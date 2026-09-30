@@ -71,7 +71,7 @@ import {
   type StampPolicy,
 } from './stamp.ts'
 import { fire, registry, type Resource, type Rule, stands } from './rules.ts'
-import { ready, settle } from './declared.ts'
+import { own, type Ready, ready, settle } from './declared.ts'
 import { state } from './state.ts'
 import { each, isPromise, then } from './pipe.ts'
 import { addressing } from './said.ts'
@@ -166,6 +166,10 @@ export type Options = {
    * words of their own (default: that nothing this vocabulary was loaded from
    * declares it; @yaks/vocab `unknownComps`) */
   teach?: string
+  /** which declared rules run on a change (default: every one but a page's
+   * own, ./declared.ts `own`). A page decides for itself, since it holds only
+   * part of the graph (@yaks/client). */
+  runs?: (rule: Ready, o: ApplyOpts) => boolean
 }
 
 /** A live graph: what it knows, and what you can do with it. */
@@ -517,7 +521,9 @@ export let graph = (opts: Options): Graph => {
                   'rules',
                   held,
                   (b) => {
-                    let rules = declaring()
+                    let rules = declaring().filter((r) =>
+                      opts.runs ? opts.runs(r, o) : !own(r, vocab)
+                    )
                     if (!rules.length) return b
                     // A resource a declared rule writes (`+result.at=#Now`)
                     // is the same singleton the rules written in code read,

@@ -372,6 +372,12 @@ before any bundle is read.
   @yaks/sql refuses the same property for the same reason when its `derived`
   hook has no entry.
 - **`.refs` and `!refs`** — only `.refs=<id>` is a question about backlinks.
+
+A removal (`-comp`) is not refused: it asks what a pending change took off,
+which an `Index` answers through its `gone` member (@yaks/ram's rules supply
+it). A source without one holds no pending change, and the clause matches
+nothing, as @yaks/sql answers it with no batch under the statement.
+
 - **A predicate the property's type cannot answer** (`.price>cheap`), **a path
   whose root is not a reference property**, and **a reverse hop that is neither
   a count nor a child filter**.

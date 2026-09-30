@@ -8,7 +8,7 @@
 // component's name points at its CTE, so what changes is a name.
 
 import type { Vocab } from '@yaks/vocab'
-import { type Binding, type Bundle, type Match, narrowed } from '@yaks/graph'
+import { type Binding, type Bundle, collected, type Match } from '@yaks/graph'
 import {
   type BindOpts,
   type Cte,
@@ -31,66 +31,27 @@ export let matched = (
   opts: BindOpts = {},
   on: On = {},
   over: Cte[] = [],
-): Binding[] => {
-  let rows = (plan: Match, scope: On): Binding[] =>
-    plan.empty
-      ? []
-      : !plan.patterns.length
-      ? [{ entities: [], vars: {} }]
-      : driver.query({
-        ...rule({ patterns: plan.patterns }, vocab, opts, scope),
-        with: over,
-      }).map((
-        row: Row,
-      ) => ({
-        entities: plan.patterns.map((p, i) =>
-          p.makes ? null : String(row[`e${i}`])
-        ),
-        vars: Object.fromEntries(
-          plan.vars.map((name) => [name, row[`v_${name}`]]),
-        ),
-      }))
-  let key = (names: string[], vars: Binding['vars']) =>
-    JSON.stringify(names.map((name) => vars[name]))
-  let attach = (parents: Binding[], children: Match[]): void => {
-    if (!parents.length) return
-    for (let child of children) {
-      let shared = child.vars.filter((name) => name in parents[0].vars)
-      let choices = Object.fromEntries(shared.map((name) => [
-        name,
-        parents.map((row) => row.vars[name]),
-      ]))
-      // The outer match is anchored to a changed batch. A collection reads
-      // every member belonging to that outer binding, including members that
-      // the batch did not touch.
-      let members = rows(narrowed(child, choices), {
-        ...on,
-        touched: undefined,
-      })
-      let groups = new Map<string, Binding[]>()
-      for (let member of members) {
-        let id = key(shared, member.vars)
-        groups.set(id, [...(groups.get(id) ?? []), member])
-      }
-      let attached: Binding[] = []
-      for (let parent of parents) {
-        let found = (groups.get(key(shared, parent.vars)) ?? []).map((
-          member,
-        ) => ({
-          entities: member.entities,
-          vars: { ...parent.vars, ...member.vars },
-        }))
-        let collections = parent.collections ?? (parent.collections = [])
-        collections.push(found)
-        attached.push(...found)
-      }
-      attach(attached, child.collections)
-    }
-  }
-  let found = rows(m, on)
-  attach(found, m.collections)
-  return found
-}
+): Binding[] =>
+  // The outer match is anchored to a changed batch; a collection reads every
+  // member belonging to that outer binding, including members the batch did
+  // not touch.
+  collected(m, (plan, anchored) =>
+    driver.query({
+      ...rule(
+        { patterns: plan.patterns },
+        vocab,
+        opts,
+        anchored ? on : { ...on, touched: undefined },
+      ),
+      with: over,
+    }).map((row: Row) => ({
+      entities: plan.patterns.map((p, i) =>
+        p.makes ? null : String(row[`e${i}`])
+      ),
+      vars: Object.fromEntries(
+        plan.vars.map((name) => [name, row[`v_${name}`]]),
+      ),
+    })))
 
 /**
  * How declared rules are evaluated (@yaks/graph `Tx.bindings`): run every match

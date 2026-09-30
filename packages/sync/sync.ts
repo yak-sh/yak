@@ -1,10 +1,12 @@
 // Where the pieces are assembled: a client graph connected to a server.
 //
-// Two plugin hooks and one socket. The `precondition` hook runs inside the
+// Three plugin hooks and one socket. The `precondition` hook runs inside the
 // write's transaction, before the patches go in, and marks each bundle the
 // caller passed in with a copy of the entity it is about to change — that mark
 // is what tells the `effect` hook which bundles came from a caller, and what to
-// put back if the server refuses them. The `effect` hook runs after the commit
+// put back if the server refuses them. The `rules` hook marks what the write's
+// rules added the same way, since the server's answer replaces it and its
+// refusal takes it back (./mark.ts). The `effect` hook runs after the commit
 // and sends the write without waiting for a response: a local write over a
 // local store is synchronous, and staying synchronous is most of the reason to
 // run a graph in a page at all.
@@ -23,7 +25,7 @@
 
 import type { Bundle, Eid, Graph, Plugin } from '@yaks/graph'
 import { dead, then } from '@yaks/graph'
-import { asking, clean, ECHO, echoed, SENT } from './mark.ts'
+import { asked, asking, clean, ECHO, echoed, ruling, SENT } from './mark.ts'
 import { exchange, type Fetch, type Refusal, type Report } from './outbound.ts'
 import { relayed } from './tier.ts'
 import { pacer } from './pace.ts'
@@ -226,6 +228,20 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
             return []
           }
           return asked
+        })
+      },
+      // After the rules, still before the patches: what they added, marked
+      // with the copy to put back. The server's own change carries what its
+      // rules added, so a change that came from it has nothing to mark.
+      rules: (bundles, tx) => {
+        let added = bundles.filter((b) => !asked(b))
+        if (!added.length || bundles.some(echoed)) return bundles
+        let eids = [...new Set(added.map((b) => b.entity.eid))]
+        return then(tx.get(eids), (held) => {
+          let was = new Map(held.map((b) => [b.entity.eid, b]))
+          return bundles.map((b) =>
+            asked(b) ? b : ruling(b, was.get(b.entity.eid) ?? null)
+          )
         })
       },
       // After the commit: send it to the server, and reconcile the response.

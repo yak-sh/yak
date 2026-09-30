@@ -6,8 +6,9 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import type { Bundle, Tx } from '@yaks/graph'
-import { isPromise } from '@yaks/graph'
+import type { Bundle, Storage, Tx } from '@yaks/graph'
+import { graph, isPromise } from '@yaks/graph'
+import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { effects, type Job } from './registry.ts'
 import { effectDoc } from './pool.ts'
@@ -291,18 +292,39 @@ test('a word this vocabulary has no entry for says nothing, or nothing at all', 
   assertEquals(fx.slots().length, 2)
 })
 
-test('a pattern over two entities needs a storage that answers bindings', () => {
-  let { fx, oops, apply } = fixture()
-  fx.on('$p .post; .comment, comment.post=$p', () => {})
-  // The batch committed; a question this storage cannot answer is telemetry.
+test('a pattern over two entities fires once both hold', () => {
+  let { fx, seen, apply } = fixture()
+  fx.on('$p .post; .comment, comment.post=$p', (e) => {
+    seen.push(String(e.vars?.p))
+  })
   apply([post('p1')])
-  assertEquals(oops.map((j) => j.handler), ['post.matched'])
+  assertEquals(seen, [])
+  apply([{ entity: { eid: 'c1' }, comment: { post: 'p1' } }])
+  assertEquals(seen, ['p1'])
 })
 
-test('a collected pattern uses the binding interface', () => {
-  let { fx, oops, apply } = fixture()
-  fx.on('$p .post; [.comment, comment.post=$p]', () => {})
-  apply([post('p1')])
+test('a collected pattern carries its members', () => {
+  let { fx, seen, apply } = fixture()
+  fx.on('$p .post; [$c .comment, comment.post=$p]', (e) => {
+    let members = e.binding?.collections?.[0] ?? []
+    seen.push(members.map((m) => m.vars.c).join())
+  })
+  apply([post('p1'), { entity: { eid: 'c1' }, comment: { post: 'p1' } }])
+  assertEquals(seen, ['c1'])
+})
+
+test('a pattern over two entities needs a storage that answers bindings', () => {
+  let r = ram(blog, { number: true })
+  let mute: Storage = {
+    ...r,
+    tx: (body) => r.tx((tx) => body({ ...tx, bindings: undefined })),
+  }
+  let oops: Job[] = []
+  let fx = effects(blog, { report: (_e, job) => oops.push(job) })
+  let g = graph({ storage: mute, vocab: blog, plugins: [fx] })
+  fx.on('$p .post; .comment, comment.post=$p', () => {})
+  // The batch committed; a question this storage cannot answer is telemetry.
+  sync(g.apply([post('p1')]))
   assertEquals(oops.map((j) => j.handler), ['post.matched'])
 })
 

@@ -168,8 +168,8 @@ grouped approximately by function, **not** by dependency order.
   aimed at it.
 - **[@yaks/ram](./ram)** — Implement graph storage with a synchronous in-memory
   `Map` and @yaks/match queries, suitable for browsers and tests. Shared
-  operations are tested against SQLite, but RAM does not support every SQL query
-  or the multi-entity declarative rules that need `Tx.bindings`.
+  operations and declared rules are tested against SQLite, but RAM does not
+  support every SQL query.
 
 - **[@yaks/edge](./edge)** — links between entities as a component: the
   `edge{from, to}` component an entity carries, the id derived from the

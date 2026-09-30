@@ -173,9 +173,17 @@ subset. Text search matches tokens in stored text without a full-text index or
 relevance ranking; it does not promise the tokenization of every database's
 full-text engine.
 
-RAM does not implement `Tx.bindings`, so the graph's multi-entity declarative
-rules are skipped with this adapter. Ordinary graph hooks and per-entity rules
-still run.
+## Declared rules
+
+RAM implements `Tx.bindings`, so a graph over it runs the vocabulary's
+[declared rules](../graph/README.md#rules-over-more-than-one-entity) as a graph
+over @yaks/sqlite does, and passes the same script of rule scenarios. It patches
+the pending change into the map, evaluates each pattern's filter with
+@yaks/match over the store's indexes, joins the patterns on their variables in
+memory, and rewinds the change through the transaction's undo log. A pattern
+anchored to the change reads only the entities the change is about, and each
+pattern after it is found through what the ones before it bound, so a rule over
+a one-entity change reads a handful of bundles however large the map is.
 
 ## Compatibility
 

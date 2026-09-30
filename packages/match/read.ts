@@ -72,6 +72,11 @@ export type Index = {
     lo: number,
     hi: number,
   ) => ReadonlyMap<Eid, Bundle>[]
+  /** The entities a pending change took this component off: what a removal
+   * clause (`-comp`) asks. Only a store evaluating a change it has not
+   * committed has an answer (@yaks/ram's rules); without one, nothing was
+   * removed and the clause holds for nobody. */
+  gone?: (comp: string) => ReadonlySet<Eid> | undefined
 }
 
 /**

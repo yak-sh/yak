@@ -54,35 +54,36 @@ Standard JSON Schema keywords include `type`, `format`, `enum`, `const`,
 JSON Schema's `$vocabulary` mechanism, in `meta/core.vocab.json` — add what a
 component table needs on top:
 
-| keyword     | on    | means                                                                   |
-| ----------- | ----- | ----------------------------------------------------------------------- |
-| `component` | entry | `true` = this entry is a component. Required; there is no default       |
-| `extends`   | comp  | `true` = add these properties to a component another document declares  |
-| `rule`      | entry | `true` = a declarative rule, read by `rulesIn`                          |
-| `tool`      | entry | `true` = this entry is a tool declaration, not a table                  |
-| `noun`      | tool  | the resource word a CLI answers to (`session list`, `list session`)     |
-| `verb`      | tool  | the operation word; either word alone is the whole command              |
-| `input`     | tool  | one schema per named argument, as a component declares properties       |
-| `ref`       | prop  | the entity kind a string references (`"project"`, `"entity"`)           |
-| `death`     | prop  | `cascade` \| `detach` \| `release` \| `keep` when the target is deleted |
-| `computed`  | both  | `true` = derived, never stored: a query-only rank, a journal record     |
-| `reads`     | prop  | on a computed prop: components on other entities it reads; `[]` = none  |
-| `stamped`   | prop  | `true` = the server owns it: clients read it, never write it            |
-| `search`    | both  | prop: `true` = full-text indexed. comp: `["content.body"]`, found by it |
-| `aliases`   | prop  | input forms that resolve to an enum member                              |
-| `bare`      | both  | `false` = only the qualified component/property name is accepted        |
-| `unique`    | both  | prop: no two rows share it. comp: `[["space","slug"]]`                  |
-| `index`     | both  | the same two forms, without the uniqueness                              |
-| `required`  | comp  | native: the properties every row holds (NOT NULL)                       |
-| `default`   | prop  | native: the row's fallback; `{"now": true}` is the clock                |
-| `identity`  | both  | derive the entity's id from this. comp: `["space","slug"]`              |
-| `kind`      | comp  | this component names a display kind                                     |
-| `before`    | comp  | kinds this kind sorts before (feeds the derived kindOrder)              |
-| `embed`     | comp  | `false` = an entity wearing it is never embedded (still found by words) |
-| `wire`      | comp  | `false` = a component clients read but cannot write                     |
-| `sync`      | comp  | who is told about a write: `none` \| `server` (default) \| `peers`      |
-| `durable`   | comp  | how long a value lives: `forever` (default) \| `connection` \| `5s`     |
-| `pace`      | comp  | how often a writer's value is taken: relayed, or stored (`1s`)          |
+| keyword      | on    | means                                                                   |
+| ------------ | ----- | ----------------------------------------------------------------------- |
+| `component`  | entry | `true` = this entry is a component. Required; there is no default       |
+| `extends`    | comp  | `true` = add these properties to a component another document declares  |
+| `rule`       | entry | `true` = a declarative rule, read by `rulesIn`                          |
+| `optimistic` | rule  | `true` = a page runs it on its own copy as it writes, before the server |
+| `tool`       | entry | `true` = this entry is a tool declaration, not a table                  |
+| `noun`       | tool  | the resource word a CLI answers to (`session list`, `list session`)     |
+| `verb`       | tool  | the operation word; either word alone is the whole command              |
+| `input`      | tool  | one schema per named argument, as a component declares properties       |
+| `ref`        | prop  | the entity kind a string references (`"project"`, `"entity"`)           |
+| `death`      | prop  | `cascade` \| `detach` \| `release` \| `keep` when the target is deleted |
+| `computed`   | both  | `true` = derived, never stored: a query-only rank, a journal record     |
+| `reads`      | prop  | on a computed prop: components on other entities it reads; `[]` = none  |
+| `stamped`    | prop  | `true` = the server owns it: clients read it, never write it            |
+| `search`     | both  | prop: `true` = full-text indexed. comp: `["content.body"]`, found by it |
+| `aliases`    | prop  | input forms that resolve to an enum member                              |
+| `bare`       | both  | `false` = only the qualified component/property name is accepted        |
+| `unique`     | both  | prop: no two rows share it. comp: `[["space","slug"]]`                  |
+| `index`      | both  | the same two forms, without the uniqueness                              |
+| `required`   | comp  | native: the properties every row holds (NOT NULL)                       |
+| `default`    | prop  | native: the row's fallback; `{"now": true}` is the clock                |
+| `identity`   | both  | derive the entity's id from this. comp: `["space","slug"]`              |
+| `kind`       | comp  | this component names a display kind                                     |
+| `before`     | comp  | kinds this kind sorts before (feeds the derived kindOrder)              |
+| `embed`      | comp  | `false` = an entity wearing it is never embedded (still found by words) |
+| `wire`       | comp  | `false` = a component clients read but cannot write                     |
+| `sync`       | comp  | who is told about a write: `none` \| `server` (default) \| `peers`      |
+| `durable`    | comp  | how long a value lives: `forever` (default) \| `connection` \| `5s`     |
+| `pace`       | comp  | how often a writer's value is taken: relayed, or stored (`1s`)          |
 
 A component whose name starts with `_` gives none of its properties a bare name,
 whatever `bare` says: `.name` never means `_prop.name`. An authored name starts
@@ -487,6 +488,14 @@ joined by the variables they share. Prefix characters specify the actions:
 to prevent a repeated match, `*comp` is its write set, `$name` names an entity,
 and a `$name` in a value refers to that same variable. `before` names the rules
 this one runs before, to specify execution order.
+
+`optimistic: true` lets a page run the rule on its own copy of the graph as it
+writes ([@yaks/client](../client/README.md#rules)): what it adds shows before
+the server answers, and a refusal stops the write before it is sent. The page
+holds only what it subscribed to, so marking a rule is its author's claim that
+the rule decides correctly from that. A rule that writes only `sync: none`
+components is the page's own and always runs there. Any other rule runs only
+where the whole graph is: on the server, or in a page with no server.
 
 `rulesIn(docs)` reads rule entries, the way `toolsIn` reads tool declarations,
 and `loadVocab` skips both. `match` describes the changes directly; no separate

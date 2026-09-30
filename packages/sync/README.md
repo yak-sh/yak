@@ -82,13 +82,16 @@ follows:
 - **Applied:** server patches, including assigned numbers, stamps, and
   tombstones, are applied locally with `trusted: true`. They are marked to
   prevent the plugin from sending them back. A response is a set of applied
-  patches, not a complete snapshot of every affected entity.
+  patches, not a complete snapshot of every affected entity. What the local
+  graph's own rules added to server-kept components is undone in the same
+  change, so the server's result replaces it.
 - **Refused:** an HTTP error response causes the plugin to apply inverse patches
-  for the properties in the refused request, using the state recorded before the
-  local write. These restore previous values, clear previously absent values,
-  and remove newly introduced components. Local and relayed values in the same
-  batch stay in place. The `report` callback receives the refusal, sent batch,
-  and whether it reverted local data.
+  for the properties in the refused request, and for everything the write's
+  rules added, using the state recorded before the local write. These restore
+  previous values, clear previously absent values, and remove newly introduced
+  components. Local and relayed values the caller wrote in the same batch stay
+  in place. The `report` callback receives the refusal, sent batch, and whether
+  it reverted local data.
 - **Unreachable:** a failed request is reported with `reverted: false`. The
   local change remains because the server may have applied it before the
   connection failed. There is no automatic HTTP retry or guarantee that a later

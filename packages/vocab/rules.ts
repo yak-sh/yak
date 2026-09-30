@@ -34,6 +34,8 @@ export type RuleDecl = {
   match: string
   /** what this rule runs before, so order is declared and never incidental */
   before?: string[]
+  /** a page runs it on its own copy as it writes, before its server has */
+  optimistic?: boolean
   /** what it is for, in one line */
   description?: string
 }
@@ -61,6 +63,7 @@ export let rulesIn = (input: VocabDoc | VocabDoc[]): RuleDecl[] => {
         name,
         match,
         ...(Array.isArray(entry.before) ? { before: entry.before } : {}),
+        ...(entry.optimistic === true ? { optimistic: true } : {}),
         ...(typeof entry.description == 'string'
           ? { description: entry.description }
           : {}),

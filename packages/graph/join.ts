@@ -14,12 +14,14 @@
 // as the variable it plainly is, exactly as a bare `$name` is read as the
 // pattern's entity.
 //
-// What this file produces is a plan, not SQL. A storage adapter lowers the
-// flat part of the plan to a statement — @yaks/sqlite does it through
+// What this file produces is a plan, not SQL. A storage adapter evaluates the
+// flat part of the plan — @yaks/sqlite lowers it to a statement through
 // @yaks/sql's path-to-join lowering, where `+!comp` becomes a
-// `LEFT JOIN … IS NULL` — and this package remains the one that knows nothing
-// about any backend. Nothing here enumerates candidate rows: a rule's match is
-// a query, and evaluating a query is storage's job.
+// `LEFT JOIN … IS NULL`; @yaks/ram joins it in memory — and this package
+// remains the one that knows nothing about any backend. Nothing here
+// enumerates candidate rows: a rule's match is a query, and evaluating a query
+// is storage's job. What every backend shares is here instead: attaching a
+// collection's members to the bindings they belong to (`collected`).
 //
 // A variable is a slot, and what fills it depends on where it is written: a
 // bare `$name` is the pattern's entity, and a `$name` in a value position is
@@ -142,8 +144,16 @@ let pattern = (query: And): Pattern => {
   }
 }
 
+// The plans already parsed, by text. A plan is a value nobody changes, so the
+// same text hands back the same plan, and what compiles its filters (an
+// in-memory store's matcher, keyed by the filter's tree) compiles them once
+// rather than on every change a rule is asked about. Bounded, since a caller
+// may parse text it was handed.
+let parsed = new Map<string, Match>()
+
 /**
- * Parse a rule's match out of its source text.
+ * Parse a rule's match out of its source text. The same text hands back the
+ * same plan, which nothing may change.
  *
  * ```ts
  * import { match } from '@yaks/graph'
@@ -154,6 +164,15 @@ let pattern = (query: And): Pattern => {
  * ```
  */
 export let match = (source: string): Match => {
+  let held = parsed.get(source)
+  if (held) return held
+  if (parsed.size >= 1000) parsed.clear()
+  let plan = fresh(source)
+  parsed.set(source, plan)
+  return plan
+}
+
+let fresh = (source: string): Match => {
   let parts = parseMatch(source)
   if (!parts.length) throw new Error('a rule needs a pattern')
   let build = (parts: ReturnType<typeof parseMatch>, inside = false): Match => {
@@ -229,6 +248,74 @@ export let reads = (m: Match, v: Vocab): string[] => {
     for (let comp of reads(child, v)) out.add(comp)
   }
   return [...out]
+}
+
+/**
+ * Every component a match writes: what its `+`, `+!` and `*` clauses name, in
+ * every pattern. Where a graph decides which rules to run (a page runs the
+ * ones that write only its own components), this is what the rule is about.
+ */
+export let writes = (m: Match): string[] => [
+  ...new Set(m.patterns.flatMap((p) => [
+    ...p.gates,
+    ...p.ensures,
+    ...p.writes,
+    ...p.sets.map((s) => s.comp),
+  ])),
+]
+
+/**
+ * A match's bindings with its collections attached, the half of evaluating a
+ * match that no backend owns. `rows` answers one flat level: its patterns
+ * joined, anchored to the change when `anchored` is true. A collection level
+ * is asked narrowed to the values its parents bound (`narrowed`) and never
+ * anchored: it reads every member of an outer binding, including the ones the
+ * change did not touch. Each member is attached to the parent whose shared
+ * variables it holds, and a parent with none keeps an empty collection.
+ */
+export let collected = (
+  m: Match,
+  rows: (flat: Match, anchored: boolean) => Binding[],
+): Binding[] => {
+  let level = (plan: Match, anchored: boolean): Binding[] =>
+    plan.empty
+      ? []
+      : !plan.patterns.length
+      ? [{ entities: [], vars: {} }]
+      : rows(plan, anchored)
+  let key = (names: string[], vars: Binding['vars']) =>
+    JSON.stringify(names.map((name) => vars[name]))
+  let attach = (parents: Binding[], children: Match[]): void => {
+    if (!parents.length) return
+    for (let child of children) {
+      let shared = child.vars.filter((name) => name in parents[0].vars)
+      let choices = Object.fromEntries(shared.map((name) => [
+        name,
+        parents.map((row) => row.vars[name]),
+      ]))
+      let groups = new Map<string, Binding[]>()
+      for (let member of level(narrowed(child, choices), false)) {
+        let id = key(shared, member.vars)
+        groups.set(id, [...(groups.get(id) ?? []), member])
+      }
+      let attached: Binding[] = []
+      for (let parent of parents) {
+        let found = (groups.get(key(shared, parent.vars)) ?? []).map((
+          member,
+        ) => ({
+          entities: member.entities,
+          vars: { ...parent.vars, ...member.vars },
+        }))
+        let collections = parent.collections ?? (parent.collections = [])
+        collections.push(found)
+        attached.push(...found)
+      }
+      attach(attached, child.collections)
+    }
+  }
+  let found = level(m, true)
+  attach(found, m.collections)
+  return found
 }
 
 /**

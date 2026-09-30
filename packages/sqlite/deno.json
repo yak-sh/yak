@@ -18,6 +18,7 @@
       "**/*_test.ts",
       "testing.ts",
       "parity.ts",
+      "declared.ts",
       "**/*_bench.ts",
       "fixtures/"
     ]

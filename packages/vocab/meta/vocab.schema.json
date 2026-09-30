@@ -692,6 +692,9 @@
           "items": {
             "type": "string"
           }
+        },
+        "optimistic": {
+          "type": "boolean"
         }
       },
       "required": [

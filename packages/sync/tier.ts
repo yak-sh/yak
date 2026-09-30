@@ -26,7 +26,7 @@
 import type { Bundle, Comp } from '@yaks/graph'
 import { comps, dead } from '@yaks/graph'
 import { durableOf, type Sync, syncOf, type Vocab } from '@yaks/vocab'
-import { asked, before } from './mark.ts'
+import { asked, before, ruled } from './mark.ts'
 
 export { durableOf, type Sync, syncOf }
 
@@ -121,11 +121,36 @@ export let outward = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
 export let relayed = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
   leaving(bundles, vocab, 'peers', false)
 
+// The patches that put these components of one entity back as `was` held
+// them: a component it did not hold is dropped, one the write dropped comes
+// back whole, and every property a patch named returns to what it was (or is
+// cleared).
+let undo = (
+  eid: string,
+  patches: [string, Comp | null][],
+  was: Bundle | null,
+): Bundle[] => {
+  let out: Bundle = { entity: { eid } }
+  for (let [name, patch] of patches) {
+    let held = was?.[name] as Comp | undefined
+    if (!held) out[name] = null
+    else if (patch == null) out[name] = held
+    else {
+      out[name] = Object.fromEntries(
+        Object.keys(patch).map((c) => [c, held[c] ?? null]),
+      )
+    }
+  }
+  return comps(out).length ? [out] : []
+}
+
 /**
- * The inverse of the server-owned part of one committed list of bundles: what
- * to patch back when the server refuses it. Each sent property is restored
- * from the copy {@link before} took of it. Local and relayed values were not
- * in the refused request, so they stay as they are.
+ * The inverse of one committed list of bundles, as far as the server's
+ * refusal reaches: what to patch back when it refuses. What the caller sent is
+ * restored from the copy {@link before} took of it; its local and relayed
+ * values were not in the refused request, so they stay as they are. What the
+ * write's rules added is restored whole, since the write they followed from
+ * never happened.
  *
  * A DELETE gets no inverse here: a write that deletes is never applied
  * optimistically — it waits for the server (sync.ts), so there is never a
@@ -134,21 +159,21 @@ export let relayed = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
 export let inverse = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
   bundles.flatMap((b) => {
     let was = before(b)
-    let sent = outward([b], vocab)[0]
-    if (was === undefined || !sent || dead(b)) return []
-    let out: Bundle = { entity: { eid: b.entity.eid } }
-    for (let [name, patch] of comps(sent)) {
-      let held = was?.[name] as Comp | undefined
-      // Not present before this write: the whole component is dropped.
-      if (!held) out[name] = null
-      // Dropped by this write: put back what it dropped, whole.
-      else if (patch == null) out[name] = held
-      // Patched by this write: every property it named, as it was (or cleared).
-      else {
-        out[name] = Object.fromEntries(
-          Object.keys(patch).map((c) => [c, held[c] ?? null]),
-        )
-      }
-    }
-    return comps(out).length ? [out] : []
+    let wrote = asked(b) ? outward([b], vocab)[0] : b
+    if (was === undefined || !wrote || dead(b)) return []
+    return undo(b.entity.eid, comps(wrote), was)
+  })
+
+/**
+ * What the write's rules guessed about the components the server keeps, put
+ * back: the server ran the same rules over the whole graph, and its answer
+ * replaces the guess, so the guess is undone just before the answer lands. A
+ * rule's `sync: none` components are the page's own, and stay.
+ */
+export let guessed = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
+  bundles.flatMap((b) => {
+    let was = before(b)
+    if (!ruled(b) || was === undefined) return []
+    let kept = comps(b).filter(([name]) => stored(vocab, name))
+    return undo(b.entity.eid, kept, was)
   })

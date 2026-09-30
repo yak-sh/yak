@@ -295,9 +295,15 @@ query sources to include the uncommitted patches; `+!comp` tests for an absent
 component through a left join. `reads(plan, vocab)` lists the components that
 must be included in those sources.
 
-**These rules require `Tx.bindings`.** An adapter without it, including RAM,
-skips declared rules. Use a supporting adapter such as
-[@yaks/sqlite](../sqlite/README.md) when the application depends on them.
+**These rules require `Tx.bindings`.** An adapter without it skips declared
+rules. [@yaks/sqlite](../sqlite/README.md) and [@yaks/ram](../ram/README.md)
+both implement it, and run the same script of rule scenarios.
+
+`graph({ runs })` chooses which declared rules run on a change. By default a
+graph runs every rule but a page's own: one whose writes are all `sync: none`
+components (`own(rule, vocab)`), state only a page holds. A page chooses for
+itself ([@yaks/client](../client/README.md#rules)): its own rules, and the
+server's rules marked `optimistic`.
 
 ### A rule with no code at all
 

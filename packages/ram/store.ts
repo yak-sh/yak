@@ -22,9 +22,30 @@
 // and rolling back is cheap — an undo log of one reference per entity a
 // transaction touched, replayed backwards, restores the map and its indexes
 // exactly as they were without copying anything the write did not touch.
+//
+// The same log is how declared rules see a change before it is written: the
+// change is patched in, the rules are asked (./rules.ts), and the log is
+// rewound, so a rule reads the graph as the change would leave it through the
+// same indexes every read uses, and nothing it saw outlives the question.
 
-import type { Bundle, Comp, Eid, Entity, ReadOpts, Row } from '@yaks/graph'
-import { comps, isPromise, only, TOMBSTONE, tombstoned } from '@yaks/graph'
+import type {
+  Binding,
+  Bundle,
+  Comp,
+  Eid,
+  Entity,
+  Match,
+  ReadOpts,
+  Row,
+} from '@yaks/graph'
+import {
+  comps,
+  dead,
+  isPromise,
+  only,
+  TOMBSTONE,
+  tombstoned,
+} from '@yaks/graph'
 import {
   type Computed,
   type Index,
@@ -34,6 +55,7 @@ import {
   rows as answer,
 } from '@yaks/match'
 import type { Vocab } from '@yaks/vocab'
+import { bindings } from './rules.ts'
 
 export type { Query }
 
@@ -75,6 +97,10 @@ export type Tx = {
    * components `comps` names or every one. A deleted one carries `tombstone`;
    * an unknown one is simply absent. */
   get: (eids: Eid[], comps?: string[]) => Bundle[]
+  /** what declared rules are evaluated through: every match run against this
+   * graph with `batch` folded in, as though it had been written, and nothing
+   * of it left behind */
+  bindings: (matches: Match[], batch: Bundle[]) => Binding[][]
   /** apply these patches → the entities they created, each with its `num` */
   patch: (bundles: Bundle[]) => Entity[]
   /** Evict live payloads, not identities. A later patch keeps the same number.
@@ -206,6 +232,16 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   let log: [Eid, Bundle | undefined, Entity | undefined][] = []
   let depth = 0
   let save = (eid: Eid) => log.push([eid, rows.get(eid), cold.get(eid)])
+  // Back to where the log stood at `mark`, and the numbering with it.
+  let rewind = (mark: number, minted: number) => {
+    while (log.length > mark) {
+      let [eid, rec, identity] = log.pop()!
+      if (identity) cold.set(eid, identity)
+      else cold.delete(eid)
+      put(eid, rec)
+    }
+    next = minted
+  }
 
   // One entity's record replaced, or dropped, and every index moved with it.
   // Every write goes through here, a rollback's included, so an index never
@@ -307,10 +343,11 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     return out
   }
 
-  // What one read sees: every row, by id, by component and by value. A fresh
-  // view per read, so what a run keeps against it (a walk's closure) never
-  // outlives the rows it was worked out from.
-  let view = (): Index => {
+  // What one read sees: every row, by id, by component and by value, and what
+  // a change under evaluation removed. A fresh view per read, so what a run
+  // keeps against it (a walk's closure) never outlives the rows it was worked
+  // out from.
+  let view = (gone?: Index['gone']): Index => {
     let list: Bundle[] | undefined
     return {
       get list() {
@@ -320,6 +357,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       wearing: (comp) => worn.get(comp) ?? NONE,
       keyed: (comp, prop, key) => keys(comp, prop).get(key) ?? NONE,
       ranged,
+      gone,
     }
   }
 
@@ -484,9 +522,44 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     return out
   }
 
+  // The change folded in, the matches asked, the log rewound. What the change
+  // took a component off is its own list, since a removed component leaves
+  // nothing in a row to ask about; one written again later in the change is
+  // not gone. A deleted entity is removed, and matches nothing.
+  let ask = (matches: Match[], batch: Bundle[]): Binding[][] => {
+    if (!matches.length) return []
+    let mark = log.length
+    let minted = next
+    try {
+      tx.remove(batch.filter(dead).map((b) => b.entity))
+      patch(batch.filter((b) => !dead(b)))
+      let gone = new Map<string, Set<Eid>>()
+      for (let b of batch) {
+        for (let [name, c] of comps(b)) {
+          let at = gone.get(name) ?? new Set()
+          if (c == null) gone.set(name, at.add(b.entity.eid))
+          else at.delete(b.entity.eid)
+        }
+      }
+      let anchor = batch.length
+        ? new Set(batch.map((b) => b.entity.eid))
+        : undefined
+      return bindings(
+        matches,
+        view((comp) => gone.get(comp)),
+        anchor,
+        vocab,
+        { now: base.now, computed: base.computed },
+      )
+    } finally {
+      rewind(mark, minted)
+    }
+  }
+
   let tx: Tx = {
     read,
     get,
+    bindings: ask,
     patch,
     evict: (eids) => {
       for (let eid of eids) {
@@ -533,13 +606,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       let minted = next
       depth++
       let undo = (e: unknown): never => {
-        while (log.length > mark) {
-          let [eid, rec, identity] = log.pop()!
-          if (identity) cold.set(eid, identity)
-          else cold.delete(eid)
-          put(eid, rec)
-        }
-        next = minted
+        rewind(mark, minted)
         depth--
         throw e
       }

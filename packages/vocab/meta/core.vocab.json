@@ -21,6 +21,10 @@
       "description": "true = this $defs entry declares a rule: a query the graph runs over every batch of changes, and nothing else. There is no implementation anywhere \u2014 the `match` query is the rule, and the components its `+` patterns name are what it writes.",
       "const": true
     },
+    "optimistic": {
+      "description": "On a rule, true = a page runs it on its own copy of the graph as it writes, before the server has: what it adds shows at once, what it refuses is never sent, and the server's answer replaces what it added. It sees only what the page holds, so marking a rule is the author's claim that the page's partial copy is enough. A rule that writes only `sync: none` components is the page's own and always runs there.",
+      "type": "boolean"
+    },
     "match": {
       "description": "A rule's query: one or more ordinary query patterns separated by `;`, one per entity, joined by the variables they share. `$call .call, results=; +result.call=$call`.",
       "type": "string"

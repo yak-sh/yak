@@ -25,14 +25,25 @@
 // Nothing here writes rows. The patches join the change and `mutate` writes
 // them, so a rule's output is admitted, stamped, journaled, cascaded and
 // returned exactly like anything a client sent.
+//
+// Which rules run is the graph's to choose (./graph.ts `runs`). A rule that
+// writes only `sync: none` components is a page's own (`own`): only a page
+// holds what it writes, so only a page runs it.
 
 import type { Bundle, Comp, Eid } from './bundle.ts'
 import { derivedEid } from './identity.ts'
-import { type Binding, filled, type Match, match, reads } from './join.ts'
+import {
+  type Binding,
+  filled,
+  type Match,
+  match,
+  reads,
+  writes,
+} from './join.ts'
 import type { Tx } from './storage.ts'
 import { then } from './pipe.ts'
 import type { Value } from '@yaks/query'
-import type { Prop, Vocab } from '@yaks/vocab'
+import { type Prop, syncOf, type Vocab } from '@yaks/vocab'
 
 /**
  * A rule as declared: a name, the query it matches, and the rules it runs
@@ -45,10 +56,24 @@ export type Declared = {
   match: string
   /** rules this one runs before (their names) */
   before?: string[]
+  /** a page runs it on its own copy as it writes, before its server has
+   * (@yaks/client): what it adds shows at once, and what it refuses is never
+   * sent */
+  optimistic?: boolean
 }
 
 /** A declared rule with its match already parsed. */
 export type Ready = { rule: Declared; plan: Match }
+
+/**
+ * Whether a rule is a page's own: everything it writes is `sync: none`, state
+ * that never leaves the page holding it. A page runs it on every change; a
+ * graph that serves pages never holds what it writes, so it never runs one.
+ */
+export let own = ({ plan }: Ready, vocab: Vocab): boolean => {
+  let made = writes(plan)
+  return made.length > 0 && made.every((c) => syncOf(vocab, c) == 'none')
+}
 
 /** Parse a set of declarations, in the order they should run. */
 export let ready = (rules: Declared[]): Ready[] =>
@@ -188,12 +213,17 @@ export let settle = (
   resource: (name: string) => unknown = () => undefined,
   admit: (made: Bundle[]) => Bundle[] = (made) => made,
 ): Bundle[] | Promise<Bundle[]> => {
-  if (!rules.length || !tx.bindings) return bundles
+  // An empty change is about nothing, and a match with no batch under it is
+  // asked of the whole graph (a template's invocation): the rules have
+  // nothing to fire on.
+  if (!rules.length || !bundles.length || !tx.bindings) return bundles
   let ask = tx.bindings
+  let plans = rules.map((r) => r.plan)
+  let covers = cover(rules, vocab)
   let fired = new Set<string>()
   let round = (batch: Bundle[]): Bundle[] | Promise<Bundle[]> =>
     then(
-      ask(rules.map((r) => r.plan), batch, cover(rules, vocab)),
+      ask(plans, batch, covers),
       (found) => {
         let made: Bundle[] = []
         rules.forEach((r, i) => {

@@ -112,6 +112,41 @@ eid and stay off the wire. The returned promise resolves to the applied bundles
 or rejects on refusal or transport failure. A local-only client needs the
 `@yaks/key` and `@yaks/alias` graph plugins to write names.
 
+## Rules
+
+The page's graph runs the vocabulary's
+[declared rules](../graph/README.md#rules-over-more-than-one-entity) on the
+page's own copy, which holds only what the page subscribed to:
+
+- A rule whose writes are all `sync: none` components is the page's own. It runs
+  on every change, including what the server sends, and may refuse. A server
+  never runs one.
+- A rule the server runs too runs here only when its declaration says
+  `optimistic: true`, and only on the page's own writes. What it adds shows at
+  once; what it refuses throws from `mutate()` before anything is sent. When the
+  server answers, what it added to server-kept components is undone in the same
+  change that lands the server's result, so the server's answer replaces it.
+  When the server refuses, the write is undone with everything its rules added.
+- Any other rule is the server's alone; its result arrives with the server's
+  answer.
+
+A client with no server is the whole graph, and runs every rule.
+
+```json
+{
+  "$defs": {
+    "shelve": {
+      "rule": true,
+      "optimistic": true,
+      "match": ".doc, +!shelf, +shelf.aisle=Z"
+    }
+  }
+}
+```
+
+A rule-created entity's id is derived from the rule and what it matched, so the
+page's result and the server's name the same entity.
+
 ## Reactive queries
 
 A watch exposes `value` (the current bundle array), `ready`,

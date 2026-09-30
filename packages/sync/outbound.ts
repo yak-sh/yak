@@ -7,20 +7,23 @@
 // rather than permitting it. Three responses are possible:
 //
 //   applied    the bundles come back as the server applied them — assigned
-//              numbers, stamped properties, cascade deletions — and they are
-//              applied locally in turn, marked as an echo so they are not sent
-//              back again.
+//              numbers, stamped properties, cascade deletions, what its rules
+//              added — and they are applied locally in turn, marked as an echo
+//              so they are not sent back again. What the page's own run of
+//              those rules guessed is undone in the same change, so the
+//              server's answer replaces it.
 //   refused    the server would not take it. The optimistic change is undone
-//              from the copy taken before it, and the refusal is reported. A
-//              write that was held (a delete — see sync.ts) was never applied
-//              locally, so there is nothing to undo.
+//              from the copy taken before it, with everything its rules added,
+//              and the refusal is reported. A write that was held (a delete —
+//              see sync.ts) was never applied locally, so there is nothing to
+//              undo.
 //   unreachable  nothing is undone. The write may have been applied on the
 //              server with only the response lost, and a client that guesses
 //              wrong about that turns a network blip into data loss.
 
 import type { Bundle, Graph } from '@yaks/graph'
 import { replicate } from './mark.ts'
-import { inverse, outward } from './tier.ts'
+import { guessed, inverse, outward } from './tier.ts'
 
 /** The body of a server's refusal: the error's own name, its message, and
  * whatever fields it carried — a `Stale` names the property and the value the
@@ -116,7 +119,8 @@ export let exchange = async (
   }
   let applied = await res.json()
   if (!Array.isArray(applied)) throw new Error('/apply returned no bundles')
-  if (applied.length) await replicate(graph, applied)
+  let landing = [...(opts.held ? [] : guessed(batch, graph.vocab)), ...applied]
+  if (landing.length) await replicate(graph, landing)
   return { settled: true, applied }
 }
 
