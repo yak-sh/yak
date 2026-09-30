@@ -914,15 +914,17 @@ export type Mail = {
 
 // The shared outcome and health facets (D-14945): `delivered` reached its
 // destination (`via` says how — cast S-9 / spawned S-9 / local / a
-// Message-ID), `failed` says an effect failed (`message` says why). The word
-// is a MARK, beside `delivered`, because @yaks/tools spells a tool's own
-// expected outcome `error{code}` and one word answers to one idea.
-// Server-owned and effect-written; `.failed` is the fleet health query.
+// Message-ID), and `failed` is @yaks/kernel's mark on work that was tried and
+// given up on (`reason` says why). The word is a MARK, beside `delivered`,
+// because @yaks/tools spells a tool's own expected outcome `error{code}` and
+// one word answers to one idea. `.failed` is the fleet health query.
 export type Delivered = { eid: string; at?: string | null; via?: string | null }
 export type Failure = {
   eid: string
   at?: string | null
-  message?: string | null
+  by?: string | null
+  via?: string | null
+  reason?: string | null
 }
 
 // The break facet (D-17077): an unexpected fault, the self-healing trigger.

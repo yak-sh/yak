@@ -245,7 +245,7 @@ export let Mail = ({ e }: { e: Ent }) => {
   // mail column: delivered = sent, failed = attempted-and-failed, neither =
   // pending. `at` stays on the row as the arrival DATA.
   let sent = e.delivered?.at
-  let fault = e.failed?.message
+  let fault = e.failed?.reason
   return (
     <MailEl>
       <MailField name='from'>{m.from || '?'}</MailField>

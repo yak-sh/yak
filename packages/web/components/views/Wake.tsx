@@ -56,7 +56,7 @@ export let Wake = ({ e }: { e: Ent }) => {
           {e.delivered?.via && (
             <Frame.Detail>via {e.delivered.via}</Frame.Detail>
           )}
-          {e.failed?.message && <Frame.Detail>{e.failed.message}</Frame.Detail>}
+          {e.failed?.reason && <Frame.Detail>{e.failed.reason}</Frame.Detail>}
         </Frame.Outcome>
       </Frame.Moment>
       {to && (

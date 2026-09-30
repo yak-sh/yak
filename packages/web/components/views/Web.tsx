@@ -27,8 +27,8 @@ export let Web = ({ e }: { e: Ent }) =>
     )
     : (
       <Wait>
-        {e.failed?.message
-          ? <Error>{e.failed.message}</Error>
+        {e.failed?.reason
+          ? <Error>{e.failed.reason}</Error>
           : <Url>freezing {e.web!.url} …</Url>}
         <Go
           type='button'

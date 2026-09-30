@@ -107,7 +107,7 @@ let mark = (
   if (!info) return undefined
   let has = new Set(vocab.props(comp))
   // A property something else already filled is left as it was found: a hook
-  // that set the mark's author (@yaks/task keeps a completion's author across
+  // that set the mark's author (@yaks/kernel keeps a completion's author across
   // edits) and a graph whose policy supplied the writer both run before this.
   let said = (prop: string) => held?.[prop] != null
   let out: Comp = {}
