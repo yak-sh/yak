@@ -190,7 +190,7 @@ let dirty = (db: Driver, model: string): Map<number, Uint8Array | null> =>
   new Map(
     db.query(select({
       cols: [
-        as(d('entity'), 'owner'),
+        d('owner'),
         as(e('model'), 'model'),
         as(e('vec'), 'vec'),
       ],
@@ -198,7 +198,7 @@ let dirty = (db: Driver, model: string): Map<number, Uint8Array | null> =>
       joins: [{
         how: 'left',
         src: table(TABLE, 'e'),
-        on: eq(e('entity'), d('entity')),
+        on: eq(e('owner'), d('owner')),
       }],
     })).map((r) => [
       Number(r.owner),
@@ -248,14 +248,14 @@ let load = (db: Driver, model: string): Held | null => {
   }
   for (let after = 0;;) {
     let rows = db.query(select({
-      cols: [col('entity'), col('vec')],
+      cols: [col('owner'), col('vec')],
       from: table(TABLE),
-      where: and(gt(col('entity'), val(after)), eq(col('model'), val(model))),
-      order: [col('entity')],
+      where: and(gt(col('owner'), val(after)), eq(col('model'), val(model))),
+      order: [col('owner')],
       limit: lit(PAGE),
     }))
     for (let r of rows) {
-      if (!keep(h, Number(r.entity), r.vec as Uint8Array)) {
+      if (!keep(h, Number(r.owner), r.vec as Uint8Array)) {
         drop(h)
         copies.delete(db)
         over.add(db)
@@ -263,7 +263,7 @@ let load = (db: Driver, model: string): Held | null => {
       }
     }
     if (rows.length < PAGE) break
-    after = Number(rows[rows.length - 1].entity)
+    after = Number(rows[rows.length - 1].owner)
   }
   // The copy is the table now, so what the set named is in it.
   if (owned(db) && dirty(db, model).size) h.n = clear(db)

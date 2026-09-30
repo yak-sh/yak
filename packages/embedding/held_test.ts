@@ -48,7 +48,7 @@ let corpus = () => {
   for (let id = 1; id <= 200; id++) {
     db.query(insert('entity', { id, eid: `v-${id}` }))
     db.query(
-      insert(TABLE, { entity: id, model, hash: '', vec: pack(point(id)) }),
+      insert(TABLE, { owner: id, model, hash: '', vec: pack(point(id)) }),
     )
   }
   return db
@@ -99,13 +99,13 @@ test('a write or delete after the copy loaded counts as it stands', () => {
   let q = queries[0]
   let [first] = top(db, q)
   db.query(insert('entity', { id: 201, eid: 'v-201' }))
-  db.query(insert(TABLE, { entity: 201, model, hash: '', vec: pack(q) }))
-  db.query({ t: 'delete', from: TABLE, where: eq(col('entity'), val(12)) })
+  db.query(insert(TABLE, { owner: 201, model, hash: '', vec: pack(q) }))
+  db.query({ t: 'delete', from: TABLE, where: eq(col('owner'), val(12)) })
   db.query({
     t: 'update',
     table: TABLE,
     set: { vec: val(pack(point(7))) },
-    where: eq(col('entity'), val(Number(first.slice(2)))),
+    where: eq(col('owner'), val(Number(first.slice(2)))),
   })
   for (let settled of [false, true]) {
     if (settled) absorb(db)
@@ -120,7 +120,7 @@ test('a copy whose dirty set another driver cleared loads again', () => {
   let q = queries[1]
   top(db, q)
   other.query(insert('entity', { id: 201, eid: 'v-201' }))
-  other.query(insert(TABLE, { entity: 201, model, hash: '', vec: pack(q) }))
+  other.query(insert(TABLE, { owner: 201, model, hash: '', vec: pack(q) }))
   absorb(other)
   assertEquals(top(db, q)[0], 'v-201')
   alike(db)
@@ -135,7 +135,7 @@ test('a buried entity, or one moved to another model, is no neighbour', () => {
     t: 'update',
     table: TABLE,
     set: { model: val('next') },
-    where: eq(col('entity'), val(Number(second.slice(2)))),
+    where: eq(col('owner'), val(Number(second.slice(2)))),
   })
   let now = top(db, q)
   assert(!now.includes(first) && !now.includes(second), now.join())
