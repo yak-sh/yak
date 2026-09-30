@@ -62,7 +62,8 @@ queries exclude these entities.
 The package has one import path, `@yaks/sql`. It exports:
 
 - `compile`, `bind`, `BindOpts`, `Compiled`, and `Unsupported` for compilation,
-  and `screen` for the ids a query admits;
+  `screen` for the ids a query admits, and `tallied` for how an aggregate counts
+  a property's values;
 - the statement nodes (`Select`, `Insert`, `CreateTable`, `Stmt`, `Expr`, …),
   their builders (`select`, `col`, `val`, `eq`, `and`, `among`, `when`, …), and
   `render`;
@@ -279,6 +280,10 @@ presence/absence, ordering, `.limit`/`.after`, `.count`/`.distinct`/`.tally`,
 combinations can still be unsupported; the binder throws `Unsupported` rather
 than silently ignoring them. Callers may report the error or use another
 evaluator.
+
+`.distinct` and `.tally` count a number as the number it is and a text, enum or
+eid as its text (`tallied`), and refuse any other type. Over a reference they
+group by the integer it stores and read each group's eid once.
 
 Text terms require a search extension, such as `@yaks/fts`, or a custom text
 compiler. `.edges` and edge-typed walks require `@yaks/edge`; `.near` requires a

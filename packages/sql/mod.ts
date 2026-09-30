@@ -141,7 +141,7 @@ export * from './ident.ts'
 export { walk } from './walk.ts'
 export * from './archetype.ts'
 export { type At, type Gone, type On, type Plan, rule } from './match.ts'
-export { bind, type BindOpts, screen } from './bind.ts'
+export { bind, type BindOpts, screen, tallied } from './bind.ts'
 export { Unsupported, whole } from './unsupported.ts'
 
 /** A compiled statement: its SQL and the parameters it binds, in order. */

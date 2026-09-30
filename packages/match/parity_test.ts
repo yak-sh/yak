@@ -118,9 +118,17 @@ test('an aggregate answers the same rows on both sides', () => {
       '.price<20&.tally=status',
       '.tally=author',
       '.distinct=review.book',
+      '.tally=review.book.book.author',
+      // a number is counted as the number it is, never as its text
+      '.tally=price',
+      '.distinct=price',
+      '.tally=review.book.book.price',
     ]
   ) assertEquals(rows(q, shop, { now: NOW })(bundles), s.rows(q), q)
-  assertThrows(() => rows('.tally=price', shop), Error, 'cannot compile')
+  assertEquals(s.rows('.tally=review.book.book.price'), [
+    { value: 12, n: 2 },
+    { value: 30, n: 1 },
+  ])
 })
 
 // A projection carries each value it names beside the eid, one hop or through
@@ -173,7 +181,8 @@ test('a query neither side can answer is declined by both', () => {
       // a path through a hop that is no reference, or to a whole component
       '.review&.fields=review.stars.doc.title',
       '.order=book.author.member',
-      '.tally=review.book.book.price',
+      '.tally=available',
+      '.distinct=released',
     ]
   ) {
     assertThrows(() => s.rows(q), Error, 'cannot compile', q)

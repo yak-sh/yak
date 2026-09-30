@@ -71,6 +71,51 @@ test('archetype query golden: presence/kind, value joins, boolean, paths, revers
   assertEquals(rows(driver, vocab, bool), driver.query(old))
 })
 
+// A tally groups by the archetype each entity stores, and still answers with
+// the archetype's eid: the count each entity's own archetype adds up to.
+test('a tally by archetype counts each entity under its archetype', () => {
+  // the entity's archetype as a property a query reads (@yaks/kernel's)
+  let v = loadVocab([...vocab.docs, {
+    $defs: {
+      entity: {
+        component: true,
+        type: 'object',
+        extends: true,
+        properties: {
+          archetype: { type: 'string', ref: 'archetype', stamped: true },
+        },
+      },
+    },
+  }])
+  let s = storage(mem(), v)
+  s.install()
+  let g = graph({ storage: s, vocab: v, plugins: [archetypes()] })
+  g.apply([
+    { entity: { eid: 'a' }, doc: {}, marker: {} },
+    { entity: { eid: 'b' }, doc: {} },
+    { entity: { eid: 'c' }, doc: {} },
+    { entity: { eid: 'd' }, marker: {} },
+  ])
+  g.apply([{ entity: { eid: 'c' }, $delete: true }])
+  let of = new Map(
+    s.rows('.fields=entity.archetype')
+      .map((r) => [r.eid, r['entity.archetype'] as string]),
+  )
+  let sorted = (vs: string[]) => [...new Set(vs)].sort()
+  let each = [...of.values()]
+  assertEquals(
+    s.rows('.tally=entity.archetype'),
+    sorted(each).map((value) => ({
+      value,
+      n: each.filter((v) => v == value).length,
+    })),
+  )
+  assertEquals(
+    s.rows('.doc .distinct=entity.archetype'),
+    sorted([of.get('a')!, of.get('b')!]).map((value) => ({ value })),
+  )
+})
+
 test('a wide archetype catalog still answers a component query', () => {
   let flags = Object.fromEntries(
     Array.from({ length: 7 }, (_, i) => [

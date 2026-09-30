@@ -41,7 +41,7 @@ import {
   type Query as Ast,
   type Tally,
 } from '@yaks/query'
-import { type Tag, Unsupported, whole } from '@yaks/sql'
+import { type Tag, tallied, Unsupported, whole } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import {
   BY,
@@ -367,10 +367,10 @@ let SEQUENCE = new Set(['order', 'limit', 'after'])
  * `.fields` projection puts each value it names beside the eid, keyed by its
  * path as written, through references too. `.count` is one
  * `{ value: '', n }`; `.tally=prop` is a `{ value, n }` per value and
- * `.distinct=prop` a `{ value }` per value, empty values dropped and sorted by
- * value. As there, only a text, enum or eid property is tallied, since a
- * number or a time read as text would not compare the same, and an aggregate
- * ignores `.order`, `.limit` and `.after`.
+ * `.distinct=prop` a `{ value }` per value, absent and empty values dropped
+ * and sorted by value. As there, a number is counted as the number it is and a
+ * text, enum or eid as its text, anything else is refused (@yaks/sql
+ * `tallied`), and an aggregate ignores `.order`, `.limit` and `.after`.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -426,19 +426,20 @@ export let rows = (
     }
     let path = (agg as Distinct | Tally).path.join('.')
     let { read, tag } = field(ctx, path)
-    if (!['text', 'enum', 'eid'].includes(tag)) {
+    let counted = tallied(tag)
+    if (!counted) {
       throw new Unsupported('.distinct/.tally', `over a ${tag} property`, BY)
     }
+    let key = (v: unknown) =>
+      v == null ? null : counted == 'number' ? v : String(v) || null
     return (bs: Source) => {
       let among = indexed(bs)
-      let n = new Map<string, number>()
+      let n = new Map<unknown, number>()
       for (let b of select(among)) {
-        let v = read(b, among)
-        if (v != null && String(v) != '') {
-          n.set(String(v), (n.get(String(v)) ?? 0) + 1)
-        }
+        let k = key(read(b, among))
+        if (k != null) n.set(k, (n.get(k) ?? 0) + 1)
       }
-      let values = [...n.keys()].sort()
+      let values = [...n.keys()].sort(compare)
       return agg.kind == 'tally'
         ? values.map((value) => ({ value, n: n.get(value) }))
         : values.map((value) => ({ value }))

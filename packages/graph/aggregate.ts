@@ -25,14 +25,42 @@ let AGGS = new Set(['count', 'distinct', 'tally'])
 export let aggregate = (ast: Query): Agg | undefined =>
   ast.clauses.find((c) => AGGS.has(c.kind))?.kind as Agg | undefined
 
+// Values in order: a number by its size and before any text (a property
+// tallies as numbers or as text, @yaks/sql `tallied`), a text as a string.
+let before = (a: unknown, b: unknown): number =>
+  typeof a == 'number' && typeof b == 'number'
+    ? a - b
+    : typeof a == 'number'
+    ? -1
+    : typeof b == 'number'
+    ? 1
+    : String(a) < String(b)
+    ? -1
+    : String(a) > String(b)
+    ? 1
+    : 0
+
 /** A reduction's rows as its answer. The compiled statement returns one
  * `{value, n}` row per value (`.count` under the empty key, since no tally
  * keeps an empty one). Sorted by value, so two stores answering the same
- * question answer in the same order. */
+ * question answer in the same order, and each value written as JavaScript
+ * writes it.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ *
+ * let rows = [{ value: 12, n: 1 }, { value: -2, n: 3 }, { value: 7.5, n: 1 }]
+ * assertEquals(reduced('distinct', rows), { distinct: ['-2', '7.5', '12'] })
+ * ```
+ */
 export let reduced = (op: Agg, rows: Row[]): Reduced => {
   if (op == 'count') return { count: Number(rows[0]?.n ?? 0) }
-  let values = rows.map((r) => String(r.value)).sort()
+  let sorted = rows.toSorted((a, b) => before(a.value, b.value))
+  let values = sorted.map((r) => String(r.value))
   if (op == 'distinct') return { distinct: values }
-  let at = new Map(rows.map((r) => [String(r.value), Number(r.n ?? 0)]))
-  return { tally: Object.fromEntries(values.map((v) => [v, at.get(v)!])) }
+  return {
+    tally: Object.fromEntries(
+      sorted.map((r, i) => [values[i], Number(r.n ?? 0)]),
+    ),
+  }
 }

@@ -373,7 +373,8 @@ before any bundle is read.
   see above.
 - **`.count`, `.distinct=`, `.tally=` in `matcher()` or `filter()`** — these
   return aggregate rows rather than entities; `rows()` answers them. As in
-  @yaks/sql, `.distinct` and `.tally` take only a text, enum or eid property.
+  @yaks/sql (`tallied`), `.distinct` and `.tally` count a number as the number
+  it is and a text, enum or eid property as its text, and refuse the rest.
 - **A computed property nobody registered** — no function was supplied to
   calculate it. Register it through `opts.computed` and it is answered;
   @yaks/sql refuses the same property for the same reason when its `derived`

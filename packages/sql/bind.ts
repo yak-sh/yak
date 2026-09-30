@@ -840,12 +840,11 @@ let rel = (from: string, o: {
   cols: string[]
   joins: Link[]
   where: Cond
-  uniq?: boolean
   group?: string
+  having?: string
   order?: string[]
 }): Select => ({
   t: 'select',
-  distinct: o.uniq,
   cols: o.cols.map((c) => raw(c)),
   from: raw(from),
   joins: o.joins.map((j): Join => ({
@@ -855,6 +854,7 @@ let rel = (from: string, o: {
   })),
   where: o.where,
   group: o.group ? [raw(o.group)] : undefined,
+  having: o.having ? raw(o.having) : undefined,
   order: (o.order ?? []).map((x) => raw(x)),
 })
 
@@ -1288,11 +1288,12 @@ let screenFor = (
 // reads it. Read off the selected row, through the joins this bind makes, or,
 // given `owner`, off the row with that integer id: a `.after` anchor, whose
 // place in the order is then read exactly as the rows' own places are.
-let resolveField = (
-  ctx: Ctx,
-  pathStr: string,
-  owner?: string,
-): { expr: string; tag: Tag } => {
+//
+// A reference's value is the eid it names, and `key` is the integer it stores
+// beside it: one key names one entity, so an aggregate groups by the key and
+// reads each group's eid once, rather than every row's.
+type Field = { expr: string; tag: Tag; key?: string }
+let resolveField = (ctx: Ctx, pathStr: string, owner?: string): Field => {
   let hops = ctx.v.aim(pathStr)
   let [root, leaf] = [hops[0], hops[hops.length - 1]]
   if (!leaf.comp) throw new Unsupported('a shared reference', pathStr)
@@ -1303,9 +1304,14 @@ let resolveField = (
   // A component these entities never wear holds nothing to read.
   if (!reachable(ctx, hops)) return { expr: 'null', tag }
   let read: Read
+  let key: string | undefined
   if (hops.length == 1 && owner == null) {
     ctx.tables.add(leaf.comp)
     read = readProp(ctx, leaf.comp, leaf.prop, ctx.d.ownerKey(leaf.comp))
+    // (a backed spine has no entity columns: they read null)
+    if (keyed(ctx, leaf) && !(ctx.spine && leaf.comp == 'entity')) {
+      key = refKey(ctx, leaf.comp, leaf.prop)
+    }
   } else {
     let start = hops.length == 1
       ? owner!
@@ -1313,11 +1319,38 @@ let resolveField = (
       ? `(select "__pa"."${root.prop}" from ${source(ctx, root.comp)}` +
         ` as "__pa" where "__pa"."entity" = ${owner})`
       : (ctx.tables.add(root.comp), refKey(ctx, root.comp, root.prop))
-    read = leafRead(ctx, leaf, chain(ctx, hops, start))
+    let target = chain(ctx, hops, start)
+    read = leafRead(ctx, leaf, target)
+    if (keyed(ctx, leaf)) {
+      let id = leaf.comp == 'entity' ? 'id' : 'entity'
+      key = `(select "__pk"."${leaf.prop}" from ${source(ctx, leaf.comp)}` +
+        ` as "__pk" where "__pk"."${id}" = ${target})`
+    }
   }
   if (!read) throw new Unsupported('a computed property here', pathStr)
-  return { expr: read.expr, tag: read.tag }
+  return { expr: read.expr, tag: read.tag, key }
 }
+
+// Whether a property's read is the eid its stored reference names, rather
+// than a derived expression of its own.
+let keyed = (ctx: Ctx, leaf: Hop): boolean =>
+  isRef(ctx.v, leaf.comp, leaf.prop) &&
+  !ctx.v.prop(leaf.comp, leaf.prop)!.computed &&
+  !ctx.derived[`${leaf.comp}.${leaf.prop}`]
+
+/**
+ * How `.distinct` and `.tally` count a property of type `tag`, alike here and
+ * in @yaks/match: a number as the number it is, a text, an enum member or an
+ * eid as its text, anything else not at all (null). A number cast to text
+ * would not read as JavaScript writes it (a real 2 is `2.0`), and a boolean
+ * is 0 or 1 here where a bundle holds `false` or `true`.
+ */
+export let tallied = (tag: Tag): 'number' | 'text' | null =>
+  tag == 'number' || tag == 'priority'
+    ? 'number'
+    : tag == 'text' || tag == 'enum' || tag == 'eid'
+    ? 'text'
+    : null
 
 /** A query as the statement that answers it: the one function `compile`
  * renders. */
@@ -1383,42 +1416,37 @@ export let bound = (
       where,
     })
   }
-  // `.distinct`/`.tally`: the non-empty values of a property (only a text, enum
-  // or eid property — casting a numeric or time property would disagree with
-  // the JavaScript matcher), or a count per value. Empty values are dropped.
+  // `.distinct`/`.tally`: the values of a property, or a count per value, as
+  // `tallied` counts them; an absent value, and an empty text, is dropped.
   if (distinct || tally) {
     let agg = (distinct ?? tally)!
-    let { expr, tag } = resolveField(ctx, agg.path.join('.'))
-    // decline a numeric, time or derived property: only text, enum and eid
-    // properties tally exactly
-    if (!['text', 'enum', 'eid'].includes(tag)) {
+    let { expr, tag, key } = resolveField(ctx, agg.path.join('.'))
+    let counted = tallied(tag)
+    if (!counted) {
       throw new Unsupported('.distinct/.tally', `over a ${tag} property`)
     }
-    // Grouped and ordered by the expression, never by its `value` alias: a
-    // name in GROUP BY reads a source column first, and a backed spine can
-    // have one of that name (`_change.value`), which grouped every change
-    // apart.
-    let text = `cast(${expr} as text)`
-    let nonEmpty = and(
-      cond({ sql: `${expr} is not null`, params: [] }),
-      cond({ sql: `${text} != ''`, params: [] }),
-      where,
-    )
-    return tally
-      ? rel(ctx.d.spine, {
-        cols: [`${text} as value`, 'count(*) as n'],
-        joins: joinsOf(ctx),
-        where: nonEmpty,
-        group: text,
-        order: [text],
-      })
-      : rel(ctx.d.spine, {
-        cols: [`${text} as value`],
-        uniq: true,
-        joins: joinsOf(ctx),
-        where: nonEmpty,
-        order: [text],
-      })
+    let value = counted == 'number' ? expr : `cast(${expr} as text)`
+    // Grouped by the stored reference where there is one, so each group's eid
+    // is read once: counting 2.4M entities by archetype read an eid per entity,
+    // four times over, in 3.5 s, and grouped by the integer takes 0.8 s, most
+    // of it the tombstone check. Else grouped and ordered by the expression,
+    // never by its `value` alias: a name in GROUP BY reads a source column
+    // first, and a backed spine can have one of that name (`_change.value`),
+    // which grouped every change apart.
+    let held = key
+      ? `${key} is not null`
+      : counted == 'number'
+      ? `${expr} is not null`
+      : `${expr} is not null and ${value} != ''`
+    return rel(ctx.d.spine, {
+      cols: [`${value} as value`, ...tally ? ['count(*) as n'] : []],
+      joins: joinsOf(ctx),
+      where: and(cond({ sql: held, params: [] }), where),
+      group: key ?? value,
+      // a reference that names no entity has no eid to count under
+      having: key ? `${expr} is not null` : undefined,
+      order: [value],
+    })
   }
 
   // An ordinary query. Ordering, then the window within it. `.order=-field` is descending, and an
