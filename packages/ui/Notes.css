@@ -12,7 +12,7 @@
   gap: 0 var(--half-gap);
   min-width: 0;
   padding-left: var(--half-gap);
-  border-left: 2px solid var(--yellow);
+  border-left: 2px solid var(--active);
 }
 .Notes_Item-done {
   border-left-color: var(--border2);
@@ -28,7 +28,7 @@
   white-space: nowrap;
 }
 .Notes_Who {
-  color: var(--blue);
+  color: var(--who);
 }
 .Notes_When {
   color: var(--dim);

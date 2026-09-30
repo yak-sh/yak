@@ -34,6 +34,7 @@ import * as timeline from './Timeline.ts'
 import * as tip from './Tip.ts'
 import * as value from './Value.ts'
 import { everforest } from './everforest.ts'
+import { rosepine } from './rosepine.ts'
 import type { Kit, Theme } from './theme.ts'
 
 /** Every part: the document's defaults first, then each component. */
@@ -66,8 +67,8 @@ export let kit: Record<string, Kit> = {
   Index: index,
 }
 
-/** Every theme, by name. */
-export let themes: Record<string, Theme> = { everforest }
+/** Every theme, by name; the first is the default. */
+export let themes: Record<string, Theme> = { everforest, rosepine }
 
 /** What @yaks/tui's painter dresses the kit with, in `theme`'s colours. */
 export let sheet = (theme: Theme): Sheet =>

@@ -26,11 +26,11 @@ export let Notes: Part & Record<'Item' | 'Text' | 'Who' | 'When', Part> = block(
   },
 )
 
-/** A note is a line of its own; who is blue, when is dim, a done one dim. */
+/** A note is a line of its own; when is dim, and so is a done one. */
 export let sheet = (c: Colors): Sheet => ({
   Notes_Item: { block: true, spaced: true },
   'Notes_Item-done': { fg: c.dim },
-  Notes_Who: { fg: c.blue },
+  Notes_Who: { fg: c.who },
   Notes_When: { fg: c.dim },
 })
 

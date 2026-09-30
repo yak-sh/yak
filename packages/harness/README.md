@@ -367,15 +367,15 @@ model delegation keeps its existing receipt behavior.
 
 ### Sidebar status indicators
 
-Session and task indicators use query-matched `@yaks/render` registrations: `●`
-green = completed task / settled session; `●` yellow = active work; `◐` yellow =
-task still claimed by a settled worker; `○` blue = open; `●` red = failed
-session / unfinished task whose worker failed. Stopped sessions and cancelled
-tasks use a muted open circle. A stopped or unknown/missing task worker uses a
-muted half-circle rather than claiming the work is active or complete. Completed
-tasks outrank their worker's state. The task panel joins already-read session
-state only for rendering; nothing is persisted twice. Completed tasks still
-follow the existing open-task filtering.
+Session and task indicators use query-matched `@yaks/render` registrations, in
+the theme's tones: `●` positive = completed task / settled session; `●` active =
+active work; `◐` active = task still claimed by a settled worker; `○` info =
+open; `●` negative = failed session / unfinished task whose worker failed.
+Stopped sessions and cancelled tasks use a muted open circle. A stopped or
+unknown/missing task worker uses a muted half-circle rather than claiming the
+work is active or complete. Completed tasks outrank their worker's state. The
+task panel joins already-read session state only for rendering; nothing is
+persisted twice. Completed tasks still follow the existing open-task filtering.
 
 <a id="subagent-git-homes"></a>
 

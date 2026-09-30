@@ -1,0 +1,57 @@
+/* Rosé Pine: the second theme, the same names as Everforest's with nothing
+   of Everforest in them. Prose is set in a serif, corners are round and the
+   spacing is roomier. Each colour is a light-dark() pair, Rosé Pine Dawn
+   then Rosé Pine (main), and the page's color-scheme picks one. The palette
+   has no green and two pinks: a part that names a hue where it means a role
+   shows here. rosepine.ts holds the dark colours for a terminal. */
+:root {
+  color-scheme: light dark;
+  --gap: 1rem;
+  --radius: 10px;
+  --measure: 72ch;
+  --shadow: 0 12px 32px light-dark(#5752792e, #0000008c);
+
+  --font: 'Iowan Old Style', 'Palatino Linotype', Palatino, Charter, Georgia,
+    serif;
+  --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace,
+    monospace;
+
+  --bg: light-dark(#faf4ed, #191724); /* base */
+  --surface: light-dark(#fffaf3, #1f1d2e); /* surface */
+  --card: light-dark(#f2e9e1, #26233a); /* overlay */
+  --border: light-dark(#dfdad9, #403d52); /* highlight med */
+  --border2: light-dark(#cecacd, #524f67); /* highlight high */
+
+  --text: light-dark(#575279, #e0def4); /* text */
+  --muted: light-dark(#797593, #908caa); /* subtle */
+  --dim: light-dark(#9893a5, #6e6a86); /* muted */
+
+  --accent: light-dark(#d7827e, #ebbcba); /* rose */
+  --link: light-dark(#907aa9, #c4a7e7); /* iris */
+  --heading: light-dark(#56949f, #9ccfd8); /* foam */
+
+  --info: light-dark(#56949f, #9ccfd8); /* foam */
+  --active: light-dark(#d7827e, #ebbcba); /* rose */
+  --positive: light-dark(#286983, #31748f); /* pine */
+  --negative: light-dark(#b4637a, #eb6f92); /* love */
+  --caution: light-dark(#ea9d34, #f6c177); /* gold */
+  --special: light-dark(#907aa9, #c4a7e7); /* iris */
+
+  --number: light-dark(#ea9d34, #f6c177); /* gold */
+  --literal: light-dark(#d7827e, #ebbcba); /* rose */
+  --time: light-dark(#56949f, #9ccfd8); /* foam */
+  --who: light-dark(#907aa9, #c4a7e7); /* iris */
+
+  --keyword: light-dark(#286983, #31748f); /* pine */
+  --string: light-dark(#ea9d34, #f6c177); /* gold */
+  --fn: light-dark(#d7827e, #ebbcba); /* rose */
+  --type: light-dark(#56949f, #9ccfd8); /* foam */
+  --attr: light-dark(#907aa9, #c4a7e7); /* iris */
+
+  --hue-0: light-dark(#56949f, #9ccfd8); /* foam */
+  --hue-1: light-dark(#ea9d34, #f6c177); /* gold */
+  --hue-2: light-dark(#907aa9, #c4a7e7); /* iris */
+  --hue-3: light-dark(#286983, #31748f); /* pine */
+  --hue-4: light-dark(#d7827e, #ebbcba); /* rose */
+  --hue-5: light-dark(#b4637a, #eb6f92); /* love */
+}

@@ -16,14 +16,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  border-radius: 3px;
+  border-radius: calc(var(--radius) / 2);
   padding: 0 4px;
   min-height: var(--tap);
 }
 .Index_Head {
   font-size: 12px;
   font-weight: 600;
-  color: var(--green);
+  color: var(--heading);
 }
 .Index_Item {
   font-family: var(--mono);

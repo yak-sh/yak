@@ -7,8 +7,12 @@
 
 import type { Theme } from './theme.ts'
 
+let red = '#e67e80'
+let orange = '#e69875'
+let yellow = '#dbbc7f'
 let green = '#a7c080'
 let blue = '#7fbbb3'
+let purple = '#d699b6'
 
 /** Everforest dark (medium). */
 export let everforest: Theme = {
@@ -22,13 +26,24 @@ export let everforest: Theme = {
     text: '#d3c6aa',
     muted: '#9da9a0',
     dim: '#7a8478',
-    green,
-    red: '#e67e80',
-    orange: '#e69875',
-    purple: '#d699b6',
-    blue,
-    yellow: '#dbbc7f',
     accent: green,
     link: blue,
+    heading: green,
+    info: blue,
+    active: yellow,
+    positive: green,
+    negative: red,
+    caution: orange,
+    special: purple,
+    number: purple,
+    literal: orange,
+    time: blue,
+    who: blue,
+    keyword: red,
+    string: green,
+    fn: blue,
+    type: yellow,
+    attr: orange,
+    hues: [blue, yellow, purple, green, orange, red],
   },
 }

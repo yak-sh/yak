@@ -35,7 +35,7 @@ export let sheet = (c: Colors): Sheet => ({
   Tile_Id: { fg: c.dim },
   Tile_Kind: { fg: c.dim },
   Tile_Note: { fg: c.muted, spaced: true },
-  Tile_Count: { fg: c.purple },
+  Tile_Count: { fg: c.number },
 })
 
 let { Id, Kind, Title, Note, Count } = Tile

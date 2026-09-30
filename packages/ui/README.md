@@ -79,14 +79,33 @@ of the screen, and a `Table` is a `grid` whose cells cut with an `ellipsis`.
 
 ## Themes
 
-A theme is a stylesheet of CSS custom properties (`--bg`, `--dim`, …) and the
-same colours as values. Some name a role rather than a hue: `--accent` is
-selection and the primary action, and `--link` is every link, whatever part it
-is in (an anchor, a `Pager.Step`), in a browser and in a terminal alike. Every
-component's CSS reads the properties through `var()`, and every component's
-terminal entries are a function of the colours. Everforest is the first theme:
-`everforest.css`, with a light face for a light system, and `everforest.ts`.
-`themes` names every one.
+A theme is a stylesheet of CSS custom properties and the same colours as values.
+Every colour names a role, never a hue, so a part says what a thing is and the
+theme says how it looks:
+
+- the ground and the ink: `--bg`, `--surface`, `--card`, `--border`,
+  `--border2`, `--text`, `--muted`, `--dim`;
+- `--accent`, selection and the primary action; `--link`, every link, whatever
+  part it is in (an anchor, a `Pager.Step`); `--heading`, a section's title;
+- the tones a state is said in, which are a `Dot`'s: `--info`, `--active`,
+  `--positive`, `--negative`, `--caution`, `--special`;
+- what a value is: `--number`, `--literal` (true, false, null), `--time`,
+  `--who`; and code's `--keyword`, `--string`, `--fn`, `--type`, `--attr`;
+- `--hue-0` to `--hue-5`, six colours that only tell things apart (a `Chip`'s).
+
+`Colors` (theme.ts) lists them. Each is a `light-dark()` pair, so the page's
+`color-scheme` picks the light scheme or the dark: the system's, unless the page
+sets one. A terminal paints the dark. Besides its colours a theme sets its type
+(`--font`, `--mono`), its spacing (`--gap`, `--radius`, `--measure`) and the
+shadow under a raised box (`--shadow`); the base derives `--half-gap`, `--soft`
+and the touch-target floor `--tap` from them. Every component's CSS reads the
+properties through `var()`, and every component's terminal entries are a
+function of the colours.
+
+`themes` (kit.ts) is every theme by name. Everforest (`everforest.css`,
+`everforest.ts`) is the first and the default. Rosé Pine (`rosepine.*`) shares
+nothing with it but the names: a serif, round corners, more room, and a palette
+with no green, so a part that leans on one theme's values shows in the other.
 
 ```ts ignore
 import { everforest, sheet, stylesheet } from '@yaks/ui'
@@ -103,7 +122,8 @@ text entry), the way the base stylesheet colours a browser's scrollbars.
 `Guide` is every part in every variant, on one page built of plain HTML, and
 `Specimens` is one part's section of it. The routes facet (`@yaks/ui/routes`)
 answers it at `/ui` as a static page with the stylesheet inline, and web's
-terminal shows it on `:ui`.
+terminal shows it on `:ui`. `/ui` takes the theme and the scheme it is seen in,
+`?theme=rosepine&scheme=light`, and a row of links over the guide switches each.
 
 The cli facet (`@yaks/ui/cli`) holds it in a terminal as `yak ui`, painted
 through each part's terminal sheet: the themes as tabs over an index of the
@@ -122,6 +142,7 @@ nothing from a graph.
 | `base.*`        | the document's defaults: prose, code, tables, syntax, scrollbars      |
 | `<Part>.ts/css` | one component: the part, its terminal entries, its specimens; its CSS |
 | `everforest.*`  | the first theme                                                       |
+| `rosepine.*`    | the second                                                            |
 | `guide.ts`      | the style guide                                                       |
 | `routes.ts`     | `/ui`                                                                 |
 | `cli.ts`        | `yak ui`                                                              |

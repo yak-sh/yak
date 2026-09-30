@@ -19,7 +19,7 @@ export let Button: Part = el('button', 'Button')
 export let sheet = (c: Colors): Sheet => ({
   Button: { fg: c.accent },
   'Button-add': { fg: c.dim },
-  'Button-danger': { fg: c.red },
+  'Button-danger': { fg: c.negative },
   'Button-quiet': { fg: c.dim },
 })
 

@@ -224,13 +224,13 @@ export let views: Registry = define([
  * imported: @yaks/tui builds on this package. A page's head, title and body
  * and each section end with a blank line, where a browser has margins. */
 export let sheet = (
-  c: Record<'dim' | 'green' | 'muted', string>,
+  c: Record<'dim' | 'heading' | 'muted', string>,
 ): Record<string, { fg?: string; gap?: boolean }> => ({
   Page_Head: { fg: c.dim, gap: true },
   Page_Title: { gap: true },
   Page_Body: { gap: true },
   Section: { gap: true },
-  Section_Title: { fg: c.green },
+  Section_Title: { fg: c.heading },
   Facts_Prop: { fg: c.muted },
   Tile_Id: { fg: c.dim },
   Comment_Head: { fg: c.dim },

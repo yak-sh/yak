@@ -1,6 +1,21 @@
 /* The document's defaults: what an element looks like before any component
    says otherwise. Everything here is :where(), zero specificity, so any
-   component rule wins. */
+   component rule wins, and a theme's custom properties win over the ones
+   set here. */
+
+/* What every theme derives the same way: half its gap, a faint wash of its
+   text, and the touch-target floor, which grows under a coarse pointer (fat
+   fingers get fat targets, and only there). */
+:where(:root) {
+  --half-gap: calc(var(--gap) / 2);
+  --soft: color-mix(in srgb, var(--text) 6%, transparent);
+  --tap: 0px;
+}
+@media (pointer: coarse) {
+  :where(:root) {
+    --tap: 2.5rem;
+  }
+}
 
 /* Border-box everywhere: a width is the box you see. */
 *,
@@ -60,7 +75,7 @@
 :where(code) {
   background: var(--soft);
   padding: 0 3px;
-  border-radius: 3px;
+  border-radius: calc(var(--radius) / 2);
 }
 :where(pre code) {
   display: block;
@@ -88,25 +103,32 @@
 
 /* Syntax, as highlight.js names it. */
 :where(.hljs-keyword, .hljs-selector-tag) {
-  color: var(--red);
+  color: var(--keyword);
 }
-:where(.hljs-literal, .hljs-number) {
-  color: var(--purple);
+:where(.hljs-number) {
+  color: var(--number);
 }
-:where(.hljs-string, .hljs-addition) {
-  color: var(--accent);
+:where(.hljs-literal) {
+  color: var(--literal);
 }
-:where(.hljs-title, .hljs-section) {
-  color: var(--blue);
+:where(.hljs-string) {
+  color: var(--string);
+}
+:where(.hljs-title) {
+  color: var(--fn);
 }
 :where(.hljs-section) {
+  color: var(--heading);
   font-weight: 700;
 }
 :where(.hljs-built_in, .hljs-type) {
-  color: var(--yellow);
+  color: var(--type);
 }
 :where(.hljs-attr, .hljs-variable) {
-  color: var(--orange);
+  color: var(--attr);
+}
+:where(.hljs-addition) {
+  color: var(--positive);
 }
 :where(.hljs-comment, .hljs-meta) {
   color: var(--dim);
@@ -115,7 +137,7 @@
   font-style: italic;
 }
 :where(.hljs-deletion) {
-  color: var(--red);
+  color: var(--negative);
 }
 
 /* A textarea is as tall as what is typed in it. */

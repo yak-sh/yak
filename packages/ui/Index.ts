@@ -22,7 +22,7 @@ export let Index: Part & Record<'Group' | 'Head' | 'Item', Part> = block(
 /** Each head and entry a line of its own, the entries indented under their
  * head; where you are in the accent. */
 export let sheet = (c: Colors): Sheet => ({
-  Index_Head: { block: true, fg: c.green },
+  Index_Head: { block: true, fg: c.heading },
   'Index_Head-on': { fg: c.accent, bold: true },
   Index_Item: { block: true, indent: 2, fg: c.muted },
   'Index_Item-on': { fg: c.accent, bold: true },

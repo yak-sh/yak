@@ -94,23 +94,23 @@
 
 /* The tones. */
 .Dot-info {
-  --dot: var(--blue);
+  --dot: var(--info);
 }
 .Dot-active {
-  --dot: var(--yellow);
+  --dot: var(--active);
 }
 .Dot-positive {
-  --dot: var(--green);
+  --dot: var(--positive);
 }
 .Dot-negative {
-  --dot: var(--red);
+  --dot: var(--negative);
 }
 .Dot-caution {
-  --dot: var(--orange);
+  --dot: var(--caution);
 }
 .Dot-accent {
   --dot: var(--accent);
 }
 .Dot-special {
-  --dot: var(--purple);
+  --dot: var(--special);
 }

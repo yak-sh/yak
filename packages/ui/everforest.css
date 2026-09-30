@@ -1,71 +1,59 @@
-/* Everforest: the custom properties every component reads. Names are the
-   promise and values are not: a theme sets these names and nothing else, and
-   every rule in the kit stays as it is. everforest.ts holds the same colours
-   for a terminal. */
+/* Everforest (medium): the custom properties every component reads. Names
+   are the promise and values are not: a theme sets these names and nothing
+   else, and every rule in the kit stays as it is. Each colour is a
+   light-dark() pair, Everforest light then dark, and the page's
+   color-scheme picks one: the system's, unless the page says. Light borders
+   step up to bg3/bg4, because light bg2 is bg_dim and a border the colour of
+   the floor is not one. everforest.ts holds the dark colours for a
+   terminal. */
 :root {
-  color-scheme: dark; /* native widgets and scrollbars match the palette */
+  color-scheme: light dark; /* native widgets and scrollbars follow */
   --gap: 0.75rem;
-  --half-gap: calc(var(--gap) / 2);
   --radius: 6px;
-  --tap: 0px; /* the touch-target floor; grows under a coarse pointer */
   --measure: 90ch; /* the readable line length running prose caps at */
+  --shadow: 0 8px 30px light-dark(#5c6a7233, #00000073); /* under a raised box */
 
   /* Prose reads proportional; mono is kept for what it means: ids, stamps,
      code, command surfaces. */
   --font: system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  --bg: #232a2e; /* the floor */
-  --surface: #2d353b; /* panels and chrome */
-  --card: #343f44; /* a raised body */
-  --border: #3d484d;
-  --border2: #475258;
+  --bg: light-dark(#efebd4, #232a2e);
+  --surface: light-dark(#fdf6e3, #2d353b);
+  --card: light-dark(#f4f0d9, #343f44);
+  --border: light-dark(#e6e2cc, #3d484d);
+  --border2: light-dark(#e0dcc7, #475258);
 
-  --text: #d3c6aa;
-  --muted: #9da9a0;
-  --dim: #7a8478;
+  --text: light-dark(#5c6a72, #d3c6aa);
+  --muted: light-dark(#829181, #9da9a0);
+  --dim: light-dark(#a6b0a0, #7a8478);
 
-  --green: #a7c080;
-  --red: #e67e80;
-  --orange: #e69875;
-  --purple: #d699b6;
-  --blue: #7fbbb3;
-  --yellow: #dbbc7f;
-  --accent: var(--green); /* selection and the primary action */
-  --link: var(--blue); /* a link, whatever part it is in */
-  --soft: color-mix(in srgb, var(--text) 6%, transparent);
-}
+  --accent: light-dark(#8da101, #a7c080); /* green */
+  --link: light-dark(#3a94c5, #7fbbb3); /* blue */
+  --heading: light-dark(#8da101, #a7c080); /* green */
 
-/* A light system gets Everforest light (medium): the same names re-pointed
-   at the mirror palette. Borders step up to bg3/bg4, because light bg2 is
-   bg_dim and a border the colour of the floor is not one. */
-@media (prefers-color-scheme: light) {
-  :root {
-    color-scheme: light;
+  --info: light-dark(#3a94c5, #7fbbb3); /* blue */
+  --active: light-dark(#dfa000, #dbbc7f); /* yellow */
+  --positive: light-dark(#8da101, #a7c080); /* green */
+  --negative: light-dark(#f85552, #e67e80); /* red */
+  --caution: light-dark(#f57d26, #e69875); /* orange */
+  --special: light-dark(#df69ba, #d699b6); /* purple */
 
-    --bg: #efebd4;
-    --surface: #fdf6e3;
-    --card: #f4f0d9;
-    --border: #e6e2cc;
-    --border2: #e0dcc7;
+  --number: light-dark(#df69ba, #d699b6); /* purple */
+  --literal: light-dark(#f57d26, #e69875); /* orange */
+  --time: light-dark(#3a94c5, #7fbbb3); /* blue */
+  --who: light-dark(#3a94c5, #7fbbb3); /* blue */
 
-    --text: #5c6a72;
-    --muted: #829181;
-    --dim: #a6b0a0;
+  --keyword: light-dark(#f85552, #e67e80); /* red */
+  --string: light-dark(#8da101, #a7c080); /* green */
+  --fn: light-dark(#3a94c5, #7fbbb3); /* blue */
+  --type: light-dark(#dfa000, #dbbc7f); /* yellow */
+  --attr: light-dark(#f57d26, #e69875); /* orange */
 
-    --green: #8da101;
-    --red: #f85552;
-    --orange: #f57d26;
-    --purple: #df69ba;
-    --blue: #3a94c5;
-    --yellow: #dfa000;
-  }
-}
-
-/* Fat fingers get fat targets: a control that declares the --tap floor grows
-   to it on a touch device, and only there. */
-@media (pointer: coarse) {
-  :root {
-    --tap: 2.5rem;
-  }
+  --hue-0: light-dark(#3a94c5, #7fbbb3); /* blue */
+  --hue-1: light-dark(#dfa000, #dbbc7f); /* yellow */
+  --hue-2: light-dark(#df69ba, #d699b6); /* purple */
+  --hue-3: light-dark(#8da101, #a7c080); /* green */
+  --hue-4: light-dark(#f57d26, #e69875); /* orange */
+  --hue-5: light-dark(#f85552, #e67e80); /* red */
 }

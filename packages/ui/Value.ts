@@ -26,13 +26,13 @@ export let shapes = ['text', 'num', 'bool', 'id', 'time', 'json', 'nil']
 /** A shape is a colour. */
 export let sheet = (c: Colors): Sheet => ({
   Value: { fg: c.text },
-  'Value-num': { fg: c.purple },
-  'Value-bool': { fg: c.orange },
+  'Value-num': { fg: c.number },
+  'Value-bool': { fg: c.literal },
   'Value-id': { fg: c.dim },
-  'Value-time': { fg: c.blue },
+  'Value-time': { fg: c.time },
   'Value-json': { fg: c.muted },
   'Value-nil': { fg: c.dim, italic: true },
-  'Value-refused': { fg: c.red, underline: true },
+  'Value-refused': { fg: c.negative, underline: true },
 })
 
 let samples: Record<string, string> = {

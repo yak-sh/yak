@@ -21,7 +21,7 @@ export let Menu: Part & Record<'Item' | 'Rule', Part> = block('div', 'Menu', {
 export let sheet = (c: Colors): Sheet => ({
   Menu_Item: { block: true },
   'Menu_Item-hover': { bg: c.card },
-  'Menu_Item-danger': { fg: c.red },
+  'Menu_Item-danger': { fg: c.negative },
   Menu_Rule: { fg: c.border2 },
 })
 

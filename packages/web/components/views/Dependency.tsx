@@ -13,11 +13,12 @@ export let up = (type: string): string => reversed(vocab)[type] ?? type
 
 // An entity as one edge sentence: "<verb> <inline>". Never a tab — reached
 // by name, with the verb passed through by the parent's edge row. The verb
-// wears its edge color: requires red, reads blue, contains yellow. The rest
-// is the entity's own Inline — chip, a task's status pip (red when gated),
-// truncated title, struck when settled: the sentence says whether the edge
-// still binds. A reversed sentence (the view from the child) passes `label`,
-// its relation's `up` phrase, and keeps the type for its color.
+// wears its edge's colour (styles.css `--requires`, `--reads`, `--contains`).
+// The rest is the entity's own Inline — chip, a task's status pip (an alert
+// when gated), truncated title, struck when settled: the sentence says
+// whether the edge still binds. A reversed sentence (the view from the child)
+// passes `label`, its relation's `up` phrase, and keeps the type for its
+// colour.
 export let Dependency = (
   { e, type, label }: { e: Ent; [x: string]: unknown },
 ) => (

@@ -22,12 +22,7 @@ export let hues = 6
 /** A hue is a colour; a ghost is dim. */
 export let sheet = (c: Colors): Sheet => ({
   Chip: { fg: c.muted },
-  'Chip-0': { fg: c.blue },
-  'Chip-1': { fg: c.yellow },
-  'Chip-2': { fg: c.purple },
-  'Chip-3': { fg: c.green },
-  'Chip-4': { fg: c.orange },
-  'Chip-5': { fg: c.red },
+  ...Object.fromEntries(c.hues.map((fg, i) => [`Chip-${i}`, { fg }])),
   'Chip-ghost': { fg: c.dim, dim: true },
 })
 

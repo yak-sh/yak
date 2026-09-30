@@ -22,10 +22,10 @@ export let Timeline: Part & Record<'Item' | 'When' | 'Who' | 'What', Part> =
     What: 'div',
   })
 
-/** When is dim, who is blue, and what hangs under them. */
+/** When is dim, who wears its own colour, and what hangs under them. */
 export let sheet = (c: Colors): Sheet => ({
   Timeline_When: { fg: c.dim },
-  Timeline_Who: { fg: c.blue },
+  Timeline_Who: { fg: c.who },
   Timeline_Item: { spaced: true },
   Timeline_What: { indent: 2, spaced: true },
 })

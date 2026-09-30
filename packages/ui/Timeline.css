@@ -24,7 +24,7 @@
   color: var(--dim);
 }
 .Timeline_Who {
-  color: var(--blue);
+  color: var(--who);
 }
 .Timeline_What {
   flex-basis: 100%;

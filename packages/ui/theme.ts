@@ -4,15 +4,19 @@
  * through `var()`, and the same colours as values, which a terminal sheet is
  * built from (kit.ts `stylesheet` and `sheet`).
  *
+ * Every colour names a role, never a hue: `--number` is a number wherever
+ * one shows, whatever colour a theme gives it. A theme's stylesheet sets
+ * these names, its type and its spacing, and nothing else.
+ *
  * @module
  */
 
 import type { Sheet } from '@yaks/tui/theme'
 import type { VNode } from 'preact'
 
-/** A theme's colours, named as its custom properties are. A terminal paints
- * with one palette; where the stylesheet re-points them for a light system,
- * these are the dark values. */
+/** A theme's colours, named as its custom properties are (`hues` are
+ * `--hue-0` to `--hue-5`). A terminal paints with one palette; where the
+ * stylesheet has a light and a dark scheme, these are the dark. */
 export type Colors = {
   /** the floor */
   bg: string
@@ -27,16 +31,46 @@ export type Colors = {
   text: string
   muted: string
   dim: string
-  green: string
-  red: string
-  orange: string
-  purple: string
-  blue: string
-  yellow: string
   /** selection and the primary action */
   accent: string
   /** a link, whatever part it is in */
   link: string
+  /** a section's title */
+  heading: string
+  /** the tones a state is said in (a `Dot`'s): something to know, or still
+   * open */
+  info: string
+  /** under way */
+  active: string
+  /** went well: done, passed, approved */
+  positive: string
+  /** went wrong, or would destroy something */
+  negative: string
+  /** needs watching */
+  caution: string
+  /** set apart from the rest */
+  special: string
+  /** a number, stored or in code */
+  number: string
+  /** true, false and null, stored or in code */
+  literal: string
+  /** a moment */
+  time: string
+  /** who did it: a person or a session */
+  who: string
+  /** code: the language's own words */
+  keyword: string
+  /** code: a string */
+  string: string
+  /** code: a function's or a class's name */
+  fn: string
+  /** code: a type, or what the language builds in */
+  type: string
+  /** code: an attribute or a variable */
+  attr: string
+  /** six colours that only tell things apart (a `Chip`'s), none of them a
+   * role */
+  hues: [string, string, string, string, string, string]
 }
 
 /** A theme: its custom properties, and their colours. */

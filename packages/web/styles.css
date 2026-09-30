@@ -7,12 +7,16 @@
    scroller, so the scrollbar touches the card border and padding scrolls
    with content. */
 
-/* The statuses a task's text wears, as the theme's colours. */
+/* The statuses a task's text wears, in the tones a Dot says them in; and
+   the edges between tasks, told apart. */
 :root {
-  --open: var(--blue);
-  --wip: var(--yellow);
-  --done: var(--accent);
+  --open: var(--info);
+  --wip: var(--active);
+  --done: var(--positive);
   --cancelled: var(--dim); /* settled, but not a success: stays muted */
+  --requires: var(--hue-5);
+  --contains: var(--hue-1);
+  --reads: var(--hue-0);
 }
 
 /* Overscroll gestures (swipe-back) die ONLY while a canvas is on screen —
@@ -394,7 +398,7 @@ html {
   padding: var(--half-gap);
 }
 .Persona_Lint {
-  color: var(--yellow);
+  color: var(--caution);
   font-size: 12px;
 }
 
@@ -612,7 +616,7 @@ html {
   color: var(--accent);
 }
 .Card_X:hover {
-  color: var(--red);
+  color: var(--negative);
 }
 
 .Icon {
@@ -655,7 +659,7 @@ html {
 }
 .Comments_Who {
   font-size: 11px;
-  color: var(--blue);
+  color: var(--who);
 }
 /* The instrument, dimmed behind its actor: "Jeff · via S-3704". */
 .Comments_Via {
@@ -664,16 +668,16 @@ html {
   margin-left: var(--half-gap);
 }
 .Comments_Verdict {
-  --verdict: var(--yellow);
+  --verdict: var(--caution);
   color: var(--verdict);
   font-size: 11px;
   margin-left: var(--half-gap);
 }
 .Comments_Verdict-approved {
-  --verdict: var(--green);
+  --verdict: var(--positive);
 }
 .Comments_Verdict-rejected {
-  --verdict: var(--red);
+  --verdict: var(--negative);
 }
 .Comments_Who,
 .Comments_Via,
@@ -1066,7 +1070,7 @@ html {
   --wake-state: var(--done);
 }
 .Wake_Moment-failed {
-  --wake-state: var(--red);
+  --wake-state: var(--negative);
 }
 .Wake_Relative {
   color: var(--wake-state);
@@ -1265,10 +1269,10 @@ html {
   background: color-mix(in srgb, var(--pill) 15%, transparent);
 }
 .Prio-0 {
-  --pill: var(--red);
+  --pill: var(--negative);
 }
 .Prio-1 {
-  --pill: var(--orange);
+  --pill: var(--caution);
 }
 .Prio-3 {
   opacity: 0.65;
@@ -1404,8 +1408,8 @@ html {
   text-overflow: ellipsis;
 }
 /* The meta line wears the W-3639 mockup's chip grammar: every field a
-   bordered rounded chip, quiet color naming the field — domain blue,
-   project purple, prio its rank color, claim fleet purple. */
+   bordered rounded chip, a quiet colour of its own naming the field — prio
+   its rank's tone, a claim the fleet's. */
 .Show_Meta :is(.Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Prio, .Show_Comments) {
   padding: var(--meta-chip-padding, 1px 7px);
   border: var(--meta-chip-border, 1px solid var(--border2));
@@ -1419,19 +1423,19 @@ html {
   align-items: center;
 }
 .Show_Proposal-proposed {
-  color: var(--yellow);
+  color: var(--active);
 }
 .Show_Proposal[role='button'] {
   cursor: pointer;
 }
 .Show_Proposal-approved {
-  color: var(--accent);
+  color: var(--positive);
 }
 .Show_Proposal-cancelled {
-  color: var(--red);
+  color: var(--negative);
 }
 .Show_Proposal-declined {
-  color: var(--red);
+  color: var(--negative);
 }
 .Show_Meta .Prio {
   background: transparent;
@@ -1439,13 +1443,13 @@ html {
   font-weight: 400;
 }
 .Show_Meta .Show_Domain {
-  color: var(--blue);
+  color: var(--hue-0);
 }
 .Show_Meta .Show_Project {
-  color: var(--purple);
+  color: var(--hue-2);
 }
 .Show_Meta .Show_Assignee {
-  color: var(--orange); /* a person's warmth, apart from fleet purple */
+  color: var(--hue-4); /* a person, apart from the fleet's claim */
 }
 .Show_Mail {
   display: grid;
@@ -1462,11 +1466,11 @@ html {
   overflow-wrap: anywhere;
 }
 .Show_MailVal-verified {
-  color: var(--green);
+  color: var(--positive);
 }
 .Show_MailVal-unverified,
 .Show_MailFault {
-  color: var(--red);
+  color: var(--negative);
 }
 .Show_MailFault {
   grid-column: 1 / -1;
@@ -1480,7 +1484,7 @@ html {
   line-height: 1;
   white-space: nowrap;
 }
-/* Edge tallies wear their edge colors, dimmed to meta-line volume. */
+/* Edge tallies wear their edge colours, dimmed to meta-line volume. */
 .Show_Deps {
   display: inline-flex;
   align-items: center;
@@ -1495,20 +1499,20 @@ html {
   opacity: 0.55;
 }
 .Show_Deps-requires {
-  color: var(--red);
+  color: var(--requires);
 }
 .Show_Deps-contains {
-  color: var(--yellow);
+  color: var(--contains);
 }
 .Show_Deps-reads {
-  color: var(--blue);
+  color: var(--reads);
 }
 /* The block signal (D-17094): an EXTERNAL stuck, red like the Dot's alarm —
    distinct from the calm deps tally above. Carries the free-text reason. */
 .Show_Blocked {
   white-space: nowrap;
   font-size: 11px;
-  color: var(--red);
+  color: var(--negative);
 }
 .Show_Blocked .Icon {
   vertical-align: -2px;
@@ -1523,11 +1527,11 @@ html {
 .Show_Superseded .Icon {
   vertical-align: -2px;
 }
-/* The session lease badge — who's working this, in fleet purple. */
+/* The session lease badge — who's working this, in the fleet's tone. */
 .Show_Claim {
   white-space: nowrap;
   font-size: 11px;
-  color: var(--purple);
+  color: var(--special);
 }
 /* The badge links to the claiming session; underline on hover says so. */
 .Show_Claim {
@@ -1556,13 +1560,13 @@ html {
 }
 /* Each verb wears its edge's color — the same paint the sentence gets. */
 .Relate_Verb-requires {
-  color: var(--red);
+  color: var(--requires);
 }
 .Relate_Verb-contains {
-  color: var(--yellow);
+  color: var(--contains);
 }
 .Relate_Verb-reads {
-  color: var(--blue);
+  color: var(--reads);
 }
 .Relate_Verb:hover,
 .Relate:has(.Relate_Anchor) .Relate_Verb {
@@ -1645,7 +1649,7 @@ html {
   font-weight: 500;
 }
 .Role_State-running {
-  color: var(--green);
+  color: var(--positive);
 }
 .Role_Title {
   flex: 1;
@@ -1675,7 +1679,7 @@ html {
   text-transform: uppercase;
 }
 .Role_Fault {
-  color: var(--red);
+  color: var(--negative);
   white-space: pre-wrap;
 }
 .Show_Body {
@@ -1886,13 +1890,13 @@ html {
   font-size: 11px;
 }
 .Dependency_Type-requires {
-  color: var(--red);
+  color: var(--requires);
 }
 .Dependency_Type-reads {
-  color: var(--blue);
+  color: var(--reads);
 }
 .Dependency_Type-contains {
-  color: var(--yellow);
+  color: var(--contains);
 }
 /* similarity is a derived edge — quieter than the authored ones */
 .Dependency_Type-similar {
@@ -1955,10 +1959,10 @@ html {
   font-weight: 600;
 }
 .Status_Mode-insert {
-  color: var(--yellow);
+  color: var(--active);
 }
 .Status_Mode-visual {
-  color: var(--purple);
+  color: var(--special);
 }
 /* The colon gives a thumb-sized lead to the command line. */
 .Status_Colon {
@@ -2070,7 +2074,7 @@ html {
 }
 .Status_Person {
   font: inherit;
-  color: var(--blue);
+  color: var(--who);
   background: none;
   border: 0;
   padding: 0;
@@ -2105,10 +2109,10 @@ html {
   cursor: default;
 }
 .Sync_Pending {
-  --sync: var(--orange);
+  --sync: var(--caution);
 }
 .Sync_Refused {
-  --sync: var(--red);
+  --sync: var(--negative);
   cursor: pointer;
 }
 .Sync_Refused-open,
@@ -2171,7 +2175,7 @@ html {
 .Sync_Reason {
   flex: 1;
   min-width: 0;
-  color: var(--red);
+  color: var(--negative);
 }
 .Sync_Dismiss {
   font: inherit;
@@ -2224,7 +2228,7 @@ html {
   overflow-wrap: anywhere;
 }
 .WebWait_Error {
-  color: var(--red);
+  color: var(--negative);
   overflow-wrap: anywhere;
 }
 .WebWait_Go {
@@ -2586,7 +2590,7 @@ a[data-ref]:hover {
 .Session_Stop {
   font: inherit;
   font-size: 11px;
-  color: var(--red);
+  color: var(--negative);
   background: none;
   border: 1px solid var(--border2);
   border-radius: var(--radius);
@@ -2595,7 +2599,7 @@ a[data-ref]:hover {
   cursor: pointer;
 }
 .Session_Stop:hover {
-  border-color: var(--red);
+  border-color: var(--negative);
 }
 /* Facts and unordered diagnostics fold behind one dim line. */
 .Session_Facts,
@@ -2638,7 +2642,7 @@ a[data-ref]:hover {
   overflow-wrap: anywhere;
 }
 .Session_Fault-error {
-  color: var(--red);
+  color: var(--negative);
 }
 /* Messages sit straight on the card, each styled by its role. Only commands
    and broken-stream evidence fall back to monospace. */
@@ -2720,7 +2724,7 @@ a[data-ref]:hover {
 .Entry_Raw {
   font-family: var(--mono);
   font-size: 11px;
-  color: var(--orange); /* not JSON: the bytes as the provider wrote them */
+  color: var(--caution); /* not JSON: the bytes as the provider wrote them */
   overflow-wrap: anywhere;
 }
 /* The inspector: the whole event as the provider wrote it. */
@@ -2806,16 +2810,16 @@ a[data-ref]:hover {
 }
 .Entry-pending .Entry_Name,
 .Entry-pending .Entry_Status {
-  color: var(--yellow);
+  color: var(--active);
 }
 .Entry-success .Entry_Name,
 .Entry-success .Entry_Status {
-  color: var(--green);
+  color: var(--positive);
 }
 .Entry-fail .Entry_Name,
 .Entry-fail .Entry_Status,
 .Entry_Error {
-  color: var(--red);
+  color: var(--negative);
 }
 .Entry-meta {
   display: block;
@@ -2831,7 +2835,7 @@ a[data-ref]:hover {
 .Entry-user {
   display: block;
   padding: var(--half-gap) var(--gap);
-  border-left: 2px solid var(--blue);
+  border-left: 2px solid var(--who);
   border-radius: 0 var(--radius) var(--radius) 0;
   background: var(--soft);
   color: var(--text);
@@ -2876,7 +2880,7 @@ a[data-ref]:hover {
   overflow-wrap: anywhere;
 }
 .Entry_Err-fail {
-  color: var(--red);
+  color: var(--negative);
 }
 .Entry_Part {
   min-width: 0;
@@ -2944,7 +2948,7 @@ a[data-ref]:hover {
 }
 /* The run itself went wrong. */
 .Entry_Oops {
-  color: var(--red);
+  color: var(--negative);
   overflow-wrap: anywhere;
 }
 .Session_Err {
@@ -2960,7 +2964,7 @@ a[data-ref]:hover {
   overflow: auto;
 }
 .Session_Err-fail {
-  --err: var(--red);
+  --err: var(--negative);
 }
 .Ansi-bold {
   font-weight: 700;
@@ -3067,7 +3071,7 @@ a[data-ref]:hover {
 }
 .Run_Error {
   margin: 0;
-  color: var(--red);
+  color: var(--negative);
   font-size: 11px;
   max-width: 20rem;
   overflow-wrap: anywhere;
@@ -3284,7 +3288,7 @@ a[data-ref]:hover {
   padding: 0 2px;
 }
 .Tray_X:hover {
-  color: var(--red);
+  color: var(--negative);
 }
 .Tray_Hint {
   padding: var(--gap);
@@ -3613,7 +3617,7 @@ a[data-ref]:hover {
   display: flex;
   gap: 0.75rem;
   align-items: center;
-  color: var(--red);
+  color: var(--negative);
 }
 
 .Fault_Retry {

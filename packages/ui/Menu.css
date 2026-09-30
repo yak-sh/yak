@@ -6,7 +6,7 @@
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 8px 30px color-mix(in srgb, #000 45%, transparent);
+  box-shadow: var(--shadow);
   overflow: hidden;
 }
 .Menu_Item {
@@ -27,7 +27,7 @@
 }
 /* an item that destroys something */
 .Menu_Item-danger {
-  color: var(--red);
+  color: var(--negative);
 }
 .Menu_Rule {
   margin: 0;

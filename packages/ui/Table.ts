@@ -93,7 +93,7 @@ export let sheet = (c: Colors): Sheet => ({
   'Table_Row-on': { bg: c.card, fg: c.text },
   'Table_Row-hover': { bg: c.surface },
   Table_Cell: { spaced: true, ellipsis: true },
-  'Table_Cell-num': { fg: c.purple, align: 'right' },
+  'Table_Cell-num': { fg: c.number, align: 'right' },
   'Table_Cell-key': { fg: c.dim },
   'Table_Cell-prose': { fg: c.muted, wrap: true },
 })

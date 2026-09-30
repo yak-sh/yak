@@ -1,5 +1,5 @@
 /* A name as a token: mono, small, in its hue, on a faint wash of it. The hue
-   rides --hue, so a variant only re-points it. */
+   rides --hue, so a variant only re-points it at one of the theme's six. */
 .Chip {
   --hue: var(--muted);
   font-family: var(--mono);
@@ -16,22 +16,22 @@ a.Chip:hover,
   text-decoration: underline;
 }
 .Chip-0 {
-  --hue: var(--blue);
+  --hue: var(--hue-0);
 }
 .Chip-1 {
-  --hue: var(--yellow);
+  --hue: var(--hue-1);
 }
 .Chip-2 {
-  --hue: var(--purple);
+  --hue: var(--hue-2);
 }
 .Chip-3 {
-  --hue: var(--green);
+  --hue: var(--hue-3);
 }
 .Chip-4 {
-  --hue: var(--orange);
+  --hue: var(--hue-4);
 }
 .Chip-5 {
-  --hue: var(--red);
+  --hue: var(--hue-5);
 }
 /* only a possibility: absent, or not added yet */
 .Chip-ghost {

@@ -30,7 +30,7 @@
   --ink: var(--text);
 }
 .Button-danger {
-  --ink: var(--red);
+  --ink: var(--negative);
 }
 /* a glyph that waits for the pointer */
 .Button-quiet {
@@ -42,5 +42,5 @@
   --ink: var(--text);
 }
 .Button-quiet.Button-danger:hover {
-  --ink: var(--red);
+  --ink: var(--negative);
 }

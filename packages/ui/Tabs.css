@@ -6,7 +6,9 @@
   align-items: center;
 }
 .Tabs_Tab {
+  font: inherit;
   color: var(--dim);
+  text-decoration: none; /* a tab that links reads as a tab */
   background: none;
   border: 1px solid transparent;
   border-radius: calc(var(--radius) - 2px);

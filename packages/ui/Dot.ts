@@ -25,7 +25,7 @@ export let shapes = [
   'alert',
 ]
 
-/** Its tones: dim, or one of these. */
+/** Its tones: dim, or one of these, each a colour of the theme's. */
 export let tones = [
   'info',
   'active',
@@ -34,7 +34,7 @@ export let tones = [
   'caution',
   'accent',
   'special',
-]
+] satisfies (keyof Colors)[]
 
 /** In a terminal, a shape is a glyph and a tone its colour. */
 export let sheet = (c: Colors): Sheet => ({
@@ -46,13 +46,7 @@ export let sheet = (c: Colors): Sheet => ({
   'Dot-check': { glyph: '✓' },
   'Dot-cross': { glyph: '✕' },
   'Dot-alert': { glyph: '!', bold: true },
-  'Dot-info': { fg: c.blue },
-  'Dot-active': { fg: c.yellow },
-  'Dot-positive': { fg: c.green },
-  'Dot-negative': { fg: c.red },
-  'Dot-caution': { fg: c.orange },
-  'Dot-accent': { fg: c.accent },
-  'Dot-special': { fg: c.purple },
+  ...Object.fromEntries(tones.map((t) => [`Dot-${t}`, { fg: c[t] }])),
 })
 
 /** Every shape, then every tone on the full disc and on a ring. */

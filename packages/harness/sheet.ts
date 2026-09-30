@@ -9,15 +9,15 @@ import { type Colors, everforest, sheet } from '@yaks/ui'
 let own = (c: Colors): Sheet => ({
   Title: { bold: true },
   Dim: { fg: c.dim, dim: true },
-  Key: { fg: c.yellow },
-  Accent: { fg: c.blue },
-  Good: { fg: c.green },
-  Task: { fg: c.orange },
-  Warn: { fg: c.yellow },
-  Bad: { fg: c.red },
+  Key: { fg: c.active },
+  Accent: { fg: c.info },
+  Good: { fg: c.positive },
+  Task: { fg: c.hues[4] }, // a mode, told apart from Good
+  Warn: { fg: c.caution },
+  Bad: { fg: c.negative },
   Rule: { fg: c.dim },
   Composer_Border: { fg: c.dim, dim: true },
-  Selection_Active: { bg: c.card, fg: c.blue },
+  Selection_Active: { bg: c.card, fg: c.accent },
   Session_Selected: { bg: c.card },
 })
 

@@ -39,7 +39,7 @@ a.Tile:hover,
   margin-left: auto;
   font-family: var(--mono);
   font-size: 11px;
-  color: var(--purple);
+  color: var(--number);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
