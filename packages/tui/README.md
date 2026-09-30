@@ -103,10 +103,19 @@ Block elements stack as rows. Inline elements such as `span`, `b`, `i`, `a`,
 up a `Style` in the active `Sheet`. A wrapper with one element child passes its
 box to that child.
 
-A `Style` can say `row`, `col`, `width`, `grow` and `border` too, so a part
-drawn in a browser and a terminal alike (@yaks/ui) keeps its terminal layout in
-its sheet, beside its colours, and puts nothing in the browser's DOM for it:
-`{ Panes: { row: true }, 'Panes_Pane-nav': { col: true, width: 30 } }`.
+A `Style` can say `row`, `col`, `width`, `grow`, `wrap` and `border` too, so a
+part drawn in a browser and a terminal alike (@yaks/ui) keeps its terminal
+layout in its sheet, beside its colours, and puts nothing in the browser's DOM
+for it: `{ Panes: { row: true }, 'Panes_Pane-nav': { col: true, width: 30 } }`.
+
+Three more say what CSS says of a grid. `grid` lays every `row` under an element
+(through whatever holds it, a head or a body) in shared columns, two apart, as
+subgrid rows share a CSS grid's tracks: each column grows toward its widest
+cell, all by the same step, as far as the room allows, a `width` fixes one and a
+`grow` one takes what is left (`grid.ts`), and a row's colours run under its
+gaps. `ellipsis` ends a line cut to its width in `…`, as `text-overflow` does,
+and `align` sets an element narrower than its width to one side, as `text-align`
+does.
 
 Semantic `strong`, `em`, `del`, headings, links, code, block quotes, rules, and
 tables receive terminal-specific rendering without requiring application

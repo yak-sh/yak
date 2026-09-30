@@ -55,7 +55,7 @@ follow (web's nav.tsx listens for it).
 | `Timeline` | `Item`, `When`, `Who`, `What`            |                                                                                                                                         |
 | `Crumbs`   | `Item`                                   | `Item-here`                                                                                                                             |
 | `Edit`     | a value where it can be changed          | the class @yaks/render's editors put on each control; `Edit` itself is the read-only value; `fit`                                       |
-| `Table`    | `Head`, `Body`, `Row`, `Heading`, `Cell` | `Row-picks`, `Row-on`, `Row-hover`; `Heading-sorts`, `Heading-asc`, `Heading-desc`; `Cell-num`, `Cell-key`, `Cell-prose`                |
+| `Table`    | `Head`, `Body`, `Row`, `Heading`, `Cell` | `Row-picks`, `Row-on`, `Row-hover`; `Heading-sorts`, `Heading-asc`, `Heading-desc`, `Heading-num`; `Cell-num`, `Cell-key`, `Cell-prose` |
 | `Pager`    | `Span`, `Step`                           | a `Step` is `disabled` with nowhere to go                                                                                               |
 | `Panes`    | `Pane`, `Top`, `Body`                    | `Pane-nav`, `Pane-main`, `Pane-aside`, `Pane-on`                                                                                        |
 | `Head`     | `Title`, `Id`, `Kind`, `Sub`, `Facts`    |                                                                                                                                         |
@@ -65,10 +65,17 @@ follow (web's nav.tsx listens for it).
 
 A variant for a pseudo-class (`hover`) lets the style guide show that state.
 
+A `Table` is a grid, not an html table: its `cols` say what each column holds
+(`h(Table, { cols: [null, 'prose', 'num'] }, …)`, the variant its cells wear or
+nothing for text), each row is a subgrid of it so the cells line up, and a cell
+keeps to one line, cut with an ellipsis, as a table cell cannot. Its parts say
+`table`, `row`, `cell` and `columnheader` by their roles.
+
 A part's terminal entries say what its CSS says of its layout (@yaks/tui's
-`spaced`, `row`, `col`, `width`, `grow`, `border`), never an attribute on the
-element: a part laid out by a CSS gap is `spaced`, so its runs stay apart in a
-terminal too, and `Panes` are framed columns of the screen.
+`spaced`, `row`, `col`, `width`, `grow`, `grid`, `wrap`, `ellipsis`, `align`,
+`border`), never an attribute on the element: a part laid out by a CSS gap is
+`spaced`, so its runs stay apart in a terminal too, `Panes` are framed columns
+of the screen, and a `Table` is a `grid` whose cells cut with an `ellipsis`.
 
 ## Themes
 

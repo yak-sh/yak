@@ -93,10 +93,12 @@ let typing = (el: EventTarget | null) =>
 // first table's.
 let near = (): { rows: HTMLElement[]; on: number } => {
   let page = document.querySelector('[data-pane=page]')
-  let on = page?.querySelector<HTMLElement>('tr[data-pick].Table_Row-on')
-  let table = on?.closest('table') ??
-    page?.querySelector('table:has(tr[data-pick])')
-  let rows = [...table?.querySelectorAll<HTMLElement>('tr[data-pick]') ?? []]
+  let on = page?.querySelector<HTMLElement>('.Table_Row-on[data-pick]')
+  let table = on?.closest('.Table') ??
+    page?.querySelector('.Table:has(.Table_Row[data-pick])')
+  let rows = [
+    ...table?.querySelectorAll<HTMLElement>('.Table_Row[data-pick]') ?? [],
+  ]
   return { rows, on: on ? rows.indexOf(on) : -1 }
 }
 

@@ -197,6 +197,46 @@ test('a sheet lays a box out as its attributes would', () => {
   assertEquals(words(screenful(tree({}), 10, 1, sheet).lines), ['ab  cd'])
 })
 
+test('a grid lines its rows up in shared columns, each cell cut or set to its side', () => {
+  let row = (...cells: string[]) =>
+    el(
+      'div',
+      { class: 'Row' },
+      ...cells.map((text) =>
+        el('div', { class: /^[\d,n]+$/.test(text) ? 'Num' : 'Cell' }, text)
+      ),
+    )
+  let tree = el(
+    'root',
+    {},
+    el(
+      'div',
+      { class: 'Grid' },
+      el('div', {}, row('id', 'title', 'n')),
+      el(
+        'div',
+        {},
+        row('T-1', 'a title far too long to fit', '7'),
+        row('T-22', 'short', '1,204'),
+      ),
+    ),
+  )
+  let sheet = {
+    Grid: { grid: true },
+    Row: { row: true, bg: '#111111' },
+    Cell: { ellipsis: true },
+    Num: { align: 'right' as const },
+  }
+  let { lines } = screenful(tree, 24, 3, sheet)
+  assertEquals(words(lines), [
+    'id    title            n',
+    'T-1   a title fa…      7',
+    'T-22  short        1,204',
+  ])
+  // A row's colours run under its gaps and out to the grid's edge.
+  assert(lines.every((l) => l.every((s) => s.style.bg == '#111111')))
+})
+
 test('a block style lays an inline tag out on lines of its own', () => {
   let item = (text: string) => el('button', { class: 'Item' }, text)
   let tree = el('root', {}, el('div', {}, item('one'), item('two')))

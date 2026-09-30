@@ -1,24 +1,53 @@
-/* Things in rows: hairlines between the rows, dim headings in mono, a cell
-   one line tall and cut short, unless it holds prose. A row a press picks
-   lights under the pointer; the picked one is raised, with the accent at its
-   edge. */
+/* Things in rows, as a grid: every row a subgrid of it, so the cells line
+   up; hairlines between the rows, dim headings in mono. A column is as wide
+   as its widest cell where there is room, and they share the room when there
+   is not; what is left over runs past the last. Each cell is one line, cut
+   short with an ellipsis, whatever it holds; a number is never cut and sets
+   right, and prose wraps. A row a press picks lights under the pointer; the
+   picked one is raised, with the accent at its edge.
+
+   Table.ts names each column's track in --cols, by what the column holds:
+   --col for text, --col-<variant> for the rest. */
 .Table {
-  border-collapse: collapse;
-  width: 100%;
-  margin: 0;
+  --col: minmax(0, max-content);
+  --col-num: max-content;
+  --col-prose: minmax(12em, max-content);
+  display: grid;
+  grid-template-columns: var(--cols) 1fr;
+  min-width: 0;
   font-size: 13px;
+}
+.Table_Head,
+.Table_Body,
+.Table_Row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+.Table_Row {
+  align-items: baseline;
+  border-bottom: 1px solid var(--border);
+}
+.Table_Head > .Table_Row {
+  border-bottom-color: var(--border2);
+}
+.Table_Heading,
+.Table_Cell {
+  min-width: 0;
+  padding: 2px var(--half-gap);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* What a cell holds keeps to the cell's line, whatever it would do on its
+   own (a stored value keeps its newlines). */
+.Table_Cell * {
+  white-space: inherit;
 }
 .Table_Heading {
   font-family: var(--mono);
   font-size: 11px;
-  font-weight: normal;
-  text-align: left;
   color: var(--dim);
-  background: none;
-  border: 0;
-  border-bottom: 1px solid var(--border2);
-  padding: 2px var(--half-gap);
-  white-space: nowrap;
 }
 .Table_Heading-sorts {
   cursor: pointer;
@@ -30,20 +59,11 @@
 .Table_Heading-desc {
   color: var(--accent);
 }
-.Table_Cell {
-  border: 0;
-  border-bottom: 1px solid var(--border);
-  padding: 2px var(--half-gap);
-  vertical-align: baseline;
-  max-width: 24em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.Table_Heading-num {
+  text-align: right;
 }
 .Table_Cell-prose {
   white-space: normal;
-  min-width: 12em;
-  max-width: 40em;
   color: var(--muted);
 }
 .Table_Cell-num {
@@ -54,7 +74,6 @@
   color: var(--purple);
 }
 .Table_Cell-key {
-  width: 1%;
   font-family: var(--mono);
   font-size: 11px;
   color: var(--dim);
@@ -68,7 +87,5 @@
 }
 .Table_Row-on {
   background: var(--card);
-}
-.Table_Row-on > .Table_Cell:first-child {
   box-shadow: inset 2px 0 var(--accent);
 }

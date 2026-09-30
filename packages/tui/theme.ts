@@ -51,6 +51,19 @@ export type Style = {
   width?: number
   /** In a row or a column, take what is left, as a `grow` attribute does. */
   grow?: boolean
+  /** Lay the rows under this element out in shared columns, as a CSS grid
+   * whose rows are subgrids: each `row` under it, through whatever holds it
+   * (a head, a body), takes its cells' widths from the grid's columns, a gap
+   * apart (grid.ts). */
+  grid?: boolean
+  /** Fold this element's lines at its width, as a `wrap` attribute does. */
+  wrap?: boolean
+  /** Where this element's line is cut to its width, end it in `…`, as CSS's
+   * `text-overflow: ellipsis` does. */
+  ellipsis?: boolean
+  /** Where this element is narrower than its width, set it to this side, as
+   * CSS's `text-align` does. */
+  align?: 'left' | 'center' | 'right'
   /** Frame this element in a line of the sheet's class of this name, as a
    * `border` attribute does. */
   border?: string

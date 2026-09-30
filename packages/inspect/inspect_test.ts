@@ -253,7 +253,8 @@ test("a component's entities run by a pressed heading, a page at a time", async 
       : undefined
   )
   using p = mount(h(t.Door, { e: TASK, view: 'Inspect.Page' }))
-  let heading = () => p.root.querySelectorAll('[data-section="Entities"] th')[1]
+  let heading = () =>
+    p.root.querySelectorAll('[data-section="Entities"] [role=columnheader]')[1]
   let last = () => t.asked.filter((l) => l.endsWith('&.limit=50')).at(-1)
   assertEquals(heading().textContent, 'status')
   await p.fire(heading(), 'click')
@@ -283,18 +284,18 @@ test('a query shows its rows by the components they share; a row pressed opens b
   using p = mount(h(Page, { where: { query: '.task' } }))
   let pane = (name: string) => `[data-pane="${name}"]`
   assertEquals(
-    [...p.root.querySelectorAll(`${pane('page')} th`)].map((th) =>
-      th.textContent
-    ),
+    [...p.root.querySelectorAll(`${pane('page')} [role=columnheader]`)].map((
+      th,
+    ) => th.textContent),
     ['id', 'title', 'task'],
   )
   assert(p.text(pane('detail')).includes('Press a row'))
   // linkedom calls a bubbled listener as its target's, so the row is pressed
   // itself
-  await p.fire(p.$(`${pane('page')} tr[data-pick="t2"]`), 'click')
+  await p.fire(p.$(`${pane('page')} [role=row][data-pick="t2"]`), 'click')
   assert(p.text(`${pane('detail')} h1`).includes('N-t2'))
   assert(
-    p.$(`${pane('page')} tr[data-pick="t2"]`).className.includes(
+    p.$(`${pane('page')} [role=row][data-pick="t2"]`).className.includes(
       'Table_Row-on',
     ),
   )

@@ -86,8 +86,15 @@ export class TElement extends TNode {
   nodeType = 1
   /** Children in document order. */
   childNodes: TNode[] = []
-  /** Present because Preact writes to it; the painter reads none of it. */
-  style: Record<string, unknown> = {}
+  /** Present because Preact writes to it, a custom property through
+   * `setProperty`; the painter reads none of it. */
+  style: Record<string, unknown> & {
+    setProperty: (k: string, v: string) => void
+  } = {
+    setProperty(k, v) {
+      this[k] = v
+    },
+  }
   private attrs = new Map<string, string>()
   handlers: Map<string, unknown> = new Map()
   constructor(public localName: string) {

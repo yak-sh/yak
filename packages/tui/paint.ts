@@ -18,7 +18,10 @@ import { scrollbar } from './scrollbar.ts'
  * (`width` fixed, `grow` takes the rest), `col` stacks them (`grow` takes the
  * leftover rows), `height` fixes a box, and `scroll` windows a box's content
  * from that offset. A class's style in the sheet can say `row`, `col`,
- * `width`, `grow` and `border` as well. Everything else flows: block elements
+ * `width`, `grow`, `wrap` and `border` as well, and `grid`, which gives every
+ * row under it the same columns (./grid.ts); `ellipsis` and `align` say how
+ * an element sits in the width it is cut or padded to, as CSS's
+ * `text-overflow` and `text-align` do. Everything else flows: block elements
  * stack as lines, inline elements run into them, class names look up the
  * sheet. A text field (`input`, `textarea`) paints its `value`, or its
  * `placeholder` while empty, with a painted cursor at `data-caret`.
@@ -35,6 +38,7 @@ import { safe as strip, safeHref } from '@yaks/text'
 import type { TElement, TNode } from './dom.ts'
 import { touch, TText } from './dom.ts'
 import { table } from './table.ts'
+import { type Track, tracks } from './grid.ts'
 import { graphics } from './graphics.ts'
 import { base, type Sheet, type Style } from './theme.ts'
 
@@ -156,8 +160,14 @@ let runs = (n: TNode, sheet: Sheet) =>
 // `spaced` is for a tree drawn by components written for a browser, whose
 // inline siblings are kept apart by CSS gaps rather than by characters: a space
 // goes between two inline siblings unless one side brings its own, except
-// inside an `Md_Code` run, where every character is the code's.
-type Ctx = { sheet: Sheet; metrics: Metrics; spaced?: boolean }
+// inside an `Md_Code` run, where every character is the code's. `columns` are
+// the widths a grid gives the rows under it.
+type Ctx = {
+  sheet: Sheet
+  metrics: Metrics
+  spaced?: boolean
+  columns?: number[]
+}
 
 // Whether a spaced layout puts a space between what a line holds and the run
 // that follows it: when neither side brings its own.
@@ -360,7 +370,9 @@ let col = (el: TElement, s: Style, w: number, h: number | null, c: Ctx) => {
 }
 
 // Lay element children side by side; `width` is fixed, `grow` takes the rest.
+// Under a grid, the grid's columns say how wide each is instead (`cells`).
 let row = (el: TElement, s: Style, w: number, h: number | null, c: Ctx) => {
+  if (c.columns) return cells(el, s, w, h, c)
   let all = kids(el)
   let fixed = all.map((k) => wide(k, c.sheet))
   let spare = w - fixed.reduce((n: number, v) => n + (v ?? 0), 0)
@@ -376,11 +388,73 @@ let row = (el: TElement, s: Style, w: number, h: number | null, c: Ctx) => {
   let cols = all.map((k, i) => lay(k, s, widths[i], h, c))
   let rows = h ?? Math.max(0, ...cols.map((l) => l.length))
   return Array.from({ length: rows }, (_, y) =>
-    all.flatMap((_k, i) =>
+    all.flatMap((k, i) => {
+      let o = own(k, c.sheet)
+      let line = clip(cols[i][y] ?? [], widths[i], o.ellipsis)
       // The last column is not padded: the screen's own erase ends the line.
-      i == all.length - 1
-        ? clip(cols[i][y] ?? [], widths[i])
-        : pad(clip(cols[i][y] ?? [], widths[i]), widths[i])
+      return i == all.length - 1 ? line : pad(line, widths[i], o.align)
+    }))
+}
+
+// How far apart a grid's columns stand.
+let GAP = 2
+
+// How wide a grid measures a cell's content at: wider than any terminal.
+let MEASURE = 1000
+
+// The rows under a grid, through whatever holds them (a head, a body), but
+// not into a row, or a grid of its own.
+let rowsUnder = (el: TElement, sheet: Sheet): TElement[] =>
+  kids(el).flatMap((k) =>
+    k.attr('row') != null || own(k, sheet).row
+      ? [k]
+      : own(k, sheet).grid
+      ? []
+      : rowsUnder(k, sheet)
+  )
+
+// Lay a grid out: measure every row's cells, column by column, give each
+// column its width (./grid.ts), then lay the grid's children out as they
+// would be, every row under it in those columns.
+let grid = (el: TElement, s: Style, w: number, h: number | null, c: Ctx) => {
+  let free = { ...c, columns: undefined }
+  let cols: Track[] = []
+  for (let r of rowsUnder(el, c.sheet)) {
+    kids(r).forEach((k, i) => {
+      let t = cols[i] ??= { content: 0 }
+      let lines = layout(k, s, MEASURE, null, free)
+      t.content = Math.max(
+        t.content,
+        ...lines.map((l) => l.map((seg) => seg.text).join('').trimEnd().length),
+      )
+      t.grow ||= grows(k, c.sheet)
+      t.width ??= wide(k, c.sheet)
+    })
+  }
+  return flow(el, s, w, h, { ...c, columns: tracks(cols, w, GAP) })
+}
+
+// A row under a grid: its cells in the grid's columns, a gap apart, each cut
+// to its column and set to its side of it, and the row's own colours under
+// the whole line, as a subgrid row's background runs under its gaps.
+let cells = (el: TElement, s: Style, w: number, h: number | null, c: Ctx) => {
+  let widths = c.columns!
+  let free = { ...c, columns: undefined }
+  let all = kids(el)
+  let laid = all.map((k, i) => owned(k, layout(k, s, widths[i] ?? 0, h, free)))
+  let rows = h ?? Math.max(0, ...laid.map((l) => l.length))
+  let gap: Seg = { text: ' '.repeat(GAP), style: s, decorative: true }
+  return Array.from({ length: rows }, (_, y) =>
+    pad(
+      all.flatMap((k, i) => {
+        let o = own(k, c.sheet)
+        let n = widths[i] ?? 0
+        let cell = pad(clip(laid[i][y] ?? [], n, o.ellipsis), n, o.align, s)
+        return i ? [gap, ...cell] : cell
+      }),
+      w,
+      'left',
+      s,
     ))
 }
 
@@ -457,6 +531,7 @@ let layout = (
   if (el.viewport) return el.viewport(w, h ?? 0, st, c.sheet)
   let o = own(el, c.sheet)
   let s = inherit(st, o)
+  let wraps = el.attr('wrap') != null || !!o.wrap
   let outer = num(el, 'height') ?? h
   // Borders consume real layout space; descendants measure the inner width.
   let border = el.attr('border') ?? o.border
@@ -491,6 +566,8 @@ let layout = (
       },
       wrap,
     )
+    : o.grid
+    ? grid(el, s, contentWidth, box, c)
     : el.attr('row') != null || o.row
     ? row(el, s, contentWidth, box, c)
     : el.attr('col') != null || o.col
@@ -499,7 +576,7 @@ let layout = (
       el,
       s,
       contentWidth,
-      el.attr('wrap') != null || el.attr('scroll') != null ? null : box,
+      wraps || el.attr('scroll') != null ? null : box,
       c,
     )
   if (el.localName == 'li') {
@@ -509,7 +586,7 @@ let layout = (
       i,
     ) => [{ text: i ? ' '.repeat(marker.length) : marker, style: s }, ...line])
   }
-  if (el.attr('wrap') != null) {
+  if (wraps) {
     lines = lines.flatMap((line) => wrap(line, contentWidth))
   }
   const maximum = num(el, 'max-height')
@@ -581,15 +658,22 @@ export let lay = (
   w: number,
   h: number | null,
   c: Ctx,
-): Line[] =>
-  layout(el, st, w, h, c).map((line) =>
-    (el.viewport || el.attr('scroll') != null || wide(el, c.sheet) != null ||
-        grows(el, c.sheet)
-      ? pad(clip(line, w), w)
-      : line).map((seg) => ({
-        ...seg,
-        owner: el.viewport ? el : seg.owner ?? el,
-      }))
+): Line[] => {
+  let o = own(el, c.sheet)
+  let boxed = el.viewport || el.attr('scroll') != null ||
+    wide(el, c.sheet) != null || grows(el, c.sheet)
+  let lines = layout(el, st, w, h, c)
+  return owned(
+    el,
+    boxed ? lines.map((l) => pad(clip(l, w, o.ellipsis), w, o.align)) : lines,
+  )
+}
+
+// Every cell an element painted is its own, unless something under it
+// claimed it first; a viewport's are all its own.
+let owned = (el: TElement, lines: Line[]): Line[] =>
+  lines.map((line) =>
+    line.map((seg) => ({ ...seg, owner: el.viewport ? el : seg.owner ?? el }))
   )
 
 let fit = (lines: Line[], h: number): Line[] =>
@@ -599,15 +683,34 @@ let fit = (lines: Line[], h: number): Line[] =>
 
 let width = (l: Line) => l.reduce((n, s) => n + s.text.length, 0)
 
-let pad = (l: Line, w: number): Line => {
+// Fill a line out to `w` columns in `style`, the line set to `align`'s side.
+let pad = (
+  l: Line,
+  w: number,
+  align: Style['align'] = 'left',
+  style: Style = {},
+): Line => {
   let n = w - width(l)
-  return n > 0
-    ? [...l, { text: ' '.repeat(n), style: {}, decorative: true }]
-    : l
+  if (n <= 0) return l
+  let before = align == 'right' ? n : align == 'center' ? n >> 1 : 0
+  let fill = (k: number): Line =>
+    k ? [{ text: ' '.repeat(k), style, decorative: true }] : []
+  return [...fill(before), ...l, ...fill(n - before)]
 }
 
-/** Cut a line to a column count, keeping whole segments where it can. */
-export let clip = (line: Line, w: number): Line => {
+/// let texts = (l: Line) => l.map((s) => s.text)
+/// let line = [{ text: 'hello ', style: {} }, { text: 'world', style: {} }]
+/// texts(clip(line, 8)) -> ['hello ', 'wo']
+/// texts(clip(line, 8, true)) -> ['hello ', 'w', '…']
+/// texts(clip(line, 11, true)) -> ['hello ', 'world']
+/** Cut a line to a column count, keeping whole segments where it can; with
+ * `ellipsis`, a line that is cut ends in `…`. */
+export let clip = (line: Line, w: number, ellipsis = false): Line => {
+  if (ellipsis && w > 0 && width(line) > w) {
+    let out = clip(line, w - 1)
+    let { style, owner } = out.at(-1) ?? line[0]
+    return [...out, { text: '…', style, owner }]
+  }
   let out: Line = []
   let len = 0
   for (let s of line) {

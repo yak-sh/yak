@@ -71,7 +71,7 @@ let own = (target: unknown): boolean => {
       className?: string
       parentNode?: unknown
     } | null;
-    n && n.localName != 'tr';
+    n && !/\bTable_Row\b/.test(n.className ?? '');
     n = n.parentNode as typeof n
   ) {
     if (['a', 'button', 'input', 'select', 'textarea'].includes(n.localName!)) {
@@ -187,7 +187,7 @@ export let Grid = (p: GridProps): JSX.Element => {
     null,
     h(
       Table,
-      { 'data-table': id },
+      { 'data-table': id, cols: columns.map((c) => c.mod) },
       h(
         Table.Head,
         {},
@@ -197,7 +197,11 @@ export let Grid = (p: GridProps): JSX.Element => {
           columns.map((c) =>
             h(Table.Heading, {
               key: c.name,
-              mod: [c.sort && 'sorts', way(g.order, c)],
+              mod: [
+                c.sort && 'sorts',
+                way(g.order, c),
+                c.mod == 'num' && 'num',
+              ],
               onClick: c.sort ? () => sort(c) : undefined,
             }, c.name)
           ),

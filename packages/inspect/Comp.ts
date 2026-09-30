@@ -18,7 +18,7 @@ import { parse } from '@yaks/query'
 import { Head, Value } from '@yaks/ui'
 import type { Answer, Bundle, Io, Props, View } from './host.ts'
 import { Cell } from './cell.ts'
-import { Grid, paged, SIZE } from './grid.ts'
+import { type Column, Grid, paged, SIZE } from './grid.ts'
 import { chip, chips } from './links.ts'
 import {
   NoteButton,
@@ -233,6 +233,10 @@ let Refers = (
 let sorts = (io: Io, name: string, prop: string) =>
   io.vocab.prop(name, prop)?.scalar != 'jsonb'
 
+// Whether a property holds a number, whose column sets right.
+let numeric = (io: Io, name: string, prop: string) =>
+  ['number', 'priority'].includes(io.vocab.prop(name, prop)?.scalar ?? '')
+
 // The entities carrying it, a page at a time.
 let Entities = ({ e, io, notes }: Part_) => {
   let eid = e.entity.eid
@@ -280,9 +284,10 @@ let Entities = ({ e, io, notes }: Part_) => {
             cell: (b: Bundle) => line(title.get(b.entity.eid), 80),
           }]
           : [],
-        ...props.map((prop) => ({
+        ...props.map((prop): Column => ({
           name: prop,
           sort: sorts(io, name, prop) ? `${name}.${prop}` : undefined,
+          mod: numeric(io, name, prop) ? 'num' : undefined,
           cell: (b: Bundle) => h(Cell, { io, e: b, name, prop }),
         })),
       ],
