@@ -9,6 +9,7 @@
 //   yak admin query jeff/recipes .doc    an app's store, through the filter grammar
 //   yak admin client google <id> <secret> --admin   keep an OAuth client, from 1Password
 //   yak admin tunnel ada           the tunnel a space has to a machine
+//   yak admin move --rehearse --admin   every store rehearses the store mover
 //
 // The one rule these verbs are shaped around: A TEST ACCOUNT IS THE DEFAULT AND
 // EVERY OTHER ACCOUNT IS A NAMED ACT. No chain of defaults arrives at one —
@@ -74,6 +75,7 @@ import {
   feeNow,
   keepClient,
   linkFor,
+  moveIn,
   renewing,
   rpc,
   saidBy,
@@ -81,12 +83,14 @@ import {
   setTunnel,
   spendCode,
   storeQuery,
+  storesNow,
   storeUpload,
   tunnelNow,
   unlink,
   zone,
 } from './api.ts'
 import { deploys, rollback, table } from './deploys.ts'
+import { sweep } from './move.ts'
 import { push, type PushProgress, read } from './push.ts'
 import { errors, tail, TOKEN } from './logs.ts'
 import { revert } from './revert.ts'
@@ -559,6 +563,40 @@ export let runs = (
         progress: pushNote,
       })
       return [said(call, lines)]
+    }),
+
+    // Every store asked about the store mover (./move.ts): rehearse each rule
+    // everywhere, or wake each store to move what it owes. The platform's act,
+    // so the flag says whose.
+    admin_move: verb(async (call, vault, keep) => {
+      let a = argsOf(call)
+      platform(a)
+      let rehearse = a.rehearse === true
+      let pace = Number(word(a, 'pace') ?? (rehearse ? 0 : 5))
+      if (!Number.isFinite(pace) || pace < 0) {
+        throw new CallError('pace', `not a number of stores a minute: ${pace}`)
+      }
+      let where = word(a, 'where')
+      let at = acting(vault, a, keep, host.state)
+      let stores = (await storesNow(at.session)).filter((s) =>
+        !where || s.at == where || s.at.startsWith(`${where}/`)
+      )
+      note(
+        `${rehearse ? 'rehearsing' : 'waking'} ${stores.length} stores` +
+          (pace ? `, ${pace} a minute` : ''),
+      )
+      return [
+        said(
+          call,
+          await sweep({
+            stores,
+            ask: (store) => moveIn(at.session, store, rehearse),
+            pace,
+            out,
+            stopping: host.stopping,
+          }),
+        ),
+      ]
     }),
 
     admin_deploys: verb(async (call) => {

@@ -22,6 +22,8 @@ import { type Registered, registration } from '@yaks/connections'
 import { type And, and, eq, ge, limit, want } from '@yaks/query'
 import { CallError, valueIn } from '@yaks/tools'
 import { PLATFORM_STORE } from '../../workers/yak/door.ts'
+import type { Swept } from '../../workers/yak/sweep.ts'
+import type { Asked } from './move.ts'
 import { INVITE, LINK, PLATFORM, SLUG } from '../../workers/yak/route.ts'
 import { COOKIE } from '../../workers/yak/lib/token.ts'
 
@@ -230,6 +232,28 @@ export let feeNow = (session: string): Promise<Fee> =>
 /** Set it. Whole basis points — 250 is 2.5%, 0 takes nothing. */
 export let setFee = (session: string, bps: number): Promise<Fee> =>
   said(posted(apex(FEE), { bps: String(bps) }, session))
+
+/** The store mover's sweep door (workers/yak/sweep.ts): every store there is,
+ * and one of them asked to rehearse its rules, or woken to move what it owes.
+ * An owner of the `yak` space is answered. */
+export let MOVE = '/api/move'
+
+export let storesNow = (session: string): Promise<Swept[]> =>
+  said(sent(apex(MOVE), session))
+
+export let moveIn = (
+  session: string,
+  store: string,
+  rehearse: boolean,
+): Promise<Asked> =>
+  said(sent(
+    apex(
+      `${MOVE}?store=${encodeURIComponent(store)}` +
+        (rehearse ? '&rehearse=1' : ''),
+    ),
+    session,
+    { method: 'POST' },
+  ))
 
 /** The tunnel a space has to a machine (workers/yak/tunnel.ts), and, answered
  * once by the change that made it, the token its `cloudflared` runs with. */

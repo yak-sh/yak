@@ -161,6 +161,35 @@
       "options": { "positional": ["bps"] },
       "openWorld": true
     },
+    "admin_move": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "move",
+      "title": "Rehearse or run the store mover in every yaks.app store",
+      "description": "The store mover brings a store's rows into a new shape from its alarm, a batch at a time (workers/yak/mover.ts). This asks every store in turn, the app stores first and the directory last, and prints a line per store and rule as it goes. --rehearse moves each rule's rows inside a transaction the store rolls back, and says what it found, how long it took, its slowest batch and any failure; without it each store is woken to move what it owes, a few a minute, and says where each rule stands. A space or space/app narrows it. The platform’s act, so --admin or --owner is required.\n\n  yak admin move --rehearse --admin\n  yak admin move --admin\n  yak admin move ada --rehearse --admin",
+      "input": {
+        "where": {
+          "type": "string",
+          "description": "only this space, or space/app"
+        },
+        "rehearse": {
+          "type": "boolean",
+          "description": "rehearse every rule, moving nothing"
+        },
+        "pace": {
+          "type": "string",
+          "description": "stores a minute, 0 for each as soon as the last answers (5 for a wake, 0 for a rehearsal)"
+        },
+        "as": { "type": "string", "description": "act as this account" },
+        "admin": {
+          "type": "boolean",
+          "description": "as the platform’s admin"
+        },
+        "owner": { "type": "boolean", "description": "as Jeff" }
+      },
+      "options": { "positional": ["where"] },
+      "openWorld": true
+    },
     "admin_tunnel": {
       "tool": true,
       "noun": "admin",

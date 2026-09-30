@@ -110,6 +110,7 @@ import {
   shared,
 } from './route.ts'
 import * as sell from './sell.ts'
+import * as sweep from './sweep.ts'
 import * as tunnel from './tunnel.ts'
 import { slid } from './session.ts'
 import * as site from './site.ts'
@@ -192,6 +193,9 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // The tunnel a space has to a machine (tunnel.ts, T-39585): the owner's own
   // door, before the connector for the same reason as the fee's.
   if (path == '/api/tunnel') return tunnel.fetch(req, env)
+  // The store mover's sweep (sweep.ts, D-45640): the owner's door onto every
+  // store's rehearsal and wake, before the connector for the same reason.
+  if (path == sweep.PATH) return sweep.fetch(req, env)
   if (path == '/mcp' || path.startsWith('/api/')) {
     return bound(env.MCP, mcp, env).fetch(req)
   }

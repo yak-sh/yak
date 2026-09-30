@@ -127,6 +127,7 @@ yak admin errors --since 10m --admin
 yak admin tail --admin
 yak admin rollback [version] --admin
 yak admin revert <sha> --admin
+yak admin move --rehearse --admin  # every store rehearses the mover's rules
 ```
 
 `yak login admin@bot.yak.sh --admin` signs this box in as that person; the
@@ -268,6 +269,18 @@ code after it still reads the shape it made. A refused pass is not a boundary
 either: its transaction rolls back, the data did not move, and its marker stays
 unchanged. `yak admin deploys` still treats a version carrying that pass as a
 potential boundary, because another Store may have completed it.
+
+Rows move with the store mover (mover.ts, D-45640), never inside boot. A Store
+moves from its alarm once it serves, one transaction of a few hundred rows at a
+time, yielding between them; a batch that fails unwinds and is reported, and the
+store keeps serving the shape it holds until its next incarnation tries again. A
+rule is data, the rows still in the old shape and the patch that moves one, and
+lands rehearsal-only: `yak admin move --rehearse --admin` moves every rule's
+rows in every store inside a transaction the store rolls back, and says what
+each found, how long it took, its slowest batch and any failure. A clean rule
+goes `live: 'apps'`, then `'all'`, the directory last, and its mark joins
+`BOUNDARIES` in that release. `yak admin move --admin` wakes the dormant stores
+a few a minute and says where each rule stands in each.
 
 ## App bindings
 

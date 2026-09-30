@@ -193,6 +193,19 @@ import {
 import { type Meta, metaOf } from './meta.ts'
 import { caught, defect } from './sentry.ts'
 import { counts, hop, type Tally, tallying } from './lib/hops.ts'
+import {
+  type Mark,
+  type Moving,
+  rehearse,
+  type Rule,
+  RULES,
+  runs,
+  size,
+  SLICE,
+  type Stamp,
+  type Standing,
+  step,
+} from './mover.ts'
 import { weighed } from './meter.ts'
 import { directoryOf } from './directory.ts'
 import { commandWorker } from './dispatch.ts'
@@ -395,6 +408,8 @@ type Word =
   | 'wakes'
   | 'planted'
   | 'effect-migrated'
+  // How far each rule of the mover got here (mover.ts), under its mark.
+  | Mark
   // The bytes it last told the directory it holds (`#tell`).
   | 'weighed'
   // One person's localStorage in a sandboxed app (installed.ts): their keys
@@ -580,6 +595,7 @@ let routes = new Set([
   '/restore',
   '/writes',
   '/alarm',
+  '/move',
   '/ws',
   '/apply',
   '/query',
@@ -611,6 +627,11 @@ export class Store {
   #auth!: Authenticate
   #meta!: Meta
   #bind: Bindings
+  // The mover's rules (mover.ts `RULES`), and the ones whose batch failed in
+  // this incarnation: those wait for the next one, which fixed code arrives
+  // as.
+  #rules: Rule[]
+  #halted = new Set<Mark>()
   // Why this object's schema would not stand, when it would not. The rows are
   // as they were: the boot ran in one transaction and it unwound.
   #refused: string | null = null
@@ -657,9 +678,10 @@ export class Store {
   #quiet: (() => void) | null = null
   #draft: Promise<void> | null = null
 
-  constructor(ctx: State, bind: Bindings = {}) {
+  constructor(ctx: State, bind: Bindings = {}, rules: Rule[] = RULES) {
     this.#ctx = ctx
     this.#bind = bind
+    this.#rules = rules
     let { getAlarm, setAlarm } = ctx.storage
     if (getAlarm && setAlarm) {
       this.#alarm = {
@@ -1651,6 +1673,7 @@ export class Store {
         await this.#sown()
         await this.#tick(Date.now())
         this.#workingEffects()
+        await this.#moving()
       } finally {
         this.#profile?.flush()
         leave()
@@ -1734,6 +1757,89 @@ export class Store {
     }
     this.#effectsReady = true
     this.#workingEffects()
+    // Rows a rule still owes here are moved from the alarm, never by the wake
+    // that found them owing (mover.ts).
+    if (this.#owing().length) await this.#arming(this.#soon())
+  }
+
+  // ---- the mover (mover.ts, D-45640) ---------------------------------------
+  //
+  // Rows brought into a new shape after this object has booted, from its
+  // alarm, a batch at a time. Nothing here can refuse the object: a batch that
+  // fails unwinds, is reported, and leaves its rule for the next incarnation,
+  // while the store serves the shape it holds.
+
+  // A moment from now: the wake that armed it answers first.
+  #soon = () => new Date(Date.now() + SLICE).toISOString()
+
+  #stamp = (rule: Rule): Stamp | null => {
+    let held = this.#get(rule.mark)
+    return held ? JSON.parse(held) : null
+  }
+
+  // The rules live here that are not done, less the ones this incarnation
+  // saw fail. No rules is no read at all.
+  #owing = (): Rule[] =>
+    this.#rules.length
+      ? this.#rules.filter((r) =>
+        runs(r, this.#get('name') ?? '') && !this.#halted.has(r.mark) &&
+        !this.#stamp(r)?.done
+      )
+      : []
+
+  // The store as a rule reaches it. The patch is the kernel's own write, and
+  // its effects wait in `held` for the caller: run once the batch commits,
+  // dropped when it is a rehearsal.
+  #mover = (held: (() => void | Promise<void>)[]): Moving => ({
+    read: (q) => this.#graph.read(q),
+    rows: (q) => this.#graph.rows(q),
+    apply: (patch) =>
+      this.#trust(patch, null, { deferEffects: (run) => void held.push(run) }),
+    tx: (body) => this.#ctx.storage.transactionSync(body),
+  })
+
+  // Batches until the slice is spent, yielding the object between them, then
+  // the alarm again for whatever is left.
+  #moving = async (): Promise<void> => {
+    let until = Date.now() + SLICE
+    let name = this.#get('name') ?? ''
+    for (let rule of this.#owing()) {
+      while (Date.now() < until && !this.#refused) {
+        let held: (() => void | Promise<void>)[] = []
+        let was = this.#stamp(rule)
+        let now = new Date().toISOString()
+        let s: Stamp
+        try {
+          s = this.#ctx.storage.transactionSync(() => {
+            let s = step(this.#mover(held), rule, was, size(name), now)
+            this.#put(rule.mark, JSON.stringify(s))
+            return s
+          })
+        } catch (e) {
+          this.#kv.clear()
+          this.#halted.add(rule.mark)
+          defect(e, { request: `move ${rule.mark}`, store: name })
+          try {
+            let failed = e instanceof Error ? e.message : String(e)
+            this.#put(
+              rule.mark,
+              JSON.stringify({ moved: 0, ...was, at: now, failed }),
+            )
+          } catch { /* the stamp is a report; the defect already went */ }
+          break
+        }
+        for (let run of held) {
+          try {
+            await run()
+          } catch (e) {
+            defect(e, { request: `move ${rule.mark} effects`, store: name })
+          }
+        }
+        if (s.done) break
+        await new Promise((r) => setTimeout(r, 0))
+      }
+    }
+    if (this.#owing().length) await this.#arming(this.#soon())
   }
 
   // Before this store kept effect rows, a prompt could have left on the wire
@@ -2324,6 +2430,26 @@ export class Store {
       if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
       await this.#arming(new Date().toISOString())
       return Response.json({ ok: true })
+    }
+    // The mover's door (mover.ts), a sweep's one question of each store:
+    // `?rehearse=1` moves every rule's rows inside a transaction it rolls
+    // back and says what it found; otherwise the store is woken to move what
+    // it owes, and says where each rule stands. Kernel only, like the alarm.
+    if (path == '/move' && request.method == 'POST') {
+      if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
+      let store = this.#get('name') ?? ''
+      if (new URL(request.url).searchParams.get('rehearse') == '1') {
+        let rules = rehearse(this.#mover([]), this.#rules, size(store))
+        this.#kv.clear()
+        return Response.json({ store, rules })
+      }
+      if (this.#owing().length) await this.#arming(new Date().toISOString())
+      let rules: Standing[] = this.#rules.map((r) => ({
+        mark: r.mark,
+        live: runs(r, store),
+        ...this.#stamp(r),
+      }))
+      return Response.json({ store, rules })
     }
     // The socket is a read that stays open, and it is the one door @yaks/api
     // does not answer here — hibernation is the runtime's, so `sockets` takes
