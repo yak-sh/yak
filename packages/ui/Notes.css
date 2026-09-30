@@ -1,0 +1,35 @@
+/* Notes under a heading: each a line of its words, then who and when, small;
+   one seen to fades. */
+.Notes {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.Notes_Item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--half-gap);
+  min-width: 0;
+  padding-left: var(--half-gap);
+  border-left: 2px solid var(--yellow);
+}
+.Notes_Item-done {
+  border-left-color: var(--border2);
+  color: var(--dim);
+}
+.Notes_Text {
+  overflow-wrap: anywhere;
+}
+.Notes_Who,
+.Notes_When {
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.Notes_Who {
+  color: var(--blue);
+}
+.Notes_When {
+  color: var(--dim);
+}

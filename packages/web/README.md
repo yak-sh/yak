@@ -34,7 +34,7 @@ The routes facet (`@yaks/web/routes`, routes.ts) answers:
 | `/`                                     | the page (index.html)                     |
 | `/<letter>-*`, `/<letter>%23*`, `/%23*` | the page, for each id letter in use       |
 | `/web/app.js`                           | main.tsx, built by `deno bundle` at start |
-| `/web/styles.css`                       | @yaks/ui's, @yaks/inspect's, styles.css   |
+| `/web/styles.css`                       | @yaks/ui's, then styles.css               |
 | `/web/manifest.webmanifest`, icons      | the files beside it                       |
 
 Any other one-segment path is a name an id may be written as (`/lemon-cake`):

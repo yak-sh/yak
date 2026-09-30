@@ -5,6 +5,8 @@
  * written. The controls are built by the renderer through whatever
  * hyperscript its host gives it, so this part is the class they share and its
  * look; `Edit` is that span, for a caller drawing a value the same way.
+ * `Edit-fit` is a control as wide as what it holds, for one sitting in a line
+ * beside other things rather than on a row of its own.
  *
  * @module
  */
@@ -44,5 +46,13 @@ export let specimens = (): Specimen[] => [
     h(Input, { type: 'checkbox', checked: true }),
   ],
   ['Edit, json', h(Area, { value: '{"x": 1}' })],
+  [
+    'Edit-fit',
+    h(
+      Select,
+      { mod: 'fit', value: '' },
+      h('option', { value: '' }, '+ component'),
+    ),
+  ],
   ['Edit, read-only', h(Edit, {}, '2026-09-29T19:12:21Z')],
 ]

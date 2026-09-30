@@ -26,7 +26,8 @@ export let Timeline: Part & Record<'Item' | 'When' | 'Who' | 'What', Part> =
 export let sheet = (c: Colors): Sheet => ({
   Timeline_When: { fg: c.dim },
   Timeline_Who: { fg: c.blue },
-  Timeline_What: { indent: 2 },
+  Timeline_Item: { spaced: true },
+  Timeline_What: { indent: 2, spaced: true },
 })
 
 let { Item, When, Who, What } = Timeline

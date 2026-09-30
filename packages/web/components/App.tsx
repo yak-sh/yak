@@ -10,7 +10,7 @@ import {
   row,
   serverName,
 } from '../live.ts'
-import { mapPath } from '@yaks/inspect'
+import { queryPath } from '@yaks/inspect'
 import { block, Id, Tabs } from '@yaks/ui'
 import { filterable, FilterInput } from './Filter.tsx'
 import { applicable } from './registry.ts'
@@ -232,7 +232,7 @@ export let App = () => {
               type='button'
               aria-label='Inspect'
               data-tip='Inspect'
-              onClick={() => location.assign(mapPath())}
+              onClick={() => location.assign(queryPath())}
             >
               <Icon name='table' />
             </Tab>

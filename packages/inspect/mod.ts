@@ -1,31 +1,34 @@
 /**
  * @yaks/inspect: the inspector. A graph's data model, its values and how they
- * flow, drawn as pages and listings of @yaks/ui parts for a browser and a
- * terminal alike, with feedback left on any part where it was seen.
+ * flow, as a schema browser in three panes, the same in a browser and a
+ * terminal: the index of packages and components, the page for what was
+ * picked, and the entity picked from a row beside it. Everything a client may
+ * write is written in place, and any heading takes a note, picked up as work.
  *
  * The views know no store. Each is selected through @yaks/render, declares
  * the queries it needs as data, and draws what the host answers; an edit goes
- * out as bundles. The inspector's own state (a folded section, a lens, the
- * trail, the map's listings) lives in the page's own graph (./front.json).
+ * out as bundles. The inspector's own state (what is beside the page, what is
+ * typed over, how each table runs) lives in the page's own graph
+ * (./front.json).
  *
  * - `views`: every view, as a registry: the `/views` facet (./views.ts).
  * - `inspector(registry, host)`: the `Door` a host draws them through, and
  *   their `io` (./door.ts).
- * - `opened`, `ran`, `MAP`: the map set up in a page's graph, a line run in
- *   its bar, and its entity (./Map.ts).
- * - `feedback`: the change that leaves feedback on a part (./Feedback.ts).
+ * - `frame(inspector, chrome)`: the three panes around them (./Frame.ts).
+ * - `note`: the change that leaves a note under a heading (./notes.ts).
  * - `Host`, `View`, `Answer`, `Ask`: the contract (./host.ts).
- * - `at`, `mapPath`, `pagePath`: the inspector's addresses (./where.ts).
+ * - `at`, `queryPath`, `pagePath`: the inspector's addresses (./where.ts).
  *
  * `./routes` serves its own page at `/inspect` (./main.ts, over ./live.ts),
- * `./cli` holds it in a terminal as `yak inspect` (./tui.ts), `./styles` is
- * its stylesheet and `./front` its page's own components.
+ * `./cli` holds it in a terminal as `yak inspect` (./tui.ts), and `./front`
+ * is its page's own components.
  *
  * @module
  */
 
 export { type DoorProps, type Inspector, inspector } from './door.ts'
-export { feedback } from './Feedback.ts'
+export { type Chrome, frame } from './Frame.ts'
+export { note } from './notes.ts'
 export type {
   Answer,
   Ask,
@@ -37,6 +40,6 @@ export type {
   Props,
   View,
 } from './host.ts'
-export { LISTINGS, MAP, opened, QUERY, ran } from './Map.ts'
+export { INSPECT, picked } from './state.ts'
 export { all, views } from './views.ts'
-export { type At, at, mapPath, pagePath } from './where.ts'
+export { type At, at, pagePath, queryPath } from './where.ts'

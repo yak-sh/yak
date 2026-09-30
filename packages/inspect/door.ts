@@ -1,13 +1,14 @@
 /**
  * The door every inspector view is drawn through. `inspector(registry, host)`
  * binds a registry of views ({@link View}) to what a host supplies, and gives
- * `Door`: `<Door e={bundle} view='Inspect.Full' />` selects the view for the
+ * `Door`: `<Door e={bundle} view='Inspect.Page' />` selects the view for the
  * bundle (@yaks/render `resolve`), asks the host for what that view asks,
  * and draws its component with the bundle, the answers and `io`.
  *
  * `io.state` reads the inspector's own entities in the page's own graph, and a
  * render that reads one is woken when that graph changes; `io.set` writes
- * them. Everything else on `io` is the host's, passed through.
+ * them. `io.ask` is the host's hook, for a component's own asks. Everything
+ * else on `io` is the host's, passed through.
  *
  * @module
  */
@@ -48,6 +49,7 @@ export let inspector = (
     show: (b, view, ctx) =>
       h(Door, { key: `${b.entity.eid} ${view}`, e: b, view, ctx }),
     can: (b, view) => !!resolve(registry, b, view, host.vocab),
+    ask: useAnswers,
     state: (eid) => (turn.value, front.ent(eid)),
     set: (change) => void front.mutate(change),
   }

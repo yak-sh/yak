@@ -1,12 +1,14 @@
 # @yaks/inspect
 
-The inspector: a graph's data model, its values and how they flow, as pages and
-listings built of [@yaks/ui](../ui/README.md) parts, the same in a browser and a
-terminal. Any part can take feedback where it was seen.
+The inspector: a graph's data model, its values and how they flow, as a schema
+browser in three panes built of [@yaks/ui](../ui/README.md) parts, the same in a
+browser and a terminal. Every value is written where it stands, and a note can
+be left under any heading.
 
-The views know no store. Each is a @yaks/render registration that declares the
-queries it needs as data (`asks`), draws what the host answers, and sends an
-edit out as bundles. The inspector's own state lives in the page's own graph.
+The views know no store. Each is a @yaks/render registration, or a component
+drawn by one, that declares the queries it needs as data, draws what the host
+answers, and sends an edit out as bundles. The inspector's own state lives in
+the page's own graph.
 
 It has a page of its own at `/inspect` and a terminal of its own, `yak inspect`:
 nothing of another package's app around it. A host that lists `@yaks/api` and
@@ -14,62 +16,69 @@ this package serves it.
 
 ## A tour
 
-- **`/inspect`** is the map: a query bar (@yaks/filter) over listings, each a
-  saved query that folds. **Query** runs the bar's line: rows as tiles, a
-  `.count` as a number, a `.tally` as values by count. **Components** lists
-  every component with its package and how many entities carry it.
-  **Archetypes** lists the sets of components entities are made of, most
-  populous first. **Packages** and **Relations** (the edge relations, each with
-  its reverse reading) follow. `/inspect?q=<line>` opens the map with that line
-  run.
-- **A page**, `/inspect/<id>` (any id the graph resolves), shows one entity: the
-  trail that led there, its tile, and lenses: `parts`, `markdown` for a
-  document, `json`. Its parts are sections by kind:
-  - a component (`_comp`): About, Properties, References (its own and those
-    naming it), Archetypes, Carried by, Feedback, Writes, Fields
-  - a property (`_prop`): About, Values (a tally of what it holds), Feedback,
-    Writes
-  - a package (`_package`): About, Declares, Extends, Feedback
-  - an archetype: its components, and its members
-  - a transaction (`_tx`): what it wrote
-  - anything else: Fields (each value in its editor where the vocabulary lets a
-    client write it; add or remove a component; delete), Links (edges each way,
-    and every entity whose reference names it; add or remove an edge), History
-    (the journal's changes to it, by transaction), Feedback
-- **The terminal**: `yak inspect` opens the map, `yak inspect T-9` an entity's
-  page and `yak inspect '<line>'` the map with the line run. Tab and ⇧Tab (or j
-  and k) walk the links, Enter or a click follows one, h goes back, `/` types a
-  query, q quits. It reads through the config's `yak serve`. Controls paint as
-  values there; editing is the page's.
+- **The index**, on the left, always there: every package with the components it
+  declares under it. The field above it narrows it as it is typed (a component
+  by its name, a package with all of its own), and runs the line as a query on
+  Enter.
+- **The page**, in the middle, for what the address names:
+  - `/inspect`: the sets of components entities are made of, most populous
+    first, and the edge relations.
+  - a component: its name, package and description; Properties (name, type,
+    description, flags); Found with (the sets it appears in, with counts);
+    Refers to, and referred to by; Entities (a row each, a column per property,
+    a page at a time, sorted by a pressed heading).
+  - a property: its type and description, its values ranked by how many hold
+    each, and its recent writes.
+  - a package: the components it declares, and what it adds to others'.
+  - any other entity (`/inspect/<id>`, by any id the graph resolves): its id and
+    title, a small table per component under that component's description, its
+    edges, and its history as a timeline (who, when, through which session,
+    before and after).
+  - a query (`/inspect?q=<line>`): its rows, with a column per component they
+    share; a `.count` as a number, a `.tally` as values by count.
+- **The detail**, on the right: a row pressed in any table opens its entity
+  there without leaving the page, so rows can be stepped through one by one (j
+  and k, or the arrows). A link inside it moves the page.
+- **Editing**: a value pressed is typed over where it stands, and nothing else
+  on the page moves; Enter or leaving it writes it, Escape puts it back. A
+  component is added from an entity's head and removed by its ×; an edge is
+  added under its table; an entity is deleted by two presses.
+- **Notes**: every heading has a `note` press that opens a one-line field. A
+  note shows under its heading, and each one is a task an agent picks up.
+- **The terminal**: `yak inspect` opens the first page, `yak inspect T-9` an
+  entity's page and `yak inspect '<line>'` a query's. The three panes are framed
+  columns; Tab and ⇧Tab move the keys between them, j and k walk the rows and
+  links (a row walked onto opens in the detail), Enter or l follows, h goes
+  back, `/` types in the index's field, q quits. It reads through the config's
+  `yak serve`. Values paint as values; editing is the page's.
 - **Elsewhere**: a page that registers these views (a card's Inspect tab) draws
-  an entity's page in place, and links to `/inspect` for the rest.
+  an entity's page in place, a row pressed opening that entity's own card.
 
 ## The host
 
 A browser or a terminal supplies a `Host` once (./host.ts): the vocabulary, a
-hook answering a view's asks while it is mounted, where links go, how an entity
-is named and when a moment was, and `apply`, which writes a change and rejects
-with the reason when the graph refuses it (the section that wrote says it under
-its title). `inspector(registry, host)` gives the `Door` every view is drawn
-through.
+hook answering a view's asks while it is mounted, where links go, what a pressed
+row picks, how an entity is named and when a moment was, and `apply`, which
+writes a change and rejects with the reason when the graph refuses it (the value
+or heading that wrote says it). `inspector(registry, host)` gives the `Door`
+every view is drawn through, and `frame()` the three panes around it.
 
 The inspector's own page and terminal share one host, `live()` (./live.ts), and
 it is small: the vocabulary the server serves (@yaks/api `/vocab`), a
 @yaks/client box connected to that server, and the page's own graph. An ask is a
-server-evaluated watch held while its view is mounted, an aggregate is the
-watch's `reduced` and a refusal its `refused`; a write goes to the server as it
-stands (@yaks/sync `submit`), so the graph resolves the ids and aliases a person
-typed. `here()` draws what an address names (./where.ts). Around it the page
-(./main.ts) adds a floating list for the query field and follows links in place;
-the terminal (./tui.ts) adds its keys.
+server-evaluated watch held while its view is mounted, sent as it is written
+(`*` for whole rows); an aggregate is the watch's `reduced` and a refusal its
+`refused`; one asked `once` is kept for as long as the page is open. A write
+goes to the server as it stands (@yaks/sync `submit`), so the graph resolves the
+ids and aliases a person typed. Around it the page (./main.ts) follows links in
+place, and the terminal (./tui.ts) adds its keys.
 
 | export     | what it is                                                    |
 | ---------- | ------------------------------------------------------------- |
-| `.`        | the views, `inspector()`, the addresses, the contract         |
+| `.`        | the views, `inspector()`, `frame()`, the addresses, the host  |
 | `./views`  | the views as a registry, for a host that draws them           |
 | `./routes` | `/inspect`, `/inspect/<id>` and what their page loads         |
 | `./cli`    | `yak inspect`                                                 |
-| `./styles` | the CSS a page that draws the views serves after @yaks/ui's   |
 | `./front`  | the components of the page's own graph, never a graph's vocab |
 
 ## State
@@ -78,35 +87,33 @@ The page's own graph holds the inspector's state, in components this package
 declares for that graph alone (`front.json`, exported as `./front`, never a
 `./vocab` a host composes; `sync: none`, `durable: connection`):
 
-| component | on               | what it holds                                   |
-| --------- | ---------------- | ----------------------------------------------- |
-| `map`     | `inspect`        | the listings the map shows                      |
-| `listing` | each listing     | its title, query, kind, whether open, its limit |
-| `section` | `<eid> <view>`   | whether a section is open; a refused write      |
-| `lens`    | the entity's eid | the lens its page shows; a delete armed         |
-| `trail`   | `inspect:trail`  | the pages drilled through                       |
+| component   | on               | what it holds                                                                                        |
+| ----------- | ---------------- | ---------------------------------------------------------------------------------------------------- |
+| `inspector` | `inspect`        | the detail, the pane with the keys, what is typed over, a note open, a delete armed, a refused write |
+| `table`     | each table's key | how its rows run, the page it shows, whether its values are ranked                                   |
 
-## Feedback
+The index's field is the same `inspect` entity's `filter` (@yaks/filter).
 
-Feedback on a part is one entity: `doc{title, body}` + `comment{target}` +
-`task{}`, a comment on the part that is an open task (`feedback()`,
-./Feedback.ts). It shows on the part's page, and an agent finds it as work:
-`yak task list` lists open tasks, and `yak task list .comment.target=<eid>` what
-was said about one part. A comment alone reaches a session only through a claim
-on its target (@yaks/session), and nothing claims a component or a property, so
-feedback is filed as a task.
+## Notes
+
+A note is one entity: `doc{title, body}` + `comment{target}` + `task{}`, a
+comment on what the page is about that is an open task (`note()`, ./notes.ts).
+The heading it was left under rides in its title (`task · Properties: …`), since
+a comment has nowhere else to say it. An agent finds it as work: `yak task list`
+lists open tasks, and `yak task list .comment.target=<eid>` what was said about
+one thing.
 
 ## Limits
 
-- How many entities carry a component is read off one tally of every entity's
-  archetype. It reads every entity (seconds on a large graph), so it is asked
-  once when a listing opens, not kept live.
-- The journal's changes are indexed by target, not by component, so a
-  component's Writes section is folded until opened.
+- Which sets a component is found with is read off one tally of its entities'
+  archetypes, asked once per page.
+- A tally cannot be bounded, so a property's values are ranked at once only for
+  an enum or a component carried by up to 5,000 entities; beyond that, a press
+  ranks them.
+- The journal's changes are indexed by target, not by component, so a property's
+  recent writes take a second or two on a large graph; they are asked once, with
+  no count.
 - A `.fields` projection cannot carry a JSON value, so `_comp` rows are asked
   whole.
-- A history asks the transactions and components by reverse hop
-  (`._tx&._changes_tx._change.…`), which every host answers, rather than a
-  projection through a reference.
-- A live answer adds a new row at its end, so a view that shows an order sorts
-  by the column it asked the order on.
+- A terminal's pane cannot yet scroll to an element, so walking past the bottom
+  of a pane does not bring the row into view.

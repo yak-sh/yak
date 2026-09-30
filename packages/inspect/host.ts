@@ -4,15 +4,15 @@
  * A view is a domain component in the sense of https://yak.sh/composable-ui.md:
  * it knows no store. It says which bundles it draws (`match`, a @yaks/render
  * registration), the queries it needs as data (`asks`, a query line by the
- * name it reads the answer under), and draws what it is handed: the bundle,
- * each answer (`got`), and `io`, its doors to the world outside it. An edit
- * goes out through `io.apply` as bundles; the inspector's own state (a folded
- * section, a lens, the trail) is read and written in the page's own graph
- * through `io.state` and `io.set`.
+ * name it reads the answer under, and `io.ask` for a query that depends on
+ * another's answer), and draws what it is handed: the bundle, each answer
+ * (`got`), and `io`, its doors to the world outside it. An edit goes out
+ * through `io.apply` as bundles; the inspector's own state (./state.ts) is
+ * read and written in the page's own graph through `io.state` and `io.set`.
  *
  * The host is what a browser or a terminal supplies once ({@link Host}): the
- * vocabulary, a hook answering a view's asks while it is mounted, where links
- * go, how an entity is named, and the doors that write. `inspector()`
+ * vocabulary, a hook answering asks while the view asking is mounted, where
+ * links go, how an entity is named, and the doors that write. `inspector()`
  * (./door.ts) turns a host into the `Door` every view is drawn through.
  *
  * @module
@@ -39,8 +39,8 @@ export type Answer = {
 }
 
 /** One query a view asks: a line, answered and kept live while the view is
- * mounted, or `{query, once: true}`, answered once when it mounts, for an
- * answer that reads too much to be asked again after every commit. */
+ * mounted, or `{query, once: true}`, answered once, for an answer that reads
+ * too much to be asked again after every commit. */
 export type Ask = string | { query: string; once: true }
 
 /** The queries a view asks, each by the name its answer is read under. */
@@ -73,8 +73,12 @@ export type Host = {
   get: (eid: string) => Bundle | undefined
   /** where the inspector's page for an entity is */
   link: (eid: string) => string
-  /** where the map is, with this query in its bar */
+  /** where the inspector's page for a query is */
   find: (query: string) => string
+  /** a row was pressed: show its entity beside the page (the inspector's
+   * own page puts it in its detail pane; a host with no pane beside the
+   * page may open it instead) */
+  pick: (eid: string) => void
   /** the id a person reads: `T-9` */
   id: (b: Bundle) => string
   /** the kind it displays as: `task` */
@@ -88,10 +92,6 @@ export type Host = {
   edits: boolean
   /** how an edit's typed input is read (@yaks/render `edit`) */
   editing?: EditOptions
-  /** the query field (@yaks/filter) bound to the page's own graph: the
-   * field's entity is `id`, and `run` is called with its line when it is
-   * sent */
-  Bar: FunctionComponent<{ id: string; run: (line: string) => void }>
 }
 
 /** A view's doors to the world outside it. */
@@ -100,6 +100,9 @@ export type Io = Omit<Host, 'useAnswers' | 'front'> & {
   show: (b: Bundle, view: string, ctx?: Context) => ComponentChildren
   /** whether the registry draws this bundle as `view` */
   can: (b: Bundle, view: string) => boolean
+  /** the answers to asks a component makes as it draws: a hook, for a query
+   * that depends on another's answer */
+  ask: (asks: Asks) => Record<string, Answer>
   /** one of the inspector's own entities, read reactively */
   state: (eid: string) => Bundle | undefined
   /** write the inspector's own state */

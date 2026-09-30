@@ -103,6 +103,11 @@ Block elements stack as rows. Inline elements such as `span`, `b`, `i`, `a`,
 up a `Style` in the active `Sheet`. A wrapper with one element child passes its
 box to that child.
 
+A `Style` can say `row`, `col`, `width`, `grow` and `border` too, so a part
+drawn in a browser and a terminal alike (@yaks/ui) keeps its terminal layout in
+its sheet, beside its colours, and puts nothing in the browser's DOM for it:
+`{ Panes: { row: true }, 'Panes_Pane-nav': { col: true, width: 30 } }`.
+
 Semantic `strong`, `em`, `del`, headings, links, code, block quotes, rules, and
 tables receive terminal-specific rendering without requiring application
 components to emit ANSI. A text field (`input`, `textarea`) shares a row and

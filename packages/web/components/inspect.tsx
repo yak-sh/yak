@@ -4,8 +4,9 @@
 // subscriptions (a query held while the view asking is mounted, an aggregate
 // held or asked once), what they write goes out as this store's changes, and
 // their own state lives in `front`, the page's own graph the query fields keep
-// theirs in. The map, and every page past this one, is the inspector's own
-// page (`/inspect`), which a link here opens.
+// theirs in. A card has no pane beside it, so a row pressed opens its
+// entity's own Inspect card; a query, and the index of every component, are
+// the inspector's own page (`/inspect`), which a link here opens.
 import { useLayoutEffect, useMemo } from 'preact/hooks'
 import {
   type Answer,
@@ -15,10 +16,9 @@ import {
   type Bundle,
   type Host,
   inspector,
-  mapPath,
+  queryPath,
   views,
 } from '@yaks/inspect'
-import { define } from '@yaks/render'
 import { parse } from '@yaks/query'
 import {
   aggRead,
@@ -43,8 +43,7 @@ import { entityPath } from '../url.ts'
 import { editOptions, vocab } from './registry.ts'
 import { ago } from './Stamp.tsx'
 import { navigate } from './nav.tsx'
-import { fields, front } from './fields.tsx'
-import { Md } from './views/Md.tsx'
+import { front } from './fields.tsx'
 
 // A browser takes input in its controls; the terminal paints them (typeof
 // Deno is the seam: undefined in the browser bundle, set in the TUI).
@@ -190,15 +189,6 @@ let name = (eid: string) => {
   return title || idOf(e)
 }
 
-// The page's own lens a host alone can draw: a document as its Markdown
-// file, the one a dragged tab drops.
-let own = define([{
-  view: 'Inspect.Markdown',
-  match: parse('.doc'),
-  Render: ({ e }: { e: Bundle }) => <Md e={ent(e.entity.eid)} />,
-}])
-let registry = { ...views, renderers: [...own.renderers, ...views.renderers] }
-
 // A plain click on a link inside the inspector opens it in place: this page's
 // own addresses here, the inspector's in its own page.
 let inPlace = (ev: MouseEvent) => {
@@ -210,8 +200,7 @@ let inPlace = (ev: MouseEvent) => {
   navigate(href)
 }
 
-// The host the card view draws the inspector's views through. The map's bar
-// is drawn on the inspector's own page, so a line sent here opens it there.
+// The host the card view draws the inspector's views through.
 let host: Host = {
   vocab,
   front,
@@ -226,24 +215,14 @@ let host: Host = {
   apply: async (bundles) => mutate(...changes(await resolved(bundles))),
   get: held,
   link: inspectPath,
-  find: mapPath,
+  find: queryPath,
+  pick: (eid) => navigate(inspectPath(eid)),
   id: (b) => idOf(ent(b.entity.eid)),
   kind: (b) => ent(b.entity.eid).kind,
   name,
   when: (at) => ago(at),
-  Bar: ({ id }) => (
-    <fields.Filter
-      id={id}
-      placeholder='a query: ._comp, .task&.tally=filed.priority…'
-      onKey={(e: KeyboardEvent) => {
-        if (e.key != 'Enter') return
-        e.preventDefault()
-        globalThis.location?.assign(mapPath(fields.text(id).trim()))
-      }}
-    />
-  ),
 }
-let { Door } = inspector(registry, host)
+let { Door } = inspector(views, host)
 
 /** An entity's inspector page, as a card view. */
 export let Inspect = ({ e }: { e: Ent }) => {
@@ -251,7 +230,7 @@ export let Inspect = ({ e }: { e: Ent }) => {
   return b
     ? (
       <div class='InspectHost' onClick={inPlace}>
-        <Door e={b} view='Inspect.Full' />
+        <Door e={b} view='Inspect.Page' />
       </div>
     )
     : null

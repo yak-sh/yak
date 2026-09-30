@@ -38,6 +38,22 @@ export type Style = {
   /** Lay this element out as a block, on lines of its own, whatever its tag:
    * CSS's `display: block` for a `button` or a `span`. */
   block?: boolean
+  /** Keep the runs on this element's lines apart with a space, as a CSS gap
+   * keeps a flex row's items apart in a browser. Not inherited, as a gap is
+   * not. */
+  spaced?: boolean
+  /** Lay this element's children side by side, as a `row` attribute does. */
+  row?: boolean
+  /** Stack this element's children, `grow` ones sharing the rows left, as a
+   * `col` attribute does. */
+  col?: boolean
+  /** In a row, this many columns wide, as a `width` attribute says. */
+  width?: number
+  /** In a row or a column, take what is left, as a `grow` attribute does. */
+  grow?: boolean
+  /** Frame this element in a line of the sheet's class of this name, as a
+   * `border` attribute does. */
+  border?: string
 }
 
 /** A class sheet: class name to style. */

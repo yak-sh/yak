@@ -13,14 +13,15 @@ import { scrollbar } from './scrollbar.ts'
  * OpenTUI's renderable tree, say — means implementing those five, not touching
  * the widgets.
  *
- * Layout is four structural attributes, because only the painter knows how
- * wide and tall the terminal is: `row` lays element children side by side
+ * Layout is structural attributes, because only the painter knows how wide
+ * and tall the terminal is: `row` lays element children side by side
  * (`width` fixed, `grow` takes the rest), `col` stacks them (`grow` takes the
  * leftover rows), `height` fixes a box, and `scroll` windows a box's content
- * from that offset. Everything else flows: block elements stack as lines,
- * inline elements run into them, class names look up the sheet. A text field
- * (`input`, `textarea`) paints its `value`, or its `placeholder` while empty,
- * with a painted cursor at `data-caret`.
+ * from that offset. A class's style in the sheet can say `row`, `col`,
+ * `width`, `grow` and `border` as well. Everything else flows: block elements
+ * stack as lines, inline elements run into them, class names look up the
+ * sheet. A text field (`input`, `textarea`) paints its `value`, or its
+ * `placeholder` while empty, with a painted cursor at `data-caret`.
  *
  * The boundary. Every text node and every href loses the C0/DEL/C1 class
  * before anything is painted (`@yaks/text`'s `safe`, with `\n` kept because a
@@ -176,8 +177,9 @@ let inline = (n: TNode, st: Style, c: Ctx): Seg[] => {
     return field(el, s, c)
   }
   // A block the sheet makes of an element keeps its runs apart, as it would
-  // on a line of its own, even where it is painted inline (a `dd`).
-  let spaced = c.spaced && o.block
+  // on a line of its own, even where it is painted inline (a `dd`); so does
+  // one its sheet spaces, wherever it is painted.
+  let spaced = (c.spaced && o.block) || o.spaced
   return el.childNodes.reduce<Seg[]>((out, k) => {
     let segs = inline(k, s, c)
     if (spaced && apart(out, segs)) out.push({ text: ' ', style: s })
@@ -227,6 +229,14 @@ let num = (el: TElement, k: string) => {
   let v = el.attr(k)
   return v == null || v === '' ? null : +v
 }
+
+// How an element is boxed: by its attribute, or by its classes in the sheet,
+// so a part styled for a browser and a terminal alike says its layout where
+// it says its colours.
+let grows = (el: TElement, sheet: Sheet) =>
+  el.attr('grow') != null || !!own(el, sheet).grow
+let wide = (el: TElement, sheet: Sheet) =>
+  num(el, 'width') ?? own(el, sheet).width ?? null
 
 // Block flow: text and inline children run into a line, element children stack.
 // A lone element child inherits the box: a wrapper div is not a layout, so the
@@ -282,7 +292,8 @@ let flow = (
     return lines
   }
   let previousParagraph = false
-  let spaced = c.spaced && !el.className.split(/\s+/).includes('Md_Code')
+  let spaced = (c.spaced || own(el, c.sheet).spaced) &&
+    !el.className.split(/\s+/).includes('Md_Code')
   for (let n of el.childNodes) {
     if (runs(n, c.sheet)) {
       let segs = inline(n, s, c)
@@ -318,10 +329,10 @@ let col = (el: TElement, s: Style, w: number, h: number | null, c: Ctx) => {
   let all = kids(el)
   let fixed = new Map<TElement, Line[]>()
   for (let k of all) {
-    if (k.attr('grow') == null) fixed.set(k, lay(k, s, w, null, c))
+    if (!grows(k, c.sheet)) fixed.set(k, lay(k, s, w, null, c))
   }
   let used = [...fixed.values()].reduce((n, l) => n + l.length, 0)
-  let growers = all.filter((k) => k.attr('grow') != null)
+  let growers = all.filter((k) => grows(k, c.sheet))
   let left = h == null ? null : Math.max(0, h - used)
   let out: Line[] = []
   if (left != null) {
@@ -349,7 +360,7 @@ let col = (el: TElement, s: Style, w: number, h: number | null, c: Ctx) => {
 // Lay element children side by side; `width` is fixed, `grow` takes the rest.
 let row = (el: TElement, s: Style, w: number, h: number | null, c: Ctx) => {
   let all = kids(el)
-  let fixed = all.map((k) => num(k, 'width'))
+  let fixed = all.map((k) => wide(k, c.sheet))
   let spare = w - fixed.reduce((n: number, v) => n + (v ?? 0), 0)
   let growers = fixed.filter((v) => v == null).length
   let taken = 0
@@ -415,7 +426,7 @@ let layout = (
   let s = inherit(st, o)
   let outer = num(el, 'height') ?? h
   // Borders consume real layout space; descendants measure the inner width.
-  let border = el.attr('border')
+  let border = el.attr('border') ?? o.border
   let framed = border != null && w >= 3
   let box = outer == null ? null : Math.max(0, outer - (framed ? 2 : 0))
   let bar = el.attr('scrollbar') != null && el.attr('scroll') != null &&
@@ -447,9 +458,9 @@ let layout = (
       },
       wrap,
     )
-    : el.attr('row') != null
+    : el.attr('row') != null || o.row
     ? row(el, s, contentWidth, box, c)
-    : el.attr('col') != null
+    : el.attr('col') != null || o.col
     ? col(el, s, contentWidth, box, c)
     : flow(
       el,
@@ -539,8 +550,8 @@ export let lay = (
   c: Ctx,
 ): Line[] =>
   layout(el, st, w, h, c).map((line) =>
-    (el.viewport || el.attr('scroll') != null || el.attr('width') != null ||
-        el.attr('grow') != null
+    (el.viewport || el.attr('scroll') != null || wide(el, c.sheet) != null ||
+        grows(el, c.sheet)
       ? pad(clip(line, w), w)
       : line).map((seg) => ({
         ...seg,

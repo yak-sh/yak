@@ -1,0 +1,14 @@
+/* One line to send something on: what is typed runs as wide as it can, the
+   button after it. */
+.Say {
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+  margin: 0;
+  min-width: 0;
+}
+.Say > .Field {
+  flex: 1 1 auto;
+  min-width: 0;
+  border-bottom-color: var(--border);
+}

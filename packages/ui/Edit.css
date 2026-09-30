@@ -21,6 +21,9 @@
 :is(input, select, textarea).Edit:focus {
   border-bottom: 1px solid var(--accent);
 }
+:is(input, select, textarea).Edit-fit {
+  width: auto;
+}
 input[type=checkbox].Edit {
   width: auto;
   accent-color: var(--accent);

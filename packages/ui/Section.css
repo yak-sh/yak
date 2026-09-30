@@ -1,5 +1,6 @@
-/* A titled section: a title line (fold, words, count, note), then its body.
-   Sections stack with a gap between them; the page decides the rest. */
+/* A titled section: a title line (words, count, note), what it is about,
+   then its body. Sections stack with a gap between them; the page decides
+   the rest. */
 .Section {
   display: grid;
   gap: var(--half-gap);
@@ -31,23 +32,9 @@
 .Section_Note-refused {
   color: var(--red);
 }
-/* The caret a folding section turns: sideways shut, down open. */
-.Section_Fold {
-  font: inherit;
-  background: none;
-  border: 0;
-  padding: 0;
-  width: 1em;
-  color: var(--dim);
-  cursor: pointer;
-  min-height: var(--tap);
-}
-.Section_Fold::before {
-  content: '▸';
-}
-.Section_Fold-open::before {
-  content: '▾';
-}
-.Section_Fold:hover {
-  color: var(--text);
+.Section_Sub {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  max-width: var(--measure);
 }

@@ -31,3 +31,19 @@
   color: var(--dim);
   font-style: italic;
 }
+/* A value that can be changed where it stands: a dotted rule under it at
+   the pointer, the caret's outline while it is typed over (base.css), and a
+   red wave under it when the change was turned down. */
+.Value-editable {
+  cursor: text;
+  border-bottom: 1px dotted transparent;
+}
+.Value-editable:hover {
+  border-bottom-color: var(--border2);
+}
+.Value-editing {
+  min-width: 2ch;
+}
+.Value-refused {
+  text-decoration: underline wavy var(--red);
+}

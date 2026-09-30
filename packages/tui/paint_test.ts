@@ -149,6 +149,37 @@ test('a scroll offset windows the content and is clamped to it', () => {
   assertEquals(rows('99'), ['c', 'd'])
 })
 
+test('a spaced style keeps its runs apart, as a CSS gap does', () => {
+  let tree = (cls: string) =>
+    el(
+      'root',
+      {},
+      el('div', { class: cls }, el('span', {}, 'id'), el('span', {}, 'title')),
+    )
+  assertEquals(words(screenful(tree('Row'), 20, 1).lines), ['idtitle'])
+  assertEquals(
+    words(screenful(tree('Row'), 20, 1, { Row: { spaced: true } }).lines),
+    ['id title'],
+  )
+})
+
+test('a sheet lays a box out as its attributes would', () => {
+  let tree = (attrs: Record<string, string>) =>
+    el(
+      'root',
+      {},
+      el(
+        'div',
+        { class: 'Row', ...attrs },
+        el('div', { class: 'Nav', ...attrs.row && { width: '4' } }, 'ab'),
+        el('div', {}, 'cd'),
+      ),
+    )
+  let sheet = { Row: { row: true }, Nav: { width: 4 } }
+  assertEquals(words(screenful(tree({ row: '1' }), 10, 1).lines), ['ab  cd'])
+  assertEquals(words(screenful(tree({}), 10, 1, sheet).lines), ['ab  cd'])
+})
+
 test('a block style lays an inline tag out on lines of its own', () => {
   let item = (text: string) => el('button', { class: 'Item' }, text)
   let tree = el('root', {}, el('div', {}, item('one'), item('two')))

@@ -28,7 +28,7 @@ let hosted = async (asks: Asks) => {
   ])
   let box = boxClient(srv, { signal })
   let front = client(loadVocab(docs), [], { vault: false })
-  let host = live({ box, front, edits: true, Bar: () => null })
+  let host = live({ box, front, edits: true })
   let got: Record<string, Answer> = {}
   let View = () => {
     got = host.useAnswers(asks)
@@ -68,6 +68,7 @@ test('a view is answered rows, counts and tallies, live, from the server', async
     count: '.recipe&.count',
     tally: '.recipe&.tally=recipe.course',
     once: { query: '.recipe&.count', once: true },
+    first: { query: '.recipe&.order=doc.title&?doc', once: true },
   })
   await until(() => Object.values(t.got()).every((a) => a.ready))
   let read = () => {
@@ -77,9 +78,16 @@ test('a view is answered rows, counts and tallies, live, from the server', async
       g.count.count,
       g.tally.tally,
       g.once.count,
+      g.first.rows.map((b) => (b.doc as { title: string }).title),
     ]
   }
-  assertEquals(read(), [['r1', 'r2'], 2, { dinner: 1, starter: 1 }, 2])
+  assertEquals(read(), [
+    ['r1', 'r2'],
+    2,
+    { dinner: 1, starter: 1 },
+    2,
+    ['Dal', 'Soup'],
+  ])
   await t.host.apply([
     {
       entity: { eid: 'r3' },
@@ -90,7 +98,13 @@ test('a view is answered rows, counts and tallies, live, from the server', async
   await until(() => t.got().count.count == 3)
   await t.settle()
   // A line asked once keeps its first answer.
-  assertEquals(read(), [['r1', 'r2', 'r3'], 3, { dinner: 2, starter: 1 }, 2])
+  assertEquals(read(), [
+    ['r1', 'r2', 'r3'],
+    3,
+    { dinner: 2, starter: 1 },
+    2,
+    ['Dal', 'Soup'],
+  ])
 })
 
 test('a line the server refuses answers why', async () => {

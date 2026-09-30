@@ -10,10 +10,9 @@ import {
   type Answer,
   type Asks,
   type Bundle,
+  frame,
   type Host,
   inspector,
-  MAP,
-  opened,
   views,
 } from './mod.ts'
 import { docs } from './front.ts'
@@ -28,6 +27,7 @@ let vocab = loadVocab([{
     },
     task: {
       component: true,
+      description: 'Work to be done.',
       properties: {
         status: { type: 'string', enum: ['open', 'done'] },
         owner: { type: 'string', ref: 'entity' },
@@ -49,15 +49,33 @@ let vocab = loadVocab([{
   },
 }], [edgeKeywords])
 
+let P1 = '0190a1b2-0000-7000-8000-000000000001'
 let T1: Bundle = {
   entity: { eid: 't1', num: 1 },
   doc: { title: 'Fix the map' },
-  task: { status: 'open', owner: 'p1', seen: 'yesterday' },
+  task: { status: 'open', owner: P1, seen: 'yesterday' },
+}
+let T2: Bundle = {
+  entity: { eid: 't2', num: 2 },
+  doc: { title: 'Draw the map' },
+  task: { status: 'done' },
+}
+let TASK: Bundle = {
+  entity: { eid: 'c-task' },
+  _comp: { name: 'task' },
+  doc: { title: 'task', body: 'Work to be done.' },
 }
 
-// A host that answers each line from `answers` and keeps what was asked and
-// written, over a page graph of the inspector's own.
-let host = (answers: Record<string, Partial<Answer>> = {}, edits = true) => {
+// A host that answers each line from `answers` and keeps what was asked,
+// written and picked, over a page graph of the inspector's own.
+type Answers =
+  | Record<string, Partial<Answer>>
+  | ((line: string) => Partial<Answer> | undefined)
+
+let host = (answers: Answers = {}, edits = true) => {
+  let answer = typeof answers == 'function'
+    ? answers
+    : (l: string) => answers[l]
   let asked: string[] = []
   let applied: Bundle[][] = []
   let front = client(loadVocab(docs), [], { vault: false })
@@ -70,7 +88,7 @@ let host = (answers: Record<string, Partial<Answer>> = {}, edits = true) => {
         Object.entries(asks).map(([k, a]) => {
           let line = typeof a == 'string' ? a : a.query
           asked.push(line)
-          return [k, { rows: [], ready: true, ...answers[line] }]
+          return [k, { rows: [], ready: true, ...answer(line) }]
         }),
       ),
     // A write naming T-404 is refused, as a graph refuses an id that names
@@ -84,19 +102,18 @@ let host = (answers: Record<string, Partial<Answer>> = {}, edits = true) => {
     get: () => undefined,
     link: (eid) => `/${eid}`,
     find: (q) => `/inspect?q=${q}`,
+    pick: (eid) =>
+      void front.mutate([{
+        entity: { eid: 'inspect' },
+        inspector: { detail: eid },
+      }]),
     id: (b) => b.entity.eid.toUpperCase(),
     kind: (b) => b.task ? 'task' : 'entity',
     name: (eid) => `N-${eid}`,
     when: (at) => at,
-    Bar: ({ id }) => h('input', { class: 'Bar', 'data-id': id }),
   }
-  return {
-    host: double,
-    asked,
-    applied,
-    front,
-    ...inspector(views, double),
-  }
+  let door = inspector(views, double)
+  return { asked, applied, front, ...door, door }
 }
 
 // A page mounted in a document: its root, and a way to fire an event.
@@ -109,90 +126,90 @@ let mount = (node: ComponentChild) => {
     configurable: true,
   })
   render(node, root)
-  let fire = (el: Element, type: string) =>
-    el.dispatchEvent(
-      new window.Event(type, { bubbles: true, cancelable: true }),
-    )
+  let fire = async (el: Element, type: string, key?: string) => {
+    let ev = new window.Event(type, { bubbles: true, cancelable: true })
+    if (key) Object.defineProperty(ev, 'key', { value: key })
+    el.dispatchEvent(ev)
+    await tick()
+  }
+  let $ = <T extends Element = HTMLElement>(s: string) =>
+    root.querySelector<T>(s)!
+  let text = (s: string) => root.querySelector(s)?.textContent ?? ''
   let free = () => {
     render(null, root)
     if (prior) Object.defineProperty(globalThis, 'document', prior)
     else delete (globalThis as { document?: unknown }).document
   }
-  return { root, fire, free }
+  return { root, fire, $, text, [Symbol.dispose]: free }
 }
 
-test('an entity page shows every value and writes an edit as a patch', async () => {
+// A value typed over where it stands: pressed, typed, then Enter.
+let type = async (p: ReturnType<typeof mount>, label: string, to: string) => {
+  await p.fire(p.$(`[aria-label="${label}"]`), 'click')
+  let v = p.$(`[aria-label="${label}"]`)
+  assert(v.className.includes('Value-editing'))
+  v.textContent = to
+  await p.fire(v, 'keydown', 'Enter')
+}
+
+test('an entity page shows each component and writes a value typed over in place', async () => {
   let t = host()
-  let p = mount(h(t.Door, { e: T1, view: 'Inspect.Full' }))
-  try {
-    let title = p.root.querySelector<HTMLInputElement>(
-      '[aria-label="doc.title"]',
-    )!
-    assertEquals(title.value, 'Fix the map')
-    title.value = 'Fix the whole map'
-    p.fire(title, 'change')
-    await tick()
-    assertEquals(t.applied, [[{
-      entity: { eid: 't1' },
-      doc: { title: 'Fix the whole map' },
-    }]])
-    // What the server owns is shown, never offered.
-    assertEquals(p.root.querySelector('[aria-label="task.seen"]'), null)
-    assert(p.root.textContent!.includes('yesterday'))
-    // A reference reads as what it names, linked.
-    assert(p.root.querySelector('a[href="/p1"]')?.textContent == 'N-p1')
-  } finally {
-    p.free()
-  }
+  using p = mount(h(t.Door, { e: T1, view: 'Inspect.Page' }))
+  assertEquals(p.text('[aria-label="doc.title"]'), 'Fix the map')
+  assert(p.text('[data-section="task"]').includes('Work to be done.'))
+  // What the server owns is shown, never offered.
+  assert(p.text('[data-section="task"]').includes('yesterday'))
+  assertEquals(p.root.querySelector('[aria-label="task.seen"]'), null)
+  // A reference reads as what it names, linked.
+  assertEquals(p.text(`a[href="/${P1}"]`), `N-${P1}`)
+  await type(p, 'doc.title', 'Fix the whole map')
+  assertEquals(t.applied.at(-1), [{
+    entity: { eid: 't1' },
+    doc: { title: 'Fix the whole map' },
+  }])
+  assert(!p.$('[aria-label="doc.title"]').className.includes('Value-editing'))
+  // A value the graph refuses stays marked, saying why.
+  await type(p, 'task.owner', 'T-404')
+  await tick()
+  let owner = p.$('[aria-label="task.owner"]')
+  assert(owner.className.includes('Value-refused'))
+  assertEquals(owner.getAttribute('title'), "no entity 'T-404'")
 })
 
-test('a folded section asks nothing, and unfolding it asks again', async () => {
-  let t = host()
-  let p = mount(h(t.Door, { e: T1, view: 'Inspect.Full' }))
-  try {
-    let refs = '.refs=t1&.limit=200'
-    assert(t.asked.includes(refs))
-    p.fire(p.root.querySelector('[aria-label="fold Links"]')!, 'click')
-    await tick()
-    t.asked.length = 0
-    render(h(t.Door, { e: { ...T1 }, view: 'Inspect.Full' }), p.root)
-    assert(!t.asked.includes(refs))
-    assert(p.root.querySelector('[aria-label="unfold Links"]'))
-  } finally {
-    p.free()
-  }
-})
-
-test('feedback on a part is a comment on it that is an open task', async () => {
+test('a note under a heading is a comment on the entity that is an open task', async () => {
   let t = host({
-    '.comment&.comment.target=t1&.limit=100': {
+    '.comment&.comment.target=t1&.limit=100&*': {
       rows: [{
         entity: { eid: 'c1' },
-        doc: { body: 'the owner should be required' },
+        doc: {
+          title: 'T1 · task: owner should be required',
+          body: 'owner should be required',
+        },
         comment: { target: 't1' },
         task: {},
       }],
     },
   })
-  let p = mount(h(t.Door, { e: T1, view: 'Inspect.Full' }))
-  try {
-    assert(p.root.textContent!.includes('the owner should be required'))
-    let say = p.root.querySelector<HTMLTextAreaElement>('[name=body]')!
-    say.value = 'status wants a third value'
-    p.fire(say.closest('form')!, 'submit')
-    await tick()
-    assertEquals(t.applied.at(-1), [{
-      entity: { eid: '$feedback' },
-      doc: {
-        title: 'N-t1: status wants a third value',
-        body: 'status wants a third value',
-      },
-      comment: { target: 't1' },
-      task: {},
-    }])
-  } finally {
-    p.free()
-  }
+  using p = mount(h(t.Door, { e: T1, view: 'Inspect.Page' }))
+  assert(p.text('[data-section="task"]').includes('owner should be required'))
+  assert(!p.text('[data-section="doc"]').includes('owner should be required'))
+  await p.fire(
+    p.$('[data-section="task"] [aria-label="note on task"]'),
+    'click',
+  )
+  let field = p.$<HTMLInputElement>('[data-section="task"] [name=note]')
+  field.value = 'status wants a third value'
+  await p.fire(field.closest('form')!, 'submit')
+  assertEquals(t.applied.at(-1), [{
+    entity: { eid: '$note' },
+    doc: {
+      title: 'T1 · task: status wants a third value',
+      body: 'status wants a third value',
+    },
+    comment: { target: 't1' },
+    task: {},
+  }])
+  assertEquals(p.root.querySelector('[name=note]'), null)
 })
 
 test('an edge is added by its relation and far end, and its × removes it', async () => {
@@ -202,68 +219,104 @@ test('an edge is added by its relation and far end, and its × removes it', asyn
     requires: {},
   }
   let t = host({ '.refs=t1&.limit=200': { rows: [edge] } })
-  let p = mount(h(t.Door, { e: T1, view: 'Inspect.Full' }))
-  try {
-    assert(p.root.querySelector('a[href="/t2"]')?.textContent == 'N-t2')
-    p.fire(
-      p.root.querySelector('[aria-label="remove this requires edge"]')!,
-      'click',
-    )
-    await tick()
-    assertEquals(t.applied.at(-1), [{ entity: { eid: 'e1' }, $delete: true }])
-    // linkedom selects no first option, as a browser does
-    Object.defineProperty(p.root.querySelector('[name=relation]')!, 'value', {
-      value: 'requires',
-    })
-    let to = p.root.querySelector<HTMLInputElement>('[name=to]')!
-    to.value = 'T-2'
-    p.fire(to.closest('form')!, 'submit')
-    await tick()
-    assertEquals(t.applied.at(-1), [{
-      entity: { eid: '$edge' },
-      edge: { from: 't1', to: 'T-2' },
-      requires: {},
-    }])
-    // An end that names nothing is refused, and the section says why.
-    to.value = 'T-404'
-    p.fire(to.closest('form')!, 'submit')
-    await tick()
-    let links = p.root.querySelector('[data-section="Inspect.Links"] h2')!
-    assert(links.textContent!.includes("no entity 'T-404'"))
-  } finally {
-    p.free()
-  }
+  using p = mount(h(t.Door, { e: T1, view: 'Inspect.Page' }))
+  assertEquals(p.text('[data-section="Edges"] a[href="/t2"]'), 'N-t2')
+  await p.fire(p.$('[aria-label="remove this requires edge"]'), 'click')
+  assertEquals(t.applied.at(-1), [{ entity: { eid: 'e1' }, $delete: true }])
+  // linkedom selects no first option, as a browser does
+  Object.defineProperty(p.$('[name=relation]'), 'value', { value: 'requires' })
+  let to = p.$<HTMLInputElement>('[name=to]')
+  to.value = 'T-2'
+  await p.fire(to.closest('form')!, 'submit')
+  assertEquals(t.applied.at(-1), [{
+    entity: { eid: '$edge' },
+    edge: { from: 't1', to: 'T-2' },
+    requires: {},
+  }])
+  // An end that names nothing is refused, and the part says why.
+  to.value = 'T-404'
+  await p.fire(to.closest('form')!, 'submit')
+  await tick()
+  assert(p.text('[data-section="Edges"]').includes("no entity 'T-404'"))
 })
 
-test('the map runs a line from its bar in its Query listing', async () => {
-  let t = host({ '.task&.count': { count: 12 } })
-  t.front.mutate(opened(t.front.ent, '.task&.count'))
-  let p = mount(
-    h(() => h(t.Door, { e: t.io.state(MAP)!, view: 'Inspect.Full' }), {}),
+test("a component's entities run by a pressed heading, a page at a time", async () => {
+  let page = Array.from({ length: 50 }, (_, i) => ({
+    entity: { eid: `t${i}` },
+    task: { status: 'open' },
+  }))
+  let t = host((line) =>
+    line.endsWith('&.limit=50')
+      ? { rows: page }
+      : line == '.task&.count'
+      ? { count: 120 }
+      : undefined
   )
-  try {
-    await tick()
-    assert(p.root.querySelector('.Bar[data-id="inspect"]'))
-    assert(t.asked.includes('.task&.count'), 'an aggregate is asked as typed')
-    assert(p.root.textContent!.includes('12'))
-    // A plain query is asked a window at a time, with its count beside it.
-    t.front.mutate([{
-      entity: { eid: 'inspect:query' },
-      listing: { query: '.task' },
-    }])
-    await tick()
-    assert(t.asked.includes('.task&.limit=50'))
-    assert(t.asked.includes('.task&.count'))
-  } finally {
-    p.free()
-  }
+  using p = mount(h(t.Door, { e: TASK, view: 'Inspect.Page' }))
+  let heading = () => p.root.querySelectorAll('[data-section="Entities"] th')[1]
+  let last = () => t.asked.filter((l) => l.endsWith('&.limit=50')).at(-1)
+  assertEquals(heading().textContent, 'status')
+  await p.fire(heading(), 'click')
+  assertEquals(last(), '.task&.order=task.status&.limit=50')
+  await p.fire(heading(), 'click')
+  assertEquals(last(), '.task&.order=-task.status&.limit=50')
+  await p.fire(heading(), 'click')
+  assertEquals(last(), '.task&.limit=50')
+  assert(p.text('[data-section="Entities"] .Pager').includes('1–50 of 120'))
+  let [, next] = p.root.querySelectorAll(
+    '[data-section="Entities"] .Pager_Step',
+  )
+  await p.fire(next, 'click')
+  assertEquals(last(), '.task&.after=t49&.limit=50')
 })
 
-test('a terminal paints a page as values, with no controls to type in', () => {
+test('a query shows its rows by the components they share; a row pressed opens beside it', async () => {
+  let t = host({
+    '.task&.limit=50&*': { rows: [T1, T2] },
+    '.task&.count': { count: 2 },
+    'entity.eid=t2&*': { rows: [T2] },
+  })
+  let Page = frame(t.door, {
+    Bar: () => h('input', { name: 'filter' }),
+    Scroll: ({ children }) => h('div', {}, children),
+  })
+  using p = mount(h(Page, { where: { query: '.task' } }))
+  let pane = (name: string) => `[data-pane="${name}"]`
+  assertEquals(
+    [...p.root.querySelectorAll(`${pane('page')} th`)].map((th) =>
+      th.textContent
+    ),
+    ['id', 'title', 'task'],
+  )
+  assert(p.text(pane('detail')).includes('Press a row'))
+  // linkedom calls a bubbled listener as its target's, so the row is pressed
+  // itself
+  await p.fire(p.$(`${pane('page')} tr[data-pick="t2"]`), 'click')
+  assert(p.text(`${pane('detail')} h1`).includes('N-t2'))
+  assert(
+    p.$(`${pane('page')} tr[data-pick="t2"]`).className.includes(
+      'Table_Row-on',
+    ),
+  )
+})
+
+test('a query that counts shows the count', () => {
+  let t = host({ '.task&.count': { count: 12403 } })
+  let Page = frame(t.door, {
+    Bar: () => null,
+    Scroll: ({ children }) => h('div', {}, children),
+  })
+  using p = mount(h(Page, { where: { query: '.task&.count' } }))
+  assert(p.text('[data-pane="page"]').includes('12,403'))
+})
+
+test('a terminal paints a page as values, with nothing to type in', () => {
   let t = host({}, false)
-  let painted = print(h(t.Door, { e: T1, view: 'Inspect.Full' }), 80)
-  for (let word of ['Fields', 'Fix the map', 'status', 'open', 'Feedback']) {
+  let painted = print(h(t.Door, { e: T1, view: 'Inspect.Page' }), 100)
+  for (let word of ['Fix the map', 'status', 'open', 'Edges', 'History']) {
     assert(painted.includes(word), word)
   }
-  assert(!painted.includes('leave feedback'))
+  for (let control of ['note', '+ component', 'delete']) {
+    assert(!painted.includes(control), control)
+  }
 })

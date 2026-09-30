@@ -282,5 +282,8 @@ test('expanded entries offer only specifically rendered faces', () =>
       true,
     )
     render(h(resolve(result, 'Entry.Inspect').Render, { e: result }), root)
-    assertEquals(root.querySelector('.Inspect .Pairs') != null, true)
+    assertEquals(
+      root.querySelector('.InspectHost [data-section="entry"]') != null,
+      true,
+    )
   }))

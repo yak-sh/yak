@@ -8,8 +8,8 @@
  * - `el`, `block`: the builders every part is made from (el.ts).
  * - `Dot`, `Id`, `Stamp`, `Tabs`, `Menu`, `Tip`, `Field`, `Choices`, `Button`,
  *   `Chip`, `Value`, `Pairs`, `Tile`, `Rows`, `Section`, `Timeline`, `Crumbs`,
- *   `Edit`:
- *   the parts.
+ *   `Edit`, `Table`, `Pager`, `Panes`, `Head`, `Notes`, `Say`, `Index`: the
+ *   parts.
  * - `relative`: a moment in words, what a `Stamp` says.
  * - `everforest`: the first theme; `stylesheet(theme)` dresses a browser,
  *   `sheet(theme)` a terminal (kit.ts).
@@ -31,6 +31,13 @@ export { Button } from './Button.ts'
 export { Chip, hues } from './Chip.ts'
 export { Crumbs } from './Crumbs.ts'
 export { Edit } from './Edit.ts'
+export { Head } from './Head.ts'
+export { Index } from './Index.ts'
+export { Notes } from './Notes.ts'
+export { Pager } from './Pager.ts'
+export { Panes } from './Panes.ts'
+export { Say } from './Say.ts'
+export { Table } from './Table.ts'
 export { Pairs } from './Pairs.ts'
 export { Rows } from './Rows.ts'
 export { Section } from './Section.ts'

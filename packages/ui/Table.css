@@ -1,0 +1,74 @@
+/* Things in rows: hairlines between the rows, dim headings in mono, a cell
+   one line tall and cut short, unless it holds prose. A row a press picks
+   lights under the pointer; the picked one is raised, with the accent at its
+   edge. */
+.Table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0;
+  font-size: 13px;
+}
+.Table_Heading {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: normal;
+  text-align: left;
+  color: var(--dim);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--border2);
+  padding: 2px var(--half-gap);
+  white-space: nowrap;
+}
+.Table_Heading-sorts {
+  cursor: pointer;
+}
+.Table_Heading-sorts:hover {
+  color: var(--text);
+}
+.Table_Heading-asc,
+.Table_Heading-desc {
+  color: var(--accent);
+}
+.Table_Cell {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 2px var(--half-gap);
+  vertical-align: baseline;
+  max-width: 24em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.Table_Cell-prose {
+  white-space: normal;
+  min-width: 12em;
+  max-width: 40em;
+  color: var(--muted);
+}
+.Table_Cell-num {
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--purple);
+}
+.Table_Cell-key {
+  width: 1%;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+}
+.Table_Row-picks {
+  cursor: pointer;
+}
+.Table_Row-picks:hover,
+.Table_Row-hover {
+  background: var(--soft);
+}
+.Table_Row-on {
+  background: var(--card);
+}
+.Table_Row-on > .Table_Cell:first-child {
+  box-shadow: inset 2px 0 var(--accent);
+}

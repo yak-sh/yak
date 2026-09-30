@@ -15,12 +15,19 @@ import * as crumbs from './Crumbs.ts'
 import * as dot from './Dot.ts'
 import * as edit from './Edit.ts'
 import * as field from './Field.ts'
+import * as head from './Head.ts'
 import * as id from './Id.ts'
+import * as index from './Index.ts'
 import * as menu from './Menu.ts'
+import * as notes from './Notes.ts'
+import * as pager from './Pager.ts'
 import * as pairs from './Pairs.ts'
+import * as panes from './Panes.ts'
 import * as rows from './Rows.ts'
+import * as say from './Say.ts'
 import * as section from './Section.ts'
 import * as stamp from './Stamp.ts'
+import * as table from './Table.ts'
 import * as tabs from './Tabs.ts'
 import * as tile from './Tile.ts'
 import * as timeline from './Timeline.ts'
@@ -49,6 +56,13 @@ export let kit: Record<string, Kit> = {
   Timeline: timeline,
   Crumbs: crumbs,
   Edit: edit,
+  Table: table,
+  Pager: pager,
+  Panes: panes,
+  Head: head,
+  Notes: notes,
+  Say: say,
+  Index: index,
 }
 
 /** What @yaks/tui's painter dresses the kit with, in `theme`'s colours. */

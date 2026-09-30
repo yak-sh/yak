@@ -1,121 +1,196 @@
 /**
- * The sections of a property's page (`_prop`, @yaks/vocab): what it is and
- * holds, the values it most often holds, and its recent writes.
+ * A property's page (`_prop`, @yaks/vocab): what it is and holds; the values
+ * it holds, most common first, with how many entities hold each; and the
+ * recent writes of its component that touched it.
+ *
+ * Ranking values is a tally over every entity carrying the component, asked
+ * once. Where the vocabulary bounds the values (an enum), or few entities
+ * carry the component, it is asked as the page opens; otherwise a press asks
+ * it, since a tally over a free-text property of many entities is as large
+ * as the entities are many (README, Limits).
  *
  * @module
  */
 
-import { h } from 'preact'
+import { h, type JSX } from 'preact'
 import { parse } from '@yaks/query'
-import { Pairs, Rows, Value } from '@yaks/ui'
-import type { Asks, Bundle, Props, View } from './host.ts'
-import { history, where } from './History.ts'
-import { section } from './page.ts'
-import { comp, count, face, line, str } from './read.ts'
+import { Button, Head, Rows, Value } from '@yaks/ui'
+import type { Prop } from '@yaks/vocab'
+import type { Bundle, Io, Props, View } from './host.ts'
+import { Grid, SIZE } from './grid.ts'
+import { History } from './History.ts'
+import { chip, compEid } from './links.ts'
+import { NoteButton, Part, Said, under, useNamed, useNotes } from './notes.ts'
+import { comp, count, face, flags, line, named, str, typed } from './read.ts'
 import { waiting } from './rows.ts'
-import { flags, typed } from './Tile.ts'
+import { grid, key, turned } from './state.ts'
 
-let { Key, Value: Cell } = Pairs
+/** How many entities may carry a component before ranking its values waits
+ * for a press. */
+export let RANKED = 5000
 
-/** A property's address, `comp.prop`: its `doc.title` (@yaks/vocab titles
- * each property so). */
-export let address = (e: Bundle): string => str(e, 'doc', 'title')
+let HEADINGS = ['Values', 'Recent writes']
 
-let about = section({
-  view: 'Inspect.About',
-  match: parse('._prop'),
-  title: 'About',
-  Body: ({ e, io }: Props) => {
-    let p = comp(e, '_prop')
-    let of = str(e, '_prop', 'comp')
-    let pkg = str(e, '_prop', 'package')
-    let listed = (k: string) =>
-      p[k] != null
-        ? [h(Key, { key: `k ${k}` }, k), h(Cell, { key: `v ${k}` }, face(p[k]))]
-        : []
-    return h(
-      Pairs,
+// A property's component and its own name.
+let split = (e: Bundle): [string, string] => {
+  let [name, ...rest] = str(e, 'doc', 'title').split('.')
+  return [name, rest.join('.') || str(e, '_prop', 'name')]
+}
+
+// Whether the graph ranks this property's values: text, enum and id only.
+let ranks = (p?: Prop) =>
+  !!p &&
+  (p.category != 'scalar' || ['text', 'url', 'query'].includes(p.scalar!))
+
+/**
+ * A value as a query term: bare where it is one word, quoted otherwise.
+ *
+ * ```ts
+ * import { quoted } from './Prop.ts'
+ * quoted('open') // 'open'
+ * quoted('two words') // '"two words"'
+ * quoted('say "hi"') // "'say \"hi\"'"
+ * ```
+ */
+export let quoted = (v: string): string =>
+  /^[\w.:@#-]+$/.test(v) ? v : v.includes('"') ? `'${v}'` : `"${v}"`
+
+type Part_ = { e: Bundle; io: Io; notes: Map<string, Bundle[]> }
+
+let Top = ({ e, io, notes }: Part_) => {
+  let eid = e.entity.eid
+  let [name] = split(e)
+  let p = comp(e, '_prop')
+  let pkg = str(e, '_prop', 'package')
+  let subject = str(e, 'doc', 'title')
+  let listed = (k: string) =>
+    p[k] != null ? [h('span', {}, `${k} ${face(p[k])}`)] : []
+  return h(
+    'div',
+    {},
+    h(
+      Head,
       {},
-      h(Key, {}, 'of'),
-      h(Cell, {}, of ? h('a', { href: io.link(of) }, io.name(of)) : '—'),
-      h(Key, {}, 'package'),
-      h(Cell, {}, pkg ? h('a', { href: io.link(pkg) }, io.name(pkg)) : '—'),
-      h(Key, {}, 'type'),
-      h(Cell, {}, typed(p) || '—'),
-      h(Key, {}, 'is'),
-      h(Cell, {}, flags(p).join(' · ') || '—'),
-      ...['enum', 'default', 'death', 'examples'].flatMap(listed),
-      h(Key, {}, 'about'),
-      h(Cell, {}, str(e, 'doc', 'body') || '—'),
-    )
-  },
-})
+      h(
+        Head.Title,
+        {},
+        subject,
+        h(Head.Kind, {}, 'property'),
+        h(NoteButton, { io, eid, heading: '', subject }),
+      ),
+      h(Head.Sub, {}, str(e, 'doc', 'body')),
+      h(
+        Head.Facts,
+        {},
+        h('span', {}, 'of ', chip(io, name)),
+        pkg ? h('a', { href: io.link(pkg) }, io.name(pkg)) : 'no package',
+        h('span', {}, typed(p) || 'untyped'),
+        ...flags(p).map((f) => h('span', {}, f)),
+        ...['enum', 'default', 'death'].flatMap(listed),
+      ),
+    ),
+    h(Said, { io, eid, subject, heading: '', notes: notes.get('') }),
+  )
+}
 
-/** How many values a property's page lists. */
-export let VALUES = 30
-
-/** The values it holds, most common first. The tally reads every entity
- * carrying its component, so it is asked once. */
-let values = section({
-  view: 'Inspect.Values',
-  match: parse('._prop'),
-  title: 'Values',
-  asks: (e): Asks => {
-    let at = address(e)
-    let [name] = at.split('.')
-    return at.includes('.')
-      ? { tally: { query: `.${name}&.tally=${at}`, once: true } }
-      : {}
-  },
-  count: ({ got }) =>
-    got.tally?.tally ? Object.keys(got.tally.tally).length : undefined,
-  Body: ({ e, io, got }: Props) => {
-    let tally = Object.entries(got.tally?.tally ?? {})
-    // A reference's values are entities: each links to its page.
-    let ref = !!str(e, '_prop', 'ref')
-    return waiting(got.tally) ??
-      (tally.length
-        ? h(
-          Pairs,
-          {},
-          tally
-            .toSorted(([, a], [, b]) => b - a)
-            .slice(0, VALUES)
-            .flatMap(([v, n]) => [
-              h(Key, { key: `k ${v}` }, h(Value, { mod: 'num' }, count(n))),
-              h(
-                Cell,
-                { key: `v ${v}` },
-                ref && v
-                  ? h('a', { href: io.link(v) }, io.name(v))
-                  : line(v, 160) || '""',
-              ),
-            ]),
-        )
-        : h(Rows.More, {}, 'none'))
-  },
-})
-
-/** Its recent writes: the writes of its component, each with this
- * property's value. */
-let writes = history({
-  view: 'Inspect.History',
-  match: parse('._prop'),
-  title: 'Writes',
-  open: false,
-  where: (e) => `comp=${str(e, '_prop', 'comp')}`,
-  what: (io, b, e) => {
-    let v = comp(b, '_change').value as Record<string, unknown> | null
-    let name = str(e, '_prop', 'name')
-    return h(
-      'span',
+// The values it holds, most common first.
+let Values = ({ e, io, notes }: Part_) => {
+  let eid = e.entity.eid
+  let [name, prop] = split(e)
+  let p = io.vocab.prop(name, prop)
+  let id = key(eid, 'Values')
+  let got = io.ask({ total: { query: `.${name}&.count`, once: true } })
+  let n = got.total?.count
+  let ranked = ranks(p) &&
+    (p?.category == 'enum' || !!grid(io, id).rank || (n != null && n <= RANKED))
+  let tallied = io.ask(
+    ranked
+      ? { tally: { query: `.${name}&.tally=${name}.${prop}`, once: true } }
+      : {},
+  )
+  let tally = tallied.tally?.tally ?? {}
+  let values = Object.keys(tally).toSorted((a, b) => tally[b] - tally[a])
+  let ref = p?.category == 'ref'
+  let page = grid(io, id).after?.length ?? 0
+  useNamed(io, ref ? values.slice(page * SIZE, (page + 1) * SIZE) : [])
+  let body = !ranks(p)
+    ? h(Rows.More, {}, 'the graph ranks only text, enum and id values')
+    : !ranked
+    ? waiting(got.total) ?? h(
+      Rows.More,
       {},
-      where(io, b),
-      ' ',
-      v == null ? 'removed' : name in v ? line(face(v[name]), 160) : '·',
+      `${count(n ?? 0)} entities carry ${name}; ranking what they hold here ` +
+        'reads every one. ',
+      h(Button, {
+        type: 'button',
+        mod: 'quiet',
+        onClick: () => io.set(turned(id, { rank: true })),
+      }, 'rank them'),
     )
-  },
-})
+    : waiting(tallied.tally) ?? h(Grid, {
+      io,
+      id,
+      local: true,
+      rows: values.map((v): Bundle => ({ entity: { eid: v } })),
+      pick: ref ? (b) => named(b.entity.eid) ? b.entity.eid : undefined : false,
+      columns: [
+        {
+          name: 'value',
+          cell: (b) => {
+            let v = b.entity.eid
+            return ref && named(v)
+              ? h('a', { href: io.link(v) }, io.name(v))
+              : h(
+                'a',
+                { href: io.find(`.${name}.${prop}=${quoted(v)}`) },
+                h(Value, { mod: 'text' }, line(v, 120)),
+              )
+          },
+        },
+        {
+          name: 'entities',
+          mod: 'num',
+          cell: (b) => count(tally[b.entity.eid] ?? 0),
+        },
+      ],
+    })
+  return h(
+    Part,
+    {
+      io,
+      eid,
+      subject: str(e, 'doc', 'title'),
+      heading: 'Values',
+      count: tallied.tally?.tally ? values.length : undefined,
+      notes,
+    },
+    body,
+  )
+}
 
-/** A property's sections. */
-export let propViews: View[] = [about, values, writes]
+/** A property's own page. */
+export let PropPage = ({ e, io }: Props): JSX.Element => {
+  let subject = str(e, 'doc', 'title')
+  let notes = under(useNotes(io, e.entity.eid), subject, HEADINGS)
+  let [name, prop] = split(e)
+  return h(
+    'div',
+    { 'data-inspect': e.entity.eid },
+    h(Top, { e, io, notes }),
+    h(Values, { e, io, notes }),
+    h(History, {
+      e,
+      io,
+      notes,
+      heading: 'Recent writes',
+      where: `comp=${compEid(name)}`,
+      prop,
+      once: true,
+    }),
+  )
+}
+
+/** A property's page. */
+export let propViews: View[] = [
+  { view: 'Inspect.Page', match: parse('._prop'), Render: PropPage },
+]

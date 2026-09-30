@@ -2,9 +2,10 @@
  * The routes facet, exported as `@yaks/inspect/routes`: the inspector's own
  * page. `/inspect` is the map and `/inspect/<id>` an entity's page; both
  * answer the one document, which loads the page's script (./main.ts, bundled
- * by @yaks/cli `bundle`) and its stylesheet (@yaks/ui's kit in Everforest,
- * then ./styles.ts). What the page reads and writes is @yaks/api's doors, so
- * a host serves it with @yaks/api and this package, and nothing else.
+ * by @yaks/cli `bundle`) and its stylesheet: @yaks/ui's kit in Everforest,
+ * since every part the page draws is @yaks/ui's. What the page reads and
+ * writes is @yaks/api's doors, so a host serves it with @yaks/api and this
+ * package, and nothing else.
  *
  * @module
  */
@@ -12,7 +13,6 @@
 import type { Route } from '@yaks/api'
 import { bundle, kept } from '@yaks/cli/page'
 import { everforest, stylesheet } from '@yaks/ui'
-import { styles } from './styles.ts'
 
 /** What this facet reads off the host it is composing into. */
 export type Hosting = {
@@ -27,11 +27,7 @@ export let PAGE = '<!doctype html><html><head><meta charset="utf-8">' +
   '<link rel="stylesheet" href="/inspect/styles.css"></head>' +
   '<body><script type="module" src="/inspect/app.js"></script></body></html>'
 
-let read = (url: URL) => fetch(url).then((r) => r.text())
-
-let css = async () =>
-  [await stylesheet(everforest), ...await Promise.all(styles.map(read))]
-    .join('\n')
+let css = () => stylesheet(everforest)
 
 /** `/inspect`, `/inspect/<id>`, and what their page loads. */
 export let routes = (host: Hosting = {}): Route[] => {

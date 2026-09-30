@@ -1,10 +1,10 @@
 /**
- * A titled section of a page: its `Title` line, then what it holds. The title
- * line is one heading, so it stays one line in a terminal too: the words, a
- * `Count` of what the section holds and a `Note`, all inside `Title`. A
- * section that folds starts its title with a `Fold`, `Fold-open` while its
- * body shows; what a press on it does, and whether the body is drawn, are the
- * caller's. A `Note-refused` says what went wrong there.
+ * A titled section of a page: its `Title` line, then a `Sub` saying what it
+ * is about, then what it holds. The title line is one heading, so it stays
+ * one line in a terminal too: the words, a `Count` of what the section holds,
+ * a `Note`, and anything else the line offers (a button), all inside `Title`.
+ * A `Note-refused` says what went wrong there. A section never folds: what it
+ * holds shows.
  *
  * @module
  */
@@ -17,35 +17,33 @@ import type { Colors, Specimen } from './theme.ts'
 /** A section. */
 export let Section:
   & Part
-  & Record<'Title' | 'Count' | 'Note' | 'Fold', Part> = block(
+  & Record<'Title' | 'Count' | 'Note' | 'Sub', Part> = block(
     'section',
     'Section',
     {
       Title: 'h2',
       Count: 'span',
       Note: 'span',
-      Fold: 'button',
+      Sub: 'p',
     },
   )
 
-/** A blank line after it, as the margin after it in a browser; a fold is its
- * caret. */
+/** A blank line after it, as the margin after it in a browser. */
 export let sheet = (c: Colors): Sheet => ({
   Section: { gap: true },
-  Section_Title: { fg: c.green },
-  Section_Count: { fg: c.dim },
-  Section_Note: { fg: c.dim },
+  Section_Title: { fg: c.green, spaced: true },
+  Section_Count: { fg: c.dim, bold: false },
+  Section_Note: { fg: c.dim, bold: false },
   'Section_Note-refused': { fg: c.red },
-  Section_Fold: { glyph: '▸', fg: c.dim },
-  'Section_Fold-open': { glyph: '▾' },
+  Section_Sub: { fg: c.muted },
 })
 
-let { Title, Count, Note, Fold } = Section
+let { Title, Count, Note, Sub } = Section
 
-/** An open section, and a folded one. */
+/** A section with all it says of itself, and one that went wrong. */
 export let specimens = (): Specimen[] => [
   [
-    'Section, Title, Count, Note',
+    'Section, Title, Count, Note, Sub',
     h(
       Section,
       {},
@@ -56,6 +54,7 @@ export let specimens = (): Specimen[] => [
         h(Count, {}, '4'),
         h(Note, {}, 'declared by @yaks/task'),
       ),
+      h(Sub, {}, 'what a task holds'),
       h('p', null, 'What the section holds.'),
     ),
   ],
@@ -65,35 +64,6 @@ export let specimens = (): Specimen[] => [
       Section,
       {},
       h(Title, {}, 'Links', h(Note, { mod: 'refused' }, "no entity 'T-0'")),
-    ),
-  ],
-  [
-    'Fold, Fold-open',
-    h(
-      'div',
-      null,
-      h(
-        Section,
-        {},
-        h(
-          Title,
-          {},
-          h(Fold, { type: 'button', mod: 'open', 'aria-label': 'fold' }),
-          'Open',
-        ),
-        h('p', null, 'Its body shows.'),
-      ),
-      h(
-        Section,
-        {},
-        h(
-          Title,
-          {},
-          h(Fold, { type: 'button', 'aria-label': 'unfold' }),
-          'Folded',
-          h(Count, {}, '12'),
-        ),
-      ),
     ),
   ],
 ]

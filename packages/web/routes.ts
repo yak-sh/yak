@@ -12,15 +12,13 @@
 // `/ws` and every other plugin's route stay theirs.
 //
 // `/web/*` is what that page loads: the app bundled from main.tsx (@yaks/cli
-// `bundle`), its stylesheet (@yaks/ui's in Everforest, then those of the
-// packages whose views it draws, then this package's own), icons and
-// manifest. The vocabulary is @yaks/api's `/vocab`.
+// `bundle`), its stylesheet (@yaks/ui's in Everforest, then this package's
+// own), icons and manifest. The vocabulary is @yaks/api's `/vocab`.
 
 import type { Route } from '@yaks/api'
 import { dead, type Graph } from '@yaks/graph'
 import { prefixOf } from '@yaks/id'
 import { everforest, stylesheet } from '@yaks/ui'
-import { styles as inspecting } from '@yaks/inspect/styles'
 import type { Vocab } from '@yaks/vocab'
 import { type Body, bundle, kept } from '@yaks/cli/page'
 import { addressId } from './url.ts'
@@ -46,14 +44,9 @@ let text = (path: string) => () => fetch(here(path)).then((r) => r.text())
 let bytes = (path: string) => () =>
   fetch(here(path)).then(async (r) => new Uint8Array(await r.arrayBuffer()))
 
-let read = (url: URL) => fetch(url).then((r) => r.text())
-
 let styles = async () =>
-  (await Promise.all([
-    stylesheet(everforest),
-    ...inspecting.map(read),
-    text('./styles.css')(),
-  ])).join('\n')
+  (await Promise.all([stylesheet(everforest), text('./styles.css')()]))
+    .join('\n')
 
 let files: [string, string, () => Promise<Body>][] = [
   ['styles.css', 'text/css; charset=utf-8', styles],

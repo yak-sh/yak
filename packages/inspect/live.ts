@@ -5,41 +5,27 @@
  * and the page's own graph beside it for the inspector's state.
  *
  * What a view asks is a server-evaluated watch held while the view is
- * mounted, each row whole; an aggregate is the watch's `reduced`, and one
- * asked `once` is kept as it first came and its watch closed. A write goes to
- * the server as it stands, so the graph resolves what a person typed (an id,
- * a `$` alias, an edge's eid), and comes back as it was applied.
- *
- * `here` draws what an address (./where.ts) names.
+ * mounted, sent as it is written: a line brings the components it names,
+ * and `*` every one. An aggregate is the watch's `reduced`. One asked `once`
+ * is kept as it first came, its watch closed, and answered from what was
+ * kept for as long as the page is open. A write goes to the server as it
+ * stands, so the graph resolves what a person typed (an id, a `$` alias, an
+ * edge's eid), and comes back as it was applied. A row pressed is shown
+ * beside the page (./state.ts `picked`).
  *
  * @module
  */
 
 import { type Signal, signal } from '@preact/signals'
-import { type FunctionComponent, h } from 'preact'
 import { useLayoutEffect, useState } from 'preact/hooks'
 import type { Client, Watch } from '@yaks/client'
 import { aggregate, dead, type Reduced } from '@yaks/graph'
 import { human, short } from '@yaks/id'
 import { parse } from '@yaks/query'
 import { relative } from '@yaks/ui'
-import type { Inspector } from './door.ts'
 import type { Answer, Ask, Asks, Bundle, Front, Host } from './host.ts'
-import { MAP, opened } from './Map.ts'
-import { type At, mapPath, pagePath } from './where.ts'
-
-/** The line that holds one entity whole, by any id the graph resolves. */
-export let entityLine = (id: string): string => `entity.eid=${id}&*`
-
-// A line's rows carry every component, so a view draws an entity by whatever
-// it wears: `*`, unless the line already says what it answers (a projection),
-// or answers no rows at all (an aggregate).
-let whole = (line: string, agg: boolean): string =>
-  agg || /(^|&)(\*|\.fields=[^&]*)(&|$)/.test(line)
-    ? line
-    : line
-    ? `${line}&*`
-    : '*'
+import { picked } from './state.ts'
+import { pagePath, queryPath } from './where.ts'
 
 // One ask held: its answer as it stands, and letting it go.
 type Held = { answer: () => Answer; drop: () => void }
@@ -66,12 +52,10 @@ export type LiveOpts = {
   front: Front
   /** whether controls take input: a browser's do, a terminal's paint */
   edits: boolean
-  /** the query field, bound to `front` (@yaks/filter) */
-  Bar: Host['Bar']
 }
 
 /** The host over `box`. */
-export let live = ({ box, front, edits, Bar }: LiveOpts): Host => {
+export let live = ({ box, front, edits }: LiveOpts): Host => {
   let vocab = box.vocab
   let id = human(vocab)
 
@@ -91,8 +75,12 @@ export let live = ({ box, front, edits, Bar }: LiveOpts): Host => {
     return b && !dead(b) ? b : undefined
   }
 
+  // What each line asked once answered, kept while the page is open.
+  let kept = new Map<string, Signal<Answer | undefined>>()
+
   let hold = (a: Ask): Held => {
     let line = typeof a == 'string' ? a : a.query
+    let once = typeof a != 'string' && a.once
     let agg: boolean
     try {
       agg = !!aggregate(parse(line))
@@ -103,15 +91,25 @@ export let live = ({ box, front, edits, Bar }: LiveOpts): Host => {
         drop: () => {},
       }
     }
-    let w: Watch | undefined = box.watch(whole(line, agg), {
-      evaluate: 'server',
-    })
+    let now = (w?: Watch): Answer =>
+      agg
+        ? {
+          rows: [],
+          ready: !!w?.reduced,
+          error: w?.refused,
+          ...reading(w?.reduced),
+        }
+        : { rows: w?.value ?? [], ready: !!w?.ready, error: w?.refused }
+    let got = once ? kept.get(line) : undefined
+    if (got?.value) return { answer: () => got!.value!, drop: () => {} }
+    let w: Watch | undefined = box.watch(line, { evaluate: 'server' })
     // Asked once: the first answer is kept, and nothing is asked again.
-    let kept = signal<Reduced | undefined>(undefined)
-    let off = typeof a != 'string' && a.once && agg
+    if (once && !got) kept.set(line, got = signal(undefined))
+    let off = once
       ? w.subscribe(() => {
-        if (!w?.reduced) return
-        kept.value = w.reduced
+        let a = now(w)
+        if (!a.ready || a.error) return
+        got!.value = a
         drop()
       })
       : undefined
@@ -120,17 +118,7 @@ export let live = ({ box, front, edits, Bar }: LiveOpts): Host => {
       w?.close()
       w = undefined
     }
-    return {
-      answer: () => {
-        let error = w?.refused
-        if (agg) {
-          let r = kept.value ?? w?.reduced
-          return { rows: [], ready: !!r, error, ...reading(r) }
-        }
-        return { rows: w?.value ?? [], ready: !!w?.ready, error }
-      },
-      drop,
-    }
+    return { answer: () => got?.value ?? now(w), drop }
   }
 
   // A view's asks, held while it is mounted: opened after its first render
@@ -173,44 +161,11 @@ export let live = ({ box, front, edits, Bar }: LiveOpts): Host => {
       let b = get(eid)
       return pagePath(b?.entity.num ? id(b) : eid)
     },
-    find: mapPath,
+    find: queryPath,
+    pick: (eid) => void front.mutate(picked(eid)),
     id,
     kind: (b) => vocab.kindOf(b) || 'entity',
     name,
     when: (at) => relative(at),
-    Bar,
   }
-}
-
-/**
- * What an address draws, over a host and its inspector: the map, with the
- * address's line run in its bar (`put` writes a field's text, @yaks/filter
- * `set`), or the page of the entity its id names.
- */
-export let here = (
-  host: Host,
-  { Door, io }: Inspector,
-  put: (field: string, text: string) => void,
-): FunctionComponent<{ where: At }> => {
-  let Mapped = ({ query }: { query?: string }) => {
-    useLayoutEffect(() => {
-      host.front.mutate(opened(host.front.ent, query))
-      if (query != null) put(MAP, query)
-    }, [query])
-    let map = io.state(MAP)
-    return map ? h(Door, { e: map, view: 'Inspect.Full' }) : null
-  }
-  let Page = ({ id }: { id: string }) => {
-    let { it } = host.useAnswers({ it: entityLine(id) })
-    let [e] = it.rows
-    return e
-      ? h(Door, { e, view: 'Inspect.Full' })
-      : it.ready || it.error
-      ? h('p', null, it.error ?? `${id} names nothing.`)
-      : null
-  }
-  return ({ where }) =>
-    'id' in where
-      ? h(Page, { id: where.id })
-      : h(Mapped, { query: where.query })
 }

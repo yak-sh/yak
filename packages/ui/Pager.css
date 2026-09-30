@@ -1,0 +1,32 @@
+/* Which rows show, then a step each way: small, mono, out of the way of the
+   rows above it. */
+.Pager {
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+  padding: 4px var(--half-gap);
+}
+.Pager_Span {
+  font-variant-numeric: tabular-nums;
+}
+.Pager_Step {
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  min-height: var(--tap);
+}
+.Pager_Step:hover {
+  text-decoration: underline;
+}
+.Pager_Step:disabled {
+  color: var(--dim);
+  opacity: 0.5;
+  cursor: default;
+  text-decoration: none;
+}

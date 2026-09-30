@@ -2,12 +2,15 @@
  * The inspector's page in a browser, bundled by ./routes.ts and loaded at
  * `/inspect`. Its host is the smallest that works: the vocabulary the server
  * serves (@yaks/api `/vocab`), a @yaks/client box connected to that server,
- * the page's own graph for the inspector's state and its query field
- * (@yaks/filter), and the views (./live.ts `live`, `here`). Nothing else is on
- * the page.
+ * the page's own graph for the inspector's state and the index's field
+ * (@yaks/filter), and the views, in the three panes (./Frame.ts). Nothing
+ * else is on the page.
  *
- * The address is the page's state: a link inside the inspector is followed in
- * place, and back and forward walk what was followed.
+ * The address is the page shown: a link inside the inspector is followed in
+ * place, and back and forward walk what was followed. The keys step through
+ * a table's rows: ↓ or j picks the next row of the table a row was last
+ * picked in (the first table, before any), ↑ or k the one before, and Enter
+ * opens the picked row's own page.
  *
  * @module
  */
@@ -15,13 +18,15 @@
 import { signal } from '@preact/signals'
 import { h, render } from 'preact'
 import { client } from '@yaks/client'
-import { filters, type Float } from '@yaks/filter'
+import { filters } from '@yaks/filter'
 import { docs as fieldDocs } from '@yaks/filter/vocab'
+import { Panes } from '@yaks/ui'
 import { loadVocab } from '@yaks/vocab'
 import { inspector } from './door.ts'
+import { frame } from './Frame.ts'
 import { docs as own } from './front.ts'
-import { here, live } from './live.ts'
-import { at, mapPath } from './where.ts'
+import { live } from './live.ts'
+import { at, queryPath } from './where.ts'
 import { views } from './views.ts'
 
 let { docs, keywords } = await (await fetch('/vocab')).json()
@@ -40,36 +45,32 @@ let front = client(loadVocab([...fieldDocs, ...own]), [], {
   wireVault: false,
 })
 
-// The list of candidates floats under the field it completes.
-let Below: Float = ({ children }) =>
-  h('div', { class: 'InspectPage_Float' }, children)
-let fields = filters(front, { vocab, Float: Below })
+// The field's candidates show under it, above the index.
+let fields = filters(front, { vocab })
 
 let where = signal(at(location.href) ?? {})
 let go = (href: string) => {
+  if (href == location.pathname + location.search) return
   history.pushState(null, '', href)
   where.value = at(href) ?? {}
 }
 addEventListener('popstate', () => where.value = at(location.href) ?? {})
 
-let host = live({
-  box,
-  front,
-  edits: true,
-  Bar: ({ id, run }) =>
+let host = live({ box, front, edits: true })
+let door = inspector(views, host)
+let Frame = frame(door, {
+  Bar: ({ id }) =>
     h(fields.Filter, {
       id,
-      placeholder: 'a query: ._comp, .task&.tally=filed.priority…',
+      placeholder: 'find, or a query: .task&.tally=filed.priority',
       onKey: (e: KeyboardEvent) => {
         if (e.key != 'Enter') return
         e.preventDefault()
-        let line = fields.text(id)
-        run(line)
-        go(mapPath(line.trim()))
+        go(queryPath(fields.text(id).trim()))
       },
     }),
+  Scroll: ({ children }) => h(Panes.Body, {}, children),
 })
-let Here = here(host, inspector(views, host), fields.set)
 
 // A plain click on a link to another inspector address follows it in place.
 document.addEventListener('click', (ev) => {
@@ -81,7 +82,42 @@ document.addEventListener('click', (ev) => {
   go(href)
 })
 
-let Page = () =>
-  h('main', { class: 'InspectPage' }, h(Here, { where: where.value }))
+// Where the keys are the page's: not while something takes what is typed.
+let typing = (el: EventTarget | null) =>
+  el instanceof HTMLElement &&
+  (el.isContentEditable || /^(input|textarea|select)$/i.test(el.localName))
+
+// The rows the keys step through: the picked row's table's, or the page's
+// first table's.
+let near = (): { rows: HTMLElement[]; on: number } => {
+  let page = document.querySelector('[data-pane=page]')
+  let on = page?.querySelector<HTMLElement>('tr[data-pick].Table_Row-on')
+  let table = on?.closest('table') ??
+    page?.querySelector('table:has(tr[data-pick])')
+  let rows = [...table?.querySelectorAll<HTMLElement>('tr[data-pick]') ?? []]
+  return { rows, on: on ? rows.indexOf(on) : -1 }
+}
+
+document.addEventListener('keydown', (ev) => {
+  if (ev.metaKey || ev.ctrlKey || ev.altKey || typing(ev.target)) return
+  let d = ev.key == 'ArrowDown' || ev.key == 'j'
+    ? 1
+    : ev.key == 'ArrowUp' || ev.key == 'k'
+    ? -1
+    : 0
+  let { rows, on } = near()
+  if (d) {
+    let next = rows[Math.max(0, Math.min(rows.length - 1, on + d))]
+    if (!next) return
+    ev.preventDefault()
+    host.pick(next.dataset.pick!)
+    next.scrollIntoView({ block: 'nearest' })
+  } else if (ev.key == 'Enter' && on >= 0) {
+    ev.preventDefault()
+    go(host.link(rows[on].dataset.pick!))
+  }
+})
+
+let Page = () => h(Frame, { where: where.value })
 
 render(h(Page, null), document.body)

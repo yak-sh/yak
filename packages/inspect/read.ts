@@ -183,3 +183,45 @@ export let relation = (b: Bundle, relations: string[]): string | undefined =>
 
 /** A number, grouped for reading: 12345 reads 12,345. */
 export let count = (n: number): string => n.toLocaleString('en-US')
+
+/**
+ * A property's type as it reads, off its `_prop` row.
+ *
+ * ```ts
+ * import { typed } from './read.ts'
+ * typed({ type: 'string', enum: ['open', 'done'] }) // 'string enum'
+ * typed({ type: 'string', ref: 'session' }) // 'string → session'
+ * ```
+ */
+export let typed = (prop: Record<string, unknown>): string =>
+  [
+    [prop.type].flat().filter(Boolean).join('|'),
+    prop.format,
+    prop.enum ? 'enum' : null,
+    prop.ref ? `→ ${prop.ref}` : null,
+  ].filter(Boolean).join(' ')
+
+/**
+ * What is special about a property, off its `_prop` row: who owns it,
+ * whether it is stored, how it is found.
+ *
+ * ```ts
+ * import { flags } from './read.ts'
+ * flags({ stamped: true, search: true, unique: null }) // ['stamped', 'search']
+ * ```
+ */
+export let flags = (prop: Record<string, unknown>): string[] =>
+  ['stamped', 'computed', 'required', 'search', 'unique', 'identity']
+    .filter((k) => prop[k] === true)
+
+/**
+ * Some values' distinct members, in the order first met, blanks left out.
+ *
+ * ```ts
+ * import { unique } from './read.ts'
+ * unique(['a', '', 'b', 'a', undefined]) // ['a', 'b']
+ * ```
+ */
+export let unique = (xs: (string | undefined | null)[]): string[] => [
+  ...new Set(xs.filter((x): x is string => !!x)),
+]

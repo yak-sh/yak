@@ -1,13 +1,16 @@
 /**
  * The inspector in a terminal: `yak inspect`, a rendering mode of the CLI
- * (./cli.ts). The same host and views the page draws (./live.ts), over a
- * @yaks/client box connected to the server this config's `yak serve` runs,
- * painted by @yaks/tui in @yaks/ui's Everforest sheet. Controls paint as
- * values; editing is the page's.
+ * (./cli.ts). The same host, views and three panes the page draws (./live.ts,
+ * ./Frame.ts), over a @yaks/client box connected to the server this config's
+ * `yak serve` runs, painted by @yaks/tui in @yaks/ui's Everforest sheet: the
+ * index, the page and the detail as framed columns, the detail left out of a
+ * terminal too narrow for it. Values paint as values; editing is the page's.
  *
- * Keys: ↑ ↓ PgUp PgDn scroll, Tab and ⇧Tab (or j and k) walk the links, Enter
- * follows one (a click does too), h or Backspace goes back, `/` types a query
- * on the map (Enter runs it, Escape leaves the field), q quits.
+ * Keys: Tab and ⇧Tab move between the panes, the one with the keys framed in
+ * the accent. j and k walk its rows and links, a row picked as the walk
+ * reaches it, so the detail follows; Enter (or l) opens what the walk is on
+ * as the page; h or Backspace goes back; ↑ ↓ PgUp PgDn scroll; `/` types in
+ * the index's field (Enter runs it as a query, Escape leaves it); q quits.
  *
  * @module
  */
@@ -25,20 +28,27 @@ import {
   quit,
   run,
   Scroll,
+  size,
   type TElement,
   useKeys,
 } from '@yaks/tui'
 import { everforest, sheet } from '@yaks/ui'
 import { loadVocab } from '@yaks/vocab'
 import { inspector } from './door.ts'
+import { frame } from './Frame.ts'
 import { docs as own } from './front.ts'
-import { here, live } from './live.ts'
-import { at, mapPath, pagePath } from './where.ts'
-import { MAP, ran } from './Map.ts'
+import { live } from './live.ts'
+import { INSPECT, me, put } from './state.ts'
+import { at, pagePath, queryPath } from './where.ts'
 import { views } from './views.ts'
 
-// The class the focused link wears.
-let FOCUS = 'Inspect_Focus'
+// What the walk is on wears the painter's own mark for a selected row, in
+// the theme's colours (@yaks/ui `sheet`).
+let FOCUS = 'List_Selected'
+
+// The panes, in the order Tab walks them.
+let PANES = ['index', 'page', 'detail'] as const
+type Pane = typeof PANES[number]
 
 // Whether a word names an entity rather than being a query: a human id
 // (`T-9`), a short handle (`#3b5bc70420`) or an eid.
@@ -46,23 +56,35 @@ let names = (word: string): boolean =>
   !!human(word) || /^#[0-9a-f]+$/i.test(word) ||
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(word)
 
-/** Where `yak inspect <word>` opens: the entity it names, or the map with
- * it run as a query. */
+/** Where `yak inspect <word>` opens: the entity it names, or the page of the
+ * query it is. */
 export let start = (word = ''): string =>
-  word && names(word) ? pagePath(word) : mapPath(word)
+  word && names(word) ? pagePath(word) : queryPath(word)
 
-// Every link under `el`, in the order they paint.
-let linksIn = (el: TElement | null | undefined): TElement[] =>
-  !el ? [] : [
+let elements = (el: TElement) =>
+  el.childNodes.filter((n): n is TElement => 'localName' in n)
+
+// The pane element named `pane`, under `el`.
+let paneOf = (el: TElement | null, pane: Pane): TElement | undefined => {
+  if (!el) return
+  if (el.attr('data-pane') == pane) return el
+  for (let k of elements(el)) {
+    let found = paneOf(k, pane)
+    if (found) return found
+  }
+}
+
+// What a walk stops on under `el`, in the order they paint: each row a press
+// picks, and each link that is not inside one.
+let stops = (el: TElement | undefined): TElement[] =>
+  !el ? [] : el.attr('data-pick') ? [el] : [
     ...el.localName == 'a' && el.attr('href') ? [el] : [],
-    ...el.childNodes.flatMap((n) =>
-      'localName' in n ? linksIn(n as TElement) : []
-    ),
+    ...elements(el).flatMap(stops),
   ]
 
-// The focused link wears FOCUS, and no other does.
-let mark = (links: TElement[], on?: TElement) => {
-  for (let el of links) {
+// The stop the walk is on wears FOCUS, and no other does.
+let mark = (all: TElement[], on?: TElement) => {
+  for (let el of all) {
     let cls = el.className.split(/\s+/).filter((c) => c && c != FOCUS)
     if (el == on) cls.push(FOCUS)
     let next = cls.join(' ')
@@ -104,39 +126,47 @@ export let open = async (url: string, href: string): Promise<void> => {
   })
   let fields = filters(front, { vocab })
   let typing = signal(false)
-  let host = live({
-    box,
-    front,
-    edits: false,
+  let host = live({ box, front, edits: false })
+  let door = inspector(views, host)
+  let wide = () => size.value.columns >= 120
+  let Frame = frame(door, {
     Bar: ({ id }) =>
       h(fields.Filter, {
         id,
         active: typing.value,
-        placeholder: '/ to type a query',
+        placeholder: '/ to find, or a query',
       }),
+    Scroll: ({ id, on, children }) =>
+      h(Scroll, { id, grow: '1', follow: false, keyboard: on }, children),
+    aside: wide,
   })
-  let Here = here(host, inspector(views, host), fields.set)
 
-  // What was followed, the page on screen last.
+  // What was followed, the page on screen last; where each pane's walk is.
   let trail = signal([href])
-  let focus = signal(-1)
+  let walk = signal<Record<Pane, number>>({ index: -1, page: -1, detail: -1 })
   let go = (to: string) => {
     if (!at(to) || to == trail.value.at(-1)) return
     trail.value = [...trail.value, to]
-    focus.value = -1
+    walk.value = { ...walk.value, page: -1 }
   }
   let back = () => {
     if (trail.value.length < 2) return
     trail.value = trail.value.slice(0, -1)
-    focus.value = -1
+    walk.value = { ...walk.value, page: -1 }
+  }
+  let pane = (): Pane => me(door.io).pane ?? 'page'
+  let turn = (d: number) => {
+    let open = PANES.filter((p) => p != 'detail' || wide())
+    let i = open.indexOf(pane())
+    front.mutate(put({ pane: open[(i + d + open.length) % open.length] }))
   }
 
-  // Typing in the map's bar: the list takes its keys first.
+  // Typing in the index's field: the list takes its keys first.
   let type = (k: Key): boolean => {
-    let text = fields.text(MAP)
-    let caret = fields.row(MAP)?.caret ?? text.length
-    let put = (t: string, c: number) => fields.type(MAP, t, c)
-    let pressed = (name: string) => fields.press(MAP, name)
+    let text = fields.text(INSPECT)
+    let caret = fields.row(INSPECT)?.caret ?? text.length
+    let put = (t: string, c: number) => fields.type(INSPECT, t, c)
+    let pressed = (name: string) => fields.press(INSPECT, name)
     if (k.name == 'char' || k.name == 'paste') {
       let s = k.text ?? ''
       put(text.slice(0, caret) + s + text.slice(caret), caret + s.length)
@@ -149,24 +179,28 @@ export let open = async (url: string, href: string): Promise<void> => {
     else if (k.name == 'down') pressed('ArrowDown')
     else if (k.name == 'escape' && !pressed('Escape')) typing.value = false
     else if (k.name == 'enter' && !pressed('Enter')) {
-      let line = text.trim()
-      front.mutate(ran(line))
       typing.value = false
-      go(mapPath(line))
+      go(queryPath(text.trim()))
     }
     return true
   }
 
   let App = () => {
     let root = useRef<TElement>(null)
-    let links = () => linksIn(root.current)
-    let walk = (d: number) => {
-      let all = links()
+    let here = () => stops(paneOf(root.current, pane()))
+    let step = (d: number) => {
+      let all = here()
       if (!all.length) return
-      focus.value = (Math.max(-1, focus.value) + d + all.length) % all.length
+      let now = Math.max(-1, walk.value[pane()])
+      let to = Math.max(0, Math.min(all.length - 1, now + d))
+      walk.value = { ...walk.value, [pane()]: to }
+      let row = all[to].attr('data-pick')
+      if (row && pane() == 'page') host.pick(row)
     }
     let follow = () => {
-      let to = links()[focus.value]?.attr('href')
+      let on = here()[walk.value[pane()]]
+      let row = on?.attr('data-pick')
+      let to = row ? host.link(row) : on?.attr('href')
       if (to) go(to)
     }
     useKeys((k) => {
@@ -174,56 +208,49 @@ export let open = async (url: string, href: string): Promise<void> => {
       let c = k.name == 'char' ? k.text : undefined
       if (c == 'q') quit()
       else if (c == '/') {
-        go(mapPath(fields.text(MAP)))
+        front.mutate(put({ pane: 'index' }))
         typing.value = true
-      } else if (k.name == 'tab') walk(k.shift ? -1 : 1)
-      else if (c == 'j' || c == 'k') walk(c == 'j' ? 1 : -1)
+      } else if (k.name == 'tab') turn(k.shift ? -1 : 1)
+      else if (c == 'j' || c == 'k') step(c == 'j' ? 1 : -1)
       else if (k.name == 'enter' || c == 'l') follow()
       else if (k.name == 'backspace' || c == 'h') back()
       else return false
       return true
     })
-    // After every paint of the page, the focus is where it was left.
+    // After every paint, the walk wears FOCUS where it was left, in every
+    // pane.
     useLayoutEffect(() => {
-      let all = links()
-      mark(all, all[focus.value])
+      for (let p of PANES) {
+        let all = stops(paneOf(root.current, p))
+        mark(all, p == pane() ? all[walk.value[p]] : undefined)
+      }
     })
     let now = trail.value.at(-1)!
-    let where = at(now) ?? {}
-    let on = links()[focus.value]?.attr('href')
     return h(
       'div',
       { col: '' },
-      h(
-        Scroll,
-        { id: `inspect ${now}`, grow: '1', follow: false },
-        h('div', {
-          ref: root,
-          onClick: (e: MouseEvent) => {
-            let to = linkOf(e.target as TElement)
-            if (to && at(to)) go(to)
-          },
-        }, h(Here, { where })),
-      ),
+      h('div', {
+        ref: root,
+        grow: '1',
+        col: '',
+        onClick: (e: MouseEvent) => {
+          let to = linkOf(e.target as TElement)
+          if (to && at(to)) go(to)
+        },
+      }, h(Frame, { where: at(now) ?? {} })),
       h(
         'div',
-        { class: 'Inspect_Keys' },
+        { class: 'Muted' },
         typing.value
           ? 'Enter runs the query · Escape leaves the field'
-          : `${on ? `${on} · ` : ''}Tab links · Enter follows · h back · ` +
-            '/ query · q quit',
+          : `${pane()} · Tab panes · j k walk · Enter opens · h back · ` +
+            '/ find · q quit',
       ),
     )
   }
 
   try {
-    await run(App, {
-      sheet: {
-        ...sheet(everforest),
-        [FOCUS]: { inverse: true },
-        Inspect_Keys: { fg: everforest.colors.dim },
-      },
-    })
+    await run(App, { sheet: sheet(everforest) })
   } finally {
     box.close()
     front.close()

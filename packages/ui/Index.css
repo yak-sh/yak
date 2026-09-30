@@ -1,0 +1,44 @@
+/* An index: each group a small head, its entries in mono under it, one line
+   each and cut short. Where you are is lit in the accent. */
+.Index {
+  display: grid;
+  gap: var(--half-gap);
+  min-width: 0;
+}
+.Index_Group {
+  display: grid;
+  min-width: 0;
+}
+.Index_Head,
+.Index_Item {
+  display: block;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 3px;
+  padding: 0 4px;
+  min-height: var(--tap);
+}
+.Index_Head {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--green);
+}
+.Index_Item {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  padding-left: var(--gap);
+}
+.Index_Head:hover,
+.Index_Item:hover,
+.Index_Item-hover {
+  background: var(--soft);
+  color: var(--text);
+}
+.Index_Head-on,
+.Index_Item-on {
+  background: var(--soft);
+  color: var(--accent);
+}
