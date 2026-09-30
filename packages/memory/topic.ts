@@ -83,8 +83,10 @@ export let topics = (): Runs => ({
           `(${str(doc.title)}: ${str(doc.body)}); use it`,
       )
     }
+    // Its id, not an alias: the name decides it, and the caller is answered
+    // what was written, so a model reading the answer learns the id to use.
     return [{
-      entity: { eid: '$topic' },
+      entity: { eid: topicEid(title) },
       [TOPIC]: { name: named(title) },
       doc: { title, body },
     }]
