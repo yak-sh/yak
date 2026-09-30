@@ -5,12 +5,24 @@
 //
 // A builder's query selects inputs, and each output cites what it used. A build
 // writes @yaks/session's components, so a graph loading this document loads
-// those beside it. `build.cost` is computed, and `derived` is its SQL.
+// those beside it. `build.cost` and `built.current` are computed, and `derived`
+// is their SQL.
 
-import type { VocabDoc } from '@yaks/vocab'
+import type { Derived } from '@yaks/sql'
+import type { Vocab, VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
+import { buildCost } from './cost.ts'
+import { builtCurrent } from './current.ts'
 
-export { buildCost, derived } from './cost.ts'
+export { buildCost, builtCurrent }
+
+/** The properties builders computes rather than stores: `built.current`, and
+ * `build.cost` where the vocabulary declares the `cost` it sums
+ * (@yaks/model). */
+export let derived = (vocab: Vocab): Derived => ({
+  'built.current': builtCurrent,
+  ...vocab.comp('cost') ? { 'build.cost': buildCost } : {},
+})
 
 /** The builders vocabulary, as the document `loadVocab` accepts. */
 export let builderDoc: VocabDoc = doc as VocabDoc

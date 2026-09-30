@@ -144,6 +144,12 @@
           "ref": "artifact",
           "death": "keep",
           "stamped": true
+        },
+        "current": {
+          "type": "boolean",
+          "computed": true,
+          "reads": ["built.build", "built.key", "build.key", "build.stale"],
+          "description": "its build still selects its binding and still wants the key it was made under; a downstream builder selects only current outputs"
         }
       },
       "description": "one named output; current when its key equals its non-stale build key"

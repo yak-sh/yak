@@ -20,8 +20,10 @@ deno add jsr:@yaks/builders
   same build.
 - `built{build,slot,key,call,artifact?}` is one named output. Its id derives
   from its build and slot. It is current when its build is not stale and the two
-  keys match. An omitted slot remains as history, with its previous key. Shadow
-  builds have separate ids and their outputs are not selected by other builders.
+  keys match, which `built.current` computes, so a downstream builder selects
+  `.built.current=true` and never gathers a point its upstream dropped. An
+  omitted slot remains as history, with its previous key. Shadow builds have
+  separate ids and their outputs are not selected by other builders.
 
 A changed key writes a fresh `call{to,source,args}` with `source` set to the
 build and `args` containing the frozen binding tree, key, template and using.
@@ -69,15 +71,18 @@ inputs. The artifact's `artifact{address,media_type,size}` holds byte metadata;
 `built.artifact` only points to it.
 
 `modelTool()` is an internal registered tool for model builders. It renders
-`content.body` from the frozen binding, opens an ordinary @yaks/session
-transcript with `using`, and adapts that transcript's reply to the same output
-value. The reply is the output of an ask that called no tools: prose beside a
-tool call is the model at work. A session that fails for good leaves its build's
-key clear, to be asked again on the next reconciliation; a tool's refusal
-answered to the model, and a request the runner retries, do not. `using.tools`
-names the tools the session is offered (@yaks/session), so a builder's model
-reads and writes the graph through exactly the tools its builder names.
-`builder.to` points at `modelToolEid()` for this adapter. The tool runner
+`content.body` from the frozen binding (`$name` is a variable's value, or its
+distinct values inside a bracket; the variable a bracket binds its members to,
+`$p` in `[$p .note, doc.body=$body]`, says every member as a JSON list of the
+variables it binds, so a member's values stay together), opens an ordinary
+@yaks/session transcript with `using`, and adapts that transcript's reply to the
+same output value. The reply is the output of an ask that called no tools: prose
+beside a tool call is the model at work. A session that fails for good leaves
+its build's key clear, to be asked again on the next reconciliation; a tool's
+refusal answered to the model, and a request the runner retries, do not.
+`using.tools` names the tools the session is offered (@yaks/session), so a
+builder's model reads and writes the graph through exactly the tools its builder
+names. `builder.to` points at `modelToolEid()` for this adapter. The tool runner
 records the call and result; builders does not execute models or code itself.
 
 `builder build <builder>` reconciles now, independent of `floor`. An alternate
@@ -93,7 +98,7 @@ call. A scheduled wake checks the builder again. A configured `rest` advances
 - `@yaks/builders/effects`: `watches` and `effects`.
 - `@yaks/builders/tools`: the on-demand `builder build` tool.
 - `@yaks/builders/vocab`: the schema in `builderDoc`, and `derived`, the SQL of
-  `build.cost`.
+  `build.cost` and `built.current`.
 
 Compose @yaks/kernel, @yaks/tools, @yaks/edge, @yaks/session, @yaks/blob,
 @yaks/model and @yaks/wake vocabulary where the model adapter runs. Storage must

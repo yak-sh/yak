@@ -4,8 +4,7 @@
 // and the entries of the session the model tool opened for it
 // (`session.source`), which record what each request cost (@yaks/session).
 
-import type { Derived, DerivedProp } from '@yaks/sql'
-import type { Vocab } from '@yaks/vocab'
+import type { DerivedProp } from '@yaks/sql'
 import {
   among,
   col,
@@ -52,8 +51,3 @@ export let buildCost: DerivedProp = {
     }))
   },
 }
-
-/** The properties builders computes rather than stores: `build.cost`, where
- * the vocabulary declares the `cost` it sums (@yaks/model). */
-export let derived = (vocab: Vocab): Derived =>
-  vocab.comp('cost') ? { 'build.cost': buildCost } : {}

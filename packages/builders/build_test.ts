@@ -473,3 +473,39 @@ test('template substitution reads variables in nested bindings', () => {
     'a: note and $',
   )
 })
+
+test('a bracket member variable says each member whole', () => {
+  let note = (eid: string, body: string) => ({
+    entities: [eid],
+    vars: { s: 'a', n: eid, body },
+  })
+  assertEquals(
+    JSON.parse(render('$n', {
+      entities: ['a'],
+      vars: { s: 'a' },
+      collections: [[note('n1', 'same'), note('n2', 'same')]],
+    })),
+    [{ n: 'n1', body: 'same' }, { n: 'n2', body: 'same' }],
+  )
+})
+
+test('a downstream builder selects only current outputs', async () => {
+  let { g, runner, vocab } = await shop({}, [], [code()])
+  await g.apply([source('a'), builder()])
+  let build = run(ids.builder, ['a'])
+  await drive(g, runner, build)
+  let now = async () =>
+    (await g.storage.tx((tx) =>
+      selected(tx, {
+        entity: { eid: 'downstream' },
+        builder: { query: '$o .built.current=true' },
+      }, vocab)
+    )).map(({ binding }) => binding.entities[0])
+  assertEquals(await now(), [output(build)])
+  await g.apply([source('a', 'second')])
+  assertEquals(await now(), [])
+  await drive(g, runner, build)
+  assertEquals(await now(), [output(build)])
+  await g.apply([{ entity: { eid: 'a' }, doc: { title: 'Elsewhere' } }])
+  assertEquals(await now(), [])
+})

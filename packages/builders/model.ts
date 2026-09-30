@@ -45,11 +45,41 @@ let values = (binding: Binding): Map<string, unknown[]> => {
   return out
 }
 
-/** Fill $var from the frozen binding tree; $$ is a literal dollar sign. */
+// A collection's members, by the variable each binds its entity to: every
+// member as the variables it binds and its parent does not. A value variable
+// inside a bracket says its distinct values and loses which member held one;
+// the member variable keeps each member's values together.
+let members = (binding: Binding): Map<string, Record<string, unknown>[]> => {
+  let out = new Map<string, Record<string, unknown>[]>()
+  let walk = (row: Binding) => {
+    for (let list of row.collections ?? []) {
+      for (let member of list) {
+        let own = Object.fromEntries(
+          Object.entries(member.vars).filter(([name]) => !(name in row.vars)),
+        )
+        for (let [name, value] of Object.entries(own)) {
+          if (!member.entities.includes(value as Eid)) continue
+          out.set(name, [...out.get(name) ?? [], own])
+        }
+        walk(member)
+      }
+    }
+  }
+  walk(binding)
+  return out
+}
+
+/** Fill $var from the frozen binding tree; $$ is a literal dollar sign. A
+ * variable naming a bracket's members says them as a JSON list, each member
+ * the variables it binds: `[$p .note, doc.body=$body]` makes `$p`
+ * `[{"p": "n1", "body": "…"}, …]`. */
 export let render = (template: string, binding: Binding): string => {
   let vars = values(binding)
+  let rows = members(binding)
   return template.replace(/\$\$|\$([a-zA-Z_][\w]*)/g, (_part, name) => {
     if (!name) return '$'
+    let listed = rows.get(name)
+    if (listed) return JSON.stringify(listed, null, 1)
     let held = vars.get(name)
     if (!held) throw new Error(`builder template has no $${name} binding`)
     let value = held.length == 1 ? held[0] : held
