@@ -24,8 +24,7 @@ import { edgeKeywords } from '@yaks/edge/vocab'
 import { blobKeywords } from '@yaks/blob'
 import { kernelKeywords } from '@yaks/kernel/vocab'
 import { keyKeywords } from '@yaks/key/vocab'
-import { statusOf as taskStatus } from '@yaks/task'
-import { taskMarks } from '@yaks/session/vocab'
+import { settled, statusOf as taskStatus } from '@yaks/task'
 
 export let statuses = ['open', 'wip', 'done', 'cancelled'] as const
 export let turnStates = ['idle', 'busy'] as const
@@ -345,22 +344,22 @@ export let resultComps = {
 } as const
 export type ResultComp = keyof typeof resultComps
 
-// Task status is derived, never stored (D-24102). The rule is @yaks/task's
-// `statusOf` over @yaks/session's ladder: `cancelled`, then `completed`, then a
-// held `claim` reads wip, then the `task.status` the row carries, else open. The
-// carried value is what the host derived; it holds where a row arrives without
-// its marks (a read answers the components it names, and an edge rider ships
-// projected columns only). A mark the row does carry wins, so a local patch
-// reads its own evidence before the host's older answer. `has` is a component
-// bag (a live row's `.comps`, a Row's comps).
+// Task status is derived, never stored (D-24102). The rule is the ladder the
+// learned vocabulary declares (@yaks/task's `statusOf`): `cancelled`, then
+// `completed`, then a held `claim` reads wip (@yaks/session's rung), then the
+// `task.status` the row carries, else open. The carried value is what the host
+// derived; it holds where a row arrives without its marks (a read answers the
+// components it names, and an edge rider ships projected columns only). A mark
+// the row does carry wins, so a local patch reads its own evidence before the
+// host's older answer. `has` is a component bag (a live row's `.comps`, a
+// Row's comps).
 export let statusOf = (has: Record<string, unknown>) =>
-  taskStatus(has, taskMarks) ?? 'open'
+  taskStatus(vocab, has) ?? 'open'
 
 // Settled = no longer open work, whether it finished or was called off.
 // Gating, board defaults, and lease-lapse audits all key off this
 // instead of 'done' alone, so a cancelled blocker releases its gate too.
-export let settled = (status?: string | null) =>
-  status == 'done' || status == 'cancelled'
+export { settled }
 
 // The shape of one index declaration (see the indexes map in the data
 // section above): its columns, uniqueness, and an optional partial-index

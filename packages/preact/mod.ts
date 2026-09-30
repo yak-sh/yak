@@ -192,7 +192,10 @@ export function render<E>(
       },
     )
   }
-  return renderer.render(bundle, hyperscript(bundle, ctx), context)
+  return renderer.render(bundle, hyperscript(bundle, ctx), {
+    ...context,
+    vocab,
+  })
 }
 
 /**

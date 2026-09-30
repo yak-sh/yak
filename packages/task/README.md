@@ -31,12 +31,12 @@ The package declares these stored components:
 | `requires{}`, `contains{}`       | Relation components on an `edge{from, to}` entity.                |
 
 `task.status` is computed from component presence; it is never stored. The first
-matching entry in `MARKS` wins: `cancelled` means `cancelled`, otherwise
-`completed` means `done`, otherwise a task is `open`. `completed{at, by, via}`
-is [@yaks/kernel](../kernel)'s mark, shared with anything else that finishes, so
-a graph of tasks loads the kernel's words beside these. An entity without `task`
-has no task status. If both completion and cancellation are present,
-cancellation takes precedence.
+mark the task wears, in the order its `status` ladder declares, wins:
+`cancelled` means `cancelled`, otherwise `completed` means `done`, otherwise a
+task is `open`. `completed{at, by, via}` is [@yaks/kernel](../kernel)'s mark,
+shared with anything else that finishes, so a graph of tasks loads the kernel's
+words beside these. An entity without `task` has no task status. If both
+completion and cancellation are present, cancellation takes precedence.
 
 This package does not open or own storage. The graph's storage adapter keeps
 these components, using memory, SQLite or another supported backend. References
@@ -68,20 +68,23 @@ let vocab = loadVocab([kernelDoc, docDoc, edgeDoc, taskDoc], [
   kernelKeywords,
   edgeKeywords,
 ])
-let storage = ram(vocab)
-let g = graph({ storage, vocab, plugins: [kernel(), edges(vocab), tasks()] })
+let g = graph({
+  storage: ram(vocab),
+  vocab,
+  plugins: [kernel(), edges(vocab), tasks()],
+})
 
 await g.apply([
   { entity: { eid: 't1' }, task: {}, doc: { title: 'Buy the cake' } },
   { entity: { eid: 't2' }, task: {}, doc: { title: 'Book the room' } },
   link('t1', 'requires', 't2'),
 ])
-console.log(await openDeps(storage, 't1')) // 1
+console.log(await openDeps(g, 't1')) // 1
 
 await g.apply([{ entity: { eid: 't2' }, completed: {} }])
 let [room] = await g.read('.completed')
-console.log(statusOf(room)) // done
-console.log(await openDeps(storage, 't1')) // 0
+console.log(statusOf(vocab, room)) // done
+console.log(await openDeps(g, 't1')) // 0
 
 await g.apply([{ entity: { eid: 't2' }, completed: null }]) // reopen
 ```
@@ -142,49 +145,38 @@ generated during a preview are not reserved for a later write. The HTTP form is
 
 ## The status rule is written once
 
-The same ordered list of marks supplies three ways to read status:
+`task` declares its status in the vocabulary with the `status` keyword
+([@yaks/vocab](../vocab)): an ordered map from a mark to the status it gives.
 
-```ts
-import { compute, derived, statusOf } from '@yaks/task'
-
-statusOf({ entity: { eid: 't1' }, task: {} }) // open
-derived() // SQL expressions for @yaks/sql's derived option
-compute() // per-bundle readers for @yaks/match's computed option
+```json
+"status": { "cancelled": "cancelled", "completed": "done", "default": "open" }
 ```
 
-Configure the evaluator used by your storage when filtering on `.task.status`.
-Calling `tasks()` alone does not register these readers. For example, filter
-already-loaded bundles with `@yaks/match`:
+Every store reads `.task.status` from that declaration: @yaks/sql as a `case`
+over the marks, @yaks/match off a bundle, so a saved filter selects the same
+tasks in a database and in a page, and nothing has to be registered.
+`statusOf(vocab, bundle)` reads it off an entity in hand:
 
 ```ts
 import { loadVocab } from '@yaks/vocab'
 import { matcher } from '@yaks/match'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
-import { compute, taskDoc } from '@yaks/task'
+import { statusOf, taskDoc } from '@yaks/task'
 
 let vocab = loadVocab([kernelDoc, taskDoc], [kernelKeywords])
-let open = matcher('.task.status=open', vocab, { computed: compute() })
-open([
+let tasks = [
   { entity: { eid: 't1' }, task: {} },
   { entity: { eid: 't2' }, task: {}, completed: {} },
-]) // t1 alone
+]
+matcher('.task.status=open', vocab)(tasks) // t1 alone
+statusOf(vocab, tasks[1]) // done
 ```
 
-Applications can extend the ordered list. A `claim` component can indicate work
-in progress without counting as completion:
-
-```ts
-import { MARKS } from '@yaks/task'
-
-let marks = [...MARKS, { status: 'wip', comp: 'claim', settled: false }]
-// Pass marks to statusOf(), derived(), compute(), openDeps() and done().
-```
-
-For dependency helpers, pass `{ marks }` as their third argument. Declare the
-additional component and status values in the vocabulary too.
-[@yaks/session](../session) provides the `claim` component and an extended SQL
-status definition through `@yaks/session/vocab`; plugin assembly loads that
-definition after `@yaks/task/vocab`.
+Another package adds a rung with an `extends` entry, appended after these.
+[@yaks/session](../session) reads a held `claim` as `wip`:
+`"task": {"component": true, "extends": true, "status": {"claim": "wip"}}`. A
+claim marks work in progress, which is not completion: `settled(status)` is true
+for `done` and `cancelled` alone.
 
 ## Blocked is not a status
 
@@ -192,17 +184,17 @@ definition after `@yaks/task/vocab`.
 to an open task leaves the task open. `gated(bundle)` tests for the component's
 presence.
 
-`openDeps(storage, eid, options?)` follows outgoing `requires` and `contains`
+`openDeps(graph, eid, options?)` follows outgoing `requires` and `contains`
 links and counts distinct direct endpoints that are unfinished. Cancelled and
 completed tasks both count as settled. Missing endpoints and entities without
 `task` remain counted. It does not recursively inspect descendants.
 
-`done(storage, eid, options?)` returns true only when the entity is a settled
-task and has no unfinished direct dependencies. Both helpers accept
-`{ marks, relations }` to override the status definitions or relation names.
-They return values with synchronous storage and promises with asynchronous
-storage. A UI can display the dependency count as "3 left" and omit zero; this
-package does not render it.
+`done(graph, eid, options?)` returns true only when the entity is a settled task
+and has no unfinished direct dependencies. Both read status through the graph's
+vocabulary, and accept `{ relations }` to override the relation names. They
+return values with synchronous storage and promises with asynchronous storage. A
+UI can display the dependency count as "3 left" and omit zero; this package does
+not render it.
 
 ## The three tools
 
@@ -228,8 +220,8 @@ Omitted arguments leave existing values unchanged.
 
 `task_list` always includes `.task`, combines it with the caller's query using
 `&`, and defaults to `.task.status=open`. The qualified status name avoids
-ambiguity with components such as `session.status`. Its storage must support
-that computed status, as described above.
+ambiguity with components such as `session.status`. Every store reads that
+computed status from the vocabulary, as described above.
 
 The tools can write `doc` and `filed` without importing their packages because
 bundles are plain data. Load `@yaks/doc` and `@yaks/project` to keep those
@@ -265,10 +257,10 @@ and Cloudflare Workers with suitable storage and package resolution.
 
 ## Interface
 
-| Import path        | Exports                                                                                                                                                                                                                                                |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@yaks/task`       | `taskDoc`, `tasks`, `MARKS`, `OPEN`, `statuses`, `declared`, `settled`, `statusOf`, `compute`, `derived`, `gated`, `openDeps`, `done`; types `Mark`, `Status`, `Compute`, `DepOpts`; constants `TASK`, `CANCELLED`, `BLOCKED`, `REQUIRES`, `CONTAINS`. |
-| `@yaks/task/vocab` | `taskDoc`, `docs`, and the default SQL `derived()` definitions.                                                                                                                                                                                        |
-| `@yaks/task/rules` | `rules()`, returning the task graph plugin in an array.                                                                                                                                                                                                |
-| `@yaks/task/tools` | `runs()`, status patches in `marked`, and the query-building helper `listing()`.                                                                                                                                                                       |
-| `@yaks/task/views` | `views`: the `Status` renderer, `open`, `done` or `cancelled` computed with `statusOf`.                                                                                                                                                                |
+| Import path        | Exports                                                                                                                                                   |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/task`       | `taskDoc`, `tasks`, `settled`, `statusOf`, `gated`, `openDeps`, `done`; type `DepOpts`; constants `TASK`, `CANCELLED`, `BLOCKED`, `REQUIRES`, `CONTAINS`. |
+| `@yaks/task/vocab` | `taskDoc` and `docs`.                                                                                                                                     |
+| `@yaks/task/rules` | `rules()`, returning the task graph plugin in an array.                                                                                                   |
+| `@yaks/task/tools` | `runs()`, status patches in `marked`, and the query-building helper `listing()`.                                                                          |
+| `@yaks/task/views` | `views`: the `Status` renderer, the status read with `statusOf` through the vocabulary the view was chosen by.                                            |

@@ -2,28 +2,22 @@
 // as `@yaks/session/vocab`. It imports no storage, no SQL and no runtime, so a
 // browser tab that loads this vocabulary loads nothing else.
 //
-// Two computed properties, not one. A transcript's status is read off its
-// newest entry; a task's status is read off its marks, and a graph that leases
-// its tasks has a state @yaks/task cannot know about — a held claim reads
-// `wip`. That state belongs to whoever owns `claim`, which is this package, so
-// this module restates `task.status` with the claim included. An application
-// composing both puts @yaks/session after @yaks/task and gets the wider
-// reading.
+// A transcript's status is read off its newest entry, as SQL here
+// (./status.ts). A task's status is its ladder in @yaks/task's vocabulary, and
+// a graph that leases its tasks has a state @yaks/task cannot know about: a
+// held claim reads `wip`. That rung belongs to whoever owns `claim`, which is
+// this package, so ./vocab.json adds it to the ladder with an `extends` entry
+// on `task`, and every store reads it from there.
 
 import type { Vocab, VocabDoc } from '@yaks/vocab'
 import type { Derived } from '@yaks/sql'
-import { derived as ladder } from '@yaks/task'
-import { sessionDoc, taskMarks } from './comp.ts'
+import { sessionDoc } from './comp.ts'
 import { sessionDerived } from './status.ts'
 
-export { sessionDoc, taskMarks }
+export { sessionDoc }
 
 /** Every document this plugin declares. */
 export let docs: VocabDoc[] = [sessionDoc]
 
-/** A transcript's status and cost, and a task's read with the lease rung in
- * it. */
-export let derived = (vocab: Vocab): Derived => ({
-  ...sessionDerived(vocab),
-  ...ladder(taskMarks),
-})
+/** A transcript's status and cost. */
+export let derived = (vocab: Vocab): Derived => sessionDerived(vocab)

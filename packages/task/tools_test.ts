@@ -3,7 +3,7 @@ import { assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
 import { taskDoc } from './comp.ts'
-import { statusOf } from './status.ts'
+import { statusOf } from './words.ts'
 import { teamGraph } from './testing.ts'
 import { listing, runs } from './tools.ts'
 
@@ -70,7 +70,7 @@ test('a status is the marks that mean it', async () => {
       ...asked({ task: 't', status }),
     ) as Bundle[]
     await g.apply(said)
-    return statusOf((await g.read('.entity.eid="t"'))[0])
+    return statusOf(g.vocab, (await g.read('.entity.eid="t"'))[0])
   }
   assertEquals(await move('done'), 'done')
   assertEquals(await move('cancelled'), 'cancelled')

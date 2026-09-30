@@ -1,5 +1,4 @@
 import { appendEntry } from './append.ts'
-import { taskMarks } from './comp.ts'
 // Delegation is transcript structure, not a process handle. A spawned session
 // names its parent and originating call; a fork additionally names a prefix.
 // Submission is serialized per graph (across parents and tool tables). The
@@ -424,8 +423,8 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
               let b = await taskRow(g, id)
               return {
                 task: id,
-                status: taskStatus(b, taskMarks),
-                done: await done(g.storage, id, { marks: taskMarks }),
+                status: taskStatus(g.vocab, b),
+                done: await done(g, id),
               }
             }))
             if (results.every((r) => r.done) || Date.now() >= end) {
@@ -480,19 +479,19 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
     : []
   let task = tasks.find((b) => b.task)
   let ready = task &&
-    await done(g.storage, task.entity.eid, { marks: taskMarks })
+    await done(g, task.entity.eid)
   let last = tail ?? entries?.at(-1)
   if (!last) return
   // A parent's own completion is already known to it. Fall back to the
   // ordinary child receipt identity: a new child response must still arrive,
   // while an already delivered response must not echo on completion/restart.
   let announceTask = ready &&
-    (taskStatus(task!, taskMarks) != 'done' ||
+    (taskStatus(g.vocab, task!) != 'done' ||
       comp(task, 'completed')?.by != String(link.parent))
   let receipt = (last: Bundle) =>
     announceTask
       ? `delivery:${child}:task:${task!.entity.eid}:${
-        taskStatus(task!, taskMarks)
+        taskStatus(g.vocab, task!)
       }`
       : `delivery:${child}:${last.entity.eid}`
   let eid = receipt(last)
@@ -509,12 +508,12 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
   let message = announceTask
     ? `task ${
       task!.entity.num != null ? `T-${task!.entity.num}` : task!.entity.eid
-    } ${taskStatus(task!, taskMarks)}`
+    } ${taskStatus(g.vocab, task!)}`
     : `child ${child} ${status}`
   let notice = await row(g, 'notice:' + child)
   let context = notice?.notice
     ? textOf(notice) + '\nOutcome: child ' + status +
-      (ready ? '; task ' + taskStatus(task!, taskMarks) : '') + '\nResult:\n'
+      (ready ? '; task ' + taskStatus(g.vocab, task!) : '') + '\nResult:\n'
     : ''
   let parent = String(link.parent)
   let prefix = await transcript(g, parent)

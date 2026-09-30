@@ -120,7 +120,7 @@ export let keyOf = (v: unknown): string | undefined =>
  * The identity (`entity`) and the `$`-prefixed markers are not components.
  */
 export let comp = (
-  b: Bundle,
+  b: Record<string, unknown>,
   name: string,
 ): Record<string, unknown> | undefined => {
   let c = b[name]
@@ -133,7 +133,7 @@ export let comp = (
  * Does the entity have this component? The identity component (`entity`) is on
  * every entity there is, so it always returns true.
  */
-export let wears = (b: Bundle, name: string): boolean =>
+export let wears = (b: Record<string, unknown>, name: string): boolean =>
   name == 'entity' || comp(b, name) != null
 
 /**
@@ -176,7 +176,8 @@ export type Read = {
 }
 
 /**
- * The status a component's ladder gives this entity (@yaks/vocab's `status`
+ * The status a component's ladder gives this entity, a bundle or any bag of
+ * its components (@yaks/vocab's `status`
  * keyword): the first rung it wears, else the status the bundle carries, else
  * the ladder's default. An entity without the component has none, and reads
  * `null`, the nothing a database reads for it.
@@ -204,7 +205,11 @@ export type Read = {
  * assertEquals(statusOf(v, 'job', { entity: { eid: 'x' } }), null)
  * ```
  */
-export let statusOf = (v: Vocab, name: string, b: Bundle): string | null => {
+export let statusOf = (
+  v: Vocab,
+  name: string,
+  b: Record<string, unknown>,
+): string | null => {
   let own = comp(b, name)
   if (!own) return null
   let l = v.comp(name)?.ladder

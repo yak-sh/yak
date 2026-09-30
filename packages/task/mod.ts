@@ -33,19 +33,13 @@
  * an ordinary count read by {@link openDeps} — "3 left", never an alarm.
  *
  * ## The status rule is written once
- * ```ts
- * import { compute, derived, statusOf } from '@yaks/task'
- *
- * // 'open', for an entity in hand
- * statusOf({ entity: { eid: 't1' }, task: {} })
- * derived() // the same rule as SQL, for @yaks/sql
- * compute() // the same rule per bundle, for @yaks/match
- * ```
- * All three are built from one ordered list of marks ({@link MARKS}), so a
- * saved filter selects the same tasks in a database and in a page. Add a rung
- * and every reader learns it at once — a graph that leases its tasks reads a
- * held lease as `wip` by passing
- * `[...MARKS, { status: 'wip', comp: 'claim', settled: false }]`.
+ * The rule is data in the vocabulary: `task` declares its status as a ladder
+ * of marks (`"status": {"cancelled": "cancelled", "completed": "done",
+ * "default": "open"}`, @yaks/vocab's `status` keyword). @yaks/sql and
+ * @yaks/match read it from that declaration, so a saved filter selects the
+ * same tasks in a database and in a page, and {@link statusOf} reads it off an
+ * entity in hand. A graph that leases its tasks adds a rung where it declares
+ * the lease: @yaks/session reads a held claim as `wip`.
  *
  * ## Use
  * ```ts
@@ -73,6 +67,5 @@
 
 export * from './words.ts'
 export * from './comp.ts'
-export * from './status.ts'
 export * from './deps.ts'
 export * from './plugin.ts'

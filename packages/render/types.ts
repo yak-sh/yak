@@ -37,9 +37,11 @@ export type Context = {
 }
 
 /** The backend supplies nested rendering through the same registry and
- * bundle. */
+ * bundle, and the vocabulary the renderer was chosen by, for a view that
+ * reads what it declares (a computed status). */
 export type RenderContext<Node> = Context & {
   render?: (view: string, ctx?: Context) => Node | null
+  vocab?: Vocab
 }
 
 /** The fields selection needs, shared by portable renderers and by ones a

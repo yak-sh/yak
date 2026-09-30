@@ -11,7 +11,6 @@
 import { after } from '@yaks/fp'
 import { type Plugin } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import type { Mark } from '@yaks/task'
 import { projectDoc } from './comp.ts'
 import { guarding } from './guard.ts'
 import { nesting } from './tree.ts'
@@ -21,13 +20,12 @@ import { nesting } from './tree.ts'
  * components, and a `precondition` hook that refuses a board whose query would
  * quietly match nothing, or a project filed under one already under it.
  *
- * Passing no `marks` checks a board's statuses against the set the loaded
- * vocabulary declares — every package's `statuses` enum — so a server that
- * loads leases gets `wip` without this package being told about them. Pass
- * `marks` to check against exactly that list instead.
+ * A board's statuses are checked against the ladder the loaded vocabulary
+ * declares, so a server that loads leases gets `wip` without this package
+ * being told about them.
  */
-export let projects = (vocab: Vocab, marks?: Mark[]): Plugin => {
-  let boards = guarding(vocab, marks)
+export let projects = (vocab: Vocab): Plugin => {
+  let boards = guarding(vocab)
   return {
     name: '@yaks/project',
     vocab: [projectDoc],

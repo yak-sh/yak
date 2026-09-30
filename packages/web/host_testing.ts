@@ -9,7 +9,6 @@
 import type { Bundle } from '@yaks/graph'
 import { matcher } from '@yaks/match'
 import type { Frame, Socket } from '@yaks/sync'
-import { compute } from '@yaks/task'
 import { cache, useSocket } from './live.ts'
 import { tick } from './testing.ts'
 import { vocab } from './types.ts'
@@ -18,7 +17,7 @@ import { vocab } from './types.ts'
  * @yaks/match reads the line over `rows`, and its parity tests hold it to
  * @yaks/sql. */
 export let reader = (rows: Bundle[]) => (line: string): Bundle[] =>
-  matcher(line, vocab, { computed: compute() })(rows)
+  matcher(line, vocab)(rows)
 
 export type Ask = { subscribe: string; id: string }
 type Heard = (e: Event & { data?: unknown }) => void

@@ -27,22 +27,10 @@ import { taskDoc } from './comp.ts'
  * let g = graph({ storage: ram(vocab), vocab, plugins })
  * ```
  *
- * The status ladder is not this plugin's to extend: a graph that leases its
- * tasks reads a held lease as `wip` by passing its own `marks` list to the
- * status readers, and to whoever checks a board's query
- * (`projects(vocab, marks)`, @yaks/project).
- *
- * ```ts
- * import { MARKS } from '@yaks/task'
- *
- * // let marks = [...MARKS, { status: 'wip', comp: 'claim', settled: false }]
- * ```
- *
- * The status itself is not stored and not written. It is computed from the
- * marks — see {@link https://jsr.io/@yaks/task/doc/~/derived | derived} for the
- * database's reading of that rule and
- * {@link https://jsr.io/@yaks/task/doc/~/compute | compute} for the in-memory
- * one.
+ * The status itself is not stored and not written. `task` declares it as a
+ * ladder of marks in the vocabulary (@yaks/vocab's `status` keyword), and
+ * every store reads it from there. A graph that leases its tasks adds a rung
+ * where it declares the lease, as @yaks/session reads a held claim as `wip`.
  */
 export let tasks = (): Plugin => ({
   name: '@yaks/task',

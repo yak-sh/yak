@@ -59,6 +59,7 @@ export let tree = (
   let context: RenderContext<Node> = {
     ...ctx,
     readOnly: true,
+    vocab,
     render: (view, overrides) =>
       tree(registry, bundle, view, vocab, { ...ctx, ...overrides }),
   }

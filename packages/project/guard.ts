@@ -33,7 +33,6 @@ import type { Bundle, Comp, Hook } from '@yaks/graph'
 import { comps, Refused } from '@yaks/graph'
 import { parse, type Value } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
-import { declared, type Mark, statuses, TASK } from '@yaks/task'
 import { BOARD } from './comp.ts'
 
 // Every raw token a value contains: a scalar is one, a list is its items, a
@@ -52,7 +51,9 @@ let tokens = (v: Value | null): string[] =>
 /**
  * Returns why this query cannot stand as a board's filter, or `null` when it
  * can: every predicate must route through the vocabulary, and every status it
- * names must be one the status set contains.
+ * names must be one its component's ladder gives (@yaks/vocab's `status`
+ * keyword). The set is the vocabulary's, so a board in a graph that leases its
+ * tasks knows `wip` without @yaks/project being told about @yaks/session.
  *
  * ```ts
  * import { unroutable } from '@yaks/project'
@@ -61,21 +62,16 @@ let tokens = (v: Value | null): string[] =>
  * // unroutable('.status=complete', vocab) → 'no such status: complete — …'
  * ```
  */
-export let unroutable = (
-  query: string,
-  vocab: Vocab,
-  marks?: Mark[],
-): string | null => {
-  // Pass the marks and the status set is theirs; pass none and it is the one
-  // the vocabulary declares, which is how a board in a graph that leases its
-  // tasks knows `wip` without @yaks/project being told about @yaks/session.
-  let known = marks ? statuses(marks) : declared(vocab)
+export let unroutable = (query: string, vocab: Vocab): string | null => {
   try {
     for (let c of parse(query).clauses) {
       if (c.kind != 'pred') continue
       let hops = vocab.aim(c.path.join('.'), c.op == '!' && c.path.length == 1)
       let last = hops[hops.length - 1]
-      if (!last || last.comp != TASK || last.prop != 'status') continue
+      if (!last || last.prop != 'status' || !vocab.comp(last.comp)?.ladder) {
+        continue
+      }
+      let known = vocab.prop(last.comp, 'status')?.values ?? []
       // An empty value is the absence form (`!status`), which names nothing.
       for (let t of tokens(c.value).filter(Boolean)) {
         if (!known.includes(t)) {
@@ -95,9 +91,9 @@ export let unroutable = (
  * {@link https://jsr.io/@yaks/project/doc/~/projects | projects}; exported on
  * its own for a graph that wants the check without the rest of the plugin.
  */
-export let guarding = (vocab: Vocab, marks?: Mark[]): Hook => (bundles) => {
+export let guarding = (vocab: Vocab): Hook => (bundles) => {
   for (let b of bundles) {
-    for (let [name, comp] of comps(b)) checked(b, name, comp, vocab, marks)
+    for (let [name, comp] of comps(b)) checked(b, name, comp, vocab)
   }
   return bundles
 }
@@ -109,10 +105,9 @@ let checked = (
   name: string,
   comp: Comp | null,
   vocab: Vocab,
-  marks?: Mark[],
 ): void => {
   if (!comp || name != BOARD || comp.query == null) return
-  let why = unroutable(String(comp.query), vocab, marks)
+  let why = unroutable(String(comp.query), vocab)
   if (why) {
     throw new Refused(
       `board ${b.entity.eid} refused: ${why} — a board IS its query, so one ` +

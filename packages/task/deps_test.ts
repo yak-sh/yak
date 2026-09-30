@@ -3,9 +3,14 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { link } from '@yaks/edge'
+import { edges, link } from '@yaks/edge'
+import { graph } from '@yaks/graph'
+import { kernel } from '@yaks/kernel'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
 import { done, gated, openDeps } from './deps.ts'
-import { teamGraph } from './testing.ts'
+import { tasks } from './plugin.ts'
+import { team, teamGraph } from './testing.ts'
 
 test('gated reads the blocked facet, and nothing else', () => {
   assertEquals(gated({ entity: { eid: 't' }, task: {} }), false)
@@ -21,7 +26,7 @@ test('gated reads the blocked facet, and nothing else', () => {
 // A parent with four children: one open, one done, one cancelled, one that is
 // not a task at all.
 let seeded = () => {
-  let { g, storage } = teamGraph()
+  let { g } = teamGraph()
   g.install()
   g.apply([
     { entity: { eid: 'p' }, doc: { title: 'the parent' }, task: {} },
@@ -34,7 +39,7 @@ let seeded = () => {
     link('p', 'contains', 'c'),
     link('p', 'requires', 'd'),
   ])
-  return storage
+  return g
 }
 
 test('openDeps counts what has not settled, over both relations', () => {
@@ -53,49 +58,58 @@ test('openDeps follows only the relations it is given', () => {
   assertEquals(openDeps(s, 'p', { relations: ['requires'] }), 2)
 })
 
-test('a rung the ladder does not know leaves a child open', () => {
-  let { g, storage } = teamGraph()
-  g.install()
-  g.apply([
-    { entity: { eid: 'p' }, task: {} },
-    { entity: { eid: 'a' }, task: {}, claim: {} },
-    link('p', 'requires', 'a'),
-  ])
-  // a claim is not a mark by default, so the child is open
-  assertEquals(openDeps(storage, 'p'), 1)
-  // and adding the rung does not settle it either — a lease is not finishing
-  let marks = [
-    { status: 'cancelled', comp: 'cancelled' },
-    { status: 'done', comp: 'completed' },
-    { status: 'wip', comp: 'claim', settled: false },
-  ]
-  assertEquals(openDeps(storage, 'p', { marks }), 1)
+// The team's vocabulary with a rung of its own: a held claim reads `wip`.
+let leased = loadVocab([...team.docs, {
+  $defs: {
+    task: { component: true, extends: true, status: { claim: 'wip' } },
+  },
+}], team.keywords)
+
+test('a claimed child is open, whether or not its ladder reads it wip', () => {
+  for (let vocab of [team, leased]) {
+    let g = graph({
+      storage: ram(vocab),
+      vocab,
+      plugins: [kernel(), edges(vocab), tasks()],
+    })
+    g.install()
+    g.apply([
+      { entity: { eid: 'p' }, task: {}, claim: {} },
+      { entity: { eid: 'a' }, task: {}, claim: {} },
+      link('p', 'requires', 'a'),
+    ])
+    // a lease is not finishing
+    assertEquals(openDeps(g, 'p'), 1)
+    assertEquals(done(g, 'p'), false)
+    g.apply([{ entity: { eid: 'a' }, completed: {} }])
+    assertEquals(openDeps(g, 'p'), 0)
+  }
 })
 
 test('finishing a child lowers the count', () => {
-  let { g, storage } = teamGraph()
+  let { g } = teamGraph()
   g.install()
   g.apply([
     { entity: { eid: 'p' }, task: {} },
     { entity: { eid: 'a' }, task: {} },
     link('p', 'requires', 'a'),
   ])
-  assertEquals(openDeps(storage, 'p'), 1)
+  assertEquals(openDeps(g, 'p'), 1)
   g.apply([{ entity: { eid: 'a' }, completed: {} }])
-  assertEquals(openDeps(storage, 'p'), 0)
+  assertEquals(openDeps(g, 'p'), 0)
 })
 
 test('done requires a task and a settled status, not merely zero children', () => {
-  let storage = seeded()
-  assertEquals(done(storage, 'a'), false)
-  assertEquals(done(storage, 'b'), true)
-  assertEquals(done(storage, 'c'), true)
-  assertEquals(done(storage, 'd'), false)
-  assertEquals(done(storage, 'missing'), false)
+  let g = seeded()
+  assertEquals(done(g, 'a'), false)
+  assertEquals(done(g, 'b'), true)
+  assertEquals(done(g, 'c'), true)
+  assertEquals(done(g, 'd'), false)
+  assertEquals(done(g, 'missing'), false)
 })
 
 test('done waits for both relations, deduplicates children, and accepts cancellation', () => {
-  let { g, storage } = teamGraph()
+  let { g } = teamGraph()
   g.install()
   g.apply([
     { entity: { eid: 'p' }, task: {}, completed: {} },
@@ -105,33 +119,19 @@ test('done waits for both relations, deduplicates children, and accepts cancella
     link('p', 'contains', 'a'),
     link('p', 'contains', 'b'),
   ])
-  assertEquals(done(storage, 'p'), false)
-  assertEquals(openDeps(storage, 'p'), 2)
+  assertEquals(done(g, 'p'), false)
+  assertEquals(openDeps(g, 'p'), 2)
   g.apply([{ entity: { eid: 'a' }, completed: {} }])
-  assertEquals(done(storage, 'p'), false)
-  assertEquals(done(storage, 'p', { relations: ['requires'] }), true)
+  assertEquals(done(g, 'p'), false)
+  assertEquals(done(g, 'p', { relations: ['requires'] }), true)
   g.apply([{ entity: { eid: 'b' }, cancelled: {} }])
-  assertEquals(done(storage, 'p'), true)
+  assertEquals(done(g, 'p'), true)
   g.apply([{ entity: { eid: 'a' }, completed: null }])
-  assertEquals(done(storage, 'p'), false)
-})
-
-test('done uses the supplied ladder for the parent and the children', () => {
-  let { g, storage } = teamGraph()
-  g.install()
-  g.apply([
-    { entity: { eid: 'p' }, task: {}, claim: {} },
-    { entity: { eid: 'a' }, task: {}, claim: {} },
-    link('p', 'requires', 'a'),
-  ])
-  let marks = [{ status: 'wip', comp: 'claim', settled: false }]
-  assertEquals(done(storage, 'p', { marks }), false)
-  marks = [{ status: 'accepted', comp: 'claim', settled: true }]
-  assertEquals(done(storage, 'p', { marks }), true)
+  assertEquals(done(g, 'p'), false)
 })
 
 test('done stays async over asynchronous storage, for true and false answers', async () => {
-  let s = seeded()
+  let s = seeded().storage
   s.tx((tx) => tx.patch([{ entity: { eid: 'p' }, completed: {} }]))
   let asyncStorage: import('@yaks/graph').Storage = {
     ...s,
@@ -142,22 +142,22 @@ test('done stays async over asynchronous storage, for true and false answers', a
   for (
     let [eid, expected] of [['a', false], ['b', true], ['p', false]] as const
   ) {
-    let result = done(asyncStorage, eid)
+    let result = done({ storage: asyncStorage, vocab: team }, eid)
     assertEquals(result instanceof Promise, true)
     assertEquals(await result, expected)
   }
 })
 
 test('done cannot settle a non-task or a parent waiting on one', () => {
-  let { g, storage } = teamGraph()
+  let { g } = teamGraph()
   g.install()
   g.apply([
     { entity: { eid: 'p' }, task: {}, cancelled: {} },
     { entity: { eid: 'spec' }, doc: { title: 'spec' }, completed: {} },
     link('p', 'requires', 'spec'),
   ])
-  assertEquals(done(storage, 'spec'), false)
-  assertEquals(done(storage, 'p'), false)
+  assertEquals(done(g, 'spec'), false)
+  assertEquals(done(g, 'p'), false)
   g.apply([{ entity: { eid: 'spec' }, task: {} }])
-  assertEquals(done(storage, 'p'), true)
+  assertEquals(done(g, 'p'), true)
 })

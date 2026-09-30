@@ -14,7 +14,7 @@ import type { Bundle } from './read.ts'
 import { storage } from '@yaks/sqlite'
 import { fields, schema as ftsSchema, search } from '@yaks/fts'
 import { type Derived, type Extension, Unsupported } from '@yaks/sql'
-import { compute, derived as taskDerived, taskDoc } from '@yaks/task'
+import { taskDoc } from '@yaks/task'
 import { kernelDoc } from '@yaks/kernel'
 import { projectDoc } from '@yaks/project'
 import { edgeDoc, edgeKeywords, link, traverse } from '@yaks/edge'
@@ -354,14 +354,14 @@ test('a chain with a hop that is no reference is declined by both', () => {
   }
 })
 
-// ---- a computed property, one rule, both evaluators
+// ---- a task's status, one ladder, both evaluators
 // ---------------------------
 //
-// `task.status` (@yaks/task) is declared `computed: true`: no row holds it, and
-// its value is read off the marks a task wears. The package states that rule
-// once and hands each side its own reader — `derived()` the SQL expression,
-// `compute()` the function over a bundle — so this is the agreement that makes
-// a status board portable: the same filter, the same tasks, database or page.
+// `task.status` (@yaks/task) is computed: no row holds it, and its value is
+// read off the marks a task wears. The package declares that ladder once, in
+// its vocabulary, and each side reads it from there, so this is the agreement
+// that makes a status board portable: the same filter, the same tasks,
+// database or page.
 
 let spine: VocabDoc = {
   $defs: {
@@ -431,10 +431,9 @@ let STATUS = [
   '.status&.order=status&.after=2',
 ]
 
-test('a computed property agrees when both sides are given the rule', () => {
-  let s = loaded(todo, ROWS, taskDerived())
-  let select = (q: string) =>
-    matcher(q, todo, { now: NOW, computed: compute() })
+test("a task's status agrees on both sides, read from its ladder", () => {
+  let s = loaded(todo, ROWS)
+  let select = (q: string) => matcher(q, todo, { now: NOW })
   for (let q of STATUS) {
     let mine = eids(select(q)(todos))
     let theirs = eids(fromSql(s, q))
@@ -448,13 +447,22 @@ test('a computed property agrees when both sides are given the rule', () => {
 })
 
 test('a computed property nobody registered still declines', () => {
+  let lamps = loadVocab([spine, {
+    $defs: {
+      lamp: {
+        component: true,
+        type: 'object',
+        properties: { glow: { type: 'string', computed: true } },
+      },
+    },
+  }])
   let e = assertThrows(
-    () => matcher('.status=open', todo),
+    () => matcher('.glow=on', lamps),
     Unsupported,
   ) as Unsupported
   assertEquals(e.by, '@yaks/match')
   // ordering by one declines the same way
-  assertThrows(() => matcher('.task&.order=status', todo), Unsupported)
+  assertThrows(() => matcher('.lamp&.order=glow', lamps), Unsupported)
 })
 
 // ---- a status ladder, declared once in the vocabulary

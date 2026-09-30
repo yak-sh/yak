@@ -87,7 +87,7 @@ import { sessionDoc } from '@yaks/session/vocab'
 import { openrouterDoc } from '@yaks/openrouter/vocab'
 import { artifactDoc } from '@yaks/blob/vocab'
 import { sessionDerived } from '@yaks/session/status'
-import { derived as statuses, taskDoc } from '@yaks/task/vocab'
+import { taskDoc } from '@yaks/task/vocab'
 import { toolsDoc } from '@yaks/tools'
 import { tunnelDoc } from '@yaks/tunnel'
 import { wakeDoc } from '@yaks/wake'
@@ -294,8 +294,8 @@ export let teach = (env: Host = {}) =>
  * same word as a `task` in the next, so one filter reads both.
  *
  * A task's `status` is read, never written: what the entity wears says its
- * state, so a task is done because it wears `completed`. {@link appDerived} is
- * the expression that reads it.
+ * state, so a task is done because it wears `completed`. The ladder that reads
+ * it is declared on `task` itself (@yaks/vocab's `status` keyword).
  */
 let givenDocs: VocabDoc[] = [
   pick(taskDoc, ['cancelled', 'task']),
@@ -459,12 +459,12 @@ let hostedBuilderDoc = pick(builderDoc, [
 /**
  * The properties an app's store reads rather than stores, as the SQL that
  * reads them (@yaks/sql `Derived`), from the packages that declare them: a
- * task's `status`, which @yaks/task reads off the marks the entity wears, a
  * transcript's status and cost, which @yaks/session reads off its entries, and
- * a build's cost, which @yaks/builders sums over its calls.
+ * a build's cost, which @yaks/builders sums over its calls. A task's `status`
+ * needs none: its ladder is declared in @yaks/task's vocabulary, and every
+ * store reads it from there.
  */
 export let appDerived = (vocab: Vocab): Derived => ({
-  ...statuses(),
   ...sessionDerived(vocab),
   ...builds(vocab),
 })

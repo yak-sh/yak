@@ -13,15 +13,14 @@
 // Four things are worth explaining about the shapes, because each is a decision
 // somebody would otherwise make differently.
 //
-// Status is not stored. `task.status` is declared `computed: true`: it is
-// readable and filterable, and no writer sets it. Its value is computed from
-// the `completed` and `cancelled` components (./status.ts) — `completed` is
-// @yaks/kernel's, the mark anything finished wears — which is why
-// finishing a task means writing a fact with a time and an author rather than
-// overwriting a value. Both evaluators get that rule from one list, so
-// `.status=done` selects the same tasks in a database and in a page. The `enum`
-// in the document holds the default ladder's values; an application that adds a
-// rung widens them where it declares its own document.
+// Status is not stored. `task` declares it with the `status` keyword: a ladder
+// over the `completed` and `cancelled` marks (`completed` is @yaks/kernel's,
+// the mark anything finished wears), which gives it a computed `task.status`
+// that is readable and filterable, and that no writer sets. Finishing a task
+// means writing a fact with a time and an author rather than overwriting a
+// value. Both evaluators read the one declaration, so `.status=done` selects
+// the same tasks in a database and in a page, and a package that adds a rung
+// (@yaks/session's `wip`) widens the closed set where it declares the rung.
 //
 // The two relations are `requires` and `contains`, as @yaks/edge reads them: a
 // component that an edge entity carries beside `edge{from, to}`. Neither has

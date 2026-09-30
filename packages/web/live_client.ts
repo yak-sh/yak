@@ -21,14 +21,21 @@ import type { Sub } from './live.ts'
 // Server-derived columns are ordinary received data in a browser replica.
 // Their derivation/writability remains the server's responsibility, and so do
 // their values: a computed enum names what can be written, and a derivation may
-// read wider (a claimed task's status is `wip`, contributed by the claim).
+// read wider (a claimed task's status is `wip`, contributed by the claim). A
+// status ladder (@yaks/vocab's `status` keyword) is the server's derivation
+// too, so its component keeps the status as a plain column, and the rungs
+// another document adds go with it.
 let browserVocab = () => {
   let docs = structuredClone(vocab.docs)
   for (let doc of docs) {
     for (let [name, def] of Object.entries(doc.$defs ?? {})) {
       if (!def.component || name == 'entity') continue
+      let ladder = def.status
+      delete def.status
+      if (def.extends) continue
       def.properties ??= {}
       def.properties.eid = { type: 'string' }
+      if (ladder) def.properties.status = { type: 'string' }
       for (let prop of Object.values(def.properties ?? {})) {
         if (prop.computed) delete prop.enum
         prop.computed = false

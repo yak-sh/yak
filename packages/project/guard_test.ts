@@ -4,8 +4,8 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { Refused } from '@yaks/graph'
+import { loadVocab } from '@yaks/vocab'
 import { unroutable } from './guard.ts'
-import { MARKS } from '@yaks/task'
 import { team, teamGraph } from './testing.ts'
 
 let board = (query: string) => [{
@@ -41,28 +41,23 @@ test('a status outside the closed set is refused, by name', () => {
   let why = unroutable('.status=complete', team)
   assertEquals(
     why,
-    'no such status: complete — this board knows open, wip, done, cancelled',
+    'no such status: complete — this board knows cancelled, done, open',
   )
   // and in a list, where one bad member is just as invisible
   assertEquals(typeof unroutable('.status=open,finished', team), 'string')
 })
 
-test("the ladder is the vocabulary's, unless marks name one", () => {
-  // Naming nothing reads @yaks/task's `statuses` — every word a status can be,
-  // the rung a host that leases its tasks adds included — so a board filtering
-  // on `wip` routes without @yaks/project being told about leases.
-  assertEquals(unroutable('.status=wip', team), null)
-  // Naming marks narrows it to exactly that ladder, which is what a graph with
-  // no lease at all wants.
-  assertEquals(typeof unroutable('.status=wip', team, MARKS), 'string')
-  assertEquals(
-    unroutable('.status=wip', team, [...MARKS, {
-      status: 'wip',
-      comp: 'claim',
-      settled: false,
-    }]),
-    null,
-  )
+test("the statuses a board may name are the vocabulary's ladder's", () => {
+  // a graph with no lease has no `wip`
+  assertEquals(typeof unroutable('.status=wip', team), 'string')
+  // and one whose vocabulary adds the rung routes it, without @yaks/project
+  // being told about leases
+  let leased = loadVocab([...team.docs, {
+    $defs: {
+      task: { component: true, extends: true, status: { claim: 'wip' } },
+    },
+  }], team.keywords)
+  assertEquals(unroutable('.status=wip', leased), null)
 })
 
 test('the graph refuses the bad board and keeps the good one', () => {

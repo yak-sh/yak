@@ -5,7 +5,6 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { relations } from '@yaks/edge'
 import { CONTAINS, REQUIRES } from './comp.ts'
-import { statuses } from './words.ts'
 import { team } from './testing.ts'
 
 test('the components this package ships', () => {
@@ -28,9 +27,6 @@ test('status is readable and routable, and nobody can write it', () => {
   let status = team.prop('task', 'status')!
   assertEquals(status.computed, true)
   assertEquals(status.values, ['cancelled', 'done', 'open'])
-  // The vocabulary is a file now, so the ladder and the enum are two
-  // copies of one list — this is what keeps them the same list.
-  assertEquals(status.values, statuses())
   assert(!team.comp('task')!.writable.includes('status'))
   // still routable, so a board can filter on it
   assertEquals(team.route('status'), { comp: 'task', prop: 'status' })

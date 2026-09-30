@@ -17,7 +17,6 @@ import { kernel, kernelDoc } from '@yaks/kernel'
 import { projectDoc, projects } from '@yaks/project'
 import { taskDoc } from './comp.ts'
 import { tasks } from './plugin.ts'
-import type { Mark } from './words.ts'
 
 let doc: VocabDoc = {
   $defs: {
@@ -33,8 +32,7 @@ let doc: VocabDoc = {
       kind: true,
       properties: { name: { type: 'string' } },
     },
-    // A lease, so that a test can add the `wip` rung the way an application
-    // would.
+    // A lease, which this vocabulary gives no rung: a claimed task is open.
     claim: {
       component: true,
       type: 'object',
@@ -60,12 +58,11 @@ export let store = (): Storage => ram(team, { number: true })
  * loaded. */
 export let teamGraph = (
   storage: Storage = store(),
-  marks?: Mark[],
 ): { g: Graph; storage: Storage } => ({
   g: graph({
     storage,
     vocab: team,
-    plugins: [kernel(), edges(team), tasks(), projects(team, marks)],
+    plugins: [kernel(), edges(team), tasks(), projects(team)],
   }),
   storage,
 })

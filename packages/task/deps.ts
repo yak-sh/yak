@@ -22,13 +22,12 @@
 // storage turns the answer into a promise. Nothing in between has to know
 // which.
 
-import type { Bundle, Eid, Storage, Tx } from '@yaks/graph'
+import type { Bundle, Eid, Graph, Tx } from '@yaks/graph'
 import { after, each } from '@yaks/fp'
 import { detached } from '@yaks/graph'
 import { and, eq, present } from '@yaks/query'
 import { EDGE } from '@yaks/edge'
-import { type Mark, MARKS, settled } from './words.ts'
-import { statusOf } from './status.ts'
+import { settled, statusOf } from './words.ts'
 import { BLOCKED, CONTAINS, REQUIRES } from './comp.ts'
 
 /**
@@ -47,13 +46,10 @@ export let gated = (b: Bundle): boolean => {
   return c != null && typeof c == 'object'
 }
 
-/** Which links count as work this task is waiting on, and which ladder a
- * child's status is computed from. */
+/** Which links count as work this task is waiting on. */
 export type DepOpts = {
   /** the relation tags to follow. Default: `requires` and `contains`. */
   relations?: string[]
-  /** the status ladder a child is read with. Default: {@link MARKS}. */
-  marks?: Mark[]
 }
 
 // The far ends of every edge with one of these relations leading away from
@@ -88,15 +84,14 @@ let kidsOf = (tx: Tx, eid: Eid, rels: string[]): Eid[] | Promise<Eid[]> => {
  * ```ts
  * import { openDeps } from '@yaks/task'
  *
- * // openDeps(storage, 't1') // → 2
+ * // openDeps(graph, 't1') // → 2
  * ```
  */
 export let openDeps = (
-  storage: Storage,
+  { storage, vocab }: Pick<Graph, 'storage' | 'vocab'>,
   eid: Eid,
   opts: DepOpts = {},
 ): number | Promise<number> => {
-  let marks = opts.marks ?? MARKS
   let tx = detached(storage)
   return after(
     kidsOf(tx, eid, opts.relations ?? [REQUIRES, CONTAINS]),
@@ -104,10 +99,7 @@ export let openDeps = (
       kids.length == 0 ? 0 : after(tx.get(kids), (bundles) => {
         // Counted by what has settled, so a child the storage does not hold —
         // and which therefore cannot be shown to have finished — stays counted.
-        let done = bundles.filter((b) => {
-          let s = statusOf(b, marks)
-          return s != null && settled(s, marks)
-        }).length
+        let done = bundles.filter((b) => settled(statusOf(vocab, b))).length
         return kids.length - done
       }),
   ) as number | Promise<number>
@@ -123,14 +115,11 @@ export let openDeps = (
  * promise.
  */
 export let done = (
-  storage: Storage,
+  held: Pick<Graph, 'storage' | 'vocab'>,
   eid: Eid,
   opts: DepOpts = {},
-): boolean | Promise<boolean> => {
-  let marks = opts.marks ?? MARKS
-  return after(storage.get([eid]), (bundles) => {
-    let status = bundles[0] ? statusOf(bundles[0], marks) : null
-    if (status == null || !settled(status, marks)) return false
-    return after(openDeps(storage, eid, opts), (count) => count == 0)
+): boolean | Promise<boolean> =>
+  after(held.storage.get([eid]), (bundles) => {
+    if (!bundles[0] || !settled(statusOf(held.vocab, bundles[0]))) return false
+    return after(openDeps(held, eid, opts), (count) => count == 0)
   }) as boolean | Promise<boolean>
-}

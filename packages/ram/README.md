@@ -115,10 +115,11 @@ Options are:
 - `adopt`: accept numbers supplied by another store. Off by default. See below
   for how this interacts with `number`.
 - `computed`: `comp.prop` → a function of one bundle, for each property the
-  vocabulary declares computed and never stores. A package that declares one
-  ships its rule, so a task graph passes `computed: compute()` from
-  [@yaks/task](../task) and `.task.status=open` is answered in memory. Without a
-  rule, a query on a computed property throws `Unsupported`, naming it.
+  vocabulary declares computed and never stores. A status ladder
+  ([@yaks/vocab](../vocab)'s `status` keyword) needs none: `.task.status=open`
+  is answered in memory from the ladder [@yaks/task](../task) declares. Without
+  a rule, a query on any other computed property throws `Unsupported`, naming
+  it.
 
 ### Writes are patches
 

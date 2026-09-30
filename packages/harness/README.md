@@ -226,11 +226,11 @@ bundles from graph-backed interfaces. To embed the app, mount `App` with
   SQL; normal agent operations use the graph API. Session state is persisted;
   running sessions can be queried with `.session.status=running`.
 - **Two statuses are computed, never stored.** `@yaks/harness/vocab` registers
-  computed session and task status properties through `@yaks/session/vocab`. The
-  task plugin uses the same `taskMarks` from @yaks/session: completed/cancelled
-  win, then a claim means wip, otherwise open. `blocked` stays a component of
-  its own, never a status. Queries filter in the database, and the sidebar reads
-  that same status.
+  the computed session status through `@yaks/session/vocab`. A task's status is
+  the ladder @yaks/task declares, with @yaks/session's rung added:
+  completed/cancelled win, then a claim means wip, otherwise open. `blocked`
+  stays a component of its own, never a status. Queries filter in the database,
+  and the sidebar reads that same status.
 - **Work need not be filed.** `doc` + bare `task{}` is a task without project
   metadata; optional `filed{project, priority, domain, assignee}` adds project
   and assignment metadata. `a.tasks()` reads a page of open/wip work, newest

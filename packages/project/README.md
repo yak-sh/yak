@@ -72,11 +72,10 @@ is wrong are caught:
 - it names a status outside the closed set (`.status=complete`, where @yaks/task
   declares `done`, `cancelled` and `open`).
 
-The set of statuses a board may name comes from the loaded vocabulary — every
-package's `statuses` enum, read as a union — so a graph that also loads
-[@yaks/session](../session)'s claim gets `wip` in the check by composing it, and
-one without leases knows only the three @yaks/task declares. Pass `marks` to
-`projects(vocab, marks)` to check against exactly that list instead.
+The set of statuses a board may name is the ladder the loaded vocabulary
+declares (@yaks/vocab's `status` keyword), so a graph that also loads
+[@yaks/session](../session) gets `wip` in the check by composing it, and one
+without leases knows only the three @yaks/task declares.
 
 The empty query is still allowed, and `task.status` needs no check here: it is
 declared `computed: true`, and @yaks/graph drops a computed property before this
@@ -127,9 +126,9 @@ await g.apply([
 ```
 
 - `@yaks/project`: `projectDoc`, `PROJECT`, `FILED`, `BOARD`, `VENTURE`,
-  `projects(vocab, marks?)`, `guarding(vocab, marks?)`,
-  `unroutable(query, vocab, marks?)` (a diagnostic string or `null`),
-  `lineage(g, eid)`, and `nesting` (the hook keeping projects a tree).
+  `projects(vocab)`, `guarding(vocab)`, `unroutable(query, vocab)` (a diagnostic
+  string or `null`), `lineage(g, eid)`, and `nesting` (the hook keeping projects
+  a tree).
 - `@yaks/project/vocab`: schema documents in `docs`.
 - `@yaks/project/rules`: `rules(host)` supplies the validation plugin.
 - `@yaks/project/tools`: `runs(host, options)` supplies the two checks above;

@@ -11,7 +11,7 @@ import { ram } from '@yaks/ram'
 import { docDoc } from '@yaks/doc'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import { kernel, kernelDoc, kernelKeywords } from '@yaks/kernel'
-import { type Mark, taskDoc, tasks } from '@yaks/task'
+import { taskDoc, tasks } from '@yaks/task'
 import { projectDoc } from './comp.ts'
 import { projects } from './plugin.ts'
 
@@ -24,8 +24,7 @@ let doc = {
       properties: { num: { type: 'number', stamped: true } },
     },
     person: { component: true, type: 'object', kind: true, properties: {} },
-    // A lease, so a test can add the `wip` status the way an application
-    // would.
+    // A lease, which this vocabulary gives no rung: a claimed task is open.
     claim: {
       component: true,
       type: 'object',
@@ -52,12 +51,11 @@ export let store = (): Storage => ram(team, { number: true })
  * plugins. */
 export let teamGraph = (
   storage: Storage = store(),
-  marks?: Mark[],
 ): { g: Graph; storage: Storage } => ({
   g: graph({
     storage,
     vocab: team,
-    plugins: [kernel(), edges(team), tasks(), projects(team, marks)],
+    plugins: [kernel(), edges(team), tasks(), projects(team)],
   }),
   storage,
 })

@@ -2,7 +2,7 @@
 import type { Bundle } from '@yaks/graph'
 import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { loadVocab } from '@yaks/vocab'
-import { derived, MARKS, statusOf } from '@yaks/task'
+import { statusOf } from '@yaks/task'
 import { fields, search } from '@yaks/fts'
 import { traverse } from '@yaks/edge'
 
@@ -32,12 +32,11 @@ export const vocab = loadVocab([edgeDoc, {
     task: {
       component: true,
       type: 'object',
-      properties: {
-        status: {
-          type: 'string',
-          enum: ['open', 'wip', 'done', 'cancelled'],
-          computed: true,
-        },
+      status: {
+        cancelled: 'cancelled',
+        completed: 'done',
+        claim: 'wip',
+        default: 'open',
       },
     },
     session: {
@@ -73,9 +72,7 @@ export const vocab = loadVocab([edgeDoc, {
   },
 }], [edgeKeywords])
 export const textFields = fields(vocab, (c) => c.comp == 'doc')
-const marks = [...MARKS, { status: 'wip', comp: 'claim', settled: false }]
 export const options = {
-  derived: derived(marks),
   extend: [search(textFields), traverse(vocab)],
 }
 
@@ -117,7 +114,7 @@ export function workload() {
     {
       name: 'status-open',
       query: '.task.status=open',
-      expected: tasks.filter((t) => statusOf(t, marks) == 'open').map((t) =>
+      expected: tasks.filter((t) => statusOf(vocab, t) == 'open').map((t) =>
         t.entity.eid
       ),
     },

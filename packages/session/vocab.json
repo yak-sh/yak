@@ -109,6 +109,13 @@
         }
       }
     },
+    "task": {
+      "component": true,
+      "extends": true,
+      "type": "object",
+      "description": "a task a session holds is being worked on: a held claim reads `wip`, below the marks that end it",
+      "status": { "claim": "wip" }
+    },
     "conflict": {
       "component": true,
       "type": "object",
