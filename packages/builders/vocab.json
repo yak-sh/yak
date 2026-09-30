@@ -261,9 +261,6 @@
       "removed": [
         "created"
       ],
-      "without": [
-        "effect"
-      ],
       "description": "check immediate builders when an entity enters, changes or leaves their query"
     }
   }

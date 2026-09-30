@@ -575,10 +575,10 @@ vocabulary knows what a write owes, whatever code it imported.
 `comp.prop` for one property; `match` is a pattern in the rule grammar, run
 wherever the batch made it hold. `tries` bounds the attempts,
 `idempotent: false` says an interrupted run must not run again. `active` is a
-query that must match somewhere before a run is owed; `without` lists components
-that exclude an entity from the trigger. `sweep` is a query whose matches are
-owed a `created` run again whenever a worker starts. `effectsIn(docs)` reads
-them, refuses a name declared twice, and `loadVocab` skips them.
+query that must match somewhere before a run is owed. `sweep` is a query whose
+matches are owed a `created` run again whenever a worker starts.
+`effectsIn(docs)` reads them, refuses a name declared twice, and `loadVocab`
+skips them.
 
 ## A vocabulary as entities
 

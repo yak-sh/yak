@@ -10,7 +10,7 @@ import type { Bundle, Storage, Tx } from '@yaks/graph'
 import { isPromise } from '@yaks/fp'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { loadVocab } from '@yaks/vocab'
+import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { effects, type Job } from './registry.ts'
 import { effectDoc } from './pool.ts'
 import type { Event } from './trace.ts'
@@ -350,33 +350,42 @@ test('a declared effect runs where it is handled, on each trigger it declares', 
   assertEquals(seen, ['created p1', 'changed p1', 'removed p1'])
 })
 
-test('a declared effect can exclude bookkeeping entities', async () => {
-  let vocab = loadVocab([...blog.docs, effectDoc, {
-    $defs: {
-      watch_change: {
-        effect: true,
-        created: ['created'],
-        changed: ['updated'],
-        without: ['effect'],
-        active: '.subscriber',
-      },
-    },
-  }])
-  let fx = effects(vocab)
-  let g = blogGraph([fx], vocab)
+// A graph whose vocabulary declares `$defs` beside the blog and its pool.
+let declaring = ($defs: VocabDoc['$defs']) => {
+  let vocab = loadVocab([...blog.docs, effectDoc, { $defs }])
+  return blogGraph([effects(vocab)], vocab)
+}
+
+test('a declared effect is owed only while its active query matches', async () => {
+  let g = declaring({
+    watch: { effect: true, created: ['created'], active: '.subscriber' },
+  })
   await g.apply([post('p1')])
   assertEquals((await g.read('.effect')).length, 0)
   await g.apply([{
     entity: { eid: 's1' },
     subscriber: { email: 'one@example.com' },
   }])
-  let owed = await g.read('.effect')
-  assertEquals(owed.length, 1)
-  await g.apply([{
-    entity: owed[0].entity,
-    effect: { state: 'done' },
-  }], { trusted: true })
   assertEquals((await g.read('.effect')).length, 1)
+})
+
+test('a write to an effect row owes no run, whatever it moves', async () => {
+  let g = declaring({
+    done: { component: true, type: 'object' },
+    noticed: {
+      effect: true,
+      created: ['done'],
+      changed: ['updated'],
+      removed: ['done'],
+    },
+  })
+  await g.apply([{ ...post('p1'), done: {} }])
+  let [row] = await g.read('.effect')
+  await g.apply([{ entity: row.entity, effect: { state: 'done' }, done: {} }], {
+    trusted: true,
+  })
+  await g.apply([{ entity: row.entity, $delete: true }], { trusted: true })
+  assertEquals(await g.read('.effect'), [])
 })
 
 test('a declared effect nobody handles runs nothing', () => {

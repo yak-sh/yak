@@ -152,10 +152,10 @@ components were present before the write.
 | `on(pattern, run)`         | `match: pattern`    | A query matches an entity touched by the batch           |
 
 A declared effect may add `active: '.some-query'` to owe commit-triggered runs
-only while that query matches an entity. `without: ['effect']` excludes entities
-carrying any named component, including one removed in the batch. These
-conditions are checked before a pooled run is written; a declared `sweep` still
-uses its own query.
+only while that query matches an entity. An effect row owes no declared effect a
+run, whatever a write to it moves: a run is owed for what happened in the graph,
+never for the pool's own bookkeeping. Both are checked before a pooled run is
+written; a declared `sweep` still uses its own query.
 
 The plugin reads component presence before applying changes, including
 components on entities about to be deleted by a cascade. After commit it

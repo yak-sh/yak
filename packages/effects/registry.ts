@@ -452,11 +452,15 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     if (!chosen.length) return []
     let seen = events(bundles)
     let prior = (bundles.find((b) => b[BEFORE])?.[BEFORE] ?? {}) as Before
-    let allowed = (s: Slot, e: Event) =>
-      !s.effect?.without?.some((name) =>
-        prior[e.entity.eid]?.includes(name) ||
-        bundles.some((b) => b.entity.eid == e.entity.eid && b[name] != null)
-      )
+    // A run is owed for what happened in the graph, never for the pool's own
+    // rows: an entity that wears `effect`, before this batch or in it, owes no
+    // declared effect a run. Otherwise a mark a settle writes (`completed`)
+    // would owe the runs that mark triggers, each of those would settle and
+    // owe more, and the depth never stops it, since a settle is generation 0.
+    let inPool = (eid: Eid) =>
+      prior[eid]?.includes(EFFECT) ||
+      bundles.some((b) => b.entity.eid == eid && b[EFFECT] != null)
+    let allowed = (s: Slot, e: Event) => !s.effect || !inPool(e.entity.eid)
     let found = seen.flatMap((e) =>
       chosen.filter((s) => watching(s, e) && allowed(s, e))
         .map((s) => [s, e] as [Slot, Event])
