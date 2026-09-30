@@ -9,26 +9,19 @@ test('a store that fails is said, and the sweep goes on', async () => {
     ask: (store) =>
       store == 'b/y' ? Promise.reject(new Error('503')) : Promise.resolve({
         store,
-        rules: [{
-          mark: 'yak/store/now/1',
-          rows: 3,
-          moved: 3,
-          batches: 1,
-          ms: 4,
-          slowest: 4,
-        }],
+        rules: [{ mark: 'yak/store/now/1', rows: 3, moved: 3, batches: 1 }],
       }),
     pace: 0,
-    out: (line) => said.push(line),
+    out: (line) => said.push(line.replace(/ {2}\(\d+ms\)$/, '')),
     stopping: new AbortController().signal,
   })
   assertEquals(said, [
-    'a/x  now/1  3 rows, 3 moved in 4ms, slowest batch 4ms',
+    'a/x  now/1  3 rows, 3 moved in 1 batches',
     'b/y  failed: 503',
-    'directory  now/1  3 rows, 3 moved in 4ms, slowest batch 4ms',
+    'directory  now/1  3 rows, 3 moved in 1 batches',
   ])
-  assertEquals(summary, [
+  assertEquals(summary.slice(0, 2), [
     '3 of 3 stores asked, 1 failed: b/y',
-    '6 rows found; slowest batch 4ms in a/x',
+    '6 rows found',
   ])
 })

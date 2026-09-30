@@ -195,14 +195,15 @@ import { type Meta, metaOf } from './meta.ts'
 import { caught, defect } from './sentry.ts'
 import { counts, hop, type Tally, tallying } from './lib/hops.ts'
 import {
+  BATCHES,
   type Mark,
   type Moving,
+  PAUSE,
   rehearse,
   type Rule,
   RULES,
   runs,
   size,
-  SLICE,
   type Stamp,
   type Standing,
   step,
@@ -1771,7 +1772,7 @@ export class Store {
   // while the store serves the shape it holds.
 
   // A moment from now: the wake that armed it answers first.
-  #soon = () => new Date(Date.now() + SLICE).toISOString()
+  #soon = () => new Date(Date.now() + PAUSE).toISOString()
 
   #stamp = (rule: Rule): Stamp | null => {
     let held = this.#get(rule.mark)
@@ -1799,13 +1800,13 @@ export class Store {
     tx: (body) => this.#ctx.storage.transactionSync(body),
   })
 
-  // Batches until the slice is spent, yielding the object between them, then
-  // the alarm again for whatever is left.
+  // A few batches, yielding the object between them, then the alarm again for
+  // whatever is left.
   #moving = async (): Promise<void> => {
-    let until = Date.now() + SLICE
+    let left = BATCHES
     let name = this.#get('name') ?? ''
     for (let rule of this.#owing()) {
-      while (Date.now() < until && !this.#refused) {
+      while (left-- > 0 && !this.#refused) {
         let held: (() => void | Promise<void>)[] = []
         let was = this.#stamp(rule)
         let now = new Date().toISOString()

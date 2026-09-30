@@ -9,8 +9,10 @@
 //     `#moving`). Nothing in boot waits on it, and a wake owed rows arms the
 //     alarm rather than moving them itself.
 //   - each batch is one transaction of a few hundred rows, and the object
-//     yields between batches, so requests interleave. An alarm moves for a
-//     slice of time and comes back for the rest.
+//     yields between batches, so requests interleave. An alarm moves a few
+//     batches and comes back for the rest.
+//   - every bound is counted in rows, never in time: inside a Worker the clock
+//     stands still while code runs, and moves only when it waits.
 //   - a batch that fails unwinds and is reported, and the store keeps serving
 //     the shape it holds. This incarnation leaves that rule alone; the next
 //     one, which a fix arrives as, tries again.
@@ -23,8 +25,9 @@
 // `updated` by the platform, when it moved.
 //
 // A rule is rehearsed before it runs ({@link rehearse}): every row it finds is
-// moved inside a transaction that is rolled back, and the store says how many
-// rows, how long, and what failed (`yak admin move --rehearse`). It runs for
+// moved inside a transaction that is rolled back, up to a bound, and the store
+// says how many rows it found and moved, and what failed; the sweep times each
+// store's answer from outside (`yak admin move --rehearse`). It runs for
 // real only where `live` names: nowhere until every rehearsal is clean, then
 // the app stores, then every store, the directory last. The release that
 // makes a rule live adds its mark to migrate.ts `BOUNDARIES`, so a rollback
@@ -80,16 +83,13 @@ export type Stamp = {
 /** Where one rule stands in one store, as a wake answers it. */
 export type Standing = Partial<Stamp> & { mark: Mark; live: boolean }
 
-/** What one rule's rehearsal found in one store: the rows it would move, how
- * many it moved before its time ran out, and the slowest batch, which is how
- * long the store's one thread is held at a time. */
+/** What one rule's rehearsal found in one store: the rows it would move, and
+ * how many it moved, in how many batches, before its bound. */
 export type Rehearsal = {
   mark: Mark
   rows: number
   moved: number
   batches: number
-  ms: number
-  slowest: number
   unspoken?: string
   failed?: string
 }
@@ -108,10 +108,11 @@ export type Moving = {
  * directory, which every space's routing reads. */
 export let size = (store: string) => store == PLATFORM_STORE ? 50 : 200
 
-/** How long an alarm moves before it yields the object and comes back, and
- * how long a rehearsal may hold it. */
-export let SLICE = 1_000
-export let REHEARSAL = 2_000
+/** The batches an alarm moves before it comes back for the rest, how long it
+ * waits to come back, and the batches a rehearsal holds the store for. */
+export let BATCHES = 5
+export let PAUSE = 1_000
+export let REHEARSED = 20
 
 /** Whether a rule runs for real in this store. */
 export let runs = (rule: Rule, store: string) =>
@@ -154,36 +155,27 @@ export let step = (
 
 let said = (e: unknown) => e instanceof Error ? e.message : String(e)
 
-/** Every rule moved inside a transaction that is rolled back: what it found,
- * what it moved in the time it had, and what failed. A rule is rehearsed
+/** Every rule moved inside a transaction that is rolled back, `bound` batches
+ * at most: what it found, what it moved, and what failed. A rule is rehearsed
  * whether or not it is live, and whatever its stamp says. */
 export let rehearse = (
   m: Moving,
   rules: Rule[],
   n: number,
-  budget = REHEARSAL,
+  bound = REHEARSED,
 ): Rehearsal[] =>
   rules.map((rule) => {
-    let start = performance.now()
-    let r: Rehearsal = {
-      mark: rule.mark,
-      rows: 0,
-      moved: 0,
-      batches: 0,
-      ms: 0,
-      slowest: 0,
-    }
+    let r: Rehearsal = { mark: rule.mark, rows: 0, moved: 0, batches: 0 }
     let back = Symbol('rehearsal')
     try {
       let [counted] = sync(m.rows(conjoin(rule.find, '.count')))
       r.rows = Number(counted?.n ?? 0)
       m.tx(() => {
         let s: Stamp | null = null
-        while (!s?.done && performance.now() - start < budget) {
-          let t = performance.now()
-          s = step(m, rule, s, n, new Date().toISOString())
+        let now = new Date().toISOString()
+        while (!s?.done && r.batches < bound) {
+          s = step(m, rule, s, n, now)
           r.batches++
-          r.slowest = Math.max(r.slowest, performance.now() - t)
         }
         r.moved = s?.moved ?? 0
         throw back
@@ -192,6 +184,5 @@ export let rehearse = (
       if (e instanceof Unknown) r.unspoken = e.prop
       else if (e !== back) r.failed = said(e)
     }
-    r.ms = performance.now() - start
     return r
   })

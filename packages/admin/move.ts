@@ -1,6 +1,8 @@
 // `yak admin move`: a sweep of yaks.app's stores for the store mover
 // (workers/yak/mover.ts, D-45640). One store at a time, each rehearses every
-// rule or is woken to move what it owes, and says so as the sweep goes. A
+// rule or is woken to move what it owes, and says so as the sweep goes, with
+// how long it took to answer: a store cannot time itself, since a Worker's
+// clock stands still while its code runs. A
 // wake is paced, a few stores a minute, so the platform is never woken all at
 // once; a rehearsal holds one store at a time and needs no pace. A store that
 // fails is said and the sweep goes on: the report is the point.
@@ -18,8 +20,7 @@ let rehearsed = (r: Rehearsal) =>
     ? `failed: ${r.failed}`
     : r.unspoken
     ? `speaks no .${r.unspoken}`
-    : `${r.rows} rows, ${r.moved} moved in ${ms(r.ms)}, ` +
-      `slowest batch ${ms(r.slowest)}`
+    : `${r.rows} rows, ${r.moved} moved in ${r.batches} batches`
 
 let standing = (s: Standing) =>
   !s.live
@@ -35,6 +36,12 @@ export let line = (at: string, r: Rehearsal | Standing) =>
   `${at}  ${r.mark.replace(/^yak\/store\//, '')}  ${
     'rows' in r ? rehearsed(r) : standing(r)
   }`
+
+// A store's lines, and how long it took to answer.
+let lines = (at: string, a: Asked, took: number) =>
+  a.rules.length
+    ? a.rules.map((r, i) => line(at, r) + (i ? '' : `  (${ms(took)})`))
+    : [`${at}  no rules  (${ms(took)})`]
 
 let wait = (ms: number, stopping: AbortSignal) =>
   new Promise<void>((go) => {
@@ -62,16 +69,14 @@ export let sweep = async (o: {
     if (asked && o.pace) await wait(60_000 / o.pace, o.stopping)
     if (o.stopping.aborted) break
     asked++
+    let start = performance.now()
     try {
       let a = await o.ask(s.store)
-      if (!a.rules.length) o.out(`${s.at}  no rules`)
-      for (let r of a.rules) {
-        o.out(line(s.at, r))
-        if (r.failed && !failed.includes(s.at)) failed.push(s.at)
-        if (!('rows' in r)) continue
-        rows = (rows ?? 0) + r.rows
-        if (r.slowest > slow.ms) slow = { at: s.at, ms: r.slowest }
-      }
+      let took = performance.now() - start
+      for (let l of lines(s.at, a, took)) o.out(l)
+      if (took > slow.ms) slow = { at: s.at, ms: took }
+      if (a.rules.some((r) => r.failed)) failed.push(s.at)
+      for (let r of a.rules) if ('rows' in r) rows = (rows ?? 0) + r.rows
     } catch (e) {
       failed.push(s.at)
       o.out(`${s.at}  failed: ${e instanceof Error ? e.message : e}`)
@@ -80,9 +85,7 @@ export let sweep = async (o: {
   return [
     `${asked} of ${o.stores.length} stores asked, ${failed.length} failed` +
     (failed.length ? `: ${failed.join(', ')}` : ''),
-    ...(rows == null ? [] : [
-      `${rows} rows found` +
-      (slow.at ? `; slowest batch ${ms(slow.ms)} in ${slow.at}` : ''),
-    ]),
+    ...(rows == null ? [] : [`${rows} rows found`]),
+    ...(slow.at ? [`slowest answer ${ms(slow.ms)}, from ${slow.at}`] : []),
   ]
 }
