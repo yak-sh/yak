@@ -1,0 +1,110 @@
+// How a transcript reads: one `Line` per entry, and a `Status` for the
+// transcript itself, as portable @yaks/render renderers — the same tree prints
+// as plain text in a CLI (@yaks/text) or mounts in a browser. The status is
+// computed from the entries the caller hands in as `ctx.entries`, because a
+// store with no derived properties (@yaks/ram) has nothing else to read it
+// from.
+
+import type { Comp } from '@yaks/graph'
+import { parse } from '@yaks/query'
+import { type Bundle, define, type Registry, type Renderer } from '@yaks/render'
+import { SESSION } from './comp.ts'
+import { ASK, CALL, ENTRY } from './native.ts'
+import { kindOf, statusOf, textOf } from './status.ts'
+
+let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
+
+/** What an ask or a call reached: `→ gpt-6-astra`, `→ echo`. The names are the
+ * caller's (`ctx.names`, eid → name); a provider's anchor on an ask prints only
+ * when the caller can read it (`ctx.anchor`), because which comp holds it is
+ * the provider's business, not this view's. */
+let reached = (
+  b: Bundle,
+  names: Record<string, string>,
+  anchor?: (b: Bundle) => string | undefined,
+) => {
+  let to = comp(b, ASK)?.to ?? comp(b, CALL)?.to
+  if (to == null) return ''
+  let id = ASK in b ? anchor?.(b) : undefined
+  return `→ ${names[String(to)] ?? String(to)}` +
+    (id ? ` (${id.slice(0, 12)}…)` : '')
+}
+
+/** Shared prose tree; renderers keep metadata structural rather than stripping
+ * text. */
+export let entryBody: Renderer['render'] = (b, h, ctx) => {
+  let body = textOf(b)
+  let max = Number(ctx.maxChars)
+  let first = ctx.full
+    ? Number.isSafeInteger(max) && max > 0 && body.length > max
+      ? body.slice(0, max) + `\n… [${body.length} characters total]`
+      : body
+    : body.split('\n')[0].slice(0, 70)
+  let names = (ctx.names ?? {}) as Record<string, string>
+  let anchor = ctx.anchor as ((b: Bundle) => string | undefined) | undefined
+  let line = [
+    reached(b, names, anchor),
+    first,
+  ].filter(Boolean).join(' ')
+  // Text renderers strip literal control bytes. Structural line breaks
+  // preserve transcript lines without letting other control characters
+  // through.
+  return h(
+    'span',
+    null,
+    ...line.split('\n').flatMap((text, i) =>
+      i ? [h('br', null), text] : [text]
+    ),
+  )
+}
+
+let line: Renderer['render'] = (b, h, ctx) =>
+  h(
+    'p',
+    null,
+    String(comp(b, ENTRY)!.seq).padStart(3),
+    ' ',
+    (kindOf(b) ?? 'entry').padEnd(9),
+    ' ',
+    entryBody(b, h, ctx),
+  )
+
+// A transcript as one line of a list: the word that reaches it again, which
+// every session tool takes (./who.ts `sessionFor`) — its number where it has
+// one (`S-12`), else its runner's own id — and its status where the bundle
+// carries one. A patch fresh from a write carries none, and a line that said
+// "unknown" there would be wrong about a transcript that is fine.
+let tile: Renderer['render'] = (b, h, ctx) => {
+  let id = ctx.id as ((b: Bundle) => string) | undefined
+  let status = comp(b, SESSION)?.status
+  return h(
+    'p',
+    null,
+    b.entity.num != null && id
+      ? id(b)
+      : String(comp(b, SESSION)?.id ?? b.entity.eid),
+    ...status == null ? [] : [': ', String(status)],
+  )
+}
+
+/** The transcript views: `Line` for an entry, `Status` for a transcript. The
+ * context may carry `names` (model or tool eid → name), `anchor` (reads a
+ * provider's anchor off an ask entry), and `entries` (the transcript, for
+ * `Status`), `full` (entry prose), `maxChars` (a full prose preview bound). In a list
+ * of answers, an entry's `Tile` is its line and a transcript's is its status
+ * as the store computed it. */
+export let sessionViews: Registry = define([
+  { view: 'Line', match: parse('.entry'), render: line },
+  { view: 'Tile', match: parse('.entry'), render: line },
+  { view: 'Tile', match: parse(`.${SESSION}`), render: tile },
+  { view: 'Body', match: parse('.entry'), render: entryBody },
+  {
+    view: 'Status',
+    match: parse(`.${SESSION}`),
+    render: (b, h, ctx) => {
+      let entries = (ctx.entries ?? []) as Bundle[]
+      let name = String(comp(b, SESSION)?.id ?? b.entity.eid)
+      return h('p', null, `${name}: ${statusOf(entries)}`)
+    },
+  },
+])

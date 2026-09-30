@@ -1,0 +1,49 @@
+/* A stretch of a conversation: who in a narrow column, what they said beside
+   it. The turn the page is about is lit by a bar in the accent; a quiet one
+   (a tool call, its answer) is dim. */
+.Turns {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  max-width: var(--measure);
+}
+.Turns_Turn {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr);
+  gap: var(--half-gap);
+  align-items: baseline;
+  padding: 2px var(--half-gap);
+  border-left: 3px solid transparent;
+  min-width: 0;
+}
+.Turns_Turn-on {
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.Turns_Turn-quiet {
+  color: var(--dim);
+  font-size: 12px;
+}
+.Turns_Who {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--who);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+a.Turns_Who:hover {
+  text-decoration: underline;
+}
+.Turns_Text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+.Turns_More {
+  padding-left: calc(var(--half-gap) + 3px);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+}

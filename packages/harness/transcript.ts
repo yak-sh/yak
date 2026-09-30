@@ -3,10 +3,10 @@ import type { Comp } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import { parse } from '@yaks/query'
 import { define, type Renderer } from '@yaks/render'
-import { views } from '@yaks/session'
+import { sessionViews } from '@yaks/session'
 import { parse as markdown, render as renderMarkdown } from '@yaks/markdown'
 
-let body = views.renderers.find((r) => r.view == 'Body')!
+let body = sessionViews.renderers.find((r) => r.view == 'Body')!
 let row = (
   query: string,
   label: string,

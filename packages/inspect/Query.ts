@@ -12,11 +12,12 @@ import { h, type JSX } from 'preact'
 import { conjoin, orderOf, parse, type Query, windowOf } from '@yaks/query'
 import { Head, Rows, Value } from '@yaks/ui'
 import type { Bundle, Io } from './host.ts'
-import { Grid, paged } from './grid.ts'
-import { comp, comps, count, face, line, shape, str } from './read.ts'
+import { Grid, paged, SIZE } from './grid.ts'
+import { comp, comps, count, line, named, str } from './read.ts'
 import { rows, waiting } from './rows.ts'
-import { useSets } from './notes.ts'
-import { key } from './state.ts'
+import { useNamed, useSets } from './notes.ts'
+import { grid, key } from './state.ts'
+import { mention, reads } from './value.ts'
 
 let AGGREGATES = new Set(['count', 'tally', 'distinct'])
 
@@ -54,8 +55,9 @@ export let shared = (rows: Bundle[]): string[] =>
     ? comps(rows[0]).map(([n]) => n).filter((n) => rows.every((b) => b[n]))
     : []
 
-// What a component holds, in a cell: its first few values that are there.
-let summed = (b: Bundle, name: string) => {
+// What a component holds, in a cell: its first few values that are there,
+// each as a person reads it.
+let summed = (io: Io, b: Bundle, name: string) => {
   let set = Object.entries(comp(b, name)).filter(([, v]) =>
     v != null && v !== ''
   )
@@ -64,26 +66,41 @@ let summed = (b: Bundle, name: string) => {
       i ? ' ' : null,
       h(Value, { mod: 'id' }, k),
       ' ',
-      h(Value, { mod: shape(v) }, line(face(v), 40)),
+      reads(io, v, io.vocab.prop(name, k)),
     ])
     : h(Value, { mod: 'nil' }, 'present')
 }
 
-// A tally, or a distinct list read as one: each value beside its count.
+// Every entity the rows' values name, so each reads by its name.
+let mentioned = (rows: Bundle[], names: string[]) =>
+  rows.flatMap((b) =>
+    names.flatMap((n) => Object.values(comp(b, n)).filter(named))
+  )
+
+// A tally, or a distinct list read as one: each value beside its count, an
+// entity by its name.
 let Tallied = ({ io, id, tally }: {
   io: Io
   id: string
   tally: Record<string, number>
-}) =>
-  h(Grid, {
+}) => {
+  let values = Object.keys(tally).toSorted((a, b) => tally[b] - tally[a])
+  let page = grid(io, id).after?.length ?? 0
+  useNamed(io, values.slice(page * SIZE, (page + 1) * SIZE).filter(named))
+  return h(Grid, {
     io,
     id,
     local: true,
-    pick: false,
-    rows: Object.keys(tally).toSorted((a, b) => tally[b] - tally[a])
-      .map((v): Bundle => ({ entity: { eid: v } })),
+    pick: (b) => named(b.entity.eid) ? b.entity.eid : undefined,
+    rows: values.map((v): Bundle => ({ entity: { eid: v } })),
     columns: [
-      { name: 'value', cell: (b) => line(b.entity.eid, 120) || '""' },
+      {
+        name: 'value',
+        cell: (b) =>
+          named(b.entity.eid)
+            ? mention(io, b.entity.eid)
+            : line(b.entity.eid, 120) || '""',
+      },
       {
         name: 'entities',
         mod: 'num',
@@ -91,6 +108,7 @@ let Tallied = ({ io, id, tally }: {
       },
     ],
   })
+}
 
 /** The rows a query answers, a page at a time. */
 let Answered = ({ io, text, ast }: { io: Io; text: string; ast: Query }) => {
@@ -104,6 +122,7 @@ let Answered = ({ io, text, ast }: { io: Io; text: string; ast: Query }) => {
   useSets(io, all)
   let titled = all.some((b) => str(b, 'doc', 'title'))
   let cols = shared(all).filter((n) => !(titled && n == 'doc'))
+  useNamed(io, mentioned(all, cols))
   return waiting(got.rows) ?? h(Grid, {
     io,
     id,
@@ -122,7 +141,7 @@ let Answered = ({ io, text, ast }: { io: Io; text: string; ast: Query }) => {
         : [],
       ...cols.map((n) => ({
         name: n,
-        cell: (b: Bundle) => summed(b, n),
+        cell: (b: Bundle) => summed(io, b, n),
       })),
     ],
   })

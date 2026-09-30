@@ -449,8 +449,9 @@ The package exports seven entry points:
   answers an address with a body made once and kept for the process, bounded,
   healed on its next request after a failure, and ended as its host closes;
   `bundle(entry, signal)` makes a page's script and everything it imports into
-  one browser module with `deno bundle`. @yaks/web's app and @yaks/inspect's
-  page are each served this way.
+  one browser module with `deno bundle`, from a file or from an entry written
+  for the host (`Written`: its code, and where its imports resolve from).
+  @yaks/web's app and @yaks/inspect's page are each served this way.
 
 Application commands use `yak command <name> --app <app> key=value`, or the
 short form `yak <app> <name> key=value`. Values are parsed as JSON when

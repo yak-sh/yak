@@ -34,8 +34,15 @@ export let commands: CliCommand[] = [{
       !hostname || hostname == '0.0.0.0' ? '127.0.0.1' : hostname
     }:${port}`
     let { open, start } = await import('./tui.ts')
+    let { contributed } = await import('./plugins.ts')
+    let more = (await contributed(host.config.plugins ?? []))
+      .flatMap((c) => c.views)
     try {
-      await open(url, start(typeof args.what == 'string' ? args.what : ''))
+      await open(
+        url,
+        start(typeof args.what == 'string' ? args.what : ''),
+        more,
+      )
       return 0
     } catch (e) {
       context.note(e instanceof Error ? e.message : String(e))

@@ -15,7 +15,7 @@ import { type Frame, portLink } from '@yaks/sync'
 import type { Bundle, Comp } from '@yaks/graph'
 import { render as tree } from '@yaks/preact'
 import { render } from '@yaks/text'
-import { views } from '@yaks/session'
+import { sessionViews } from '@yaks/session'
 import { type Config, words } from '@yaks/cli/host'
 import { transcriptViews } from './transcript.ts'
 import type { UIAgent } from './panels.ts'
@@ -365,7 +365,14 @@ export let remote = async (
         image: (eid: string) => request('image', [eid]),
       }),
     line: (b, view = 'Line', ctx = {}) =>
-      render(views, b, view, vocab, { names: init.names, ...ctx }, 'plain'),
+      render(
+        sessionViews,
+        b,
+        view,
+        vocab,
+        { names: init.names, ...ctx },
+        'plain',
+      ),
   }
   return {
     agent,

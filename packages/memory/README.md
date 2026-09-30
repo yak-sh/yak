@@ -238,6 +238,11 @@ trimming; `terms` turns words into search terms the query grammar cannot
 misread; `EMPTY` is the empty-statement error message. `@yaks/memory/vocab`
 exports `memoryDoc` and its `docs` array for schema loaders;
 `@yaks/memory/tools` supplies the tool implementations described above.
+`@yaks/memory/views` exports `inspectViews`, how the inspector (@yaks/inspect)
+draws a belief and a topic: a belief says what it says, what it is about and
+where it holds, then each memory it cites, the words verbatim with who said
+them, when and where, the context line, and the conversation around them (as
+@yaks/session draws it); a topic says its brief, then the beliefs about it.
 
 ## Compatibility
 

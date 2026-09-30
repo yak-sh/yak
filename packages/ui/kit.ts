@@ -9,6 +9,7 @@
 
 import type { Sheet } from '@yaks/tui/theme'
 import * as base from './base.ts'
+import * as body from './Body.ts'
 import * as button from './Button.ts'
 import * as catalog from './Catalog.ts'
 import * as chip from './Chip.ts'
@@ -27,6 +28,7 @@ import * as pager from './Pager.ts'
 import * as pairs from './Pairs.ts'
 import * as panes from './Panes.ts'
 import * as prop from './Prop.ts'
+import * as quote from './Quote.ts'
 import * as rows from './Rows.ts'
 import * as say from './Say.ts'
 import * as section from './Section.ts'
@@ -37,6 +39,7 @@ import * as tabs from './Tabs.ts'
 import * as tile from './Tile.ts'
 import * as timeline from './Timeline.ts'
 import * as tip from './Tip.ts'
+import * as turns from './Turns.ts'
 import * as value from './Value.ts'
 import { everforest } from './everforest.ts'
 import { rosepine } from './rosepine.ts'
@@ -47,7 +50,7 @@ import type { Kit, Theme } from './theme.ts'
  * what frames a page. A group's name is never a part's: each is a place in
  * the guide. */
 export let groups: Record<string, Record<string, Kit>> = {
-  Prose: { base },
+  Prose: { base, Body: body, Quote: quote },
   Marks: { Dot: dot, Id: id, Stamp: stamp, Chip: chip, Value: value, Tip: tip },
   Controls: {
     Button: button,
@@ -65,6 +68,7 @@ export let groups: Record<string, Record<string, Kit>> = {
     Pairs: pairs,
     Table: table,
     Timeline: timeline,
+    Turns: turns,
     Notes: notes,
   },
   Page: {

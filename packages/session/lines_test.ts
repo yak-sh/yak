@@ -5,7 +5,7 @@ import { render } from '@yaks/text'
 import { loadVocab } from '@yaks/vocab'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { sessionDoc } from './comp.ts'
-import { views } from './views.ts'
+import { sessionViews } from './lines.ts'
 
 let vocab = loadVocab([sessionDoc, toolsDoc])
 let body = 'x'.repeat(100) + '\nchild final output'
@@ -16,8 +16,8 @@ let entry = {
 }
 
 test('Line full retains multiline prose; the default stays a compact preview', () => {
-  let compact = render(views, entry, 'Line', vocab, {}, 'plain')
-  let full = render(views, entry, 'Line', vocab, { full: true }, 'plain')
+  let compact = render(sessionViews, entry, 'Line', vocab, {}, 'plain')
+  let full = render(sessionViews, entry, 'Line', vocab, { full: true }, 'plain')
   assert(compact.endsWith('x'.repeat(70)))
   assertEquals(compact.includes('child final output'), false)
   assert(full.endsWith(body))
@@ -26,7 +26,7 @@ test('Line full retains multiline prose; the default stays a compact preview', (
 test('Body omits metadata but retains resolved target and full prose', () => {
   let call = { ...entry, call: { to: 'tool' } }
   assertEquals(
-    render(views, call, 'Body', vocab, {
+    render(sessionViews, call, 'Body', vocab, {
       full: true,
       names: { tool: 'shell' },
     }, 'plain'),
@@ -34,7 +34,7 @@ test('Body omits metadata but retains resolved target and full prose', () => {
   )
   assertEquals(
     render(
-      views,
+      sessionViews,
       entry,
       'Body',
       vocab,
@@ -47,7 +47,7 @@ test('Body omits metadata but retains resolved target and full prose', () => {
 
 test('a session’s line is the word that reaches it, and no status it lacks', () => {
   let tile = (b: Bundle) =>
-    render(views, b, 'Tile', vocab, { id: () => 'S-3' }, 'plain')
+    render(sessionViews, b, 'Tile', vocab, { id: () => 'S-3' }, 'plain')
   let named = { entity: { eid: 's', num: 3 }, session: { id: 'abc' } }
   assertEquals(tile(named), 'S-3')
   assertEquals(

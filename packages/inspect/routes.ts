@@ -1,23 +1,32 @@
 /**
  * The routes facet, exported as `@yaks/inspect/routes`: the inspector's own
  * page. `/inspect` is the first page and `/inspect/<pane>/…` a stack of
- * pages (./where.ts); each answers the one document, which loads the page's script (./main.ts, bundled
- * by @yaks/cli `bundle`) and its stylesheet: @yaks/ui's kit in Everforest,
- * since every part the page draws is @yaks/ui's. What the page reads and
- * writes is @yaks/api's doors, so a host serves it with @yaks/api and this
- * package, and nothing else.
+ * pages (./where.ts); each answers the one document, which loads the page's
+ * script and its stylesheet: @yaks/ui's kit in Everforest, since every part
+ * the page draws is @yaks/ui's. What the page reads and writes is @yaks/api's
+ * doors, so a host serves it with @yaks/api and this package, and nothing
+ * else.
+ *
+ * The script is one bundle (@yaks/cli `bundle`) of an entry written for this
+ * host: it imports the `/views` of each plugin the config names that draws an
+ * inspector view of its own (./plugins.ts), and boots the page with them
+ * (./main.ts).
  *
  * @module
  */
 
 import type { Route } from '@yaks/api'
+import type { Plug } from '@yaks/cli/config'
 import { bundle, kept } from '@yaks/cli/page'
 import { everforest, stylesheet } from '@yaks/ui'
+import { contributed } from './plugins.ts'
 
 /** What this facet reads off the host it is composing into. */
 export type Hosting = {
   /** aborts as the host closes, ending the page's build if it is still going */
   stopping?: AbortSignal
+  /** the config it was composed from: its plugins may draw their own kinds */
+  config?: { plugins?: Plug[] }
 }
 
 /** The page every inspector address answers. */
@@ -29,6 +38,35 @@ export let PAGE = '<!doctype html><html><head><meta charset="utf-8">' +
 
 let css = () => stylesheet(everforest)
 
+/**
+ * The page's entry: `boot` with the inspector views each module of `specs`
+ * exports (./plugins.ts), ahead of the inspector's own.
+ *
+ * ```ts
+ * import { entry } from './routes.ts'
+ * entry('file:///i/main.ts', ['file:///m/views.ts'])
+ * // import { boot } from "file:///i/main.ts"
+ * // import { inspectViews as v0 } from "file:///m/views.ts"
+ * // boot([...v0])
+ * ```
+ */
+export let entry = (main: string, specs: string[]): string =>
+  [
+    `import { boot } from ${JSON.stringify(main)}`,
+    ...specs.map((s, i) =>
+      `import { inspectViews as v${i} } from ${JSON.stringify(s)}`
+    ),
+    `boot([${specs.map((_, i) => `...v${i}`).join(', ')}])`,
+  ].join('\n')
+
+// The page's script: the entry for this host's plugins, and all it imports.
+let app = async (host: Hosting, signal: AbortSignal) => {
+  let from = await contributed(host.config?.plugins ?? [])
+  let main = new URL('./main.ts', import.meta.url)
+  let specs = from.map((c) => import.meta.resolve(c.spec))
+  return await bundle({ code: entry(main.href, specs), at: main }, signal)
+}
+
 /** `/inspect`, `/inspect/<pane>/…`, and what their page loads. */
 export let routes = (host: Hosting = {}): Route[] => {
   let page = kept(
@@ -36,7 +74,6 @@ export let routes = (host: Hosting = {}): Route[] => {
     'text/html; charset=utf-8',
     () => Promise.resolve(PAGE),
   )
-  let app = new URL('./main.ts', import.meta.url)
   return [
     { method: 'GET', path: '/inspect', handle: page },
     { method: 'GET', path: '/inspect/*', handle: page },
@@ -47,7 +84,7 @@ export let routes = (host: Hosting = {}): Route[] => {
       handle: kept(
         '/inspect/app.js',
         'text/javascript; charset=utf-8',
-        (signal) => bundle(app, signal),
+        (signal) => app(host, signal),
         { early: true, closing: host.stopping },
       ),
     },

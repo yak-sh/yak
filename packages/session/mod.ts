@@ -80,7 +80,7 @@ export * from './react.ts'
 export * from './run.ts'
 export { admitNext } from './admission.ts'
 export * from './providers.ts'
-export * from './views.ts'
+export * from './lines.ts'
 export * from './readers.ts'
 
 export * from './children.ts'

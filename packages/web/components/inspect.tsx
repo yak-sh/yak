@@ -13,12 +13,15 @@ import {
   type Ask,
   type Asks,
   type Bundle,
+  composed,
   type Host,
   inspector,
   queryPath,
   stackOf,
-  views,
 } from '@yaks/inspect'
+import { inspectViews as memoryViews } from '@yaks/memory/views'
+import { inspectViews as sessionViews } from '@yaks/session/views'
+import { inspectViews as taskViews } from '@yaks/task/views'
 import { parse } from '@yaks/query'
 import {
   aggRead,
@@ -216,7 +219,12 @@ let host: Host = {
   name,
   when: (at) => ago(at),
 }
-let { Door } = inspector(views, host)
+// The kinds this app's packages draw their own way (a belief, a transcript
+// entry, a task), ahead of the page any entity has.
+let { Door } = inspector(
+  composed([...memoryViews, ...sessionViews, ...taskViews]),
+  host,
+)
 
 /** An entity's inspector page, as a card view. */
 export let Inspect = ({ e }: { e: Ent }) => {

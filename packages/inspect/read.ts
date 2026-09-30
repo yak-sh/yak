@@ -176,9 +176,112 @@ export let census = (
 
 /** The first line of a text, cut to `n` characters. */
 export let line = (text: unknown, n = 120): string => {
-  let first = String(text ?? '').split('\n')[0].trim()
+  let first = String(text ?? '').split('\n').map((l) => l.trim())
+    .find(Boolean) ?? ''
   return first.length > n ? first.slice(0, n - 1) + '…' : first
 }
+
+/**
+ * The text an entity holds for reading: a doc's body, else what a message
+ * says (`content.body`, a transcript entry's).
+ *
+ * ```ts
+ * import { bodyOf } from './read.ts'
+ * bodyOf({ entity: { eid: 'e' }, content: { body: 'hi' } }) // 'hi'
+ * ```
+ */
+export let bodyOf = (b: Bundle): string =>
+  str(b, 'doc', 'body') || str(b, 'content', 'body')
+
+/**
+ * Some words, cut where they run past `n` characters.
+ *
+ * ```ts
+ * import { cut } from './read.ts'
+ * cut('abcdef', 4) // 'abc…'
+ * cut('abc', 4) // 'abc'
+ * ```
+ */
+export let cut = (text: string, n: number): string =>
+  text.length > n ? text.slice(0, n - 1).trimEnd() + '…' : text
+
+/**
+ * What an entity is called, in words: its title; else the `name` its kind
+ * gives it (a topic's, a component's); else its id where it is numbered
+ * (`S-12`); else the first line of what it says (a transcript entry); else
+ * its kind and its handle (`process #1320a8ee61`). `id` is the id a person
+ * reads, and `kind` the kind it shows as.
+ *
+ * ```ts
+ * import { called } from './read.ts'
+ * let e = (b: object) => ({ entity: { eid: 'e1' }, ...b })
+ * called(e({ doc: { title: 'Fix it' } }), 'T-9', 'task') // 'Fix it'
+ * called(e({ topic: { name: 'naming' } }), '#e1', 'topic') // 'naming'
+ * called(e({ content: { body: '\nuse grams' } }), '#e1', 'entry') // 'use grams'
+ * called(e({ process: { pid: 1 } }), '#e1', 'process') // 'process #e1'
+ * ```
+ */
+export let called = (b: Bundle, id: string, kind: string): string =>
+  str(b, 'doc', 'title') || str(b, kind, 'name') ||
+  (b.entity.num != null ? id : '') || line(bodyOf(b), 80) ||
+  (kind && kind != 'entity' ? `${kind} ${id}` : id)
+
+/** Where an entity came from, said once in a quiet line rather than stated
+ * as a fact: who made and changed it and when, what built it, where it was
+ * imported from, when it was checked. */
+export let PROVENANCE = ['created', 'updated', 'built', 'imported', 'verified']
+
+/** What a page says in its head and its body rather than as facts. */
+let SAID = new Set(['entity', 'doc', 'content', ...PROVENANCE])
+
+/**
+ * The components a page states as facts, in the order they mean: the kinds
+ * it is, most specific first (the vocabulary's kind order); then what else it
+ * carries, by name; then the marks of what happened to it. What the head and
+ * the body say (its title, its text, where it came from) is left out, and so
+ * is anything in `skip`.
+ *
+ * ```ts
+ * import { loadVocab } from '@yaks/vocab'
+ * import { facts } from './read.ts'
+ * let c = (o = {}) => ({ component: true, properties: {}, ...o })
+ * let at = { type: 'string', stamped: true }
+ * let vocab = loadVocab([{ $defs: {
+ *   doc: c(), task: c({ kind: true }), filed: c(), claim: c(),
+ *   completed: c({ properties: { at, by: at } }),
+ *   created: c({ properties: { at, by: at } }),
+ * } }])
+ * facts(vocab, {
+ *   entity: { eid: 'e' }, completed: {}, created: {}, filed: {}, doc: {},
+ *   task: {}, claim: {},
+ * }) // ['task', 'claim', 'filed', 'completed']
+ * ```
+ */
+export let facts = (
+  vocab: Pick<Io['vocab'], 'kinds' | 'comp'>,
+  b: Bundle,
+  skip: string[] = [],
+): string[] => {
+  let has = comps(b).map(([n]) => n)
+    .filter((n) => !SAID.has(n) && !skip.includes(n))
+  let kinds = vocab.kinds.filter((k) => has.includes(k))
+  let rest = has.filter((n) => !kinds.includes(n)).toSorted()
+  let marks = rest.filter((n) => vocab.comp(n)?.mark)
+  return [...kinds, ...rest.filter((n) => !marks.includes(n)), ...marks]
+}
+
+/**
+ * A long hash, as far as a reader needs it: its first ten characters.
+ *
+ * ```ts
+ * import { brief } from './read.ts'
+ * brief('f07941748e70ecf0a7272d9a05dba89f0b98cb1cde9709b12a6e1e711ef3621b')
+ * // 'f07941748e…'
+ * brief('open') // 'open'
+ * ```
+ */
+export let brief = (v: string): string =>
+  /^[0-9a-f]{41,}$/.test(v) ? v.slice(0, 10) + '…' : v
 
 /**
  * The relation an edge's entity states: the component beside `edge` that the

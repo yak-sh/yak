@@ -162,6 +162,11 @@ let TRIES = 3
 /** The longest a bundle takes, every try together. */
 export let BUNDLE_LIMIT = TRY * TRIES
 
+/** An entry written where it is bundled rather than read from a file: its
+ * `code`, whose imports resolve as they would in a module at `at`. A page
+ * composed of what a config's plugins contribute starts from one. */
+export type Written = { code: string; at: URL }
+
 /** One file of browser JavaScript: `entry` and everything it imports, by
  * `deno bundle`. Aborting `signal` kills the bundler.
  *
@@ -170,9 +175,10 @@ export let BUNDLE_LIMIT = TRY * TRIES
  * it does there. From JSR it is a URL, and the bundler runs in a directory of
  * its own under the config a release resolves by (./release.ts): on the day
  * this one published the rest of it is exactly as new, and a bundler waiting
- * a day for it would find none. */
+ * a day for it would find none. An entry `Written` here is put beside the
+ * bundle and read the same way, from where it says it is. */
 export let bundle = async (
-  entry: URL,
+  entry: URL | Written,
   signal?: AbortSignal,
 ): Promise<string> => {
   for (let tried = 1;; tried++) {
@@ -191,15 +197,23 @@ export let bundle = async (
 }
 
 // One try: the bundler, killed if `stop` aborts.
-let once = async (stop: AbortSignal, entry: URL): Promise<string> => {
+let once = async (
+  stop: AbortSignal,
+  entry: URL | Written,
+): Promise<string> => {
   let dir = await Deno.makeTempDir({ prefix: `${PREFIX}${Deno.pid}-` })
   await sweep(dir.slice(0, dir.lastIndexOf('/')))
   try {
     let to = `${dir}/app.js`
-    let local = entry.protocol == 'file:'
+    let at = entry instanceof URL ? entry : entry.at
+    let local = at.protocol == 'file:'
     if (!local) {
       await Deno.writeTextFile(`${dir}/deno.json`, JSON.stringify(released))
     }
+    let from = entry instanceof URL
+      ? local ? entry.pathname : entry.href
+      : `${dir}/entry.ts`
+    if (!(entry instanceof URL)) await Deno.writeTextFile(from, entry.code)
     let run = await new Deno.Command(Deno.execPath(), {
       args: [
         'bundle',
@@ -209,9 +223,9 @@ let once = async (stop: AbortSignal, entry: URL): Promise<string> => {
         '--minify',
         '-o',
         to,
-        local ? entry.pathname : entry.href,
+        from,
       ],
-      cwd: local ? new URL('./', entry).pathname : dir,
+      cwd: local ? new URL('./', at).pathname : dir,
       stdout: 'piped',
       stderr: 'piped',
       signal: stop,

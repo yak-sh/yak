@@ -1,0 +1,39 @@
+/* Words somebody said: the words under a bar in the accent, then who, when
+   and where, small and dim; a note on them dimmer still, never read as the
+   words. */
+.Quote {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  max-width: var(--measure);
+}
+.Quote_Text {
+  margin: 0;
+  padding: 2px 0 2px var(--gap);
+  border-left: 3px solid var(--accent);
+  color: var(--text);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.Quote_By {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--half-gap);
+  padding-left: calc(var(--gap) + 3px);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+}
+.Quote_Sep {
+  color: var(--border2);
+}
+.Quote_Note {
+  margin: 0;
+  padding-left: calc(var(--gap) + 3px);
+  font-size: 12px;
+  font-style: italic;
+  color: var(--dim);
+}

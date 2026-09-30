@@ -23,7 +23,7 @@ import { Button, Field, Notes, Say, Section } from '@yaks/ui'
 import type { Bundle, Io } from './host.ts'
 import { comp, count, line, named, str } from './read.ts'
 import { rows } from './rows.ts'
-import { key, me, put, refusal, write } from './state.ts'
+import { edited, key, me, put, refusal, write } from './state.ts'
 
 /** How many notes a page reads. */
 export let NOTES = 100
@@ -210,13 +210,15 @@ export let Said = (p: Said): JSX.Element | null => {
     : null
 }
 
-/** The press that opens a heading's note line, and closes it. */
+/** The press that opens a heading's note line, and closes it: the head's on
+ * any page where the controls take input, a part's while its page is
+ * edited. */
 export let NoteButton = (
   { io, eid, heading, subject }: Omit<Said, 'notes'>,
 ): JSX.Element | null => {
   let at = key(eid, heading)
   let open = me(io).note == at
-  return io.edits
+  return io.edits && (!heading || open || edited(io, eid))
     ? h(Button, {
       type: 'button',
       mod: 'quiet',

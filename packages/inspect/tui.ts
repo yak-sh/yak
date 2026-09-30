@@ -44,7 +44,8 @@ import { docs as own } from './front.ts'
 import { live } from './live.ts'
 import { INSPECT, me, put, STACK, stack } from './state.ts'
 import { HOME, pagePath, queryPath, stackOf } from './where.ts'
-import { views } from './views.ts'
+import { composed } from './views.ts'
+import type { View } from './host.ts'
 
 // What the walk is on wears the painter's own mark for a selected row, in
 // the theme's colours (@yaks/ui `sheet`).
@@ -113,9 +114,14 @@ let linkOf = (el: TElement | null | undefined): string | undefined => {
 
 /**
  * Hold the inspector in this terminal until q or Ctrl-C, over the server at
- * `url`, opening at `href` (an inspector address).
+ * `url`, opening at `href` (an inspector address), with `more` views ahead
+ * of its own (./plugins.ts).
  */
-export let open = async (url: string, href: string): Promise<void> => {
+export let open = async (
+  url: string,
+  href: string,
+  more: View[] = [],
+): Promise<void> => {
   let answered = await fetch(`${url}/vocab`).catch(() => undefined)
   if (!answered?.ok) {
     await answered?.body?.cancel()
@@ -147,7 +153,7 @@ export let open = async (url: string, href: string): Promise<void> => {
   })
   let typing = signal(false)
   let host = live({ box, front, edits: false })
-  let door = inspector(views, host)
+  let door = inspector(composed(more), host)
   let Frame = frame(door, {
     fields,
     Bar: ({ id }) =>

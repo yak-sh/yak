@@ -8,6 +8,8 @@
 // the bundle lacks the marks, so a task read as `.task` alone still says done.
 // A bundle built by hand may carry neither, which is why this matches the
 // component rather than a status.
+//
+// Beside it, as the inspector draws them, a task's page (./inspect.ts).
 
 import { parse } from '@yaks/query'
 import { define, type Registry } from '@yaks/render'
@@ -30,3 +32,5 @@ export let views: Registry = define([
     },
   },
 ])
+
+export { inspectViews } from './inspect.ts'

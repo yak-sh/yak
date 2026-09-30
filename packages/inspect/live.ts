@@ -25,7 +25,7 @@ import { human, short } from '@yaks/id'
 import { parse } from '@yaks/query'
 import { relative } from '@yaks/ui'
 import type { Answer, Ask, Asks, Bundle, Front, Host } from './host.ts'
-import { comp, tables } from './read.ts'
+import { called, comp, tables } from './read.ts'
 import { follow, stack } from './state.ts'
 import { pagePath, queryPath } from './where.ts'
 
@@ -175,11 +175,13 @@ export let live = ({ box, front, edits }: LiveOpts): Host => {
   // a link to it says are one spelling.
   let id = (b: Bundle): string => format(kinded(b))
 
-  // What an entity is called: its title, or the id a person reads.
+  let kind = (b: Bundle) => vocab.kindOf(kinded(b)) || 'entity'
+
+  // What an entity is called (./read.ts `called`); one not held yet, its
+  // handle.
   let name = (eid: string): string => {
     let b = get(eid)
-    let title = (b?.doc as { title?: unknown } | undefined)?.title
-    return typeof title == 'string' && title ? title : b ? id(b) : short(eid)
+    return b ? called(b, id(b), kind(b)) : short(eid)
   }
 
   return {
@@ -202,7 +204,7 @@ export let live = ({ box, front, edits }: LiveOpts): Host => {
         follow(stack({ state: (eid) => front.ent(eid) }), href),
       ]),
     id,
-    kind: (b) => vocab.kindOf(kinded(b)) || 'entity',
+    kind,
     name,
     when: (at) => relative(at),
   }

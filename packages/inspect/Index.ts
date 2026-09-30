@@ -17,7 +17,7 @@ import { h, type JSX } from 'preact'
 import * as ui from '@yaks/ui'
 import type { Vocab } from '@yaks/vocab'
 import type { Io } from './host.ts'
-import { compEid, packEid } from './links.ts'
+import { compEid, packEid } from './schema.ts'
 
 /**
  * The groups an index shows for `text`: each package with the components it

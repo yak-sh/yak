@@ -357,15 +357,19 @@ The main module exports:
 - inspection: `statusOf()`, `kindOf()`, `textOf()`, `ordered()`,
   `sessionDerived`, and the bounded transcript functions;
 - identity and rendering: `sessionFor()`, `sessionEid()`, `speaking()`,
-  `where()`, and `views`;
+  `where()`, and `sessionViews`, the portable transcript renderers;
 - harness readers: `claude`, `subagent`, `codex`, `readers`, and `scrub()`;
 - error types including `Bounced`, `Unnamed`, and `UnknownSession`.
 
 Additional entry points are `@yaks/session/vocab`, `/rules` (with
 `authenticate`), `/tools`, `/views`, `/service` (the duty that reads
-transcripts), and `/tail` (the importer). A **host** is the process that opened
-the graph; effects and tools receive its graph and, where needed, its process
-entity ID.
+transcripts), and `/tail` (the importer). `/views` is `views`, the portable
+renderers, and `inspectViews`, how the inspector (@yaks/inspect) draws an entry
+and a session: an entry as a turn of its conversation (`Inspect.Turn`), the
+turns either side of it (`Inspect.Conversation`, what a belief citing the entry
+shows), the entry's page inside its conversation, and a session's page with its
+status, brief and latest turns. A **host** is the process that opened the graph;
+effects and tools receive its graph and, where needed, its process entity ID.
 
 <a id="what-is-deliberately-not-here"></a>
 <a id="compatibility"></a>

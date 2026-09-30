@@ -46,6 +46,7 @@ import {
   providerResolver,
   type Runner,
   running,
+  sessionViews,
   statusOf,
   type Step,
   taskEntry,
@@ -56,7 +57,6 @@ import {
   type TranscriptWindow,
   transcriptWindow,
   usingBefore,
-  views,
 } from '@yaks/session'
 import { outputView, promptEntry, type Snapshot } from '@yaks/context'
 import { render } from '@yaks/text'
@@ -596,7 +596,7 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
       }
     }),
     line: (b, view = 'Line', ctx = {}) =>
-      render(views, b, view, h.vocab, {
+      render(sessionViews, b, view, h.vocab, {
         names,
         anchor: r.model.anchor,
         ...ctx,

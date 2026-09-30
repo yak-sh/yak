@@ -29,7 +29,7 @@ import {
   views,
 } from './mod.ts'
 import { docs } from './front.ts'
-import { compEid } from './links.ts'
+import { compEid } from './schema.ts'
 
 // A graph of tasks, their owners and the edges between them.
 let vocab = loadVocab([{
@@ -211,9 +211,33 @@ let type = async (p: ReturnType<typeof mount>, was: string, to: string) => {
   await p.fire(edit, 'keydown', 'Enter')
 }
 
-test('an entity page shows each component and writes a value typed over in place', async () => {
+// The press on a page's head that turns its controls on.
+let edit = (p: ReturnType<typeof mount>) =>
+  p.fire(
+    [...p.root.querySelectorAll('button')].find((b) =>
+      b.textContent == 'edit'
+    )!,
+    'click',
+  )
+
+test('an entity page is read, its references by name, until the reader asks to edit it', async () => {
   using t = host()
   using p = mount(t.draw(h(t.Door, { e: T1, view: 'Inspect.Page' })))
+  assert(p.text('h1').includes('N-t1'))
+  assertEquals(p.text(`[data-facts] a[href="${pagePath(P1)}"]`), `N-${P1}`)
+  assert(p.text('[data-facts]').includes('open'))
+  // Nothing is offered to type over, nor to remove, until it is asked for.
+  assertEquals(value(p, 'open'), undefined)
+  assertEquals(p.root.querySelector('[aria-label="remove task"]'), null)
+  await edit(p)
+  assert(value(p, 'open'))
+  assert(p.root.querySelector('[aria-label="remove task"]'))
+})
+
+test('an entity page, edited, writes a value typed over in place', async () => {
+  using t = host()
+  using p = mount(t.draw(h(t.Door, { e: T1, view: 'Inspect.Page' })))
+  await edit(p)
   assert(value(p, 'Fix the map'))
   assert(p.text('[data-section="task"]').includes('Work to be done.'))
   // What the server owns is shown, never offered.
@@ -257,6 +281,8 @@ test('a note under a heading is a comment on the entity that is an open task', a
     },
   })
   using p = mount(t.draw(h(t.Door, { e: T1, view: 'Inspect.Page' })))
+  assert(p.text('[data-facts]').includes('owner should be required'))
+  await edit(p)
   assert(p.text('[data-section="task"]').includes('owner should be required'))
   assert(!p.text('[data-section="doc"]').includes('owner should be required'))
   await p.fire(
@@ -286,10 +312,12 @@ test('an edge is added by its relation and far end, and its × removes it', asyn
   }
   using t = host({ '.refs=t1&.limit=200': { rows: [edge] } })
   using p = mount(t.draw(h(t.Door, { e: T1, view: 'Inspect.Page' })))
+  assert(p.text('[data-section="Links"]').includes('requires'))
   assertEquals(
-    p.text(`[data-section="Edges"] a[href="${pagePath('t2')}"]`),
+    p.text(`[data-section="Links"] a[href="${pagePath('t2')}"]`),
     'N-t2',
   )
+  await edit(p)
   await p.fire(p.$('[aria-label="remove this requires edge"]'), 'click')
   assertEquals(t.applied.at(-1), [{ entity: { eid: 'e1' }, $delete: true }])
   // linkedom selects no first option, as a browser does
@@ -306,7 +334,7 @@ test('an edge is added by its relation and far end, and its × removes it', asyn
   to.value = 'T-404'
   await p.fire(to.closest('form')!, 'submit')
   await tick()
-  assert(p.text('[data-section="Edges"]').includes("no entity 'T-404'"))
+  assert(p.text('[data-section="Links"]').includes("no entity 'T-404'"))
 })
 
 test("a component's entities run by a pressed heading, a page at a time", async () => {
@@ -408,10 +436,10 @@ test('the index lists what the vocabulary serves, narrowed by what is typed in i
 test('a terminal paints a page as values, with nothing to type in', () => {
   using t = host({}, false)
   let painted = print(h(t.Door, { e: T1, view: 'Inspect.Page' }), 100)
-  for (let word of ['Fix the map', 'status', 'open', 'Edges', 'History']) {
+  for (let word of ['N-t1', 'status', 'open', 'History']) {
     assert(painted.includes(word), word)
   }
-  for (let control of ['note', '+ component', 'delete']) {
+  for (let control of ['note', 'edit', '+ component', 'delete']) {
     assert(!painted.includes(control), control)
   }
 })

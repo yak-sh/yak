@@ -22,11 +22,12 @@ import { type ComponentChildren, h, type JSX } from 'preact'
 import { Timeline, Value } from '@yaks/ui'
 import type { Bundle, Io } from './host.ts'
 import { paged, Paging } from './grid.ts'
-import { chip } from './links.ts'
+import { chip } from './schema.ts'
 import { about, Part, useNamed } from './notes.ts'
-import { comp, face, line, shape, str, unique } from './read.ts'
+import { comp, named, str, unique } from './read.ts'
 import { none, rows, waiting } from './rows.ts'
 import { key } from './state.ts'
+import { mention, reads } from './value.ts'
 
 /** How many changes a page of history holds. */
 export let CHANGES = 40
@@ -36,24 +37,40 @@ type Row = Record<string, unknown>
 // A change's value: the component as it was written, or null where it went.
 let value = (b: Bundle) => comp(b, '_change').value as Row | null | undefined
 
-// One property's change: what it was, and what it became.
-let moved = (prop: string, was: unknown, now: unknown, known: boolean) =>
-  h(
+// One property's change: what it was, and what it became, each as a person
+// reads it (a reference by name, a moment in words, a hash cut short).
+let moved = (
+  io: Io,
+  name: string,
+  prop: string,
+  was: unknown,
+  now: unknown,
+  known: boolean,
+) => {
+  let p = io.vocab.prop(name, prop)
+  return h(
     'span',
     { key: prop },
     h(Value, { mod: 'id' }, prop),
     ' ',
-    known ? [h(Value, { mod: shape(was) }, line(face(was), 60)), ' → '] : null,
-    h(Value, { mod: shape(now) }, line(face(now), 80)),
+    known ? [reads(io, was, p), ' → '] : null,
+    reads(io, now, p),
   )
+}
 
 /**
- * What one change did, property by property, given the change before it
- * (the next older one of the same component on the same entity) where the
- * page holds it: each property that moved, or every one it wrote when what
- * came before is not known; only `prop`, where one is named.
+ * What one change did to the component `name`, property by property, given
+ * the change before it (the next older one of the same component on the same
+ * entity) where the page holds it: each property that moved, or every one it
+ * wrote when what came before is not known; only `prop`, where one is named.
  */
-let did = (b: Bundle, older?: Bundle, prop?: string): ComponentChildren[] => {
+let did = (
+  io: Io,
+  name: string,
+  b: Bundle,
+  older?: Bundle,
+  prop?: string,
+): ComponentChildren[] => {
   let now = value(b)
   if (now == null) return ['removed']
   let was = older ? value(older) ?? {} : undefined
@@ -62,9 +79,13 @@ let did = (b: Bundle, older?: Bundle, prop?: string): ComponentChildren[] => {
     (!was || JSON.stringify(was[p]) != JSON.stringify(now[p]))
   )
   return props.length
-    ? props.map((p) => moved(p, was?.[p], now[p], !!was))
+    ? props.map((p) => moved(io, name, p, was?.[p], now[p], !!was))
     : ['wrote what it held']
 }
+
+// Every entity the values of these changes name, so each reads by name.
+let mentioned = (all: Bundle[]): string[] =>
+  all.flatMap((b) => Object.values(value(b) ?? {}).filter(named)).slice(0, 60)
 
 /** What a history is drawn with. */
 export type HistoryProps = {
@@ -115,6 +136,7 @@ export let History = (p: HistoryProps): JSX.Element => {
     ...txs.flatMap((x) => [t(x).by as string, t(x).via as string]),
     ...about1 ? all.map((b) => str(b, '_change', 'target')) : [],
   ])
+  useNamed(io, mentioned(all))
   let name = (b: Bundle) =>
     str(io.get(str(b, '_change', 'comp')), '_comp', 'name') || '…'
   // The next older change of the same component on the same entity.
@@ -152,17 +174,15 @@ export let History = (p: HistoryProps): JSX.Element => {
                 w.at ? io.when(String(w.at)) : `#${w.seq ?? '…'}`,
               ),
             ),
-            h(Timeline.Who, {}, by ? io.name(by) : ''),
-            via ? ['via', h(Timeline.Who, {}, io.name(via))] : null,
+            h(Timeline.Who, {}, by ? mention(io, by) : ''),
+            via ? ['via', h(Timeline.Who, {}, mention(io, via))] : null,
             cs.map((b) =>
               h(
                 Timeline.What,
                 { key: b.entity.eid },
-                about1
-                  ? h('a', { href: io.link(target(b)) }, io.name(target(b)))
-                  : null,
+                about1 ? mention(io, target(b)) : null,
                 chip(io, name(b)),
-                ...did(b, older(b), p.prop),
+                ...did(io, name(b), b, older(b), p.prop),
               )
             ),
           )

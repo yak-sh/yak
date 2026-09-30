@@ -39,9 +39,9 @@ import {
   OUTPUT,
   SESSION,
   sessionFor,
+  sessionViews,
   statusOf,
   textOf,
-  views,
 } from '@yaks/session'
 import { render } from '@yaks/text'
 import { CallError } from '@yaks/tools'
@@ -281,7 +281,7 @@ export let runs = (_host: Host, options: Options = {}): Runs => {
         [
           `${human(graph.vocab)(row)} — ${status}`,
           ...shown.map((b) =>
-            render(views, b, 'Line', graph.vocab, {
+            render(sessionViews, b, 'Line', graph.vocab, {
               full: true,
               maxChars: 16_384,
             }, 'plain')

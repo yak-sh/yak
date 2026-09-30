@@ -7,7 +7,8 @@
  *
  * - `el`, `block`: the builders every part is made from (el.ts).
  * - `Dot`, `Id`, `Stamp`, `Tabs`, `Menu`, `Tip`, `Field`, `Choices`, `Button`,
- *   `Chip`, `Value`, `Pairs`, `Tile`, `Rows`, `Section`, `Timeline`, `Stack`,
+ *   `Chip`, `Value`, `Pairs`, `Tile`, `Rows`, `Section`, `Timeline`, `Turns`,
+ *   `Body`, `Quote`, `Stack`,
  *   `Edit`, `Prop`, `Overlay`, `Table`, `Pager`, `Panes`, `Head`, `Notes`,
  *   `Say`, `Index`, `Catalog`, `Gallery`: the parts; `groups`, the parts by
  *   what they are for, and `kit`, all of them (kit.ts).
@@ -33,6 +34,7 @@ export { Tabs } from './Tabs.ts'
 export { Tip } from './Tip.ts'
 export { Field, type FieldProps } from './Field.ts'
 export { Choices } from './Choices.ts'
+export { Body } from './Body.ts'
 export { Button } from './Button.ts'
 export { Catalog } from './Catalog.ts'
 export { Chip, hues } from './Chip.ts'
@@ -53,6 +55,7 @@ export {
 export { Pager } from './Pager.ts'
 export { Panes } from './Panes.ts'
 export { Prop } from './Prop.ts'
+export { Quote } from './Quote.ts'
 export { Say } from './Say.ts'
 export { type Col, Table, type TableProps } from './Table.ts'
 export { Pairs } from './Pairs.ts'
@@ -61,6 +64,7 @@ export { Section } from './Section.ts'
 export { Stack } from './Stack.ts'
 export { Tile } from './Tile.ts'
 export { Timeline } from './Timeline.ts'
+export { Turns } from './Turns.ts'
 export { Value } from './Value.ts'
 export { everforest } from './everforest.ts'
 export { rosepine } from './rosepine.ts'

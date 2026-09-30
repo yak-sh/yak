@@ -21,6 +21,7 @@ export let INSPECT = 'inspect'
 /** The page's state. */
 export type Inspector = {
   pane?: 'index' | 'page' | null
+  editing?: string | null
   note?: string | null
   armed?: string | null
   said?: string | null
@@ -71,6 +72,11 @@ export let stack = (io: Pick<Io, 'state'>): Bundle =>
  */
 export let follow = (b: Bundle, href: string): Bundle =>
   (stackOf(href) ?? []).reduce((s, pane) => stacked(s, pane), b)
+
+/** Whether the page of the entity `eid` shows its controls: where the host's
+ * take input, once the reader asked to edit it. */
+export let edited = (io: Pick<Io, 'state' | 'edits'>, eid: string): boolean =>
+  io.edits && me(io).editing == eid
 
 /** The key of a value, a heading or a table: its parts, spaced. */
 export let key = (...parts: string[]): string => parts.join(' ')

@@ -10,12 +10,16 @@
       "type": "object",
       "sync": "none",
       "durable": "connection",
-      "description": "the inspector's page, on the entity `inspect`: which pane has the keys, a note open, a delete armed and a refused write; what the index's field holds is the same entity's `filter` (@yaks/filter), and the panes it shows are a @yaks/ux `Stack` of its own",
+      "description": "the inspector's page, on the entity `inspect`: which pane has the keys, the page being edited, a note open, a delete armed and a refused write; what the index's field holds is the same entity's `filter` (@yaks/filter), and the panes it shows are a @yaks/ux `Stack` of its own",
       "properties": {
         "pane": {
           "type": "string",
           "enum": ["index", "page"],
           "description": "the pane that has the keys, in a terminal: the index, or the page on top of the stack"
+        },
+        "editing": {
+          "type": "string",
+          "description": "the eid of the entity whose page shows its controls: a page is read until the reader asks to edit it"
         },
         "note": {
           "type": "string",

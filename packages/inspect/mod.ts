@@ -13,9 +13,15 @@
  * @yaks/ux's `Edit`, whose host the page hands down over its own
  * (`editing`).
  *
- * - `views`: every view, as a registry: the `/views` facet (./views.ts).
+ * - `views`: every view, as a registry: the `/views` facet (./views.ts);
+ *   `composed(more)`, with the views other packages contribute ahead of them.
  * - `inspector(registry, host)`: the `Door` a host draws them through, and
  *   their `io` (./door.ts).
+ * - What a package's own page for its kind is built with besides the parts
+ *   any page has (`io.show(e, 'Inspect.Head')`): `Part`, a titled part with
+ *   its notes; `usePageNotes`, the notes by heading; `mention`, an entity by
+ *   its name, linked; `reads`, a value as a person reads it; `useNamed`, the
+ *   entities a part names, asked for.
  * - `frame(inspector, chrome)`: the index and the stack around them
  *   (./Frame.ts).
  * - `note`: the change that leaves a note under a heading (./notes.ts).
@@ -32,7 +38,12 @@
 
 export { type DoorProps, type Inspector, inspector } from './door.ts'
 export { type Chrome, frame } from './Frame.ts'
-export { note } from './notes.ts'
+export { note, Part, type PartProps, useNamed } from './notes.ts'
+export { type PageCtx, usePageNotes } from './Entity.ts'
+export type { HeadCtx } from './Head.ts'
+export type { FactsCtx } from './Facts.ts'
+export type { LinksCtx } from './Links.ts'
+export { mention, reads } from './value.ts'
 export type {
   Answer,
   Ask,
@@ -44,8 +55,8 @@ export type {
   Props,
   View,
 } from './host.ts'
-export { editing, follow, INSPECT, STACK } from './state.ts'
-export { all, views } from './views.ts'
+export { edited, editing, follow, INSPECT, STACK } from './state.ts'
+export { all, composed, views } from './views.ts'
 export {
   type At,
   at,

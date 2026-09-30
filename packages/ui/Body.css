@@ -1,0 +1,13 @@
+/* The text of a thing: the ink at a reading measure, its paragraphs and
+   quotes as the base sets prose. A short one is the gist: muted, smaller. */
+.Body {
+  min-width: 0;
+  max-width: var(--measure);
+  color: var(--text);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.Body-short {
+  color: var(--muted);
+  font-size: 12px;
+}
