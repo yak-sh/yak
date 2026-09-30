@@ -18,6 +18,7 @@
 // the ordinary door. It is never forwarded from anywhere a client can reach
 // (directory.ts vouch), so it cannot arrive from outside.
 import { type Bundle, Stale } from '@yaks/graph'
+import type { Hit } from '@yaks/embedding'
 import { type Door, type Namespace, PLATFORM_STORE, storeOf } from './door.ts'
 import { Pending, said } from './writes.ts'
 
@@ -30,6 +31,12 @@ export type Meta = {
     bundles: Bundle[],
     headers?: Record<string, string>,
   ) => Promise<Bundle[]>
+  /** words → the entities a filter line selects, nearest them in meaning
+   * first, where the store keeps vectors (graph.ts `/meaning`) */
+  meaning: (
+    words: string,
+    opts?: { within?: string; limit?: number },
+  ) => Promise<Hit[]>
 }
 
 /** The platform writing about its own data: server-owned properties admitted. */
@@ -61,7 +68,8 @@ let refusal = (text: string): { error?: string; message: string } | null => {
 /**
  * The graph's own doors over a store: `POST /apply` takes the bundles as they
  * are and answers the batch as applied, `GET /query?q=` takes the whole filter
- * line as one parameter. This is what graph.ts's Store serves, at the directory
+ * line as one parameter, and `GET /meaning?q=` ranks words by meaning among
+ * what the `within` line selects (the kernel's alone). This is what graph.ts's Store serves, at the directory
  * and at every app alike — {@link meta} is it aimed at `yak/platform`, and
  * unseen.ts aims it at one app's own store.
  */
@@ -98,6 +106,20 @@ export let metaOf = (
       method: 'POST',
       body: JSON.stringify(bundles),
     }, { ...base, ...headers })
+  },
+  meaning: (words, opts = {}) => {
+    let at = new URLSearchParams({ q: words })
+    if (opts.within) at.set('within', opts.within)
+    if (opts.limit != null) at.set('limit', String(opts.limit))
+    return store.consume(
+      `/meaning?${at}`,
+      async (r) => {
+        if (!r.ok) throw await answered(r)
+        return await r.json() as Hit[]
+      },
+      {},
+      { ...KERNEL, ...base },
+    )
   },
 })
 

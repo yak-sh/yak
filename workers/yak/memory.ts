@@ -13,21 +13,15 @@
 // space reads them; a writer writes them, the same seat every other write here
 // takes.
 //
-// How they are ranked. On Cloudflare, by meaning: Workers AI embeds the words,
-// Vectorize answers which memories are nearest, filtered to the space. That
-// index is made once, outside a deploy —
-//
-//   wrangler vectorize create yak-memories --dimensions=768 --metric=cosine
-//
-// — and until somebody has, or wherever the bindings are absent (`wrangler
-// dev`, the workerd probes), there is no ranker and the words rank themselves
-// through the store's own full-text index over `doc`, which is where a
-// memory's sentence lives. One line in the log says which, and nothing breaks.
-//
-// A save upserts the vector after the row is written, and never fails the
-// write: a memory the vector service did not hear about is still findable by
-// its words, and a memory refused because an embedding call timed out is the
-// person's sentence lost.
+// How they are ranked. By meaning: the directory keeps a vector beside every
+// text it holds, a memory's sentence among them, and ranks words against the
+// space's memories with an exact scan over its own vectors (embedding.ts,
+// graph.ts `/meaning`). A save writes the row and nothing else; the store makes
+// the vector once the write has committed. Words no vector answers — a memory
+// saved a moment ago, a directory with no model bound (`wrangler dev`, the
+// workerd probes) — rank themselves through the store's own full-text index
+// over `doc`, which is where a memory's sentence lives. Nothing breaks either
+// way.
 import {
   heard,
   LAST,
@@ -48,67 +42,22 @@ import { titling, vouched, type Who } from './session.ts'
 import { inSpace, type Row, SPACE, str, text, worded } from './tool.ts'
 import { caught } from './sentry.ts'
 
-/** The Vectorize index, and the Workers AI model whose vectors it holds. */
-export let INDEX = 'yak-memories'
-export let MODEL = '@cf/baai/bge-base-en-v1.5'
-
-// The words as one vector, or nothing where the model is not bound or did not
-// answer in the shape it documents. Never throws: every caller has a way to
-// carry on without it.
-let vector = async (env: Env, text: string): Promise<number[] | null> => {
-  if (!env.AI) return null
-  try {
-    let said = await env.AI.run(MODEL, { text: [text] }) as {
-      data?: number[][]
-    }
-    let one = said?.data?.[0]
-    return Array.isArray(one) && one.length ? one : null
-  } catch (e) {
-    caught(e, { request: 'memory embed' })
-    return null
-  }
-}
-
 /**
- * Ranking by meaning, where this host can: Vectorize over the space's own
- * memories. Absent — no index bound, no model bound — nothing is answered and
- * the caller ranks by the words instead.
+ * Ranking by meaning: the directory's vectors of the space's own memories,
+ * nearest first. A directory that cannot answer — no model bound, an outage —
+ * is a worse order, never a failed recall: it answers nothing, and the caller
+ * ranks by the words instead.
  */
-export let ranker = (env: Env): Ranker | undefined => {
-  let index = env.VECTORIZE
-  if (!index || !env.AI) return undefined
-  return async (words, scope) => {
-    let asked = await vector(env, words)
-    if (!asked) return []
-    // A vector service that is bound and cannot answer — an index nobody has
-    // created yet, `wrangler dev` refusing a binding it only serves remotely,
-    // an outage — is a worse order, never a failed recall: the caller ranks by
-    // the words instead.
-    try {
-      let found = await index.query(asked, {
-        topK: scope.limit,
-        filter: { space: scope.space },
-      })
-      return (found?.matches ?? []).map((m) => m.id)
-    } catch (e) {
-      caught(e, { request: 'memory recall', space: scope.space })
-      return []
-    }
-  }
-}
-
-// The vector for one memory, filed under its own eid with the space beside it,
-// so a query is answered within one space and a deleted memory is one id to
-// forget. Failure is a log line: the row is already written.
-let filed = async (env: Env, eid: string, space: string, said: string) => {
-  let index = env.VECTORIZE
-  if (!index) return
+export let ranker = (env: Env): Ranker => async (words, scope) => {
   try {
-    let values = await vector(env, said)
-    if (!values) return
-    await index.upsert([{ id: eid, values, metadata: { space } }])
+    let hits = await meta(env).meaning(words, {
+      within: line({ space: scope.space, limit: scope.limit }),
+      limit: scope.limit,
+    })
+    return hits.map((h) => h.entity)
   } catch (e) {
-    caught(e, { request: 'memory file', space })
+    caught(e, { request: 'memory recall', space: scope.space })
+    return []
   }
 }
 
@@ -136,21 +85,14 @@ export let memories = async (
   let limit = ask.limit ?? LAST
   let said = (ask.said ?? '').trim()
   if (said) {
-    let rank = ranker(env)
-    if (rank) {
-      let ids = await rank(said, { space: space.eid, limit })
-      let held = ids.length
-        ? ordered(
-          ids,
-          await read(env, line({ space: space.eid, limit, eids: ids })),
-        )
-        : []
-      if (held.length) return held
-    } else {
-      console.log(
-        'memory: no vector service bound — recall is ranking by words',
+    let ids = await ranker(env)(said, { space: space.eid, limit })
+    let held = ids.length
+      ? ordered(
+        ids,
+        await read(env, line({ space: space.eid, limit, eids: ids })),
       )
-    }
+      : []
+    if (held.length) return held
     let hits = await read(env, line({ space: space.eid, limit, said }))
     if (hits.length) return hits
   }
@@ -158,8 +100,9 @@ export let memories = async (
 }
 
 /**
- * One memory kept: the person's words verbatim in the space's store, then the
- * vector beside them. Answers the memory as it was written.
+ * One memory kept: the person's words verbatim in the space's store, which
+ * makes their vector once the write has committed. Answers the memory as it
+ * was written.
  */
 export let remember = async (
   env: Env,
@@ -174,7 +117,6 @@ export let remember = async (
     ...vouched(who),
     ...await titling(dir, who.person),
   })
-  await filed(env, eid, space.eid, m.said.trim())
   return heard(wrote.find((b) => b.entity.eid == eid) ?? batch[0])
 }
 
@@ -298,8 +240,8 @@ let MEMORY: Row[] = [
  * a box. What this plugin adds is where they are loaded: the directory, which
  * is the one store a space has.
  *
- * The ranker is not a slot, and deliberately: it is read by `memories` above
- * out of bindings this host happens to hold, so a host with no Vectorize ranks
+ * The ranker is not a slot, and deliberately: it is the directory's own
+ * vectors, which every store keeps, so a directory with no model bound ranks
  * by the words and nothing about the contribution changes.
  */
 export let memoryPlugin: Plugin = {

@@ -1,15 +1,12 @@
 import { test } from '@yaks/testing'
-import { assertEquals, assertRejects } from '@std/assert'
+import { assertEquals } from '@std/assert'
 import {
   BUCKETS,
-  DIMENSIONS,
   DISPATCH,
   initialize,
-  METRIC,
   OAUTH_KV,
   type Run,
   SECRETS,
-  VECTORIZE,
 } from './yak-staging-init'
 
 let fake = (empty = false) => {
@@ -32,16 +29,6 @@ let fake = (empty = false) => {
         stderr: '',
       })
     }
-    if (key == 'vectorize list --json') {
-      return Promise.resolve({
-        success: true,
-        stdout: empty ? '[]' : JSON.stringify([{
-          name: VECTORIZE,
-          config: { dimensions: DIMENSIONS, metric: METRIC },
-        }]),
-        stderr: '',
-      })
-    }
     if (key == 'kv namespace list') {
       let rows = !empty || made ? [{ title: OAUTH_KV, id: 'kv-id' }] : []
       return Promise.resolve({
@@ -61,10 +48,9 @@ test('yak-staging-init reports existing resources without creating them', async 
   let lines: string[] = []
   assertEquals(await initialize(run, (line) => lines.push(line)), 'kv-id')
   assertEquals(calls.some((args) => args.includes('create')), false)
-  assertEquals(lines.slice(0, 4), [
+  assertEquals(lines.slice(0, 3), [
     `exists: dispatch namespace ${DISPATCH}`,
     `exists: R2 bucket ${BUCKETS[0]}`,
-    `exists: Vectorize index ${VECTORIZE}`,
     `exists: KV namespace ${OAUTH_KV}`,
   ])
   assertEquals(
@@ -82,40 +68,11 @@ test('yak-staging-init creates every missing resource once', async () => {
     [
       ['dispatch-namespace', 'create', DISPATCH],
       ['r2', 'bucket', 'create', BUCKETS[0]],
-      [
-        'vectorize',
-        'create',
-        VECTORIZE,
-        `--dimensions=${DIMENSIONS}`,
-        `--metric=${METRIC}`,
-      ],
       ['kv', 'namespace', 'create', OAUTH_KV],
     ],
   )
   assertEquals(
-    lines.slice(0, 4).every((line) => line.startsWith('created:')),
+    lines.slice(0, 3).every((line) => line.startsWith('created:')),
     true,
-  )
-})
-
-test('yak-staging-init refuses an incompatible existing index', async () => {
-  let { run } = fake()
-  let changed: Run = async (args) => {
-    if (args.join(' ') == 'vectorize list --json') {
-      return {
-        success: true,
-        stdout: JSON.stringify([{
-          name: VECTORIZE,
-          config: { dimensions: 3, metric: METRIC },
-        }]),
-        stderr: '',
-      }
-    }
-    return await run(args)
-  }
-  await assertRejects(
-    () => initialize(changed, () => {}),
-    Error,
-    `want ${DIMENSIONS}/${METRIC}`,
   )
 })

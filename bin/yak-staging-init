@@ -6,14 +6,7 @@
 import { fileURLToPath } from 'node:url'
 export let DISPATCH = 'yak-apps-staging'
 export let BUCKETS = ['yak-blobs-staging']
-export let VECTORIZE = 'yak-memories-staging'
 export let OAUTH_KV = 'yak-oauth-staging'
-
-// 768/cosine is the production index's declared shape in memory.ts and
-// wrangler.toml. The embedding model answers 768 values, so staging must not
-// silently create a differently shaped index under the same binding.
-export let DIMENSIONS = 768
-export let METRIC = 'cosine'
 
 // These are the deployed settings that are secrets, or optional settings the
 // Worker deliberately changes through `secret put` without a code deploy.
@@ -106,37 +99,6 @@ let ensureText = async (
   say(`${found ? 'exists' : 'created'}: ${kind} ${name}`)
 }
 
-type Index = { name: string; config?: { dimensions?: number; metric?: string } }
-
-let ensureVectorize = async (
-  run: Run,
-  say: (line: string) => void,
-) => {
-  let indexes = parse<Index[]>(
-    await ran(run, ['vectorize', 'list', '--json']),
-    'Vectorize index list',
-  )
-  let found = indexes.find((index) => index.name == VECTORIZE)
-  if (found) {
-    let shape = found.config
-    if (shape?.dimensions != DIMENSIONS || shape.metric != METRIC) {
-      throw new Error(
-        `${VECTORIZE} exists with ${shape?.dimensions ?? 'unknown'} dimensions` +
-          `/${shape?.metric ?? 'unknown'}, want ${DIMENSIONS}/${METRIC}`,
-      )
-    }
-  } else {
-    await ran(run, [
-      'vectorize',
-      'create',
-      VECTORIZE,
-      `--dimensions=${DIMENSIONS}`,
-      `--metric=${METRIC}`,
-    ])
-  }
-  say(`${found ? 'exists' : 'created'}: Vectorize index ${VECTORIZE}`)
-}
-
 type Namespace = { id: string; title: string }
 
 let namespaces = async (run: Run) =>
@@ -181,7 +143,6 @@ export let initialize = async (
       ['r2', 'bucket', 'create', bucket],
     )
   }
-  await ensureVectorize(run, say)
   let id = await ensureKV(run, say)
   say('')
   say(`Paste this into workers/yak/wrangler.toml: id = "${id}"`)

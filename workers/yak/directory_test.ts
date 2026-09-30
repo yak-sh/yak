@@ -195,6 +195,7 @@ test('a release reaches consumer and home through stale isolate caches', async (
   let reads = [0, 0]
   let isolate = (i: number) => {
     let store: Meta = {
+      meaning: () => Promise.resolve([]),
       query: (line) => {
         reads[i]++
         if (!line.includes('.app.space=s1')) return Promise.resolve([])

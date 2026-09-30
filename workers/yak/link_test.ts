@@ -49,6 +49,7 @@ let book = () => links(kv())!
 let store = () => {
   let rows: Bundle[] = []
   let at: Meta = {
+    meaning: () => Promise.resolve([]),
     query: () => Promise.resolve([...rows]),
     apply: (bundles) => {
       for (let b of bundles) {

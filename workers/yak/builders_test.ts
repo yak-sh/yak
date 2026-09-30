@@ -10,7 +10,7 @@ import type { Env } from './env.ts'
 import { BUDGET, monthOf } from './meter.ts'
 import { CATALOGUE, priceOf } from './models.ts'
 import { weigh } from '@yaks/model'
-import { platform } from './testing.ts'
+import { embeds, platform } from './testing.ts'
 
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let SOURCE = 'a0000000-0000-4000-8000-0000000000aa'
@@ -19,7 +19,7 @@ let MODEL = CATALOGUE.find((r) => r.offered && r.output > 0)!.name
 
 let app = async (models = 0, access = 'private') => {
   let asked: string[] = []
-  let AI = {
+  let AI = embeds({
     run: (model: string) => {
       asked.push(model)
       return Promise.resolve({
@@ -37,7 +37,7 @@ let app = async (models = 0, access = 'private') => {
       })
     },
     gateway: () => ({ getUrl: () => Promise.resolve('') }),
-  }
+  })
   let p = platform('a probe secret', { AI } as Partial<Env>)
   let dir = directory({ fetch: (r) => dirPart.fetch(r, p.env) }, true)
   await dir.apply({

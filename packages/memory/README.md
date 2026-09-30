@@ -112,10 +112,10 @@ type Ranker = (
 
 It returns semantically similar memory ids, closest first, and `ordered()`
 reorders the store's result to match. Nothing here knows how that is done: on
-Cloudflare it is Vectorize with an embedding from Workers AI, on a server it
-could be [@yaks/embedding](https://jsr.io/@yaks/embedding) over SQLite, and
-without a ranker the query filters by words and sorts by entity number. The
-library does not automatically call a ranker; the application does.
+yaks.app it is the store's own vectors, embedded by Workers AI and ranked by
+[@yaks/embedding](https://jsr.io/@yaks/embedding), and without a ranker the
+query filters by words and sorts by entity number. The library does not
+automatically call a ranker; the application does.
 
 An external vector index must use the same dimensions and similarity metric as
 the embedding model. Creating and updating that index is the server's

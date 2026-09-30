@@ -99,6 +99,7 @@ import {
   eq,
   notNull,
   render,
+  screen,
   select,
   table,
   val,
@@ -128,6 +129,14 @@ import {
   search,
 } from '@yaks/fts'
 import { admitSchema } from '@yaks/graph/schema'
+import {
+  drain,
+  type Field as Text,
+  left as unembedded,
+  meaning,
+  schema as vectorSchema,
+  semantic,
+} from '@yaks/embedding'
 import { after } from '@yaks/fp'
 import {
   type Actor,
@@ -209,6 +218,7 @@ import {
   step,
 } from './mover.ts'
 import { weighed } from './meter.ts'
+import { embedder, SPACE, texts } from './embedding.ts'
 import { directoryOf } from './directory.ts'
 import { commandWorker } from './dispatch.ts'
 import { vaultOf } from './vault.ts'
@@ -328,6 +338,7 @@ let shapeOf = (name: string, declared: string | null): Shape => {
     ...blobSchema(),
     ...schema(vocab, derived),
     ...ftsSchema(searchable, read),
+    ...vectorSchema(),
   ]
   // With the revision of the fitting that brings standing tables to it
   // (@yaks/sqlite `FIT`), which reads what it changes off the tables: a store
@@ -488,12 +499,11 @@ async (req) => {
   throw new Denied(String(who.by), held, 'viewer', 'read')
 }
 
-// The two pieces of the wider platform grammar an app's store refuses by name
-// rather than answering some other way (public/docs/querying.md, where both
-// are written down as this store's own limits). A work lane is the fleet's
-// board, which nothing here has; semantic ranking needs a vector index, which
-// nothing here has either — and an empty answer to a question about neither
-// would read as "no rows" rather than "not that question".
+// The piece of the wider platform grammar an app's store refuses by name
+// rather than answering some other way (public/docs/querying.md, where it is
+// written down as this store's own limit). A work lane is the fleet's board,
+// which nothing here has, and an empty answer to a question about one would
+// read as "no rows" rather than "not that question".
 // The three directives that reshape an answer into one value rather than a set
 // of rows. A line naming one is not a listing at all.
 type Agg = 'count' | 'distinct' | 'tally'
@@ -506,9 +516,6 @@ let unserved = (line: string): string | null => {
   for (let seg of line.split('&')) {
     if (seg.startsWith('work=')) {
       return 'work lanes are not served by this store'
-    }
-    if (/^\.order=-?similar$/.test(seg)) {
-      return 'semantic ranking is not served by this store'
     }
   }
   return null
@@ -646,6 +653,11 @@ export class Store {
   #effectsReady = false
   #effectWork: Promise<void> | null = null
   #effectAgain = false
+  // The text this object embeds, over the storage it was built on, and the
+  // drain of its queue in progress (`#embedding`).
+  #texts!: { sql: Driver; fields: Text[]; derived: Derived }
+  #vectorWork: Promise<void> | null = null
+  #vectorAgain = false
   // The schedules this object was born with, planted once (`#sown`), and
   // how long the ground lies fallow after a planting that threw: until when,
   // and how many throws the wait has doubled for.
@@ -816,8 +828,9 @@ export class Store {
         number: numbered(vocab),
         // The vocabulary says which prose is searched — @yaks/doc declares its
         // title and body, and an app's own vocab.json declares `"search": true`
-        // on whatever of its words it wants found. sqlite owns no index.
-        extend: [search(searchable)],
+        // on whatever of its words it wants found. sqlite owns no index. The
+        // same text has a vector each (`#embedding`), which `.near` ranks.
+        extend: [search(searchable), semantic(drive, { model: SPACE })],
         // A body is stored as its address (@yaks/blob `store: "blob"`), so the
         // reads and the `doc_value` view resolve it as prose. The FTS schema
         // receives the same resolution, keeping hashes out of the index
@@ -827,6 +840,7 @@ export class Store {
       observe,
       this.#measure,
     )
+    this.#texts = { sql: drive, fields: texts(vocab, derived), derived }
     // The schema this object stands at is one word (`shapeOf`): a wake under
     // the same vocabulary runs no DDL at all, and a deploy that added a
     // component raises its table on the next request. Every index the
@@ -943,6 +957,18 @@ export class Store {
           hooks: {
             effect: (bundles) => {
               for (let b of bundles) this.#people.delete(b.entity.eid)
+              return bundles
+            },
+          },
+        },
+        // A text the write changed, embedded once it has committed
+        // (`#embedding`). Its triggers queued it in the write's own statement,
+        // so a write that queued nothing costs one count.
+        {
+          name: 'yak/embed',
+          hooks: {
+            effect: (bundles) => {
+              if (this.#owes()) this.#embedding()
               return bundles
             },
           },
@@ -1675,6 +1701,7 @@ export class Store {
         await this.#sown()
         await this.#tick(Date.now())
         this.#workingEffects()
+        this.#embedding()
         await this.#moving()
       } finally {
         this.#profile?.flush()
@@ -1759,6 +1786,9 @@ export class Store {
     }
     this.#effectsReady = true
     this.#workingEffects()
+    // Whatever text is owed its vector, and, the first time, every text this
+    // store holds.
+    this.#embedding()
     // Rows a rule still owes here are moved from the alarm, never by the wake
     // that found them owing (mover.ts).
     if (this.#owing().length) await this.#arming(this.#soon())
@@ -1911,6 +1941,69 @@ export class Store {
     }).finally(() => {
       this.#effectWork = null
       if (this.#effectAgain) this.#workingEffects()
+    })
+  }
+
+  // ---- the vectors (@yaks/embedding, T-59101) -------------------------------
+  //
+  // A vector beside each text the vocabulary marks searched, made by the model
+  // embedding.ts names and kept in this object's own SQLite, which is what
+  // `.near` ranks. Triggers queue a text in the write's own statement; this
+  // drains the queue once a write has committed and from the alarm, a batch
+  // at a time, waiting on the model between batches, so requests interleave
+  // and none waits on it. It drains for a slice and comes back on the alarm
+  // for the rest: the first wake after this shipped, every store owes a
+  // vector for each text it holds, and it catches up behind its own traffic.
+  // A drain that fails goes to Sentry and comes back a minute later; `.near`
+  // ranks whatever is stored meanwhile.
+  static EMBED = 10_000
+
+  // Whether a text is owed its vector, which asks one count. An object whose
+  // schema is not standing yet owes nothing: it has no table to owe it in.
+  #owes = () =>
+    !!this.#texts && !!this.#get('schema') && unembedded(this.#texts.sql) > 0
+
+  #embedding = () => {
+    let model = embedder(this.#bind)
+    if (this.#refused || !this.#texts || !this.#get('schema') || !model) return
+    if (this.#vectorWork) {
+      this.#vectorAgain = true
+      return
+    }
+    let name = this.#name()
+    this.#vectorWork = (async () => {
+      // Back after this slice whatever becomes of it: an object evicted while
+      // it drains takes up the rest on its alarm.
+      if (this.#owes()) {
+        await this.#arming(
+          new Date(Date.now() + Store.EMBED + PAUSE).toISOString(),
+        )
+      }
+      do {
+        this.#vectorAgain = false
+        let { sql, fields } = this.#texts
+        let done = await drain(sql, fields, model, {
+          signal: AbortSignal.timeout(Store.EMBED),
+        })
+        // A text the model will not take is the text's, not the store's: it
+        // has no vector, and ranks by its words alone.
+        for (let r of done.refused) {
+          console.log(
+            'yak store embed refused',
+            name,
+            r.entity,
+            r.error.message,
+          )
+        }
+      } while (this.#vectorAgain)
+      if (this.#owes()) await this.#arming(this.#soon())
+    })().catch(async (error) => {
+      defect(error, { request: 'embedding', store: name })
+      await this.#arming(new Date(Date.now() + Store.RETRY).toISOString())
+        .catch((e) => defect(e, { request: 'embedding retry', store: name }))
+    }).finally(() => {
+      this.#vectorWork = null
+      if (this.#vectorAgain) this.#embedding()
     })
   }
 
@@ -2339,6 +2432,32 @@ export class Store {
         db: `do:${this.#get('name') ?? ''}`,
         bytes: this.#ctx.storage.sql.databaseSize,
       })
+    }
+    // Words ranked by meaning among what a filter line selects, nearest first
+    // (memory.ts): the words embedded by the model this store's vectors are
+    // in, and those vectors scanned (@yaks/embedding `meaning`). A store with
+    // no model bound answers nothing. The kernel's alone, like `/inspect`.
+    if (path == '/meaning') {
+      if (!kernel || request.method != 'GET') {
+        return json({ error: 'NotFound', message: 'no route' }, 404)
+      }
+      let at = new URL(request.url).searchParams
+      let model = embedder(this.#bind)
+      if (!model) return Response.json([])
+      try {
+        let within = at.get('within')
+        let { sql, fields, derived } = this.#texts
+        return Response.json(
+          await meaning(sql, fields, model, at.get('q') ?? '', {
+            limit: Number(at.get('limit') ?? 20),
+            screen: within
+              ? screen(parse(within), this.#vocab, { derived }) ?? undefined
+              : undefined,
+          }),
+        )
+      } catch (e) {
+        return refuse(e, request)
+      }
     }
     if (path == '/inspect') {
       if (!kernel || request.method != 'GET') {

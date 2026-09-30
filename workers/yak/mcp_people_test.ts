@@ -70,8 +70,8 @@ test('what the person said is kept, and read back whole', async () => {
     assertEquals(one.created.by.name, them.name)
 
     // Recall by words: whole, with the context under it. Ranked by meaning
-    // where a vector service is bound, and by the words themselves here,
-    // where none is.
+    // where the directory has a model to embed with, and by the words
+    // themselves here, where it has none.
     let found = await agent.tool('memory_recall', {
       words: 'grams',
       space: 'kitchen42',

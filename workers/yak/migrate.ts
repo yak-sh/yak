@@ -7,6 +7,7 @@
 // {@link respelled}). {@link BOUNDARIES} names the stored shapes this code
 // reads, for `yak admin deploys`.
 import { fields, schema as ftsSchema } from '@yaks/fts'
+import { schema as vectorSchema } from '@yaks/embedding'
 import { reserved } from '@yaks/durable-object'
 import {
   and,
@@ -417,8 +418,12 @@ export let install = (
       }),
   }
   for (let stmt of indexed(ready)) d.query(stmt)
-  // Search is app composition, after all indexed columns have been raised.
+  // Search is app composition, after all indexed columns have been raised:
+  // the full-text indexes, and the table the vectors are kept in beside the
+  // triggers that note which of them changed (@yaks/embedding). The triggers
+  // that queue text to embed are the sweep's own (graph.ts `#embedding`).
   for (let stmt of ftsSchema(fields(vocab), derived)) d.query(stmt)
+  for (let stmt of vectorSchema()) d.query(stmt)
   if (vocab.comp('archetype')) backfill(d, false)
   return unfit
 }

@@ -34,6 +34,7 @@ import { contentType } from '@std/media-types'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { Builder } from './build.ts'
 import type { Env, Inbound } from './env.ts'
+import { DIM, MODEL as EMBEDDER } from './embedding.ts'
 import { Store } from './graph.ts'
 import { Wire as Wired } from './stream.ts'
 import type { Limiter } from './rate.ts'
@@ -207,6 +208,25 @@ export type Turn = {
 }
 
 /**
+ * An `AI` binding stand-in that also answers the model every store embeds its
+ * text with (embedding.ts) as Workers AI does, a vector per text, so a store's
+ * own embedding never spends a turn a test scripted.
+ */
+export let embeds = <
+  A extends { run: (model: string, input: unknown) => Promise<unknown> },
+>(ai: A): A => ({
+  ...ai,
+  run: (model: string, input: unknown) =>
+    model == EMBEDDER
+      ? Promise.resolve({
+        data: (input as { text: string[] }).text.map((_, i) =>
+          Array.from({ length: DIM }, (_, j) => j == i % DIM ? 1 : 0)
+        ),
+      })
+      : ai.run(model, input),
+})
+
+/**
  * Workers AI, scripted: the `AI` binding answering the turns it was given, in
  * the binding's own shape (`{response, tool_calls, usage}`), so a test drives
  * the whole provider (@yaks/workers-ai, as builder.ts hands it the loop) — the
@@ -216,7 +236,7 @@ export type Turn = {
 export let ai = (script: Turn[]) => {
   let asked: { model: string; input: Record<string, unknown> }[] = []
   let at = 0
-  return {
+  return embeds({
     asked,
     run: (model: string, input: unknown) => {
       asked.push({ model, input: input as Record<string, unknown> })
@@ -230,7 +250,7 @@ export let ai = (script: Turn[]) => {
     // The gateway a Workers AI binding can name is nobody's here: nothing on
     // this platform reaches OpenAI (builder.ts, T-34238).
     gateway: () => ({ getUrl: () => Promise.resolve('') }),
-  }
+  })
 }
 
 /**

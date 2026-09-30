@@ -437,17 +437,23 @@ prefix-matches, and quotes make a phrase:
 Words and filters mix freely in one filter, which is why a search box can hand
 its whole string to `query()` and a saved filter is a valid search.
 
+## Near in meaning
+
+Every text the store searches has a meaning too. `.near=<eid>` selects the eight
+entities closest in meaning to that one, among what the rest of the filter
+selects, and `.order=similar` puts the closest first:
+
+    await query(`.near=${eid}&.recipe&.order=similar`)   // recipes like this one
+
+A text just written is found this way a moment later, once its meaning has been
+worked out; an entity with no text has no neighbours.
+
 ## What this store will not do
 
-Two pieces of the wider platform grammar are refused in an app's store, by name,
+One piece of the wider platform grammar is refused in an app's store, by name,
 rather than quietly doing something else:
 
     .doc&work=build       → work lanes are not served by this store
-    .doc&.order=similar   → semantic ranking is not served by this store
-
-There is no vector search in an app's store, so `.near=<eid>` alone changes
-nothing about the answer — do not reach for it. Ranking is what a text term
-gives you.
 
 `.kind=` knows the platform's own components only (`.kind=task`,
 `.kind=comment`); a component of your own is not a kind to it, and

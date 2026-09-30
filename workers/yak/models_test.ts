@@ -19,7 +19,7 @@ import { priceOf } from './models.ts'
 import { weigh } from '@yaks/model'
 import { parseTools } from '@yaks/tools/declared'
 import type { VocabDoc } from '@yaks/vocab'
-import { platform } from './testing.ts'
+import { embeds, platform } from './testing.ts'
 import * as apps from './apps.ts'
 import { ctxOf } from './connections.ts'
 import { as as signedIn, visit } from './serving-probe.ts'
@@ -46,14 +46,14 @@ let vale = async (
   } = {},
 ) => {
   let asked: Asked[] = []
-  let AI = {
+  let AI = embeds({
     run: (model: string, input: unknown) => {
       let a = { model, input: input as Record<string, unknown> }
       asked.push(a)
       return Promise.resolve(answer(a, asked.length))
     },
     gateway: () => ({ getUrl: () => Promise.resolve('') }),
-  }
+  })
   let p = platform('a probe secret', { AI, ...env } as Partial<Env>)
   let dir = directory({ fetch: (r) => dirPart.fetch(r, p.env) }, true)
   await dir.apply({
