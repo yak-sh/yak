@@ -3,15 +3,15 @@ import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, type Eid, Refused } from '@yaks/graph'
 import { arrived, type Book, known, named, routed, wearer } from './arrive.ts'
 import type { Received } from './inbound.ts'
-import { clubhouse } from './testing.ts'
+import { clubhouse, type Rig } from './testing.ts'
 
 let ana = 'p-ana'
 let pile = 'p-triage'
 let domain = 'books.example'
 
 // The club, with one member in the address book and one letter already filed.
-let seeded = async () => {
-  let club = clubhouse()
+let seeded = async (rig: Rig = {}) => {
+  let club = clubhouse(rig)
   await club.g.apply([
     {
       entity: { eid: ana },
@@ -116,14 +116,30 @@ test('arrived: a letter, with both lookups answered', async () => {
   assertEquals(batch[0].$actor, { by: ana })
 })
 
-test('arrived: a stranger writes unattributed, to the triage pile', async () => {
+test('arrived: a stranger writes to the triage pile', async () => {
   let { g } = await seeded()
   let receive = arrived({ graph: g, domain, triage: pile })
   let batch = await receive(got({ from: 'bo@elsewhere.com', subject: 'hello' }))
   assertEquals(comp(batch[0], 'mail').target, pile)
-  assertEquals(batch[0].$actor, undefined)
   // Nobody checked is not a check that failed.
   assertEquals(comp(batch[0], 'mail').verified, undefined)
+})
+
+test('arrived: a letter is written by its sender, never by the graph owner', async () => {
+  // The club's graph is its secretary's: she writes what names no writer.
+  let { g } = await seeded({ owner: { by: 'p-secretary' } })
+  let receive = arrived({
+    graph: knowing(g, { 'S-31': 'sess-31' }),
+    domain,
+    triage: pile,
+  })
+  let writer = async (from: string) => {
+    let landed = await g.apply(await receive(got({ from, subject: from })))
+    return comp(landed.find((b) => b.mail), 'created').by
+  }
+  assertEquals(await writer('Ana <ana@books.example>'), ana)
+  assertEquals(await writer('S-31@books.example'), 'sess-31')
+  assertEquals(await writer('bo@elsewhere.com'), undefined)
 })
 
 test('arrived: the same Message-ID lands once', async () => {

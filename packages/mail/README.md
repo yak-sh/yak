@@ -235,10 +235,12 @@ sent it. `arrived()` returns `[]` if that id is already stored, and resolves
 before the caller writes, not a uniqueness constraint covering concurrent
 arrivals. Messages without a Message-ID cannot be deduplicated this way.
 
-Only a recognized author's address supplies `$actor.by`; unknown senders remain
-unattributed. `arrived()` also reads the DKIM result from
-`Authentication-Results` unless the caller supplies `verified`. A failed result
-is recorded as `false`, not grounds for discarding the message.
+The author is found as a recipient is (`routed()`), and writes the letter:
+`$actor.by`. An unknown sender's letter carries an empty `$actor`, so it stays
+unattributed rather than being signed as the graph's owner. `arrived()` also
+reads the DKIM result from `Authentication-Results` unless the caller supplies
+`verified`. A failed result is recorded as `false`, not grounds for discarding
+the message.
 
 ## The arrival endpoint
 

@@ -7,7 +7,7 @@
 // store is @yaks/ram: a Map holding the bundles, with the same apply() and the
 // same queries as a database.
 
-import { type Graph, graph } from '@yaks/graph'
+import { type Actor, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { type Effects, effects } from '@yaks/effects'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
@@ -89,6 +89,7 @@ let doc: VocabDoc = {
       type: 'object',
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },
+        by: { type: 'string', ref: 'entity', death: 'keep', stamped: true },
       },
     },
     updated: {
@@ -125,10 +126,12 @@ export type Rig = {
   refuse?: string
   /** the domain whose addresses are the graph's own, for local delivery */
   local?: string
+  /** whose graph it is: the writer of a change that names none */
+  owner?: Actor
 }
 
 /** A club with a post room. */
-export let clubhouse = ({ refuse, local }: Rig = {}): Club => {
+export let clubhouse = ({ refuse, local, owner }: Rig = {}): Club => {
   // The write function the sending effect records an outcome through: the
   // club's own graph, trusted, since `delivered` and `bounced` are
   // server-owned. `g` is built below, and this only ever runs post-commit.
@@ -137,6 +140,7 @@ export let clubhouse = ({ refuse, local }: Rig = {}): Club => {
   let g = graph({
     storage: ram(club),
     vocab: club,
+    ...(owner ? { actor: owner } : {}),
     plugins: [
       fx,
       docs(),

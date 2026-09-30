@@ -6,9 +6,13 @@
 // they live in this file instead.
 //
 // The address book is read in one direction here: which entity has this
-// address. A sender nobody here knows resolves to nobody — never to whatever
-// a routing fallback would have picked, or a stranger's letter joins the
-// journal attributed to whoever runs the mailbox.
+// address. Both ends of a letter are found the same way (`routed`), and the
+// one it came from is who wrote it. A sender nobody here knows resolves to
+// nobody — never to whatever a routing fallback would have picked — and the
+// letter says so with an empty `$actor`. Saying nothing is not the same: a
+// change that names no writer is signed by the graph's owner (@yaks/graph
+// `Options.actor`), and a stranger's letter would join the journal as the
+// words of whoever runs the mailbox.
 //
 // The id grammar is the address grammar: an address whose local part is an id
 // this graph knows names that entity, resolved by the same call that resolves
@@ -117,10 +121,11 @@ export type Arrivals = {
  * is the one identity a letter carries between mail systems, so recording it
  * twice would be the error, not the second delivery.
  *
- * The transaction is attributed to the author where the address book knows
- * them, and to nobody where it does not — an unattributed write is the truth
- * about a stranger's letter, and far better than the mailbox's owner appearing
- * to have written it.
+ * The letter is written by its author, found as a recipient is (`routed`),
+ * and by nobody where nobody here has that address: its `$actor` is then
+ * empty, so the graph does not sign it as its owner's. An unattributed write
+ * is the truth about a stranger's letter, and far better than the mailbox's
+ * owner appearing to have written it.
  */
 export let arrived = (
   { graph, domain, triage }: Arrivals,
@@ -132,12 +137,12 @@ async (m, arrival = {}) => {
   let answers = m.headers.get('in-reply-to')
   let reply = arrival.reply ??
     (answers ? await known(graph, answers.replace(/[<>]/g, '').trim()) : null)
-  let by = await wearer(graph, author(m), domain)
+  let by = await routed(graph, author(m), domain)
   let batch = inbound(m, {
     ...arrival,
     verified: arrival.verified ?? verdict(m.headers) ?? undefined,
     ...(target ? { target } : {}),
     ...(reply ? { reply } : {}),
   })
-  return by ? batch.map((b) => ({ ...b, $actor: { by } })) : batch
+  return batch.map((b) => ({ ...b, $actor: by ? { by } : {} }))
 }
