@@ -46,10 +46,13 @@ export let role = (v: unknown): Role => v == 'owner' ? 'owner' : 'member'
 export let level = (v: unknown): Level =>
   v == 'owner' ? 'owner' : v == 'editor' ? 'editor' : 'viewer'
 
-/** Read a stored `access.mode`: an app with no `access` component is `public`,
- * which is what an app is before anyone thinks about it. */
+/** Read a stored `access.mode`. An app whose mode cannot be read, because its
+ * `access` is missing or says something else, is `private`: a lost row locks
+ * the app, never opens it. Every app is born with its mode said (yaks.app
+ * `app_new` writes `public`), so a missing one is a failure to report, not a
+ * choice to honour. */
 export let mode = (v: unknown): Mode =>
-  v == 'open' ? 'open' : v == 'private' ? 'private' : 'public'
+  v == 'open' ? 'open' : v == 'public' ? 'public' : 'private'
 
 /** May a principal holding this level write? An `owner` and an `editor` write;
  * a `viewer`, and a principal holding nothing, do not. */

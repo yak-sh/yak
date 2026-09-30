@@ -139,7 +139,9 @@ let newer = (ctx: State, name: string) => {
   let door = (path: string, init: RequestInit = {}, app?: string) => {
     let req = new Request(`http://store${path}`, init)
     req.headers.set('x-store', name)
+    // As the kernel's door (door.ts) sends them: an app and its mode.
     if (app) req.headers.set('x-yak-app', app)
+    if (app) req.headers.set('x-yak-access', 'public')
     return store.fetch(req)
   }
   return {

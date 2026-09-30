@@ -24,9 +24,15 @@ let writes = (s: Storage, app: string) =>
     ) => [who, may(s).canWrite(ids[who], app)]),
   )
 
-test('a thing that never said is public', () => {
+test('a thing whose mode is missing is closed to everyone holding nothing', () => {
   let s = store()
-  assertEquals(may(s).modeOf(ids.list), 'public')
+  assertEquals(reads(s, ids.list), {
+    dana: true,
+    raj: true,
+    mo: true,
+    kim: false,
+  })
+  assertEquals(may(s).canRead(null, ids.list), false)
 })
 
 test('public: anyone reads, only owner and editor write', () => {

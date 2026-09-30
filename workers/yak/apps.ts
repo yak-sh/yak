@@ -491,7 +491,7 @@ let inside = (path: string) => MANIFEST.has(path) || seedy(path.slice(1))
 // A file's validator is its content, and a page's is the document as sent
 // (`woven`).
 let keeping = (app: App) =>
-  `${app.access == null || app.access == 'public' ? 'public' : 'private'}, ` +
+  `${app.access == 'public' ? 'public' : 'private'}, ` +
   'no-cache'
 
 // The tag for a file's bytes, whose version arrives from files.ts (`VERSION`).

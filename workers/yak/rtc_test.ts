@@ -134,6 +134,7 @@ test('a lease nobody renewed closes its call at Realtime and drops its row', asy
     let headers = {
       'x-store': 'ada/room',
       'x-yak-app': crypto.randomUUID(),
+      'x-yak-access': 'public',
       'x-yak-kernel': '1',
     }
     let read = async () =>

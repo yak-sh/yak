@@ -145,7 +145,7 @@ let VOUCH = [
  * space's home — a store is named at birth and never renamed (`storeName`). */
 export type Served = {
   eid: string
-  access: string | null
+  access: string
   mail?: string
   release?: string
   base?: string
@@ -177,7 +177,7 @@ export let doorOf = (
     req.headers.set('x-store', name)
     if (app) {
       req.headers.set('x-yak-app', app.eid)
-      if (app.access) req.headers.set('x-yak-access', app.access)
+      req.headers.set('x-yak-access', app.access)
       if (app.mail) req.headers.set('x-yak-mail', app.mail)
       if (app.release != null) {
         req.headers.set('x-yak-release', String(app.release))

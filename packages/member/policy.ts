@@ -55,7 +55,7 @@ export type Where = {
 /** The checks the HTTP layer and the write guard both call. Each returns a
  * value rather than a promise over a synchronous storage. */
 export type Policy = {
-  /** the app's mode — `public` when it has no `access` component */
+  /** the app's mode — `private` when it has no `access` component */
   modeOf: (app: Eid) => Mode | Promise<Mode>
   /** what this principal holds on this app, or `null` for nothing */
   levelOf: (who: Viewer, app: Eid) => Level | null | Promise<Level | null>

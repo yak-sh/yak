@@ -188,9 +188,10 @@ export type App = {
   script?: string | null
   title: string
   // Who may read and write its store (T-32504): 'public', 'open', or
-  // 'private'. Null for an app born before the word, which means public —
-  // what every app did before there was one.
-  access: Access | null
+  // 'private'. Every app is born with it said (`app_new`); a row without it is
+  // read as 'private' and reported (`appOf`), since a lost row must lock an
+  // app, never open it.
+  access: Access
   // The app's handle: the name of everything the platform keeps for it — its
   // Durable Object, its dispatch script, its export path, its analytics rows
   // (`storeName` below). Written once at birth and never derived from a slug
@@ -703,6 +704,17 @@ let spaceOf = (r: Row): Space => ({
   tunnel: tunnelOf(r),
 })
 
+// An app row with no access mode: nothing writes one (T-59268 stamped the six
+// born before the word), so it is a failure to report, and the app is read as
+// private until its owner says otherwise.
+let unsaid = (app: string): Access => {
+  caught(new Error(`app ${app} has no access mode; read as private`), {
+    request: 'app access',
+    app,
+  })
+  return 'private'
+}
+
 export let appOf = (r: Row): App => ({
   eid: r.entity.eid,
   slug: r.app!.slug,
@@ -713,7 +725,7 @@ export let appOf = (r: Row): App => ({
   draft: r.app!.draft ?? null,
   fence: r.app!.fence ?? null,
   script: r.app!.script ?? null,
-  access: r.app!.access ?? null,
+  access: r.app!.access ?? unsaid(r.entity.eid),
   title: r.doc?.title || r.app!.slug,
   store: r.app!.store ?? null,
   slugs: slugsOf(r.former),

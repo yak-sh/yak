@@ -443,3 +443,13 @@ test('directory caches belong to a store, not the shared isolate', async () => {
   assertEquals(a.at.reads, 1)
   assertEquals(b.at.reads, 1)
 })
+
+test('an app row that says no access mode is read as private', () => {
+  let row = {
+    entity: { eid: an.eid },
+    app: { slug: 'lost', space: space.eid, version: 1 },
+  }
+  assertEquals(dirPart.appOf(row).access, 'private')
+  let open = { ...row, app: { ...row.app, access: 'open' as const } }
+  assertEquals(dirPart.appOf(open).access, 'open')
+})

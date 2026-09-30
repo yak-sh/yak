@@ -36,7 +36,7 @@ application's other data:
 | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `member{space, person, role}`       | Associates a person with a space. `role` defaults to `member`; `owner` supplies owner permission to policies configured for that space.                         |
 | `grant{app, person, token, access}` | Gives a principal permission on an app. `access` defaults to `viewer`, with `editor` and `owner` also supported. A share link uses `token` instead of `person`. |
-| `access{mode}`                      | Sets an app's access mode. Missing or unset mode defaults to `public`.                                                                                          |
+| `access{mode}`                      | Sets an app's access mode. A missing or unreadable mode reads as `private`.                                                                                     |
 
 Memberships and grants are separate entities. The `access` component is stored
 on the app entity. References from `member` and `grant` use `death: cascade`, so
@@ -255,7 +255,7 @@ The main export includes:
 | `memberDoc`                                            | Vocabulary document containing the three components.                           |
 | `MEMBER`, `GRANT`, `ACCESS`, `GOVERNED`                | Component names and the list requiring owner permission.                       |
 | `Role`, `Level`, `Mode`; `ROLES`, `LEVELS`, `MODES`    | Value types and their supported values.                                        |
-| `role`, `level`, `mode`                                | Read a value with its default: member, viewer or public.                       |
+| `role`, `level`, `mode`                                | Read a value with its default: member, viewer or private.                      |
 | `reads`, `edits`, `callsOut`, `writes`, `reaches`      | Pure permission checks.                                                        |
 | `members(guard)`                                       | Graph plugin with the vocabulary, permission-read requirements and write hook. |
 | `guarding(guard)`, `wanting(guard)`, `actorOf`, `asks` | Write hook and supporting helpers.                                             |

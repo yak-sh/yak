@@ -1846,7 +1846,7 @@ let SANDBOX: Row[] = machineDeclared().map((t) => {
 // What an app's access means where it is felt: what happens when the person
 // sends someone the link. Said on every tool that sets it, so the agent can
 // repeat it and the person is never surprised by who can act on their app.
-let told = (access: Access | null) =>
+let told = (access: Access) =>
   access == 'open'
     ? 'anyone with the link can use it, signed in or not'
     : access == 'private'
@@ -4473,7 +4473,7 @@ let OURS: Row[] = [
       let entities: Bundle[] = [{
         ...born(space, s, {
           title: clamped(offer.app.title),
-          access: offer.app.access ?? 'public',
+          access: offer.app.access,
         }),
         installed: { of: offer.app.eid, version, ...sandboxing(false) },
       }]
