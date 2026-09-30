@@ -395,7 +395,7 @@ The vector table is:
 
 ```sql
 create table embedding (
-  entity integer primary key references entity(id),
+  owner integer primary key references entity(id),
   model text not null,
   hash text not null,
   vec blob not null,
@@ -404,9 +404,13 @@ create table embedding (
 ```
 
 The primary key allows one stored vector per entity, including only one model at
-a time. `vec` contains packed Float32 bytes, with dimension equal to byte length
-divided by four. `schema()` creates the table and its maintenance objects
-idempotently; it does not migrate incompatible existing definitions.
+a time. It is named `owner`, as are `embedding_dirty`'s and `embedding_owed`'s:
+`@yaks/sqlite` takes a table keyed by an integer `entity` for a component table,
+and a vector is not a component. `vec` contains packed Float32 bytes, with
+dimension equal to byte length divided by four. `schema()` creates the table and
+its maintenance objects idempotently; it does not migrate incompatible existing
+definitions. `rekey(db)`, run before it, renames the key of tables made while it
+was named `entity`.
 
 The package assumes `@yaks/sqlite`'s integer `entity.id`, public `entity.eid`,
 component owner columns, and `tombstone` table. The vector data can be rebuilt

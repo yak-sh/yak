@@ -95,7 +95,7 @@ export let sources = (
         {
           how: 'left',
           src: table(TABLE, 'e'),
-          on: eq(e('entity'), s('owner')),
+          on: eq(e('owner'), s('owner')),
         },
       ],
       where: not(exists(select({
@@ -128,7 +128,7 @@ export let put = (
   db.query({
     t: 'insert',
     into: TABLE,
-    cols: ['entity', 'model', 'hash', 'vec'],
+    cols: ['owner', 'model', 'hash', 'vec'],
     rows: [[
       val(owner),
       val(model),
@@ -136,7 +136,7 @@ export let put = (
       val(pack(unit(vec))),
     ]],
     upsert: [{
-      on: [col('entity')],
+      on: [col('owner')],
       set: {
         model: fresh('model'),
         hash: fresh('hash'),
@@ -153,7 +153,7 @@ let drop = (db: Driver, owner: number): void =>
   void db.query({
     t: 'delete',
     from: TABLE,
-    where: eq(col('entity'), val(owner)),
+    where: eq(col('owner'), val(owner)),
   })
 
 // Whether any stored vector was made by another model. Asked only once the

@@ -185,7 +185,7 @@ export let wearers = (fields: Field[], arms = ARMS): Query[] =>
   cut(fields, arms).filter((group) => group.length).map((group) =>
     union(...group.map((f) =>
       select({
-        cols: [col('entity', 'c')],
+        cols: [as(col('entity', 'c'), 'owner')],
         from: table(f.comp, 'c'),
         joins: scope(f),
         where: and(...allowed(f)),

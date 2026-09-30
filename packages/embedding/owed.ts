@@ -48,23 +48,25 @@ import { OWED, TABLE } from './ddl.ts'
 let queue = (rows: Pick<Insert, 'rows' | 'q'>): Insert => ({
   t: 'insert',
   into: OWED,
-  cols: ['entity', 'n'],
+  cols: ['owner', 'n'],
   ...rows,
-  upsert: [{ on: [col('entity')], set: { n: op('+', col('n'), lit(1)) } }],
+  upsert: [{ on: [col('owner')], set: { n: op('+', col('n'), lit(1)) } }],
 })
 
 let one = (e: Expr): Insert => queue({ rows: [[e, lit(1)]] })
 
-// Whether `table` has a row for this entity.
+// Whether `table` has a row for this entity: a component table keys it by
+// `entity`, a vector table (./ddl.ts) by `owner`.
 let wears = (name: string, e: Expr): Expr =>
   exists(select({
     cols: [lit(1)],
     from: table(name),
-    where: eq(col('entity', name), e),
+    where: eq(col(name == TABLE || name == OWED ? 'owner' : 'entity', name), e),
   }))
 
 let NEW = col('entity', 'new')
 let OLD = col('entity', 'old')
+let GONE = col('owner', 'old')
 
 let trigger = (
   name: string,
@@ -124,7 +126,7 @@ export let triggers = (fields: Field[]): CreateTrigger[] => {
           wears(TABLE, NEW),
         ),
         trigger('tombstone_delete', 'delete', 'tombstone', OLD),
-        trigger('vector_delete', 'delete', TABLE, OLD, not(wears(OWED, OLD))),
+        trigger('vector_delete', 'delete', TABLE, GONE, not(wears(OWED, GONE))),
       ]
       : [],
   ]
@@ -170,11 +172,11 @@ export let watch = (db: Driver, fields: Field[]): boolean => {
 
 /** Queue every entity that wears an embedded field or has a vector. */
 export let owe = (db: Driver, fields: Field[]): void => {
-  let vectors = select({ cols: [col('entity')], from: table(TABLE) })
+  let vectors = select({ cols: [col('owner')], from: table(TABLE) })
   for (let worn of [...wearers(fields, db.arms), vectors]) {
     db.query(
       queue({
-        q: select({ cols: [col('entity'), lit(1)], from: from(worn, 'w') }),
+        q: select({ cols: [col('owner'), lit(1)], from: from(worn, 'w') }),
       }),
     )
   }
@@ -188,9 +190,9 @@ export type Due = { owner: number; n: number }
 export let due = (db: Driver, limit: number): Due[] =>
   db.query(
     select({
-      cols: [as(col('entity'), 'owner'), col('n')],
+      cols: [col('owner'), col('n')],
       from: table(OWED),
-      order: [desc(col('entity'))],
+      order: [desc(col('owner'))],
       limit: val(limit),
     }),
   ).map((r) => ({ owner: Number(r.owner), n: Number(r.n) }))
@@ -200,7 +202,7 @@ export let paid = (db: Driver, d: Due): void =>
   void db.query({
     t: 'delete',
     from: OWED,
-    where: and(eq(col('entity'), val(d.owner)), eq(col('n'), val(d.n))),
+    where: and(eq(col('owner'), val(d.owner)), eq(col('n'), val(d.n))),
   })
 
 /** How many entities are queued. */

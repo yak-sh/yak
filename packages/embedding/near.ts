@@ -80,18 +80,18 @@ let vectors = (
   pool?: number[],
 ) =>
   db.query(select({
-    cols: [as(e('entity'), 'owner'), as(e('vec'), 'vec')],
+    cols: [as(e('owner'), 'owner'), as(e('vec'), 'vec')],
     from: table(TABLE, 'e'),
     where: and(
-      ...(pool ? [among(e('entity'), each(pool))] : []),
+      ...(pool ? [among(e('owner'), each(pool))] : []),
       eq(e('model'), val(model)),
       not(exists(select({
         cols: [lit(1)],
         from: table('tombstone', 't'),
-        where: eq(col('entity', 't'), e('entity')),
+        where: eq(col('entity', 't'), e('owner')),
       }))),
       // The pool was drawn from what the screen admits already.
-      ...(within && !pool ? [among(e('entity'), within)] : []),
+      ...(within && !pool ? [among(e('owner'), within)] : []),
     ),
   }))
 
@@ -108,7 +108,7 @@ export let vectorOf = (
   let row = db.query(select({
     cols: [as(e('vec'), 'vec')],
     from: table(TABLE, 'e'),
-    joins: [join(table('entity', 'o'), eq(o('id'), e('entity')))],
+    joins: [join(table('entity', 'o'), eq(o('id'), e('owner')))],
     where: and(eq(o('eid'), val(entity)), eq(e('model'), val(model))),
   }))[0]
   return row ? unpack(row.vec as Uint8Array) : null

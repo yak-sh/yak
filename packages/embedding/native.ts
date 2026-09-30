@@ -320,9 +320,9 @@ export let candidates = (
   }
   let d = at(DIRTY)
   let fresh = db.query(select({
-    cols: [as(d('entity'), 'owner')],
+    cols: [as(d('owner'), 'owner')],
     from: table(DIRTY),
-    where: opts.within ? admitted(opts.within, d('entity')) : undefined,
+    where: opts.within ? admitted(opts.within, d('owner')) : undefined,
   })).map((r) => Number(r.owner))
   return [...new Set([...owners, ...fresh])]
 }

@@ -225,8 +225,8 @@ let reopened = (times: number, beside: (d: Driver) => void) => {
 
 test('an open of a file its schema is current in installs nothing', () => {
   // What a host's plugins keep beside the store's tables once it has
-  // installed: a table of their own keyed by entity (@yaks/embedding's
-  // vectors), and a trigger on doc that fills it (@yaks/fts).
+  // installed: a table of their own keyed by entity, which the store counts
+  // as a component table, and a trigger on doc that fills it (@yaks/fts).
   let plugins = (d: Driver) => {
     d.query({
       t: 'create table',

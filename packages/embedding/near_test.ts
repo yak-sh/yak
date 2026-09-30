@@ -104,7 +104,7 @@ test('a bounded scan keeps the nearest across more than one screen', () => {
         id == 10 || id == 11 ? 0 : id == 13 ? 0.3 : id == 14 ? 0.5 : id,
       ]),
     )
-    db.query(insert(TABLE, { entity: id, model, hash: 'test', vec: pack(vec) }))
+    db.query(insert(TABLE, { owner: id, model, hash: 'test', vec: pack(vec) }))
   }
   let query = new Float32Array([1, 0])
   let got = nearest(db, query, { model, limit: 3 })
@@ -128,7 +128,7 @@ test('an unaligned blob still ranks and returns its neighbour', () => {
   let db = shelf()
   db.query(insert('entity', { id: 10, eid: 'rank-10' }))
   db.query(insert(TABLE, {
-    entity: 10,
+    owner: 10,
     model: 'rank-test',
     hash: 'test',
     vec: pack(new Float32Array([1, 0])),

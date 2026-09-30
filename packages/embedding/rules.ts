@@ -24,7 +24,7 @@ import type { Derived, Extension } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import { semantic } from './compile.ts'
 import type { Driver } from '@yaks/sql'
-import { schema } from './ddl.ts'
+import { rekey, schema } from './ddl.ts'
 import { resolved } from './fields.ts'
 import { type Options, ready, spaceOf } from './options.ts'
 import { type Hit, meaning as search, type MeaningOpts } from './search.ts'
@@ -35,6 +35,7 @@ import { type Host, neighbours } from './neighbours.ts'
  * what keeps the vectors in step with the text is the sweep (`./service`), off
  * the write path. */
 export let rules = (host: { sql: Driver }): Plugin[] => {
+  rekey(host.sql)
   for (let statement of schema()) host.sql.query(statement)
   return []
 }

@@ -79,7 +79,7 @@ test('where every search reads every vector, it says why', async () => {
     t: 'update',
     table: TABLE,
     set: { model: val('next') },
-    where: eq(col('entity'), val(4)),
+    where: eq(col('owner'), val(4)),
   })
   let two = await checkup(shared(db))
   assertEquals(two.level, 'warn')

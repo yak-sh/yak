@@ -120,7 +120,7 @@ test('a restored entity, and a vector deleted by hand, are made again', async ()
   bury(db, 2)
   await swept(db)
   unrow(db, 'tombstone', 2)
-  unrow(db, TABLE, 1)
+  db.query({ t: 'delete', from: TABLE, where: by({ owner: 1 }) })
   assertEquals(await swept(db), { fresh: 2, left: 0 })
   assertEquals(count(db), 4)
 })
@@ -241,7 +241,7 @@ test('text found through another component counts only while that one is worn', 
   unrow(db, 'excerpt', 1)
   await pass()
   assertEquals(
-    scan(db, TABLE, undefined, ['entity']).map((r) => r.entity).sort(),
+    scan(db, TABLE, undefined, ['owner']).map((r) => r.owner).sort(),
     [2, 3],
   )
 })
@@ -276,7 +276,7 @@ test('an entity wearing an embed: false component gets no vector', async () => {
   db.query(insert('output', { entity: 2 }))
   await sweep(db, fields(quiet, searched), embedder)
   assertEquals(
-    scan(db, TABLE, undefined, ['entity']).map((r) => r.entity),
+    scan(db, TABLE, undefined, ['owner']).map((r) => r.owner),
     [1],
   )
 })

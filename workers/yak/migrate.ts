@@ -7,7 +7,7 @@
 // {@link respelled}). {@link BOUNDARIES} names the stored shapes this code
 // reads, for `yak admin deploys`.
 import { fields, schema as ftsSchema } from '@yaks/fts'
-import { schema as vectorSchema } from '@yaks/embedding'
+import { rekey, schema as vectorSchema } from '@yaks/embedding'
 import { reserved } from '@yaks/durable-object'
 import {
   and,
@@ -423,6 +423,7 @@ export let install = (
   // triggers that note which of them changed (@yaks/embedding). The triggers
   // that queue text to embed are the sweep's own (graph.ts `#embedding`).
   for (let stmt of ftsSchema(fields(vocab), derived)) d.query(stmt)
+  rekey(d)
   for (let stmt of vectorSchema()) d.query(stmt)
   if (vocab.comp('archetype')) backfill(d, false)
   return unfit

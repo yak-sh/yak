@@ -4,10 +4,11 @@
 // look (./owed.ts).
 //
 // The layout is deliberately the plainest thing that works — the entity's own
-// integer id as the primary key, so a vector joins to the graph the way every
-// component table does; the model and a content hash, so the sweep knows which
-// rows are stale and a search never mixes two vector spaces; the vector itself
-// as a blob; and when it was written.
+// integer id as the primary key, named `owner` as @yaks/fts names its rows' (a
+// table keyed by `entity` is a component table to @yaks/sqlite, physical.ts
+// `componentTables`, and a vector is no component); the model and a content
+// hash, so the sweep knows which rows are stale and a search never mixes two
+// vector spaces; the vector itself as a blob; and when it was written.
 //
 // It is derived data. Nothing here is a source of truth: drop the table and the
 // next sweep rebuilds it from the text it was made from. That is why it carries
@@ -20,7 +21,15 @@
 // index has not seen is in the set, which a search scores directly, and a
 // crash between a write and a build leaves it there.
 
-import { col, type CreateTrigger, eq, lit, NOW, type Stmt } from '@yaks/sql'
+import {
+  col,
+  type CreateTrigger,
+  type Driver,
+  eq,
+  lit,
+  NOW,
+  type Stmt,
+} from '@yaks/sql'
 
 /** The vector table's name. */
 export let TABLE = 'embedding'
@@ -54,11 +63,29 @@ let triggers = (['insert', 'update', 'delete'] as const).map((
   body: [{
     t: 'insert',
     into: DIRTY,
-    cols: ['entity'],
-    rows: [[col('entity', event == 'delete' ? 'old' : 'new')]],
-    upsert: [{ on: [col('entity')] }],
+    cols: ['owner'],
+    rows: [[col('owner', event == 'delete' ? 'old' : 'new')]],
+    upsert: [{ on: [col('owner')] }],
   }],
 }))
+
+/**
+ * Heal a store whose vector tables were made while their key was named
+ * `entity`: each such table has the column renamed to `owner`, which SQLite
+ * carries into every trigger and index that names it. Run it before
+ * {@link schema}. It can be deleted once every store has opened with it.
+ */
+export let rekey = (db: Driver): void => {
+  for (let name of [TABLE, DIRTY, OWED]) {
+    let cols = db.query({ t: 'pragma', name: 'table_info', arg: name })
+    if (!cols.some((c) => c.name == 'entity')) continue
+    db.query({
+      t: 'alter table',
+      table: name,
+      rename: { column: 'entity', to: 'owner' },
+    })
+  }
+}
 
 /**
  * The schema the vectors need, as ordered statements. Run them after the
@@ -72,7 +99,7 @@ export let schema = (): Stmt[] => [
     ifNot: true,
     cols: [
       {
-        name: 'entity',
+        name: 'owner',
         type: 'integer',
         pk: true,
         ref: { table: 'entity', cols: ['id'] },
@@ -114,7 +141,7 @@ export let schema = (): Stmt[] => [
     t: 'create table',
     name: DIRTY,
     ifNot: true,
-    cols: [{ name: 'entity', type: 'integer', pk: true }],
+    cols: [{ name: 'owner', type: 'integer', pk: true }],
   },
   ...triggers,
   {
@@ -122,7 +149,7 @@ export let schema = (): Stmt[] => [
     name: OWED,
     ifNot: true,
     cols: [
-      { name: 'entity', type: 'integer', pk: true },
+      { name: 'owner', type: 'integer', pk: true },
       { name: 'n', type: 'integer', notNull: true },
     ],
   },

@@ -14,8 +14,9 @@ import {
 import { type Bundle, identityEid } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
-import { at, col, fn, insert, lit, type Stmt } from '@yaks/sql'
-import { objects as catalogue } from '@yaks/sqlite'
+import { at, by, col, fn, insert, lit, scan, type Stmt } from '@yaks/sql'
+import { DIRTY, OWED, TABLE } from '@yaks/embedding'
+import { columns, objects as catalogue } from '@yaks/sqlite'
 import { Store } from './graph.ts'
 import { documented, respelled, unholed, unworded } from './migrate.ts'
 import { PLATFORM_STORE } from './door.ts'
@@ -207,6 +208,39 @@ test('a Store keeps exception request ids across the rename', async () => {
     assertEquals(cols.includes('request_id'), true)
     assertEquals(cols.includes('requestId'), false)
   }
+})
+
+test('a Store heals vector tables made while their key was named entity', async () => {
+  let ctx = state()
+  let before = newer(ctx, PLATFORM_STORE)
+  assertEquals(
+    (await before.apply([{
+      entity: { eid: ONE },
+      exception: { request_id: 'report-1' },
+    }])).status,
+    200,
+  )
+  let d = db(ctx)
+  let id = Number(scan(d, 'entity', by({ eid: ONE }), ['id'])[0].id)
+  let tables = [TABLE, DIRTY, OWED]
+  run(
+    ctx,
+    ...tables.map((table): Stmt => ({
+      t: 'alter table',
+      table,
+      rename: { column: 'owner', to: 'entity' },
+    })),
+    insert(TABLE, {
+      entity: id,
+      model: 'm',
+      hash: 'h',
+      vec: new Uint8Array(8),
+    }),
+  )
+  keep(ctx, 'schema', 'older schema')
+  await newer(ctx, PLATFORM_STORE).query('.exception')
+  for (let t of tables) assert(columns(d, t).includes('owner'), t)
+  assertEquals(scan(d, TABLE, undefined, ['owner']), [{ owner: id }])
 })
 
 // ---- what the object remembers ---------------------------------------------

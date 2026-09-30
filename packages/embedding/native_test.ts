@@ -50,7 +50,7 @@ let corpus = (db: Driver, n: number, from = 1) => {
   )
 }
 let put = (db: Driver, id: number, vec: Float32Array) =>
-  db.query(insert(TABLE, { entity: id, model, hash: '', vec: pack(vec) }))
+  db.query(insert(TABLE, { owner: id, model, hash: '', vec: pack(vec) }))
 // Entities `v-<id>` numbered on from `from`, each with its vector, a few
 // hundred rows to a statement.
 let store = (db: Driver, from: number, vecs: Float32Array[]) => {
@@ -61,7 +61,7 @@ let store = (db: Driver, from: number, vecs: Float32Array[]) => {
     db.query(insert(
       TABLE,
       ...ids.map((id) => ({
-        entity: id,
+        owner: id,
         model,
         hash: '',
         vec: pack(vecs[id - from]),
@@ -86,7 +86,7 @@ let anchor = (db: Driver, id: number) =>
     (db.query(select({
       cols: [col('vec')],
       from: table(TABLE),
-      where: among(col('entity'), [val(id)]),
+      where: among(col('owner'), [val(id)]),
     }))[0].vec as Uint8Array).slice().buffer,
   )
 
@@ -176,7 +176,7 @@ test('a vector written after the build is near at once; a gone one is not', () =
   db.query({
     t: 'delete',
     from: TABLE,
-    where: among(col('entity'), [val(Number(first.slice(2)))]),
+    where: among(col('owner'), [val(Number(first.slice(2)))]),
   })
   bury(db, Number(second.slice(2)))
   let got = names(db, q, { without: 'v-5' })
