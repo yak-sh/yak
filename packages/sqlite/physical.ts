@@ -218,16 +218,16 @@ export function componentTables(
  * Object's SQLite refuses `pragma schema_version`. Only the named objects
  * count, so what is kept beside them (a search index and its triggers, a
  * plugin's own table, the `sqlite_stat1` the first analyze creates) is no
- * change to them; with no names, every object does.
+ * change to them.
  */
-export let shape = (driver: Driver, names?: readonly string[]): string => {
+export let shape = (driver: Driver, names: readonly string[]): string => {
   let [row] = driver.query(select({
     cols: [
       as(count(), 'n'),
       as(fn('total', fn('length', col('sql'))), 'bytes'),
     ],
     from: table('sqlite_schema'),
-    where: names && among(col('name'), each(names)),
+    where: among(col('name'), each(names)),
   }))
   return `${row.n}/${row.bytes}`
 }

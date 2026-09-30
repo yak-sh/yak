@@ -437,9 +437,15 @@ export let install = (
     backfill(d, false)
     // A pass: pointers a write past the graph left out of step (the access
     // mode `#mode` writes, before @yaks/sqlite's units kept them) are
-    // classified again, so `get` reads the rows they hold. It can be deleted
-    // once every store has opened with it (T-59268).
-    mend(d, false)
+    // classified again, so `get` reads the rows they hold. A pass that fails
+    // is told like a table left unfit, and the store serves on and tries it
+    // again at its next wake. It can be deleted once every store has opened
+    // with it (T-59268).
+    try {
+      mend(d, false)
+    } catch (e) {
+      unfit.push(e instanceof Error ? e : new Error(String(e)))
+    }
   }
   return unfit
 }
