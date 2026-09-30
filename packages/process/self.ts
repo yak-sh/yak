@@ -4,8 +4,8 @@
 // `process{pid, command, cwd}` and then `exit{code}` once it is over, and it
 // describes programs somebody here launched. The one it never described was
 // the program doing the launching. So it does now: a process opening a graph
-// writes a row for itself on the way in, and records its exit code on the way
-// out.
+// writes a row for itself on the way in, with the `runtime` it runs on, and
+// records its exit code on the way out.
 //
 // Two things follow from that row, and they are why it is worth writing.
 //
@@ -32,7 +32,7 @@
 // names it first ({@link become}), and writes that `exit` for it.
 
 import type { Bundle, Eid } from '@yaks/graph'
-import { EXIT, PROCESS } from './comp.ts'
+import { EXIT, PROCESS, RUNTIME, type Runtime } from './comp.ts'
 
 let mine: Eid | undefined
 
@@ -75,8 +75,27 @@ let here = (): string | undefined => {
   }
 }
 
+// The operating system and its release, or only its name where reading the
+// release is not permitted.
+let system = (): string => {
+  try {
+    return `${Deno.build.os} ${Deno.osRelease()}`
+  } catch {
+    return Deno.build.os
+  }
+}
+
+/** What this process runs on: the runtime, its version and the operating
+ * system. */
+export let runtime = (): Runtime => ({
+  name: 'deno',
+  version: Deno.version.deno,
+  os: system(),
+})
+
 /**
- * The bundle a process writes when it starts: itself, running.
+ * The bundle a process writes when it starts: itself, running, and what it
+ * runs on.
  *
  * ```ts
  * import { started } from '@yaks/process'
@@ -93,6 +112,7 @@ export let started = (o: SelfOpts = {}): Bundle => {
       command: o.command ?? line(),
       ...cwd ? { cwd } : {},
     },
+    [RUNTIME]: runtime(),
   }
 }
 

@@ -13,11 +13,16 @@ deno add jsr:@yaks/process
 
 A **bundle** is one entity's components as a JSON object. This package defines:
 
-| Component                                  | Meaning                       |
-| ------------------------------------------ | ----------------------------- |
-| `service{command, cwd, restart, attempts}` | a program that should run     |
-| `process{pid, command, cwd}`               | a tracked running process     |
-| `exit{code}`                               | the observed end of a process |
+| Component                                  | Meaning                        |
+| ------------------------------------------ | ------------------------------ |
+| `service{command, cwd, restart, attempts}` | a program that should run      |
+| `process{pid, command, cwd}`               | a tracked running process      |
+| `runtime{name, version, os}`               | what a process of ours runs on |
+| `exit{code}`                               | the observed end of a process  |
+
+A process that opens a graph writes its own row when it starts (`started()`),
+with `runtime` beside `process`: `deno`, its version, and the operating system
+and its release (`linux 6.8.0-45-generic`).
 
 An adopted process may contain only `pid`; `command` and `cwd` are recorded for
 processes launched by this package. A missing `exit` means the process is still

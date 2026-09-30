@@ -47,6 +47,25 @@
         }
       }
     },
+    "runtime": {
+      "component": true,
+      "type": "object",
+      "description": "what a process runs on, written by the process about itself when it starts, beside its `process` component: the JavaScript runtime, its version and the operating system. It is how a failure in that process says what it ran on",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "the runtime, lowercase: deno"
+        },
+        "version": {
+          "type": "string",
+          "description": "the runtime's version: 2.5.1"
+        },
+        "os": {
+          "type": "string",
+          "description": "the operating system and its release, as the runtime reports them: linux 6.8.0-45-generic, darwin 24.1.0"
+        }
+      }
+    },
     "exit": {
       "component": true,
       "type": "object",

@@ -1,8 +1,9 @@
-// The three components this package ships, as one vocabulary document to load
+// The four components this package ships, as one vocabulary document to load
 // beside your own.
 //
 //   service{command, cwd, restart, attempts}   a program that should run
 //   process{pid, command, cwd}                 a program that is running
+//   runtime{name, version, os}                 what one of ours runs on
 //   exit{code}                                 it is over, and how
 //
 // A process is an entity, not a field on whatever asked for it. That is the
@@ -48,6 +49,9 @@ export let SERVICE = 'service'
 /** The component naming a running program. */
 export let PROCESS = 'process'
 
+/** The component recording what a process of ours runs on. */
+export let RUNTIME = 'runtime'
+
 /** The component recording that it is over. */
 export let EXIT = 'exit'
 
@@ -74,6 +78,16 @@ export type Process = {
   command?: string | null
   /** where it was launched — absent on an adopted process */
   cwd?: string | null
+}
+
+/** What a process of ours runs on, as it says about itself. */
+export type Runtime = {
+  /** the runtime, lowercase: `deno` */
+  name?: string | null
+  /** the runtime's version */
+  version?: string | null
+  /** the operating system and its release: `linux 6.8.0-45-generic` */
+  os?: string | null
 }
 
 /** What is recorded about a process that has ended. */
