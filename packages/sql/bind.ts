@@ -685,6 +685,16 @@ let leafRead = (ctx: Ctx, leaf: Hop, target: string): Read => {
   }
   let def = ctx.v.prop(leaf.comp, leaf.prop)
   if (def?.computed) return null
+  // The entity row's own reference (its archetype) holds an integer id, read
+  // as the eid it names, like any other reference.
+  if (leaf.comp == 'entity' && def?.category == 'ref') {
+    return {
+      expr: `(select "__pr"."eid" from ${source(ctx, 'entity')} as "__pl"` +
+        ` join ${source(ctx, 'entity')} "__pr"` +
+        ` on "__pr"."id" = "__pl"."${leaf.prop}" where "__pl"."id" = ${target})`,
+      tag: 'eid',
+    }
+  }
   if (leaf.comp == 'entity') {
     return {
       expr: `(select "__pl"."${leaf.prop}" from ${

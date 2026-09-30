@@ -9,9 +9,10 @@
  * the rows run and which page shows are the table's state in the page's own
  * graph (./state.ts `grid`), so a page shown again shows as it was left.
  *
- * A table paged by the graph asks for one page at a time (`paged`); one
- * whose rows are all in hand (a tally, a component's properties) pages them
- * itself (`local`).
+ * A table paged by the graph asks for one page at a time (`paged`), and the
+ * graph sorts it; one whose rows are all in hand (a tally, a component's
+ * properties) pages them itself (`local`), and sorts them by a column's
+ * `value` (`run`).
  *
  * @module
  */
@@ -30,10 +31,49 @@ export let SIZE = 50
 /** One column: its heading, what its cells hold, and what it sorts by. */
 export type Column = {
   name: string
-  /** the property its rows run by when its heading is pressed */
+  /** the property the graph runs its rows by when its heading is pressed */
   sort?: string
+  /** what a table holding every row runs them by when its heading is
+   * pressed: a number, or text */
+  value?: (b: Bundle) => number | string
   mod?: 'num' | 'key' | 'prose'
   cell: (b: Bundle) => ComponentChildren
+}
+
+// What a column sorts by in a table's state: the property the graph runs by,
+// or, where the table holds its rows, the column's name.
+let sorted = (c: Column) => c.sort ?? (c.value ? c.name : undefined)
+
+/**
+ * Rows a table holds, run by the column its order names (`-` before it when
+ * they run down), or as they came.
+ *
+ * ```ts
+ * import { type Column, run } from './grid.ts'
+ * let rows = [2, 3, 1].map((n) => ({ entity: { eid: `${n}` } }))
+ * let cols: Column[] = [
+ *   { name: 'n', value: (b) => Number(b.entity.eid), cell: () => '' },
+ * ]
+ * run(rows, cols, '-n').map((b) => b.entity.eid) // ['3', '2', '1']
+ * run(rows, cols, null).map((b) => b.entity.eid) // ['2', '3', '1']
+ * ```
+ */
+export let run = (
+  rows: Bundle[],
+  columns: Column[],
+  order?: string | null,
+): Bundle[] => {
+  let down = !!order?.startsWith('-')
+  let c = columns.find((c) => c.value && c.name == order?.replace(/^-/, ''))
+  if (!c?.value) return rows
+  let v = c.value
+  return rows.toSorted((a, b) => {
+    let [x, y] = [v(a), v(b)]
+    let d = typeof x == 'number' && typeof y == 'number'
+      ? x - y
+      : String(x).localeCompare(String(y))
+    return down ? -d : d
+  })
 }
 
 /**
@@ -154,19 +194,20 @@ export let Paging = (p: PagingProps): JSX.Element | null => {
 
 // Which way a column runs: its heading's variant.
 let way = (order: string | null | undefined, c: Column) =>
-  !c.sort
+  !sorted(c)
     ? undefined
-    : order == c.sort
+    : order == sorted(c)
     ? 'asc'
-    : order == `-${c.sort}`
+    : order == `-${sorted(c)}`
     ? 'desc'
     : undefined
 
 /** A table of things, paged, its rows opened and its columns sorted. */
 export let Grid = (p: GridProps): JSX.Element => {
-  let { io, id, columns, rows, local } = p
+  let { io, id, columns, local } = p
   let size = p.size ?? SIZE
   let g = grid(io, id)
+  let rows = local ? run(p.rows, columns, g.order) : p.rows
   let after = g.after ?? []
   let page = after.length
   let shown = local ? rows.slice(page * size, (page + 1) * size) : rows
@@ -174,11 +215,8 @@ export let Grid = (p: GridProps): JSX.Element => {
     ? () => undefined
     : p.pick ?? ((b: Bundle) => b.entity.eid)
   let sort = (c: Column) => {
-    let next = g.order == c.sort
-      ? `-${c.sort}`
-      : g.order == `-${c.sort}`
-      ? null
-      : c.sort
+    let by = sorted(c)!
+    let next = g.order == by ? `-${by}` : g.order == `-${by}` ? null : by
     io.set(turned(id, { order: next, after: [] }))
   }
   if (!rows.length && !page) return none()
@@ -198,11 +236,11 @@ export let Grid = (p: GridProps): JSX.Element => {
             h(Table.Heading, {
               key: c.name,
               mod: [
-                c.sort && 'sorts',
+                sorted(c) && 'sorts',
                 way(g.order, c),
                 c.mod == 'num' && 'num',
               ],
-              onClick: c.sort ? () => sort(c) : undefined,
+              onClick: sorted(c) ? () => sort(c) : undefined,
             }, c.name)
           ),
         ),

@@ -1,13 +1,20 @@
 /**
- * The inspector's first page, before anything is picked: how the data is
- * made. Its archetypes, every set of components entities are made of, most
- * populous first; and its relations, every component that is an edge
- * relation (@yaks/edge), what it reads as from the far end, and how many
- * edges state it.
+ * The inspector's first page, a map of how the data is made, each part a
+ * listing to press into:
  *
- * Both are read off one census: the archetypes, and a tally of every
- * entity's archetype. The tally reads every entity (seconds on a large
- * graph), so it is asked once (README, Limits).
+ * - Packages: each package the vocabulary is served from, what it is, how many
+ *   components it declares, and how many entities carry any of them.
+ * - Components: every component, its package, what it is and how many
+ *   entities carry it, the most carried first; a pressed heading runs them
+ *   by it.
+ * - Relations: every component that is an edge relation (@yaks/edge), what it
+ *   reads as from the far end, and how many edges state it.
+ * - Archetypes: every set of components entities are made of, the most
+ *   populous first.
+ *
+ * What each is comes from the vocabulary the host was served and the graph's
+ * description of it (@yaks/vocab's `_package`); every count from one census
+ * (./census.ts).
  *
  * @module
  */
@@ -15,22 +22,17 @@
 import { h, type JSX } from 'preact'
 import { Head, Value } from '@yaks/ui'
 import type { Bundle, Io } from './host.ts'
+import { useCensus } from './census.ts'
 import { Grid } from './grid.ts'
-import { chip, chips, compEid, relations } from './schema.ts'
+import { chip, chips, compEid, packEid, relations } from './schema.ts'
 import { Part, under, useNotes } from './notes.ts'
-import { census, count, tables } from './read.ts'
-import { rows, waiting } from './rows.ts'
+import { count, line, str, tables } from './read.ts'
+import { waiting } from './rows.ts'
 import { key } from './state.ts'
 
-/** The census the first page reads: each set of components that occurs,
- * and how many entities are made of each. */
-export let CENSUS = {
-  sets: '.archetype&.fields=archetype.tables',
-  tally: '.tally=entity.archetype',
-}
-
 // Notes on the first page are about the components its parts are made of:
-// `archetype` for the archetypes, `edge` for the relations.
+// `_package` for the packages, `_comp` for the components, `edge` for the
+// relations, `archetype` for the archetypes.
 let useConcept = (io: Io, name: string, heading: string) => {
   let eid = compEid(name)
   return {
@@ -40,21 +42,41 @@ let useConcept = (io: Io, name: string, heading: string) => {
   }
 }
 
+// A row standing for a name, for a table of names.
+let named = (n: string): Bundle => ({ entity: { eid: n } })
+
+// A count, or `…` while the census is out.
+let tallied = (ready: boolean, n: number) => ready ? count(n) : '…'
+
 /** The first page. */
 export let HomePage = ({ io }: { io: Io }): JSX.Element => {
-  let got = io.ask({
-    sets: CENSUS.sets,
-    tally: { query: CENSUS.tally, once: true },
-  })
-  let tally = got.tally?.tally ?? {}
-  let sets = rows(got.sets).toSorted((a, b) =>
-    (tally[b.entity.eid] ?? 0) - (tally[a.entity.eid] ?? 0)
+  let census = useCensus(io)
+  let { carried, sets, tally, ready } = census
+  let got = io.ask({ packs: { query: '._package&?_package&?doc', once: true } })
+  let about = new Map(
+    (got.packs?.rows ?? []).map((b) => [
+      str(b, '_package', 'name'),
+      str(b, 'doc', 'body'),
+    ]),
   )
-  let carried = got.tally?.tally ? census(sets, tally) : undefined
-  let archetypes = useConcept(io, 'archetype', 'Archetypes')
-  let edges = useConcept(io, 'edge', 'Relations')
+  let vocab = io.vocab
+  let packs = [...new Set(vocab.docs.flatMap((d) => d.package ?? []))]
+    .toSorted()
+  let declared = Map.groupBy(vocab.all, (n) => vocab.comp(n)?.package ?? '')
+  // How many entities carry any of a package's components.
+  let reach = (p: string) => {
+    let own = new Set(declared.get(p) ?? [])
+    return sets.reduce(
+      (n, s) =>
+        tables(s).some((t) => own.has(t)) ? n + (tally[s.entity.eid] ?? 0) : n,
+      0,
+    )
+  }
   let rels = relations(io).toSorted()
-  let rel = (b: Bundle) => b.entity.eid
+  let comps = vocab.all.toSorted((a, b) =>
+    (carried[b] ?? 0) - (carried[a] ?? 0) || a.localeCompare(b)
+  )
+  let total = Object.values(tally).reduce((a, b) => a + b, 0)
   return h(
     'div',
     {},
@@ -65,63 +87,124 @@ export let HomePage = ({ io }: { io: Io }): JSX.Element => {
       h(
         Head.Sub,
         {},
-        "The graph's data model: every package and component (the index), " +
-          'the sets of components entities are made of, and the relations ' +
-          'between them. Press a row to open it over this page.',
+        "The graph's data model: the packages it is declared in, the " +
+          'components entities carry, the relations between them, and the ' +
+          'sets of components entities are made of. Press a row to open it.',
       ),
       h(
         Head.Facts,
         {},
-        h('span', {}, `${count(io.vocab.all.length)} components`),
-        h('span', {}, `${count(sets.length)} archetypes`),
+        h('span', {}, `${count(packs.length)} packages`),
+        h('span', {}, `${count(vocab.all.length)} components`),
         h('span', {}, `${count(rels.length)} relations`),
+        h('span', {}, `${count(sets.length)} archetypes`),
+        h('span', {}, ready ? `${count(total)} entities` : '… entities'),
       ),
     ),
     h(
       Part,
       {
         io,
-        ...archetypes,
-        heading: 'Archetypes',
-        count: sets.length || undefined,
+        ...useConcept(io, '_package', 'Packages'),
+        heading: 'Packages',
+        count: packs.length,
       },
-      waiting(got.sets) ?? h(Grid, {
+      h(Grid, {
         io,
-        id: key('inspect', 'Archetypes'),
+        id: key('inspect', 'Packages'),
         local: true,
-        rows: sets,
+        rows: packs.map(named),
+        pick: (b) => packEid(b.entity.eid),
         columns: [
-          { name: 'components', cell: (b) => chips(io, tables(b)) },
+          {
+            name: 'package',
+            value: (b) => b.entity.eid,
+            cell: (b) =>
+              h('a', { href: io.link(packEid(b.entity.eid)) }, b.entity.eid),
+          },
+          {
+            name: 'what it is',
+            mod: 'prose',
+            cell: (b) => line(about.get(b.entity.eid), 160),
+          },
+          {
+            name: 'components',
+            mod: 'num',
+            value: (b) => declared.get(b.entity.eid)?.length ?? 0,
+            cell: (b) => count(declared.get(b.entity.eid)?.length ?? 0),
+          },
           {
             name: 'entities',
             mod: 'num',
-            cell: (b) =>
-              got.tally?.tally
-                ? h(
-                  'a',
-                  { href: io.find(`.entity.archetype=${b.entity.eid}`) },
-                  count(tally[b.entity.eid] ?? 0),
-                )
-                : '…',
+            value: (b) => reach(b.entity.eid),
+            cell: (b) => tallied(ready, reach(b.entity.eid)),
           },
         ],
       }),
     ),
     h(
       Part,
-      { io, ...edges, heading: 'Relations', count: rels.length },
+      {
+        io,
+        ...useConcept(io, '_comp', 'Components'),
+        heading: 'Components',
+        count: comps.length,
+      },
+      h(Grid, {
+        io,
+        id: key('inspect', 'Components'),
+        local: true,
+        rows: comps.map(named),
+        pick: (b) => compEid(b.entity.eid),
+        columns: [
+          {
+            name: 'component',
+            value: (b) => b.entity.eid,
+            cell: (b) => chip(io, b.entity.eid),
+          },
+          {
+            name: 'package',
+            value: (b) => vocab.comp(b.entity.eid)?.package ?? '',
+            cell: (b) => vocab.comp(b.entity.eid)?.package ?? '',
+          },
+          {
+            name: 'what it is',
+            mod: 'prose',
+            cell: (b) => line(vocab.comp(b.entity.eid)?.description, 160),
+          },
+          {
+            name: 'entities',
+            mod: 'num',
+            value: (b) => carried[b.entity.eid] ?? 0,
+            cell: (b) => tallied(ready, carried[b.entity.eid] ?? 0),
+          },
+        ],
+      }),
+    ),
+    h(
+      Part,
+      {
+        io,
+        ...useConcept(io, 'edge', 'Relations'),
+        heading: 'Relations',
+        count: rels.length,
+      },
       h(Grid, {
         io,
         id: key('inspect', 'Relations'),
         local: true,
-        rows: rels.map((n): Bundle => ({ entity: { eid: n } })),
-        pick: (b) => compEid(rel(b)),
+        rows: rels.map(named),
+        pick: (b) => compEid(b.entity.eid),
         columns: [
-          { name: 'relation', cell: (b) => chip(io, rel(b)) },
+          {
+            name: 'relation',
+            value: (b) => b.entity.eid,
+            cell: (b) => chip(io, b.entity.eid),
+          },
           {
             name: 'from the far end',
             cell: (b) => {
-              let back = io.vocab.comp(rel(b))?.keywords.reversed
+              let back = vocab.comp(b.entity.eid)?.keywords.reversed
               return typeof back == 'string'
                 ? back
                 : h(Value, { mod: 'nil' }, 'the same')
@@ -130,11 +213,51 @@ export let HomePage = ({ io }: { io: Io }): JSX.Element => {
           {
             name: 'edges',
             mod: 'num',
-            cell: (b) => carried ? count(carried[rel(b)] ?? 0) : '…',
+            value: (b) => carried[b.entity.eid] ?? 0,
+            cell: (b) => tallied(ready, carried[b.entity.eid] ?? 0),
           },
           {
             name: 'package',
-            cell: (b) => io.vocab.comp(rel(b))?.package ?? '',
+            cell: (b) => vocab.comp(b.entity.eid)?.package ?? '',
+          },
+        ],
+      }),
+    ),
+    h(
+      Part,
+      {
+        io,
+        ...useConcept(io, 'archetype', 'Archetypes'),
+        heading: 'Archetypes',
+        count: sets.length || undefined,
+      },
+      waiting({
+        rows: sets,
+        ready: census.ready,
+        error: census.error,
+      }) ?? h(Grid, {
+        io,
+        id: key('inspect', 'Archetypes'),
+        local: true,
+        rows: sets,
+        columns: [
+          {
+            name: 'components',
+            cell: (b) =>
+              tables(b).length
+                ? chips(io, tables(b))
+                : h(Value, { mod: 'nil' }, 'no components'),
+          },
+          {
+            name: 'entities',
+            mod: 'num',
+            value: (b) => tally[b.entity.eid] ?? 0,
+            cell: (b) =>
+              h(
+                'a',
+                { href: io.find(`.entity.archetype=${b.entity.eid}`) },
+                count(tally[b.entity.eid] ?? 0),
+              ),
           },
         ],
       }),

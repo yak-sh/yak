@@ -31,15 +31,22 @@ this package serves it.
   a path segment a page (./where.ts): `/inspect/q=/T-9` is the first page with
   T-9's over it, so back, forward and a shared link restore it.
 - **A page**, for what a pane names:
-  - the first page (`/inspect`): the sets of components entities are made of,
-    most populous first, and the edge relations.
-  - a component: its name, package and description; Properties (name, type,
-    description, flags); Found with (the sets it appears in, with counts);
-    Refers to, and referred to by; Entities (a row each, a column per property,
-    a page at a time, sorted by a pressed heading).
-  - a property: its type and description, its values ranked by how many hold
-    each, and its recent writes.
-  - a package: the components it declares, and what it adds to others'.
+  - the first page (`/inspect`), a map of how the data is made: the packages
+    (what each is, how many components it declares, how many entities carry any
+    of them), the components (package, what it is, how many carry it, the most
+    carried first), the edge relations (what each reads as from the far end, how
+    many edges state it) and the sets of components entities are made of, most
+    populous first. Every count is read off one census (./census.ts).
+  - a component: what it is, its package, how many carry it; Properties (name,
+    type, description, flags); Found with (the sets it appears in, with counts);
+    Refers to, and referred to by (each property naming it or named by it, and
+    each relation its entities are an end of, both ways, with what is at the
+    other end); Entities (a row each, a column per property, a page at a time,
+    sorted by a pressed heading).
+  - a property: what it is, whose, its type; its values ranked by how many hold
+    each; and its component's recent writes that touched it.
+  - a package: the components it declares and how many carry each, and what it
+    adds to others'.
   - any other entity (`/inspect/<id>`, by any id the graph resolves), read the
     way a person reads a page: what it is called, its id and kind, and one quiet
     line of where it came from (what built it, who made it and when, through
@@ -165,14 +172,14 @@ one thing.
 
 ## Limits
 
-- Which sets a component is found with is read off one tally of its entities'
-  archetypes, asked once per page.
+- The census is one tally over every entity (`.tally=entity.archetype`), under a
+  second on a graph of 2.5 million; it is asked once for as long as the page is
+  open, and every count on every page is read off it.
 - A tally cannot be bounded, so a property's values are ranked at once only for
   an enum or a component carried by up to 5,000 entities; beyond that, a press
   ranks them.
-- The journal's changes are indexed by target, not by component, so a property's
-  recent writes take a second or two on a large graph; they are asked once, with
-  no count.
+- A table asked whole (the first page's, a package's) is sorted where it is
+  drawn; one asked a page at a time is sorted by the graph.
 - A `.fields` projection cannot carry a JSON value, so `_comp` rows are asked
   whole.
 - A terminal's pane cannot yet scroll to an element, so walking past the bottom

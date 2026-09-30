@@ -12,15 +12,17 @@
  * @module
  */
 
-import { h, type JSX } from 'preact'
+import { type ComponentChildren, h, type JSX } from 'preact'
 import { parse } from '@yaks/query'
-import { Button, Head, Rows, Value } from '@yaks/ui'
+import { Button, Rows, Value } from '@yaks/ui'
 import type { Prop } from '@yaks/vocab'
 import type { Bundle, Io, Props, View } from './host.ts'
+import { useCensus } from './census.ts'
+import { usePageNotes } from './Entity.ts'
 import { Grid, SIZE } from './grid.ts'
 import { History } from './History.ts'
 import { chip, compEid } from './schema.ts'
-import { NoteButton, Part, Said, under, useNamed, useNotes } from './notes.ts'
+import { Part, useNamed } from './notes.ts'
 import { comp, count, face, flags, line, named, str, typed } from './read.ts'
 import { waiting } from './rows.ts'
 import { grid, key, turned } from './state.ts'
@@ -37,10 +39,11 @@ let split = (e: Bundle): [string, string] => {
   return [name, rest.join('.') || str(e, '_prop', 'name')]
 }
 
-// Whether the graph ranks this property's values: text, enum and id only.
+// Whether the graph ranks this property's values: text, enum, id and number.
 let ranks = (p?: Prop) =>
   !!p &&
-  (p.category != 'scalar' || ['text', 'url', 'query'].includes(p.scalar!))
+  (p.category != 'scalar' ||
+    ['text', 'url', 'query', 'number', 'priority'].includes(p.scalar!))
 
 /**
  * A value as a query term: bare where it is one word, quoted otherwise.
@@ -57,41 +60,26 @@ export let quoted = (v: string): string =>
 
 type Part_ = { e: Bundle; io: Io; notes: Map<string, Bundle[]> }
 
-let Top = ({ e, io, notes }: Part_) => {
-  let eid = e.entity.eid
+// What the head says under the property's name: what it is, then whose it
+// is, its type and what is special about it.
+let about = (io: Io, e: Bundle): ComponentChildren[] => {
   let [name] = split(e)
   let p = comp(e, '_prop')
   let pkg = str(e, '_prop', 'package')
-  let subject = str(e, 'doc', 'title')
-  useNamed(io, [pkg])
-  let listed = (k: string) =>
-    p[k] != null ? [h('span', {}, `${k} ${face(p[k])}`)] : []
-  return h(
-    'div',
-    {},
-    h(
-      Head,
-      {},
-      h(
-        Head.Title,
-        {},
-        subject,
-        h(Head.Kind, {}, 'property'),
-        h(NoteButton, { io, eid, heading: '', subject }),
-      ),
-      h(Head.Sub, {}, str(e, 'doc', 'body')),
-      h(
-        Head.Facts,
-        {},
-        h('span', {}, 'of ', chip(io, name)),
-        pkg ? h('a', { href: io.link(pkg) }, io.name(pkg)) : 'no package',
-        h('span', {}, typed(p) || 'untyped'),
-        ...flags(p).map((f) => h('span', {}, f)),
-        ...['enum', 'default', 'death'].flatMap(listed),
-      ),
-    ),
-    h(Said, { io, eid, subject, heading: '', notes: notes.get('') }),
-  )
+  let ref = str(e, '_prop', 'ref')
+  let listed = (k: string) => p[k] != null ? [` · ${k} ${face(p[k])}`] : []
+  return [
+    str(e, 'doc', 'body'),
+    h('br', {}),
+    'of ',
+    chip(io, name),
+    pkg ? [' from ', h('a', { href: io.link(pkg) }, io.name(pkg))] : '',
+    ' · ',
+    typed({ ...p, ref: null }) || 'untyped',
+    ref ? [' → ', ref == 'entity' ? 'any entity' : chip(io, ref)] : '',
+    ...flags(p).map((f) => ` · ${f}`),
+    ...['enum', 'default', 'death'].flatMap(listed),
+  ]
 }
 
 // The values it holds, most common first.
@@ -100,8 +88,8 @@ let Values = ({ e, io, notes }: Part_) => {
   let [name, prop] = split(e)
   let p = io.vocab.prop(name, prop)
   let id = key(eid, 'Values')
-  let got = io.ask({ total: { query: `.${name}&.count`, once: true } })
-  let n = got.total?.count
+  let census = useCensus(io)
+  let n = census.ready ? census.carried[name] ?? 0 : undefined
   let ranked = ranks(p) &&
     (p?.category == 'enum' || !!grid(io, id).rank || (n != null && n <= RANKED))
   let tallied = io.ask(
@@ -112,12 +100,13 @@ let Values = ({ e, io, notes }: Part_) => {
   let tally = tallied.tally?.tally ?? {}
   let values = Object.keys(tally).toSorted((a, b) => tally[b] - tally[a])
   let ref = p?.category == 'ref'
+  let numbered = ['number', 'priority'].includes(p?.scalar ?? '')
   let page = grid(io, id).after?.length ?? 0
   useNamed(io, ref ? values.slice(page * SIZE, (page + 1) * SIZE) : [])
   let body = !ranks(p)
-    ? h(Rows.More, {}, 'the graph ranks only text, enum and id values')
+    ? h(Rows.More, {}, 'the graph ranks only text, enum, id and number values')
     : !ranked
-    ? waiting(got.total) ?? h(
+    ? waiting({ rows: [], ready: census.ready, error: census.error }) ?? h(
       Rows.More,
       {},
       `${count(n ?? 0)} entities carry ${name}; ranking what they hold here ` +
@@ -144,7 +133,7 @@ let Values = ({ e, io, notes }: Part_) => {
               : h(
                 'a',
                 { href: io.find(`.${name}.${prop}=${quoted(v)}`) },
-                h(Value, { mod: 'text' }, line(v, 120)),
+                h(Value, { mod: numbered ? 'num' : 'text' }, line(v, 120)),
               )
           },
         },
@@ -172,12 +161,17 @@ let Values = ({ e, io, notes }: Part_) => {
 /** A property's own page. */
 export let PropPage = ({ e, io }: Props): JSX.Element => {
   let subject = str(e, 'doc', 'title')
-  let notes = under(useNotes(io, e.entity.eid), subject, HEADINGS)
+  let notes = usePageNotes(io, e, HEADINGS)
   let [name, prop] = split(e)
+  useNamed(io, [str(e, '_prop', 'package')])
   return h(
     'div',
     { 'data-inspect': e.entity.eid },
-    h(Top, { e, io, notes }),
+    io.show(e, 'Inspect.Head', {
+      sub: about(io, e),
+      notes: notes.get(''),
+      subject,
+    }),
     h(Values, { e, io, notes }),
     h(History, {
       e,

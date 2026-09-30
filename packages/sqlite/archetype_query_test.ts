@@ -116,6 +116,45 @@ test('a tally by archetype counts each entity under its archetype', () => {
   )
 })
 
+// A path that ends on the archetype of the entity a reference names reads its
+// eid, so reviews are found by what the product they review is made of.
+test('a path through a reference reads the archetype of the entity it names', () => {
+  let v = loadVocab([...vocab.docs, {
+    $defs: {
+      entity: {
+        component: true,
+        type: 'object',
+        extends: true,
+        properties: {
+          archetype: { type: 'string', ref: 'archetype', stamped: true },
+        },
+      },
+    },
+  }])
+  let s = storage(mem(), v)
+  s.install()
+  let g = graph({ storage: s, vocab: v, plugins: [archetypes()] })
+  g.apply([
+    { entity: { eid: 'b' }, doc: {}, product: { price: 4 } },
+    { entity: { eid: 'p' }, product: { price: 2 } },
+    { entity: { eid: 'r1' }, review: { product: 'b', stars: 5 } },
+    { entity: { eid: 'r2' }, review: { product: 'p', stars: 3 } },
+  ])
+  let [of] = s.rows('.eid=b&.fields=entity.archetype')
+  let set = of['entity.archetype'] as string
+  assertEquals(
+    s.read(`.review.product.entity.archetype=${set}`)
+      .map((b) => b.entity.eid),
+    ['r1'],
+  )
+  assertEquals(s.rows('.review&.tally=review.product.entity.archetype'), [
+    ...[{ value: set, n: 1 }, {
+      value: s.rows('.eid=p&.fields=entity.archetype')[0]['entity.archetype'],
+      n: 1,
+    }].toSorted((a, b) => String(a.value).localeCompare(String(b.value))),
+  ])
+})
+
 test('a wide archetype catalog still answers a component query', () => {
   let flags = Object.fromEntries(
     Array.from({ length: 7 }, (_, i) => [

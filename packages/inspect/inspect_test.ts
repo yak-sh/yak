@@ -29,6 +29,7 @@ import {
   views,
 } from './mod.ts'
 import { docs } from './front.ts'
+import { CENSUS } from './census.ts'
 import { compEid } from './schema.ts'
 
 // A graph of tasks, their owners and the edges between them.
@@ -345,8 +346,10 @@ test("a component's entities run by a pressed heading, a page at a time", async 
   using t = host((line) =>
     line.endsWith('&.limit=50')
       ? { rows: page }
-      : line == '.task&.count'
-      ? { count: 120 }
+      : line == CENSUS.sets
+      ? { rows: [{ entity: { eid: 'a' }, archetype: { tables: '["task"]' } }] }
+      : line == CENSUS.tally
+      ? { tally: { a: 120 } }
       : undefined
   )
   using p = mount(t.draw(h(t.Door, { e: TASK, view: 'Inspect.Page' })))

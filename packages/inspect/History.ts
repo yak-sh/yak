@@ -113,7 +113,10 @@ export let History = (p: HistoryProps): JSX.Element => {
   let base = `._change&._change.${where}`
   let heading = p.heading ?? 'History'
   let id = key(eid, heading)
-  let page = paged(io, id, base, { order: '-_change.tx', size: CHANGES })
+  // Newest first: a window runs newest first by the changes' own ids, which
+  // rise with their transactions, and an index answers it (an order by `tx`
+  // would sort every change of a component).
+  let page = paged(io, id, base, { size: CHANGES })
   let got = io.ask({
     rows: p.once ? { query: page, once: true } : page,
     ...p.once ? {} : { total: `${base}&.count` },

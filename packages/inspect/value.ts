@@ -36,10 +36,11 @@ export let shown = (io: Io, v: unknown, p?: Declared): JSX.Element =>
     ? mention(io, v)
     : h(Value, { mod: shape(v) }, face(v))
 
-/** A stored value as a person reads it. A text kept as a blob (@yaks/blob's
- * `store: 'blob'`), where a journal holds its address rather than its words,
- * links to the words. */
+/** A stored value as a person reads it; nothing where it holds nothing. A text
+ * kept as a blob (@yaks/blob's `store: 'blob'`), where a journal holds its
+ * address rather than its words, links to the words. */
 export let reads = (io: Io, v: unknown, p?: Declared): JSX.Element => {
+  if (v == null) return h(Value, { mod: 'nil' })
   if (named(v) && (p?.category == 'ref' || !p)) return mention(io, v)
   if (p?.keywords.store == 'blob' && /^[0-9a-f]{64}$/.test(String(v))) {
     return h('a', { href: `/blob/${v}` }, 'the text')

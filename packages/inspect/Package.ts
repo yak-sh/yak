@@ -1,6 +1,7 @@
 /**
  * A package's page (`_package`, @yaks/vocab): what it is, the components it
- * declares, and the properties it adds to components other packages declare
+ * declares and how many entities carry each (from the census, ./census.ts),
+ * and the properties it adds to components other packages declare
  * (`extends`).
  *
  * @module
@@ -10,10 +11,11 @@ import { h, type JSX } from 'preact'
 import { parse } from '@yaks/query'
 import { Head } from '@yaks/ui'
 import type { Answer, Bundle, Io, Props, View } from './host.ts'
+import { type Census, useCensus } from './census.ts'
 import { Grid } from './grid.ts'
 import { chip } from './schema.ts'
 import { NoteButton, Part, Said, under, useNotes } from './notes.ts'
-import { comp, line, str, typed } from './read.ts'
+import { comp, count, line, str, typed } from './read.ts'
 import { rows, waiting } from './rows.ts'
 import { key } from './state.ts'
 
@@ -24,7 +26,9 @@ type Part_ = { e: Bundle; io: Io; notes: Map<string, Bundle[]> }
 let about = (b: Bundle) => line(str(b, 'doc', 'body'), 200)
 
 // The components it declares.
-let Declares = ({ e, io, notes, comps }: Part_ & { comps: Answer }) =>
+let Declares = (
+  { e, io, notes, comps, census }: Part_ & { comps: Answer; census: Census },
+) =>
   h(
     Part,
     {
@@ -41,8 +45,21 @@ let Declares = ({ e, io, notes, comps }: Part_ & { comps: Answer }) =>
       local: true,
       rows: rows(comps),
       columns: [
-        { name: 'name', cell: (b) => chip(io, str(b, '_comp', 'name')) },
+        {
+          name: 'name',
+          value: (b) => str(b, '_comp', 'name'),
+          cell: (b) => chip(io, str(b, '_comp', 'name')),
+        },
         { name: 'description', mod: 'prose', cell: about },
+        {
+          name: 'entities',
+          mod: 'num',
+          value: (b) => census.carried[str(b, '_comp', 'name')] ?? 0,
+          cell: (b) =>
+            census.ready
+              ? count(census.carried[str(b, '_comp', 'name')] ?? 0)
+              : '…',
+        },
       ],
     }),
   )
@@ -86,6 +103,7 @@ export let PackagePage = ({ e, io }: Props): JSX.Element => {
   let eid = e.entity.eid
   let name = str(e, '_package', 'name') || str(e, 'doc', 'title')
   let notes = under(useNotes(io, eid), name, HEADINGS)
+  let census = useCensus(io)
   let got = io.ask({
     comps: `._comp&._comp.package=${eid}&?doc&.order=_comp.name`,
     props: `._prop&._prop.package=${eid}&?doc&.order=_prop.comp`,
@@ -106,7 +124,7 @@ export let PackagePage = ({ e, io }: Props): JSX.Element => {
       h(Head.Sub, {}, str(e, 'doc', 'body')),
     ),
     h(Said, { io, eid, subject: name, heading: '', notes: notes.get('') }),
-    h(Declares, { e, io, notes, comps: got.comps }),
+    h(Declares, { e, io, notes, comps: got.comps, census }),
     h(Extends, { e, io, notes, comps: got.comps, props: got.props }),
   )
 }
