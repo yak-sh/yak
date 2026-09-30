@@ -193,6 +193,13 @@ prompt. The model is fetched from the Hugging Face hub on the first embed and
 kept in the platform's cache. Its space is the pinned model and its width
 (`minishlab/potion-retrieval-32M@6fc8051#256`).
 
+`workersAi({ model: '@cf/qwen/qwen3-embedding-0.6b', dim: 256, ai })` asks
+Cloudflare Workers AI through a Worker's `AI` binding: the binding is the
+credential, so a Worker makes this embedder itself. Texts asked together ride
+one `run(model, { text })`, as over HTTP. Outside a Worker, Workers AI is an
+OpenAI-compatible endpoint for `remote`. `batched(model, ask, load?)` is the
+batching both share, for any provider that answers many texts at once.
+
 ## The sweep
 
 Triggers on each component a field lives on queue the entity a write touched in
@@ -210,6 +217,12 @@ another model queues everything again. It returns `{ fresh, left, refused }`. A
 text the embedder refuses loses its vector and is reported in `refused`; any
 other embedder failure stops the pass, the caller receives the error, and the
 work stays queued.
+
+`drain(db, fields, embedder, { batch?, signal? })` sweeps pass after pass until
+nothing is owed, building the index after each, and returns
+`{ fresh, refused }`: the service's loop is a drain and a wait, and a host with
+nothing standing between requests (a Durable Object sleeps) drains once a write
+commits. An aborted `signal` stops it after the pass it is in.
 
 `sources()`, `put()`, `watch()`, `owe()`, `due()` and `paid()` expose the
 individual operations. Embedding can run asynchronously; source reads, vector
@@ -279,7 +292,8 @@ entities a screen admits, and excludes tombstoned entities immediately. Where
 the index below is built, it names the candidates and only those vectors are
 read; everywhere else every vector the screen admits is read. A screen that
 admits at most 5000 entities is always read whole: its vectors cost less to
-score than to find among every code.
+score than to find among every code. A Durable Object cannot load sqlite-vector,
+so there every search reads every vector the screen admits.
 
 Supply `semantic(db, space, { rank })` with a `Rank` implementation to use
 another ranking; it receives the same screen.
@@ -344,10 +358,11 @@ the table.
 
 ## Exports
 
-The root exports field selection, `Embedder`, `hashEmbedder`, `remote`, vector
-math/packing helpers, the schema, sweep operations, the index (`installNative`,
-`build`, `state`, `behind`), `vectorOf`, `nearest`, `meaning`, `semantic` and
-supporting types such as `Rank`. The `Driver` it runs on is `@yaks/sql`'s.
+The root exports field selection, `Embedder`, `hashEmbedder`, `remote`,
+`workersAi`, `batched`, vector math/packing helpers, the schema, sweep
+operations, the index (`installNative`, `build`, `state`, `behind`), `vectorOf`,
+`nearest`, `meaning`, `semantic` and supporting types such as `Rank`. The
+`Driver` it runs on is `@yaks/sql`'s.
 
 | Sub-module export         | Purpose                                                                                                                                                                                      |
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -359,5 +374,7 @@ supporting types such as `Rank`. The `Driver` it runs on is `@yaks/sql`'s.
 ## Compatibility
 
 Requires a synchronous SQLite driver that supports blob values. The package
-chooses no SQLite binding. Remote embedders also require `fetch`; the offline
-embedder needs no network access.
+chooses no SQLite binding. A statement that unions a term per text field is cut
+to the terms the driver's `arms` allows (@yaks/sql `ARMS`: a Durable Object's
+SQLite takes five). Remote embedders also require `fetch`; the offline embedder
+needs no network access.

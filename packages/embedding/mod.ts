@@ -90,6 +90,7 @@
 export * from './vector.ts'
 export * from './embedder.ts'
 export * from './remote.ts'
+export * from './workers-ai.ts'
 export * from './fields.ts'
 export * from './ddl.ts'
 export * from './sweep.ts'

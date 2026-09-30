@@ -7,10 +7,12 @@
 // only this process's. The queue's triggers note every write to embedded text
 // in the same statement as the write, whoever made it — this server, a CLI, a
 // restore — so the loop reads the queue, not the commits it happened to see.
-// While work is left it takes the next batch at once, which is how a backfill
-// drains; when the queue is empty it looks again after `after`, which is how
-// soon a new entry is found by its meaning. An empty look costs a few index
-// reads.
+// While work is left it takes the next batch at once (./sweep.ts `drain`),
+// which is how a backfill drains; when the queue is empty it looks again after
+// `after`, which is how soon a new entry is found by its meaning. An empty
+// look costs a few index reads. A host with nothing standing between requests
+// (a Durable Object sleeps) runs `drain` itself when a write asks, and no loop
+// at all.
 //
 // Embedding is slow and usually remote, and a pass never holds a write open:
 // what it reads and writes are a batch's rows, and the wait between is the
@@ -33,7 +35,7 @@ import type { Vocab } from '@yaks/vocab'
 import type { Derived, Driver } from '@yaks/sql'
 import { resolved } from './fields.ts'
 import { type Options, ready } from './options.ts'
-import { sweep } from './sweep.ts'
+import { drain } from './sweep.ts'
 import { build } from './native.ts'
 
 /** How long an empty queue waits before the loop looks again, by default. */
@@ -59,30 +61,26 @@ export let service = async (
   // Reported once per distinct message: a server waiting for a key says so on
   // the first pass and then goes quiet; `vector_check` keeps the answer.
   let told = new Set<string>()
-  // One pass, and how long until the next.
-  let pass = async (): Promise<number> => {
-    let now = ready(host.vocab, options)
-    if (!now.embedder) {
-      if (!told.has(now.waiting!)) {
-        told.add(now.waiting!)
-        console.warn('@yaks/embedding —', now.waiting)
-      }
-      // The vectors already stored are still searched, through an index.
-      build(host.sql)
-      return after
-    }
-    let text = resolved(now.text, host.derived)
-    let swept = await sweep(host.sql, text, now.embedder, options.batch)
-    for (let r of swept.refused) {
-      console.warn('@yaks/embedding refused', r.entity, '—', r.error)
-    }
-    build(host.sql)
-    return swept.left ? 0 : after
-  }
   for (;;) {
-    let wait = after
     try {
-      wait = await pass()
+      let now = ready(host.vocab, options)
+      if (now.embedder) {
+        let text = resolved(now.text, host.derived)
+        let done = await drain(host.sql, text, now.embedder, {
+          batch: options.batch,
+          signal,
+        })
+        for (let r of done.refused) {
+          console.warn('@yaks/embedding refused', r.entity, '—', r.error)
+        }
+      } else {
+        if (!told.has(now.waiting!)) {
+          told.add(now.waiting!)
+          console.warn('@yaks/embedding —', now.waiting)
+        }
+        // The vectors already stored are still searched, through an index.
+        build(host.sql)
+      }
     } catch (error) {
       // A pass the host ended mid-way wrote nothing it had not settled: its
       // work is still queued, and the store it would report into is closing.
@@ -90,7 +88,7 @@ export let service = async (
       console.warn('@yaks/embedding sweep —', error)
     }
     if (signal.aborted) return
-    await sleep(wait, signal)
+    await sleep(after, signal)
     if (signal.aborted) return
   }
 }

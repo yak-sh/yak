@@ -34,6 +34,7 @@ import { type Field, pieces } from './fields.ts'
 import { TABLE } from './ddl.ts'
 import { due, left, owe, paid, watch } from './owed.ts'
 import { pack, unit } from './vector.ts'
+import { build } from './native.ts'
 
 /** How many queued entities one sweep takes by default. */
 export let BATCH = 64
@@ -50,9 +51,10 @@ export type Source = {
   had: string | null
 }
 
-// The pieces joined per entity, in field order. Assembled here rather than with
-// a SQL group_concat because the order matters and SQLite does not guarantee
-// one for an aggregate.
+// The pieces joined per entity, in field order: the rows arrive sorted by
+// owner and field. Assembled here rather than with a SQL group_concat because
+// the order matters and SQLite does not guarantee one for an aggregate, and
+// because the pieces may come from several statements (./fields.ts `pieces`).
 let assemble = (
   rows: { owner: number; eid: Eid; had: string | null; t: string }[],
 ): Source[] => {
@@ -76,35 +78,41 @@ export let sources = (
   fields: Field[],
   owners?: number[],
 ): Source[] => {
-  let text = pieces(fields, owners)
-  if (!text) return []
   let s = at('s'), o = at('o'), e = at('e')
-  let rows = db.query(select({
-    cols: [
-      as(o('id'), 'owner'),
-      as(o('eid'), 'eid'),
-      as(e('hash'), 'had'),
-      as(s('ord'), 'ord'),
-      as(s('t'), 't'),
-    ],
-    from: from(text, 's'),
-    joins: [
-      join(table('entity', 'o'), eq(o('id'), s('owner'))),
-      { how: 'left', src: table(TABLE, 'e'), on: eq(e('entity'), s('owner')) },
-    ],
-    where: not(exists(select({
-      cols: [lit(1)],
-      from: table('tombstone', 't'),
-      where: eq(col('entity', 't'), s('owner')),
-    }))),
-    order: [o('id'), s('ord')],
-  }))
-  return assemble(rows.map((r) => ({
-    owner: Number(r.owner),
-    eid: String(r.eid),
-    had: r.had == null ? null : String(r.had),
-    t: String(r.t),
-  })))
+  let rows = pieces(fields, owners, db.arms).flatMap((text) =>
+    db.query(select({
+      cols: [
+        as(o('id'), 'owner'),
+        as(o('eid'), 'eid'),
+        as(e('hash'), 'had'),
+        as(s('ord'), 'ord'),
+        as(s('t'), 't'),
+      ],
+      from: from(text, 's'),
+      joins: [
+        join(table('entity', 'o'), eq(o('id'), s('owner'))),
+        {
+          how: 'left',
+          src: table(TABLE, 'e'),
+          on: eq(e('entity'), s('owner')),
+        },
+      ],
+      where: not(exists(select({
+        cols: [lit(1)],
+        from: table('tombstone', 't'),
+        where: eq(col('entity', 't'), s('owner')),
+      }))),
+    }))
+  )
+  return assemble(
+    rows.map((r) => ({
+      owner: Number(r.owner),
+      eid: String(r.eid),
+      had: r.had == null ? null : String(r.had),
+      ord: Number(r.ord),
+      t: String(r.t),
+    })).sort((a, b) => a.owner - b.owner || a.ord - b.ord),
+  )
 }
 
 /** Store one entity's vector, replacing whatever it had. */
@@ -240,4 +248,32 @@ export let sweep = async (
     paid(db, d)
   }
   return { fresh: todo.length - refused.length, left: left(db), refused }
+}
+
+/** What one {@link drain} did: how many vectors it made, and the texts the
+ * embedder refused. */
+export type Drained = { fresh: number; refused: Swept['refused'] }
+
+/**
+ * Sweep pass after pass until nothing is owed, and stop, building the index
+ * after each pass where there is one (./native.ts `build`). A host with
+ * nothing standing between requests (a Durable Object sleeps) runs this when a
+ * write asks; the service (./service.ts) runs it, then waits. An aborted
+ * `signal` stops it after the pass it is in. An embedder that cannot be
+ * reached throws, and what it took stays owed.
+ */
+export let drain = async (
+  db: Driver,
+  fields: Field[],
+  embedder: Embedder,
+  opts: { batch?: number; signal?: AbortSignal } = {},
+): Promise<Drained> => {
+  let done: Drained = { fresh: 0, refused: [] }
+  for (;;) {
+    let swept = await sweep(db, fields, embedder, opts.batch)
+    done.fresh += swept.fresh
+    done.refused.push(...swept.refused)
+    build(db)
+    if (!swept.left || opts.signal?.aborted) return done
+  }
 }

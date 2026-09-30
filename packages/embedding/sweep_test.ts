@@ -17,7 +17,7 @@ import {
 import { bury, raised, SPINE, text as prose } from '../sqlite/testing.ts'
 import { loadVocab } from '@yaks/vocab'
 import { fields, searched } from './fields.ts'
-import { sources, sweep } from './sweep.ts'
+import { drain, sources, sweep } from './sweep.ts'
 import { left, watch } from './owed.ts'
 import { vectorOf } from './near.ts'
 import { schema, TABLE } from './ddl.ts'
@@ -75,6 +75,12 @@ test('the sweep embeds everything owed, then nothing', async () => {
   assertEquals(await swept(db), { fresh: 4, left: 0 })
   assertEquals(await swept(db), { fresh: 0, left: 0 })
   assert(has(db, 'book-1'))
+})
+
+test('a drain sweeps a batch at a time until nothing is owed', async () => {
+  let db = shelf()
+  let done = await drain(db, text, embedder, { batch: 1 })
+  assertEquals([done.fresh, count(db), left(db)], [4, 4, 0])
 })
 
 test('a limit takes the newest and says what is left', async () => {

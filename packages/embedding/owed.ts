@@ -38,7 +38,6 @@ import {
   render,
   select,
   table,
-  union,
   val,
 } from '@yaks/sql'
 import type { Driver } from '@yaks/sql'
@@ -171,16 +170,14 @@ export let watch = (db: Driver, fields: Field[]): boolean => {
 
 /** Queue every entity that wears an embedded field or has a vector. */
 export let owe = (db: Driver, fields: Field[]): void => {
-  let worn = wearers(fields)
   let vectors = select({ cols: [col('entity')], from: table(TABLE) })
-  db.query(
-    queue({
-      q: select({
-        cols: [col('entity'), lit(1)],
-        from: from(worn ? union(worn, vectors) : vectors, 'w'),
+  for (let worn of [...wearers(fields, db.arms), vectors]) {
+    db.query(
+      queue({
+        q: select({ cols: [col('entity'), lit(1)], from: from(worn, 'w') }),
       }),
-    }),
-  )
+    )
+  }
 }
 
 /** One queued entity, and the count it was read at. */

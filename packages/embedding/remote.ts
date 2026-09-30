@@ -51,15 +51,9 @@ export type Remote = {
   dim?: number
   /** how long to wait for one request (default 30s) */
   timeout?: number
-  /** the most characters sent for one vector (default {@link CHARS}) */
-  chars?: number
-  /** the most inputs one request carries (default {@link COUNT}) */
-  count?: number
-  /** the most characters one request carries (default {@link LOAD}) */
-  load?: number
   /** the fetch to call through (default: the global one) */
   fetch?: Fetch
-}
+} & Load
 
 // Where each server takes an embedding request, and where it puts the answer.
 let PATH = { ollama: '/api/embed', openai: '/v1/embeddings' }
@@ -139,10 +133,94 @@ export let cut = (v: Float32Array, dim: number): Float32Array => {
   return unit(v.slice(0, dim))
 }
 
-/** The space a remote's vectors live in: the model, and its width when
+/** The space an embedder's vectors live in: the model, and its width when
  * {@link cut}, since two widths of one model are two spaces. */
-export let space = (said: Remote): string =>
+export let space = (said: { model: string; dim?: number }): string =>
   said.dim ? `${said.model}#${said.dim}` : said.model
+
+/** How many texts ride one request, and how much of each is sent. */
+export type Load = {
+  /** the most characters sent for one vector (default {@link CHARS}) */
+  chars?: number
+  /** the most inputs one request carries (default {@link COUNT}) */
+  count?: number
+  /** the most characters one request carries (default {@link LOAD}) */
+  load?: number
+}
+
+/**
+ * A provider's answer as vectors, one per input and in order, each cut to
+ * `dim` where one is asked for. An answer short of a vector is a provider
+ * that did not do what it says, and throws.
+ */
+export let answered = (
+  who: string,
+  input: string[],
+  got: number[][] | undefined,
+  dim?: number,
+): Float32Array[] => {
+  if (got?.length != input.length || got.some((v) => !v?.length)) {
+    throw new Error(
+      `@yaks/embedding: ${who} answered no vector for ${input.length} ` +
+        `input${input.length == 1 ? '' : 's'} — ${
+          JSON.stringify(got).slice(0, 200)
+        }`,
+    )
+  }
+  return got.map((v) => {
+    let vec = Float32Array.from(v)
+    return dim ? cut(vec, dim) : vec
+  })
+}
+
+/**
+ * An {@link Embedder} over a provider that answers many texts at once. Every
+ * `embed()` made in one turn of the event loop waits for that turn to end and
+ * rides one call of `ask`, split by {@link parts} into calls no larger than
+ * `load` allows; a call that fails fails every text in it. `ask` answers a
+ * vector per text, in order ({@link answered}).
+ */
+export let batched = (
+  model: string,
+  ask: (input: string[]) => Promise<Float32Array[]>,
+  load: Load = {},
+): Embedder => {
+  type Wait = {
+    text: string
+    ok: (v: Float32Array) => void
+    no: (e: unknown) => void
+  }
+  let waiting: Wait[] = []
+  // Send what this turn asked for, a run at a time.
+  let flush = async (): Promise<void> => {
+    let all = waiting
+    waiting = []
+    let at = 0
+    for (
+      let run of parts(
+        all.map((w) => w.text),
+        load.count ?? COUNT,
+        load.load ?? LOAD,
+      )
+    ) {
+      let mine = all.slice(at, at += run.length)
+      try {
+        let got = await ask(run)
+        mine.forEach((w, i) => w.ok(got[i]))
+      } catch (error) {
+        for (let w of mine) w.no(error)
+      }
+    }
+  }
+  return {
+    model,
+    embed: (text) =>
+      new Promise((ok, no) => {
+        if (!waiting.length) setTimeout(flush)
+        waiting.push({ text: text.slice(0, load.chars ?? CHARS), ok, no })
+      }),
+  }
+}
 
 /** An {@link Embedder} that asks a server for every vector, batching the
  * calls made together. */
@@ -170,52 +248,12 @@ export let remote = (said: Remote): Embedder => {
         }`,
       )
     }
-    let got = vectorsOf(said.via, JSON.parse(raw))
-    if (got?.length != input.length || got.some((v) => !v?.length)) {
-      throw new Error(
-        `@yaks/embedding: ${said.via} answered no vector for ${input.length} ` +
-          `input${input.length == 1 ? '' : 's'} — ${raw.slice(0, 200)}`,
-      )
-    }
-    return got.map((v) => {
-      let vec = Float32Array.from(v)
-      return said.dim ? cut(vec, said.dim) : vec
-    })
+    return answered(
+      said.via,
+      input,
+      vectorsOf(said.via, JSON.parse(raw)),
+      said.dim,
+    )
   }
-  type Wait = {
-    text: string
-    ok: (v: Float32Array) => void
-    no: (e: unknown) => void
-  }
-  let waiting: Wait[] = []
-  // Send what this turn asked for, a run at a time; a run that fails fails
-  // every call in it.
-  let flush = async (): Promise<void> => {
-    let all = waiting
-    waiting = []
-    let at = 0
-    for (
-      let run of parts(
-        all.map((w) => w.text),
-        said.count ?? COUNT,
-        said.load ?? LOAD,
-      )
-    ) {
-      let mine = all.slice(at, at += run.length)
-      try {
-        let got = await ask(run)
-        mine.forEach((w, i) => w.ok(got[i]))
-      } catch (error) {
-        for (let w of mine) w.no(error)
-      }
-    }
-  }
-  return {
-    model: space(said),
-    embed: (text) =>
-      new Promise((ok, no) => {
-        if (!waiting.length) setTimeout(flush)
-        waiting.push({ text: text.slice(0, said.chars ?? CHARS), ok, no })
-      }),
-  }
+  return batched(space(said), ask, said)
 }

@@ -52,6 +52,11 @@ import {
 import { BUILD, DIRTY, TABLE } from './ddl.ts'
 import { pack } from './vector.ts'
 
+// The machine this runs on, where the runtime says: Deno does. A Worker does
+// not, and has no extension to load into its SQLite anyway.
+let host = (globalThis as { Deno?: { build: { os: string; arch: string } } })
+  .Deno?.build
+
 let binary = (): string | null => {
   let names: Record<string, string> = {
     'linux-x86_64': '@sqlite-vector-linux-x86_64',
@@ -60,13 +65,9 @@ let binary = (): string | null => {
     'darwin-aarch64': '@sqlite-vector-darwin-aarch64',
     'windows-x86_64': '@sqlite-vector-windows-x86_64',
   }
-  let name = names[`${Deno.build.os}-${Deno.build.arch}`]
-  if (!name) return null
-  let ext = Deno.build.os == 'windows'
-    ? 'dll'
-    : Deno.build.os == 'darwin'
-    ? 'dylib'
-    : 'so'
+  let name = host && names[`${host.os}-${host.arch}`]
+  if (!host || !name) return null
+  let ext = host.os == 'windows' ? 'dll' : host.os == 'darwin' ? 'dylib' : 'so'
   return new URL(`./vector.${ext}`, import.meta.resolve(name)).pathname
 }
 

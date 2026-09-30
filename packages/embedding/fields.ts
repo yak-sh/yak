@@ -16,8 +16,10 @@
 import {
   among,
   and,
+  ARMS,
   as,
   col,
+  cut,
   type Derived,
   each,
   eq,
@@ -134,42 +136,54 @@ let scope = (f: Field) =>
 /**
  * Every embeddable piece of text in the graph, as one row per (entity, field):
  * the owner's integer id, the field's position in the join order, and the text.
- * Blank fields are dropped here, so an entity appears in this result exactly
- * when it has something to embed. `owners` narrows it to those entities, which
- * is how the sweep reads only what it owes. Returns null for a vocabulary with
- * no text properties at all: there is no statement to write.
+ * Blank fields are dropped here, so an entity appears in these results exactly
+ * when it has something to embed. `owners` narrows them to those entities,
+ * which is how the sweep reads only what it owes. One compound statement per
+ * `arms` fields, since an engine bounds the terms one may carry (@yaks/sql
+ * `ARMS`: a Durable Object's SQLite takes five); none for a vocabulary with no
+ * text properties at all.
  */
-export let pieces = (fields: Field[], owners?: number[]): Query | null =>
-  fields.length
-    ? unionAll(...fields.map((f, i) => {
-      let stored = col(f.prop, 'c')
-      let text = f.text ? f.text(stored) : stored
-      let some = ne(fn('trim', fn('coalesce', text, lit('')), val(WS)), lit(''))
-      return select({
-        cols: [
-          as(col('entity', 'c'), 'owner'),
-          as(lit(i), 'ord'),
-          as(text, 't'),
-        ],
-        from: table(f.comp, 'c'),
-        joins: scope(f),
-        where: and(
-          some,
-          ...allowed(f),
-          ...owners ? [among(col('entity', 'c'), each(owners))] : [],
-        ),
-      })
-    }))
-    : null
+export let pieces = (
+  fields: Field[],
+  owners?: number[],
+  arms = ARMS,
+): Query[] =>
+  cut(fields.map((f, i) => [f, i] as const), arms)
+    .filter((group) => group.length)
+    .map((group) =>
+      unionAll(...group.map(([f, i]) => {
+        let stored = col(f.prop, 'c')
+        let text = f.text ? f.text(stored) : stored
+        let some = ne(
+          fn('trim', fn('coalesce', text, lit('')), val(WS)),
+          lit(''),
+        )
+        return select({
+          cols: [
+            as(col('entity', 'c'), 'owner'),
+            as(lit(i), 'ord'),
+            as(text, 't'),
+          ],
+          from: table(f.comp, 'c'),
+          joins: scope(f),
+          where: and(
+            some,
+            ...allowed(f),
+            ...owners ? [among(col('entity', 'c'), each(owners))] : [],
+          ),
+        })
+      }))
+    )
 
 /**
  * Every entity that wears an embedded field, text or no text: what is owed a
  * look when the fields themselves change. It reads no text, so it costs an
- * index scan per field rather than the corpus.
+ * index scan per field rather than the corpus. One statement per `arms`
+ * fields, as {@link pieces}.
  */
-export let wearers = (fields: Field[]): Query | null =>
-  fields.length
-    ? union(...fields.map((f) =>
+export let wearers = (fields: Field[], arms = ARMS): Query[] =>
+  cut(fields, arms).filter((group) => group.length).map((group) =>
+    union(...group.map((f) =>
       select({
         cols: [col('entity', 'c')],
         from: table(f.comp, 'c'),
@@ -177,4 +191,4 @@ export let wearers = (fields: Field[]): Query | null =>
         where: and(...allowed(f)),
       })
     ))
-    : null
+  )
