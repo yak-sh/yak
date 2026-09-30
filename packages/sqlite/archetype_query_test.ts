@@ -1,8 +1,16 @@
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { assert, assertEquals } from '@std/assert'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { graph } from '@yaks/graph'
-import { compile, type Driver, render } from '@yaks/sql'
+import {
+  among,
+  col,
+  compile,
+  type Driver,
+  render,
+  select,
+  table,
+} from '@yaks/sql'
 import { absent, and, or, parse, present } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
 import { mem, shop, spy } from './testing.ts'
@@ -93,6 +101,34 @@ test('a wide archetype catalog still answers a component query', () => {
     ),
   })))
   assertEquals(s.rows('.doc !excluded .count')[0]?.n, 120)
+})
+
+// What a search beside the graph is narrowed by (a store's `/meaning`), read
+// through the archetype index as the store's own reads are.
+test('a screen the store compiles admits what its query selects, by archetype', () => {
+  let driver = mem()
+  let s = storage(driver, vocab)
+  s.install()
+  let g = graph({ storage: s, vocab, plugins: [archetypes()] })
+  g.apply([
+    { entity: { eid: 'a' }, doc: {}, marker: {} },
+    { entity: { eid: 'b' }, doc: {} },
+    { entity: { eid: 'c' }, marker: {} },
+    { entity: { eid: 'd' } },
+  ])
+  for (let q of ['.marker', '.doc !marker', '.kind=doc']) {
+    let within = s.screen(q)!
+    let admitted = driver.query(select({
+      cols: [col('eid')],
+      from: table('entity'),
+      where: among(col('id'), within),
+      order: [col('id')],
+    }))
+    assertEquals(admitted, s.rows(q), q)
+    let plan = driver.query({ t: 'explain query plan', of: within })
+      .map((r) => String(r.detail)).join('\n')
+    assert(plan.includes('entity_archetype'), `${q}\n${plan}`)
+  }
 })
 
 test('archetype query/gather see new sets, rollback and reused descriptor ids', () => {

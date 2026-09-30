@@ -2,7 +2,7 @@
 // query vector; the stored vectors and their source text stay in this package.
 
 import type { Eid } from '@yaks/graph'
-import type { Driver, Raw } from '@yaks/sql'
+import type { Driver, Screen } from '@yaks/sql'
 import type { Embedder } from './embedder.ts'
 import type { Field } from './fields.ts'
 import { nearest } from './near.ts'
@@ -18,9 +18,10 @@ export type Hit = {
 export type MeaningOpts = {
   limit?: number
   floor?: number
-  /** a statement selecting, as `id`, the ids of the entities a hit must be
-   * among (@yaks/sql `screen`) */
-  screen?: Raw
+  /** the entities a hit must be among, as a statement selecting their ids
+   * (@yaks/sql `Screen`): asked for once the words are embedded, so it is
+   * compiled against the rows the search then reads */
+  screen?: Screen
 }
 
 /** A short piece of the text that made an entity's vector. */
@@ -47,7 +48,7 @@ export let meaning = async (
     model: embedder.model,
     limit: opts.limit ?? 20,
     floor: opts.floor,
-    within: opts.screen,
+    within: opts.screen?.() ?? undefined,
   })
   if (!found.length) return []
   let text = new Map(

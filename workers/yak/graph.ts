@@ -98,8 +98,8 @@ import {
   type Driver,
   eq,
   notNull,
+  type Raw,
   render,
-  screen,
   select,
   table,
   val,
@@ -653,9 +653,14 @@ export class Store {
   #effectsReady = false
   #effectWork: Promise<void> | null = null
   #effectAgain = false
-  // The text this object embeds, over the storage it was built on, and the
-  // drain of its queue in progress (`#embedding`).
-  #texts!: { sql: Driver; fields: Text[]; derived: Derived }
+  // The text this object embeds, over the storage it was built on, how the
+  // store narrows a search by a filter line, and the drain of its queue in
+  // progress (`#embedding`).
+  #texts!: {
+    sql: Driver
+    fields: Text[]
+    screen: (line: string) => Raw | null
+  }
   #vectorWork: Promise<void> | null = null
   #vectorAgain = false
   // The schedules this object was born with, planted once (`#sown`), and
@@ -840,7 +845,11 @@ export class Store {
       observe,
       this.#measure,
     )
-    this.#texts = { sql: drive, fields: texts(vocab, derived), derived }
+    this.#texts = {
+      sql: drive,
+      fields: texts(vocab, derived),
+      screen: (line) => store.screen(line),
+    }
     // The schema this object stands at is one word (`shapeOf`): a wake under
     // the same vocabulary runs no DDL at all, and a deploy that added a
     // component raises its table on the next request. Every index the
@@ -2450,13 +2459,11 @@ export class Store {
       if (!model) return Response.json([])
       try {
         let within = at.get('within')
-        let { sql, fields, derived } = this.#texts
+        let { sql, fields, screen } = this.#texts
         return Response.json(
           await meaning(sql, fields, model, at.get('q') ?? '', {
             limit: Number(at.get('limit') ?? 20),
-            screen: within
-              ? screen(parse(within), this.#vocab, { derived }) ?? undefined
-              : undefined,
+            screen: within ? () => screen(within) : undefined,
           }),
         )
       } catch (e) {

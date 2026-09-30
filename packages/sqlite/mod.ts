@@ -44,6 +44,7 @@ import {
   type BindOpts,
   type Derived,
   type Driver,
+  type Raw,
   render,
   type Row,
   type Stmt,
@@ -73,7 +74,7 @@ import {
   tabled,
 } from './ddl.ts'
 import { epoch, epochAt, installed, meta, SCHEMA } from './meta.ts'
-import { doom, get, read, rows, tagOf } from './read.ts'
+import { doom, get, read, rows, screened, tagOf } from './read.ts'
 import { unit } from './unit.ts'
 import { backfill, entomb, ledger, reclassify } from './archetype.ts'
 import { componentTables, shape } from './physical.ts'
@@ -211,6 +212,10 @@ export type Store = {
   read: (query: Query, opts?: BindOpts, comps?: string[]) => Bundle[]
   /** a query → the compiled statement's raw rows (counts, tallies) */
   rows: (query: Query, opts?: BindOpts) => Row[]
+  /** a query → a statement selecting the ids of the entities it admits, as
+   * this store compiles its reads (./read.ts `screened`); null for a query
+   * with nothing to narrow by */
+  screen: (query: Query, opts?: BindOpts) => Raw | null
   /** these entities as they stand, carrying the components `comps` names or
    * every one, read in a unit that takes no write lock */
   get: (eids: Eid[], comps?: string[]) => Bundle[]
@@ -458,6 +463,7 @@ export let storage = (
     read: (query, o, comps) =>
       read(driver, vocab, query, { ...opts(), ...o }, comps),
     rows: (query, o) => rows(driver, vocab, query, { ...opts(), ...o }),
+    screen: (query, o) => screened(driver, vocab, query, { ...opts(), ...o }),
     get: (eids, comps) => unit(driver, () => identity(eids, comps), 'read'),
     tx: <R>(body: (tx: Tx) => R): R =>
       unit(driver, (): R => {

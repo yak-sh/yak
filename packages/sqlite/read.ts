@@ -9,6 +9,7 @@
 // which is what aggregate and projection queries (a count, a tally, a field
 // list) want. `read()` is the whole-entity form built on it: it takes the ids
 // `rows()` returns and reads back every component each entity has.
+// `screened()` is the statement alone, for a search beside the graph to run.
 
 import { type And, parse } from '@yaks/query'
 import type { Prop, Vocab } from '@yaks/vocab'
@@ -43,6 +44,7 @@ import {
   type Query as Sub,
   type Raw,
   type Row,
+  screen,
   type Select,
   select,
   type Source,
@@ -74,19 +76,37 @@ export let rows = (
   opts: BindOpts = {},
 ): Row[] => {
   let indexed = !!vocab.comp('archetype')
-  let ask = () => {
-    let s = compile(ast(query), vocab, {
-      ...opts,
-      archetypes: opts.archetypes ?? (indexed ? catalog(driver) : undefined),
-    })
-    return driver.query(s).map((r) => projected(vocab, r))
-  }
+  let ask = () =>
+    driver.query(compile(ast(query), vocab, catalogued(driver, vocab, opts)))
+      .map((r) => projected(vocab, r))
   // The catalog and entity statement must see the same commit. Otherwise a
   // concurrent writer could introduce a new matching set between the two. A
   // read unit is one snapshot without the write lock, so a long query never
   // makes a writer on another connection wait (./unit.ts).
   return indexed || opts.archetypes ? unit(driver, ask, 'read') : ask()
 }
+
+// A compile's options over this file: the caller's, and the file's archetype
+// catalog where the vocabulary keeps one, so every presence and kind test is
+// a lookup on the archetype index.
+let catalogued = (driver: Driver, vocab: Vocab, opts: BindOpts): BindOpts => ({
+  ...opts,
+  archetypes: opts.archetypes ??
+    (vocab.comp('archetype') ? catalog(driver) : undefined),
+})
+
+/**
+ * The entities a query admits, as a statement selecting their integer ids as
+ * `id` (@yaks/sql `screen`), compiled as this file's reads are: what a search
+ * run beside the graph is narrowed by. It names the archetypes that match now,
+ * so run it before anything else writes.
+ */
+export let screened = (
+  driver: Driver,
+  vocab: Vocab,
+  query: Query,
+  opts: BindOpts = {},
+): Raw | null => screen(ast(query), vocab, catalogued(driver, vocab, opts))
 
 // The properties a gather reads: the stored ones, plus any computed property
 // the caller registered an expression for. A computed property has no row to

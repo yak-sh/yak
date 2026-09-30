@@ -37,13 +37,13 @@ test('new words find ranked source excerpts, bounded by the limit', async () => 
 
 test('a screen narrows meaning search before ranking and limiting', async () => {
   let db = await stocked()
-  let screen = render(select({
+  let within = render(select({
     cols: [col('id')],
     from: table('entity'),
     where: among(col('eid'), [val('book-3'), val('review-4')]),
   }))
   let hits = await meaning(db, fields(shop), embedder, 'dragon', {
-    screen,
+    screen: () => within,
     limit: 1,
   })
   assertEquals(hits.map((h) => h.entity), ['review-4'])
@@ -56,13 +56,13 @@ test('an excerpt reads the configured, resolved source', async () => {
       ...f,
       text: (stored: Expr) => fn('upper', stored),
     }))
-  let screen = render(select({
+  let within = render(select({
     cols: [col('id')],
     from: table('entity'),
     where: among(col('eid'), [val('book-1')]),
   }))
   let [hit] = await meaning(db, only, embedder, 'burglar dragon', {
-    screen,
+    screen: () => within,
     limit: 1,
   })
   assertEquals(hit.entity, 'book-1')
