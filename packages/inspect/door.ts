@@ -17,7 +17,6 @@ import { type FunctionComponent, h } from 'preact'
 import { signal } from '@preact/signals'
 import { type Context, resolve, type Selection } from '@yaks/render'
 import type { Bundle, Host, Io, View } from './host.ts'
-import { docs } from './front.ts'
 
 /** What `Door` takes: the bundle, the view it is drawn as, and the context
  * the view is drawn with. */
@@ -29,19 +28,16 @@ export type Inspector = {
   io: Io
 }
 
-// The components the inspector keeps in the page's own graph.
-let mine = Object.keys(docs[0].$defs ?? {})
-
 /** Bind a registry of views to a host. */
 export let inspector = (
   registry: Selection<View>,
   host: Host,
 ): Inspector => {
   let { useAnswers, front, ...doors } = host
-  // One watch per component of the inspector's own, each change a new turn:
-  // a read of the page's graph during a render subscribes that render to it.
+  // One watch per component of the page's own graph, each change a new turn:
+  // a read of it during a render subscribes that render to it.
   let turn = signal(0)
-  for (let comp of mine) {
+  for (let comp of front.vocab.comps.filter((c) => c != 'entity')) {
     front.watch(`.${comp}`).subscribe(() => turn.value++)
   }
   let io: Io = {

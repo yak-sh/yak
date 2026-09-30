@@ -49,6 +49,9 @@ export type Asks = Record<string, Ask>
 /** A page's own graph, as much as the inspector needs of it: a @yaks/client
  * `client()` is one. */
 export type Front = {
+  /** the components it holds: the inspector's own (./front.json), and
+   * whatever else the page keeps there (a field's @yaks/filter state) */
+  vocab: { comps: string[] }
   mutate: (change: Bundle[]) => unknown
   watch: (query: string) => {
     value: Bundle[]

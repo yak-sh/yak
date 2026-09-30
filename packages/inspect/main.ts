@@ -36,6 +36,8 @@ let box = client(vocab, [], {
   signal,
   vault: false,
   wireVault: false,
+  // Who wrote a row, and when, is the server's to say.
+  provenance: () => null,
   // A refused query says why where it was asked (./live.ts); anything else
   // that goes wrong on the way is the console's.
   report: (t) => t.refused || console.warn('@yaks/inspect', t.error, t.sent),

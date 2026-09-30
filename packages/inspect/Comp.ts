@@ -53,6 +53,7 @@ let Top = ({ e, io, notes }: Part_) => {
   let eid = e.entity.eid
   let name = nameOf(e)
   let pkg = str(e, '_comp', 'package')
+  useNamed(io, [pkg])
   return h(
     'div',
     {},

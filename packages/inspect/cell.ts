@@ -83,9 +83,10 @@ export let Cell = ({ io, e, name, prop }: CellProps): JSX.Element => {
   let was = source(io, v, p)
   // Leave the value: write what was typed, unless it was put back.
   let done = (keep: boolean) => {
-    if (me(io).edit != at) return
+    let node = el.current
+    if (me(io).edit != at || !node) return
     io.set(put({ edit: null }))
-    let typed = el.current?.textContent ?? ''
+    let typed = node.textContent ?? ''
     if (!keep || typed == was) return
     let patch
     try {
@@ -113,7 +114,9 @@ export let Cell = ({ io, e, name, prop }: CellProps): JSX.Element => {
       else io.set(put({ edit: at }))
       ev.preventDefault()
     },
-    onBlur: () => done(true),
+    // Only the element typed in writes when it is left: the one it replaced
+    // loses the focus as it goes, holding nothing typed.
+    onBlur: editing ? () => done(true) : undefined,
   }, editing ? was : face(v))
   return p?.category == 'ref' && named(v)
     ? h('span', {}, far(io, v), ' ', value)

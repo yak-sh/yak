@@ -82,13 +82,16 @@ let stops = (el: TElement | undefined): TElement[] =>
     ...elements(el).flatMap(stops),
   ]
 
-// The stop the walk is on wears FOCUS, and no other does.
+// The stop the walk is on wears FOCUS, and no other does; its pane scrolls
+// to it (@yaks/tui `reveal`).
 let mark = (all: TElement[], on?: TElement) => {
   for (let el of all) {
     let cls = el.className.split(/\s+/).filter((c) => c && c != FOCUS)
     if (el == on) cls.push(FOCUS)
     let next = cls.join(' ')
     if (next != el.className) el.className = next
+    if (el == on) el.setAttribute('reveal', '')
+    else if (el.attr('reveal') != null) el.removeAttribute('reveal')
   }
 }
 
@@ -116,6 +119,8 @@ export let open = async (url: string, href: string): Promise<void> => {
     signal,
     vault: false,
     wireVault: false,
+    // Who wrote a row, and when, is the server's to say.
+    provenance: () => null,
     // The terminal is the page: a refused query says why where it was asked
     // (./live.ts), and a lost socket reconnects on its own.
     report: () => {},
@@ -203,7 +208,7 @@ export let open = async (url: string, href: string): Promise<void> => {
       let to = row ? host.link(row) : on?.attr('href')
       if (to) go(to)
     }
-    useKeys((k) => {
+    let press = (k: Key): boolean => {
       if (typing.value) return type(k)
       let c = k.name == 'char' ? k.text : undefined
       if (c == 'q') quit()
@@ -216,13 +221,21 @@ export let open = async (url: string, href: string): Promise<void> => {
       else if (k.name == 'backspace' || c == 'h') back()
       else return false
       return true
-    })
-    // After every paint, the walk wears FOCUS where it was left, in every
-    // pane.
+    }
+    // Keys typed faster than a read arrive as one run of characters: each is
+    // its own press, the way it was typed.
+    useKeys((k) =>
+      k.name == 'char' && !k.alt && (k.text?.length ?? 0) > 1
+        ? [...k.text!].map((text) => press({ ...k, text })).some(Boolean)
+        : press(k)
+    )
+    // After every render, the walk wears FOCUS where it was left, in the
+    // pane with the keys; a step renders again.
+    let walked = walk.value
     useLayoutEffect(() => {
       for (let p of PANES) {
         let all = stops(paneOf(root.current, p))
-        mark(all, p == pane() ? all[walk.value[p]] : undefined)
+        mark(all, p == pane() ? all[walked[p]] : undefined)
       }
     })
     let now = trail.value.at(-1)!

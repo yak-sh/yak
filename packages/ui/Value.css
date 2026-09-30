@@ -41,8 +41,13 @@
 .Value-editable:hover {
   border-bottom-color: var(--border2);
 }
+/* Typed over where it stands: inline, as it was, so its row keeps its
+   height and nothing around it moves; room for the caret while empty. */
 .Value-editing {
-  min-width: 2ch;
+  display: inline;
+}
+.Value-editing:empty {
+  padding-right: 2ch;
 }
 .Value-refused {
   text-decoration: underline wavy var(--red);

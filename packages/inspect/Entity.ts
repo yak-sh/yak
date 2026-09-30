@@ -43,7 +43,7 @@ let Add = ({ e, io }: { e: Bundle; io: Io }) =>
   h(
     'select',
     {
-      class: 'Edit',
+      class: 'Edit Edit-fit',
       'aria-label': 'add a component',
       value: '',
       onChange: (ev: Event & { currentTarget: HTMLSelectElement }) => {
@@ -105,7 +105,7 @@ export let EntityHead = ({ e, io, notes, linked }: Top): JSX.Element => {
         Head.Title,
         {},
         linked ? h('a', { href: io.link(eid) }, io.name(eid)) : io.name(eid),
-        h(Head.Id, {}, io.id(e)),
+        io.name(eid) != io.id(e) ? h(Head.Id, {}, io.id(e)) : null,
         h(Head.Kind, {}, io.kind(e)),
         h(NoteButton, { io, eid, heading: '', subject }),
       ),

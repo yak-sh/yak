@@ -63,6 +63,7 @@ let Top = ({ e, io, notes }: Part_) => {
   let p = comp(e, '_prop')
   let pkg = str(e, '_prop', 'package')
   let subject = str(e, 'doc', 'title')
+  useNamed(io, [pkg])
   let listed = (k: string) =>
     p[k] != null ? [h('span', {}, `${k} ${face(p[k])}`)] : []
   return h(
