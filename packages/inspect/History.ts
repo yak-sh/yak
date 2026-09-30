@@ -62,7 +62,8 @@ let moved = (
  * What one change did to the component `name`, property by property, given
  * the change before it (the next older one of the same component on the same
  * entity) where the page holds it: each property that moved, or every one it
- * wrote when what came before is not known; only `prop`, where one is named.
+ * wrote a value to when what came before is not known; only `prop`, where one
+ * is named.
  */
 let did = (
   io: Io,
@@ -76,7 +77,7 @@ let did = (
   let was = older ? value(older) ?? {} : undefined
   let props = Object.keys(now).filter((p) =>
     (!prop || p == prop) &&
-    (!was || JSON.stringify(was[p]) != JSON.stringify(now[p]))
+    (was ? JSON.stringify(was[p]) != JSON.stringify(now[p]) : now[p] != null)
   )
   return props.length
     ? props.map((p) => moved(io, name, p, was?.[p], now[p], !!was))
