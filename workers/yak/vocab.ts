@@ -1527,10 +1527,32 @@ export let meant = (said: unknown): VocabDoc => {
 }
 
 /**
+ * The core documents under an app's own words: each word the app declares is
+ * left out of them, so in its store the app's word is the one home.
+ *
+ * Every door a new manifest comes through refuses a platform word
+ * ({@link unsaid}), so an app declares one only where it held the word before
+ * the platform said it. The app's word stays what its rows were written under,
+ * and what the platform means by the name is absent from that one store: a
+ * reader of it asks the vocabulary for what it reads (`cost.dollars`), never
+ * for the name alone.
+ */
+let beneath = (doc: VocabDoc): VocabDoc[] => {
+  let mine = new Set(Object.keys(doc.$defs ?? {}))
+  let kept = ([name, s]: [string, PropSchema]) =>
+    !mine.has(name) || s?.component !== true
+  return coreDocs.map((d) => ({
+    ...d,
+    $defs: Object.fromEntries(Object.entries(d.$defs ?? {}).filter(kept)),
+  }))
+}
+
+/**
  * One app's whole vocabulary: the core documents plus its own `vocab.json`,
  * loaded into the `Vocab` a Store reads its DDL, routing and admission out of.
  * The source is the file as written — text or already parsed — and an app that
- * declares nothing gets the core alone.
+ * declares nothing gets the core alone. A word the app declares is its own
+ * even where the core says it too ({@link beneath}).
  *
  * A vocabulary never changes once loaded, and the core it is built on dwarfs an
  * app's own words, so it is loaded once per declaration and shared: every app
@@ -1549,7 +1571,7 @@ export let appVocab = (source: unknown = {}): Vocab => {
     appVocabs.set(key, held)
     return held
   }
-  let v = loadVocab([...coreDocs, doc], appKeywords)
+  let v = loadVocab([...beneath(doc), doc], appKeywords)
   appVocabs.set(key, v)
   if (appVocabs.size > 64) appVocabs.delete(appVocabs.keys().next().value!)
   return v

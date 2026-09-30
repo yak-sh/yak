@@ -17,11 +17,11 @@ import { builtCurrent } from './current.ts'
 export { buildCost, builtCurrent }
 
 /** The properties builders computes rather than stores: `built.current`, and
- * `build.cost` where the vocabulary declares the `cost` it sums
- * (@yaks/model). */
+ * `build.cost` where the vocabulary declares the `cost.dollars` it sums
+ * (@yaks/model), which a store holding an app's own `cost` does not. */
 export let derived = (vocab: Vocab): Derived => ({
   'built.current': builtCurrent,
-  ...vocab.comp('cost') ? { 'build.cost': buildCost } : {},
+  ...vocab.prop('cost', 'dollars') ? { 'build.cost': buildCost } : {},
 })
 
 /** The builders vocabulary, as the document `loadVocab` accepts. */

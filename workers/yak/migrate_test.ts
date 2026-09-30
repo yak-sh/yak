@@ -258,6 +258,41 @@ test(
   },
 )
 
+// The platform keeps learning words, and an app may have declared one first:
+// its store wakes with the app's word, its rows read and write, the platform's
+// transcript and build words read beside it, and the same manifest redeploys.
+test('a word the platform said after the app did stays the app’s', async () => {
+  let ctx = state()
+  await newer(ctx, 'ada/trip').query('.doc', APP)
+  let words = JSON.stringify({
+    $defs: {
+      cost: {
+        properties: { euros: { type: 'number' }, paid: { type: 'boolean' } },
+      },
+    },
+  })
+  keep(ctx, 'vocab', words)
+  let now = newer(ctx, 'ada/trip')
+  let lunch = { entity: { eid: ONE }, cost: { euros: 12, paid: true } }
+  let chat = { entity: { eid: TWO }, session: {} }
+  let builder = 'b0000000-0000-4000-8000-000000000001'
+  let made = {
+    entity: { eid: identityEid('build', [builder, '["a"]', 'main']) },
+    build: { builder, match: '["a"]', variant: 'main' },
+  }
+  let wrote = await now.apply(
+    [lunch, chat, { entity: { eid: builder }, builder: {} }, made],
+    APP,
+  )
+  assertEquals(wrote.status, 200)
+  let [row] = await now.query('.cost.euros=12&*', APP)
+  assertEquals(row.cost, { euros: 12, paid: true })
+  assertEquals((await now.query('.session&*', APP)).length, 1)
+  assertEquals((await now.query('.build&*', APP)).length, 1)
+  let deploy = await now.door('/vocab', { method: 'POST', body: words }, APP)
+  assertEquals(deploy.status, 200)
+})
+
 test('the {{arg}} hole, as the variable it became', () => {
   assertEquals(
     unholed('{"a":{"query":".r.t={{t}}&.r.n={{n_2}}","apply":"{{x}}!"}}'),

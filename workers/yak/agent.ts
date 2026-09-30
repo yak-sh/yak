@@ -413,9 +413,10 @@ let spoken = async (
   )
   let defs: Record<string, PropSchema> = {}
   let clashes = new Set<string>()
+  let core = appVocab()
   for (let one of said) {
     for (let [name, schema] of Object.entries(one.$defs ?? {})) {
-      let mine = defs[name]
+      let mine = defs[name] ?? core.def(name)
       if (!mine) {
         defs[name] = schema
         continue
@@ -423,7 +424,10 @@ let spoken = async (
       // Two apps in two spaces may each home one word, and then one name
       // means two things (reach.ts `apartIn`). The first declarer is the word
       // here — the same rule the space's own union loads by — and a property
-      // they spell differently is typed nowhere (`reading` below).
+      // they spell differently is typed nowhere (`reading` below). The
+      // platform declares first: an app that held a word before the platform
+      // said it keeps it in its own store (vocab.ts `beneath`), and here the
+      // word is the platform's.
       //
       // Inside one space there is nothing to merge: a word has one home, and
       // a property a borrower declared was planted on the home's manifest by

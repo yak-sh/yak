@@ -512,8 +512,9 @@ export let sessionStatus = {
 
 /** The derived-property registry a SQLite store loads to read
  * `session.status`, and `session.cost` (./cost.ts) where the vocabulary
- * declares @yaks/model's `cost`. */
+ * declares the `cost.dollars` it sums: a store may hold an app's own `cost`
+ * in place of @yaks/model's. */
 export let sessionDerived = (vocab: Vocab): Derived => ({
   'session.status': sessionStatus,
-  ...vocab.comp(COST) ? { 'session.cost': sessionCost } : {},
+  ...vocab.prop(COST, 'dollars') ? { 'session.cost': sessionCost } : {},
 })
