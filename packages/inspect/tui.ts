@@ -141,6 +141,7 @@ export let open = async (url: string, href: string): Promise<void> => {
   let door = inspector(views, host)
   let wide = () => size.value.columns >= 120
   let Frame = frame(door, {
+    fields,
     Bar: ({ id }) =>
       h(fields.Filter, {
         id,

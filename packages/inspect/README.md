@@ -97,7 +97,9 @@ declares for that graph alone (`front.json`, exported as `./front`, never a
 | `table`     | each table's key | how its rows run, the page it shows, whether its values are ranked               |
 
 The index's field is the same `inspect` entity's `filter` (@yaks/filter), and
-each value being changed an `Edit` of its own (@yaks/ux).
+each value being changed an `Edit` of its own (@yaks/ux). What is typed in the
+field is the person's draft, read through @yaks/filter's `text`, which the
+page's host hands `frame()` as its `fields`.
 
 ## Notes
 

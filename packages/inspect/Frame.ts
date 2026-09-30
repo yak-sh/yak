@@ -7,12 +7,15 @@
  *
  * What scrolls, and how the field takes what is typed, are the host's
  * (`Chrome`): a browser's panes scroll under the pointer, a terminal's under
- * its keys, and a terminal too narrow for three leaves the detail out.
+ * its keys, and a terminal too narrow for three leaves the detail out. What
+ * is typed in the field is read through the host's fields (@yaks/filter
+ * `text`), where the person's draft is kept.
  *
  * @module
  */
 
 import { type ComponentChildren, type FunctionComponent, h } from 'preact'
+import type { Filters } from '@yaks/filter'
 import { Panes, Rows } from '@yaks/ui'
 import type { Inspector } from './door.ts'
 import { HomePage } from './Home.ts'
@@ -25,6 +28,9 @@ import { type At, entityLine } from './where.ts'
 export type Chrome = {
   /** the index's query field (@yaks/filter), on the entity `inspect` */
   Bar: FunctionComponent<{ id: string }>
+  /** the query fields the bar is one of: what is typed in it, read
+   * reactively */
+  fields: Pick<Filters, 'text'>
   /** a pane's body, scrolling on its own; `on` while its pane has the keys */
   Scroll: FunctionComponent<
     { id: string; on: boolean; children?: ComponentChildren }
@@ -36,7 +42,7 @@ export type Chrome = {
 /** The page every inspector address draws, over an inspector's door. */
 export let frame = (
   { Door, io }: Inspector,
-  { Bar, Scroll, aside = () => true }: Chrome,
+  { Bar, fields, Scroll, aside = () => true }: Chrome,
 ): FunctionComponent<{ where: At }> => {
   // An entity, by any id the graph resolves, drawn as `view`.
   let Shown = ({ id, view }: { id: string; view: string }) => {
@@ -63,7 +69,7 @@ export let frame = (
         h(
           Scroll,
           { id: 'inspect index', on: pane == 'index' },
-          h(Index, { io, here: id }),
+          h(Index, { io, here: id, text: fields.text(INSPECT) }),
         ),
       ),
       h(

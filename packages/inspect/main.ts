@@ -82,6 +82,7 @@ let find = async (line: string, limit: number, signal?: AbortSignal) => {
 let ux = editing(host, { find, fields, drafts: typed, Float })
 let door = inspector(views, host)
 let Frame = frame(door, {
+  fields,
   Bar: ({ id }) =>
     h(fields.Filter, {
       id,

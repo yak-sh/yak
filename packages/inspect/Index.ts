@@ -1,10 +1,10 @@
 /**
  * The index beside every page: every package, and under it every component
  * it declares, always there, each a link to its page; the one shown lit.
- * What is typed in the field above it (the `filter` on `inspect`, @yaks/filter)
- * narrows it as it is typed: to the components whose name holds it, and to
- * every component of a package whose name does. The field runs it as a
- * query when it is sent (./Frame.ts).
+ * What is typed in the field above it (`text`, the page hands it down from
+ * @yaks/filter) narrows it as it is typed: to the components whose name holds
+ * it, and to every component of a package whose name does. The field runs it
+ * as a query when it is sent (./Frame.ts).
  *
  * @module
  */
@@ -14,7 +14,6 @@ import * as ui from '@yaks/ui'
 import type { Bundle, Io } from './host.ts'
 import { str } from './read.ts'
 import { rows, waiting } from './rows.ts'
-import { INSPECT } from './state.ts'
 
 /** What the index asks for: every package and every component, by name. */
 export let INDEX = {
@@ -57,10 +56,12 @@ export let grouped = (
   })
 }
 
-/** The index. `here` is the eid of the page shown, where it is one. */
-export let Index = ({ io, here }: { io: Io; here?: string }): JSX.Element => {
+/** The index, narrowed by `text`. `here` is the eid of the page shown, where
+ * it is one. */
+export let Index = (
+  { io, here, text }: { io: Io; here?: string; text: string },
+): JSX.Element => {
   let got = io.ask(INDEX)
-  let text = str(io.state(INSPECT), 'filter', 'text')
   let groups = grouped(rows(got.packs), rows(got.comps), text)
   return waiting(got.comps) ?? h(
     ui.Index,

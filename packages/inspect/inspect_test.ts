@@ -2,6 +2,8 @@ import { test, tick, until } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { client } from '@yaks/client'
 import { desk, draftDoc, drafts } from '@yaks/draft'
+import { filters } from '@yaks/filter'
+import { docs as fieldDocs } from '@yaks/filter/vocab'
 import { mint } from '@yaks/graph'
 import { EDGE_URI, edgeKeywords } from '@yaks/edge'
 import { print } from '@yaks/tui/print'
@@ -18,10 +20,12 @@ import {
   editing,
   frame,
   type Host,
+  INSPECT,
   inspector,
   views,
 } from './mod.ts'
 import { docs } from './front.ts'
+import { INDEX } from './Index.ts'
 
 // A graph of tasks, their owners and the edges between them.
 let vocab = loadVocab([{
@@ -120,11 +124,14 @@ let host = (answers: Answers = {}, edits = true) => {
     when: (at) => at,
   }
   let door = inspector(views, double)
+  // What is typed waits as drafts in a page graph beside it, the query
+  // fields' own.
   let typer = mint()
-  let drafted = desk(
-    client(loadVocab([draftDoc]), [drafts()], { vault: false }),
-    { by: () => typer },
-  )
+  let page = client(loadVocab([...fieldDocs, draftDoc]), [drafts()], {
+    vault: false,
+  })
+  let drafted = desk(page, { by: () => typer })
+  let fields = filters(page, { vocab, drafts: drafted })
   let ux = editing(double, {
     find: () => Promise.resolve([T2]),
     drafts: drafted,
@@ -134,6 +141,7 @@ let host = (answers: Answers = {}, edits = true) => {
     asked,
     applied,
     front,
+    fields,
     ...door,
     door,
     draw: (node: ComponentChild) => h(Ux, { host: ux }, node),
@@ -332,6 +340,7 @@ test('a query shows its rows by the components they share; a row pressed opens b
     'entity.eid=t2&*': { rows: [T2] },
   })
   let Page = frame(t.door, {
+    fields: t.fields,
     Bar: () => h('input', { name: 'filter' }),
     Scroll: ({ children }) => h('div', {}, children),
   })
@@ -358,11 +367,42 @@ test('a query shows its rows by the components they share; a row pressed opens b
 test('a query that counts shows the count', () => {
   using t = host({ '.task&.count': { count: 12403 } })
   let Page = frame(t.door, {
+    fields: t.fields,
     Bar: () => null,
     Scroll: ({ children }) => h('div', {}, children),
   })
   using p = mount(t.draw(h(Page, { where: { query: '.task&.count' } })))
   assert(p.text('[data-pane="page"]').includes('12,403'))
+})
+
+test("what is typed in the index's field narrows the index as it is typed", async () => {
+  let pack = (eid: string, name: string) => ({
+    entity: { eid },
+    _package: { name },
+  })
+  let comp = (eid: string, name: string, pkg: string) => ({
+    entity: { eid },
+    _comp: { name, package: pkg },
+  })
+  using t = host({
+    [INDEX.packs]: { rows: [pack('p1', '@yaks/task')] },
+    [INDEX.comps]: {
+      rows: [comp('c1', 'task', 'p1'), comp('c2', 'blocked', 'p1')],
+    },
+  })
+  let Page = frame(t.door, {
+    fields: t.fields,
+    Bar: () => null,
+    Scroll: ({ children }) => h('div', {}, children),
+  })
+  using p = mount(t.draw(h(Page, { where: {} })))
+  let listed = () =>
+    [...p.root.querySelectorAll('[data-pane="index"] .Index_Item')]
+      .map((a) => a.textContent)
+  assertEquals(listed(), ['task', 'blocked'])
+  t.fields.type(INSPECT, 'bl')
+  await tick()
+  assertEquals(listed(), ['blocked'])
 })
 
 test('a terminal paints a page as values, with nothing to type in', () => {
