@@ -71,6 +71,7 @@ import {
   FALSE,
   type Frag,
   type Join,
+  not,
   or,
   type Raw,
   raw,
@@ -149,6 +150,20 @@ let byArchetype = (
   let sql = missing ? `(${key} is null or ${set.sql})` : set.sql
   return cond({ sql, params: set.params })
 }
+
+// The entities wearing `comp`, read from its own table: what a presence test
+// is without a catalog, and, negated, an absence test. Read that way, a sparse
+// component is found from its rows whether or not the planner has statistics,
+// where a LEFT JOIN tested for a row is planned without them as a walk of the
+// whole entity table probing the component per row — and a Durable Object's
+// SQLite has none. `where` narrows to the rows holding a property.
+let owned = (ctx: Ctx, comp: string, where?: string): Cond =>
+  cond({
+    sql: `${ctx.owner ?? ctx.d.ownerKey('entity')} in (select ${
+      ctx.d.ownerKey(comp)
+    } from ${ctx.d.table(comp)}${where ? ` where ${where}` : ''})`,
+    params: [],
+  })
 
 // The two halves of the extension point. `claims` reports whether any
 // registered extension handles a clause kind, so that a directive that would
@@ -418,6 +433,9 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
       present ? { all: [hop.comp] } : { none: [hop.comp] },
     )
     if (shape) return shape
+    if (hop.comp != 'entity' && !computed(ctx.v, hop.comp)) {
+      return present ? owned(ctx, hop.comp) : not(owned(ctx, hop.comp))
+    }
     ctx.tables.add(hop.comp)
     let eid = ctx.d.col(hop.comp, 'eid', ctx.v)!
     return cond({ sql: `${eid} is ${present ? 'not ' : ''}null`, params: [] })
@@ -442,10 +460,9 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
       value,
     )
   }
-  // A stored property's presence is a set of component owners. Reading that
-  // set first keeps a sparse component query off the entity spine even before
-  // the planner has table statistics; it also leaves the outer row's order
-  // and tombstone check where every query keeps them.
+  // A stored property's presence is a set of component owners, read first
+  // (`owned`); it also leaves the outer row's order and tombstone check where
+  // every query keeps them.
   if (!worn(ctx, hop.comp)) return unworn(op, flat(p.value), hop.prop)
   let stored = ctx.v.prop(hop.comp, hop.prop)
   if (
@@ -453,14 +470,7 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     !computed(ctx.v, hop.comp) && !ctx.derived[`${hop.comp}.${hop.prop}`]
   ) {
     let value = ctx.d.col(hop.comp, hop.prop, ctx.v)
-    if (value) {
-      return cond({
-        sql: `${ctx.owner ?? ctx.d.ownerKey('entity')} in (select ${
-          ctx.d.ownerKey(hop.comp)
-        } from ${ctx.d.table(hop.comp)} where ${value} is not null)`,
-        params: [],
-      })
-    }
+    if (value) return owned(ctx, hop.comp, `${value} is not null`)
   }
   if (hop.comp != 'entity') ctx.tables.add(hop.comp)
   // On the entity table, `=` names entities instead of comparing a column.
@@ -726,14 +736,11 @@ let kindScope = (ctx: Ctx, value: string): Cond => {
   let i = kinds.indexOf(k)
   let shape = byArchetype(ctx, { all: [k], none: kinds.slice(0, i) })
   if (shape) return shape
-  ctx.tables.add(k)
-  let parts: Cond[] = [cond(ctx.d.presence(k))]
-  // A computed kind is never worn here, so it is absent without asking.
-  for (let earlier of kinds.slice(0, i).filter((e) => worn(ctx, e))) {
-    ctx.tables.add(earlier)
-    parts.push(cond({ sql: `"${earlier}"."entity" is null`, params: [] }))
-  }
-  return and(...parts)
+  // A computed kind is never worn here, so it is absent without asking. Each
+  // earlier kind is a set to be outside of rather than a table to join, so a
+  // vocabulary of more kinds than SQLite joins in one statement still binds.
+  let earlier = kinds.slice(0, i).filter((e) => worn(ctx, e))
+  return and(owned(ctx, k), ...earlier.map((e) => not(owned(ctx, e))))
 }
 
 // The backlink union across every reference property: the entities that point

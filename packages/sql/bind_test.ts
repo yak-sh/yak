@@ -156,8 +156,14 @@ test('a read marked worn: false keeps its value without the component', () => {
 test('the .kind scope expands to present-and-earlier-absent', () => {
   // task sorts before doc, so `.kind=doc` is doc present and task absent.
   let { sql } = compile(parse('.kind=doc'), v)
-  assert(sql.includes('"doc"."entity" is not null'), sql)
-  assert(sql.includes('"task"."entity" is null'), sql)
+  assert(
+    sql.includes('"entity"."id" in (select "doc"."entity" from "doc")'),
+    sql,
+  )
+  assert(
+    sql.includes('not ("entity"."id" in (select "task"."entity" from "task"))'),
+    sql,
+  )
 })
 
 test('a reverse hop compiles to a correlated EXISTS', () => {
@@ -589,7 +595,7 @@ test('a builder can preserve a terminal component facet across name collisions',
     },
   })
   let c = compile(and({ ...absent('book'), facet: true }), vocab)
-  assert(c.sql.includes('"book"."entity" is null'), c.sql)
+  assert(c.sql.includes('(select "book"."entity" from "book")'), c.sql)
   assert(!c.sql.includes('join "loan"'), c.sql)
 })
 

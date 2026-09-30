@@ -111,6 +111,48 @@ test('stored property presence reads its component without scanning entities', (
   assert(!plan.includes('SCAN entity'), plan)
 })
 
+// Without an archetype catalog, and without the statistics a Durable Object's
+// SQLite never has, a component and a kind are still found from their own
+// rows, and a kind scope binds past SQLite's 64 tables in a join.
+test('a component and a kind are read from their rows, not a scan of entities', () => {
+  let letter = (n: number) => String.fromCharCode(97 + n)
+  let kinds = Array.from(
+    { length: 70 },
+    (_, i) => `k${letter(i / 26 | 0)}${letter(i % 26)}`,
+  )
+  let vocab = loadVocab({
+    $defs: Object.fromEntries(
+      kinds.map((k) => [k, { component: true, type: 'object', kind: true }]),
+    ),
+  })
+  let [first, last] = [kinds[0], kinds.at(-1)!]
+  let driver = mem()
+  let s = storage(driver, vocab)
+  s.install()
+  s.tx((tx) => {
+    tx.patch([
+      { entity: { eid: 'only' }, [last]: {} },
+      { entity: { eid: 'both' }, [last]: {}, [first]: {} },
+      { entity: { eid: 'other' }, [first]: {} },
+      { entity: { eid: 'bare' } },
+      { entity: { eid: 'buried' }, [last]: {} },
+    ])
+    tx.remove([{ eid: 'buried' }])
+  })
+  let eids = (q: string) => s.rows(q).map((r) => r.eid)
+  assertEquals(eids(`.${last}`), ['only', 'both'])
+  assertEquals(eids(`!${last}`), ['other', 'bare'])
+  assertEquals(eids(`.kind=${last}`), ['only'])
+  for (let q of [`.${last}`, `.kind=${last}`]) {
+    let plan = driver.query({
+      t: 'explain query plan',
+      of: bind(parse(q), vocab),
+    })
+      .map((r) => String(r.detail)).join('\n')
+    assert(!plan.includes('SCAN entity'), `${q}\n${plan}`)
+  }
+})
+
 test('ddl() lists the statements install() runs', () => {
   let s = storage(mem(), shop)
   let ddl = s.ddl()
