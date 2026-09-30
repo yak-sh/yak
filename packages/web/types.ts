@@ -44,18 +44,6 @@ export let wakePolicies = [
   'scheduled',
   'manual',
 ] as const
-export let ventureStates = [
-  'incubating',
-  'idea',
-  'building',
-  'launching',
-  'live',
-  'hold',
-  'paused',
-  'shuttered',
-  'killed',
-] as const
-export let ventureModes = ['long-loop', 'cold', 'cron'] as const
 export let dirs = ['h', 'v'] as const
 export let subModes = ['watch', 'mute'] as const
 export let verdicts = ['approved', 'rejected', 'changes_requested'] as const
@@ -591,18 +579,12 @@ export type Repo = {
   push?: boolean
 }
 
-// A project's venture facet: where it sits in its lifecycle and how it's run.
-// A tag like project/repo — it never names an entity alone, so it stays out
-// of kindOrder. paused_from/hold_from carry the phase a reversible stop will
-// restore; run_mode/agent_model/operated_by are the interim operator binding.
+// A project's venture facet (@yaks/project): the phase it is in and its
+// address. A tag like project/repo — it never names an entity alone, so it
+// stays out of kindOrder.
 export type Venture = {
   eid: string
   phase?: string | null
-  paused_from?: string | null
-  hold_from?: string | null
-  run_mode?: string | null
-  agent_model?: string | null
-  operated_by?: string | null
   tagline?: string | null
   site?: string | null
 }

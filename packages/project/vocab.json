@@ -97,15 +97,11 @@
         "phase": {
           "type": "string",
           "enum": [
-            "incubating",
-            "idea",
             "building",
             "launching",
-            "live",
-            "shuttered",
-            "killed"
+            "live"
           ],
-          "description": "where it is: a phase, not a status, because nothing here is ever done. Suspending it is the separate `paused` component, so a phase never has to be remembered and put back"
+          "description": "where it is: a phase, not a status, because nothing here is ever done. Suspending it is the separate `paused` component, so a phase never has to be remembered and put back, and putting it away for good is the kernel's `archived`"
         },
         "tagline": {
           "type": "string",

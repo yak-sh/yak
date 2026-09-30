@@ -25,8 +25,8 @@ deno add jsr:@yaks/project
   nothing to reconcile. The empty query selects nothing, which is what a board
   nobody has written a filter for should show.
 - `venture{phase, tagline, site}` — a business being built. It has a phase —
-  `incubating`, `idea`, `building`, `launching`, `live`, `shuttered` or `killed`
-  — separate from a task's completion status.
+  `building`, `launching` or `live` — separate from a task's completion status.
+  A venture put away for good wears [@yaks/kernel](../kernel)'s `archived`.
 - `paused{at}` — work on it is suspended. It is a separate component rather than
   a phase, so the phase underneath is untouched and resuming means removing the
   component; there is no `paused_from` property remembering where to put the

@@ -21,11 +21,11 @@
 // reconcile. The empty query selects nothing, which is what a board nobody has
 // written a filter for should show, and ./guard.ts refuses the rest.
 //
-// A venture has A phase, not A status. It is never done: it is incubating, or
-// building, or live, or shuttered. Suspending work on it is the separate
-// `paused` component, so the phase underneath is untouched and resuming means
-// removing that component — there is no property remembering which phase to put
-// back.
+// A venture has A phase, not A status. It is never done: it is building, or
+// launching, or live. Suspending work on it is the separate `paused` component,
+// so the phase underneath is untouched and resuming means removing that
+// component — there is no property remembering which phase to put back. A
+// venture put away for good wears the kernel's `archived` mark.
 //
 // The document itself is `./vocab.json` — plain JSON Schema, readable by
 // anything that reads JSON.

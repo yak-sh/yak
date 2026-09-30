@@ -207,9 +207,9 @@ let tag = (t: PropType) =>
   typeof t == 'string' ? t : 'enum' in t ? 'enum' : 'eid' in t ? 'eid' : 'text'
 
 // Empty clears these — an optional enum too (T-16491): a closed set is still
-// an optional column, so `.venture.paused_from=` un-sets it the way every other
-// scalar does. A required enum (for example venture.phase) is protected by
-// the schema, so clearing it is refused loudly rather than silently corrupted.
+// an optional column, so `.venture.phase=` un-sets it the way every other
+// scalar does. A required enum is protected by the schema, so clearing it is
+// refused loudly rather than silently corrupted.
 let nullable = (t: PropType) =>
   ['number', 'priority', 'bool', 'time', 'eid', 'enum'].includes(tag(t))
 
