@@ -20,6 +20,7 @@ import { memoryDoc } from './comp.ts'
 import { type Asked, heard, line } from './recall.ts'
 import { saved } from './save.ts'
 import { runs, unread, witnessed } from './tools.ts'
+import { topicEid } from './topic.ts'
 
 // What a memory lives among: the portfolio it is scoped to, the people and
 // sessions that write, transcripts, comments and tasks that hold words, and
@@ -109,14 +110,47 @@ let jeff = { by: 'jeff', via: 's1' }
 let agent = { by: 'agent', via: 's1' }
 
 test('every memory tool is declared and implemented', () => {
-  assertEquals(loadTools(memoryDoc, tools).map((t) => t.name).sort(), [
-    'memory_around',
-    'memory_recall',
-    'memory_save',
-    'memory_session',
-    'memory_source',
-    'memory_target',
-    'memory_thread',
+  let declared = loadTools(memoryDoc, tools).map((t) => t.name)
+  assertEquals(declared.filter((name) => !tools[name]), [])
+  assertEquals(
+    Object.keys(tools).filter((name) => !declared.includes(name)),
+    [],
+  )
+})
+
+test('a topic is its name, and a name said twice is one topic', async () => {
+  let g = fresh()
+  await write(
+    g,
+    await ask('topic_new', {
+      name: 'UI  Components',
+      body: 'how the interface is built from display-only parts',
+    }, g),
+  )
+  let [made] = await g.read('.topic&*')
+  assertEquals(made.entity.eid, topicEid('ui components'))
+  assertEquals(part(made, 'doc').title, 'UI Components')
+  await assertRejects(
+    () => ask('topic_new', { name: 'ui components', body: 'again' }, g),
+    Refused,
+    made.entity.eid,
+  )
+})
+
+test('find answers the topics holding the words, else every one by name', async () => {
+  let g = fresh()
+  for (
+    let [name, body] of [['testing', 'what a test checks'], [
+      'naming',
+      'one thing, one name',
+    ]]
+  ) {
+    await write(g, await ask('topic_new', { name, body }, g))
+  }
+  let names = (bs: Bundle[]) => bs.map((b) => part(b, 'topic').name)
+  assertEquals(names(await ask('topic_find', {}, g)), ['naming', 'testing'])
+  assertEquals(names(await ask('topic_find', { said: 'checks' }, g)), [
+    'testing',
   ])
 })
 

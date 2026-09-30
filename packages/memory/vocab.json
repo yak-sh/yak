@@ -74,6 +74,104 @@
         }
       }
     },
+    "belief": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "before": [
+        "doc"
+      ],
+      "prefix": "I",
+      "description": "what a builder concluded from memories: one point a person made, or everything they said about one subject. Its doc says it; its built names the build that made it, and its cites edges what it was built from. Never edited by hand: a wrong belief is fixed in the builder that made it",
+      "properties": {
+        "scope": {
+          "type": "string",
+          "ref": "project",
+          "death": "keep",
+          "description": "the project it holds for; absent for a principle that holds everywhere"
+        },
+        "about": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "its subject: a topic, a project, a package, a component (_comp) or a design"
+        }
+      }
+    },
+    "topic": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "before": [
+        "doc"
+      ],
+      "prefix": "Q",
+      "description": "a subject beliefs are about that no project, package, component or design already is. Its doc is a brief: the title, and a line or two saying what belongs under it. What is understood about it lives in the beliefs about it",
+      "properties": {
+        "name": {
+          "type": "string",
+          "identity": true,
+          "description": "the title in lowercase, its spaces single; the topic's id is derived from it, so one name is one topic and naming it again finds the same one"
+        }
+      }
+    },
+    "topic_new": {
+      "tool": true,
+      "noun": "topic",
+      "verb": "new",
+      "title": "Make a topic",
+      "description": "Make a topic for beliefs to be about, where no existing topic, project, package, component or design fits. name is what it is called, as plain and general as the subject is (\"testing\", \"ui components\", \"naming\"), never a phrase about one point; body is its brief, a line or two saying what belongs under it, never a point anybody made. One name is one topic: a name that is taken is refused with the topic that has it, to use instead. Returns the applied change as bundles (JSON objects with entity ids and components); the topic's id is its entity.eid.",
+      "input": {
+        "name": {
+          "type": "string",
+          "description": "what the topic is called, a few plain words"
+        },
+        "body": {
+          "type": "string",
+          "description": "a line or two saying what belongs under it"
+        }
+      },
+      "required": [
+        "name",
+        "body"
+      ],
+      "options": {
+        "positional": [
+          "name"
+        ]
+      }
+    },
+    "topic_find": {
+      "tool": true,
+      "noun": "topic",
+      "verb": "find",
+      "title": "Find topics",
+      "description": "Find existing topics: those whose name or brief contains every word in said, ranked by meaning to the entity near names when the server has a vector index, or, given neither, the topics in order of name. Use it before making a topic, with near set to what a belief is built from, so a subject already named is reused rather than named again in other words. Returns bundles (JSON objects with entity ids and components), each whole; limit defaults to 12.",
+      "input": {
+        "said": {
+          "type": "string",
+          "description": "words the topic's name or brief must contain"
+        },
+        "near": {
+          "type": "string",
+          "ref": "entity",
+          "description": "an entity id or name whose meaning ranks the topics"
+        },
+        "limit": {
+          "type": "number",
+          "description": "return at most this many (default 12)"
+        }
+      },
+      "options": {
+        "positional": [
+          "said"
+        ],
+        "short": {
+          "n": "limit"
+        }
+      },
+      "readOnly": true
+    },
     "memory_save": {
       "tool": true,
       "noun": "memory",

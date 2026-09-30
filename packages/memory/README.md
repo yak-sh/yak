@@ -1,9 +1,11 @@
 # @yaks/memory
 
 Marks what a person said, in their own words, where the graph already holds it,
-reads it back at the start of the next conversation, and reads around it. This
-package supplies the `memory` component, the write and read helpers, and seven
-tools; storage and optional semantic ranking come from elsewhere.
+reads it back at the start of the next conversation, and reads around it. It
+also declares what is built from those words: `belief`, a conclusion a builder
+drew from memories, and `topic`, a subject beliefs are about. This package
+supplies the components, the write and read helpers, and nine tools; storage and
+optional semantic ranking come from elsewhere.
 
 An entity is a record identified by `entity.eid`. A bundle is a JSON object
 containing that identifier and the entity's named components, such as `doc` and
@@ -81,6 +83,31 @@ what happened to an entity, never what it is: a comment marked as a memory is
 still a comment, and only a doc that is nothing but a memory is shown as one
 (@yaks/vocab `kindOrder`).
 
+## Beliefs and topics
+
+A memory is what happened; a belief is what was built from it. A belief is a
+builder's output ([@yaks/builders](../builders)): `doc{title, body}` says it,
+`built` names the build that made it, `cites` edges name the memories or beliefs
+it was built from, and `belief` says where it stands:
+
+- `about` — its subject: a topic, a project, a package, a component (`_comp`) or
+  a design.
+- `scope` — the project it holds for; absent for a principle that holds
+  everywhere.
+
+Nobody edits a belief. A wrong one is fixed in the builder that made it, and the
+builder makes it again.
+
+A topic is a subject no project, package, component or design already is:
+`topic{name}` beside a `doc` whose title names it and whose body is a brief, a
+line or two saying what belongs under it. What is understood about the subject
+lives in the beliefs about it, not in the brief. `topic.name` is the title in
+lowercase with single spaces, and it is the topic's identity: its id is derived
+from it (`topicEid(title)`), so a name said twice is one topic, whoever says it
+and however they capitalise it. That is the guard against synonyms from the
+graph's side; the other is that a builder finds the topics that exist before it
+makes one.
+
 ## Writing
 
 `marked()` returns the bundle that marks an entity already holding the words:
@@ -135,7 +162,7 @@ strict total-output bound. If records are omitted, a notice names
 
 ## The tools
 
-`vocab.json` declares seven tools, and `@yaks/memory/tools` exports the `runs()`
+`vocab.json` declares nine tools, and `@yaks/memory/tools` exports the `runs()`
 factory that implements them (`yak memory save`, `yak memory recall`, and the
 rest the same way, and each over `/mcp`):
 
@@ -149,6 +176,8 @@ yak memory around '#c625160bfa' -B 5 -A 2
 yak memory target C-38041
 yak memory thread C-38041
 yak memory session '#c625160bfa'
+yak topic find --near '#c625160bfa'
+yak topic new testing --body 'what a test checks, and how fast a suite runs'
 ```
 
 `memory save` marks the words where the graph holds them: the entity `on` names,
@@ -188,16 +217,24 @@ bundles, each whole:
 They know other packages' components (`entry`, `comment`, `worked`, `claim`)
 only by the names their queries speak and the rows those answer.
 
+`topic find` answers topics whole: those whose name or brief holds every word of
+`said`, ranked by meaning to `near` where the server has embeddings, or with
+neither, in order of name. `topic new` makes a topic from a name and a brief,
+and refuses a name that is taken, saying which topic has it. A builder making
+beliefs finds before it makes, so a subject already named is reused.
+
 ## Exports
 
 The root exports `memoryDoc`, `marked`, `saved`, `clamped`, `words`, `terms`,
-`line`, `heard`, `ordered`, `passage`, the `Marking`, `Saving`, `Asked`,
-`Memory`, and `Ranker` types, and constants `MEMORY`, `FEEDBACK`, `LINES`,
-`EMPTY`, `LAST`, and `BYTES`. `clamped` performs context-line trimming; `terms`
-turns words into search terms the query grammar cannot misread; `EMPTY` is the
-empty-statement error message. `@yaks/memory/vocab` exports `memoryDoc` and its
-`docs` array for schema loaders; `@yaks/memory/tools` supplies the tool
-implementations described above.
+`line`, `heard`, `ordered`, `passage`, `named`, `topicEid`, `found`, the
+`Marking`, `Saving`, `Asked`, `Memory`, and `Ranker` types, and constants
+`MEMORY`, `FEEDBACK`, `LINES`, `EMPTY`, `LAST`, `BYTES`, `TOPIC` and `FIND`.
+`named` folds a title to a topic's name, `topicEid` gives the id a title names,
+and `found` builds the query `topic find` reads. `clamped` performs context-line
+trimming; `terms` turns words into search terms the query grammar cannot
+misread; `EMPTY` is the empty-statement error message. `@yaks/memory/vocab`
+exports `memoryDoc` and its `docs` array for schema loaders;
+`@yaks/memory/tools` supplies the tool implementations described above.
 
 ## Compatibility
 
