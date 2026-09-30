@@ -14,8 +14,8 @@
 // sweep drops that one text and carries on. Anything else the binding throws —
 // a rate limit, an outage — is thrown as it came, and the work stays owed.
 
-import { type Embedder, Refused } from './embedder.ts'
-import { answered, batched, type Load, space } from './remote.ts'
+import { Refused } from './embedder.ts'
+import { answered, type Batched, batched, type Load, space } from './remote.ts'
 
 /** The slice of a Worker's `AI` binding this file calls. */
 export type Ai = {
@@ -38,9 +38,9 @@ let unfit = (e: unknown) =>
     e instanceof Error ? e.message : String(e),
   )
 
-/** An {@link Embedder} that asks Workers AI for every vector, batching the
- * calls made together. */
-export let workersAi = (said: WorkersAi): Embedder =>
+/** A {@link Batched} embedder that asks Workers AI for every vector,
+ * batching the calls made together. */
+export let workersAi = (said: WorkersAi): Batched =>
   batched(space(said), async (input) => {
     let got: unknown
     try {

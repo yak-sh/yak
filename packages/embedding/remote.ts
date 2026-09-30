@@ -191,6 +191,12 @@ export let answered = (
   })
 }
 
+/** An {@link Embedder} whose every answer comes later: one that asks a
+ * provider, so a caller may treat each `embed()` as a promise. */
+export type Batched = Omit<Embedder, 'embed'> & {
+  embed: (text: string) => Promise<Float32Array>
+}
+
 /**
  * An {@link Embedder} over a provider that answers many texts at once. Every
  * `embed()` made in one turn of the event loop waits for that turn to end and
@@ -202,7 +208,7 @@ export let batched = (
   model: string,
   ask: (input: string[]) => Promise<Float32Array[]>,
   load: Load = {},
-): Embedder => {
+): Batched => {
   type Wait = {
     text: string
     ok: (v: Float32Array) => void
@@ -242,7 +248,7 @@ export let batched = (
 
 /** An {@link Embedder} that asks a server for every vector, batching the
  * calls made together. */
-export let remote = (said: Remote): Embedder => {
+export let remote = (said: Remote): Batched => {
   let root = said.base.trim().replace(/\/+$/, '')
   let go: Fetch = said.fetch ?? (fetch as unknown as Fetch)
   // One request: texts in, a vector each out, in order.
