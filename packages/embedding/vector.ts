@@ -23,6 +23,16 @@ export let unpack = (bytes: Uint8Array): Float32Array =>
   new Float32Array(bytes.slice().buffer)
 
 /**
+ * A vector read back from its blob without a copy where it can be: a view of
+ * the bytes where they are 4-byte aligned, {@link unpack}'s copy where not.
+ * The view shares the bytes, so it is for reading.
+ */
+export let floats = (bytes: Uint8Array): Float32Array =>
+  bytes.byteOffset % 4 == 0
+    ? new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4)
+    : unpack(bytes)
+
+/**
  * The same direction at length 1. A zero vector has no direction, so it comes
  * back unchanged — {@link cosine} answers 0 against it, which is what "unrelated
  * to everything" should read as.

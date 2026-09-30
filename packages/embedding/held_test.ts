@@ -1,6 +1,7 @@
 // The copy held in memory answers what reading every vector answers: as it
 // loads, after any write behind its back, and after another driver clears the
-// dirty set it reads.
+// dirty set it reads. The corpus is ten times what a search re-scores, so the
+// int8 scan decides which vectors reach the float rows.
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
@@ -19,9 +20,9 @@ import {
 import { open } from '@yaks/sqlite/db'
 import { bury, SPINE, TOMBSTONE } from '../sqlite/testing.ts'
 import { schema, TABLE } from './ddl.ts'
-import { absorb } from './held.ts'
+import { absorb, hold, RESCORE } from './held.ts'
 import { nearest, type NearOpts } from './near.ts'
-import { pack, unit } from './vector.ts'
+import { pack, unit, unpack } from './vector.ts'
 
 let model = 'clusters'
 let DIM = 32
@@ -41,16 +42,23 @@ let centres = Array.from(
 let point = (i: number) =>
   unit(centres[i % 12].map((x) => x + (next() - 0.5) * 0.6))
 
-// 200 entities `v-<id>`, each with a vector around one of twelve centres.
+// Entities `v-<id>`, each with a vector around one of twelve centres, of
+// length 1, 4 or 16: its direction is what ranks.
+let N = 5 * RESCORE
 let corpus = () => {
   let db = open(':memory:')
   for (let s of [SPINE, TOMBSTONE, ...schema()]) db.query(s)
-  for (let id = 1; id <= 200; id++) {
-    db.query(insert('entity', { id, eid: `v-${id}` }))
-    db.query(
-      insert(TABLE, { owner: id, model, hash: '', vec: pack(point(id)) }),
-    )
-  }
+  let ids = Array.from({ length: N }, (_, i) => i + 1)
+  db.query(insert('entity', ...ids.map((id) => ({ id, eid: `v-${id}` }))))
+  db.query(insert(
+    TABLE,
+    ...ids.map((id) => ({
+      owner: id,
+      model,
+      hash: '',
+      vec: pack(point(id).map((x) => x * 4 ** (id % 3))),
+    })),
+  ))
   return db
 }
 
@@ -84,6 +92,17 @@ let alike = (db: Driver, opts: Partial<NearOpts> = {}) => {
   }
 }
 
+// A copy as each owner's scale and codes, whichever slot holds them.
+let copy = (db: Driver) => {
+  let h = hold(db, model)!
+  return new Map(
+    [...h.slot].map(([owner, i]) => [
+      owner,
+      [h.scales[i], ...h.codes.subarray(i * h.dim, (i + 1) * h.dim)],
+    ]),
+  )
+}
+
 let top = (db: Driver, q: Float32Array) =>
   nearest(db, q, { model, limit: 3 }).map((n) => n.entity)
 
@@ -98,8 +117,13 @@ test('a write or delete after the copy loaded counts as it stands', () => {
   let db = corpus()
   let q = queries[0]
   let [first] = top(db, q)
-  db.query(insert('entity', { id: 201, eid: 'v-201' }))
-  db.query(insert(TABLE, { owner: 201, model, hash: '', vec: pack(q) }))
+  // the last vector held, which moves into the slot a delete frees
+  let last = unpack(
+    db.query(select({ from: table(TABLE), where: eq(col('owner'), val(N)) }))[0]
+      .vec as Uint8Array,
+  )
+  db.query(insert('entity', { id: N + 1, eid: `v-${N + 1}` }))
+  db.query(insert(TABLE, { owner: N + 1, model, hash: '', vec: pack(q) }))
   db.query({ t: 'delete', from: TABLE, where: eq(col('owner'), val(12)) })
   db.query({
     t: 'update',
@@ -107,11 +131,23 @@ test('a write or delete after the copy loaded counts as it stands', () => {
     set: { vec: val(pack(point(7))) },
     where: eq(col('owner'), val(Number(first.slice(2)))),
   })
+  // one far from q, moved onto it
+  let far = nearest(db, q, { model, limit: N }).at(-1)!.owner
+  db.query({
+    t: 'update',
+    table: TABLE,
+    set: { vec: val(pack(queries[3])) },
+    where: eq(col('owner'), val(far)),
+  })
   for (let settled of [false, true]) {
     if (settled) absorb(db)
-    assertEquals(top(db, q)[0], 'v-201')
+    assertEquals(top(db, q)[0], `v-${N + 1}`)
+    assertEquals(top(db, queries[3])[0], `v-${far}`)
+    assertEquals(top(db, last)[0], `v-${N}`)
     alike(db)
   }
+  // what the writes left is the copy a load makes now, code for code
+  assertEquals(copy(db), copy({ ...db }))
 })
 
 test('a copy whose dirty set another driver cleared loads again', () => {
@@ -119,10 +155,10 @@ test('a copy whose dirty set another driver cleared loads again', () => {
   let other: Driver = { query: db.query }
   let q = queries[1]
   top(db, q)
-  other.query(insert('entity', { id: 201, eid: 'v-201' }))
-  other.query(insert(TABLE, { owner: 201, model, hash: '', vec: pack(q) }))
+  other.query(insert('entity', { id: N + 1, eid: `v-${N + 1}` }))
+  other.query(insert(TABLE, { owner: N + 1, model, hash: '', vec: pack(q) }))
   absorb(other)
-  assertEquals(top(db, q)[0], 'v-201')
+  assertEquals(top(db, q)[0], `v-${N + 1}`)
   alike(db)
 })
 

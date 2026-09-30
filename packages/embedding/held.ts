@@ -1,31 +1,41 @@
 // The vectors held in this process's memory, so a search compares without
-// reading them: one copy per driver, loaded the first time a search asks for
-// it, for a database only this process has open (a Durable Object's, or one in
-// memory; @yaks/sql `Driver.file` says which). A file other processes write is
-// ranked by the quantized index (./native.ts) or read row by row instead.
+// reading them all: one copy per driver, loaded the first time a search asks
+// for it, for a database only this process has open (a Durable Object's, or
+// one in memory; @yaks/sql `Driver.file` says which). A file other processes
+// write is ranked by the quantized index (./native.ts) or read row by row
+// instead.
+//
+// The copy is int8. Each vector is held as one signed byte per coordinate, its
+// coordinates over its own largest in 127 steps, and one float that scales
+// them back. A search scans every code, keeps the best {@link RESCORE} the
+// graph lets stand, reads those few vectors' float rows, and ranks them by
+// their exact cosine. Scaling each vector by its own largest coordinate is the
+// calibration that suits an embedding model's unit vectors: Qwen3-Embedding's
+// largest coordinate is ~3.8 times its root mean square, and no one dimension
+// holds it, so one step is ~1/33 of a typical coordinate and the scan's error
+// is far below the gap between a neighbour and the hundredth candidate. It
+// needs no ranges drawn from the data, so a vector codes the same whenever and
+// wherever it is coded, and a copy kept current write by write codes exactly
+// what one loaded afresh would.
 //
 // The table stays the truth, and the copy is the table as of one build. It is
 // kept current the way the quantized index is: the triggers on the table note
 // every vector written or deleted, by anyone, in the same statement as the
-// write (./ddl.ts, the dirty set), and a search scores what the set names from
+// write (./ddl.ts, the dirty set), and a search codes what the set names from
 // its rows beside the copy. After each sweep pass, the process that ran it
 // folds the set into its copy and clears it ({@link absorb}), numbering a new
 // build; a copy that sees a build it did not make loads again. So no write can
 // leave a copy behind: a write another driver made, a migration, a rollback
 // are all in the set or in the build number.
 //
-// Memory is the limit. A vector costs its width in float32 (1 KB at 256
-// dimensions) and ~44 bytes beside it, and every object in a Worker's isolate
-// shares its 128 MB, so all copies together stay within {@link HELD}: the
-// least recently searched is dropped to make room, and a store whose vectors
-// alone would pass it is not held at all and is read row by row. Today's
-// largest store (24k vectors) holds 26 MB; ten times that would not fit.
-//
-// The scores are the scan's to the last bit: cosine over the same float32
-// values in the same order, so a held search and a read one answer alike.
+// Memory is the limit. A vector costs its width in bytes and ~40 bytes beside
+// it (1 KB at 1024 dimensions), and every object in a Worker's isolate shares
+// its 128 MB, so all copies together stay within {@link HELD}: the least
+// recently searched is dropped to make room, and a store whose vectors alone
+// would pass it is not held at all and is read row by row. Today's largest
+// store (24k vectors) holds 25 MB; ten times that would not fit.
 
 import {
-  among,
   and,
   as,
   at,
@@ -37,6 +47,7 @@ import {
   fn,
   from,
   gt,
+  join,
   lit,
   not,
   op,
@@ -49,18 +60,22 @@ import {
 import { BUILD, DIRTY, TABLE } from './ddl.ts'
 import { admitted, current, installed } from './native.ts'
 import type { Near } from './near.ts'
-import { cosine, unpack } from './vector.ts'
+import { cosine, floats } from './vector.ts'
 
 /** How many bytes of vectors this process holds across every copy: 48 MB of
  * a Worker isolate's 128 MB, which every object in it shares. */
 export let HELD = 48 * 2 ** 20
 
+/** How many of the scan's best a search reads from their rows and ranks by
+ * their exact cosine (more where it asks for more neighbours). */
+export let RESCORE = 100
+
 // Rows read to a statement while a copy loads.
 let PAGE = 2048
 
-// The bytes one vector costs held: its floats, its owner, its norm, and its
+// The bytes one vector costs held: its codes, its owner, its scale, and its
 // entry in the owner index.
-let cost = (dim: number) => 4 * dim + 4 + 8 + 32
+let cost = (dim: number) => dim + 4 + 4 + 32
 
 /** One database's vectors under one model, as of one build. */
 export type Held = {
@@ -70,9 +85,68 @@ export type Held = {
   n: number
   size: number
   ids: Int32Array
-  norms: Float64Array
-  vecs: Float32Array
+  /** each vector's step over its length: a query's dot product with its
+   * codes, times this, is the cosine times the query's length */
+  scales: Float32Array
+  codes: Int8Array
   slot: Map<number, number>
+}
+
+// Code `v` into `codes` from `at`: each coordinate over the largest, rounded
+// to one of 255 steps from -127 to 127. Returns the scale that turns the
+// codes' dot product with a query back into cosine times the query's length;
+// 0 for a vector with no direction.
+let code = (v: Float32Array, codes: Int8Array, at = 0): number => {
+  let max = 0, sum = 0, dim = v.length
+  for (let j = 0; j < dim; j++) {
+    let x = v[j]
+    sum += x * x
+    if (x > max) max = x
+    else if (-x > max) max = -x
+  }
+  if (!max) {
+    codes.fill(0, at, at + dim)
+    return 0
+  }
+  let k = 127 / max
+  for (let j = 0; j < dim; j++) codes[at + j] = Math.round(v[j] * k)
+  return max / 127 / Math.sqrt(sum)
+}
+
+// The first `size` coded vectors' scores against `query`: each one's codes'
+// dot product, term after term, times its scale. Four vectors share a pass
+// over the query, which V8 runs nearly twice as fast as one at a time, and
+// each one's sum is still its own terms in order, so a vector scores the same
+// to the last bit however many are scored beside it.
+let scores = (
+  query: Float32Array,
+  codes: Int8Array,
+  scales: Float32Array,
+  size: number,
+): Float64Array => {
+  let out = new Float64Array(size)
+  let dim = query.length, i = 0
+  for (; i + 4 <= size; i += 4) {
+    let a = 0, b = 0, c = 0, d = 0
+    let p = i * dim, q = p + dim, r = q + dim, s = r + dim
+    for (let j = 0; j < dim; j++) {
+      let x = query[j]
+      a += x * codes[p + j]
+      b += x * codes[q + j]
+      c += x * codes[r + j]
+      d += x * codes[s + j]
+    }
+    out[i] = scales[i] * a
+    out[i + 1] = scales[i + 1] * b
+    out[i + 2] = scales[i + 2] * c
+    out[i + 3] = scales[i + 3] * d
+  }
+  for (; i < size; i++) {
+    let a = 0, p = i * dim
+    for (let j = 0; j < dim; j++) a += query[j] * codes[p + j]
+    out[i] = scales[i] * a
+  }
+  return out
 }
 
 // Each driver's copy, gone with the driver. The copies are also listed, least
@@ -107,8 +181,8 @@ let drop = (h: Held) => {
     n: -1,
     size: 0,
     ids: new Int32Array(0),
-    norms: new Float64Array(0),
-    vecs: new Float32Array(0),
+    scales: new Float32Array(0),
+    codes: new Int8Array(0),
     slot: new Map(),
   })
 }
@@ -131,12 +205,12 @@ let room = (need: number, mine: Held) => {
 // Room for `cap` vectors, keeping the ones held.
 let grow = (h: Held, cap: number): boolean => {
   if (!room((cap - h.ids.length) * cost(h.dim), h)) return false
-  let ids = new Int32Array(cap), norms = new Float64Array(cap)
-  let vecs = new Float32Array(cap * h.dim)
+  let ids = new Int32Array(cap), scales = new Float32Array(cap)
+  let codes = new Int8Array(cap * h.dim)
   ids.set(h.ids.subarray(0, h.size))
-  norms.set(h.norms.subarray(0, h.size))
-  vecs.set(h.vecs.subarray(0, h.size * h.dim))
-  Object.assign(h, { ids, norms, vecs })
+  scales.set(h.scales.subarray(0, h.size))
+  codes.set(h.codes.subarray(0, h.size * h.dim))
+  Object.assign(h, { ids, scales, codes })
   return true
 }
 
@@ -149,8 +223,8 @@ let lose = (h: Held, owner: number) => {
   if (i == last) return
   let moved = h.ids[last]
   h.ids[i] = moved
-  h.norms[i] = h.norms[last]
-  h.vecs.copyWithin(i * h.dim, last * h.dim, (last + 1) * h.dim)
+  h.scales[i] = h.scales[last]
+  h.codes.copyWithin(i * h.dim, last * h.dim, (last + 1) * h.dim)
   h.slot.set(moved, i)
 }
 
@@ -173,13 +247,7 @@ let keep = (h: Held, owner: number, bytes: Uint8Array): boolean => {
     h.slot.set(owner, i)
     h.ids[i] = owner
   }
-  let v = unpack(bytes)
-  let at = i * h.dim, lb = 0
-  for (let j = 0; j < h.dim; j++) {
-    h.vecs[at + j] = v[j]
-    lb += v[j] * v[j]
-  }
-  h.norms[i] = Math.sqrt(lb)
+  h.scales[i] = code(floats(bytes), h.codes, i * h.dim)
   return true
 }
 
@@ -227,8 +295,8 @@ let load = (db: Driver, model: string): Held | null => {
     n: current(db).n,
     size: 0,
     ids: new Int32Array(0),
-    norms: new Float64Array(0),
-    vecs: new Float32Array(0),
+    scales: new Float32Array(0),
+    codes: new Int8Array(0),
     slot: new Map(),
   }
   touch(h)
@@ -312,8 +380,8 @@ export let absorb = (db: Driver): void => {
   if (h && h.n == now) h.n = n
 }
 
-// The `m` best of the scored, best first: the highest similarity, and for
-// equal ones the lower owner id, as the scan breaks a tie.
+// The `m` best of the scored, best first: the highest score, and for equal
+// ones the lower owner id, as the scan breaks a tie.
 let top = (owners: Int32Array, sims: Float64Array, m: number): number[] => {
   let worse = (a: number, b: number) =>
     sims[a] < sims[b] || (sims[a] == sims[b] && owners[a] > owners[b])
@@ -345,16 +413,26 @@ let top = (owners: Int32Array, sims: Float64Array, m: number): number[] => {
   return heap.sort((a, b) => worse(a, b) ? 1 : worse(b, a) ? -1 : 0)
 }
 
-// Which of `owners` stand as neighbours, and their eids: an entity that is
-// not buried, and one the screen admits, each tested by its own key.
-let o = at('o')
-let standing = (db: Driver, owners: number[], within?: Raw) =>
+// Which of `owners` stand as neighbours, with their eids and their vectors as
+// stored: an entity that is not buried, whose vector is still in `model`'s
+// space, and one the screen admits. Driven by the list, so each candidate
+// costs one read of its entity, its vector and its tombstone.
+let o = at('o'), j = at('j')
+let standing = (db: Driver, model: string, owners: number[], within?: Raw) =>
   new Map(
     db.query(select({
-      cols: [as(o('id'), 'owner'), as(o('eid'), 'eid')],
-      from: table('entity', 'o'),
+      cols: [
+        as(o('id'), 'owner'),
+        as(o('eid'), 'eid'),
+        as(e('model'), 'model'),
+        as(e('vec'), 'vec'),
+      ],
+      from: from(each(owners), 'j'),
+      joins: [
+        join(table('entity', 'o'), eq(o('id'), j('value'))),
+        join(table(TABLE, 'e'), eq(e('owner'), o('id'))),
+      ],
       where: and(
-        among(o('id'), each(owners)),
         not(exists(select({
           cols: [lit(1)],
           from: table('tombstone', 't'),
@@ -362,40 +440,19 @@ let standing = (db: Driver, owners: number[], within?: Raw) =>
         }))),
         ...(within ? [admitted(within, o('id'))] : []),
       ),
-    })).map((r) => [Number(r.owner), String(r.eid)]),
+    })).flatMap((r) =>
+      r.model == model
+        ? [[Number(r.owner), { eid: String(r.eid), vec: r.vec as Uint8Array }]]
+        : []
+    ),
   )
-
-// Every held vector's similarity to `query`, as cosine scores it: the same
-// terms added in the same order, four to a turn of the loop. A query of
-// another width is unrelated to every vector.
-let similarities = (h: Held, query: Float32Array): Float64Array => {
-  let out = new Float64Array(h.size)
-  if (query.length != h.dim) return out
-  let { norms, vecs, dim } = h
-  let la = 0
-  for (let j = 0; j < dim; j++) la += query[j] * query[j]
-  let qn = Math.sqrt(la)
-  let four = dim - dim % 4
-  for (let i = 0; i < h.size; i++) {
-    let dot = 0, at = i * dim, j = 0
-    for (; j < four; j += 4) {
-      dot += query[j] * vecs[at + j]
-      dot += query[j + 1] * vecs[at + j + 1]
-      dot += query[j + 2] * vecs[at + j + 2]
-      dot += query[j + 3] * vecs[at + j + 3]
-    }
-    for (; j < dim; j++) dot += query[j] * vecs[at + j]
-    let len = qn * norms[i]
-    out[i] = len ? dot / len : 0
-  }
-  return out
-}
 
 /**
  * The `limit` nearest to `query` in a copy, most similar first: every held
- * vector scored in memory, what the dirty set names scored from its rows, and
- * the best tested against the graph a few at a time, reaching further while
- * too few stand.
+ * vector's codes scanned, what the dirty set names coded from its rows, the
+ * best tested against the graph a few at a time until {@link RESCORE} of
+ * them stand (reaching further while too few do), and those ranked by the
+ * exact cosine of their stored vectors.
  */
 export let ranked = (
   db: Driver,
@@ -404,34 +461,41 @@ export let ranked = (
   opts: { limit: number; floor: number; without?: number; within?: Raw },
 ): Near[] => {
   let fresh = dirty(db, h.model)
-  let all = similarities(h, query)
+  let all = query.length == h.dim
+    ? scores(query, h.codes, h.scales, h.size)
+    : new Float64Array(h.size)
   let owners = new Int32Array(h.size + fresh.size)
   let sims = new Float64Array(h.size + fresh.size)
   let count = 0
   let score = (owner: number, sim: number) => {
-    if (owner == opts.without || !(sim >= opts.floor)) return
+    if (owner == opts.without) return
     owners[count] = owner
     sims[count++] = sim
   }
   for (let i = 0; i < h.size; i++) {
     if (!fresh.has(h.ids[i])) score(h.ids[i], all[i])
   }
+  let one = new Int8Array(h.dim), scale = new Float32Array(1)
   for (let [owner, vec] of fresh) {
-    if (vec) score(owner, cosine(query, unpack(vec)))
+    if (vec?.byteLength != h.dim * 4 || query.length != h.dim) continue
+    scale[0] = code(floats(vec), one)
+    score(owner, scores(query, one, scale, 1)[0])
   }
   owners = owners.subarray(0, count)
   sims = sims.subarray(0, count)
-  let out: Near[] = []
+  let want = Math.max(RESCORE, opts.limit)
+  let found: Near[] = []
   let within = opts.within
-  for (let seen = 0, reach = opts.limit; out.length < opts.limit;) {
+  for (let seen = 0, reach = want; found.length < want;) {
     let best = top(owners, sims, Math.min(reach, owners.length))
     if (best.length == seen) break
     let batch = best.slice(seen)
-    let eids = standing(db, batch.map((k) => owners[k]), within)
+    let rows = standing(db, h.model, batch.map((k) => owners[k]), within)
     for (let k of batch) {
-      let entity = eids.get(owners[k])
-      if (entity == null || out.length == opts.limit) continue
-      out.push({ entity, owner: owners[k], similarity: sims[k] })
+      let row = rows.get(owners[k])
+      if (!row || found.length == want) continue
+      let similarity = cosine(query, floats(row.vec))
+      found.push({ entity: row.eid, owner: owners[k], similarity })
     }
     seen = best.length
     reach *= 4
@@ -439,10 +503,8 @@ export let ranked = (
     // the rate so far says the walk would test more than half of it, the
     // screen is read whole, and the rest of the ranking is what it admits,
     // all of it below everything already tested.
-    let rate = Math.max(out.length, 1) / seen
-    if (
-      within && out.length < opts.limit && opts.limit / rate > owners.length / 2
-    ) {
+    let rate = Math.max(found.length, 1) / seen
+    if (within && found.length < want && want / rate > owners.length / 2) {
       let admits = new Set(
         db.query(select({ cols: [col('id', 's')], from: from(within, 's') }))
           .map((r) => Number(r.id)),
@@ -457,8 +519,11 @@ export let ranked = (
       ]
       within = undefined
       seen = 0
-      reach = opts.limit - out.length
+      reach = want - found.length
     }
   }
-  return out
+  return found
+    .filter((n) => n.similarity >= opts.floor)
+    .sort((a, b) => b.similarity - a.similarity || a.owner - b.owner)
+    .slice(0, opts.limit)
 }

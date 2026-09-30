@@ -3,12 +3,14 @@
 // the kernel's `/meaning` door, which memory recall asks.
 import { test, until } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { hashEmbedder } from '@yaks/embedding'
+import { hashEmbedder, pack, TABLE, unit } from '@yaks/embedding'
+import { driver } from '@yaks/durable-object'
+import { col, select, table, val } from '@yaks/sql'
 import { doorOf } from './door.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { state } from './testing.ts'
-import { DIM } from './embedding.ts'
+import { DIM, SPACE } from './embedding.ts'
 
 // Workers AI, stood in for by word buckets: texts sharing words are near.
 let words = hashEmbedder(DIM)
@@ -23,10 +25,15 @@ let AI = {
   gateway: () => ({ getUrl: () => Promise.resolve('') }),
 }
 
+// A store over an object's state, and its door.
+let open = (st: ReturnType<typeof state>) => {
+  let store = new Store(st, { AI })
+  return metaOf(doorOf((r) => store.fetch(r), 'ada/notes'))
+}
+
 // An app's store holding three notes, embedded once their write committed.
-let notes = async () => {
-  let store = new Store(state(), { AI })
-  let door = metaOf(doorOf((r) => store.fetch(r), 'ada/notes'))
+let notes = async (st = state()) => {
+  let door = open(st)
   await door.apply([
     { entity: { eid: 'hobbit' }, doc: { title: 'a burglar meets a dragon' } },
     { entity: { eid: 'flight' }, doc: { title: 'a dragon meets a burglar' } },
@@ -50,4 +57,30 @@ test('words rank by meaning among what a line selects', async () => {
   assertEquals(hits.map((h) => h.entity).sort(), ['flight', 'hobbit'])
   let none = await door.meaning('dragon', { within: '.eid=kitchen' })
   assertEquals(none.map((h) => h.entity), ['kitchen'])
+})
+
+test('a store woken with its vectors in another space re-embeds them all', async () => {
+  let st = state()
+  await notes(st)
+  let sql = driver(st.storage)
+  sql.query({
+    t: 'update',
+    table: TABLE,
+    set: {
+      model: val(`${SPACE}#256`),
+      hash: val(''),
+      vec: val(pack(unit(new Float32Array(256).fill(1)))),
+    },
+  })
+  let door = open(st)
+  let near = (q: string) =>
+    door.query(q).then((rows) => rows.map((b) => b.entity.eid))
+  await until(() => near('.near=hobbit').then((eids) => eids.length))
+  assertEquals(await near('.near=hobbit&.order=similar'), ['flight', 'kitchen'])
+  let spaces = sql.query(select({
+    cols: [col('model')],
+    from: table(TABLE),
+    distinct: true,
+  }))
+  assertEquals(spaces, [{ model: SPACE }])
 })

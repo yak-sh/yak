@@ -5,9 +5,10 @@
 // (./native.ts), the index names the few hundred candidates worth scoring,
 // plus every vector written since its build, and only those are read. Where
 // this process is the only one with the database open (a Durable Object's),
-// the vectors are held in its memory (./held.ts) and none is read. Everywhere
-// else every vector is read. An approximate ranker can replace this through
-// Rank without changing the query extension.
+// the vectors are held in its memory as int8 (./held.ts), and only the
+// hundred its scan finds best are read. Everywhere else every vector is read.
+// An approximate ranker can replace this through Rank without changing the
+// query extension.
 //
 // A {@link Screen} is the other half of "nearest": nearest among what. The
 // eight nearest entities of any kind are the wrong eight for `.near=X&.memory`
@@ -40,7 +41,7 @@ import {
 import { TABLE } from './ddl.ts'
 import { hold, ranked } from './held.ts'
 import { candidates } from './native.ts'
-import { cosine, unpack } from './vector.ts'
+import { cosine, floats, unpack } from './vector.ts'
 
 /**
  * One semantic neighbour: the entity, the integer id its rows key on, and how
@@ -194,12 +195,7 @@ export let nearest = (
   let heap: Hit[] = []
   for (let row of vectors(db, opts.model, opts.within, pool)) {
     if (row.owner == without) continue
-    let bytes = row.vec as Uint8Array
-    // A driver may return a slice with an unaligned offset. A view avoids a
-    // second copy for aligned blobs while retaining unpack's safe fallback.
-    let vec = bytes.byteOffset % 4 == 0
-      ? new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4)
-      : unpack(bytes)
+    let vec = floats(row.vec as Uint8Array)
     let hit = { owner: Number(row.owner), similarity: cosine(query, vec) }
     if (!(hit.similarity >= floor)) continue
     if (heap.length < limit) push(heap, hit)
