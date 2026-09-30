@@ -16,8 +16,8 @@ deno add jsr:@yaks/persona
   for. The component declares `governed`, meaning it should be associated with a
   project, so [@yaks/project](../project)'s check reports a persona no project
   can reach.
-- `role{state, surface, scope}` — what an agent running a persona is responsible
-  for, and whether it is currently running. When it next runs is a
+- `role{surface, scope}` — what an agent running a persona is responsible for,
+  and whether it runs in this process or another. When it next runs is a
   [@yaks/wake](../wake) `wake` pointing at it, where it works is a
   [@yaks/git](../git) `worktree`, and what it last decided is
   [@yaks/kernel](../kernel)'s `decided` — the role does not keep a second copy

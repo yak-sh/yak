@@ -86,13 +86,8 @@ export let sessionsOf = (
     .sort((a, b) => Number(awake(b)) - Number(awake(a)) || b.num - a.num)
 }
 
-// The roles scoped here, running first.
-let rolesOf = (roles: Ent[]) =>
-  roles
-    .toSorted((a, b) =>
-      Number(b.role?.state == 'running') -
-        Number(a.role?.state == 'running') || a.num - b.num
-    )
+// The roles scoped here, oldest first.
+let rolesOf = (roles: Ent[]) => roles.toSorted((a, b) => a.num - b.num)
 
 export let Dashboard = ({ e }: { e: Ent }) => {
   // The sessions facet screens EVERY session down to the few serving this

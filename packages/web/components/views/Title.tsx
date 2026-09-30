@@ -2,7 +2,6 @@ import { type Ent, friendly } from '../../types.ts'
 import { block } from '@yaks/ui'
 import { title, TitleEdit } from '../title.tsx'
 import { Pip } from './Show.tsx'
-import { Dot } from '../Dot.tsx'
 import { Id } from './Inline.tsx'
 import { SessionDot } from '../session_status.tsx'
 import { useModel } from '../subscriptions.ts'
@@ -39,7 +38,6 @@ export let BoardTitle = ({ e }: { e: Ent }) => (
 export let RoleTitle = ({ e }: { e: Ent }) => (
   <Frame>
     <Id e={e} />
-    <Dot status={e.role!.state == 'running' ? 'running' : 'completed'} />
     <Text>
       <TitleEdit eid={e.eid} />
     </Text>

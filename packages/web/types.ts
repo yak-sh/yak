@@ -37,14 +37,6 @@ export let httpMethods = [
   'PATCH',
   'DELETE',
 ] as const
-export let roleStates = [
-  'running',
-  'stopped',
-  'paused',
-  'disabled',
-  'retired',
-  'held',
-] as const
 export let roleSurfaces = ['native', 'managed'] as const
 export let wakePolicies = [
   'always',
@@ -834,28 +826,12 @@ export type Usage = {
   reasoning_tokens?: number
 }
 
-// Desired fleet capacity. Runtime facts are server-stamped on the same row;
-// sessions point back through role instead of a mutable current pointer.
+// A persona assigned to standing work (@yaks/persona): what it is responsible
+// for, and whether it runs here or elsewhere. Sessions point back through role.
 export type Role = {
   eid: string
-  state: string
   surface: string
   scope: string | null
-  checkout?: string | null
-  schedule?: string | null
-  wake_policy?: string | null
-  wake_target?: string | null
-  applied_hash?: string | null
-  applied_at?: string | null
-  stopped_at?: string | null
-  retry_at?: string | null
-  quiet?: number | null
-  cooldown?: number | null
-  cap?: number | null
-  decision?: string | null
-  reason?: string | null
-  observed?: string | null
-  decided_at?: string | null
 }
 
 // What a session's life is read from: its own row, and the process behind

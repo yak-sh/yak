@@ -193,7 +193,7 @@ test('a role keeps its face without lifecycle actions', () => {
     role: {
       entity: { eid: 'role', num: 7 },
       doc: { eid: 'role', title: 'Coordinator', body: '' },
-      role: { eid: 'role', state: 'running', surface: 'native', scope: null },
+      role: { eid: 'role', surface: 'native', scope: null },
     },
   }
   let role = ent('role')

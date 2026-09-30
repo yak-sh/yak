@@ -2,11 +2,11 @@
  * Who is acting, what they are responsible for, and the instructions they run
  * with. A `person` is a human being the graph knows by name; a `persona` is a
  * set of instructions an agent runs with, held in the `doc` body on the same
- * entity; and a `role` is what an agent running one is responsible for, plus
- * whether it is currently running. When a role next runs is a `@yaks/wake`
- * wake pointing at it, where it works is a `@yaks/git` worktree, and what it
- * last decided is `@yaks/kernel`'s `decided` — the role keeps no second copy
- * of any of them.
+ * entity; and a `role` is what an agent running one is responsible for, and
+ * whether it runs in this process or another. When a role next runs is a
+ * `@yaks/wake` wake pointing at it, where it works is a `@yaks/git` worktree,
+ * and what it last decided is `@yaks/kernel`'s `decided` — the role keeps no
+ * second copy of any of them.
  *
  * Besides those components, this package renders one document. A persona has
  * edges to the documents it includes in full (`contains`) and the documents it

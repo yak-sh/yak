@@ -55,18 +55,6 @@
       "prefix": "R",
       "by_name": true,
       "properties": {
-        "state": {
-          "type": "string",
-          "enum": [
-            "running",
-            "stopped",
-            "paused",
-            "disabled",
-            "retired",
-            "held"
-          ],
-          "description": "running, stopped, paused, disabled, retired, or held"
-        },
         "surface": {
           "type": "string",
           "enum": [
@@ -80,14 +68,9 @@
           "ref": "entity",
           "death": "detach",
           "description": "what it is responsible for"
-        },
-        "stopped_at": {
-          "type": "string",
-          "format": "date-time",
-          "stamped": true
         }
       },
-      "description": "a persona assigned to standing work: what it is responsible for, and whether it is running. When it next runs is a @yaks/wake `wake` pointing at it, where it works is a @yaks/git `worktree`, and what it last decided is kernel `decided`"
+      "description": "a persona assigned to standing work: what it is responsible for, and whether it runs here or elsewhere. When it next runs is a @yaks/wake `wake` pointing at it, where it works is a @yaks/git `worktree`, and what it last decided is kernel `decided`"
     },
     "persona_read": {
       "tool": true,

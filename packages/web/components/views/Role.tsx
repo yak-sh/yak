@@ -1,6 +1,5 @@
 import { type Ent } from '../../types.ts'
 import { block } from '@yaks/ui'
-import { Stamp } from '../Stamp.tsx'
 import { TitleEdit } from '../title.tsx'
 import { Edit } from '@yaks/ux'
 import { bundle } from '../registry.ts'
@@ -11,15 +10,13 @@ import { Id } from './Inline.tsx'
 // operator retirement. Sessions retain their links to the original role.
 let Frame = block('div', 'Role', {
   Head: 'h1',
-  State: 'span',
   Title: 'span',
   Meta: 'div',
   Grid: 'div',
   Field: 'div',
   Label: 'span',
-  Fault: 'p',
 })
-let { Head, State, Title, Meta, Grid, Field, Label, Fault } = Frame
+let { Head, Title, Meta, Grid, Field, Label } = Frame
 
 let Config = (
   { e, comp, prop, name }: {
@@ -40,45 +37,28 @@ let Config = (
   </Field>
 )
 
-export let Role = ({ e }: { e: Ent }) => {
-  let r = e.role!
-  return (
-    <Frame>
-      <Head>
-        <State mod={r.state}>{r.state}</State>
-        <Title>
-          <TitleEdit eid={e.eid} />
-        </Title>
-      </Head>
-      <Meta>
-        <Id e={e} />
-        {r.applied_at && <Stamp at={r.applied_at} label='applied' />}
-        {r.stopped_at && <Stamp at={r.stopped_at} label='stopped' />}
-        {r.applied_hash && <span>{r.applied_hash.slice(0, 8)}</span>}
-        {r.decision && <span>{r.decision}</span>}
-        {r.observed && <span>{r.observed}</span>}
-        {r.decided_at && <Stamp at={r.decided_at} label='decided' />}
-      </Meta>
-      <Grid>
-        <Config e={e} comp='role' prop='state' name='state' />
-        <Config e={e} comp='role' prop='surface' name='surface' />
-        <Config e={e} comp='role' prop='scope' name='scope' />
-        <Config e={e} comp='role' prop='checkout' name='checkout' />
-        <Config e={e} comp='role' prop='schedule' name='schedule' />
-        <Config e={e} comp='role' prop='wake_policy' name='wake policy' />
-        <Config e={e} comp='role' prop='wake_target' name='wake target' />
-        <Config e={e} comp='spawn' prop='provider' name='provider' />
-        <Config e={e} comp='spawn' prop='model' name='model' />
-        <Config e={e} comp='spawn' prop='effort' name='effort' />
-        <Config e={e} comp='spawn' prop='persona' name='persona' />
-      </Grid>
-      {e.failed?.message && <Fault>{e.failed.message}</Fault>}
-      {r.reason && <Fault>{r.reason}</Fault>}
-      <Entity eid={e.eid} view='Body' />
-      <Entity eid={e.eid} view='Dependencies' />
-      <Entity eid={e.eid} view='Relate' />
-      <Entity eid={e.eid} view='Runs' />
-      <Entity eid={e.eid} view='Comments' />
-    </Frame>
-  )
-}
+export let Role = ({ e }: { e: Ent }) => (
+  <Frame>
+    <Head>
+      <Title>
+        <TitleEdit eid={e.eid} />
+      </Title>
+    </Head>
+    <Meta>
+      <Id e={e} />
+    </Meta>
+    <Grid>
+      <Config e={e} comp='role' prop='surface' name='surface' />
+      <Config e={e} comp='role' prop='scope' name='scope' />
+      <Config e={e} comp='spawn' prop='provider' name='provider' />
+      <Config e={e} comp='spawn' prop='model' name='model' />
+      <Config e={e} comp='spawn' prop='effort' name='effort' />
+      <Config e={e} comp='spawn' prop='persona' name='persona' />
+    </Grid>
+    <Entity eid={e.eid} view='Body' />
+    <Entity eid={e.eid} view='Dependencies' />
+    <Entity eid={e.eid} view='Relate' />
+    <Entity eid={e.eid} view='Runs' />
+    <Entity eid={e.eid} view='Comments' />
+  </Frame>
+)
