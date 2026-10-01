@@ -230,20 +230,10 @@ export let done: Record<string, Voice> = {
   }),
 }
 
-// A footstep by body plan, for a creature `s` times the square root of its
-// size: soft for a hero, heavier and lower the bigger the creature, a
-// squelch for a slime and a knock of stone for a crag.
+// A footstep until a creature's own step is recorded (sound.ts), for one `s`
+// times the square root of its size: soft for a hero, heavier and lower the
+// bigger the creature.
 let STEPS: Record<string, (s: number) => Voice> = {
-  slime: (s) =>
-    voice(0.12, 0.05, (o) => {
-      tone(o, vary(300 / s ** 2), 0.1, 'sine', 0.05, 120 / s ** 2)
-      hiss(o, 0.06, 1400, 0.02, 1)
-    }),
-  crag: (s) =>
-    voice(0.2, 0.1, (o) => {
-      tone(o, vary(70), 0.18, 'triangle', 0.06 * s, 38)
-      hiss(o, 0.1, 500, 0.05, 0.8)
-    }),
   hero: () => voice(0.1, 0.035, (o) => hiss(o, 0.07, vary(1000), 0.035)),
   _: (s) =>
     voice(0.12, 0.035 * s, (o) => {
@@ -251,42 +241,26 @@ let STEPS: Record<string, (s: number) => Voice> = {
       if (s > 1.2) tone(o, vary(90 / s), 0.12, 'triangle', 0.04 * s, 45)
     }),
 }
-export let step = (plan: string, size: number) =>
-  (STEPS[plan] ?? STEPS._)(Math.sqrt(size))
+export let step = (gait: string, size: number) =>
+  (STEPS[gait] ?? STEPS._)(Math.sqrt(size))
 
-// A creature's cry by body plan: at full voice `k` of 1 for a growl as its
-// bite winds up, less for a call, and `low` lower for a bigger creature.
+// A creature's cry until its own is recorded, by its figure's gait: at full
+// voice `k` of 1 for a growl as its bite winds up, less for a call, and `low`
+// lower for a bigger creature. What floats hums, what slides hisses, what
+// hovers buzzes, and the rest growl.
 let CRIES: Record<string, (k: number, low: number) => Voice> = {
-  bird: (k, low) =>
-    voice(0.3, 0.06 * k, (o) => {
-      tone(o, vary(2600 * low), 0.08, 'sine', 0.06 * k, 3400 * low)
-      tone(o, 2300 * low, 0.1, 'sine', 0.05 * k, 3100 * low, 0.12)
-    }),
-  slime: (k, low) =>
-    voice(
-      0.35,
-      0.07 * k,
-      (o) => tone(o, vary(260 * low), 0.3, 'sine', 0.07 * k, 110 * low),
-    ),
-  wisp: (k) =>
+  drift: (k) =>
     voice(
       0.5,
       0.04 * k,
       (o) => tone(o, vary(900), 0.45, 'sine', 0.04 * k, 1500),
     ),
-  serpent: (k) =>
-    voice(0.6, 0.06 * k, (o) => hiss(o, 0.55, 5200, 0.06 * k, 1.2)),
-  flier: (k, low) =>
+  slide: (k) => voice(0.6, 0.06 * k, (o) => hiss(o, 0.55, 5200, 0.06 * k, 1.2)),
+  hover: (k, low) =>
     voice(0.4, 0.03 * k, (o) => {
       let f = vary(240 * low)
       tone(o, f, 0.35, 'sawtooth', 0.03 * k, f * 0.9, 0, 1800)
     }),
-  crag: (k) =>
-    voice(0.6, 0.08 * k, (o) => {
-      tone(o, vary(55), 0.55, 'sawtooth', 0.06 * k, 38, 0, 400)
-      hiss(o, 0.45, 350, 0.05 * k, 0.7)
-    }),
-  // A growl: the beasts, the bipeds, the crawlers and hoppers.
   _: (k, low) =>
     voice(0.5, 0.08 * k, (o) => {
       let f = vary(150 * low), dur = 0.45 * k
@@ -294,8 +268,8 @@ let CRIES: Record<string, (k: number, low: number) => Voice> = {
       tone(o, f * 1.02, dur * 0.9, 'square', 0.03 * k, f * 0.55, 0, 500)
     }),
 }
-export let cry = (plan: string, size: number, loud: boolean) =>
-  (CRIES[plan] ?? CRIES._)(loud ? 1 : 0.55, 1 / Math.sqrt(size))
+export let cry = (gait: string, size: number, loud: boolean) =>
+  (CRIES[gait] ?? CRIES._)(loud ? 1 : 0.55, 1 / Math.sqrt(size))
 
 // A buffer `secs` long that loops without a seam, made into `d` by `fill`
 // at `rate` samples a second: what it adds past the end comes round to the

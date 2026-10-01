@@ -17,10 +17,10 @@ import * as THREE from 'three'
 import { ABILITIES } from './abilities.ts'
 import { effect } from './ability-effects.ts'
 import { BEASTS } from './beasts.ts'
+import { type Figure, FIGURES, puppet } from './figure.ts'
 import { skull } from './danger.ts'
 import {
   type Act,
-  beast,
   type Build,
   CHILD,
   type Dress,
@@ -349,6 +349,14 @@ export let cast = (
       return true
     })
   }
+  // Each figure row drawn, by a number of its own: a creature whose figure
+  // changes is drawn again from the new row.
+  let figures = new WeakMap<Figure, string>(), made = 0
+  let drawn = (f: Figure) => {
+    let n = figures.get(f)
+    if (!n) figures.set(f, n = String(++made))
+    return n
+  }
   let actor = (key: string, make: () => Puppet, look = ''): Actor => {
     let a = actors.get(key)
     if (a && a.look != look) {
@@ -579,10 +587,11 @@ export let cast = (
       mark.visible = false
       for (let w of warns.values()) w.zone.visible = w.fill.visible = false
       for (let m of f.mobs) {
-        let b = BEASTS[m.beast]
-        // Small things are lost in the haze sooner than big ones.
-        if (m.near > Math.min(75, 30 + 25 * b.size)) continue
-        let a = actor(m.eid, () => beast(m.beast))
+        let b = BEASTS[m.beast], fig = FIGURES[m.beast]
+        // Small things are lost in the haze sooner than big ones; one with no
+        // figure yet is not drawn.
+        if (!b || !fig || m.near > Math.min(75, 30 + 25 * fig.size)) continue
+        let a = actor(m.eid, () => puppet(fig), drawn(fig))
         let gone = m.down ? (f.now - m.since) / 1000 : 0
         // A fallen creature lies a moment, sinks into the moss, and is gone
         // until it wakes.
@@ -591,7 +600,7 @@ export let cast = (
         glide(
           a,
           m.body.x,
-          m.body.y - sink * b.size,
+          m.body.y - sink * fig.size,
           m.body.z,
           m.body.yaw,
           dt,
@@ -626,7 +635,7 @@ export let cast = (
         }
         let foe = f.foe?.eid == m.eid, aimed = f.aim?.eid == m.eid
         if (aimed) {
-          let r = 0.55 + b.size * 0.6
+          let r = 0.55 + fig.size * 0.6
           mark.visible = true
           mark.position.set(a.x, laid(v, a.x, a.z, r), a.z)
           mark.rotation.z = t * 0.8

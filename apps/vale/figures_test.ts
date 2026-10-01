@@ -7,7 +7,8 @@ import { assertEquals } from '@std/assert'
 import * as THREE from 'three'
 import { HANDLES, WEIGHTS } from './arms.ts'
 import { BEASTS } from './beasts.ts'
-import { beast, BUILD, CHILD, hero, person, type Puppet } from './figures.ts'
+import { FIGURES, puppet } from './figure.ts'
+import { BUILD, CHILD, hero, person, type Puppet } from './figures.ts'
 import { fights, type Out, out, pack, place } from './mesh.ts'
 import { seedDesigns } from './designs_fixture.ts'
 
@@ -83,7 +84,7 @@ let look = { tint: '#4a7ab8', hair: '#6a4a30', skin: '#e8c0a0' }
 test('no creature fights itself', () => {
   assertEquals(
     fighting(Object.fromEntries(
-      Object.values(BEASTS).map((b) => [b.name, () => beast(b.eid)]),
+      Object.values(BEASTS).map((b) => [b.name, () => puppet(FIGURES[b.eid])]),
     )),
     {},
   )

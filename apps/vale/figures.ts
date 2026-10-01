@@ -1,12 +1,9 @@
-// Who moves in the vale, and how: the heroes, the people who give quests, and
-// the creatures, each a little jointed figure of soft boxes (parts.ts), and
-// the animation that walks, hops, swings and falls it. A creature is drawn by
-// the body plan its row names (beasts.ts `Look`), one plan to a file in
-// bodies/, in the row's colours and at its row's scale; a new plan is one
-// more file there and one more row in `PLANS`. A figure is told what it is
+// The people of the vale, and how they move: the heroes and the people who
+// give quests, each a little jointed figure of soft boxes (parts.ts), and the
+// animation that walks, swings, rolls and fells them. A creature's figure is
+// data, moved by the one animator in figure.ts. A puppet is told what it is
 // doing (`Act`) every frame and poses itself; it keeps no state of the world.
-// Each figure is drawn as one skinned mesh, its parts the bones (parts.ts
-// `knit`).
+// Each is drawn as one skinned mesh, its parts the bones (parts.ts `knit`).
 //
 // People are built like children, the way they are in Portal Knights: a big
 // head, a short straight middle, short arms and legs bending at elbow and
@@ -22,21 +19,9 @@
 import * as THREE from 'three'
 import type { Box } from './boxes.ts'
 import type { Pose } from './abilities.ts'
-import { beastOf, BEASTS, type Look, type Plans } from './beasts.ts'
 import type { Hand } from './gear.ts'
 import { halo } from './halo.ts'
 import { ITEMS } from './items.ts'
-import { biped } from './bodies/biped.ts'
-import { bird } from './bodies/bird.ts'
-import { crag } from './bodies/crag.ts'
-import { crawler } from './bodies/crawler.ts'
-import { flier } from './bodies/flier.ts'
-import { hopper } from './bodies/hopper.ts'
-import { quadruped } from './bodies/quadruped.ts'
-import { seal } from './bodies/seal.ts'
-import { serpent } from './bodies/serpent.ts'
-import { slime } from './bodies/slime.ts'
-import { wisp } from './bodies/wisp.ts'
 import type { Vec } from './mesh.ts'
 import {
   ease,
@@ -606,31 +591,3 @@ export let hero = (
   look: { tint: string; hair: string; skin: string },
   dress: Dress = {},
 ) => person(b, look, false, dress)
-
-// Every body plan, by the name a row gives it.
-let PLANS: { [P in keyof Plans]: (l: Plans[P]) => Puppet } = {
-  biped,
-  bird,
-  crag,
-  crawler,
-  flier,
-  hopper,
-  quadruped,
-  seal,
-  serpent,
-  slime,
-  wisp,
-}
-
-let draw = <P extends keyof Plans>(l: { plan: P } & Plans[P]) =>
-  PLANS[l.plan](l)
-
-/** A creature, by eid, drawn by its row's body plan (beasts.ts) at its row's
- * scale; a moss slime until the store has it. */
-export let beast = (eid: string): Puppet => {
-  let l: Look = (BEASTS[eid] ?? beastOf('beast:slime')!).look
-  let f = sewn(draw(l))
-  let k = l.scale ?? 1
-  f.root.scale.setScalar(k)
-  return { ...f, height: f.height * k }
-}

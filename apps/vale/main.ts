@@ -19,6 +19,7 @@ import { bar } from './bar.ts'
 import { board } from './board.ts'
 import { BEASTS, useBeasts, useDens } from './beasts.ts'
 import { useNames } from './names.ts'
+import { FIGURES, sizeOf, useFigures } from './figure.ts'
 import { aim, bearing, type Cam, depth, moveLook, steer } from './cam.ts'
 import { cast } from './cast.ts'
 import { chatbox } from './chatbox.ts'
@@ -151,6 +152,7 @@ await Promise.all([
   opening.designs(['beast_design'], useBeasts, ['combat', 'loot', 'sounds']),
   opening.designs(['den'], useDens),
   opening.designs(['alias', 'key'], useNames),
+  opening.designs(['figure'], useFigures),
   itemReady,
   themeReady,
   buildingReady,
@@ -605,7 +607,7 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
     let m = stage.headOf(e.eid)
     dust.emit(
       m ?? p(e.at),
-      BEASTS[e.beast]?.dust ?? 0xd8c8a8,
+      FIGURES[e.beast]?.dust ?? 0xd8c8a8,
       e.great ? 14 : 7,
       {
         speed: 3.5,
@@ -651,7 +653,7 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
     sound.hurt(net.hero)
     cam.shake = Math.max(cam.shake, 0.18)
   } else if (e.type == 'fall') {
-    dust.emit(p(e.at), BEASTS[e.beast]?.dust ?? 0xaaaaaa, 22, {
+    dust.emit(p(e.at), FIGURES[e.beast]?.dust ?? 0xaaaaaa, 22, {
       speed: 4,
       up: 4,
       life: 0.9,
@@ -1181,7 +1183,7 @@ let loop = (t: number) => {
   aim(cam, camera, target, v, dt, home)
   let foes = (last?.mobs ?? []).filter((m) => m.aim && !m.down && m.near < 8)
     .sort((a, b) => a.near - b.near).slice(0, FOES).map((m) => {
-      let size = BEASTS[m.beast].size
+      let size = sizeOf(m.beast)
       return new THREE.Vector4(
         m.body.x,
         m.body.y + size * .55,

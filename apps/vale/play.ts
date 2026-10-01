@@ -32,6 +32,7 @@ import { abilitiesOf, again, BLEEDS, WARD, type Went } from './abilities.ts'
 import { effect } from './ability-effects.ts'
 import { type Slot, SLOTS } from './arms.ts'
 import { BEASTS } from './beasts.ts'
+import { sizeOf } from './figure.ts'
 import { fighter, foeOf } from './danger.ts'
 import { heed } from './gaze.ts'
 import {
@@ -1110,7 +1111,7 @@ export let game = (
               ) from = sp
             }
             if (from) {
-              let k = 0.45 / Math.max(0.3, beast.size)
+              let k = 0.45 / Math.max(0.3, sizeOf(h.beast))
               let dx = mb.x - from.x, dz = mb.z - from.z
               let d = Math.hypot(dx, dz) || 1
               mb = walk(
@@ -1274,7 +1275,7 @@ export let game = (
         events.push({
           type: 'xp',
           n: worth(beast.xp, beast.lvl, s.lvl),
-          at: at(m.body, beast.size + 1),
+          at: at(m.body, sizeOf(m.beast) + 1),
         })
         let find = s.kit.powers.find ?? 0
         lootOf(beast, m.eid, when, me, s.kit.family, find).forEach((l, i) => {
@@ -1319,7 +1320,7 @@ export let game = (
             type: 'hit',
             eid: m.eid,
             beast: m.beast,
-            at: at(m.body, beast.size + 0.4),
+            at: at(m.body, sizeOf(m.beast) + 0.4),
             dmg,
             great,
             by,
@@ -1333,7 +1334,7 @@ export let game = (
         } else if (held) {
           d.held = Math.max(d.held, now + held * (beast.boss ? BOSS_HELD : 1))
           m.held = true
-          events.push({ type: 'held', at: at(m.body, beast.size + 1) })
+          events.push({ type: 'held', at: at(m.body, sizeOf(m.beast) + 1) })
         }
       }
 
@@ -1405,7 +1406,7 @@ export let game = (
           if (target) face(target)
           let dashEffect = effect(a.effects, 'dash')
           if (target && dashEffect) {
-            let gap = BEASTS[target.beast].size * 0.5 + 0.9
+            let gap = sizeOf(target.beast) * 0.5 + 0.9
             let ang = Math.atan2(
               target.body.x - body.x,
               target.body.z - body.z,
@@ -1484,7 +1485,7 @@ export let game = (
         if (lead) fought.foe = lead.eid
         // A shot flies at the creature it was aimed at, or straight on at
         // nothing, and what it takes, it takes when it gets there.
-        let to = lead ? at(lead.body, BEASTS[lead.beast].size * 0.6) : at({
+        let to = lead ? at(lead.body, sizeOf(lead.beast) * 0.6) : at({
           x: body.x + Math.sin(body.yaw) * k.reach,
           y: body.y,
           z: body.z + Math.cos(body.yaw) * k.reach,

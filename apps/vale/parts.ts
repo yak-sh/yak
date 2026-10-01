@@ -1,9 +1,7 @@
-// The joinery every figure is built from (figures.ts, bodies/): a part is a
-// few soft boxes (boxes.ts) turning about a pivot, and a figure is
-// parts hung on parts. A limb is two parts bending at a knee or an elbow
-// (`limb`), its halves overlapping at the joint so a bend opens no gap. Most
-// of a creature is left and right alike, so a box can be given once and
-// mirrored (`both`).
+// The joinery every figure is built from (figures.ts, figure.ts): a part is
+// a few soft boxes (boxes.ts) turning about a pivot, and a figure is parts
+// hung on parts. A limb is two parts bending at a knee or an elbow (`limb`),
+// its halves overlapping at the joint so a bend opens no gap.
 //
 // A part is a bone, and a figure's parts are drawn together as one skinned
 // mesh (`knit`): one draw call and one shadow for the whole figure, however
@@ -16,7 +14,6 @@ import * as THREE from 'three'
 import { type Box, drawn, moved, type Solid, worn } from './boxes.ts'
 import { out, pack, place, type Vec } from './mesh.ts'
 import { geometry } from './soft.ts'
-import type { Bite, Fall, Gait, Move } from './figure.ts'
 
 /** A limb: the part at the hip or shoulder, and the one below the joint. */
 export type Limb = [THREE.Bone, THREE.Bone]
@@ -129,22 +126,6 @@ export let knit = (root: THREE.Object3D, material: THREE.Material) => {
   return mesh
 }
 
-/** A box mirrored across the middle, from right to left.
- *
- * ```ts
- * import { assertEquals } from '@std/assert'
- * assertEquals(mirror([[0.25, 0, 0], [0.5, 1, 1], 7]), [[-0.75, 0, 0], [0.5, 1, 1], 7])
- * ```
- */
-export let mirror = ([[x, y, z], size, ...rest]: Box): Box => [
-  [-x - size[0], y, z],
-  size,
-  ...rest,
-]
-
-/** A box and its mirror, right and left. */
-export let both = (b: Box): Box[] => [b, mirror(b)]
-
 /** A box toppled forward, a quarter turn about x: what stood up runs toward
  * +z, and what lay toward +z hangs below.
  *
@@ -175,20 +156,6 @@ export let fit = (boxes: Box[], k: Vec): Box[] =>
     [size[0] * k[0], size[1] * k[1], size[2] * k[2]],
     ...rest,
   ])
-
-/** The boxes `f` makes of `v`, or none without a `v`: what a figure has only
- * when its look says so.
- *
- * ```ts
- * import { assertEquals } from '@std/assert'
- * import type { Box } from './boxes.ts'
- * let tusks = (c: number): Box[] => both([[0.1, 0, 0], [0.1, 0.2, 0.1], c])
- * assertEquals(given(undefined, tusks), [])
- * assertEquals(given(0xffffff, tusks).length, 2)
- * ```
- */
-export let given = <T>(v: T | undefined | false, f: (v: T) => Box[]): Box[] =>
-  v === undefined || v === false ? [] : f(v)
 
 /** A colour, darker (`k` under 1) or lighter. */
 export let shade = (hex: number, k: number) => {
@@ -227,32 +194,4 @@ export let stride = (leg: Leg, s: number, c: number, amp: number) => {
   let [hip, knee] = Array.isArray(leg) ? leg : [leg]
   hip.rotation.x = s * amp
   if (knee) knee.rotation.x = Math.max(0, -c) * amp * 1.5
-}
-
-/** Four legs in a walk: each diagonal pair together. */
-export let trot = (legs: Leg[], s: number, c: number, amp: number) =>
-  legs.forEach((l, i) =>
-    i == 1 || i == 2 ? stride(l, -s, -c, amp) : stride(l, s, c, amp)
-  )
-
-/** Name a part and give it its role in motion, for the one-time export of
- * every body plan as figures (export-figures.ts), which goes with bodies/. */
-export let tag = <T extends THREE.Object3D>(
-  o: T,
-  name: string,
-  move?: Move,
-) => {
-  o.name = name
-  if (move) o.userData.move = move
-  return o
-}
-
-/** How a body plan's figure moves as a whole, for the same export: kept on
- * its root (`userData.moves`). */
-export type Moves = {
-  gait: Gait
-  bite: Bite
-  fall: Fall
-  speckle?: number
-  glow?: number
 }

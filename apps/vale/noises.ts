@@ -5,6 +5,7 @@
 // a sound stands: the heroes and creatures by their eids, the nearest hearth,
 // and the water nearest the ears. sound.ts makes the sounds.
 import { BEASTS } from './beasts.ts'
+import { FIGURES, sizeOf } from './figure.ts'
 import { isA } from './features.ts'
 import type { Spot } from './levels.ts'
 import type { Mob, Other, Vec3 } from './play.ts'
@@ -13,18 +14,18 @@ import { placesOf, regionOf } from './regions.ts'
 import { groundAt, hearthNear, type Vale, WATER } from './terrain.ts'
 
 /** Something heard: `of` is the eid of whoever made it. A creature's
- * sounds name the sfx row it cries or steps with (`sfx`), and its body plan
- * (beasts.ts) and size say how its procedural voice sounds until that row has
- * a recording; a hero's plan is `hero`. */
+ * sounds name the sfx row it cries or steps with (`sfx`), and its figure's
+ * gait and size (figure.ts) say how its procedural voice sounds until that
+ * row has a recording; a hero's gait is `hero`. */
 export type Noise =
-  | { type: 'step'; of: string; sfx?: string; plan: string; size: number }
+  | { type: 'step'; of: string; sfx?: string; gait: string; size: number }
   | { type: 'swing'; of: string }
   | { type: 'roll'; of: string }
   | {
     type: 'cry'
     of: string
     sfx?: string
-    plan: string
+    gait: string
     size: number
     loud: boolean
   }
@@ -36,18 +37,10 @@ export type Scene = {
   mobs: Pick<Mob, 'eid' | 'beast' | 'body' | 'down' | 'bite'>[]
 }
 
-// How far a step carries a hero, and a creature of each body plan at size 1,
-// in metres; a plan without a stride flies or slithers, and makes no steps.
-let STRIDE: Record<string, number> = {
-  hero: 1,
-  biped: 0.9,
-  quadruped: 0.55,
-  crawler: 0.4,
-  hopper: 1.1,
-  slime: 0.9,
-  crag: 1,
-  bird: 0.3,
-}
+// How far a step carries a hero, and a creature of each gait (figure.ts) at
+// size 1, in metres; a gait without a stride flies, floats or slides, and
+// makes no steps.
+let STRIDE: Record<string, number> = { hero: 1, walk: 0.6, hop: 1 }
 // A creature that is up calls about this often, in seconds.
 let CALL = 18
 // Further than this in a frame is not a walk: a rise by the fire, a road.
@@ -120,18 +113,18 @@ export let noises = () => {
     let walk = (
       of: string,
       b: Body,
-      plan: string,
+      gait: string,
       size: number,
       sfx?: string,
     ) => {
-      let stride = (STRIDE[plan] ?? 0) * size
+      let stride = (STRIDE[gait] ?? 0) * size
       if (!stride) return
       let [x, z, d] = was.get(of) ?? [b.x, b.z, 0]
       let moved = Math.hypot(b.x - x, b.z - z)
       let on = (b.gait == 'walk' || b.gait == 'run') && moved < LEAP
       let now = on ? d + moved : d
       if (Math.floor(now / stride) > Math.floor(d / stride)) {
-        out.push({ type: 'step', of, ...sfx && { sfx }, plan, size })
+        out.push({ type: 'step', of, ...sfx && { sfx }, gait, size })
       }
       walked.set(of, [b.x, b.z, now])
     }
@@ -148,16 +141,16 @@ export let noises = () => {
     }
     let bites = new Map<string, number>()
     for (let m of f.mobs) {
-      let beast = BEASTS[m.beast]
-      if (!beast || m.down) continue
-      let { plan } = beast.look, size = beast.size
-      walk(m.eid, m.body, plan, size, beast.step)
+      let beast = BEASTS[m.beast], fig = FIGURES[m.beast]
+      if (!beast || !fig || m.down) continue
+      let { gait, size } = fig
+      walk(m.eid, m.body, gait, size, beast.step)
       let b = bit.get(m.eid) ?? -1
       let cry = (loud: boolean): Noise => ({
         type: 'cry',
         of: m.eid,
         ...beast.cry && { sfx: beast.cry },
-        plan,
+        gait,
         size,
         loud,
       })
@@ -177,7 +170,7 @@ export let where = (f: Scene, me: string) => {
     at.set(of, [b.x, b.y + up, b.z])
   put(me, f.body, HERO)
   for (let o of f.others) put(o.eid, o.body, HERO)
-  for (let m of f.mobs) put(m.eid, m.body, (BEASTS[m.beast]?.size ?? 1) / 2)
+  for (let m of f.mobs) put(m.eid, m.body, sizeOf(m.beast) / 2)
   return at
 }
 

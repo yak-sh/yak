@@ -7,26 +7,7 @@
       "name": "beast:fennec"
     },
     "beast_design": {
-      "name": "Fennec fox",
-      "size": 0.7,
-      "dust": 15255696,
-      "look": {
-        "plan": "quadruped",
-        "hide": 15255696,
-        "ridge": 13148272,
-        "snout": 16314592,
-        "eye": 1708048,
-        "ears": "point",
-        "tail": "bush",
-        "belly": 16314592,
-        "build": [
-          0.65,
-          0.7,
-          0.9
-        ],
-        "muzzle": 1.6,
-        "scale": 0.75
-      }
+      "name": "Fennec fox"
     },
     "combat": {
       "lvl": 8,
@@ -92,19 +73,7 @@
       "name": "beast:scarab"
     },
     "beast_design": {
-      "name": "Tomb scarab",
-      "size": 1.1,
-      "dust": 14198832,
-      "look": {
-        "plan": "crawler",
-        "shell": 14198832,
-        "under": 5914656,
-        "leg": 3811860,
-        "eye": 1052688,
-        "jaws": 12093984,
-        "mark": 2787978,
-        "scale": 1.8
-      }
+      "name": "Tomb scarab"
     },
     "combat": {
       "lvl": 12,
@@ -174,24 +143,7 @@
       "name": "beast:vulture"
     },
     "beast_design": {
-      "name": "Dune vulture",
-      "size": 1.1,
-      "dust": 4864564,
-      "look": {
-        "plan": "bird",
-        "feather": 4864564,
-        "wing": 3812392,
-        "beak": 14207136,
-        "eye": 14696480,
-        "belly": 6969936,
-        "crest": 14192768,
-        "neck": 1.6,
-        "bill": "hook",
-        "tail": "fan",
-        "fly": 2,
-        "span": 1.6,
-        "scale": 1.5
-      }
+      "name": "Dune vulture"
     },
     "combat": {
       "lvl": 11,
@@ -276,20 +228,7 @@
       "name": "beast:sandwyrm"
     },
     "beast_design": {
-      "name": "Sand wyrm",
-      "size": 2.2,
-      "dust": 13150320,
-      "look": {
-        "plan": "serpent",
-        "skin": 13150320,
-        "belly": 15259824,
-        "eye": 2101264,
-        "band": 10123848,
-        "frill": 13134394,
-        "length": 9,
-        "girth": 2,
-        "scale": 1.3
-      }
+      "name": "Sand wyrm"
     },
     "combat": {
       "lvl": 15,
@@ -348,26 +287,7 @@
       "name": "beast:strider"
     },
     "beast_design": {
-      "name": "Sand strider",
-      "size": 1.4,
-      "dust": 14203016,
-      "look": {
-        "plan": "quadruped",
-        "hide": 14203016,
-        "ridge": 12097640,
-        "snout": 13150328,
-        "eye": 1708048,
-        "ears": "long",
-        "tail": "thin",
-        "legs": 1.6,
-        "build": [
-          0.8,
-          0.9,
-          1.1
-        ],
-        "muzzle": 1.3,
-        "scale": 1.3
-      }
+      "name": "Sand strider"
     },
     "combat": {
       "lvl": 9,
@@ -436,23 +356,7 @@
       "name": "beast:warden"
     },
     "beast_design": {
-      "name": "Tomb warden",
-      "size": 1.6,
-      "dust": 14207136,
-      "look": {
-        "plan": "biped",
-        "skin": 14207136,
-        "garb": 9071162,
-        "eye": 4251856,
-        "build": [
-          1.2,
-          1.3
-        ],
-        "head": "crown",
-        "top": 14725184,
-        "club": 13148224,
-        "stoop": 0.05
-      }
+      "name": "Tomb warden"
     },
     "combat": {
       "lvl": 17,
@@ -525,22 +429,7 @@
       "name": "beast:deathstalker"
     },
     "beast_design": {
-      "name": "Deathstalker",
-      "size": 1.6,
-      "dust": 2760736,
-      "look": {
-        "plan": "crawler",
-        "shell": 2761254,
-        "under": 5904922,
-        "leg": 1709078,
-        "eye": 16728096,
-        "pairs": 4,
-        "claws": 3811886,
-        "sting": 13119530,
-        "tail": true,
-        "mark": 10493984,
-        "scale": 1.9
-      }
+      "name": "Deathstalker"
     },
     "combat": {
       "lvl": 16,

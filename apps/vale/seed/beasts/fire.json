@@ -7,16 +7,7 @@
       "name": "beast:emberslime"
     },
     "beast_design": {
-      "name": "Ember slime",
-      "size": 1,
-      "dust": 15759914,
-      "look": {
-        "plan": "slime",
-        "body": 15229482,
-        "moss": 5913130,
-        "bloom": 16764992,
-        "scale": 1.1
-      }
+      "name": "Ember slime"
     },
     "combat": {
       "lvl": 12,
@@ -81,20 +72,7 @@
       "name": "beast:salamander"
     },
     "beast_design": {
-      "name": "Salamander",
-      "size": 1.2,
-      "dust": 15755818,
-      "look": {
-        "plan": "crawler",
-        "shell": 14174250,
-        "under": 15769664,
-        "leg": 12073504,
-        "eye": 16769088,
-        "pairs": 2,
-        "tail": true,
-        "mark": 2759188,
-        "scale": 1.6
-      }
+      "name": "Salamander"
     },
     "combat": {
       "lvl": 14,
@@ -164,23 +142,7 @@
       "name": "beast:imp"
     },
     "beast_design": {
-      "name": "Cinder imp",
-      "size": 1.1,
-      "dust": 14174250,
-      "look": {
-        "plan": "biped",
-        "skin": 13123626,
-        "garb": 3809312,
-        "eye": 16764992,
-        "head": "horns",
-        "top": 2759188,
-        "club": 4864564,
-        "build": [
-          0.75,
-          0.7
-        ],
-        "stoop": 0.2
-      }
+      "name": "Cinder imp"
     },
     "combat": {
       "lvl": 15,
@@ -254,18 +216,7 @@
       "name": "beast:emberback"
     },
     "beast_design": {
-      "name": "Emberback",
-      "size": 1.6,
-      "dust": 5917252,
-      "look": {
-        "plan": "crag",
-        "stone": 4866624,
-        "light": 6181968,
-        "moss": 3813420,
-        "eye": 16752688,
-        "crystals": 16738858,
-        "scale": 1.1
-      }
+      "name": "Emberback"
     },
     "combat": {
       "lvl": 17,
@@ -335,21 +286,7 @@
       "name": "beast:cinderwyrm"
     },
     "beast_design": {
-      "name": "The Cinder Wyrm",
-      "size": 3.4,
-      "dust": 14174762,
-      "look": {
-        "plan": "serpent",
-        "skin": 9054750,
-        "belly": 15769664,
-        "eye": 16769088,
-        "band": 4856340,
-        "frill": 16742954,
-        "horns": 2760736,
-        "length": 9,
-        "girth": 2.4,
-        "scale": 1.5
-      }
+      "name": "The Cinder Wyrm"
     },
     "combat": {
       "lvl": 20,
@@ -410,17 +347,7 @@
       "name": "beast:flameling"
     },
     "beast_design": {
-      "name": "Flameling",
-      "size": 1,
-      "dust": 16747050,
-      "look": {
-        "plan": "wisp",
-        "core": 16773280,
-        "glow": 16738842,
-        "mote": 16760896,
-        "fly": 0.8,
-        "scale": 1.1
-      }
+      "name": "Flameling"
     },
     "combat": {
       "lvl": 16,
@@ -490,18 +417,7 @@
       "name": "beast:cindercrag"
     },
     "beast_design": {
-      "name": "Cinder crag",
-      "size": 1.8,
-      "dust": 5917252,
-      "look": {
-        "plan": "crag",
-        "stone": 3813424,
-        "light": 5917252,
-        "moss": 14174250,
-        "eye": 16764992,
-        "crystals": 16747050,
-        "scale": 1.2
-      }
+      "name": "Cinder crag"
     },
     "combat": {
       "lvl": 18,

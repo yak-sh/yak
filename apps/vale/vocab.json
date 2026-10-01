@@ -473,36 +473,11 @@
       "component": true,
       "type": "object",
       "floor": "editor",
-      "description": "A kind of creature, and what players call it. Its other aspects are components of their own beside it: combat (how it fights), loot (what it leaves) and sounds (how it sounds); a den row says where it lives. An alias key such as beast:boar names it in quests, seeds and commands, and everything stored refers to it by its eid. Its created stamp records who invented it.",
+      "description": "A kind of creature, and what players call it. Its other aspects are components of their own beside it: combat (how it fights), loot (what it leaves) and sounds (how it sounds); a den row says where it lives, and a figure row how it looks and moves. An alias key such as beast:boar names it in quests, seeds and commands, and everything stored refers to it by its eid. Its created stamp records who invented it.",
       "properties": {
-        "name": { "type": "string", "minLength": 1 },
-        "size": { "type": "number", "exclusiveMinimum": 0 },
-        "dust": { "type": "integer", "minimum": 0, "maximum": 16777215 },
-        "look": {
-          "type": "object",
-          "description": "A body plan and that plan's colours and proportions.",
-          "properties": {
-            "plan": {
-              "type": "string",
-              "enum": [
-                "biped",
-                "bird",
-                "crag",
-                "crawler",
-                "flier",
-                "hopper",
-                "quadruped",
-                "seal",
-                "serpent",
-                "slime",
-                "wisp"
-              ]
-            }
-          },
-          "required": ["plan"]
-        }
+        "name": { "type": "string", "minLength": 1 }
       },
-      "required": ["name", "size", "dust", "look"]
+      "required": ["name"]
     },
     "combat": {
       "component": true,

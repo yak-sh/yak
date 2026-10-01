@@ -7,15 +7,7 @@
       "name": "beast:slime"
     },
     "beast_design": {
-      "name": "Moss slime",
-      "size": 0.9,
-      "dust": 8836700,
-      "look": {
-        "plan": "slime",
-        "body": 8178773,
-        "moss": 5216826,
-        "bloom": 15193178
-      }
+      "name": "Moss slime"
     },
     "combat": {
       "lvl": 1,
@@ -66,19 +58,7 @@
       "name": "beast:hen"
     },
     "beast_design": {
-      "name": "Stray hen",
-      "size": 0.55,
-      "dust": 13140042,
-      "look": {
-        "plan": "bird",
-        "feather": 12614212,
-        "wing": 10115632,
-        "beak": 15249472,
-        "eye": 2103312,
-        "crest": 14172202,
-        "belly": 14727312,
-        "scale": 1.2
-      }
+      "name": "Stray hen"
     },
     "combat": {
       "lvl": 1,
@@ -129,18 +109,7 @@
       "name": "beast:hare"
     },
     "beast_design": {
-      "name": "Meadow hare",
-      "size": 0.55,
-      "dust": 11045478,
-      "look": {
-        "plan": "hopper",
-        "fur": 11045478,
-        "belly": 15721680,
-        "eye": 2103832,
-        "ears": "long",
-        "tail": "puff",
-        "scale": 1.2
-      }
+      "name": "Meadow hare"
     },
     "combat": {
       "lvl": 1,
@@ -234,17 +203,7 @@
       "name": "beast:toad"
     },
     "beast_design": {
-      "name": "Garden toad",
-      "size": 0.5,
-      "dust": 8026690,
-      "look": {
-        "plan": "hopper",
-        "fur": 8026690,
-        "belly": 14208928,
-        "eye": 1710608,
-        "frog": true,
-        "scale": 1.1
-      }
+      "name": "Garden toad"
     },
     "combat": {
       "lvl": 1,
@@ -296,20 +255,7 @@
       "name": "beast:gander"
     },
     "beast_design": {
-      "name": "Cross gander",
-      "size": 0.8,
-      "dust": 15263968,
-      "look": {
-        "plan": "bird",
-        "feather": 15658726,
-        "wing": 13684936,
-        "beak": 15765546,
-        "eye": 1710618,
-        "neck": 2.6,
-        "legs": 1.1,
-        "bill": "flat",
-        "scale": 1.5
-      }
+      "name": "Cross gander"
     },
     "combat": {
       "lvl": 2,
@@ -361,15 +307,7 @@
       "name": "beast:honeyslime"
     },
     "beast_design": {
-      "name": "Honey slime",
-      "size": 0.9,
-      "dust": 15775808,
-      "look": {
-        "plan": "slime",
-        "body": 15775808,
-        "moss": 13142568,
-        "bloom": 16773280
-      }
+      "name": "Honey slime"
     },
     "combat": {
       "lvl": 2,
@@ -436,18 +374,7 @@
       "name": "beast:moth"
     },
     "beast_design": {
-      "name": "Lamp moth",
-      "size": 0.6,
-      "dust": 14208176,
-      "look": {
-        "plan": "flier",
-        "body": 13154456,
-        "wing": 15260864,
-        "eye": 3154968,
-        "wings": "dust",
-        "fly": 1.4,
-        "scale": 1.2
-      }
+      "name": "Lamp moth"
     },
     "combat": {
       "lvl": 1,
@@ -510,21 +437,7 @@
       "name": "beast:pheasant"
     },
     "beast_design": {
-      "name": "Ring pheasant",
-      "size": 0.6,
-      "dust": 12084270,
-      "look": {
-        "plan": "bird",
-        "feather": 12084270,
-        "wing": 9067058,
-        "beak": 14207120,
-        "eye": 1708048,
-        "crest": 13122090,
-        "belly": 9062952,
-        "neck": 1.4,
-        "tail": "long",
-        "scale": 1.2
-      }
+      "name": "Ring pheasant"
     },
     "combat": {
       "lvl": 1,
@@ -589,20 +502,7 @@
       "name": "beast:bee"
     },
     "beast_design": {
-      "name": "Clover bee",
-      "size": 0.6,
-      "dust": 15777840,
-      "look": {
-        "plan": "flier",
-        "body": 15777840,
-        "wing": 15267064,
-        "eye": 1710618,
-        "wings": "clear",
-        "stripe": 2761240,
-        "sting": 2761240,
-        "fly": 1.1,
-        "scale": 1.3
-      }
+      "name": "Clover bee"
     },
     "combat": {
       "lvl": 2,
@@ -668,20 +568,7 @@
       "name": "beast:hornet"
     },
     "beast_design": {
-      "name": "Red hornet",
-      "size": 0.7,
-      "dust": 13652010,
-      "look": {
-        "plan": "flier",
-        "body": 13128746,
-        "wing": 15788248,
-        "eye": 2756624,
-        "wings": "clear",
-        "stripe": 2759188,
-        "sting": 2101264,
-        "fly": 1.2,
-        "scale": 1.6
-      }
+      "name": "Red hornet"
     },
     "combat": {
       "lvl": 4,
@@ -751,20 +638,7 @@
       "name": "beast:crow"
     },
     "beast_design": {
-      "name": "Field crow",
-      "size": 0.6,
-      "dust": 2763314,
-      "look": {
-        "plan": "bird",
-        "feather": 2763316,
-        "wing": 2236972,
-        "beak": 3816000,
-        "eye": 9079440,
-        "fly": 1.8,
-        "span": 1,
-        "tail": "fan",
-        "scale": 1.2
-      }
+      "name": "Field crow"
     },
     "combat": {
       "lvl": 2,
@@ -830,25 +704,7 @@
       "name": "beast:hedgehog"
     },
     "beast_design": {
-      "name": "Hedgehog",
-      "size": 0.5,
-      "dust": 9072720,
-      "look": {
-        "plan": "quadruped",
-        "hide": 9072720,
-        "ridge": 5916210,
-        "snout": 14203024,
-        "eye": 1708048,
-        "thorns": true,
-        "legs": 0.5,
-        "build": [
-          1.1,
-          0.8,
-          0.8
-        ],
-        "muzzle": 1.3,
-        "scale": 0.5
-      }
+      "name": "Hedgehog"
     },
     "combat": {
       "lvl": 2,
@@ -909,27 +765,7 @@
       "name": "beast:ram"
     },
     "beast_design": {
-      "name": "Wild ram",
-      "size": 1.1,
-      "dust": 15261900,
-      "look": {
-        "plan": "quadruped",
-        "hide": 15261900,
-        "ridge": 14209212,
-        "snout": 4866112,
-        "eye": 1708048,
-        "horns": "curl",
-        "horn": 13154448,
-        "tail": "stub",
-        "belly": 14209212,
-        "legs": 1.1,
-        "build": [
-          1.15,
-          1.1,
-          1
-        ],
-        "muzzle": 1.2
-      }
+      "name": "Wild ram"
     },
     "combat": {
       "lvl": 6,
@@ -999,26 +835,7 @@
       "name": "beast:aurochs"
     },
     "beast_design": {
-      "name": "Longhorn aurochs",
-      "size": 1.7,
-      "dust": 6965814,
-      "look": {
-        "plan": "quadruped",
-        "hide": 6964274,
-        "ridge": 4861474,
-        "snout": 12098176,
-        "eye": 1708048,
-        "horns": "spike",
-        "horn": 15721676,
-        "tail": "thin",
-        "legs": 1.2,
-        "build": [
-          1.3,
-          1.3,
-          1.25
-        ],
-        "scale": 1.2
-      }
+      "name": "Longhorn aurochs"
     },
     "combat": {
       "lvl": 7,
@@ -1088,27 +905,7 @@
       "name": "beast:fox"
     },
     "beast_design": {
-      "name": "Red fox",
-      "size": 0.8,
-      "dust": 13660218,
-      "look": {
-        "plan": "quadruped",
-        "hide": 13660218,
-        "ridge": 11030570,
-        "snout": 15787734,
-        "eye": 1708048,
-        "ears": "point",
-        "tail": "bush",
-        "belly": 16051424,
-        "legs": 1.1,
-        "build": [
-          0.7,
-          0.75,
-          1
-        ],
-        "muzzle": 1.9,
-        "scale": 0.85
-      }
+      "name": "Red fox"
     },
     "combat": {
       "lvl": 3,
@@ -1190,15 +987,7 @@
       "name": "beast:grasssnake"
     },
     "beast_design": {
-      "name": "Grass snake",
-      "size": 0.7,
-      "dust": 6982202,
-      "look": {
-        "plan": "serpent",
-        "skin": 5933626,
-        "belly": 14209184,
-        "eye": 1710608
-      }
+      "name": "Grass snake"
     },
     "combat": {
       "lvl": 2,
@@ -1260,19 +1049,7 @@
       "name": "beast:adder"
     },
     "beast_design": {
-      "name": "Heath adder",
-      "size": 0.9,
-      "dust": 9075290,
-      "look": {
-        "plan": "serpent",
-        "skin": 10127978,
-        "belly": 4866104,
-        "eye": 14172192,
-        "band": 2761760,
-        "length": 7,
-        "girth": 1.1,
-        "scale": 1.1
-      }
+      "name": "Heath adder"
     },
     "combat": {
       "lvl": 5,
@@ -1342,15 +1119,7 @@
       "name": "beast:wisp"
     },
     "beast_design": {
-      "name": "Will-o’-the-wisp",
-      "size": 0.8,
-      "dust": 12120319,
-      "look": {
-        "plan": "wisp",
-        "core": 16777215,
-        "glow": 9099519,
-        "mote": 13694207
-      }
+      "name": "Will-o’-the-wisp"
     },
     "combat": {
       "lvl": 9,
@@ -1401,18 +1170,7 @@
       "name": "beast:rollbeetle"
     },
     "beast_design": {
-      "name": "Rollbeetle",
-      "size": 0.8,
-      "dust": 3824202,
-      "look": {
-        "plan": "crawler",
-        "shell": 3037774,
-        "under": 1714724,
-        "leg": 1710618,
-        "eye": 1052688,
-        "mark": 5937786,
-        "scale": 1.5
-      }
+      "name": "Rollbeetle"
     },
     "combat": {
       "lvl": 3,
@@ -1477,23 +1235,7 @@
       "name": "beast:bogle"
     },
     "beast_design": {
-      "name": "Straw bogle",
-      "size": 1.2,
-      "dust": 14205048,
-      "look": {
-        "plan": "biped",
-        "skin": 13153418,
-        "garb": 6969994,
-        "eye": 2759184,
-        "head": "hat",
-        "top": 12098122,
-        "build": [
-          0.85,
-          1.05
-        ],
-        "long": true,
-        "stoop": 0.15
-      }
+      "name": "Straw bogle"
     },
     "combat": {
       "lvl": 7,

@@ -7,16 +7,7 @@
       "name": "beast:frog"
     },
     "beast_design": {
-      "name": "Mere frog",
-      "size": 0.45,
-      "dust": 5939274,
-      "look": {
-        "plan": "hopper",
-        "fur": 5939274,
-        "belly": 14739616,
-        "eye": 1710608,
-        "frog": true
-      }
+      "name": "Mere frog"
     },
     "combat": {
       "lvl": 1,
@@ -81,21 +72,7 @@
       "name": "beast:duck"
     },
     "beast_design": {
-      "name": "Mallard",
-      "size": 0.55,
-      "dust": 9075290,
-      "look": {
-        "plan": "bird",
-        "feather": 9073240,
-        "wing": 6969928,
-        "beak": 15253568,
-        "eye": 1710618,
-        "belly": 12100744,
-        "bill": "flat",
-        "neck": 1.2,
-        "legs": 0.7,
-        "scale": 1.1
-      }
+      "name": "Mallard"
     },
     "combat": {
       "lvl": 1,
@@ -146,21 +123,7 @@
       "name": "beast:heron"
     },
     "beast_design": {
-      "name": "Grey heron",
-      "size": 0.9,
-      "dust": 12106944,
-      "look": {
-        "plan": "bird",
-        "feather": 12106948,
-        "wing": 9080472,
-        "beak": 14729296,
-        "eye": 15781952,
-        "crest": 2763312,
-        "bill": "long",
-        "neck": 3.5,
-        "legs": 3,
-        "scale": 1.3
-      }
+      "name": "Grey heron"
     },
     "combat": {
       "lvl": 3,
@@ -227,20 +190,7 @@
       "name": "beast:swan"
     },
     "beast_design": {
-      "name": "Mute swan",
-      "size": 1,
-      "dust": 16053488,
-      "look": {
-        "plan": "bird",
-        "feather": 16185072,
-        "wing": 15395556,
-        "beak": 15231530,
-        "eye": 1710618,
-        "bill": "flat",
-        "neck": 3,
-        "legs": 0.8,
-        "scale": 1.6
-      }
+      "name": "Mute swan"
     },
     "combat": {
       "lvl": 6,
@@ -292,18 +242,7 @@
       "name": "beast:crab"
     },
     "beast_design": {
-      "name": "Shore crab",
-      "size": 0.6,
-      "dust": 13131834,
-      "look": {
-        "plan": "crawler",
-        "shell": 13131834,
-        "under": 15255712,
-        "leg": 12079150,
-        "eye": 1708048,
-        "claws": 14182976,
-        "scale": 1.1
-      }
+      "name": "Shore crab"
     },
     "combat": {
       "lvl": 5,
@@ -354,19 +293,7 @@
       "name": "beast:snapclaw"
     },
     "beast_design": {
-      "name": "Snapclaw",
-      "size": 1.4,
-      "dust": 9058906,
-      "look": {
-        "plan": "crawler",
-        "shell": 8010328,
-        "under": 14203056,
-        "leg": 6958664,
-        "eye": 16764992,
-        "claws": 10111594,
-        "mark": 12085898,
-        "scale": 2.4
-      }
+      "name": "Snapclaw"
     },
     "combat": {
       "lvl": 10,
@@ -436,20 +363,7 @@
       "name": "beast:turtle"
     },
     "beast_design": {
-      "name": "Mossback turtle",
-      "size": 0.9,
-      "dust": 5929530,
-      "look": {
-        "plan": "crawler",
-        "shell": 4876852,
-        "under": 13154440,
-        "leg": 8030810,
-        "eye": 1710608,
-        "dome": true,
-        "pairs": 2,
-        "mark": 6986312,
-        "scale": 1.3
-      }
+      "name": "Mossback turtle"
     },
     "combat": {
       "lvl": 4,
@@ -516,27 +430,7 @@
       "name": "beast:otter"
     },
     "beast_design": {
-      "name": "River otter",
-      "size": 0.6,
-      "dust": 6965808,
-      "look": {
-        "plan": "quadruped",
-        "hide": 6965808,
-        "ridge": 5913124,
-        "snout": 13152408,
-        "eye": 1708048,
-        "belly": 13152408,
-        "ears": "round",
-        "tail": "thin",
-        "legs": 0.55,
-        "build": [
-          0.7,
-          0.7,
-          1.35
-        ],
-        "muzzle": 1.2,
-        "scale": 0.7
-      }
+      "name": "River otter"
     },
     "combat": {
       "lvl": 2,
@@ -584,26 +478,7 @@
       "name": "beast:beaver"
     },
     "beast_design": {
-      "name": "Dam beaver",
-      "size": 0.7,
-      "dust": 8016434,
-      "look": {
-        "plan": "quadruped",
-        "hide": 8016434,
-        "ridge": 5913122,
-        "snout": 9071178,
-        "eye": 1708048,
-        "tusk": 15769664,
-        "ears": "round",
-        "tail": "flat",
-        "legs": 0.55,
-        "build": [
-          1,
-          0.9,
-          0.9
-        ],
-        "scale": 0.75
-      }
+      "name": "Dam beaver"
     },
     "combat": {
       "lvl": 3,
@@ -655,18 +530,7 @@
       "name": "beast:watersnake"
     },
     "beast_design": {
-      "name": "Water snake",
-      "size": 0.8,
-      "dust": 3824234,
-      "look": {
-        "plan": "serpent",
-        "skin": 3824234,
-        "belly": 13158568,
-        "eye": 14729280,
-        "band": 2767428,
-        "length": 7,
-        "scale": 1.1
-      }
+      "name": "Water snake"
     },
     "combat": {
       "lvl": 6,
@@ -733,16 +597,7 @@
       "name": "beast:bogslime"
     },
     "beast_design": {
-      "name": "Bog slime",
-      "size": 1,
-      "dust": 6974010,
-      "look": {
-        "plan": "slime",
-        "body": 6974010,
-        "moss": 4872746,
-        "bloom": 13150432,
-        "scale": 1.1
-      }
+      "name": "Bog slime"
     },
     "combat": {
       "lvl": 5,
@@ -824,20 +679,7 @@
       "name": "beast:darter"
     },
     "beast_design": {
-      "name": "Blue darter",
-      "size": 0.6,
-      "dust": 3836632,
-      "look": {
-        "plan": "flier",
-        "body": 3836632,
-        "wing": 14741752,
-        "eye": 1718874,
-        "wings": "clear",
-        "long": true,
-        "stripe": 1723002,
-        "fly": 1.2,
-        "scale": 1.3
-      }
+      "name": "Blue darter"
     },
     "combat": {
       "lvl": 2,
@@ -904,16 +746,7 @@
       "name": "beast:lantern"
     },
     "beast_design": {
-      "name": "Mire lantern",
-      "size": 0.8,
-      "dust": 10547392,
-      "look": {
-        "plan": "wisp",
-        "core": 15794160,
-        "glow": 7004320,
-        "mote": 12648408,
-        "fly": 0.8
-      }
+      "name": "Mire lantern"
     },
     "combat": {
       "lvl": 8,
@@ -980,25 +813,7 @@
       "name": "beast:troll"
     },
     "beast_design": {
-      "name": "Mire troll",
-      "size": 2,
-      "dust": 4872772,
-      "look": {
-        "plan": "biped",
-        "skin": 5927012,
-        "garb": 5925434,
-        "eye": 16760896,
-        "head": "snout",
-        "top": 9076848,
-        "club": 5916210,
-        "build": [
-          1.5,
-          1.35
-        ],
-        "long": true,
-        "stoop": 0.3,
-        "scale": 1.4
-      }
+      "name": "Mire troll"
     },
     "combat": {
       "lvl": 11,
@@ -1057,17 +872,7 @@
       "name": "beast:mudjaw"
     },
     "beast_design": {
-      "name": "Old Mudjaw",
-      "size": 2.6,
-      "dust": 5921330,
-      "look": {
-        "plan": "hopper",
-        "fur": 6183986,
-        "belly": 13156496,
-        "eye": 16747050,
-        "frog": true,
-        "scale": 4.2
-      }
+      "name": "Old Mudjaw"
     },
     "combat": {
       "lvl": 13,
@@ -1127,19 +932,7 @@
       "name": "beast:gull"
     },
     "beast_design": {
-      "name": "Harbour gull",
-      "size": 0.7,
-      "dust": 15790316,
-      "look": {
-        "plan": "bird",
-        "feather": 16053488,
-        "wing": 11055288,
-        "beak": 15777856,
-        "eye": 1710618,
-        "fly": 1.8,
-        "span": 1.4,
-        "scale": 1.2
-      }
+      "name": "Harbour gull"
     },
     "combat": {
       "lvl": 5,
@@ -1194,18 +987,7 @@
       "name": "beast:seal"
     },
     "beast_design": {
-      "name": "Grey seal",
-      "size": 1,
-      "dust": 8028296,
-      "look": {
-        "plan": "seal",
-        "hide": 8028296,
-        "ridge": 5922920,
-        "snout": 11055288,
-        "eye": 1052688,
-        "belly": 12107976,
-        "scale": 0.9
-      }
+      "name": "Grey seal"
     },
     "combat": {
       "lvl": 7,
@@ -1268,20 +1050,7 @@
       "name": "beast:seaserpent"
     },
     "beast_design": {
-      "name": "Sea serpent",
-      "size": 1.8,
-      "dust": 2779770,
-      "look": {
-        "plan": "serpent",
-        "skin": 2779770,
-        "belly": 10145992,
-        "eye": 16769088,
-        "band": 1722968,
-        "frill": 4894880,
-        "length": 10,
-        "girth": 2.2,
-        "scale": 1.2
-      }
+      "name": "Sea serpent"
     },
     "combat": {
       "lvl": 12,

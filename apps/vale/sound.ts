@@ -320,13 +320,13 @@ let noisy = (n: Noise) =>
   make(
     n.of,
     n.type == 'step'
-      ? n.plan == 'hero'
-        ? sampled('step-hero', voices.step(n.plan, n.size), 0.25)
-        : voiced(n.sfx, voices.step(n.plan, n.size), 0.25)
+      ? n.gait == 'hero'
+        ? sampled('step-hero', voices.step(n.gait, n.size), 0.25)
+        : voiced(n.sfx, voices.step(n.gait, n.size), 0.25)
       : n.type == 'cry'
       ? voiced(
         n.sfx,
-        voices.cry(n.plan, n.size, n.loud),
+        voices.cry(n.gait, n.size, n.loud),
         n.loud ? 0.32 : 0.2,
       )
       : n.type == 'swing'

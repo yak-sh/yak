@@ -7,16 +7,7 @@
       "name": "beast:crag"
     },
     "beast_design": {
-      "name": "Cragback",
-      "size": 1.5,
-      "dust": 10131600,
-      "look": {
-        "plan": "crag",
-        "stone": 9342084,
-        "light": 10789528,
-        "moss": 6986312,
-        "eye": 16757575
-      }
+      "name": "Cragback"
     },
     "combat": {
       "lvl": 5,
@@ -70,28 +61,7 @@
       "name": "beast:goat"
     },
     "beast_design": {
-      "name": "Crag goat",
-      "size": 0.8,
-      "dust": 14209216,
-      "look": {
-        "plan": "quadruped",
-        "hide": 14209216,
-        "ridge": 11050120,
-        "snout": 6970960,
-        "eye": 14196784,
-        "horns": "spike",
-        "horn": 5918792,
-        "ears": "long",
-        "tail": "stub",
-        "legs": 1.3,
-        "build": [
-          0.8,
-          0.85,
-          0.95
-        ],
-        "muzzle": 1.4,
-        "scale": 0.8
-      }
+      "name": "Crag goat"
     },
     "combat": {
       "lvl": 3,
@@ -141,18 +111,7 @@
       "name": "beast:marmot"
     },
     "beast_design": {
-      "name": "Rock marmot",
-      "size": 0.5,
-      "dust": 10123864,
-      "look": {
-        "plan": "hopper",
-        "fur": 10123864,
-        "belly": 14205088,
-        "eye": 1708048,
-        "ears": "round",
-        "tail": "puff",
-        "scale": 1.2
-      }
+      "name": "Rock marmot"
     },
     "combat": {
       "lvl": 2,
@@ -202,20 +161,7 @@
       "name": "beast:lizard"
     },
     "beast_design": {
-      "name": "Rock lizard",
-      "size": 0.7,
-      "dust": 9079386,
-      "look": {
-        "plan": "crawler",
-        "shell": 9079378,
-        "under": 14209184,
-        "leg": 8026696,
-        "eye": 14721056,
-        "pairs": 2,
-        "tail": true,
-        "mark": 5921332,
-        "scale": 1.2
-      }
+      "name": "Rock lizard"
     },
     "combat": {
       "lvl": 3,
@@ -266,23 +212,7 @@
       "name": "beast:kobold"
     },
     "beast_design": {
-      "name": "Crag kobold",
-      "size": 1,
-      "dust": 11033146,
-      "look": {
-        "plan": "biped",
-        "skin": 12083258,
-        "garb": 5917242,
-        "eye": 16769088,
-        "head": "snout",
-        "top": 15260864,
-        "club": 6974064,
-        "build": [
-          0.8,
-          0.7
-        ],
-        "stoop": 0.25
-      }
+      "name": "Crag kobold"
     },
     "combat": {
       "lvl": 5,
@@ -352,22 +282,7 @@
       "name": "beast:golem"
     },
     "beast_design": {
-      "name": "Stone golem",
-      "size": 2,
-      "dust": 9342084,
-      "look": {
-        "plan": "biped",
-        "skin": 9342084,
-        "garb": 8026224,
-        "eye": 7000319,
-        "build": [
-          1.7,
-          1.2
-        ],
-        "long": true,
-        "stoop": 0.1,
-        "scale": 1.4
-      }
+      "name": "Stone golem"
     },
     "combat": {
       "lvl": 9,
@@ -437,20 +352,7 @@
       "name": "beast:scorpion"
     },
     "beast_design": {
-      "name": "Rock scorpion",
-      "size": 1,
-      "dust": 11042890,
-      "look": {
-        "plan": "crawler",
-        "shell": 11042890,
-        "under": 6967344,
-        "leg": 9071166,
-        "eye": 1708048,
-        "pairs": 4,
-        "claws": 12094032,
-        "sting": 3811866,
-        "scale": 1.4
-      }
+      "name": "Rock scorpion"
     },
     "combat": {
       "lvl": 10,
@@ -535,21 +437,7 @@
       "name": "beast:basilisk"
     },
     "beast_design": {
-      "name": "Basilisk",
-      "size": 2,
-      "dust": 4876858,
-      "look": {
-        "plan": "serpent",
-        "skin": 4876858,
-        "belly": 13154416,
-        "eye": 16769088,
-        "band": 3032100,
-        "frill": 13126186,
-        "horns": 15260864,
-        "length": 8,
-        "girth": 1.6,
-        "scale": 1.5
-      }
+      "name": "Basilisk"
     },
     "combat": {
       "lvl": 12,
@@ -623,19 +511,7 @@
       "name": "beast:stonewyrm"
     },
     "beast_design": {
-      "name": "Stonewyrm",
-      "size": 1.8,
-      "dust": 9078400,
-      "look": {
-        "plan": "serpent",
-        "skin": 8288882,
-        "belly": 11052184,
-        "eye": 16756800,
-        "band": 6183508,
-        "length": 7,
-        "girth": 1.8,
-        "scale": 1.2
-      }
+      "name": "Stonewyrm"
     },
     "combat": {
       "lvl": 10,
@@ -705,19 +581,7 @@
       "name": "beast:thornback"
     },
     "beast_design": {
-      "name": "Old Thornback",
-      "size": 2.4,
-      "dust": 8011567,
-      "look": {
-        "plan": "quadruped",
-        "hide": 8011567,
-        "ridge": 4858905,
-        "snout": 12089962,
-        "tusk": 15853263,
-        "eye": 16734778,
-        "thorns": true,
-        "scale": 2.3
-      }
+      "name": "Old Thornback"
     },
     "combat": {
       "lvl": 8,
@@ -772,22 +636,7 @@
       "name": "beast:hawk"
     },
     "beast_design": {
-      "name": "Ridge hawk",
-      "size": 0.8,
-      "dust": 9071178,
-      "look": {
-        "plan": "bird",
-        "feather": 9069630,
-        "wing": 6965806,
-        "beak": 3815994,
-        "eye": 15777840,
-        "belly": 15260872,
-        "bill": "hook",
-        "tail": "fan",
-        "fly": 2.2,
-        "span": 1.3,
-        "scale": 1.3
-      }
+      "name": "Ridge hawk"
     },
     "combat": {
       "lvl": 5,
@@ -868,22 +717,7 @@
       "name": "beast:griffin"
     },
     "beast_design": {
-      "name": "Griffin",
-      "size": 2,
-      "dust": 14200928,
-      "look": {
-        "plan": "bird",
-        "feather": 15261904,
-        "wing": 13146704,
-        "beak": 15249456,
-        "eye": 15751722,
-        "belly": 14198880,
-        "bill": "hook",
-        "tail": "fan",
-        "fly": 1.2,
-        "span": 1.8,
-        "scale": 2.6
-      }
+      "name": "Griffin"
     },
     "combat": {
       "lvl": 11,
@@ -942,28 +776,7 @@
       "name": "beast:ridgeram"
     },
     "beast_design": {
-      "name": "Ridge ram",
-      "size": 1.2,
-      "dust": 9075306,
-      "look": {
-        "plan": "quadruped",
-        "hide": 10127992,
-        "ridge": 6969932,
-        "snout": 4865590,
-        "eye": 14196784,
-        "horns": "curl",
-        "horn": 14207144,
-        "tail": "stub",
-        "belly": 14734528,
-        "legs": 1.2,
-        "build": [
-          1.1,
-          1.1,
-          1
-        ],
-        "muzzle": 1.3,
-        "scale": 1.2
-      }
+      "name": "Ridge ram"
     },
     "combat": {
       "lvl": 8,
@@ -1033,26 +846,7 @@
       "name": "beast:lynx"
     },
     "beast_design": {
-      "name": "Ridge lynx",
-      "size": 1,
-      "dust": 13148272,
-      "look": {
-        "plan": "quadruped",
-        "hide": 13148272,
-        "ridge": 9071176,
-        "snout": 15787732,
-        "eye": 14213184,
-        "ears": "tuft",
-        "tail": "stub",
-        "belly": 15787732,
-        "legs": 1.3,
-        "build": [
-          0.8,
-          0.85,
-          0.95
-        ],
-        "muzzle": 1.3
-      }
+      "name": "Ridge lynx"
     },
     "combat": {
       "lvl": 7,
@@ -1137,24 +931,7 @@
       "name": "beast:wight"
     },
     "beast_design": {
-      "name": "Barrow wight",
-      "size": 1.3,
-      "dust": 10135728,
-      "look": {
-        "plan": "biped",
-        "skin": 11056316,
-        "garb": 2764344,
-        "eye": 10154239,
-        "build": [
-          0.95,
-          1.15
-        ],
-        "head": "crown",
-        "top": 12098128,
-        "club": 8028296,
-        "long": true,
-        "stoop": 0.25
-      }
+      "name": "Barrow wight"
     },
     "combat": {
       "lvl": 14,

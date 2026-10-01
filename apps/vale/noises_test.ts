@@ -1,6 +1,7 @@
 import { test } from '@yaks/testing'
 import { seedBuildings } from './buildings_fixture.ts'
 import { seedBeasts } from './beasts_fixture.ts'
+import { seedFigures } from './figures_fixture.ts'
 import { beastOf } from './beasts.ts'
 import { assert, assertEquals } from '@std/assert'
 import { NEAR } from './ears.ts'
@@ -12,6 +13,7 @@ seedThemes()
 
 seedBuildings()
 seedBeasts()
+seedFigures()
 
 test('village fire is near the square but not beyond surrounding buildings', () => {
   // The fire loop uses NEAR's exponential panner: by the outer homes its

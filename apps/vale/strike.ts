@@ -8,7 +8,7 @@
 // there (`FLIGHT`). An ability takes what its shape covers (`takenBy`).
 import type { Ability } from './abilities.ts'
 import { effect } from './ability-effects.ts'
-import { BEASTS } from './beasts.ts'
+import { sizeOf } from './figure.ts'
 import type { Kit } from './gear.ts'
 
 /** A creature, as far as a blow cares: where it is, and how near. */
@@ -39,7 +39,7 @@ let HOLD = 0.8
 // How far a sweep reaches with a weapon that shoots: the arm's length.
 let HAND = 1.4
 
-let size = (m: Mark) => BEASTS[m.beast]?.size ?? 1
+let size = (m: Mark) => sizeOf(m.beast)
 let off = (me: Me, m: Mark) => {
   let a = Math.atan2(m.body.x - me.x, m.body.z - me.z)
   return Math.abs(Math.atan2(Math.sin(a - me.yaw), Math.cos(a - me.yaw)))

@@ -7,18 +7,7 @@
       "name": "beast:snowhare"
     },
     "beast_design": {
-      "name": "Snow hare",
-      "size": 0.6,
-      "dust": 16054008,
-      "look": {
-        "plan": "hopper",
-        "fur": 16054008,
-        "belly": 16777215,
-        "eye": 1710618,
-        "ears": "long",
-        "tail": "puff",
-        "scale": 1.3
-      }
+      "name": "Snow hare"
     },
     "combat": {
       "lvl": 9,
@@ -83,16 +72,7 @@
       "name": "beast:frostslime"
     },
     "beast_design": {
-      "name": "Frost slime",
-      "size": 1.1,
-      "dust": 13167871,
-      "look": {
-        "plan": "slime",
-        "body": 10148080,
-        "moss": 15792383,
-        "bloom": 16777215,
-        "scale": 1.2
-      }
+      "name": "Frost slime"
     },
     "combat": {
       "lvl": 10,
@@ -158,18 +138,7 @@
       "name": "beast:frostback"
     },
     "beast_design": {
-      "name": "Frostback",
-      "size": 1.6,
-      "dust": 14216440,
-      "look": {
-        "plan": "crag",
-        "stone": 9083560,
-        "light": 14215408,
-        "moss": 15792383,
-        "eye": 7000319,
-        "crystals": 11067647,
-        "scale": 1.1
-      }
+      "name": "Frostback"
     },
     "combat": {
       "lvl": 12,
@@ -239,27 +208,7 @@
       "name": "beast:frostwolf"
     },
     "beast_design": {
-      "name": "Frost wolf",
-      "size": 1.2,
-      "dust": 15266036,
-      "look": {
-        "plan": "quadruped",
-        "hide": 15265522,
-        "ridge": 12635352,
-        "snout": 16317437,
-        "eye": 7000319,
-        "ears": "point",
-        "tail": "bush",
-        "belly": 16317437,
-        "legs": 1.25,
-        "build": [
-          0.85,
-          0.9,
-          1.15
-        ],
-        "muzzle": 2,
-        "scale": 1.2
-      }
+      "name": "Frost wolf"
     },
     "combat": {
       "lvl": 13,
@@ -348,28 +297,7 @@
       "name": "beast:mammoth"
     },
     "beast_design": {
-      "name": "Woolly mammoth",
-      "size": 2.4,
-      "dust": 6965812,
-      "look": {
-        "plan": "quadruped",
-        "hide": 6965812,
-        "ridge": 5913126,
-        "snout": 6965812,
-        "eye": 1708048,
-        "tusk": 16051416,
-        "ears": "round",
-        "tail": "thin",
-        "belly": 5913126,
-        "legs": 1.3,
-        "build": [
-          1.5,
-          1.5,
-          1.35
-        ],
-        "muzzle": 1.5,
-        "scale": 1.45
-      }
+      "name": "Woolly mammoth"
     },
     "combat": {
       "lvl": 14,
@@ -424,24 +352,7 @@
       "name": "beast:frostmaw"
     },
     "beast_design": {
-      "name": "Frostmaw",
-      "size": 2.8,
-      "dust": 15266040,
-      "look": {
-        "plan": "biped",
-        "skin": 10137800,
-        "garb": 15265524,
-        "eye": 3854591,
-        "head": "horns",
-        "top": 9083562,
-        "build": [
-          1.6,
-          1.25
-        ],
-        "long": true,
-        "stoop": 0.25,
-        "scale": 1.9
-      }
+      "name": "Frostmaw"
     },
     "combat": {
       "lvl": 16,
@@ -517,23 +428,7 @@
       "name": "beast:skyreaver"
     },
     "beast_design": {
-      "name": "The Skyreaver",
-      "size": 3,
-      "dust": 4868714,
-      "look": {
-        "plan": "bird",
-        "feather": 3816018,
-        "wing": 2763326,
-        "beak": 15253568,
-        "eye": 16728112,
-        "belly": 5921400,
-        "crest": 14170682,
-        "bill": "hook",
-        "tail": "fan",
-        "fly": 1.6,
-        "span": 1.8,
-        "scale": 3.4
-      }
+      "name": "The Skyreaver"
     },
     "combat": {
       "lvl": 18,
@@ -609,23 +504,7 @@
       "name": "beast:yeti"
     },
     "beast_design": {
-      "name": "Yeti",
-      "size": 1.8,
-      "dust": 15265522,
-      "look": {
-        "plan": "biped",
-        "skin": 10137792,
-        "garb": 15660280,
-        "eye": 3832504,
-        "build": [
-          1.5,
-          1.45
-        ],
-        "head": "horns",
-        "top": 13160664,
-        "long": true,
-        "stoop": 0.2
-      }
+      "name": "Yeti"
     },
     "combat": {
       "lvl": 16,

@@ -116,6 +116,10 @@ export let useFigures = (rows: Bundle[]) => {
   }))
 }
 
+/** How big the game takes a creature to be, by its eid: its figure's size,
+ * or 1 while it has no figure. */
+export let sizeOf = (beast: string) => FIGURES[beast]?.size ?? 1
+
 let TAU = Math.PI * 2
 
 type Role = keyof { [K in Move as keyof K]: 0 }

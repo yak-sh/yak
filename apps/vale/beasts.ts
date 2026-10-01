@@ -1,8 +1,9 @@
 // The creatures of the vale are store rows, seeded from seed/beasts/. A
 // creature is an entity with whichever aspects it needs, each a component of
-// its own: beast_design (what it is called, and for now how it is drawn),
-// combat (how it fights), loot (what it leaves) and sounds (the sfx rows it
-// cries and steps with). A creature without combat can't be fought.
+// its own: beast_design (what it is called), combat (how it fights), loot (what
+// it leaves) and sounds (the sfx rows it cries and steps with). How it looks
+// and moves is its figure, a row of its own (figure.ts). A creature without a
+// combat can't be fought.
 //
 // Where it lives is a den row of its own (homes.ts): every land whose habitat
 // suits it and that has a place of the den's kind (levels.ts) grows that many
@@ -11,43 +12,11 @@
 // creature with no den lives nowhere until it is spawned.
 //
 // Everything refers to a creature by its eid. Its alias key, such as
-// beast:boar, is the readable name quests and seeds use (names.ts);
-// `beastId` takes either. Body plans remain code in bodies/; a look picks one by name.
+// beast:boar, is the readable name quests and seeds use; `beastId` takes
+// either.
 import { comp, num, str } from './bundle.ts'
 import { named } from './names.ts'
 import type { Bundle } from './net.ts'
-import type { Biped } from './bodies/biped.ts'
-import type { Bird } from './bodies/bird.ts'
-import type { Crag } from './bodies/crag.ts'
-import type { Crawler } from './bodies/crawler.ts'
-import type { Flier } from './bodies/flier.ts'
-import type { Hopper } from './bodies/hopper.ts'
-import type { Quadruped } from './bodies/quadruped.ts'
-import type { Seal } from './bodies/seal.ts'
-import type { Serpent } from './bodies/serpent.ts'
-import type { Slime } from './bodies/slime.ts'
-import type { Wisp } from './bodies/wisp.ts'
-
-/** Every body plan, by name, and what a look in it says. */
-export type Plans = {
-  biped: Biped
-  bird: Bird
-  crag: Crag
-  crawler: Crawler
-  flier: Flier
-  hopper: Hopper
-  quadruped: Quadruped
-  seal: Seal
-  serpent: Serpent
-  slime: Slime
-  wisp: Wisp
-}
-
-/** How a creature is drawn: which body plan, in which colours, and how many
- * times its plan's own size. */
-export type Look = {
-  [P in keyof Plans]: { plan: P; scale?: number } & Plans[P]
-}[keyof Plans]
 
 /** How a creature fights, at its own level (vocab.json `combat`). */
 export type Combat = {
@@ -86,11 +55,6 @@ export type Den = {
 export type Beast = {
   eid: string
   name: string
-  /** how big it is drawn, and how far a blow must reach it */
-  size: number
-  /** the colour of the dust a blow knocks off it */
-  dust: number
-  look: Look
   combat?: Combat
   /** item kinds (items.ts), each with the chance of one dropping */
   drops: [string, number][]
@@ -187,9 +151,6 @@ let index = () => {
     let beast: Beast = {
       eid,
       name,
-      size: num(design.size, 1),
-      dust: num(design.dust),
-      look: design.look as Look,
       combat: combatOf(row),
       drops: drops(comp(row, 'loot').drops),
       ...typeof sounds.cry == 'string' && { cry: sounds.cry },

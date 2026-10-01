@@ -7,17 +7,7 @@
       "name": "beast:boar"
     },
     "beast_design": {
-      "name": "Bristleboar",
-      "size": 1.1,
-      "dust": 9067068,
-      "look": {
-        "plan": "quadruped",
-        "hide": 9067068,
-        "ridge": 5913126,
-        "snout": 14260874,
-        "tusk": 16051416,
-        "eye": 2826272
-      }
+      "name": "Bristleboar"
     },
     "combat": {
       "lvl": 3,
@@ -71,17 +61,7 @@
       "name": "beast:squirrel"
     },
     "beast_design": {
-      "name": "Red squirrel",
-      "size": 0.45,
-      "dust": 12081706,
-      "look": {
-        "plan": "hopper",
-        "fur": 12081706,
-        "belly": 15786184,
-        "eye": 1708048,
-        "ears": "round",
-        "tail": "bush"
-      }
+      "name": "Red squirrel"
     },
     "combat": {
       "lvl": 1,
@@ -131,26 +111,7 @@
       "name": "beast:deer"
     },
     "beast_design": {
-      "name": "Fallow deer",
-      "size": 1,
-      "dust": 12094040,
-      "look": {
-        "plan": "quadruped",
-        "hide": 12092494,
-        "ridge": 9068086,
-        "snout": 3811876,
-        "eye": 1708048,
-        "ears": "long",
-        "tail": "stub",
-        "belly": 15919318,
-        "legs": 1.8,
-        "build": [
-          0.75,
-          0.85,
-          1.05
-        ],
-        "muzzle": 1.4
-      }
+      "name": "Fallow deer"
     },
     "combat": {
       "lvl": 2,
@@ -201,29 +162,7 @@
       "name": "beast:stag"
     },
     "beast_design": {
-      "name": "Great stag",
-      "size": 1.4,
-      "dust": 9068086,
-      "look": {
-        "plan": "quadruped",
-        "hide": 9068090,
-        "ridge": 6964264,
-        "snout": 3811876,
-        "eye": 1708048,
-        "ears": "long",
-        "horns": "antler",
-        "horn": 14733488,
-        "tail": "stub",
-        "belly": 15260872,
-        "legs": 1.9,
-        "build": [
-          0.85,
-          0.95,
-          1.15
-        ],
-        "muzzle": 1.4,
-        "scale": 1.25
-      }
+      "name": "Great stag"
     },
     "combat": {
       "lvl": 6,
@@ -294,26 +233,7 @@
       "name": "beast:wolf"
     },
     "beast_design": {
-      "name": "Grey wolf",
-      "size": 1,
-      "dust": 9079432,
-      "look": {
-        "plan": "quadruped",
-        "hide": 9079430,
-        "ridge": 5921368,
-        "snout": 14210252,
-        "eye": 15253568,
-        "ears": "point",
-        "tail": "bush",
-        "belly": 14210252,
-        "legs": 1.25,
-        "build": [
-          0.8,
-          0.85,
-          1.15
-        ],
-        "muzzle": 2
-      }
+      "name": "Grey wolf"
     },
     "combat": {
       "lvl": 4,
@@ -383,27 +303,7 @@
       "name": "beast:direwolf"
     },
     "beast_design": {
-      "name": "Dire wolf",
-      "size": 1.7,
-      "dust": 4868690,
-      "look": {
-        "plan": "quadruped",
-        "hide": 3816004,
-        "ridge": 2236970,
-        "snout": 9079440,
-        "eye": 16738874,
-        "ears": "point",
-        "tail": "bush",
-        "belly": 6974068,
-        "legs": 1.3,
-        "build": [
-          0.85,
-          0.9,
-          1.3
-        ],
-        "muzzle": 2.1,
-        "scale": 1.6
-      }
+      "name": "Dire wolf"
     },
     "combat": {
       "lvl": 9,
@@ -477,27 +377,7 @@
       "name": "beast:bear"
     },
     "beast_design": {
-      "name": "Brown bear",
-      "size": 1.6,
-      "dust": 6965808,
-      "look": {
-        "plan": "quadruped",
-        "hide": 7227950,
-        "ridge": 5913122,
-        "snout": 11045480,
-        "eye": 1708048,
-        "ears": "round",
-        "tail": "stub",
-        "belly": 5913124,
-        "legs": 1.05,
-        "build": [
-          1.4,
-          1.3,
-          1.1
-        ],
-        "muzzle": 1.3,
-        "scale": 1.4
-      }
+      "name": "Brown bear"
     },
     "combat": {
       "lvl": 8,
@@ -571,20 +451,7 @@
       "name": "beast:spider"
     },
     "beast_design": {
-      "name": "Wood spider",
-      "size": 0.8,
-      "dust": 3813416,
-      "look": {
-        "plan": "crawler",
-        "shell": 4864556,
-        "under": 2760730,
-        "leg": 3812386,
-        "eye": 14168096,
-        "pairs": 4,
-        "abdomen": true,
-        "mark": 14196800,
-        "scale": 1.3
-      }
+      "name": "Wood spider"
     },
     "combat": {
       "lvl": 3,
@@ -650,20 +517,7 @@
       "name": "beast:broodmother"
     },
     "beast_design": {
-      "name": "Broodmother",
-      "size": 2,
-      "dust": 2760752,
-      "look": {
-        "plan": "crawler",
-        "shell": 2892336,
-        "under": 1709086,
-        "leg": 2366504,
-        "eye": 16726586,
-        "pairs": 4,
-        "abdomen": true,
-        "mark": 11549290,
-        "scale": 2.6
-      }
+      "name": "Broodmother"
     },
     "combat": {
       "lvl": 11,
@@ -737,22 +591,7 @@
       "name": "beast:owl"
     },
     "beast_design": {
-      "name": "Tawny owl",
-      "size": 0.7,
-      "dust": 10123858,
-      "look": {
-        "plan": "bird",
-        "feather": 10122832,
-        "wing": 8018490,
-        "beak": 3815984,
-        "eye": 2759178,
-        "face": 14732456,
-        "neck": 0.3,
-        "fly": 2.2,
-        "span": 1.2,
-        "tail": "fan",
-        "scale": 1.3
-      }
+      "name": "Tawny owl"
     },
     "combat": {
       "lvl": 3,
@@ -818,23 +657,7 @@
       "name": "beast:barkling"
     },
     "beast_design": {
-      "name": "Barkling",
-      "size": 1.2,
-      "dust": 6969914,
-      "look": {
-        "plan": "biped",
-        "skin": 8020546,
-        "garb": 6967860,
-        "eye": 14217328,
-        "head": "crown",
-        "top": 5933626,
-        "build": [
-          1,
-          1.05
-        ],
-        "long": true,
-        "scale": 1.1
-      }
+      "name": "Barkling"
     },
     "combat": {
       "lvl": 5,
@@ -889,24 +712,7 @@
       "name": "beast:grimbark"
     },
     "beast_design": {
-      "name": "Grimbark",
-      "size": 2.8,
-      "dust": 5917232,
-      "look": {
-        "plan": "biped",
-        "skin": 5917234,
-        "garb": 4865064,
-        "eye": 16765514,
-        "head": "crown",
-        "top": 4090414,
-        "build": [
-          1.3,
-          1.2
-        ],
-        "long": true,
-        "stoop": 0.1,
-        "scale": 2.2
-      }
+      "name": "Grimbark"
     },
     "combat": {
       "lvl": 12,
@@ -966,28 +772,7 @@
       "name": "beast:badger"
     },
     "beast_design": {
-      "name": "Brock badger",
-      "size": 0.8,
-      "dust": 8026744,
-      "look": {
-        "plan": "quadruped",
-        "hide": 8026744,
-        "ridge": 3815994,
-        "snout": 15789284,
-        "eye": 1708048,
-        "mask": 15789284,
-        "belly": 2763306,
-        "ears": "round",
-        "tail": "stub",
-        "legs": 0.6,
-        "build": [
-          1.1,
-          0.8,
-          1
-        ],
-        "muzzle": 1.5,
-        "scale": 0.8
-      }
+      "name": "Brock badger"
     },
     "combat": {
       "lvl": 3,
@@ -1038,25 +823,7 @@
       "name": "beast:quillback"
     },
     "beast_design": {
-      "name": "Quillback",
-      "size": 0.9,
-      "dust": 5917242,
-      "look": {
-        "plan": "quadruped",
-        "hide": 5917242,
-        "ridge": 3813416,
-        "snout": 9075304,
-        "eye": 1708048,
-        "thorns": true,
-        "ears": "round",
-        "legs": 0.7,
-        "build": [
-          1.1,
-          1,
-          0.9
-        ],
-        "scale": 0.85
-      }
+      "name": "Quillback"
     },
     "combat": {
       "lvl": 4,
@@ -1107,22 +874,7 @@
       "name": "beast:goblin"
     },
     "beast_design": {
-      "name": "Bramble goblin",
-      "size": 1,
-      "dust": 6982202,
-      "look": {
-        "plan": "biped",
-        "skin": 8034890,
-        "garb": 6965808,
-        "eye": 15781952,
-        "head": "ears",
-        "club": 8018488,
-        "build": [
-          0.85,
-          0.72
-        ],
-        "stoop": 0.2
-      }
+      "name": "Bramble goblin"
     },
     "combat": {
       "lvl": 5,
@@ -1192,24 +944,7 @@
       "name": "beast:warchief"
     },
     "beast_design": {
-      "name": "Goblin warchief",
-      "size": 1.4,
-      "dust": 5929514,
-      "look": {
-        "plan": "biped",
-        "skin": 6982202,
-        "garb": 9054756,
-        "eye": 16756784,
-        "head": "horns",
-        "top": 15260864,
-        "club": 5921376,
-        "build": [
-          1.2,
-          0.95
-        ],
-        "stoop": 0.15,
-        "scale": 1.25
-      }
+      "name": "Goblin warchief"
     },
     "combat": {
       "lvl": 8,
@@ -1283,18 +1018,7 @@
       "name": "beast:stagbeetle"
     },
     "beast_design": {
-      "name": "Stag beetle",
-      "size": 0.9,
-      "dust": 4860442,
-      "look": {
-        "plan": "crawler",
-        "shell": 5910044,
-        "under": 2758672,
-        "leg": 2758672,
-        "eye": 1052688,
-        "jaws": 6961698,
-        "scale": 1.6
-      }
+      "name": "Stag beetle"
     },
     "combat": {
       "lvl": 4,
@@ -1345,19 +1069,7 @@
       "name": "beast:bat"
     },
     "beast_design": {
-      "name": "Hollow bat",
-      "size": 0.7,
-      "dust": 4864580,
-      "look": {
-        "plan": "flier",
-        "body": 4864576,
-        "wing": 5915728,
-        "eye": 16765024,
-        "wings": "leather",
-        "ears": true,
-        "fly": 1.6,
-        "scale": 1.3
-      }
+      "name": "Hollow bat"
     },
     "combat": {
       "lvl": 3,
