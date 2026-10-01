@@ -1,6 +1,6 @@
 ---
 name: files
-description: "Files and pictures (yaks.app). app_files for the app's own files — what a write returns, the patch and fetch ops, the history every write keeps and the restore that puts one back, the icon.png that gives an app an icon on a home screen — then upload() for a file off an <input>: where the bytes are served back from, the attachment and image rows it writes, the 20 MB ceiling and the downscale under it, and a gallery that never shows one picture twice."
+description: "Files and pictures (yaks.app). app_deploy's reload and the yak-release event, including a custom notice that keeps unsaved input; app_files — what a write returns, the patch and fetch ops, the history every write keeps and the restore that puts one back, the icon.png that gives an app an icon on a home screen — then upload() for a file off an <input>: where the bytes are served back from, the attachment and image rows it writes, the 20 MB ceiling and the downscale under it, and a gallery that never shows one picture twice."
 ---
 
 # Files and pictures
@@ -69,6 +69,101 @@ them for a year. The page itself, app data, and the ordinary file addresses
 still revalidate; they show the current release. A page with its own `<base>`
 keeps its chosen URL behavior. App access is checked whenever a request reaches
 the server, including a request for an older release.
+
+## Releases and open pages
+
+`app_deploy` makes the draft a new release. An already-open page keeps its
+release's file URLs, but its data is live: a newer release may change the
+contract that page uses. The platform checks on a release push through the app's
+own socket, when that socket opens or reconnects, when the page becomes visible
+again, and on a persisted `pageshow` (returning from the browser's back-forward
+cache). The return checks run at most once a minute. A page with no socket that
+never hides does not hear a release until one of those moments.
+
+The level is derived **from the page's version to the newest version**, not just
+from the last deploy:
+
+- Identical file manifests mean **no notice**, even after a rollback or an
+  explicit required mark.
+- Dropping or retyping a declared component, tool or property, or crossing any
+  release marked `reload: 'required'`, means **required**.
+- Other file changes, including additive vocabulary changes, mean **optional**.
+
+A deployer can raise the level for a contract the vocabulary does not describe:
+
+    app_deploy(app: 'recipes', reload: 'required')
+
+Use this when, for example, a worker route or the meaning of a value sent to a
+peer changes incompatibly. The only explicit value is `'required'`. Leaving
+`reload` out means **derive from the releases**, not "force optional"; a
+deployer cannot lower a required change. `app_rollback` marks its new release
+required. `app_update` carries required marks from the source releases it
+crosses. The identical-files rule still takes precedence. Neither operation
+rolls back saved data; plan any store migration with the release.
+
+### The default notice
+
+The platform emits a cancelable **`yak-release` event on `window`**, once for
+each newly noticed version. Its `detail` includes `{version, reload}`: `version`
+is the latest release number and `reload` is `'optional'` or `'required'`. More
+fields may be added; read the ones you use rather than assuming that is the
+whole object.
+
+Without a takeover, an optional notice says **"A new version of this app is
+out"**, with Reload and Dismiss. Dismiss holds for that version in that tab. A
+required notice says **"This app has changed. Reload to keep using it"**, with
+Reload only, and stays until the person reloads. Neither notice covers the
+page's input. **There is no automatic reload**, even for required changes: let
+the person save or copy unfinished work before choosing Reload.
+
+### Drawing your own notice
+
+Call `event.preventDefault()` **synchronously in the listener** to suppress the
+platform notice, then draw your own. Canceling is a takeover, not an
+acknowledgment: your app now owes the person a notice and a Reload action. Keep
+a required notice visible, and let only an optional notice be dismissed. Do not
+clear or replace the form while drawing it.
+
+For example, put this notice in normal page flow, beside (not over) your form:
+
+```html
+<aside id="release-notice" hidden aria-live="polite">
+  <p id="release-message"></p>
+  <button id="release-reload" type="button">Reload</button>
+  <button id="release-dismiss" type="button">Dismiss</button>
+</aside>
+```
+
+Run this script after those elements exist. The form and its unsaved values are
+untouched; reload happens only on the button click. For a required change, help
+the person copy unfinished work before clicking it.
+
+```js ignore
+let notice = document.querySelector('#release-notice')
+let message = document.querySelector('#release-message')
+let reload = document.querySelector('#release-reload')
+let dismiss = document.querySelector('#release-dismiss')
+
+window.addEventListener('yak-release', (event) => {
+  event.preventDefault()
+  let { reload: level } = event.detail
+  message.textContent = level == 'required'
+    ? 'This app has changed. Copy unfinished work, then reload to keep using it'
+    : 'A new version of this app is out'
+  dismiss.hidden = level == 'required'
+  dismiss.onclick = () => {
+    notice.hidden = true
+  }
+  reload.onclick = () => {
+    window.location.reload()
+  }
+  notice.hidden = false
+})
+```
+
+This event is for the app's own releases, not for platform releases or a
+borrowed app's releases. The script is supplied by the platform; there is no
+client library upgrade or app rebuild needed to receive it.
 
 ## Every write keeps what it replaced
 

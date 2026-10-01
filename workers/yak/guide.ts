@@ -91,6 +91,17 @@ in a package.json beside index.html, and app_deploy compiles them. Four steps:
 app_list is what they already have — every app, its address and what is
 broken in it.
 
+Open pages hear a newer release as a cancelable window yak-release event,
+with detail {version, reload}, where reload is 'optional' or 'required'. The
+platform draws a notice with a Reload button; it never reloads automatically.
+An app can synchronously preventDefault() and draw its own notice instead,
+keeping unsaved input until the person chooses to reload. app_deploy accepts
+reload: 'required' for a changed contract outside the vocabulary, such as a
+worker route. Leave it out to derive the level from the releases; it cannot
+force an incompatible change to optional. Identical file manifests give no
+notice. Call guide with page files for the rules and a custom-notice example
+(${url(env, '/docs/files.md')}).
+
 Some things are the person's to do, and a tool returns what they need for
 it rather than doing it: space_delete emails the owner a confirmation link,
 space_sell returns the Stripe onboarding link, domain_attach returns the DNS

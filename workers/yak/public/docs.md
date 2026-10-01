@@ -46,13 +46,20 @@ HTTP endpoints underneath, and who may read and write.
 
 ## Files
 
+`app_deploy` releases the app's draft. Open pages get a `yak-release` event with
+`{version, reload}` and an optional or required Reload notice, never an
+automatic reload. An app can take over the notice without losing input. Use
+`reload: 'required'` on `app_deploy` for a changed contract the vocabulary
+cannot describe; otherwise the platform derives the level.
+
 An `icon.png` beside `index.html` is the app's icon on a home screen. `upload`
 takes a file and returns where its bytes live, addressed by their own SHA-256,
 and a row that points at them is what a gallery draws. One upload is 20 MB at
 most, so downscale a photo on the page before sending it.
 
-Deeper: <https://yaks.app/docs/files.md> — the app's icon, uploads, pictures,
-and a gallery that never shows one twice.
+Deeper: <https://yaks.app/docs/files.md> — releases, `yak-release`,
+`app_deploy`'s `reload`, the app's icon, uploads, pictures, and a gallery that
+never shows one twice.
 
 ## Components
 
@@ -240,9 +247,9 @@ state means.
 
 One grammar everywhere: `.doc` selects rows that have a component, `?doc` asks
 for one beside the rows selected, `.recipe.minutes<=30` filters a property, `&`
-joins, `id=<eid>` fetches one entity whole, `limit=` windows the answer, and a
-bare word is a full-text search. A row comes back with the components the filter
-names, so ask for what you will draw.
+joins, `.entity.eid=<eid>` fetches one entity whole, `.limit=` windows the
+answer, and a bare word is a full-text search. A row comes back with the
+components the filter names, so ask for what you will draw.
 
 Deeper: <https://yaks.app/docs/querying.md> — every operator, with worked
 examples.
