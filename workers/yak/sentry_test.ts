@@ -12,6 +12,10 @@ import { Refused, Stale } from '@yaks/graph'
 import { CallError } from '@yaks/tools'
 import { caught, defect, reporter, scrub } from './sentry.ts'
 import type { Ctx } from './tools.ts'
+import { doorOf, type Namespace, storeOf } from './door.ts'
+import { Store } from './graph.ts'
+import { KERNEL } from './meta.ts'
+import { state } from './testing.ts'
 
 // A client that keeps what it would have sent.
 let sentry = () => {
@@ -123,4 +127,48 @@ test('what leaves carries no header, query, body or console argument', () => {
     method: 'GET',
   })
   assertEquals(event.extra, {})
+})
+
+// A store the runtime kills for its limits never runs a line that could report
+// it: the kernel's door does, and the alarm's retry does.
+test('a store killed for its limits is reported, though the retry answers', async () => {
+  let s = sentry()
+  let answers: (Error | Response)[] = [
+    Object.assign(
+      new Error('Durable Object exceeded its CPU time limit and was reset.'),
+      { retryable: true },
+    ),
+    new Response('ok'),
+  ]
+  let ns: Namespace = {
+    idFromName: (name) => name,
+    get: () => ({
+      fetch: () => {
+        let next = answers.shift()!
+        return next instanceof Error
+          ? Promise.reject(next)
+          : Promise.resolve(next)
+      },
+    }),
+  }
+  let door = storeOf(ns, 'ada/notes')
+  assertEquals(await (await door('/query?q=private')).text(), 'ok')
+  await s.done()
+  assertEquals(s.seen.map((e) => e.tags), [
+    { request: 'store /query', store: 'ada/notes' },
+  ])
+})
+
+test("a store's alarm the runtime cut off is reported by its retry", async () => {
+  let s = sentry()
+  let o = new Store(state(), {})
+  let door = doorOf((r) => o.fetch(r), 'ada/notes')
+  await door('/vocab', { method: 'POST', body: '{}' }, KERNEL)
+  await o.alarm({ isRetry: true, retryCount: 1 })
+  await o.alarm()
+  await s.done()
+  assertEquals(
+    s.seen.filter((e) => e.tags?.request == 'alarm').map((e) => e.tags),
+    [{ request: 'alarm', store: 'ada/notes', retry: '1' }],
+  )
 })

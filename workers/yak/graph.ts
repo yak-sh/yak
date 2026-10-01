@@ -1694,8 +1694,22 @@ export class Store {
     return result
   }
 
-  /** The runtime's clock going off: whatever this object armed itself for. */
-  alarm(): Promise<void> {
+  // Whether this incarnation's last alarm threw (`alarm`).
+  #threw = false
+
+  /** The runtime's clock going off: whatever this object armed itself for.
+   * The runtime retries an alarm whose run failed. One that threw was reported
+   * where it threw; one the runtime killed for its limits left nothing behind
+   * that could report it, so its retry does (M-37965). */
+  alarm(info?: { isRetry?: boolean; retryCount?: number }): Promise<void> {
+    if (info?.isRetry && !this.#threw) {
+      defect(new Error("a store's alarm was cut off before it finished"), {
+        request: 'alarm',
+        store: this.#name(),
+        retry: String(info.retryCount ?? ''),
+      })
+    }
+    this.#threw = false
     let run = async () => {
       let leave = await this.#enter(false)
       try {
@@ -1720,7 +1734,11 @@ export class Store {
         leave()
       }
     }
-    return this.#profile ? this.#profile.run('alarm', run) : run()
+    let ran = this.#profile ? this.#profile.run('alarm', run) : run()
+    return ran.catch((e) => {
+      this.#threw = true
+      throw e
+    })
   }
 
   // Planted once per incarnation, by the first request or alarm to find the

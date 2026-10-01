@@ -12,6 +12,7 @@
 // object's graph and failed that check. That class is gone (T-33807).
 import type { Caller } from '@yaks/egress'
 import { hop, writing } from './lib/hops.ts'
+import { defect } from './sentry.ts'
 
 // A store reports the statements it ran for this fetch, including any store
 // it asked in turn. Only the door sees every answer, so it is also where a
@@ -216,6 +217,13 @@ export let evicted = (e: unknown): boolean =>
   (('retryable' in e && e.retryable === true) ||
     RESETS.some((said) => e.message.includes(said)))
 
+// A store the runtime killed for its limits says so in these words. Its own
+// code never sees the kill, and the retry may well answer, so the door
+// reports it, before anything retries, or nothing ever would (M-37965).
+let LIMITS = /exceeded its (CPU time|memory) limit/
+export let killed = (e: unknown): boolean =>
+  e instanceof Error && LIMITS.test(e.message)
+
 /** An answer, with an eviction in it thrown as the runtime throws one. A store
  * the runtime resets mid-request can still answer, and it answers the reset as
  * it answers any error, in a 500's refusal body (@yaks/api `refuse`), so the
@@ -283,8 +291,16 @@ export let storeOf = (ns: Namespace, name: string, app?: Served): Door => {
     let once = { ...headers, [IDEMPOTENCY]: crypto.randomUUID() }
     let method = init instanceof Request ? init.method : init.method ?? 'GET'
     let safe = method == 'GET' || method == 'HEAD'
+    let request = `store ${path.split('?')[0]}`
     return retryOnce(
-      async () => read(await thrown(await door(path, init, once))),
+      async () => {
+        try {
+          return read(await thrown(await door(path, init, once)))
+        } catch (e) {
+          if (killed(e)) defect(e, { request, store: name })
+          throw e
+        }
+      },
       rebuildable(init) && options.replayable !== false,
       (e) =>
         evicted(e) ||
