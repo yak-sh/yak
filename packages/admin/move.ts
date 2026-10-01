@@ -9,8 +9,12 @@
 import type { Rehearsal, Standing } from '../../workers/yak/mover.ts'
 import type { Swept } from '../../workers/yak/sweep.ts'
 
-/** What one store answers the sweep. */
-export type Asked = { store: string; rules: (Rehearsal | Standing)[] }
+/** What one store answers the sweep: woken, also the alarm it then holds. */
+export type Asked = {
+  store: string
+  rules: (Rehearsal | Standing)[]
+  alarm?: string | null
+}
 
 let ms = (n: number) =>
   n < 1000 ? `${Math.round(n)}ms` : `${(n / 1000).toFixed(1)}s`
@@ -38,10 +42,17 @@ export let line = (at: string, r: Rehearsal | Standing) =>
   }`
 
 // A store's lines, and how long it took to answer.
+// Woken, a store says the alarm it then holds: the mover moves only from it,
+// so one long past is one that never comes.
+let held = (a: Asked) =>
+  a.alarm === undefined ? '' : a.alarm ? `  alarm ${a.alarm}` : '  no alarm'
+
 let lines = (at: string, a: Asked, took: number) =>
   a.rules.length
-    ? a.rules.map((r, i) => line(at, r) + (i ? '' : `  (${ms(took)})`))
-    : [`${at}  no rules  (${ms(took)})`]
+    ? a.rules.map((r, i) =>
+      line(at, r) + (i ? '' : `  (${ms(took)})${held(a)}`)
+    )
+    : [`${at}  no rules  (${ms(took)})${held(a)}`]
 
 let wait = (ms: number, stopping: AbortSignal) =>
   new Promise<void>((go) => {

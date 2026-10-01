@@ -54,6 +54,7 @@ let store = async (n: number, ...rules: Rule[]) => {
     alarm: () => o.alarm(),
     query: (q: string) => meta.query(q),
     moves: async () => (await post('/move')).rules as Standing[],
+    held: async () => (await post('/move')).alarm as string | null,
     rehearse: async () => (await post('/move?rehearse=1')).rules as Rehearsal[],
   }
 }
@@ -63,6 +64,8 @@ let count = async (s: { query: (q: string) => Promise<Bundle[]> }, q: string) =>
 
 test('a live rule moves every row from the alarm, and says it is done', async () => {
   let s = await store(250, rule())
+  // Woken, a store owing rows says the alarm it will move them from.
+  assert(Date.parse(String(await s.held())) <= Date.now())
   let [first] = await s.query('.was')
   for (let i = 0; i < 5 && (await s.moves())[0]?.done == null; i++) {
     await s.alarm()

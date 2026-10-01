@@ -2581,7 +2581,11 @@ export class Store {
         live: runs(r, store),
         ...this.#stamp(r),
       }))
-      return Response.json({ store, rules })
+      // The alarm the object holds once woken, so a sweep sees one that is
+      // due and never comes: the mover only moves from it.
+      let held = await this.#alarm?.getAlarm()
+      let alarm = held == null ? null : new Date(held).toISOString()
+      return Response.json({ store, rules, alarm })
     }
     // The socket is a read that stays open, and it is the one door @yaks/api
     // does not answer here — hibernation is the runtime's, so `sockets` takes
