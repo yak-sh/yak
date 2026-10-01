@@ -280,6 +280,9 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
   let state = model.state
   let nodes = mapParts(model)
   let { frames, placed, height, width } = geometry(nodes)
+  // Fit the aperture to width, not the full tall roster. Lower lanes stay
+  // reachable by panning rather than shrinking every label to a pixel.
+  let aperture = Math.min(height, width * .65)
   let positions = new Map(placed.map((p) => [p.node.id, p]))
   let relations = model.edges.filter((e) =>
     positions.has(e.from) && positions.has(e.to)
@@ -308,7 +311,7 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
       y: event.clientY,
       cameraX: state.x,
       cameraY: state.y,
-      ratio: Math.max(width / rect.width, height / rect.height) / state.zoom,
+      ratio: Math.max(width / rect.width, aperture / rect.height) / state.zoom,
     }
     svg.setPointerCapture(event.pointerId)
   }
@@ -351,7 +354,7 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
       <div class='Map_Viewport'>
         <svg
           class='Map_Canvas'
-          viewBox={`0 0 ${width} ${height}`}
+          viewBox={`0 0 ${width} ${aperture}`}
           role='group'
           aria-label='Pan and zoom the system topology'
           tabIndex={0}
@@ -386,9 +389,9 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
           </defs>
           <rect width={width} height={height} fill='url(#atlas-grid)' />
           <g
-            transform={`translate(${width / 2} ${height / 2}) ` +
+            transform={`translate(${width / 2} ${aperture / 2}) ` +
               `scale(${state.zoom}) ` +
-              `translate(${-width / 2 + state.x} ${-height / 2 + state.y})`}
+              `translate(${-width / 2 + state.x} ${-aperture / 2 + state.y})`}
           >
             {frames.map((f) => (
               <g

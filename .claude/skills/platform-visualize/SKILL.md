@@ -98,9 +98,6 @@ yak visualize anatomy --group tools --json
 yak visualize activity --limit 32 --wait 250 --json
 ```
 
-**Validation pending:** these command examples and the page require the
-isolated native runtime proof before they are treated as exercised examples.
-
 Use `--url` to select an HTTP(S) serving origin when native config is not the
 host you intend. `--json` prints the exact returned DTO; human output is a
 bounded overview. The agent tool always selects anatomy, while an unfiltered

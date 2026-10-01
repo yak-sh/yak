@@ -145,14 +145,32 @@ human mode summarizes it. The selected origin determines the saved token;
 redirects are refused; an unrelated default host's credential is not forwarded.
 `x-via` names provenance, not authentication.
 
-## Validation status
+## Verification
 
-Source implementation and landed UI are **not runtime proof**. The CLI examples
-and page still require the isolated end-to-end gate. No live server restart or
-port-5173 proof is permitted. Fresh targeted automated tests, browser-only type
-checks and a scratch native process must establish the contracts, actual
-mutation-to-cause path, pause/reconnect, themes, keyboard, mobile/reduced-motion
-behavior and bounds. Runtime benchmarks compare both apply and query with the
-channel absent and present-but-inactive; idle work must not allocate IDs, event
-objects or clocks. Update this section with actual commands, results and exact
-landed SHAs, not plans presented as proof.
+The package's fresh Deno tests cover snapshots, selection, leases, finite
+captures, authentication, SSE replay/backpressure and the graph-owned model:
+
+```sh
+deno task test --tag=deno --all packages/visualize
+deno check --no-lock --config packages/visualize/browser.json packages/visualize/main.ts
+```
+
+The standalone page and both CLI examples were also exercised on an isolated
+native host, not the live graph. A successful mutation produced a retained
+request → apply → phase/rule/fan-out cause path without exposing its private
+contents. Pause closed observation while a second mutation succeeded; resume
+reported one gap episode. Restarting only the scratch host reconnected the page
+and reset the observation epoch. A burst remained bounded to 256 records, 160
+map nodes, 320 edges and 48 pulses. Themes, keyboard search/list navigation,
+pointer pan/reset/zoom and a 390-pixel reduced-motion layout were checked.
+
+Native and Worker suppliers have separate tests against their actual composition
+seams. Worker runtime deployment and a live-box restart are not implied by those
+checks. A host must include the plugin before serving the route; a running
+process receives source changes on its next start.
+
+Inactive observation is not zero-cost: repeated runtime benchmarks measured
+roughly 128–214 ns/query (5.5–9.2%) for the inactive channel branch. Idle-path
+interface tests observed no telemetry begin/instant calls, clock reads or UUID
+creation during apply/read/get. This is not a heap-allocation profiling claim.
+D-61711 consumes the same stream, not another measurement system.
