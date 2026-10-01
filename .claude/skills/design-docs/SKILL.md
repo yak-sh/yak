@@ -95,6 +95,13 @@ When Jeff answers questions, comment his words verbatim on the design
 (`yak comment new D-… '<his words>'`), fold the answers into a "Decided"
 section of the body, and drop what he rejected.
 
+When his comment reshapes the design, the body changes in the same sitting
+as your reply, with whatever is still open in its Open questions. You will
+want to wait for his answers and revise once; meanwhile the design says the
+old shape to every other agent and to Jeff, and the new one exists only in a
+chat reply that is lost with your context. Open questions are part of a
+design, never a reason to leave it stale.
+
 ## Deciding it
 
 `yak design decide D-… approved` stamps the caller as the decider: the tool
