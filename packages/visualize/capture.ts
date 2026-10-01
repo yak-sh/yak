@@ -23,8 +23,10 @@ export let capture = async (
   opts: CaptureOptions = {},
 ): Promise<Capture> => {
   let limit = bounded(opts.limit, DEFAULT_LIMIT, MAX_LIMIT)
-  let wait = Math.min(MAX_WAIT, Math.max(0,
-    Number.isFinite(opts.wait) ? opts.wait! : 0))
+  let wait = Math.min(
+    MAX_WAIT,
+    Math.max(0, Number.isFinite(opts.wait) ? opts.wait! : 0),
+  )
   if (opts.signal?.aborted) throw opts.signal.reason
   let observation = observe(graph)
   let before = observation.history()
@@ -52,7 +54,9 @@ export let capture = async (
     return {
       epoch: observation.epoch,
       events,
-      gap: last == undefined ? 0 : Math.max(0, last - first + 1 - events.length),
+      gap: last == undefined
+        ? 0
+        : Math.max(0, last - first + 1 - events.length),
       coverage: 'process-local',
     }
   } finally {

@@ -2,9 +2,23 @@
 import type { Anatomy, AnatomyPart } from '@yaks/code/anatomy'
 
 export let GROUPS = [
-  'packages', 'roles', 'facets', 'comps', 'tools', 'commands', 'effects',
-  'rules', 'hooks', 'routes', 'views', 'inspectViews', 'tui', 'kits',
-  'themes', 'skills', 'secrets',
+  'packages',
+  'roles',
+  'facets',
+  'comps',
+  'tools',
+  'commands',
+  'effects',
+  'rules',
+  'hooks',
+  'routes',
+  'views',
+  'inspectViews',
+  'tui',
+  'kits',
+  'themes',
+  'skills',
+  'secrets',
 ] as const
 export type Group = typeof GROUPS[number]
 export let DEFAULT_LIMIT = 1000
@@ -41,9 +55,24 @@ export type Supplier = { anatomy?: () => Anatomy }
 let unobserved = (): Anatomy => ({
   version: 1,
   host: 'unobserved',
-  packages: [], roles: [], facets: [], comps: [], tools: [], commands: [],
-  effects: [], rules: [], hooks: [], routes: [], views: [], inspectViews: [],
-  tui: [], kits: [], themes: [], skills: [], secrets: [], edges: [],
+  packages: [],
+  roles: [],
+  facets: [],
+  comps: [],
+  tools: [],
+  commands: [],
+  effects: [],
+  rules: [],
+  hooks: [],
+  routes: [],
+  views: [],
+  inspectViews: [],
+  tui: [],
+  kits: [],
+  themes: [],
+  skills: [],
+  secrets: [],
+  edges: [],
 })
 
 export let bounded = (n: number | undefined, fallback: number, max: number) =>
@@ -56,11 +85,22 @@ export let snapshot = (host: Supplier): Snapshot => {
     observed?: Record<string, boolean>
   }
   // Older suppliers prove only the native categories they actually compose.
-  let native = ['packages', 'roles', 'facets', 'comps', 'tools',
-    'effects', 'rules', 'hooks', 'routes', 'secrets']
+  let native = [
+    'packages',
+    'roles',
+    'facets',
+    'comps',
+    'tools',
+    'effects',
+    'rules',
+    'hooks',
+    'routes',
+    'secrets',
+  ]
   let observed = Object.fromEntries(GROUPS.map((group) => [
     group,
-    meta.observed?.[group] ?? (anatomy.host == 'native' && native.includes(group)),
+    meta.observed?.[group] ??
+      (anatomy.host == 'native' && native.includes(group)),
   ]))
   return {
     version: 1,
@@ -90,16 +130,16 @@ export let select = (source: Snapshot, opts: SelectOptions = {}): Snapshot => {
     let parts: AnatomyPart[] = source.anatomy[group]
     total += parts.length
     let chosen = parts.filter((part) =>
-      (!opts.group || opts.group == group) && (!opts.id || opts.id == part.id) &&
+      (!opts.group || opts.group == group) &&
+      (!opts.id || opts.id == part.id) &&
       (!text || [part.name, part.package, part.facet, part.description]
         .some((s) => s?.toLowerCase().includes(text)))
     )
     matched += chosen.length
     let included = chosen.slice(0, Math.max(0, limit - shown))
     shown += included.length
-    for (let part of included) ids.add(part.id)
-    // Group membership is unchanged; TypeScript cannot express this union's
-    // correlated array assignment without a structural view.
+    for (let part of included) ids.add(part.id) // Group membership is unchanged; TypeScript cannot express this union's
+     // correlated array assignment without a structural view.
     ;(anatomy as unknown as Record<Group, AnatomyPart[]>)[group] = included
   }
   anatomy.edges = source.anatomy.edges.filter((edge) =>

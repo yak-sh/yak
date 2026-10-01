@@ -1,9 +1,9 @@
 # @yaks/visualize
 
 A system MRI at **`/visualize`**: the serving platform's parts and their
-relationships, with the real causal work passing through that process. This
-is a standalone package, not an inspector extension. It does not read stored
-entity contents to draw the picture.
+relationships, with the real causal work passing through that process. This is a
+standalone package, not an inspector extension. It does not read stored entity
+contents to draw the picture.
 
 ## Compose it
 
@@ -21,15 +21,15 @@ Add `@yaks/visualize` to the serving config's plugins. In a checkout use
 A host supplies its **actual composed** `anatomy()` and its **exact** `graph`
 object. The mapper belongs to `@yaks/code/anatomy`; visualize never reruns a
 package factory, forces a lazy tool, or composes a second graph to improve its
-picture. A missing supplier means **unobserved**, not an empty platform.
-Native composition and a Worker store have different observation seams; a
-category not observed by that seam must not be advertised as globally absent.
+picture. A missing supplier means **unobserved**, not an empty platform. Native
+composition and a Worker store have different observation seams; a category not
+observed by that seam must not be advertised as globally absent.
 
-Every page, asset, snapshot, capture and SSE request requires `host.who`.
-It can be synchronous or asynchronous; returning `null` intentionally allows
-anonymous access when the supplied policy permits that. Missing policy fails
-closed. Authentication errors are sanitized, not a channel for arbitrary
-exception fields or messages. Assets are built lazily after authorization.
+Every page, asset, snapshot, capture and SSE request requires `host.who`. It can
+be synchronous or asynchronous; returning `null` intentionally allows anonymous
+access when the supplied policy permits that. Missing policy fails closed.
+Authentication errors are sanitized, not a channel for arbitrary exception
+fields or messages. Assets are built lazily after authorization.
 
 ## Anatomy contract
 
@@ -44,9 +44,9 @@ exception fields or messages. Assets are built lazily after authorization.
 - `takenAt`: the metadata snapshot's wall-clock time, not a trace clock.
 
 A part's declaration, loading and binding are independent facts. A lazy
-unattempted facet is not an absent implementation; an imported browser view
-is not a mounted renderer. A secret part reports a **name**, never its value
-or a getter's result. Schema metadata is a contract, not returned row data.
+unattempted facet is not an absent implementation; an imported browser view is
+not a mounted renderer. A secret part reports a **name**, never its value or a
+getter's result. Schema metadata is a contract, not returned row data.
 
 Optional `group`, `search`, `id` and `limit` select parts:
 
@@ -58,21 +58,21 @@ Optional `group`, `search`, `id` and `limit` select parts:
 - A selected response adds `selection: { total, matched, shown, truncated }`.
   `matched` is counted before the cap. The source arrays are not mutated.
 
-Unknown/repeated parameters, empty groups, invalid numeric bounds and
-malformed cursors are refused. Plain unfiltered HTTP anatomy preserves the
-supplier DTO; the anatomy tool always runs selection and reports its counts.
-The page projects the same contract into its private graph. Its pipeline
-labels are explanatory client nodes, not another server anatomy category or
-claims of bound handlers. The spine includes normalize, admit, mint, prepare,
-precondition, rules, mutate, cascade, stamp, journal, commit, effect and audit.
-**Audit is rollback notification, not a successful apply's continuation.**
+Unknown/repeated parameters, empty groups, invalid numeric bounds and malformed
+cursors are refused. Plain unfiltered HTTP anatomy preserves the supplier DTO;
+the anatomy tool always runs selection and reports its counts. The page projects
+the same contract into its private graph. Its pipeline labels are explanatory
+client nodes, not another server anatomy category or claims of bound handlers.
+The spine includes normalize, admit, mint, prepare, precondition, rules, mutate,
+cascade, stamp, journal, commit, effect and audit. **Audit is rollback
+notification, not a successful apply's continuation.**
 
 ## Activity contract and lifecycle
 
-`@yaks/trace` owns measurement. Producers record names, stages, causal span
-IDs, monotonic times, finite counts and outcomes only while subscribers exist.
-No query text, entity values, payloads, credentials or secret values cross
-this stream. `apply(change, { trace })` remains the domain trace contract;
+`@yaks/trace` owns measurement. Producers record names, stages, causal span IDs,
+monotonic times, finite counts and outcomes only while subscribers exist. No
+query text, entity values, payloads, credentials or secret values cross this
+stream. `apply(change, { trace })` remains the domain trace contract;
 performance observation does not repurpose persisted effects/trace components.
 
 `observe(graph)` leases that exact graph's shared stream. It adds one local
@@ -88,29 +88,29 @@ sharing a database do not share this channel.
 - `limit`: default/max 256; minimum 1.
 - `wait`: integer milliseconds, default 0, maximum 2000. The lease stays open
   during the wait. Abort releases it.
-- The `Capture` is `{ epoch, events, gap, coverage: process-local }`.
-  **`gap` counts known omitted records**, including records removed by the
-  limit or overwritten during that capture. It cannot count unrecorded work.
+- The `Capture` is `{ epoch, events, gap, coverage: process-local }`. **`gap`
+  counts known omitted records**, including records removed by the limit or
+  overwritten during that capture. It cannot count unrecorded work.
 
 `GET /visualize/events` is bounded SSE with `hello`, `activity` and `gap`
 frames. Activity IDs are `epoch:seq`. A same-epoch `Last-Event-ID` replays only
-available newer records and reports known overflow. A changed epoch signals
-that continuity cannot be established. An invalid or future same-epoch cursor
-is refused. Each reader has a 256-record queue; backpressure reports dropped
+available newer records and reports known overflow. A changed epoch signals that
+continuity cannot be established. An invalid or future same-epoch cursor is
+refused. Each reader has a 256-record queue; backpressure reports dropped
 records, never grows without bound. Disconnect, cancellation and host closing
 release the lease. Keepalives exist only while the reader is connected.
 
-The page retains 256 raw records, oldest first, and displays one row per span.
-A causal view follows retained parents and descendants, never inventing a
-missing parent or a complete distributed trace. Epoch change clears prior
-records and cause selection, so clocks and span identity are not compared
-across processes. UI offsets use the latest retained record, not a timer.
+The page retains 256 raw records, oldest first, and displays one row per span. A
+causal view follows retained parents and descendants, never inventing a missing
+parent or a complete distributed trace. Epoch change clears prior records and
+cause selection, so clocks and span identity are not compared across processes.
+UI offsets use the latest retained record, not a timer.
 
 **Pause closes EventSource**, not merely the drawing. Anatomy and retained
 records stay available; metadata refresh while paused is allowed. Resume uses
-`tail=1`, adds one observation-gap episode and does not reconstruct paused
-work. The page's `gap` indicator counts **episodes**, not omitted records.
-A disconnect alone does not prove that any records were lost. Other remaining
+`tail=1`, adds one observation-gap episode and does not reconstruct paused work.
+The page's `gap` indicator counts **episodes**, not omitted records. A
+disconnect alone does not prove that any records were lost. Other remaining
 subscribers may still observe the host, but they do not backfill this page's
 pause. Subscribers such as D-61711 consume this same measured stream; they do
 not introduce a competing timing system or persist these records by default.
@@ -147,12 +147,12 @@ redirects are refused; an unrelated default host's credential is not forwarded.
 
 ## Validation status
 
-Source implementation and landed UI are **not runtime proof**. The CLI
-examples and page still require the isolated end-to-end gate. No live server
-restart or port-5173 proof is permitted. Fresh targeted automated tests,
-browser-only type checks and a scratch native process must establish the
-contracts, actual mutation-to-cause path, pause/reconnect, themes, keyboard,
-mobile/reduced-motion behavior and bounds. Runtime benchmarks compare both
-apply and query with the channel absent and present-but-inactive; idle work
-must not allocate IDs, event objects or clocks. Update this section with
-actual commands, results and exact landed SHAs, not plans presented as proof.
+Source implementation and landed UI are **not runtime proof**. The CLI examples
+and page still require the isolated end-to-end gate. No live server restart or
+port-5173 proof is permitted. Fresh targeted automated tests, browser-only type
+checks and a scratch native process must establish the contracts, actual
+mutation-to-cause path, pause/reconnect, themes, keyboard, mobile/reduced-motion
+behavior and bounds. Runtime benchmarks compare both apply and query with the
+channel absent and present-but-inactive; idle work must not allocate IDs, event
+objects or clocks. Update this section with actual commands, results and exact
+landed SHAs, not plans presented as proof.

@@ -4,13 +4,17 @@ import { h, render } from 'preact'
 import { Atlas } from './Atlas.tsx'
 import { atlas } from './model.ts'
 
-export let boot = (): (() => void) => {
+export let boot = (): () => void => {
   let root = document.getElementById('visualize-root')
   if (!root) throw new Error('visualize root is missing')
   let model = atlas({
-    scheme: matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark',
+    scheme: matchMedia('(prefers-color-scheme: light)').matches
+      ? 'light'
+      : 'dark',
   })
-  let theme = document.getElementById('visualize-theme') as HTMLLinkElement | null
+  let theme = document.getElementById('visualize-theme') as
+    | HTMLLinkElement
+    | null
   let stop = effect(() => {
     let state = model.state
     document.documentElement.style.colorScheme = state.scheme

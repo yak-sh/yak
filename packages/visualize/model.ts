@@ -57,10 +57,23 @@ export type ModelOptions = {
   start?: boolean
 }
 let initial = (scheme: 'dark' | 'light'): VisualizeState => ({
-  selected: '', cause: '', filter: '', group: 'all', listPage: 0,
-  paused: false, view: 'map', theme: 'everforest', scheme,
-  x: 0, y: 0, zoom: 1, connected: 'connecting',
-  gap: 0, received: 0, error: '', host: '',
+  selected: '',
+  cause: '',
+  filter: '',
+  group: 'all',
+  listPage: 0,
+  paused: false,
+  view: 'map',
+  theme: 'everforest',
+  scheme,
+  x: 0,
+  y: 0,
+  zoom: 1,
+  connected: 'connecting',
+  gap: 0,
+  received: 0,
+  error: '',
+  host: '',
 })
 let component = <T>(bundle: Bundle | undefined, key: string) =>
   bundle?.[key] as T | undefined
@@ -86,7 +99,10 @@ export let causes = (events: Activity[], id: string): Activity[] => {
     let seen = new Set<string>()
     let at: string | undefined = event.id
     while (at && !seen.has(at)) {
-      if (at == id) { included.add(event.id); break }
+      if (at == id) {
+        included.add(event.id)
+        break
+      }
       seen.add(at)
       at = spans.get(at)?.parent
     }
@@ -97,13 +113,17 @@ export let causes = (events: Activity[], id: string): Activity[] => {
 
 /** All observations here are projections of the one producer stream. */
 export let atlas = (opts: ModelOptions = {}): AtlasModel => {
-  let base = new URL(opts.base ?? globalThis.location?.origin ??
-    'http://localhost')
+  let base = new URL(
+    opts.base ?? globalThis.location?.origin ??
+      'http://localhost',
+  )
   let page = mint()
   let stateId = derivedEid(`${page}|state`)
   let actor = derivedEid(`${page}|actor`)
   let local = client(loadVocab([...docs, ...draftDocs]), [drafts()], {
-    signal, vault: false, wireVault: false,
+    signal,
+    vault: false,
+    wireVault: false,
   })
   let closed = false
   let request: AbortController | undefined
@@ -118,16 +138,23 @@ export let atlas = (opts: ModelOptions = {}): AtlasModel => {
     if (closed || !change.length) return
     let result = local.mutate(change)
     if (result instanceof Promise) {
-      void result.catch(() => { if (!closed) console.error('MRI local write') })
+      void result.catch(() => {
+        if (!closed) console.error('MRI local write')
+      })
     }
   }
-  let patch = (value: Record<string, unknown>) => write([
-    { entity: { eid: stateId }, Visualize: value },
-  ])
-  let defaults = Object.fromEntries(Object.entries(initial(opts.scheme ?? 'dark'))
-    .filter(([key]) => !['selected', 'cause', 'filter'].includes(key)))
-  write([{ entity: { eid: stateId }, Visualize: defaults },
-    { entity: { eid: actor }, AtlasCoverage: { scope: 'page', observed: {} } }])
+  let patch = (value: Record<string, unknown>) =>
+    write([
+      { entity: { eid: stateId }, Visualize: value },
+    ])
+  let defaults = Object.fromEntries(
+    Object.entries(initial(opts.scheme ?? 'dark'))
+      .filter(([key]) => !['selected', 'cause', 'filter'].includes(key)),
+  )
+  write([{ entity: { eid: stateId }, Visualize: defaults }, {
+    entity: { eid: actor },
+    AtlasCoverage: { scope: 'page', observed: {} },
+  }])
   let stateWatch = local.watch(`.entity.eid=${stateId}&.Visualize`)
   let nodeWatch = local.watch('.AtlasPart')
   let edgeWatch = local.watch('.AtlasRelation')
@@ -148,28 +175,42 @@ export let atlas = (opts: ModelOptions = {}): AtlasModel => {
       component<Edge>(row, 'AtlasRelation')?.id ?? ''
   }
   let rows = () => eventWatch.value
-  let observations = () => rows().map((b) =>
-    component<{ data: Activity }>(b, 'AtlasEvent')!.data)
-  let spanRef = (id: string) => rows().findLast((b) =>
-    component<{ span: string }>(b, 'AtlasEvent')?.span == id)?.entity.eid ?? ''
+  let observations = () =>
+    rows().map((b) => component<{ data: Activity }>(b, 'AtlasEvent')!.data)
+  let spanRef = (id: string) =>
+    rows().findLast((b) =>
+      component<{ span: string }>(b, 'AtlasEvent')?.span == id
+    )?.entity.eid ?? ''
   let state = (): VisualizeState => {
     let stored = component<VisualizeState>(stateWatch.value[0], 'Visualize')!
-    let cause = component<{ span: string }>(stored.cause ? local.ent(stored.cause) : undefined,
-      'AtlasEvent')?.span ?? ''
-    return { ...initial(opts.scheme ?? 'dark'), ...stored, selected: publicId(stored.selected), cause,
-      filter: typed.text('anatomy-search') }
+    let cause = component<{ span: string }>(
+      stored.cause ? local.ent(stored.cause) : undefined,
+      'AtlasEvent',
+    )?.span ?? ''
+    return {
+      ...initial(opts.scheme ?? 'dark'),
+      ...stored,
+      selected: publicId(stored.selected),
+      cause,
+      filter: typed.text('anatomy-search'),
+    }
   }
   let clearEvents = (epoch: string) => {
     write([
       ...rows().map((b): Bundle => ({ entity: b.entity, AtlasEvent: null })),
-      { entity: { eid: stateId }, Visualize: { cause: null },
-        AtlasCoverage: { epoch } },
+      {
+        entity: { eid: stateId },
+        Visualize: { cause: null },
+        AtlasCoverage: { epoch },
+      },
     ])
     eventIds.clear()
   }
   let epoch = (value: string) => {
-    let old = component<{ epoch?: string }>(coverageWatch.value[0],
-      'AtlasCoverage')?.epoch
+    let old = component<{ epoch?: string }>(
+      coverageWatch.value[0],
+      'AtlasCoverage',
+    )?.epoch
     if (old == value) return
     clearEvents(value)
     if (old && !resumed) {
@@ -179,8 +220,10 @@ export let atlas = (opts: ModelOptions = {}): AtlasModel => {
   }
   let accept = (input: Activity) => {
     if (closed || state().paused || !valid(input)) return
-    let known = component<{ epoch?: string }>(coverageWatch.value[0],
-      'AtlasCoverage')?.epoch
+    let known = component<{ epoch?: string }>(
+      coverageWatch.value[0],
+      'AtlasCoverage',
+    )?.epoch
     if (known && known != input.epoch) return
     if (!known) epoch(input.epoch)
     let key = `${input.epoch}:${input.seq}`
@@ -195,14 +238,25 @@ export let atlas = (opts: ModelOptions = {}): AtlasModel => {
     let node = located(input, model.nodes)
     let counts = input.counts && Object.fromEntries(
       Object.entries(input.counts).filter(([name, n]) =>
-        name.length <= 64 && Number.isFinite(n)).slice(0, 32),
+        name.length <= 64 && Number.isFinite(n)
+      ).slice(0, 32),
     )
     let event: Activity = {
-      id: input.id, parent: input.parent, kind: input.kind, name: input.name,
-      stage: input.stage, time: input.time, start: input.start,
-      duration: input.duration, outcome: input.outcome,
-      package: input.package, plugin: input.plugin, counts,
-      seq: input.seq, epoch: input.epoch, node,
+      id: input.id,
+      parent: input.parent,
+      kind: input.kind,
+      name: input.name,
+      stage: input.stage,
+      time: input.time,
+      start: input.start,
+      duration: input.duration,
+      outcome: input.outcome,
+      package: input.package,
+      plugin: input.plugin,
+      counts,
+      seq: input.seq,
+      epoch: input.epoch,
+      node,
     }
     let next = [...held, event].slice(-256)
     let used = new Set(eventIds.values())
@@ -218,25 +272,41 @@ export let atlas = (opts: ModelOptions = {}): AtlasModel => {
       let at = id && spans.get(id)
       return at ? eventIds.get(`${at.epoch}:${at.seq}`) ?? null : null
     }
-    let changes: Bundle[] = [{ entity: { eid }, AtlasEvent: {
-      seq: event.seq, epoch: event.epoch, span: event.id, data: event,
-      node: node ? identity(node) : null, parent: ref(event.parent),
-    } }]
+    let changes: Bundle[] = [{
+      entity: { eid },
+      AtlasEvent: {
+        seq: event.seq,
+        epoch: event.epoch,
+        span: event.id,
+        data: event,
+        node: node ? identity(node) : null,
+        parent: ref(event.parent),
+      },
+    }]
     for (let row of rows()) {
       if (row.entity.eid == eid) continue
-      let stored = component<{ parent?: string; data: Activity }>(row,
-        'AtlasEvent')!
+      let stored = component<{ parent?: string; data: Activity }>(
+        row,
+        'AtlasEvent',
+      )!
       if (!keys.has(`${stored.data.epoch}:${stored.data.seq}`)) {
         changes.push({ entity: row.entity, AtlasEvent: null })
       } else if ((stored.parent ?? null) != ref(stored.data.parent)) {
-        changes.push({ entity: row.entity, AtlasEvent: {
-          parent: ref(stored.data.parent),
-        } })
+        changes.push({
+          entity: row.entity,
+          AtlasEvent: {
+            parent: ref(stored.data.parent),
+          },
+        })
       }
     }
-    changes.push({ entity: { eid: stateId }, Visualize: {
-      received: state().received + 1, cause: ref(chosen),
-    } })
+    changes.push({
+      entity: { eid: stateId },
+      Visualize: {
+        received: state().received + 1,
+        cause: ref(chosen),
+      },
+    })
     write(changes)
   }
   let start = (tail = false) => {
@@ -244,9 +314,13 @@ export let atlas = (opts: ModelOptions = {}): AtlasModel => {
     patch({ connected: 'connecting' })
     try {
       feed = stream({
-        url: new URL('/visualize/events', base).href, tail,
+        url: new URL('/visualize/events', base).href,
+        tail,
         connect: opts.connect ?? ((url) => new EventSource(url)),
-        epoch: (value) => { epoch(value); resumed = false },
+        epoch: (value) => {
+          epoch(value)
+          resumed = false
+        },
         activity: accept,
         gap: () => {
           if (!resumed && !skipGap) patch({ gap: state().gap + 1 })
@@ -260,25 +334,42 @@ export let atlas = (opts: ModelOptions = {}): AtlasModel => {
     }
   }
   let model: AtlasModel = {
-    get state() { return state() },
-    get nodes() { return nodeWatch.value.map((b) =>
-      component<Node>(b, 'AtlasPart')!) },
-    get edges() { return edgeWatch.value.map((b) => {
-      let edge = component<Edge>(b, 'AtlasRelation')!
-      return { ...edge, from: publicId(edge.from), to: publicId(edge.to) }
-    }) },
-    get events() { return observations() },
-    get selected() { return model.nodes.find((n) => n.id == state().selected) },
-    get cause() { return causes(observations(), state().cause) },
-    get coverage() { return component<{ observed: AtlasModel['coverage'] }>(
-      coverageWatch.value[0], 'AtlasCoverage')?.observed ?? {} },
+    get state() {
+      return state()
+    },
+    get nodes() {
+      return nodeWatch.value.map((b) => component<Node>(b, 'AtlasPart')!)
+    },
+    get edges() {
+      return edgeWatch.value.map((b) => {
+        let edge = component<Edge>(b, 'AtlasRelation')!
+        return { ...edge, from: publicId(edge.from), to: publicId(edge.to) }
+      })
+    },
+    get events() {
+      return observations()
+    },
+    get selected() {
+      return model.nodes.find((n) => n.id == state().selected)
+    },
+    get cause() {
+      return causes(observations(), state().cause)
+    },
+    get coverage() {
+      return component<{ observed: AtlasModel['coverage'] }>(
+        coverageWatch.value[0],
+        'AtlasCoverage',
+      )?.observed ?? {}
+    },
     set: (value) => {
       if (closed) return
       let { filter, selected, cause, ...rest } = value
       if (filter != undefined) typed.type('anatomy-search', filter)
       let before = state()
       let next: Record<string, unknown> = { ...rest }
-      if (selected != undefined) next.selected = identities.get(selected) ?? null
+      if (selected != undefined) {
+        next.selected = identities.get(selected) ?? null
+      }
       if (cause != undefined) next.cause = spanRef(cause) || null
       for (let k of ['x', 'y', 'zoom', 'listPage'] as const) {
         if (value[k] != undefined && !Number.isFinite(value[k])) delete next[k]
@@ -304,7 +395,9 @@ export let atlas = (opts: ModelOptions = {}): AtlasModel => {
       patch(next)
       if (before.paused && value.paused === false) start(true)
     },
-    search: (text) => { if (!closed) typed.type('anatomy-search', text) },
+    search: (text) => {
+      if (!closed) typed.type('anatomy-search', text)
+    },
     select: (id) => model.set({ selected: id }),
     choose: (id) => model.set({ cause: id }),
     reset: () => model.set({ x: 0, y: 0, zoom: 1 }),
@@ -316,53 +409,91 @@ export let atlas = (opts: ModelOptions = {}): AtlasModel => {
       try {
         let response = await (opts.fetch ?? fetch)(
           new URL('/visualize/anatomy', base),
-          { signal: stop.signal, credentials: 'same-origin', redirect: 'error' },
+          {
+            signal: stop.signal,
+            credentials: 'same-origin',
+            redirect: 'error',
+          },
         )
         if (!response.ok) throw new Error('anatomy refused')
         let source = await response.json() as Snapshot
         if (closed || stop.signal.aborted) return
-        if (source.version != 1 || source.anatomy?.version != 1 ||
+        if (
+          source.version != 1 || source.anatomy?.version != 1 ||
           !source.coverage || !GROUPS.every((g) =>
-            Array.isArray(source.anatomy[g]))) throw new Error('bad anatomy')
+            Array.isArray(source.anatomy[g])
+          )
+        ) throw new Error('bad anatomy')
         let nodes = parts(source)
-        let current = new Set([...nodes.map((n) => n.id),
-          ...source.anatomy.edges.map((e) => e.id)])
+        let current = new Set([
+          ...nodes.map((n) => n.id),
+          ...source.anatomy.edges.map((e) => e.id),
+        ])
         let changes: Bundle[] = []
         for (let row of [...nodeWatch.value, ...edgeWatch.value]) {
           let id = publicId(row.entity.eid)
-          if (!current.has(id)) changes.push({ entity: row.entity,
-            AtlasPart: null, AtlasRelation: null })
+          if (!current.has(id)) {
+            changes.push({
+              entity: row.entity,
+              AtlasPart: null,
+              AtlasRelation: null,
+            })
+          }
         }
-        for (let node of nodes) changes.push({ entity: { eid: identity(node.id) },
-          AtlasPart: node })
+        for (let node of nodes) {
+          changes.push({ entity: { eid: identity(node.id) }, AtlasPart: node })
+        }
         for (let edge of source.anatomy.edges) {
-          if (!nodes.some((n) => n.id == edge.from) ||
-            !nodes.some((n) => n.id == edge.to)) continue
-          changes.push({ entity: { eid: identity(edge.id) }, AtlasRelation: {
-            ...edge, from: identity(edge.from), to: identity(edge.to),
-          } })
+          if (
+            !nodes.some((n) => n.id == edge.from) ||
+            !nodes.some((n) => n.id == edge.to)
+          ) continue
+          changes.push({
+            entity: { eid: identity(edge.id) },
+            AtlasRelation: {
+              ...edge,
+              from: identity(edge.from),
+              to: identity(edge.to),
+            },
+          })
         }
         // Relink retained observations when lazy metadata arrives or a part
         // leaves. The measurement, sequence and monotonic time are unchanged.
         for (let row of rows()) {
           let stored = component<{ data: Activity }>(row, 'AtlasEvent')!
           let node = located(stored.data, nodes)
-          changes.push({ entity: row.entity, AtlasEvent: {
-            data: { ...stored.data, node },
-            node: node ? identity(node) : null,
-          } })
+          changes.push({
+            entity: row.entity,
+            AtlasEvent: {
+              data: { ...stored.data, node },
+              node: node ? identity(node) : null,
+            },
+          })
         }
-        changes.push({ entity: { eid: stateId }, Visualize: {
-          host: source.coverage.scope, error: '',
-          selected: current.has(state().selected)
-            ? identities.get(state().selected) ?? null : null,
-        }, AtlasCoverage: { scope: source.coverage.scope,
-          observed: source.coverage.observed, takenAt: source.takenAt } })
+        changes.push({
+          entity: { eid: stateId },
+          Visualize: {
+            host: source.coverage.scope,
+            error: '',
+            selected: current.has(state().selected)
+              ? identities.get(state().selected) ?? null
+              : null,
+          },
+          AtlasCoverage: {
+            scope: source.coverage.scope,
+            observed: source.coverage.observed,
+            takenAt: source.takenAt,
+          },
+        })
         write(changes)
-        for (let id of identities.keys()) if (!current.has(id)) identities.delete(id)
+        for (let id of identities.keys()) {
+          if (!current.has(id)) identities.delete(id)
+        }
       } catch {
         if (!closed && !stop.signal.aborted) {
-          patch({ error: 'Could not read host anatomy. Check access and retry.' })
+          patch({
+            error: 'Could not read host anatomy. Check access and retry.',
+          })
         }
       } finally {
         if (request == stop) request = undefined
@@ -375,15 +506,23 @@ export let atlas = (opts: ModelOptions = {}): AtlasModel => {
       feed = undefined
       request?.abort()
       typed.close()
-      for (let watch of [stateWatch, nodeWatch, edgeWatch, eventWatch,
-        coverageWatch]) watch.close()
+      for (
+        let watch of [
+          stateWatch,
+          nodeWatch,
+          edgeWatch,
+          eventWatch,
+          coverageWatch,
+        ]
+      ) watch.close()
       identities.clear()
       eventIds.clear()
       local.close()
     },
   }
-  for (let node of spine()) write([{ entity: { eid: identity(node.id) },
-    AtlasPart: node }])
+  for (let node of spine()) {
+    write([{ entity: { eid: identity(node.id) }, AtlasPart: node }])
+  }
   if (opts.start !== false) {
     start()
     void model.refresh()

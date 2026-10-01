@@ -35,17 +35,26 @@ export let routes = (host: Hosting): Route[] => {
     make: (signal: AbortSignal) => Promise<string>,
   ): Route => {
     let cached = kept(path, type, make, { closing: host.stopping })
-    return { method: 'GET', path, handle: guarded(host, async (request) => {
-      let response = await cached(request)
-      // kept reports the build locally; its exception text is not page data.
-      return response.status >= 500
-        ? new Response('visualize asset unavailable', {
-          status: 503, headers: { 'cache-control': 'no-store' },
-        }) : response
-    }) }
+    return {
+      method: 'GET',
+      path,
+      handle: guarded(host, async (request) => {
+        let response = await cached(request)
+        // kept reports the build locally; its exception text is not page data.
+        return response.status >= 500
+          ? new Response('visualize asset unavailable', {
+            status: 503,
+            headers: { 'cache-control': 'no-store' },
+          })
+          : response
+      }),
+    }
   }
-  let page = asset('/visualize', 'text/html; charset=utf-8', () =>
-    Promise.resolve(PAGE))
+  let page = asset(
+    '/visualize',
+    'text/html; charset=utf-8',
+    () => Promise.resolve(PAGE),
+  )
   return [
     page,
     { ...page, path: '/visualize/' },
@@ -53,12 +62,20 @@ export let routes = (host: Hosting): Route[] => {
       let main = new URL('./main.ts', import.meta.url)
       return bundle({ code: entry(main.href), at: main }, signal)
     }),
-    asset('/visualize/styles.css', 'text/css; charset=utf-8', async (signal) =>
-      (await stylesheet({ kits, theme: everforest })) + '\n' +
-      (await text(new URL('./visualize.css', import.meta.url), signal))),
+    asset(
+      '/visualize/styles.css',
+      'text/css; charset=utf-8',
+      async (signal) =>
+        (await stylesheet({ kits, theme: everforest })) + '\n' +
+        (await text(new URL('./visualize.css', import.meta.url), signal)),
+    ),
     ...Object.entries({ everforest, rosepine }).map(([name, theme]) =>
-      asset(`/visualize/themes/${name}.css`, 'text/css; charset=utf-8',
-        (signal) => text(theme.css, signal))),
+      asset(
+        `/visualize/themes/${name}.css`,
+        'text/css; charset=utf-8',
+        (signal) => text(theme.css, signal),
+      )
+    ),
     ...http(host),
   ]
 }

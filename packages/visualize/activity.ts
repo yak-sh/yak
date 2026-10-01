@@ -31,15 +31,21 @@ export let observe = (graph: object): Observation => {
   if (!broker) {
     let stream = channel(graph)
     let made: Broker = {
-      epoch: crypto.randomUUID(), seq: 0, records: [], leases: new Set(),
+      epoch: crypto.randomUUID(),
+      seq: 0,
+      records: [],
+      leases: new Set(),
       stop: () => {},
     }
     let accept = (event: Event, notify = true) => {
       let record = Object.freeze({
-        ...event, epoch: made.epoch, seq: ++made.seq,
+        ...event,
+        epoch: made.epoch,
+        seq: ++made.seq,
         ...(event.kind == 'phase' &&
-          phases.some((p) => p == event.name.split('.').at(-1))
-          ? { node: `phase:${event.name.split('.').at(-1)}` } : {}),
+            phases.some((p) => p == event.name.split('.').at(-1))
+          ? { node: `phase:${event.name.split('.').at(-1)}` }
+          : {}),
       })
       made.records.push(record)
       if (made.records.length > capacity) made.records.shift()
@@ -66,16 +72,24 @@ export let observe = (graph: object): Observation => {
   return {
     epoch: current.epoch,
     history: (limit = capacity) => {
-      let n = Math.min(capacity, Math.max(0, Math.floor(
-        Number.isFinite(limit) ? limit : capacity,
-      )))
+      let n = Math.min(
+        capacity,
+        Math.max(
+          0,
+          Math.floor(
+            Number.isFinite(limit) ? limit : capacity,
+          ),
+        ),
+      )
       return closed || !n ? [] : current.records.slice(-n)
     },
     subscribe: (fn) => {
       if (closed) return () => {}
       let own = (event: Activity) => fn(event)
       owned.add(own)
-      return () => { owned.delete(own) }
+      return () => {
+        owned.delete(own)
+      }
     },
     close: () => {
       if (closed) return

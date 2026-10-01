@@ -10,10 +10,13 @@ export let docs: VocabDoc[] = [frontDoc]
  * No duplicate component declaration and no host vocabulary override. */
 export let draftDocs: VocabDoc[] = sharedDraftDocs.map((source) => ({
   ...source,
-  $defs: Object.fromEntries(Object.entries(source.$defs ?? {}).map(
-    ([name, schema]) => [name, {
-      ...schema, sync: 'none',
-      durable: name == 'typed' ? '0s' : 'connection',
-    }],
-  )),
+  $defs: Object.fromEntries(
+    Object.entries(source.$defs ?? {}).map(
+      ([name, schema]) => [name, {
+        ...schema,
+        sync: 'none',
+        durable: name == 'typed' ? '0s' : 'connection',
+      }],
+    ),
+  ),
 }))

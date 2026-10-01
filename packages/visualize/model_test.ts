@@ -1,7 +1,7 @@
 /** Page-model contracts, with no server, polling clock or guessed sleeps. */
 import { effect } from '@preact/signals'
 import { equal, ok, test } from '@yaks/testing'
-import { atlas, type Activity, causes, type ModelOptions } from './model.ts'
+import { type Activity, atlas, causes, type ModelOptions } from './model.ts'
 import { GROUPS, type Snapshot } from './snapshot.ts'
 import type { Source } from './stream.ts'
 
@@ -9,35 +9,69 @@ let composition = (host = 'fixture-process'): Snapshot => ({
   version: 1,
   takenAt: '2026-10-01T00:00:00.000Z',
   coverage: {
-    scope: host, activity: 'process-local', recording: 'subscriber-only',
-    clock: 'monotonic', capacity: 256,
-    observed: Object.fromEntries(GROUPS.map((group) => [group,
-      ['rules', 'views'].includes(group)])),
+    scope: host,
+    activity: 'process-local',
+    recording: 'subscriber-only',
+    clock: 'monotonic',
+    capacity: 256,
+    observed: Object.fromEntries(
+      GROUPS.map((group) => [group, ['rules', 'views'].includes(group)]),
+    ),
   },
   anatomy: {
-    version: 1, host,
-    packages: [], roles: [], facets: [], comps: [], tools: [], commands: [],
-    effects: [], hooks: [], routes: [], inspectViews: [], tui: [], kits: [],
-    themes: [], skills: [], secrets: [],
+    version: 1,
+    host,
+    packages: [],
+    roles: [],
+    facets: [],
+    comps: [],
+    tools: [],
+    commands: [],
+    effects: [],
+    hooks: [],
+    routes: [],
+    inspectViews: [],
+    tui: [],
+    kits: [],
+    themes: [],
+    skills: [],
+    secrets: [],
     rules: [{
-      id: 'part:rule', name: 'owned.rule', package: '@yaks/fixture',
-      declared: true, loaded: true, bound: true, hooks: ['rules'],
+      id: 'part:rule',
+      name: 'owned.rule',
+      package: '@yaks/fixture',
+      declared: true,
+      loaded: true,
+      bound: true,
+      hooks: ['rules'],
     }],
     views: [{
-      id: 'part:view', name: 'FixtureView', package: '@yaks/fixture',
-      declared: true, loaded: true, bound: false,
+      id: 'part:view',
+      name: 'FixtureView',
+      package: '@yaks/fixture',
+      declared: true,
+      loaded: true,
+      bound: false,
       description: 'An imported contract, not a mounted renderer.',
     }],
     edges: [{
-      id: 'relation:rule-view', from: 'part:rule', to: 'part:view',
+      id: 'relation:rule-view',
+      from: 'part:rule',
+      to: 'part:view',
       kind: 'owns-contract',
     }],
   },
 })
 
 let observation = (seq: number, patch: Partial<Activity> = {}): Activity => ({
-  epoch: 'epoch-a', seq, id: `span-${seq}`, kind: 'apply', name: 'apply',
-  stage: 'instant', time: 0, ...patch,
+  epoch: 'epoch-a',
+  seq,
+  id: `span-${seq}`,
+  kind: 'apply',
+  name: 'apply',
+  stage: 'instant',
+  time: 0,
+  ...patch,
 })
 
 let source = () => {
@@ -50,23 +84,29 @@ let source = () => {
     readyState: 1,
     onopen: null as Source['onopen'],
     onerror: null as Source['onerror'],
-    close: () => { closes++ },
+    close: () => {
+      closes++
+    },
   }) as unknown as Source
   return {
     handle,
-    get closes() { return closes },
-    raw: (kind: string, data: string) => target.dispatchEvent(
-      new MessageEvent(kind, { data }),
-    ),
-    frame: (kind: string, data: unknown) => target.dispatchEvent(
-      new MessageEvent(kind, { data: JSON.stringify(data) }),
-    ),
-    hello: (epoch = 'epoch-a', omitted = 0) => target.dispatchEvent(
-      new MessageEvent('hello', { data: JSON.stringify({ epoch, omitted }) }),
-    ),
+    get closes() {
+      return closes
+    },
+    raw: (kind: string, data: string) =>
+      target.dispatchEvent(
+        new MessageEvent(kind, { data }),
+      ),
+    frame: (kind: string, data: unknown) =>
+      target.dispatchEvent(
+        new MessageEvent(kind, { data: JSON.stringify(data) }),
+      ),
+    hello: (epoch = 'epoch-a', omitted = 0) =>
+      target.dispatchEvent(
+        new MessageEvent('hello', { data: JSON.stringify({ epoch, omitted }) }),
+      ),
     status: (kind: 'open' | 'error') => {
-      let callback = kind == 'open' ? handle.onopen : handle.onerror
-      // stream installs arrow callbacks which do not use an EventSource this.
+      let callback = kind == 'open' ? handle.onopen : handle.onerror // stream installs arrow callbacks which do not use an EventSource this.
       ;(callback as ((event: Event) => void) | null)?.(new Event(kind))
     },
   }
@@ -77,7 +117,8 @@ let fixture = (opts: Pick<ModelOptions, 'fetch' | 'start'> = {}) => {
   let feeds: { url: string; source: ReturnType<typeof source> }[] = []
   let requests: { url: string; options?: RequestInit }[] = []
   let model = atlas({
-    base: 'http://mri.test', start: opts.start,
+    base: 'http://mri.test',
+    start: opts.start,
     fetch: (url, options) => {
       requests.push({ url: String(url), options })
       return opts.fetch?.(url, options) ?? Promise.resolve(Response.json(value))
@@ -89,9 +130,15 @@ let fixture = (opts: Pick<ModelOptions, 'fetch' | 'start'> = {}) => {
     },
   })
   return {
-    model, feeds, requests,
-    get source() { return ok(feeds.at(-1)).source },
-    anatomy: (next: Snapshot) => { value = next },
+    model,
+    feeds,
+    requests,
+    get source() {
+      return ok(feeds.at(-1)).source
+    },
+    anatomy: (next: Snapshot) => {
+      value = next
+    },
   }
 }
 
@@ -150,7 +197,9 @@ test('MRI camera normalization and reset do not reset domain navigation', () => 
     equal(model.state.selected, 'phase:stamp')
     equal(model.state.filter, 'stamp')
     equal(model.state.group, 'phases')
-  } finally { model.close() }
+  } finally {
+    model.close()
+  }
 })
 
 test('MRI explanatory phases include prepare and do not imply bound handlers', () => {
@@ -158,15 +207,28 @@ test('MRI explanatory phases include prepare and do not imply bound handlers', (
   try {
     let phases = model.nodes.filter((n) => n.group == 'phases')
     equal(phases.map((n) => n.name), [
-      'normalize', 'admit', 'mint', 'prepare', 'precondition', 'rules',
-      'mutate', 'cascade', 'stamp', 'journal', 'commit', 'effect', 'audit',
+      'normalize',
+      'admit',
+      'mint',
+      'prepare',
+      'precondition',
+      'rules',
+      'mutate',
+      'cascade',
+      'stamp',
+      'journal',
+      'commit',
+      'effect',
+      'audit',
     ])
     equal(phases.map((n) => n.detail.order), phases.map((_, i) => i))
     ok(phases.every((n) => !n.loaded && !n.bound))
     equal(phases.at(-1)?.detail.path, 'rollback')
     model.select('phase:prepare')
     equal(model.selected?.name, 'prepare')
-  } finally { model.close() }
+  } finally {
+    model.close()
+  }
 })
 
 test('MRI private UUID references round-trip part and relation public IDs', async () => {
@@ -188,7 +250,9 @@ test('MRI private UUID references round-trip part and relation public IDs', asyn
     equal(f.requests[0].url, 'http://mri.test/visualize/anatomy')
     equal(f.requests[0].options?.redirect, 'error')
     equal(f.requests[0].options?.credentials, 'same-origin')
-  } finally { f.model.close() }
+  } finally {
+    f.model.close()
+  }
 })
 
 test('MRI metadata refresh prunes removed parts, relations and selection', async () => {
@@ -207,7 +271,9 @@ test('MRI metadata refresh prunes removed parts, relations and selection', async
     ok(!f.model.nodes.some((n) => n.id == 'part:rule'))
     equal(f.model.state.host, 'changed-process')
     equal(f.feeds.length, 0)
-  } finally { f.model.close() }
+  } finally {
+    f.model.close()
+  }
 })
 
 test('MRI causes use span IDs, collapse start/end and keep retained relatives', async () => {
@@ -216,20 +282,42 @@ test('MRI causes use span IDs, collapse start/end and keep retained relatives', 
     await f.model.refresh()
     f.source.hello()
     f.source.frame('activity', observation(1, { id: 'write', stage: 'start' }))
-    f.source.frame('activity', observation(2, {
-      id: 'rule', kind: 'rule', name: 'owned.rule', package: '@yaks/fixture',
-      parent: 'write', stage: 'end', duration: 0,
-    }))
-    f.source.frame('activity', observation(3, {
-      id: 'read', kind: 'query', parent: 'rule', stage: 'end', duration: 0,
-    }))
-    f.source.frame('activity', observation(4, {
-      id: 'write', stage: 'end', duration: 0,
-    }))
+    f.source.frame(
+      'activity',
+      observation(2, {
+        id: 'rule',
+        kind: 'rule',
+        name: 'owned.rule',
+        package: '@yaks/fixture',
+        parent: 'write',
+        stage: 'end',
+        duration: 0,
+      }),
+    )
+    f.source.frame(
+      'activity',
+      observation(3, {
+        id: 'read',
+        kind: 'query',
+        parent: 'rule',
+        stage: 'end',
+        duration: 0,
+      }),
+    )
+    f.source.frame(
+      'activity',
+      observation(4, {
+        id: 'write',
+        stage: 'end',
+        duration: 0,
+      }),
+    )
     f.model.choose('rule')
     equal(f.model.state.cause, 'rule')
-    equal(new Set(f.model.cause.map((e) => e.id)),
-      new Set(['write', 'rule', 'read']))
+    equal(
+      new Set(f.model.cause.map((e) => e.id)),
+      new Set(['write', 'rule', 'read']),
+    )
     equal(f.model.cause.filter((e) => e.id == 'write').length, 1)
     equal(f.model.cause.find((e) => e.id == 'write')?.stage, 'end')
     equal(f.model.events.length, 4)
@@ -237,21 +325,31 @@ test('MRI causes use span IDs, collapse start/end and keep retained relatives', 
     f.model.choose('unknown-span')
     equal(f.model.state.cause, '')
     equal(f.model.cause, [])
-  } finally { f.model.close() }
+  } finally {
+    f.model.close()
+  }
 })
 
 test('MRI phase activity maps to the explanatory spine without a new clock', () => {
   let f = fixture()
   try {
     f.source.hello()
-    f.source.frame('activity', observation(1, {
-      kind: 'phase', name: 'graph.prepare', stage: 'end', duration: 0,
-    }))
+    f.source.frame(
+      'activity',
+      observation(1, {
+        kind: 'phase',
+        name: 'graph.prepare',
+        stage: 'end',
+        duration: 0,
+      }),
+    )
     equal(f.model.events[0].node, 'phase:prepare')
     equal(f.model.events[0].time, 0)
     equal(f.model.events[0].duration, 0)
     equal(f.model.state.received, 1)
-  } finally { f.model.close() }
+  } finally {
+    f.model.close()
+  }
 })
 
 test('MRI ignores duplicate and out-of-order observations in one epoch', () => {
@@ -265,7 +363,9 @@ test('MRI ignores duplicate and out-of-order observations in one epoch', () => {
     equal(f.model.events.map((e) => e.id), ['span-1', 'span-2'])
     equal(f.model.state.received, 2)
     equal(f.model.state.gap, 0)
-  } finally { f.model.close() }
+  } finally {
+    f.model.close()
+  }
 })
 
 test('MRI retains 256 zero-time records and clears an evicted chosen span', () => {
@@ -286,7 +386,9 @@ test('MRI retains 256 zero-time records and clears an evicted chosen span', () =
     equal(f.model.cause, [])
     equal(f.model.state.gap, 0)
     equal(f.model.state.received, 257)
-  } finally { f.model.close() }
+  } finally {
+    f.model.close()
+  }
 })
 
 test('MRI a sequence jump cannot collide with an occupied event UUID slot', () => {
@@ -300,7 +402,9 @@ test('MRI a sequence jump cannot collide with an occupied event UUID slot', () =
     equal(f.model.state.cause, 'chosen')
     equal(f.model.cause.map((e) => e.id), ['chosen'])
     equal(f.model.state.gap, 1)
-  } finally { f.model.close() }
+  } finally {
+    f.model.close()
+  }
 })
 
 test('MRI epoch changes clear history, cause and old monotonic offsets', () => {
@@ -313,16 +417,28 @@ test('MRI epoch changes clear history, cause and old monotonic offsets', () => {
     equal(f.model.events, [])
     equal(f.model.state.cause, '')
     equal(f.model.state.gap, 1)
-    f.source.frame('activity', observation(1, {
-      epoch: 'epoch-b', id: 'same', time: 0, duration: 0, stage: 'end',
-    }))
-    equal(f.model.events.map((e) => [e.epoch, e.seq, e.time]),
-      [['epoch-b', 1, 0]])
+    f.source.frame(
+      'activity',
+      observation(1, {
+        epoch: 'epoch-b',
+        id: 'same',
+        time: 0,
+        duration: 0,
+        stage: 'end',
+      }),
+    )
+    equal(f.model.events.map((e) => [e.epoch, e.seq, e.time]), [[
+      'epoch-b',
+      1,
+      0,
+    ]])
     f.model.choose('same')
     equal(f.model.cause.length, 1)
     equal(f.model.cause[0].duration, 0)
     equal(f.model.state.gap, 1)
-  } finally { f.model.close() }
+  } finally {
+    f.model.close()
+  }
 })
 
 test('MRI a disconnect changes status without claiming lost records', () => {
@@ -336,7 +452,9 @@ test('MRI a disconnect changes status without claiming lost records', () => {
     f.source.hello()
     equal(f.model.state.connected, 'live')
     equal(f.model.state.gap, 0)
-  } finally { f.model.close() }
+  } finally {
+    f.model.close()
+  }
 })
 
 test('MRI pause closes its lease; paused refresh cannot resume observation', async () => {
@@ -368,7 +486,9 @@ test('MRI pause closes its lease; paused refresh cannot resume observation', asy
     equal(f.model.state.received, 2)
     equal(f.model.state.gap, 1)
     equal(first.closes, 1)
-  } finally { f.model.close() }
+  } finally {
+    f.model.close()
+  }
 })
 
 test('MRI resume into a new epoch is one episode, not two or a record count', () => {
@@ -386,7 +506,9 @@ test('MRI resume into a new epoch is one episode, not two or a record count', ()
     f.source.frame('activity', observation(801, { epoch: 'epoch-b' }))
     equal(f.model.events.map((e) => e.seq), [801])
     equal(f.model.state.gap, 1)
-  } finally { f.model.close() }
+  } finally {
+    f.model.close()
+  }
 })
 
 test('MRI hello overflow plus its sequence jump is only one gap episode', () => {
@@ -404,7 +526,9 @@ test('MRI hello overflow plus its sequence jump is only one gap episode', () => 
     equal(f.model.state.gap, 2)
     f.source.frame('gap', { omitted: 0 })
     equal(f.model.state.gap, 2)
-  } finally { f.model.close() }
+  } finally {
+    f.model.close()
+  }
 })
 
 test('MRI malformed frames expose only a safe error and no bogus activity', () => {
@@ -422,54 +546,75 @@ test('MRI malformed frames expose only a safe error and no bogus activity', () =
     ok(!f.model.state.error.includes('private-message'))
     f.source.frame('activity', observation(1))
     equal(f.model.events.length, 1)
-  } finally { f.model.close() }
+  } finally {
+    f.model.close()
+  }
 })
 
 test('MRI invalid optional span metadata is not admitted into the contract', () => {
   let f = fixture()
   try {
     f.source.hello()
-    f.source.frame('activity', { ...observation(1),
-      parent: { payload: 'not-a-span-id' }, counts: { rows: 1 } })
+    f.source.frame('activity', {
+      ...observation(1),
+      parent: { payload: 'not-a-span-id' },
+      counts: { rows: 1 },
+    })
     equal(f.model.events, [])
     equal(f.model.state.error, 'Invalid observation frame.')
-  } finally { f.model.close() }
+  } finally {
+    f.model.close()
+  }
 })
 
 test('MRI retains only activity fields rather than arbitrary frame payloads', () => {
   let f = fixture()
   try {
     f.source.hello()
-    f.source.frame('activity', { ...observation(1),
-      payload: 'must-not-be-retained', entity: { eid: 'not-telemetry' },
-      counts: { rows: 0, changes: 2 } })
+    f.source.frame('activity', {
+      ...observation(1),
+      payload: 'must-not-be-retained',
+      entity: { eid: 'not-telemetry' },
+      counts: { rows: 0, changes: 2 },
+    })
     equal(f.model.events[0].counts, { rows: 0, changes: 2 })
     let text = JSON.stringify(f.model.events)
     ok(!text.includes('must-not-be-retained'))
     ok(!text.includes('not-telemetry'))
-  } finally { f.model.close() }
+  } finally {
+    f.model.close()
+  }
 })
 
 test('MRI refresh rejection is handled internally and does not expose errors', async () => {
-  let f = fixture({ start: false, fetch: () =>
-    Promise.reject(new Error('private-authentication-payload')) })
+  let f = fixture({
+    start: false,
+    fetch: () => Promise.reject(new Error('private-authentication-payload')),
+  })
   try {
     await f.model.refresh()
-    equal(f.model.state.error,
-      'Could not read host anatomy. Check access and retry.')
+    equal(
+      f.model.state.error,
+      'Could not read host anatomy. Check access and retry.',
+    )
     equal(f.model.state.host, '')
     ok(!f.model.state.error.includes('private-authentication-payload'))
     equal(f.feeds.length, 0)
-  } finally { f.model.close() }
+  } finally {
+    f.model.close()
+  }
 })
 
 test('MRI replacing a refresh aborts and ignores its later response', async () => {
   let pending: ReturnType<typeof deferred<Response>>[] = []
-  let f = fixture({ start: false, fetch: () => {
-    let response = deferred<Response>()
-    pending.push(response)
-    return response.promise
-  } })
+  let f = fixture({
+    start: false,
+    fetch: () => {
+      let response = deferred<Response>()
+      pending.push(response)
+      return response.promise
+    },
+  })
   try {
     let first = f.model.refresh()
     let second = f.model.refresh()
@@ -547,8 +692,10 @@ test('MRI cause helper cannot connect reused IDs across epoch boundaries', () =>
     observation(2, { id: 'choice', parent: 'parent', epoch: 'old' }),
     observation(1, { id: 'choice', parent: 'parent', epoch: 'new' }),
   ]
-  equal(causes(events, 'choice').map((e) => [e.epoch, e.id]),
-    [['new', 'choice']])
+  equal(causes(events, 'choice').map((e) => [e.epoch, e.id]), [[
+    'new',
+    'choice',
+  ]])
 })
 
 test('MRI stale activity cannot reverse the authoritative hello epoch', () => {
@@ -561,5 +708,7 @@ test('MRI stale activity cannot reverse the authoritative hello epoch', () => {
     f.source.frame('activity', observation(2, { epoch: 'epoch-a' }))
     equal(f.model.events.map((e) => [e.epoch, e.seq]), [['epoch-b', 1]])
     equal(f.model.state.gap, 1)
-  } finally { f.model.close() }
+  } finally {
+    f.model.close()
+  }
 })
