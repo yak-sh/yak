@@ -7,6 +7,7 @@ import {
   assertThrows,
 } from '@std/assert'
 import type { Bundle, Comp, Graph, Tool } from '@yaks/graph'
+import type { Vocab } from '@yaks/vocab'
 import { edgeEid } from '@yaks/edge'
 import { CallError, toolEid } from '@yaks/tools'
 import { marksDoc } from '@yaks/kernel/vocab'
@@ -97,6 +98,36 @@ let drive = async (
   let pending = await calls(g, build)
   await r.due(pending.at(-1)!.entity.eid)
 }
+// `builder build` on the test's builder, as a host loads the tool: through its
+// declaration in the vocabulary.
+let asking = (g: Graph, vocab: Vocab) => {
+  let [tool] = loadTools(builderDoc, runs({ vocab }))
+    .filter((t) => t.name == 'builder_build')
+  return async (args: Comp = {}) =>
+    await tool.run({
+      entity: { eid: crypto.randomUUID() },
+      call: { args: { builder: ids.builder, ...args } },
+    }, g)
+}
+let ring: Bundle = {
+  entity: { eid: 'ring' },
+  wake: { target: ids.builder },
+  fired: { at: noon() },
+}
+let match = (b: Bundle): string[] => JSON.parse(String(comp(b, 'build')?.match))
+// The sources the test builder's main builds were made for, and one's build.
+let built = async (g: Graph) =>
+  (await rows(g, `.build.builder=${ids.builder}&.build.variant=main`))
+    .map((b) => match(b)[0]).toSorted()
+let mainOf = async (g: Graph, s: string) =>
+  comp(await one(g, run(ids.builder, [s])), 'build')
+let keyOf = async (g: Graph, s: string) => (await mainOf(g, s))?.key
+let staleOf = async (g: Graph, s: string) => (await mainOf(g, s))?.stale
+let currentOf = async (g: Graph, s: string) =>
+  current(
+    (await mainOf(g, s))!,
+    comp(await one(g, output(run(ids.builder, [s]))), 'built')!,
+  )
 
 test('outer query bindings make independent builds and tool calls', async () => {
   let { g, runner } = await shop({}, [], [code()])
@@ -356,21 +387,7 @@ test('shadow builds have distinct ids and cannot feed another builder', async ()
   await g.apply([source('a'), builder()])
   let primary = run(ids.builder, ['a'])
   await drive(g, runner, primary)
-  // The tool as a host loads it: through its declaration in the vocabulary.
-  let [build] = loadTools(builderDoc, runs({ vocab }))
-    .filter((t) => t.name == 'builder_build')
-  let [said] = await build.run(
-    {
-      entity: { eid: 'ask' },
-      call: {
-        args: {
-          builder: ids.builder,
-          template: 'alternate',
-        },
-      },
-    },
-    g,
-  )
+  let [said] = await asking(g, vocab)({ template: 'alternate' })
   assert(said.content)
   let shadow = (await rows(g, '.build')).find((b) =>
     comp(b, 'build')?.variant != 'main'
@@ -398,26 +415,78 @@ test('shadow builds have distinct ids and cannot feed another builder', async ()
 
 test('an archived builder builds by no door until the mark is removed', async () => {
   let { g, vocab } = await shop({}, [marksDoc], [code()])
-  let [build] = loadTools(builderDoc, runs({ vocab }))
-    .filter((t) => t.name == 'builder_build')
-  let ask = async () =>
-    await build.run({
-      entity: { eid: crypto.randomUUID() },
-      call: { args: { builder: ids.builder } },
-    }, g)
+  let ask = asking(g, vocab)
   let built = async () => (await rows(g, '.build')).length
   await g.apply([source('a'), { ...builder(), archived: {} }])
   await g.apply([source('b')])
-  await g.apply([{
-    entity: { eid: 'ring' },
-    wake: { target: ids.builder },
-    fired: { at: noon() },
-  }])
+  await g.apply([ring])
   assertEquals(await built(), 0)
-  await assertRejects(ask, CallError, 'is archived')
+  await assertRejects(() => ask(), CallError, 'is archived')
   await g.apply([{ entity: { eid: ids.builder }, archived: null }])
   await ask()
   assertEquals(await built(), 2)
+})
+
+test('a staged builder is built on no create, edit, wake or input change', async () => {
+  let { g, vocab } = await shop({}, [], [code()])
+  let ask = asking(g, vocab)
+  await g.apply([source('a'), { ...builder(), staged: {} }])
+  await g.apply([{ entity: { eid: ids.builder }, content: { body: 'Again' } }])
+  await g.apply([ring])
+  assertEquals(await built(g), [])
+  // `builder build` still builds it, and its inputs are then known, so a
+  // change to one is a change the builder would otherwise answer.
+  await ask()
+  let key = await keyOf(g, 'a')
+  await g.apply([source('a', 'second'), source('b')])
+  assertEquals(await keyOf(g, 'a'), key)
+  assertEquals(await built(g), ['a'])
+})
+
+test('a partial build makes the named bindings and leaves the others current', async () => {
+  let { g, runner, vocab } = await shop({}, [], [code()])
+  let ask = asking(g, vocab)
+  await g.apply([source('a'), source('b'), source('c'), builder()])
+  for (let s of ['a', 'b', 'c']) await drive(g, runner, run(ids.builder, [s]))
+  await g.apply([{ entity: { eid: ids.builder }, staged: {} }])
+  await g.apply([{ entity: { eid: ids.builder }, content: { body: 'Again' } }])
+  await ask({ only: ['a'] })
+  await drive(g, runner, run(ids.builder, ['a']))
+  for (let s of ['a', 'b', 'c']) {
+    assertEquals(await staleOf(g, s), false)
+    assertEquals(await currentOf(g, s), true)
+    assertEquals(
+      (await calls(g, run(ids.builder, [s]))).length,
+      s == 'a' ? 2 : 1,
+    )
+  }
+  // A shadow template tried on one binding leaves every main build alone.
+  await ask({ only: ['b'], template: 'Shadow $s' })
+  let shadows = (await rows(g, '.build&.build.variant!=main')).map(match)
+  assertEquals(shadows, [['b']])
+  assertEquals(await currentOf(g, 'a'), true)
+  // A name in no binding is said, not quietly skipped.
+  await g.apply([{ entity: { eid: 'x' }, doc: { title: 'Elsewhere' } }])
+  await assertRejects(() => ask({ only: ['x'] }), CallError, 'in no binding')
+})
+
+test('removing the staged mark builds the rest and asks no sampled binding again', async () => {
+  let { g, runner, vocab } = await shop({}, [], [code()])
+  let ask = asking(g, vocab)
+  await g.apply([source('a'), source('b'), source('c'), {
+    ...builder(),
+    staged: {},
+  }])
+  await ask({ limit: 2 })
+  let [sampled] = await built(g)
+  assertEquals((await built(g)).length, 2)
+  await drive(g, runner, run(ids.builder, [sampled]))
+  await g.apply([{ entity: { eid: ids.builder }, staged: null }])
+  assertEquals(await built(g), ['a', 'b', 'c'])
+  for (let s of ['a', 'b', 'c']) {
+    assertEquals((await calls(g, run(ids.builder, [s]))).length, 1)
+  }
+  assertEquals(await currentOf(g, sampled), true)
 })
 
 test('a model turn failed for good leaves its key retryable without another call', async () => {

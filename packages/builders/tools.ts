@@ -1,5 +1,7 @@
-// The on-demand door reconciles a definition now. Alternate model settings
-// make a shadow variant; the underlying work still goes through a tool call.
+// The on-demand door reconciles a definition now, staged or not. Alternate
+// model settings make a shadow variant; `only` and `limit` build some
+// bindings and leave the rest as they are. The underlying work still goes
+// through a tool call.
 
 import {
   argsOf,
@@ -54,6 +56,8 @@ export let runs = (
     let variant = alternate
       ? `shadow:${sha256(JSON.stringify([using, template]))}`
       : 'main'
+    let only = args.only as string[] | undefined
+    let limit = args.limit as number | undefined
     let result = await graph.storage.tx((tx) =>
       reconcile(
         tx,
@@ -64,12 +68,27 @@ export let runs = (
           variant,
           using,
           template: str(template),
+          only,
+          limit,
         },
         clock(),
         false,
         true,
       )
     )
+    // A name no binding holds is a mistake to say, unless the limit cut the
+    // run short before reaching it.
+    let unbound = (only ?? []).filter((eid) =>
+      !result.plans.some((p) => p.binding.entities.includes(eid))
+    )
+    if (unbound.length && (limit == null || result.plans.length < limit)) {
+      let named = (await graph.get(unbound)).map(human(host.vocab))
+      throw new CallError(
+        'refused',
+        `${named.join(', ')} ${named.length == 1 ? 'is' : 'are'} ` +
+          `in no binding of ${human(host.vocab)(definition)}`,
+      )
+    }
     if (result.writes.length) {
       await graph.apply(signed(result.writes, who(call)), { trusted: true })
     }

@@ -445,6 +445,7 @@ let askingDoc: VocabDoc = sealed(
 // not an app command; the app keeps the components and effect declarations.
 let hostedBuilderDoc = pick(builderDoc, [
   'builder',
+  'staged',
   'builder_dep',
   'build',
   'built',

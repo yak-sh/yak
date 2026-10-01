@@ -1,6 +1,11 @@
 // Reconcile builders after scheduled or selected changes, and turn every tool
 // output value into stable built rows. The model adapter has the same output
 // contract as a code tool; it only translates an ordinary session reply.
+//
+// Every automatic door (opening, editing, a wake, an input change) settles a
+// builder here, so a staged builder is left alone by all of them: only
+// `builder build` builds it until the mark comes off, and `builder_open`
+// answers that removal.
 
 import { type Bundle, type Comp, Stale, token, type Tx } from '@yaks/graph'
 import type { Handler, Handlers } from '@yaks/effects'
@@ -27,7 +32,7 @@ let settle = async (
 ) => {
   for (let attempt = 0; attempt < 3; attempt++) {
     let [builder] = await tx.get([eid])
-    if (!builder?.builder) return
+    if (!builder?.builder || builder.staged) return
     let { writes } = await reconcile(
       tx,
       builder,

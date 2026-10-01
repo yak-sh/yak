@@ -93,6 +93,20 @@ model, provider or template creates a shadow variant. A repeated key creates no
 call. A scheduled wake checks the builder again. A configured `rest` advances
 `floor` after a call starts.
 
+`builder build <builder> --only <id…>` builds only the bindings whose outer
+entities are named (any id form, as in every write), and `--limit <n>` builds
+the first n; together, the first n of those named. A partial run leaves every
+other build as it is and never marks one stale. It combines with an alternate
+model or template, so a new prompt is tried on a few rows as a shadow while the
+main outputs stay what readers select. A name in no binding is refused.
+
+A builder carrying the `staged{at,by,via}` mark is being tried before it builds
+everything: creating it, editing it, a wake and a change to its inputs all leave
+it alone, and only `builder build` builds it, usually with `--only` or
+`--limit`. Removing the mark is the commit: the builder reconciles once, as when
+it was created, and a sampled binding whose key is unchanged is not asked again,
+so only the rest are. Nothing about staging enters a build's key.
+
 A builder carrying @yaks/kernel's `archived{at,by,via}` mark is put away, and no
 door builds it: `builder build` refuses, saying it is archived, and neither a
 change to its inputs nor a wake reconciles it. Removing the mark restores every

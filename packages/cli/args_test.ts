@@ -84,6 +84,12 @@ test('a repeated option builds the list its property asked for', async () => {
     app: 'r',
     files: ['a', 'b'],
   })
+  // Where the list also takes the bare words, they join it.
+  let listing = { ...tool, options: { positional: ['app'], rest: 'files' } }
+  assertEquals(
+    await argsFor(listing, ['r', '--files', 'a', 'b', 'c'], reads),
+    { app: 'r', files: ['a', 'b', 'c'] },
+  )
 })
 
 test('a bare flag is a boolean, and only a boolean', async () => {

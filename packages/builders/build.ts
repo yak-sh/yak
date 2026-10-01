@@ -29,6 +29,10 @@ export type Options = {
   variant?: string
   template?: string
   using?: Comp
+  /** build only the bindings whose outer entities these name */
+  only?: Eid[]
+  /** build only the first n bindings */
+  limit?: number
 }
 
 export type Plan = {
@@ -132,6 +136,21 @@ export let selected = async (
   })
 }
 
+/** The bindings a partial run builds: those whose outer entities include one
+ * `only` names, then the first `limit` of them. Every binding without either. */
+export let narrow = <T extends { binding: Binding }>(
+  chosen: T[],
+  only?: Eid[],
+  limit?: number,
+): T[] => {
+  let named = only
+    ? chosen.filter(({ binding }) =>
+      binding.entities.some((eid) => eid != null && only.includes(eid))
+    )
+    : chosen
+  return limit == null ? named : named.slice(0, limit)
+}
+
 /** A tool call freezes one binding tree and the key it was selected under. */
 export let start = (
   p: Plan,
@@ -176,7 +195,9 @@ export let start = (
 
 /** Bring every desired build current and mark vanished bindings stale. An
  * archived builder is put away: every door reconciles through here, so none
- * of them builds it until the mark is removed. */
+ * of them builds it until the mark is removed. A partial run (`only`,
+ * `limit`) builds some bindings and leaves every other build as it is, never
+ * stale, since a binding it skipped has not vanished. */
 export let reconcile = async (
   tx: Tx,
   builder: Bundle,
@@ -214,9 +235,10 @@ export let reconcile = async (
     }&*`,
   )
   let held = new Map(prior.map((b) => [b.entity.eid, b]))
+  let partial = o.only != null || o.limit != null
   let plans: Plan[] = []
   let writes: Bundle[] = [...dep]
-  for (let { binding, rows } of chosen) {
+  for (let { binding, rows } of narrow(chosen, o.only, o.limit)) {
     let entities = binding.entities
     let match = JSON.stringify(entities)
     let build = run(builder.entity.eid, entities, variant)
@@ -252,7 +274,7 @@ export let reconcile = async (
     }
     if (!same || failed) writes.push(...start(p, before, o.eid))
   }
-  for (let old of held.values()) {
+  for (let old of partial ? [] : held.values()) {
     let b = comp(old, BUILD)
     if (b?.stale) continue
     writes.push({

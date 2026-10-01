@@ -260,10 +260,15 @@ export let argsFor = async (
   }
 
   // The bare words nothing claimed, where the tool asked for them: an app's
-  // own arguments as `key=value` pairs, or a plain list.
+  // own arguments as `key=value` pairs, or a plain list, which joins what its
+  // own option gathered (`--only a b` is both a and b).
   if (rest && spare.length) {
+    let had = out[rest]
     out[rest] = typeOf(props[rest]) == 'array'
-      ? await Promise.all(spare.map((w) => inflate(w, reads)))
+      ? [
+        ...Array.isArray(had) ? had : [],
+        ...await Promise.all(spare.map((w) => inflate(w, reads))),
+      ]
       : await pairsIn(spare, reads)
   }
 

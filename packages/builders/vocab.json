@@ -31,6 +31,33 @@
       },
       "description": "a query-to-tool transformation; content.body is its optional $var template and using chooses a model"
     },
+    "staged": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it was staged"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "who staged it"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "what the write was made through"
+        }
+      },
+      "description": "A builder being tried on a few bindings: only `builder build` builds it. Removing the mark builds the rest once, and a binding already built under the same key is not asked again."
+    },
     "builder_dep": {
       "component": true,
       "type": "object",
@@ -174,7 +201,7 @@
       "noun": "builder",
       "verb": "build",
       "title": "Build now",
-      "description": "Reconcile a builder now, independent of its floor. Optional alternate provider, model or template creates a shadow variant.",
+      "description": "Reconcile a builder now, independent of its floor and of a `staged` mark. An alternate provider, model or template creates a shadow variant. `--only` and `--limit` build some bindings and leave the other builds as they are.\n\n  yak builder build <builder> --only <id> <id>\n  yak builder build <builder> --limit 3 --template @prompt.md",
       "input": {
         "builder": {
           "type": "string",
@@ -194,6 +221,16 @@
         "template": {
           "type": "string",
           "description": "alternate content.body template for a shadow variant"
+        },
+        "only": {
+          "type": "array",
+          "items": { "type": "string", "ref": "entity" },
+          "description": "build only the bindings whose outer entities these name, and leave the other builds as they are"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "build only the first n bindings, and leave the other builds as they are"
         }
       },
       "required": [
@@ -203,6 +240,7 @@
         "positional": [
           "builder"
         ],
+        "rest": "only",
         "short": {
           "m": "model",
           "p": "provider"
@@ -218,8 +256,11 @@
       "changed": [
         "builder.floor"
       ],
+      "removed": [
+        "staged"
+      ],
       "sweep": ".builder",
-      "description": "build a builder whose floor has passed, unless its key is built"
+      "description": "build a builder whose floor has passed, unless its key is built; removing its staged mark builds it too"
     },
     "builder_edit": {
       "effect": true,
