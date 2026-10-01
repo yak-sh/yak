@@ -115,7 +115,7 @@ export let pageSocket = async (
   for (let [index, link] of links.entries()) {
     if (!link) continue
     link.addEventListener('message', (e) => {
-      let frame: Frame
+      let frame: Frame & { release?: { version: number } }
       try {
         frame = JSON.parse(String(e.data)) as Frame
       } catch (error) {
@@ -124,6 +124,12 @@ export let pageSocket = async (
           space: space.slug,
           app: app.slug,
         })
+        return
+      }
+      // Release notices are raw, outside subscription acknowledgements. A home
+      // changing must not offer to reload the page borrowing its components.
+      if (frame.release) {
+        if (index == 0) front.send(String(e.data))
         return
       }
       if (frame.refused) {

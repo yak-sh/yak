@@ -2427,6 +2427,31 @@ export class Store {
   async #serve(request: Request): Promise<Response> {
     let path = new URL(request.url).pathname
     let kernel = request.headers.get('x-yak-kernel') == '1'
+    // A release belongs to the store, not a subscription. Tell even sockets
+    // whose page has not subscribed yet; the page decides when to reload.
+    if (path == '/released') {
+      if (!kernel || request.method != 'POST') {
+        return json({ error: 'NotFound', message: 'no route' }, 404)
+      }
+      let version
+      try {
+        version = (await request.json()).version
+        if (!Number.isSafeInteger(version) || version < 1) {
+          throw new Refused('/released needs a positive version')
+        }
+      } catch (error) {
+        return refuse(error, request)
+      }
+      let packet = JSON.stringify({ release: { version } })
+      for (let ws of this.#ctx.getWebSockets()) {
+        try {
+          ws.send(packet)
+        } catch (error) {
+          caught(error, { request: 'POST /released', store: this.#name() })
+        }
+      }
+      return Response.json({ version })
+    }
     if (path == '/vocab') return this.#vocabDoor(request)
     if (path == '/seed') return this.#seedDoor(request)
     // Every word this store speaks, as the documents its vocabulary was loaded
