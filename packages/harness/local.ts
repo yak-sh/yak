@@ -35,6 +35,7 @@ import { collecting, going, homes, sweep } from './worktrees.ts'
 import { transcriptViews } from './transcript.ts'
 import type { Harness } from './store.ts'
 import { graphTools, harnessTools } from './tools.ts'
+import { skillItems, skillTools } from './skills.ts'
 
 export { type Harness, hosted } from './store.ts'
 export { graphTools, harnessTools, parametersOf } from './tools.ts'
@@ -177,12 +178,15 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
       ...opts.providers,
     },
     tools: opts.tools ??
-      harnessTools(h.g, {
-        ...opts,
-        worktrees: root,
-        artifacts: h.artifacts,
-        reply: h.reply,
-      }),
+      [
+        ...harnessTools(h.g, {
+          ...opts,
+          worktrees: root,
+          artifacts: h.artifacts,
+          reply: h.reply,
+        }),
+        ...skillTools(h.g, cwd, h.reply),
+      ],
     remote: mcp.snapshot,
     // The host's other tools, its plugins' own among them, adapted the first
     // time a transcript names one: a builder's session offered memory_around
@@ -200,6 +204,7 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
     },
     context: (window, entries) =>
       imageContext(h.g, window, entries, h.artifacts),
+    requestItems: (_, __, current) => skillItems(h.g, current, cwd),
     report,
     // What abnormal endings left in the worktree root, taken back by the same
     // test one child's end applies — plus the checkouts Git itself has

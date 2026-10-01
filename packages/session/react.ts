@@ -178,6 +178,13 @@ export type Deps = {
     window: Bundle[],
     entries: Bundle[],
   ) => Promise<Map<Eid, Item[]>>
+  /** Dynamic provider-neutral context after the exact tool offer is resolved.
+   * Unlike contextItems, these items have no transcript/media source. */
+  requestItems?: (
+    window: Bundle[],
+    entries: Bundle[],
+    current: { session: Eid; tools: readonly Tool[] },
+  ) => Promise<Item[]>
   /** Unexpected model/tool defects, separate from expected refusals. */
   report?: (error: unknown, session: Eid, phase: string) => void
   mint?: () => Eid
@@ -883,6 +890,9 @@ export let react = async (
     : undefined
   // Resolve media once, before admission, and project beside its source entry.
   let media = await deps.contextItems?.(window, entries)
+  let dynamic =
+    await deps.requestItems?.(window, entries, { session, tools }) ??
+      []
   let req: Request = {
     signal: deps.signal,
     model: spelled,
@@ -896,16 +906,19 @@ export let react = async (
       : using?.instructions == null
       ? deps.instructions
       : String(using.instructions),
-    items: project(
-      entries,
-      window,
-      toolEntities,
-      {
-        anchor: anchorId ? asked!.entity.eid : undefined,
-        results,
-        media,
-      },
-    ),
+    items: [
+      ...dynamic,
+      ...project(
+        entries,
+        window,
+        toolEntities,
+        {
+          anchor: anchorId ? asked!.entity.eid : undefined,
+          results,
+          media,
+        },
+      ),
+    ],
     tools: tools.map(({ name, description, parameters }) => ({
       name,
       description,
@@ -938,6 +951,7 @@ export let react = async (
       ),
       fixed: tokens(
         String(req.instructions ?? '').length +
+          JSON.stringify(dynamic).length +
           JSON.stringify(req.tools).length +
           JSON.stringify(project(entries, retained(entries), toolEntities))
             .length +
@@ -1077,7 +1091,8 @@ export let react = async (
     accepting = false
     await tail
     if (streamFailure) throw streamFailure
-  } catch (e) {
+  } catch (error) {
+    let e = error
     accepting = false
     await tail
     let text = e instanceof ModelError
