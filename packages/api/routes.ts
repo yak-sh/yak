@@ -12,6 +12,7 @@
 // It is handed the host once the graph is open and the routes are gathered,
 // unlike `authenticate` beside it, which is asked for before anything is open.
 
+import type { Anatomy } from '@yaks/code/anatomy'
 import type { Bundle, Graph } from '@yaks/graph'
 import type { Authenticate } from './actor.ts'
 import {
@@ -31,6 +32,8 @@ import { subscriptions } from './subs.ts'
  * other hosts make to the same store, which `/ws` subscribers are told of as
  * well as this graph's own. */
 export type Hosting = {
+  /** Captured composition, projected only when a route asks for it. */
+  anatomy?: () => Anatomy
   graph: Graph
   reader?: Pick<Graph, 'read' | 'rows' | 'get'>
   who: Authenticate
