@@ -5,8 +5,8 @@ description: >
   @yaks/testing (`test`, `suite`, `equal`, `until`, `///` doctests, fenced
   examples), `deno task test` and its platforms (deno, browser, terminal,
   workerd), the skip of files whose dependencies have not changed, kernel and
-  workerd tests in workers/yak, the Stripe sandbox, and which tests a change can
-  break. Use it whenever you write, change, run, narrow, time or debug a test,
+  workerd tests in workers/yak, the Stripe sandbox, and running the tests of the
+  package you changed. Use it whenever you write, change, run, narrow, time or debug a test,
   a doctest or a README example, when a run fails or is slow, when a brief says
   "add a test", or before landing to decide what to run. Proving a change by
   hand in a browser or a terminal is the `end-to-end-checks` skill.
@@ -62,12 +62,11 @@ same proof, stronger.
   itself, the runner, config, lock and Deno version). "N unchanged since they
   passed" is that skip, not a pass you just earned. The record is
   `~/.cache/yak/tests-passed.json`, shared by every checkout.
-- Run the tests your change could break, and none it could not: the touched
-  package's tests and those of the packages that import what you changed.
-  A change inside one yaks app runs `deno task test apps/<name>` at most.
-  Editing a file many packages import (workers/yak/vocab.ts, @yaks/graph)
-  reruns most of the suite, two to four minutes; that cost is a reason to
-  narrow the change, not to skip the run.
+- Run the tests of the package you changed (`deno task test packages/<name>`),
+  not the full suite. Packages exist so a change can be checked where it lives.
+  A change inside one yaks app runs `deno task test apps/<name>` at most. The
+  full suite runs only when a change reaches across packages in a way their own
+  tests cannot cover.
 - `deno task test:budget` lists deno tests and file loads over the 1 ms budget,
   slowest first.
 - `deno task check` (fmt, lint, types, publish, browser and workers checks) is
