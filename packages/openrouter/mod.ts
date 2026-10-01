@@ -1,5 +1,5 @@
 /** OpenRouter's stateless OpenResponses adapter. */
-import type { Model, Reply } from '@yaks/model'
+import type { Model, Reply, Request } from '@yaks/model'
 import {
   type Options as ResponsesOptions,
   responses as openResponses,
@@ -7,6 +7,7 @@ import {
 import { chat, type MediaOptions } from './chat.ts'
 import { speech } from './speech.ts'
 import { openrouterDoc } from './vocab.ts'
+import { alibabaCache, responseBody, tools } from './prompt.ts'
 
 export { openrouterDoc }
 export type Options = Pick<ResponsesOptions, 'fetch' | 'signal'> & {
@@ -18,22 +19,30 @@ export type Options = Pick<ResponsesOptions, 'fetch' | 'signal'> & {
 }
 
 /** Always sends complete context. OpenRouter rejects stored continuations. */
-export const responses = (options: Options): Model => {
-  const call = openResponses({
-    ...options,
-    credential: async () => ({
-      token: await options.key(),
-      base: 'https://openrouter.ai/api/v1',
-    }),
-    store: false,
-    web: false,
-  })
+export let responses = (options: Options): Model => {
+  let call = (req: Request) =>
+    openResponses({
+      ...options,
+      credential: async () => ({
+        token: await options.key(),
+        base: 'https://openrouter.ai/api/v1',
+      }),
+      store: false,
+      web: false,
+      shape: (body) => responseBody(req, body),
+    })
   let model: Model = (request) =>
     options.speech?.includes(request.model)
       ? speech(request, options)
       : request.modalities?.some((m) => m == 'audio' || m == 'image')
       ? chat(request, options)
-      : call({ ...request, anchor: undefined })
+      : alibabaCache(request.model)
+      ? chat(request, options)
+      : call(request)({
+        ...request,
+        tools: tools(request.tools),
+        anchor: undefined,
+      })
   return Object.assign(
     model,
     {

@@ -1,10 +1,11 @@
 # @yaks/openrouter
 
 OpenRouter model access through `@yaks/model`. Text requests use its stateless
-Responses API, including streaming text and function calls. A request whose
-model row asks for image or audio output uses Chat Completions instead. A model
-listed in `speech` uses OpenRouter's binary speech endpoint. The text and chat
-routes accept image input and report usage, and the dollars OpenRouter says each
+Responses API, including streaming text and function calls. Alibaba models with
+documented explicit caching use Chat Completions. A request whose model row asks
+for image or audio output uses Chat Completions instead. A model listed in
+`speech` uses OpenRouter's binary speech endpoint. The text and chat routes
+accept image input and report usage, and the dollars OpenRouter says each
 request cost as the reply's `cost`. They share media decoding and SSE parsing
 with `@yaks/openai`, but use only OpenRouter credentials.
 
@@ -14,8 +15,8 @@ configuration. Do not store it in graph entities or shared configuration files.
 ```ts ignore
 import { responses } from '@yaks/openrouter'
 
-const model = responses({ key: () => myPrivateKey })
-const reply = await model({
+let model = responses({ key: () => myPrivateKey })
+let reply = await model({
   model: 'anthropic/claude-sonnet-4',
   items: [{ kind: 'user', text: 'Hello' }],
   tools: [],
@@ -69,17 +70,54 @@ complete applicable conversation. This adapter sends `store: false`, never
 `openrouter{response_id}` for diagnostics only. Expect higher request bytes than
 a provider supporting stored continuation, especially for forks.
 
-The shared transport retries transient failures before text reaches the caller.
-It does not replay text delivered through `onText`, or retry a rejected request
-such as HTTP 400. Cancellation uses `Request.signal`. Native `image_generation`
-and `web_search` declarations are not enabled on text requests; function tools
-remain available there.
+The Responses transport retries transient failures before text reaches the
+caller. It does not replay text delivered through `onText`, or retry a rejected
+request such as HTTP 400. Cancellation uses `Request.signal`. Native
+`image_generation` and `web_search` declarations are not enabled on text
+requests; function tools remain available there.
+
+## Prompt caching
+
+Tool declarations are sorted by name, with schema object keys sorted
+recursively. Array order is preserved. Instructions precede the transcript;
+appending items never regroups or rewrites earlier messages.
+
+Anthropic text requests mark the stable instruction prefix and the latest three
+request-ending transcript boundaries with Responses `prompt_cache_breakpoint`.
+OpenRouter translates these into five-minute `cache_control` breakpoints across
+Anthropic-compatible upstreams. Prior boundaries remain explicit even when more
+than 20 new blocks are appended; a trailing marker alone cannot look back far
+enough. Cache hints may move as old boundaries roll out, not message content.
+
+Alibaba's documented explicit-cache models use Chat Completions with per-block
+`cache_control`, the same stable-prefix and rolling boundaries, streamed text
+and tool calls. Unsupported snapshot models get no explicit directives. Other
+upstreams retain their documented automatic caching. Gemini uses implicit
+caching, not the separately billed explicit storage path.
+
+`Request.conversation` becomes `session_id` on Responses and chat. OpenRouter
+pins routing from the first successful request, before any observed cache hit;
+the routing session expires after ten minutes of inactivity. Speech sends
+`x-session-id` for observability grouping only, not sticky routing.
+
+Cache hits still depend on upstream minimum prefix lengths, expiry, and exact
+prefix matches. Anthropic makes a cache write available only once the response
+begins, so concurrent cold-prefix requests do not guarantee cache hits.
+`usage.cached_tokens` preserves reported reads (including zero); absent counts
+stay unknown. OpenRouter reports cache writes too, but the shared `Usage` shape
+has no cache-write property. This adapter does not invent one or treat writes as
+cache reads. The provider-reported dollar cost is preserved.
 
 Official protocol references:
 
 - https://openrouter.ai/docs/api_reference/responses/overview
+- https://openrouter.ai/docs/guides/best-practices/prompt-caching
+- https://platform.claude.com/docs/en/build-with-claude/prompt-caching
 - https://openrouter.ai/docs/guides/overview/multimodal/audio
 - https://openrouter.ai/docs/guides/overview/multimodal/tts
 - https://openrouter.ai/docs/guides/overview/auth/oauth
 
-Tests use mocked responses, not paid provider calls.
+Tests capture interface requests and use mocked responses, not paid provider
+calls. They check reusable prefixes, cache boundaries beyond the lookback
+window, streamed text/tool assembly, reported usage, cancellation, errors, and
+media.

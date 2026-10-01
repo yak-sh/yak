@@ -1,6 +1,7 @@
-/** Chat Completions media output; text-only asks stay on Responses. */
-import { type Item, ModelError, type Reply, type Request } from '@yaks/model'
+/** Chat Completions for generated media and Alibaba explicit-cache models. */
+import { ModelError, type Reply, type Request } from '@yaks/model'
 import { generatedMedia, jsonFrames, type MediaStore } from '@yaks/openai'
+import { chatTools, messages } from './prompt.ts'
 
 export type MediaOptions = MediaStore & {
   /** Audio settings vary by model; Lyria uses MP3 without a voice. */
@@ -25,48 +26,6 @@ let retryAfter = (value: string | null) => {
   return Number.isFinite(ms) ? Math.min(60_000, Math.max(0, ms)) : 0
 }
 
-let base64 = (bytes: Uint8Array) => {
-  let parts: string[] = []
-  for (let at = 0; at < bytes.length; at += 8192) {
-    parts.push(String.fromCharCode(...bytes.subarray(at, at + 8192)))
-  }
-  return btoa(parts.join(''))
-}
-
-let message = (item: Item): Data => {
-  if (item.kind == 'image') {
-    return {
-      role: 'user',
-      content: [
-        { type: 'text', text: item.label },
-        {
-          type: 'image_url',
-          image_url: {
-            url: 'data:' + item.mediaType + ';base64,' + base64(item.bytes),
-          },
-        },
-      ],
-    }
-  }
-  if (item.kind == 'call') {
-    return {
-      role: 'assistant',
-      tool_calls: [{
-        id: item.id,
-        type: 'function',
-        function: { name: item.name, arguments: item.args },
-      }],
-    }
-  }
-  if (item.kind == 'result') {
-    return { role: 'tool', tool_call_id: item.id, content: item.output }
-  }
-  return {
-    role: item.kind == 'instruction' ? 'developer' : item.kind,
-    content: item.text,
-  }
-}
-
 let usage = (raw: unknown) => {
   let u = obj(raw)
   let counts = {
@@ -77,7 +36,7 @@ let usage = (raw: unknown) => {
     reasoning_tokens: obj(u.completion_tokens_details).reasoning_tokens,
   }
   let entries = Object.entries(counts).filter(([, v]) =>
-    typeof v == 'number' && Number.isFinite(v)
+    typeof v == 'number' && Number.isSafeInteger(v) && v >= 0
   )
   // OpenRouter reports what every request cost, in dollars.
   let cost = u.cost
@@ -100,7 +59,7 @@ let image = (v: unknown, call: string, options: MediaOptions) => {
   return generatedMedia(match[2], match[1], call, options)
 }
 
-/** A media ask uses OpenRouter's chat door and returns neutral blob artifacts. */
+/** The chat door streams text/tools, or decodes generated media to artifacts. */
 export let chat = async (
   req: Request,
   options: {
@@ -116,14 +75,15 @@ export let chat = async (
       'Chat Completions answers no typed questions',
     )
   }
-  if (!options.media) {
+  let media = req.modalities?.some((m) => m == 'audio' || m == 'image')
+  if (media && !options.media) {
     throw new ModelError(
       'media_storage',
       'Media output requires artifact storage',
     )
   }
   let audio = req.modalities?.includes('audio') ?? false
-  let format = options.media.audio?.format ?? 'mp3'
+  let format = options.media?.audio?.format ?? 'mp3'
   let mediaType = {
     mp3: 'audio/mpeg',
     wav: 'audio/wav',
@@ -141,18 +101,18 @@ export let chat = async (
         headers: {
           authorization: 'Bearer ' + key,
           'content-type': 'application/json',
+          ...req.conversation ? { 'x-session-id': req.conversation } : {},
         },
         body: JSON.stringify({
           model: req.model,
-          messages: [
-            ...req.instructions
-              ? [{ role: 'developer', content: req.instructions }]
-              : [],
-            ...req.items.map(message),
-          ],
+          messages: messages(req),
+          ...req.conversation ? { session_id: req.conversation } : {},
+          ...!media ? { tools: chatTools(req) } : {},
+          ...req.effort ? { reasoning: { effort: req.effort } } : {},
           modalities: req.modalities,
-          ...audio ? { audio: { format, ...options.media.audio } } : {},
-          stream: audio,
+          ...audio ? { audio: { format, ...options.media?.audio } } : {},
+          stream: !media || audio,
+          ...!media || audio ? { stream_options: { include_usage: true } } : {},
           ...req.tokens ? { max_tokens: req.tokens } : {},
         }),
         signal: req.signal && options.signal
@@ -184,7 +144,15 @@ export let chat = async (
   }
   let id = '', model = req.model, text = '', chunks: string[] = []
   let images: unknown[] = [], reported: unknown
+  let calls = new Map<number, { id: string; name: string; args: string }>()
   let receive = (value: Data) => {
+    if (value.error) {
+      let error = obj(value.error)
+      throw new ModelError(
+        str(error.code) || 'stream',
+        str(error.message).slice(0, 512) || 'OpenRouter stream failed',
+      )
+    }
     id = str(value.id) || id
     model = str(value.model) || model
     reported = value.usage ?? reported
@@ -196,10 +164,19 @@ export let chat = async (
       req.onText?.({ index: 0, text: said })
       text += said
     }
+    for (let raw of list(delta.tool_calls)) {
+      let tool = obj(raw), fn = obj(tool.function)
+      let index = typeof tool.index == 'number' ? tool.index : calls.size
+      let call = calls.get(index) ?? { id: '', name: '', args: '' }
+      call.id += str(tool.id)
+      call.name += str(fn.name)
+      call.args += str(fn.arguments)
+      calls.set(index, call)
+    }
     if (audioPart.data) chunks.push(str(audioPart.data))
     images.push(...list(delta.images))
   }
-  if (audio) {
+  if (!media || audio) {
     if (!response.body) {
       throw new ModelError(
         'media_stream',
@@ -223,17 +200,23 @@ export let chat = async (
         chunks.join(''),
         mediaType,
         id + ':audio',
-        options.media,
+        options.media!,
       ),
     )
   }
   for (let [index, value] of images.entries()) {
-    artifacts.push(await image(value, id + ':image:' + index, options.media))
+    artifacts.push(await image(value, id + ':image:' + index, options.media!))
   }
   return {
     id,
     model,
-    items: [{ kind: 'assistant', text }],
+    items: [
+      ...text || !calls.size ? [{ kind: 'assistant' as const, text }] : [],
+      ...[...calls.entries()].sort(([a], [b]) => a - b).map(([, c]) => ({
+        kind: 'call' as const,
+        ...c,
+      })),
+    ],
     ...artifacts.length ? { artifacts } : {},
     ...usage(reported),
   }

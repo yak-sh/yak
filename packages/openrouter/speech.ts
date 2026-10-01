@@ -62,6 +62,7 @@ export let speech = async (
         headers: {
           authorization: 'Bearer ' + key,
           'content-type': 'application/json',
+          ...req.conversation ? { 'x-session-id': req.conversation } : {},
         },
         body: JSON.stringify({
           model: req.model,

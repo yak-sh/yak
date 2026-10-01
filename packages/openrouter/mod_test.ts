@@ -176,6 +176,10 @@ test('streamed OpenRouter audio becomes one blob artifact with no encoded bytes 
     media: { store: artifactStore(memoryBlobs()) },
     fetch: (url, init) => {
       assertEquals(url, 'https://openrouter.ai/api/v1/chat/completions')
+      assertEquals(
+        new Headers(init?.headers).get('x-session-id'),
+        'music-session',
+      )
       seen = JSON.parse(String(init?.body))
       let frames = [
         {
@@ -200,10 +204,12 @@ test('streamed OpenRouter audio becomes one blob artifact with no encoded bytes 
   })
   let reply = await model({
     model: 'google/lyria-3-clip-preview',
+    conversation: 'music-session',
     modalities: ['text', 'audio'],
     items: [{ kind: 'user', text: 'An instrumental melody' }],
     tools: [],
   })
+  assertEquals(seen.session_id, 'music-session')
   assertEquals(seen.modalities, ['text', 'audio'])
   assertEquals(seen.audio, { format: 'mp3' })
   assertEquals(seen.stream, true)
@@ -260,6 +266,10 @@ test('a speech model uses the audio door and stores its bytes as an artifact', a
     fetch: (url, init) => {
       assertEquals(url, 'https://openrouter.ai/api/v1/audio/speech')
       assertEquals(
+        new Headers(init?.headers).get('x-session-id'),
+        'speech-session',
+      )
+      assertEquals(
         new Headers(init?.headers).get('authorization'),
         'Bearer probe-key',
       )
@@ -277,6 +287,7 @@ test('a speech model uses the audio door and stores its bytes as an artifact', a
   })
   let reply = await model({
     model: 'vendor/speech',
+    conversation: 'speech-session',
     modalities: ['audio'],
     items: [{ kind: 'user', text: 'A forge hammer ringing' }],
     tools: [],
