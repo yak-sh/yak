@@ -51,13 +51,14 @@ for (let async of [false, true]) {
       })))
       assertEquals(out instanceof Promise, async)
       let answer = await out
-      assertEquals(seen, veto ? [1, 1] : [2])
-      assertEquals(writes, veto ? [1, 1] : [2])
+      assertEquals(seen, veto ? [1, 1, 1] : [3])
+      assertEquals(writes, veto ? [1, 1, 1] : [3])
       assertEquals(journal.filter((b) => b.doc).map((b) => b.entity.eid), [
         'a',
+        'dead',
         'b',
       ])
-      for (let eid of ['a', 'b']) {
+      for (let eid of ['a', 'dead', 'b']) {
         assertEquals(
           comp(answer.find((b) => b.entity.eid == eid), 'doc').title,
           'rewritten',
@@ -206,3 +207,40 @@ test('a host may defer effects; its clock is frozen before context leaves', () =
   g.apply(batch, { now: 'fixed', check: true })
   assertEquals(queued.length, 0)
 })
+
+for (let async of [false, true]) {
+  for (let independent of [false, true]) {
+    test(`beforeWrite revives old graves but retains delete races (${async}, ${independent})`, async () => {
+      let storage = async ? slow(memory()) : memory()
+      let g = graph({ storage, vocab: books })
+      await g.apply(['fresh', 'race'].map((eid) => ({
+        entity: { eid },
+        doc: { title: 'old' },
+      })))
+      await g.apply(['fresh', 'race'].map((eid) => ({
+        entity: { eid },
+        $delete: true,
+      })))
+      g.use({
+        name: 'check',
+        beforeWrite: () => Object.assign((bs: Bundle[]) => bs, { independent }),
+      })
+      let out = await g.apply([
+        { entity: { eid: 'fresh' }, doc: { title: 'back' } },
+        {
+          entity: { eid: 'race' },
+          doc: { title: 'stale' },
+          $was: { doc: { title: token('old') } },
+        },
+      ])
+      assertEquals(
+        comp(out.find((b) => b.entity.eid == 'fresh'), 'doc').title,
+        'back',
+      )
+      assertEquals(out.some((b) => b.entity.eid == 'race'), false)
+      let [fresh, race] = await storage.get(['fresh', 'race'])
+      assertEquals(fresh.tombstone, undefined)
+      assertEquals(race.tombstone, {})
+    })
+  }
+}

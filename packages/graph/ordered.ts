@@ -5,8 +5,7 @@
 // per operation, inside the enclosing transaction — so a refusal at the end
 // rolls back everything that came before it.
 import { after, each } from '@yaks/fp'
-import type { Bundle } from './bundle.ts'
-import { dead } from './bundle.ts'
+import { type Bundle, dead } from './bundle.ts'
 import type { WriteHook } from './plugin.ts'
 import type { Tx } from './storage.ts'
 import type { Vocab } from '@yaks/vocab'
@@ -24,46 +23,47 @@ export let ordered = (
   checks: WriteHook[],
 ): Bundle[] | Promise<Bundle[]> => {
   let held = holding(tx, vocab, snap)
+  let killed = new Set(st.killed)
   return each(
     checks.every((check) => check.independent)
       ? [bundles]
       : bundles.map((b) => [b]),
     [] as Bundle[],
-    (out, batch) =>
-      after(
-        held.get(batch.map((b) => b.entity.eid), []),
-        (found) => {
-          let gone = new Set(found.filter(dead).map((b) => b.entity.eid))
-          let live = batch.filter((b) => !gone.has(b.entity.eid))
-          if (!live.length) return out
+    (out, batch) => {
+      // Only this change's own deaths win over its later patches. A grave
+      // from an earlier change belongs to mutate: a fresh write revives it,
+      // while a write carrying old $was values is swallowed as a race.
+      let live = batch.filter((b) => !killed.has(b.entity.eid))
+      if (!live.length) return out
+      return after(
+        each(checks, live, (bs, check) => check(bs, held)),
+        (bs) => {
+          let step = state()
           return after(
-            each(checks, live, (bs, check) => check(bs, held)),
-            (bs) => {
-              let step = state()
-              return after(mutate(bs, held, step, vocab), (written) =>
-                after(cascade(written, tx, vocab, step), (expanded) => {
-                  st.born.push(...step.born)
-                  st.killed.push(...step.killed)
-                  st.heard.push(...step.heard)
-                  for (let eid of step.touched) {
-                    st.touched.add(eid)
-                  }
-                  // A cascade writes rows the gather never read. Clear the
-                  // snapshot after a delete, so the next check sees the
-                  // released rows, the cleared references, and the entities
-                  // the cascade deleted.
-                  if (step.killed.length) {
-                    snap.got.clear()
-                    snap.only?.clear()
-                    snap.near.clear()
-                    snap.pairs.length = 0
-                  }
-                  out.push(...expanded)
-                  return out
-                }))
-            },
+            mutate(bs, held, step, vocab),
+            (written) =>
+              after(cascade(written, tx, vocab, step), (expanded) => {
+                for (let b of expanded) {
+                  if (dead(b)) killed.add(b.entity.eid)
+                }
+                st.born.push(...step.born)
+                st.killed.push(...step.killed)
+                st.heard.push(...step.heard)
+                for (let eid of step.touched) {
+                  st.touched.add(eid)
+                }
+                if (step.killed.length) {
+                  snap.got.clear()
+                  snap.only?.clear()
+                  snap.near.clear()
+                  snap.pairs.length = 0
+                }
+                out.push(...expanded)
+                return out
+              }),
           )
         },
-      ),
+      )
+    },
   )
 }
