@@ -9,36 +9,29 @@ export let SAMPLES: Record<string, string> = {
   wolf: 'd5a019cc0df66f1cc3e2ca5a049235b12678f78595d7fd0759058623a1b3911c',
 }
 
-type Row = { entity: { eid: string } }
-type Built = Row & { built: { build: string; key: string; artifact?: string } }
-type Build = Row & {
-  build: { match: string; key: string; variant: string; stale?: boolean }
-}
-type Sound = Row & { sfx: { name: string } }
-type Artifact = Row & {
-  artifact: { address: string; media_type: string }
+/** Every output a build now holds for a sound, each with the sound it was
+ * built for (`build.for`) and its clip, which ride beside it. */
+export let SOUNDS = '.built.current=true&.built.artifact' +
+  '&.built.build.variant=main&.fields=built.build.for.sfx.name,' +
+  'built.artifact.artifact.address,built.artifact.artifact.media_type'
+
+export type Row = {
+  entity: { eid: string }
+  built?: { build: string; artifact?: string }
+  build?: { for?: string }
+  sfx?: { name: string }
+  artifact?: { address: string; media_type: string }
 }
 
-/** Current sound outputs, named by the sfx each build matched. */
-export let catalog = (
-  outputs: Built[],
-  builds: Build[],
-  sounds: Sound[],
-  artifacts: Artifact[],
-): Record<string, string> => {
-  let runs = new Map(builds.map((row) => [row.entity.eid, row.build]))
-  let names = new Map(sounds.map((row) => [row.entity.eid, row.sfx.name]))
-  let blobs = new Map(artifacts.map((row) => [row.entity.eid, row.artifact]))
-  return Object.fromEntries(outputs.flatMap((row) => {
-    let run = runs.get(row.built.build)
-    if (
-      !run || run.stale || run.variant != 'main' ||
-      run.key != row.built.key
-    ) return []
-    let [eid] = JSON.parse(run.match) as string[]
-    let name = names.get(eid)
-    let blob = blobs.get(row.built.artifact ?? '')
-    return name && blob?.media_type.startsWith('audio/') &&
+/** The clip of each sound, from {@link SOUNDS}' rows: an audio clip, for a
+ * sound whose clip is not pinned. */
+export let catalog = (rows: Row[]): Record<string, string> => {
+  let at = new Map(rows.map((row) => [row.entity.eid, row]))
+  return Object.fromEntries(rows.flatMap(({ built }) => {
+    let made = built && at.get(built.build)?.build?.for
+    let name = made && at.get(made)?.sfx?.name
+    let blob = built?.artifact && at.get(built.artifact)?.artifact
+    return name && blob && blob.media_type.startsWith('audio/') &&
         !PINNED.has(name)
       ? [[name, blob.address]]
       : []
@@ -54,12 +47,8 @@ export let watch = () => {
   if (watching) return watching
   watching = import(new URL('api/client.js', document.baseURI).href)
     .then(({ subscribe }) => {
-      let outputs: Built[] = [], builds: Build[] = []
-      let sounds: Sound[] = [], artifacts: Artifact[] = []
-      let seen = new Set<string>()
-      let refresh = () => {
-        if (seen.size != 4) return
-        let current = catalog(outputs, builds, sounds, artifacts)
+      subscribe(SOUNDS, (rows: Row[]) => {
+        let current = catalog(rows)
         for (let name of Object.keys(SAMPLES)) {
           if (!PINNED.has(name) && !(name in current)) delete SAMPLES[name]
         }
@@ -68,26 +57,6 @@ export let watch = () => {
           for (let ready of waiting.get(name) ?? []) ready(hash)
           waiting.delete(name)
         }
-      }
-      subscribe('.built&.built.artifact', (rows: Built[]) => {
-        outputs = rows
-        seen.add('built')
-        refresh()
-      })
-      subscribe('.build', (rows: Build[]) => {
-        builds = rows
-        seen.add('build')
-        refresh()
-      })
-      subscribe('.sfx', (rows: Sound[]) => {
-        sounds = rows
-        seen.add('sfx')
-        refresh()
-      })
-      subscribe('.artifact', (rows: Artifact[]) => {
-        artifacts = rows
-        seen.add('artifact')
-        refresh()
       })
     })
     .catch((error) => {
