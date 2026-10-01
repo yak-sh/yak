@@ -6,12 +6,12 @@ import {
   type Bundle,
   type Comp,
   type Eid,
-  identityEid,
   match,
   reads,
   token,
   type Tx,
 } from '@yaks/graph'
+import { held, keyed } from '@yaks/key'
 import type { Vocab } from '@yaks/vocab'
 import { next } from '@yaks/wake'
 import { key } from './key.ts'
@@ -59,16 +59,42 @@ export let due = (builder: Comp | undefined, at: string): boolean => {
   return Number.isNaN(floor) || floor <= Date.parse(at)
 }
 
-/** An outer entity tuple names one build, regardless of nested collections. */
-export let run = (
+// A build and an output keep the eid they were minted with, which says nothing
+// about the builder that made them, and each is found again by a key
+// (@yaks/key): a row at an id derived from what it is the build or output of,
+// whose `key.of` names it. So a rebuild lands on the entity already there,
+// which stays free to be cited, revised and linked like any other.
+export let BUILD_OF = 'build_of'
+export let OUTPUT_OF = 'output_of'
+
+/** What a build's key says: whose build it is, of which variant, for which
+ * outer tuple (`match`, as JSON). Nested collections never enter it. */
+export let buildOf = (builder: Eid, match: string, variant = 'main'): string =>
+  `${builder}/${variant}/${match}`
+
+/** What an output's key says: the build it came from, and its slot. */
+export let outputOf = (build: Eid, slot = 'main'): string => `${build}/${slot}`
+
+/** The build a builder made for an outer tuple, found by its key. */
+export let buildFor = async (
+  g: Pick<Tx, 'get'>,
   builder: Eid,
   entities: (Eid | null)[],
   variant = 'main',
-): Eid => identityEid(BUILD, [builder, JSON.stringify(entities), variant])
+): Promise<Eid | undefined> => {
+  let value = buildOf(builder, JSON.stringify(entities), variant)
+  return (await held(g, BUILD_OF, [value])).get(value)
+}
 
-/** One output slot belongs to its build, including its variant. */
-export let output = (build: Eid, slot = 'main'): Eid =>
-  identityEid(BUILT, [build, slot])
+/** A build's output in one slot, found by its key. */
+export let outputFor = async (
+  g: Pick<Tx, 'get'>,
+  build: Eid,
+  slot = 'main',
+): Promise<Eid | undefined> => {
+  let value = outputOf(build, slot)
+  return (await held(g, OUTPUT_OF, [value])).get(value)
+}
 
 export let current = (build: Comp, built: Comp): boolean =>
   !build.stale && build.key != null && built.key == build.key
@@ -197,6 +223,7 @@ export let start = (
         },
       },
     },
+    keyed(BUILD_OF, p.build, buildOf(p.builder, p.match, p.variant)),
   ]
 }
 
@@ -241,14 +268,18 @@ export let reconcile = async (
       encodeURIComponent(variant)
     }&*`,
   )
-  let held = new Map(prior.map((b) => [b.entity.eid, b]))
+  let left = new Map(prior.map((b) => [b.entity.eid, b]))
+  // The build each outer tuple already has. A new one is written under an
+  // alias beside its key, so a reconciliation racing this one to the same
+  // tuple resolves onto the build that committed first (@yaks/key).
+  let had = new Map(prior.map((b) => [str(comp(b, BUILD), 'match'), b]))
   let partial = o.only != null || o.limit != null
   let plans: Plan[] = []
   let writes: Bundle[] = [...dep]
   for (let { binding, rows } of narrow(chosen, o.only, o.limit)) {
     let entities = binding.entities
     let match = JSON.stringify(entities)
-    let build = run(builder.entity.eid, entities, variant)
+    let build = had.get(match)?.entity.eid ?? `$build${plans.length}`
     let p: Plan = {
       builder: builder.entity.eid,
       build,
@@ -264,8 +295,8 @@ export let reconcile = async (
       using: { ...comp(builder, 'using'), ...o.using },
     }
     plans.push(p)
-    let before = comp(held.get(build), BUILD)
-    held.delete(build)
+    let before = comp(left.get(build), BUILD)
+    left.delete(build)
     let same = str(before, 'key') == p.key
     if (same && before?.stale) {
       writes.push({
@@ -281,7 +312,7 @@ export let reconcile = async (
     }
     if (!same || failed) writes.push(...start(p, before, o.eid))
   }
-  for (let old of partial ? [] : held.values()) {
+  for (let old of partial ? [] : left.values()) {
     let b = comp(old, BUILD)
     if (b?.stale) continue
     writes.push({

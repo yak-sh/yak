@@ -11,7 +11,7 @@ import {
   ServerRuntimeClient,
   setCurrentClient,
 } from '@sentry/core'
-import { type Bundle, identityEid } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { at, by, col, fn, insert, lit, scan, type Stmt } from '@yaks/sql'
@@ -120,7 +120,7 @@ test('a Store retires an old build identity index on its next schema wake', asyn
   assertEquals(
     (await moved.apply(
       ['a', 'b'].map((name) => ({
-        entity: { eid: identityEid('build', [builder, `["${name}"]`, 'main']) },
+        entity: { eid: crypto.randomUUID() },
         build: { builder, match: `["${name}"]`, variant: 'main' },
       })),
       APP,
@@ -335,7 +335,7 @@ test('a word the platform said after the app did stays the app’s', async () =>
   let chat = { entity: { eid: TWO }, session: {} }
   let builder = 'b0000000-0000-4000-8000-000000000001'
   let made = {
-    entity: { eid: identityEid('build', [builder, '["a"]', 'main']) },
+    entity: { eid: crypto.randomUUID() },
     build: { builder, match: '["a"]', variant: 'main' },
   }
   let wrote = await now.apply(

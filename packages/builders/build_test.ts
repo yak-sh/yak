@@ -12,7 +12,7 @@ import { edgeEid } from '@yaks/edge'
 import { CallError, toolEid } from '@yaks/tools'
 import { marksDoc } from '@yaks/kernel/vocab'
 import { ids, noon, shop } from './testing.ts'
-import { current, output, run, selected } from './build.ts'
+import { buildFor, current, outputFor, selected } from './build.ts'
 import { key } from './key.ts'
 import { render } from './model.ts'
 import { runs } from './tools.ts'
@@ -23,6 +23,15 @@ let comp = (b: Bundle | undefined, name: string): Comp | undefined =>
   b?.[name] as Comp | undefined
 let rows = async (g: Graph, q: string) => await g.read(`${q}&*`)
 let one = async (g: Graph, eid: string) => (await g.get([eid]))[0]
+// A build and an output, found by their keys.
+let runOf = async (
+  g: Graph,
+  entities: (string | null)[],
+  variant = 'main',
+  builder = ids.builder,
+) => (await buildFor(g, builder, entities, variant))!
+let outOf = async (g: Graph, build: string, slot = 'main') =>
+  (await outputFor(g, build, slot))!
 let source = (eid: string, body = 'first'): Bundle => ({
   entity: { eid },
   doc: { title: 'Source', body },
@@ -145,20 +154,20 @@ let built = async (g: Graph) =>
   (await rows(g, `.build.builder=${ids.builder}&.build.variant=main`))
     .map((b) => match(b)[0]).toSorted()
 let mainOf = async (g: Graph, s: string) =>
-  comp(await one(g, run(ids.builder, [s])), 'build')
+  comp(await one(g, await runOf(g, [s])), 'build')
 let keyOf = async (g: Graph, s: string) => (await mainOf(g, s))?.key
 let staleOf = async (g: Graph, s: string) => (await mainOf(g, s))?.stale
 let currentOf = async (g: Graph, s: string) =>
   current(
     (await mainOf(g, s))!,
-    comp(await one(g, output(run(ids.builder, [s]))), 'built')!,
+    comp(await one(g, await outOf(g, await runOf(g, [s]))), 'built')!,
   )
 
 test('outer query bindings make independent builds and tool calls', async () => {
   let { g, runner } = await shop({}, [], [code()])
   await g.apply([source('a'), source('b'), builder()])
-  let a = run(ids.builder, ['a'])
-  let b = run(ids.builder, ['b'])
+  let a = await runOf(g, ['a'])
+  let b = await runOf(g, ['b'])
   assertNotEquals(a, b)
   assertEquals((await rows(g, '.build')).length, 2)
   let [asked] = await calls(g, a)
@@ -170,9 +179,9 @@ test('outer query bindings make independent builds and tool calls', async () => 
   )
   await drive(g, runner, a)
   await drive(g, runner, b)
-  assertEquals(comp(await one(g, output(a)), 'doc')?.body, 'Made')
-  assertEquals(comp(await one(g, output(b)), 'built')?.build, b)
-  let cited = await one(g, edgeEid(output(a), 'cites', 'a'))
+  assertEquals(comp(await one(g, await outOf(g, a)), 'doc')?.body, 'Made')
+  assertEquals(comp(await one(g, await outOf(g, b)), 'built')?.build, b)
+  let cited = await one(g, edgeEid(await outOf(g, a), 'cites', 'a'))
   assert(cited?.cites)
 })
 
@@ -180,7 +189,7 @@ test('nested collection changes the key but retains the build and output', async
   let { g, runner } = await shop({}, [notes], [code()])
   let query = '$s .doc.title=Source; [$n .note.parent=$s]'
   await g.apply([source('a'), builder(query)])
-  let build = run(ids.builder, ['a'])
+  let build = await runOf(g, ['a'])
   let before = comp(await one(g, build), 'build')?.key
   await drive(g, runner, build)
   await g.apply([{ entity: { eid: 'n1' }, note: { parent: 'a', text: 'one' } }])
@@ -190,7 +199,7 @@ test('nested collection changes the key but retains the build and output', async
   await drive(g, runner, build)
   assertEquals((await rows(g, '.built')).length, 1)
   assertEquals(
-    comp(await one(g, output(build)), 'built')?.key,
+    comp(await one(g, await outOf(g, build)), 'built')?.key,
     comp(await one(g, build), 'build')?.key,
   )
   let withNote = comp(await one(g, build), 'build')?.key
@@ -203,9 +212,9 @@ test('nested collection changes the key but retains the build and output', async
 test('vanished bindings preserve history and returning bindings reuse it', async () => {
   let { g, runner } = await shop({}, [], [code()])
   await g.apply([source('a'), builder()])
-  let build = run(ids.builder, ['a'])
+  let build = await runOf(g, ['a'])
   await drive(g, runner, build)
-  let made = output(build)
+  let made = await outOf(g, build)
   await g.apply([{ entity: { eid: 'a' }, doc: { title: 'Elsewhere' } }])
   assertEquals(comp(await one(g, build), 'build')?.stale, true)
   assert(await one(g, made))
@@ -229,10 +238,10 @@ test('vanished bindings preserve history and returning bindings reuse it', async
 test('an answer that lands after its binding vanished is kept for its return', async () => {
   let { g, runner } = await shop({}, [], [code()])
   await g.apply([source('a'), builder()])
-  let build = run(ids.builder, ['a'])
+  let build = await runOf(g, ['a'])
   await g.apply([{ entity: { eid: 'a' }, doc: { title: 'Elsewhere' } }])
   await drive(g, runner, build)
-  let made = comp(await one(g, output(build)), 'built')!
+  let made = comp(await one(g, await outOf(g, build)), 'built')!
   assertEquals(current(comp(await one(g, build), 'build')!, made), false)
   await g.apply([{ entity: { eid: 'a' }, doc: { title: 'Source' } }])
   assert(current(comp(await one(g, build), 'build')!, made))
@@ -246,20 +255,23 @@ test('an output names a sibling output of its answer by $slot', async () => {
   ])
   let { g, runner, failed } = await shop({}, [notes], [kinded])
   await g.apply([source('a'), builder()])
-  let build = run(ids.builder, ['a'])
+  let build = await runOf(g, ['a'])
   await drive(g, runner, build)
   assertEquals(failed, [])
-  let cry = await one(g, output(build, 'cry'))
-  assertEquals(comp(cry, 'note')?.parent, output(build, 'kind'))
+  let cry = await one(g, await outOf(g, build, 'cry'))
+  assertEquals(comp(cry, 'note')?.parent, await outOf(g, build, 'kind'))
   // Only a reference names an entity; text keeps what it says.
-  assertEquals(comp(await one(g, output(build, 'kind')), 'doc')?.body, '$cry')
+  assertEquals(
+    comp(await one(g, await outOf(g, build, 'kind')), 'doc')?.body,
+    '$cry',
+  )
 
   let astray = answering([
     { slot: 'cry', inputs: [], components: { note: { parent: '$nowhere' } } },
   ])
   let lost = await shop({}, [notes], [astray])
   await lost.g.apply([source('a'), builder()])
-  await drive(lost.g, lost.runner, build)
+  await drive(lost.g, lost.runner, await runOf(lost.g, ['a']))
   assertEquals((await rows(lost.g, '.built')).length, 0)
   assert(String(lost.failed[0]).includes('names no sibling output $nowhere'))
 })
@@ -278,6 +290,7 @@ test('an edge output lands on its link, and an answer that drops it deletes it',
   let items = ['x', 'y']
   let binding = answering(() => [
     ...items.map((to) => ({
+      slot: `needs ${to}`,
       inputs: [],
       components: { edge: { from: '$tome', to }, needs: { count: 2 } },
     })),
@@ -289,44 +302,47 @@ test('an edge output lands on its link, and an answer that drops it deletes it',
     project: { name: eid },
   })
   await g.apply([item('x'), item('y'), item('z'), source('a'), builder()])
-  let build = run(ids.builder, ['a'])
-  let tome = output(build, 'tome')
+  let build = await runOf(g, ['a'])
+  await drive(g, runner, build)
+  assertEquals(failed, [])
+  let tome = await outOf(g, build, 'tome')
   let needs = async () =>
     (await rows(g, `.edge.from=${tome}&.needs&.built.current=true`))
       .map((b) => b.entity.eid).toSorted()
   let linked = (...to: string[]) =>
     to.map((t) => edgeEid(tome, 'needs', t)).toSorted()
-  await drive(g, runner, build)
-  assertEquals(failed, [])
   assertEquals(await needs(), linked('x', 'y'))
   let [edge] = await g.get([edgeEid(tome, 'needs', 'x')])
   assertEquals(comp(edge, 'needs')?.count, 2)
-  assertEquals(comp(edge, 'built')?.slot, null)
+  assertEquals(comp(edge, 'built')?.slot, 'needs x')
   items = ['y', 'z']
   await g.apply([source('a', 'second')])
   assertEquals(await needs(), [])
   await drive(g, runner, build)
+  // The tome is rewritten where it stands, and its links follow the answer.
+  assertEquals(await outOf(g, build, 'tome'), tome)
   assertEquals(await needs(), linked('y', 'z'))
   assert((await g.get([edgeEid(tome, 'needs', 'x')]))[0]?.tombstone)
   // A link between things the answer did not make is not the build's to state.
   let astray = answering([{
+    slot: 'needs',
     inputs: [],
     components: { edge: { from: 'x', to: 'y' }, needs: { count: 1 } },
   }])
   let lost = await shop({}, [reagents], [astray])
   await lost.g.apply([item('x'), item('y'), source('a'), builder()])
-  await drive(lost.g, lost.runner, build)
+  await drive(lost.g, lost.runner, await runOf(lost.g, ['a']))
   assert(String(lost.failed[0]).includes('joins nothing its answer made'))
 })
 
 test('a query reads what was built for an entity', async () => {
   let { g, runner } = await shop({}, [], [code()])
   await g.apply([source('a'), source('b'), builder()])
-  for (let s of ['a', 'b']) await drive(g, runner, run(ids.builder, [s]))
+  for (let s of ['a', 'b']) await drive(g, runner, await runOf(g, [s]))
   let eids = async (q: string) => (await rows(g, q)).map((b) => b.entity.eid)
-  assertEquals(await eids('.build.for=a'), [run(ids.builder, ['a'])])
+  assertEquals(await eids('.build.for=a'), [await runOf(g, ['a'])])
   assertEquals(await eids('.built.build.build.for=b'), [
-    output(run(ids.builder, ['b'])),
+    await outOf(g, await runOf(g, ['b'])),
   ])
 })
 
@@ -354,18 +370,20 @@ test('a code tool can return an artifact output without owning built rows', asyn
   }
   let { g, runner } = await shop({}, [], [media])
   await g.apply([source('a'), builder()])
-  let build = run(ids.builder, ['a'])
+  let build = await runOf(g, ['a'])
   await drive(g, runner, build)
-  let built = comp(await one(g, output(build, 'icon')), 'built')
+  let built = comp(await one(g, await outOf(g, build, 'icon')), 'built')
   assertEquals(built?.artifact, artifact)
   assertEquals(built?.media_type, undefined)
-  assert((await one(g, edgeEid(output(build, 'icon'), 'cites', 'a')))?.cites)
+  assert(
+    (await one(g, edgeEid(await outOf(g, build, 'icon'), 'cites', 'a')))?.cites,
+  )
 })
 
 test('tool revision and input content change a key once each', async () => {
   let { g } = await shop({}, [], [code()])
   await g.apply([source('a'), builder()])
-  let build = run(ids.builder, ['a'])
+  let build = await runOf(g, ['a'])
   let first = comp(await one(g, build), 'build')?.key
   await g.apply([source('a')])
   assertEquals(comp(await one(g, build), 'build')?.key, first)
@@ -379,7 +397,7 @@ test('tool revision and input content change a key once each', async () => {
 test('selected content, definition edits and removed matches reconcile', async () => {
   let { g } = await shop({}, [], [code()])
   await g.apply([source('a'), source('b'), builder()])
-  let a = run(ids.builder, ['a'])
+  let a = await runOf(g, ['a'])
   let first = comp(await one(g, a), 'build')?.key
   await g.apply([{ entity: { eid: 'a' }, project: { name: 'new content' } }])
   assertNotEquals(comp(await one(g, a), 'build')?.key, first)
@@ -392,12 +410,12 @@ test('selected content, definition edits and removed matches reconcile', async (
   assertEquals(comp(await one(g, a), 'build')?.stale, true)
   await g.apply([{ entity: { eid: 'b' }, doc: { title: 'Elsewhere' } }])
   assertEquals(
-    comp(await one(g, run(ids.builder, ['b'])), 'build')?.stale,
+    comp(await one(g, await runOf(g, ['b'])), 'build')?.stale,
     false,
   )
   await g.apply([{ entity: { eid: 'b' }, doc: null }])
   assertEquals(
-    comp(await one(g, run(ids.builder, ['b'])), 'build')?.stale,
+    comp(await one(g, await runOf(g, ['b'])), 'build')?.stale,
     true,
   )
 })
@@ -460,7 +478,7 @@ test('a malformed output cannot write and leaves its build retryable', async () 
   }
   let { g, runner, failed } = await shop({}, [], [bad])
   await g.apply([source('a'), builder()])
-  let build = run(ids.builder, ['a'])
+  let build = await runOf(g, ['a'])
   await drive(g, runner, build)
   assertEquals((await rows(g, '.built')).length, 0)
   assertEquals(comp(await one(g, build), 'build')?.key, null)
@@ -473,7 +491,7 @@ test('a model reply cut short leaves its build to be asked again', async () => {
     ...builder('$s .doc.title=Source', toolEid('builder_model')),
     using: { model: ids.model },
   }])
-  let build = run(ids.builder, ['a'])
+  let build = await runOf(g, ['a'])
   await drive(g, runner, build)
   let [session] = await rows(g, '.session')
   let s = session.entity.eid
@@ -489,7 +507,7 @@ test('a model reply cut short leaves its build to be asked again', async () => {
 test('shadow builds have distinct ids and cannot feed another builder', async () => {
   let { g, runner, vocab } = await shop({}, [], [code()])
   await g.apply([source('a'), builder()])
-  let primary = run(ids.builder, ['a'])
+  let primary = await runOf(g, ['a'])
   await drive(g, runner, primary)
   let [said] = await asking(g, vocab)({ template: 'alternate' })
   assert(said.content)
@@ -497,7 +515,7 @@ test('shadow builds have distinct ids and cannot feed another builder', async ()
     comp(b, 'build')?.variant != 'main'
   )!
   await drive(g, runner, shadow.entity.eid)
-  assertNotEquals(output(shadow.entity.eid), output(primary))
+  assertNotEquals(await outOf(g, shadow.entity.eid), await outOf(g, primary))
   let downstream: Bundle = {
     entity: { eid: 'downstream' },
     builder: {
@@ -508,12 +526,12 @@ test('shadow builds have distinct ids and cannot feed another builder', async ()
   }
   await g.apply([downstream])
   assertEquals((await rows(g, '.build.builder=downstream')).length, 1)
-  let [asked] = await calls(g, run('downstream', ['a']))
+  let [asked] = await calls(g, await runOf(g, ['a'], 'main', 'downstream'))
   let binding = (comp(asked, 'call')?.args as {
     binding: { collections: { members: { entities: string[] }[] }[] }
   }).binding
   assertEquals(binding.collections[0].members.map((row) => row.entities[0]), [
-    output(primary),
+    await outOf(g, primary),
   ])
 })
 
@@ -551,16 +569,16 @@ test('a partial build makes the named bindings and leaves the others current', a
   let { g, runner, vocab } = await shop({}, [], [code()])
   let ask = asking(g, vocab)
   await g.apply([source('a'), source('b'), source('c'), builder()])
-  for (let s of ['a', 'b', 'c']) await drive(g, runner, run(ids.builder, [s]))
+  for (let s of ['a', 'b', 'c']) await drive(g, runner, await runOf(g, [s]))
   await g.apply([{ entity: { eid: ids.builder }, staged: {} }])
   await g.apply([{ entity: { eid: ids.builder }, content: { body: 'Again' } }])
   await ask({ only: ['a'] })
-  await drive(g, runner, run(ids.builder, ['a']))
+  await drive(g, runner, await runOf(g, ['a']))
   for (let s of ['a', 'b', 'c']) {
     assertEquals(await staleOf(g, s), false)
     assertEquals(await currentOf(g, s), true)
     assertEquals(
-      (await calls(g, run(ids.builder, [s]))).length,
+      (await calls(g, await runOf(g, [s]))).length,
       s == 'a' ? 2 : 1,
     )
   }
@@ -584,11 +602,11 @@ test('removing the staged mark builds the rest and asks no sampled binding again
   await ask({ limit: 2 })
   let [sampled] = await built(g)
   assertEquals((await built(g)).length, 2)
-  await drive(g, runner, run(ids.builder, [sampled]))
+  await drive(g, runner, await runOf(g, [sampled]))
   await g.apply([{ entity: { eid: ids.builder }, staged: null }])
   assertEquals(await built(g), ['a', 'b', 'c'])
   for (let s of ['a', 'b', 'c']) {
-    assertEquals((await calls(g, run(ids.builder, [s]))).length, 1)
+    assertEquals((await calls(g, await runOf(g, [s]))).length, 1)
   }
   assertEquals(await currentOf(g, sampled), true)
 })
@@ -599,7 +617,7 @@ test('a model turn failed for good leaves its key retryable without another call
     ...builder('$s .doc.title=Source', toolEid('builder_model')),
     using: { model: ids.model },
   }])
-  let build = run(ids.builder, ['a'])
+  let build = await runOf(g, ['a'])
   await drive(g, runner, build)
   let [session] = await rows(g, '.session')
   let failed = (seq: number, code: string): Bundle => ({
@@ -627,7 +645,7 @@ test('model tool opens a session using content.body, then adapts its reply', asy
     doc: { body: 'Documentation, not a request.' },
     using: { model: ids.model, effort: 'low' },
   }])
-  let build = run(ids.builder, ['a'])
+  let build = await runOf(g, ['a'])
   await drive(g, runner, build)
   let [session] = await rows(g, '.session')
   let [entry] = await rows(g, `.entry.session=${session.entity.eid}`)
@@ -653,13 +671,16 @@ test('model tool opens a session using content.body, then adapts its reply', asy
       'reply',
     ),
   ])
-  assertEquals(await one(g, output(build)), undefined)
+  assertEquals(await outputFor(g, build), undefined)
   await g.apply([
     asked(session.entity.eid, 2, 'model-answer', 'completed'),
     replied(session.entity.eid, 3, 'model-answer', answer, 'reply'),
   ])
   assertEquals(failed, [])
-  assertEquals(comp(await one(g, output(build)), 'doc')?.body, 'From model')
+  assertEquals(
+    comp(await one(g, await outOf(g, build)), 'doc')?.body,
+    'From model',
+  )
 })
 
 test('prose a model writes beside a tool call is not its answer', async () => {
@@ -668,7 +689,7 @@ test('prose a model writes beside a tool call is not its answer', async () => {
     ...builder('$s .doc.title=Source', toolEid('builder_model')),
     using: { model: ids.model },
   }])
-  let build = run(ids.builder, ['a'])
+  let build = await runOf(g, ['a'])
   await drive(g, runner, build)
   let [session] = await rows(g, '.session')
   let s = session.entity.eid
@@ -687,7 +708,7 @@ test('prose a model writes beside a tool call is not its answer', async () => {
     replied(s, 6, 'ask-2', JSON.stringify({ outputs: [answer] })),
   ])
   assertEquals(failed, [])
-  assert(await one(g, output(build)))
+  assert(await one(g, await outOf(g, build)))
 })
 
 test("a build's cost sums what its calls said and its sessions spent", async () => {
@@ -705,7 +726,7 @@ test("a build's cost sums what its calls said and its sessions spent", async () 
   let { g, runner } = await shop({}, [], [paid])
   let cost = async (build: string) => comp(await one(g, build), 'build')?.cost
   await g.apply([source('a'), builder()])
-  let build = run(ids.builder, ['a'])
+  let build = await runOf(g, ['a'])
   assertEquals(await cost(build), null)
   await drive(g, runner, build)
   let [asked] = await calls(g, build)
@@ -722,7 +743,7 @@ test("a build's cost sums what its calls said and its sessions spent", async () 
     ...builder('$s .doc.title=Source', toolEid('builder_model')),
     using: { model: ids.model },
   }])
-  let modeled = run(ids.builder, ['a'])
+  let modeled = await runOf(m, ['a'])
   await drive(m, r, modeled)
   let [session] = await rows(m, '.session')
   await m.apply([{
@@ -793,7 +814,7 @@ test('an empty bracket member variable renders as an empty list', () => {
 test('a downstream builder selects only current outputs', async () => {
   let { g, runner, vocab } = await shop({}, [], [code()])
   await g.apply([source('a'), builder()])
-  let build = run(ids.builder, ['a'])
+  let build = await runOf(g, ['a'])
   await drive(g, runner, build)
   let now = async () =>
     (await g.storage.tx((tx) =>
@@ -802,11 +823,11 @@ test('a downstream builder selects only current outputs', async () => {
         builder: { query: '$o .built.current=true' },
       }, vocab)
     )).map(({ binding }) => binding.entities[0])
-  assertEquals(await now(), [output(build)])
+  assertEquals(await now(), [await outOf(g, build)])
   await g.apply([source('a', 'second')])
   assertEquals(await now(), [])
   await drive(g, runner, build)
-  assertEquals(await now(), [output(build)])
+  assertEquals(await now(), [await outOf(g, build)])
   await g.apply([{ entity: { eid: 'a' }, doc: { title: 'Elsewhere' } }])
   assertEquals(await now(), [])
 })

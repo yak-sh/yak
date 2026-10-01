@@ -6,6 +6,7 @@ import { type Graph, graph, identityEid, type Tool } from '@yaks/graph'
 import { type Effects, effects } from '@yaks/effects'
 import { docDoc, docs } from '@yaks/doc'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
+import { keyDoc, keyKeywords, keys } from '@yaks/key'
 import { artifactDoc } from '@yaks/blob/vocab'
 import { modelDoc } from '@yaks/model'
 import { wakeDoc } from '@yaks/wake'
@@ -62,6 +63,7 @@ export let workshop = (more: VocabDoc[] = []): Vocab =>
   loadVocab([
     docDoc,
     edgeDoc,
+    keyDoc,
     artifactDoc,
     modelDoc,
     wakeDoc,
@@ -70,7 +72,7 @@ export let workshop = (more: VocabDoc[] = []): Vocab =>
     builderDoc,
     doc,
     ...more,
-  ], [edgeKeywords])
+  ], [edgeKeywords, keyKeywords])
 
 export let noon = (): string => '2026-09-19T12:00:00.000Z'
 export let ids = {
@@ -106,7 +108,7 @@ export let shop = async (
   let g = graph({
     storage: db,
     vocab,
-    plugins: [fx, docs(), edges(vocab), sessions()],
+    plugins: [fx, docs(), edges(vocab), keys(vocab), sessions()],
   })
   let run = runner(g, { tools: [modelTool(), ...tools] })
   fx.handle(watches({ ...o, vocab }))

@@ -39,7 +39,7 @@ import { KEY, names } from './kinds.ts'
  * everything else makes: no query, no index, no scan.
  */
 export let held = (
-  tx: Tx,
+  tx: Pick<Tx, 'get'>,
   kind: string,
   values: string[],
 ): Map<string, Eid> | Promise<Map<string, Eid>> => {

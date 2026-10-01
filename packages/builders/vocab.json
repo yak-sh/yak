@@ -84,11 +84,6 @@
     "build": {
       "component": true,
       "type": "object",
-      "identity": [
-        "builder",
-        "match",
-        "variant"
-      ],
       "properties": {
         "builder": {
           "type": "string",
@@ -97,7 +92,7 @@
         },
         "match": {
           "type": "string",
-          "description": "JSON outer entity-ID tuple, from which the build's id derives"
+          "description": "JSON outer entity-ID tuple; with the builder and variant, what the build's `build_of` key says"
         },
         "variant": {
           "type": "string"
@@ -140,16 +135,24 @@
       },
       "description": "one stable instance of a builder for an outer query binding"
     },
+    "build_of": {
+      "component": true,
+      "type": "object",
+      "key": true,
+      "description": "the key a build is found by: `<builder>/<variant>/<match>`, so a rebuild lands on the build already there"
+    },
+    "output_of": {
+      "component": true,
+      "type": "object",
+      "key": true,
+      "description": "the key an output is found by: `<build>/<slot>`, so a rebuild lands on the output already there; a link output is found by its own ends instead"
+    },
     "built": {
       "component": true,
       "type": "object",
       "kind": true,
       "before": [
         "doc"
-      ],
-      "identity": [
-        "build",
-        "slot"
       ],
       "properties": {
         "build": {

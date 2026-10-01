@@ -32,7 +32,10 @@
 // the app stores, then every store, the directory last. The release that
 // makes a rule live adds its mark to migrate.ts `BOUNDARIES`, so a rollback
 // never lands on code that cannot read what it moved.
-import type { Bundle, Row } from '@yaks/graph'
+import type { Bundle, Comp, Row } from '@yaks/graph'
+import { BUILD_OF, buildOf, OUTPUT_OF, outputOf } from '@yaks/builders'
+import { EDGE } from '@yaks/edge'
+import { keyed } from '@yaks/key'
 import { isPromise } from '@yaks/fp'
 import { conjoin } from '@yaks/query'
 import { Unknown } from '@yaks/vocab'
@@ -54,7 +57,36 @@ export type Rule = {
 
 /** Every rule a release carries. A rule leaves in the release after the sweep
  * reports every store done with it, with the old words it moved out of. */
-export let RULES: Rule[] = []
+export let RULES: Rule[] = [
+  // A build and an output are found by a key, not by an eid derived from what
+  // made them (@yaks/builders, T-61728). Each gains its key at the eid it
+  // already has, so nothing is rebuilt and nothing moves; a key stated again
+  // is the row it already is. A link output is found by its own ends.
+  {
+    mark: 'yak/store/build_of/13',
+    find: '.build',
+    move: (row) => {
+      let b = row.build as Comp
+      let value = buildOf(
+        str(b.builder),
+        str(b.match),
+        str(b.variant || 'main'),
+      )
+      return [keyed(BUILD_OF, row.entity.eid, value)]
+    },
+  },
+  {
+    mark: 'yak/store/output_of/14',
+    find: `.built.slot&!${EDGE}`,
+    move: (row) => {
+      let b = row.built as Comp
+      let value = outputOf(str(b.build), str(b.slot))
+      return [keyed(OUTPUT_OF, row.entity.eid, value)]
+    },
+  },
+]
+
+let str = (v: unknown) => v == null ? '' : String(v)
 
 /** How far one rule got in one store. `after` is the last row it moved past;
  * `unspoken` is a word the rule reads that this store does not declare, so

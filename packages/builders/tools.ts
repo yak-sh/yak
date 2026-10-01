@@ -18,7 +18,8 @@ import type { Runs } from '@yaks/graph/tools'
 import { human } from '@yaks/id'
 import { CallError } from '@yaks/tools'
 import type { Vocab } from '@yaks/vocab'
-import { clock, type Options, reconcile } from './build.ts'
+import { held } from '@yaks/key'
+import { BUILD_OF, buildOf, clock, type Options, reconcile } from './build.ts'
 import { type Desk, modelTool } from './model.ts'
 
 let str = (v: unknown): string => v == null ? '' : String(v)
@@ -108,7 +109,10 @@ export let build = async (
   if (result.writes.length) {
     await graph.apply(signed(result.writes, actor), { trusted: true })
   }
-  return result.plans.map((p) => p.build)
+  // A new build was written under an alias; its key names it now.
+  let values = result.plans.map((p) => buildOf(p.builder, p.match, p.variant))
+  let found = await held(graph, BUILD_OF, values)
+  return values.map((v, i) => found.get(v) ?? result.plans[i].build)
 }
 
 export let runs = (

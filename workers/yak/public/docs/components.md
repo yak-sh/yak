@@ -532,7 +532,7 @@ whole:
 These are the names, all of them:
 
     about access account_alert account_usage alias answer app archetype
-    archived artifact ask attachment attempt belief binding blob bounced build builder
+    archived artifact ask attachment attempt belief binding blob bounced build build_of builder
     builder_answer builder_change builder_dep builder_edit builder_model_answer
     builder_open builder_ring built call call_ready
     call_woken cancel cancelled checkout
@@ -541,7 +541,7 @@ These are the names, all of them:
     error exception execution favorite fee feedback file filed fired former
     gallery gitobj grant home hook hostname image installed integration
     integration_install invite inviting key lease lines mail mail_post member memory
-    meter model notice notified opened openrouter order output parent person plan price product
+    meter model notice notified opened openrouter order output output_of parent person plan price product
     project provider provisional published quarantined questions quote reads
     recalled ref referenced report repository representation requires restored
     result retired

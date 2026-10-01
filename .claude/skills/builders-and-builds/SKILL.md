@@ -35,15 +35,19 @@ is the reference; this is how to use them well.
   (@yaks/builders/model) asks a model through an ordinary @yaks/session
   transcript; a registered code tool answers the same contract.
 - Each outer binding of the query is one `build{builder, match, variant, for,
-  key, call, stale}`, whose id derives from the builder, the binding's entities
-  and the variant. A bracket gathers members into the one binding:
+  key, call, stale}`, found by its `build_of` key (@yaks/key), which says the
+  builder, the variant and the binding's entities. A bracket gathers members
+  into the one binding:
   `$region .region; [$sfx .sfx, sfx.region=$region]` is one build per region.
 - `$name` in the template is that variable's value in the binding; inside a
   bracket it renders as the README's `modelTool()` paragraph says.
-- Each output is `built{build, slot, key, call, artifact, current}` on an
-  entity whose id derives from the build and the slot, so a rebuild rewrites
+- Each output is `built{build, slot, key, call, artifact, current}`, found by
+  its `output_of` key, which says the build and the slot, so a rebuild rewrites
   the same entity. A slot the next answer leaves out stays as history, not
   current.
+- A build's or an output's eid is minted, never derived from what made it, so
+  it is an ordinary entity to cite and link. `buildFor` and `outputFor`
+  (@yaks/builders) find one by its key.
 
 ## One builder per job
 
@@ -80,11 +84,11 @@ becomes a `cites` edge). Every write lands as one change, or none of it does.
   `"$<slot>"`: a creature's `sounds{cry: "$cry"}` becomes the eid of the `sfx`
   in slot `cry`. Text keeps a `$` as written; a reference naming no sibling is
   refused.
-- An output wearing `edge{from, to}` and one relation is a link and takes no
-  slot: `{"inputs": [], "components": {"edge": {"from": "$tome", "to":
-  "<item>"}, "needs": {"count": 2}}}`. It lands on the link's derived eid
-  (@yaks/edge), one end must be a sibling, and a later answer that leaves it
-  out deletes it.
+- An output wearing `edge{from, to}` and one relation is a link:
+  `{"slot": "needs <item>", "inputs": [], "components": {"edge": {"from":
+  "$tome", "to": "<item>"}, "needs": {"count": 2}}}`. It lands on the link's
+  own eid (@yaks/edge), which finds it again without a key, one end must be a
+  sibling, and a later answer that leaves it out deletes it.
 - A malformed answer or a model turn that failed for good clears the build's
   key, so the next reconciliation asks again. A refusal answered to the model,
   or a request the runner retries, does not.

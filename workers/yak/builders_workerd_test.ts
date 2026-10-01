@@ -3,7 +3,6 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { identityEid } from '@yaks/graph'
 import { connector, seed, workerd } from './probe.ts'
 
 test('a hosted builder keeps independent builds for 50 bindings', async () => {
@@ -17,7 +16,7 @@ test('a hosted builder keeps independent builds for 50 bindings', async () => {
   await apply([{ entity: { eid: builder }, builder: {} }])
   await apply(Array.from({ length: 50 }, (_, i) => ({
     entity: {
-      eid: identityEid('build', [builder, `["${i}"]`, 'main']),
+      eid: crypto.randomUUID(),
     },
     build: { builder, match: `["${i}"]`, variant: 'main' },
   })))

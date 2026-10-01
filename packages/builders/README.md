@@ -14,21 +14,25 @@ deno add jsr:@yaks/builders
   template; `using{provider,model,effort}` chooses model details. `doc.body` is
   documentation.
 - `build{builder,match,variant,for,key,call,stale}` is one instance per outer
-  entity-ID tuple and variant. `match` stores that tuple as JSON, which the
-  build's id derives from; `for` names the entity it was built for, the first
-  the tuple holds, as a reference a query can follow: `.build.for=X` is X's
-  builds, and `.built.build.build.for=X&.built.current=true` what was built for
-  X now. Nested bracket collections change the key but preserve this identity. A
-  vanished binding marks its build stale and retains its outputs; a returning
-  binding reuses the same build. An answer that lands after its binding vanished
-  is kept too, so a binding returning under the same key has it without asking
-  again.
-- `built{build,slot,key,call,artifact?}` is one named output. Its id derives
-  from its build and slot. It is current when its build is not stale and the two
-  keys match, which `built.current` computes, so a downstream builder selects
-  `.built.current=true` and never gathers a point its upstream dropped. An
-  omitted slot remains as history, with its previous key. Shadow builds have
-  separate ids and their outputs are not selected by other builders.
+  entity-ID tuple and variant. `match` stores that tuple as JSON; `for` names
+  the entity it was built for, the first the tuple holds, as a reference a query
+  can follow: `.build.for=X` is X's builds, and
+  `.built.build.build.for=X&.built.current=true` what was built for X now. Nested
+  bracket collections change the key but keep the build. A vanished binding
+  marks its build stale and retains its outputs; a returning binding reuses the
+  same build. An answer that lands after its binding vanished is kept too, so a
+  binding returning under the same key has it without asking again.
+- `built{build,slot,key,call,artifact?}` is one named output. It is current when
+  its build is not stale and the two keys match, which `built.current` computes,
+  so a downstream builder selects `.built.current=true` and never gathers a
+  point its upstream dropped. An omitted slot remains as history, with its
+  previous key. Shadow builds are builds of their own and their outputs are not
+  selected by other builders.
+- A build and an output keep the eid they were minted with, which says nothing
+  about what made them, and each is found again by a key (@yaks/key): `build_of`
+  holds `<builder>/<variant>/<match>` and `output_of` holds `<build>/<slot>`. So
+  a rebuild lands on the entity already there, and two reconciliations racing to
+  one binding settle on one build. `buildFor` and `outputFor` read them.
 
 A changed key writes a fresh `call{to,source,args}` with `source` set to the
 build and `args` containing the frozen binding tree, key, template and using.
@@ -79,11 +83,11 @@ artifact reference and citations before writing all outputs as one graph change.
 `artifact{address,media_type,size}` holds byte metadata; `built.artifact` only
 points to it.
 
-An output wearing `edge{from,to}` and one relation beside it is a link, and
-takes no slot:
+An output wearing `edge{from,to}` and one relation beside it is a link:
 
 ```json
 {
+  "slot": "needs item-eid",
   "inputs": [],
   "components": {
     "edge": { "from": "$tome", "to": "item-eid" },
@@ -93,12 +97,12 @@ takes no slot:
 ```
 
 A link is identified by its ends and relation (@yaks/edge), so it lands on that
-derived id, and its `built` names no slot, which keeps the two derivations
-apart. One of its ends must be a sibling output, which makes the link this
-build's alone: an answer that no longer states a link the build's earlier answer
-did deletes it, so `.edge.from=X&.needs` reads what the latest answer said, and
-`.built.current=true` beside it leaves out a link whose build is being asked
-again.
+derived id and is found by it, with no key; its slot names it in its answer like
+any output's. One of its ends must be a sibling output, which makes the link
+this build's alone: an answer that no longer states a link the build's earlier
+answer did deletes it, so `.edge.from=X&.needs` reads what the latest answer
+said, and `.built.current=true` beside it leaves out a link whose build is being
+asked again.
 
 `modelTool()` is an internal registered tool for model builders. It renders
 `content.body` from the frozen binding (`$name` is a variable's value, or its
@@ -144,7 +148,7 @@ next input change or `builder build`.
 
 ## Exports
 
-- `@yaks/builders`: vocabulary, `key`, `run`, `output`, `selected`, and
+- `@yaks/builders`: vocabulary, `key`, `buildFor`, `outputFor`, `selected`, and
   `reconcile`.
 - `@yaks/builders/model`: `modelTool`, `modelToolEid`, and template `render`.
 - `@yaks/builders/effects`: `watches` and `effects`.
@@ -153,7 +157,7 @@ next input change or `builder build`.
 - `@yaks/builders/vocab`: the schema in `builderDoc`, and `derived`, the SQL of
   `build.cost` and `built.current`.
 
-Compose @yaks/kernel, @yaks/tools, @yaks/edge, @yaks/session, @yaks/blob,
-@yaks/model and @yaks/wake vocabulary where the model adapter runs. Storage must
-implement `Tx.bindings` so bracket collections and outer bindings have one
-meaning. @yaks/sqlite does.
+Compose @yaks/kernel, @yaks/tools, @yaks/edge, @yaks/key, @yaks/session,
+@yaks/blob, @yaks/model and @yaks/wake vocabulary where the model adapter runs.
+Storage must implement `Tx.bindings` so bracket collections and outer bindings
+have one meaning. @yaks/sqlite does.
