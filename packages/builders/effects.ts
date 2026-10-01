@@ -80,6 +80,13 @@ export let changing = (o: Options): Handler => async (event, tx, write) => {
   ) {
     return
   }
+  // A shadow is review-only. It must not start downstream sound/figure
+  // builders simply because its output wears their input components.
+  let made = comp(changed, 'built')
+  if (made?.build) {
+    let [build] = await tx.get([String(made.build)])
+    if (comp(build, BUILD)?.variant != 'main') return
+  }
   // TODO: Drop the broad path after pending effects written before touched
   // was recorded have drained; those runs lost the changed component names.
   let builders = event.touched

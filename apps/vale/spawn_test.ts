@@ -2,6 +2,7 @@
 // it writes is a creature the page fights at that hero's level, counted from
 // their falls and quests.
 import { test } from '@yaks/testing'
+import { parse } from '@yaks/query'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Bundle } from './net.ts'
 import { beastId } from './beasts.ts'
@@ -11,6 +12,7 @@ import {
   kindOf,
   pendingSpawns,
   ROAM,
+  SPAWN_KINDS,
   spawnedNear,
   useSpawnKinds,
 } from './spawn.ts'
@@ -145,4 +147,22 @@ test('/spawn keeps a description at the hero until its current main kind', async
   assertEquals(pendingSpawns(wrote, (b) => b == 'minted-kind'), [])
   useSpawnKinds([])
   assertEquals(kindOf(wrote[0]), undefined)
+})
+
+test('hosted projected kind rows resolve the main creature at its saved home', () => {
+  parse(SPAWN_KINDS)
+  let rows = [
+    {
+      entity: { eid: 'kind' },
+      built: { current: true, slot: 'kind', build: 'build' },
+    },
+    { entity: { eid: 'build' }, build: { variant: 'main', for: 'spawn' } },
+    { entity: { eid: 'spawn' }, spawned: { lvl: 7 } },
+  ]
+  useSpawnKinds(rows)
+  assertEquals(
+    kindOf({ entity: { eid: 'spawn' }, spawned: { lvl: 7 } }),
+    'kind',
+  )
+  useSpawnKinds([])
 })

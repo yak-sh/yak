@@ -164,9 +164,9 @@ export let spawnedNear = (
 
 /** Current main kind outputs, joined through build.for, never derived ids. */
 export let SPAWN_KINDS = '.built.current=true&.built.slot=kind' +
-  '&.built.build.build.variant=main&.built.build.build.for.spawned' +
+  '&.built.build.build.variant=main&.built.build.build.for.spawned.lvl' +
   '&.fields=built.current,built.slot,built.build.build.variant,' +
-  'built.build.build.for.spawned'
+  'built.build.build.for.spawned.lvl'
 
 let kinds = new Map<string, string>()
 

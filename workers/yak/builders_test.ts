@@ -254,3 +254,54 @@ test('a hosted generated row starts the next immediate builder', async () => {
   assertEquals(builds.length, 1)
   assertEquals((builds[0].build as Comp).for, output.entity.eid)
 })
+
+test('shadow outputs do not start downstream immediate builders', async () => {
+  let v = await app(0, 'private', true)
+  let next = crypto.randomUUID()
+  assertEquals(
+    (await v.send('/apply', [{
+      entity: { eid: next },
+      content: { body: 'Build from the generated villager.' },
+      using: { model: MODEL },
+      builder: {
+        query: '$v .villager, .doc.body=$description',
+        to: toolEid('builder_model'),
+        immediate: true,
+      },
+    }])).status,
+    200,
+  )
+  assertEquals((await start(v)).status, 200)
+  await until(() => v.asked.length == 2, { label: 'main downstream turn' })
+  assertEquals(
+    (await v.kernel('/build', {
+      builder: BUILDER,
+      only: [SOURCE],
+      template: 'A review-only variant.',
+    })).status,
+    200,
+  )
+  await until(() => v.asked.length == 3, { label: 'shadow model turn' })
+  await until(async () => (await v.read('.build&*')).length == 3, {
+    label: 'shadow build retained',
+  })
+  // The shadow model returns no output in this fixture, so exercise the
+  // generated-row change door explicitly with its shadow build provenance.
+  let [shadow] = (await v.read('.build&*')).filter((b) =>
+    (b.build as Comp).variant != 'main'
+  )
+  assertEquals(
+    (await v.kernel('/apply', [{
+      entity: { eid: crypto.randomUUID() },
+      villager: { role: 'smith' },
+      doc: { body: 'Review-only smith.' },
+      built: {
+        build: shadow.entity.eid,
+        slot: 'Ada',
+        key: (shadow.build as Comp).key,
+      },
+    }])).status,
+    200,
+  )
+  assertEquals((await v.read(`.build.builder=${next}&*`)).length, 1)
+})
