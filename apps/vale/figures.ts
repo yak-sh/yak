@@ -78,7 +78,10 @@ export type Act = {
   t: number
 }
 
-export type Figure = {
+/** A figure made up to be drawn and moved: the people's, built by `person`,
+ * or a creature's, from its figure (figure.ts `puppet`). It keeps no state of
+ * the world; it is told what it is doing every frame. */
+export type Puppet = {
   root: THREE.Group
   material: THREE.Material
   /** where a name plate sits, above the root */
@@ -87,7 +90,7 @@ export type Figure = {
 }
 
 // Stitch a figure's parts into the one mesh it is drawn as.
-let sewn = (f: Figure): Figure => {
+let sewn = (f: Puppet): Puppet => {
   knit(f.root, f.material)
   return f
 }
@@ -281,7 +284,7 @@ export let person = (
   look: { tint: string; hair: string; skin: string },
   staff = false,
   dress?: Dress,
-): Figure => {
+): Puppet => {
   let m = soft({ speckle: 0.06 })
   let tint = new THREE.Color(look.tint).getHex()
   let hair = new THREE.Color(look.hair).getHex()
@@ -605,7 +608,7 @@ export let hero = (
 ) => person(b, look, false, dress)
 
 // Every body plan, by the name a row gives it.
-let PLANS: { [P in keyof Plans]: (l: Plans[P]) => Figure } = {
+let PLANS: { [P in keyof Plans]: (l: Plans[P]) => Puppet } = {
   biped,
   bird,
   crag,
@@ -624,7 +627,7 @@ let draw = <P extends keyof Plans>(l: { plan: P } & Plans[P]) =>
 
 /** A creature of the given kind, drawn by its row's body plan (beasts.ts) at
  * its row's scale. */
-export let beast = (kind: string): Figure => {
+export let beast = (kind: string): Puppet => {
   let l: Look = (BEASTS[kind] ?? BEASTS.slime).look
   let f = sewn(draw(l))
   let k = l.scale ?? 1

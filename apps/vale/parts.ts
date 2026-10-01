@@ -16,6 +16,7 @@ import * as THREE from 'three'
 import { type Box, drawn, moved, type Solid, worn } from './boxes.ts'
 import { out, pack, place, type Vec } from './mesh.ts'
 import { geometry } from './soft.ts'
+import type { Bite, Fall, Gait, Move } from './figure.ts'
 
 /** A limb: the part at the hip or shoulder, and the one below the joint. */
 export type Limb = [THREE.Bone, THREE.Bone]
@@ -233,3 +234,25 @@ export let trot = (legs: Leg[], s: number, c: number, amp: number) =>
   legs.forEach((l, i) =>
     i == 1 || i == 2 ? stride(l, -s, -c, amp) : stride(l, s, c, amp)
   )
+
+/** Name a part and give it its role in motion, for the one-time export of
+ * every body plan as figures (export-figures.ts), which goes with bodies/. */
+export let tag = <T extends THREE.Object3D>(
+  o: T,
+  name: string,
+  move?: Move,
+) => {
+  o.name = name
+  if (move) o.userData.move = move
+  return o
+}
+
+/** How a body plan's figure moves as a whole, for the same export: kept on
+ * its root (`userData.moves`). */
+export type Moves = {
+  gait: Gait
+  bite: Bite
+  fall: Fall
+  speckle?: number
+  glow?: number
+}

@@ -4,8 +4,8 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import type { Box } from '../boxes.ts'
-import type { Figure } from '../figures.ts'
-import { both, given, lunge, mirror, partOf, shade } from '../parts.ts'
+import type { Puppet } from '../figures.ts'
+import { both, given, lunge, mirror, partOf, shade, tag } from '../parts.ts'
 import { flash, soft } from '../soft.ts'
 
 export type Flier = {
@@ -51,7 +51,7 @@ let WINGS: Record<string, (c: number, long: boolean) => [Box[], number]> = {
   ], 11],
 }
 
-export let flier = (o: Flier): Figure => {
+export let flier = (o: Flier): Puppet => {
   let m = soft({ speckle: 0.06 })
   let { body: hue, wing, eye } = o
   let long = !!o.long
@@ -79,30 +79,46 @@ export let flier = (o: Flier): Figure => {
   let body = new THREE.Group()
   body.position.y = rest
   root.add(body)
-  body.add(partOf(
-    [
-      [[-0.09, -0.09, 0.14], [0.18, 0.18, 0.14], shade(hue, 0.8)],
-      ...both([[0.06, -0.02, 0.2], [0.05, 0.08, 0.06], eye]),
-      [[-0.12, -0.12, -0.06], [0.24, 0.24, 0.22], hue],
-      ...tail,
-      ...given(o.sting, (c) => [[[-0.02, -0.04, -0.5], [0.04, 0.04, 0.1], c]]),
-      ...given(o.ears, () => [
-        ...both([[0.04, 0.08, 0.14], [0.07, 0.14, 0.04], shade(hue, 0.9)]),
-        [[-0.05, -0.06, 0.27], [0.1, 0.07, 0.04], shade(hue, 0.7)],
-      ]),
-      ...given(
-        !o.ears && wing,
-        (c) => both([[0.03, 0.07, 0.26], [0.02, 0.1, 0.02], shade(c, 0.7)]),
-      ),
-    ],
-    [0, 0, 0],
-    0.05,
+  body.add(tag(
+    partOf(
+      [
+        [[-0.09, -0.09, 0.14], [0.18, 0.18, 0.14], shade(hue, 0.8)],
+        ...both([[0.06, -0.02, 0.2], [0.05, 0.08, 0.06], eye]),
+        [[-0.12, -0.12, -0.06], [0.24, 0.24, 0.22], hue],
+        ...tail,
+        ...given(
+          o.sting,
+          (c) => [[[-0.02, -0.04, -0.5], [0.04, 0.04, 0.1], c]],
+        ),
+        ...given(o.ears, () => [
+          ...both([[0.04, 0.08, 0.14], [0.07, 0.14, 0.04], shade(hue, 0.9)]),
+          [[-0.05, -0.06, 0.27], [0.1, 0.07, 0.04], shade(hue, 0.7)],
+        ]),
+        ...given(
+          !o.ears && wing,
+          (c) => both([[0.03, 0.07, 0.26], [0.02, 0.1, 0.02], shade(c, 0.7)]),
+        ),
+      ],
+      [0, 0, 0],
+      0.05,
+    ),
+    'body',
   ))
   let [pinion, rate] = WINGS[o.wings](wing, long)
   let wings = [1, -1].map((side) =>
     partOf(side > 0 ? pinion : pinion.map(mirror), [side * 0.1, 0.1, 0], 0.05)
   )
+  for (let [i, w] of wings.entries()) {
+    let beat = Math.round(rate / Math.PI / 2 * 10) / 10
+    tag(w, i ? 'left wing' : 'right wing', { wing: { beat } })
+  }
   body.add(...wings)
+  root.userData.moves = {
+    gait: 'hover',
+    bite: 'dive',
+    fall: 'flip',
+    speckle: 0.06,
+  }
   let phase = Math.random() * 6
   return {
     root,

@@ -559,6 +559,166 @@
         "look"
       ]
     },
+    "figure": {
+      "component": true,
+      "type": "object",
+      "floor": "editor",
+      "description": "A creature's look and how it moves: a jointed tree of soft boxes at its true size, in metres, standing on the ground under its root and facing +z. One animator walks, strikes and fells any figure from its parts' roles and its gait, bite and fall (figure.ts).",
+      "properties": {
+        "of": {
+          "type": "string",
+          "ref": "beast_design",
+          "death": "cascade",
+          "index": true,
+          "description": "The creature it draws."
+        },
+        "parts": {
+          "type": "array",
+          "description": "Its parts, each after the part it hangs from.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "parent": {
+                "type": "string",
+                "description": "The part it hangs from, by name; none hangs from the figure."
+              },
+              "pivot": {
+                "type": "array",
+                "description": "Where it turns, in its parent's space.",
+                "items": { "type": "number" },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "turn": {
+                "type": "array",
+                "description": "How it is turned at rest, in radians about y, then x, then z.",
+                "items": { "type": "number" },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "cell": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "The edge of the voxels its colour is speckled in; 0.1 unless it says."
+              },
+              "boxes": {
+                "type": "array",
+                "description": "Soft boxes in its space: low corner, size, colour, and how round their edges are.",
+                "items": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "array",
+                      "items": { "type": "number" },
+                      "minItems": 3,
+                      "maxItems": 3
+                    },
+                    {
+                      "type": "array",
+                      "items": { "type": "number", "minimum": 0 },
+                      "minItems": 3,
+                      "maxItems": 3
+                    },
+                    { "type": "integer", "minimum": 0, "maximum": 16777215 },
+                    { "type": "number", "minimum": 0 }
+                  ],
+                  "minItems": 3,
+                  "maxItems": 4
+                }
+              },
+              "move": {
+                "type": "object",
+                "description": "Its role as the figure moves: leg{phase}, arm{phase}, wing{beat}, tail, head, jaw, spin or link{n}.",
+                "minProperties": 1,
+                "maxProperties": 1,
+                "properties": {
+                  "leg": {
+                    "type": "object",
+                    "properties": {
+                      "phase": { "type": "number", "minimum": 0, "maximum": 1 }
+                    }
+                  },
+                  "arm": {
+                    "type": "object",
+                    "properties": {
+                      "phase": { "type": "number", "minimum": 0, "maximum": 1 }
+                    }
+                  },
+                  "wing": {
+                    "type": "object",
+                    "properties": {
+                      "beat": { "type": "number", "minimum": 0 }
+                    }
+                  },
+                  "tail": { "type": "object" },
+                  "head": { "type": "object" },
+                  "jaw": { "type": "object" },
+                  "spin": { "type": "object" },
+                  "link": {
+                    "type": "object",
+                    "properties": {
+                      "n": { "type": "integer", "minimum": 1 }
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": ["name", "pivot", "boxes"]
+          }
+        },
+        "height": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Where its name plate sits, in metres above the ground."
+        },
+        "size": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "How big the game takes it to be: how far a blow must reach it, and how heavy its footfalls."
+        },
+        "dust": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16777215,
+          "description": "The colour of the dust a blow knocks off it."
+        },
+        "gait": {
+          "type": "string",
+          "enum": ["walk", "hop", "hover", "slide", "drift"]
+        },
+        "bite": {
+          "type": "string",
+          "enum": ["lunge", "peck", "smash", "thrust", "dive", "leap", "flare"]
+        },
+        "fall": {
+          "type": "string",
+          "enum": ["topple", "flip", "back", "flatten"]
+        },
+        "speckle": {
+          "type": "number",
+          "minimum": 0,
+          "description": "How grainy its stuff looks; 0.1 unless it says."
+        },
+        "glow": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16777215,
+          "description": "The colour it shines by its own light, if it does."
+        }
+      },
+      "required": [
+        "of",
+        "parts",
+        "height",
+        "size",
+        "dust",
+        "gait",
+        "bite",
+        "fall"
+      ]
+    },
     "sfx": {
       "component": true,
       "type": "object",

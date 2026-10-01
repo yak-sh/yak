@@ -6,8 +6,8 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import type { Box } from '../boxes.ts'
-import type { Figure } from '../figures.ts'
-import { both, given, lunge, mirror, partOf, shade } from '../parts.ts'
+import type { Puppet } from '../figures.ts'
+import { both, given, lunge, mirror, partOf, shade, tag } from '../parts.ts'
 import { flash, soft } from '../soft.ts'
 
 export type Bird = {
@@ -57,7 +57,7 @@ let owl = (face: number, eye: number): Box[] => [
   ...both([[0.02, 0.08, 0.125], [0.06, 0.06, 0.01], eye]),
 ]
 
-export let bird = (o: Bird): Figure => {
+export let bird = (o: Bird): Puppet => {
   let m = soft({ speckle: 0.08 })
   let { feather, wing, beak, eye } = o
   let fly = o.fly ?? 0
@@ -67,15 +67,18 @@ export let bird = (o: Bird): Figure => {
   let body = new THREE.Group()
   body.position.y = rest
   root.add(body)
-  body.add(partOf(
-    [
-      [[-0.18, -0.16, -0.26], [0.36, 0.32, 0.52], feather],
-      [[-0.15, -0.17, -0.2], [0.3, 0.1, 0.4], o.belly ?? shade(feather, 1.2)],
-      [[-0.14, 0.12, -0.24], [0.28, 0.06, 0.4], shade(wing, 0.9)],
-      [[-0.07, 0.08, 0.14], [0.14, nk + 0.06, 0.12], feather],
-    ],
-    [0, 0, 0],
-    0.06,
+  body.add(tag(
+    partOf(
+      [
+        [[-0.18, -0.16, -0.26], [0.36, 0.32, 0.52], feather],
+        [[-0.15, -0.17, -0.2], [0.3, 0.1, 0.4], o.belly ?? shade(feather, 1.2)],
+        [[-0.14, 0.12, -0.24], [0.28, 0.06, 0.4], shade(wing, 0.9)],
+        [[-0.07, 0.08, 0.14], [0.14, nk + 0.06, 0.12], feather],
+      ],
+      [0, 0, 0],
+      0.06,
+    ),
+    'body',
   ))
   let head = partOf(
     [
@@ -92,10 +95,12 @@ export let bird = (o: Bird): Figure => {
     [0, 0.1 + nk, 0.18],
     0.05,
   )
+  tag(head, 'head', { head: {} })
   body.add(head)
   let [tailBoxes, lift] = TAILS[o.tail ?? 'short'](shade(wing, 0.85))
   let tail = partOf(tailBoxes, [0, 0.04, -0.24], 0.05)
   tail.rotation.x = -lift
+  tag(tail, 'tail')
   body.add(tail)
   let pinion: Box[] = [
     [[0, -0.02, -0.18], [0.42 * sp, 0.05, 0.34], wing],
@@ -110,7 +115,11 @@ export let bird = (o: Bird): Figure => {
       0.1,
     ], 0.06)
     w.rotation.order = 'YXZ'
-    return w
+    if (fly) w.rotation.set(0, side * 0.1, 0)
+    else w.rotation.set(Math.PI / 2, side * Math.PI / 2, 0)
+    return tag(w, side > 0 ? 'right wing' : 'left wing', {
+      wing: { beat: 1.4 },
+    })
   })
   body.add(...wings)
   let leg = (x: number) =>
@@ -123,7 +132,12 @@ export let bird = (o: Bird): Figure => {
       0.04,
     )
   let legs = [leg(0.07), leg(-0.07)]
+  tag(legs[0], 'right leg', { leg: { phase: 0 } })
+  tag(legs[1], 'left leg', { leg: { phase: 0.5 } })
   body.add(...legs)
+  root.userData.moves = fly
+    ? { gait: 'hover', bite: 'dive', fall: 'topple', speckle: 0.08 }
+    : { gait: 'walk', bite: 'peck', fall: 'topple', speckle: 0.08 }
   for (let l of legs) l.visible = !fly
   let phase = Math.random() * 6
   return {

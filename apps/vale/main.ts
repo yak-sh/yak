@@ -29,7 +29,7 @@ import { fires } from './fires.ts'
 import { exploration } from './explore.ts'
 import { map } from './map.ts'
 import { menu } from './menu.ts'
-import { BUILD, type Figure, hero, stature } from './figures.ts'
+import { BUILD, hero, type Puppet, stature } from './figures.ts'
 import { bits, type Kind, overlay } from './fx.ts'
 import { glyphText } from './glyphs.ts'
 import {
@@ -332,7 +332,7 @@ let lookOf = (eid: string) => {
 }
 let playing = false
 let starting = false
-let preview: Figure | null = null
+let preview: Puppet | null = null
 let posed = ''
 let dress = () => {
   let colours = [look.tint, look.hair, look.skin].join()

@@ -7,13 +7,13 @@ import { assertEquals } from '@std/assert'
 import * as THREE from 'three'
 import { HANDLES, WEIGHTS } from './arms.ts'
 import { BEASTS } from './beasts.ts'
-import { beast, BUILD, CHILD, type Figure, hero, person } from './figures.ts'
+import { beast, BUILD, CHILD, hero, person, type Puppet } from './figures.ts'
 import { fights, type Out, out, pack, place } from './mesh.ts'
 import { seedDesigns } from './designs_fixture.ts'
 
 seedDesigns()
 
-let parts = (f: Figure) => {
+let parts = (f: Puppet) => {
   let got: THREE.Bone[] = []
   f.root.traverse((o) => {
     if (o instanceof THREE.Bone && o.userData.part) got.push(o)
@@ -50,7 +50,7 @@ let beside = (a: THREE.Bone, b: THREE.Bone): Out | null => {
 
 // How many pairs of `f`'s faces fight: within a part, or looking the same way
 // from two parts.
-let clashes = (f: Figure) => {
+let clashes = (f: Puppet) => {
   let ps = parts(f)
   let n = ps.reduce((n, p) => n + fights(pack(p.userData.part)).length, 0)
   for (let [i, a] of ps.entries()) {
@@ -71,7 +71,7 @@ let clashes = (f: Figure) => {
 }
 
 // Every figure `made` that fights, with how many pairs of faces.
-let fighting = (made: Record<string, () => Figure>) =>
+let fighting = (made: Record<string, () => Puppet>) =>
   Object.fromEntries(
     Object.entries(made)
       .map(([name, f]) => [name, clashes(f())])
@@ -91,7 +91,7 @@ test('no creature fights itself', () => {
 
 test('no hero fights what they wear, grown or a child', () => {
   let offs = ['shield1', 'torch1', 'tome1', 'dagger1']
-  let made: Record<string, () => Figure> = {}
+  let made: Record<string, () => Puppet> = {}
   for (let [build, b] of Object.entries({ grown: BUILD, child: CHILD })) {
     for (let [weight, w] of Object.entries(WEIGHTS)) {
       for (let [i, family] of Object.keys(HANDLES).entries()) {

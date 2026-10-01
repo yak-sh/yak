@@ -5,8 +5,8 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import type { Box } from '../boxes.ts'
-import type { Figure } from '../figures.ts'
-import { both, given, limb, lunge, partOf, shade, trot } from '../parts.ts'
+import type { Puppet } from '../figures.ts'
+import { both, given, limb, lunge, partOf, shade, tag, trot } from '../parts.ts'
 import { flash, soft } from '../soft.ts'
 
 export type Quadruped = {
@@ -83,7 +83,7 @@ let TAILS: Record<string, (c: number, tip: number) => [Box[], number]> = {
   ) => [[[[-0.16, -0.03, -0.5], [0.32, 0.06, 0.48], shade(c, 0.5)]], -0.2],
 }
 
-export let quadruped = (o: Quadruped): Figure => {
+export let quadruped = (o: Quadruped): Puppet => {
   let m = soft({ speckle: 0.1 })
   let { hide, ridge, snout, eye } = o
   let [bw, bh, bl] = o.build ?? [1, 1, 1]
@@ -115,6 +115,7 @@ export let quadruped = (o: Quadruped): Figure => {
         ]),
       ])),
   ], [0, 0, 0])
+  tag(trunk, 'trunk')
   body.add(trunk)
   let nose = 0.38 + 0.14 * mz
   let head = partOf([
@@ -131,12 +132,14 @@ export let quadruped = (o: Quadruped): Figure => {
     ...given(o.horns, (h) => HORNS[h](o.horn ?? 0xe8dcc0)),
   ], [0, y0 + 0.3 * bh, 0.6 * bl - 0.02])
   head.scale.setScalar(Math.sqrt(bw * bh))
+  tag(head, 'head', { head: {} })
   body.add(head)
   let tail: THREE.Bone | null = null, droop = 0
   if (o.tail) {
     let [boxes, d] = TAILS[o.tail](ridge, o.belly ?? 0xf0ebe0)
     tail = partOf(boxes, [0, y0 + 0.44 * bh, -0.6 * bl])
     droop = d
+    tag(tail, 'tail', { tail: {} }).rotation.x = droop
     body.add(tail)
   }
   let lw = 0.16 * Math.sqrt(bw), half = ll / 2
@@ -166,6 +169,13 @@ export let quadruped = (o: Quadruped): Figure => {
     leg(-0.21, -0.4),
     leg(0.21, -0.4),
   ]
+  for (let [i, [thigh, shin]] of legs.entries()) {
+    let at = ['front left', 'front right', 'hind left', 'hind right'][i]
+    let phase = i == 1 || i == 2 ? 0.5 : 0
+    tag(thigh, `${at} thigh`, { leg: { phase } })
+    tag(shin, `${at} shin`, { leg: { phase } })
+  }
+  root.userData.moves = { gait: 'walk', bite: 'lunge', fall: 'topple' }
   body.add(...legs.map(([thigh]) => thigh))
   let pace = 1 / Math.sqrt(o.legs ?? 1)
   let phase = 0

@@ -5,7 +5,7 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import type { Box } from '../boxes.ts'
-import type { Figure } from '../figures.ts'
+import type { Puppet } from '../figures.ts'
 import {
   both,
   given,
@@ -15,6 +15,7 @@ import {
   partOf,
   shade,
   stride,
+  tag,
 } from '../parts.ts'
 import { flash, soft } from '../soft.ts'
 
@@ -78,7 +79,7 @@ let HEADS: Record<string, (skin: number, top: number) => Box[]> = {
   ],
 }
 
-export let biped = (o: Biped): Figure => {
+export let biped = (o: Biped): Puppet => {
   let m = soft({ speckle: 0.1 })
   let [bw, bt] = o.build ?? [1, 1]
   let { skin, garb, eye } = o
@@ -119,6 +120,15 @@ export let biped = (o: Biped): Figure => {
     )
   let legL = leg(-0.15), legR = leg(0.15)
   hips.add(legL[0], legR[0])
+  for (
+    let [side, [thigh, shin], phase] of [
+      ['left', legL, 0],
+      ['right', legR, 0.5],
+    ] as const
+  ) {
+    tag(thigh, `${side} thigh`, { leg: { phase } })
+    tag(shin, `${side} shin`, { leg: { phase } })
+  }
   let torso = partOf([
     [[-0.3 * bw, 0, -0.18 * bw], [0.6 * bw, tl, 0.36 * bw], garb],
     [
@@ -143,6 +153,7 @@ export let biped = (o: Biped): Figure => {
     ),
   ], [0, 0, 0])
   torso.rotation.x = o.stoop ?? 0
+  tag(torso, 'torso')
   hips.add(torso)
   // An upper arm, and a forearm ending in a hand, bending at the elbow; a
   // club, if it has one, is held out before it, head up.
@@ -182,12 +193,24 @@ export let biped = (o: Biped): Figure => {
         0.05,
       )
       c.rotation.x = Math.PI / 4
+      tag(c, 'club')
       fore.add(c)
     }
     return [upper, fore]
   }
   let [armL, foreL] = arm(-0.4, false), [armR, foreR] = arm(0.4, true)
   torso.add(armL, armR)
+  for (
+    let [side, upper, fore, phase] of [
+      ['left', armL, foreL, 0.5],
+      ['right', armR, foreR, 0],
+    ] as const
+  ) {
+    tag(upper, `${side} arm`, { arm: { phase } }).rotation.z = phase
+      ? -0.1
+      : 0.1
+    tag(fore, `${side} forearm`, { arm: { phase } }).rotation.x = -0.25
+  }
   let head = partOf([
     [[-0.17, 0, -0.16], [0.34, 0.32, 0.32], skin],
     [[-0.18, 0.2, -0.17], [0.36, 0.06, 0.34], shade(skin, 0.85)],
@@ -195,7 +218,9 @@ export let biped = (o: Biped): Figure => {
     ...given(o.head, (h) => HEADS[h](skin, top)),
   ], [0, tl, 0.02])
   head.scale.setScalar(Math.max(1, Math.sqrt(bw)))
+  tag(head, 'head', { head: {} })
   torso.add(head)
+  root.userData.moves = { gait: 'walk', bite: 'smash', fall: 'back' }
   let phase = 0
   return {
     root,

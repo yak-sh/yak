@@ -3,8 +3,8 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import type { Box } from '../boxes.ts'
-import type { Figure } from '../figures.ts'
-import { partOf, shade, trot } from '../parts.ts'
+import type { Puppet } from '../figures.ts'
+import { partOf, shade, tag, trot } from '../parts.ts'
 import { flash, soft } from '../soft.ts'
 
 export type Crag = {
@@ -16,7 +16,7 @@ export type Crag = {
   crystals?: number
 }
 
-export let crag = (l: Crag): Figure => {
+export let crag = (l: Crag): Puppet => {
   let m = soft({ speckle: 0.14 })
   let root = new THREE.Group()
   let body = new THREE.Group()
@@ -29,20 +29,23 @@ export let crag = (l: Crag): Figure => {
     [[-0.58, 0.96, 0.18], [0.14, 0.3, 0.14], shade(crystals, 0.9)],
     [[-0.04, 1.36, -0.52], [0.12, 0.3, 0.12], shade(crystals, 1.2)],
   ]
-  body.add(partOf(
-    [
-      [[-0.72, 0.3, -0.8], [1.44, 0.55, 1.6], stone],
-      [[-0.56, 0.85, -0.64], [1.12, 0.35, 1.28], light],
-      [[-0.36, 1.2, -0.42], [0.72, 0.25, 0.84], stone],
-      [[-0.3, 1.18, -0.2], [0.44, 0.1, 0.5], moss],
-      [[0.2, 1.02, 0.3], [0.3, 0.08, 0.28], moss],
-      [[-0.5, 0.98, -0.5], [0.24, 0.06, 0.3], moss],
-      [[0.34, 0.8, -0.6], [0.3, 0.2, 0.24], shade(stone, 0.86)],
-      [[-0.66, 0.28, -0.74], [1.32, 0.1, 1.48], shade(stone, 0.78)],
-      ...spikes,
-    ],
-    [0, 0, 0],
-    0.15,
+  body.add(tag(
+    partOf(
+      [
+        [[-0.72, 0.3, -0.8], [1.44, 0.55, 1.6], stone],
+        [[-0.56, 0.85, -0.64], [1.12, 0.35, 1.28], light],
+        [[-0.36, 1.2, -0.42], [0.72, 0.25, 0.84], stone],
+        [[-0.3, 1.18, -0.2], [0.44, 0.1, 0.5], moss],
+        [[0.2, 1.02, 0.3], [0.3, 0.08, 0.28], moss],
+        [[-0.5, 0.98, -0.5], [0.24, 0.06, 0.3], moss],
+        [[0.34, 0.8, -0.6], [0.3, 0.2, 0.24], shade(stone, 0.86)],
+        [[-0.66, 0.28, -0.74], [1.32, 0.1, 1.48], shade(stone, 0.78)],
+        ...spikes,
+      ],
+      [0, 0, 0],
+      0.15,
+    ),
+    'body',
   ))
   let head = partOf(
     [
@@ -54,6 +57,7 @@ export let crag = (l: Crag): Figure => {
     [0, 0.6, 0.78],
     0.12,
   )
+  tag(head, 'head', { head: {} })
   body.add(head)
   let leg = (x: number, z: number) =>
     partOf([[[-0.16, -0.36, -0.16], [0.32, 0.4, 0.32], shade(stone, 0.9)]], [
@@ -62,7 +66,17 @@ export let crag = (l: Crag): Figure => {
       z,
     ], 0.12)
   let legs = [leg(-0.5, 0.5), leg(0.5, 0.5), leg(-0.5, -0.55), leg(0.5, -0.55)]
+  for (let [i, l] of legs.entries()) {
+    let at = ['front left', 'front right', 'hind left', 'hind right'][i]
+    tag(l, `${at} leg`, { leg: { phase: i == 1 || i == 2 ? 0.5 : 0 } })
+  }
   body.add(...legs)
+  root.userData.moves = {
+    gait: 'walk',
+    bite: 'lunge',
+    fall: 'flip',
+    speckle: 0.14,
+  }
   let phase = 0
   return {
     root,

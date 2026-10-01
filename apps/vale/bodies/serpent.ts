@@ -5,8 +5,8 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import type { Box } from '../boxes.ts'
-import type { Figure } from '../figures.ts'
-import { both, given, lunge, partOf, shade } from '../parts.ts'
+import type { Puppet } from '../figures.ts'
+import { both, given, lunge, partOf, shade, tag } from '../parts.ts'
 import { flash, soft } from '../soft.ts'
 
 export type Serpent = {
@@ -25,7 +25,7 @@ export type Serpent = {
   horns?: number
 }
 
-export let serpent = (o: Serpent): Figure => {
+export let serpent = (o: Serpent): Puppet => {
   let m = soft({ speckle: 0.1 })
   let { skin, belly, eye } = o
   let n = o.length ?? 6, g = o.girth ?? 1
@@ -44,6 +44,7 @@ export let serpent = (o: Serpent): Figure => {
       ]),
     ]
     let link = partOf(boxes, [0, 0, -(i + 0.5) * step], 0.05)
+    tag(link, `length ${i + 1}`, { link: { n: i + 1 } })
     body.add(link)
     return link
   })
@@ -74,7 +75,14 @@ export let serpent = (o: Serpent): Figure => {
     [0, 0, 0.05],
     0.05,
   )
+  // At rest it holds its head a little up, the first length rising to it.
+  tag(head, 'head', { head: {} })
+  head.position.y = 0.3 * g
+  head.rotation.x = -0.3
+  links[0].position.y = 0.3 * g * 0.45
+  links[0].rotation.x = -0.6 * 0.3
   body.add(head)
+  root.userData.moves = { gait: 'slide', bite: 'thrust', fall: 'flip' }
   let phase = Math.random() * 6
   return {
     root,

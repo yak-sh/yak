@@ -3,8 +3,8 @@
 // by its own light, and flares when it strikes.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
-import type { Figure } from '../figures.ts'
-import { lunge, partOf, shade } from '../parts.ts'
+import type { Puppet } from '../figures.ts'
+import { lunge, partOf, shade, tag } from '../parts.ts'
 import { flash, soft } from '../soft.ts'
 
 export type Wisp = {
@@ -15,7 +15,7 @@ export type Wisp = {
   fly?: number
 }
 
-export let wisp = (o: Wisp): Figure => {
+export let wisp = (o: Wisp): Puppet => {
   let m = soft({ speckle: 0.04 })
   if (m instanceof THREE.MeshLambertMaterial) {
     m.emissive.setHex(o.glow)
@@ -36,7 +36,7 @@ export let wisp = (o: Wisp): Figure => {
     [0, 0, 0],
     0.08,
   )
-  body.add(heart)
+  body.add(tag(heart, 'heart', { spin: {} }))
   let trail = partOf(
     [
       [[-0.12, -0.5, -0.12], [0.24, 0.22, 0.24], o.glow],
@@ -46,11 +46,23 @@ export let wisp = (o: Wisp): Figure => {
     [0, 0, 0],
     0.05,
   )
-  body.add(trail)
+  body.add(tag(trail, 'trail', { tail: {} }))
   let motes = [0, 1, 2].map(() =>
     partOf([[[-0.05, -0.05, -0.05], [0.1, 0.1, 0.1], o.mote]], [0, 0, 0], 0.05)
   )
-  body.add(...motes)
+  // For the export, the motes ride the heart, wheeling about with it.
+  for (let [i, mote] of motes.entries()) {
+    let t = (i * Math.PI * 2) / 3
+    mote.position.set(Math.cos(t) * 0.45, 0, Math.sin(t) * 0.45)
+    heart.add(tag(mote, `mote ${i + 1}`))
+  }
+  root.userData.moves = {
+    gait: 'drift',
+    bite: 'flare',
+    fall: 'flatten',
+    speckle: 0.04,
+    glow: o.glow,
+  }
   let phase = Math.random() * 6
   return {
     root,

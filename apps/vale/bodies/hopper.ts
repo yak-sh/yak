@@ -4,8 +4,8 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import type { Box } from '../boxes.ts'
-import type { Figure } from '../figures.ts'
-import { both, given, partOf, shade } from '../parts.ts'
+import type { Puppet } from '../figures.ts'
+import { both, given, partOf, shade, tag } from '../parts.ts'
 import { flash, soft } from '../soft.ts'
 
 export type Hopper = {
@@ -73,19 +73,22 @@ let TAILS: Record<string, (fur: number, belly: number) => Box[]> = {
   ],
 }
 
-export let hopper = (o: Hopper): Figure => {
+export let hopper = (o: Hopper): Puppet => {
   let m = soft({ speckle: 0.08 })
   let [trunk, face, haunch] = o.frog ? froggy(o) : furry(o)
   let root = new THREE.Group()
   let body = new THREE.Group()
   root.add(body)
-  body.add(partOf(
-    [
-      ...trunk,
-      ...given(o.tail, (t) => TAILS[t](o.fur, o.belly)),
-    ],
-    [0, 0, 0],
-    0.06,
+  body.add(tag(
+    partOf(
+      [
+        ...trunk,
+        ...given(o.tail, (t) => TAILS[t](o.fur, o.belly)),
+      ],
+      [0, 0, 0],
+      0.06,
+    ),
+    'body',
   ))
   let head = partOf(face, o.frog ? [0, 0.14, 0.16] : [0, 0.34, 0.18], 0.05)
   body.add(head)
@@ -99,7 +102,20 @@ export let hopper = (o: Hopper): Figure => {
       0.14,
     ], 0.04)
   )
+  for (let [i, l] of hind.entries()) {
+    tag(l, i ? 'left hind leg' : 'right hind leg', { leg: { phase: 0 } })
+  }
+  for (let [i, l] of fore.entries()) {
+    tag(l, i ? 'left foreleg' : 'right foreleg', { leg: { phase: 0.5 } })
+  }
+  tag(head, 'head', { head: {} })
   body.add(...hind, ...fore)
+  root.userData.moves = {
+    gait: 'hop',
+    bite: 'leap',
+    fall: 'topple',
+    speckle: 0.08,
+  }
   let phase = Math.random() * 6
   let leap = o.frog ? 0.34 : 0.26
   return {

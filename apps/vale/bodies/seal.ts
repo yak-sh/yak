@@ -3,8 +3,8 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import type { Box } from '../boxes.ts'
-import type { Figure } from '../figures.ts'
-import { both, lunge, mirror, partOf, shade } from '../parts.ts'
+import type { Puppet } from '../figures.ts'
+import { both, lunge, mirror, partOf, shade, tag } from '../parts.ts'
 import { flash, soft } from '../soft.ts'
 
 export type Seal = {
@@ -15,7 +15,7 @@ export type Seal = {
   belly: number
 }
 
-export let seal = (o: Seal): Figure => {
+export let seal = (o: Seal): Puppet => {
   let m = soft({ speckle: 0.1 })
   let root = new THREE.Group(), body = new THREE.Group()
   root.add(body)
@@ -30,7 +30,7 @@ export let seal = (o: Seal): Figure => {
     [0, 0, 0],
     0.07,
   )
-  body.add(trunk)
+  body.add(tag(trunk, 'trunk'))
   let head = partOf(
     [
       [[-0.23, -0.15, -0.04], [0.46, 0.36, 0.44], o.hide, 0.12],
@@ -41,7 +41,7 @@ export let seal = (o: Seal): Figure => {
     [0, 0.43, 0.51],
     0.05,
   )
-  body.add(head)
+  body.add(tag(head, 'head', { head: {} }))
   let fin: Box[] = [
     [[0.02, -0.035, -0.22], [0.48, 0.08, 0.28], o.hide, 0.05],
     [[0.3, -0.035, -0.28], [0.25, 0.065, 0.17], shade(o.hide, 0.82), 0.04],
@@ -53,6 +53,11 @@ export let seal = (o: Seal): Figure => {
       0.04,
     )
   )
+  for (let [i, f] of front.entries()) {
+    let side = i ? -1 : 1
+    tag(f, i ? 'left flipper' : 'right flipper', { leg: { phase: 0 } })
+      .rotation.set(0, side * 0.18, side * 0.06)
+  }
   body.add(...front)
   let rear = [1, -1].map((side) =>
     partOf(
@@ -74,7 +79,14 @@ export let seal = (o: Seal): Figure => {
       0.04,
     )
   )
+  for (let [i, f] of rear.entries()) {
+    let side = i ? -1 : 1
+    tag(f, i ? 'left hind flipper' : 'right hind flipper', {
+      leg: { phase: 0.25 },
+    }).rotation.set(-0.08, side * 0.2, 0)
+  }
   body.add(...rear)
+  root.userData.moves = { gait: 'slide', bite: 'lunge', fall: 'topple' }
   let phase = 0
   return {
     root,

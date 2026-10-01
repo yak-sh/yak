@@ -24,9 +24,9 @@ import {
   type Build,
   CHILD,
   type Dress,
-  type Figure,
   hero,
   person,
+  type Puppet,
 } from './figures.ts'
 import type { bits, overlay } from './fx.ts'
 import { halo } from './halo.ts'
@@ -51,7 +51,7 @@ let dressOf = (s: Frame['sheet']): Dress =>
   )
 
 type Actor = {
-  fig: Figure
+  fig: Puppet
   remote: Remote | null
   x: number
   y: number
@@ -349,7 +349,7 @@ export let cast = (
       return true
     })
   }
-  let actor = (key: string, make: () => Figure, look = ''): Actor => {
+  let actor = (key: string, make: () => Puppet, look = ''): Actor => {
     let a = actors.get(key)
     if (a && a.look != look) {
       scene.remove(a.fig.root)

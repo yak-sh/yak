@@ -5,8 +5,8 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import type { Box } from '../boxes.ts'
-import type { Figure } from '../figures.ts'
-import { both, given, lunge, mirror, partOf, shade } from '../parts.ts'
+import type { Puppet } from '../figures.ts'
+import { both, given, lunge, mirror, partOf, shade, tag } from '../parts.ts'
 import { flash, soft } from '../soft.ts'
 
 export type Crawler = {
@@ -52,7 +52,7 @@ let legsOf = (o: Crawler, set: number): Box[] => {
   return out
 }
 
-export let crawler = (o: Crawler): Figure => {
+export let crawler = (o: Crawler): Puppet => {
   let m = soft({ speckle: 0.1 })
   let { shell, under, eye } = o
   let root = new THREE.Group()
@@ -83,7 +83,7 @@ export let crawler = (o: Crawler): Figure => {
         [[-0.05, 0.14, -0.9], [0.1, 0.08, 0.3], shade(c, 0.9)],
       ]),
     ]
-  body.add(partOf(hull, [0, 0, 0], 0.08))
+  body.add(tag(partOf(hull, [0, 0, 0], 0.08), 'shell'))
   let head = partOf(
     [
       [[-0.13, -0.08, 0], [0.26, 0.16, 0.16], shade(shell, 0.85)],
@@ -97,9 +97,10 @@ export let crawler = (o: Crawler): Figure => {
         ...both([[0.03, -0.04, 0.34], [0.05, 0.06, 0.06], shade(c, 0.85)]),
       ]),
     ],
-    [0, 0.22, o.dome ? 0.36 : 0.28],
+    [0, 0.22, o.dome ? 0.32 : 0.28],
     0.05,
   )
+  tag(head, 'head', { head: {} })
   body.add(head)
   let claws = given(o.claws, (c) => [
     [[0.02, -0.04, 0], [0.08, 0.08, 0.2], shade(c, 0.9)],
@@ -115,6 +116,11 @@ export let crawler = (o: Crawler): Figure => {
       )
     )
     : []
+  for (let [i, p] of pincers.entries()) {
+    tag(p, i ? 'left claw' : 'right claw', { jaw: {} }).rotation.y = i
+      ? -0.2
+      : 0.2
+  }
   if (pincers.length) body.add(...pincers)
   let sting = o.sting == undefined ? null : partOf(
     [
@@ -126,9 +132,34 @@ export let crawler = (o: Crawler): Figure => {
     [0, 0.26, -0.26],
     0.05,
   )
-  if (sting) body.add(sting)
+  if (sting) body.add(tag(sting, 'sting', { tail: {} }))
   let sets = [0, 1].map((s) => partOf(legsOf(o, s), [0, 0, 0], 0.05))
-  body.add(...sets)
+  // Each leg on its own, turning at its hip, for the export.
+  let n = o.pairs ?? 3
+  for (let i = 0; i < n; i++) {
+    for (let side of [1, -1]) {
+      let z = n == 1 ? 0 : 0.2 - (0.44 * i) / (n - 1)
+      let hip: [number, number, number] = [side * 0.24, 0.225, z]
+      let boxes = legsOf({ ...o, pairs: n }, (i + (side > 0 ? 0 : 1)) % 2)
+        .filter(([[x, , bz]]) =>
+          Math.abs(bz - (z - 0.03)) < 1e-9 && x * side > 0
+        )
+        .map(([[x, y, bz], ...rest]): Box => [
+          [x - hip[0], y - hip[1], bz - hip[2]],
+          ...rest,
+        ])
+      body.add(
+        tag(
+          partOf(boxes, hip, 0.05),
+          `${side > 0 ? 'right' : 'left'} leg ${i + 1}`,
+          {
+            leg: { phase: (i + (side > 0 ? 0 : 1)) % 2 * 0.5 },
+          },
+        ),
+      )
+    }
+  }
+  root.userData.moves = { gait: 'walk', bite: 'lunge', fall: 'flip' }
   let phase = Math.random() * 6
   return {
     root,
