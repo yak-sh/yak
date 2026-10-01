@@ -11,6 +11,7 @@ import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import type { Rehearsal, Rule, Standing } from './mover.ts'
 import { dispatchMove, dispatchRule, step } from './mover.ts'
+import { type Rehearsal, type Rule, RULES, type Standing } from './mover.ts'
 import { state } from './testing.ts'
 
 let NAME = 'ada/notes'
@@ -286,4 +287,103 @@ test('dispatch conversion refuses changes to the old state, envelope or marks', 
   let [converted] = await s.query('.entity.eid=old-writer&*')
   assertEquals(converted.admitted, undefined)
   assertEquals((converted.dispatch as Comp).state ?? null, null)
+})
+
+test('source reads do not move or count sources, and rehearsal rolls back', async () => {
+  let source = crypto.randomUUID()
+  let reading = rule({
+    live: undefined,
+    move: (row, read) => {
+      assert(read)
+      let [from] = read(`.eid=${source}&.now`)
+      return [{
+        entity: row.entity,
+        was: null,
+        now: from.now,
+      }]
+    },
+  })
+  let s = await store(51, reading)
+  await s.apply([{ entity: { eid: source }, now: { word: 'source' } }])
+  let before = await s.query(`.eid=${source}`)
+  let [r] = await s.rehearse()
+  assertEquals([r.rows, r.moved, r.batches, r.failed], [51, 51, 2, undefined])
+  assertEquals(await count(s, '.was'), 51)
+  assertEquals(await count(s, '.now'), 1)
+  assertEquals(await s.query(`.eid=${source}`), before)
+  s.wake({ ...reading, live: 'apps' })
+  await s.alarm()
+  let [said] = await s.moves()
+  assertEquals([said.moved, !!said.done], [51, true])
+  assertEquals(await count(s, '.was'), 0)
+  assertEquals(await count(s, '.now.word=source'), 52)
+  assertEquals(await s.query(`.eid=${source}`), before)
+})
+
+test('refusal rules rehearse unchanged and convert only answers when enabled', async () => {
+  let s = await store(0, ...RULES)
+  let source = crypto.randomUUID()
+  let native = crypto.randomUUID()
+  let imported = crypto.randomUUID()
+  let retained = crypto.randomUUID()
+  await s.apply([
+    {
+      entity: { eid: source },
+      call: { to: crypto.randomUUID() },
+      execution: { state: 'failed', by: 'runner' },
+      imported: { source: 'fixture.jsonl', line: 11 },
+    },
+    {
+      entity: { eid: native },
+      error: { code: 'Refused' },
+      output: { source },
+      content: { body: 'refused' },
+    },
+    {
+      entity: { eid: imported },
+      result: { call: source, ms: 17 },
+      imported: { source: 'fixture.jsonl', line: 12 },
+      content: { body: 'historical failed tool result' },
+    },
+    {
+      entity: { eid: retained },
+      error: { code: 'transport' },
+      content: { body: 'connection lost' },
+    },
+  ])
+  let before = await s.query('*')
+  let report = await s.rehearse()
+  assertEquals(
+    report.map((r) => [r.rows, r.moved, r.batches, r.failed, r.unspoken]),
+    [[2, 2, 1, undefined, undefined], [1, 1, 1, undefined, undefined]],
+  )
+  assertEquals(await s.query('*'), before)
+  await s.alarm()
+  assertEquals(await s.query('*'), before)
+  assertEquals((await s.moves()).map((r) => r.live), [false, false])
+  let sourceBefore = await s.query(`.eid=${source}`)
+  let retainedBefore = await s.query(`.eid=${retained}`)
+  let [nativeBefore] = await s.query(`.eid=${native}&.content&.output`)
+  let [importedBefore] = await s.query(
+    `.eid=${imported}&.content&.result&.imported`,
+  )
+  s.wake(...RULES.map((r) => ({ ...r, live: 'apps' as const })))
+  await s.alarm()
+  assertEquals(await count(s, '.error'), 1)
+  assertEquals(await count(s, '.refusal.code=Refused'), 1)
+  assertEquals(await count(s, '.refusal.code=is_error'), 1)
+  assertEquals(await s.query(`.eid=${source}`), sourceBefore)
+  assertEquals(await s.query(`.eid=${retained}`), retainedBefore)
+  let [nativeAfter] = await s.query(`.eid=${native}&.content&.output`)
+  let [importedAfter] = await s.query(
+    `.eid=${imported}&.content&.result&.imported`,
+  )
+  assertEquals(
+    [nativeAfter.content, nativeAfter.output],
+    [nativeBefore.content, nativeBefore.output],
+  )
+  assertEquals(
+    [importedAfter.content, importedAfter.result, importedAfter.imported],
+    [importedBefore.content, importedBefore.result, importedBefore.imported],
+  )
 })

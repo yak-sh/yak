@@ -35,6 +35,7 @@
 import { type Bundle, type Comp, type Row, token } from '@yaks/graph'
 import { isPromise } from '@yaks/fp'
 import { conjoin } from '@yaks/query'
+import { refusalFind, refusalPatch, refusalSource } from '@yaks/tools/refusals'
 import { Unknown } from '@yaks/vocab'
 import { GIT_STORE, PLATFORM_STORE } from './door.ts'
 
@@ -46,8 +47,9 @@ export type Rule = {
   mark: Mark
   /** The rows still in the old shape, naming what `move` reads. */
   find: string
-  /** One row's patch into the new shape. */
-  move: (row: Bundle) => Bundle[]
+  /** One candidate's patch. `read` looks up evidence synchronously without
+   * adding reached rows to the candidate page or cursor. */
+  move: (row: Bundle, read?: (line: string) => Bundle[]) => Bundle[]
   /** Where it runs for real. Absent, it is only rehearsed. */
   live?: 'apps' | 'all'
 }
@@ -100,7 +102,15 @@ export let dispatchRule: Rule = {
 
 /** Every rule a release carries. A rule leaves in the release after the sweep
  * reports every store done with it, with the old words it moved out of. */
-export let RULES: Rule[] = []
+export let RULES: Rule[] = refusalFind.map((find, i) => ({
+  mark: i == 0 ? 'yak/store/refusal/1' : 'yak/store/refusal-imported/1',
+  find,
+  move: (row, read) => {
+    let line = refusalSource(row)
+    let patch = refusalPatch(row, line && read ? read(line)[0] : undefined)
+    return patch ? [patch] : []
+  },
+}))
 
 let str = (v: unknown) => v == null ? '' : String(v)
 
@@ -182,7 +192,10 @@ export let step = (
     if (!(e instanceof Unknown)) throw e
     return { moved: 0, at: now, done: now, unspoken: e.prop }
   }
-  if (rows.length) sync(m.apply(rows.flatMap(rule.move)))
+  if (rows.length) {
+    let read = (line: string) => sync(m.read(line))
+    sync(m.apply(rows.flatMap((row) => rule.move(row, read))))
+  }
   return {
     moved: (was?.moved ?? 0) + rows.length,
     at: now,
