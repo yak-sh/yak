@@ -31,7 +31,7 @@ test('only live unexited duty roles cover the fallback', async () => {
     await missing(
       store,
       ['effects', 'wake', 'process'],
-      async (eid) => eid == 'dead',
+      (eid) => Promise.resolve(eid == 'dead'),
     ),
     ['wake', 'process'],
   )
@@ -40,18 +40,19 @@ test('only live unexited duty roles cover the fallback', async () => {
 test('empty or covered duties start no worker; partial coverage starts only missing', async () => {
   let starts: string[][] = []
   let inspected = 0
-  let uncovered = async () => {
+  let uncovered = () => {
     inspected++
-    return []
+    return Promise.resolve([])
   }
-  let start = async (roles: string[]) => {
+  let start = (roles: string[]) => {
     starts.push(roles)
+    return Promise.resolve()
   }
   await fallback([], uncovered, start)
   assertEquals(inspected, 0)
   await fallback(['effects'], uncovered, start)
   assertEquals(starts, [])
-  await fallback(['effects', 'wake'], async () => ['wake'], start)
+  await fallback(['effects', 'wake'], () => Promise.resolve(['wake']), start)
   assertEquals(starts, [['wake']])
 })
 
@@ -74,9 +75,9 @@ test('ready worker is detached and never stopped', async () => {
   let reads = 0
   await ready(
     run.process,
-    async () => ++reads == 1 ? '999\n' : '123\n',
+    () => Promise.resolve(++reads == 1 ? '999\n' : '123\n'),
     100,
-    async () => {},
+    () => Promise.resolve(),
     () => 0,
   )
   assertEquals(reads, 2)
@@ -86,7 +87,7 @@ test('ready worker is detached and never stopped', async () => {
 test('worker exit is an explicit readiness error, not a successful launch', async () => {
   let run = child(Promise.resolve({ code: 7 }))
   await assertRejects(
-    () => ready(run.process, async () => '123\n'),
+    () => ready(run.process, () => Promise.resolve('123\n')),
     Error,
     'exited before readiness (code 7)',
   )
@@ -100,10 +101,11 @@ test('bounded readiness timeout stops only this failed launch', async () => {
     () =>
       ready(
         run.process,
-        async () => undefined,
+        () => Promise.resolve(undefined),
         100,
-        async () => {
+        () => {
           time += 50
+          return Promise.resolve()
         },
         () => time,
       ),
@@ -116,9 +118,11 @@ test('bounded readiness timeout stops only this failed launch', async () => {
 test('launch failure propagates instead of hiding missing duties', async () => {
   await assertRejects(
     () =>
-      fallback(['wake'], async () => ['wake'], async () => {
-        throw new Error('setsid unavailable')
-      }),
+      fallback(
+        ['wake'],
+        () => Promise.resolve(['wake']),
+        () => Promise.reject(new Error('setsid unavailable')),
+      ),
     Error,
     'setsid unavailable',
   )
