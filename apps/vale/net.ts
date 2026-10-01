@@ -380,6 +380,7 @@ export let connect = (base: URL, vocab: ReturnType<typeof loadVocab>) => {
     },
     /** the falls everyone has written, and mine still waiting */
     falls: (): Bundle[] => join('falls', rows('slain'), 'slain'),
+    spawned: (): Bundle[] => rows('spawned'),
     /** the nodes everyone has gathered, and mine still waiting */
     gathered: (): Bundle[] => join('gathered', rows('gathered'), 'gathered'),
     keep,

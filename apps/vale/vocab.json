@@ -604,6 +604,39 @@
         "respawn"
       ]
     },
+    "spawned": {
+      "component": true,
+      "type": "object",
+      "floor": "owner",
+      "description": "One creature an owner put at a spot with /spawn; the row's eid is the creature's. It wanders roam metres from x, z as a den's creature wanders from its home, fights at lvl, its spawner's level when it was spawned, and stays down once a slain row names it. Its place says the land and chunk it stands in (spawn.ts).",
+      "properties": {
+        "beast": {
+          "type": "string",
+          "ref": "beast_design",
+          "death": "cascade",
+          "description": "The creature it is."
+        },
+        "lvl": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The level it fights at."
+        },
+        "x": {
+          "type": "number",
+          "description": "World metres east of Mossvale's origin."
+        },
+        "z": {
+          "type": "number",
+          "description": "World metres south of Mossvale's origin."
+        },
+        "roam": {
+          "type": "number",
+          "minimum": 0,
+          "description": "How far it wanders from x, z, in metres."
+        }
+      },
+      "required": ["lvl", "x", "z", "roam"]
+    },
     "figure": {
       "component": true,
       "type": "object",
@@ -1562,6 +1595,20 @@
         "entity": { "eid": "$player" },
         "damageable": { "on": "$on" }
       }
+    },
+    "spawn": {
+      "tool": true,
+      "floor": "owner",
+      "description": "Put a creature at a Mossvale hero's feet. Only the app owner may do this, and the hero has to be in the game. Name an existing creature by its name or alias, such as Bristleboar or beast:boar. It wanders a few metres from that spot, fights at the hero's level, and does not come back once it falls.",
+      "input": {
+        "player": { "type": "string", "description": "The hero's eid." },
+        "beast": {
+          "type": "string",
+          "description": "A creature's name or alias, such as Bristleboar or beast:boar."
+        }
+      },
+      "required": ["player", "beast"],
+      "worker": "/spawn"
     },
     "teleport": {
       "tool": true,

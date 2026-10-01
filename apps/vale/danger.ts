@@ -23,13 +23,9 @@ let oldNeed = (lvl: number): number => 90 + lvl * 16
 let oldPower = (lvl: number): number => 9 + lvl * 3
 let gain = (lvl: number): number => need(lvl + 1) - need(lvl)
 
-/** The numbers for a species in one land, preserving its own strength
- * relative to its neighbors on the old scale; nothing for a creature that
- * can't be fought. */
-export let foeAt = (b: Beast, hops: number): Fighter | undefined => {
-  let f = b.combat
-  if (!f) return
-  let lvl = foeLevel(f, hops)
+/** A species' numbers at encounter level `lvl`, preserving its own strength
+ * relative to its neighbors on the old scale. */
+let scaled = (b: Beast, f: Combat, lvl: number): Fighter => {
   let oldBlow = oldPower(f.lvl) * oldGrade(f.lvl)
   let newBlow = power(lvl) * GRADE[tierOf(lvl) - 1]
   return {
@@ -47,24 +43,57 @@ export let foeAt = (b: Beast, hops: number): Fighter | undefined => {
   }
 }
 
+/** The numbers for a species in one land; nothing for a creature that can't
+ * be fought. */
+export let foeAt = (b: Beast, hops: number): Fighter | undefined =>
+  b.combat && scaled(b, b.combat, foeLevel(b.combat, hops))
+
 let cache = new Map<string, Fighter | undefined>()
 let from = BEASTS
 
-/** A creature, by eid, as it fights in a land; nothing for one that can't
- * be fought, or that the store has not got. */
-export let foeOf = (beast: string, level: string): Fighter | undefined => {
+// A creature's numbers, kept by `key` while the creature index stands.
+let kept = (key: string, find: () => Fighter | undefined) => {
   if (from != BEASTS) {
     cache.clear()
     from = BEASTS
   }
-  let key = `${beast}:${level}`
   if (cache.has(key)) return cache.get(key)
-  let b = BEASTS[beast]
-  let found = b && foeAt(b, hopsOf(level))
+  let found = find()
   if (cache.size >= 256) cache.delete(cache.keys().next().value!)
   cache.set(key, found)
   return found
 }
+
+/** A creature, by eid, as it fights in a land; nothing for one that can't
+ * be fought, or that the store has not got. */
+export let foeOf = (beast: string, level: string): Fighter | undefined =>
+  kept(`${beast}:${level}`, () => {
+    let b = BEASTS[beast]
+    return b && foeAt(b, hopsOf(level))
+  })
+
+/** A creature, by eid, as it fights at encounter level `lvl`, wherever it
+ * stands: what a spawned creature fights at, and what a creature already
+ * met fights at again. The same numbers as {@link foeOf} gives for a land
+ * whose level it is.
+ *
+ * ```ts
+ * import { seedDesigns } from './designs_fixture.ts'
+ * seedDesigns()
+ * import { assertEquals } from '@std/assert'
+ * import { beastId } from './beasts.ts'
+ * let boar = beastId('beast:boar')!
+ * let met = foeOf(boar, 'mossvale')!
+ * assertEquals(fighter(boar, met.lvl), met)
+ * assertEquals(fighter(boar, 30)!.lvl, 30)
+ * assertEquals(fighter(boar, 30)!.hp > met.hp, true)
+ * ```
+ */
+export let fighter = (beast: string, lvl: number): Fighter | undefined =>
+  kept(`${beast}@${lvl}`, () => {
+    let b = BEASTS[beast]
+    return b?.combat && scaled(b, b.combat, lvl)
+  })
 
 /** Far stronger foes conceal their level so a skull warns before a fight. */
 export let skull = (foe: number, hero: number): boolean => foe - hero >= 10

@@ -5,6 +5,8 @@ import { LODES } from './gather.ts'
 import { destinationOf } from './teleport.ts'
 import { installBuildingDesigns, refreshTerrain, vale } from './terrain.ts'
 import { placeOf, placeText } from './place.ts'
+import { creatureNamed, heroLevel, spawnedAt } from './spawn.ts'
+import { useBeasts } from './beasts.ts'
 import { resolveTarget } from './target.ts'
 import { GIVERS } from './quests.ts'
 import { decided, where as villagerWhere } from './villagers.ts'
@@ -332,6 +334,68 @@ let teleport = async (req, env, v, themes) => {
   return Response.json({ request, player, ...at, pending: !!pending })
 }
 
+// An owner's /spawn: the creature a word names, at the hero's feet, fighting
+// at the hero's level, counted from their falls and quests (spawn.ts). The
+// hero must be in the game, since only a connected page says where they
+// stand.
+let spawn = async (req, env, themes) => {
+  if (req.headers.get('x-yak-role') != 'owner') {
+    return new Response('Only the app owner can spawn a creature.', {
+      status: 403,
+    })
+  }
+  let args = await req.json().catch(() => null)
+  let { player, beast: word } = args ?? {}
+  if (
+    typeof player != 'string' || !player || typeof word != 'string' ||
+    !word.trim()
+  ) {
+    return new Response('Pass a hero and a creature.', { status: 400 })
+  }
+  await themes(env)
+  let who = JSON.stringify(player)
+  let [beasts, keys, [hero], slain, journal] = await Promise.all([
+    read(env.STORE, '.beast_design ?combat'),
+    read(env.STORE, '.alias .key'),
+    live(env, `.eid=${who}&.position`),
+    read(env.STORE, `.slain.by=${who}`),
+    read(env.STORE, `.journal.player=${who}`),
+  ])
+  // A fall written before falls carried their level counts at its creature's.
+  useBeasts(beasts)
+  let beast
+  try {
+    beast = creatureNamed(word, beasts, keys)
+  } catch (e) {
+    return new Response(e.message, { status: 400 })
+  }
+  if (!beast) {
+    return new Response(`No creature is called ${word.trim()}.`, {
+      status: 404,
+    })
+  }
+  let at = placeOf(hero, 'position')
+  if (!at) {
+    return new Response(
+      'That hero is not in the game: /spawn puts a creature at their feet.',
+      { status: 404 },
+    )
+  }
+  let lvl = heroLevel(slain, journal)
+  let row = spawnedAt(beast, at.x, at.z, lvl)
+  let saved = await env.STORE.fetch('apply', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ entities: [row] }),
+  })
+  if (!saved.ok) return saved
+  await saved.body?.cancel()
+  let name = beasts.find((b) => b.entity.eid == beast)?.beast_design?.name
+  return new Response(
+    `${name ?? 'A creature'} stands at your feet, at level ${lvl}.`,
+  )
+}
+
 export let workerOf = (v) => {
   // The ground is grown from the store's themes and building plans, as on
   // the page (main.ts): without the plans, nothing near a building stands.
@@ -359,6 +423,9 @@ export let workerOf = (v) => {
       }
       if (req.method == 'POST' && path.endsWith('/teleport')) {
         return teleport(req, env, v, themes)
+      }
+      if (req.method == 'POST' && path.endsWith('/spawn')) {
+        return spawn(req, env, themes)
       }
       if (req.method == 'POST' && path.endsWith('/where')) {
         return where(req, env)

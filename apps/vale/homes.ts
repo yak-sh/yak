@@ -88,6 +88,9 @@ export type Home = {
   seed: number
   /** seconds from a fall until it is up again; never, without */
   respawn?: number
+  /** the level it fights at, where its land does not decide it: a spawned
+   * creature fights at its spawner's (spawn.ts) */
+  lvl?: number
 }
 
 let listed = new Map<string, Home[]>()

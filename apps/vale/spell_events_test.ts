@@ -52,6 +52,7 @@ let encounter = (item: string, gap: number) => {
     who: () => ({ name: 'Tester' }),
     players: () => [],
     falls: () => [],
+    spawned: () => [],
     nearReady: () => false,
     settled: () => false,
     follow: () => {},

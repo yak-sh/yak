@@ -31,6 +31,7 @@ test('dodging sideways moves without turning the hero', () => {
     mine: () => [],
     who: () => null,
     falls: () => [],
+    spawned: () => [],
     follow: () => {},
     players: () => [],
     settled: () => true,

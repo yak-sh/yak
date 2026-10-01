@@ -4,8 +4,10 @@
 // so every page reaches the same answer from the same rows. What there is to
 // fight, carry and do is data of its own: beasts.ts, items.ts, quests.ts.
 import { spoil, tierOf } from './arms.ts'
+import { comp, num, str } from './bundle.ts'
 import { beastId, BEASTS } from './beasts.ts'
 import type { Fighter } from './beasts.ts'
+import type { Bundle } from './net.ts'
 import type { Quest } from './quests.ts'
 import { need, power } from './progress.ts'
 import { hashOf, noise, stream } from './rand.ts'
@@ -318,6 +320,32 @@ export let wander = (
 }
 
 export type Entry = { quest: string; step: string; at: number; xp?: number }
+
+/** A hero's falls, as their slain rows hold them. */
+export let killsOf = (rows: Bundle[]): Slain[] =>
+  rows.map((b) => {
+    let s = comp(b, 'slain')
+    return {
+      creature: str(s.creature),
+      by: str(s.by),
+      beast: str(s.beast),
+      at: num(s.at),
+      xp: num(s.xp),
+      ...s.lvl != null && { lvl: num(s.lvl) },
+    }
+  })
+
+/** A hero's quest steps, as their journal rows hold them. */
+export let entriesOf = (rows: Bundle[]): Entry[] =>
+  rows.map((b) => {
+    let j = comp(b, 'journal')
+    return {
+      quest: str(j.quest),
+      step: str(j.step),
+      at: num(j.at),
+      ...j.xp != null && { xp: num(j.xp) },
+    }
+  })
 /** An item row in the bag: its kind, how many, and for gear its rarity, item
  * level (rarity.ts), and how far it is upgraded (upgrade.ts). */
 export type Held = {

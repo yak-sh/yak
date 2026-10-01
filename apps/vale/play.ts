@@ -32,7 +32,7 @@ import { abilitiesOf, again, BLEEDS, WARD, type Went } from './abilities.ts'
 import { effect } from './ability-effects.ts'
 import { type Slot, SLOTS } from './arms.ts'
 import { BEASTS } from './beasts.ts'
-import { foeOf } from './danger.ts'
+import { fighter, foeOf } from './danger.ts'
 import { heed } from './gaze.ts'
 import {
   canWear,
@@ -47,6 +47,7 @@ import {
   wornOf,
 } from './gear.ts'
 import { homesNear } from './homes.ts'
+import { spawnedNear } from './spawn.ts'
 import { publish, pulses, replay } from './combat.ts'
 import type { Intent } from './input.ts'
 import { ITEMS } from './items.ts'
@@ -60,16 +61,17 @@ import {
   blowOf,
   type Dealing,
   type Dealt,
+  entriesOf,
   fallOf,
   type Held,
   heldOf,
   hpOf,
   hunter,
+  killsOf,
   levelOf,
   lootOf,
   maxHp,
   questsOf,
-  type Slain,
   type Standing,
   unpinnedOf,
   worth,
@@ -190,7 +192,7 @@ export type Mob = {
   eid: string
   /** the creature it is (beasts.ts) */
   beast: string
-  land: string
+  /** the level it fights at (danger.ts `fighter`) */
   lvl: number
   home: [number, number]
   body: Body
@@ -592,17 +594,7 @@ export let game = (
     ]
     if (sheet && key.every((k, i) => k == sheetKey[i])) return sheet
     sheetKey = key
-    let kills = slain.map((b): Slain => {
-      let s = comp(b, 'slain')
-      return {
-        creature: str(s.creature),
-        by: str(s.by),
-        beast: str(s.beast),
-        at: num(s.at),
-        xp: num(s.xp),
-        ...s.lvl != null && { lvl: num(s.lvl) },
-      }
-    })
+    let kills = killsOf(slain)
     let spent = new Set(used.map((b) => str(comp(b, 'used').item)))
     let ups = upgradesOf(upgraded.map((b) => {
       let u = comp(b, 'upgraded')
@@ -624,15 +616,7 @@ export let game = (
         ...ups.get(b.entity.eid),
       }
     })
-    let entries = journal.map((b) => {
-      let j = comp(b, 'journal')
-      return {
-        quest: str(j.quest),
-        step: str(j.step),
-        at: num(j.at),
-        ...j.xp != null && { xp: num(j.xp) },
-      }
-    })
+    let entries = entriesOf(journal)
     let rows = equip.map((b) => {
       let e = comp(b, 'equip')
       return { slot: str(e.slot), item: str(e.item), at: num(e.at) }
@@ -1049,11 +1033,14 @@ export let game = (
       ]
       let all = dealing()
 
-      // The creatures living within sight.
-      let homes = homesNear(body.x, body.z, SIGHT)
+      // The creatures living within sight: the dens', and those spawned.
+      let homes = [
+        ...homesNear(body.x, body.z, SIGHT),
+        ...spawnedNear(net.spawned(), body.x, body.z, SIGHT),
+      ]
       let mobs: Mob[] = []
       for (let h of homes) {
-        let beast = foeOf(h.beast, h.level)
+        let beast = h.lvl ? fighter(h.beast, h.lvl) : foeOf(h.beast, h.level)
         if (!beast) continue
         let eid = h.eid
         let e = c.ent(eid)
@@ -1241,7 +1228,6 @@ export let game = (
         mobs.push({
           eid,
           beast: h.beast,
-          land: h.level,
           lvl: beast.lvl,
           home: h.home,
           body: mb,
@@ -1264,7 +1250,7 @@ export let game = (
         let key = `${m.eid}:${life}`
         if (shares.has(key)) return
         shares.add(key)
-        let beast = foeOf(m.beast, m.land)
+        let beast = fighter(m.beast, m.lvl)
         if (!beast) return
         net.keep({
           entity: { eid: crypto.randomUUID() },
@@ -1317,7 +1303,7 @@ export let game = (
       // A blow landing on a creature: what I have dealt it in this life of
       // it, and, when the blow holds it, until when.
       let land = (m: Mob, dmg: number, great: boolean, held = 0, by = '') => {
-        let beast = foeOf(m.beast, m.land)
+        let beast = fighter(m.beast, m.lvl)
         if (!beast) return
         let life = fallOf(falls.get(m.eid) ?? [], m.respawn ?? Infinity, now)
           .fell

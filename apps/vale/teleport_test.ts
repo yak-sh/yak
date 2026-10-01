@@ -248,6 +248,7 @@ test('an active hero moves once and a returning hero keeps the move', () => {
     mine: (name: string) => name == 'teleport_request' ? requests : [],
     who: () => null,
     falls: () => [],
+    spawned: () => [],
     follow: () => {},
     players: () => [],
     settled: () => true,

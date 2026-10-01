@@ -63,6 +63,7 @@ test('damage off revives and protects until damage is turned on', () => {
     mine: () => [],
     who: () => null,
     falls: () => [],
+    spawned: () => [],
     follow: () => {},
     players: () => [],
     settled: () => true,
