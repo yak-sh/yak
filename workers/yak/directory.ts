@@ -24,6 +24,7 @@
 // The meta space seeds itself on first touch (space `yak`, app `platform`),
 // written as bundles through the store's /apply, so the directory can describe
 // its own store.
+import type { Reload } from '@yaks/platform'
 import { type Host as HostEnv, spaceHost } from './host.ts'
 import type { Bundle } from '@yaks/graph'
 import {
@@ -353,6 +354,7 @@ type Row = {
     worker?: string
     script?: string
     source?: string | null
+    reload?: Reload | null
   }
   restored?: {
     app: Id
@@ -792,6 +794,7 @@ export let deployOf = (r: Row) => ({
   worker: r.deploy!.worker ?? '',
   script: r.deploy!.script ?? '',
   source: r.deploy!.source ?? null,
+  reload: r.deploy!.reload ?? null,
 })
 
 // One restore of an app's store, as recover.ts reads it (T-34507). `from` is

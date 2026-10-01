@@ -228,7 +228,10 @@ app_deploy:
   description: >-
     Release the app's staged files as a version. The files, vocabulary and
     worker begin serving together when this succeeds. The version is the one
-    an error report will name. It
+    an error report will name. Set reload to required for a contract change
+    that open pages must reload to use; optional (or leaving it out) still
+    derives severity from the changed files and vocabulary. Open pages are
+    notified after the release is recorded; they never reload automatically. It
     also creates the components the app's vocab.json declares ({{vocab}}). A
     component is a named group of typed fields attached to a stored record,
     called an entity; vocab.json is the schema defining those groups and

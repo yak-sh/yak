@@ -48,6 +48,7 @@
 import type { Blobs as Pins, Objects } from '@yaks/blob'
 import { mint, token } from '@yaks/graph'
 import type { App, Directory, Space } from './directory.ts'
+import type { Reload } from '@yaks/platform'
 import { pinsOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import { vouched, type Who } from './session.ts'
@@ -76,6 +77,7 @@ export type Version = {
   worker: string
   script?: string
   source?: string | null
+  reload?: Reload | null
 }
 
 // How many versions a list shows at once, and the floor under a path's history
@@ -607,6 +609,7 @@ export let record = async (
   draftWas = app.draft,
   fenceWas = app.fence,
   seeded = false,
+  reload?: Reload,
 ) => {
   let prior = sourceWas
     ? (await dir.deploys(app)).find((v) =>
@@ -657,6 +660,8 @@ export let record = async (
           worker,
           script: app.script ?? '',
           source: app.source,
+          // Optional is derived; the stored mark can only raise severity.
+          ...reload == 'required' ? { reload } : {},
         },
       },
     ],

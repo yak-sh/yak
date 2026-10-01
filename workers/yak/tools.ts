@@ -32,6 +32,7 @@
 // answered at all. A deploy in v1 is a version bump, since an
 // app's files serve live from its blob store — and the version it bumps to is
 // kept, files and all, so app_rollback can put it back.
+import type { Reload } from '@yaks/platform'
 import { configured, deployWorker } from './deploy_worker.ts'
 import { compiled } from './esbuild.ts'
 import { bindingLines, bindings } from './bindings.ts'
@@ -830,6 +831,30 @@ let fits = async (
 // moved on — recorded as a version of its own (versions.ts), so app_rollback
 // can put this release back later. The answer is every line said beneath the
 // door's own sentence.
+// A committed release stays successful even if its notification or reporter
+// is unavailable. The store's door owns authentication and response cleanup.
+export let releaseNotice = async (
+  store: Door,
+  version: number,
+  tags: Record<string, string>,
+  report = caught,
+) => {
+  try {
+    await store.consume('/released', async (res) => {
+      if (!res.ok) throw new Error(`release notice: ${res.status}`)
+      await res.arrayBuffer()
+    }, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ version }),
+    }, { 'x-yak-kernel': '1' })
+  } catch (e) {
+    try {
+      report(e, tags)
+    } catch { /* the release is already live */ }
+  }
+}
+
 let published = async (
   ctx: Ctx,
   space: Space,
@@ -840,6 +865,7 @@ let published = async (
   fence: string,
   files: Awaited<ReturnType<typeof staged>>,
   candidate?: { source: string; script: string },
+  reload?: Reload,
 ) => {
   let c = ctx.clock ?? clock()
   let blobs = files.files
@@ -1177,13 +1203,21 @@ let published = async (
         standing.draft,
         fence,
         sowed.length > 0,
+        reload,
       ),
   )
+  await releaseNotice(store, version, {
+    tool: 'app_deploy',
+    space: space.slug,
+    app: app.slug,
+  })
   if (tooled.views) {
     try {
       await viewsMoved(ctx, space)
     } catch (e) {
-      caught(e, { tool: 'app_deploy', space: space.slug, app: app.slug })
+      try {
+        caught(e, { tool: 'app_deploy', space: space.slug, app: app.slug })
+      } catch { /* the release is already live */ }
     }
   }
   // What the versions before this one broke is closed by this one: the code
@@ -1198,7 +1232,9 @@ let published = async (
     )
   } catch (e) {
     // The release is out; an open break is the softer wrong, and Sentry hears.
-    caught(e, { tool: 'app_deploy', space: space.slug, app: app.slug })
+    try {
+      caught(e, { tool: 'app_deploy', space: space.slug, app: app.slug })
+    } catch { /* the release is already live */ }
   }
   // A published app's offer does not move with a deploy: publishing is the
   // owner's deliberate act and pins the version strangers install, so an
@@ -1261,6 +1297,7 @@ let released = async (
   who: Who,
   store: Door,
   candidate?: { source: string; script: string },
+  reload?: Reload,
 ) => {
   let standing = await waiting(ctx.dir, space, app, who)
   let blobs = r2RawObjects(ctx.env.BLOBS)
@@ -1286,6 +1323,7 @@ let released = async (
       fence,
       files,
       candidate,
+      reload,
     )
   } finally {
     await unfenced(ctx.dir, standing, fence, who)
@@ -2864,7 +2902,11 @@ let OURS: Row[] = [
     openWorld: true,
     input: {
       type: 'object',
-      properties: { space: SPACE, app: APP },
+      properties: {
+        space: SPACE,
+        app: APP,
+        reload: { type: 'string', enum: ['optional', 'required'] },
+      },
       required: ['app'],
     },
     run: async (ctx, args) => {
@@ -2873,7 +2915,19 @@ let OURS: Row[] = [
         'inApp',
         () => inApp(ctx, args, true),
       )
-      let { version, said } = await released(ctx, space, app, who, store)
+      let reload = args.reload as Reload | undefined
+      if (reload != null && reload != 'optional' && reload != 'required') {
+        throw refuse('invalid', 'reload must be optional or required')
+      }
+      let { version, said } = await released(
+        ctx,
+        space,
+        app,
+        who,
+        store,
+        undefined,
+        reload,
+      )
       return {
         text:
           `deployed ${space.slug}/${app.slug} v${version}: ${
@@ -3104,6 +3158,7 @@ let OURS: Row[] = [
         who,
         store,
         candidate,
+        'required',
       )
       return {
         text: `put ${space.slug}/${app.slug} back to v${want.version}, live ` +
@@ -4554,8 +4609,23 @@ let OURS: Row[] = [
       if (said.source != null) {
         await fits(ctx, space, app, store, said.source, said.file)
       }
+      let crossed = await ctx.dir.deploys(from.app)
+      let reload: Reload | undefined = to < was ||
+          crossed.some((v) =>
+            v.version > was && v.version <= to && v.reload == 'required'
+          )
+        ? 'required'
+        : undefined
       let { wrote, gone } = await copied(ctx, from, { space, app }, who)
-      let out = await released(ctx, space, app, who, store)
+      let out = await released(
+        ctx,
+        space,
+        app,
+        who,
+        store,
+        undefined,
+        reload,
+      )
       await ctx.dir.apply({
         entities: [{ entity: { eid: app.eid }, installed: { version: to } }],
       }, vouched(who))
