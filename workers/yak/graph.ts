@@ -882,6 +882,10 @@ export class Store {
     let fx = effects(vocab, {
       write: (b) => this.#trust(b, null),
       defer: true,
+      // A builder output (2) starts a downstream builder call (3). The
+      // registered tool then opens its ordinary session through the runner.
+      // Keep the chain bounded, but let that owed call run.
+      depth: 3,
       max: 2,
       nudge: () => this.#workingEffects(),
       report: (error, { handler }) =>

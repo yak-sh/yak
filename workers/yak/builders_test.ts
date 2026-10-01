@@ -17,14 +17,14 @@ let SOURCE = 'a0000000-0000-4000-8000-0000000000aa'
 let BUILDER = 'a0000000-0000-4000-8000-0000000000bb'
 let MODEL = CATALOGUE.find((r) => r.offered && r.output > 0)!.name
 
-let app = async (models = 0, access = 'private') => {
+let app = async (models = 0, access = 'private', chain = false) => {
   let asked: string[] = []
   let AI = embeds({
     run: (model: string) => {
       asked.push(model)
       return Promise.resolve({
         response: JSON.stringify({
-          outputs: [{
+          outputs: chain && asked.length > 1 ? [] : [{
             slot: 'Ada',
             inputs: [SOURCE],
             components: {
@@ -227,4 +227,30 @@ test('an open app cannot let a visitor start a builder at its account expense', 
   assertEquals(refused.status, 403)
   assertEquals((await v.read('.builder&*')).length, 0)
   assertEquals(v.asked.length, 0)
+})
+
+test('a hosted generated row starts the next immediate builder', async () => {
+  let v = await app(0, 'private', true)
+  let next = crypto.randomUUID()
+  assertEquals(
+    (await v.send('/apply', [{
+      entity: { eid: next },
+      content: { body: 'Build from the generated villager.' },
+      using: { model: MODEL },
+      builder: {
+        query: '$v .villager, .doc.body=$description',
+        to: toolEid('builder_model'),
+        immediate: true,
+      },
+    }])).status,
+    200,
+  )
+  assertEquals((await start(v)).status, 200)
+  await until(() => v.asked.length == 2, {
+    label: 'chained builder model turn',
+  })
+  let [output] = await v.read('.villager&.built&*')
+  let builds = await v.read(`.build.builder=${next}&*`)
+  assertEquals(builds.length, 1)
+  assertEquals((builds[0].build as Comp).for, output.entity.eid)
 })
