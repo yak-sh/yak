@@ -638,7 +638,7 @@ test('graceful stop during preparation admits no ask and leaves the input owed',
     contextItems: async () => {
       entered = true
       await gate
-      return []
+      return new Map()
     },
   })
   await p.g.apply(ask('s1'))
