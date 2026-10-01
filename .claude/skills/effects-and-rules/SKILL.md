@@ -12,8 +12,6 @@ description: >
   runs in the wrong process. Where a facet's code lives and how a plugin is
   wired is `packages-and-plugins`; a one-time fix of stored rows is
   `data-migration`.
-scope: tasks-v2
-volatility: stable
 ---
 
 # Effects, rules and roles

@@ -13,8 +13,6 @@ description: >
   often already there. How the answer is computed (the archetype index, row
   cost, writes) is `graph-reads-and-writes`; full-text ranking and `.near`
   internals are `search-and-embeddings`.
-scope: tasks-v2
-volatility: stable
 ---
 
 # The query grammar

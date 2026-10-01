@@ -14,8 +14,6 @@ description: >
   stored rows is `data-migration`, building a platform page's parts is
   `ui-building`, vectors and `.near` in a store are `search-and-embeddings`, and
   its tests are `testing`.
-scope: tasks-v2
-volatility: stable
 ---
 
 # The yaks.app platform

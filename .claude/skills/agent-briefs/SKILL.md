@@ -8,17 +8,19 @@ description: >
   call the Agent tool, SendMessage a running agent, run `yak session spawn`, or
   file a task an agent will be pointed at, even for a one-line fix, and whenever
   an agent's report or task-notification arrives. Not for doing the work
-  yourself, and not for a design Jeff will read (that is `design-docs`).
+  yourself, and not for a design Jeff will read (that is `design-docs`); what
+  every agent in an area needs is a skill (`skill-writing`), not a longer
+  brief.
 ---
 
 # Briefing an agent
 
-A fresh agent knows the persona and the brief, nothing else. Whatever the brief
-says, it builds; whatever the brief leaves out, it guesses. When delegated work
-comes back wrong, the cause is usually in the brief: today's behavior written
-as the requirement, a full run asked for where a pilot was meant, Jeff's words
-paraphrased until they meant something else. Treat the brief as the part of the
-work you do yourself.
+A fresh agent knows the persona, the skills its work triggers and the brief,
+nothing else. Whatever the brief says, it builds; whatever the brief leaves
+out, it guesses. When delegated work comes back wrong, the cause is usually in
+the brief: today's behavior written as the requirement, a full run asked for
+where a pilot was meant, Jeff's words paraphrased until they meant something
+else. Treat the brief as the part of the work you do yourself.
 
 ## Fork or fresh agent
 
@@ -47,8 +49,8 @@ work you do yourself.
    check his words (M-37958).
 4. **The constraints that bite here**, and only those: one shape after the
    change (M-17871), no yaks app brought down, fail closed, a package boundary
-   it must not cross. The persona already carries the rest; repeating it buries
-   what matters.
+   it must not cross. The persona and the skills carry the rest; repeating
+   them buries what matters.
 5. **Pointers, not copies**: the task, design, shas, files, memory ids. A
    pointer stays true; a pasted excerpt goes stale.
 6. **How it proves the work**: the end-to-end check it must run (the

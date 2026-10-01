@@ -12,8 +12,6 @@ description: >
   declares (`vocabulary`), what its effects and rules do (`effects-and-rules`)
   or what its views draw (`ui-building`); a new package or a boundary Jeff
   should decide gets a design first (`design-docs`).
-scope: tasks-v2
-volatility: stable
 ---
 
 # Packages and plugins

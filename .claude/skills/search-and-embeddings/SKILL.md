@@ -12,8 +12,6 @@ description: >
   query". How a query is written is `query-grammar`, how the archetype index
   answers one is `graph-reads-and-writes`; re-embedding stored vectors after a
   model change is still this skill.
-scope: tasks-v2
-volatility: stable
 ---
 
 # Search

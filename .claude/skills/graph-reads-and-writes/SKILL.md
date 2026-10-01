@@ -13,8 +13,6 @@ description: >
   designing a component is `vocabulary`, moving stored rows to a new shape is
   `data-migration`, what runs after a write (rules, effects) is
   `effects-and-rules`, and full-text and `.near` are `search-and-embeddings`.
-scope: tasks-v2
-volatility: stable
 ---
 
 # Writing to and reading from the graph

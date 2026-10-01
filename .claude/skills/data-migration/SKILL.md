@@ -11,8 +11,6 @@ description: >
   "fix the old rows". Deciding the new shape is `vocabulary`; how one write or
   query behaves is `graph-reads-and-writes`; this one is getting the existing
   data there.
-scope: tasks-v2
-volatility: stable
 ---
 
 # Migrating stored data
