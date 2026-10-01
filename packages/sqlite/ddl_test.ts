@@ -527,7 +527,7 @@ test('a grown column keeps a literal default, takes the clock only ahead', () =>
   assertEquals(scan(d, 'created', undefined, ['at']), [{ at: null }])
 })
 
-test('refitting removes only empty undeclared columns', () => {
+test('refitting preserves undeclared columns, empty or populated', () => {
   let d = mem()
   storage(d, shop).install()
   d.query(insert('entity', { id: 1, eid: 'm' }, { id: 2, eid: 'p' }))
@@ -544,7 +544,7 @@ test('refitting removes only empty undeclared columns', () => {
   })
   d.query({ t: 'update', table: 'product', set: { used: val('kept') } })
   storage(d, shop).install()
-  assertEquals(cols(d, 'product').includes('old'), false)
+  assertEquals(cols(d, 'product').includes('old'), true)
   assertEquals(cols(d, 'product').includes('used'), true)
   assertEquals(scan(d, 'product', undefined, ['used']), [{ used: 'kept' }])
   storage(d, shop).install()
@@ -567,7 +567,7 @@ let pets = (said: string[], required = said) =>
     },
   })
 
-test('a property no longer required clears, then leaves once empty', () => {
+test('a property no longer required clears without automatic column deletion', () => {
   let d = mem()
   let s = storage(d, pets(['name', 'sound']))
   s.install()
@@ -581,7 +581,7 @@ test('a property no longer required clears, then leaves once empty', () => {
   // and forgotten once it holds nothing
   s = storage(d, pets(['name']))
   s.install()
-  assertEquals(cols(d, 'pet').includes('sound'), false)
+  assertEquals(cols(d, 'pet').includes('sound'), true)
   assertEquals(s.read('.pet').map((b) => b.pet), [{ name: 'Rex' }])
 })
 
@@ -745,4 +745,76 @@ test('a store that is not a file is left unmeasured', () => {
     said.filter((s) => /analysis_limit|optimize|analyze/.test(s)),
     [],
   )
+})
+
+// A long-lived new worker and an older CLI open the same file. The CLI must
+// neither delete the worker's empty new column nor need an explicit install.
+test('opening an older vocabulary preserves newer empty columns', () => {
+  let dir = Deno.makeTempDirSync({ prefix: 'yak-schema-peer-' })
+  let old = open(`${dir}/graph.db`), newer = open(`${dir}/graph.db`)
+  try {
+    let prior = pets(['name'], [])
+    let next = pets(['name', 'sound'], [])
+    let a = storage(old, prior)
+    a.tx((tx) => tx.patch([{ entity: { eid: 'rex' }, pet: { name: 'Rex' } }]))
+    let b = storage(newer, next)
+    assertEquals(b.get(['rex'])[0].pet, { name: 'Rex', sound: null })
+    storage(old, prior).install()
+    assertEquals(b.get(['rex'])[0].pet, { name: 'Rex', sound: null })
+    b.tx((tx) => tx.patch([{ entity: { eid: 'rex' }, pet: { sound: 'woof' } }]))
+    assertEquals(b.get(['rex'])[0].pet, { name: 'Rex', sound: 'woof' })
+  } finally {
+    old.close()
+    newer.close()
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
+// A peer grows the column precisely when this installer acquires its lock.
+test('install inspects columns after acquiring the write lock', () => {
+  let dir = Deno.makeTempDirSync({ prefix: 'yak-schema-lock-' })
+  let a = open(`${dir}/graph.db`), b = open(`${dir}/graph.db`)
+  try {
+    storage(a, pets(['name'], [])).install()
+    let next = pets(['name', 'sound'], [])
+    let waited = false
+    let peer = storage(b, next)
+    let waiting = storage({
+      ...a,
+      query: (stmt) => {
+        if (stmt.t == 'begin' && stmt.mode == 'immediate' && !waited) {
+          waited = true
+          peer.install()
+        }
+        return a.query(stmt)
+      },
+    }, next)
+    waiting.install()
+    assertEquals(waited, true)
+    waiting.tx((tx) =>
+      tx.patch([
+        { entity: { eid: 'rex' }, pet: { name: 'Rex', sound: 'woof' } },
+      ])
+    )
+    assertEquals(peer.get(['rex'])[0].pet, { name: 'Rex', sound: 'woof' })
+  } finally {
+    a.close()
+    b.close()
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
+test('an open store repairs a column removed by a historical installer', () => {
+  let dir = Deno.makeTempDirSync({ prefix: 'yak-schema-repair-' })
+  let a = open(`${dir}/graph.db`), b = open(`${dir}/graph.db`)
+  try {
+    let s = storage(a, pets(['name', 'sound'], []))
+    s.tx((tx) => tx.patch([{ entity: { eid: 'rex' }, pet: { name: 'Rex' } }]))
+    b.query({ t: 'alter table', table: 'pet', drop: 'sound' })
+    assertEquals(s.get(['rex'])[0].pet, { name: 'Rex', sound: null })
+  } finally {
+    a.close()
+    b.close()
+    Deno.removeSync(dir, { recursive: true })
+  }
 })

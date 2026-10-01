@@ -113,7 +113,6 @@ export {
   tabled,
   unfit,
   unresolved,
-  vacant,
 } from './ddl.ts'
 export { EPOCH, epoch, epochAt, type Meta, meta } from './meta.ts'
 export { decoded, isJsonb, jsonIn, jsonOut, projected } from './jsonb.ts'
@@ -369,6 +368,70 @@ export let storage = (
       },
     }
   }
+  let ready = false, version: unknown
+  let changed = () =>
+    driver.query({ t: 'pragma', name: 'schema_version' })[0]?.schema_version
+  let install = () => {
+    let { print, made } = plan(vocab, base.derived)
+    let mark = (strays: string[]) =>
+      [print, shape(driver, [...made, ...strays]), ...strays].join(' ')
+    let matches = () => {
+      let was = installed(driver)
+      return was == mark(was?.split(' ').slice(2) ?? [])
+    }
+    // The fast path only reads. A changed file is inspected again *after*
+    // taking its write lock, and tables, growth and indexes commit together.
+    if (!matches()) {
+      let keys = (value: string): Stmt => ({
+        t: 'pragma',
+        name: 'foreign_keys',
+        value,
+      })
+      let clean = false
+      let seal = () => {
+        epoch(driver)
+        if (classified) backfill(driver, numbered)
+        meta(driver).set(SCHEMA, mark(componentTables(driver, made)))
+      }
+      let make = () =>
+        unit(driver, () => {
+          if (matches()) return
+          for (let stmt of tabled(vocab, base.derived)) driver.query(stmt)
+          let unfit = fit(driver, vocab)
+          for (let stmt of retired(driver, vocab)) driver.query(stmt)
+          for (let stmt of indexed(vocab)) driver.query(stmt)
+          unfit.forEach(report)
+          clean = !unfit.length
+          // Memory templates keep schema, never a store's lineage identity.
+          if (driver.file && clean) seal()
+        })
+      driver.query(keys('off'))
+      try {
+        // Templates are only for fresh in-memory files; file installs always
+        // inspect their standing schema under BEGIN IMMEDIATE.
+        let fresh = !installed(driver) &&
+          !Object.keys(standing(driver, vocab)).length
+        fresh && driver.template ? driver.template(print, make) : make()
+        if (!driver.file) {
+          unit(driver, () => {
+            epoch(driver)
+            if (classified) backfill(driver, numbered)
+            if (fresh || clean) {
+              meta(driver).set(SCHEMA, mark(componentTables(driver, made)))
+            }
+          })
+        }
+      } finally {
+        driver.query(keys('on'))
+      }
+    }
+    analyzed(driver)
+    version = changed()
+    ready = true
+  }
+  let ensure = () => {
+    if (!ready || (driver.file && version != changed())) install()
+  }
   return {
     worn: worn(vocab, base.derived),
     // A caller replaying these statements over a standing file must add new
@@ -380,99 +443,30 @@ export let storage = (
       ...indexed(vocab),
     ],
     grown: () => grown(vocab, standing(driver, vocab)),
-    install: () => {
-      // A file whose schema nothing has touched since this vocabulary
-      // installed it is left as it is. Every statement below is a no-op there
-      // but two: the doc view is recreated, which changes the schema and makes
-      // every other connection re-read it, and the archetype backfill reads
-      // every descriptor.
-      //
-      // The mark is the statements' fingerprint, then the shape (physical.ts
-      // `shape`) of the objects they make and of the component tables beyond
-      // the vocabulary that the backfill classified, then those tables' names.
-      // So a vocabulary that says anything new installs, and so does a file
-      // where another hand changed one of those objects or dropped one of
-      // those tables. What joins the file afterwards (the search index the
-      // host adopts once this returns, a plugin's own tables and triggers) is
-      // not measured: it would move the shape after the mark was written, and
-      // the next open would install again.
-      let { print, made } = plan(vocab, base.derived)
-      let mark = (strays: string[]) =>
-        [print, shape(driver, [...made, ...strays]), ...strays].join(' ')
-      let was = installed(driver)
-      if (was != mark(was?.split(' ').slice(2) ?? [])) {
-        // What stood before: only those tables can be behind the vocabulary,
-        // so a fresh file is asked nothing about its columns, keys or checks.
-        let before = standing(driver, vocab)
-        let unfit: Error[] = []
-        let make = () => {
-          // The tables in one unit: a file commits them once, not once each.
-          unit(driver, () => {
-            for (let stmt of tabled(vocab, base.derived)) driver.query(stmt)
-          })
-          // Then the columns a component gained since its table was created,
-          // the half `create table if not exists` cannot add, and a rebuild of
-          // each table whose keys or checks the vocabulary has since changed
-          // its mind about (ddl.ts `fit`). A rebuild runs outside the
-          // enforcement, which SQLite switches only between transactions: a
-          // copy that re-checks a key the vocabulary only now declares would
-          // reject the rows it exists to keep.
-          let keys = (value: string): Stmt => ({
-            t: 'pragma',
-            name: 'foreign_keys',
-            value,
-          })
-          driver.query(keys('off'))
-          try {
-            unfit = fit(driver, vocab, before)
-          } finally {
-            driver.query(keys('on'))
-          }
-          // The indexes last: one may name a column this boot just added, or
-          // stand on a table it just rebuilt. Retire old vocabulary
-          // constraints before raising the new ones, in one unit so a
-          // rejected new unique constraint leaves the standing indexes intact.
-          unit(driver, () => {
-            for (let stmt of retired(driver, vocab)) driver.query(stmt)
-            for (let stmt of indexed(vocab)) driver.query(stmt)
-          })
-        }
-        // A database nothing has installed into, with none of the tables
-        // standing, is made the way the last one like it was, where its driver
-        // keeps templates: nothing stood to fit, so nothing it did depends on
-        // what this one holds.
-        let fresh = !was && !Object.keys(before).length
-        fresh && driver.template ? driver.template(print, make) : make()
-        unfit.forEach(report)
-        // The store's lineage identity, minted on the first install (meta.ts
-        // `epoch`).
-        epoch(driver)
-        if (classified) backfill(driver, numbered)
-        // A table left unfit is not yet the shape this vocabulary says, so
-        // the mark waits: the next open fits it again, and it heals once its
-        // rows are prepared.
-        if (!unfit.length) {
-          meta(driver).set(SCHEMA, mark(componentTables(driver, made)))
-        }
-      }
-      // And the sizes those tables are read with (ddl.ts `analyzed`), which
-      // drift with the rows, not the schema. An index the planner cannot size
-      // is half an index: it costs a scan of the whole spine to find the fifty
-      // thousand rows that carry a component. Last, because it measures what
-      // the statements above just raised.
-      analyzed(driver)
-    },
-    read: (query, o, comps) =>
-      unit(
+    install,
+    read: (query, o, comps) => {
+      ensure()
+      return unit(
         driver,
         () => read(driver, vocab, query, { ...opts(), ...o }, comps),
         'read',
-      ),
-    rows: (query, o) => rows(driver, vocab, query, { ...opts(), ...o }),
-    screen: (query, o) => screened(driver, vocab, query, { ...opts(), ...o }),
-    get: (eids, comps) => unit(driver, () => identity(eids, comps), 'read'),
-    tx: <R>(body: (tx: Tx) => R): R =>
-      unit(driver, (): R => {
+      )
+    },
+    rows: (query, o) => {
+      ensure()
+      return rows(driver, vocab, query, { ...opts(), ...o })
+    },
+    screen: (query, o) => {
+      ensure()
+      return screened(driver, vocab, query, { ...opts(), ...o })
+    },
+    get: (eids, comps) => {
+      ensure()
+      return unit(driver, () => identity(eids, comps), 'read')
+    },
+    tx: <R>(body: (tx: Tx) => R): R => {
+      ensure()
+      return unit(driver, (): R => {
         if (!classified) return body(tx)
         let { tx: t, settle } = tracked()
         // An async body settles what it owes before the unit closes, as the
@@ -481,7 +475,8 @@ export let storage = (
           settle()
           return out
         }) as R
-      }),
+      })
+    },
   }
 }
 

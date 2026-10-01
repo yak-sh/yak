@@ -381,7 +381,7 @@ export let retired = (driver: Driver, vocab: Vocab): Stmt[] => {
  * fingerprint instead, and moving it fits every store once more: move it when
  * fitting learns to see something it did not.
  */
-export let FIT = 5
+export let FIT = 6
 
 /**
  * What fitting reads off a file before an install creates anything: each
@@ -489,7 +489,8 @@ export let unresolved = (
  * own name rather than renamed into it, because a rename checks every view and
  * trigger that names the table while it is gone (`doc_value` names `doc`).
  *
- * Undeclared columns with any non-null value come back; empty ones do not.
+ * Undeclared columns come back, even when empty: another process may have
+ * installed a newer vocabulary. Removing a column is an explicit migration.
  * A kept column keeps its type and nothing else. The
  * table's triggers and undeclared indexes go with it, for whoever raised them
  * to raise again at boot (@yaks/fts `adopt`); the declared indexes are
@@ -498,55 +499,23 @@ export let unresolved = (
  * Each table's statements, by name: none for a file that already fits, which
  * is every boot but the one after the vocabulary changed.
  */
-// Ask whether an undeclared column holds anything. Both SQLite and D1 use
-// this statement; only the caller knows how to await the answer.
-export let vacant = (
-  vocab: Vocab,
-  was: Standing,
-): Record<string, Record<string, Stmt>> =>
-  Object.fromEntries(
-    comps(vocab, was).flatMap((comp) => {
-      let said = new Set(stored(vocab, comp).map((c) => c.prop))
-      let cols = was[comp].cols.map((r) => String(r.name))
-        .filter((name) => name != 'entity' && !said.has(name))
-      return cols.length
-        ? [[
-          comp,
-          Object.fromEntries(cols.map((name) => [
-            name,
-            select({
-              cols: [col(name)],
-              from: table(comp),
-              where: notNull(col(name)),
-              limit: lit(1),
-            }),
-          ])),
-        ]]
-        : []
-    }),
-  )
-
 export let refit = (
   vocab: Vocab,
   was: Standing,
-  empty: Record<string, string[]> = {},
 ): Record<string, Stmt[]> =>
   Object.fromEntries(
     comps(vocab, was).flatMap((comp) => {
       let t = was[comp]
       let said = new Set(stored(vocab, comp).map((c) => c.prop))
       let extra = t.cols
-        .filter((r) =>
-          r.name != 'entity' && !said.has(String(r.name)) &&
-          !empty[comp]?.includes(String(r.name))
-        )
+        .filter((r) => r.name != 'entity' && !said.has(String(r.name)))
         .map((r) => ({
           name: String(r.name),
           type: String(r.type ?? '') || undefined,
         }))
       let fresh = tableDdl(vocab, comp, comp, extra)
       let refs = converted(t, fresh)
-      if (fits(t, fresh, refs.length) && !empty[comp]?.length) return []
+      if (fits(t, fresh, refs.length)) return []
       let old = t.cols.map((r) => String(r.name))
       let cols = fresh.cols.map((r) => r.name).filter((name) =>
         old.includes(name)
@@ -626,8 +595,12 @@ export let grown = (vocab: Vocab, was: Standing): Stmt[] => [
  * migration that prepares them. Until one runs, the old constraint admits them,
  * and admission holds every new write to the vocabulary.
  */
-export let fit = (driver: Driver, vocab: Vocab, was: Standing): Error[] =>
+export let fit = (
+  driver: Driver,
+  vocab: Vocab,
+): Error[] =>
   unit(driver, () => {
+    let was = standing(driver, vocab)
     for (let stmt of grown(vocab, was)) driver.query(stmt)
     let missing = Object.fromEntries(
       Object.entries(unresolved(vocab, was)).map(([comp, checks]) => [
@@ -635,16 +608,7 @@ export let fit = (driver: Driver, vocab: Vocab, was: Standing): Error[] =>
         checks.some((q) => driver.query(q).length),
       ]),
     )
-    let empty = Object.fromEntries(
-      Object.entries(vacant(vocab, was)).map(
-        ([comp, queries]) => [
-          comp,
-          Object.entries(queries)
-            .filter(([, q]) => !driver.query(q).length).map(([name]) => name),
-        ],
-      ),
-    )
-    return Object.entries(refit(vocab, was, empty)).flatMap(([comp, stmts]) => {
+    return Object.entries(refit(vocab, was)).flatMap(([comp, stmts]) => {
       if (missing[comp]) {
         return [
           new Error(

@@ -39,7 +39,7 @@ test('the d1 schema is the sqlite schema, constraints included', async () => {
   await s.install() // a second install finds everything standing
 })
 
-test('a d1 install removes empty old columns but keeps written ones', async () => {
+test('a d1 install preserves undeclared columns, empty or populated', async () => {
   let db = d1(), s = storage(db, strict)
   await s.install()
   await s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, repo: {} }]))
@@ -70,7 +70,7 @@ test('a d1 install removes empty old columns but keeps written ones', async () =
     (await (await prepare(db, { t: 'pragma', name: 'table_info', arg: 'repo' })
       .all()).results)
       .map((r) => r.name).includes('old'),
-    false,
+    true,
   )
   assertEquals((await has('used')).results.length, 1)
   await s.install()

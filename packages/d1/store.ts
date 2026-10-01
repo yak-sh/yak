@@ -97,7 +97,6 @@ import {
   unburySql,
   unfit,
   unresolved,
-  vacant,
 } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
 import { type D1Like, prepare, type Prepared, type Row, unbind } from './d1.ts'
@@ -544,18 +543,6 @@ export let storage = <S extends Prepared<S>>(
       await send([...tabled(vocab), ...grown(vocab, before)])
       // A rebuild to a batch, which is D1's only transaction: a table whose
       // rows the new shape refuses stays as it stood, and is told.
-      let empty = Object.fromEntries(
-        await Promise.all(
-          Object.entries(vacant(vocab, before)).map(async ([comp, queries]) => [
-            comp,
-            (await Promise.all(
-              Object.entries(queries).map(async ([name, q]) =>
-                (await one(q)).length ? null : name
-              ),
-            )).filter((n) => n != null),
-          ]),
-        ),
-      ) as Record<string, string[]>
       let missing = Object.fromEntries(
         await Promise.all(
           Object.entries(unresolved(vocab, before)).map(
@@ -566,7 +553,7 @@ export let storage = <S extends Prepared<S>>(
           ),
         ),
       )
-      for (let [comp, stmts] of Object.entries(refit(vocab, before, empty))) {
+      for (let [comp, stmts] of Object.entries(refit(vocab, before))) {
         if (missing[comp]) {
           report(
             new Error(
