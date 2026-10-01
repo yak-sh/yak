@@ -343,7 +343,7 @@ test('dispatch rehearsal rule converts all four states and keeps the envelope', 
   assertEquals(rows.map((b) => b.entity.eid).sort(), [...states].sort())
   await s.apply(rows.flatMap(dispatchMove))
   for (let state of states) {
-    let [row] = await s.query(`.eid=${state}&*`)
+    let [row] = await s.query(`.entity.eid=${state}&*`)
     let dispatch = row.dispatch as Comp | undefined
     assertEquals(dispatch?.state ?? null, null)
     assertEquals(!!row.admitted, state == 'active')
@@ -360,11 +360,11 @@ test('dispatch rehearsal rule converts all four states and keeps the envelope', 
     assertEquals(dispatchMove(row), [])
   }
   assertEquals(await s.query(dispatchRule.find), [])
-  let [future] = await s.query('.eid=future&*')
+  let [future] = await s.query('.entity.eid=future&*')
   assertEquals((future.dispatch as Comp).state, 'future')
   assertEquals(dispatchMove(future), [])
   assertEquals(dispatchMove({ entity: { eid: 'absent' } }), [])
-  let [already] = await s.query('.eid=already&*')
+  let [already] = await s.query('.entity.eid=already&*')
   assertEquals((already.dispatch as Comp).args, 'unchanged')
   assertEquals((already.dispatch as Comp).order, 0)
   assertEquals(dispatchMove(already), [])
@@ -379,7 +379,7 @@ test('dispatch conversion creates missing marks without changing empty envelopes
   let rows = await s.query(dispatchRule.find)
   await s.apply(rows.flatMap(dispatchMove))
   for (let state of states) {
-    let [row] = await s.query(`.eid=${state}&*`)
+    let [row] = await s.query(`.entity.eid=${state}&*`)
     assertEquals(!!row.admitted, state == 'active')
     assertEquals(!!row.waiting, state == 'waiting')
     if (state == 'settled') assertEquals(row.dispatch, undefined)
@@ -439,43 +439,43 @@ test('dispatch conversion refuses changes to the old state, envelope or marks', 
       let eid = `${comp}-${prop}`
       let other = `${eid}-other`
       await s.apply([legacy('settled', eid), legacy('queued', other)])
-      let [row] = await s.query(`.eid=${eid}&*`)
-      let [untouched] = await s.query(`.eid=${other}&*`)
+      let [row] = await s.query(`.entity.eid=${eid}&*`)
+      let [untouched] = await s.query(`.entity.eid=${other}&*`)
       let patch = [...dispatchMove(untouched), ...dispatchMove(row)]
       await s.apply([{ entity: { eid }, [comp]: { [prop]: value } }])
-      let changed = await s.query(`.eid=${eid}&*`)
+      let changed = await s.query(`.entity.eid=${eid}&*`)
       await assertRejects(() => s.apply(patch), Stale, `${comp}.${prop}`)
-      assertEquals(await s.query(`.eid=${eid}&*`), changed)
-      assertEquals(await s.query(`.eid=${other}&*`), [untouched])
+      assertEquals(await s.query(`.entity.eid=${eid}&*`), changed)
+      assertEquals(await s.query(`.entity.eid=${other}&*`), [untouched])
     }
   }
   for (let mark of ['admitted', 'waiting']) {
     let eid = `new-${mark}`
     await s.apply([{ entity: { eid }, dispatch: { state: 'queued' } }])
-    let [row] = await s.query(`.eid=${eid}&*`)
+    let [row] = await s.query(`.entity.eid=${eid}&*`)
     let patch = dispatchMove(row)
     await s.apply([{
       entity: { eid },
       [mark]: { at: '2026-09-03T00:00:00.000Z' },
     }])
-    let changed = await s.query(`.eid=${eid}&*`)
+    let changed = await s.query(`.entity.eid=${eid}&*`)
     await assertRejects(() => s.apply(patch), Stale, `${mark}.at`)
-    assertEquals(await s.query(`.eid=${eid}&*`), changed)
+    assertEquals(await s.query(`.entity.eid=${eid}&*`), changed)
   }
   // A writer after conversion can restore state: guards cannot stop that.
   // This is why the rule stays rehearsal-only until old writers are gone.
   await s.apply([legacy('active', 'old-writer')])
-  let [row] = await s.query('.eid=old-writer&*')
+  let [row] = await s.query('.entity.eid=old-writer&*')
   await s.apply(dispatchMove(row))
   await s.apply([{ entity: row.entity, dispatch: { state: 'queued' } }])
-  let [written] = await s.query('.eid=old-writer&*')
+  let [written] = await s.query('.entity.eid=old-writer&*')
   assertEquals((written.dispatch as Comp).state, 'queued')
   assertEquals(
-    (await s.query(`${dispatchRule.find}&.eid=old-writer`)).length,
+    (await s.query(`${dispatchRule.find}&.entity.eid=old-writer`)).length,
     1,
   )
   await s.apply(dispatchMove(written))
-  let [converted] = await s.query('.eid=old-writer&*')
+  let [converted] = await s.query('.entity.eid=old-writer&*')
   assertEquals(converted.admitted, undefined)
   assertEquals((converted.dispatch as Comp).state ?? null, null)
 })
