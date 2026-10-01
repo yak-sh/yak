@@ -167,6 +167,7 @@
     "./packages/ux",
     "./packages/filter",
     "./packages/inspect",
+    "./packages/visualize",
     "./packages/context",
     "./packages/mcp-client",
     "./packages/kernel",

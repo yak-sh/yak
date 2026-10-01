@@ -1,0 +1,210 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "visualize front",
+  "description": "The MRI page's own state. Never synced or stored past the connection; not a host vocabulary facet.",
+  "$defs": {
+    "Visualize": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "Navigation, camera, appearance and observation status of one MRI page.",
+      "properties": {
+        "selected": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach"
+        },
+        "cause": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach"
+        },
+        "group": {
+          "type": "string"
+        },
+        "listPage": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "paused": {
+          "type": "boolean"
+        },
+        "view": {
+          "type": "string",
+          "enum": [
+            "map",
+            "list"
+          ]
+        },
+        "theme": {
+          "type": "string",
+          "enum": [
+            "everforest",
+            "rosepine"
+          ]
+        },
+        "scheme": {
+          "type": "string",
+          "enum": [
+            "dark",
+            "light"
+          ]
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "zoom": {
+          "type": "number",
+          "minimum": 0.35,
+          "maximum": 3
+        },
+        "connected": {
+          "type": "string",
+          "enum": [
+            "connecting",
+            "live",
+            "reconnecting",
+            "paused",
+            "offline"
+          ]
+        },
+        "gap": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "received": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "error": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string"
+        }
+      }
+    },
+    "AtlasPart": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "One value-free anatomy part, with the supplier's public identity and contract.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "group": {
+          "type": "string"
+        },
+        "package": {
+          "type": "string"
+        },
+        "facet": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "declared": {
+          "type": "boolean"
+        },
+        "loaded": {
+          "type": "boolean"
+        },
+        "bound": {
+          "type": "boolean"
+        },
+        "detail": {
+          "type": "object"
+        }
+      }
+    },
+    "AtlasRelation": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "A supplier's relationship, with real references to page-local anatomy entities.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach"
+        },
+        "to": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach"
+        }
+      }
+    },
+    "AtlasEvent": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "A retained shared-channel observation. At most 256 records; no entity data.",
+      "properties": {
+        "seq": {
+          "type": "integer"
+        },
+        "epoch": {
+          "type": "string"
+        },
+        "span": {
+          "type": "string"
+        },
+        "parent": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach"
+        },
+        "node": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach"
+        },
+        "data": {
+          "type": "object"
+        }
+      }
+    },
+    "AtlasCoverage": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "Whether the supplier actually observed each composition category, not inferred absence.",
+      "properties": {
+        "scope": {
+          "type": "string"
+        },
+        "observed": {
+          "type": "object"
+        },
+        "takenAt": {
+          "type": "string"
+        },
+        "epoch": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

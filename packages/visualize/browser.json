@@ -1,0 +1,26 @@
+{
+  "_": "Portable MRI core, page vocabulary and graph-owned model must type-check with only the web platform. Native assets/routes and CLI are separate facets.",
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "strict": true
+  },
+  "entries": [".", "./front", "./model", "./http"],
+  "imports": {
+    "@yaks/archetype": "../archetype/mod.ts",
+    "@yaks/client": "../client/mod.ts",
+    "@yaks/code/anatomy": "../code/anatomy.ts",
+    "@yaks/draft": "../draft/mod.ts",
+    "@yaks/fp": "../fp/mod.ts",
+    "@yaks/graph": "../graph/mod.ts",
+    "@yaks/match": "../match/mod.ts",
+    "@yaks/query": "../query/mod.ts",
+    "@yaks/ram": "../ram/mod.ts",
+    "@yaks/sql": "../sql/mod.ts",
+    "@yaks/sync": "../sync/mod.ts",
+    "@yaks/trace": "../trace/mod.ts",
+    "@yaks/vocab": "../vocab/mod.ts",
+    "@preact/signals": "npm:@preact/signals@^2.9.0",
+    "preact": "npm:preact@^10.29.1",
+    "preact/hooks": "npm:preact@^10.29.1/hooks"
+  }
+}

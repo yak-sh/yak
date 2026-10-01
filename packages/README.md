@@ -175,6 +175,11 @@ grouped approximately by function, **not** by dependency order.
   for the queries they need as data, write edits out as bundles, keep their own
   state in the page's own graph, and take feedback on any part as an open task
   aimed at it.
+- **[@yaks/visualize](./visualize)** — the platform MRI at `/visualize`: its
+  composed parts, value-free contracts and relationships, with bounded causal
+  activity from the exact serving graph's shared trace channel. Agents use the
+  same anatomy and capture contracts through tools and `yak visualize`; this
+  standalone page does not depend on the stored-data inspector.
 - **[@yaks/ram](./ram)** — Implement graph storage with a synchronous in-memory
   `Map` and @yaks/match queries, suitable for browsers and tests. Shared
   operations and declared rules are tested against SQLite, but RAM does not
