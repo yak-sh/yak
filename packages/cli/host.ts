@@ -114,7 +114,7 @@ import { stateDir } from './store.ts'
 import { understood } from './keywords.ts'
 import { vaultOf } from './vault.ts'
 import type { Command, Ctx } from './run.ts'
-import type { Anatomy } from '@yaks/code/anatomy'
+import type { Anatomy, AnatomyObserver } from '@yaks/code/anatomy'
 import { nativeAnatomy, secretNames } from './anatomy.ts'
 
 export {
@@ -138,6 +138,8 @@ export {
 export type Host = {
   /** Already-observed composition metadata; never imports a lazy facet. */
   anatomy: () => Anatomy
+  /** Already-loaded metadata only; never triggers an import or a factory. */
+  observe?: AnatomyObserver
   config: Config
   /** the roles this process serves over the graph ({@link ROLES}): the
    * facets it imported, and so what else is wired in below */
@@ -925,10 +927,14 @@ export let compose = async (
     // correctly. The host process itself is that answer until the plugins are
     // asked, which happens a moment later — `who` reads the variable rather
     // than a copy of its value.
+    for (let [ui, , plugin] of dressed) {
+      observed.observe({ package: plugin, facet: 'ui', loaded: true, bound: true, value: ui })
+    }
     let self = writer(vocab)
     let authenticate: Authenticate = () => self
     let host: Host = {
       anatomy: observed.read,
+      observe: observed.observe,
       config,
       ui: gather(dressed.map(([facet]) => facet)),
       roles,

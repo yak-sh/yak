@@ -1,6 +1,7 @@
 /** Per-composition evidence, separate from the shared vocabulary cache. */
 import {
   type Anatomy,
+  type AnatomyObservation,
   anatomy,
   anatomyData,
   anatomyDocuments,
@@ -110,6 +111,7 @@ export let nativeAnatomy = (
         'tools',
         'effects',
         'routes',
+        'ui',
         'service',
         'cli',
         'views',
@@ -140,6 +142,78 @@ export let nativeAnatomy = (
     let p = ownerOf(owner)
     p.loaded = p.bound = true
   }
+  let readValue = (input: unknown, name: string): unknown => {
+    if (!input || typeof input != 'object') return undefined
+    let d = Object.getOwnPropertyDescriptor(input, name)
+    return d && 'value' in d ? d.value : undefined
+  }
+  let entries = (input: unknown): [string, unknown][] => {
+    if (!input || typeof input != 'object') return []
+    return Object.entries(Object.getOwnPropertyDescriptors(input))
+      .filter(([, d]) => d.enumerable && 'value' in d)
+      .map(([k, d]) => [k, d.value])
+  }
+  let values = (input: unknown): unknown[] =>
+    Array.isArray(input) ? entries(input).map(([, v]) => v) : []
+  let observe = (o: AnatomyObservation) => {
+    let f = forFacet(o.package, o.facet)
+    f.attempted = true
+    f.loaded = o.loaded
+    if (!o.loaded) return
+    f.declared = true
+    ownerOf(o.package).loaded = true
+    if (o.bound) binding(o.package, o.facet)
+    let common = {
+      package: o.package, facet: o.facet, declared: true,
+      loaded: true, bound: o.bound,
+    }
+    if (o.facet == 'ui') {
+      for (let group of ['kits', 'themes'] as const) {
+        source.observed![group] = true
+        source[group] = [
+          ...source[group]?.filter((p) => p.package != o.package) ?? [],
+          ...entries(readValue(o.value, group)).map(([name]) => ({
+            ...common, name,
+          })),
+        ]
+      }
+      return
+    }
+    if (o.facet == 'cli') {
+      source.observed!.commands = true
+      source.commands = [
+        ...source.commands?.filter((p) => p.package != o.package) ?? [],
+        ...values(readValue(o.value, 'commands')).flatMap((c, i) => {
+          let name = readValue(c, 'name')
+          if (typeof name != 'string') return []
+          let description = readValue(c, 'description')
+          return [{
+            ...common, name, key: String(i),
+            schema: anatomyData(readValue(c, 'inputSchema')),
+            ...typeof description == 'string' ? { description } : {},
+          }]
+        }),
+      ]
+      return
+    }
+    for (let group of o.facet == 'tui' ? ['tui'] as const : ['views', 'inspectViews'] as const) {
+      let raw = group == 'inspectViews'
+        ? readValue(o.value, 'inspectViews')
+        : readValue(readValue(o.value, 'views'), 'renderers')
+      // A module without inspectViews is not evidence about its page's own
+      // curated registry; an exported empty list is evidence of no additions.
+      if (raw === undefined) continue
+      source.observed![group] = true
+      source[group] = [
+        ...source[group]?.filter((p) => p.package != o.package) ?? [],
+        ...values(raw).flatMap((r, i) => {
+          let name = readValue(r, 'view')
+          if (typeof name != 'string') return []
+          return [{ ...common, name, key: String(i) }]
+        }),
+      ]
+    }
+  }
   let declarations = (docs: VocabDoc[], vocab: Vocab) => {
     let projected = anatomyDocuments(docs)
     source.comps = projected.comps
@@ -156,7 +230,9 @@ export let nativeAnatomy = (
     for (let c of source.comps ?? []) {
       let info = vocab.comp(c.name)
       if (info && !c.extends) c.rules = anatomyData(info)
-      for (let p of c.props) p.rules = anatomyData(vocab.prop(c.name, p.name))
+      for (let p of c.props) {
+        if (!c.extends) p.rules = anatomyData(vocab.prop(c.name, p.name))
+      }
       c.refs = [
         ...new Set(c.props.flatMap((p) => {
           let ref = vocab.prop(c.name, p.name)?.ref
@@ -210,6 +286,7 @@ export let nativeAnatomy = (
   }
   return {
     read: (): Anatomy => anatomy({ ...source, facets: [...facets.values()] }),
+    observe,
     attempted: (owner: string, name: string) => {
       forFacet(owner, name).attempted = true
     },

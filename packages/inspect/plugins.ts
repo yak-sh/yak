@@ -16,6 +16,7 @@
 
 import { located, type Plug, subpath, used } from '@yaks/cli/config'
 import type { View } from './host.ts'
+import type { AnatomyObserver } from '@yaks/code/anatomy'
 
 /** One plugin's contribution: where its views are, and the ones it gives
  * the inspector. */
@@ -23,10 +24,11 @@ export type Contribution = { spec: string; views: View[] }
 
 /** The plugins among `plugins` whose `/views` facet exports inspector views,
  * each with those views, in the order the config names them. */
-export let contributed = async (plugins: Plug[]): Promise<Contribution[]> => {
+export let contributed = async (plugins: Plug[], observe?: AnatomyObserver): Promise<Contribution[]> => {
   let others = plugins.map(used).filter((p) => p != '@yaks/inspect')
   let found = await Promise.all(others.map(async (plugin) => {
     let m = await subpath<{ inspectViews?: View[] }>(plugin, 'views')
+    observe?.({ package: plugin, facet: 'views', loaded: m !== null, bound: true, value: m })
     let views = m?.inspectViews ?? []
     return views.length ? [{ spec: located(`${plugin}/views`), views }] : []
   }))

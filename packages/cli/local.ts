@@ -31,6 +31,7 @@
 // on a machine with no graph should not pay.
 
 import { type Actor, mint, offered } from '@yaks/graph'
+import type { AnatomyObservation } from '@yaks/code/anatomy'
 import type { Vocab } from '@yaks/vocab'
 import { EFFECT } from '@yaks/effects'
 import { answerOf, faulted, structured, toolEid } from '@yaks/tools'
@@ -264,12 +265,23 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
   // The views are imported when an answer is first drawn, never to list.
   let plugins = () => (config.plugins ?? []).map(used)
   let views: ReturnType<typeof registry> | undefined
-  let drawn = () => views ??= registry(plugins())
-  let direct = (await Promise.all(
-    plugins().map(async (plugin) =>
-      (await facet(plugin, 'cli'))?.commands ?? []
-    ),
-  )).flat()
+  let loadedViews: AnatomyObservation[] = []
+  let drawn = async (host: Served) => {
+    views ??= registry(plugins(), undefined, (o) => loadedViews.push(o))
+    let made = await views
+    for (let o of loadedViews) host.observe?.(o)
+    return made
+  }
+  let loaded = await Promise.all(plugins().map(async (plugin) => ({
+    plugin, value: await facet(plugin, 'cli'),
+  })))
+  let observe = (host: Served) => {
+    if (!host.observe) return
+    for (let { plugin, value } of loaded) host.observe({
+      package: plugin, facet: 'cli', loaded: value !== null, bound: true, value,
+    })
+  }
+  let direct = loaded.flatMap(({ value }) => value?.commands ?? [])
   let tools = said.tools().filter(offered('cli')).map((declared) => ({
     ...declared,
     // A tool arrives declaring its arguments as JSON Schema — the same
@@ -289,6 +301,7 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
         rolesOf(declared, !!said.vocab.comp(EFFECT)),
         c.duties,
       )
+      observe(host)
       // Write the `tool` rows a call's `to` points at first: a call naming an
       // entity nothing created would be a dangling reference. Done once per
       // process, by whichever caller gets there first (@yaks/tools `ensure`).
@@ -307,10 +320,10 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
       } else {
         await show(
           c,
-          await drawn(),
+          await drawn(host),
           host.vocab,
           answer,
-          c.tui ? { views: await terminal(plugins()), config: c.config } : {},
+          c.tui ? { views: await terminal(plugins(), undefined, undefined, host.observe), config: c.config } : {},
           {
             lookup: (eids) => host.graph.get(eids),
             query: (q) => host.graph.read(q),
@@ -332,6 +345,7 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
         rolesOf(declared, !!said.vocab.comp(EFFECT)),
         context.duties,
       )
+      observe(host)
       return await run(args, host, context)
     },
   }))

@@ -44,6 +44,7 @@ import {
   views as generic,
 } from '@yaks/render/views'
 import { subpath } from './config.ts'
+import type { AnatomyObserver } from '@yaks/code/anatomy'
 import { understood } from './keywords.ts'
 import type { Tty } from './run.ts'
 
@@ -57,7 +58,7 @@ let dressed = async (): Promise<Sheet> => {
 
 /** How one plugin's `./views` becomes a module: {@link subpath} unless a test
  * hands its modules over inline. */
-export type Views = (plugin: string) => Promise<{ views?: Registry } | null>
+export type Views = (plugin: string) => Promise<{ views?: Registry; inspectViews?: unknown } | null>
 
 type Hit = {
   kind: string
@@ -140,9 +141,16 @@ let search: Renderer = { view: 'Search.Tile', match: true, render: hit }
 export let registry = async (
   plugins: string[],
   load: Views = (plugin) => subpath(plugin, 'views'),
+  observe?: AnatomyObserver,
 ): Promise<Registry> => {
   let named = [...new Set([...plugins, '@yaks/tools'])]
-  let found = await Promise.all(named.map(load))
+  let found = await Promise.all(named.map(async (plugin) => {
+    let m = await load(plugin)
+    observe?.({ package: plugin, facet: 'views', loaded: m !== null, bound: true, value: m })
+    return m
+  }))
+  observe?.({ package: '@yaks/cli', facet: 'views', loaded: true, bound: true, value: { views: define([search]) } })
+  observe?.({ package: '@yaks/render', facet: 'views', loaded: true, bound: true, value: { views: generic } })
   return define([
     ...found.flatMap((m) => m?.views?.renderers ?? []),
     search,
@@ -162,11 +170,16 @@ export let terminal = async (
   plugins: string[],
   load: Views = (plugin) => subpath(plugin, 'views'),
   held: Tui = (plugin) => subpath<{ views?: Held }>(plugin, 'tui'),
+  observe?: AnatomyObserver,
 ): Promise<Held> => {
-  let own = await Promise.all(plugins.map(held))
+  let own = await Promise.all(plugins.map(async (plugin) => {
+    let m = await held(plugin)
+    observe?.({ package: plugin, facet: 'tui', loaded: m !== null, bound: true, value: m })
+    return m
+  }))
   return define([
     ...own.flatMap((m) => m?.views?.renderers ?? []),
-    ...(await registry(plugins, load)).renderers,
+    ...(await registry(plugins, load, observe)).renderers,
   ])
 }
 

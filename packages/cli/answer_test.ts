@@ -273,3 +273,22 @@ test('a link in a list reads as the sentence it states', () => {
     ['T-10 contains T-9', 'T-9 requires T-10'],
   )
 })
+
+
+test('actual answer registries report loaded metadata without drawing a renderer', async () => {
+  let seen: import('@yaks/code/anatomy').AnatomyObservation[] = []
+  let loads = 0, ran = 0
+  let part = { view: 'Tile', match: true as const, render: () => { ran++; return null } }
+  let held = { view: 'Page', match: true as const, Render: () => { ran++; return null } }
+  let views = await terminal(['shop'], async (name) => {
+    loads++
+    return name == 'shop' ? { views: define([part]), inspectViews: [] } : null
+  }, async (name) => name == 'shop' ? { views: define([held]) } : null,
+  (o) => seen.push(o))
+  assertEquals(loads, 2)
+  assertEquals(ran, 0)
+  assertEquals(seen.filter((o) => o.package == 'shop').map((o) => o.facet), ['tui', 'views'])
+  assertEquals(seen.find((o) => o.package == '@yaks/tools')?.loaded, false)
+  assert(views.renderers.includes(part))
+  assert(views.renderers.includes(held))
+})

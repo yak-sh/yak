@@ -114,6 +114,17 @@ export type Anatomy = {
   edges: AnatomyEdge[]
 }
 
+/** An already-loaded metadata contribution; a supplier never requests one. */
+export type AnatomyObservation = {
+  package: string
+  facet: 'ui' | 'cli' | 'views' | 'tui'
+  loaded: boolean
+  bound: boolean
+  /** Only an adapter's allowlisted fields are retained, never this whole value. */
+  value?: unknown
+}
+export type AnatomyObserver = (observation: AnatomyObservation) => void
+
 /** Adapters pass metadata they already observed, never a host or its options. */
 export type AnatomySeed<T extends AnatomyPart = AnatomyPart> =
   & Omit<T, 'id' | 'declared' | 'loaded' | 'bound'>

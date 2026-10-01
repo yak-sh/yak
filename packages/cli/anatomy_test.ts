@@ -1,4 +1,4 @@
-import { assertEquals } from '@std/assert'
+import { assert, assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { nativeAnatomy, secretNames } from './anatomy.ts'
@@ -87,4 +87,45 @@ test('native secret observation reads only raw names, not resolved accessors', (
   )
   assertEquals(capture.read().secrets.map((s) => s.name), names)
   assertEquals(capture.read().observed?.secrets, true)
+})
+
+
+test('native anatomy keeps actual UI and later command/view loading separate', () => {
+  let first = nativeAnatomy(['shop'], ['web'], roles)
+  let second = nativeAnatomy(['shop'], ['web'], roles)
+  let ran = 0
+  let ui = {
+    kits: { base: { Piece: { Component: () => { ran++ }, sheet: () => { ran++ } } } },
+    themes: { forest: { css: new URL('https://example.invalid/theme.css') } },
+  }
+  Object.defineProperty(ui.kits, 'vault', {
+    enumerable: true, get: () => { ran++; return 'not a kit' },
+  })
+  first.observe({ package: 'shop', facet: 'ui', loaded: true, bound: true, value: ui })
+  let before = first.read()
+  assertEquals(before.kits.map((k) => k.name), ['base'])
+  assertEquals(before.themes.map((k) => k.name), ['forest'])
+  assertEquals(before.observed?.views, false)
+  assertEquals(before.observed?.commands, false)
+  first.observe({ package: 'shop', facet: 'cli', loaded: true, bound: true, value: {
+    commands: [{ name: 'peek', description: 'Look', inputSchema: { type: 'object', properties: {} }, run: () => { ran++ } }],
+  } })
+  let view = { view: 'Tile', match: true, render: () => { ran++ } }
+  let inspect = { view: 'Inspect.Page', match: true, Render: () => { ran++ } }
+  first.observe({ package: 'shop', facet: 'views', loaded: true, bound: true, value: {
+    views: { renderers: [view] }, inspectViews: [inspect],
+  } })
+  first.observe({ package: 'shop', facet: 'tui', loaded: true, bound: true, value: { views: { renderers: [view] } } })
+  let after = first.read()
+  assertEquals(after.commands.map((c) => c.name), ['peek'])
+  assertEquals(after.commands[0].schema, { type: 'object', properties: {} })
+  assertEquals(after.views.map((v) => v.name), ['Tile'])
+  assertEquals(after.inspectViews.map((v) => v.name), ['Inspect.Page'])
+  assertEquals(after.tui.map((v) => v.name), ['Tile'])
+  assertEquals(second.read().kits, [])
+  assertEquals(second.read().observed?.commands, false)
+  assertEquals(after.observed?.skills, false)
+  assertEquals(ran, 0)
+  assert(!JSON.stringify(after).includes('Component'))
+  assert(!JSON.stringify(after).includes('render'))
 })

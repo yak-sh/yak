@@ -20,9 +20,11 @@ import type { Plug } from '@yaks/cli/config'
 import { bundle, kept } from '@yaks/cli/page'
 import { everforest, kits, stylesheet } from '@yaks/ui'
 import { contributed } from './plugins.ts'
+import type { AnatomyObserver } from '@yaks/code/anatomy'
 
 /** What this facet reads off the host it is composing into. */
 export type Hosting = {
+  observe?: AnatomyObserver
   /** aborts as the host closes, ending the page's build if it is still going */
   stopping?: AbortSignal
   /** the config it was composed from: its plugins may draw their own kinds */
@@ -61,7 +63,7 @@ export let entry = (main: string, specs: string[]): string =>
 
 // The page's script: the entry for this host's plugins, and all it imports.
 let app = async (host: Hosting, signal: AbortSignal) => {
-  let from = await contributed(host.config?.plugins ?? [])
+  let from = await contributed(host.config?.plugins ?? [], host.observe)
   let main = new URL('./main.ts', import.meta.url)
   let specs = from.map((c) => import.meta.resolve(c.spec))
   return await bundle({ code: entry(main.href, specs), at: main }, signal)
