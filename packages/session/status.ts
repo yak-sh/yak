@@ -267,6 +267,32 @@ export let usingBefore = (
     : latest)?.[USING] as Comp | undefined
 }
 
+// Old servers still write state during the marks expansion. A non-null state
+// wins until cutover; otherwise waiting precedes admitted in the declared ladder.
+export let dispatchStatus = {
+  tag: 'text' as const,
+  values: ['queued', 'active', 'waiting', 'settled'],
+  deps: ['dispatch', 'waiting', 'admitted'],
+  expr: (owner: Expr, marks = ['waiting', 'admitted']): Expr => {
+    let marked = (comp: string) =>
+      exists(select({
+        cols: [lit(1)],
+        from: table(comp, 'm'),
+        where: eq(col('entity', 'm'), owner),
+      }))
+    let rungs: [Expr, Expr][] = marks.map((comp) => [
+      marked(comp),
+      lit(comp == 'waiting' ? 'waiting' : 'active'),
+    ])
+    let status = rungs.length ? when(rungs, lit('queued')) : lit('queued')
+    return sub(select({
+      cols: [fn('coalesce', col('state', 'd'), status)],
+      from: table('dispatch', 'd'),
+      where: eq(col('entity', 'd'), owner),
+    }))
+  },
+}
+
 /**
  * The same rule as SQL, for @yaks/sqlite's derived-property registry
  * (`storage(driver, vocab, { derived: sessionDerived(vocab) })`), so
@@ -286,7 +312,7 @@ export let sessionStatus = {
     'failed',
   ],
   deps: ['session'],
-  expr: (owner: Expr): Expr => {
+  expr: (owner: Expr, dispatch = dispatchStatus): Expr => {
     // Whether the entity `of` wears `comp` (and `also` holds of that row, `k`).
     let has = (comp: string, of: Expr, also?: Expr) =>
       exists(select({
@@ -429,14 +455,7 @@ export let sessionStatus = {
       ),
     }))
     let owed = iff(served, lit('pending'), lit('running'))
-    let queued = exists(select({
-      cols: [lit(1)],
-      from: table('dispatch', 'd'),
-      where: and(
-        eq(col('entity', 'd'), owner),
-        eq(col('state', 'd'), lit('queued')),
-      ),
-    }))
+    let queued = eq(dispatch.expr(owner), lit('queued'))
     let settled = exists(select({
       cols: [lit(1)],
       from: table('attempt', 'a'),
@@ -532,10 +551,24 @@ export let sessionStatus = {
 }
 
 /** The derived-property registry a SQLite store loads to read
- * `session.status`, and `session.cost` (./cost.ts) where the vocabulary
- * declares the `cost.dollars` it sums: a store may hold an app's own `cost`
+ * `session.status`, compatible `dispatch.status`, and `session.cost` (./cost.ts)
+ * where the vocabulary declares the `cost.dollars` it sums: a store may hold an app's own `cost`
  * in place of @yaks/model's. */
-export let sessionDerived = (vocab: Vocab): Derived => ({
-  'session.status': sessionStatus,
-  ...vocab.prop(COST, 'dollars') ? { 'session.cost': sessionCost } : {},
-})
+export let sessionDerived = (vocab: Vocab): Derived => {
+  // Small compositions can declare dispatch without loading kernel's marks.
+  // Missing marks are absent, not tables to read (nor an empty CASE ladder).
+  let marks = ['waiting', 'admitted'].filter((comp) => vocab.comp(comp))
+  let dispatch = {
+    ...dispatchStatus,
+    deps: ['dispatch', ...marks],
+    expr: (owner: Expr) => dispatchStatus.expr(owner, marks),
+  }
+  return {
+    'session.status': {
+      ...sessionStatus,
+      expr: (owner) => sessionStatus.expr(owner, dispatch),
+    },
+    'dispatch.status': dispatch,
+    ...vocab.prop(COST, 'dollars') ? { 'session.cost': sessionCost } : {},
+  }
+}

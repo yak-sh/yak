@@ -1,3 +1,4 @@
+import { dispatchStatus } from '@yaks/session/admission'
 // The harness is its agent: the rows every transcript is read from, the runner
 // it lends them (@yaks/session run.ts), and the operations a caller needs —
 // start a session, send it a message, list sessions, read one back. It runs
@@ -462,7 +463,7 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
   let quiet = async (session: Eid) => {
     if (passing(h.g, session)) return false
     let [self] = await h.g.get([session])
-    if ((self?.dispatch as Comp | undefined)?.state == 'queued') return false
+    if (dispatchStatus(self) == 'queued') return false
     let status = statusOf(await transcript(h.g, session))
     if (status != 'pending' && status != 'running') return true
     return !await answering(h.g, session, r)
@@ -582,7 +583,7 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
       // retries an interrupted delivery without revisiting finished children.
       let woken = [
         ...new Set((await h.g.read(
-          `${live}|.session&.dispatch.state=active,queued`,
+          `${live}|.session&.dispatch.status=active,queued,waiting`,
         )).map((b) => b.entity.eid)),
       ]
       await opts.resuming?.()

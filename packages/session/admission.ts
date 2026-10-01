@@ -17,8 +17,16 @@ import type { ChildLimits } from './children.ts'
 
 let dispatch = (b: Bundle | undefined) => b?.dispatch as Comp | undefined
 
+/** During expansion the old server's value wins. After conversion only marks
+ * remain; no dispatch means no place, not a queued root. */
+export let dispatchStatus = (b: Bundle | undefined): unknown => {
+  let d = dispatch(b)
+  if (!d) return null
+  return d.state ?? (b?.waiting ? 'waiting' : b?.admitted ? 'active' : 'queued')
+}
+
 let state = async (g: Graph, eid: Eid) =>
-  dispatch((await g.get([eid]))[0])?.state
+  dispatchStatus((await g.get([eid]))[0])
 
 /** Patch a transcript's `dispatch` only if its state is still `was`. */
 export let swap = async (
@@ -26,13 +34,50 @@ export let swap = async (
   eid: Eid,
   was: unknown,
   patch: Comp,
+  together: Bundle[] = [],
 ): Promise<boolean> => {
+  let b = (await g.get([eid]))[0]
+  if (dispatchStatus(b) != was || !b?.dispatch) return false
+  let d = dispatch(b)!
+  let next = patch.state
+  // Narrow consumers may still load only the old session vocabulary. They
+  // keep writing the legacy shape; marks-only rows require both core marks.
+  let marks = g.vocab.comps.includes('admitted') &&
+    g.vocab.comps.includes('waiting')
   try {
     await g.apply([{
       entity: { eid },
-      dispatch: patch,
-      $was: { dispatch: { state: token(was ?? null) } },
-    }], { trusted: true })
+      dispatch: next == 'settled' && d.state == null
+        ? null
+        : { ...patch, ...(d.state == null ? { state: null } : {}) },
+      ...(marks
+        ? next == 'active'
+          ? { admitted: {}, waiting: null }
+          : next == 'waiting'
+          ? { admitted: null, waiting: {} }
+          : next == 'queued' || next == 'settled'
+          ? { admitted: null, waiting: null }
+          : {}
+        : {}),
+      $was: {
+        dispatch: {
+          state: token(d.state ?? null),
+          order: token(d.order ?? null),
+          args: token(d.args ?? null),
+        },
+        ...marks
+          ? {
+            ...Object.fromEntries(['admitted', 'waiting'].map((name) => [
+              name,
+              Object.fromEntries(['at', 'by', 'via'].map((prop) => [
+                prop,
+                token((b[name] as Comp)?.[prop]),
+              ])),
+            ])),
+          }
+          : {},
+      },
+    }, ...together], { trusted: true })
     return true
   } catch (error) {
     if (error instanceof Stale) return false
@@ -42,13 +87,15 @@ export let swap = async (
 
 /** The children waiting for a place, oldest first. */
 export let queue = async (g: Graph): Promise<Bundle[]> =>
-  (await g.read('.dispatch.state=queued&*')).toSorted((a, b) =>
-    Number(dispatch(a)?.order ?? 0) - Number(dispatch(b)?.order ?? 0)
-  )
+  (await g.read('.dispatch&*')).filter((b) => dispatchStatus(b) == 'queued')
+    .toSorted((a, b) =>
+      Number(dispatch(a)?.order ?? 0) - Number(dispatch(b)?.order ?? 0)
+    )
 
 /** How many children hold a place. */
 export let active = async (g: Graph): Promise<number> =>
-  (await g.read('.dispatch.state=active')).length
+  (await g.read('.dispatch&*')).filter((b) => dispatchStatus(b) == 'active')
+    .length
 
 /** Admit the oldest queued children while fewer than the bound are active. */
 export let admitNext = async (

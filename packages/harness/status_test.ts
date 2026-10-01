@@ -11,6 +11,7 @@ test('sidebar indicator queries cover states and owner joins', () => {
       ['settled', '●', 'Good'],
       ['running', '●', 'Key'],
       ['pending', '●', 'Key'],
+      ['queued', '◷', 'Muted'],
       ['failed', '●', 'Bad'],
       ['stopped', '○', 'Muted'],
       ['unknown', '○', 'Accent'],
@@ -23,6 +24,7 @@ test('sidebar indicator queries cover states and owner joins', () => {
       ['open', '', '○', 'Accent'],
       ['wip', 'running', '●', 'Key'],
       ['wip', 'pending', '●', 'Key'],
+      ['wip', 'queued', '◷', 'Muted'],
       ['wip', 'settled', '◐', 'Key'],
       ['wip', 'failed', '●', 'Bad'],
       ['wip', 'stopped', '◐', 'Muted'],
@@ -41,6 +43,29 @@ test('sidebar indicator queries cover states and owner joins', () => {
     )
     assertEquals(task.session, undefined)
     cases.push([joined, glyph, color])
+  }
+  // Dispatch admission is independent of the sidebar's transcript status.
+  for (
+    let [status, glyph, color] of [
+      ['queued', '◷', 'Muted'],
+      ['running', '●', 'Key'],
+      ['settled', '●', 'Good'],
+      ['failed', '●', 'Bad'],
+    ]
+  ) {
+    for (let dispatch of [{ state: 'queued' }, { state: 'active' }, {}]) {
+      cases.push([
+        {
+          entity: { eid: 'mixed-' + status },
+          session: { status },
+          dispatch,
+          admitted: {},
+          waiting: {},
+        },
+        glyph,
+        color,
+      ])
+    }
   }
   for (let [bundle, glyph, color] of cases) {
     let renderer = resolve(statusViews, bundle, 'Indicator', statusVocab)!

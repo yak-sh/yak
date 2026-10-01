@@ -6,7 +6,10 @@ import { type Bundle, type Comp } from '@yaks/graph'
 import { define, type Renderer } from '@yaks/render'
 import { parse } from '@yaks/query'
 import { render } from '@yaks/preact'
-import { loadVocab } from '@yaks/vocab'
+import { loadVocab, pick } from '@yaks/vocab'
+import { sessionDoc } from '@yaks/session/vocab'
+import { kernelDoc } from '@yaks/kernel/vocab'
+import { dispatchStatus } from '@yaks/session/admission'
 import doc from './runtime/vocab.json' with { type: 'json' }
 import { Scroll, useKeymap } from '@yaks/tui'
 import type { RuntimeAction } from './runtime.ts'
@@ -14,14 +17,18 @@ import type { Frontend } from './frontend.ts'
 import type { UIAgent } from './panels.ts'
 import { sessionLine } from './panels.ts'
 
-let vocabulary = loadVocab([doc])
+let vocabulary = loadVocab([
+  doc,
+  pick(sessionDoc, ['dispatch']),
+  pick(kernelDoc, ['admitted', 'waiting']),
+])
 let label = (match: string, text: string, color: string): Renderer => ({
   view: 'Runtime',
   match: parse(match),
   render: (_b, host) => host('span', { class: color }, text),
 })
 export let runtimeViews = define([
-  label('.session&.dispatch.state=queued', 'queued', 'Key'),
+  label('.session&.dispatch.status=queued', 'queued', 'Key'),
   label('.session&.attempt.state=inflight', 'generating', 'Key'),
   label('.session&.error.code=interrupted', 'interrupted', 'Muted'),
   label('.session.status=running&.call', 'waiting for tool', 'Key'),
@@ -31,6 +38,18 @@ export let runtimeViews = define([
   label('.session.status=stopped', 'stopped', 'Muted'),
   label('.session', 'idle', 'Good'),
 ])
+// The matcher gives ladder marks priority over a carried status. Project the
+// authoritative legacy value into that ladder too, without changing the row.
+export let runtimeRow = (b: Bundle): Bundle => {
+  if (!b.dispatch) return b
+  let status = dispatchStatus(b)
+  return {
+    ...b,
+    dispatch: { ...(b.dispatch as Comp), status },
+    admitted: status == 'active' ? {} : null,
+    waiting: status == 'waiting' ? {} : null,
+  }
+}
 export let elapsed = (start: unknown, now: number): string => {
   let at = typeof start == 'string' ? Date.parse(start) : NaN
   if (!Number.isFinite(at)) return ''
@@ -112,7 +131,7 @@ export let RuntimePanel = ({ ui, agent, session, subscribe }: {
     } else if ((text == 'x' || text == 'c') && selected && agent.control) {
       let action: RuntimeAction = text == 'c'
         ? 'resume'
-        : (selected.dispatch as Comp | undefined)?.state == 'queued'
+        : dispatchStatus(selected) == 'queued'
         ? 'cancel-queued'
         : 'interrupt'
       ui.keys({ runtimeFeedback: 'Requesting ' + action + '…' })
@@ -147,7 +166,7 @@ export let RuntimePanel = ({ ui, agent, session, subscribe }: {
             fill: '1',
             class: i == index ? 'Session_Selected' : '',
           },
-          render(runtimeViews, b, 'Runtime', vocabulary),
+          render(runtimeViews, runtimeRow(b), 'Runtime', vocabulary),
           ' ',
           elapsed(
             (b.updated as Comp | undefined)?.at ??

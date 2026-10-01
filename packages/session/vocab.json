@@ -111,7 +111,9 @@
       "extends": true,
       "type": "object",
       "description": "a task a session holds is being worked on: a held claim reads `wip`, below the marks that end it",
-      "status": { "claim": "wip" }
+      "status": {
+        "claim": "wip"
+      }
     },
     "conflict": {
       "component": true,
@@ -151,10 +153,11 @@
     "dispatch": {
       "component": true,
       "type": "object",
-      "description": "a child's place under the bound on children: queued, active, waiting on its own, or settled; it survives a restart",
+      "description": "a child's place under the concurrency bound; settling removes it",
       "properties": {
         "state": {
-          "type": "string"
+          "type": "string",
+          "description": "Legacy compatibility during the dispatch marks expansion; removed after the deferred cutover."
         },
         "args": {
           "type": "string"
@@ -162,6 +165,11 @@
         "order": {
           "type": "number"
         }
+      },
+      "status": {
+        "waiting": "waiting",
+        "admitted": "active",
+        "default": "queued"
       }
     },
     "entry": {
@@ -292,7 +300,9 @@
       "component": true,
       "type": "object",
       "kind": true,
-      "before": ["process"],
+      "before": [
+        "process"
+      ],
       "prefix": "S",
       "description": "a transcript something reacts to. Its chosen persona is kept here; what it is doing is read off its entries (`status`), where it runs is @yaks/process `process`, and what it was asked for is the `using` on its first entry",
       "properties": {
@@ -346,12 +356,16 @@
             "running",
             "settled",
             "stopped",
-            "failed"
+            "failed",
+            "queued"
           ],
           "computed": true,
           "reads": [
             "entry.session",
-            "session.ended"
+            "session.ended",
+            "dispatch",
+            "admitted",
+            "waiting"
           ],
           "description": "what the newest entry implies: pending is waiting on the model, running is waiting on an answer, settled has nothing to do"
         },
@@ -419,7 +433,9 @@
         },
         "tools": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "the tools a turn is offered, by name: exactly these, from every tool the runner can run; the runner's own set where absent"
         }
       }
@@ -535,7 +551,9 @@
     },
     "session_listen": {
       "tool": true,
-      "surfaces": ["cli"],
+      "surfaces": [
+        "cli"
+      ],
       "noun": "session",
       "verb": "listen",
       "title": "Listen for a session’s work",
@@ -635,17 +653,23 @@
         "cancel",
         "stop",
         "completed",
-        "cancelled"
+        "cancelled",
+        "admitted"
       ],
       "changed": ["dispatch.state"],
       "removed": ["contains", "requires"],
-      "sweep": ".session.status=pending,running,queued (.entries.using|.entries.ask)|.dispatch.state=active,queued",
+      "sweep": ".session.status=pending,running,queued (.entries.using|.entries.ask)|.dispatch.status=active,queued,waiting",
       "tries": 8,
       "description": "run a transcript until it has nothing more to do: a `using` on an entry asks for a turn, a cancel withdraws the request in flight, a stop ends it (and gives up a child's place), a child is admitted, or a task a transcript holds completes, is cancelled or loses a dependency. A model request the provider failed but may yet answer is asked again after the pool's backoff, eight tries in a row at most"
     },
     "session_release": {
       "effect": true,
-      "created": ["stop", "error", "exception", "exit"],
+      "created": [
+        "stop",
+        "error",
+        "exception",
+        "exit"
+      ],
       "sweep": ".claim",
       "description": "release claims held by a transcript that stopped or failed; a worker also finds claims left by runs that ended while no worker was serving effects"
     }

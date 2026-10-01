@@ -514,6 +514,70 @@
           "body"
         ]
       }
+    },
+    "admitted": {
+      "component": true,
+      "type": "object",
+      "index": [
+        [
+          "at"
+        ]
+      ],
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when the child took a place"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "who wrote the mark — kept as history when that entity is deleted"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "what the write came in through — the session or client that made it"
+        }
+      },
+      "description": "A child holds a place under the concurrency bound. Removing the mark gives up that place."
+    },
+    "waiting": {
+      "component": true,
+      "type": "object",
+      "index": [
+        [
+          "at"
+        ]
+      ],
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when the child began waiting"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "who wrote the mark — kept as history when that entity is deleted"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "what the write came in through — the session or client that made it"
+        }
+      },
+      "description": "A child has stepped aside while it waits for its own children. Removing the mark queues it again."
     }
   }
 }

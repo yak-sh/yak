@@ -113,6 +113,7 @@ export let collecting = (
     if (typeof session == 'string') at(session)
   })
   fx.created('exit', (e) => at(e.entity.eid))
+  fx.removed('dispatch', (e) => at(e.entity.eid))
   fx.changed('dispatch', 'state', (e) => {
     if (e.comp?.state == 'settled') at(e.entity.eid)
   })

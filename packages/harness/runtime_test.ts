@@ -1,7 +1,15 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { local } from './local.ts'
-import { runtimeRows } from './runtime.ts'
+import { runtimeAction, runtimeRows } from './runtime.ts'
+import { type Bundle, type Comp, graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { kernelDoc } from '@yaks/kernel/vocab'
+import { sessionDoc } from '@yaks/session/vocab'
+import { dispatchStatus } from '@yaks/session/admission'
+import { loadVocab } from '@yaks/vocab'
+import { toolsDoc } from '@yaks/tools/vocab'
+import type { Agent } from './agent.ts'
 import { elapsed } from './RuntimePanel.ts'
 import { at, harness, repo, worker } from './testing.ts'
 
@@ -212,3 +220,83 @@ test('worker runtime projection and scoped continuation use explicit commands', 
     await connection.close()
   }
 })
+
+for (let legacy of [true, false]) {
+  test(`runtime queued cancellation commits terminal entry and ${legacy ? 'legacy settlement' : 'dispatch removal'} together`, async () => {
+    let vocab = loadVocab([kernelDoc, sessionDoc, toolsDoc])
+    let g = graph({ vocab, storage: ram(vocab) })
+    await g.apply([{
+      entity: { eid: 'queued' },
+      session: { id: 'queued' },
+      dispatch: {
+        ...(legacy ? { state: 'queued' } : {}),
+        order: 1,
+        args: '{}',
+      },
+    }], { trusted: true })
+    let a = {
+      h: { g } as Agent['h'],
+      send: () => {
+        throw new Error('cancellation must not send input')
+      },
+    }
+    let observed: { status: unknown; stops: number; terminal: boolean }[] = []
+    let refuse = true
+    g.use({
+      name: 'queued-cancellation-observer',
+      hooks: {
+        commit: (bundles) => {
+          if (refuse && bundles.some((b) => b.stop)) {
+            throw new Error('terminal entry refused')
+          }
+          return bundles
+        },
+        effect: async (bundles: Bundle[]) => {
+          if (
+            bundles.some((b) =>
+              b.entity.eid == 'queued' ||
+              (b.entry as Comp | undefined)?.session == 'queued'
+            )
+          ) {
+            observed.push({
+              status: dispatchStatus((await g.get(['queued']))[0]),
+              stops: (await g.read('.entry.session=queued&.stop&*')).length,
+              terminal: bundles.some((b) =>
+                (b.entry as Comp | undefined)?.session == 'queued' && !!b.stop
+              ),
+            })
+          }
+          return bundles
+        },
+      },
+    })
+    // Refusing the terminal entry must not release the queue place either.
+    await assertRejects(
+      () => runtimeAction(a, 'queued', 'cancel-queued'),
+      Error,
+      'terminal entry refused',
+    )
+    assertEquals(dispatchStatus((await g.get(['queued']))[0]), 'queued')
+    assertEquals(await g.read('.entry.session=queued&*'), [])
+    assertEquals(observed, [])
+
+    refuse = false
+    assertMatch(await runtimeAction(a, 'queued', 'cancel-queued'), 'cancelled')
+    assertEquals(observed, [{
+      status: legacy ? 'settled' : null,
+      stops: 1,
+      terminal: true,
+    }])
+    let [row] = await g.get(['queued'])
+    assertEquals(row.admitted, undefined)
+    assertEquals(row.waiting, undefined)
+    if (!legacy) assertEquals(row.dispatch, undefined)
+    // Repeating a stale UI action cannot append another stop.
+    await assertRejects(
+      () => runtimeAction(a, 'queued', 'cancel-queued'),
+      Error,
+      'Only queued',
+    )
+    assertEquals((await g.read('.entry.session=queued&.stop&*')).length, 1)
+  })
+}

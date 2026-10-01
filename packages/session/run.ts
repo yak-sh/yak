@@ -9,7 +9,7 @@
 // What asks for a turn is a `using` on an entry: the request @yaks/spawn
 // answers when the provider is a command line, and this answers when it is a
 // provider the host lent a model for ({@link Runner.answers}). A child
-// admitted to run (`dispatch.state`), a task a transcript holds completing or
+// admitted to run (`admitted`, or legacy `dispatch.state`), a task a transcript holds completing or
 // being cancelled, and a dependency of that task going away owe a run too; a
 // worker coming up sweeps every transcript a restart left owing one.
 //
@@ -48,7 +48,7 @@ import {
   token,
 } from '@yaks/graph'
 import { effectsIn } from '@yaks/vocab'
-import { active, admitNext, queue, swap } from './admission.ts'
+import { active, admitNext, dispatchStatus, queue, swap } from './admission.ts'
 import { type ChildLimits, deliverChild } from './children.ts'
 import { CLAIM } from './comp.ts'
 import { STOP_ENTRY } from './native.ts'
@@ -126,41 +126,93 @@ let ended = async (g: Graph, session: Eid, r: Runner) => {
   let self = await one(g, session)
   let d = comp(self, 'dispatch')
   if (self?.spawned) await deliverChild(g, session)
-  if (!d || d.state == 'settled') return
-  await g.apply(
-    [{ entity: { eid: session }, dispatch: { state: 'settled' } }],
-    {
-      trusted: true,
-    },
-  )
+  if (!d || dispatchStatus(self) == 'settled') return
+  await swap(g, session, dispatchStatus(self), { state: 'settled' })
   await admitNext(g, r)
 }
 
-// Whether a child may run now. One without a `dispatch` is a root and always
+// Whether a child may run now. One without `spawned` is a root and always
 // may; a queued one runs once it is among the oldest the bound leaves room
 // for; a settled one given more to do rejoins the tail. A child's preparation
 // (a checkout of its own, say) is done once, by the run that admits it.
 let admitted = async (g: Graph, session: Eid, r: Runner) => {
   let self = await one(g, session)
   let d = comp(self, 'dispatch')
-  if (!self || !d) return true
-  if (d.state == 'settled') {
+  if (!self?.spawned) return true
+  if (!d) {
+    // Imports can have spawned{parent,call}. The pool's canonical native input
+    // identifies a returning child by convention, not as a security boundary.
+    let input = await one(g, `${session}:input`)
+    if (
+      comp(input, 'entry')?.session != session || !input?.using ||
+      !input.content || input.imported || input.output || input.call ||
+      input.result
+    ) return true
     let order = Math.max(
       0,
       ...(await g.read('.dispatch')).map((b) =>
         Number(comp(b, 'dispatch')?.order ?? 0)
       ),
     ) + 1
-    await swap(g, session, 'settled', { state: 'queued', order })
-    return false
+    try {
+      await g.apply([{
+        entity: { eid: session },
+        // Expansion writers retain legacy state until the explicit cutover.
+        dispatch: { state: 'queued', order },
+        $was: {
+          dispatch: { state: null, args: null, order: null },
+          spawned: {
+            parent: token(comp(self, 'spawned')?.parent),
+            call: token(comp(self, 'spawned')?.call),
+          },
+        },
+      }, {
+        entity: input.entity,
+        $was: Object.fromEntries(
+          ['entry', 'content', 'using', 'imported', 'output', 'call', 'result']
+            .filter((name) => g.vocab.comps.includes(name))
+            .map((name) => [
+              name,
+              Object.fromEntries(
+                g.vocab.props(name)
+                  .filter((prop) => !g.vocab.prop(name, prop)?.computed)
+                  .map((prop) => [prop, token(comp(input, name)?.[prop])]),
+              ),
+            ]),
+        ),
+      }], { trusted: true })
+    } catch (error) {
+      if (error instanceof Stale) return false
+      throw error
+    }
+    self = await one(g, session)
+    d = comp(self, 'dispatch')
   }
-  if (d.state == 'queued') {
+  if (dispatchStatus(self) == 'settled') {
+    let order = Math.max(
+      0,
+      ...(await g.read('.dispatch')).map((b) =>
+        Number(comp(b, 'dispatch')?.order ?? 0)
+      ),
+    ) + 1
+    if (!await swap(g, session, 'settled', { state: 'queued', order })) {
+      return false
+    }
+    self = await one(g, session)
+  }
+  // A live wait owns this lease. Recovery has lost its reacquisition closure,
+  // so requeue then attempt bounded admission in this same pass (no lost wake).
+  if (dispatchStatus(self) == 'waiting') {
+    if (!await swap(g, session, 'waiting', { state: 'queued' })) return false
+    self = await one(g, session)
+  }
+  if (dispatchStatus(self) == 'queued') {
     let free = (r.maxChildren ?? 32) - await active(g)
     let ahead = (await queue(g)).findIndex((b) => b.entity.eid == session)
     if (ahead < 0 || ahead >= free) return false
     if (!await swap(g, session, 'queued', { state: 'active' })) return false
   }
-  if (typeof d.args != 'string') return true
+  if (typeof d?.args != 'string') return true
   try {
     let prepared = await r.prepareChild?.({
       parent: String(comp(self, 'spawned')?.parent),
@@ -170,7 +222,7 @@ let admitted = async (g: Graph, session: Eid, r: Runner) => {
     await g.apply([{
       entity: { eid: session },
       ...prepared,
-      dispatch: { state: 'active', args: null },
+      dispatch: { args: null },
     }], { trusted: true })
     return true
   } catch (err) {

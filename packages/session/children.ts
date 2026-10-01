@@ -5,7 +5,7 @@ import { appendEntry } from './append.ts'
 // durable queue order and fork prefix commit with the child. Replays find
 // that same child; preparation is deferred until the runner admits it
 // (./run.ts).
-import { aside } from './admission.ts'
+import { aside, dispatchStatus } from './admission.ts'
 import {
   type Bundle,
   type Comp,
@@ -433,7 +433,7 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
           } else {
             let results = await Promise.all(ids.map(async (session) => {
               let entries = await transcript(g, session)
-              let state = comp(await row(g, session), 'dispatch')?.state
+              let state = dispatchStatus(await row(g, session))
               let status = state == 'queued' && statusOf(entries) != 'stopped'
                 ? 'queued'
                 : statusOf(entries)

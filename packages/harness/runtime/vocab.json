@@ -9,14 +9,6 @@
         }
       }
     },
-    "dispatch": {
-      "component": true,
-      "properties": {
-        "state": {
-          "type": "string"
-        }
-      }
-    },
     "attempt": {
       "component": true,
       "properties": {

@@ -1,6 +1,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { discover, restore } from '@yaks/git/host'
+import { swap } from '@yaks/session/admission'
 import { sessionCwd } from './workspace.ts'
 import {
   collect,
@@ -258,6 +259,42 @@ test('live homes are the checkouts named for a session and the ones it inherited
     )
   } finally {
     h.close()
+  }
+})
+
+test('a settled child hands its checkout back when dispatch is removed', async () => {
+  let f = await fixture()
+  let h = await harness()
+  let failed: unknown[] = []
+  let collected = collecting(h.g, h.fx, (error) => failed.push(error), f.root)
+  try {
+    let path = await f.cut('child-one')
+    await h.g.apply([
+      {
+        entity: { eid: 'child:one' },
+        session: {},
+        dispatch: {},
+        admitted: {},
+      },
+      said('child:one'),
+    ], { trusted: true })
+    // Prose ends the transcript without a stop or exit effect. Only removing
+    // the marks-only dispatch below can notify the collector.
+    assert(await there(path))
+    assertEquals(
+      await swap(h.g, 'child:one', 'active', { state: 'settled' }),
+      true,
+    )
+    let [child] = await h.g.get(['child:one'])
+    assertEquals(child.dispatch, undefined)
+    assertEquals(child.admitted, undefined)
+    await until(async () => !await there(path))
+    await until(async () => await f.branches() == 'main')
+    assertEquals(failed, [])
+  } finally {
+    await collected()
+    h.close()
+    await f.free()
   }
 })
 
