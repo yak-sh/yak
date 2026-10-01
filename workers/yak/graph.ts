@@ -2435,7 +2435,7 @@ export class Store {
       }
       let version
       try {
-        version = (await request.json()).version
+        version = (await request.json() as { version: number }).version
         if (!Number.isSafeInteger(version) || version < 1) {
           throw new Refused('/released needs a positive version')
         }

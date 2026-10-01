@@ -40,7 +40,9 @@ test('only kernel POST /released tells every held socket, without subscriptions'
   })
   assertEquals((await store.fetch(released(2, false))).status, 404)
   assertEquals((await store.fetch(released(2, true, 'GET'))).status, 404)
-  assertEquals((await store.fetch(released('2'))).status, 400)
+  for (let version of ['2', null, 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+    assertEquals((await store.fetch(released(version))).status, 400)
+  }
   assertEquals(one.sent, [])
   assertEquals(two.sent, [])
   assertEquals((await store.fetch(released(2))).status, 200)
