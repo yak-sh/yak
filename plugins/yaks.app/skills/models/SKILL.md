@@ -149,11 +149,12 @@ Each outer query match gets a durable `build` and a fresh tool `call` when its
 key changes. The model returns named slots with components and the selected
 input ids each used. A slot keeps its id across rebuilds; its citations are
 `cites` edges. Query `.build.builder=<builder-id>&*`, then
-`.built.build=<build-id>&*` to find the outputs. A vanished match leaves a stale
-build and its outputs as history. Changing `builder.floor` to a time in the past
-checks it again. A `wake` can check it later, and `builder.immediate: true` also
-checks changed inputs. Only app editors may write a builder, since model turns
-spend the owner's account budget.
+`.built.build=<build-id>&*` to find the outputs; what was built for one row now
+is `.built.build.for=<row-id>&.built.current=true&*`. A vanished match leaves a
+stale build and its outputs as history. Changing `builder.floor` to a time in
+the past checks it again. A `wake` can check it later, and
+`builder.immediate: true` also checks changed inputs. Only app editors may write
+a builder, since model turns spend the owner's account budget.
 
 ## One call, answered at once
 

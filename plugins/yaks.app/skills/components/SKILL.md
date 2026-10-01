@@ -538,7 +538,7 @@ These are the names, all of them:
     recalled ref referenced report repository representation requires restored
     result retired
     revision rtc satisfies screenshot secret seeded serves session session_run sfu
-    signed_in signin space spend stop stripe supersedes supervises sweep task
+    signed_in signin space spend staged stop stripe supersedes supervises sweep task
     theme tool topic trashed tree_entry tunnel updated usage uses using verified wake
     wants web
     worked worktree
