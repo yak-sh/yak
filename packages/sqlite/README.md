@@ -129,7 +129,7 @@ aggregates.
 | `ddl()`              | Schema statements derived from the vocabulary                           |
 | `grown()`            | Statements adding columns missing from existing tables                  |
 | `install()`          | Creates/updates schema, indexes, metadata, and archetype classification |
-| `read(query, opts?)` | Matching bundles                                                        |
+| `read(query, opts?)` | Matching bundles, read as one snapshot without taking the write lock    |
 | `rows(query, opts?)` | Raw result rows                                                         |
 | `screen(query)`      | A statement selecting the ids a query admits, compiled as reads are     |
 | `get(eids)`          | Those entities as stored, read without taking the write lock            |

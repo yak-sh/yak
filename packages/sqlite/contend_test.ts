@@ -5,6 +5,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { archetypeDoc } from '@yaks/archetype'
 import { loadVocab, type Vocab } from '@yaks/vocab'
+import type { Stmt } from '@yaks/sql'
 import { storage } from './mod.ts'
 import { open } from './db.ts'
 import { shop } from './testing.ts'
@@ -58,4 +59,50 @@ test('a query answers while another process is writing', () => {
 test('an open beside a writer goes on without it', () => {
   using p = beside()
   prompt(() => storage(p.mine, shop).install())
+})
+
+// This process's store, holding x titled Hi, whose reads another connection
+// races: it commits x retitled Bye just after a read's first select, the
+// moment a read made of several statements would see the commit in pieces.
+let racing = (vocab: Vocab) => {
+  let dir = Deno.makeTempDirSync()
+  let mine = open(`${dir}/graph.db`)
+  let theirs = open(`${dir}/graph.db`)
+  let armed = false
+  let store = storage({
+    ...mine,
+    query: (s: Stmt) => {
+      let out = mine.query(s)
+      if (armed && s.t == 'select') {
+        armed = false
+        storage(theirs, vocab).tx((tx) =>
+          tx.patch([{ entity: { eid: 'x' }, doc: { title: 'Bye' } }])
+        )
+      }
+      return out
+    },
+  }, vocab)
+  store.install()
+  store.tx((tx) => tx.patch([{ entity: { eid: 'x' }, doc: { title: 'Hi' } }]))
+  return {
+    read: (q: string) => {
+      armed = true
+      return store.read(q)
+    },
+    [Symbol.dispose]: () => {
+      theirs.close()
+      mine.close()
+      Deno.removeSync(dir, { recursive: true })
+    },
+  }
+}
+
+test('a query sees another process’s commit whole or not at all', () => {
+  for (let vocab of [shop, indexed]) {
+    using p = racing(vocab)
+    let found = p.read('.doc.title=Hi')
+    assertEquals(found.map((b) => [b.entity.eid, b.doc]), [
+      ['x', { title: 'Hi', body: null }],
+    ])
+  }
 })

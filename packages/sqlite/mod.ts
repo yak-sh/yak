@@ -208,7 +208,9 @@ export type Store = {
    * classify what the archetype backfill finds unclassified; nothing, where
    * the file's schema is as this vocabulary last installed it */
   install: () => void
-  /** a query → its entities, with `comps` only where named */
+  /** a query → its entities, with `comps` only where named: which entities
+   * match and what they carry read as one snapshot, in a unit that takes no
+   * write lock, so another process's commit is seen whole or not at all */
   read: (query: Query, opts?: BindOpts, comps?: string[]) => Bundle[]
   /** a query → the compiled statement's raw rows (counts, tallies) */
   rows: (query: Query, opts?: BindOpts) => Row[]
@@ -461,7 +463,11 @@ export let storage = (
       analyzed(driver)
     },
     read: (query, o, comps) =>
-      read(driver, vocab, query, { ...opts(), ...o }, comps),
+      unit(
+        driver,
+        () => read(driver, vocab, query, { ...opts(), ...o }, comps),
+        'read',
+      ),
     rows: (query, o) => rows(driver, vocab, query, { ...opts(), ...o }),
     screen: (query, o) => screened(driver, vocab, query, { ...opts(), ...o }),
     get: (eids, comps) => unit(driver, () => identity(eids, comps), 'read'),
