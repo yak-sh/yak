@@ -234,3 +234,45 @@ test('cumulative imported observations never inflate per-request cache totals', 
   equal(r.requests?.length, 2)
   equal(cacheOf([imported]).total.cached_share, null)
 })
+
+test('imported cumulative asks are excluded by session provenance, not ask presence', async () => {
+  let rows = [
+    request('native', { input_tokens: 100, cached_tokens: 50 }, at, 'n'),
+    request(
+      'cli',
+      { input_tokens: 19_000_000, cached_tokens: 18_000_000 },
+      at,
+      'cli',
+    ),
+    request('sidechain', { input_tokens: 500, cached_tokens: 400 }, at, 'side'),
+  ]
+  let meta: Bundle[] = [
+    ...metadata,
+    { entity: { eid: 'n' }, session: {} },
+    {
+      entity: { eid: 'cli' },
+      session: { log: '/outside/transcript.jsonl', source: 'c' },
+    },
+    {
+      entity: { eid: 'side' },
+      session: {},
+      imported: { source: 'transcript', line: 1 },
+    },
+  ]
+  let report = cacheOf(rows, meta)
+  equal(report.total.requests, 1)
+  equal(report.total.input_tokens, 100)
+  equal(report.total.cached_share, 0.5)
+  equal(report.imported_observations, 2)
+  equal(
+    report.groups.path.find((g) => g.key == 'imported')?.input_tokens,
+    19_000_500,
+  )
+  equal(report.groups.model[0].cached_share, 0.5)
+  equal(report.groups.session.map((g) => g.key), ['n'])
+  let got = await cacheRead({
+    read: () => rows,
+    get: (keys) => meta.filter((b) => keys.includes(b.entity.eid)),
+  })
+  equal(got, report)
+})

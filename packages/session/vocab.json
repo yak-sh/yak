@@ -650,7 +650,7 @@
       "noun": "session",
       "verb": "cache",
       "title": "Report prompt-cache observations",
-      "description": "Report input-token-weighted cached share by session, provider, model and derived path. Uses request created.at in [from, until). Share is sum(cached_tokens)/sum(input_tokens) over requests reporting both counts; missing counts are unknown, not zero. Reports unknown coverage and explicit zero-cache requests. No date bounds reads all history. Returns JSON in content.body and output.value; no stored rollup. Usage-only imported entries may be cumulative turn totals: excluded from total and session/provider/model groups, counted in imported_observations and shown separately in groups.path.imported.",
+      "description": "Report input-token-weighted cached share by session, provider, model and derived path. Uses request created.at in [from, until). Share is sum(cached_tokens)/sum(input_tokens) over requests reporting both counts; missing counts are unknown, not zero. Reports unknown coverage and explicit zero-cache requests. No date bounds reads all history. Returns JSON in content.body and output.value; no stored rollup. Imported CLI entries (even with ask) and usage-only entries may be cumulative turn totals: excluded from total and session/provider/model groups, counted in imported_observations and shown separately in groups.path.imported.",
       "input": {
         "from": {
           "type": "string",

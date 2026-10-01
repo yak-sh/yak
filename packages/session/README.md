@@ -36,9 +36,11 @@ all reported counts; the paired `reported_*` totals explain the share.
 `unknown_cache_input_tokens`, `unknown_input_requests` and
 `unknown_cache_requests` expose missing coverage; `zero_cache_requests` counts
 explicitly reported zeros. Requests not yet reporting usage remain unknown.
-Usage-only imported entries can be cumulative turn totals rather than individual
-requests. They are excluded from `total` and the session, provider and model
-groups, so these never mix cumulative imports with per-request usage.
+Imported CLI entries can carry `ask{to, through}` too; `session{log}` or
+`imported{source, line}` on their session still identifies them as imported.
+Imported entries can be cumulative turn totals rather than individual requests.
+They are excluded from `total` and the session, provider and model groups, so
+these never mix cumulative imports with per-request usage.
 `imported_observations` counts the excluded entries; `groups.path.imported`
 keeps their totals separately, and `--requests` retains the individual
 observations. An endpoint that omits cached usage (or reports null) is unknown,

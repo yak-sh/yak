@@ -89,6 +89,7 @@ let totals = (rows: CacheRequest[]): CacheTotals => {
 
 /** Source call -> build identifies builders without storing a second label. */
 let pathOf = (s: Bundle | undefined, byId: Map<string, Bundle>): string => {
+  if (s?.imported || comp(s, 'session').log) return 'imported'
   let sourceId = str(comp(s, 'session').source)
   let source = byId.get(sourceId)
   let origin = byId.get(str(comp(source, 'call').source))
@@ -99,7 +100,7 @@ let pathOf = (s: Bundle | undefined, byId: Map<string, Bundle>): string => {
     comp(source, 'call').name == 'session_compact'
   ) return 'compaction'
   if (sourceId) return 'other'
-  return s?.imported || comp(s, 'session').log ? 'imported' : 'native'
+  return 'native'
 }
 
 /** Pure reduction of request bundles plus their session/call/model metadata. */
@@ -151,7 +152,9 @@ export let cacheOf = (
     a.request.localeCompare(b.request)
   )
   let asked = new Set(rows.filter((b) => b.ask).map((b) => b.entity.eid))
-  let measured = requests.filter((r) => asked.has(r.request))
+  let measured = requests.filter((r) =>
+    asked.has(r.request) && r.path != 'imported'
+  )
   let group = (key: 'session' | 'provider' | 'model' | 'path') => {
     let buckets = new Map<string, CacheRequest[]>()
     for (let r of key == 'path' ? requests : measured) {
