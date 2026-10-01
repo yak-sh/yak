@@ -99,6 +99,23 @@ let shape: Record<Item['kind'], (item: Item) => unknown> = {
 export let input = (items: Item[]): unknown[] =>
   items.map((i) => shape[i.kind](i))
 
+// Object insertion order from a graph or MCP server is not schema meaning.
+// Arrays keep their order (tuple schemas and alternatives may depend on it).
+let canonical = (value: unknown): unknown =>
+  Array.isArray(value)
+    ? value.map(canonical)
+    : record(value)
+    ? Object.fromEntries(
+      Object.keys(value).sort().map((key) => [key, canonical(value[key])]),
+    )
+    : value
+
+let toolOrder = (a: Frame, b: Frame): number => {
+  let x = String(a.type) + ':' + String(a.name ?? '')
+  let y = String(b.type) + ':' + String(b.name ?? '')
+  return x < y ? -1 : x > y ? 1 : 0
+}
+
 /** The whole request body. */
 export let body = (
   req: Request,
@@ -114,7 +131,8 @@ export let body = (
       ...req.tools.map((t) => ({ type: 'function', strict: false, ...t })),
       ...images ? [{ ...images.tool, type: 'image_generation' }] : [],
       ...web ? [{ type: 'web_search' }] : [],
-    ],
+    ].sort(toolOrder).map(canonical),
+    ...req.conversation ? { prompt_cache_key: req.conversation } : {},
     ...req.effort ? { reasoning: { effort: req.effort } } : {},
     ...req.tokens ? { max_output_tokens: req.tokens } : {},
     ...req.anchor ? { previous_response_id: req.anchor } : {},

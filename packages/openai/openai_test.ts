@@ -352,3 +352,30 @@ test('usage keeps missing counts unknown and rejects invalid counts', async () =
     { usage: { cached_tokens: 0 } },
   )
 })
+
+test('equivalent tool registries produce an identical request prefix', () => {
+  let alpha = {
+    name: 'alpha',
+    description: 'a',
+    parameters: {
+      type: 'object',
+      properties: { z: { type: 'string' }, a: { type: 'number' } },
+    },
+  }
+  let beta = { name: 'beta', description: 'b', parameters: { type: 'object' } }
+  let first = body({ ...req, conversation: 'stable', tools: [beta, alpha] })
+  let second = body({
+    ...req,
+    conversation: 'stable',
+    tools: [{
+      ...alpha,
+      parameters: {
+        properties: { a: { type: 'number' }, z: { type: 'string' } },
+        type: 'object',
+      },
+    }, beta],
+  })
+  assertEquals(JSON.stringify(first), JSON.stringify(second))
+  assertEquals(first.prompt_cache_key, 'stable')
+  assertEquals(body(req).prompt_cache_key, undefined)
+})
