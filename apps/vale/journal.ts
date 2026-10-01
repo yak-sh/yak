@@ -21,6 +21,7 @@ import { originOf } from './regions.ts'
 import type { Standing } from './rules.ts'
 import { said } from './stock.ts'
 import { tipped } from './tip.ts'
+import { split } from './ui/split.ts'
 import { homeOf } from './villagers.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -293,14 +294,23 @@ export type Acts = { pin: (task: string, on: boolean) => void }
 
 /** The journal, drawn into its tab (panel.ts). */
 export let journal = (panel: Page, acts: Acts) => {
-  let was = ''
+  let panes = split(panel.body)
+  let picked: string | null = null
+  let tasks: Task[] = [], here = ''
   panel.body.addEventListener('click', (e) => {
+    let row = e.target instanceof Element
+      ? e.target.closest<HTMLElement>('[data-select]')
+      : null
+    if (row) {
+      picked = row.dataset.select!
+      draw()
+      return
+    }
     let b = e.target instanceof Element
       ? e.target.closest<HTMLElement>('[data-pin]')
       : null
     if (!b) return
     acts.pin(b.dataset.pin!, b.getAttribute('aria-pressed') != 'true')
-    was = ''
   })
 
   // A step as a line: a mark, what it asks, and how far it has come.
@@ -312,62 +322,75 @@ export let journal = (panel: Page, acts: Acts) => {
     }</li>`
 
   let task = (t: Task, here: string) => {
+    let tracked = t.state == 'taken' || t.pinned
     let pin: Glyph = t.pinned ? 'pin' : 'pinOff'
     return `<article class="Journal_Task${
       t.pinned ? ' Journal_Task-pinned' : ''
-    }"><header class=Journal_Top><b class=Journal_Title>${
-      esc(t.title)
-    }</b><button class="Orb Orb-small Journal_Pin" data-pin="${t.id}" aria-pressed=${t.pinned}${
-      tipped(
-        t.pinned
-          ? {
-            name: 'Tracked',
-            says: 'On the glass and the compass. Tap to stop.',
-          }
-          : { name: 'Track it', says: 'Show it on the glass and the compass.' },
-      )
-    }>${glyph(pin)}</button></header><p class=Journal_From>${esc(t.from)} · ${
+    }"><header class=Journal_Top><b class=Journal_Title>${esc(t.title)}</b>${
+      tracked
+        ? `<button class="Orb Orb-small Journal_Pin" data-pin="${
+          esc(t.id)
+        }" aria-pressed=${t.pinned}${
+          tipped(
+            t.pinned
+              ? {
+                name: 'Tracked',
+                says: 'On the glass and the compass. Tap to stop.',
+              }
+              : {
+                name: 'Track it',
+                says: 'Show it on the glass and the compass.',
+              },
+          )
+        }>${glyph(pin)}</button>`
+        : ''
+    }</header><p class=Journal_From>${esc(t.from)} · ${
       esc(nameOf(t.level))
     } · ${esc(t.gives)}</p><ol class=Journal_Steps>${
       t.steps.map((s) => line(s, here)).join('')
     }</ol>${t.says ? `<p class=Journal_Says>${esc(t.says)}</p>` : ''}</article>`
   }
 
+  let summary = (t: Task) => {
+    let step = next(t)
+    return `<button class=Split_Row type=button data-select="${esc(t.id)}"><b>${
+      esc(t.title)
+    }</b>${t.pinned ? glyph('pin') : ''}<small>${
+      t.state == 'done' ? 'Done' : step ? esc(told(step, here)) : esc(t.from)
+    }${
+      step?.need ? ` · ${step.have ?? 0} / ${step.need}` : ''
+    }</small></button>`
+  }
+  let group = (head: string, ts: Task[]) =>
+    `<h3 class=Journal_Head>${head}</h3>${ts.map(summary).join('')}`
+  let draw = () => {
+    if (!panel.open) return
+    // A quest on offer pinned from a notice board is on its way: to
+    // whoever offers it.
+    let taken = tasks.filter((t) => t.state == 'taken' || t.pinned)
+      .sort((a, b) => Number(b.pinned) - Number(a.pinned))
+    let open = tasks.filter((t) => t.state == 'open' && !t.pinned)
+    let done = tasks.filter((t) => t.state == 'done')
+    let selected = [...taken, ...open, ...done].find((t) => t.id == picked)
+    if (!selected) picked = null
+    let rows = `<div class=Journal>${group('Under way', taken)}${
+      taken.length
+        ? ''
+        : '<p class=Journal_None>Nothing yet. Whoever has a ! over their head has a job for you.</p>'
+    }${open.length ? group('On offer', open) : ''}${
+      done.length ? group(`Done · ${done.length}`, done) : ''
+    }</div>`
+    let content = selected
+      ? `<div class=Journal>${task(selected, here)}</div>`
+      : '<p class=Journal_None>Select a task to see its steps and rewards.</p>'
+    panes.render(rows, content, picked)
+  }
   return {
     /** show the journal, when it is open and what it shows changed */
-    show: (tasks: Task[], here: string) => {
-      if (!panel.open) return
-      // A quest on offer pinned from a notice board is on its way: to
-      // whoever offers it.
-      let taken = tasks.filter((t) => t.state == 'taken' || t.pinned)
-        .sort((a, b) => Number(b.pinned) - Number(a.pinned))
-      let open = tasks.filter((t) => t.state == 'open' && !t.pinned)
-      let done = tasks.filter((t) => t.state == 'done')
-      let offer = (t: Task) =>
-        `<li class=Journal_Offer><b>${esc(t.title)}</b><span>${
-          esc(told(t.steps[0], here))
-        }</span></li>`
-      let html = `<div class=Journal>` +
-        `<h3 class=Journal_Head>Under way</h3>${
-          taken.map((t) => task(t, here)).join('') ||
-          '<p class=Journal_None>Nothing yet. Whoever has a ! over their head has a job for you.</p>'
-        }` +
-        (open.length
-          ? `<h3 class=Journal_Head>On offer</h3><ul class=Journal_Offers>${
-            open.map(offer).join('')
-          }</ul>`
-          : '') +
-        (done.length
-          ? `<h3 class=Journal_Head>Done · ${done.length}</h3><ul class=Journal_Done>${
-            done.map((t) =>
-              `<li>${glyph('done')}<span>${esc(t.title)}</span></li>`
-            ).join('')
-          }</ul>`
-          : '') +
-        `</div>`
-      if (html == was) return
-      was = html
-      panel.body.innerHTML = html
+    show: (latest: Task[], level: string) => {
+      tasks = latest
+      here = level
+      draw()
     },
   }
 }
