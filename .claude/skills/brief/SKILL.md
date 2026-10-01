@@ -1,12 +1,14 @@
 ---
 name: brief
 description: >
-  How the locus hands work to another agent in ~/code/tasks: writing the brief
-  for a fresh subagent or a fork, relaying a new instruction to an agent that is
-  already running, deciding to stop one and start fresh, and checking what it
-  reports. Use it whenever you are about to call the Agent tool, SendMessage a
-  running agent, or `yak session spawn`, even for a small fix, and whenever an
-  agent's report comes back.
+  Handing work to another agent in ~/code/tasks and taking it back: writing the
+  brief for a fresh subagent, a fork or a managed spawn, relaying something Jeff
+  just said to an agent already running, stopping one whose task Jeff reframed,
+  and checking a report before telling Jeff. Use it whenever you are about to
+  call the Agent tool, SendMessage a running agent, run `yak session spawn`, or
+  file a task an agent will be pointed at, even for a one-line fix, and whenever
+  an agent's report or task-notification arrives. Not for doing the work
+  yourself, and not for a design Jeff will read (that is `design`).
 ---
 
 # Briefing an agent
@@ -102,3 +104,5 @@ lines: <what you need back>.
   that holds the context rather than a new one.
 - Tell Jeff what changed for him, in plain words, and only what he needs to act
   on.
+
+When this skill is wrong or missing something, fix it in the same change.

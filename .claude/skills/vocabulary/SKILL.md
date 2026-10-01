@@ -8,7 +8,8 @@ description: >
   that something happened or how two things relate, or review a design that
   proposes components, even when the request never says "vocabulary" or
   "component": "add a field", "track whether X happened", "store Y on the
-  entity", "link X to Y", "keep a list of".
+  entity", "link X to Y", "keep a list of". Moving rows already stored into
+  the new shape is the `migrate` skill.
 ---
 
 # Designing vocabulary
@@ -238,3 +239,5 @@ Decide these per component, on purpose:
 - Stored rows on the box and on the platform are migrated with the
   `migrate` skill, and no app's own vocab.json declares the new word
   (`deno task app-grep`).
+
+When this skill is wrong or missing something, fix it in the same change.

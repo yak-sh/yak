@@ -7,8 +7,10 @@ description: >
   drive `yak inspect`, `yak ui` or the web TUI in tmux, and reap everything
   afterwards. Use it whenever you are about to check something "in the
   browser", "in the terminal", "live", on a "probe server" or "against real
-  data", take a screenshot of this app, or verify a UI, query, write path or
-  migration by hand, even if the task only says "make sure it works".
+  data", take a screenshot of this app, audit how a screen behaves, or verify a
+  UI, query, write path or migration by hand, even if the task only says "make
+  sure it works" or "check it". Not for writing automated tests, and never
+  aimed at the live graph or yak.service.
 ---
 
 # Probing a change
@@ -131,3 +133,5 @@ A probe is done when nothing of it is left running or on disk:
 
 Say in your report what you checked and how, so the reader can tell a probed
 claim from a tested one.
+
+When this skill is wrong or missing something, fix it in the same change.

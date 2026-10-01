@@ -3,12 +3,14 @@ name: ui
 description: >
   How to build interface in this repo, browser and terminal alike: a new @yaks/ui
   part, a theme, a UX component in @yaks/ux (editing, picking, stacking,
-  popovers), or a page or view that shows entities (the inspector, web's canvas,
-  a package's /views). Use it whenever a change adds or changes something a
-  person sees or presses, restyles anything, touches packages/ui, packages/ux,
-  packages/inspect or packages/web/components, or when a screen is confusing,
-  ugly, slow to read or looks different in the terminal, even if the request
-  never says "UI".
+  popovers), or a page or view that shows entities (the inspector, web's canvas
+  and TUI, the style guides, a package's /views). Use it whenever a change adds
+  or changes something a person sees or presses, restyles anything, touches
+  packages/ui, packages/ux, packages/tui, packages/inspect or
+  packages/web/components, or when a screen is confusing, ugly, slow to read or
+  looks different in the terminal, even if the request never says "UI". Not for
+  a yaks app's own pages, which are its author's; proving the screen works once
+  built is the `probe` skill.
 ---
 
 # Building UI
@@ -125,3 +127,5 @@ lost (M-59093).
   screenshots don't work for this app.
 - **Tests:** `deno task test packages/ui` (and `packages/ux`, `packages/inspect`)
   run the part tests and the guide's checks.
+
+When this skill is wrong or missing something, fix it in the same change.

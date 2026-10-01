@@ -1,13 +1,15 @@
 ---
 name: migrate
 description: >
-  Change the shape of stored data without losing any of it or taking an app
-  down: on the box (~/.yak/yak.db) or in yaks.app stores. Use whenever a change
-  renames, removes, splits or retypes a component or property, rewrites stored
-  rows, re-derives ids, deletes data in bulk, repairs rows written wrong,
-  changes a default, or re-keys anything people hold (links, tokens, saved
-  queries), even when the task only says "rename", "clean up", "drop" or "fix
-  the old rows".
+  Move stored data from one shape to another without losing any of it or taking
+  an app down: on the box (~/.yak/yak.db) or in yaks.app stores. Use whenever a
+  change renames, removes, splits or retypes a component or property that has
+  rows, rewrites or repairs stored rows, re-derives ids, deletes data in bulk,
+  backfills, changes a default or how a missing value reads, writes a one-time
+  script, or re-keys anything people hold (links, tokens, saved queries), even
+  when the task only says "rename", "clean up", "drop", "purge", "backfill" or
+  "fix the old rows". Deciding the new shape is the `vocabulary` skill; this one
+  is getting the existing data there.
 scope: tasks-v2
 volatility: stable
 ---
@@ -90,3 +92,5 @@ bring down yaks apps.
 - Counts before and after, on the copy and live, match what the script said.
 - A query that read wrong before the change now reads right.
 - `yak admin errors --admin` and the box's logs show nothing new.
+
+When this skill is wrong or missing something, fix it in the same change.

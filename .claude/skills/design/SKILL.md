@@ -4,12 +4,14 @@ description: >
   Write, revise, file and decide a design (a D- entity) for Jeff in the yaks
   repo: a proposal he reads before anything is built, with where things live,
   components and their properties, open questions and a task tree. Use it
-  whenever you are asked to pitch, propose, draft, design or "write up" a
-  change bigger than a bug fix; when a change moves code between packages or
-  adds a package, a component, a vocabulary keyword or a worker; when Jeff
-  answers a design's open questions and the design needs revising, deciding or
-  turning into tasks; or when an agent hands you a draft to review and put on a
-  D- entity. Not for a bug fix or a small feature: those are just done.
+  whenever you are asked to pitch, propose, draft, design, "write up" or "think
+  through" a change bigger than a bug fix; when a change moves code between
+  packages or adds a package, a vocabulary keyword or a worker; when Jeff
+  answers a design's open questions and it needs revising, deciding (`yak
+  design decide`) or turning into tasks; or when an agent's draft needs
+  reviewing before it goes on a D- entity. Not for a bug fix or a small
+  feature, which are just done. How each proposed component is shaped is the
+  `vocabulary` skill; this one is the document around it.
 ---
 
 # Writing a design for Jeff
@@ -131,3 +133,5 @@ A long design is drafted by an agent into a scratch file; you read it before
 Jeff does. Check its claims against the code where they decide anything, put
 it on the design, and tell Jeff the gist with components written out, where
 you disagree, and the questions that need him. The rest stays in the design.
+
+When this skill is wrong or missing something, fix it in the same change.

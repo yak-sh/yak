@@ -4,7 +4,8 @@ description: >
   Publish or unpublish a file on the public web (public.yak.sh), or explain what
   ~/shared is — use when asked to make a shared file public, share a file, put
   something on public.yak.sh, get a public/tailnet link for an artifact, or take a
-  published file down.
+  published file down. Not for yaks apps (those are served by yaks.app) or for
+  the inspector or canvas at tasks.yak.sh.
 scope: fleet
 volatility: stable
 ---
