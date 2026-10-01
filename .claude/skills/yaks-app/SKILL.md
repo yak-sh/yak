@@ -1,19 +1,20 @@
 ---
 name: yaks-app
 description: >
-  How the yaks.app platform works, for anyone changing or debugging it: the
-  kernel Worker in workers/yak, its stores (one Durable Object per app, plus the
-  directory), an app's vocabulary on top of the platform's core words, access
-  modes, the connector's tools, deploys, budgets and what a Durable Object can't
-  do. Use it whenever you change anything under workers/yak, touch a store, an
-  app's vocab.json or its stored rows, add or rename a platform word, change a
-  connector tool, its prompts or the guide, spend money on an account's behalf,
-  or debug a yaks app that is broken, slow, refusing or showing the wrong thing,
-  even if the request only names an app ("jill's app", "yourname/trip"). Not for
-  the box's own server (`yak serve`). Designing words is `vocabulary`, moving
-  stored rows is `data-migration`, building a platform page's parts is
-  `ui-building`, vectors and `.near` in a store are `search-and-embeddings`, an
-  app's builders are `builders-and-builds`, and its tests are `testing`.
+  How the yaks.app platform works: the kernel Worker in workers/yak, its stores
+  (one Durable Object per app, plus the directory), an app's vocabulary on top
+  of the platform's core words, access modes, the connector's tools, deploys,
+  budgets and what a Durable Object can't do. Use it whenever you change
+  anything under workers/yak, touch a store, an app's vocab.json or its stored
+  rows, add or rename a platform word, change a connector tool, its prompts or
+  the guide, spend money on an account's behalf, or debug a yaks app that is
+  broken, slow, refusing or showing the wrong thing, even if the request only
+  names an app ("jill's app", "yourname/trip"). Not for the box's own server
+  (`yak serve`). Designing words is `vocabulary`, moving stored rows is
+  `data-migration`, a platform page's parts are `ui-building`, vectors and
+  `.near` in a store are `search-and-embeddings`, an app's builders are
+  `builders-and-builds`, its tests are `testing`, and a key it calls out with is
+  `secrets-and-connections`.
 ---
 
 # The yaks.app platform
@@ -21,7 +22,7 @@ description: >
 Every person's apps run here, and every commit on main reaches them within
 minutes. A change that is merely wrong on the box can lock someone out, lose
 their input or break their app here. workers/yak/README.md is the reference for
-bindings, secrets and setup; this is the map and the judgment.
+bindings, the Worker's own secrets and setup; this is the map and the judgment.
 
 ## The parts
 
@@ -42,6 +43,9 @@ bindings, secrets and setup; this is the map and the judgment.
   call; `prompts/` and `public/docs/` are what those assistants read.
 - **Spending**: `models.ts` and its allowance, the one budget per account
   (M-42105).
+- **Keys**: a key a space or app uses is a connection, kept in the directory's
+  vault; an app is handed only a sentinel, swapped for the key on the way out
+  (`outbound.ts`). The `secrets-and-connections` skill covers it.
 
 ## Deploying
 

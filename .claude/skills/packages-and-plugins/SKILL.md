@@ -10,8 +10,9 @@ description: >
   `yak land --allow-revert`, even if the task only says "put this somewhere",
   "share this helper" or "make it reusable". Not for the words a package
   declares (`vocabulary`), what its effects and rules do (`effects-and-rules`)
-  or what its views draw (`ui-building`); a new package or a boundary Jeff
-  should decide gets a design first (`design-docs`).
+  or what its views draw (`ui-building`); a key a plugin reads is
+  `secrets-and-connections`; a new package or a boundary Jeff should decide
+  gets a design first (`design-docs`).
 ---
 
 # Packages and plugins
@@ -89,7 +90,8 @@ A plugin runs on the box only once `~/.yak/yak.json` lists it in `plugins`,
 either as a name or as `{"use": "@yaks/x", "with": {…}}`, and the server is
 restarted. Adding one has broken every `yak` command before, so prove the config
 on a scratch server first (the `end-to-end-checks` skill), back up yak.json,
-then edit it and `systemctl --user restart yak`.
+then edit it and `systemctl --user restart yak`. A key in `with` is
+`{"secret": "NAME"}`, never the value (the `secrets-and-connections` skill).
 
 ## Publishing
 

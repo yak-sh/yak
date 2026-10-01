@@ -9,8 +9,8 @@ description: >
   script, or re-keys anything people hold (links, tokens, saved queries), even
   when the task only says "rename", "clean up", "drop", "purge", "backfill" or
   "fix the old rows". Deciding the new shape is `vocabulary`; how one write or
-  query behaves is `graph-reads-and-writes`; this one is getting the existing
-  data there.
+  query behaves is `graph-reads-and-writes`; how a key or token is kept is
+  `secrets-and-connections`; this one is getting the existing data there.
 ---
 
 # Migrating stored data
