@@ -1,0 +1,10 @@
+{
+  "name": "@yaks/trace",
+  "version": "0.2.10",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "description": "Subscriber-only, bounded, value-free causal runtime activity for graphs and their consumers.",
+  "publish": {
+    "exclude": ["**/*_test.ts", "./browser.json"]
+  }
+}

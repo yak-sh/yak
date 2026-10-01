@@ -1,0 +1,7 @@
+{
+  "_": "Runtime activity has no graph, host or UI dependencies; it uses only the web platform.",
+  "compilerOptions": {
+    "lib": ["dom", "esnext"],
+    "strict": true
+  }
+}

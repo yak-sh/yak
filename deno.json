@@ -120,6 +120,7 @@
     "./packages/web",
     "./packages/text",
     "./packages/graph",
+    "./packages/trace",
     "./packages/archetype",
     "./packages/ram",
     "./packages/sync",

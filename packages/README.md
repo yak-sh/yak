@@ -39,6 +39,10 @@ grouped approximately by function, **not** by dependency order.
 
 ## Package index
 
+- **[@yaks/trace](./trace)** — Subscriber-only, bounded, value-free runtime
+  activity and causal spans, keyed by the observed graph. Unsubscribed producers
+  allocate nothing and read no clock.
+
 - **[@yaks/query](./query)** — Parse query strings into an abstract syntax tree
   (AST), or build the same tree from code. It understands operators, lists,
   ranges and directives, not application field meanings. Time-parsing helpers
