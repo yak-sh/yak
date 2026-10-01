@@ -601,6 +601,128 @@ test('a transcript of huge tool results is not compacted again on the next steps
   assertEquals(sent.filter((n) => n > window), [])
 })
 
+// A hand-set window above a provider's enforced ceiling. The existing
+// checkpoint is younger than GAP: a length refusal must bypass that guard.
+let overflowing = async () => {
+  let g = world()
+  await windowed(g, 1_000_000)
+  await g.apply([{
+    entity: { eid: 'old-summary' },
+    entry: { session: ids.s },
+    checkpoint: { through: 'e1', seq: 1 },
+    notice: {},
+    content: { body: 'Old summary.' },
+  }])
+  await appendEntry(g, ids.s, 'x'.repeat(60_000))
+  return g
+}
+let lengthError = () =>
+  new ModelError(
+    'context_length_exceeded',
+    "This model's maximum context length is 10,000 tokens. " +
+      'Your request contains 15,000 tokens.',
+    undefined,
+    { body: '{"error":{"code":"context_length_exceeded"}}' },
+  )
+
+test('a length refusal bypasses GAP, compacts deeply and retries once', async () => {
+  let g = await overflowing()
+  let asked: Request[] = []
+  let model: Model = (req) => {
+    asked.push(req)
+    if (JSON.stringify(req.items).length / 4 > 10_000) throw lengthError()
+    return Promise.resolve(says('ok', 'It fits.'))
+  }
+  let summarizer = scripted([says('sum', 'Short summary.')], false)
+  let deps = {
+    model,
+    tools: [echo],
+    mint,
+    instructions: 'The stable persona.',
+    compactModel: { model: summarizer.model, name: 'fake-1' },
+  }
+  assertEquals(await rest(g, ids.s, deps), 'settled')
+  assertEquals(asked.length, 2)
+  assertEquals(summarizer.asked.length, 1)
+  assertEquals(asked[1].items, [{
+    kind: 'instruction',
+    text: 'Short summary.',
+  }])
+  assertEquals(asked[1].instructions, asked[0].instructions)
+  assertEquals(asked[1].tools, asked[0].tools)
+  assertEquals(asked[1].conversation, asked[0].conversation)
+  let row = (await g.get([ids.m]))[0].model as Comp
+  assertEquals(row.context, 1_000_000)
+  assertEquals(row.enforced, 10_000)
+  // The enforced ceiling is used on later turns, not only on this retry.
+  for (let i = 0; i < GAP; i++) {
+    await appendEntry(g, ids.s, 'small')
+    assertEquals(await rest(g, ids.s, deps), 'settled')
+  }
+  summarizer.model = scripted([says('sum2', 'Later summary.')], false).model
+  deps.compactModel.model = summarizer.model
+  await appendEntry(g, ids.s, 'y'.repeat(24_000))
+  assertEquals(await rest(g, ids.s, deps), 'settled')
+  assertEquals(asked.length, 2 + GAP + 1)
+  assertEquals(asked.at(-1)!.items, [{
+    kind: 'instruction',
+    text: 'Later summary.',
+  }])
+})
+
+test('a second length refusal fails visibly in the provider’s words', async () => {
+  let g = await overflowing()
+  let calls = 0
+  let model: Model = () => {
+    calls++
+    throw lengthError()
+  }
+  let summarizer = scripted([says('sum', 'Short summary.')], false)
+  let deps = {
+    model,
+    tools: [],
+    mint,
+    compactModel: { model: summarizer.model, name: 'fake-1' },
+  }
+  assertEquals(await rest(g, ids.s, deps), 'failed')
+  assertEquals(calls, 2)
+  assertEquals(summarizer.asked.length, 1)
+  let entries = await transcript(g, ids.s)
+  assertEquals(textOf(entries.at(-1)!), lengthError().message)
+  assertEquals((entries.at(-1)!.error as Comp).code, 'context_length_exceeded')
+  assertEquals(
+    (entries.at(-1)!.response as Comp).body,
+    lengthError().response!.body,
+  )
+  await react(g, ids.s, deps)
+  assertEquals(calls, 2)
+})
+
+test('a provider’s equivalent length message with no ceiling also recovers', async () => {
+  let g = await overflowing()
+  let asks = 0
+  let model: Model = () => {
+    if (++asks == 1) {
+      throw new ModelError('invalid_request_error', 'Prompt is too long')
+    }
+    return Promise.resolve(says('ok', 'Recovered.'))
+  }
+  assertEquals(
+    await rest(g, ids.s, {
+      model,
+      tools: [],
+      mint,
+      compactModel: {
+        model: scripted([says('sum', 'Short summary.')], false).model,
+        name: 'fake-1',
+      },
+    }),
+    'settled',
+  )
+  assertEquals(asks, 2)
+  assertEquals(((await g.get([ids.m]))[0].model as Comp).enforced, undefined)
+})
+
 test('media transcripts compact only through a text model without persona instructions', async () => {
   let g = world()
   await windowed(g, 40)

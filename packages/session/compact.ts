@@ -56,7 +56,7 @@ export let CONTEXT = 128_000
 export let SHARE = 0.5
 
 /** Asks a transcript takes after a checkpoint before another may be written,
- * whatever it weighs, so no window, however wrong, summarizes every step. */
+ * whatever it weighs, except a length refusal that needs an immediate cut. */
 export let GAP = 4
 
 /** What a share of `window` comes to, a share outside 10 to 90 percent held
@@ -85,4 +85,33 @@ export let prefix = (
   while (from > 1 && kept + sizes[from - 1] <= keep) kept += sizes[--from]
   let end = entries.findIndex((_, i) => i >= from && paired(entries, i) == i)
   return end < 0 ? entries : entries.slice(0, end)
+}
+
+/** A provider's length refusal, including providers that use a generic input
+ * code and say what exceeded the window in their message. */
+export let tooLong = (code: string, text: string): boolean =>
+  [
+    'context_length_exceeded',
+    'prompt_too_long',
+    'request_too_large',
+    'max_tokens_exceeded',
+    'context_window_exceeded',
+  ].includes(code) ||
+  /prompt is too long|exceeds? (?:the )?(?:maximum|context|token)|(?:context|input|prompt)[\s\S]{0,80}(?:too long|length exceeded)/i
+    .test(text)
+
+/** Only an explicitly stated token limit, never the request's token count.
+ * The catalog and a configured window are not evidence of enforcement. */
+/// ceiling("maximum context length is 272,000 tokens; sent 350,000") -> 272000
+/// ceiling("prompt is too long: 350000 tokens > 272000 maximum") -> 272000
+/// ceiling("your request has 350000 tokens") -> undefined
+export let ceiling = (text: string): number | undefined => {
+  let match = [
+    /maximum context length (?:is|of) ([\d,]+) tokens/i,
+    /(?:context window|token limit|context limit)(?: is| of|:)?\s*([\d,]+)(?: tokens)?/i,
+    /([\d,]+) tokens?\s*>\s*([\d,]+)\s*(?:maximum|max|tokens? allowed)/i,
+    /maximum (?:number of )?(?:input )?tokens(?: allowed)?\s*[:(]?\s*([\d,]+)/i,
+  ].map((re) => re.exec(text)).find(Boolean)
+  let value = match && Number((match[2] ?? match[1]).replaceAll(',', ''))
+  return value && Number.isSafeInteger(value) && value > 0 ? value : undefined
 }

@@ -82,6 +82,12 @@
         "seq": {
           "type": "integer",
           "description": "position of the last summarized entry, kept if that imported entry is later trimmed"
+        },
+        "overflow": {
+          "type": "string",
+          "ref": "ask",
+          "death": "keep",
+          "description": "the request refused for length that forced this checkpoint; only one compacted retry follows it"
         }
       },
       "description": "everything through this entry is settled: a compaction boundary"

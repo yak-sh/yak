@@ -102,6 +102,12 @@
         },
         "offered": {
           "type": "boolean"
+        },
+        "enforced": {
+          "type": "integer",
+          "minimum": 1,
+          "stamped": true,
+          "description": "the token ceiling explicitly enforced by a provider refusal, separate from the configured context window; compaction uses the smaller of them"
         }
       }
     },
