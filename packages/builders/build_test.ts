@@ -65,12 +65,16 @@ let code = (revision = '1'): Tool => ({
   },
   run: (call) => answer(call),
 })
-// A code tool whose answer is these outputs.
-let answering = (outputs: unknown[]): Tool => ({
+// A code tool whose answer is these outputs, or what a function says they are
+// at the time it is asked.
+let answering = (outputs: unknown[] | (() => unknown[])): Tool => ({
   ...code(),
   run: (call) => [{
     entity: { eid: crypto.randomUUID() },
-    output: { source: call.entity.eid, value: { outputs } },
+    output: {
+      source: call.entity.eid,
+      value: { outputs: typeof outputs == 'function' ? outputs() : outputs },
+    },
   }],
 })
 // A component with a reference of its own.
@@ -258,6 +262,61 @@ test('an output names a sibling output of its answer by $slot', async () => {
   await drive(lost.g, lost.runner, build)
   assertEquals((await rows(lost.g, '.built')).length, 0)
   assert(String(lost.failed[0]).includes('names no sibling output $nowhere'))
+})
+
+test('an edge output lands on its link, and an answer that drops it deletes it', async () => {
+  let reagents = {
+    $defs: {
+      needs: {
+        component: true,
+        type: 'object',
+        edge: true,
+        properties: { count: { type: 'number' } },
+      },
+    },
+  }
+  let items = ['x', 'y']
+  let binding = answering(() => [
+    ...items.map((to) => ({
+      inputs: [],
+      components: { edge: { from: '$tome', to }, needs: { count: 2 } },
+    })),
+    { slot: 'tome', inputs: ['a'], components: { doc: { title: 'Tome' } } },
+  ])
+  let { g, runner, failed } = await shop({}, [reagents], [binding])
+  let item = (eid: string): Bundle => ({
+    entity: { eid },
+    project: { name: eid },
+  })
+  await g.apply([item('x'), item('y'), item('z'), source('a'), builder()])
+  let build = run(ids.builder, ['a'])
+  let tome = output(build, 'tome')
+  let needs = async () =>
+    (await rows(g, `.edge.from=${tome}&.needs&.built.current=true`))
+      .map((b) => b.entity.eid).toSorted()
+  let linked = (...to: string[]) =>
+    to.map((t) => edgeEid(tome, 'needs', t)).toSorted()
+  await drive(g, runner, build)
+  assertEquals(failed, [])
+  assertEquals(await needs(), linked('x', 'y'))
+  let [edge] = await g.get([edgeEid(tome, 'needs', 'x')])
+  assertEquals(comp(edge, 'needs')?.count, 2)
+  assertEquals(comp(edge, 'built')?.slot, null)
+  items = ['y', 'z']
+  await g.apply([source('a', 'second')])
+  assertEquals(await needs(), [])
+  await drive(g, runner, build)
+  assertEquals(await needs(), linked('y', 'z'))
+  assert((await g.get([edgeEid(tome, 'needs', 'x')]))[0]?.tombstone)
+  // A link between things the answer did not make is not the build's to state.
+  let astray = answering([{
+    inputs: [],
+    components: { edge: { from: 'x', to: 'y' }, needs: { count: 1 } },
+  }])
+  let lost = await shop({}, [reagents], [astray])
+  await lost.g.apply([item('x'), item('y'), source('a'), builder()])
+  await drive(lost.g, lost.runner, build)
+  assert(String(lost.failed[0]).includes('joins nothing its answer made'))
 })
 
 test('a query reads what was built for an entity', async () => {

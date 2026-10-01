@@ -79,6 +79,27 @@ artifact reference and citations before writing all outputs as one graph change.
 `artifact{address,media_type,size}` holds byte metadata; `built.artifact` only
 points to it.
 
+An output wearing `edge{from,to}` and one relation beside it is a link, and
+takes no slot:
+
+```json
+{
+  "inputs": [],
+  "components": {
+    "edge": { "from": "$tome", "to": "item-eid" },
+    "needs": { "count": 2 }
+  }
+}
+```
+
+A link is identified by its ends and relation (@yaks/edge), so it lands on that
+derived id, and its `built` names no slot, which keeps the two derivations
+apart. One of its ends must be a sibling output, which makes the link this
+build's alone: an answer that no longer states a link the build's earlier answer
+did deletes it, so `.edge.from=X&.needs` reads what the latest answer said, and
+`.built.current=true` beside it leaves out a link whose build is being asked
+again.
+
 `modelTool()` is an internal registered tool for model builders. It renders
 `content.body` from the frozen binding (`$name` is a variable's value, or its
 distinct values inside a bracket; the variable a bracket binds its members to,
