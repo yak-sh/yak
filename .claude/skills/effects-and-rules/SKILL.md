@@ -11,7 +11,8 @@ description: >
   write: a run that loops, never fires, fires too often, retries forever, or
   runs in the wrong process. Where a facet's code lives and how a plugin is
   wired is `packages-and-plugins`; a one-time fix of stored rows is
-  `data-migration`.
+  `data-migration`; a builder, which turns each match of a query into outputs
+  through a model or tool, is `builders-and-builds`.
 ---
 
 # Effects, rules and roles

@@ -12,7 +12,8 @@ description: >
   saved query in data; and before adding syntax to the grammar, since it is
   often already there. How the answer is computed (the archetype index, row
   cost, writes) is `graph-reads-and-writes`; full-text ranking and `.near`
-  internals are `search-and-embeddings`.
+  internals are `search-and-embeddings`; what a builder makes of its matches is
+  `builders-and-builds`.
 ---
 
 # The query grammar

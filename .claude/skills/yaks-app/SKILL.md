@@ -12,8 +12,8 @@ description: >
   even if the request only names an app ("jill's app", "yourname/trip"). Not for
   the box's own server (`yak serve`). Designing words is `vocabulary`, moving
   stored rows is `data-migration`, building a platform page's parts is
-  `ui-building`, vectors and `.near` in a store are `search-and-embeddings`, and
-  its tests are `testing`.
+  `ui-building`, vectors and `.near` in a store are `search-and-embeddings`, an
+  app's builders are `builders-and-builds`, and its tests are `testing`.
 ---
 
 # The yaks.app platform
