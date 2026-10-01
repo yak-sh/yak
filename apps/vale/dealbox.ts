@@ -10,6 +10,7 @@ import type { View } from './deals.ts'
 import { ITEMS } from './items.ts'
 import type { Panel } from './panel.ts'
 import { said } from './stock.ts'
+import { split } from './ui/split.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
@@ -36,7 +37,7 @@ let buttons = (v: View) => {
   let b = (act: Act, label: string, go = false) =>
     `<button class="Btn${
       go ? ' Btn-go' : ''
-    }" data-do=${act} data-deal=${v.eid}>${label}</button>`
+    }" type=button data-do=${act} data-deal="${esc(v.eid)}">${label}</button>`
   if (v.state == 'taken') return v.ready ? b('hand', 'Hand it in', true) : ''
   return (v.ready && !v.steps.some((s) => s.deed)
     ? b('hand', 'Trade', true)
@@ -60,35 +61,69 @@ let card = (v: View, now: number) =>
 
 /** The deals panel; `act` is told what the hero chose. */
 export let dealbox = (panel: Panel, act: (a: Act, v: View) => void) => {
+  let panes = split(panel.body)
   let shown: View[] = []
-  let was = ''
+  let picked: string | null = null
+  let now = 0
   let at = ''
   panel.body.addEventListener('click', (e) => {
-    let b = e.target instanceof Element
-      ? e.target.closest<HTMLButtonElement>('button[data-do]')
-      : null
+    let t = e.target instanceof Element ? e.target : null
+    let select = t?.closest<HTMLButtonElement>('button[data-select]')
+    if (select && shown.some((v) => v.eid == select.dataset.select)) {
+      picked = select.dataset.select!
+      draw()
+      return
+    }
+    let b = t?.closest<HTMLButtonElement>('button[data-do]')
     let a = ACTS.find((x) => x == b?.dataset.do)
     let v = shown.find((v) => v.eid == b?.dataset.deal)
     if (a && v) act(a, v)
   })
+  let draw = () => {
+    let selected = shown.find((v) => v.eid == picked)
+    if (!selected) picked = null
+    let rows =
+      shown.map((v) =>
+        `<button class=Split_Row type=button data-select="${esc(v.eid)}"><b>${
+          esc(said(v.give))
+        }</b><small>${v.state == 'taken' ? 'Agreed' : 'Offered'}${
+          v.ready ? ' · Ready' : ''
+        }</small><small>For ${esc(said(v.take))}</small></button>`
+      ).join('') ||
+      '<p class=Deal_None>Nothing stands between you. Ask what they might trade.</p>'
+    panes.render(
+      rows,
+      selected
+        ? card(selected, now)
+        : `<p class=Deal_None>${
+          shown.length
+            ? 'Select a deal to see its steps and what you can do.'
+            : 'Talk to the villager about a new offer.'
+        }</p>`,
+      picked,
+    )
+  }
+
   return {
     /** open it beside a villager, by their id and name */
     open: (id: string, name: string) => {
+      if (id != at || !panel.open) {
+        picked = null
+        shown = []
+        draw()
+      }
       at = id
       panel.head(esc(name))
       panel.show()
     },
     /** this frame's deals with the villager the hero is beside, by their
      * id: walked off from the one it is open at, it folds away */
-    paint: (views: View[], id: string | null, now: number) => {
+    paint: (views: View[], id: string | null, time: number) => {
       if (!panel.open) return
       if (id != at) return panel.close()
       shown = views
-      let html = views.map((v) => card(v, now)).join('') ||
-        '<p class=Deal_None>Nothing stands between you. Ask what they might trade.</p>'
-      if (html == was) return
-      was = html
-      panel.body.innerHTML = html
+      now = time
+      draw()
     },
   }
 }
