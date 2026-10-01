@@ -426,7 +426,7 @@ export let storage = (
       }
     }
     analyzed(driver)
-    version = changed()
+    version = driver.file ? changed() : undefined
     ready = true
   }
   let ensure = () => {

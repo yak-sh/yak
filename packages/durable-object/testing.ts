@@ -43,6 +43,9 @@ export { shop }
 let REFUSED =
   /^\s*(begin|commit|end|rollback|savepoint|release|attach|detach|vacuum)\b/i
 
+// Schema cookies are private to the runtime's connection.
+let SCHEMA = /^\s*pragma\s+(?:["\w]+\.)?["']?schema_version\b/i
+
 // workerd's SQL authorizer, at the one place it bites an object that reads its
 // own schema: a statement that names a table Cloudflare owns is refused — read,
 // write or drop alike — while `sqlite_master` still lists it. There is no
@@ -153,6 +156,7 @@ export let durable = (): DurableStorage & {
             `not authorized: use transactionSync, not \`${query.trim()}\``,
           )
         }
+        if (SCHEMA.test(query)) throw new Error('not authorized: SQLITE_AUTH')
         let no = refused(query)
         if (no) throw new Error(`access to ${no} is prohibited: SQLITE_AUTH`)
         let rows = run(query, bindings).map(out)
