@@ -469,6 +469,56 @@
       },
       "required": ["land", "wild"]
     },
+    "music_design": {
+      "component": true,
+      "type": "object",
+      "floor": "editor",
+      "description": "A land's musical palette and recurring melody in words.",
+      "properties": {
+        "instruments": {
+          "type": "string",
+          "minLength": 1
+        },
+        "motif": {
+          "type": "string",
+          "minLength": 1
+        },
+        "voice": {
+          "type": "string",
+          "enum": [
+            "none",
+            "solo",
+            "choir"
+          ]
+        }
+      },
+      "required": [
+        "instruments",
+        "motif",
+        "voice"
+      ]
+    },
+    "song": {
+      "component": true,
+      "type": "object",
+      "floor": "editor",
+      "description": "One soundtrack song, shaped by its land and its own theme.",
+      "properties": {
+        "land": {
+          "type": "string",
+          "ref": "theme_design",
+          "death": "cascade"
+        },
+        "theme": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "land",
+        "theme"
+      ]
+    },
     "beast_design": {
       "component": true,
       "type": "object",
