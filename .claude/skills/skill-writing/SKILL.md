@@ -28,11 +28,16 @@ documentation, workflows, tasks, etc etc." and "skills can also work well just
 for documentation. the auto-trigger is kinda what we were searching for with
 memories".
 
-Today a skill reaches a Claude Code agent working in this repo and nothing
-else. Designed, not built: the box's MCP server offering them (T-61609), the
-yaks.app connector offering the app-building ones (T-61610), and the native
-harness loading them (T-61611). Until those land, what an agent on another
-harness must know stays in the persona.
+A repository skill reaches Claude Code, native harness sessions and agents
+connected to the box's MCP server. Native asks receive titles and descriptions;
+`skill_read` loads the matching instructions from the session's own checkout.
+MCP offers scoped prompts, resources and complete Skills manifests; resource
+reads are not activation, and automatic MCP activation is not established.
+The shared graph form is `skill{invoke, arguments, paths, fork, options}` beside
+`doc{title, body}` (name and description) and `content{body}` (instructions).
+The optional bidirectional mirror lands graph exports before acknowledging
+them; read-only session views never import local edits. The yaks.app connector's
+app-building skills remain separate work (T-61610).
 
 ## Where a piece of knowledge lives
 

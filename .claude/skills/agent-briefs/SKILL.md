@@ -33,8 +33,10 @@ else. Treat the brief as the part of the work you do yourself.
   model M-37542 names): starts from the persona alone and needs the full brief
   below.
 - **Native session** (`yak session new`, our own harness, on a GPT model):
-  the full brief below, plus what `native-sessions` adds; that skill also
-  covers saying more to one, waiting for its work and stopping it.
+  the full brief below, plus what `native-sessions` adds. Its catalogue
+  matches descriptions to work and `skill_read` loads instructions; do not
+  repeat skill bodies or require naming SKILL.md files in the brief. That skill
+  also covers saying more to one, waiting for its work and stopping it.
 - **Neither**: knowing and recording stay with the locus (M-33551). Read the
   code, file the task, save the memory, then delegate the work.
 

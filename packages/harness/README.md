@@ -39,6 +39,22 @@ opened the graph. An **ask** is a recorded model request; a **settled** session
 has finished its current turn without more calls to execute and can accept new
 input.
 
+## Repository skills
+
+A local native session receives repository skill titles and descriptions before
+each model ask, only when its exact tool offer includes `skill_read`. The single
+read-only loader accepts `{skill: '<title>'}` and returns the exact instructions
+plus the supporting-file base path through the attributed graph runner. It does
+not execute scripts or start a fork from metadata.
+
+The shared `@yaks/persona/skills` view follows the session's
+`home{worktree, cwd}`. Local edits, additions and deletions are visible without
+importing them into the graph, and forks/resumed sessions use their own
+checkout. User-only skills are not model-discovered or loaded. Explicit tool
+registries and transcript allowlists remain exact: they do not gain a loader
+implicitly. Source-bound images remain beside their transcript entries; dynamic
+catalogue items are separate and count toward compaction budgets.
+
 ## Exports
 
 | Import                | Main exports                                                                     |

@@ -25,8 +25,11 @@ call lands as an entry, so the graph is the record of everything it did, and
 killing the CLI that started it stops nothing. Its shell commands run on this
 machine with `TASKS_SESSION` set to the session (packages/session/who.ts), so
 its own `yak claim take` and `yak comment new` act as it. It carries the
-persona from the graph (M-36709) but not the skills in .claude/skills
-(T-61611).
+persona from the graph (M-36709) and a fresh catalogue of repository skill
+titles and descriptions before each ask. When a description matches its work,
+it calls `skill_read` by title; only that call loads the instructions. The
+read-only view follows its own `home{worktree, cwd}`, including local edits,
+additions and deletions, without importing them into the graph.
 
 A request naming a GPT model pulls toward whatever has "codex" in its name.
 That door is wrong. The native harness's `openai` provider already serves
@@ -67,11 +70,10 @@ it in seconds:
 
 ## What its brief adds
 
-`agent-briefs` says what a brief carries. A native session needs three more
-things:
+`agent-briefs` says what a brief carries. Native sessions discover skills from
+descriptions; do not paste their bodies or prescribe file paths. A native
+session needs two more things:
 
-- **The skills by path.** It cannot load them, so name each SKILL.md its work
-  needs and tell it to read them first.
 - **Nobody is at its prompt.** When only the owner can decide something, it says so
   on the task and stops there, rather than guessing or waiting. Only spending,
   an irreversible act or a preference he alone holds is his. A session told it
