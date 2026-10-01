@@ -357,6 +357,43 @@ export let editing = async (
   return draft
 }
 
+// Recover the incomplete schema-only drafts the legacy writer opened. A
+// complete old draft remains a full replacement; only a matching live base
+// with one staged vocabulary file can be inherited without guessing intent.
+let repairing = async (
+  blobs: Objects,
+  dir: Directory,
+  space: Space,
+  app: App,
+  who: Who,
+  source: string,
+) => {
+  let old = app.draft
+  if (!old || delta(old) || app.source || app.fence || !app.version) return app
+  let paths = await blobs.list(`${old}/`)
+  if (paths.length != 1 || paths[0] != `${old}/vocab.json`) return app
+  let live = (await versions(dir, app)).find((v) => v.version == app.version)
+  if (!live || Object.keys(live.files).length < 2) return app
+  if (!same(live.files, await manifest(blobs, `${source}/`))) return app
+  let draft = draftOf(space, app)
+  await blobs.put(`${draft}/vocab.json`, await blobs.get(paths[0]))
+  await dir.stamp({
+    entities: [{
+      entity: { eid: app.eid },
+      app: { draft },
+      $was: {
+        app: {
+          draft: token(old),
+          source: token(app.source),
+          version: token(app.version),
+          fence: token(app.fence),
+        },
+      },
+    }],
+  }, vouched(who))
+  return { ...app, draft }
+}
+
 /** An edit crossing a release fence is replayed into the next draft. */
 export let modifying = async <T>(
   blobs: Objects,
@@ -370,6 +407,7 @@ export let modifying = async <T>(
   let row = app
   for (let n = 0; n < 3; n++) {
     row = await waiting(dir, space, row, who)
+    row = await repairing(blobs, dir, space, row, who, source(row))
     let draft = await editing(dir, space, row, who)
     let result = await act(
       draft,
