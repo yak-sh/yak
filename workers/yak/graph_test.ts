@@ -1484,3 +1484,28 @@ test('app archetype descriptors are read-only and vocabulary extension tracks ne
     1,
   )
 })
+// Append to graph_test.ts after the Worker supplier lands. These stores use
+// the existing Durable Object stand-in and ordinary fixture requests only.
+test('a Store anatomy supplier observes its own conditional composition without reads', async () => {
+  let held = state()
+  let store = new Store(held)
+  await get(store, '/query?query=.entity')
+  let app = store.anatomy()
+  assertEquals(app.scope, 'worker')
+  assertEquals(app.observed?.commands, true)
+  assertEquals(app.observed?.secrets, false)
+  assertEquals(app.skills, [])
+  assertEquals(app.views, [])
+  assertEquals(app.routes, [])
+  assert(app.rules.some((r) => r.name == 'yak/rules'))
+  assert(app.rules.some((r) => r.name == 'yak/weigh'))
+  assert(!app.packages.some((p) => p.name == '@yaks/visualize'))
+  let meta = new Store(state())
+  await meta.fetch(new Request('http://store/query?query=.entity', {
+    headers: { 'x-store': PLATFORM_STORE },
+  }))
+  let directory = meta.anatomy()
+  assert(!directory.rules.some((r) => r.name == 'yak/weigh'))
+  assert(directory.rules.some((r) => r.name == 'yak/rules'))
+  assertEquals(app.comps.length, store.anatomy().comps.length)
+})

@@ -168,6 +168,8 @@ import {
 } from '@yaks/member'
 import { parse } from '@yaks/query'
 import { effectsIn, type Vocab, type VocabDoc } from '@yaks/vocab'
+import { anatomy, type Anatomy } from '@yaks/code/anatomy'
+import { workerAnatomy } from './anatomy.ts'
 import { reconcile, type Runner, runner } from '@yaks/tools'
 import { commands, type Tools } from '@yaks/tools/declared'
 import { rouse, soonest, tick, type Ticked, wakes } from '@yaks/wake'
@@ -622,6 +624,7 @@ export class Store {
   #ctx: State
   #vocab!: Vocab
   #graph!: Graph
+  #anatomy: ReturnType<typeof workerAnatomy> | null = null
   // The object's SQLite, as the driver every statement here runs through.
   #sql!: Driver
   #profile: ReturnType<typeof profile> | null = null
@@ -895,6 +898,7 @@ export class Store {
     // comes out of a write before anything else reads it, and is sealed once
     // the write commits, by the same plugin; an app's store keeps none.
     let vault = meta ? vaultOf(this.#bind) : null
+    let observed = workerAnatomy(vocab)
     let g = graph({
       storage: store,
       vocab,
@@ -993,6 +997,7 @@ export class Store {
         ...(own ? [] : [admitSchema(vocab)]),
       ],
     })
+    observed.graph(g.plugins, PLUGINS)
     // What every domain of this Worker does about data this store committed
     // (plugin.ts `effects`, plugins.ts): a letter that asks to go is the one
     // there is today (outbox.ts). The store hands over what only it knows —
@@ -1005,11 +1010,13 @@ export class Store {
     // holding no schedule sleeps, and one holding a schedule needs no
     // heartbeat to keep it. Every store has this, the directory included: its
     // sweeps are wake rows like anybody's.
+    let wakeRegistered = observed.registration('worker/store', fx)
     fx.on('wake', {
       doc: 'arm this object for the wake a write just moved',
       created: (e) => this.#arming(e.comp?.at as string),
       changed: { at: (e) => this.#arming(e.comp?.at as string) },
     })
+    wakeRegistered()
     // The app's own commands, run here (T-37605, D-37562). @yaks/tools
     // declares which calls still want running as two effects — one for a call
     // nobody scheduled, one for a call whose wake has fired — and a host
@@ -1022,14 +1029,24 @@ export class Store {
     let due = (e: { entity: { eid: string } }) =>
       this.#runner().due(e.entity.eid)
     let declared = new Set(effectsIn(vocab.docs).map((e) => e.name))
+    let coreRegistered = observed.registration('@yaks/tools', fx)
     fx.handle(Object.fromEntries(
-      this.#runner(g).rules.filter((r) => declared.has(r.rule.name))
+      this.#runner(g, observed).rules.filter((r) => declared.has(r.rule.name))
         .map((r) => [r.rule.name, due]),
     ))
-    effected(PLUGINS, fx, this.#stored(g))
+    coreRegistered()
+    let at = this.#stored(g)
+    for (let p of PLUGINS) {
+      if (!p.effects?.length) continue
+      let done = observed.registration(p.name, fx)
+      effected([p], fx, at)
+      done()
+    }
+    observed.effects(fx.slots())
     this.#effects = fx
     this.#vocab = vocab
     this.#graph = g
+    this.#anatomy = observed
     // One per incarnation, like the graph: directory.ts seeds once per Meta.
     // Its own writes are not writes reaching it, so they skip the log (and
     // never wait on a replay they may be part of).
@@ -1074,13 +1091,19 @@ export class Store {
    * words — not `call`, `result` or `tool` — so the record lives in a graph of
    * its own for the life of this door rather than as three tables in
    * everybody's app. */
-  get door(): { graph: Graph; authenticate: Authenticate; calls: Graph } {
+  get door(): { graph: Graph; authenticate: Authenticate; calls: Graph; anatomy: () => Anatomy } {
     return {
       graph: this.#graph,
       authenticate: this.#auth,
       calls: ledger(this.#graph),
+      anatomy: this.anatomy,
     }
   }
+
+  /** Value-free metadata captured by this incarnation, never a graph read. */
+  anatomy = (): Anatomy => this.#anatomy?.read() ?? anatomy({
+    host: 'worker/store', scope: 'worker', observed: {},
+  })
 
   #get(k: Word): string | null {
     if (this.#kv.has(k)) return this.#kv.get(k)!
@@ -1518,7 +1541,7 @@ export class Store {
    * wearing a wake is work asked for later, and nothing outside this object
    * has to be awake for it.
    */
-  #runner = (g: Graph = this.#graph): Runner => {
+  #runner = (g: Graph = this.#graph, capture = this.#anatomy): Runner => {
     let said = this.#get('tools') ?? '{}'
     if (this.#runs?.said != said || g != this.#graph) {
       let declared: Tools = JSON.parse(said || '{}')
@@ -1567,6 +1590,7 @@ export class Store {
           },
         ),
       }
+      capture?.commands(declared, this.#runs.run.tools)
     }
     return this.#runs.run
   }
