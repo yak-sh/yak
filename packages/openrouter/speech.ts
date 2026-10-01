@@ -3,6 +3,7 @@
 // session records their address.
 import { ModelError, type Reply, type Request } from '@yaks/model'
 import { generatedBytes, type MediaStore } from '@yaks/openai'
+import { generationCost } from './cost.ts'
 
 let audio = async (res: Response, max: number) => {
   if (!Number.isSafeInteger(max) || max < 1) {
@@ -101,5 +102,11 @@ export let speech = async (
     id,
     options.media,
   )
-  return { id, model: req.model, items: [], artifacts: [artifact] }
+  let cost = await generationCost(id, {
+    ...options,
+    signal: req.signal && options.signal
+      ? AbortSignal.any([req.signal, options.signal])
+      : req.signal ?? options.signal,
+  })
+  return { id, model: req.model, items: [], artifacts: [artifact], cost }
 }

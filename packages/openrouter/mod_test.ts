@@ -191,7 +191,8 @@ test('streamed OpenRouter audio becomes one blob artifact with no encoded bytes 
             },
           }],
         },
-        { choices: [{ delta: { audio: { data: encoded.slice(5) } } }] },
+        { choices: [{ delta: { audio: { data: encoded.slice(5) } } }],
+          usage: { cost: 0.24 } },
       ]
       return Promise.resolve(
         new Response(
@@ -213,6 +214,7 @@ test('streamed OpenRouter audio becomes one blob artifact with no encoded bytes 
   assertEquals(seen.modalities, ['text', 'audio'])
   assertEquals(seen.audio, { format: 'mp3' })
   assertEquals(seen.stream, true)
+  assertEquals(reply.cost, 0.24)
   assertEquals(reply.items, [{ kind: 'assistant', text: 'A tune' }])
   assertEquals(reply.artifacts?.[0].media_type, 'audio/mpeg')
   assertEquals(reply.artifacts?.[0].size, bytes.length)
@@ -264,6 +266,10 @@ test('a speech model uses the audio door and stores its bytes as an artifact', a
     speech: ['vendor/speech'],
     media: { store: artifactStore(memoryBlobs()) },
     fetch: (url, init) => {
+      if (String(url).includes('/generation?')) {
+        assertEquals(new Headers(init?.headers).get('authorization'), 'Bearer probe-key')
+        return Promise.resolve(Response.json({ data: { total_cost: 0.0123 } }))
+      }
       assertEquals(url, 'https://openrouter.ai/api/v1/audio/speech')
       assertEquals(
         new Headers(init?.headers).get('x-session-id'),
@@ -292,6 +298,7 @@ test('a speech model uses the audio door and stores its bytes as an artifact', a
     items: [{ kind: 'user', text: 'A forge hammer ringing' }],
     tools: [],
   })
+  assertEquals(reply.cost, 0.0123)
   assertEquals(reply.id, 'gen-1')
   assertEquals(reply.artifacts?.[0].media_type, 'audio/mpeg')
   assertEquals(reply.artifacts?.[0].size, bytes.length)

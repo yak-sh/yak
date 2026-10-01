@@ -2,6 +2,7 @@
 import { ModelError, type Reply, type Request } from '@yaks/model'
 import { generatedMedia, jsonFrames, type MediaStore } from '@yaks/openai'
 import { chatTools, messages } from './prompt.ts'
+import { generationCost } from './cost.ts'
 
 export type MediaOptions = MediaStore & {
   /** Audio settings vary by model; Lyria uses MP3 without a voice. */
@@ -207,6 +208,15 @@ export let chat = async (
   for (let [index, value] of images.entries()) {
     artifacts.push(await image(value, id + ':image:' + index, options.media!))
   }
+  let billed = usage(reported)
+  if (audio && billed.cost == null) {
+    billed.cost = await generationCost(id, {
+    ...options,
+    signal: req.signal && options.signal
+      ? AbortSignal.any([req.signal, options.signal])
+      : req.signal ?? options.signal,
+  })
+  }
   return {
     id,
     model,
@@ -218,6 +228,6 @@ export let chat = async (
       })),
     ],
     ...artifacts.length ? { artifacts } : {},
-    ...usage(reported),
+    ...billed,
   }
 }

@@ -1219,7 +1219,7 @@ export let react = async (
     ...reply.usage ? { usage: reply.usage } : {},
     ...reply.cost == null
       ? {}
-      : { cost: { dollars: reply.cost, reported: true } },
+      : { cost: { dollars: reply.cost, reported: reply.costReported ?? true } },
     attempt: { state: 'completed' },
   }
   let added: Bundle[] = [finalAsk]

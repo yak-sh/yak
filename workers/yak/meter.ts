@@ -29,7 +29,7 @@ import type { Plugin } from './plugin.ts'
 import { mailedTo } from './post.ts'
 import { reporting } from './wake.ts'
 import { refuse } from './tool.ts'
-import { ModelError, weigh } from '@yaks/model'
+import { type Model, ModelError, weigh } from '@yaks/model'
 import { LIMIT } from '@yaks/session/status'
 import {
   type Binding,
@@ -867,3 +867,26 @@ export let metered = (
     return answer
   },
 })
+
+/** A hosted provider spends from the same account budget as every other door.
+ * Costs are supplied by the adapter, never guessed from media JSON. */
+export let accounted = (
+  bind: Pick<Env, 'STORE'>,
+  spaceOf: (dir: Directory) => Promise<Space | null>,
+  model: Model,
+): Model => Object.assign(async (req: Parameters<Model>[0]) => {
+  let ns = bind.STORE
+  let dir = ns ? directoryOf(ns) : null
+  let space = dir ? await spaceOf(dir) : null
+  if (!ns || !dir || !space) {
+    throw new ModelError('unbound', 'No account is bound to this model call')
+  }
+  let no = await refusedSpend(dir, space, 'models', bind)
+  if (no) throw new ModelError(LIMIT, no)
+  let reply = await model(req)
+  if (reply.cost == null || !Number.isFinite(reply.cost) || reply.cost < 0) {
+    throw new Error('Hosted provider returned no valid request cost')
+  }
+  await countedSpend({ STORE: ns }, space, reply.cost, 0)
+  return reply
+}, model)

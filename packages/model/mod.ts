@@ -233,6 +233,8 @@ export type Reply = {
   /** the dollars the provider reported this request cost, where it reports
    * them; a caller weighs `usage` at the model's {@link Price} otherwise */
   cost?: number
+  /** False for an adapter-measured tariff; provider-reported by default. */
+  costReported?: boolean
   artifacts?: (Artifact & { call: string; revised_prompt?: string })[]
 }
 
