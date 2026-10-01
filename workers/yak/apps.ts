@@ -821,7 +821,8 @@ let said = (b: Record<string, unknown>) =>
   ).slice(0, 4000)
 
 // A report body, either shape: the small `{message, stack?, url?, line?}` the
-// injected script posts, or the Reporting API's array of `{type, url, body}`.
+// injected script posts (with its page version), or the Reporting API's
+// array of `{type, url, body}`.
 // Junk answers with nothing — a malformed body is the sender's bug, not a
 // break in this app, and writing it as one would be the noise we are here to
 // stop.
@@ -851,6 +852,11 @@ let broken = (body: string) => {
     let at = pathOf(r.url ?? b.url ?? b.documentURL)
     let source = b.sourceFile ?? b.url
     return [{
+      version:
+        typeof b.version == 'number' && Number.isSafeInteger(b.version) &&
+          b.version >= 0
+          ? b.version
+          : null,
       request: `${typeof r.type == 'string' ? r.type : 'page'} ${at}`.trim(),
       message,
       stack: String(
@@ -1275,14 +1281,16 @@ let api = async (
     if (req.method != 'POST') return json(405, 'method_not_allowed')
     if (flooding(space, app)) return json(429, 'too_many_reports')
     let reports = broken(await req.text())
-    // The deploy the page broke on, read past the directory's cache: a break
-    // in the seconds after a deploy must not name the version before it
-    // (unseen.ts `serving`, C-32869 item 4).
-    let version = reports.length ? await serving(env, space, app) : null
+    // The injected reporter names the page that ran, not the newest release.
+    // Older reporters and the browser's Reporting API have no page version;
+    // keep their serving-version fallback, read past the directory's cache.
+    let version = reports.some((broke) => broke.version == null)
+      ? await serving(env, space, app)
+      : null
     for (let broke of reports) {
       await noted(
         (bundles) => metaOf(store).apply(bundles, KERNEL),
-        { ...broke, version },
+        { ...broke, version: broke.version ?? version },
         { env, space, app },
       )
     }

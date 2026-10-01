@@ -45,7 +45,10 @@ test('a page reports its own breaks, and the agent hears', async () => {
       1,
       'injected once',
     )
-    assertMatch(html, /<head><script src="\/recipes\/api\/report\.js">/)
+    assertMatch(
+      html,
+      /<head><script src="\/recipes\/api\/report\.js" data-version="\d+">/,
+    )
     assertMatch(
       page.headers.get('reporting-endpoints') ?? '',
       /yak="http.*\/recipes\/api\/report"/,
@@ -276,6 +279,83 @@ test('a break names the version the app is serving', async () => {
   }
 })
 
+// An old tab keeps the version injected into its page, even after a deploy.
+// Both the beacon and the report door must carry it without consulting the
+// app's latest version. Each break in a batch may name a different page.
+test('a break names the page version that ran, not the newest release', async () => {
+  let k = await kernel()
+  try {
+    let { cookie, eids } = await seed(k, [{
+      slug: 'jeff64',
+      apps: ['recipes'],
+    }])
+    let agent = connector(k, cookie)
+    let page = 'https://jeff64.yaks.app/recipes/'
+    let files = client(k, 'jeff64.yaks.app', 'recipes', cookie)
+    await files.put(
+      '/index.html',
+      '<!doctype html><html><head></head><body></body></html>',
+    )
+    await agent.tool('app_deploy', { space: 'jeff64', app: 'recipes' })
+    let html = await (await k.at('jeff64.yaks.app', '/recipes/')).text()
+    let tag = html.match(
+      /<script[^>]*src="[^" ]*report\.js"[^>]*data-version="(\d+)"/,
+    )
+    assert(tag, 'the served page names its reporter version')
+    let version = Number(tag[1])
+    let code = await (await k.at('jeff64.yaks.app', '/recipes/api/report.js'))
+      .text()
+    let old = browser(code, page, version)
+    await meta(k).apply([
+      {
+        entity: { eid: eids['jeff64/recipes'] },
+        app: { version: version + 1 },
+      },
+    ])
+    old.blocked('SCRIPT', `${page}old.js`)
+    // Zero is also a page version, not an absent value.
+    let first = browser(code, page, 0)
+    first.blocked('SCRIPT', `${page}first.js`)
+    await tick()
+    let reports = [...await old.filed(), ...await first.filed()]
+    assertEquals(reports.map((b) => b.version), [version, 0])
+    await (await k.at('jeff64.yaks.app', '/recipes/api/report', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(reports),
+    })).body?.cancel()
+    let told = await agent.tool('app_errors', {
+      space: 'jeff64',
+      app: 'recipes',
+    })
+    assertStringIncludes(
+      told,
+      `recipes v${version}: page /recipes/old.js — failed to load script ${page}old.js`,
+    )
+    assertStringIncludes(
+      told,
+      `recipes: page /recipes/first.js — failed to load script ${page}first.js`,
+    )
+    let rows = JSON.parse(
+      (await agent.tool('graph_query', {
+        space: 'jeff64',
+        app: 'recipes',
+        query: '.exception',
+      })).split('\n\n## ')[0],
+    ) as { exception: { version: number } }[]
+    assertEquals(rows.map((r) => r.exception.version).sort((a, b) => a - b), [
+      0,
+      version,
+    ])
+    assert(
+      !told.includes(`recipes v${version + 1}:`),
+      'the newest release did not run in these tabs',
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
 // A page that dies on its first import (T-32909, C-32905 items 2 and 8): the
 // module 404'd, the app store held no open error, and the person was left
 // looking at a heading and empty space. The browser is the part a probe
@@ -301,7 +381,10 @@ test('a page that dies on its first import says so', async () => {
     )
     await agent.tool('app_deploy', app)
     let page = await k.at('jeff62.yaks.app', '/weather/')
-    assertMatch(await page.text(), /<script src="\/weather\/api\/report\.js">/)
+    assertMatch(
+      await page.text(),
+      /<script src="\/weather\/api\/report\.js" data-version="\d+">/,
+    )
     assertEquals((await k.at('jeff62.yaks.app', '/weather/app.js')).status, 404)
 
     // What the reporter posts for that, and the one break it becomes.
@@ -348,7 +431,7 @@ test('a page that dies on its first import says so', async () => {
 // the part a probe cannot boot, so the reporter the kernel serves is run
 // here, over a page that is only what this script touches: where it was
 // injected, what it beacons, and the body it draws the soft state on.
-let browser = (code: string, page: string) => {
+let browser = (code: string, page: string, version = 1) => {
   let beacons: Blob[] = []
   let drawn: unknown[] = []
   let ears: Record<string, ((e: unknown) => void)[]> = {}
@@ -358,7 +441,10 @@ let browser = (code: string, page: string) => {
     append: (el: unknown) => drawn.push(el),
   }
   let doc = {
-    currentScript: { src: new URL('api/report.js', page).href },
+    currentScript: {
+      src: new URL('api/report.js', page).href,
+      dataset: { version: String(version) },
+    },
     baseURI: page,
     readyState: 'complete',
     body,

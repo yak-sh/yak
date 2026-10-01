@@ -38,14 +38,19 @@
 // beacon carries it, because a page that is dying is a page that will not
 // wait for a response; the door itself is rate-limited per app.
 
-let door = new URL('report', document.currentScript.src).href
+let script = document.currentScript
+let door = new URL('report', script.src).href
+// Keep the version this page loaded, even after another release is served.
+let version = Number(script.dataset.version)
 let sent = 0
 
 let send = (body) => {
   // A render loop that throws every frame must not become a write loop.
   if (sent++ >= 20) return
   try {
-    let blob = new Blob([JSON.stringify(body)], { type: 'application/json' })
+    let blob = new Blob([JSON.stringify({ ...body, version })], {
+      type: 'application/json',
+    })
     // A beacon always sends credentials, and a sandboxed app's page — an
     // opaque origin, `self.origin` "null" — reports to a door that answers
     // any origin only because it takes none (installed.ts), so the browser
