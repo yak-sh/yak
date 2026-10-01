@@ -13,7 +13,7 @@
 // through `keep`, which holds them a moment and sends them together: a visitor
 // may write 30 times a minute, and a busy fight earns more rows than that.
 // Until they are sent, `mine` counts them already, so nothing on screen waits.
-import { type Client, client, type Watch } from '@yaks/client'
+import { type Client, client, type ClientOpts, type Watch } from '@yaks/client'
 import { comp, num, str } from './bundle.ts'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { areaOf, looksOf, REACH } from './area.ts'
@@ -92,8 +92,13 @@ let tab = {
 export type Net = ReturnType<ReturnType<typeof connect>['world']>
 
 /** Open the store. World queries start after its designs have arrived. */
-export let connect = (base: URL, vocab: ReturnType<typeof loadVocab>) => {
+export let connect = (
+  base: URL,
+  vocab: ReturnType<typeof loadVocab>,
+  opts: ClientOpts = {},
+) => {
   let c = client(vocab, [], {
+    ...opts,
     url: base.href.replace(/\/$/, ''),
     vault: false,
     wireVault: false,
@@ -461,6 +466,11 @@ export let connect = (base: URL, vocab: ReturnType<typeof loadVocab>) => {
   addEventListener('pagehide', flush)
   let opened = false
   return {
+    client: c,
+    close: () => {
+      removeEventListener('pagehide', flush)
+      c.close()
+    },
     spawnKinds: () => {
       let watch = c.watch(SPAWN_KINDS, { evaluate: 'server' })
       watchDesigns(watch, ['built', 'build', 'spawned'], useSpawnKinds)

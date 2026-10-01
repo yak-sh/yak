@@ -38,3 +38,20 @@ ignored outputs to Git.
 files. The deployed page loads the generated JavaScript bundle, not the
 TypeScript dependency entry. Building prepares local artifacts only; it does not
 publish packages or deploy the app.
+
+For a complete push, use the build script's optional staging-directory argument.
+It includes both generated assets and excludes tests, fixtures, documentation
+and local build inputs. A tracked-file-only push deletes the generated bundle
+and breaks the page; do not push the raw checkout or a Git-only file list.
+
+```sh
+stage="$(mktemp -d /tmp/vale-release-XXXXXX)"
+deno run -A apps/vale/build-slash.ts "$stage"
+yak admin push "$stage" --space=yourname --app=vale --owner
+rm -rf "$stage"
+```
+
+The creature-build subscription uses server evaluation: `built.current` is
+computed by the store, and the page has neither the complete build graph nor a
+local rule for it. Rebuild this runtime whenever `@yaks/client` changes, not
+just when chat changes, because Vale's network graph shares that bundled client.
