@@ -1,14 +1,17 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
-// wiki, written as a vocabulary. Pages several people edit, and notes that
-// exist about a page — so a deleted page takes its notes with it, and the
-// entities a cascading delete takes down are something the tests can watch the
-// journal record.
+// wiki, written as a vocabulary. Pages several people edit, notes that exist
+// about a page, pages that cite pages, pages under a parent page, and pins on
+// a page — so a deleted page takes its notes and its citations with it, leaves
+// its children without a parent and drops the pins on it, every way a delete
+// spreads (@yaks/graph's cascade) is something the tests can watch the journal
+// record.
 //
 // The log is tables beside the store's own, so a fixture is a database: one
 // `mem()`, the wiki's tables installed on it, the journal's `ddl()` run against
 // it, and a graph over both. The clock is fixed, so a test can assert on the
 // timestamp a transaction was stamped with.
 
+import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import { isPromise } from '@yaks/fp'
 import { type Graph, graph, type Options } from '@yaks/graph'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
@@ -33,8 +36,19 @@ let doc: VocabDoc = {
         title: { type: 'string' },
         text: { type: 'string' },
         locked: { type: 'boolean' },
+        // A page whose parent is deleted is still a page.
+        parent: { type: 'string', ref: 'page', death: 'detach' },
       },
     },
+    // A pin exists only to point at a page: it goes when the page does, and
+    // what wore it stays.
+    pin: {
+      component: true,
+      type: 'object',
+      properties: { page: { type: 'string', ref: 'page', death: 'release' } },
+    },
+    // One page citing another, an edge (@yaks/edge).
+    cites: { component: true, type: 'object', edge: true },
     // A note has nothing left to be about once its page is gone.
     note: {
       component: true,
@@ -72,7 +86,7 @@ let doc: VocabDoc = {
 }
 
 /** The wiki vocabulary the tests write against. */
-export let wiki: Vocab = loadVocab([doc])
+export let wiki: Vocab = loadVocab([doc, edgeDoc], [edgeKeywords])
 
 /** The timestamp every fixture transaction is stamped with. */
 export let NOW = '2026-01-01T00:00:00.000Z'
@@ -109,7 +123,7 @@ export let wikiLog = (): {
     graph({
       storage: store,
       vocab: wiki,
-      plugins: [journal(j, { now: () => NOW }), ...plugins],
+      plugins: [journal(j, { now: () => NOW }), edges(wiki), ...plugins],
     })
   let j = log({ rows: (s) => db.query(s) })
   return {

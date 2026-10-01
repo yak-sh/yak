@@ -72,9 +72,9 @@ brings it back (M-17876). References follow their `death` keyword
 (packages/graph/cascade.ts): `cascade` deletes the referrer, `detach` clears the
 property, `release` drops the referencing component, `keep` leaves history.
 Deleting an entity deletes the edges that point at it, so count what a delete
-takes with `--check` first. The journal's `undo` cannot bring a deleted entity
-back (packages/journal/README.md, "Undo"): a delete is final, so delete only
-what is junk, and say so to the person.
+takes with `--check` first. The journal's `undo` brings a deleted entity back
+with what the delete cascaded (packages/journal/README.md, "Undo"), but not its
+`created` stamp or anything written before the journal began.
 
 ## Ids and edges
 

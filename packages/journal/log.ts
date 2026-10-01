@@ -25,7 +25,7 @@
 // its own — the caller owns the transaction.
 
 import type { Actor, Bundle, Comp, Eid, Plugin, Tx } from '@yaks/graph'
-import { comps, dead, writers } from '@yaks/graph'
+import { comps, dead, TOMBSTONE, writers } from '@yaks/graph'
 import {
   and,
   as,
@@ -488,49 +488,76 @@ export let log = (opts: LogOpts): Log => {
     return seq
   }
 
-  /**
-   * One entity's component state as of just before `seq`, rebuilt by merging,
-   * property by property, that entity's own rows in the log — bounded to one
-   * entity, never a table scan. This is where the before-value an after-image
-   * log does not store comes from.
-   */
-  let before = (target: Eid, seq: number): Record<string, Comp> => {
+  // One entity's component state as of just before `seq`, rebuilt by merging,
+  // property by property, that entity's own rows in the log — bounded to one
+  // entity, never a table scan — and whether it lay deleted then. This is where
+  // the before-value an after-image log does not store comes from.
+  let past = (
+    target: Eid,
+    seq: number,
+  ): { state: Record<string, Comp>; dead: boolean } => {
     let state: Record<string, Comp> = {}
+    let dead = false
     for (
       let p of rebuild(rows(changes(
         and(eq(jc('entity'), idOf(target)), lt(jc('tx'), val(seq))),
         [jc('tx'), jc('ordinal')],
       )))
     ) {
-      // A deletion partway through cannot precede a live target, but resetting
-      // keeps the reconstruction correct if one turns up.
+      // A deletion empties the entity; a later write that gives it a
+      // component is what brought it back.
       if (p.comp == 'entity') {
-        if (!p.value) state = {}
+        if (!p.value) [state, dead] = [{}, true]
         continue
       }
       if (p.value == null) delete state[p.comp]
-      else state[p.comp] = { ...(state[p.comp] ?? {}), ...p.value }
+      else {
+        state[p.comp] = { ...(state[p.comp] ?? {}), ...p.value }
+        dead = false
+      }
     }
-    return state
+    return { state, dead }
   }
+
+  /** One entity's components as of just before `seq`, rebuilt from its own
+   * rows in the log. */
+  let before = (target: Eid, seq: number): Record<string, Comp> =>
+    past(target, seq).state
 
   // An entry's operations as deltas: a component that was not there is
   // announced by a property-less delta before its properties follow, a
   // component that went is a property-less delta carrying what it held, and a
-  // deletion is a tombstone. The before-side comes from `before()`, carried
-  // forward across the transaction so that a transaction touching one component
-  // twice reads as two movements.
+  // deletion is a tombstone appearing (`after: {}`). A write that brings a
+  // deleted entity back is that tombstone going (`before: {}`), ahead of the
+  // components it gives. The before-side comes from `past()`, carried forward
+  // across the transaction so that a transaction touching one component twice
+  // reads as two movements.
   let deltasOf = (e: Entry): Delta[] => {
     let held = new Map<Eid, Record<string, Comp>>()
+    let buried = new Set<Eid>()
     let now = (eid: Eid) => {
       let s = held.get(eid)
-      if (!s) held.set(eid, s = before(eid, e.seq))
-      return s
+      if (s) return s
+      let p = past(eid, e.seq)
+      if (p.dead) buried.add(eid)
+      held.set(eid, p.state)
+      return p.state
     }
     let out: Delta[] = []
     for (let { target, comp, value } of e.patches) {
       let st = now(target)
+      if (buried.has(target) && comp != 'entity' && value != null) {
+        buried.delete(target)
+        out.push({
+          target,
+          comp: TOMBSTONE,
+          prop: null,
+          before: {},
+          after: null,
+        })
+      }
       if (comp == 'entity' && value == null) {
+        buried.add(target)
         for (let [name, was] of Object.entries(st)) {
           out.push({
             target,
@@ -543,7 +570,7 @@ export let log = (opts: LogOpts): Log => {
         held.set(target, {})
         out.push({
           target,
-          comp: 'tombstone',
+          comp: TOMBSTONE,
           prop: null,
           before: null,
           after: {},

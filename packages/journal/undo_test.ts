@@ -5,7 +5,8 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import type { Bundle, Comp } from '@yaks/graph'
+import { edgeEid } from '@yaks/edge'
+import { type Bundle, type Comp, Stale } from '@yaks/graph'
 import { applied, Final, undo, undone } from './undo.ts'
 import { sync, wikiGraph } from './testing.ts'
 
@@ -20,6 +21,13 @@ let fixture = () => {
     page: (eid: string) =>
       (sync(g.read('.kind=page')).find((b) => b.entity.eid == eid)
         ?.page ?? null) as Comp | null,
+    get: (eid: string) => sync(g.get([eid]))[0],
+    // An entity as it reads, but for the stamps a write leaves on it.
+    held: (eid: string) => {
+      let { created: _c, updated: _u, ...rest } = sync(g.get([eid]))[0]
+      return rest
+    },
+    cite: (from: string, to: string) => edgeEid(from, 'cites', to),
   }
 }
 
@@ -81,15 +89,64 @@ test('an undo guards every property it restores', () => {
   assert(back.$was?.page?.title)
 })
 
-test('undo of a delete is refused — death is final', () => {
+test('undo of a delete brings the entity back as it was', () => {
+  let f = fixture()
+  f.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff', text: 'b' } }])
+  f.apply([{ entity: { eid: 'p1' }, page: { title: 'Retro' } }])
+  let was = f.held('p1')
+  f.apply([{ entity: { eid: 'p1' }, $delete: true }])
+  f.back(3)
+  assertEquals(f.held('p1'), was)
+})
+
+test('undo of a delete brings back what it cascaded, edges included', () => {
+  let f = fixture()
+  f.apply([
+    { entity: { eid: 'p1' }, page: { title: 'Kickoff' } },
+    { entity: { eid: 'p2' }, page: { title: 'Retro', parent: 'p1' } },
+    { entity: { eid: 'p2' }, pin: { page: 'p1' } },
+    { entity: { eid: 'n1' }, note: { text: 'aside', page: 'p1' } },
+    { entity: { eid: '$c' }, edge: { from: 'p2', to: 'p1' }, cites: {} },
+  ])
+  let whole = () => ['p1', 'p2', 'n1', f.cite('p2', 'p1')].map(f.held)
+  let was = whole()
+  f.apply([{ entity: { eid: 'p1' }, $delete: true }])
+  assertEquals(f.get('p2').pin, undefined)
+  f.back(2)
+  assertEquals(whole(), was)
+})
+
+test('undoing an undone delete deletes it again', () => {
+  let f = fixture()
+  f.apply([
+    { entity: { eid: 'p1' }, page: { title: 'Kickoff' } },
+    { entity: { eid: 'n1' }, note: { text: 'aside', page: 'p1' } },
+  ])
+  f.apply([{ entity: { eid: 'p1' }, $delete: true }])
+  f.back(2)
+  f.back(3)
+  assertEquals([f.get('p1').tombstone, f.get('n1').tombstone], [{}, {}])
+})
+
+test('an undone delete is refused if the entity came back with other values', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' } }])
   f.apply([{ entity: { eid: 'p1' }, $delete: true }])
-  let err = assertThrows(() => f.back(2), Final)
-  assertEquals(
-    (err as Final).message,
-    'p1 was deleted in batch #2 — undo does not bring it back',
-  )
+  f.apply([{ entity: { eid: 'p1' }, page: { title: 'Again' } }])
+  assertThrows(() => f.back(2), Stale)
+  assertEquals(f.page('p1')?.title, 'Again')
+})
+
+test('an entity the journal recorded nothing of cannot come back', () => {
+  let died = {
+    target: 'p1',
+    comp: 'tombstone',
+    prop: null,
+    before: null,
+    after: {},
+  }
+  let batch = { seq: 4, at: '', by: null, via: null, deltas: [died] }
+  assertThrows(() => undone(batch), Final, 'p1 was deleted in batch #4')
 })
 
 test('undo of a batch that never happened says so', () => {

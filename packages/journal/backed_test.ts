@@ -5,7 +5,7 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
-import { edgeDoc, edgeKeywords } from '@yaks/edge'
+import { edgeKeywords } from '@yaks/edge'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { lit } from '@yaks/sql'
@@ -16,7 +16,7 @@ import { backed, ddl, journal, log } from './mod.ts'
 import { journalDoc } from './vocab.ts'
 import { NOW, sync, wiki } from './testing.ts'
 
-let vocab = loadVocab([...wiki.docs, edgeDoc, metaDoc, journalDoc], [
+let vocab = loadVocab([...wiki.docs, metaDoc, journalDoc], [
   edgeKeywords,
 ])
 

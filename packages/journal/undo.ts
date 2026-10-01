@@ -9,85 +9,105 @@
 // is admitted, guarded, stamped, and journaled in its turn. Undoing an undo is
 // a redo, for free.
 //
-// The one thing not walked backward is a deletion: an undo that would bring a
-// deleted entity back is refused rather than half-applied.
+// A deletion walks backward like anything else. The journal knows every
+// component the entity held as it went, so the reversal gives them back, and a
+// write that gives a deleted entity a component is what clears its tombstone
+// (@yaks/graph's mutate phase): it comes back with its eid and its number.
+// Whatever the deletion cascaded is in the same transaction and comes back
+// with it.
 
 import type { Actor, Bundle, Comp, Eid, Graph, Was } from '@yaks/graph'
 import { token, TOMBSTONE } from '@yaks/graph'
 import type { Batch } from './batch.ts'
 import type { Log } from './log.ts'
 
-/** A refused undo: the transaction deleted an entity, which undo does not
- * bring back. */
+/** A refused undo: the transaction deleted an entity whose components the
+ * journal never recorded — it was written before the journal began, or only
+ * in components the journal skips — so nothing can bring it back, and bringing
+ * back the rest would leave whatever pointed at it pointing at a grave. */
 export class Final extends Error {
   /**
    * @param eid the entity the transaction deleted
    * @param seq the transaction it was deleted in
    */
   constructor(public eid: Eid, public seq: number) {
-    super(`${eid} was deleted in batch #${seq} — undo does not bring it back`)
+    super(
+      `${eid} was deleted in batch #${seq}, and the journal holds none of ` +
+        `its components to bring it back with`,
+    )
     this.name = 'Final'
   }
 }
 
-// One side of a recorded transaction, as bundles. The deltas are replayed in
-// order onto a per-entity table of components, which is what makes a
-// transaction that touched the same component twice come out as one bundle
-// holding where that component ended up.
+// One side of a recorded transaction, as bundles. The deltas are replayed onto
+// a per-entity table of components: forward for the side after, so a
+// component the transaction touched twice comes out where it ended up, and
+// backward for the side before, so it comes out where it started.
 let side = (
   batch: Batch,
   want: 'before' | 'after',
   guard = false,
 ): Bundle[] => {
-  let order: Eid[] = []
+  let back = want == 'before'
+  let order = [...new Set(batch.deltas.map((d) => d.target))]
   let held = new Map<Eid, Map<string, Comp | null>>()
-  let died = new Set<Eid>()
+  // Whether each entity the transaction deleted or brought back lies deleted
+  // on this side, and which of them it deleted.
+  let grave = new Map<Eid, boolean>()
+  let killed = new Set<Eid>()
   // What the transaction left in each property, hashed: the precondition an
   // undo carries, so that a property somebody else has changed since refuses
-  // the whole reversal rather than quietly overwriting it. Only the backward
-  // side needs one — replaying forward is a push to subscribers, not a write.
+  // the whole reversal rather than quietly overwriting it. Walking backward,
+  // the first delta to name a property holds the last value the transaction
+  // left there, and a component it removed, or an entity it deleted, left
+  // nothing in any of them. Only the backward side needs one — replaying
+  // forward is a push to subscribers, not a write.
   let was = new Map<Eid, Was>()
   let guarded = (eid: Eid, comp: string, prop: string, after: unknown) => {
+    if (!guard) return
     let w = was.get(eid)
     if (!w) was.set(eid, w = {})
-    w[comp] = { ...w[comp], [prop]: token(after) }
+    let c = w[comp] ??= {}
+    if (!(prop in c)) c[prop] = token(after)
   }
   let of = (eid: Eid): Map<string, Comp | null> => {
     let t = held.get(eid)
-    if (!t) {
-      held.set(eid, t = new Map())
-      order.push(eid)
-    }
+    if (!t) held.set(eid, t = new Map())
     return t
   }
-  for (let d of batch.deltas) {
+  for (let d of back ? batch.deltas.toReversed() : batch.deltas) {
     if (d.comp == TOMBSTONE) {
-      if (want == 'before') throw new Final(d.target, batch.seq)
-      died.add(d.target)
-      of(d.target)
+      grave.set(d.target, d[want] != null)
+      if (d.after != null) killed.add(d.target)
       continue
     }
     let table = of(d.target)
     if (d.prop == null) {
-      let whole = d[want]
-      table.set(d.comp, whole == null ? null : { ...(whole as Comp) })
+      let whole = d[want] as Comp | null
+      table.set(d.comp, whole == null ? null : { ...whole })
+      for (let prop of Object.keys(whole ?? {})) {
+        guarded(d.target, d.comp, prop, null)
+      }
       continue
     }
-    if (guard) guarded(d.target, d.comp, d.prop, d.after)
+    guarded(d.target, d.comp, d.prop, d.after)
     let cur = table.get(d.comp)
     if (cur === null) continue // the component is not there on this side
     table.set(d.comp, { ...(cur ?? {}), [d.prop]: d[want] ?? null })
   }
   let out: Bundle[] = []
   for (let eid of order) {
-    if (died.has(eid)) {
+    if (grave.get(eid)) {
       out.push({ entity: { eid }, $delete: true })
       continue
     }
+    let table = held.get(eid)
+    if (!table?.size) {
+      if (back && killed.has(eid)) throw new Final(eid, batch.seq)
+      continue
+    }
     let b: Bundle = { entity: { eid } }
-    let moved = false
-    for (let [comp, value] of held.get(eid)!) {
-      moved = true
+    for (let [comp, value] of table) {
       // The entity row is the bundle's own identity, not a component beside
       // it: a recorded patch to `entity` merges into the key naming which
       // entity this bundle is about, and never lands on top of the eid. A
@@ -100,7 +120,6 @@ let side = (
       }
       b[comp] = value
     }
-    if (!moved) continue
     let w = was.get(eid)
     // A guard names only properties this bundle restores: a component the undo
     // removes whole has no property to hold a token.
@@ -135,8 +154,10 @@ export type UndoneOpts = {
 /**
  * The bundles that reverse a transaction: every property back to the value it
  * held, every component that went restored with the properties it had, every
- * component that appeared removed. Throws {@link Final} if the transaction
- * deleted an entity.
+ * component that appeared removed, every entity it deleted given back the
+ * components it held, and every entity it brought back deleted again. Throws
+ * {@link Final} if the transaction deleted an entity the journal recorded none
+ * of the components of.
  */
 export let undone = (batch: Batch, opts: UndoneOpts = {}): Bundle[] =>
   side(batch, 'before', opts.guard)
@@ -147,12 +168,13 @@ export let undone = (batch: Batch, opts: UndoneOpts = {}): Bundle[] =>
  * the undo is admitted, stamped and journaled like any other write:
  * `undo(g, j)(7, { by: 'ada' })` reverses transaction 7 as `ada`.
  *
- * Throws {@link Final} if the transaction deleted an entity, and a plain
- * `Error` if no transaction has that seq. The inverse is applied as trusted,
- * since restoring a property the server owns is the graph's own reconstruction
- * rather than a client's write. Every restored property carries a `$was`
- * precondition, so a property somebody else has changed since refuses the whole
- * reversal instead of being overwritten.
+ * Throws {@link Final} if the transaction deleted an entity the journal holds
+ * none of the components of, and a plain `Error` if no transaction has that
+ * seq. The inverse is applied as trusted, since restoring a property the
+ * server owns is the graph's own reconstruction rather than a client's write.
+ * Every restored property carries a `$was` precondition, so a property
+ * somebody else has changed since refuses the whole reversal instead of being
+ * overwritten.
  */
 export let undo =
   (g: Graph, j: Log) =>

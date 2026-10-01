@@ -17,7 +17,8 @@ import type { Comp, Eid } from '@yaks/graph'
  * carries the value on each side of the write; a delta with no property is
  * about the component as a whole — `after` set means the component appeared,
  * `before` set means it went, and either way the set side holds the properties
- * it had.
+ * it had. A `tombstone` delta is about the entity itself: `after` set means it
+ * was deleted, `before` set means a write brought it back.
  */
 export type Delta = {
   /** the entity that changed */

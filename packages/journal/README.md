@@ -224,33 +224,51 @@ A store an older journal made gains the `host` column the next time
 
 `undo(g, j)(seq, actor?)` reconstructs an inverse and applies it through the
 graph, with trusted access to server-owned properties. It restores previous
-property values and removed components, and removes components created by the
-original transaction. The undo is validated, stamped and journaled as another
-write; undoing that write provides redo.
+property values and removed components, removes components created by the
+original transaction, brings back every entity it deleted, and deletes again
+every entity it brought back. The undo is validated, stamped and journaled as
+another write; undoing that write provides redo.
+
+An entity the transaction deleted comes back with the components the journal
+recorded it holding. That write clears its tombstone, and the entity keeps its
+eid and number (@yaks/graph). Whatever the delete cascaded is in the same
+transaction and comes back with it: the entities deleted with it, edges
+included, the references it detached and the components it released.
 
 Property deltas restored by `undo()` carry `$was` preconditions hashed from the
-original transaction's after-values. If those properties changed in the
-meantime, the graph rejects the reversal. Whole-component operations do not have
-the same per-property guard, so this is not a general conflict check for every
+original transaction's after-values, and a component or entity it brings back
+carries one saying each of its properties is still empty. If any of them changed
+in the meantime, the graph rejects the reversal. A component the undo removes
+whole carries no guard, so this is not a general conflict check for every
 possible intervening edit.
 
-`undone(batch, { guard? })` builds the inverse without applying it; guards are
-off by default there. `applied(batch)` reconstructs the forward change.
+An undone delete cannot give back:
 
-Undo does not bring a deleted entity back. `undone()` and `undo()` throw `Final`
-if the batch deleted an entity, including a cascade. A nonexistent sequence
-makes `undo()` throw an `Error`; a batch with no reversible changes returns
-`[]`.
+- The `created` and `updated` stamps, which the journal skips. The entity comes
+  back stamped by the undo: its `created` names the undo's writer and time.
+- Components written before the journal began. If the journal recorded none of a
+  deleted entity's components, `undone()` and `undo()` throw `Final` naming it,
+  and nothing is written. If it recorded some, the entity comes back with those,
+  and nothing tells the missing rest apart.
+
+`undone(batch, { guard? })` builds the inverse without applying it; guards are
+off by default there. To reverse part of a transaction, cut `batch.deltas` to
+the entities wanted before passing it. `applied(batch)` reconstructs the forward
+change.
+
+A nonexistent sequence makes `undo()` throw an `Error`; a batch with no
+reversible changes returns `[]`.
 
 ## Limitations and recording rules
 
 - History can reconstruct only recorded state. Enabling the plugin after data
   already exists does not capture that data's earlier values.
 - Entity deletion is stored as an entity removal; history expands the known
-  components and a tombstone from that entity's journal records. The retained
-  entity row keeps references valid after deletion.
+  components and a tombstone from that entity's journal records, and a later
+  write that gives the entity a component reads as the tombstone going. The
+  retained entity row keeps references valid after deletion.
 - Skipped components, including the default `created` and `updated` stamps, are
-  not restored by undo. Undo receives fresh stamps when the graph supplies them.
+  not restored by undo ("Undo", above).
 - An optional `log({ cas })` configuration records selected text by a reference
   to a content store. Supply its lookup layout, selection function and writer;
   this is not enabled automatically by `rules(host)`.
