@@ -122,13 +122,14 @@ test('cache provenance separates compaction, native and imported observations', 
     { entity: { eid: 'cx' }, call: { to: 'tx' } },
     { entity: { eid: 'tx' }, tool: { name: 'session_compact' } },
   ], { requests: true })
-  equal(r.total.requests, 3)
+  equal(r.total.requests, 2)
+  equal(r.imported_observations, 1)
   equal(r.requests?.map((r) => [r.request, r.path]), [
     ['imported', 'imported'],
     ['compact', 'compaction'],
     ['native', 'native'],
   ])
-  equal(r.groups.provider.find((g) => g.key == 'unknown')?.requests, 1)
+  equal(r.groups.path.find((g) => g.key == 'imported')?.requests, 1)
 })
 
 test('cache graph reader and command return the same range without writing', async () => {
@@ -208,4 +209,28 @@ test('an endpoint reporting cache null is unknown, not a cache miss', () => {
   equal(r.total.zero_cache_requests, 0)
   equal(r.total.cached_share, null)
   equal(r.requests?.[0].cached_tokens, null)
+})
+
+test('cumulative imported observations never inflate per-request cache totals', () => {
+  let native = request('ask', { input_tokens: 100, cached_tokens: 50 })
+  let imported: Bundle = {
+    entity: { eid: 'cumulative' },
+    entry: { session: 's' },
+    using: { provider, model },
+    usage: { input_tokens: 19_000_000, cached_tokens: 18_000_000 },
+  }
+  let r = cacheOf([native, imported], metadata, { requests: true })
+  equal(r.total.requests, 1)
+  equal(r.total.input_tokens, 100)
+  equal(r.total.cached_share, 0.5)
+  equal(r.imported_observations, 1)
+  equal(r.groups.provider[0].cached_share, 0.5)
+  equal(r.groups.model[0].cached_share, 0.5)
+  equal(r.groups.session[0].cached_share, 0.5)
+  equal(
+    r.groups.path.find((g) => g.key == 'imported')?.input_tokens,
+    19_000_000,
+  )
+  equal(r.requests?.length, 2)
+  equal(cacheOf([imported]).total.cached_share, null)
 })

@@ -42,6 +42,7 @@ export type CacheReport = {
   from: string | null
   until: string | null
   total: CacheTotals
+  imported_observations: number
   groups: Record<string, (CacheTotals & { key: string })[]>
   requests?: CacheRequest[]
 }
@@ -149,9 +150,11 @@ export let cacheOf = (
     (a.at ?? '').localeCompare(b.at ?? '') ||
     a.request.localeCompare(b.request)
   )
+  let asked = new Set(rows.filter((b) => b.ask).map((b) => b.entity.eid))
+  let measured = requests.filter((r) => asked.has(r.request))
   let group = (key: 'session' | 'provider' | 'model' | 'path') => {
     let buckets = new Map<string, CacheRequest[]>()
-    for (let r of requests) {
+    for (let r of key == 'path' ? requests : measured) {
       let bucket = buckets.get(r[key]) ?? []
       bucket.push(r)
       buckets.set(r[key], bucket)
@@ -162,7 +165,8 @@ export let cacheOf = (
   return {
     from: from ?? null,
     until: until ?? null,
-    total: totals(requests),
+    total: totals(measured),
+    imported_observations: requests.length - measured.length,
     groups: {
       session: group('session'),
       provider: group('provider'),
