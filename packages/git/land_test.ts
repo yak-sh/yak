@@ -264,6 +264,63 @@ test(
 )
 
 test(
+  'a rival landing after the ancestry check rebases and waits for another land',
+  async () => {
+    let r = await setup()
+    try {
+      let tip = ''
+      let raced = async (args: string[], cwd: string) => {
+        if (args[0] == 'merge' && !tip) {
+          await rivalLands(r, 'rival.txt', 'rival\n')
+          tip = await command(r.repo, 'rev-parse', 'main')
+        }
+        return run(args, cwd)
+      }
+      let first = await land({ cwd: r.tree, run: raced, ...quiet })
+      assertEquals(first, { diverged: true, conflict: false })
+      assertEquals(await command(r.repo, 'rev-parse', 'main'), tip)
+      assertEquals(exists(`${r.repo}/candidate.txt`), false)
+      assertEquals(Deno.readTextFileSync(`${r.tree}/rival.txt`), 'rival\n')
+
+      let second = await land({ cwd: r.tree, ...quiet })
+      assert('landed' in second)
+      assertEquals(await command(r.repo, 'rev-parse', 'main'), second.landed)
+      assertEquals(
+        Deno.readTextFileSync(`${r.repo}/candidate.txt`),
+        'candidate\n',
+      )
+      assertEquals(Deno.readTextFileSync(`${r.repo}/rival.txt`), 'rival\n')
+    } finally {
+      Deno.removeSync(r.root, { recursive: true })
+    }
+  },
+)
+
+test('a failed merge with unchanged ancestry remains a fault', async () => {
+  let r = await setup()
+  try {
+    let broken = (args: string[], cwd: string) =>
+      args[0] == 'merge'
+        ? Promise.resolve({
+          ok: false,
+          code: 128,
+          out: '',
+          err: 'fatal: broke',
+        })
+        : run(args, cwd)
+    let error = await assertRejects(
+      () => land({ cwd: r.tree, run: broken, ...quiet }),
+      Error,
+      'git merge failed with exit 128: fatal: broke',
+    )
+    assertEquals(error.name, 'Error')
+    assertEquals(exists(`${r.repo}/candidate.txt`), false)
+  } finally {
+    Deno.removeSync(r.root, { recursive: true })
+  }
+})
+
+test(
   "a rebase conflict returns with git's conflict output, leaving the rebase to resolve",
   async () => {
     let r = await setup()

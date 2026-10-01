@@ -360,16 +360,19 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
   // Ancestry decides which of the two things this invocation does, and it is
   // asked before the merge because the guard's refusal has to come before the
   // merge too: once the base has fast-forwarded, the bad content has landed.
-  let anc = await git(
-    tree,
-    ['merge-base', '--is-ancestor', base, branch],
-    false,
-  )
-  if (anc.code != 0 && anc.code != 1) {
-    throw new Error(message('read merge contention', anc))
+  let ancestry = async () => {
+    let r = await git(
+      tree,
+      ['merge-base', '--is-ancestor', base, branch],
+      false,
+    )
+    if (r.code != 0 && r.code != 1) {
+      throw new Error(message('read merge contention', r))
+    }
+    return r.code
   }
 
-  if (anc.code == 0) {
+  if (await ancestry() == 0) {
     // The base has not moved: the branch is rebased onto it (or never left it),
     // so `base...HEAD` is the landing diff and the guard can read it.
     let found = await reverts(read, base)
@@ -382,8 +385,8 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
     // The shared checkout need not be spotless: Git leaves unrelated edits
     // alone. `read-tree` runs the same two-tree/worktree safety check as the
     // fast-forward, without changing the index or files. A refusal here is the
-    // checkout's state, while a merge that fails after it passed remains a
-    // fault (a hook, corruption, or a race somebody has to hear about). The
+    // checkout's state. A merge can still lose to another landing after this
+    // check; ancestry distinguishes that contention from a Git fault. The
     // fast-forward refreshes the index before its check and `read-tree` does
     // not, so the refresh comes first: a file touched but not changed is not
     // in the way. Its exit code only says some file differs, which the check
@@ -400,20 +403,23 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
       )
     }
     let merged = await git(root, ['merge', '--ff-only', branch])
-    if (merged.code) throw new Error(message('git merge', merged))
-    let sha = await need('read landed commit', root, ['rev-parse', 'HEAD'])
-    // The worktree and its branch survive landing: the caller does its own
-    // cleanup afterwards, and a command whose working directory was unlinked
-    // under it is refused by the kernel. Unlock it instead — whoever handed the
-    // worktree out locked it to mark it as in use, and this is that worker
-    // reporting it has finished. The unlock's exit code decides nothing: the
-    // only failure reachable is "not locked". Neither it nor the publish
-    // needs the other, and neither throws.
-    await Promise.all([
-      publish(git, write, root, base),
-      git(root, ['worktree', 'unlock', tree], false),
-    ])
-    return { landed: sha, root }
+    if (merged.code) {
+      if (await ancestry() != 1) throw new Error(message('git merge', merged))
+    } else {
+      let sha = await need('read landed commit', root, ['rev-parse', 'HEAD'])
+      // The worktree and its branch survive landing: the caller does its own
+      // cleanup afterwards, and a command whose working directory was unlinked
+      // under it is refused by the kernel. Unlock it instead — whoever handed the
+      // worktree out locked it to mark it as in use, and this is that worker
+      // reporting it has finished. The unlock's exit code decides nothing: the
+      // only failure reachable is "not locked". Neither it nor the publish
+      // needs the other, and neither throws.
+      await Promise.all([
+        publish(git, write, root, base),
+        git(root, ['worktree', 'unlock', tree], false),
+      ])
+      return { landed: sha, root }
+    }
   }
 
   // The base moved; rebase onto it and return, for the caller to re-run its
