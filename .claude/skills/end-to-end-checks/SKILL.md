@@ -1,16 +1,16 @@
 ---
 name: end-to-end-checks
 description: >
-  Prove a change works end to end in ~/code/tasks before calling it done: run
-  the branch's own code as a scratch `yak serve` with its own config, port and
-  directory, drive the web page in headless Chrome over CDP and read its DOM,
-  drive `yak inspect`, `yak ui` or the web TUI in tmux, and reap everything
-  afterwards. Use it whenever you are about to check something "in the
-  browser", "in the terminal", "live", on a "probe server" or "against real
-  data", take a screenshot of this app, audit how a screen behaves, or verify a
-  UI, query, write path or migration by hand, even if the task only says "make
-  sure it works" or "check it". Not for writing automated tests (`testing`), and
-  never aimed at the live graph or yak.service.
+  Prove a change end to end in ~/code/tasks before calling it done: run the
+  branch's own code as scratch `yak serve` with its own config, port and
+  directory, drive the page in headless Chrome over CDP and read its DOM, drive
+  `yak inspect`, `yak ui` or web TUI in tmux, and reap everything afterwards.
+  Use it whenever checking "in the browser", "in the terminal", "live", on a
+  "probe server" or "against real data", taking a screenshot, auditing a screen,
+  or verifying UI, query, write path or migration by hand, even if asked only
+  "make sure it works" or "check it". `platform-visualize` is causal observation,
+  not proof; proving its page and CLI also takes this skill. Automated tests
+  are `testing`; never aim a manual probe at the live graph or yak.service.
 ---
 
 # Probing a change

@@ -3,16 +3,16 @@ name: packages-and-plugins
 description: >
   How an @yaks package or plugin is made, wired and published in ~/code/tasks,
   and where code belongs. Use it whenever you add a package or plugin, move code
-  from one package to another (or out of workers/yak or packages/web), add or
-  change a subpath export or facet (./vocab, ./rules, ./tools, ./effects,
-  ./routes, ./service, ./cli, ./views, ./tui), add a plugin to ~/.yak/yak.json,
-  hit an import cycle between packages, publish to jsr, or land with
-  `yak land --allow-revert`, even if the task only says "put this somewhere",
-  "share this helper" or "make it reusable". Not for the words a package
-  declares (`vocabulary`), what its effects and rules do (`effects-and-rules`)
-  or what its views draw (`ui-building`); a key a plugin reads is
-  `secrets-and-connections`; a new package or a boundary the owner should decide
-  gets a design first (`design-docs`).
+  between packages (or out of workers/yak or packages/web), change a subpath
+  export or facet (./vocab, ./rules, ./tools, ./effects, ./routes, ./service,
+  ./cli, ./views, ./tui), add a plugin to ~/.yak/yak.json, hit an import cycle,
+  publish to jsr, or land with `yak land --allow-revert`, even if the task says
+  "put this somewhere", "share this helper" or "make it reusable". Reading
+  composed anatomy and causal activity is `platform-visualize`, not wiring.
+  Declared words are `vocabulary`; effects and rules are `effects-and-rules`;
+  drawn views are `ui-building`; keys a plugin reads are
+  `secrets-and-connections`. A new package or an owner-decided boundary gets a
+  design first (`design-docs`).
 ---
 
 # Packages and plugins

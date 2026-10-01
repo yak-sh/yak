@@ -3,13 +3,14 @@ name: testing
 description: >
   How tests work in ~/code/tasks and how to write one that earns its place:
   @yaks/testing (`test`, `suite`, `equal`, `until`, `///` doctests, fenced
-  examples), `deno task test` and its platforms (deno, browser, terminal,
-  workerd), the skip of files whose dependencies have not changed, kernel and
-  workerd tests in workers/yak, the Stripe sandbox, and running the tests of the
-  package you changed. Use it whenever you write, change, run, narrow, time or debug a test,
-  a doctest or a README example, when a run fails or is slow, when a brief says
-  "add a test", or before landing to decide what to run. Proving a change by
-  hand in a browser or a terminal is the `end-to-end-checks` skill.
+  examples), `deno task test` and its deno/browser/terminal/workerd platforms,
+  unchanged-dependency skips, kernel and workerd tests in workers/yak, the
+  Stripe sandbox, and running the changed package's tests. Use it whenever you
+  write, change, run, narrow, time or debug a test, doctest or README example,
+  when a run fails or is slow, a brief says "add a test", or before landing to
+  choose what to run. `platform-visualize` observes anatomy and causal activity,
+  not assertions; its automated contracts take this skill. Proving a change by
+  hand in a browser or terminal is `end-to-end-checks`.
 ---
 
 # Testing

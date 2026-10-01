@@ -1,18 +1,17 @@
 ---
 name: graph-reads-and-writes
 description: >
-  How writing to and reading from the yaks graph works, and why a read or write
-  behaves as it does: bundles and patch rules, `$was` preconditions, who a write
-  is stamped as, deletes and tombstones, derived ids and edges, queries and the
-  archetype index, scripts against ~/.yak/yak.db. Use it whenever you write
-  bundles (`yak graph apply`, `graph_apply`, a script, a tool, a rule), query
-  the graph (`yak graph query`, `graph_query`, a board, a filter), write any
-  script or SQL against the db, or are surprised by a refusal, a missing
-  component, a wrong count, a write that landed as the wrong writer, or a
-  deleted entity that came back. How a query is written is `query-grammar`;
-  designing a component is `vocabulary`, moving stored rows to a new shape is
-  `data-migration`, what runs after a write (rules, effects) is
-  `effects-and-rules`, and full-text and `.near` are `search-and-embeddings`.
+  How writing to and reading from the yaks graph works: bundles and patch
+  rules, `$was`, writer stamps, deletes and tombstones, derived ids and edges,
+  queries and the archetype index, scripts against ~/.yak/yak.db. Use it when
+  writing bundles (`yak graph apply`, `graph_apply`, a script, tool or rule),
+  querying (`yak graph query`, `graph_query`, a board or filter), writing db
+  scripts or SQL, or surprised by a refusal, missing component, wrong count,
+  wrong writer or a deleted entity returning. Value-free composed anatomy and
+  causal observation are `platform-visualize`, not stored rows or returned
+  values. Query syntax is `query-grammar`; component design is `vocabulary`;
+  changing stored row shape is `data-migration`; rules and effects are
+  `effects-and-rules`; full-text and `.near` are `search-and-embeddings`.
 ---
 
 # Writing to and reading from the graph

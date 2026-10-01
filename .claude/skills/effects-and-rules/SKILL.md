@@ -1,18 +1,17 @@
 ---
 name: effects-and-rules
 description: >
-  How work that follows a write is done in ~/code/tasks: declared rules inside
-  the transaction, effects after the commit (the pool, start-up work, sweeps,
-  retries, leases), observers in one process, and which process runs what
-  (roles, services, independent workers). Use it whenever you add or change an
-  effect, a rule, a start-up job, a sweep, a lease or duty, a plugin's service
-  or a role, write an `/effects` or `/rules` facet or an `effect: true` or
-  `rule: true` entry in a vocab.json, or debug something that runs after a
-  write: a run that loops, never fires, fires too often, retries forever, or
-  runs in the wrong process. Where a facet's code lives and how a plugin is
-  wired is `packages-and-plugins`; a one-time fix of stored rows is
-  `data-migration`; a builder, which turns each match of a query into outputs
-  through a model or tool, is `builders-and-builds`.
+  How work after a write is done in ~/code/tasks: transactional rules,
+  post-commit effects (the pool, start-up work, sweeps, retries, leases),
+  process-local observers, roles, services and independent workers. Use it
+  when changing an effect, rule, start-up job, sweep, lease, duty, service
+  or role, an `/effects` or `/rules` facet or `effect: true` / `rule: true`
+  vocab entry, or debugging work after a write: loops, never fires, fires
+  too often, retries forever, or runs in the wrong process. Reading composed
+  anatomy and causal activity is `platform-visualize`, not changing behavior.
+  Facet placement and plugin wiring are `packages-and-plugins`; one-time
+  stored-row fixes are `data-migration`; turning query matches into model
+  or tool outputs is `builders-and-builds`.
 ---
 
 # Effects, rules and roles

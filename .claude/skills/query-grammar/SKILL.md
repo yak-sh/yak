@@ -1,19 +1,17 @@
 ---
 name: query-grammar
 description: >
-  How a yaks query is written and read: clauses and operators, the `.p` `!p`
-  `?p` prefixes, bare words as text, `|` and grouping, walks (`->` `<-`),
-  qualifiers, directives (`.order` `.limit` `.after` `.count` `.tally`
-  `.distinct` `.fields` `*` `.refs` `.near` `.edges`), time values, reverse
-  associations, rule matches with `;` `$vars` `+` and brackets, and the
-  refusal of a property named without its component. Use it whenever you write or read a query anywhere:
-  `yak graph query`, a tool's `q`, `graph_query`, a board's query, a filter
-  field, a rule's or effect's `match`, a builder's query, a `.near` search, a
-  saved query in data; and before adding syntax to the grammar, since it is
-  often already there. How the answer is computed (the archetype index, row
-  cost, writes) is `graph-reads-and-writes`; full-text ranking and `.near`
-  internals are `search-and-embeddings`; what a builder makes of its matches is
-  `builders-and-builds`.
+  How a yaks query is written and read: clauses, operators, `.p` `!p` `?p`,
+  bare text, `|`, grouping, walks (`->` `<-`), qualifiers, directives (`.order`
+  `.limit` `.after` `.count` `.tally` `.distinct` `.fields` `*` `.refs` `.near`
+  `.edges`), time values, reverse associations, rule matches with `;` `$vars`
+  `+` and brackets, and refusing a property named without its component.
+  Use it for any query: `yak graph query`, a tool's `q`, `graph_query`, a
+  board, filter, rule/effect `match`, builder query, `.near` search or saved
+  query; and before adding syntax that may exist already. Anatomy's
+  plain-text search is `platform-visualize`, not query syntax. Computation
+  and row cost are `graph-reads-and-writes`; full-text ranking and `.near`
+  internals are `search-and-embeddings`; outputs are `builders-and-builds`.
 ---
 
 # The query grammar

@@ -1,0 +1,64 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "visualize",
+  "$defs": {
+    "visualize_anatomy": {
+      "tool": true,
+      "noun": "visualize",
+      "verb": "anatomy",
+      "title": "Read the platform's anatomy",
+      "description": "Read this host's composed platform anatomy: packages, roles, facets, vocabulary, tools, commands, rules, effects, routes, views, kits, themes, skills and secret names. Declaration, loading and binding are separate facts; an unobserved category is not globally absent. Returns the same filtered JSON snapshot as /visualize/anatomy, with coverage and node-only selection counts. Edges are kept only between included nodes. This reads no entity data or secret values and does not force lazy facets to load.",
+      "input": {
+        "group": {
+          "type": "string",
+          "enum": [
+            "packages", "roles", "facets", "comps", "tools", "commands",
+            "effects", "rules", "hooks", "routes", "views", "inspectViews",
+            "tui", "kits", "themes", "skills", "secrets"
+          ],
+          "description": "one anatomy group; omitted means every group"
+        },
+        "search": {
+          "type": "string",
+          "description": "plain-text anatomy search, not a graph query"
+        },
+        "id": {
+          "type": "string",
+          "description": "one exact anatomy part id, not a stored entity id"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000,
+          "default": 1000,
+          "description": "maximum nodes shown; selection reports total, matching and shown counts with a truncation flag"
+        }
+      }
+    },
+    "visualize_activity": {
+      "tool": true,
+      "noun": "visualize",
+      "verb": "activity",
+      "title": "Capture causal platform activity",
+      "description": "Capture bounded causal activity from this tool host's process-local trace channel: apply phases, rules, queries, gets, effects, requests and fanout. Returns the same JSON capture DTO as /visualize/activity: epoch, events with sequence and causal span ids, a known omitted record count (gap) and explicit process-local coverage. Recording is subscriber-only; no earlier idle work is reconstructed and another process using the same store is not covered. Uses the existing trace stream, never a second measurement stream. Events carry fixed operation names, durations and counts, never query text, entity contents, payloads or secret values. A zero duration is valid.",
+      "input": {
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256,
+          "default": 256,
+          "description": "maximum retained activity events, including start and end events"
+        },
+        "wait": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2000,
+          "default": 0,
+          "description": "milliseconds to keep this capture subscribed; zero reads only available history"
+        }
+      }
+    }
+  }
+}

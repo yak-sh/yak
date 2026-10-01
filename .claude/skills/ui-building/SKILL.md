@@ -1,17 +1,17 @@
 ---
 name: ui-building
 description: >
-  How to build interface in this repo, browser and terminal alike: a new
-  @yaks/ui part, a theme, a UX component in @yaks/ux (editing, picking,
-  stacking, popovers), or a page or view that shows entities (the inspector,
-  web's canvas and TUI, the style guides, a package's /views). Use it whenever a
-  change adds or changes something a person sees or presses, restyles anything,
-  touches packages/ui, packages/ux, packages/tui, packages/inspect or
-  packages/web/components, or when a screen is confusing, ugly, slow to read or
-  looks different in the terminal, even if the request never says "UI". Not for
-  a yaks app's own pages, which are its author's; a page the platform serves
-  from workers/yak takes this skill and `yaks-app` together. Proving a screen
-  works is `end-to-end-checks`; wiring a package's /views facet is
+  How to build interface here, browser and terminal: @yaks/ui parts, themes,
+  @yaks/ux components (editing, picking, stacking, popovers), entity pages and
+  views (inspector, web canvas, TUI, style guides, /views). Use it whenever a
+  change adds or changes what a person sees or presses, restyles anything,
+  touches packages/ui, packages/ux, packages/tui, packages/inspect,
+  packages/visualize or packages/web/components, or a screen is confusing,
+  ugly, slow to read or different in the terminal, even if the request never
+  says "UI". Reading platform anatomy or causal activity is
+  `platform-visualize`; building that screen takes this skill too. A yaks app's
+  pages are its author's; platform pages from workers/yak also take `yaks-app`.
+  Proving a screen is `end-to-end-checks`; wiring /views is
   `packages-and-plugins`.
 ---
 
