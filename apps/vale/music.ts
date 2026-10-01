@@ -28,12 +28,17 @@ let current: Land | null = null
 let change: ReturnType<typeof setTimeout> | null = null
 let ducked = false
 let at: Vec3 | null = null
+let unavailable = new Set<string>()
 
 let song = async (land: Land) => {
   let c = ctx!
-  let index = land.next
-  let sha = TRACKS[land.id][index]
   land.wait = null
+  let tracks = TRACKS[land.id]
+  let index = [land.next, 1 - land.next].find((i) =>
+    !unavailable.has(tracks[i])
+  )
+  if (index == null) return
+  let sha = tracks[index]
   try {
     let response = await fetch(new URL(`api/blob/${sha}`, document.baseURI))
     if (!response.ok) {
@@ -53,9 +58,13 @@ let song = async (land: Land) => {
     }
     source.start()
   } catch (error) {
-    reportError(error)
+    if (!unavailable.has(sha)) {
+      unavailable.add(sha)
+      reportError(error)
+    }
     if (current == land) {
-      land.wait = setTimeout(() => void song(land), QUIET * 1000)
+      land.next = 1 - index
+      void song(land)
     }
   }
 }

@@ -130,3 +130,117 @@ test('region music finishes one source before starting another', async () => {
     } else Reflect.deleteProperty(globalThis, 'AudioBufferSourceNode')
   }
 })
+
+test('unavailable songs are skipped and reported once for the page', async () => {
+  using time = new FakeTime()
+  seedThemes()
+  // A fresh page owns its own music singleton and unavailable-song set.
+  let { music } = await import('./music.ts?unavailable')
+  let doc = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let sourceWas = Object.getOwnPropertyDescriptor(
+    globalThis,
+    'AudioBufferSourceNode',
+  )
+  let report = Object.getOwnPropertyDescriptor(globalThis, 'reportError')
+  let fetchWas = globalThis.fetch
+  let requests: string[] = [], failures: unknown[] = [], sources: Source[] = []
+  class Source {
+    onended: (() => void) | null = null
+    constructor() {
+      sources.push(this)
+    }
+    connect() {}
+    disconnect() {}
+    start() {}
+    stop() {
+      this.onended?.()
+    }
+  }
+  let ctx = {
+    currentTime: 0,
+    createGain: () => ({
+      gain: {
+        value: 0,
+        cancelScheduledValues() {},
+        setValueAtTime() {},
+        linearRampToValueAtTime() {},
+      },
+      connect() {},
+      disconnect() {},
+    }),
+    decodeAudioData: (bytes: ArrayBuffer) =>
+      new Uint8Array(bytes)[0] == 0
+        ? Promise.reject(new Error('invalid song'))
+        : Promise.resolve({}),
+  } as unknown as AudioContext
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: { baseURI: 'https://yourname.yaks.app/vale/' },
+  })
+  Object.defineProperty(globalThis, 'AudioBufferSourceNode', {
+    configurable: true,
+    value: Source,
+  })
+  Object.defineProperty(globalThis, 'reportError', {
+    configurable: true,
+    value: (error: unknown) => failures.push(error),
+  })
+  globalThis.fetch = (url) => {
+    let sha = String(url).split('/').at(-1)!
+    requests.push(sha)
+    return Promise.resolve(
+      sha == TRACKS.mossvale[1]
+        ? new Response(new Uint8Array([1]))
+        : sha == TRACKS.birchmere[0]
+        ? new Response(new Uint8Array([0]))
+        : new Response('', { status: 404 }),
+    )
+  }
+  let mossvale: [number, number, number] = [128, 0, 128]
+  let birchmere: [number, number, number] = [-128, 0, 128]
+  try {
+    music.at(mossvale)
+    music.start(ctx, {} as AudioNode)
+    await time.tickAsync(0)
+    assertEquals(requests, TRACKS.mossvale)
+    assertEquals(failures.length, 1)
+    assertEquals(sources.length, 1)
+
+    sources[0].stop()
+    await time.tickAsync(8000)
+    await time.tickAsync(0)
+    assertEquals(requests, [...TRACKS.mossvale, TRACKS.mossvale[1]])
+    assertEquals(failures.length, 1)
+    assertEquals(sources.length, 2)
+
+    music.at(birchmere)
+    await time.tickAsync(700)
+    await time.tickAsync(0)
+    let tried = [...TRACKS.mossvale, TRACKS.mossvale[1], ...TRACKS.birchmere]
+    assertEquals(requests, tried)
+    assertEquals(failures.length, 3)
+    assertEquals(sources.length, 2)
+    await time.tickAsync(60000)
+    music.at(birchmere)
+    assertEquals(requests, tried)
+    assertEquals(failures.length, 3)
+
+    music.at(mossvale)
+    await time.tickAsync(0)
+    assertEquals(sources.length, 3)
+    music.at(birchmere)
+    await time.tickAsync(60700)
+    assertEquals(requests, [...tried, TRACKS.mossvale[1]])
+    assertEquals(failures.length, 3)
+    assertEquals(sources.length, 3)
+  } finally {
+    globalThis.fetch = fetchWas
+    if (doc) Object.defineProperty(globalThis, 'document', doc)
+    else Reflect.deleteProperty(globalThis, 'document')
+    if (sourceWas) {
+      Object.defineProperty(globalThis, 'AudioBufferSourceNode', sourceWas)
+    } else Reflect.deleteProperty(globalThis, 'AudioBufferSourceNode')
+    if (report) Object.defineProperty(globalThis, 'reportError', report)
+    else Reflect.deleteProperty(globalThis, 'reportError')
+  }
+})
