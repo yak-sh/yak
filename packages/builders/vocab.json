@@ -145,7 +145,7 @@
       "component": true,
       "type": "object",
       "key": true,
-      "description": "the key an output is found by: `<build>/<slot>`, so a rebuild lands on the output already there; a link output is found by its own ends instead"
+      "description": "the key an output is found by: `<build>/<slot>`, so a rebuild lands on the output already there; a link keeps its ends-derived eid and carries its slot key too"
     },
     "built": {
       "component": true,

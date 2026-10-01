@@ -34,7 +34,6 @@
 // never lands on code that cannot read what it moved.
 import type { Bundle, Comp, Row } from '@yaks/graph'
 import { BUILD_OF, buildOf, OUTPUT_OF, outputOf } from '@yaks/builders'
-import { EDGE } from '@yaks/edge'
 import { keyed } from '@yaks/key'
 import { isPromise } from '@yaks/fp'
 import { conjoin } from '@yaks/query'
@@ -61,30 +60,66 @@ export let RULES: Rule[] = [
   // A build and an output are found by a key, not by an eid derived from what
   // made them (@yaks/builders, T-61728). Each gains its key at the eid it
   // already has, so nothing is rebuilt and nothing moves; a key stated again
-  // is the row it already is. A link output is found by its own ends.
+  // is the row it already is. A link keeps its ends-derived eid and gains a key too.
   {
     mark: 'yak/store/build_of/13',
     find: '.build',
     move: (row) => {
       let b = row.build as Comp
-      let value = buildOf(
-        str(b.builder),
-        str(b.match),
-        str(b.variant || 'main'),
-      )
+      let builder = required(b, 'builder', row.entity.eid, 'build')
+      let match = required(b, 'match', row.entity.eid, 'build')
+      let tuple: unknown
+      try {
+        tuple = JSON.parse(match)
+      } catch {
+        throw new Error(
+          `${row.entity.eid} needs build.match recovery: invalid JSON`,
+        )
+      }
+      if (
+        !Array.isArray(tuple) ||
+        !tuple.every((eid) => eid === null || (typeof eid == 'string' && !!eid))
+      ) {
+        throw new Error(
+          `${row.entity.eid} needs build.match recovery: expected an entity-ID tuple`,
+        )
+      }
+      let value = buildOf(builder, match, str(b.variant || 'main'))
       return [keyed(BUILD_OF, row.entity.eid, value)]
     },
   },
   {
     mark: 'yak/store/output_of/14',
-    find: `.built.slot&!${EDGE}`,
+    find: '.built',
     move: (row) => {
       let b = row.built as Comp
-      let value = outputOf(str(b.build), str(b.slot))
+      let slot = required(b, 'slot', row.entity.eid, 'built')
+      let build = required(b, 'build', row.entity.eid, 'built')
+      let value = outputOf(build, slot)
       return [keyed(OUTPUT_OF, row.entity.eid, value)]
     },
   },
 ]
+
+// Legacy outputs, especially links, may not have recorded a slot. There is no
+// safe default: recovery must decide which slot produced that existing eid.
+let required = (
+  comp: Comp,
+  prop: string,
+  eid: string,
+  name: string,
+): string => {
+  let value = comp[prop]
+  if (typeof value != 'string' || !value.trim()) {
+    let recovery = name == 'built' && prop == 'slot'
+      ? 'slot'
+      : `${name}.${prop}`
+    throw new Error(
+      `${eid} needs ${recovery} recovery: ${name}.${prop} is missing, empty or invalid`,
+    )
+  }
+  return value
+}
 
 let str = (v: unknown) => v == null ? '' : String(v)
 

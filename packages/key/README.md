@@ -71,7 +71,9 @@ Alongside the book, that writes this key entity:
   already holds, the write patches that existing entity instead of creating a
   second one — which is what makes a seed, a chunked import, and a page that
   saves itself every time it opens idempotent. A caller who wrote an id down
-  rather than using an alias is refused instead, with the holder named.
+  rather than using an alias is refused instead, with the holder named. Deleting
+  the holder explicitly in the same batch permits a transfer, guarded against
+  ownership changing before that batch commits.
 
 ## The vocabulary
 

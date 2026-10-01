@@ -6,7 +6,7 @@
 //
 // An output wearing `edge` is a link, and a link is identified by its ends and
 // its relation (@yaks/edge): it lands on that derived eid, which finds it again
-// without a key, and carries its slot like any output. One of its ends is
+// and carries its slot and output key like any output. One of its ends is
 // something its answer made, which makes the link this build's alone; a later
 // answer that no longer states it deletes it.
 
@@ -15,13 +15,14 @@ import {
   type Bundle,
   type Comp,
   type Eid,
+  Refused,
   token,
   type Tx,
 } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { and, eq, present } from '@yaks/query'
 import { EDGE, edgeEid, link, relations, unlink } from '@yaks/edge'
-import { keyed } from '@yaks/key'
+import { keyed, keyEid, unkeyed } from '@yaks/key'
 import { verify } from '@yaks/kernel'
 import { BUILD, BUILT, ids, OUTPUT_OF, outputOf } from './build.ts'
 
@@ -29,7 +30,7 @@ export type Spec = {
   /** where it lands: its slot's entity, or a link's ends and relation */
   eid: Eid
   slot: string
-  /** a link, found by its own identity rather than a key */
+  /** a link: its identity is its ends, and its key locates its slot */
   link: boolean
   inputs: Eid[]
   components: Record<string, Comp | null>
@@ -251,9 +252,24 @@ export let answer = async (
       },
       $was: { [BUILT]: { call: token(before?.call) } },
     })
-    if (!spec.link) {
-      writes.push(keyed(OUTPUT_OF, eid, outputOf(source, spec.slot)))
+    // A retained link keeps its eid. Legacy links may have no slot or key;
+    // release only a key that still names this link, guarding its owner.
+    let old = str(before?.slot)
+    if (spec.link && before?.build == source && old && old != spec.slot) {
+      let value = outputOf(source, old)
+      let [row] = await tx.get([keyEid(OUTPUT_OF, value)])
+      let owner = comp(row, 'key')?.of
+      if (owner != null && owner != eid) {
+        throw new Refused(`${OUTPUT_OF} ${value} is ${owner}'s`)
+      }
+      if (owner == eid) {
+        writes.push({
+          ...unkeyed(OUTPUT_OF, value),
+          $was: { key: { of: token(eid) } },
+        })
+      }
     }
+    writes.push(keyed(OUTPUT_OF, eid, outputOf(source, spec.slot)))
     let citations = await tx.read(
       and(eq(`${EDGE}.from`, eid), present('cites')),
     )

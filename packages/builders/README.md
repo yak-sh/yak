@@ -97,12 +97,12 @@ An output wearing `edge{from,to}` and one relation beside it is a link:
 ```
 
 A link is identified by its ends and relation (@yaks/edge), so it lands on that
-derived id and is found by it, with no key; its slot names it in its answer like
-any output's. One of its ends must be a sibling output, which makes the link
-this build's alone: an answer that no longer states a link the build's earlier
-answer did deletes it, so `.edge.from=X&.needs` reads what the latest answer
-said, and `.built.current=true` beside it leaves out a link whose build is being
-asked again.
+derived id and carries an `output_of` key; its slot names it in its answer like
+any output's. One of its ends must be a nonedge sibling output, which makes the
+link this build's alone: an answer that no longer states a link the build's
+earlier answer did deletes it, so `.edge.from=X&.needs` reads what the latest
+answer said, and `.built.current=true` beside it leaves out a link whose build
+is being asked again.
 
 `modelTool()` is an internal registered tool for model builders. It renders
 `content.body` from the frozen binding (`$name` is a variable's value, or its

@@ -52,7 +52,8 @@
  *   that mints an entity under a `$alias` and gives it a value another entity
  *   already holds patches that entity instead of creating a second one; a
  *   caller who wrote an id down rather than using an alias is refused, with the
- *   holder named.
+ *   holder named. An explicit deletion of the holder in the same batch permits
+ *   a transfer, guarded against ownership changing before that batch commits.
  *
  * It imports no platform API, so the same code runs on a server, in a worker,
  * and in a browser tab.
