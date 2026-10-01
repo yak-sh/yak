@@ -1,0 +1,562 @@
+[
+  {
+    "entity": {
+      "eid": "fc120972-eb25-80f3-ac51-798a8707c5c6"
+    },
+    "doc": {
+      "title": "Mossvale",
+      "body": "Mossvale is a welcoming green valley, lakeside village and warm morning light. Its music evokes a generous village welcome and a quiet return along the lake, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "fiddle, tin whistle, cittern and bodhran",
+      "motif": "A warm phrase skips upward twice, lingers at its crest, then walks gently home. A lilting short-short-long pulse makes its return feel like a familiar welcome.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "def322d5-5ef5-8a0a-bf03-f1d2b1f3ded0"
+    },
+    "doc": {
+      "title": "Birchmere",
+      "body": "Birchmere is silver birches around a peaceful mere and bright fields. Its music evokes a fresh, hopeful waterside melody and a gentle reflection among birches, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "kantele, silver flute, nyckelharpa and brushed seed shaker",
+      "motif": "A clear little ripple climbs in even steps and turns down in a longer answering arc. Leave a breath between the two halves, like light moving across still water.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "523f9665-21e9-80bb-8346-bd45c0e029c0"
+    },
+    "doc": {
+      "title": "Clovermead",
+      "body": "Clovermead is sunny clover meadows, a little pond and golden copses. Its music evokes a playful meadow dance and an unhurried tune in the afternoon sun, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "mandolin, dancing fiddle, hammered dulcimer and tambourine",
+      "motif": "A quick upbeat springs into a playful rising turn, then tumbles back in a repeated skipping rhythm. Its last gesture is longer and sunny, as though the dance pauses to laugh.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "ba419339-309e-8642-8cf0-a62c3ae3562f"
+    },
+    "doc": {
+      "title": "Fernwood",
+      "body": "Fernwood is a hidden hamlet in deep ferns beneath green-filtered light. Its music evokes an intimate, winding woodland melody and a curious tune near the fern heart, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "alto recorder, muted viola, theorbo and hollow woodblocks",
+      "motif": "A close, curling phrase wanders upward slowly, doubles back, and finds a small sheltered resting place. Unequal lengths and little silences give it the feel of following a hidden path.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "67454fab-35f1-8601-b3c0-b3d40b0a4d39"
+    },
+    "doc": {
+      "title": "Elderglade",
+      "body": "Elderglade is ancient elder trees, a still pool and amber motes. Its music evokes a reverent melody beneath old branches and a luminous, gentle answer by the pool, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "wire-strung harp, viola da gamba, breathy ocarina and suspended finger cymbals",
+      "motif": "A single held call opens into a slow ascending arch, answered softly below. Give the returning descent generous space and a reverent, gently luminous stillness.",
+      "voice": "solo"
+    }
+  },
+  {
+    "entity": {
+      "eid": "d20ffb96-7a2b-89f0-a434-5b1b9a83a115"
+    },
+    "doc": {
+      "title": "Greypine",
+      "body": "Greypine is high grey pines, a cold tarn and a watch crag in mist. Its music evokes a searching phrase across the tarn and a cool, spacious watch melody, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "bukkehorn, bowed psaltery, bass viol and sparse stone percussion",
+      "motif": "A distant call rises across a wide gap, holds against the wind, then descends in three patient gestures. The rhythm is spare and searching, with a quiet pause before each return.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "d0c38670-0eaf-87b5-968a-e4488dd1ab8d"
+    },
+    "doc": {
+      "title": "Wolfden",
+      "body": "Wolfden is a dark pine hollow, wolf lair and black tarn at dusk. Its music evokes a wary, brave melody through the hollow and a guarded theme that finds resolve, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "bass clarinet, hardanger fiddle, bowed double bass and skin drum",
+      "motif": "Two low, measured pulses lead into a tense upward reach that retreats before finally standing firm. Keep the repeated figure guarded and steady, with courage rather than menace in its answer.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "686312d2-19b2-85d2-99e7-fcaa038c5942"
+    },
+    "doc": {
+      "title": "Gullwick",
+      "body": "Gullwick is a busy fishing harbour, blue bay and farmland in fresh sea air. Its music evokes a lively, welcoming harbour melody and a warm homeward tide tune, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "concertina, fiddle, tenor banjo and spoons",
+      "motif": "A jaunty pickup rolls into a broad climbing phrase and a bobbing downward answer. Its swinging long-short rhythm should feel like a harbour greeting, cheerful without rushing.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "43c046a6-b5b7-891c-9b78-922c014fd963"
+    },
+    "doc": {
+      "title": "Driftwood Bay",
+      "body": "Driftwood Bay is a wild strand, weathered wharf and dune grass under grey skies. Its music evokes a wide, weathered shore melody and a wistful tune that endures the salt wind, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "baritone acoustic guitar, low concertina, bowed fiddle and shell shaker",
+      "motif": "A weathered phrase rises reluctantly, hangs in the salt air, then settles in a long falling line. The gentle uneven sway returns with the patience of waves against an old wharf.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "777253c1-5182-825d-ad54-5aa129bfacd0"
+    },
+    "doc": {
+      "title": "Saltreach",
+      "body": "Saltreach is white salt flats, tidal edge and pale bluffs in warm mist. Its music evokes an open, shimmering salt-flat melody and a reflective tune at the distant tide, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "glass harmonica, monochord, muted viola and ceramic chimes",
+      "motif": "A narrow shimmering figure repeats with a slight lift each time, then spreads into one long downward sigh. Widely spaced entrances leave a bright, open horizon around the melody.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "4b5c8677-f120-89a6-849f-85c529ed5aa9"
+    },
+    "doc": {
+      "title": "Shellstrand",
+      "body": "Shellstrand is pink shell beaches and green isles in clear turquoise shallows. Its music evokes a lilting island melody and a calm refrain shaped like the ebbing tide, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "ukulele, bamboo flute, lap harp and shell rattles",
+      "motif": "A lilting phrase rocks upward and back, then answers with a softer descending wave. Let its three-part sway and rounded pauses feel like clear shallows washing pink shells.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "0ccb76d5-e8b2-87a5-8f1f-89e117897f72"
+    },
+    "doc": {
+      "title": "Stormhead",
+      "body": "Stormhead is rain-lashed headland, dark surf and a lone beacon on slate cliffs. Its music evokes a bold melody against the gale and a watchful theme opening toward the beacon, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "French horn, low cello ensemble, bowed cymbal and deep frame drum",
+      "motif": "A firm repeated call climbs boldly above a slower pulse and falls in a broad, resolute answer. Stretch the last rise toward a sustained beacon-like crest before returning to the surf.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "b0d9c165-af46-8b93-8ce9-ba37e77e1264"
+    },
+    "doc": {
+      "title": "Reedmarsh",
+      "body": "Reedmarsh is golden reeds, mirror pools and a stilt village in warm mist. Its music evokes a buoyant tune through the reeds and a patient waterborne melody, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "sheng, reed pipe, pizzicato cello and water drum",
+      "motif": "A buoyant figure steps up, hesitates, and floats down in a gently offbeat reply. Its light repeated pulse should sound like a small boat nudging through reeds, never a march.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "909a7af6-cc4a-87a6-8b1b-53662450deac"
+    },
+    "doc": {
+      "title": "Mirewood",
+      "body": "Mirewood is drowned trees and dark pools under a green firefly haze. Its music evokes a low, searching melody and a slow tune with glimmers in the mire, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "bassoon, bowed tagelharpa, bass viol and scattered wooden clicks",
+      "motif": "A low line creeps upward in small uncertain steps, followed by a brief high glimmer and a slow return. Keep the spaces between phrases dark and patient, but let the answer retain warmth.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "0ea1a470-00a0-8cb8-a4f7-d3b1d78581ca"
+    },
+    "doc": {
+      "title": "Fenhollow",
+      "body": "Fenhollow is peat fen, pale pools and an old dig beneath a soft grey sky. Its music evokes a curious, measured excavation theme and a quiet echo of buried history, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "viola da gamba, plucked zither, alto ocarina and peat-dry hand percussion",
+      "motif": "A measured descending question is answered by a modest climb and a lingering turn. The repeated rhythm is curious and deliberate, as if carefully uncovering something long buried.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "6aec223e-28b1-8bd4-aecd-ff29c4d79280"
+    },
+    "doc": {
+      "title": "Sunken Kirk",
+      "body": "Sunken Kirk is a half-drowned stone kirk and churchyard among cold pools. Its music evokes a graceful memorial melody and a mournful theme slowly finding light, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "small chamber organ, cello, handbells and bowed psaltery",
+      "motif": "A solemn held opening falls gently, then rises again in a longer consoling phrase. Give the melody a slow processional breath and an ending that finds light rather than final despair.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "a635c17a-f381-8e60-bf05-eb279be1d688"
+    },
+    "doc": {
+      "title": "Bogheart",
+      "body": "Bogheart is deep brown bog pools and a toadstool wood under yellow-grey sky. Its music evokes a wary, earthy wandering melody and an uncanny tune that keeps its warmth, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "contrabassoon, jaw harp, low viola and dry skin drum",
+      "motif": "A short earthy pulse circles a low resting place before making one cautious upward leap. The answer folds back in an uneven, softly loping rhythm, uncanny but companionable.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "1297a6ea-909e-84ef-8f78-d4770309648c"
+    },
+    "doc": {
+      "title": "Sporefen",
+      "body": "Sporefen is a luminous fungal marsh and tall toadstools over green water. Its music evokes a curious, buoyant melody and a softly enchanted drifting theme, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "marimba, kalimba, bamboo panpipes and plucked cello",
+      "motif": "Small buoyant gestures hop upward with a pause after each, then drift down in a smooth answering ribbon. Keep a delicate syncopated pulse beneath its softly curious glow.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "79d50f21-107f-8885-9183-0e00ec2da734"
+    },
+    "doc": {
+      "title": "Stonestep",
+      "body": "Stonestep is a quarry town, pale stone steps, green meadow and watchful moor. Its music evokes a welcoming hill-country melody and a broad tune climbing the quarry steps, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "mountain dulcimer, sturdy fiddle, tenor recorder and quarry-stone taps",
+      "motif": "A sturdy repeated step grows into a broad uphill phrase, then comes down more easily than it climbed. Its even walking rhythm opens into a generous held welcome at the top.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "884ce51a-1841-833b-9968-1badedb5026f"
+    },
+    "doc": {
+      "title": "Heatherfell",
+      "body": "Heatherfell is violet heather moor, scree and a small high tarn. Its music evokes an airy roaming melody and a wistful hillside refrain, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "Scottish smallpipes, open fiddle, bouzouki and light bodhran",
+      "motif": "An airy rising call opens wide, then curls gently down through a lilting answer. Let a little delayed accent give the refrain the freedom of wandering over heather.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "50e57ef0-ab71-8342-be41-2bf42e0034bc"
+    },
+    "doc": {
+      "title": "Oldwall",
+      "body": "Oldwall is broken ancient walls in bracken and autumn woods. Its music evokes a nostalgic melody by the old stones and a dignified theme of a forgotten kingdom, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "lute, viola d'amore, cor anglais and soft handbell",
+      "motif": "A dignified phrase rises from a quiet pickup and descends in two wistful arches. A lingering final turn returns like a half-remembered story, with a measured autumnal warmth.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "bc962115-0909-8aa7-8499-5150ca6cd336"
+    },
+    "doc": {
+      "title": "Kingsbarrow",
+      "body": "Kingsbarrow is a royal barrow and timber hall on a shadowed moor. Its music evokes a noble but weathered hall melody and a quiet memorial for the buried king, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "lur horn, lyre, low viols and measured ceremonial drum",
+      "motif": "A noble long call is answered lower by three deliberate pulses and a slow upward recovery. Hold the crest with restraint, then let the memorial refrain settle without triumphal bustle.",
+      "voice": "solo"
+    }
+  },
+  {
+    "entity": {
+      "eid": "aa2c8069-55b4-8b14-a0d7-4ad9448bd595"
+    },
+    "doc": {
+      "title": "Giantsteps",
+      "body": "Giantsteps is a monumental basalt stair across grey crags and lonely stonefield. Its music evokes a broad melody climbing the stair and a spacious theme from the summit, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "alphorn, resonant double bass, bass drum and stone lithophone",
+      "motif": "A huge low gesture climbs in widely separated strides, pausing on each ledge before a spacious falling answer. The pulse is slow and monumental, with the summit opening into still air.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "269b1327-3b1c-8f75-83ae-e3b33b4ddf9c"
+    },
+    "doc": {
+      "title": "Glowcap Hollow",
+      "body": "Glowcap Hollow is a blue-dusk village under immense glowing mushrooms. Its music evokes a gentle wonder-filled melody and a playful nocturnal village tune, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "celesta, toy-sized music box, pizzicato viola and soft udu",
+      "motif": "A tiny repeated sparkle climbs in a playful curl, pauses, and tiptoes back down. Keep a gentle nocturnal bounce, with the answer slightly longer and full of wonder.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "2e5a9483-fb59-875e-a2c7-1965d2fc36f0"
+    },
+    "doc": {
+      "title": "Gleamdeep",
+      "body": "Gleamdeep is violet mushroom woods, amethyst stone and shining pools. Its music evokes a luminous winding melody and a serene theme reflected in crystal water, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "crystal singing bowls, koto, harmonics on cello and delicate triangle",
+      "motif": "A luminous phrase winds upward in a smooth ribbon, turns once at its brightest point, and pours gently down. Unhurried repeated ripples should feel reflected rather than echoed mechanically.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "7d8c0923-67e1-8985-9788-c6d22a680c2e"
+    },
+    "doc": {
+      "title": "Shardvault",
+      "body": "Shardvault is a pale crystal vault among cold shards and blue-white water. Its music evokes a precise, mysterious vault melody and an expansive theme in the cold light, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "glass marimba, bowed vibraphone, contrabass and high recorder",
+      "motif": "A precise short figure rises angularly, stops in a clear silence, then answers with a much broader descending arc. The regular pulse is fragile and crystalline, opening into cold spaciousness.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "313b0258-1f29-8199-8e7c-ab5d38f5e399"
+    },
+    "doc": {
+      "title": "Dustmere",
+      "body": "Dustmere is a dry vanished lake, old shoreline and last well in dusty air. Its music evokes a spare, resilient travel melody and a wistful memory of water, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "setar, low ney, clay darbuka and bowed rebab",
+      "motif": "A spare wandering call rises, falters, and falls in a dry little turn, answered by a longer memory of the same shape. A patient walking pulse carries resilience through the empty shoreline.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "bd584c26-2210-8251-b462-856f99ec128f"
+    },
+    "doc": {
+      "title": "Palmwell",
+      "body": "Palmwell is a palm oasis and caravan camp among golden dunes. Its music evokes a warm caravan traveling melody and a restful tune in green shade by water, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "oud, qanun, bright ney and riq",
+      "motif": "A warm circling phrase climbs with a quick ornament and rests in a shaded, gently falling answer. Its lilting caravan pulse relaxes on the return, like arriving beside water.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "0265d74a-6854-810b-ade9-95dcb059049c"
+    },
+    "doc": {
+      "title": "Sunscar Dunes",
+      "body": "Sunscar Dunes is white-hot dunes, buried ruins, bones and a dark scar in sand. Its music evokes a tense, wide-open crossing theme and a searching melody rising above the dunes, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "kamancheh, zurna played softly, low strings and restrained daf",
+      "motif": "A tense low repetition gathers into a long ascending reach, interrupted by a brief falling turn. Let the rhythm feel like deliberate steps across hot dunes, with the last answer opening toward resolve.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "e91abe8a-c35b-8eba-b1dd-ac24b6754ff2"
+    },
+    "doc": {
+      "title": "Redmesa",
+      "body": "Redmesa is red sandstone buttes, clay slopes and a spring at copper sunset. Its music evokes a spacious red-rock melody and a warm, wandering tune toward the spring, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "cedar flute, acoustic guitar, bowed cello and rawhide hand drum",
+      "motif": "A wide, sun-warmed call rises over a slow pulse and falls across a long spacious answer. A small repeated turn at its end should suggest the spring found after an unhurried journey.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "397b0469-a6b9-8867-b7b9-bc6c3c1263f6"
+    },
+    "doc": {
+      "title": "Tombsands",
+      "body": "Tombsands is dusk over a sand-buried necropolis, sunken tombs and pale cliffs. Its music evokes an ancient theme gathering grandeur as the lost city appears and a solemn melody settling into peace among the tombs, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "duduk, ney, oud, low bowed strings, sparse bronze bells and slow frame drum",
+      "motif": "A low sustained call lifts in three slow breaths, bends gently back, and is answered beneath it by a longer descending lament. Return to that contour over a measured, spacious pulse, solemn and ancient but gradually finding peace.",
+      "voice": "choir"
+    }
+  },
+  {
+    "entity": {
+      "eid": "e1753484-688a-8249-8f52-6bbd3271529b"
+    },
+    "doc": {
+      "title": "Frostmoor",
+      "body": "Frostmoor is a scoured snowy moor, stunted pines and dark tarn in wind. Its music evokes a wind-bitten crossing melody and a brave, measured theme in the cold, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "seljefloyte, bowed lyre, low cello and sparse ice-like chimes",
+      "motif": "A thin high call rises against a firm low pulse, breaks into two short falling gestures, then recovers. Leave wind-like space between returns while keeping the refrain brave and measured.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "227db9d4-ed56-80b1-9c47-35335bc86113"
+    },
+    "doc": {
+      "title": "Rimeholt",
+      "body": "Rimeholt is a sheltering holt among frost-coated trees and a glacier. Its music evokes a cozy winter refuge melody and a hushed, crystalline snow theme, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "accordion, warm fiddle, plucked kantele and soft sleigh bells",
+      "motif": "A hushed upward curl settles into a rocking answer, then repeats with a little more warmth. Its easy long-short sway should feel like shelter while snow falls quietly outside.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "d3fe7ce0-3409-8d1b-8cdd-dd84cd381b13"
+    },
+    "doc": {
+      "title": "Frostpine",
+      "body": "Frostpine is deep snow-covered spruce and a remote logger camp. Its music evokes a dark, steady woodland tune and a hushed snowfall melody, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "tagelharpa, bass recorder, plucked mandola and muffled hand drum",
+      "motif": "A dark low figure walks steadily upward, pauses beneath a held tone, and returns in a slow falling line. Keep the repeated rhythm close and even, like footsteps softened by deep snow.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "a6377eb3-29d1-84ab-a838-9249d50948dd"
+    },
+    "doc": {
+      "title": "Icefall",
+      "body": "Icefall is a blue glacier fall, deep crevasses and a cold tarn. Its music evokes a cascading, clear melody and a cautious crossing tune above the ice, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "hammered glass dulcimer, high violin harmonics, pulsing cello and crystal chimes",
+      "motif": "A clear cascade descends in quick little groups, answered by a careful slower ascent. The pulse remains steady beneath the glitter, with a suspended pause before crossing back.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "9bc0e0e6-060b-8bb9-b30c-f287d3f2b217"
+    },
+    "doc": {
+      "title": "Whitepeak",
+      "body": "Whitepeak is an immense white summit above snowfields in thin air. Its music evokes an open melody reaching the summit and a still, majestic theme in clear air, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "alpine horn, soaring violins, open-string viola and sparse wind chimes",
+      "motif": "A broad ascending arch reaches a long still crest before descending in two generous breaths. The spacious rhythm should feel weightless and majestic, not hurried or victorious.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "7a002309-dd16-808a-bc52-526e8ff4afa4"
+    },
+    "doc": {
+      "title": "Emberfall",
+      "body": "Emberfall is a forge town below falling embers and lava cliffs. Its music evokes a determined forge melody and a warm but uneasy tune beside the fires, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "hammered dulcimer, low fiddle, cello, anvil taps and hand drum",
+      "motif": "A determined short-short-long figure climbs, holds, and comes back in a warm resolute answer. The repeated working pulse should soften on its return, keeping humanity beside the forge.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "4a234d10-e4f5-8ac7-8588-520f9b2c0f09"
+    },
+    "doc": {
+      "title": "Cinderreach",
+      "body": "Cinderreach is black ash flats, volcanic vents and a dim ash-filled sky. Its music evokes a weathered journey through stillness and heat and a stark melody gathering strength toward calm, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "bass trombone, bowed double bass, low cello and restrained volcanic drum",
+      "motif": "A stark low phrase crosses a wide interval and slowly sinks back, then rises farther on its next return. Long held gestures over sparse pulses gather strength without becoming frantic.",
+      "voice": "choir"
+    }
+  },
+  {
+    "entity": {
+      "eid": "24f21836-e4d4-8e19-95a7-e137e86469ec"
+    },
+    "doc": {
+      "title": "Ashkeep",
+      "body": "Ashkeep is a lonely grey keep and gate in a cold ashfield. Its music evokes a noble, weary melody and a humane last-watch theme, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "muted French horn, viola da gamba, low strings and solitary tower bell",
+      "motif": "A weary noble call rises once, falls in a long gentle arc, and is answered by a small stubborn lift. Let each measured return feel like keeping watch for someone, humane rather than martial.",
+      "voice": "none"
+    }
+  },
+  {
+    "entity": {
+      "eid": "4da9b7b8-beca-87b6-91fa-973977f86bac"
+    },
+    "doc": {
+      "title": "The Maw",
+      "body": "The Maw is an immense fiery chasm at the scorched edge of the world. Its music evokes a grave heroic finale and a dark climb toward a hard-won hopeful ending, with room for quiet exploration and a sense of belonging even at the world's difficult edges."
+    },
+    "music_design": {
+      "instruments": "contrabass strings, bass trombone, deep timpani and measured war drums",
+      "motif": "A grave repeated low call climbs in increasingly broad strides, answers with a heavy descent, and climbs again toward a hard-won open crest. Keep the pulse deliberate and the final return hopeful without erasing its weight.",
+      "voice": "none"
+    }
+  }
+]
