@@ -49,11 +49,13 @@ import { refuse } from './tool.ts'
 // words could not carry one (T-37546).
 import { type Host, url } from './host.ts'
 import {
+  changed,
   CORE_URI,
   type Keywords,
   loadVocab,
   pick,
   type PropSchema,
+  same,
   storable,
   typesOf,
   type Vocab,
@@ -1203,10 +1205,6 @@ export let wordOf = (s: PropSchema): string => {
 // Whether two declarations of one property store the same thing: the same JSON
 // types, in any order, and the same format. A union is an array, so it is
 // compared by what it holds.
-let same = (a: PropSchema, b: PropSchema) =>
-  a.format == b.format &&
-  typesOf(a).sort().join() == typesOf(b).sort().join()
-
 /**
  * A document as `{comp: {prop: word}}` — every component's properties as the
  * word that names each one's type. That is how the kernel reads a
@@ -1258,7 +1256,8 @@ export let grew = (
 } => {
   let mine = was.$defs ?? {}
   let theirs = next.$defs ?? {}
-  let dropped = Object.keys(mine).filter((n) => !(n in theirs) && !rows(n))
+  let delta = changed(was, next)
+  let dropped = delta.dropped.filter((n) => !n.includes('.') && !rows(n))
   let defs: Record<string, PropSchema> = { ...mine }
   let added: string[] = []
   let retyped: string[] = []
@@ -1266,13 +1265,15 @@ export let grew = (
   for (let [name, schema] of Object.entries(theirs)) {
     let props: Record<string, PropSchema> = { ...mine[name]?.properties }
     for (let prop of Object.keys(props)) {
-      if (prop in (schema.properties ?? {}) || rows(name, prop)) continue
+      if (!delta.dropped.includes(`${name}.${prop}`) || rows(name, prop)) {
+        continue
+      }
       delete props[prop]
       dropped.push(`${name}.${prop}`)
     }
     for (let [prop, s] of Object.entries(schema.properties ?? {})) {
       let had = props[prop]
-      if (had && !same(had, s)) {
+      if (had && delta.retyped.includes(`${name}.${prop}`)) {
         if (rows(name, prop)) {
           throw refuse(
             'arguments',

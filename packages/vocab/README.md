@@ -89,10 +89,10 @@ component table needs on top:
 Two packages add keywords of their own, passed to `loadVocab` beside the
 documents: `edge: true` marks a relation component riding on an edge
 ([@yaks/edge](../edge/README.md)), and `key: true` marks a key tag
-([@yaks/key](../key/README.md)). Reach for a key, not `identity`, when the
-facts locate an entity that has a life of its own: the entity keeps a minted
-eid, and a value it holds finds it again. `identity` derives the eid itself,
-and fits only where the facts are the entity, as a link is its two ends.
+([@yaks/key](../key/README.md)). Reach for a key, not `identity`, when the facts
+locate an entity that has a life of its own: the entity keeps a minted eid, and
+a value it holds finds it again. `identity` derives the eid itself, and fits
+only where the facts are the entity, as a link is its two ends.
 
 A component whose name starts with `_` gives none of its properties a bare name,
 whatever `bare` says: `.name` never means `_prop.name`. An authored name starts
@@ -640,14 +640,20 @@ it with the vocabulary the graph is served with, each time a process starts.
 
 The root export includes `loadVocab`, `Vocab`, schema and property types,
 `Unknown` and `Ambiguous` lookup errors, `pick`, `storable`, `reserved`,
-`kindOrder`, `composite`, state-lifetime helpers, `rulesIn`, `RuleDecl`,
-`effectsIn` and `EffectDecl`. `CORE_URI`, `coreVocabulary` and `metaSchema`
-expose the bundled schema documents; `Keywords`, `JsonSchema` and `extendMeta`
-support extensions. `metaDoc`, `toBundles`, `fromBundles`, `Ids` and `Bundle`
-hold a vocabulary as entities.
+`kindOrder`, `composite`, `same`, `changed`, state-lifetime helpers, `rulesIn`,
+`RuleDecl`, `effectsIn` and `EffectDecl`. `CORE_URI`, `coreVocabulary` and
+`metaSchema` expose the bundled schema documents; `Keywords`, `JsonSchema` and
+`extendMeta` support extensions. `metaDoc`, `toBundles`, `fromBundles`, `Ids`
+and `Bundle` hold a vocabulary as entities.
 
 The `@yaks/vocab/tools` sub-module exports `ToolDefinition`, `toolDefinition`,
 `toolDefinitionSchema`, `toolsIn`, `toolsSaid`, `validateToolInput`,
 `validateToolOutput` and `toolOutputValidator`. `toolsSaid` loads declarations
 without compiling argument validators; `toolsIn` also validates metadata,
 input/output schemas and option mappings.
+
+`same` compares a declaration’s type union and format, ignoring prose and other
+keywords. `changed(was, next)` compares `$defs` (components and tools alike) and
+returns `dropped`, `added`, and `retyped` names. Properties are named
+`definition.property`; retyped words are also additions. It reads no stored
+rows: retaining populated words is the store’s responsibility.
