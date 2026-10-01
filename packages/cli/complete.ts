@@ -18,8 +18,7 @@
 // function.
 
 import { commandOf, type Prop, type Schema, typeOf } from './tool.ts'
-import { type Grammar, saidIn } from './args.ts'
-import { commandFor } from './run.ts'
+import { commandFor, type Grammar, scanned, tokensIn } from './args.ts'
 
 /** The two answers only a graph can give. Left out, a `ref` or a full-text
  * argument simply offers nothing, which is all a client with no connection
@@ -35,10 +34,15 @@ export type Lookup = {
 // being typed, empty where the line ended in a space. An argv array (a shell
 // hook's COMP_WORDS) is already in that form.
 let wordsIn = (line: string | readonly string[]): string[] =>
-  Array.isArray(line) ? [...line] : [
-    ...(line as string).split(/\s+/).filter(Boolean),
-    .../\s$/.test(line as string) || !(line as string) ? [''] : [],
-  ]
+  typeof line == 'string' ? tokensIn(line, true).map((w) => w.value) : [...line]
+
+/** Quote a replacement word so parsing it yields the offered value. Shell
+ * argv callers already own quoting and receive raw values instead. */
+export let quoted = (word: string): string => {
+  let eq = word.startsWith('--') ? word.indexOf('=') : -1
+  if (eq >= 0) return word.slice(0, eq + 1) + quoted(word.slice(eq + 1))
+  return /[\s"'\\]/.test(word) || !word ? JSON.stringify(word) : word
+}
 
 let props = (t: Grammar): Record<string, Prop> =>
   ((t.inputSchema ?? {}) as Schema).properties ?? {}
@@ -76,18 +80,6 @@ let values = async (
   return said
 }
 
-// Which property the word being typed belongs to: the one the option before it
-// named, or the next positional argument nothing has filled yet. A bare
-// `--name` claims the next word whatever its type, because that is what the
-// parser does with it (args.ts `saidIn`) — which is also why the positional
-// arguments are counted by asking that same parser rather than by counting
-// words without a dash.
-let awaiting = (t: Grammar, args: readonly string[]): string | undefined => {
-  let last = args.at(-1)
-  if (last?.startsWith('--') && !last.includes('=')) return last.slice(2)
-  return t.options?.positional?.[saidIn([...args]).words.length]
-}
-
 let kept = (said: string[], partial: string): string[] =>
   [...new Set(said)].filter((w) => w.startsWith(partial)).sort()
 
@@ -113,24 +105,21 @@ export let complete = async (
   }
   let t = found.verb
   let names = Object.keys(props(t))
-  if (partial.startsWith('--')) {
+  let state
+  try { state = scanned(t, found.args, true) } catch { return [] }
+  let emit = (said: string[]) => typeof line == 'string' ? said.map(quoted) : said
+  if (!state.literal && partial.startsWith('--')) {
     let [name, ...rest] = partial.slice(2).split('=')
     // `--name=` introduces a value, in the one form that accepts a value
     // beginning with a dash.
     if (rest.length) {
       let said = await values(props(t)[name], rest.join('='), look)
-      return kept(said.map((v) => `--${name}=${v}`), partial)
+      return emit(kept(said.map((v) => `--${name}=${v}`), partial))
     }
-    let given = new Set(
-      found.args.filter((w) => w.startsWith('--')).map((w) =>
-        w.slice(2).split('=')[0]
-      ),
-    )
     return kept(
-      names.filter((n) => !given.has(n)).map((n) => `--${n}`),
+      names.filter((n) => !state.given.has(n)).map((n) => `--${n}`),
       partial,
     )
   }
-  let name = awaiting(t, found.args)
-  return kept(await values(props(t)[name ?? ''], partial, look), partial)
+  return emit(kept(await values(props(t)[state.awaiting ?? ''], partial, look), partial))
 }

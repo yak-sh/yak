@@ -8,7 +8,8 @@
     "./host": "./host.ts",
     "./install": "./install.ts",
     "./page": "./page.ts",
-    "./release": "./release.ts"
+    "./release": "./release.ts",
+    "./grammar": "./grammar.ts"
   },
   "license": "Apache-2.0",
   "description": "The yak command line: it opens the graph a config file names, or connects to an MCP server, and turns every tool it finds there into a subcommand parsed through that tool's own input schema.",

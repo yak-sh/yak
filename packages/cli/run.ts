@@ -27,7 +27,7 @@
 // is asked last and only when nothing else matched.
 
 import type { Tool, ToolId } from '@yaks/graph'
-import { argsFor, type Grammar, type Reads, Usage } from './args.ts'
+import { commandFor, argsFor, type Grammar, type Reads, Usage } from './args.ts'
 import { lineOf, safe, sketch, toolHelp } from './show.ts'
 import { commandOf, titleOf } from './tool.ts'
 import { timed } from '@yaks/api'
@@ -175,20 +175,7 @@ export let unique = <T extends ToolId>(tools: readonly T[]): readonly T[] => {
  *   ['list', 'session', '--all'])?.args // ['--all']
  * ```
  */
-export let commandFor = <T extends ToolId>(
-  tools: readonly T[],
-  argv: readonly string[],
-): { verb: T; args: string[] } | undefined => {
-  let [word, next] = argv
-  if (!word) return undefined
-  for (let t of tools) {
-    if (t.noun && t.verb) {
-      if (
-        (t.noun == word && t.verb == next) || (t.verb == word && t.noun == next)
-      ) return { verb: t, args: argv.slice(2) }
-    } else if (commandOf(t) == word) return { verb: t, args: argv.slice(1) }
-  }
-}
+export { commandFor } from './args.ts'
 
 // One column across the page, so it reads as one page. Capped: a long
 // argument sketch pushes its own line out rather than every other line.

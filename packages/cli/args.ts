@@ -86,7 +86,8 @@ export let saidIn = (argv: string[]): Said => {
 
 /** `@path` reads that file, `-` and `@-` read stdin, anything else is used as
  * given. */
-export let inflate = async (word: string, reads: Reads): Promise<string> => {
+export let inflate = async (word: string, reads?: Reads): Promise<string> => {
+  if (!reads) return word
   if (word == '-' || word == '@-') return await reads.stdin()
   return word.startsWith('@') ? await reads.file(word.slice(1)) : word
 }
@@ -153,7 +154,7 @@ export let valueOf = (name: string, raw: string, p?: Prop): unknown => {
  */
 export let pairsIn = async (
   words: string[],
-  reads: Reads,
+  reads?: Reads,
 ): Promise<Record<string, unknown>> => {
   let out: Record<string, unknown> = {}
   for (let word of words) {
@@ -187,76 +188,16 @@ let listed = (names: string[]): string =>
 export let argsFor = async (
   tool: Grammar,
   argv: readonly string[],
-  reads: Reads,
+  reads?: Reads,
 ): Promise<Record<string, unknown>> => {
-  let schema = (tool.inputSchema ?? {}) as Schema
-  let props = schema.properties ?? {}
-  let positional = tool.options?.positional ?? []
-  let shorts = tool.options?.short ?? {}
+  let props = ((tool.inputSchema ?? {}) as Schema).properties ?? {}
   let rest = tool.options?.rest
+  let { pairs, spare } = scanned(tool, argv)
   let out: Record<string, unknown> = {}
-  let spare: string[] = []
-  let at = 0
-  let literal = false
-
-  let prop = (name: string, flag: string): Prop => {
-    let p = props[name]
-    if (!p) {
-      throw new Usage(
-        `Unknown option: ${flag} — ${commandOf(tool)} takes ${
-          listed(Object.keys(props))
-        }`,
-      )
-    }
-    return p
-  }
-  let put = async (name: string, raw: string) => {
-    let value = valueOf(name, await inflate(raw, reads), props[name])
+  for (let [name, raw] of pairs) {
+    let value = raw === true ? true : valueOf(name, await inflate(raw, reads), props[name])
     let had = out[name]
-    // A repeated option builds the list its property asked for.
-    out[name] = Array.isArray(had) && Array.isArray(value)
-      ? [...had, ...value]
-      : value
-  }
-
-  for (let i = 0; i < argv.length; i++) {
-    let word = argv[i]
-    if (!literal && word == '--') {
-      literal = true
-      continue
-    }
-    // An option is `--name`, or a `-n` the tool declared as a short. Anything
-    // else starting with a dash is a bare word: `-5` is a number somebody
-    // typed, not an option nobody declared.
-    let eq = word.indexOf('=')
-    let flag = eq > 0 ? word.slice(0, eq) : word
-    let short = flag.length > 1 && !flag.startsWith('--') &&
-      flag.startsWith('-') && shorts[flag.slice(1)]
-    if (!literal && (flag.startsWith('--') && flag.length > 2 || short)) {
-      let name = flag.startsWith('--') ? flag.slice(2) : shorts[flag.slice(1)]
-      let p = prop(name, flag)
-      if (eq > 0) {
-        await put(name, word.slice(eq + 1))
-        continue
-      }
-      if (typeOf(p) == 'boolean') {
-        out[name] = true
-        continue
-      }
-      let next = argv[i + 1]
-      if (next == undefined || next.startsWith('--')) {
-        throw new Usage(`${flag} needs a value`)
-      }
-      await put(name, argv[++i])
-      continue
-    }
-    if (at < positional.length) await put(positional[at++], word)
-    else if (rest) spare.push(word)
-    else {
-      throw new Usage(
-        `${commandOf(tool)} takes ${listed(Object.keys(props))}, not ${word}`,
-      )
-    }
+    out[name] = Array.isArray(had) && Array.isArray(value) ? [...had, ...value] : value
   }
 
   // The bare words nothing claimed, where the tool asked for them: an app's
@@ -286,4 +227,85 @@ export let argsFor = async (
   } catch (e) {
     throw new Usage((e as Error).message)
   }
+}
+
+export let commandFor = <T extends Grammar>(
+  tools: readonly T[],
+  argv: readonly string[],
+): { verb: T; args: string[] } | undefined => {
+  let [word, next] = argv
+  if (!word) return undefined
+  for (let t of tools) {
+    if (t.noun && t.verb) {
+      if (
+        (t.noun == word && t.verb == next) || (t.verb == word && t.noun == next)
+      ) return { verb: t, args: argv.slice(2) }
+    } else if (commandOf(t) == word) return { verb: t, args: argv.slice(1) }
+  }
+}
+
+
+/** A typed line's words and their replacement ranges. Incomplete quotes are
+ * allowed only while completing; parsing asks for a closed line. */
+export let tokensIn = (line: string, partial = false): { value: string; from: number; to: number }[] => {
+  let words: { value: string; from: number; to: number }[] = []
+  let value = '', quote = '', from = -1
+  for (let i = 0; i < line.length; i++) {
+    let c = line[i]
+    if (from < 0 && !/\s/.test(c)) from = i
+    if (c == '\\' && i + 1 < line.length) value += line[++i]
+    else if (quote) {
+      if (c == quote) quote = ''
+      else value += c
+    } else if (c == '"' || c == "'") quote = c
+    else if (/\s/.test(c)) {
+      if (from >= 0) words.push({ value, from, to: i })
+      value = '', from = -1
+    } else value += c
+  }
+  if (quote && !partial) throw new Usage('Close the quoted argument.')
+  if (from >= 0) words.push({ value, from, to: line.length })
+  else if (partial) words.push({ value: '', from: line.length, to: line.length })
+  return words
+}
+
+/** The single argument walk used by parsing and completion. A partial walk
+ * reports the property still awaiting a value, without requiring the schema's
+ * remaining mandatory properties. */
+export let scanned = (tool: Grammar, argv: readonly string[], partial = false) => {
+  let props = ((tool.inputSchema ?? {}) as Schema).properties ?? {}
+  let positional = tool.options?.positional ?? []
+  let shorts = tool.options?.short ?? {}
+  let pairs: [string, string | true][] = [], spare: string[] = []
+  let given = new Set<string>(), at = 0, literal = false, awaiting: string | undefined
+  let put = (name: string, raw: string | true) => {
+    if (raw !== true) valueOf(name, raw, props[name])
+    pairs.push([name, raw])
+    given.add(name)
+  }
+  for (let i = 0; i < argv.length; i++) {
+    let word = argv[i]
+    if (!literal && word == '--') { literal = true; continue }
+    let eq = word.indexOf('=')
+    let flag = eq > 0 ? word.slice(0, eq) : word
+    let name = flag.startsWith('--') ? flag.slice(2) : shorts[flag.slice(1)]
+    if (!literal && (flag.startsWith('--') || flag.startsWith('-') && name)) {
+      let p = props[name]
+      if (!p) throw new Usage(`Unknown option: ${flag} — ${commandOf(tool)} takes ${listed(Object.keys(props))}`)
+      if (eq > 0) { put(name, word.slice(eq + 1)); continue }
+      let next = argv[i + 1]
+      if (typeOf(p) == 'boolean' && (next == undefined || !['true', 'false', '1', '0'].includes(next))) {
+        put(name, true)
+        if (partial && next == undefined) awaiting = name
+      } else if (next == undefined || next.startsWith('--')) {
+        if (!partial) throw new Usage(`${flag} needs a value`)
+        awaiting = name
+      } else put(name, argv[++i])
+      continue
+    }
+    if (at < positional.length) put(positional[at++], word)
+    else if (tool.options?.rest) spare.push(word)
+    else throw new Usage(`${commandOf(tool)} takes ${listed(Object.keys(props))}, not ${word}`)
+  }
+  return { pairs, spare, given, literal, awaiting: awaiting ?? positional[at] }
 }
