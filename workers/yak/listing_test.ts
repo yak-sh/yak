@@ -4,6 +4,11 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { asking, listing, mentions, named } from './listing.ts'
+import { graph } from '@yaks/graph'
+import { storage } from '@yaks/sqlite'
+import { mem } from '../../packages/sqlite/testing.ts'
+import { loadVocab } from '@yaks/vocab'
+import { toolsDoc } from '@yaks/tools'
 
 let rows = (body: string) => JSON.parse(body) as Record<string, unknown>[]
 
@@ -65,6 +70,29 @@ test('a session query and an eid include its error entry', () => {
   assertEquals(rows(listing(body, '.content')), [])
 })
 
+test('refusals are hidden by default but explicit transcript and refusal asks include them', () => {
+  let refusal = {
+    kind: 'entry',
+    entity: { eid: 'refused' },
+    entry: { session: 'heal', seq: 4 },
+    refusal: { code: 'limit' },
+    content: { body: 'Budget exhausted' },
+  }
+  let exception = { ...refusal, exception: { message: 'unexpected' } }
+  let body = JSON.stringify([refusal, exception])
+  assertEquals(rows(listing(body, '.content')), [])
+  assertEquals(rows(listing(body, '.created')), [])
+  assertEquals(rows(listing(body, '.entry.session=heal&*')), [refusal])
+  assertEquals(rows(listing(JSON.stringify([refusal]), '.refusal')), [refusal])
+  assertEquals(rows(listing(JSON.stringify([refusal]), '.eid=refused&*')), [
+    refusal,
+  ])
+  assertEquals(
+    asking('.entry.session=heal', ['refusal']),
+    '.entry.session=heal',
+  )
+})
+
 // A page's own ask carries the screen, so a `.count` counts what the list
 // beside it lists — a person the store minted wears a `doc` title now, and
 // would otherwise be one more recipe (T-32627).
@@ -78,6 +106,49 @@ test("the platform's rows are left out of the question too", () => {
   assertEquals(asking('?id=abc'), '?id=abc')
   // An empty ask selects nothing; a screen would not change that.
   assertEquals(asking('?'), '?')
+})
+
+test('query screening excludes refusals from all alternatives and counts', async () => {
+  let vocab = loadVocab([toolsDoc, {
+    $defs: {
+      doc: { component: true, properties: { title: { type: 'string' } } },
+      entry: {
+        component: true,
+        properties: { session: { type: 'string' } },
+      },
+    },
+  }])
+  let db = storage(mem(), vocab)
+  db.install()
+  let g = graph({ vocab, storage: db })
+  await g.apply([{
+    entity: { eid: 'saved' },
+    doc: { title: 'Saved' },
+  }, {
+    entity: { eid: 'refused' },
+    refusal: { code: 'limit' },
+    entry: { session: 'heal' },
+    content: { body: 'Budget exhausted' },
+  }])
+  let q = '(.doc|.content)'
+  assertEquals(
+    (await g.read(asking(q, ['refusal']))).map((b) => b.entity.eid),
+    ['saved'],
+  )
+  assertEquals(
+    await g.read(asking(q + '&.count', ['refusal'])),
+    await g.read('.doc&.count'),
+  )
+  assertEquals(
+    (await g.read(asking('.entry.session=heal', ['refusal']))).map((b) =>
+      b.entity.eid
+    ),
+    ['refused'],
+  )
+  assertEquals(
+    (await g.read(asking('.refusal', ['refusal']))).map((b) => b.entity.eid),
+    ['refused'],
+  )
 })
 
 test('what is not a row listing passes through as it came', () => {

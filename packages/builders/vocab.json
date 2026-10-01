@@ -325,13 +325,8 @@
     },
     "builder_model_answer": {
       "effect": true,
-      "created": [
-        "attempt",
-        "error"
-      ],
-      "changed": [
-        "attempt.state"
-      ],
+      "created": ["attempt", "error", "refusal"],
+      "changed": ["attempt.state"],
       "description": "adapt a model session's reply to a builder tool output once its ask completes"
     },
     "builder_change": {

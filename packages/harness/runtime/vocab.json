@@ -21,6 +21,11 @@
       "component": true,
       "properties": {}
     },
+    "refusal": {
+      "component": true,
+      "extends": true,
+      "properties": {}
+    },
     "error": {
       "component": true,
       "properties": {

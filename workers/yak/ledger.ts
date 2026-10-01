@@ -54,6 +54,7 @@ let INVOCATION = [
   'content',
   'output',
   'error',
+  'refusal',
   'exception',
   'tool',
 ]

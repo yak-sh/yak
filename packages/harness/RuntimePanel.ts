@@ -10,6 +10,7 @@ import { loadVocab, pick } from '@yaks/vocab'
 import { sessionDoc } from '@yaks/session/vocab'
 import { kernelDoc } from '@yaks/kernel/vocab'
 import { dispatchStatus } from '@yaks/session/admission'
+import { toolsDoc } from '@yaks/tools'
 import doc from './runtime/vocab.json' with { type: 'json' }
 import { Scroll, useKeymap } from '@yaks/tui'
 import type { RuntimeAction } from './runtime.ts'
@@ -19,6 +20,7 @@ import { sessionLine } from './panels.ts'
 
 let vocabulary = loadVocab([
   doc,
+  pick(toolsDoc, ['refusal']),
   pick(sessionDoc, ['dispatch']),
   pick(kernelDoc, ['admitted', 'waiting']),
 ])

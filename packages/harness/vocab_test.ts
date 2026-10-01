@@ -1,7 +1,8 @@
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertThrows } from '@std/assert'
 import { artifactDoc } from '@yaks/blob'
-import { loadVocab } from '@yaks/vocab'
+import { loadVocab, pick } from '@yaks/vocab'
+import { toolsDoc } from '@yaks/tools'
 import artifact from '../blob/vocab.json' with { type: 'json' }
 import projection from '../render/vocab.json' with { type: 'json' }
 import runtime from './runtime/vocab.json' with { type: 'json' }
@@ -34,5 +35,14 @@ test('frontend and projection vocabularies stay separate from stored backend fie
   assertEquals(frontendVocab.comp('savedDraft')?.sync, 'none')
   assertEquals(vocab.comp('savedDraft'), undefined)
   assertEquals(loadVocab([projection]).prop('prop', 'ref')?.scalar, 'text')
-  assertEquals(loadVocab([runtime]).prop('session', 'status')?.scalar, 'text')
+  // The projection extends the tools declaration; it cannot declare a second
+  // refusal of its own or silently omit the component.
+  assertThrows(
+    () => loadVocab([runtime]),
+    Error,
+    "'refusal' extends a component no document declares",
+  )
+  let runtimeVocab = loadVocab([pick(toolsDoc, ['refusal']), runtime])
+  assertEquals(runtimeVocab.prop('session', 'status')?.scalar, 'text')
+  assertEquals(runtimeVocab.prop('refusal', 'code')?.scalar, 'text')
 })

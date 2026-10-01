@@ -987,28 +987,45 @@ test('removing the staged mark builds the rest and asks no sampled binding again
   assertEquals(await currentOf(g, sampled), true)
 })
 
-test('a model turn failed for good leaves its key retryable without another call', async () => {
-  let { g, runner } = await shop()
-  await g.apply([source('a'), {
-    ...builder('$s .doc.title=Source', toolEid('builder_model')),
-    using: { model: ids.model },
+test('refusal bookkeeping does not wake an immediate builder', async () => {
+  let { g, failed } = await shop({}, [], [code()])
+  await g.apply([builder()])
+  await g.apply([{
+    ...source('refused'),
+    refusal: { code: 'invalid' },
   }])
-  let build = await runOf(g, ['a'])
-  await drive(g, runner, build)
-  let [session] = await rows(g, '.session')
-  let failed = (seq: number, code: string): Bundle => ({
-    entity: { eid: crypto.randomUUID() },
-    entry: { session: session.entity.eid, seq },
-    content: { body: 'Connection unavailable' },
-    error: { code },
-  })
-  // A request the runner asks again is not the end of the turn.
-  await g.apply([failed(2, 'connection')])
-  assert(comp(await one(g, build), 'build')?.key)
-  await g.apply([failed(3, 'limit')])
-  assertEquals(comp(await one(g, build), 'build')?.key, null)
-  assertEquals((await calls(g, build)).length, 1)
+  assertEquals(await rows(g, '.build'), [])
+  assertEquals(await rows(g, '.call'), [])
+  assertEquals(failed, [])
+  // A normal input still wakes the same builder.
+  await g.apply([source('a')])
+  assertEquals((await calls(g, await runOf(g, ['a']))).length, 1)
 })
+
+for (let failure of ['error', 'refusal']) {
+  test(`a model turn ${failure} failed for good leaves its key retryable without another call`, async () => {
+    let { g, runner } = await shop()
+    await g.apply([source('a'), {
+      ...builder('$s .doc.title=Source', toolEid('builder_model')),
+      using: { model: ids.model },
+    }])
+    let build = await runOf(g, ['a'])
+    await drive(g, runner, build)
+    let [session] = await rows(g, '.session')
+    let failed = (seq: number, code: string, kind = failure): Bundle => ({
+      entity: { eid: crypto.randomUUID() },
+      entry: { session: session.entity.eid, seq },
+      content: { body: 'Connection unavailable' },
+      [kind]: { code },
+    })
+    // A request the runner asks again is not the end of the turn.
+    await g.apply([failed(2, 'connection', 'error')])
+    assert(comp(await one(g, build), 'build')?.key)
+    await g.apply([failed(3, 'limit')])
+    assertEquals(comp(await one(g, build), 'build')?.key, null)
+    assertEquals((await calls(g, build)).length, 1)
+  })
+}
 
 test('model tool opens a session using content.body, then adapts its reply', async () => {
   let { g, runner, failed } = await shop()

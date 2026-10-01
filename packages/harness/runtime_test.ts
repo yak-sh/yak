@@ -112,6 +112,54 @@ test('runtime queued cancellation is scoped, and inspection does not schedule ex
     await a.close()
   }
 })
+test('runtime projects refusals without making failed work resumable', async () => {
+  let h = await harness(), sent = 0
+  try {
+    for (
+      let [failure, code] of [
+        ['error', 'limit'],
+        ['refusal', 'limit'],
+        ['refusal', 'interrupted'],
+      ]
+    ) {
+      let id = failure + '-' + code
+      await h.g.apply([{
+        entity: { eid: id },
+        session: { id },
+      }, {
+        entity: { eid: id + '-tail' },
+        entry: { session: id, seq: 1 },
+        [failure]: { code },
+        content: { body: 'Budget exhausted' },
+      }])
+      let [row] = await runtimeRows(h.g, id)
+      assertEquals(row[failure], { code })
+      assertEquals((row.session as { status: string }).status, 'failed')
+      let before = await h.g.read('.entry&*')
+      await assertRejects(
+        () =>
+          runtimeAction(
+            {
+              h,
+              send: () => {
+                sent++
+                return Promise.resolve('not-sent')
+              },
+            },
+            id,
+            'resume',
+          ),
+        Error,
+        'other failures and stopped work are not replayed',
+      )
+      assertEquals(sent, 0)
+      assertEquals(await h.g.read('.entry&*'), before)
+    }
+  } finally {
+    await h.close()
+  }
+})
+
 test('elapsed tolerates unknown clocks and does not display negative durations', () => {
   assertEquals(elapsed(undefined, 0), '')
   assertEquals(elapsed('1970-01-01T00:00:00Z', 62000), '1m 2s')

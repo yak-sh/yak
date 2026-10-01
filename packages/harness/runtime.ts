@@ -33,6 +33,7 @@ export let runtimeRows = async (
       ...attempt ? { attempt: attempt.attempt } : {},
       ...waiting ? { call: call.call } : {},
       ...tail?.error ? { error: tail.error } : {},
+      ...tail?.refusal ? { refusal: tail.refusal } : {},
       ...(attempt ?? tail)?.created
         ? { updated: (attempt ?? tail)!.created }
         : {},

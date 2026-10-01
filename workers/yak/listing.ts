@@ -28,7 +28,7 @@ export let STAMPS = ['created', 'updated', 'notified', 'opened', 'quarantined']
 // `selected()` asks for the store's blob rows. Asking for the stamps is not
 // asking for these: `.created` alone dragged every exception into a person's
 // list of their own rows (C-32607 item 4).
-export let KERNEL = ['exception', 'error']
+export let KERNEL = ['exception', 'error', 'refusal']
 
 // A person is the platform's row too — a store mints one for whoever writes to
 // it, so `created.by` has a name to resolve (graph.ts `#vouching`) — but only in an
@@ -82,7 +82,8 @@ export let asking = (line: string, words: string[] = PLATFORM) => {
   let ask = line.replace(/^[?&]+/, '')
   if (!ask || line.includes('id=')) return line
   let screen = words.filter((k) =>
-    !names(line, k) && !(k == 'error' && names(line, 'entry'))
+    !names(line, k) &&
+    !((k == 'error' || k == 'refusal') && names(line, 'entry'))
   ).map((k) => `!${k}`)
   return line.slice(0, line.length - ask.length) + conjoin(ask, ...screen)
 }
@@ -99,7 +100,8 @@ export let listed = (rows: Row[], asked: string): Row[] => {
     if (
       kernel.length && !kernel.some((k) => names(asked, k)) &&
       !asked.includes('id=') &&
-      !(row.entry && names(asked, 'entry') && kernel.every((k) => k == 'error'))
+      !(row.entry && names(asked, 'entry') &&
+        kernel.every((k) => k == 'error' || k == 'refusal'))
     ) continue
     let kept = Object.fromEntries(
       Object.entries(row).filter(([k]) => !hidden.includes(k)),
