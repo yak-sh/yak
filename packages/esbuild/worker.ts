@@ -22,7 +22,7 @@ import { packageOf, relative, resolved, twins } from './graph.ts'
 import { lockfile, type Pins, pins, reached, split, wanted } from './lock.ts'
 import { type Answer, type Ask, dependencies } from './plan.ts'
 import { said } from './said.ts'
-import { type Catalog, type Seed, seed } from './platform.ts'
+import { type Catalog, located, type Seed, seed } from './platform.ts'
 export type { Catalog, Toolkit } from './platform.ts'
 
 /** The module a compiled worker is uploaded as: its source's path, as
@@ -144,18 +144,32 @@ export let compile = async (
   ask: Ask,
   catalog: Catalog = {},
 ): Promise<Answer> => {
-  let answer: Answer = { pages: {}, installed: [], notes: [], errors: [] }
+  let answer: Answer = {
+    pages: {},
+    assets: {},
+    installed: [],
+    notes: [],
+    errors: [],
+  }
   let fs: InMemoryFileSystem
+  let setup: Seed
   try {
-    let setup = seed(ask.files, catalog)
+    setup = seed(ask.files, catalog)
+    answer.assets = setup.assets
     fs = new InMemoryFileSystem(setup.files)
     Object.assign(answer, await install(fs, ask, setup, catalog))
   } catch (e) {
     return { ...answer, errors: said(e) }
   }
+  let locate = (entry: string) => {
+    for (let [path, source] of Object.entries(located(setup.files, entry))) {
+      fs.write(path, source)
+    }
+  }
   if (ask.worker) {
     let { entry, flags } = ask.worker
     let main = compiledName(entry)
+    locate(main)
     // What worker-bundler reads nodejs_compat from; a page compiles without it.
     fs.write('wrangler.json', JSON.stringify({ compatibility_flags: flags }))
     try {
@@ -171,6 +185,7 @@ export let compile = async (
   }
   for (let entry of ask.pages) {
     try {
+      locate(entry)
       let out = await createWorker({
         files: fs,
         entryPoint: entry,

@@ -16,5 +16,8 @@
     "@yaks/tui/theme": "../tui/theme.ts",
     "preact": "npm:preact@^10.29.1",
     "preact/hooks": "npm:preact@^10.29.1/hooks"
-  }
+  },
+  "resources": [
+    "**/*.css"
+  ]
 }

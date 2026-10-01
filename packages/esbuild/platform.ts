@@ -2,6 +2,8 @@
 // toolkit roots and their catalog dependency closure enter a build; their source
 // digests describe what was compiled, never a version to ask the registry for.
 import { intersects, Range } from 'semver'
+import { parse } from 'es-module-lexer/js'
+import { script } from './graph.ts'
 import { dependencies } from './plan.ts'
 
 /** A compiler's toolkit package: paths relative to its package root, including
@@ -9,6 +11,8 @@ import { dependencies } from './plan.ts'
 export type Toolkit = {
   files: Record<string, string>
   dependencies: Record<string, string>
+  /** Runtime text files, relative to the package root. */
+  resources?: Record<string, string>
   version: string
 }
 
@@ -16,6 +20,7 @@ export type Toolkit = {
 export type Catalog = Record<string, Toolkit>
 
 export type Seed = {
+  assets: Record<string, string>
   files: Record<string, string>
   /** npm roots, including toolkit externals whose transitives the installer
    * would otherwise skip when it finds a preseeded toolkit package. */
@@ -24,7 +29,39 @@ export type Seed = {
   platform: Record<string, string>
 }
 
+/** Runtime resources stay outside the app's own paths. */
+export let ASSETS = '__packages/'
+
 let toolkit = (name: string) => name.startsWith('@yaks/')
+let safe = (path: string) =>
+  !!path && !path.startsWith('/') &&
+  !path.split('/').some((p) => !p || p == '.' || p == '..') &&
+  !/[\\?#%]/.test(path)
+
+// The lexer identifies import.meta outside comments, strings and regexps.
+let URL =
+  /^(?:\s|\/\*[\s\S]*?\*\/|\/\/[^\n]*(?:\n|$))*\.(?:\s|\/\*[\s\S]*?\*\/)*url\b/
+
+/** Preserve a package module's URL when its source is bundled into an entry.
+ * Rewritten from the original source for each entry, including nested workers. */
+export let located = (files: Record<string, string>, entry: string) => {
+  let out: Record<string, string> = {}
+  let up = '../'.repeat(entry.split('/').length - 1)
+  for (let [path, source] of Object.entries(files)) {
+    if (!path.startsWith('node_modules/@yaks/') || !script(path)) continue
+    let base = up + ASSETS + path.slice('node_modules/'.length)
+    for (let imp of parse(source)[0].toReversed()) {
+      if (imp.d != -2) continue
+      let tail = URL.exec(source.slice(imp.e))
+      if (!tail) continue
+      let value = `new URL(${JSON.stringify(base)}, import.meta.url).href`
+      source = source.slice(0, imp.s) + value +
+        source.slice(imp.e + tail[0].length)
+    }
+    out[path] = source
+  }
+  return out
+}
 
 // A flat install must satisfy every consumer, not whichever was visited last.
 type Bound = { value: string }
@@ -51,7 +88,12 @@ let together = (name: string, a: string, b: string) => {
 /** Seed declared platform packages and their dependency closure without I/O.
  * @yaks packages must use "platform"; none is fetched from a registry. */
 export let seed = (files: Record<string, string>, catalog: Catalog): Seed => {
-  let out: Seed = { files: { ...files }, dependencies: {}, platform: {} }
+  let out: Seed = {
+    files: { ...files },
+    assets: {},
+    dependencies: {},
+    platform: {},
+  }
   let visit = (name: string, version: string) => {
     if (!toolkit(name)) {
       if (version == 'platform') {
@@ -81,12 +123,18 @@ export let seed = (files: Record<string, string>, catalog: Catalog): Seed => {
     }
     out.platform[name] = pkg.version
     for (let [path, source] of Object.entries(pkg.files)) {
-      if (path.startsWith('/') || path.split('/').some((p) => p == '..')) {
+      if (!safe(path)) {
         throw new Error(
           `${name}: platform catalog path ${path} is not package-relative`,
         )
       }
       out.files[`node_modules/${name}/${path}`] = source
+    }
+    for (let [path, text] of Object.entries(pkg.resources ?? {})) {
+      if (!safe(path)) {
+        throw new Error(`${name}: resource ${path} is not package-relative`)
+      }
+      out.assets[`${ASSETS}${name}/${path}`] = text
     }
     for (let [dep, range] of Object.entries(pkg.dependencies)) visit(dep, range)
   }

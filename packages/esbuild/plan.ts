@@ -61,6 +61,8 @@ export type Answer = {
   worker?: { main: string; code: string }
   /** Each compiled page script, by the entry's own path. */
   pages: Record<string, string>
+  /** Runtime package resources, under a reserved package-relative namespace. */
+  assets: Record<string, string>
   /** package-lock.json as the build left it, when the app has a package.json. */
   lock?: string
   /** What the lock holds, as `name@version`. */

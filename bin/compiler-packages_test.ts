@@ -143,3 +143,27 @@ test('compiler catalog refuses unknown exports and excluded source paths', async
     })
   }
 })
+
+test('browser catalog captures declared resource globs and their digests', async () => {
+  let files = workspace()
+  files['packages/a/browser.json'] = json({
+    entries: ['.'],
+    resources: ['**/*.css'],
+  })
+  files['packages/a/parts/Button.css'] = '.Button {}'
+  files['packages/a/theme.css'] = ':root { --color: red }'
+  files['packages/a/fixtures/unused.css'] = 'unused'
+  files['packages/a/private.txt'] = 'private'
+  await scratch(files, async (root) => {
+    let a = await catalog(root)
+    assertEquals(a['@yaks/a'].resources, {
+      'base.css': '.Base { color: red }',
+      'parts/Button.css': '.Button {}',
+      'theme.css': ':root { --color: red }',
+    })
+    await Deno.writeTextFile(`${root}/packages/a/theme.css`, ':root {}')
+    let b = await catalog(root)
+    assertEquals(b['@yaks/a'].version == a['@yaks/a'].version, false)
+    assertEquals(b['@yaks/b'].version, a['@yaks/b'].version)
+  })
+})

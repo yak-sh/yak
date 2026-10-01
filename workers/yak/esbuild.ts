@@ -41,6 +41,7 @@ type Cache = {
   compiler: string
   worker?: { hash: string; main: string }
   pages: Record<string, string>
+  assets?: string[]
   plan?: Plan
   source?: Files
   main?: string
@@ -229,7 +230,13 @@ export let compiled = async (
     ),
   }
   let took = 0
-  let answer: Answer = { pages: {}, installed: [], notes: [], errors: [] }
+  let answer: Answer = {
+    pages: {},
+    assets: {},
+    installed: [],
+    notes: [],
+    errors: [],
+  }
   if (pending.worker || pending.pages.length) {
     if (!ctx.env.ESBUILD) {
       throw refuse(
@@ -267,13 +274,29 @@ export let compiled = async (
     caught(error, { request: 'esbuild', app: app.slug })
     throw refuse('unavailable', 'the compiler returned an incomplete build')
   }
+  let assets = pending.worker || pending.pages.length
+    ? Object.keys(answer.assets ?? {})
+    : old?.assets ?? []
+  for (let path of assets) {
+    if (
+      !path.startsWith('__packages/') ||
+      /[\\?#%]/.test(path) ||
+      path.split('/').some((p) => !p || p == '.' || p == '..') ||
+      paths.includes(path)
+    ) {
+      throw refuse(
+        'arguments',
+        `compiler resource conflicts with app path: ${path}`,
+      )
+    }
+  }
   let builtWorker = answer.worker
     ? { main: answer.worker.main, bytes: encode(answer.worker.code) }
     : oldWorker && old?.worker?.main
     ? { main: old.worker.main, bytes: oldWorker }
     : null
   await Promise.all(
-    Object.entries(answer.pages).map(([path, code]) =>
+    Object.entries({ ...answer.pages, ...answer.assets }).map(([path, code]) =>
       blobs.put(prefix + BUILT + path, encode(code))
     ),
   )
@@ -326,6 +349,7 @@ export let compiled = async (
       }
       : undefined,
     pages: final.pages,
+    assets,
     plan: { ...planned, ask: current },
     source: manifest() ?? undefined,
     main,
@@ -337,6 +361,7 @@ export let compiled = async (
       CACHE,
       ...(ask.worker ? [MODULE] : []),
       ...ask.pages.map((page) => BUILT + page),
+      ...assets.map((path) => BUILT + path),
     ]),
   )
   if (!ask.worker) return { lines }

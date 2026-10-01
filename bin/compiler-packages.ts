@@ -5,6 +5,7 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse } from 'es-module-lexer/js'
 import ts from 'npm:typescript@6.0.3'
+import { expandGlob } from 'jsr:@std/fs@^1.0.0/expand-glob'
 import type { Catalog } from '../packages/esbuild/platform.ts'
 
 type Manifest = {
@@ -18,12 +19,15 @@ type Member = {
   manifest: Manifest
   exports: Record<string, string>
   files: Record<string, string>
+  resources: Record<string, string>
   dependencies: Record<string, string>
 }
 
 let read = (path: string): Manifest => JSON.parse(Deno.readTextFileSync(path))
 
-let optional = (path: string): { entries?: string[] } | null => {
+let optional = (
+  path: string,
+): { entries?: string[]; resources?: string[] } | null => {
   try {
     return JSON.parse(Deno.readTextFileSync(path))
   } catch (e) {
@@ -165,6 +169,7 @@ export let catalog = async (root: string): Promise<Catalog> => {
         ? { '.': manifest.exports }
         : manifest.exports,
       files: {},
+      resources: {},
       dependencies: {},
     })
   }
@@ -194,6 +199,18 @@ export let catalog = async (root: string): Promise<Catalog> => {
   for (let [name, member] of members) {
     let browser = optional(join(member.dir, 'browser.json'))
     if (!browser) continue
+    for (let glob of browser.resources ?? []) {
+      if (glob.startsWith('/') || glob.split('/').includes('..')) {
+        throw new Error(
+          `${name}: resource glob must be package-relative: ${glob}`,
+        )
+      }
+      for await (let hit of expandGlob(glob, { root: member.dir })) {
+        let file = relative(member.dir, hit.path)
+        if (!hit.isFile || excluded(file)) continue
+        member.resources[file] = Deno.readTextFileSync(hit.path)
+      }
+    }
     for (
       let key of new Set([
         ...(browser.entries ?? ['.']),
@@ -286,10 +303,12 @@ export let catalog = async (root: string): Promise<Catalog> => {
       dependencies,
     })
     let files = ordered(member.files)
+    let resources = ordered(member.resources)
     out[name] = {
       files,
+      resources,
       dependencies,
-      version: await digest(JSON.stringify(files)),
+      version: await digest(JSON.stringify({ files, resources })),
     }
   }
   return ordered(out)

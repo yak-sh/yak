@@ -55,21 +55,33 @@ package and rejects any version other than `"platform"`, never fetching a stale
 `@yaks/*` registry release.
 
 `platform.ts` exports `Catalog`, a map from package name to
-`{files, dependencies, version}`. `files` are npm-shaped paths relative to the
-package root, including `package.json` with its exports. The host's generator
-normalizes source imports and includes runtime dependencies, not test imports or
-unrelated server exports. `dependencies` maps toolkit packages to `"platform"`
-and external npm packages to their ranges. `version` is
+`{files, resources, dependencies, version}`. `files` are npm-shaped paths
+relative to the package root, including `package.json` with its exports. The
+host's generator normalizes source imports and includes runtime dependencies,
+not test imports or unrelated server exports. `dependencies` maps toolkit
+packages to `"platform"` and external npm packages to their ranges. `version` is
 `sha256:<64 lowercase hex digits>` over the generated package's source bytes.
 
-The pure `seed(files, catalog)` returns `{files, dependencies, platform}`: app
-files plus the declared toolkit roots and their package-level dependency closure
-under `node_modules/`, npm roots including every reached toolkit external, and
-toolkit names mapped to exact source digests. Unused catalog entries stay out.
-External ranges from multiple consumers must overlap because this installer is
-flat. Toolkit externals are explicit npm roots because worker-bundler skips
-preseeded packages without installing their dependencies or reporting them as
-installed.
+The pure `seed(files, catalog)` returns
+`{files, assets, dependencies, platform}`: app files plus the declared toolkit
+roots and their package-level dependency closure under `node_modules/`, npm
+roots including every reached toolkit external, and toolkit names mapped to
+exact source digests. Unused catalog entries stay out. External ranges from
+multiple consumers must overlap because this installer is flat. Toolkit
+externals are explicit npm roots because worker-bundler skips preseeded packages
+without installing their dependencies or reporting them as installed.
+
+`resources` holds runtime text files by package-relative path. The generator
+reads a browser package's `browser.json` resource globs (for example,
+`"resources": ["**/*.css"]`); their bytes contribute to the catalog digest.
+`seed` and `Answer.assets` place them under `__packages/<package>/<path>`.
+Before bundling each entry, the compiler rewrites parsed package
+`import.meta.url` references to the package module's original location in that
+namespace, relative to the entry. Dynamic `new URL` paths and CSS imports keep
+resolving beside their source module, including nested entries and snapshots.
+Comments, strings and the app's own module URLs are unchanged. Hosts retain
+these assets beside compiled output and serve them with their own MIME type; a
+conflicting app path refuses the deploy rather than overwriting user files.
 
 The wrapper's catalog is part of the compiler deployment. A host reusing build
 output includes its compiler deployment version in the reuse fingerprint; an

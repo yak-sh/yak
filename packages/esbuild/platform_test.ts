@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
-import { type Catalog, seed, type Toolkit } from './platform.ts'
+import { type Catalog, located, seed, type Toolkit } from './platform.ts'
 import { lockfile, pins, reached, wanted } from './lock.ts'
 import { satisfies } from 'semver'
 import { compile } from './worker.ts'
@@ -104,11 +104,13 @@ test('seed does not load an unused catalog and preserves ordinary npm asks', () 
     files: input,
     dependencies: { preact: '^10' },
     platform: {},
+    assets: {},
   })
   assertEquals(seed({ 'main.ts': 'export {}' }, {}), {
     files: { 'main.ts': 'export {}' },
     dependencies: {},
     platform: {},
+    assets: {},
   })
 })
 
@@ -178,4 +180,89 @@ test('compile without entries records toolkit provenance without npm I/O', async
     resolved: 'platform',
   })
   assertEquals((await compile({ files: {}, pages: [] })).errors, [])
+})
+
+test('package resources retain module-relative addresses for nested entries', async () => {
+  let kit = pkg()
+  kit.files['mod.ts'] = `let literal = 'import.meta.url'
+    // import.meta.url in a comment
+    let regex = /import.meta.url/
+    export let sheet = name => new URL(\`./\${name}.css\`, import.meta.url).href
+    export let untouched = [literal, regex.source]
+    export let other = new URL('./nested/other.css', import.meta /* base */ .url).href`
+  kit.resources = {
+    'Button.css': '.Button { color: red }',
+    'nested/other.css': '.Other {}',
+  }
+  let setup = seed(files({ '@yaks/kit': 'platform' }), {
+    '@yaks/kit': kit,
+    '@yaks/unused': { ...pkg(), resources: { 'unused.css': 'unused' } },
+  })
+  assertEquals(setup.assets, {
+    '__packages/@yaks/kit/Button.css': '.Button { color: red }',
+    '__packages/@yaks/kit/nested/other.css': '.Other {}',
+  })
+  for (let entry of ['main.ts', 'scripts/main.ts', 'workers/deep/main.ts']) {
+    let source = located(setup.files, entry)['node_modules/@yaks/kit/mod.ts']
+    let root = await Deno.makeTempDir()
+    try {
+      let dir = `${root}/${entry.slice(0, entry.lastIndexOf('/') + 1)}`
+      await Deno.mkdir(dir, { recursive: true })
+      let at = `${root}/${entry}.mjs`
+      await Deno.writeTextFile(at, source)
+      let url = new URL(`file://${at}`)
+      let mod = await import(url.href)
+      assertEquals(
+        mod.sheet('Button'),
+        new URL('__packages/@yaks/kit/Button.css', `file://${root}/`).href,
+      )
+      assertEquals(
+        mod.other,
+        new URL('__packages/@yaks/kit/nested/other.css', `file://${root}/`)
+          .href,
+      )
+      assertEquals(mod.untouched, ['import.meta.url', 'import.meta.url'])
+      // The same relative calculation preserves a selected release's URL root.
+      let live = new URL(entry, 'https://example.test/app/.snapshots/release/')
+      let rel = '../'.repeat(entry.split('/').length - 1) +
+        '__packages/@yaks/kit/mod.ts'
+      assertEquals(
+        new URL('./Button.css', new URL(rel, live)).href,
+        'https://example.test/app/.snapshots/release/__packages/@yaks/kit/Button.css',
+      )
+    } finally {
+      await Deno.remove(root, { recursive: true })
+    }
+  }
+})
+
+test('compile returns only declared package resources without npm I/O', async () => {
+  let got = await compile({
+    files: files({ '@yaks/kit': 'platform' }),
+    pages: [],
+  }, {
+    '@yaks/kit': { ...pkg(), resources: { 'Button.css': '.Button {}' } },
+  })
+  assertEquals(got.errors, [])
+  assertEquals(got.assets, { '__packages/@yaks/kit/Button.css': '.Button {}' })
+})
+
+test('package resources refuse paths escaping their namespace', () => {
+  for (
+    let path of [
+      '../style.css',
+      '/style.css',
+      'a/../../style.css',
+      'a%2fstyle.css',
+    ]
+  ) {
+    assertThrows(
+      () =>
+        seed(files({ '@yaks/kit': 'platform' }), {
+          '@yaks/kit': { ...pkg(), resources: { [path]: 'css' } },
+        }),
+      Error,
+      'not package-relative',
+    )
+  }
 })

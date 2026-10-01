@@ -28,6 +28,7 @@ let scenario = async (
       asks.push(ask)
       return Response.json({
         pages: {},
+        assets: {},
         installed: [],
         notes: [],
         errors: [],
@@ -407,4 +408,68 @@ test('with no compiler bound, a deploy that needs one is refused in a sentence',
     Error,
     'worker.ts must be compiled',
   )
+})
+
+test('package assets serve with their MIME and survive reuse and rollback', async () => {
+  let css = '.Button { color: red }'
+  using s = await scenario((ask) => ({
+    ...compiles(ask),
+    assets: {
+      '__packages/@yaks/kit/Button.css': ask.files['main.ts'].includes('= 2')
+        ? '.Button { color: green }'
+        : '.Button { color: red }',
+    },
+  }))
+  await s.write({
+    'index.html': PAGE,
+    'main.ts': 'let n: number = 1',
+    'Button.css': '.App {}',
+  })
+  await s.tool('app_deploy')
+  let path = '__packages/@yaks/kit/Button.css'
+  assertEquals(await s.served(path), {
+    type: 'text/css; charset=utf-8',
+    body: css,
+  })
+  assertEquals((await s.served('Button.css')).body, '.App {}')
+  let head = await s.response(path, { method: 'HEAD' })
+  assertEquals(head.headers.get('content-type'), 'text/css; charset=utf-8')
+  assertEquals(head.headers.get('content-length'), String(css.length))
+  assertEquals(await head.text(), '')
+  let part = await s.response(path, { headers: { range: 'bytes=0-6' } })
+  assertEquals(part.status, 206)
+  assertEquals(part.headers.get('content-type'), 'text/css; charset=utf-8')
+  assertEquals(await part.text(), '.Button')
+  await s.write({ 'Button.css': '.App { color: blue }' })
+  await s.tool('app_deploy')
+  assertEquals(s.asks.length, 1)
+  assertEquals((await s.served(path)).body, css)
+  css = '.Button { color: green }'
+  await s.write({ 'main.ts': 'let n: number = 2' })
+  await s.tool('app_deploy')
+  assertEquals((await s.served(path)).body, css)
+  await s.tool('app_rollback', { version: 2 })
+  assertEquals((await s.served(path)).body, '.Button { color: red }')
+  await s.write({ 'index.html': '<h1>no modules</h1>' })
+  await s.tool('app_deploy')
+  assertEquals((await s.response(path)).status, 404)
+})
+
+test('compiler assets cannot replace an app-owned path', async () => {
+  let path = '__packages/@yaks/kit/Button.css'
+  using s = await scenario((ask) => ({
+    ...compiles(ask),
+    assets: { [path]: '.Kit {}' },
+  }))
+  await s.write({
+    'index.html': PAGE,
+    'main.ts': 'let n: number = 1',
+    [path]: '.App {}',
+  })
+  await assertRejects(
+    () => s.tool('app_deploy'),
+    Error,
+    'conflicts with app path',
+  )
+  assertEquals(await s.tool('app_files', { op: 'read', path }), '.App {}')
 })

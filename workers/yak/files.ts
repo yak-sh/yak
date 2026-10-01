@@ -144,7 +144,10 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let script = SCRIPT.test(key)
   let source = script ? mainOf(blobs, prefix) : null
   let type = mimeOf(key)
-  let built = script ? keyed(prefix, `/${BUILT}${path.slice(1)}`) : null
+  let resource = path.startsWith('/__packages/')
+  let built = script || resource
+    ? keyed(prefix, `/${BUILT}${path.slice(1)}`)
+    : null
   if (
     (req.method == 'HEAD' || req.headers.has('range')) &&
     !pretty(path) && !type.startsWith('text/html')
@@ -156,7 +159,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     let object = compiled ?? await blobs.open(key)
     if (!object) return missing()
     return rangedOpen(object, req, {
-      'content-type': compiled ? mimeOf('compiled.js') : type,
+      'content-type': compiled && !resource ? mimeOf('compiled.js') : type,
       [VERSION]: object.version,
       ...immutable,
     })
@@ -169,7 +172,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let file = await blobs.load(key)
   if (source && key == keyed(prefix, `/${await source}`)) return missing()
   let compiled = await made
-  if (compiled) return served(compiled, mimeOf('compiled.js'))
+  if (compiled) return served(compiled, resource ? type : mimeOf('compiled.js'))
   if (!file && pretty(path)) {
     key = keyed(prefix, '/')
     file = await blobs.load(key)
