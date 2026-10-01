@@ -57,6 +57,8 @@ export type Channel = {
 
 let channels = new WeakMap<object, Channel>()
 let capacity = 256
+let recordings = new WeakMap<Channel, number>()
+let links = new WeakMap<object, WeakMap<object, { id: string; recording: number }>>()
 
 let counts = (input?: Counts): Counts | undefined => {
   if (!input) return
@@ -79,7 +81,7 @@ let create = (): Channel => {
     ring[next] = event
     next = (next + 1) % capacity
     size = Math.min(size + 1, capacity)
-    for (let listener of listeners) {
+    for (let listener of [...listeners]) {
       try {
         listener(event)
       } catch (why) {
@@ -103,12 +105,12 @@ let create = (): Channel => {
     package: a.package,
     plugin: a.plugin,
   })
-  return {
+  let out: Channel = {
     get active() {
       return listeners.size > 0
     },
     subscribe: (listener) => {
-      if (!listeners.size) epoch++
+      if (!listeners.size) recordings.set(out, ++epoch)
       // Each subscription owns its unsubscribe, even for the same callback.
       let subscribed = (e: Event) => listener(e)
       listeners.add(subscribed)
@@ -117,7 +119,7 @@ let create = (): Channel => {
       }
     },
     history: (limit = capacity) => {
-      let n = Math.min(size, Math.max(0, Math.floor(limit)))
+      let n = Number.isNaN(limit) ? 0 : Math.min(size, Math.max(0, Math.floor(limit)))
       let out: Event[] = []
       for (let i = n; i > 0; i--) {
         out.push(ring[(next - i + capacity) % capacity])
@@ -126,6 +128,8 @@ let create = (): Channel => {
     },
     begin: (a) => {
       if (!listeners.size) return
+      // Copy code metadata before delivering: a listener may mutate its caller.
+      a = { ...a }
       let id = String(++sequence)
       let start = performance.now()
       let recording = epoch
@@ -134,7 +138,7 @@ let create = (): Channel => {
       return {
         id,
         start,
-        end: (o = {}) => {
+        end: (o) => {
           if (ended) return
           ended = true
           // A disconnected recording cannot finish in a later recording.
@@ -144,21 +148,22 @@ let create = (): Channel => {
             ...event(a, id, 'end', time),
             start,
             duration: Math.max(0, time - start),
-            outcome: o.outcome ?? 'ok',
-            counts: counts(o.counts),
+            outcome: o?.outcome ?? 'ok',
+            counts: counts(o?.counts),
           })
         },
       }
     },
-    instant: (a, o = {}) => {
+    instant: (a, o) => {
       if (!listeners.size) return
       return emit({
         ...event(a, String(++sequence), 'instant', performance.now()),
-        outcome: o.outcome,
-        counts: counts(o.counts),
+        outcome: o?.outcome,
+        counts: counts(o?.counts),
       })
     },
   }
+  return out
 }
 
 /** Explicit consumer entry point. Merely creating a channel does not turn
@@ -176,4 +181,65 @@ export let channel = (target: object): Channel => {
 export let peek = (target: object): Channel | undefined => {
   let found = channels.get(target)
   return found?.active ? found : undefined
+}
+
+
+/** A parent carried through a local callback, never through persisted rows.
+ * Both keys matter: a read overlay must not quietly become another graph's
+ * recording. Expired recordings cannot supply parents to later subscribers. */
+export let link = (target: object, carrier: object, id: string): void => {
+  let c = peek(target)
+  if (!c) return
+  let at = links.get(target)
+  if (!at) links.set(target, at = new WeakMap())
+  at.set(carrier, { id, recording: recordings.get(c)! })
+}
+
+export let parent = (target: object, carrier: object): string | undefined => {
+  let c = peek(target)
+  if (!c) return
+  let found = links.get(target)?.get(carrier)
+  return found?.recording == recordings.get(c) ? found?.id : undefined
+}
+
+export let unlink = (target: object, carrier: object): void => {
+  links.get(target)?.delete(carrier)
+}
+
+export type Context = { channel: Channel; parent?: string; plugin?: string }
+
+/** Only the error's category, never its text or properties, is observable. */
+export let outcome = (error: unknown): Outcome => {
+  let name = error instanceof Error ? error.name : undefined
+  if (name == 'Checked') return 'check'
+  return [
+    'Refused', 'Unsupported', 'SyntaxError', 'Unknown', 'UnknownSession',
+    'Unnamed', 'Unauthorized', 'Denied', 'Paced', 'NotFound', 'Stale', 'Bounced',
+  ].includes(name ?? '') ? 'refused' : 'error'
+}
+
+/** Called only inside a producer's active branch. It preserves a synchronous
+ * return and observes thenables without assuming a particular Promise realm. */
+export let during = <T>(
+  span: Span | undefined,
+  run: () => T | Promise<T>,
+  ok: Outcome = 'ok',
+  count?: (value: T) => Counts,
+): T | Promise<T> => {
+  let done = (value: T): T => {
+    span?.end({ outcome: ok, counts: count?.(value) })
+    return value
+  }
+  let failed = (error: unknown): never => {
+    span?.end({ outcome: outcome(error) })
+    throw error
+  }
+  try {
+    let value = run()
+    return value && typeof (value as Promise<T>).then == 'function'
+      ? (value as Promise<T>).then(done, failed)
+      : done(value as T)
+  } catch (error) {
+    return failed(error)
+  }
 }

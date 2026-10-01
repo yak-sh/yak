@@ -1,3 +1,4 @@
+import { type Context, during } from '@yaks/trace'
 // The declarative way to extend a phase. A {@link Hook} is code that takes the
 // bundles; a rule is a query over one bundle in the change plus what the rule
 // produces — and the query expresses both at once. `.entity, +!created` states
@@ -71,6 +72,9 @@ import type { Query, Tx } from './storage.ts'
  * what the graph knows about the run.
  */
 export type Tick = {
+  /** An actual firing, not an evaluated match; never carry its match text. */
+  tracing?: Context
+  owner?: (rule: Rule) => string | undefined
   /** the component vocabulary this graph uses */
   vocab: Vocab
   /** the phase's transaction (a detached one outside the change's own) */
@@ -436,8 +440,7 @@ export let fire = (
     })
   }
   if (!hits.length) return bundles
-  return after(
-    each(hits, [] as Bundle[], (out, [r, ready, i]) => {
+  let firing = (out: Bundle[], [r, ready, i]: [Rule, Ready, number]) => {
       let patch: Patch = {}
       // The match guarantees a `+!` component is absent; a `+` component may
       // already be present.
@@ -475,7 +478,16 @@ export let fire = (
         if (!names.length) return out
         return [...out, { entity: { eid: views[i].entity.eid }, ...patch }]
       })
-    }),
+  }
+  return after(
+    each(hits, [] as Bundle[], tick.tracing ? (out, hit) => {
+      let [r] = hit
+      return during(tick.tracing!.channel.begin({
+        kind: 'rule', name: r.name ?? 'rule', package: '@yaks/graph',
+        parent: tick.tracing!.parent,
+        plugin: tick.owner?.(r) ?? tick.tracing!.plugin,
+      }), () => firing(out, hit))
+    } : firing),
     (made) => {
       if (!made.length) return bundles
       // A phase's rules run after its core work, so from `mutate` onwards the

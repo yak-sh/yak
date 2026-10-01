@@ -48,6 +48,7 @@
 // there.
 
 import { rulesIn, type Vocab } from '@yaks/vocab'
+import { type Context, during, parent, peek } from '@yaks/trace'
 import { after, each, isPromise } from '@yaks/fp'
 import { type Actor, type Bundle, comps, type Eid } from './bundle.ts'
 import type { Row, Storage, Tx } from './storage.ts'
@@ -80,6 +81,8 @@ import { flat, named, only, projection } from './projection.ts'
 
 /** The options one `apply()` call can pass. */
 export type ApplyOpts = {
+  /** A runtime activity on this graph, not an entity ID or persisted field. */
+  parent?: string
   /** the caller is trusted server code: server-owned properties are accepted */
   trusted?: boolean
   /** the change copies rows another graph already admitted into this graph's
@@ -196,7 +199,7 @@ export type Graph = {
    * `tombstone`, one that does not exist is absent. Each carries the
    * components `comps` names, or every one when it is left out. A lookup, not
    * a search, and it takes no write lock ({@link Storage.get}). */
-  get: (eids: Eid[], comps?: string[]) => Bundle[] | Promise<Bundle[]>
+  get: (eids: Eid[], comps?: string[], opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
   /** the ids a caller passed → the eids they refer to, for the ones that are
    * not eids already (see {@link Plugin.address}). Only the ids that changed
    * are in the returned map, so a caller reads it as `at.get(id) ?? id`; with
@@ -322,19 +325,8 @@ export let graph = (opts: Options): Graph => {
       ? signed(bundles, opts.actor)
       : bundles
 
-  let apply = (bundles: Bundle[], o: ApplyOpts = {}):
-    | Bundle[]
-    | Promise<
-      Bundle[]
-    > => {
-    let st = state()
-    let now = o.now ?? new Date().toISOString()
-    let instant: string | undefined
-    let outside = detached(storage)
-    // One registry for the whole apply, so `#Now` is one instant however many
-    // phases and rules read it.
-    let resources = resourced(() => instant ??= o.now ?? opts.clock?.() ?? now)
-    let timed = <T>(
+let legacy = <T>(
+      o: ApplyOpts,
       name: Phase | 'gather' | 'transaction' | 'compose',
       run: () => T | Promise<T>,
     ): T | Promise<T> => {
@@ -357,6 +349,48 @@ export let graph = (opts: Options): Graph => {
         throw e
       }
     }
+
+  let applying = (bundles: Bundle[], o: ApplyOpts, tracing?: Context):
+    | Bundle[]
+    | Promise<
+      Bundle[]
+    > => {
+    let current = tracing?.parent
+    let st = state()
+    let now = o.now ?? new Date().toISOString()
+    let instant: string | undefined
+    let outside = detached(storage)
+    // One registry for the whole apply, so `#Now` is one instant however many
+    // phases and rules read it.
+    let resources = resourced(() => instant ??= o.now ?? opts.clock?.() ?? now)
+    let timed = <T>(
+      name: Phase | 'gather' | 'transaction' | 'compose',
+      run: () => T | Promise<T>,
+      plugin?: string,
+    ): T | Promise<T> => {
+      if (!tracing) return legacy(o, name, run)
+      let before = current
+      let span = tracing.channel.begin({
+        kind: 'phase', name, parent: before, package: '@yaks/graph', plugin,
+      })
+      current = span?.id ?? before
+      let restore = () => { current = before }
+      try {
+        let out = during(span, () => legacy(o, name, run))
+        if (isPromise(out)) return out.then((value) => {
+          restore()
+          return value
+        }, (error) => {
+          restore()
+          throw error
+        })
+        restore()
+        return out
+      } catch (error) {
+        restore()
+        throw error
+      }
+    }
     let gathering = (tx: Tx, b: Bundle[]) =>
       timed('gather', () => gather(tx, vocab, asking(b)))
 
@@ -376,10 +410,15 @@ export let graph = (opts: Options): Graph => {
       let rules = ruled(name)
       if (rules.length) {
         steps.push((b) =>
-          fire(rules, { vocab, tx, phase: name, bundles: b, resources, of })
+          fire(rules, { vocab, tx, phase: name, bundles: b, resources, of,
+            tracing: tracing ? { channel: tracing.channel, parent: current } : undefined,
+            owner: tracing ? (r) => plugins.find((p) => p.rules?.includes(r))?.name : undefined,
+          })
         )
       }
-      for (let [, h] of hooks(name)) steps.push((b) => h(b, tx))
+      for (let [plugin, h] of hooks(name)) steps.push((b) => tracing
+        ? timed(name, () => h(b, tx, undefined, { graph: g, parent: current! }), plugin)
+        : h(b, tx))
       return timed(name, () => each(steps, bundles, (b, step) => step(b)))
     }
 
@@ -438,6 +477,7 @@ export let graph = (opts: Options): Graph => {
                     resources: shared,
                     of: (eid) =>
                       held.get(eid),
+                    tracing: tracing ? { channel: tracing.channel, parent: current, plugin } : undefined,
                   }),
                   (made) => [...b, ...made.slice(applied.length)],
                 )))
@@ -448,7 +488,9 @@ export let graph = (opts: Options): Graph => {
         after(
           each(hooks('effect'), b, (out, [plugin, hook]) =>
             observed(plugin, out, () =>
-              hook(out, outside))),
+              tracing
+                ? timed('effect', () => hook(out, outside, undefined, { graph: g, parent: current! }), plugin)
+                : hook(out, outside))),
           () =>
             b,
         ))
@@ -463,7 +505,9 @@ export let graph = (opts: Options): Graph => {
     let auditing = (bundles: Bundle[], err: unknown) =>
       each(hooks('audit'), bundles, (b, [plugin, hook]) => {
         try {
-          let out = hook(b, outside, err)
+          let out = tracing
+            ? timed('audit', () => hook(b, outside, err, { graph: g, parent: current! }), plugin)
+            : hook(b, outside, err)
           return isPromise(out)
             ? out.catch((e) => {
               report(e, { phase: 'audit', plugin })
@@ -552,6 +596,7 @@ export let graph = (opts: Options): Graph => {
                       vocab,
                       ask,
                       (made) => admit(made, vocab, true),
+                      tracing ? { channel: tracing.channel, parent: current } : undefined,
                     )
                   },
                   holds,
@@ -607,11 +652,11 @@ export let graph = (opts: Options): Graph => {
       }
       let observe = (b: Bundle[]) => {
         let defer = o.deferEffects ?? opts.deferEffects
-        if (!defer) return effects(b)
+        if (!defer) return tracing ? timed('effect', () => effects(b)) : effects(b)
         // Sample the calling program's clock while its transaction-scoped
         // context still exists.
         instant ??= o.now ?? opts.clock?.() ?? now
-        defer(() => after(effects(b), () => {}))
+        defer(() => after(tracing ? timed('effect', () => effects(b)) : effects(b), () => {}))
         return b
       }
       return isPromise(committed)
@@ -669,6 +714,17 @@ export let graph = (opts: Options): Graph => {
     )
   }
 
+  let apply = (bundles: Bundle[], o: ApplyOpts = {}): Bundle[] | Promise<Bundle[]> => {
+    let c = peek(g)
+    if (!c) return applying(bundles, o)
+    let span = c.begin({
+      kind: 'apply', name: 'apply', package: '@yaks/graph',
+      parent: o.parent ?? parent(g, bundles),
+    })
+    return during(span, () => applying(bundles, o, { channel: c, parent: span?.id }),
+      o.check ? 'check' : 'ok', (out) => ({ input: bundles.length, output: out.length }))
+  }
+
   // The same convenience a tool's arguments get (tool.ts `addressed`), applied
   // to a query string: wherever the query names an entity, an id a person can
   // type is resolved to the eid the store keys rows by (said.ts).
@@ -708,22 +764,8 @@ export let graph = (opts: Options): Graph => {
     })
   }
 
-  let g: Graph = {
-    vocab,
-    worn: (comp, prop) => storage.worn?.(comp, prop) ?? false,
-    storage,
-    plugins,
-    address,
-    use: (plugin) => {
-      plugins.push(plugin)
-      return g
-    },
-    install: () => storage.install(),
-    // The rows carry what the query names (./projection.ts), the same answer
-    // at every door. A `.fields` projection is read as its rows, and answers
-    // the entities its paths reach beside the ones it selects.
-    read: (query, readOpts) =>
-      after(
+  let read = (query: Query, readOpts?: ReadOpts): Bundle[] | Promise<Bundle[]> => {
+      return after(
         aim(query, address),
         (q) => {
           let p = projection(vocab, q)
@@ -739,10 +781,45 @@ export let graph = (opts: Options): Graph => {
             (rows) => rows.map(only(want)),
           )
         },
-      ),
-    rows: (query, readOpts) =>
-      after(aim(query, address), (q) => storage.rows(q, readOpts)),
-    get: (eids, comps) => storage.get(eids, comps),
+      )
+  }
+
+  let g: Graph = {
+    vocab,
+    worn: (comp, prop) => storage.worn?.(comp, prop) ?? false,
+    storage,
+    plugins,
+    address,
+    use: (plugin) => {
+      plugins.push(plugin)
+      return g
+    },
+    install: () => storage.install(),
+    // The rows carry what the query names (./projection.ts), the same answer
+    // at every door. A `.fields` projection is read as its rows, and answers
+    // the entities its paths reach beside the ones it selects.
+    read: (query, readOpts) => {
+      let c = peek(g)
+      if (!c) return read(query, readOpts)
+      return during(c.begin({ kind: 'query', name: 'read', package: '@yaks/graph',
+        parent: readOpts?.parent }), () => read(query, readOpts),
+        'ok', (out) => ({ rows: out.length }))
+    },
+    rows: (query, readOpts) => {
+      let c = peek(g)
+      if (!c) return after(aim(query, address), (q) => storage.rows(q, readOpts))
+      return during(c.begin({ kind: 'query', name: 'rows', package: '@yaks/graph',
+        parent: readOpts?.parent }),
+        () => after(aim(query, address), (q) => storage.rows(q, readOpts)),
+        'ok', (out) => ({ rows: out.length }))
+    },
+    get: (eids, comps, readOpts) => {
+      let c = peek(g)
+      if (!c) return storage.get(eids, comps)
+      return during(c.begin({ kind: 'get', name: 'get', package: '@yaks/graph',
+        parent: readOpts?.parent }), () => storage.get(eids, comps),
+        'ok', (out) => ({ input: eids.length, rows: out.length }))
+    },
     apply,
   }
   return g

@@ -11,6 +11,7 @@
   "imports": {
     "@yaks/fp": "../fp/mod.ts",
     "@yaks/graph": "../graph/mod.ts",
+    "@yaks/trace": "../trace/mod.ts",
     "@yaks/query": "../query/mod.ts",
     "@yaks/tui/theme": "../tui/theme.ts",
     "@yaks/ui": "../ui/mod.ts",

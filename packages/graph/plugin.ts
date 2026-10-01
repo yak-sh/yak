@@ -104,10 +104,15 @@ export let INSIDE: Phase[] = [
  * is its own unit of work. The `audit` phase, and only it, also passes the
  * error that rolled the transaction back.
  */
+/** Present only while this graph is observed. The third hook argument remains
+ * the audit error; adding context must not change existing hook semantics. */
+export type HookContext = { graph: object; parent?: string }
+
 export type Hook = (
   bundles: Bundle[],
   tx: Tx,
   err?: unknown,
+  context?: HookContext,
 ) => Bundle[] | Promise<Bundle[]>
 
 /**

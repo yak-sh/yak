@@ -21,7 +21,12 @@ export type Query = string | Ast
 
 /** Options passed with a read, such as a fixed `now` for relative time
  * expressions. */
-export type ReadOpts = { now?: number; durable?: boolean }
+export type ReadOpts = {
+  now?: number
+  durable?: boolean
+  /** A graph-local runtime activity parent; storage adapters need not use it. */
+  parent?: string
+}
 
 /** One entity the cascade deletes, and how far from the original delete it
  * was: the entities the change named are depth 0, the ones deleted with them

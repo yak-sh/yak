@@ -8,6 +8,7 @@
     "@yaks/archetype": "../archetype/mod.ts",
     "@yaks/fp": "../fp/mod.ts",
     "@yaks/graph": "./mod.ts",
+    "@yaks/trace": "../trace/mod.ts",
     "@yaks/id": "../id/mod.ts",
     "@yaks/match": "../match/mod.ts",
     "@yaks/query": "../query/mod.ts",

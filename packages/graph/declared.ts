@@ -30,6 +30,7 @@
 // writes only `sync: none` components is a page's own (`own`): only a page
 // holds what it writes, so only a page runs it.
 
+import { type Context, during } from '@yaks/trace'
 import type { Bundle, Comp, Eid } from './bundle.ts'
 import { derivedEid } from './identity.ts'
 import {
@@ -212,6 +213,7 @@ export let settle = (
   vocab: Vocab,
   resource: (name: string) => unknown = () => undefined,
   admit: (made: Bundle[]) => Bundle[] = (made) => made,
+  tracing?: Context,
 ): Bundle[] | Promise<Bundle[]> => {
   // An empty change is about nothing, and a match with no batch under it is
   // asked of the whole graph (a template's invocation): the rules have
@@ -237,7 +239,14 @@ export let settle = (
               )
             }
             fired.add(key)
-            made.push(...emitted(r, row, vocab, resource))
+            if (!tracing) made.push(...emitted(r, row, vocab, resource))
+            else {
+              let span = tracing.channel.begin({
+                kind: 'rule', name: r.rule.name, package: '@yaks/graph',
+                parent: tracing.parent, plugin: tracing.plugin,
+              })
+              made.push(...during(span, () => emitted(r, row, vocab, resource)) as Bundle[])
+            }
           }
         })
         if (!made.length) return batch
