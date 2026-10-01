@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { col, lit } from '@yaks/sql'
-import { inspect } from './inspect.ts'
+import { identity, inspect } from './inspect.ts'
 import { mem } from './testing.ts'
 
 test('inspection counts stored rows and indexes without reading values', () => {
@@ -37,4 +37,65 @@ test('inspection counts stored rows and indexes without reading values', () => {
     omitted: 0,
   })
   assertEquals(inspect(db, 0), { tables: 1, shown: [], omitted: 1 })
+})
+
+test('identity inspection sees graves and live component presence without values', () => {
+  let db = mem()
+  db.query({
+    t: 'create table',
+    name: 'entity',
+    cols: [
+      { name: 'id', type: 'integer', pk: true },
+      { name: 'eid', type: 'text' },
+    ],
+  })
+  for (let name of ['tombstone', 'note']) {
+    db.query({
+      t: 'create table',
+      name,
+      cols: [{ name: 'entity', type: 'integer' }, {
+        name: 'body',
+        type: 'text',
+      }],
+    })
+  }
+  db.query({
+    t: 'insert',
+    into: 'entity',
+    cols: ['id', 'eid'],
+    rows: [[lit(1), lit('a')], [lit(2), lit('b')]],
+  })
+  db.query({
+    t: 'insert',
+    into: 'note',
+    cols: ['entity', 'body'],
+    rows: [[lit(1), lit('secret')]],
+  })
+  db.query({
+    t: 'insert',
+    into: 'tombstone',
+    cols: ['entity'],
+    rows: [[lit(2)]],
+  })
+  assertEquals(identity(db, 'a'), {
+    eid: 'a',
+    exists: true,
+    tombstoned: false,
+    tables: ['note'],
+    omitted: 0,
+  })
+  assertEquals(identity(db, 'b'), {
+    eid: 'b',
+    exists: true,
+    tombstoned: true,
+    tables: ['tombstone'],
+    omitted: 0,
+  })
+  assertEquals(identity(db, 'missing'), {
+    eid: 'missing',
+    exists: false,
+    tombstoned: false,
+    tables: [],
+    omitted: 0,
+  })
 })

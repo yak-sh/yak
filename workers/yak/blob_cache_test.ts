@@ -128,6 +128,10 @@ test('an anonymous blob read revives a removed immutable representation', async 
   // immutability guard. The read must heal those graves, not rename them.
   let rows = storage(ctx.storage, appVocab(words))
   rows.tx((tx) => tx.remove([{ eid: rep }]))
+  let inspected = await store(`/inspect?eid=${rep}`, {}, KERNEL)
+  let buried = await inspected.json()
+  assertEquals(buried.identity.tombstoned, true)
+  assertEquals(buried.identity.tables, ['tombstone'])
   let bare = await apps.fetch(visit(`/cookbook/api/blob/${file.sha}`), env)
   assertEquals(bare.status, 302)
   assertEquals(new URL(bare.headers.get('location')!).pathname, file.url)
@@ -135,4 +139,7 @@ test('an anonymous blob read revives a removed immutable representation', async 
   assertEquals(served.status, 200)
   assertEquals(new Uint8Array(await served.arrayBuffer()), body)
   assertEquals(rows.tx((tx) => tx.get([rep]))[0].tombstone, undefined)
+  let live = await (await store(`/inspect?eid=${rep}`, {}, KERNEL)).json()
+  assertEquals(live.identity.tombstoned, false)
+  assertEquals(live.identity.tables.includes('representation'), true)
 })

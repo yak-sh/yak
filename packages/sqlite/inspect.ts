@@ -1,7 +1,7 @@
 // Bounded physical facts about a SQLite store. The caller sees names and
 // counts, never definitions, statement text, or row values.
 
-import { type Driver, tally } from '@yaks/sql'
+import { by, col, type Driver, lit, select, table, tally } from '@yaks/sql'
 
 export type TableSize = {
   name: string
@@ -44,4 +44,50 @@ export let inspect = (
     }
   })
   return { tables: names.length, shown, omitted: names.length - shown.length }
+}
+
+export type Identity = {
+  eid: string
+  exists: boolean
+  tombstoned: boolean
+  tables: string[]
+  omitted: number
+}
+
+/** Physical identity and component presence, never component values. */
+export let identity = (db: Driver, eid: string): Identity => {
+  let [row] = db.query(select({
+    cols: [col('id')],
+    from: table('entity'),
+    where: by({ eid }),
+  }))
+  if (!row) {
+    return { eid, exists: false, tombstoned: false, tables: [], omitted: 0 }
+  }
+  let names = db.query({ t: 'pragma', name: 'table_list' })
+    .filter((r) => r.schema == 'main' && r.type == 'table')
+    .map((r) => String(r.name))
+    .filter((name) => !/^(_+cf_|sqlite_)/i.test(name))
+    .sort((a, b) =>
+      Number(b == 'tombstone') - Number(a == 'tombstone') || a.localeCompare(b)
+    )
+  let checked = names.slice(0, 160).filter((name) =>
+    db.query({ t: 'pragma', name: 'table_info', arg: name })
+      .some((column) => column.name == 'entity')
+  )
+  let tables = checked.filter((name) =>
+    db.query(select({
+      cols: [col('entity')],
+      from: table(name),
+      where: by({ entity: Number(row.id) }),
+      limit: lit(1),
+    })).length
+  ).sort()
+  return {
+    eid,
+    exists: true,
+    tombstoned: tables.includes('tombstone'),
+    tables,
+    omitted: Math.max(0, names.length - 160),
+  }
 }

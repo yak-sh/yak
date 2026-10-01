@@ -104,7 +104,12 @@ import {
   table,
   val,
 } from '@yaks/sql'
-import { FIT, inspect as inspectStorage, schema } from '@yaks/sqlite'
+import {
+  FIT,
+  identity as inspectIdentity,
+  inspect as inspectStorage,
+  schema,
+} from '@yaks/sqlite'
 import {
   driver,
   type DurableSql,
@@ -2554,7 +2559,12 @@ export class Store {
       if (!kernel || request.method != 'GET') {
         return json({ error: 'NotFound', message: 'no route' }, 404)
       }
-      let seq = new URL(request.url).searchParams.get('seq')
+      let at = new URL(request.url).searchParams
+      let eid = at.get('eid')
+      if (eid) {
+        return Response.json({ identity: inspectIdentity(this.#sql, eid) })
+      }
+      let seq = at.get('seq')
       if (seq == null) {
         return Response.json({ physical: inspectStorage(this.#sql) })
       }

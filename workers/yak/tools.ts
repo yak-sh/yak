@@ -3259,6 +3259,7 @@ let OURS: Row[] = [
         space: SPACE,
         app: APP,
         seq: { type: 'integer', minimum: 1 },
+        eid: { type: 'string', minLength: 1, maxLength: 256 },
       },
       required: ['app'],
     },
@@ -3268,7 +3269,11 @@ let OURS: Row[] = [
       if (seq != null && (!Number.isSafeInteger(seq) || seq < 1)) {
         throw refuse('arguments', 'seq must be a positive integer')
       }
-      let result = await inspectStore(store, seq)
+      let result = await inspectStore(
+        store,
+        seq,
+        args.eid == null ? undefined : String(args.eid),
+      )
       return {
         text: JSON.stringify(result),
         value: result,
