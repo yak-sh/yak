@@ -1001,6 +1001,28 @@ test("a build's cost sums what its calls said and its sessions spent", async () 
   assertEquals(comp(await one(m, modeled), 'build')?.cost, 0.125)
 })
 
+test('a model builder renders an empty selected collection in its prompt', async () => {
+  let { g, runner, failed } = await shop()
+  await g.apply([source('a'), {
+    ...builder(
+      '$s .doc.title=Source; [$p .doc.title=Point, .doc.body=$body]',
+      toolEid('builder_model'),
+    ),
+    content: { body: 'Subject $s:\n$p\nBodies $body' },
+    using: { model: ids.model },
+  }])
+  await drive(g, runner, await runOf(g, ['a']))
+  let [session] = await rows(g, '.session')
+  assertEquals(failed, [])
+  assert(session)
+  let [entry] = await rows(g, `.entry.session=${session.entity.eid}`)
+  assert(
+    String(comp(entry, 'content')?.body).startsWith(
+      'Subject a:\n[]\nBodies []\n\nInputs: a\n',
+    ),
+  )
+})
+
 test('template substitution reads variables in nested bindings', () => {
   assertEquals(
     render('$s: $n and $$', {
