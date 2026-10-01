@@ -42,6 +42,9 @@ let own = (c: Colors): Sheet => ({
   TKeys_Hint: { fg: c.dim, dim: true },
 
   // the domain views, under the class names the web styles
+  Entry_Speaker: { fg: c.dim, bold: true, block: true },
+  'Entry-user': { fg: c.who, indent: 2 },
+  'Entry-agent': { fg: c.text },
   MemoryType: { fg: c.accent },
   Task_Title: { bold: true },
   Task_Body: { fg: c.muted },

@@ -686,12 +686,12 @@ test('Session explains loading, ready-empty, rows, and read failure', async () =
     assertEquals(state(mounted), undefined)
     let log = mounted.root.querySelector('.Session_Log')!
     assertEquals(
-      log.querySelector('.Entry-user')?.textContent.trim(),
-      'what a person said',
+      log.querySelector('.Entry-user .Entry_Speaker')?.textContent,
+      'person',
     )
     assertEquals(
-      log.querySelector('.Entry-agent')?.textContent.trim(),
-      'what the model said',
+      log.querySelector('.Entry-agent .Entry_Speaker')?.textContent,
+      'model',
     )
     mounted.free()
     mounted = undefined
@@ -743,7 +743,7 @@ test('Session paints the newest page and loads earlier entries on demand', async
   ]
   let lines = () =>
     [...mounted.root.querySelectorAll('.Entry-agent')].map(
-      (x) => x.textContent.trim(),
+      (x) => x.querySelector(':scope > div:last-child')?.textContent.trim(),
     )
   try {
     landSub({

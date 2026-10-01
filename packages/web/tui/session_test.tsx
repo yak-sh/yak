@@ -69,3 +69,12 @@ test('a Session body cannot speak ANSI to the terminal', () => {
   assertStringIncludes(out, ']52;c;QQ==')
   assertStringIncludes(out, 'done')
 })
+
+test('terminal prose says which words are a person and which are a model', () => {
+  let out = painted(say('user', 'human words'), say('agent', 'model words'))
+  let plain = out.replace(/\x1b\[[0-9;]*m/g, '')
+  assertStringIncludes(plain, 'person\n')
+  assertStringIncludes(plain, 'model\n')
+  assertEquals(plain.indexOf('person') < plain.indexOf('human words'), true)
+  assertEquals(plain.indexOf('model\n') < plain.indexOf('model words'), true)
+})

@@ -2782,6 +2782,13 @@ a[data-ref]:hover {
   font-size: 11px;
   overflow-wrap: anywhere;
 }
+/* A speaker is said in words too: a quiet border alone disappears in plain
+   terminals and is too easy to miss in a long transcript. */
+.Entry_Speaker {
+  color: var(--dim);
+  font: 11px var(--mono);
+  margin-bottom: var(--half-gap);
+}
 .Entry-user,
 .Entry-agent {
   --entry-font-size: 1em;

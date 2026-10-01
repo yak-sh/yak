@@ -17,6 +17,7 @@ let Frame = ui.block('div', 'Entry', {
   Line: 'span',
   More: 'button',
   Name: 'span',
+  Speaker: 'div',
   Status: 'span',
   Error: 'span',
   Code: 'pre',
@@ -43,6 +44,7 @@ let {
   Line,
   More,
   Name,
+  Speaker,
   Status,
   Error,
   Code,
@@ -77,8 +79,9 @@ let more = (show: (() => void) | undefined, text: string, open = false) =>
     </More>
   )
 let body = (e: Ent) => e.content?.body ?? ''
-// Who a prose entry is from: a model's output wears `output` (@yaks/session).
+// Who a prose entry is from: a model's output wears `output` (@yaks/tools).
 let said = (e: Ent) => e.output ? 'agent' : 'user'
+let speaker = (role: 'agent' | 'user') => role == 'agent' ? 'model' : 'person'
 let failed = (e: Ent) =>
   (e.exit?.code != null && e.exit.code != 0) || !!e.error || !!e.exception ||
   (e.response?.status != null && e.response.status >= 400)
@@ -195,6 +198,7 @@ export let EntryBody = ({ x, repo }: { x: EntryLine; repo?: string }) => {
     case 'say':
       return (
         <Frame mod={r.role}>
+          <Speaker>{speaker(r.role)}</Speaker>
           <Markdown text={r.text} repo={repo} />
         </Frame>
       )
@@ -328,6 +332,7 @@ export let MessageSummary = ({ e }: { e: Ent }) => {
   let repo = useRepoUrl(e)
   return (
     <Frame mod={said(e)}>
+      <Speaker>{speaker(said(e))}</Speaker>
       <Markdown text={body(e)} repo={repo} />
     </Frame>
   )
@@ -394,6 +399,7 @@ export let MessageFull = ({ e }: { e: Ent }) => {
   let repo = useRepoUrl(e)
   return (
     <Frame mod={said(e)}>
+      <Speaker>{speaker(said(e))}</Speaker>
       <Markdown text={body(e)} repo={repo} />
     </Frame>
   )
