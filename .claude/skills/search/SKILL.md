@@ -9,8 +9,9 @@ description: >
   embeddings, vectors, similarity, neighbours, recall, ranking, `search: true`,
   `embed: false`, an embedder's config or model, or why something is or isn't
   found, even if the request only says "find", "related", "duplicates" or
-  "slow query". How the query grammar and the archetype index work is `graph`;
-  re-embedding stored vectors after a model change is still this skill.
+  "slow query". How a query is written is `query-grammar`, how the archetype
+  index answers one is `graph`; re-embedding stored vectors after a model
+  change is still this skill.
 scope: tasks-v2
 volatility: stable
 ---

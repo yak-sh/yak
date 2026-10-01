@@ -9,9 +9,10 @@ description: >
   the graph (`yak graph query`, `graph_query`, a board, a filter), write any
   script or SQL against the db, or are surprised by a refusal, a missing
   component, a wrong count, a write that landed as the wrong writer, or a
-  deleted entity that came back. Designing a component is `vocabulary`, moving
-  stored rows to a new shape is `migrate`, what runs after a write (rules,
-  effects) is `effects`, and full-text and `.near` are `search`.
+  deleted entity that came back. How a query is written is `query-grammar`;
+  designing a component is `vocabulary`, moving stored rows to a new shape is
+  `migrate`, what runs after a write (rules, effects) is `effects`, and
+  full-text and `.near` are `search`.
 scope: tasks-v2
 volatility: stable
 ---
@@ -92,12 +93,8 @@ with what the delete cascaded (packages/journal/README.md, "Undo"), but not its
 
 ## Reading
 
-The grammar is @yaks/query's (packages/query/README.md): `.comp` has it,
-`!comp` lacks it, `.comp.prop=v` filters, a bare word is a full-text match.
-Directives shape the answer: `.count`, `.tally=comp.prop`, `.fields=…` (a path
-through a reference brings what it reaches as bundles of its own), `.order`,
-`.limit`, `.refs=X`, `.near=X`. A bare property two components share (`.status`
-for task and session) is refused as ambiguous; name the component.
+How a query is written (prefixes, operators, walks, directives, rule matches,
+ambiguity) is the `query-grammar` skill. This is how one is answered.
 
 - Ask for what you need: `.count` instead of rows, `.fields` instead of whole
   bundles, `g.get(eids, comps)` instead of a query by eid. Row reads are the
