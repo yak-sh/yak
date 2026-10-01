@@ -1,5 +1,7 @@
 // Every tool returns the same named-output value. Validate it once, then write
-// stable built rows and their citations in one guarded graph change.
+// stable built rows and their citations in one guarded graph change. An
+// output's eid derives from its build and slot, so a reference in one output
+// may name a sibling of the same answer as `$<slot>`.
 
 import {
   type Binding,
@@ -35,11 +37,21 @@ let dollars = (value: unknown): number | undefined =>
     ? value.cost
     : undefined
 
-/** The one output contract for a model adapter and any registered code tool. */
+// The slot a reference names by `$<slot>`, where the value is one.
+let sibling = (vocab: Vocab, comp: string, prop: string, v: unknown) =>
+  typeof v == 'string' && v.startsWith('$') &&
+    vocab.prop(comp, prop)?.category == 'ref'
+    ? v.slice(1)
+    : undefined
+
+/** The one output contract for a model adapter and any registered code tool.
+ * A reference naming a sibling output by `$<slot>` comes back as that
+ * output's eid in `build`; one naming no sibling is refused. */
 export let parse = (
   value: unknown,
   selected: Eid[],
   vocab: Vocab,
+  build: Eid,
 ): Spec[] => {
   if (!object(value) || !Array.isArray(value.outputs)) {
     throw new Error('builder tool answer needs an outputs array')
@@ -80,7 +92,7 @@ export let parse = (
           }
         }
       }
-      components[name] = value as Comp | null
+      components[name] = value == null ? null : { ...value as Comp }
     }
     if (item.artifact != null && typeof item.artifact != 'string') {
       throw new Error(`${item.slot} has no artifact id`)
@@ -91,6 +103,18 @@ export let parse = (
       components,
       ...(item.artifact ? { artifact: item.artifact } : {}),
     })
+  }
+  for (let spec of out) {
+    for (let [name, c] of Object.entries(spec.components)) {
+      for (let [prop, v] of Object.entries(c ?? {})) {
+        let slot = sibling(vocab, name, prop, v)
+        if (slot == null) continue
+        if (!slots.has(slot)) {
+          throw new Error(`${spec.slot} names no sibling output ${v}`)
+        }
+        c![prop] = output(build, slot)
+      }
+    }
   }
   return out
 }
@@ -120,7 +144,7 @@ export let answer = async (
   if (!b || b.call != call.entity.eid) return []
   let args = comp(call, 'call')?.args as { binding?: Binding; key?: string }
   if (!args?.binding || args.key != b.key) return []
-  let specs = parse(value, ids(args.binding), vocab)
+  let specs = parse(value, ids(args.binding), vocab, source)
   let eids = specs.map((s) => output(source, s.slot))
   let prior = await tx.get(eids)
   let have = new Map(prior.map((row) => [row.entity.eid, row]))

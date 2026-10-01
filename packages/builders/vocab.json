@@ -97,10 +97,17 @@
         },
         "match": {
           "type": "string",
-          "description": "JSON outer entity-ID tuple"
+          "description": "JSON outer entity-ID tuple, from which the build's id derives"
         },
         "variant": {
           "type": "string"
+        },
+        "for": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the entity it was built for: the first its outer binding holds, so a query reaches what was built for X (`.built.build.for=X`), which `match` as JSON cannot"
         },
         "key": {
           "type": "string",

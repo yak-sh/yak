@@ -65,6 +65,27 @@ let code = (revision = '1'): Tool => ({
   },
   run: (call) => answer(call),
 })
+// A code tool whose answer is these outputs.
+let answering = (outputs: unknown[]): Tool => ({
+  ...code(),
+  run: (call) => [{
+    entity: { eid: crypto.randomUUID() },
+    output: { source: call.entity.eid, value: { outputs } },
+  }],
+})
+// A component with a reference of its own.
+let notes = {
+  $defs: {
+    note: {
+      component: true,
+      type: 'object',
+      properties: {
+        parent: { type: 'string', ref: 'entity' },
+        text: { type: 'string' },
+      },
+    },
+  },
+}
 let calls = (g: Graph, build: string) => rows(g, `.call.source=${build}`)
 // A model's ask in a transcript, and a reply to it.
 let asked = (
@@ -152,18 +173,6 @@ test('outer query bindings make independent builds and tool calls', async () => 
 })
 
 test('nested collection changes the key but retains the build and output', async () => {
-  let notes = {
-    $defs: {
-      note: {
-        component: true,
-        type: 'object',
-        properties: {
-          parent: { type: 'string', ref: 'entity' },
-          text: { type: 'string' },
-        },
-      },
-    },
-  }
   let { g, runner } = await shop({}, [notes], [code()])
   let query = '$s .doc.title=Source; [$n .note.parent=$s]'
   await g.apply([source('a'), builder(query)])
@@ -224,6 +233,42 @@ test('an answer that lands after its binding vanished is kept for its return', a
   await g.apply([{ entity: { eid: 'a' }, doc: { title: 'Source' } }])
   assert(current(comp(await one(g, build), 'build')!, made))
   assertEquals((await calls(g, build)).length, 1)
+})
+
+test('an output names a sibling output of its answer by $slot', async () => {
+  let kinded = answering([
+    { slot: 'kind', inputs: ['a'], components: { doc: { body: '$cry' } } },
+    { slot: 'cry', inputs: [], components: { note: { parent: '$kind' } } },
+  ])
+  let { g, runner, failed } = await shop({}, [notes], [kinded])
+  await g.apply([source('a'), builder()])
+  let build = run(ids.builder, ['a'])
+  await drive(g, runner, build)
+  assertEquals(failed, [])
+  let cry = await one(g, output(build, 'cry'))
+  assertEquals(comp(cry, 'note')?.parent, output(build, 'kind'))
+  // Only a reference names an entity; text keeps what it says.
+  assertEquals(comp(await one(g, output(build, 'kind')), 'doc')?.body, '$cry')
+
+  let astray = answering([
+    { slot: 'cry', inputs: [], components: { note: { parent: '$nowhere' } } },
+  ])
+  let lost = await shop({}, [notes], [astray])
+  await lost.g.apply([source('a'), builder()])
+  await drive(lost.g, lost.runner, build)
+  assertEquals((await rows(lost.g, '.built')).length, 0)
+  assert(String(lost.failed[0]).includes('names no sibling output $nowhere'))
+})
+
+test('a query reads what was built for an entity', async () => {
+  let { g, runner } = await shop({}, [], [code()])
+  await g.apply([source('a'), source('b'), builder()])
+  for (let s of ['a', 'b']) await drive(g, runner, run(ids.builder, [s]))
+  let eids = async (q: string) => (await rows(g, q)).map((b) => b.entity.eid)
+  assertEquals(await eids('.build.for=a'), [run(ids.builder, ['a'])])
+  assertEquals(await eids('.built.build.for=b'), [
+    output(run(ids.builder, ['b'])),
+  ])
 })
 
 test('a code tool can return an artifact output without owning built rows', async () => {

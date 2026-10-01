@@ -13,12 +13,16 @@ deno add jsr:@yaks/builders
   the earliest scheduled reconciliation. `content.body` is an optional `$var`
   template; `using{provider,model,effort}` chooses model details. `doc.body` is
   documentation.
-- `build{builder,match,variant,key,call,stale}` is one instance per outer
-  entity-ID tuple and variant. `match` stores that tuple as JSON. Nested bracket
-  collections change the key but preserve this identity. A vanished binding
-  marks its build stale and retains its outputs; a returning binding reuses the
-  same build. An answer that lands after its binding vanished is kept too, so a
-  binding returning under the same key has it without asking again.
+- `build{builder,match,variant,for,key,call,stale}` is one instance per outer
+  entity-ID tuple and variant. `match` stores that tuple as JSON, which the
+  build's id derives from; `for` names the entity it was built for, the first
+  the tuple holds, as a reference a query can follow: `.build.for=X` is X's
+  builds, and `.built.build.for=X&.built.current=true` what was built for X now.
+  Nested bracket collections change the key but preserve this identity. A
+  vanished binding marks its build stale and retains its outputs; a returning
+  binding reuses the same build. An answer that lands after its binding vanished
+  is kept too, so a binding returning under the same key has it without asking
+  again.
 - `built{build,slot,key,call,artifact?}` is one named output. Its id derives
   from its build and slot. It is current when its build is not stale and the two
   keys match, which `built.current` computes, so a downstream builder selects
@@ -65,11 +69,15 @@ spent is its entries'. `build.cost` is computed, never stored: every call the
 build made, each call's own `cost` and the entries of the session the model tool
 opened for it, summed. `derived()` in `@yaks/builders/vocab` is its SQL.
 
-Each output lists only the selected input entities it used. The package
-validates writable components, the artifact reference and citations before
-writing all outputs as one graph change. `cites` edges record each output's used
-inputs. The artifact's `artifact{address,media_type,size}` holds byte metadata;
-`built.artifact` only points to it.
+Each output lists only the selected input entities it used. A reference property
+in one output may name a sibling output of the same answer as `"$<slot>"`, which
+becomes that output's id, so a creature's `sounds{cry}` can point at the `sfx`
+the same answer made in slot `cry`; a `$` naming no sibling is refused, and text
+properties keep what they say. The package validates writable components, the
+artifact reference and citations before writing all outputs as one graph change.
+`cites` edges record each output's used inputs. The artifact's
+`artifact{address,media_type,size}` holds byte metadata; `built.artifact` only
+points to it.
 
 `modelTool()` is an internal registered tool for model builders. It renders
 `content.body` from the frozen binding (`$name` is a variable's value, or its

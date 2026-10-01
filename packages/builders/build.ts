@@ -73,6 +73,12 @@ export let output = (build: Eid, slot = 'main'): Eid =>
 export let current = (build: Comp, built: Comp): boolean =>
   !build.stale && build.key != null && built.key == build.key
 
+/** The entity a binding is built for: the first its outer tuple holds, which
+ * `build.for` names so a query can reach it. A builder with no query has
+ * none. */
+export let subject = (binding: Binding): Eid | null =>
+  binding.entities.find((eid) => eid != null) ?? null
+
 export let ids = (binding: Binding): Eid[] => [
   ...binding.entities.filter((eid): eid is Eid => eid != null),
   ...(binding.collections ?? []).flatMap((group) => group.members.flatMap(ids)),
@@ -165,6 +171,7 @@ export let start = (
         builder: p.builder,
         match: p.match,
         variant: p.variant,
+        for: subject(p.binding),
         key: p.key,
         call,
         stale: false,
