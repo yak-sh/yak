@@ -360,19 +360,24 @@ start-up passes `@yaks/session` and `@yaks/spawn` hold a lease for; what it
 commits is left written down for another host. `yak --no-duties serve` answers
 requests while another process, or none, does the duties.
 
-`close()` first aborts `host.stopping`, closes the duty thread, lets the effects
-it started finish and leaves the pool, ends every call its runner is still
-running as `error{code: 'interrupted'}`, then releases leases, records the
-process exit, and closes SQLite. `stop()` is the first step alone: the graph
-stays open so what is running can finish and be written. Plugin timers and loops
-should listen to `host.stopping` or the signal passed to `service`.
+`stop()` winds a host down with the graph still open: it aborts `host.stopping`,
+so the duties stop, a server takes no new request and a transcript starts no new
+step, and it leaves the pool, claiming no new run. `close()` does the same,
+closes the duty thread, waits for every effect the host started to finish, for
+as long as each takes, and says in the log which ones it is waiting on
+([`drain.ts`](./drain.ts)); then it ends every call its runner is still running
+as `error{code: 'interrupted'}`, releases leases, records the process exit, and
+closes SQLite. What a run left owed is the next worker's. Plugin timers and
+loops should listen to `host.stopping` or the signal passed to `service`.
 
-A signal winds a command down ([`signal.ts`](./signal.ts)). The first SIGTERM,
-SIGINT or SIGHUP stops every graph the command opened, so `yak serve` stops
-taking requests, answers the ones in flight and returns, and the command closes
-the way it always does. A second signal, or 30 seconds passing first, ends the
-duty thread where it stands, closes with the signal's code (143, 130, 129) and
-exits: a duty that never heeded its signal is not waited on.
+An interrupt winds a command down (`@yaks/process/wind`, wired in
+[`yak.ts`](./yak.ts)): a SIGTERM, SIGINT or SIGHUP, or Ctrl-C in a terminal app.
+The first stops every graph the command opened, so `yak serve` stops taking
+requests, answers the ones in flight and returns, and the command closes the way
+it always does once its effects have finished. Nothing here puts a deadline on
+that; only the work knows how long it needs. A second interrupt ends the duty
+thread where it stands, closes with the interrupt's code (143, 130, 129) and
+exits.
 
 ## The command line
 

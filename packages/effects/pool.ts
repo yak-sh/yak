@@ -15,9 +15,10 @@
 // graph's own `apply()` with its precondition (@yaks/graph `$was`): the claim
 // lands only if the token and the attempt count are still the ones the
 // claimant read, so two workers reaching for one row settle it there and the
-// loser moves on. A worker renews the claims it is running; one that dies
-// leaves claims that expire, and the next pass takes them — at once, where the
-// dead worker is known to have ended ({@link PoolOpts.gone}).
+// loser moves on. A worker renews the claims it is running, while it works the
+// pool and while it waits for them to finish; one that dies leaves claims that expire,
+// and the next pass takes them — at once, where the dead worker is known to
+// have ended ({@link PoolOpts.gone}).
 //
 // A process working the pool claims the rows its own commits owe as it writes
 // them, and starts them once the commit is done: nothing another process could
@@ -45,6 +46,11 @@
 // handler's, so no effect carries retry code of its own. A run that spent them
 // is left `failed` with the error it last threw, for a person (the
 // `effect_check` tool).
+//
+// A worker winds down by leaving: the moment its signal aborts it claims
+// nothing more, and what it started runs to its end, however long that is,
+// still under its claim. What its runs commit meanwhile is written down for
+// whichever worker comes next.
 //
 // A worker that stays up holds a presence lease while it works, one per
 // process, so a process that only passes through — a command line — can tell
@@ -158,12 +164,18 @@ export type Pool = {
    * one says after it wrote runs down (./registry.ts `nudge`). */
   wake: () => void
   /** Settles once every run started here has, and a worker whose signal
-   * aborted has stopped. */
+   * aborted has stopped, keeping their claims while it waits. */
   idle: () => Promise<void>
   /** Leave the pool: claim nothing more — what this process commits from
    * now on is left for the others — and settle what was started. */
   stop: () => Promise<void>
+  /** The runs going in this process, oldest first. */
+  running: () => Run[]
 }
+
+/** A run going in this process: its row, what it is, and when it started
+ * (ms, the pool's clock). */
+export type Run = { eid: Eid; handler: string; target: Eid; since: number }
 
 /** Whether a process that stays up is working the pool over `g`: a presence
  * lease other than `except`'s, still standing, held by a process not known
@@ -195,8 +207,20 @@ export let working = async (
 let said = (err: unknown): string =>
   err instanceof Error ? err.message : String(err)
 
-// A run going in this process: the claim it holds, and the run itself.
-type Held = {
+// Whether `p` is still going after `ms`: true when the wait ran out first.
+let still = (p: Promise<unknown>, ms: number): Promise<boolean> =>
+  new Promise((answer) => {
+    let timer = setTimeout(() => answer(true), ms)
+    let over = () => {
+      clearTimeout(timer)
+      answer(false)
+    }
+    p.then(over, over)
+  })
+
+// A run going in this process: what it is, the claim it holds, and the run
+// itself.
+type Held = Run & {
   token: string
   attempts: number
   expiry: number
@@ -267,6 +291,10 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     let s = handled(String(row.handler))
     let attempts = Number(row.attempts)
     let held: Held = {
+      eid,
+      handler: String(row.handler),
+      target: String(row.target),
+      since: clock(),
       token: String(row.lease_token),
       attempts,
       expiry: Date.parse(String(row.lease_expiry)),
@@ -334,7 +362,8 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     }
     let rows = await g.read(and(eq(`${EFFECT}.state`, 'pending')))
     for (let b of rows) {
-      if (running.size >= max) break
+      // A worker that left while this pass was going claims no more.
+      if (!member || running.size >= max) break
       let eid = b.entity.eid
       let row = (b[EFFECT] ?? {}) as Comp
       let s = handled(String(row.handler))
@@ -529,11 +558,27 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     await sweep(g)
   }
 
+  // Waiting on what it started, a worker keeps its claims: renewed as they
+  // near expiry whether or not its loop still runs, so a run that outlasts
+  // its lease is never taken by another worker while it is going.
+  let beat = Math.max(1, Math.min(CAP, Math.floor(hold / 4)))
   let idle = async () => {
     while (running.size || (loop?.signal.aborted && loop.done)) {
       let stopping = loop?.signal.aborted ? loop.done : undefined
       if (stopping) loop = undefined
-      await Promise.all([stopping, ...[...running.values()].map((h) => h.run)])
+      let settled = Promise.allSettled([
+        stopping,
+        ...[...running.values()].map((h) => h.run),
+      ])
+      while (await still(settled, beat)) {
+        if (!graph) continue
+        await renew(graph).catch((err) =>
+          ctx.report(err, {
+            handler: POOL,
+            event: { kind: 'created', entity: { eid: me }, name: EFFECT },
+          })
+        )
+      }
     }
   }
 
@@ -585,7 +630,11 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         }
         return
       }
-      await join(g)
+      // Leaving is the moment the signal aborts, not the end of the pass in
+      // flight: what this process commits from then on is the others'.
+      let joining = join(g)
+      signal.addEventListener('abort', () => member = false, { once: true })
+      await joining
       let done = stay(g, signal)
       loop = { done, signal }
       await done
@@ -596,5 +645,14 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       member = false
       return idle()
     },
+    running: () =>
+      [...running.values()]
+        .map(({ eid, handler, target, since }) => ({
+          eid,
+          handler,
+          target,
+          since,
+        }))
+        .sort((a, b) => a.since - b.since),
   }
 }

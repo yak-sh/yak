@@ -7,11 +7,12 @@
 // under the name the process gives it here (@yaks/process `become`), and
 // writes its own `process` row, which its leases and claims name. What the
 // command writes is written down for the pool as it commits, and a host that
-// explicitly serves duties starts this thread. Before that host ends, the
-// thread runs one last pass over what is left, then closes. A thread ended
-// where it stands, or one that fails, writes
-// no ending, and its pid is the process's, which goes on: so the process
-// writes its ending for it (host.ts `Host.end`), under the name it gave it.
+// explicitly serves duties starts this thread. Stopped, it claims nothing
+// more and starts no new step; before its host ends, it finishes what it
+// started, then closes. A thread ended where it stands, or one that fails,
+// writes no ending, and its pid is the process's, which goes on: so the
+// process writes its ending for it (host.ts `Host.end`), under the name it
+// gave it.
 //
 // It is planned once the command's own host is open, because only then can the
 // process say which duty roles its graph has (local.ts). A command passing

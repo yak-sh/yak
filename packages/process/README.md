@@ -153,4 +153,15 @@ The main module exports:
 - process operations: `dirOf()`, `paths()`, `clean()`, `launch()`, `adopt()`,
   `watch()`, `vanished()`, `gone()`, `signal()`, and `supervise()`.
 
-Additional entry points are `@yaks/process/vocab` and `@yaks/process/rules`.
+Additional entry points are `@yaks/process/vocab`, `@yaks/process/rules` and
+`@yaks/process/wind`.
+
+## Winding down
+
+`@yaks/process/wind` is how a process ends when it is asked to. An interrupt is
+a signal (`listen()` hears SIGTERM, SIGINT and SIGHUP) or a Ctrl-C typed into a
+raw terminal. Whatever keeps the process open calls
+`wind.hold({ drain, force })`. The first interrupt asks every hold to drain,
+with no deadline; a second forces them. `wind.done` settles with the interrupt's
+code once every hold has answered. There is one `wind` per process; `winding()`
+makes another for a test.

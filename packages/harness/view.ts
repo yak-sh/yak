@@ -8,7 +8,7 @@
 // (./draft_vault.ts), the app over both (./app.ts). The graph is the one the
 // command's config names, composed there as the command composed it. A first
 // Ctrl-C waits for the worker to finish what it admitted, a second forces it
-// (@yaks/tui `useShutdown`).
+// (@yaks/tui `useHold`).
 
 import { h } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
@@ -16,7 +16,7 @@ import type { Bundle, Comp } from '@yaks/graph'
 import type { ComponentRenderer } from '@yaks/preact'
 import { parse } from '@yaks/query'
 import { define, type Registry } from '@yaks/render'
-import { run, useShutdown } from '@yaks/tui'
+import { run, useHold } from '@yaks/tui'
 import { read } from '@yaks/cli/host'
 import { App } from './app.ts'
 import { openDrafts } from './draft_vault.ts'
@@ -75,7 +75,7 @@ let Harness = ({ e, config }: { e?: Bundle; config?: string }) => {
         backend.close().finally(() => drafts.close())
       ).catch(() => {})
   }, [config, session])
-  useShutdown(async () => {
+  useHold(async () => {
     if (!up || up instanceof Error) return
     up.drafts.ui.patch({
       shuttingDown: true,

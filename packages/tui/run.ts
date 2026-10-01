@@ -4,32 +4,36 @@ import { setClipboard } from './visual.ts'
  * back. Raw mode and the alt screen go up, the fake document is installed, a
  * dirty tree repaints on the next microtask (so a burst of keys costs one
  * paint), SIGWINCH is a resize and a full repaint, and every exit — a clean
- * quit, a Ctrl-C nobody took, or a throw — runs the restore exactly once.
+ * quit, an interrupt, or a throw — runs the restore exactly once.
+ *
+ * Ctrl-C is the process's interrupt, the same one a signal is
+ * (@yaks/process/wind): the terminal holds the process open while it winds
+ * down, so the first waits for what the mounted components are finishing and
+ * a second forces them, and the process ends once the terminal is given back.
  *
  * @module
  */
 
 import { type ComponentType, h, render } from 'preact'
 import { useEffect } from 'preact/hooks'
+import { type Hold, listen, wind } from '@yaks/process/wind'
 import { install, onPaint, touch } from './dom.ts'
 import { ansiBackend, type Backend } from './paint.ts'
 import { clearMouse, routeMouse } from './mouse.ts'
 import type { Line } from './paint.ts'
 import { feed } from './input.ts'
-import { shutdown } from './shutdown.ts'
 import { clear, measured, press, size } from './screen.ts'
 import type { Sheet } from './theme.ts'
 
 let stop = { fn: () => {} }
 
-type Hold = { drain: () => Promise<unknown>; force?: () => void }
-// What the mounted components are still finishing, beside what `run` was
-// handed: an app that is one view among others holds the exit the same way.
+// What the mounted components are still finishing: an app that is one view
+// among others holds the exit the same way.
 let holds = new Set<Hold>()
 
 /** Hold the exit open while this component finishes: the first interrupt
- * waits for `drain`, a second calls `force`. Released when it unmounts. */
-export let useShutdown = (
+ * waits for `drain`, a second calls `force`. Let go when it unmounts. */
+export let useHold = (
   drain: () => Promise<unknown>,
   force?: () => void,
 ): void =>
@@ -45,7 +49,7 @@ export let quit = (): void => stop.fn()
 /**
  * Run an app until it quits. `backend` swaps the renderer (the ANSI painter by
  * default); `sheet` extends the widgets' `base`, and as a function it is read
- * at every paint; Ctrl-C quits unless a widget takes it.
+ * at every paint; Ctrl-C interrupts the process ({@link useHold}).
  */
 export let run = async (
   App: ComponentType,
@@ -54,9 +58,6 @@ export let run = async (
     sheet?: Sheet | (() => Sheet)
     graphics?: 'kitty' | 'none'
     tmux?: boolean
-    /** First interrupt drains; a second invokes force. Input stays open meanwhile. */
-    shutdown?: () => Promise<unknown>
-    force?: () => void
   } = {},
 ): Promise<void> => {
   let backend = opts.backend ??
@@ -72,15 +73,31 @@ export let run = async (
   let host = screen.root as unknown as Parameters<typeof render>[1]
   let cancelRead: (() => Promise<void>) | undefined
   let done = false
-  let quitting = shutdown({
-    drain: () =>
-      Promise.all([opts.shutdown?.(), ...[...holds].map((d) => d.drain())]),
+  // The terminal's hold on the process: the input loop ends once the
+  // components have drained, or been forced, and the hold is answered once
+  // the terminal is given back. A drain that fails ends it too, and `run`
+  // throws what it threw.
+  let ending = Promise.withResolvers<void>()
+  let given = Promise.withResolvers<void>()
+  let failure: unknown
+  let unhold = wind.hold({
+    drain: async () => {
+      try {
+        await Promise.all([...holds].map((d) => d.drain()))
+      } catch (error) {
+        failure ??= error
+      }
+      ending.resolve()
+      await given.promise
+    },
     force: () => {
-      opts.force?.()
       for (let d of holds) d.force?.()
+      ending.resolve()
+      return given.promise
     },
   })
-  let interrupt = () => quitting.interrupt()
+  let unlisten = listen()
+  let interrupt = () => wind.interrupt(130)
   let escapeTimer: ReturnType<typeof setTimeout> | undefined
   stop.fn = () => done = true
 
@@ -101,7 +118,6 @@ export let run = async (
     screen.free()
     try {
       Deno.removeSignalListener('SIGWINCH', resize)
-      Deno.removeSignalListener('SIGINT', interrupt)
     } catch { /* never added */ }
     setClipboard()
     backend.stop()
@@ -116,7 +132,6 @@ export let run = async (
     setClipboard(backend.copy ? (text) => backend.copy!(text) : undefined)
     size.value = backend.size()
     Deno.addSignalListener('SIGWINCH', resize)
-    Deno.addSignalListener('SIGINT', interrupt)
     onPaint(() => {
       let frame = backend.draw(screen.root)
       painted = frame.lines ?? []
@@ -131,7 +146,7 @@ export let run = async (
           interrupt()
           continue
         }
-        if (quitting.draining) continue
+        if (wind.draining) continue
         if (key.name == 'mouse') {
           routeMouse(key, painted)
           continue
@@ -146,12 +161,13 @@ export let run = async (
     while (!done) {
       let n = await Promise.race([
         reader.read().then(({ value, done }) => done ? null : value),
-        quitting.done.then(() => null),
+        ending.promise.then(() => null),
       ])
       if (n == null) {
-        if (!quitting.draining) {
+        // Input that ended is an interrupt nobody typed.
+        if (!wind.draining) {
           interrupt()
-          await quitting.done
+          await ending.promise
         }
         break
       }
@@ -162,8 +178,12 @@ export let run = async (
     clearTimeout(escapeTimer)
   } finally {
     bye()
+    unlisten()
+    unhold()
     // Cancel the pending read after restoring raw mode; it otherwise keeps
     // the process alive after an asynchronous drain completes.
     await cancelRead?.()
+    given.resolve()
   }
+  if (failure) throw failure
 }

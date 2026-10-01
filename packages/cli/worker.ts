@@ -7,9 +7,11 @@
 // It either runs one pass of its roles or goes live and keeps at every one
 // until told to stop. Live duties do their first pass themselves: putting a
 // separate pass in front would let one slow sweep hold every service closed.
-// A command passing through never starts it. Told to close, it runs one last
-// pass over the pool for what the process wrote while it ran, then closes its
-// graph. Failures go back to the process.
+// A command passing through never starts it. Told to stop, it winds down as
+// any host does (host.ts `stop`): it claims no new run and starts no new step,
+// and what is running goes on. Told to close, it closes its graph, which waits
+// for what is running to finish; what is left owed is the next worker's.
+// Failures go back to the process.
 
 import { become } from '@yaks/process'
 import { read } from './config.ts'
@@ -48,14 +50,15 @@ self.onmessage = async ({ data }: MessageEvent<Said>) => {
     let signal = (live = new AbortController()).signal
     going = open().then((h) => h.duties(signal))
       .then(() => tell({ stopped: true }), failed)
-  } else if ('stop' in data) live?.abort()
-  else if ('nudge' in data) host?.then((h) => h.fx.wake(), () => {})
+  } else if ('stop' in data) {
+    live?.abort()
+    host?.then((h) => h.stop(), () => {})
+  } else if ('nudge' in data) host?.then((h) => h.fx.wake(), () => {})
   else if ('close' in data) {
     live?.abort()
     try {
       await going
       let h = await open()
-      if (mine.includes('effects')) await h.fx.work(h.graph)
       await h.close()
       tell({ closed: true })
     } catch (error) {

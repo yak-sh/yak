@@ -43,7 +43,7 @@ import { forgetToken, saveToken, tokenFor } from './store.ts'
 import { type Result, saidBy } from './roster.ts'
 import { ownConfig } from './config.ts'
 import { starter } from './init.ts'
-import { listen, winding } from './signal.ts'
+import { listen, wind } from '@yaks/process/wind'
 
 /** The platform this command talks to when it opens no graph of its own. */
 export let HOST = 'yaks.app'
@@ -301,16 +301,26 @@ export let main = async (
 
 // Not a top-level await: this module is also `@yaks/cli` itself (./mod.ts), so
 // a plugin the command loads that imports the package would wait on this
-// module finishing, while this module waits on the command. A signal winds
-// the command down rather than cutting it off (./signal.ts).
+// module finishing, while this module waits on the command.
+//
+// An interrupt winds the command down rather than cutting it off
+// (@yaks/process/wind). The command holds the process open: the first
+// interrupt stops every graph it opened (local.ts `stop`), so `yak serve`
+// takes no new request, no new effect and no new step, and the command
+// finishes what it started and closes the way it always does, for as long as
+// that takes. A command with nothing open has nothing to finish, and ends at
+// once. A second interrupt ends its duty threads where they stand (local.ts
+// `cut`), closes with the interrupt's code, and exits.
 if (import.meta.main) {
-  listen(winding({
-    stop: () => !!local?.stop(),
-    close: async (code) => {
-      local?.cut()
-      await local?.close(code)
-    },
-    exit: Deno.exit,
-  }))
-  main(Deno.args).then(Deno.exit)
+  listen()
+  let ran = main(Deno.args)
+  wind.hold({
+    drain: () => local?.stop() ? ran : undefined,
+    force: () => local?.cut(),
+  })
+  wind.done.then(async (code) => {
+    await local?.close(code)
+    Deno.exit(code)
+  })
+  ran.then(Deno.exit)
 }

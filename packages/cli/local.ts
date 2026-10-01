@@ -153,9 +153,10 @@ export let opened = (
   return host
 }
 
-/** Ask every graph this process opened to wind down (host.ts `stop`), so the
- * command in flight can finish and return on its own. False when it opened
- * none, and there is nothing to wait for. */
+/** Ask every graph this process opened to wind down (host.ts `stop`): it
+ * takes no new request, effect or step, and the command in flight finishes
+ * what it started and returns on its own. False when it opened none, and
+ * there is nothing to wait for. */
 export let stop = (): boolean => {
   for (let host of hosts.values()) host.then((h) => h.stop(), () => {})
   return hosts.size > 0
@@ -163,14 +164,14 @@ export let stop = (): boolean => {
 
 /** Stop waiting on what is winding down: every duty thread this process
  * started is ended where it stands (./thread.ts `end`), so a close waiting on
- * one goes on to its last write. What the grace running out, or a second
- * signal, does before it closes (./signal.ts). */
+ * one goes on to its last write. What a second interrupt does before it
+ * closes (./yak.ts). */
 export let cut = (): void => asides.forEach((a) => a.end())
 
 /** Close every graph this process opened, stamping how the command ended on
  * the `process` row each of them holds. */
 export let close = (code?: number): Promise<void> =>
-  // One close at a time: a signal's (./signal.ts) and the command's own
+  // One close at a time: an interrupt's (./yak.ts) and the command's own
   // ending can arrive together, and the second waits on the first.
   closing ??= (async () => {
     // Awaited, because the last batch is a write: a command that closed the

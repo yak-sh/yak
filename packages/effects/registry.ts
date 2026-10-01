@@ -72,7 +72,7 @@ import {
   type Policy,
   type Registration,
 } from './registration.ts'
-import { EFFECT, type Owed, pool, type PoolOpts } from './pool.ts'
+import { EFFECT, type Owed, pool, type PoolOpts, type Run } from './pool.ts'
 export type { Description, Policy, Registration } from './registration.ts'
 
 /** A post-commit handler: what happened, a detached transaction to read
@@ -201,6 +201,9 @@ export type Effects = Plugin & {
    * on is left for the others, and settle what it started. What a process
    * does on its way out. */
   stop: () => Promise<void>
+  /** The runs going in this process, oldest first: what a process winding
+   * down is waiting on. */
+  running: () => Run[]
 }
 
 let warn: Report = (err, { handler }) =>
@@ -635,6 +638,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     wake: () => pooled?.wake(),
     idle: () => pooled?.idle() ?? Promise.resolve(),
     stop: () => pooled?.stop() ?? Promise.resolve(),
+    running: () => pooled?.running() ?? [],
   }
   return fx
 }

@@ -396,12 +396,14 @@ scroll by rendered rows.
 
 ### Graceful quit
 
-`run(App, { shutdown, force })` supports two-stage interruption. The first
-Ctrl+C or SIGINT calls asynchronous `shutdown` and stops ordinary input routing.
-When it finishes, the app exits. A second interrupt calls `force` and exits
-without waiting. The application may update its existing view state during
-shutdown. Without these callbacks, Ctrl+C exits immediately. Errors still
-restore terminal state.
+Ctrl+C is the process's interrupt, the same one SIGTERM, SIGINT or SIGHUP is
+(`@yaks/process/wind`), and the terminal holds the process open while it winds
+down. A component that is still finishing something calls
+`useHold(drain, force)`: the first interrupt stops ordinary input routing and
+waits for every `drain`, then the app exits; a second calls each `force` and
+exits without waiting. The application may update its existing view state while
+it drains. With nothing held, Ctrl+C exits at once. Errors still restore
+terminal state.
 
 ### Partially loaded virtual lists
 

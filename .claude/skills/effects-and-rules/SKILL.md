@@ -112,6 +112,13 @@ of its own; a `yak` command serves `graph` only (`rolesOf` in
 packages/cli/local.ts). Each process records its roles in `process{roles}`, so
 `.process.roles` shows who serves what.
 
+Every process winds down one way (`@yaks/process/wind`): the first interrupt (a
+signal, or Ctrl-C in a terminal app) stops its hosts, so the pool claims nothing
+more, a transcript starts no new step and a server takes no new request, and the
+process waits for every run it started, with no deadline of its own, logging
+what it waits on. A second interrupt forces. What a run leaves owed is the next
+worker's, so restarting `yak serve` interrupts nothing.
+
 ## Debugging after a write
 
 - `yak effect check`: failed and overdue runs.

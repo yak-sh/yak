@@ -109,6 +109,7 @@ import {
   sqliteBlobs,
 } from '@yaks/blob'
 import { type Config, given, type Options, subpath, used } from './config.ts'
+import { drain } from './drain.ts'
 import { stateDir } from './store.ts'
 import { understood } from './keywords.ts'
 import { vaultOf } from './vault.ts'
@@ -512,11 +513,13 @@ export let facet: Load = (plugin, name) => subpath(plugin, name)
 export type Served = Host & {
   /** wind down, with the graph still open: {@link Host.stopping} aborts, so
    * the duties stop and whatever hangs off it ends — a server stops taking
-   * requests and answers the ones in flight — and what is running can finish
-   * and be written before {@link close} */
+   * requests and answers the ones in flight, a transcript starts no new step —
+   * and it leaves the pool, so what is running can finish and be written
+   * before {@link close} */
   stop: () => void
-  /** close the graph: every call this process's runner is still running ended
-   * as interrupted, every lease it holds released and its `exit` stamped —
+  /** close the graph, once the effects it started have finished: every call
+   * this process's runner is still running ended as interrupted, every lease
+   * it holds released and its `exit` stamped —
    * with the code it is given, or with none where nobody knows how it ended.
    * Await it when the process is about to end, or that last write races the
    * exit and the row reads as still running forever. */
@@ -537,7 +540,7 @@ export type Thread = {
   duties: (signal: AbortSignal) => Promise<void>
   /** this process wrote runs down: look at the pool now */
   nudge: () => void
-  /** finish: a last pass over what this process wrote, then close */
+  /** finish what it started, then close */
   close: () => Promise<void>
 }
 
@@ -1236,6 +1239,11 @@ export let compose = async (
         ),
       ]).then(() => {})
     }
+    // Its effects, drained once: begun by the first of `stop` and `close`,
+    // and awaited by `close`.
+    let draining: Promise<void> | undefined
+    let drained = () =>
+      draining ??= drain(fx, g!, (line) => console.error(line))
     // This process, written in, with the roles it serves. First among the
     // writes, because everything after is attributed to it and `created.by`
     // is a reference: a process attributing writes to an entity nothing
@@ -1258,19 +1266,23 @@ export let compose = async (
       //
       // First of all, the abort: the duties stop and every timer a
       // plugin hung off {@link Host.stopping} is cancelled, so nothing is
-      // still pending over a database that is about to be closed. Then the
-      // thread beside it finishes, running what this process wrote down; the
-      // effects this process started are let finish, and it leaves the pool,
-      // so what its last transaction owes is left written down for another.
-      // A thread that does not close, this host writes the ending of. The
-      // calls this process was still running are ended first, as interrupted,
-      // so none is left to lapse.
-      stop: () => stopping.abort(),
+      // still pending over a database that is about to be closed. It leaves
+      // the pool, so what it commits from then on, its last transaction
+      // included, is left written down for another, and the effects it
+      // started are let finish, for as long as each takes (./drain.ts). Then
+      // the thread beside it closes, draining the same way. A thread that does
+      // not close, this host writes the ending of. The calls this process was
+      // still running are ended first, as interrupted, so none is left to
+      // lapse.
+      stop: () => {
+        stopping.abort()
+        void drained()
+      },
       close: async (code?: number) => {
         stopping.abort()
         await opts.thread?.close().catch(lose)
         await ending
-        await fx.stop()
+        await drained()
         let shut = () => {
           try {
             sql.close()

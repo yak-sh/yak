@@ -266,6 +266,43 @@ test('a process that stops leaves what it writes next for the others', async () 
   assert(!(await run(a.g, 'post_note')).lease_owner)
 })
 
+test('a worker told to stop claims nothing more, and keeps what it is running until it ends', async () => {
+  let s = store()
+  let t = 0
+  let server = proc(s, { owner: 'server', lease: 40, now: () => t })
+  let finish!: () => void
+  let going = new Promise<void>((go) => finish = go)
+  server.fx.handle({
+    ...every(server.note),
+    post_note: async (e) => {
+      server.ran.push(e.entity.eid)
+      await going
+    },
+  })
+  let up = new AbortController()
+  let serving = server.fx.work(server.g, up.signal)
+  await server.g.apply([post('p1')])
+  await until(() => server.fx.running().length)
+  up.abort()
+  await serving
+  await server.g.apply([post('p2')])
+  let waiting = server.fx.idle()
+  // Long past the claim it took: still its own, renewed while it waits.
+  t = 100
+  await until(async () =>
+    Date.parse(String((await run(server.g, 'post_note')).lease_expiry)) > t
+  )
+  let next = proc(s, { owner: 'next', now: () => t })
+  next.fx.handle(every(next.note))
+  await next.fx.work(next.g)
+  await next.fx.idle()
+  assertEquals(next.ran, ['created p2'])
+  finish()
+  await waiting
+  assertEquals(server.ran, ['p1'])
+  assertEquals((await run(server.g, 'post_note')).state, 'done')
+})
+
 test("a run's write owes a generation on, and the chain stops at depth", async () => {
   let a = proc(store())
   a.fx.handle({

@@ -24,7 +24,7 @@
 // until it stops, which is why the address is reported on stderr as soon as
 // the port is bound; and a server is never run again by a sweep. Stopped by a
 // signal, it stops taking requests, answers the ones in flight and returns
-// (@yaks/cli signal.ts); closed before it could, its call is ended as
+// (@yaks/process/wind); closed before it could, its call is ended as
 // interrupted (@yaks/cli host.ts `close`); killed outright, the next server to
 // start closes for its process (host.ts `bury`), and ends it the same way.
 
