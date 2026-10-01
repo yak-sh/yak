@@ -3,12 +3,14 @@ import {
   assert,
   assertEquals,
   assertNotEquals,
+  assertRejects,
   assertThrows,
 } from '@std/assert'
 import type { Bundle, Comp, Graph, Tool } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
-import { toolEid } from '@yaks/tools'
-import { ids, shop } from './testing.ts'
+import { CallError, toolEid } from '@yaks/tools'
+import { marksDoc } from '@yaks/kernel/vocab'
+import { ids, noon, shop } from './testing.ts'
 import { current, output, run, selected } from './build.ts'
 import { key } from './key.ts'
 import { render } from './model.ts'
@@ -392,6 +394,30 @@ test('shadow builds have distinct ids and cannot feed another builder', async ()
   assertEquals(binding.collections[0].members.map((row) => row.entities[0]), [
     output(primary),
   ])
+})
+
+test('an archived builder builds by no door until the mark is removed', async () => {
+  let { g, vocab } = await shop({}, [marksDoc], [code()])
+  let [build] = loadTools(builderDoc, runs({ vocab }))
+    .filter((t) => t.name == 'builder_build')
+  let ask = () =>
+    build.run({
+      entity: { eid: crypto.randomUUID() },
+      call: { args: { builder: ids.builder } },
+    }, g)
+  let built = async () => (await rows(g, '.build')).length
+  await g.apply([source('a'), { ...builder(), archived: {} }])
+  await g.apply([source('b')])
+  await g.apply([{
+    entity: { eid: 'ring' },
+    wake: { target: ids.builder },
+    fired: { at: noon() },
+  }])
+  assertEquals(await built(), 0)
+  await assertRejects(ask, CallError, 'is archived')
+  await g.apply([{ entity: { eid: ids.builder }, archived: null }])
+  await ask()
+  assertEquals(await built(), 2)
 })
 
 test('a model turn failed for good leaves its key retryable without another call', async () => {

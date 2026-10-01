@@ -10,6 +10,7 @@ import {
   who,
 } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
+import { human } from '@yaks/id'
 import { CallError } from '@yaks/tools'
 import type { Vocab } from '@yaks/vocab'
 import { clock, type Options, reconcile } from './build.ts'
@@ -33,6 +34,12 @@ export let runs = (
     let [definition] = await graph.get([builder])
     if (!definition?.builder) {
       throw new CallError('refused', `${builder} is no builder`)
+    }
+    if (definition.archived) {
+      throw new CallError(
+        'refused',
+        `${human(host.vocab)(definition)} is archived`,
+      )
     }
     let using = {
       ...(definition.using as Comp | undefined),

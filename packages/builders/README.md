@@ -93,6 +93,12 @@ model, provider or template creates a shadow variant. A repeated key creates no
 call. A scheduled wake checks the builder again. A configured `rest` advances
 `floor` after a call starts.
 
+A builder carrying @yaks/kernel's `archived{at,by,via}` mark is put away, and no
+door builds it: `builder build` refuses, saying it is archived, and neither a
+change to its inputs nor a wake reconciles it. Removing the mark restores every
+door; nothing builds at that moment, so an immediate builder catches up on its
+next input change or `builder build`.
+
 ## Exports
 
 - `@yaks/builders`: vocabulary, `key`, `run`, `output`, `selected`, and

@@ -174,7 +174,9 @@ export let start = (
   ]
 }
 
-/** Bring every desired build current and mark vanished bindings stale. */
+/** Bring every desired build current and mark vanished bindings stale. An
+ * archived builder is put away: every door reconciles through here, so none
+ * of them builds it until the mark is removed. */
 export let reconcile = async (
   tx: Tx,
   builder: Bundle,
@@ -184,7 +186,7 @@ export let reconcile = async (
   retry = false,
 ): Promise<{ plans: Plan[]; writes: Bundle[] }> => {
   let definition = comp(builder, BUILDER)
-  if (!definition) return { plans: [], writes: [] }
+  if (!definition || builder.archived) return { plans: [], writes: [] }
   let to = str(definition, 'to')
   let immediate = definition.immediate == true
   let ready = !scheduled || due(definition, at)
