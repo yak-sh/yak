@@ -4,7 +4,8 @@
   "exports": {
     ".": "./mod.ts",
     "./views": "./views.ts",
-    "./vocab": "./vocab.ts"
+    "./vocab": "./vocab.ts",
+    "./ui": "./ui.ts"
   },
   "license": "Apache-2.0",
   "description": "UX components: behavior between UI components and domain components, each controlled by a bundle and emitting a bundle of the same shape, its own state a CamelCase component in the page's graph. Edit is a property's value changed where it stands; Stack is panes stacked as a person goes.",

@@ -24,6 +24,9 @@
     "@yaks/vocab": "../vocab/mod.ts",
     "@preact/signals": "npm:@preact/signals@^2.9.0",
     "preact": "npm:preact@^10.29.1",
-    "preact/hooks": "npm:preact@^10.29.1/hooks"
+    "preact/hooks": "npm:preact@^10.29.1/hooks",
+    "@yaks/client": "../client/mod.ts",
+    "@yaks/ram": "../ram/mod.ts",
+    "@yaks/sync": "../sync/mod.ts"
   }
 }

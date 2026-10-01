@@ -91,9 +91,9 @@ test('platform entrypoints cover every standalone config and the tail Worker', a
           continue
         }
         // The browser program checks a package's browser-facing exports: what
-        // its browser.json names (default `.`), plus `./vocab` and `./views`
-        // whenever the package exports them — the web door imports those two
-        // of every package and must reach nothing server-side through either.
+        // its browser.json names (default `.`), plus `./vocab`, `./views`
+        // and `./ui` whenever exported — the web door imports these facets
+        // of every package and must reach nothing server-side through them.
         let said = JSON.parse(
           Deno.readTextFileSync(new URL('browser.json', base)),
         ).entries as string[] | undefined
@@ -101,7 +101,9 @@ test('platform entrypoints cover every standalone config and the tail Worker', a
           Deno.readTextFileSync(new URL('deno.json', base)),
         ).exports as string | Record<string, string>
         let map = typeof exports === 'string' ? { '.': exports } : exports
-        for (let key of new Set([...(said ?? ['.']), './vocab', './views'])) {
+        for (
+          let key of new Set([...(said ?? ['.']), './vocab', './views', './ui'])
+        ) {
           if (key in map) expected.push(new URL(map[key], base).href)
         }
       }

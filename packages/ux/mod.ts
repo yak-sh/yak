@@ -74,3 +74,11 @@ export { emit, type OnChange, reading } from './emit.ts'
 export { canEdit, formatProp, isBody, wellOf } from './read.ts'
 export { type Find, pickLine, useHits } from './hits.ts'
 export { label } from './suggest.ts'
+
+export {
+  defineKit,
+  type Kit,
+  kitDocs,
+  type Piece,
+  type Specimen,
+} from './kit.ts'

@@ -484,3 +484,35 @@ test("an app has no numbers; the platform's own stores do", () => {
   assert(numbered(platformVocab()), 'the directory numbers its own')
   assert(numbered(gitVocab()), 'the object store numbers its own')
 })
+
+// A bringer owns its page words in the app manifest, not in the platform.
+test('app vocab keeps external UX state page-only, including transient events', () => {
+  let source: VocabDoc = {
+    $defs: {
+      Toggle: {
+        component: true,
+        sync: 'none',
+        durable: 'connection',
+        properties: { open: { type: 'boolean' } },
+      },
+      Toggled: {
+        component: true,
+        sync: 'none',
+        durable: '0s',
+        properties: { open: { type: 'boolean' } },
+      },
+    },
+  }
+  assertEquals(appDoc(source).$defs?.Toggle.sync, 'none')
+  let v = appVocab(source)
+  assertEquals(v.comp('Toggle')?.sync, 'none')
+  assertEquals(v.comp('Toggle')?.durable, 'connection')
+  assertEquals(v.comp('Toggled')?.sync, 'none')
+  assertEquals(v.comp('Toggled')?.durable, '0s')
+  assertEquals(v.comp('Toggle')?.writable, ['open'])
+  assertThrows(
+    () => appDoc({ $defs: { Toggle: { properties: { open: txt } } } }),
+    Error,
+    'sync',
+  )
+})

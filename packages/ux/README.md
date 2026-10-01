@@ -20,6 +20,94 @@ component prescribes behavior and keeps nothing in memory of its own:
   graph that is. What the person types before it is sent is their draft, kept
   where the host's `drafts` keep it.
 
+## Kits from outside
+
+A kit carries its controlled components, descriptions and specimens, and the
+vocabulary declaring their state. `defineKit` checks this boundary and returns
+it with its component types intact. The bringer owns those words: each state
+component is CamelCase, explicitly `sync: none`, and has a page lifetime
+(`durable: connection`, or a duration; `0s` for an event), never `forever`. A
+kit brings no rules, effects or tools. Values it edits and persistent typing
+drafts belong to its caller, not to this vocabulary.
+
+```ts ignore
+import { h } from 'preact'
+import { defineKit, kitDocs } from '@yaks/ux'
+import { client } from '@yaks/client'
+import { loadVocab } from '@yaks/vocab'
+import { ux as base } from '@yaks/ux/ui'
+
+// An outside package's controlled component; its owner supplies the row and
+// writes the emitted bundle into the page graph.
+let Toggle = ({ e, onChange }) =>
+  h('button', {
+    onClick: () =>
+      onChange({
+        entity: e.entity,
+        Toggle: { open: !e.Toggle?.open },
+      }),
+  }, e.Toggle?.open ? 'Close' : 'Open')
+
+let toggle = defineKit({
+  description: 'A controlled toggle',
+  vocab: {
+    $defs: {
+      Toggle: {
+        component: true,
+        sync: 'none',
+        durable: 'connection',
+        properties: { open: { type: 'boolean' } },
+      },
+    },
+  },
+  components: {
+    Toggle: {
+      Component: Toggle,
+      description: 'Open or close the consumer-named row',
+      state: ['Toggle'],
+      specimens: () => [[
+        'Closed',
+        h(
+          'div',
+          {},
+          h(Toggle, {
+            e: { entity: { eid: 'guide-toggle' }, Toggle: { open: false } },
+            onChange: () => {},
+          }),
+        ),
+      ]],
+    },
+  },
+})
+
+let kits = { ...base, toggle }
+let front = client(loadVocab(kitDocs(kits)), [], {
+  vault: false,
+  wireVault: false,
+})
+h(Toggle, {
+  e: front.ent('my-toggle') ?? { entity: { eid: 'my-toggle' } },
+  onChange: (b) => front.mutate([b]),
+})
+```
+
+`kitDocs(kits)` supplies the checked vocabulary documents, deduplicated by
+identity. A page loads them beside its other page words when making its client;
+discovering a facet does not load state into a graph. A shared client with a
+server still keeps these words in page memory, not on the wire or in its vault.
+On that client, use a local watch (`front.watch('.Toggle', {remote: false})`)
+for page-only state rather than requesting a server subscription.
+
+A package's `./ui` facet exports `ux = {toggle}` beside any `kits`, `themes` and
+`skins` it contributes. `@yaks/ux/ui` exports `kit` and `ux = {base: kit}`:
+`Edit`, `Stack` and `Text`, with labelled Preact specimens. `Text` shares `Edit`
+state; `Refused` is their transient event. The guide reads
+`components[name].description` and `specimens()` without importing UX or
+invoking its component references. Guide identities must include the kind and
+kit name: UI `base/Edit` and UX `base/Edit` are separate entries even though
+they have the same component name. The UI composition supplies the look; UX kits
+supply behaviour and page words, not CSS or terminal sheets.
+
 ## Edit
 
 A property's value, changed where it stands. Its face and its control are
@@ -138,15 +226,17 @@ without it a popout paints in the flow, as a terminal wants.
 
 ## Files
 
-| file         | owns                                                          |
-| ------------ | ------------------------------------------------------------- |
-| `vocab.json` | the `Edit`, `Stack` and `Refused` components                  |
-| `state.ts`   | the bundles: an `Edit`'s eid, its patches, what it emits      |
-| `live.ts`    | `useEdit`: an `Edit`'s state and its value's draft, read live |
-| `emit.ts`    | typed or picked input, read as its type, sent as a bundle     |
-| `host.ts`    | `Host`, `Ux`                                                  |
-| `Edit.ts`    | `Edit`, its controls and faces, `views`                       |
-| `Text.ts`    | `Edit.Text`                                                   |
-| `Stack.ts`   | `Stack`, its eid and bundles                                  |
-| `hits.ts`    | a picker's line and its debounced search                      |
-| `read.ts`    | what a property is, off the vocabulary                        |
+| file         | owns                                                                |
+| ------------ | ------------------------------------------------------------------- |
+| `kit.ts`     | external kit metadata, boundary validation and vocabulary documents |
+| `ui.ts`      | the base kit and its browser-safe `./ui` facet and specimens        |
+| `vocab.json` | the `Edit`, `Stack` and `Refused` components                        |
+| `state.ts`   | the bundles: an `Edit`'s eid, its patches, what it emits            |
+| `live.ts`    | `useEdit`: an `Edit`'s state and its value's draft, read live       |
+| `emit.ts`    | typed or picked input, read as its type, sent as a bundle           |
+| `host.ts`    | `Host`, `Ux`                                                        |
+| `Edit.ts`    | `Edit`, its controls and faces, `views`                             |
+| `Text.ts`    | `Edit.Text`                                                         |
+| `Stack.ts`   | `Stack`, its eid and bundles                                        |
+| `hits.ts`    | a picker's line and its debounced search                            |
+| `read.ts`    | what a property is, off the vocabulary                              |
