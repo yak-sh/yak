@@ -74,6 +74,7 @@ import { Web } from './views/Web.tsx'
 import { Media } from './views/Media.tsx'
 import { Session, SessionRow } from './views/Session.tsx'
 import {
+  CheckpointSummary,
   CommandFull,
   CommandSummary,
   EntrySummary,
@@ -193,6 +194,11 @@ define([
     view: 'Summary',
     match: parse('.entry .prompt .content'),
     Render: PromptSummary,
+  },
+  {
+    view: 'Summary',
+    match: parse('.entry .checkpoint .content'),
+    Render: CheckpointSummary,
   },
   { view: 'Summary', match: parse('.entry .result'), Render: ResultSummary },
   { view: 'Summary', match: parse('.entry .content'), Render: MessageSummary },

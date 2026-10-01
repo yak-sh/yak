@@ -11,6 +11,7 @@ import { resolve } from '../Entity.tsx'
 import { ux } from '../registry.ts'
 import { Ux } from '@yaks/ux'
 import {
+  CheckpointSummary,
   CommandFull,
   CommandSummary,
   EntryBody,
@@ -175,10 +176,31 @@ test('session prompts are collapsed persona entries', () =>
     render(<PromptSummary e={e} />, root)
     let details = root.querySelector('details.Prompt')!
     assertEquals(details.hasAttribute('open'), false)
+    assertEquals(root.querySelector('.Prompt_Body'), null)
     assertEquals(
       details.querySelector('.Prompt_Gist')?.textContent,
       'persona · 2 lines',
     )
+  }))
+
+test('checkpoint prose stays folded until its summary opens', () =>
+  withDom((root) => {
+    let e: Ent = {
+      eid: 'checkpoint',
+      num: 2,
+      kind: 'entry',
+      refs: [],
+      kids: [],
+      entry: { session: 'session', seq: 2 },
+      checkpoint: { through: 'previous' },
+      content: { body: 'checkpoint first\ncheckpoint second' },
+    }
+    assertEquals(resolve(e, 'Entry.Summary').Render, CheckpointSummary)
+    render(<CheckpointSummary e={e} />, root)
+    let details = root.querySelector('details.Prompt')!
+    assertEquals(details.hasAttribute('open'), false)
+    assertEquals(root.textContent, 'checkpoint · 2 lines')
+    assertEquals(root.querySelector('.Prompt_Body'), null)
   }))
 
 test('normalized tools and shell calls share compact entry rows', () =>

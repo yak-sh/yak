@@ -333,19 +333,35 @@ export let MessageSummary = ({ e }: { e: Ent }) => {
   )
 }
 
-export let PromptSummary = ({ e }: { e: Ent }) => {
+// Mount a folded body only after it opens: the terminal paints this same
+// tree, but has no browser-native details layout to hide its children.
+let FoldedMessage = ({ e, label }: { e: Ent; label: string }) => {
+  let [open, setOpen] = useState(false)
   let n = lines(body(e)).length
   return (
-    <Prompt>
+    <Prompt
+      onToggle={(ev: Event) =>
+        setOpen((ev.currentTarget as HTMLDetailsElement).open)}
+    >
       <Prompt.Gist>
-        persona · {n} {n == 1 ? 'line' : 'lines'}
+        {label} · {n} {n == 1 ? 'line' : 'lines'}
       </Prompt.Gist>
-      <Prompt.Body>
-        <MessageSummary e={e} />
-      </Prompt.Body>
+      {open && (
+        <Prompt.Body>
+          <MessageSummary e={e} />
+        </Prompt.Body>
+      )}
     </Prompt>
   )
 }
+
+export let PromptSummary = ({ e }: { e: Ent }) => (
+  <FoldedMessage e={e} label='persona' />
+)
+
+export let CheckpointSummary = ({ e }: { e: Ent }) => (
+  <FoldedMessage e={e} label='checkpoint' />
+)
 
 export let CommandFull = ({ e }: { e: Ent }) => {
   return (
