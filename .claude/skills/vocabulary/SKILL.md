@@ -84,7 +84,10 @@ as a migration, the most expensive change there is (the `data-migration` skill).
   `requires{}`, `contains{}`, `cites{hash}` or @yaks/model's `serves{name}`. Its
   eid is derived from from, relation and to, so linking twice is one link and
   unlinking is a delete. Never a JSON list of eids: no query can match inside
-  it, no reference follows it, and no `death` cleans it up.
+  it, no reference follows it, and no `death` cleans it up. A list of words
+  that name things (`loot: [["tusk", 0.65]]`) is the same list keyed on names:
+  it becomes edges (`edge{from: beast, to: item}` + `drops{odds}`) once the
+  words become eids, not a JSON list of eids.
 - **What you filter, join or group on is a property; what is read whole may
   be JSON.** The graph stores a JSON-valued property whole and refuses a query
   filter on it (packages/vocab/README.md). So a stack's frames can be one JSON
@@ -107,6 +110,12 @@ as a migration, the most expensive change there is (the `data-migration` skill).
 - **Derive the eid where the same facts must land on one entity:** `identity`
   makes two writers stating the same facts touch one entity instead of minting
   two: `file{path, repository}`, `built{build, slot, …}`, `_prop{comp, name, …}`.
+  Writing the same identity again patches that entity, and @yaks/graph refuses
+  a bundle whose eid disagrees with it (packages/vocab/README.md, "`identity`
+  declares deterministic entity ids"). So an entity whose eid something else
+  already derives (a builder's output, from its build and slot; an edge, from
+  from, relation and to) can't also carry an identity of its own; it points at
+  its subject with a plain ref.
 - **Reuse an outside system's id when it is already unique:** a Claude
   session's id is the session entity's eid, a commit's sha is the commit's.
   Matching the two then needs no lookup.
@@ -115,6 +124,17 @@ as a migration, the most expensive change there is (the `data-migration` skill).
   Anything that must not move (a reference, a stored query, a derived eid)
   holds an eid. Eids are global (M-39645): never mint one that only makes sense
   in one store.
+- **A readable handle is the external interface, never the reference.** People,
+  seed files, commands and URLs need words: an alias (`alias{name}`, such as
+  `sfx:water`, which @yaks/alias stores as a @yaks/key `key: true` row), a
+  human number (`T-123`), a model's name. `g.address` resolves a handle to its
+  eid at the door, on every write (packages/graph/README.md), and what is
+  stored is the eid. Jeff: "it's an external interface, not an internal one.
+  e.g. model names, aliases, etc etc. But nothing internally has to be
+  migrated when those are changed." So a thing that needs a readable name gets
+  an alias, not a slug property of its own, and no component stores a word as
+  its reference: `item{kind: "tusk"}` and `slain{kind: "boar"}` key bags and
+  kills on words that can then never change.
 
 ## Home a general word where its idea lives
 
