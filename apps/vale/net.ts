@@ -462,7 +462,7 @@ export let connect = (base: URL, vocab: ReturnType<typeof loadVocab>) => {
   let opened = false
   return {
     spawnKinds: () => {
-      let watch = c.watch(SPAWN_KINDS)
+      let watch = c.watch(SPAWN_KINDS, { evaluate: 'server' })
       watchDesigns(watch, ['built', 'build', 'spawned'], useSpawnKinds)
       return ready(watch)
     },

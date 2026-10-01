@@ -105,13 +105,28 @@ export let PROVIDER = 'workers-ai'
 let OPENROUTER = 'openrouter'
 let SPEECH = 'bytedance-seed/seed-audio-1-0'
 
-// The integration pays OpenRouter itself; these rows have no platform price.
+// The integration pays OpenRouter itself; text prices also weigh unreported
+// request costs without introducing a separate platform allowance.
 let integrated = [{
   provider: OPENROUTER,
   name: SPEECH,
   label: 'Seed Audio 1.0',
   modalities: ['audio'],
   speech: true,
+}, {
+  provider: OPENROUTER,
+  name: 'openai/gpt-4.1-nano',
+  label: 'GPT-4.1 Nano',
+  modalities: ['text'],
+  speech: false,
+  price: { input: 0.1, output: 0.4, cached: 0.025 },
+}, {
+  provider: OPENROUTER,
+  name: 'openai/gpt-4.1-mini',
+  label: 'GPT-4.1 Mini',
+  modalities: ['text'],
+  speech: false,
+  price: { input: 0.4, output: 1.6, cached: 0.1 },
 }]
 
 let modelEid = (name: string): Eid => identityEid('model', [name])

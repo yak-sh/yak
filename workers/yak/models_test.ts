@@ -15,7 +15,7 @@ import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { BUDGET, monthOf } from './meter.ts'
-import { priceOf } from './models.ts'
+import { catalogued, priceOf } from './models.ts'
 import { weigh } from '@yaks/model'
 import { parseTools } from '@yaks/tools/declared'
 import type { VocabDoc } from '@yaks/vocab'
@@ -460,4 +460,24 @@ test('./api/ai/run answers a visitor only where the app opens its models', async
     manifest: { models: 'open' },
   })
   assertEquals((await read.run(body, BOB)).status, 403)
+})
+
+test('connected OpenRouter text candidates are planted as server offers', () => {
+  let rows = catalogued()
+  for (
+    let [name, input, output] of [
+      ['openai/gpt-4.1-nano', 0.1, 0.4],
+      ['openai/gpt-4.1-mini', 0.4, 1.6],
+    ] as const
+  ) {
+    let model = rows.find((r) => (r.model as Comp)?.name == name)!
+    assert(model)
+    assertEquals(model.price && (model.price as Comp).input, input)
+    assertEquals(model.price && (model.price as Comp).output, output)
+    let offer = rows.find((r) => (r.serves as Comp)?.name == name)!
+    assertEquals((offer.edge as Comp).to, model.entity.eid)
+    let provider = rows.find((r) => r.entity.eid == (offer.edge as Comp).from)!
+    assertEquals((provider.provider as Comp).name, 'openrouter')
+    assertEquals((model.model as Comp).modalities, ['text'])
+  }
 })
