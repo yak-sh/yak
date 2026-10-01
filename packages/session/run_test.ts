@@ -627,3 +627,122 @@ test('a provider’s no is not asked again, whatever the pool allows', async () 
   let { status, due } = await clocked(model)
   assertEquals([asks(), await status(), await due()], [1, 'failed', undefined])
 })
+
+test('graceful stop during preparation admits no ask and leaves the input owed', async () => {
+  let stop = new AbortController()
+  let entered = false, open!: () => void
+  let gate = new Promise<void>((go) => open = go)
+  let { model, asked } = fake()
+  let p = proc(store(), 'w1', model, {
+    stopping: stop.signal,
+    contextItems: async () => {
+      entered = true
+      await gate
+      return []
+    },
+  })
+  await p.g.apply(ask('s1'))
+  let run = settle(p.g, 's1', p.r)
+  await until(() => entered)
+  stop.abort()
+  open()
+  await run
+  assertEquals(asked.length, 0)
+  assertEquals(await kinds(p, 's1'), ['input'])
+  assertEquals(statusOf(await transcript(p.g, 's1')), 'pending')
+})
+
+test('graceful stop after ask persistence drains the admitted dispatch', async () => {
+  let stop = new AbortController()
+  let { model, asked } = fake()
+  let p = proc(store(), 'w1', model, { stopping: stop.signal })
+  await p.g.apply(ask('s1'))
+  let apply = p.g.apply.bind(p.g)
+  p.g.apply = async (...args) => {
+    let landed = await apply(...args)
+    if (landed.some((b) => b.ask)) stop.abort()
+    return landed
+  }
+  await settle(p.g, 's1', p.r)
+  assertEquals(asked.length, 1)
+  assertEquals(await kinds(p, 's1'), ['input', 'ask', 'output'])
+  assertEquals(statusOf(await transcript(p.g, 's1')), 'settled')
+})
+
+test('a ready replacement continues a drained multi-step turn without a nudge', async () => {
+  let s = store()
+  let stop = new AbortController(), nextStop = new AbortController()
+  let open!: () => void
+  let gate = new Promise<void>((go) => open = go)
+  let asks = 0, runs = 0
+  let tool = {
+    name: 'echo',
+    description: 'say it back',
+    parameters: { type: 'object', properties: {} },
+    run: () => {
+      runs++
+      return 'echoed'
+    },
+  }
+  let model: Model = async (req) => {
+    if (++asks == 1) {
+      await gate
+      req.signal?.throwIfAborted()
+      return {
+        id: 'call',
+        model: req.model,
+        items: [{ kind: 'call', id: 'c1', name: 'echo', args: '{}' }],
+      }
+    }
+    return {
+      id: 'done',
+      model: req.model,
+      items: [{ kind: 'assistant', text: 'done' }],
+    }
+  }
+  let a = proc(s, 'w1', model, { stopping: stop.signal, tools: [tool] })
+  let b = proc(s, 'w2', model, { tools: [tool] })
+  await a.g.apply([
+    { entity: { eid: toolEid('echo') }, tool: { name: 'echo' } },
+    ...ask('s1'),
+  ])
+  let first = a.fx.work(a.g, stop.signal)
+  let second: Promise<void> | undefined
+  try {
+    await until(() => asks == 1)
+    let swept = false, read = b.g.read.bind(b.g)
+    b.g.read = async (...args) => {
+      let rows = await read(...args)
+      if (String(args[0]).includes('.session.status=')) swept = true
+      return rows
+    }
+    second = b.fx.work(b.g, nextStop.signal)
+    // The replacement's initial sweep runs while the old lease is held.
+    await until(() => swept)
+    await b.fx.idle()
+    await settle(b.g, 's1', b.r) // already tried: old still holds it
+    stop.abort()
+    open()
+    await first
+    await a.fx.idle()
+    await until(async () => statusOf(await transcript(b.g, 's1')) == 'settled')
+    assertEquals(asks, 2)
+    assertEquals(runs, 1)
+    assertEquals(await kinds(b, 's1'), [
+      'input',
+      'ask',
+      'call',
+      'result',
+      'ask',
+      'output',
+    ])
+  } finally {
+    stop.abort()
+    nextStop.abort()
+    open()
+    await first
+    await second
+    await a.fx.idle()
+    await b.fx.idle()
+  }
+})

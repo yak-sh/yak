@@ -378,6 +378,25 @@ export let settle = (g: Graph, session: Eid, r: Runner): Promise<void> => {
       }
     } finally {
       here.delete(session)
+      // The lease is released by held before owing another pass. A ready
+      // replacement may have already swept while we were still draining.
+      if (r.stopping?.aborted && g.vocab.comp('effect')) {
+        let status = statusOf(await transcript(g, session))
+        if (['pending', 'running', 'queued'].includes(status)) {
+          await g.apply([{
+            entity: { eid: crypto.randomUUID() },
+            effect: {
+              handler: 'session_run',
+              target: session,
+              kind: 'matched',
+              state: 'pending',
+              attempts: 0,
+              generation: 0,
+              at: new Date().toISOString(),
+            },
+          }], { trusted: true })
+        }
+      }
     }
   })()
   return p.done

@@ -823,6 +823,7 @@ export let react = async (
     let { chunk, results: historyResults } = summarizing
     let through = chunk.at(-1)
     if (!through) return nothing
+    if (deps.stopping?.aborted) return nothing
     try {
       let compacted = await deps.compactModel!.model(
         {
@@ -901,6 +902,8 @@ export let react = async (
   if (deps.contextItems) {
     req.items.push(...await deps.contextItems(window, entries))
   }
+  // Graceful stop closes admission, not a request already admitted below.
+  if (deps.stopping?.aborted) return nothing
   ;[ask] = await g.apply([ask], { trusted: true })
   if (deps.streaming) {
     req.onText = ({ index, id, text }) => {
