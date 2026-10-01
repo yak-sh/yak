@@ -105,12 +105,12 @@ MCP reads what one at the command line reads.
 
 The HTTP handler shares one runner across requests and constructs an MCP server
 with the authenticated actor for each request. Pass `sessions: graph` when that
-graph owns connection transcripts and declares the session vocabulary. A request
-without `x-via` then gets an `Mcp-Session-Id` response header; the caller sends
-it on later requests, and the graph preserves attribution across restarts. A
-caller supplying `x-via` continues to speak for the session it named. The
-`@yaks/mcp/routes` host route supplies its graph when that host loaded the
-session vocabulary.
+graph owns connection transcripts and declares the session vocabulary. A legacy
+request without `x-via` then gets an `Mcp-Session-Id` response header; the
+caller sends it on later requests, and the graph preserves attribution across
+restarts. A caller supplying `x-via` continues to speak for the session it
+named. The `@yaks/mcp/routes` host route supplies its graph when that host
+loaded the session vocabulary.
 
 A calling application that owns its own MCP session protocol can leave
 `sessions` unset. The yaks.app connector does this today: it uses
@@ -125,16 +125,17 @@ their own component declarations.
 
 ## Exports
 
-| Import            | Exports and purpose                                                                                                                                 |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/mcp`       | `mcp`, `MountOptions`, `Handler`: HTTP handler and its types                                                                                        |
-| `@yaks/mcp`       | `server`, `Options`: SDK server for a caller-supplied transport                                                                                     |
-| `@yaks/mcp`       | `core`, `CoreOpts`, `Search`, `Guide`: generic tool construction and callbacks                                                                      |
-| `@yaks/mcp`       | `bundleSchema`, `schemaSchema`, `BundleOpts`, `Depth`: Zod schemas for bundles and schema results                                                   |
-| `@yaks/mcp`       | `listing`, `roster`, `rosterVersion`, `rosterLine`: tool definitions, names, and change notices                                                     |
-| `@yaks/mcp`       | `shapeOf`, `inputSchemaOf`, `annotated`, `COMMAND`, `Security`: argument schemas, MCP annotations, command metadata key, and security metadata type |
-| `@yaks/mcp/tools` | `core`, `shapeOf`, `inputSchemaOf`: the generic tier and argument schemas without the MCP SDK, for a host that describes tools and serves none      |
-| `@yaks/mcp/stdio` | `stdio`: connect the server to process stdin and stdout                                                                                             |
+| Import             | Exports and purpose                                                                                                                                 |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/mcp`        | `mcp`, `MountOptions`, `Handler`: HTTP handler and its types                                                                                        |
+| `@yaks/mcp`        | `server`, `Options`: SDK server for a caller-supplied transport                                                                                     |
+| `@yaks/mcp`        | `core`, `CoreOpts`, `Search`, `Guide`: generic tool construction and callbacks                                                                      |
+| `@yaks/mcp`        | `bundleSchema`, `schemaSchema`, `BundleOpts`, `Depth`: Zod schemas for bundles and schema results                                                   |
+| `@yaks/mcp`        | `listing`, `roster`, `rosterVersion`, `rosterLine`: tool definitions, names, and change notices                                                     |
+| `@yaks/mcp`        | `shapeOf`, `inputSchemaOf`, `annotated`, `COMMAND`, `Security`: argument schemas, MCP annotations, command metadata key, and security metadata type |
+| `@yaks/mcp/tools`  | `core`, `shapeOf`, `inputSchemaOf`: the generic tier and argument schemas without the MCP SDK, for a host that describes tools and serves none      |
+| `@yaks/mcp/skills` | `attachSkills`: scoped prompts, resources and complete Skills manifests                                                                             |
+| `@yaks/mcp/stdio`  | `stdio`: connect the server to process stdin and stdout                                                                                             |
 
 `annotated(tool)` produces MCP behavior hints and includes `annotations.title`
 when the tool declares a nonempty title. It does not invent a title for tools
@@ -312,8 +313,8 @@ it.
 
 ## When a server offers more than tools
 
-The HTTP and stdio entrypoints await `extend(server)` after registering tools.
-Use it to register SDK resources or prompts:
+The HTTP and stdio entrypoints await `extend(server)` and then `skills(server)`
+after registering tools. Use it to register SDK resources or prompts:
 
 ```ts ignore
 mcp({
@@ -337,14 +338,65 @@ yourself before connecting the transport; `server()` does not call it.
 ## Refusals
 
 Bad tool arguments and rejected changes return tool error text with `isError`.
-HTTP transport responses include 405 for methods other than POST, 400 for
+Legacy HTTP transport responses include 405 for methods other than POST, 400 for
 malformed JSON or anything other than one JSON-RPC request or notification, 401
 for `Unauthorized`, and 202 for notifications. Request arrays are rejected.
 Other thrown errors use [@yaks/api](../api/README.md#refusals)'s status mapping.
 
-The HTTP transport has no SSE stream. It waits for each call's outcome by
-default. A host can set `timeout` to limit how long it waits for a reply; timing
-out does not cancel a tool already running.
+The legacy transport has no SSE stream. It waits for each call's outcome by
+default. A host can set `timeout` to limit how long it waits for a legacy reply;
+timing out does not cancel a tool already running. Modern traffic uses the SDK
+HTTP entry and its protocol validation and streaming.
+
+## Repository skills
+
+The box route offers the checkout's skills without copying them into another
+store. Discovery exposes descriptions; prompts load instructions explicitly. The
+same snapshot supplies prompts, resources and the MCP Skills extension.
+
+```ts ignore
+import { attachSkills } from '@yaks/mcp/skills'
+
+let agents = mcp({
+  graph,
+  authenticate,
+  skills: (built) => attachSkills(built, { graph, cwd: checkout }),
+})
+```
+
+Supply an explicit repository id for graph-backed skills, or a `cwd` for a
+read-only checkout view. No scope means no skills: it never exposes every
+repository in a shared graph. The box's `/mcp` facet uses its process checkout.
+Local changes and deletions are reflected on the next request, without graph
+imports. Graph-backed documents are rendered by the shared persona codec.
+
+The Skills extension advertises `resources` and
+`io.modelcontextprotocol/skills`. `skills/list` and `skills/get` return complete
+manifests with the document and supporting files, exact SHA-256 byte digests and
+sizes. Resource reads serve those same bytes. This includes nested and binary
+companions in a checkout. Unknown skill URIs are refused; unsafe trees and
+nonconforming Agent Skills metadata are refused rather than silently renamed or
+partially published. Snapshot cache hints are private with zero TTL. No
+`resources/directory/read` capability is advertised.
+
+Prompts and resources provide explicit compatibility for clients that do not
+implement the extension. Reading a resource does not activate a skill, and we
+have not verified automatic description-based activation in Claude over MCP.
+
+## Protocol revisions
+
+The SDK v2 factory entry serves modern `2026-07-28` traffic. Requests without a
+modern envelope retain the existing legacy HTTP mount and graph-session
+semantics. Both legs authenticate through the host before building a server;
+modern traffic creates no MCP graph session or client-info identity. The host's
+security filters still surround the route; the SDK is not token authorization or
+Origin/Host validation.
+
+Tool schemas remain exact advertisements. Calls still go through the shared
+graph runner, including malformed arguments, so validation refusals,
+attribution, call records, roster notices and structured results remain
+runner-owned. Connecting a lower-level SDK server directly is legacy-only; use
+`mcp()` for modern HTTP and `stdio()` for era-selecting process streams.
 
 ## stdio
 

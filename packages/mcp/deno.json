@@ -6,7 +6,8 @@
     "./stdio": "./stdio.ts",
     "./roster": "./roster.ts",
     "./tools": "./tools.ts",
-    "./routes": "./routes.ts"
+    "./routes": "./routes.ts",
+    "./skills": "./skills.ts"
   },
   "license": "Apache-2.0",
   "description": "Exposes a graph through generic MCP tools for writes, queries, entity inspection, schema inspection, and optional search.",
@@ -14,7 +15,11 @@
     "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@^1.29.0",
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "zod": "npm:zod@^3.24.0",
-    "zod-to-json-schema": "npm:zod-to-json-schema@^3.25.1"
+    "zod-to-json-schema": "npm:zod-to-json-schema@^3.25.1",
+    "@modelcontextprotocol/server": "npm:@modelcontextprotocol/server@2.2.0",
+    "@modelcontextprotocol/client": "npm:@modelcontextprotocol/client@2.2.0",
+    "@modelcontextprotocol/core": "npm:@modelcontextprotocol/core@2.2.0",
+    "@std/yaml": "jsr:@std/yaml@^1.2.0"
   },
   "compilerOptions": {
     "lib": [

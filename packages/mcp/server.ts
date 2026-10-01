@@ -1,5 +1,5 @@
 import { mint, type NamedTool, namedTool, offered, toolName } from '@yaks/graph'
-import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
+import { fromJsonSchema, ProtocolError } from '@modelcontextprotocol/server'
 // The server: a graph, its tools, and the MCP protocol implementation that
 // lists and calls them. Everything transport-specific lives in ./mount.ts and
 // ./stdio.ts; this file only knows how a @yaks/graph `Tool` becomes an MCP
@@ -17,10 +17,9 @@ import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 // as a JSON-RPC protocol error: a bad argument or a rejected write is
 // something the agent reads and corrects, not a broken connection.
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv'
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
-import { z } from 'zod'
+import { McpServer } from '@modelcontextprotocol/server'
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/server/validators/ajv'
+import type { CallToolResult } from '@modelcontextprotocol/server'
 import {
   type Actor,
   type Bundle,
@@ -47,7 +46,6 @@ import {
   inputSchemaOf,
   pointing,
   type Search,
-  shapeOf,
 } from './tools.ts'
 import type { Guide } from '@yaks/graph'
 
@@ -168,6 +166,8 @@ export type Options = {
    * its tools are registered. It is handed the SDK's own server object, and it
    * is awaited. */
   extend?: (server: McpServer) => void | Promise<void>
+  /** Skills attach to the same server, awaited before either era discovers it. */
+  skills?: (server: McpServer) => void | Promise<void>
 }
 
 /**
@@ -374,8 +374,8 @@ export let annotated = (
   openWorldHint: !!t.openWorld,
 })
 
-// The SDK's schema validator, which it consults only to check what a client
-// sent back to an elicitation, made once and shared.
+// Shared schema authorship/elicitation validator. The runner, not the SDK's
+// high-level registerTool wrapper, owns tool argument validation.
 let ajv: AjvJsonSchemaValidator | undefined
 let validator = () => ajv ??= new AjvJsonSchemaValidator()
 
@@ -429,12 +429,17 @@ export let server = (opts: Options): McpServer => {
   })
   let names = tools.map((t) => t.name)
 
+  let callbacks = new Map<
+    string,
+    (args: Record<string, unknown>) => Promise<CallToolResult>
+  >()
   for (let t of tools) {
     let meta = metaOf(t, opts.security)
     let config = {
       ...(t.title ? { title: t.title } : {}),
       description: t.description,
-      inputSchema: t.inputSchema ? z.object({}).passthrough() : shapeOf(t),
+      inputSchema: fromJsonSchema(inputSchemaOf(t), validator()),
+      outputSchema: fromJsonSchema(t.outputSchema ?? answerSchema, validator()),
       annotations: annotated(t),
       ...(meta ? { _meta: meta } : {}),
     }
@@ -464,14 +469,19 @@ export let server = (opts: Options): McpServer => {
       // the reply worth attaching it to.
       return noting(out, await opts.roster?.(names))
     }
-    mcp.registerTool(t.name, config, call)
+    mcp.registerTool(
+      t.name,
+      config,
+      (args) => call(args as Record<string, unknown>),
+    )
+    callbacks.set(t.name, call)
   }
   // The listing is this server's own, not the SDK's: a tool that declared its
-  // input as JSON Schema is sent that declaration unchanged (the SDK's
-  // argument parsing is passthrough for those; the runner validates the
-  // arguments before the handler runs), and every tool is listed with the one
+  // input as JSON Schema is sent that declaration unchanged. The direct
+  // tools/call dispatch below leaves argument validation to the runner, and
+  // every tool is listed with the one
   // answer schema, since every tool answers bundles, unless it declared its own.
-  mcp.server.setRequestHandler(ListToolsRequestSchema, () => ({
+  mcp.server.setRequestHandler('tools/list', () => ({
     tools: tools.map((t) => ({
       name: t.name,
       ...(t.title ? { title: t.title } : {}),
@@ -482,5 +492,14 @@ export let server = (opts: Options): McpServer => {
       ...(metaOf(t, opts.security) ? { _meta: metaOf(t, opts.security) } : {}),
     })),
   }))
+  // Exact authoring schemas provide header metadata, not domain validation.
+  // The runner owns malformed-argument refusals and records every graph call.
+  mcp.server.setRequestHandler('tools/call', async (request) => {
+    let call = callbacks.get(request.params.name)
+    if (!call) {
+      throw new ProtocolError(-32602, `Tool ${request.params.name} not found`)
+    }
+    return await call(request.params.arguments ?? {})
+  })
   return mcp
 }

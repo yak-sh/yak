@@ -281,3 +281,6 @@ export let loadSkill = async (
   }
   return found[0]
 }
+
+// The portable codec is shared by MCP manifests and repository views.
+export { frontmatter, parseSkill, renderSkill } from './skill-text.ts'

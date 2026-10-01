@@ -21,6 +21,7 @@ import { graphDoc } from '@yaks/graph/vocab'
 import { SESSION } from '@yaks/session'
 import type { Authenticate, Route } from '@yaks/api'
 import { mcp } from './mount.ts'
+import { attachSkills } from './skills.ts'
 import type { Search } from './tools.ts'
 
 /** The path an agent speaks to. */
@@ -50,6 +51,8 @@ export let routes = (host: Hosting): Route[] => {
     search: host.search,
     reply: host.reply,
     name: host.config.name ?? 'yak',
+    skills: (built) =>
+      attachSkills(built, { graph: host.graph, cwd: Deno.cwd() }),
     instructions: [graphDoc, ...host.graph.vocab.docs].map((doc) =>
       doc.instructions?.trim()
     )

@@ -222,3 +222,110 @@ test('a JSON Schema input declaration reaches the listing unchanged', async () =
     await client.close()
   }
 })
+
+test('a non-object declared schema is not replaced in the neutral tool listing', async () => {
+  let { server } = await import('./server.ts')
+  let { Client, StreamableHTTPClientTransport } = await import(
+    '@modelcontextprotocol/client'
+  )
+  let { createMcpHandler } = await import('@modelcontextprotocol/server')
+  let schema = { type: 'array', items: { type: 'string' } }
+  let handler = createMcpHandler(() =>
+    server({
+      graph: shopGraph(),
+      tools: [{
+        name: 'declared_array',
+        description: 'An externally declared root',
+        input: {},
+        outputSchema: schema,
+        run: () => [],
+      }],
+    }), { legacy: 'reject' })
+  let client = new Client({ name: 'schema-test', version: '0' }, {
+    versionNegotiation: { mode: { pin: '2026-07-28' } },
+  })
+  try {
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL('http://shop.test/mcp'), {
+        fetch: (input, init) =>
+          handler.fetch(
+            input instanceof Request ? input : new Request(input, init),
+          ),
+      }),
+    )
+    let found = (await client.listTools()).tools.find((t) =>
+      t.name == 'declared_array'
+    )
+    assertEquals(found?.outputSchema, schema)
+  } finally {
+    await client.close()
+    await handler.close()
+  }
+})
+
+test('modern custom parameter headers use the exact registered input schema before dispatch', async () => {
+  let { server } = await import('./server.ts')
+  let { Client, StreamableHTTPClientTransport } = await import(
+    '@modelcontextprotocol/client'
+  )
+  let { createMcpHandler } = await import('@modelcontextprotocol/server')
+  let ran = 0
+  let g = shopGraph()
+  let handler = createMcpHandler(() =>
+    server({
+      graph: g,
+      tools: [{
+        name: 'header_shelf',
+        description: 'Select a shelf',
+        inputSchema: {
+          type: 'object',
+          required: ['shelf'],
+          properties: {
+            shelf: { type: 'string', 'x-mcp-header': 'Shelf' },
+          },
+        },
+        run: () => {
+          ran++
+          return []
+        },
+      }],
+    }), { legacy: 'reject' })
+  let client = new Client({ name: 'header-test', version: '0' }, {
+    versionNegotiation: { mode: { pin: '2026-07-28' } },
+  })
+  let mismatch = false
+  try {
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL('http://shop.test/mcp'), {
+        fetch: (input, init) => {
+          let request = input instanceof Request
+            ? input
+            : new Request(input, init)
+          if (mismatch) request.headers.set('Mcp-Param-Shelf', 'different')
+          return handler.fetch(request)
+        },
+      }),
+    )
+    await client.callTool({
+      name: 'header_shelf',
+      arguments: { shelf: 'poetry' },
+    })
+    assertEquals(ran, 1)
+    mismatch = true
+    let code: unknown
+    try {
+      await client.callTool({
+        name: 'header_shelf',
+        arguments: { shelf: 'poetry' },
+      })
+    } catch (error) {
+      code = (error as { code?: unknown }).code
+    }
+    assertEquals(code, -32020)
+    assertEquals(ran, 1)
+    assertEquals((await g.read('.call')).length, 1)
+  } finally {
+    await client.close()
+    await handler.close()
+  }
+})

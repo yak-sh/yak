@@ -1,11 +1,11 @@
 // The other MCP transport: stdin and stdout. It sits in a module of its own
 // because it is the one part of the package that is not portable —
-// `StdioServerTransport` reads the process's own streams, which a Cloudflare
+// The SDK stdio entry reads the process's own streams, which a Cloudflare
 // Worker does not have — so importing `@yaks/mcp` never pulls a runtime
 // dependency in with it. An agent running on the same machine launches this;
 // anything served over HTTP uses ./mount.ts.
 
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import { type Options, server } from './server.ts'
 
 /**
@@ -19,7 +19,10 @@ import { type Options, server } from './server.ts'
  * ```
  */
 export let stdio = async (opts: Options): Promise<void> => {
-  let built = server(opts)
-  await opts.extend?.(built)
-  await built.connect(new StdioServerTransport())
+  await serveStdio(async () => {
+    let built = server(opts)
+    await opts.extend?.(built)
+    await opts.skills?.(built)
+    return built
+  })
 }

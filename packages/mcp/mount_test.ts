@@ -4,7 +4,7 @@
 // own words.
 
 import { test, until } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { type Bundle, graph } from '@yaks/graph'
 import { graphDoc } from '@yaks/graph/vocab'
@@ -365,4 +365,290 @@ test('initialize carries instructions from the loaded vocabularies', async () =>
     hello.result.instructions,
     `${graphDoc.instructions}\n\nRead the shelf.\n\nKeep each sale.`,
   )
+})
+
+test('a pinned modern HTTP client discovers awaited facets and records malformed calls through the runner', async () => {
+  let { Client, StreamableHTTPClientTransport } = await import(
+    '@modelcontextprotocol/client'
+  )
+  let g = shopGraph()
+  let sessions = sessionGraph()
+  let authenticated = 0
+  let extensions = 0
+  let skills = 0
+  let bodies: unknown[] = []
+  let door = mcp({
+    graph: g,
+    sessions,
+    authenticate: () => {
+      authenticated++
+      return ada
+    },
+    roster: () => 'Current tool roster',
+    extend: async (built) => {
+      await Promise.resolve()
+      extensions++
+      built.registerResource('shelf', 'shop://shelf', {}, () => ({
+        contents: [{ uri: 'shop://shelf', text: 'A shelf' }],
+      }))
+    },
+    skills: async (built) => {
+      await Promise.resolve()
+      skills++
+      built.registerPrompt(
+        'review',
+        { description: 'Review this shelf' },
+        () => ({
+          messages: [{
+            role: 'user',
+            content: { type: 'text', text: 'Review' },
+          }],
+        }),
+      )
+    },
+  })
+  let client = new Client({ name: 'untrusted-client', version: '0' }, {
+    versionNegotiation: { mode: { pin: '2026-07-28' } },
+  })
+  let transport = new StreamableHTTPClientTransport(
+    new URL('http://shop.test/mcp'),
+    {
+      fetch: async (input, init) => {
+        let request = input instanceof Request
+          ? input
+          : new Request(input, init)
+        let response = await door(request)
+        if (
+          response.headers.get('content-type')?.includes('application/json')
+        ) {
+          bodies.push(await response.clone().json())
+        }
+        assertEquals(response.headers.get('Mcp-Session-Id'), null)
+        return response
+      },
+    },
+  )
+  try {
+    await client.connect(transport)
+    assertEquals(client.getProtocolEra(), 'modern')
+    assertEquals(client.getNegotiatedProtocolVersion(), '2026-07-28')
+    assert(client.getServerCapabilities()?.resources)
+    assert(client.getServerCapabilities()?.prompts)
+    let tools = await client.listTools()
+    assert(tools.tools.some((t) => t.name == 'graph_apply'))
+    let bad = await client.callTool({
+      name: 'graph_apply',
+      arguments: { change: 'malformed' },
+    })
+    assertEquals(bad.isError, true)
+    assert(
+      (bad.content as { text: string }[]).some((b) =>
+        b.text == 'Current tool roster'
+      ),
+    )
+    let calls = await g.read('.call&?created')
+    assertEquals(calls.length, 1)
+    assertEquals(comp(calls[0], 'created').by, 'm1')
+    assertEquals(comp(calls[0], 'call').args, { change: 'malformed' })
+    let wrote = await client.callTool({
+      name: 'graph_apply',
+      arguments: {
+        change: [{
+          entity: { eid: 'modern-book' },
+          book: { price: 19 },
+          $actor: { by: 'villain' },
+        }],
+      },
+    })
+    assertEquals(wrote.isError, undefined)
+    assertEquals(comp((await g.get(['modern-book']))[0], 'created').by, 'm1')
+    assertEquals(
+      (await client.listResources()).resources[0].uri,
+      'shop://shelf',
+    )
+    assertEquals((await client.listPrompts()).prompts[0].name, 'review')
+    assertEquals(await sessions.read('.session'), [])
+    assert(
+      authenticated >= 6 && extensions == authenticated &&
+        skills == authenticated,
+    )
+    assert(
+      bodies.some((b) => JSON.stringify(b).includes('"resultType":"complete"')),
+    )
+  } finally {
+    await client.close()
+  }
+})
+
+test('modern header without its envelope is refused by the SDK after authentication', async () => {
+  let authenticated = 0
+  let door = mcp({
+    graph: shopGraph(),
+    authenticate: () => {
+      authenticated++
+      return ada
+    },
+  })
+  let request = rpc('tools/list')
+  request.headers.set('MCP-Protocol-Version', '2026-07-28')
+  request.headers.set('Content-Type', 'application/json')
+  request.headers.set('Accept', 'application/json, text/event-stream')
+  let response = await door(request)
+  assertEquals(authenticated, 1)
+  let body = await response.json()
+  assertEquals(body.error.code, -32602)
+})
+
+test('spawned stdio selects modern or legacy using the same attributed tool factory', async () => {
+  let { Client: ModernClient } = await import('@modelcontextprotocol/client')
+  let { StdioClientTransport: ModernTransport } = await import(
+    '@modelcontextprotocol/client/stdio'
+  )
+  let { Client: LegacyClient } = await import(
+    '@modelcontextprotocol/sdk/client/index.js'
+  )
+  let { StdioClientTransport: LegacyTransport } = await import(
+    '@modelcontextprotocol/sdk/client/stdio.js'
+  )
+  let root = new URL('../../', import.meta.url).pathname.replace(/\/$/, '')
+  let dir = await Deno.makeTempDir({ prefix: 'mcp-stdio-' })
+  let script = `${dir}/serve.ts`
+  await Deno.writeTextFile(
+    script,
+    `
+import { stdio } from ${
+      JSON.stringify(new URL('./stdio.ts', import.meta.url).href)
+    }
+import { shopGraph } from ${
+      JSON.stringify(new URL('./testing.ts', import.meta.url).href)
+    }
+await stdio({ graph: shopGraph(), actor: { by: 'm1' }, skills: async (built) => {
+  await Promise.resolve()
+  built.registerResource('shelf', 'shop://shelf', {}, () => ({ contents: [{ uri: 'shop://shelf', text: 'Awaited shelf' }] }))
+} })
+`,
+  )
+  let params = {
+    command: Deno.execPath(),
+    args: ['run', '-A', '--config', `${root}/deno.json`, script],
+    env: {
+      ...Deno.env.toObject(),
+      HARNESS_HOME: `${dir}/harness`,
+      TASKS_HOME: `${dir}/tasks`,
+    },
+    cwd: root,
+    stderr: 'pipe' as const,
+  }
+  let modern = new ModernClient({ name: 'modern-stdio', version: '0' }, {
+    versionNegotiation: {
+      mode: { pin: '2026-07-28' },
+      probe: { timeoutMs: 10_000 },
+    },
+  })
+  let legacy = new LegacyClient({ name: 'legacy-stdio', version: '0' })
+  try {
+    await modern.connect(new ModernTransport(params))
+    assertEquals(modern.getProtocolEra(), 'modern')
+    assertEquals(modern.getNegotiatedProtocolVersion(), '2026-07-28')
+    assertEquals(
+      (await modern.listResources()).resources[0].uri,
+      'shop://shelf',
+    )
+    let result = await modern.callTool({
+      name: 'graph_query',
+      arguments: { q: '.book' },
+    })
+    assertEquals(result.structuredContent, { result: [] })
+    await legacy.connect(new LegacyTransport(params))
+    assertEquals(
+      (await legacy.listResources()).resources[0].uri,
+      'shop://shelf',
+    )
+    let old = await legacy.callTool({
+      name: 'graph_query',
+      arguments: { q: '.book' },
+    })
+    assertEquals(old.structuredContent, { result: [] })
+  } finally {
+    await Promise.all([modern.close(), legacy.close()])
+    await Deno.remove(dir, { recursive: true })
+  }
+})
+
+test('modern resource streaming remains open until result or client cancellation', async () => {
+  let { Client, StreamableHTTPClientTransport } = await import(
+    '@modelcontextprotocol/client'
+  )
+  let { ProtocolError } = await import('@modelcontextprotocol/server')
+  let entered: () => void = () => {}
+  let started = new Promise<void>((resolve) => entered = resolve)
+  let aborted: () => void = () => {}
+  let cancelled = new Promise<void>((resolve) => aborted = resolve)
+  let door = mcp({
+    graph: shopGraph(),
+    extend: (built) => {
+      built.registerResource('slow', 'shop://slow', {}, async (_uri, ctx) => {
+        await ctx.mcpReq.notify({
+          method: 'notifications/progress',
+          params: {
+            progressToken: ctx.mcpReq._meta?.progressToken ?? 'stream',
+            progress: 1,
+          },
+        })
+        entered()
+        await new Promise<void>((resolve) => {
+          if (ctx.mcpReq.signal.aborted) resolve()
+          else {ctx.mcpReq.signal.addEventListener('abort', () => resolve(), {
+              once: true,
+            })}
+        })
+        aborted()
+        return { contents: [{ uri: 'shop://slow', text: 'Cancelled' }] }
+      })
+      built.registerResource('error', 'shop://error', {}, () => {
+        throw new ProtocolError(-32602, 'Unknown shelf')
+      })
+    },
+  })
+  let client = new Client({ name: 'stream-test', version: '0' }, {
+    versionNegotiation: { mode: { pin: '2026-07-28' } },
+  })
+  let streams = 0
+  try {
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL('http://shop.test/mcp'), {
+        fetch: async (input, init) => {
+          let response = await door(
+            input instanceof Request ? input : new Request(input, init),
+          )
+          if (
+            response.headers.get('content-type')?.includes('text/event-stream')
+          ) streams++
+          return response
+        },
+      }),
+    )
+    await assertRejects(
+      () => client.readResource({ uri: 'shop://error' }),
+      Error,
+      'Unknown shelf',
+    )
+    let controller = new AbortController()
+    let pending = client.readResource({ uri: 'shop://slow' }, {
+      signal: controller.signal,
+      onprogress: () => {},
+    })
+    // Attach rejection before cancellation: no detached rejected request.
+    let refused = assertRejects(() => pending)
+    await until(() => streams >= 1)
+    await started
+    controller.abort()
+    await refused
+    await cancelled
+    assert(streams >= 1)
+    // Cancellation leaves the mounted handler usable for another exchange.
+    assert((await client.listTools()).tools.length >= 4)
+  } finally {
+    await client.close()
+  }
 })

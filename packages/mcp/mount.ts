@@ -2,7 +2,9 @@
 // handler, so the same server runs on Deno, on Node, and in a Cloudflare
 // Worker.
 //
-// One JSON-RPC request in, one JSON reply out. When a caller supplies a
+// Legacy traffic gets one JSON-RPC request in and one JSON reply out. Modern
+// traffic uses the SDK factory entry, including envelope validation and SSE.
+// When a caller supplies a
 // session graph, the MCP session id names a persisted transcript; a restart
 // preserves it, and two isolates share its identity. There is no SSE stream
 // here, so a `GET` is answered 405, as MCP specifies for a server without a
@@ -20,12 +22,16 @@
 // is no moment at which a tool holds a graph together with an identity that
 // did not come from this handler.
 
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import {
-  type JSONRPCMessage,
+  createMcpHandler,
+  InMemoryTransport,
+  isLegacyRequest,
+} from '@modelcontextprotocol/server'
+import {
   JSONRPCNotificationSchema,
   JSONRPCRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js'
+} from '@modelcontextprotocol/core'
+import type { JSONRPCMessage } from '@modelcontextprotocol/server'
 import { type Authenticate, type Handler, json, refuse } from '@yaks/api'
 import { type Actor, type Bundle, type Graph, namedTool } from '@yaks/graph'
 import { SESSION, sessionFor, speaking } from '@yaks/session'
@@ -43,7 +49,7 @@ export type MountOptions = Omit<Options, 'actor'> & {
    * (default: nobody). Throwing `Unauthorized` refuses the request with a
    * 401. */
   authenticate?: Authenticate
-  /** how long one call may take, in ms; absent, wait for its outcome */
+  /** Legacy one-shot call timeout in ms; modern exchanges use client cancellation. */
   timeout?: number
 }
 
@@ -139,7 +145,20 @@ export let mcp = (opts: MountOptions): Handler => {
     report: opts.report ?? logged,
     ...opts.reply ? { reply: opts.reply } : {},
   })
-  return async (request) => {
+  let actors = new WeakMap<Request, Actor | null>()
+  let modern = createMcpHandler(async (context) => {
+    let actor = context.requestInfo
+      ? actors.get(context.requestInfo) ?? null
+      : null
+    let built = server({ ...opts, actor, runner: runs })
+    await opts.extend?.(built)
+    await opts.skills?.(built)
+    return built
+  }, { legacy: 'reject' })
+  let legacy = async (
+    request: Request,
+    actor: Actor | null,
+  ): Promise<Response> => {
     if (request.method != 'POST') {
       return refused(
         'this MCP endpoint accepts POST only — it serves no SSE stream',
@@ -147,7 +166,6 @@ export let mcp = (opts: MountOptions): Handler => {
       )
     }
     try {
-      let actor = (await opts.authenticate?.(request)) ?? null
       let body: unknown
       try {
         body = await request.json()
@@ -186,9 +204,42 @@ export let mcp = (opts: MountOptions): Handler => {
       // registered before the request is answered, so `resources/list` sees
       // them on the very first call rather than the second.
       await opts.extend?.(built)
+      await opts.skills?.(built)
       let answer = json(await ask(built, rpc.data, ms))
       if (conn) answer.headers.set(ID, conn.id)
       return answer
+    } catch (err) {
+      return refuse(err, request)
+    }
+  }
+  return async (request) => {
+    try {
+      // The SDK validates neither tokens nor Host/Origin. The host's existing
+      // authentication/security boundary runs before both protocol legs.
+      let actor = (await opts.authenticate?.(request)) ?? null
+      if (await isLegacyRequest(request)) return await legacy(request, actor)
+      // Preserve the pre-envelope door's 400 for bodies that cannot be a
+      // request at all. An explicit modern header/claim always belongs to SDK.
+      if (!request.headers.has('MCP-Protocol-Version')) {
+        let body: unknown
+        try {
+          body = await request.clone().json()
+        } catch {
+          return await legacy(request, actor)
+        }
+        if (!body || typeof body != 'object' || Array.isArray(body)) {
+          return await legacy(request, actor)
+        }
+      }
+      // No connection transcript or clientInfo-derived principal in this era.
+      actors.set(request, actor)
+      try {
+        // The SDK owns the exchange lifetime, including SSE and cancellation.
+        // Closing here would truncate a response whose stream is still active.
+        return await modern.fetch(request)
+      } finally {
+        actors.delete(request)
+      }
     } catch (err) {
       return refuse(err, request)
     }

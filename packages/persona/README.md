@@ -239,6 +239,7 @@ specialists, each saying its home's common persona beside the checkout's
 | `./tools`        | `runs(host)` — `persona_read` returns the Markdown, `persona_sync` writes           |
 | `./effects`      | `effects(host, {files, skills})` — independently enables persona files and skills   |
 | `./skills`       | Graph skill reads and read-only checkout views                                      |
+| `./skill-text`   | Portable skill parsing, frontmatter and rendering                                   |
 | `./skill-mirror` | `syncSkills`, `skillRoots` — bidirectional landed repository mirror                 |
 
 The two edge relations are borrowed rather than invented here: `contains` is
