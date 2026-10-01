@@ -114,6 +114,8 @@ import { stateDir } from './store.ts'
 import { understood } from './keywords.ts'
 import { vaultOf } from './vault.ts'
 import type { Command, Ctx } from './run.ts'
+import type { Anatomy } from '@yaks/code/anatomy'
+import { nativeAnatomy, secretNames } from './anatomy.ts'
 
 export {
   type Config,
@@ -134,6 +136,8 @@ export {
  * a `runs` factory is asked for its tools before there is a runner to run
  * them. */
 export type Host = {
+  /** Already-observed composition metadata; never imports a lazy facet. */
+  anatomy: () => Anatomy
   config: Config
   /** the roles this process serves over the graph ({@link ROLES}): the
    * facets it imported, and so what else is wired in below */
@@ -826,7 +830,23 @@ export let compose = async (
   // is fetched then, and a command does not wait on 1Password for it.
   let vault = vaultOf(path)
   await warm(vault, (config.plugins ?? []).flatMap((p) => bound(given(p))))
+  let secretDeclarations = (config.plugins ?? []).flatMap((p) =>
+    secretNames(given(p)).map((name) => ({ name, package: used(p) }))
+  )
   let plugins = named(config, vault)
+  let observed = nativeAnatomy(
+    plugins.map(([p]) => p),
+    roles,
+    ROLES,
+    secretDeclarations,
+  )
+  // Import observation belongs to this composition, not wordsOf's cache.
+  let observedLoad: Load = async (plugin, name) => {
+    observed.attempted(plugin, name)
+    let loaded = await load(plugin, name)
+    observed.loaded(plugin, name, loaded !== null)
+    return loaded
+  }
   // A service role names a plugin, so it has to be one the config lists.
   let services = roles.filter((r) => !common(r))
   for (let r of services) {
@@ -840,16 +860,23 @@ export let compose = async (
   // is imported by the first call of one of them — a command runs one tool,
   // and most of the plugins' code is for tools it will not run.
   let take = <F extends FacetName>(role: Role, name: F): Promise<Taken<F>> =>
-    roles.includes(role) ? taking(plugins, name, load) : Promise.resolve([])
+    roles.includes(role)
+      ? taking(plugins, name, observedLoad)
+      : Promise.resolve([])
   let [vocabs, ruled, watched, served, dressed, running] = await Promise.all([
     take('graph', 'vocab'),
     take('graph', 'rules'),
     take('effects', 'effects'),
     take('web', 'routes'),
     take('web', 'ui'),
-    taking(plugins.filter(([p]) => services.includes(p)), 'service', load),
+    taking(
+      plugins.filter(([p]) => services.includes(p)),
+      'service',
+      observedLoad,
+    ),
   ])
-  let { vocab, derived, backed } = wordsOf(vocabs)
+  let { docs, vocab, derived, backed } = wordsOf(vocabs)
+  observed.declarations(docs, vocab)
 
   let sql = open(path)
   try {
@@ -901,6 +928,7 @@ export let compose = async (
     let self = writer(vocab)
     let authenticate: Authenticate = () => self
     let host: Host = {
+      anatomy: observed.read,
       config,
       ui: gather(dressed.map(([facet]) => facet)),
       roles,
@@ -1016,7 +1044,12 @@ export let compose = async (
       gone: host.gone,
       nudge: opts.thread?.nudge,
     })
-    let rules = ruled.flatMap(([r, options]) => r.rules?.(host, options) ?? [])
+    let rules = ruled.flatMap(([r, options, plugin]) => {
+      let made = r.rules?.(host, options) ?? []
+      observed.graph(plugin, made)
+      return made
+    })
+    observed.graph('@yaks/effects', [fx])
     // A numbered entity is printed as an id a person types back (`T-7`), and a
     // graph that reads none back takes `T-7` for an eid and mints an entity of
     // that name. So a config that numbers entities names a plugin that
@@ -1042,7 +1075,9 @@ export let compose = async (
     // declared effect has one handler, from whichever plugin gives it code,
     // and one this config gives no code has nothing to do here: its runs are
     // settled as done, not left owed to a process that will never come.
+    observed.graphed()
     let effecting = roles.includes('effects')
+    observed.effects(new Map(), effecting)
     if (effecting) {
       let declared = new Set(
         vocabs.flatMap(([v]) => effectsIn(v.docs ?? []).map((e) => e.name)),
@@ -1063,6 +1098,7 @@ export let compose = async (
         ...Object.fromEntries([...declared].map((n) => [n, nothing])),
         ...code,
       })
+      observed.effects(by, true)
     }
     // After every table exists, the plugins' own included: a full-text index is
     // built over the tables it reads, and a property the graph stores under a
@@ -1128,12 +1164,27 @@ export let compose = async (
     //
     // A plugin's own tools are listed from its vocabulary and run by its
     // `./tools`, imported the first time one of them is called.
+    let generic = tier({ search: ranked, keywords: vocab.keywords })
+    observed.tier(generic)
     let tools = made = [
-      ...tier({ search: ranked, keywords: vocab.keywords }),
+      ...generic,
       ...vocabs.flatMap(([v, options, plugin]) =>
         loadTools(v.docs ?? [], async () => {
-          let code = await load(plugin, 'tools')
-          return code?.runs?.(host, options) ?? {}
+          let code = await observedLoad(plugin, 'tools')
+          let runs = code?.runs?.(host, options) ?? {}
+          let declarations = toolsIn(v.docs ?? [])
+          let names = declarations.map((d) => d.name ?? toolName(d))
+          let joined = declarations.filter((d) =>
+            typeof (runs[d.name ?? toolName(d)] ??
+              runs[[d.noun, d.verb].filter(Boolean).join('_')]) == 'function'
+          ).map((d) => d.name ?? toolName(d))
+          // loadTools joins the whole module; a missing run rejects that join.
+          observed.runs(
+            plugin,
+            joined,
+            joined.length == names.length ? joined : [],
+          )
+          return runs
         })
       ),
     ]
@@ -1172,6 +1223,7 @@ export let compose = async (
     if (effecting) {
       let due: Handlers[string] = (e) => run.due(e.entity.eid)
       fx.handle(Object.fromEntries(run.rules.map((r) => [r.rule.name, due])))
+      observed.due(run.rules.map((r) => r.rule.name))
     }
     // Which listed plugin hosts the routes — turns them into the one handler
     // this host answers with (@yaks/api). Two would be two answers to one
@@ -1185,9 +1237,14 @@ export let compose = async (
     }
     let [mod, options] = hosts[0] ?? []
     if (mod?.handler) {
-      paths = served.flatMap(([r, o]) => r.routes?.(host, o) ?? [])
+      paths = served.flatMap(([r, o, plugin]) => {
+        let made = r.routes?.(host, o) ?? []
+        observed.routes(plugin, made)
+        return made
+      })
       filters = served.flatMap(([r, o]) => r.filter ? [r.filter(host, o)] : [])
       answering = mod.handler(host, options ?? {})
+      observed.binding(hosts[0][2], 'routes')
     }
     // The duties: work that is nobody's request and everybody's to do. The
     // effect pool is the `effects` role's, worked by any number of processes
@@ -1196,10 +1253,13 @@ export let compose = async (
     // one process runs it. One pass, then a wait, is the shape they share: do
     // what is overdue, then keep at it until this process ends.
     let hold = config.lease ?? HOLD
-    let duties: Duty[] = running.map(([mod, options, plugin]): Duty => ({
-      name: plugin,
-      run: (signal) => mod.service!(host, options, signal),
-    }))
+    let duties: Duty[] = running.map(([mod, options, plugin]): Duty => {
+      observed.binding(plugin, 'service')
+      return {
+        name: plugin,
+        run: (signal) => mod.service!(host, options, signal),
+      }
+    })
     // Started together and stopped together, by one signal: a host shutting
     // down is one fact, and a duty that outlived the database it
     // reads would be a crash nobody asked for. One that throws is reported

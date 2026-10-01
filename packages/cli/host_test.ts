@@ -1468,3 +1468,129 @@ test('web gathers UI facets before building routes, graph does not import them',
     'broken UI facet',
   )
 })
+
+test('host anatomy reads before graph readiness and tracks lazy alias runs once', async () => {
+  let loads = 0
+  let factories = 0
+  let captured = false
+  let fixture: Plugged = {
+    vocab: {
+      docs: [{
+        ...doc,
+        $defs: {
+          ...doc.$defs,
+          book_list: {
+            tool: true,
+            noun: 'catalogue',
+            verb: 'list',
+            description: 'List the catalogue',
+            input: {},
+          },
+        },
+      }, owes],
+    },
+    rules: {
+      rules: (host) => {
+        let a = host.anatomy()
+        assertEquals(a.scope, 'native')
+        assertEquals(a.tools.find((t) => t.name == 'book_list')?.loaded, false)
+        assertThrows(() => host.graph)
+        captured = true
+        factories++
+        return [{ name: 'fixture', hooks: { commit: () => {} } }]
+      },
+    },
+    tools: {
+      runs: () => {
+        factories++
+        return { catalogue_list: () => [], book_add: () => [] }
+      },
+    },
+  }
+  let load: Load = (plugin, name) => {
+    if (name == 'tools') loads++
+    return only({ shop: fixture })(plugin, name)
+  }
+  let first = await composing(
+    { db: ':memory:', plugins: ['shop'] },
+    ['graph'],
+    load,
+  )
+  let second = await composing(
+    { db: ':memory:', plugins: ['shop'] },
+    ['graph'],
+    load,
+  )
+  try {
+    assert(captured)
+    assertEquals(loads, 0)
+    assertEquals(factories, 2)
+    let prior = first.anatomy()
+    let declared = prior.tools.find((t) => t.name == 'book_list')!
+    assertEquals([declared.declared, declared.loaded, declared.bound], [
+      true,
+      false,
+      false,
+    ])
+    assertEquals(prior.rules.find((r) => r.name == 'fixture')?.bound, true)
+    assertEquals(prior.skills, [])
+    assertEquals(prior.observed?.skills, false)
+    let run = first.tools.find((t) => t.name == 'book_list')!
+    await run.run({ entity: { eid: 'one' } }, first.graph)
+    await run.run({ entity: { eid: 'two' } }, first.graph)
+    assertEquals(loads, 1)
+    assertEquals(factories, 3)
+    let after = first.anatomy()
+    // The public declaration keeps its identity when joined through noun_verb.
+    let loaded = after.tools.find((t) => t.name == 'book_list')!
+    assertEquals(loaded.id, declared.id)
+    assertEquals([loaded.loaded, loaded.bound], [true, true])
+    assertEquals(
+      second.anatomy().tools.find((t) => t.name == 'book_list')?.loaded,
+      false,
+    )
+    assertEquals(
+      after.facets.find((f) => f.package == 'shop' && f.name == 'tools')
+        ?.attempted,
+      true,
+    )
+  } finally {
+    await first.close()
+    await second.close()
+  }
+})
+
+test('host anatomy does not replay routes without a hosting handler', async () => {
+  let calls = 0
+  let host = await composing(
+    { db: ':memory:', plugins: ['shop'] },
+    ['graph', 'web'],
+    only({
+      shop: {
+        ...shop,
+        routes: {
+          routes: () => {
+            calls++
+            return []
+          },
+        },
+      },
+    }),
+  )
+  try {
+    assertEquals(calls, 0)
+    assertEquals(host.anatomy().routes, [])
+    let routes = host.anatomy().facets.find((f) =>
+      f.package == 'shop' && f.name == 'routes'
+    )!
+    assertEquals([routes.attempted, routes.loaded, routes.bound], [
+      true,
+      true,
+      false,
+    ])
+    host.anatomy()
+    assertEquals(calls, 0)
+  } finally {
+    await host.close()
+  }
+})
