@@ -20,7 +20,7 @@ description: >
 A native session is a transcript in the graph that @yaks/harness runs. `yak
 session new` writes the session and its first input, then only waits: the
 runner works the transcript in whichever process serves the effects role,
-`yak serve` on this box (packages/harness/runs.ts). Each model turn and tool
+`yak work` on this box (packages/harness/runs.ts). Each model turn and tool
 call lands as an entry, so the graph is the record of everything it did, and
 killing the CLI that started it stops nothing. Its shell commands run on this
 machine with `TASKS_SESSION` set to the session (packages/session/who.ts), so
@@ -113,13 +113,16 @@ things:
 - **Stopping**: there is no stop for a native session yet. `yak session stop`
   stops managed spawns and refuses this one as "not a managed session"
   (T-42246).
-- **A restart of `yak serve`** interrupts nothing: serve takes no new step,
-  lets the step in flight finish (its model request, a tool call running for
-  minutes), then exits, and the journal says which runs it is waiting on
-  (@yaks/process/wind, packages/cli/drain.ts). The next `yak serve` takes the
-  session's next step. A second SIGTERM (`systemctl --user kill yak`) ends the
-  step where it stands; the session then picks up where it was, told that its
-  step was interrupted (packages/session/react.ts).
+- **Restart with `yak restart`**, the agent restart door. It waits for a new
+  independent `yak-work@` worker to be ready before queuing the old workers'
+  graceful drain and the web restart; it does not wait in a shell for shutdown.
+  `yak.service` runs `yak serve --no-duties`, so web and session work are
+  separate. A draining worker takes no new step and lets its step in flight
+  finish (a model request or a tool call running for minutes); the journal says
+  which runs it is waiting on (@yaks/process/wind, packages/cli/drain.ts).
+  A second interrupt forces shutdown and may interrupt a step or external
+  action; it is not guaranteed lossless. An interrupted step is reported to the
+  session (packages/session/react.ts).
 - **Afterwards**, leave the worktree. When `yak serve` next starts, a
   worktree under ~/.yak/worktrees that is clean and landed, and that no running
   session uses, is removed with its branch (packages/harness/worktrees.ts

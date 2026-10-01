@@ -4,7 +4,7 @@ description: >
   How work that follows a write is done in ~/code/tasks: declared rules inside
   the transaction, effects after the commit (the pool, start-up work, sweeps,
   retries, leases), observers in one process, and which process runs what
-  (roles, services, the effects thread). Use it whenever you add or change an
+  (roles, services, independent workers). Use it whenever you add or change an
   effect, a rule, a start-up job, a sweep, a lease or duty, a plugin's service
   or a role, write an `/effects` or `/rules` facet or an `effect: true` or
   `rule: true` entry in a vocab.json, or debug something that runs after a
@@ -113,17 +113,24 @@ runs (M-39540). A process serves roles and imports only their facets
 - `effects` is a pool: any number of processes may work it at once;
 - `web` and each plugin's service (named by its package) are singletons.
 
-`yak serve` serves `web` and starts the effects and service roles in a thread
-of its own; a `yak` command serves `graph` only (`rolesOf` in
-packages/cli/local.ts). Each process records its roles in `process{roles}`, so
-`.process.roles` shows who serves what.
+`yak serve` serves `web` only. When no live pool exists, its fallback starts
+an independent `yak work` process for the effects and service roles, not a duty
+thread. Installed systemd runs `yak.service` with `--no-duties` and an
+independent `yak-work@` worker. A passing `yak` command serves `graph` only
+(`rolesOf` in packages/cli/local.ts). Each process records its roles in
+`process{roles}`, so `.process.roles` shows who serves what.
+
+`yak restart` is the agent restart door: a new worker is ready first, then the
+old workers' graceful drain and the web restart are enqueued. It does not wait
+in a shell for shutdown.
 
 Every process winds down one way (`@yaks/process/wind`): the first interrupt (a
 signal, or Ctrl-C in a terminal app) stops its hosts, so the pool claims nothing
 more, a transcript starts no new step and a server takes no new request, and the
 process waits for every run it started, with no deadline of its own, logging
-what it waits on. A second interrupt forces. What a run leaves owed is the next
-worker's, so restarting `yak serve` interrupts nothing.
+what it waits on. A second interrupt forces shutdown and may interrupt a run
+or external action; it is not guaranteed lossless. Recorded work left owed is
+the next worker's.
 
 ## Debugging after a write
 

@@ -90,7 +90,7 @@ A plugin runs on the box only once `~/.yak/yak.json` lists it in `plugins`,
 either as a name or as `{"use": "@yaks/x", "with": {…}}`, and the server is
 restarted. Adding one has broken every `yak` command before, so prove the config
 on a scratch server first (the `end-to-end-checks` skill), back up yak.json,
-then edit it and `systemctl --user restart yak`. A key in `with` is
+then edit it and run `yak restart`, the agent restart door. A key in `with` is
 `{"secret": "NAME"}`, never the value (the `secrets-and-connections` skill).
 
 ## Publishing
