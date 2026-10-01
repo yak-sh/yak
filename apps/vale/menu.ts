@@ -7,6 +7,7 @@ import { SHEETS } from './hud.ts'
 import { type Action, keysOf } from './input.ts'
 import { cap, type Panel } from './panel.ts'
 import { VOXEL, VOXELS } from './terrain.ts'
+import { split } from './ui/split.ts'
 
 /** What the menu sets, and how it reads what is set. */
 type Level = { readonly level: number; set: (value: number) => void }
@@ -76,10 +77,39 @@ let TOUCH = [
 
 /** The menu, answering `o`. */
 export let menu = (panel: Panel, o: Settings) => {
+  let panes = split(panel.body)
+  let picked = 'audio'
+  let sections = [
+    ['audio', 'Audio'],
+    ['display', 'Display'],
+    ['controls', 'Controls'],
+    ['touch', 'Touch'],
+    ['keys', 'Keys'],
+  ]
+  let rows = sections.map(([id, title]) =>
+    `<button class=Split_Row data-select=${id}>${title}</button>`
+  ).join('')
+  let content = ''
+  let select = () => {
+    panes.render(rows, content, picked)
+    for (
+      let part of panes.detail.querySelectorAll<HTMLElement>('[data-section]')
+    ) {
+      part.hidden = part.dataset.section != picked
+    }
+  }
   let was = ''
   let selected = VOXELS.includes(o.voxel.current) ? o.voxel.current : VOXEL
   let volumes = { music: o.music, effects: o.effects, voice: o.voice }
   panel.body.addEventListener('click', (e) => {
+    let choice = e.target instanceof Element
+      ? e.target.closest<HTMLElement>('[data-select]')?.dataset.select
+      : null
+    if (choice) {
+      picked = choice
+      select()
+      return
+    }
     let act = e.target instanceof Element
       ? e.target.closest<HTMLElement>('[data-do]')?.dataset.do
       : null
@@ -170,7 +200,7 @@ export let menu = (panel: Panel, o: Settings) => {
         `${sound} ${playing} ${swapped} ${strafes} ${o.frames.current} ${hidesCursor}`
       if (key == was) return
       was = key
-      let html = `<div class=Menu>` +
+      let html = `<div class=Menu><section data-section=audio>` +
         toggle(
           'sound',
           sound,
@@ -186,7 +216,7 @@ export let menu = (panel: Panel, o: Settings) => {
         slider('music', 'Music volume') +
         slider('effects', 'Effects and ambience volume') +
         slider('voice', 'Player voice volume') +
-        voxel() +
+        `</section><section data-section=display>` + voxel() +
         toggle(
           'frames',
           o.frames.current == 30,
@@ -195,7 +225,7 @@ export let menu = (panel: Panel, o: Settings) => {
             ? 'Frame rate: 30 fps · lower power'
             : 'Frame rate: 60 fps · smoother motion',
         ) +
-        toggle(
+        `</section><section data-section=controls>` + toggle(
           'swap',
           swapped,
           glyph('video'),
@@ -215,12 +245,13 @@ export let menu = (panel: Panel, o: Settings) => {
           glyph('footprints'),
           strafes ? 'A/D strafes' : 'A/D turns',
         ) +
-        `<h3 class=Menu_Head>Touch</h3><dl class="Menu_Keys Menu_Keys-touch">${TOUCH}</dl>` +
-        `<h3 class=Menu_Head>Keys</h3><dl class="Menu_Keys Menu_Keys-keys">${
+        `</section><section data-section=touch><h3 class=Menu_Head>Touch</h3><dl class="Menu_Keys Menu_Keys-touch">${TOUCH}</dl>` +
+        `</section><section data-section=keys><h3 class=Menu_Head>Keys</h3><dl class="Menu_Keys Menu_Keys-keys">${
           keys(swapped, strafes)
         }</dl>` +
-        `</div>`
-      panel.body.innerHTML = html
+        `</section></div>`
+      content = html
+      select()
     },
   }
 }

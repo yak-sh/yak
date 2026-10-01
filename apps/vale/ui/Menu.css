@@ -1,11 +1,15 @@
 /* The menu (menu.ts): what a player sets, each a switch with its icon and
    what it does now, then the touches and the keys the vale answers, the
-   touches only where there are thumbs and the keys only where there is a
-   keyboard. */
+   each available as its own selectable section. */
 .Menu {
   display: grid;
   gap: var(--gap);
-  width: min(24rem, 100cqw - 2rem);
+  width: 100%;
+
+  & section:not([hidden]) {
+    display: grid;
+    gap: var(--gap);
+  }
 }
 
 .Menu_Set {
@@ -103,19 +107,5 @@
 
   & dd {
     margin: 0;
-  }
-}
-
-@media (pointer: coarse) {
-  .Menu_Head:has(+ .Menu_Keys-keys),
-  .Menu_Keys-keys {
-    display: none;
-  }
-}
-
-@media (pointer: fine) {
-  .Menu_Head:has(+ .Menu_Keys-touch),
-  .Menu_Keys-touch {
-    display: none;
   }
 }
