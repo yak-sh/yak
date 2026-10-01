@@ -58,10 +58,15 @@ else. Treat the brief as the part of the work you do yourself.
    them buries what matters.
 5. **Pointers, not copies**: the task, design, shas, files, memory ids. A
    pointer stays true; a pasted excerpt goes stale.
-6. **How it proves the work**: the end-to-end check it must run (the
-   `end-to-end-checks` skill), against a probe server, never the live graph,
-   with a scratch directory named for its task. Agents of one session share the
-   session's scratchpad, and fixed names like `scratchpad/probe` collide.
+6. **How it proves the work**: the tests of what it changed, and after a
+   yaks.app deploy, `app_errors`. A browser check (the `end-to-end-checks`
+   skill) only when nothing else can show the change works, and then once:
+   browser checks are slow, and the owner asked for fewer ("can you tell your
+   sessions to stop testing so much in chrome"). A brief that asks for one
+   every time gets one every time. When one is needed, it runs against a probe
+   server, never the live graph, with a scratch directory named for its task;
+   agents of one session share the session's scratchpad, and fixed names like
+   `scratchpad/probe` collide.
 7. **Tests**: "run only the tests your change could break", plus the behavior a
    new test must catch, or no test at all. "Add a test" alone gets one that
    restates the code (M-39441).
