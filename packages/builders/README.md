@@ -17,11 +17,11 @@ deno add jsr:@yaks/builders
   entity-ID tuple and variant. `match` stores that tuple as JSON; `for` names
   the entity it was built for, the first the tuple holds, as a reference a query
   can follow: `.build.for=X` is X's builds, and
-  `.built.build.build.for=X&.built.current=true` what was built for X now. Nested
-  bracket collections change the key but keep the build. A vanished binding
-  marks its build stale and retains its outputs; a returning binding reuses the
-  same build. An answer that lands after its binding vanished is kept too, so a
-  binding returning under the same key has it without asking again.
+  `.built.build.build.for=X&.built.current=true` what was built for X now.
+  Nested bracket collections change the key but keep the build. A vanished
+  binding marks its build stale and retains its outputs; a returning binding
+  reuses the same build. An answer that lands after its binding vanished is kept
+  too, so a binding returning under the same key has it without asking again.
 - `built{build,slot,key,call,artifact?}` is one named output. It is current when
   its build is not stale and the two keys match, which `built.current` computes,
   so a downstream builder selects `.built.current=true` and never gathers a
