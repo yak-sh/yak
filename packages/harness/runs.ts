@@ -47,12 +47,17 @@ let WORKING = ['pending', 'running', 'queued']
 // Wait for the reply: once the session's own computed status (@yaks/session
 // status.ts, one statement over the store) says it is no longer working, where
 // it settled — the newest entry, which is the model's reply, or the error or
-// stop it ended on.
-let settled = async (graph: Graph, s: Eid): Promise<Bundle[]> => {
+// stop it ended on. A host winding down stops waiting and answers the newest
+// entry as it stands; the session goes on wherever it runs.
+let settled = async (
+  graph: Graph,
+  s: Eid,
+  stopping?: AbortSignal,
+): Promise<Bundle[]> => {
   for (;;) {
     let [self] = await graph.get([s], ['session'])
     let status = (self?.session as Comp | undefined)?.status
-    if (!WORKING.includes(String(status))) {
+    if (!WORKING.includes(String(status)) || stopping?.aborted) {
       return (await transcript(graph, s)).slice(-1)
     }
     await new Promise((go) => setTimeout(go, 100))
@@ -150,7 +155,9 @@ export let runs = (host?: Host): Runs => ({
         ...effort ? { effort } : {},
       },
     })
-    return prompt ? await settled(graph, s) : await graph.get([s])
+    return prompt
+      ? await settled(graph, s, host?.stopping)
+      : await graph.get([s])
   },
   session_send: async (call, graph) => {
     let args = argsOf(call)
@@ -185,7 +192,7 @@ export let runs = (host?: Host): Runs => ({
       ...using ? { using } : {},
       $actor: through(s, caller(call)),
     }])
-    return await settled(graph, s)
+    return await settled(graph, s, host?.stopping)
   },
   model_list: async (call) => {
     if (!host) throw new Error('model list needs a host')
