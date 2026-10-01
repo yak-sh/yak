@@ -510,10 +510,17 @@ database_id = "88b2e161-99bf-4777-ab6d-b18fcf66ca95"
 # interprets a schema rather than compiling it to code the runtime refuses.
 "@cfworker/json-schema" = "./node_modules/@cfworker/json-schema/dist/esm/index.js"
 "zod-to-json-schema" = "./node_modules/zod-to-json-schema/dist/esm/index.js"
-"@modelcontextprotocol/sdk/server/mcp.js" = "./node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js"
+# SDK v2 runtime exports, including the dynamically loaded MCP routes.
+"npm:@modelcontextprotocol/server@2.2.0" = "./node_modules/@modelcontextprotocol/server/dist/index.mjs"
+"npm:@modelcontextprotocol/server@2.2.0/validators/ajv" = "./node_modules/@modelcontextprotocol/server/dist/validators/ajv.mjs"
+"@modelcontextprotocol/server" = "./node_modules/@modelcontextprotocol/server/dist/index.mjs"
+"@modelcontextprotocol/server/validators/ajv" = "./node_modules/@modelcontextprotocol/server/dist/validators/ajv.mjs"
+"@modelcontextprotocol/core" = "./node_modules/@modelcontextprotocol/core/dist/index.mjs"
+# @yaks/mcp-client loads these SDK v1 client modules dynamically.
+"@modelcontextprotocol/sdk/client/index.js" = "./node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js"
+"@modelcontextprotocol/sdk/client/streamableHttp.js" = "./node_modules/@modelcontextprotocol/sdk/dist/esm/client/streamableHttp.js"
+"@modelcontextprotocol/sdk/client/auth.js" = "./node_modules/@modelcontextprotocol/sdk/dist/esm/client/auth.js"
 "@modelcontextprotocol/sdk/types.js" = "./node_modules/@modelcontextprotocol/sdk/dist/esm/types.js"
-"@modelcontextprotocol/sdk/inMemory.js" = "./node_modules/@modelcontextprotocol/sdk/dist/esm/inMemory.js"
-"@modelcontextprotocol/sdk/validation/ajv" = "./node_modules/@modelcontextprotocol/sdk/dist/esm/validation/ajv-provider.js"
 
 # Bindings and vars do not inherit into named environments. Repeat every
 # binding here so staging has its own resources. Migrations, containers and
