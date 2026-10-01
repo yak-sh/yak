@@ -124,7 +124,7 @@ test('Anthropic Responses retains prior cache boundary beyond 20 new blocks', as
     ],
   })
   let next = seen[1].input
-  assertEquals(seen[1].tools, seen[0].tools)
+  assertEquals(JSON.stringify(seen[1].tools), JSON.stringify(seen[0].tools))
   assertEquals(strip(next.slice(0, old.length)), strip(old))
   assert(next[2].content?.[0].prompt_cache_breakpoint)
   assert(next.at(-1)?.content?.[0].prompt_cache_breakpoint)
@@ -189,7 +189,7 @@ test('implicit-cache upstreams keep append-only input and deterministic tools wi
     assertEquals(seen[0].session_id, undefined)
     assertEquals(seen[1].session_id, 'same')
     assertEquals(seen[1].input.slice(0, seen[0].input.length), seen[0].input)
-    assertEquals(seen[0].tools, seen[1].tools)
+    assertEquals(JSON.stringify(seen[0].tools), JSON.stringify(seen[1].tools))
     assert(!JSON.stringify(seen).includes('prompt_cache_breakpoint'))
     assert(!JSON.stringify(seen).includes('cache_control'))
   }
@@ -282,7 +282,7 @@ test('Alibaba chat streams calls, text and reported usage with explicit caching 
     strip(seen[1].messages.slice(0, seen[0].messages.length)),
     strip(seen[0].messages),
   )
-  assertEquals(seen[1].tools, seen[0].tools)
+  assertEquals(JSON.stringify(seen[1].tools), JSON.stringify(seen[0].tools))
 })
 
 test('Anthropic vision caches after the image and preserves the whole image prefix', async () => {
