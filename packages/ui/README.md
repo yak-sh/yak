@@ -197,3 +197,12 @@ optional, keyed by contribution name). The web host gathers the facets of all
 installed plugins into `host.ui`; `/ui` shows that composition, with links for
 each theme, skin and light/dark scheme. `gather` is also available to another
 page host; duplicate contribution names are a composition error.
+
+## Ledger skin
+
+The invented `ledger` skin paints Button, Tabs, Head and Tile as printed labels
+and ruled records, using only the selected theme's semantic tokens. Its four
+terminal replacements emphasize the same labels with bold and underline. All
+other parts retain their kit rendering. `/ui?skin=ledger` exposes coverage in
+the guide; browser skin links preserve theme and scheme, while `yak ui` uses `s`
+or the skin tabs to switch rendering without changing the tree.

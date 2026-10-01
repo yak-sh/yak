@@ -1,0 +1,52 @@
+/* A row of tabs: chips that read as controls, gapless (a tab's padding is
+   the spacing), the one showing lit. A badge says what waits behind a tab
+   without opening it: raised beside the face, a gap from it, never over
+   it, so the tab is as wide as both. */
+.Tabs {
+  display: flex;
+  align-items: center;
+}
+.Tabs_Tab {
+  font: inherit;
+  color: var(--dim);
+  text-decoration: none; /* a tab that links reads as a tab */
+  background: none;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) - 2px);
+  padding: 3px 4px;
+  cursor: pointer;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  display: flex;
+  align-items: center; /* the face stays centred as the floor grows */
+  justify-content: center;
+  gap: 3px;
+}
+.Tabs_Tab:hover,
+.Tabs_Tab-hover {
+  color: var(--muted); /* the face alone answers the pointer: no fill */
+}
+.Tabs_Tab-on {
+  color: var(--text);
+  background: var(--soft);
+  border-color: var(--border2);
+}
+/* Raised like a superscript; the shift is paint only, so the line keeps
+   its height. */
+.Tabs_Badge {
+  position: relative;
+  top: -0.5em;
+  min-width: 1.1em;
+  padding: 0 0.25em;
+  border-radius: 1em;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 0.65em;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+/* Ledger: folder labels, with a double rule on the selected label. */
+.Tabs_Tab { border-radius: 0; border-bottom: 3px solid transparent; font-family: var(--mono); }
+.Tabs_Tab-on { color: var(--accent); background: var(--card); border-color: var(--border2); border-bottom-color: var(--accent); border-bottom-style: double; }
+.Tabs_Tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

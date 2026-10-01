@@ -7,7 +7,7 @@
  * group, each part), and the page is the one the walk is on.
  *
  * Keys: j and k walk the contents, and the page follows; ↑ ↓ PgUp PgDn
- * scroll the page; t paints everything in the next theme; q quits. A press
+ * scroll the page; t paints everything in the next theme; s switches skin; q quits. A press
  * on an entry or a theme picks it.
  *
  * @module
@@ -17,15 +17,21 @@ import { signal } from '@preact/signals'
 import { h } from 'preact'
 import { type Key, quit, run, Scroll, useKeys } from '@yaks/tui'
 import { Contents, Page, stops } from './guide.ts'
-import { kits, sheet, themes } from './kit.ts'
+import { kits, sheet, skins, themes } from './kit.ts'
 import { Pairs } from './Pairs.ts'
 import { Panes } from './Panes.ts'
 import { Tabs } from './Tabs.ts'
 
-/** Hold the style guide in this terminal until q or Ctrl-C. */
-export let open = async (): Promise<void> => {
+/** A terminal guide instance, with its live composition sheet. */
+export let terminalGuide = () => {
   let names = Object.keys(themes)
-  let sheets = names.map((n) => sheet({ kits, theme: themes[n] }))
+  let skinNames = ['base', ...Object.keys(skins)]
+  let skin = signal(0)
+  let dressed = () => ({
+    kits,
+    theme: themes[names[theme.value]],
+    skin: skins[skinNames[skin.value]],
+  })
   let at = signal(0)
   let theme = signal(0)
   let walk = (i: number) =>
@@ -34,6 +40,7 @@ export let open = async (): Promise<void> => {
     let c = k.name == 'char' ? k.text : undefined
     if (c == 'q') quit()
     else if (c == 'j' || c == 'k') walk(at.value + (c == 'j' ? 1 : -1))
+    else if (c == 's') skin.value = (skin.value + 1) % skinNames.length
     else if (c == 't') theme.value = (theme.value + 1) % names.length
     else return false
     return true
@@ -73,6 +80,23 @@ export let open = async (): Promise<void> => {
             h(
               Pairs,
               {},
+              h(Pairs.Key, {}, 'skin'),
+              h(
+                Pairs.Value,
+                {},
+                h(
+                  Tabs,
+                  {},
+                  skinNames.map((name, i) =>
+                    h(Tabs.Tab, {
+                      key: name,
+                      type: 'button',
+                      mod: i == skin.value && 'on',
+                      onClick: () => skin.value = i,
+                    }, name)
+                  ),
+                ),
+              ),
               h(Pairs.Key, {}, 'theme'),
               h(
                 Pairs.Value,
@@ -95,7 +119,7 @@ export let open = async (): Promise<void> => {
           h(
             Scroll,
             { id: 'ui index', grow: '1', follow: false, keyboard: false },
-            h(Contents, { entry }),
+            h(Contents, { entry, composition: dressed() }),
           ),
         ),
         h(
@@ -104,16 +128,24 @@ export let open = async (): Promise<void> => {
           h(
             Scroll,
             { id: `ui page ${here}`, grow: '1', follow: false },
-            h(Page, { stop: here }),
+            h(Page, { stop: here, composition: dressed() }),
           ),
         ),
       ),
       h(
         'div',
         { class: 'Muted' },
-        'j k contents · ↑ ↓ PgUp PgDn scroll · t theme · q quit',
+        `j k contents · ↑ ↓ PgUp PgDn scroll · t theme · s skin (${
+          skinNames[skin.value]
+        }) · q quit`,
       ),
     )
   }
-  await run(App, { sheet: () => sheets[theme.value] })
+  return { App, sheet: () => sheet(dressed()) }
+}
+
+/** Hold the style guide in this terminal until q or Ctrl-C. */
+export let open = async (): Promise<void> => {
+  let guide = terminalGuide()
+  await run(guide.App, { sheet: guide.sheet })
 }

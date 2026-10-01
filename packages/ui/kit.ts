@@ -42,6 +42,7 @@ import * as tip from './Tip.ts'
 import * as turns from './Turns.ts'
 import * as value from './Value.ts'
 import { everforest } from './everforest.ts'
+import { ledger } from './ledger.ts'
 import { rosepine } from './rosepine.ts'
 import { Fragment } from 'preact'
 import type { Composition, Contributions, Kit, Piece, Theme } from './theme.ts'
@@ -101,7 +102,7 @@ export let groups: Record<string, Kit> = Object.fromEntries(
 export let kit: Kit = Object.assign({}, ...Object.values(groups))
 export let kits: Record<string, Kit> = { base: kit }
 export let themes: Record<string, Theme> = { everforest, rosepine }
-export let skins: NonNullable<Contributions['skins']> = {}
+export let skins: NonNullable<Contributions['skins']> = { ledger }
 export let composition: Composition = { kits, theme: everforest }
 
 export { gather } from './contributions.ts'
