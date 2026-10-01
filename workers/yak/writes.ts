@@ -41,6 +41,7 @@ import {
   and,
   col,
   type CreateTable,
+  desc,
   type Driver,
   eq,
   gt,
@@ -186,7 +187,7 @@ export let interrupted = (db: Driver) => {
 }
 
 /** Kept writes, with the body only when one is named for inspection. */
-export let writes = (db: Driver, seq?: number) =>
+export let writes = (db: Driver, seq?: number, recent = false) =>
   db.query(select({
     cols: [
       col('seq'),
@@ -196,17 +197,21 @@ export let writes = (db: Driver, seq?: number) =>
       col('why'),
       col('status'),
       col('audit'),
+      col('headers'),
       ...(seq == null ? [] : [col('body'), col(KEY), col('answer')]),
     ],
     from: table(LOG),
-    where: seq == null ? not(APPLIED) : at(seq),
-    order: [col('seq')],
+    where: seq == null ? recent ? undefined : not(APPLIED) : at(seq),
+    order: [recent ? desc(col('seq')) : col('seq')],
     limit: lit(seq == null ? 100 : 1),
-  })).map((r) =>
-    seq != null && r.audit == 1 && r.state == 'applied'
-      ? { ...r, answer: outcome(db, seq) }
-      : r
-  )
+  })).map(({ headers, ...r }) => ({
+    ...r,
+    kernel: new Headers(JSON.parse(String(headers))).get('x-yak-kernel') ==
+      '1',
+    ...(seq != null && r.audit == 1 && r.state == 'applied'
+      ? { answer: outcome(db, seq) }
+      : {}),
+  }))
 
 /** Explicitly retry an interrupted or unreviewed write, keeping its body and
  * key, and keeping its final answer beside them when it commits. */

@@ -3285,6 +3285,7 @@ let OURS: Row[] = [
         space: SPACE,
         app: APP,
         seq: { type: 'integer', minimum: 1 },
+        recent: { type: 'boolean' },
       },
       required: ['app'],
     },
@@ -3294,7 +3295,7 @@ let OURS: Row[] = [
       if (seq != null && (!Number.isSafeInteger(seq) || seq < 1)) {
         throw refuse('arguments', 'seq must be a positive integer')
       }
-      let rows = await inspectWrites(store, seq)
+      let rows = await inspectWrites(store, seq, args.recent === true)
       return {
         text: rows.length
           ? rows.map((r) =>

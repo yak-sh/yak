@@ -492,3 +492,30 @@ test('a body carrying a key is never kept', () => {
     [true, true, true, false, false, true],
   )
 })
+
+test('recent write inspection includes committed outcomes without credentials', async () => {
+  let o = object()
+  let door = storeOf({
+    idFromName: (name) => name,
+    get: () => ({ fetch: o.fetch }),
+  }, NAME)
+  await metaOf(door).apply([{
+    entity: { eid: 'recent-one' },
+    doc: { title: 'one' },
+  }], KERNEL)
+  await metaOf(door).apply([{
+    entity: { eid: 'recent-two' },
+    doc: { title: 'two' },
+  }], KERNEL)
+  let recent = await door('/writes?recent=1', {}, KERNEL)
+  let rows = await recent.json()
+  assertEquals(rows.length, 2)
+  assertEquals(rows.map((r: { kernel: boolean }) => r.kernel), [true, true])
+  assertEquals(rows[0].seq > rows[1].seq, true)
+  assertEquals(rows.some((r: object) => 'headers' in r), false)
+  let seen = await door(`/writes?seq=${rows[0].seq}`, {}, KERNEL)
+  let [write] = await seen.json()
+  assertEquals(JSON.parse(write.answer)[0].entity.eid, 'recent-two')
+  assertEquals(write.body, '')
+  assertEquals(await (await door('/writes', {}, KERNEL)).json(), [])
+})

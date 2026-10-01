@@ -6,6 +6,7 @@ import { rejected } from './tool.ts'
 
 export type Write = {
   seq: number
+  kernel: boolean
   at: string
   state: string
   tries: number
@@ -42,8 +43,16 @@ let asked = (
   )
 }
 
-export let inspect = async (store: Door, seq?: number): Promise<Write[]> =>
-  await asked(store, `/writes${seq == null ? '' : `?seq=${seq}`}`) as Write[]
+export let inspect = async (
+  store: Door,
+  seq?: number,
+  recent = false,
+): Promise<Write[]> => {
+  let query = new URLSearchParams()
+  if (seq != null) query.set('seq', String(seq))
+  if (recent) query.set('recent', '1')
+  return await asked(store, `/writes?${query}`) as Write[]
+}
 
 export let retry = async (store: Door, seq: number): Promise<Write[]> =>
   (await asked(store, `/writes?seq=${seq}`, 'POST', false) as {

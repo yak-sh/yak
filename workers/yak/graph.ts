@@ -2607,6 +2607,7 @@ export class Store {
           writes(
             this.#sql,
             Number.isSafeInteger(seq) && seq > 0 ? seq : undefined,
+            new URL(request.url).searchParams.get('recent') == '1',
           ),
         )
       }

@@ -361,8 +361,9 @@ store_writes:
   description: >-
     List writes the named app's store still holds, including interrupted
     writes that a storage reset stopped. Name seq to inspect one write's
-    original body and final outcome. Only the space owner can inspect these
-    private writes. Nothing is retried.
+    original body and final outcome. Set recent to list the newest 100 writes,
+    including applied writes, with a kernel flag but never request headers.
+    Only the space owner can inspect these private writes. Nothing is retried.
 store_retry:
   title: Retry an interrupted store write
   description: >-
