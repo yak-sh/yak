@@ -14,9 +14,23 @@
         "group": {
           "type": "string",
           "enum": [
-            "packages", "roles", "facets", "comps", "tools", "commands",
-            "effects", "rules", "hooks", "routes", "views", "inspectViews",
-            "tui", "kits", "themes", "skills", "secrets"
+            "packages",
+            "roles",
+            "facets",
+            "comps",
+            "tools",
+            "commands",
+            "effects",
+            "rules",
+            "hooks",
+            "routes",
+            "views",
+            "inspectViews",
+            "tui",
+            "kits",
+            "themes",
+            "skills",
+            "secrets"
           ],
           "description": "one anatomy group; omitted means every group"
         },

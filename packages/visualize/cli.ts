@@ -40,7 +40,9 @@ let activity = (value: Capture): string => {
   ]
   let recent = value.events.slice(-8)
   if (recent.length < value.events.length) {
-    lines.push(`latest ${recent.length} events (use --json for the full capture)`)
+    lines.push(
+      `latest ${recent.length} events (use --json for the full capture)`,
+    )
   }
   for (let event of recent) {
     lines.push(
@@ -73,9 +75,23 @@ export let commands: CliCommand[] = [{
       group: {
         type: 'string',
         enum: [
-          'packages', 'roles', 'facets', 'comps', 'tools', 'commands',
-          'effects', 'rules', 'hooks', 'routes', 'views', 'inspectViews',
-          'tui', 'kits', 'themes', 'skills', 'secrets',
+          'packages',
+          'roles',
+          'facets',
+          'comps',
+          'tools',
+          'commands',
+          'effects',
+          'rules',
+          'hooks',
+          'routes',
+          'views',
+          'inspectViews',
+          'tui',
+          'kits',
+          'themes',
+          'skills',
+          'secrets',
         ],
         description: 'one anatomy group; omitted means all groups',
       },
@@ -100,7 +116,8 @@ export let commands: CliCommand[] = [{
         minimum: 0,
         maximum: 2000,
         default: 0,
-        description: 'activity capture milliseconds; zero reads available history',
+        description:
+          'activity capture milliseconds; zero reads available history',
       },
       json: {
         type: 'boolean',
@@ -119,7 +136,9 @@ export let commands: CliCommand[] = [{
       if (what != 'anatomy' && what != 'activity') {
         throw new Error('choose anatomy or activity')
       }
-      if (what == 'activity' && ['group', 'search', 'id'].some((k) => k in args)) {
+      if (
+        what == 'activity' && ['group', 'search', 'id'].some((k) => k in args)
+      ) {
         throw new Error('--group, --search and --id apply only to anatomy')
       }
       if (what == 'anatomy' && args.wait != null && args.wait != 0) {

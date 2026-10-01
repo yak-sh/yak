@@ -9,7 +9,10 @@
     "./http": "./http.ts",
     "./front": "./front.ts",
     "./model": "./model.ts",
-    "./routes": "./routes.ts"
+    "./routes": "./routes.ts",
+    "./cli": "./cli.ts",
+    "./tools": "./tools.ts",
+    "./vocab": "./vocab.ts"
   },
   "license": "Apache-2.0",
   "description": "A value-free atlas of a composed platform and its subscriber-owned live causal activity, on /visualize and through agent doors.",

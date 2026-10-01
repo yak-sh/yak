@@ -8,38 +8,67 @@ import type { Bundle, Graph } from '@yaks/graph'
 import { equal, ok, test } from '@yaks/testing'
 import { channel, peek } from '@yaks/trace'
 import { observe } from './activity.ts'
-import { capture, type Capture } from './capture.ts'
+import { type Capture, capture } from './capture.ts'
 import { commands } from './cli.ts'
-import { select, snapshot, type Snapshot } from './snapshot.ts'
+import { select, type Snapshot, snapshot } from './snapshot.ts'
 import { runs } from './tools.ts'
 import doc from './vocab.json' with { type: 'json' }
 
 let tool = (id: string, name: string, pkg: string): AnatomyTool => ({
-  id, name, package: pkg, facet: 'tools', declared: true,
-  loaded: true, bound: false, inputSchema: { type: 'object' },
+  id,
+  name,
+  package: pkg,
+  facet: 'tools',
+  declared: true,
+  loaded: true,
+  bound: false,
+  inputSchema: { type: 'object' },
 })
 let parts = (): Anatomy => ({
   version: 1,
   host: 'native',
   packages: [{
-    id: 'package:alpha', name: '@yaks/alpha', configured: true,
-    declared: true, loaded: true, bound: true,
+    id: 'package:alpha',
+    name: '@yaks/alpha',
+    configured: true,
+    declared: true,
+    loaded: true,
+    bound: true,
   }],
   tools: [
     tool('tool:alpha', 'alpha_read', '@yaks/alpha'),
     tool('tool:beta', 'beta_read', '@yaks/beta'),
   ],
-  roles: [], facets: [], comps: [], commands: [], effects: [], rules: [],
-  hooks: [], routes: [], views: [], inspectViews: [], tui: [], kits: [],
-  themes: [], skills: [], secrets: [],
+  roles: [],
+  facets: [],
+  comps: [],
+  commands: [],
+  effects: [],
+  rules: [],
+  hooks: [],
+  routes: [],
+  views: [],
+  inspectViews: [],
+  tui: [],
+  kits: [],
+  themes: [],
+  skills: [],
+  secrets: [],
   edges: [{
-    id: 'edge:alpha', from: 'package:alpha', to: 'tool:alpha', kind: 'declares',
+    id: 'edge:alpha',
+    from: 'package:alpha',
+    to: 'tool:alpha',
+    kind: 'declares',
   }, {
-    id: 'edge:beta', from: 'package:alpha', to: 'tool:beta', kind: 'declares',
+    id: 'edge:beta',
+    from: 'package:alpha',
+    to: 'tool:beta',
+    kind: 'declares',
   }],
 })
 let asked = (args: Record<string, unknown> = {}): Bundle => ({
-  entity: { eid: 'call:visualize' }, call: { args },
+  entity: { eid: 'call:visualize' },
+  call: { args },
 })
 // A runner's graph argument is not a way to observe some other host.
 let other = {} as Graph
@@ -52,10 +81,16 @@ test('anatomy tool uses shared selection, node counts and included-only edges', 
   let original = parts()
   let before = structuredClone(original)
   let host = { graph: {}, anatomy: () => original }
-  for (let args of [
-    {}, { group: 'tools' }, { search: ' ALPHA ' }, { search: 'alpha', limit: 1 },
-    { id: 'tool:beta' }, { group: 'missing' },
-  ]) {
+  for (
+    let args of [
+      {},
+      { group: 'tools' },
+      { search: ' ALPHA ' },
+      { search: 'alpha', limit: 1 },
+      { id: 'tool:beta' },
+      { group: 'missing' },
+    ]
+  ) {
     let rows = await runs(host).visualize_anatomy(asked(args), other)
     equal(rows[0].entity.eid, '$anatomy')
     let value = decoded<Snapshot>(rows)
@@ -66,22 +101,34 @@ test('anatomy tool uses shared selection, node counts and included-only edges', 
     equal(original, before)
     for (let edge of value.anatomy.edges) {
       let ids = [
-        ...value.anatomy.packages, ...value.anatomy.tools,
+        ...value.anatomy.packages,
+        ...value.anatomy.tools,
       ].map((part) => part.id)
       ok(ids.includes(edge.from) && ids.includes(edge.to))
     }
   }
-  let truncated = decoded<Snapshot>(await runs(host).visualize_anatomy(
-    asked({ search: 'alpha', limit: 1 }), other,
-  ))
-  equal(truncated.selection, { total: 3, matched: 2, shown: 1, truncated: true })
+  let truncated = decoded<Snapshot>(
+    await runs(host).visualize_anatomy(
+      asked({ search: 'alpha', limit: 1 }),
+      other,
+    ),
+  )
+  equal(truncated.selection, {
+    total: 3,
+    matched: 2,
+    shown: 1,
+    truncated: true,
+  })
   equal(truncated.anatomy.edges, [])
 })
 
 test('anatomy tool exposes missing composition as unobserved, not absent', async () => {
-  let value = decoded<Snapshot>(await runs({ graph: {} }).visualize_anatomy(
-    asked(), other,
-  ))
+  let value = decoded<Snapshot>(
+    await runs({ graph: {} }).visualize_anatomy(
+      asked(),
+      other,
+    ),
+  )
   equal(value.anatomy.host, 'unobserved')
   equal(value.selection, { total: 0, matched: 0, shown: 0, truncated: false })
   equal(Object.keys(value.coverage.observed).length, 17)
@@ -101,13 +148,17 @@ test('activity tool returns the shared bounded capture of its actual host', asyn
     channel(other).instant({ kind: 'get', name: 'graph.other' })
     let expected = await capture(graph, { limit: 2, wait: 0 })
     let rows = await runs({ graph }).visualize_activity(
-      asked({ limit: 2, wait: 0 }), other,
+      asked({ limit: 2, wait: 0 }),
+      other,
     )
     equal(rows[0].entity.eid, '$activity')
     let value = decoded<Capture>(rows)
-    equal(value, expected)
+    equal(value, JSON.parse(JSON.stringify(expected)))
     equal(value.epoch, observation.epoch)
-    equal(value.events.map((event) => event.name), ['graph.get', 'graph.fanout'])
+    equal(value.events.map((event) => event.name), [
+      'graph.get',
+      'graph.fanout',
+    ])
     equal(value.events.map((event) => event.seq), [2, 3])
     equal(value.gap, 1)
     equal(value.coverage, 'process-local')
@@ -136,7 +187,10 @@ test('agent door declarations publish bounded filters and capture inputs', () =>
 })
 
 let empty = (): Capture => ({
-  epoch: 'capture:local', events: [], gap: 0, coverage: 'process-local',
+  epoch: 'capture:local',
+  events: [],
+  gap: 0,
+  coverage: 'process-local',
 })
 // The only replaced interfaces are network delivery and the token-store read.
 // No test reads the user's credentials, starts a server or composes a host.
@@ -175,8 +229,11 @@ let terminal = async (
     return Promise.resolve(Response.json(value, { status: opts.status ?? 200 }))
   }) as typeof fetch
   let context = {
-    host: opts.host ?? 'localhost:8787', json: opts.json ?? false,
-    state, via: opts.via, out: (s: string) => out.push(s),
+    host: opts.host ?? 'localhost:8787',
+    json: opts.json ?? false,
+    state,
+    via: opts.via,
+    out: (s: string) => out.push(s),
     note: (s: string) => notes.push(s),
   } as Ctx
   let host = {
@@ -197,10 +254,17 @@ let terminal = async (
 }
 
 test('CLI reads served anatomy filters and prints the exact JSON DTO', async () => {
-  let value = select(snapshot({ anatomy: parts }), { search: 'alpha', limit: 1 })
+  let value = select(snapshot({ anatomy: parts }), {
+    search: 'alpha',
+    limit: 1,
+  })
   let told = await terminal({
-    url: 'https://platform.test', group: 'tools', search: 'name &=#',
-    id: 'tool:alpha', limit: 1, json: true,
+    url: 'https://platform.test',
+    group: 'tools',
+    search: 'name &=#',
+    id: 'tool:alpha',
+    limit: 1,
+    json: true,
   }, value)
   equal(told.code, 0)
   equal(told.out, [JSON.stringify(value)])
@@ -211,7 +275,10 @@ test('CLI reads served anatomy filters and prints the exact JSON DTO', async () 
   equal(url.origin, 'https://platform.test')
   equal(url.pathname, '/visualize/anatomy')
   equal(Object.fromEntries(url.searchParams), {
-    group: 'tools', search: 'name &=#', id: 'tool:alpha', limit: '1',
+    group: 'tools',
+    search: 'name &=#',
+    id: 'tool:alpha',
+    limit: '1',
   })
   equal(request.method, 'GET')
   equal(request.redirect, 'error')
@@ -221,11 +288,15 @@ test('CLI reads served anatomy filters and prints the exact JSON DTO', async () 
 test('CLI uses native serving config and context JSON for activity', async () => {
   let value = { ...empty(), gap: 7 }
   let told = await terminal({ what: 'activity', limit: 2, wait: 0 }, value, {
-    config: { hostname: '0.0.0.0', port: 9191 }, json: true,
+    config: { hostname: '0.0.0.0', port: 9191 },
+    json: true,
   })
   equal(told.code, 0)
   equal(told.out, [JSON.stringify(value)])
-  equal(told.sent[0].url, 'http://127.0.0.1:9191/visualize/activity?limit=2&wait=0')
+  equal(
+    told.sent[0].url,
+    'http://127.0.0.1:9191/visualize/activity?limit=2&wait=0',
+  )
   let fallback = await terminal({}, snapshot({}), { json: true })
   equal(fallback.sent[0].url, 'http://127.0.0.1:8787/visualize/anatomy')
 })
@@ -236,24 +307,47 @@ test('CLI selects credentials only for the requested origin and carries provenan
     'selected.test': 'selected-host-key',
     'default.test': 'unrelated-key',
   }
-  let matching = await terminal({ url: 'https://selected.test', json: true }, {}, {
-    host: 'https://selected.test', tokens, via: 'session:local',
-  })
+  let matching = await terminal(
+    { url: 'https://selected.test', json: true },
+    {},
+    {
+      host: 'https://selected.test',
+      tokens,
+      via: 'session:local',
+    },
+  )
   equal(matching.sent[0].headers.get('authorization'), 'Bearer matching-key')
   equal(matching.sent[0].headers.get('x-via'), 'session:local')
   equal(matching.sent[0].redirect, 'error')
-  let selected = await terminal({ url: 'https://selected.test', json: true }, {}, {
-    host: 'default.test', tokens,
-  })
-  equal(selected.sent[0].headers.get('authorization'), 'Bearer selected-host-key')
+  let selected = await terminal(
+    { url: 'https://selected.test', json: true },
+    {},
+    {
+      host: 'default.test',
+      tokens,
+    },
+  )
+  equal(
+    selected.sent[0].headers.get('authorization'),
+    'Bearer selected-host-key',
+  )
   let absent = await terminal({ url: 'https://unknown.test', json: true }, {}, {
-    host: 'default.test', tokens,
+    host: 'default.test',
+    tokens,
   })
   equal(absent.sent[0].headers.get('authorization'), null)
-  let explicit = await terminal({ url: 'https://selected.test', json: true }, {}, {
-    token: 'explicit-env-token', tokens,
-  })
-  equal(explicit.sent[0].headers.get('authorization'), 'Bearer explicit-env-token')
+  let explicit = await terminal(
+    { url: 'https://selected.test', json: true },
+    {},
+    {
+      token: 'explicit-env-token',
+      tokens,
+    },
+  )
+  equal(
+    explicit.sent[0].headers.get('authorization'),
+    'Bearer explicit-env-token',
+  )
   equal(explicit.keys, [])
 })
 
@@ -271,13 +365,15 @@ test('CLI reports HTTP refusals without printing a DTO or response values', asyn
 })
 
 test('CLI refuses unsafe destinations and incompatible modes before fetching', async () => {
-  for (let args of [
-    { url: 'file:///tmp/visualize' },
-    { url: 'https://user:password@platform.test' },
-    { what: 'events' },
-    { what: 'activity', group: 'tools' },
-    { what: 'anatomy', wait: 1 },
-  ]) {
+  for (
+    let args of [
+      { url: 'file:///tmp/visualize' },
+      { url: 'https://user:password@platform.test' },
+      { what: 'events' },
+      { what: 'activity', group: 'tools' },
+      { what: 'anatomy', wait: 1 },
+    ]
+  ) {
     let told = await terminal(args, empty())
     equal(told.code, 1)
     equal(told.sent, [])
@@ -290,13 +386,25 @@ test('CLI overview distinguishes state, unobserved categories and zero duration'
   let overview = await terminal({}, select(snapshot({ anatomy: parts })))
   equal(overview.code, 0)
   ok(overview.out[0].includes('tools: 2; declared 2, loaded 2, bound 0'))
-  ok(overview.out[0].includes('unobserved: views'))
+  let unknown = overview.out[0].split('unobserved: ')[1].split(', ')
+  ok(unknown.includes('views'))
   ok(overview.out[0].includes('recording subscriber-only'))
   let value: Capture = {
-    ...empty(), gap: 3, events: [{
-      epoch: 'capture:local', seq: 1, id: 'span:1', parent: 'span:0',
-      kind: 'query', name: 'graph.query', stage: 'end', time: 0, start: 0,
-      duration: 0, outcome: 'ok', counts: { rows: 0 },
+    ...empty(),
+    gap: 3,
+    events: [{
+      epoch: 'capture:local',
+      seq: 1,
+      id: 'span:1',
+      parent: 'span:0',
+      kind: 'query',
+      name: 'graph.query',
+      stage: 'end',
+      time: 0,
+      start: 0,
+      duration: 0,
+      outcome: 'ok',
+      counts: { rows: 0 },
     }],
   }
   let activity = await terminal({ what: 'activity' }, value)
