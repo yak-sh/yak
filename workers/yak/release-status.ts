@@ -46,9 +46,7 @@ export let releaseStatus = async (
       return reloadLevel(
         { files: oldFiles, vocab: oldVocab },
         { files: newFiles, vocab: newVocab },
-        all.filter((v) =>
-          v.version > version && v.version <= now
-        ) as (Version & { reload?: string | null })[],
+        all.filter((v) => v.version > version && v.version <= now),
       )
     })()
     if (cache.size >= 1024) cache.delete(cache.keys().next().value!)

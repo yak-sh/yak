@@ -87,3 +87,38 @@ test('release door gates readers and validates the page version', async () => {
   })
   assertEquals((await get('?version=1')).status, 401)
 })
+
+test('crossing a required release raises the reload level even with equal vocab and only cosmetic file changes', async () => {
+  using scenario = platform()
+  let { env, files } = scenario
+  let { app } = await seeded(env)
+  files.held.set('sha/words', bytes(JSON.stringify(doc())))
+  await stamp(env, {
+    entities: [1, 2, 3].map((version) => ({
+      entity: { eid: crypto.randomUUID() },
+      deploy: {
+        app: app.eid,
+        version,
+        files: JSON.stringify({
+          'vocab.json': 'words',
+          'index.html': String(version),
+        }),
+        ...(version == 2 ? { reload: 'required' } : {}),
+      },
+    })),
+  })
+  await stamp(env, {
+    entities: [{ entity: { eid: app.eid }, app: { version: 3 } }],
+  })
+  let get = async (version: number) => {
+    let res = await apps.fetch(
+      visit(`/cookbook/api/release?version=${version}`),
+      env,
+    )
+    assertEquals(res.status, 200)
+    return res.json()
+  }
+  assertEquals(await get(1), { version: 3, reload: 'required' })
+  // The mark on the page's own release is not crossed.
+  assertEquals(await get(2), { version: 3, reload: 'optional' })
+})
