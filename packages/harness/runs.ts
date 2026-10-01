@@ -27,7 +27,7 @@ import { MODEL, PROVIDER } from '@yaks/model'
 import { parse } from '@yaks/query'
 import { CODEX, type Credential, type TransportCredential } from '@yaks/openai'
 import { instructionFiles } from '@yaks/context/host'
-import { statusOf, transcript, usingBefore } from '@yaks/session'
+import { transcript, usingBefore } from '@yaks/session'
 import { ASTRA, begin, seed, through } from './agent.ts'
 import { selectedUsing } from './model_selection.ts'
 import { openaiCredential } from './openai_auth.ts'
@@ -40,13 +40,21 @@ let word = (args: Args, name: string): string | undefined => {
   return typeof v == 'string' ? v : undefined
 }
 
-// Wait for the reply: once the transcript owes nothing, where it settled — the
-// newest entry, which is the model's reply, or the error or stop it ended on.
+// What a session is doing while it is still working: owing a turn, owing a
+// tool's answer, or waiting for a place to run.
+let WORKING = ['pending', 'running', 'queued']
+
+// Wait for the reply: once the session's own computed status (@yaks/session
+// status.ts, one statement over the store) says it is no longer working, where
+// it settled — the newest entry, which is the model's reply, or the error or
+// stop it ended on.
 let settled = async (graph: Graph, s: Eid): Promise<Bundle[]> => {
   for (;;) {
-    let entries = await transcript(graph, s)
-    let status = statusOf(entries)
-    if (status != 'pending' && status != 'running') return entries.slice(-1)
+    let [self] = await graph.get([s], ['session'])
+    let status = (self?.session as Comp | undefined)?.status
+    if (!WORKING.includes(String(status))) {
+      return (await transcript(graph, s)).slice(-1)
+    }
     await new Promise((go) => setTimeout(go, 100))
   }
 }

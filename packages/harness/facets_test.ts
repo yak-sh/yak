@@ -10,10 +10,10 @@ import {
 import { argsOf, type Bundle, mint, namedTool, offered } from '@yaks/graph'
 import { answerOf, toolEid, worded } from '@yaks/tools'
 import { connect } from '../mcp/testing.ts'
-import { transcript } from '@yaks/session'
+import { textOf, transcript } from '@yaks/session'
 import { selectedUsing } from './model_selection.ts'
 import { runs } from './runs.ts'
-import { at, harness } from './testing.ts'
+import { at, harness, working } from './testing.ts'
 
 let reads = { file: () => '', stdin: () => '' }
 
@@ -112,6 +112,36 @@ test('session new opens an empty TUI session and requires input otherwise', asyn
     assert(entries.every((e) => !!e.prompt))
     assert((await selectedUsing(h.g, session.entity.eid))?.model)
   } finally {
+    await h.close()
+  }
+})
+
+test('session new returns the reply its session settles on, past its tool calls', async () => {
+  let h = await harness()
+  let echo = {
+    name: 'echo',
+    description: 'echo',
+    parameters: { type: 'object', properties: {} },
+    run: () => 'echoed',
+  }
+  // Calls echo twice, then replies.
+  let model = (req: { items: { kind: string }[] }) =>
+    Promise.resolve({
+      id: 'r',
+      model: 'fake',
+      items: req.items.filter((i) => i.kind == 'result').length < 2
+        ? [{ kind: 'call' as const, id: mint(), name: 'echo', args: '{}' }]
+        : [{ kind: 'assistant' as const, text: 'done' }],
+    })
+  let runner = working(h, { tools: [echo], model })
+  try {
+    let [reply] = await runs().session_new!({
+      entity: { eid: mint() },
+      call: { args: { prompt: 'echo twice' } },
+    }, h.g)
+    assertEquals(textOf(reply), 'done')
+  } finally {
+    await runner.stop()
     await h.close()
   }
 })
