@@ -1,0 +1,453 @@
+/* System MRI: domain layout and semantic roles. Theme palettes and display
+   primitives belong to @yaks/ui; no live-looking animation without a record. */
+.Atlas {
+  --tap: 2rem;
+  min-height: 100vh;
+  color: var(--text);
+  background: var(--bg);
+  font: 14px/1.5 var(--font);
+}
+.Atlas :where(h1, h2, h3, p, dl, ul, ol) { margin: 0; max-width: none; }
+.Atlas :where(button, select, input) { font-family: inherit; }
+.Atlas :where(button, select, summary) { cursor: pointer; }
+.Atlas :where(button, select, input, a, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 4px;
+}
+.Atlas :where(button):disabled { cursor: default; }
+.Atlas :where(kbd) {
+  padding: 1px 5px;
+  color: var(--muted);
+  border: 1px solid var(--border2);
+  border-radius: calc(var(--radius) / 2);
+  font: 10px/1.6 var(--mono);
+}
+.Atlas :where(select) {
+  min-height: 36px;
+  padding: 6px 28px 6px 10px;
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  color: var(--text);
+  background: var(--surface);
+  font-size: 12px;
+}
+.Atlas_VisuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.Atlas_Skip {
+  position: fixed;
+  z-index: 30;
+  top: 10px;
+  left: 10px;
+  padding: 10px 18px;
+  transform: translateY(-160%);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--link);
+  border-radius: var(--radius);
+}
+.Atlas_Skip:focus { transform: none; }
+.Atlas_Header {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  min-height: 80px;
+  padding: 16px clamp(18px, 3vw, 48px);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.Atlas_Brand { display: flex; align-items: center; gap: 12px; }
+.Atlas_Brand strong { display: block; color: var(--heading); font-size: 20px; letter-spacing: -.04em; }
+.Atlas_Brand span { display: block; color: var(--muted); font: 10px/1.5 var(--mono); }
+.Atlas_Mark { width: 40px; height: 40px; flex: none; fill: none; stroke: var(--accent); }
+.Atlas_Mark rect { fill: var(--card); stroke: var(--border2); }
+.Atlas_Mark path { stroke-width: 1.8; }
+.Atlas_Mark circle { stroke: var(--border2); }
+.Atlas_Host { display: grid; gap: 3px; min-width: 0; }
+.Atlas_Host > span:last-child { max-width: 32ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11px/1.5 var(--mono); }
+.Atlas_Eyebrow { color: var(--muted); font: 10px/1.5 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.Atlas_HeaderControls { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.Atlas_Connection { display: flex; align-items: center; gap: 7px; margin-right: 8px; font: 11px/1.5 var(--mono); }
+.Atlas_Connection i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+.Atlas_Connection[data-connection='live'] i { background: var(--positive); }
+.Atlas_Connection[data-connection='connecting'] i,
+.Atlas_Connection[data-connection='reconnecting'] i { background: var(--caution); }
+.Atlas_Connection[data-connection='offline'] i { background: var(--negative); }
+.Atlas_Pause { display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px; }
+.Atlas_Pause[aria-pressed='true'] { --ink: var(--caution); --line: var(--caution); }
+.Atlas_Scheme { min-width: 36px; font-size: 20px; line-height: 1; }
+.Atlas_Main { max-width: 1800px; margin: auto; padding: 38px clamp(18px, 3vw, 48px) 24px; }
+.Atlas_Intro { display: flex; align-items: center; justify-content: space-between; gap: 32px; margin-bottom: 26px; }
+.Atlas_Heading h1 { margin: 8px 0; font-size: clamp(26px, 3vw, 42px); font-weight: 500; letter-spacing: -.04em; line-height: 1.15; }
+.Atlas_Heading em { color: var(--heading); font-style: normal; }
+.Atlas_Heading p { color: var(--muted); font-size: 13px; }
+.Atlas_Metrics { display: flex; gap: 28px; flex: none; }
+.Atlas_Metrics div { display: flex; flex-direction: column-reverse; gap: 3px; }
+.Atlas_Metrics dt { color: var(--muted); font: 10px/1.5 var(--mono); }
+.Atlas_Metrics dd { margin: 0; color: var(--text); font: 28px/1.3 var(--mono); font-variant-numeric: tabular-nums; }
+.Atlas_Coverage { display: flex; align-items: center; gap: 14px; padding: 12px 16px; margin-bottom: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.Atlas_Scope { flex: none; }
+.Atlas_Coverage p { flex: 1; color: var(--muted); font-size: 11px; }
+.Atlas_Safety { flex: none; color: var(--muted); font: 10px/1.5 var(--mono); }
+.Atlas_Notices { display: grid; gap: 8px; margin-bottom: 16px; }
+.Atlas_Notice { --notice: var(--muted); display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 11px 16px; border: 1px solid var(--border); border-left: 3px solid var(--notice); border-radius: var(--radius); background: var(--surface); font-size: 12px; }
+.Atlas_Notice[data-tone='negative'] { --notice: var(--negative); }
+.Atlas_Notice[data-tone='caution'] { --notice: var(--caution); }
+.Atlas_Notice strong { color: var(--notice); }
+.Atlas_Notice > span { flex: 1; min-width: 200px; overflow-wrap: anywhere; color: var(--muted); }
+.Spine { display: grid; grid-template-columns: 135px minmax(0, 1fr); gap: 20px; padding: 18px; margin-bottom: 26px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.Spine_Intro { display: grid; align-content: center; gap: 4px; }
+.Spine_Intro strong { font: 18px/1.5 var(--mono); }
+.Spine_Intro > span:last-child { color: var(--muted); font-size: 10px; }
+.Spine_Path { display: flex; list-style: none; padding: 0; overflow-x: auto; padding-bottom: 4px; }
+.Spine_Step { position: relative; flex: 1; min-width: 80px; }
+.Spine_Step + .Spine_Step::before { content: ''; position: absolute; top: 22px; left: -6px; width: 12px; border-top: 1px solid var(--border2); }
+.Spine_Phase { position: relative; display: grid; align-content: start; justify-items: start; gap: 5px; width: 100%; min-height: 80px; padding: 7px 10px; border: 1px solid transparent; border-radius: var(--radius); color: var(--text); background: none; text-align: left; font: 10px/1.4 var(--mono); }
+.Spine_Phase:hover { background: var(--card); border-color: var(--border2); }
+.Spine_Number { color: var(--dim); font-size: 9px; }
+.Spine_Time { color: var(--muted); font-size: 9px; white-space: nowrap; }
+.Spine_Step[data-observed='true'] .Spine_Number,
+.Spine_Step[data-observed='true'] .Spine_Time { color: var(--time); }
+.Spine_Step[data-path='rollback'] { margin-left: 12px; border-left: 1px dashed var(--caution); }
+.Spine_Step[data-path='rollback']::before { display: none; }
+.Spine_PathLabel { color: var(--caution); font: 8px/1.3 var(--mono); white-space: nowrap; }
+.Spine_Pulse { position: absolute; inset: 0; border: 1px solid var(--active); border-radius: var(--radius); pointer-events: none; animation: atlas-phase 1.4s ease-out both; }
+.Spine_Empty { align-self: center; color: var(--muted); font-size: 12px; }
+.Atlas_Workspace { scroll-margin-top: 18px; }
+.Atlas_Toolbar { display: flex; align-items: center; gap: 12px; }
+.Atlas_Search { display: flex; align-items: center; flex: 1; gap: 10px; min-width: 180px; padding: 0 12px; border: 1px solid var(--border2); border-radius: var(--radius); background: var(--surface); }
+.Atlas_Search:focus-within { border-color: var(--link); box-shadow: 0 0 0 2px color-mix(in srgb, var(--link) 12%, transparent); }
+.Atlas_Search svg { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.Atlas_SearchField { width: 100%; min-width: 0; min-height: 40px; padding: 0; border: 0; outline: none; background: none; font-size: 12px; }
+.Atlas_SearchField:focus-visible { outline: none; }
+.Atlas_Group select { min-height: 42px; max-width: 250px; }
+.Atlas_Views { display: flex; padding: 3px; border: 1px solid var(--border2); border-radius: var(--radius); background: var(--surface); }
+.Atlas_Views button { --ink: var(--muted); --line: transparent; display: flex; align-items: center; gap: 6px; padding: 3px 12px; }
+.Atlas_Views button[aria-pressed='true'] { --ink: var(--text); background: var(--card); }
+.Atlas_Refresh { min-width: 32px; font-size: 24px; }
+.Atlas_FilterSummary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; min-height: 42px; margin-bottom: 8px; color: var(--muted); font-size: 11px; }
+.Atlas_FilterSummary strong { color: var(--text); font-weight: 500; }
+.Atlas_Shortcuts { position: relative; margin-left: auto; }
+.Atlas_Shortcuts summary { display: flex; align-items: center; gap: 7px; list-style: none; }
+.Atlas_Shortcuts summary::-webkit-details-marker { display: none; }
+.Atlas_Shortcuts dl { position: absolute; z-index: 10; right: 0; top: 28px; display: grid; gap: 8px; min-width: 260px; padding: 18px; background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius); box-shadow: var(--shadow); }
+.Atlas_Shortcuts dl div { display: grid; grid-template-columns: 65px 1fr; align-items: center; gap: 8px; }
+.Atlas_Shortcuts dd { margin: 0; }
+.Atlas_Anatomy { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+.Map, .AnatomyList, .Detail, .Activity_Stream, .Cause { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.Map_Header, .Activity_Header { display: flex; justify-content: space-between; align-items: center; gap: 16px; min-height: 74px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.Map_Header h2, .Activity_Header h2 { margin-top: 4px; font-size: 16px; font-weight: 500; letter-spacing: -.02em; }
+.Map_Count { color: var(--text); font: 10px/1.5 var(--mono); white-space: nowrap; }
+.Map_Count span { color: var(--muted); }
+.Map_Viewport { position: relative; height: clamp(500px, 49vw, 700px); overflow: hidden; background: var(--bg); border-bottom: 1px solid var(--border); }
+.Map_Canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; user-select: none; }
+.Map_Canvas:active { cursor: grabbing; }
+.Map_GridDot { fill: var(--border2); }
+.Map_Arrow { fill: var(--link); }
+.Map_Frame { fill: var(--surface); fill-opacity: .94; stroke: var(--border2); stroke-width: 1; }
+.Map_LaneMark { fill: var(--lane); font: 12px var(--mono); letter-spacing: .08em; }
+.Map_LaneName { fill: var(--text); font: 600 17px var(--font); }
+.Map_LaneNote { fill: var(--muted); font: 12px var(--font); }
+.Map_LaneCount { fill: var(--muted); font: 11px var(--mono); }
+.Map_EmptyLane { fill: var(--muted); font: 12px var(--font); }
+.Map_Edge { cursor: pointer; }
+.Map_EdgeHit { fill: none; stroke: transparent; stroke-width: 12; }
+.Map_EdgeLine { fill: none; stroke: var(--border2); stroke-width: 1.1; opacity: .7; pointer-events: none; }
+.Map_Edge:hover .Map_EdgeLine,
+.Map_Edge:focus-visible .Map_EdgeLine,
+.Map_Edge-selected .Map_EdgeLine { stroke: var(--link); stroke-width: 2; opacity: 1; }
+.Map_Node { cursor: pointer; }
+.Map_NodeBody { fill: var(--card); stroke: var(--border2); stroke-width: 1; }
+.Map_Node:hover .Map_NodeBody,
+.Map_Node:focus-visible .Map_NodeBody,
+.Map_Node-selected .Map_NodeBody { fill: var(--surface); stroke: var(--node); stroke-width: 2; }
+.Map_Node-related .Map_NodeBody { stroke: var(--node); stroke-dasharray: 3 2; }
+.Map_NodeDot { fill: var(--surface); stroke: var(--node); stroke-width: 1; }
+.Map_NodeDot[data-loaded='true'] { fill: color-mix(in srgb, var(--node) 40%, var(--surface)); }
+.Map_NodeDot[data-bound='true'] { fill: var(--node); }
+.Map_NodeName { fill: var(--text); font: 12px var(--mono); }
+.Map_NodeKind { fill: var(--muted); font: 9px var(--font); }
+.Map_Pulse { fill: none; stroke: var(--node); stroke-width: 2; opacity: 0; animation: atlas-node 1.5s ease-out both; }
+.Map_Camera { position: absolute; bottom: 16px; right: 16px; display: flex; align-items: center; gap: 4px; padding: 4px; border: 1px solid var(--border2); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+.Map_Camera button { min-width: 30px; padding: 3px 8px; }
+.Map_Camera output { min-width: 44px; color: var(--muted); text-align: center; font: 10px/1.5 var(--mono); }
+.Map_Legend { position: absolute; bottom: 23px; left: 16px; display: flex; gap: 12px; padding: 5px 8px; border-radius: var(--radius); background: var(--surface); color: var(--muted); font: 9px/1.5 var(--mono); pointer-events: none; }
+.Map_Legend span { display: flex; align-items: center; gap: 5px; }
+.Map_LegendDot { width: 6px; height: 6px; border: 1px solid var(--info); border-radius: 50%; }
+.Map_LegendDot-bound { background: var(--info); }
+.Map_LegendLine { width: 12px; border-top: 1px solid var(--border2); }
+.Map_Footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 16px; color: var(--muted); font: 9px/1.5 var(--mono); }
+.Map_Budget { margin-left: auto; }
+.Map_NoMatches { display: grid; gap: 4px; padding: 14px 20px; color: var(--muted); font-size: 12px; border-bottom: 1px solid var(--border); }
+.Map_NoMatches strong { color: var(--text); }
+.Detail { position: sticky; top: 16px; max-height: 870px; overflow: auto; scroll-margin-top: 18px; }
+.Detail_Header { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding: 8px 16px; border-bottom: 1px solid var(--border); }
+.Detail_Body { padding: 20px 18px; }
+.Detail_Identity h2 { margin: 14px 0 8px; font: 500 21px/1.3 var(--mono); letter-spacing: -.04em; overflow-wrap: anywhere; }
+.Detail_Identity > p { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.Detail_Tokens, .Cause_Tokens { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.Detail_Flags { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 20px 0; padding: 12px 0; border-block: 1px solid var(--border); }
+.Detail_Flags dt { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 10px; }
+.Detail_Flags i { width: 4px; height: 4px; border-radius: 50%; background: var(--dim); }
+.Detail_Flags dd { margin: 4px 0 0; font: 9px/1.5 var(--mono); }
+.Detail_Flags [data-present='true'] i { background: var(--positive); }
+.Detail_Callout { padding: 11px 12px; margin: 16px 0; border-left: 2px solid var(--info); border-radius: 0 var(--radius) var(--radius) 0; background: var(--card); color: var(--muted); font-size: 11px; }
+.Detail_Callout[data-tone='caution'] { border-color: var(--caution); }
+.Detail_Callout strong { color: var(--text); }
+.Detail_Metadata { display: grid; gap: 10px; margin: 20px 0; }
+.Detail_Metadata div, .Cause_Provenance div { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 12px; }
+.Detail_Metadata dt, .Cause_Provenance dt { color: var(--muted); font-size: 10px; }
+.Detail_Metadata dd, .Cause_Provenance dd { margin: 0; font: 10px/1.5 var(--mono); overflow-wrap: anywhere; }
+.Detail_Schema { margin: 12px 0; border: 1px solid var(--border); border-radius: var(--radius); }
+.Detail_Schema summary { padding: 10px; font-size: 11px; }
+.Detail_Schema summary > span { float: right; color: var(--muted); font: 9px/1.7 var(--mono); }
+.Detail_Fields { padding: 0 10px 10px; }
+.Detail_Fields div { display: flex; align-items: baseline; gap: 10px; padding: 6px 0; border-top: 1px solid var(--border); }
+.Detail_Fields dt { flex: 1; overflow-wrap: anywhere; font: 10px/1.5 var(--mono); }
+.Detail_Fields dt span { color: var(--caution); }
+.Detail_Fields dd { margin: 0; color: var(--type); font: 9px/1.5 var(--mono); }
+.Detail_Note { padding: 8px 0; color: var(--muted); font-size: 11px; }
+.Detail_Schema .Detail_Note { padding: 0 10px 10px; }
+.Detail_References { display: grid; gap: 6px; list-style: none; padding: 0 10px 10px; }
+.Detail_References li { display: flex; gap: 8px; font-size: 10px; }
+.Detail_References span { color: var(--muted); }
+.Detail_References code { overflow-wrap: anywhere; }
+.Detail_Relations { margin-top: 22px; }
+.Detail_Subhead { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.Detail_Subhead h3, .Cause_PathHead h3 { font-size: 12px; font-weight: 500; }
+.Detail_Subhead > span { color: var(--number); font: 10px/1.5 var(--mono); }
+.Detail_Relations ul { list-style: none; padding: 0; }
+.Detail_Link { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 0; color: var(--text); border: 0; border-bottom: 1px solid var(--border); background: none; text-align: left; font: 10px/1.5 var(--mono); }
+.Detail_Link:hover { color: var(--link); }
+.Detail_Link > span:first-child { color: var(--link); font-size: 17px; }
+.Detail_Link > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.Detail_Link small { display: block; color: var(--muted); font: 9px/1.5 var(--mono); }
+.Detail_Observed { display: grid; gap: 8px; margin: 18px 0; }
+.Detail_Identifiers, .Cause_Identifiers { margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 10px; }
+.Detail_Identifiers summary, .Cause_Identifiers summary { color: var(--muted); }
+.Detail_Identifiers code, .Cause_Identifiers code { display: block; margin-top: 8px; padding: 6px; overflow-wrap: anywhere; font-size: 9px; }
+.Detail_Endpoints { display: grid; gap: 8px; margin-top: 20px; }
+.Detail_Endpoints button { overflow-wrap: anywhere; white-space: normal; text-align: left; padding: 8px 10px; }
+.Detail_Direction { margin: 6px 0; color: var(--link); font: 11px/1.5 var(--mono); }
+.Detail_Empty { display: grid; justify-items: center; gap: 14px; padding: 46px 0 30px; text-align: center; }
+.Detail_Empty svg { width: 120px; height: 96px; margin-bottom: 8px; fill: var(--surface); stroke: var(--border2); stroke-width: 1.5; }
+.Detail_Empty svg circle:nth-last-child(3) { fill: var(--card); stroke: var(--info); }
+.Detail_Empty h2 { font-size: 17px; font-weight: 500; }
+.Detail_Empty > p { max-width: 26ch; color: var(--muted); font-size: 12px; }
+.Detail_EmptyNote { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border); }
+.Detail_EmptyNote span { color: var(--info); font: 10px/1.5 var(--mono); }
+.Detail_EmptyNote p { margin-top: 8px; color: var(--muted); font-size: 10px; }
+.AnatomyList_Head { display: flex; justify-content: space-between; gap: 20px; padding: 10px 20px; color: var(--muted); background: var(--card); font: 9px/1.5 var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+.AnatomyList_Rows { list-style: none; padding: 0; }
+.AnatomyList_Row { display: block; width: 100%; padding: 10px 20px; border: 0; border-bottom: 1px solid var(--border); color: var(--text); background: none; text-align: left; }
+.AnatomyList_Row:hover { background: var(--card); }
+.AnatomyList_Row[aria-pressed='true'] { background: color-mix(in srgb, var(--link) 9%, var(--surface)); box-shadow: inset 3px 0 var(--link); }
+.AnatomyList_Tile { align-items: center; gap: 12px; }
+.AnatomyList_Name { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.AnatomyList_Title { font: 12px/1.5 var(--mono); }
+.AnatomyList_Note { overflow-wrap: anywhere; font-size: 10px; }
+.AnatomyList_State { display: flex; align-items: center; gap: 10px; }
+.AnatomyList_Kind { color: var(--muted); font-size: 10px; }
+.AnatomyList_Mark { width: 6px; height: 6px; flex: none; border: 1px solid var(--part); border-radius: 50%; }
+.AnatomyList_Mark[data-bound='true'] { background: var(--part); }
+.AnatomyList_Empty { display: grid; gap: 10px; justify-items: start; min-height: 280px; padding: 40px 20px; }
+.AnatomyList_Empty h3 { font-size: 16px; font-weight: 500; }
+.AnatomyList_Empty p { color: var(--muted); font-size: 12px; }
+.AnatomyList_Pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px; }
+.AnatomyList_Pager > span { color: var(--muted); font: 9px/1.5 var(--mono); }
+.AnatomyList_Pager nav { display: flex; align-items: center; gap: 12px; }
+.AnatomyList_Pager output { color: var(--muted); font: 10px/1.5 var(--mono); }
+.Activity { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, .75fr); align-items: start; gap: 16px; margin-top: 26px; }
+.Activity_Summary { display: grid; gap: 4px; text-align: right; color: var(--muted); font: 9px/1.5 var(--mono); }
+.Activity_Failed { color: var(--negative); }
+.Activity_Guide { display: flex; justify-content: space-between; gap: 12px; padding: 10px 20px; color: var(--muted); border-bottom: 1px solid var(--border); font: 9px/1.5 var(--mono); }
+.Activity_Empty { display: grid; justify-items: center; gap: 12px; min-height: 270px; padding: 38px 24px; text-align: center; }
+.Activity_Empty svg { width: 190px; height: 58px; fill: none; stroke: var(--border2); stroke-width: 1.5; }
+.Activity_Empty h3 { font-size: 17px; font-weight: 500; }
+.Activity_Empty p { max-width: 44ch; color: var(--muted); font-size: 12px; }
+.Activity_Window { max-height: 470px; overflow: auto; overscroll-behavior: contain; }
+.Activity_Timeline { display: block; border: 0; padding: 0; }
+.Activity_Item { display: block; border-bottom: 1px solid var(--border); }
+.Activity_Item:last-child { border-bottom: 0; }
+.Activity_Row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 62px; padding: 11px 20px; color: var(--text); background: none; border: 0; text-align: left; }
+.Activity_Row:hover { background: var(--card); }
+.Activity_Item[data-selected='true'] .Activity_Row { background: color-mix(in srgb, var(--link) 8%, var(--surface)); box-shadow: inset 3px 0 var(--link); }
+.Activity_Dot { width: 6px; height: 6px; flex: none; border: 1px solid var(--event); border-radius: 50%; background: var(--event); }
+.Activity_Item[data-outcome='error'] .Activity_Dot,
+.Activity_Item[data-outcome='refused'] .Activity_Dot,
+.Activity_Item[data-outcome='interrupted'] .Activity_Dot { border-color: var(--negative); background: none; }
+.Activity_RowText { flex: 1; min-width: 0; }
+.Activity_RowMeta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 10px; margin-bottom: 3px; }
+.Activity_When { min-width: 60px; color: var(--muted); font-size: 9px; }
+.Activity_Kind { color: var(--event); font-size: 9px; }
+.Activity_Outcome { margin-left: auto; color: var(--muted); font: 9px/1.5 var(--mono); }
+.Activity_Item[data-outcome='error'] .Activity_Outcome,
+.Activity_Item[data-outcome='refused'] .Activity_Outcome,
+.Activity_Item[data-outcome='interrupted'] .Activity_Outcome { color: var(--negative); }
+.Activity_Name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11px/1.5 var(--mono); }
+.Activity_Duration { min-width: 62px; color: var(--time); text-align: right; font: 10px/1.5 var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.Activity_Arrow { color: var(--dim); font-size: 15px; }
+.Activity_Footer { padding: 12px 20px; border-top: 1px solid var(--border); color: var(--muted); font-size: 10px; }
+.Activity_Counts { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.Activity_Counts div { min-width: 70px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); }
+.Activity_Counts dt { color: var(--muted); font: 9px/1.5 var(--mono); }
+.Activity_Counts dd { margin: 4px 0 0; color: var(--number); font: 16px/1.3 var(--mono); }
+.Cause { max-height: 820px; overflow: auto; scroll-margin-top: 18px; }
+.Cause_Empty { display: grid; gap: 12px; padding: 30px 24px 40px; }
+.Cause_EmptyMark { color: var(--border2); font: 48px/1 var(--mono); }
+.Cause_Empty h3 { font-size: 17px; font-weight: 500; }
+.Cause_Empty p { max-width: 44ch; color: var(--muted); font-size: 12px; }
+.Cause_Body { padding: 20px; }
+.Cause_Identity { padding-left: 12px; border-left: 2px solid var(--info); }
+.Cause_Identity[data-outcome='error'],
+.Cause_Identity[data-outcome='refused'],
+.Cause_Identity[data-outcome='interrupted'] { border-color: var(--negative); }
+.Cause_Tokens > span:last-child { color: var(--muted); font: 10px/1.5 var(--mono); }
+.Cause_Identity h3 { margin: 12px 0; overflow-wrap: anywhere; font: 500 16px/1.4 var(--mono); letter-spacing: -.03em; }
+.Cause_Measure { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.Cause_Measure strong { color: var(--time); font: 22px/1.4 var(--mono); }
+.Cause_Measure span { color: var(--muted); font-size: 10px; }
+.Cause_Provenance { display: grid; gap: 8px; margin-top: 18px; }
+.Cause_ClockNote { margin-top: 16px; color: var(--muted); font-size: 10px; }
+.Cause_Actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.Cause_PathHead { display: flex; justify-content: space-between; gap: 12px; margin: 22px 0 12px; }
+.Cause_PathHead > span { color: var(--muted); font: 9px/1.5 var(--mono); }
+.Cause_Path { list-style: none; padding: 0; }
+.Cause_Path li { margin-left: calc(var(--depth) * 12px); border-left: 1px solid var(--border2); }
+.Cause_Span { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 46px; padding: 6px 8px; border: 0; border-radius: var(--radius); background: none; color: var(--text); text-align: left; }
+.Cause_Span:hover { background: var(--card); }
+.Cause_Span[data-selected='true'] { background: var(--card); box-shadow: inset 2px 0 var(--link); }
+.Cause_Branch { color: var(--muted); font: 12px/1.5 var(--mono); }
+.Cause_SpanName { flex: 1; min-width: 0; overflow-wrap: anywhere; font: 10px/1.5 var(--mono); }
+.Cause_SpanName small { display: block; color: var(--muted); font: 8px/1.5 var(--mono); }
+.Cause_SpanTime { flex: none; color: var(--time); font: 9px/1.5 var(--mono); white-space: nowrap; }
+.Cause_Span[data-outcome='error'] .Cause_Branch,
+.Cause_Span[data-outcome='refused'] .Cause_Branch { color: var(--negative); }
+.Cause_Notice { padding: 10px 12px; margin-top: 16px; border-left: 2px solid var(--caution); background: var(--card); color: var(--muted); font-size: 10px; }
+.Atlas_Footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px 24px; margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--muted); font: 9px/1.5 var(--mono); }
+.Atlas_Footer strong { color: var(--text); font-weight: 500; }
+@keyframes atlas-node {
+  0% { opacity: .9; stroke-width: 3; }
+  65% { opacity: .35; }
+  100% { opacity: 0; stroke-width: 1; }
+}
+@keyframes atlas-phase {
+  0% { opacity: .85; background: color-mix(in srgb, var(--active) 12%, transparent); }
+  100% { opacity: 0; background: transparent; }
+}
+.Atlas[data-paused='true'] .Map_Pulse,
+.Atlas[data-paused='true'] .Spine_Pulse { animation-play-state: paused; }
+@media (min-width: 1600px) {
+  .Atlas_Anatomy { grid-template-columns: minmax(0, 1fr) 340px; }
+  .Map_Viewport { height: 760px; }
+}
+@media (max-width: 1200px) {
+  .Atlas_Header { gap: 24px; }
+  .Atlas_Host { display: none; }
+  .Atlas_Metrics { gap: 18px; }
+  .Atlas_Metrics dd { font-size: 24px; }
+  .Atlas_Coverage { flex-wrap: wrap; gap: 8px 12px; }
+  .Atlas_Safety { margin-left: auto; }
+  .Spine { grid-template-columns: 100px minmax(0, 1fr); gap: 12px; }
+  .Atlas_Anatomy { grid-template-columns: minmax(0, 1fr) 260px; }
+  .Map_Viewport { height: 580px; }
+  .Map_Legend { top: 12px; bottom: auto; }
+  .Map_Header { align-items: start; }
+  .Map_Count { white-space: normal; text-align: right; }
+  .AnatomyList_State { align-items: end; flex-direction: column; gap: 3px; }
+}
+@media (max-width: 900px) {
+  .Atlas_Main { padding-top: 28px; }
+  .Atlas_Intro { align-items: start; gap: 24px; }
+  .Atlas_Metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 22px; }
+  .Atlas_Metrics dd { font-size: 22px; }
+  .Atlas_HeaderControls { gap: 7px; }
+  .Atlas_Connection { margin-right: 0; }
+  .Spine { grid-template-columns: 1fr; gap: 14px; }
+  .Spine_Intro { display: flex; align-items: baseline; gap: 12px; }
+  .Spine_Step { min-width: 86px; }
+  .Atlas_Anatomy { grid-template-columns: minmax(0, 1fr) 240px; gap: 12px; }
+  .Atlas_Toolbar { flex-wrap: wrap; gap: 8px; }
+  .Atlas_Search { flex-basis: 100%; }
+  .Atlas_Group { flex: 1; }
+  .Atlas_Group select { width: 100%; max-width: none; }
+  .Map_Header { flex-wrap: wrap; gap: 8px; }
+  .Map_Count { text-align: left; }
+  .Map_Viewport { height: 510px; }
+  .Map_Legend { flex-wrap: wrap; font-size: 8px; }
+  .Map_Budget { margin-left: 0; }
+  .Detail_Body { padding: 16px 14px; }
+  .Detail_Identity h2 { font-size: 18px; }
+  .Activity { grid-template-columns: minmax(0, 1fr) minmax(280px, .8fr); gap: 12px; }
+  .Activity_Header { padding: 14px 16px; flex-wrap: wrap; gap: 8px; }
+  .Activity_Summary { text-align: left; }
+  .Activity_Row { padding: 10px 14px; gap: 8px; }
+  .Activity_Arrow { display: none; }
+  .Activity_Guide { flex-wrap: wrap; gap: 4px; padding-inline: 16px; }
+  .Cause_Body { padding: 16px; }
+}
+@media (max-width: 700px) {
+  .Atlas_Header { flex-wrap: wrap; justify-content: space-between; gap: 14px; padding-block: 14px; }
+  .Atlas_HeaderControls { flex: 1; justify-content: end; flex-wrap: wrap; gap: 8px; }
+  .Atlas_Brand span { font-size: 8px; }
+  .Atlas_Brand strong { font-size: 18px; }
+  .Atlas_Mark { width: 32px; height: 32px; }
+  .Atlas_Theme { order: 3; }
+  .Atlas_Theme select { min-height: 32px; font-size: 11px; }
+  .Atlas_Connection { font-size: 10px; }
+  .Atlas_Pause { min-height: 32px; font-size: 11px; }
+  .Atlas_Scheme { min-height: 32px; min-width: 32px; }
+  .Atlas_Intro { flex-wrap: wrap; gap: 22px; }
+  .Atlas_Heading h1 { font-size: 32px; }
+  .Atlas_Metrics { display: flex; flex-wrap: wrap; gap: 12px 24px; }
+  .Atlas_Coverage p { flex-basis: 100%; order: 2; }
+  .Atlas_Safety { flex: 1; text-align: right; font-size: 8px; }
+  .Spine { padding: 14px; margin-bottom: 20px; }
+  .Spine_Intro > span:last-child { margin-left: auto; font-size: 9px; }
+  .Atlas_Anatomy, .Activity { grid-template-columns: 1fr; }
+  .Map_Viewport { height: 540px; }
+  .Map_Header { flex-wrap: nowrap; }
+  .Map_Header h2 { font-size: 15px; }
+  .Detail { position: static; max-height: none; }
+  .Detail_Empty { padding: 20px 0; }
+  .Detail_Empty svg { width: 90px; height: 72px; }
+  .Detail_EmptyNote { margin-top: 8px; }
+  .Detail_Flags { max-width: 360px; }
+  .Detail_Metadata div { grid-template-columns: 90px minmax(0, 1fr); }
+  .Activity { margin-top: 20px; }
+  .Activity_Window { max-height: 360px; }
+  .Cause { max-height: none; }
+  .Activity_Header { flex-wrap: nowrap; }
+  .AnatomyList_Pager { padding-inline: 16px; }
+  .AnatomyList_Pager nav { width: 100%; justify-content: space-between; }
+  .AnatomyList_Row { padding-inline: 16px; }
+  .Atlas_Footer { margin-top: 24px; }
+}
+@media (max-width: 430px) {
+  .Atlas_HeaderControls { flex-basis: 100%; margin-left: 0; justify-content: space-between; }
+  .Atlas_Theme { order: 0; }
+  .Atlas_Connection { margin-right: auto; }
+  .Atlas_Metrics { width: 100%; justify-content: space-between; gap: 12px; }
+  .Atlas_Metrics dt { font-size: 8px; }
+  .Atlas_Metrics dd { font-size: 23px; }
+  .Atlas_Views button { padding-inline: 9px; }
+  .Atlas_FilterSummary { font-size: 10px; }
+  .Atlas_Shortcuts { margin-left: 0; }
+  .Atlas_Shortcuts dl { right: auto; left: 0; }
+  .Map_Header { flex-wrap: wrap; }
+  .Map_Viewport { height: 440px; }
+  .Map_Legend { gap: 8px; }
+  .AnatomyList_Title { font-size: 11px; }
+  .AnatomyList_Kind { font-size: 8px; }
+  .AnatomyList_State { gap: 4px; }
+  .Activity_Summary { max-width: 130px; font-size: 8px; text-align: right; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .Atlas *, .Atlas *::before, .Atlas *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .Map_Pulse, .Spine_Pulse { display: none; }
+}
