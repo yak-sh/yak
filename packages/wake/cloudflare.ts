@@ -25,6 +25,42 @@ export type Alarm = {
 let arming = new WeakMap<Alarm, Promise<unknown>>()
 
 /**
+ * How long past its instant an alarm may still be held before it is taken as
+ * lost. The runtime retries a failing `alarm()` six times, with backoff, then
+ * gives up, and `getAlarm()` goes on answering the instant it gave up on; an
+ * object whose alarm kept running out of CPU held one for days, and nothing
+ * delivered it again.
+ */
+export let LOST: number = 15 * 60_000
+
+/**
+ * The alarm the runtime will deliver: null when none is set, or when the one
+ * set is more than `LOST` past its instant.
+ *
+ * ```ts
+ * import { armed, LOST } from '@yaks/wake/cloudflare'
+ * import { assertEquals } from '@std/assert'
+ *
+ * let storage = (at: number | null) => ({
+ *   getAlarm: () => Promise.resolve(at),
+ *   setAlarm: () => Promise.resolve(),
+ * })
+ * assertEquals(await armed(storage(900), 1000), 900)
+ * assertEquals(await armed(storage(1000 - LOST - 1), 1000), null)
+ * ```
+ */
+export let armed = async (
+  storage: Alarm,
+  now: number = Date.now(),
+): Promise<number | null> => {
+  let at = await storage.getAlarm()
+  return lost(at, now) ? null : at
+}
+
+let lost = (at: number | null, now: number): at is number =>
+  at != null && at < now - LOST
+
+/**
  * A Worker's scheduled handler, reduced to the graph write every runtime
  * shares. The event's cron string does not select a job: the due wake rows do.
  *
@@ -43,6 +79,8 @@ export let scheduled = (
  * Set a Durable Object's alarm for one wake. An alarm that is already earlier
  * is kept, because the object may hold other wakes. Returns whether this wake
  * needs the alarm at all; a wake with no `at`, or a later one, leaves it alone.
+ * An alarm the runtime gave up on (`armed`) is set again for `now`, since the
+ * run it stood for is still owed.
  *
  * Call it when a wake is written. In the object's `alarm()`, call `tick(graph)`
  * and then set the alarm for its next pending wake. `before` is for an
@@ -60,12 +98,14 @@ export let arm = (
   storage: Alarm,
   wake: Wake,
   before = Infinity,
+  now: number = Date.now(),
 ): Promise<boolean> => {
   let pending = (arming.get(storage) ?? Promise.resolve()).then(async () => {
     let at = wake.at ? Date.parse(wake.at) : NaN
     if (!Number.isFinite(at) || at >= before) return false
-    let held = await storage.getAlarm()
-    if (held == null || held > at) await storage.setAlarm(at)
+    let set = await storage.getAlarm()
+    if (lost(set, now)) await storage.setAlarm(Math.min(at, now))
+    else if (set == null || set > at) await storage.setAlarm(at)
     return true
   })
   arming.set(storage, pending.catch(() => {}))

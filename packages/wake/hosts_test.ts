@@ -4,7 +4,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
-import { arm, scheduled } from './cloudflare.ts'
+import { arm, LOST, scheduled } from './cloudflare.ts'
 import { loop } from './deno.ts'
 import { store, T0, woken } from './testing.ts'
 
@@ -37,20 +37,22 @@ test('a DO alarm fills the gap before a trigger and preserves earlier alarms', a
     },
   }
   let before = T0 + 60_000
-  assertEquals(await arm(storage, {}, before), false)
-  assertEquals(await arm(storage, { at: 'invalid' }, before), false)
-  assertEquals(await arm(storage, { at: iso(before) }, before), false)
-  assertEquals(await arm(storage, { at: iso(T0 + 500) }, before), true)
-  assertEquals(await arm(storage, { at: iso(T0 + 600) }, before), true)
-  assertEquals(await arm(storage, { at: iso(T0 + 500) }, before), true)
-  assertEquals(await arm(storage, { at: iso(T0 + 100) }, before), true)
+  let at = (wake: { at?: string }) => arm(storage, wake, before, T0)
+  assertEquals(await at({}), false)
+  assertEquals(await at({ at: 'invalid' }), false)
+  assertEquals(await at({ at: iso(before) }), false)
+  assertEquals(await at({ at: iso(T0 + 500) }), true)
+  assertEquals(await at({ at: iso(T0 + 600) }), true)
+  assertEquals(await at({ at: iso(T0 + 500) }), true)
+  assertEquals(await at({ at: iso(T0 + 100) }), true)
   assertEquals(writes, [T0 + 500, T0 + 100])
   held = null
-  await Promise.all([
-    arm(storage, { at: iso(T0 + 100) }, before),
-    arm(storage, { at: iso(T0 + 500) }, before),
-  ])
+  await Promise.all([at({ at: iso(T0 + 100) }), at({ at: iso(T0 + 500) })])
   assertEquals(held, T0 + 100)
+  // An alarm the runtime gave up on is owed now, not kept.
+  held = T0 - LOST - 1
+  await at({ at: iso(T0 + 500) })
+  assertEquals(held, T0)
 })
 
 test('the loop sleeps to the earliest wake, caps empty waits, and stops', async () => {

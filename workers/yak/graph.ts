@@ -171,7 +171,7 @@ import { effectsIn, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { reconcile, type Runner, runner } from '@yaks/tools'
 import { commands, type Tools } from '@yaks/tools/declared'
 import { rouse, soonest, tick, type Ticked, wakes } from '@yaks/wake'
-import { type Alarm, arm } from '@yaks/wake/cloudflare'
+import { type Alarm, arm, armed } from '@yaks/wake/cloudflare'
 import {
   asking,
   mentions,
@@ -1784,7 +1784,7 @@ export class Store {
         (job, e) => this.#broke(`wake ${job}`, e),
       )
     }
-    if (this.#alarm && !(await this.#alarm.getAlarm())) {
+    if (this.#alarm && (await armed(this.#alarm)) == null) {
       await this.#owed(Date.now())
     }
     // The app's own commands, standing: the `tool` rows a call names, and

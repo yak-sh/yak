@@ -205,6 +205,11 @@ after `before`, leaves the alarm unchanged. A rejected wake waits for the next
 Cron Trigger. The host owns its single alarm, including cancellation after
 schedules change.
 
+The runtime gives up on an `alarm()` that keeps failing and still answers its
+instant from `getAlarm()`, so an alarm held more than `LOST` (15 minutes) past
+its instant is taken as lost: `armed(storage)` answers null for it, and `arm`
+sets it again for now, since the run it stood for is still owed.
+
 A Deno process can run the scheduler until shutdown:
 
 ```ts ignore
