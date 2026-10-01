@@ -288,6 +288,14 @@ test(
         await refused(tool, 'store_retry', { space: mine, app, seq: 999 }),
         'not held for review',
       )
+      assertStringIncludes(
+        await refused(tool, 'builder_build', {
+          space: mine,
+          app,
+          builder: '00000000-0000-4000-8000-000000000000',
+        }),
+        'is no builder',
+      )
 
       // ---- a second release, and the first one put back -------------------
       await tool('app_files', {

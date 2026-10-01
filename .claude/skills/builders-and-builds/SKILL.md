@@ -123,9 +123,10 @@ alternate `--template`, `--model` or `--provider` builds a shadow variant
 mark (`staged: null`): the builder reconciles once, and a sampled binding whose
 key is unchanged is not asked again.
 
-In an app's store the builders run (workers/yak/builders.ts) but `builder
-build` is not an app door yet (T-61657), so a staged hosted builder can only be
-committed, not sampled.
+In an app's store (workers/yak/builders.ts) the same door is the connector's
+`builder_build` tool, which takes `only`, `limit`, `template` and `model` and
+reaches the store's `/build` as the caller, after checking they may write the
+app: `yak admin tool builder_build space=<space> app=<app> builder=<id> …`.
 
 ## Chaining
 

@@ -188,7 +188,7 @@ import {
   wakesOf,
 } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
-import { builderModelTool } from './builders.ts'
+import { builderModelTool, building } from './builders.ts'
 import type { Env } from './env.ts'
 import { resumed, seeded } from './wake.ts'
 import type { Binding } from './post.ts'
@@ -605,6 +605,7 @@ let routes = new Set([
   '/writes',
   '/alarm',
   '/move',
+  '/build',
   '/ws',
   '/apply',
   '/query',
@@ -2586,6 +2587,19 @@ export class Store {
       let held = await this.#alarm?.getAlarm()
       let alarm = held == null ? null : new Date(held).toISOString()
       return Response.json({ store, rules, alarm })
+    }
+    // `builder build` for this app's builders (builders.ts), asked by the
+    // kernel for a person the connector found may write the app.
+    if (path == '/build' && request.method == 'POST') {
+      if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
+      try {
+        return await building(
+          this.#stored(this.#graph).graph,
+          await request.json(),
+        )
+      } catch (e) {
+        return refuse(e, request)
+      }
     }
     // The socket is a read that stays open, and it is the one door @yaks/api
     // does not answer here — hibernation is the runtime's, so `sockets` takes

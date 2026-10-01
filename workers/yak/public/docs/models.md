@@ -166,6 +166,13 @@ the past checks it again. A `wake` can check it later, and
 `builder.immediate: true` also checks changed inputs. Only app editors may write
 a builder, since model turns spend the owner's account budget.
 
+A builder written with `staged: {}` builds nothing by itself, so a new prompt
+can be tried on a few rows first. `builder_build` builds it now: `only` names
+the rows to build for, `limit` takes the first few, and a `template` or `model`
+tried in place of its own builds a shadow variant that nothing else selects.
+Remove the mark (`staged: null`) to build the rest; a row already built with the
+same prompt is not asked again.
+
 ## One call, answered at once
 
 A page that wants the answer in the same request, rather than in a transcript,

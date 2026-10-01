@@ -441,8 +441,9 @@ let askingDoc: VocabDoc = sealed(
   ['provider', 'model', 'serves', 'price'],
 )
 
-// A hosted builder uses this store's session runner. Its command-line tool is
-// not an app command; the app keeps the components and effect declarations.
+// A hosted builder uses this store's session runner. Its `builder build` is
+// not an app command but the connector's `builder_build` (builders.ts); the
+// app keeps the components and effect declarations.
 let hostedBuilderDoc = pick(builderDoc, [
   'builder',
   'staged',

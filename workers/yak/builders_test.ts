@@ -100,7 +100,16 @@ let app = async (models = 0, access = 'private') => {
     })).status,
     200,
   )
-  return { asked, dir, send, read }
+  // The kernel's own door onto the store, as the connector's tools reach it.
+  let kernel = (path: string, body: unknown) =>
+    store.fetch(
+      new Request(`http://store${path}`, {
+        method: 'POST',
+        headers: { ...headers, 'x-yak-kernel': '1' },
+        body: JSON.stringify(body),
+      }),
+    )
+  return { asked, dir, send, read, kernel }
 }
 
 let start = (v: Awaited<ReturnType<typeof app>>) =>
@@ -144,6 +153,44 @@ test('a hosted builder writes named outputs and spends the account budget', asyn
   })
   await until(async () => (await v.dir.space('builder-test'))?.meter?.models)
   assertAlmostEquals((await v.dir.space('builder-test'))!.meter!.models, cost)
+})
+
+test('builder_build tries a staged builder on the rows it names, as the caller', async () => {
+  let v = await app()
+  let OTHER = 'a0000000-0000-4000-8000-0000000000ab'
+  assertEquals(
+    (await v.send('/apply', [
+      { entity: { eid: SOURCE }, doc: { title: 'Source', body: 'Village.' } },
+      { entity: { eid: OTHER }, doc: { title: 'Source', body: 'Hill.' } },
+      {
+        entity: { eid: BUILDER },
+        content: { body: 'Make a villager from $body.' },
+        using: { model: MODEL },
+        builder: {
+          query: '$s .doc.title=Source, doc.body=$body',
+          to: toolEid('builder_model'),
+        },
+        staged: {},
+      },
+    ])).status,
+    200,
+  )
+  assertEquals((await v.send('/build', { builder: BUILDER })).status, 404)
+  let refused = await v.kernel('/build', { builder: BUILDER, only: [BUILDER] })
+  assertEquals(refused.status, 400)
+  let asked = await v.kernel('/build', {
+    builder: BUILDER,
+    only: [SOURCE],
+    by: ADA,
+  })
+  assertEquals(asked.status, 200)
+  assertEquals((await asked.json()).builds.length, 1)
+  await until(async () => (await v.read('.built&*')).length, {
+    label: 'builder output',
+  })
+  let builds = await v.read('.build&*')
+  assertEquals(builds.map((b) => (b.build as Comp).for), [SOURCE])
+  assertEquals((builds[0].created as Comp).by, ADA)
 })
 
 test('a hosted builder cannot spend beyond the account budget', async () => {

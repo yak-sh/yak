@@ -72,6 +72,9 @@ let DESTROYS = [
   'store_retry',
   // Rows already there are patched in place, deletes included.
   'store_load',
+  // A rebuild rewrites a builder's outputs in place, and drops a link the new
+  // answer leaves out.
+  'builder_build',
 ]
 
 // It reaches past yaks.app: a letter to somebody's inbox, a page the whole web
@@ -96,6 +99,8 @@ let OUTSIDE = [
   // Cloudflare's analytics, and an app's own worker.
   'app_stats',
   'command',
+  // A builder asks a model for its outputs.
+  'builder_build',
 ]
 
 let sorted = (names: string[]) => [...names].sort()

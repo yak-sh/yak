@@ -148,7 +148,8 @@ next input change or `builder build`.
   `reconcile`.
 - `@yaks/builders/model`: `modelTool`, `modelToolEid`, and template `render`.
 - `@yaks/builders/effects`: `watches` and `effects`.
-- `@yaks/builders/tools`: the on-demand `builder build` tool.
+- `@yaks/builders/tools`: the on-demand `builder build` tool, and `build`, the
+  same reconciliation for a host that offers it through a door of its own.
 - `@yaks/builders/vocab`: the schema in `builderDoc`, and `derived`, the SQL of
   `build.cost` and `built.current`.
 

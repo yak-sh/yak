@@ -348,6 +348,11 @@ export let WORDS: Record<string, Words> = {
     'description':
       'Explicitly retry one interrupted or unreviewed write by its seq, after inspecting its body and fixing the cause of interruption. Only the space owner can retry. The store keeps the original body, idempotency key, and full final outcome together with the graph change. A reset may interrupt it again.',
   },
+  'builder_build': {
+    'title': "Run an app's builder now",
+    'description':
+      "Build one of an app's builders now: a builder is a stored row that turns each match of its query into output rows through a model (see the guide's models page). It builds whether or not the builder is staged, which is how a staged builder is tried on a few rows before it builds everything: only names the rows whose builds to make (ids or aliases), and limit takes the first few. A template or model tried in place of the builder's own builds a shadow variant, whose outputs nothing else selects, so the builder's own outputs stay as they are. A build asks the model again only where what it hashes moved. Each model turn spends the space's model budget. Only someone who can write the app may run it. To keep it from building everything: write the builder with staged: {} first; to undo a rebuild's outputs, store_restore to a moment before it. Returns the builds it reconciled.",
+  },
   'app_set': {
     'title': 'Rename, move or reshare an app',
     'description':
