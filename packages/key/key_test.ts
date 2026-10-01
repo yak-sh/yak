@@ -4,12 +4,13 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, graph, Stale, token, type Was } from '@yaks/graph'
 import { isPromise } from '@yaks/fp'
 import { keyEid } from './eid.ts'
 import { keyed, unkeyed } from './say.ts'
 import { held } from './resolve.ts'
-import { libraryGraph } from './testing.ts'
+import { library, libraryGraph, store } from './testing.ts'
+import { keys } from './plugin.ts'
 
 let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
   assert(!isPromise(out), 'apply() went async over an embedded database')
@@ -173,4 +174,127 @@ test('held answers who holds each value, in one get', () => {
     string
   >
   assertEquals([...at], [[DUNE, 'b1']])
+})
+
+for (let deletion of [{ $delete: true }, { tombstone: {} }]) {
+  test(`a held value transfers when its holder is explicitly deleted: ${Object.keys(deletion)[0]}`, () => {
+    let g = books(libraryGraph())
+    let eid = keyEid('isbn', DUNE)
+    sync(g.apply([keyed('isbn', 'b1', DUNE)]))
+    let out = sync(g.apply([
+      { entity: { eid: 'b1' }, ...deletion },
+      {
+        ...keyed('isbn', 'b2', DUNE),
+        $was: { key: { of: token('b1'), value: token(DUNE) } },
+      },
+    ]))
+    assertEquals(read(g, '.book'), ['b2'])
+    assertEquals(read(g, '.isbn'), [eid])
+    assertEquals(read(g, '.key.of=b2'), [eid])
+    assertEquals(out.find((b) => b.entity.eid == eid)?.isbn, {})
+  })
+}
+
+test('explicit deletion permits a minted owner without resolving it onto the old holder', () => {
+  let g = books(libraryGraph())
+  sync(g.apply([keyed('isbn', 'b1', DUNE)]))
+  let out = sync(g.apply([
+    { entity: { eid: '$b' }, book: { title: 'New edition' } },
+    { entity: { eid: '$k' }, key: { of: '$b', value: DUNE }, isbn: {} },
+    { entity: { eid: 'b1' }, $delete: true },
+  ]))
+  let owner = out.find((b) => b.$alias == '$b')!.entity.eid
+  assert(owner != 'b1')
+  assertEquals(read(g, '.key.of=' + owner), [keyEid('isbn', DUNE)])
+  assertEquals(read(g, '.isbn'), [keyEid('isbn', DUNE)])
+})
+
+test('a conflicting transfer precondition is refused without changing any state', () => {
+  let g = books(libraryGraph())
+  sync(g.apply([keyed('isbn', 'b1', DUNE)]))
+  let before = g.read('*')
+  assertThrows(
+    () =>
+      sync(g.apply([
+        { entity: { eid: 'b1' }, $delete: true },
+        { entity: { eid: 'b2' }, book: { title: 'Changed' } },
+        { ...keyed('isbn', 'b2', DUNE), $was: { key: { of: null } } },
+      ])),
+    Error,
+    'conflicting $was key.of',
+  )
+  assertEquals(g.read('*'), before)
+})
+
+test('transfer keeps guards on other properties and components atomic', () => {
+  let guards: Was[] = [
+    { key: { of: token('b1'), value: token('another value') } },
+    { entity: { num: token(-1) } },
+  ]
+  for (let was of guards) {
+    let g = books(libraryGraph())
+    sync(g.apply([keyed('isbn', 'b1', DUNE)]))
+    let before = g.read('*')
+    assertThrows(() =>
+      sync(g.apply([
+        { entity: { eid: 'b1' }, $delete: true },
+        { entity: { eid: 'b2' }, book: { title: 'Changed' } },
+        { ...keyed('isbn', 'b2', DUNE), $was: was },
+      ])), Stale)
+    assertEquals(g.read('*'), before)
+  }
+})
+
+test('an ordinary conflict refuses the entire change', () => {
+  let g = books(libraryGraph())
+  sync(g.apply([keyed('isbn', 'b1', DUNE)]))
+  let before = g.read('*')
+  assertThrows(
+    () =>
+      sync(g.apply([
+        { entity: { eid: 'b2' }, book: { title: 'Changed' } },
+        keyed('isbn', 'b2', DUNE),
+      ])),
+    Error,
+    "is b1's",
+  )
+  assertEquals(g.read('*'), before)
+})
+
+test('a transfer guards the holder observed before the transaction', () => {
+  let storage = store()
+  let rival = books(libraryGraph(storage))
+  sync(rival.apply([
+    { entity: { eid: 'b3' }, book: { title: 'Rival' } },
+    keyed('isbn', 'b1', DUNE),
+  ]))
+  let before: Bundle[] = []
+  let g = graph({
+    storage,
+    vocab: library,
+    plugins: [keys(library), {
+      name: 'rival transfer',
+      hooks: {
+        // After key mint observed b1, but before the guarded transaction.
+        mint: (bundles) => {
+          sync(rival.apply([
+            { entity: { eid: 'b1' }, $delete: true },
+            keyed('isbn', 'b3', DUNE),
+          ]))
+          before = rival.read('*') as Bundle[]
+          return bundles
+        },
+      },
+    }],
+  })
+  let err = assertThrows(() =>
+    sync(g.apply([
+      { entity: { eid: 'b1' }, $delete: true },
+      { entity: { eid: 'b2' }, book: { title: 'Stale transfer' } },
+      keyed('isbn', 'b2', DUNE),
+    ])), Stale)
+  assertEquals([err.comp, err.prop, err.current], ['key', 'of', 'b3'])
+  assertEquals(g.read('*'), before)
+  assertEquals(read(g, '.key.of=b3'), [keyEid('isbn', DUNE)])
+  assertEquals(read(g, '.isbn'), [keyEid('isbn', DUNE)])
 })

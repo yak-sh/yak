@@ -15,8 +15,10 @@
 // already there.
 //
 // The refusal. A key whose `of` was not minted in this write — a caller who
-// wrote an id down — is refused instead, naming the holder. The caller named
-// both the entity and the value and the two disagree; swapping the id underneath
+// wrote an id down — is refused instead, unless the same change explicitly
+// deletes the holder. A transfer guards the observed key.of inside the
+// transaction. Otherwise the caller named both the entity and the value and
+// the two disagree; swapping the id underneath
 // them would be a lie, and the holder's id is the one they wanted.
 //
 // The read happens in `mint`, which runs outside the transaction. That leaves a
@@ -27,7 +29,7 @@
 
 import type { Eid, Hook, Tx } from '@yaks/graph'
 import { after } from '@yaks/fp'
-import { Refused, substitute } from '@yaks/graph'
+import { dead, Refused, substitute, token } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { ofOf, valueOf } from './comp.ts'
 import { keyEid, tagOf } from './eid.ts'
@@ -117,6 +119,7 @@ export let settled = (vocab: Vocab): Hook => {
     let ours = new Set(
       bundles.flatMap((b) => b.$alias == null ? [] : [b.entity.eid]),
     )
+    let gone = new Set(bundles.filter(dead).map((b) => b.entity.eid))
     return after(tx.get(claims.map(([b]) => b.entity.eid)), (rows) => {
       let was = new Map(rows.map((b) => [b.entity.eid, b]))
       let at = new Map<Eid, Eid>()
@@ -124,6 +127,17 @@ export let settled = (vocab: Vocab): Hook => {
         let holder = ofOf(was.get(b.entity.eid))
         let of = ofOf(b)!
         if (!holder || holder == of) continue
+        if (gone.has(holder)) {
+          // Mint runs outside the transaction. Transfer only the ownership we
+          // saw, without replacing any precondition the caller already gave.
+          let want = token(holder)
+          let expected = b.$was?.[KEY]
+          if (expected && 'of' in expected && expected.of !== want) {
+            throw new Refused(`${tag} ${value} has a conflicting $was key.of`)
+          }
+          b.$was = { ...b.$was, [KEY]: { ...expected, of: want } }
+          continue
+        }
         if (!ours.has(of)) {
           throw new Refused(
             `${tag} ${value} is ${holder}'s — say it of that entity, or give ` +
