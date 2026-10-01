@@ -97,21 +97,29 @@ export let render = (template: string, binding: Binding): string => {
   })
 }
 
+let contract =
+  'Answer with JSON: {"outputs": [...]}, one output for each the ' +
+  'request asks for, each {"slot":"stable-name",' +
+  '"inputs":["input-id"],"components":{"doc":{"body":"text"}}}, ' +
+  'or {"outputs": []} where it asks for none. ' +
+  'Cite only selected input ids.'
+
+let instructions = (base: unknown): string => {
+  let text = str(base)
+  return text.endsWith(contract)
+    ? text
+    : [text, contract].filter(Boolean).join('\n\n')
+}
 let request = (template: string, binding: Binding): string =>
   `${render(template, binding)}\n\nInputs: ${
     ids(binding).join(', ') || '(none)'
-  }\n` +
-  'Answer with JSON: {"outputs": [...]}, one output for each the ' +
-  'instructions above ask for, each {"slot":"stable-name",' +
-  '"inputs":["input-id"],"components":{"doc":{"body":"text"}}}, ' +
-  'or {"outputs": []} where they ask for none. ' +
-  'Cite only selected input ids.'
+  }\n`
 
 /** Run the adapter through @yaks/tools; no model execution lives here. */
 export let modelTool = (desk: Desk = {}): Tool => ({
   name: MODEL,
   description: 'Build one query binding through an ordinary model session',
-  revision: '1',
+  revision: '2',
   inputSchema: {
     type: 'object',
     properties: {
@@ -144,7 +152,7 @@ export let modelTool = (desk: Desk = {}): Tool => ({
         entity: { eid: crypto.randomUUID() },
         entry: { session, seq: 1 },
         content: { body: prompt },
-        using,
+        using: { ...using, instructions: instructions(using.instructions) },
       },
       ...(desk.persona ? [link(session, 'references', desk.persona)] : []),
     ]

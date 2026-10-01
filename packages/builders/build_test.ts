@@ -26,7 +26,7 @@ import {
 } from './build.ts'
 import { answer as answerWrites } from './answer.ts'
 import { key } from './key.ts'
-import { render } from './model.ts'
+import { modelTool, render } from './model.ts'
 import { build, runs } from './tools.ts'
 import { builderDoc } from './vocab.ts'
 import { loadTools } from '@yaks/graph/tools'
@@ -1228,4 +1228,43 @@ test('a downstream builder selects only current outputs', async () => {
   assertEquals(await now(), [await outOf(g, build)])
   await g.apply([{ entity: { eid: 'a' }, doc: { title: 'Elsewhere' } }])
   assertEquals(await now(), [])
+})
+
+test('model builder instruction prefix is shared across bindings and appended once', async () => {
+  let { g } = await shop()
+  let tool = modelTool()
+  let invoke = (id: string, using: Comp) => {
+    let call: Bundle = {
+      entity: { eid: 'call-' + id },
+      call: {
+        args: {
+          binding: { entities: [id], vars: { source: id } },
+          template: 'Summarize $source',
+          using,
+        },
+      },
+    }
+    let rows = tool.run(call, g)
+    assert(Array.isArray(rows))
+    return rows.find((b) => b.entry)!
+  }
+  let using = {
+    model: ids.model,
+    effort: 'low',
+    instructions: 'Base instruction',
+  }
+  let a = invoke('a', using), b = invoke('b', using)
+  assertEquals(a.using, b.using)
+  let fixed = String(comp(a, 'using')?.instructions)
+  assert(fixed.startsWith('Base instruction\n\n'))
+  assert(fixed.includes('Answer with JSON:'))
+  assert(fixed.includes('Cite only selected input ids.'))
+  assertEquals(comp(a, 'content')?.body, 'Summarize a\n\nInputs: a\n')
+  assertEquals(comp(b, 'content')?.body, 'Summarize b\n\nInputs: b\n')
+  assertEquals(comp(invoke('c', comp(a, 'using')!), 'using'), a.using)
+  let none = invoke('d', { model: ids.model })
+  assert(
+    String(comp(none, 'using')?.instructions).startsWith('Answer with JSON:'),
+  )
+  assertEquals(using.instructions, 'Base instruction')
 })
