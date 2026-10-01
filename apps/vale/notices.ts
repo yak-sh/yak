@@ -20,6 +20,7 @@ import { GIVERS } from './quests.ts'
 import type { Standing } from './rules.ts'
 import { said } from './stock.ts'
 import { builtNear, standAt, type Vale, villagesNear } from './terrain.ts'
+import { split } from './ui/split.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
@@ -138,15 +139,21 @@ export let notices = (
 
 export type Acts = { take: (n: Notice) => void }
 
-/** The board's sheet, in its `panel`: a notice a card, each with what it
- * gives and a button to take it. */
+/** The board's sheet: notice summaries beside the selected notice and its
+ * button to take it. */
 export let noticeboard = (panel: Panel, acts: Acts) => {
+  let panes = split(panel.body)
   let shown: Notice[] = []
-  let was = ''
+  let picked: string | null = null
   panel.body.addEventListener('click', (e) => {
-    let b = e.target instanceof Element
-      ? e.target.closest<HTMLElement>('[data-take]')
-      : null
+    let t = e.target instanceof Element ? e.target : null
+    let select = t?.closest<HTMLButtonElement>('button[data-select]')
+    if (select && shown.some((n) => n.id == select.dataset.select)) {
+      picked = select.dataset.select!
+      draw()
+      return
+    }
+    let b = t?.closest<HTMLElement>('[data-take]')
     let n = shown.find((n) => n.id == b?.dataset.take)
     if (n) acts.take(n)
   })
@@ -164,13 +171,39 @@ export let noticeboard = (panel: Panel, acts: Acts) => {
       esc(n.id)
     }">Take it</button></footer></article>`
 
+  let draw = () => {
+    let selected = shown.find((n) => n.id == picked)
+    if (!selected) picked = null
+    let rows =
+      shown.map((n) =>
+        `<button class=Split_Row type=button data-select="${esc(n.id)}"><b>${
+          esc(n.title)
+        }</b><small>${esc(n.from)}${
+          n.where ? ` · ${esc(n.where)}` : ''
+        }</small><small>${esc(n.gives)}</small></button>`
+      ).join('') || '<p class=Notices_None>Nothing is pinned here just now.</p>'
+    panes.render(
+      rows,
+      selected
+        ? card(selected)
+        : `<p class=Notices_None>${
+          shown.length
+            ? 'Select a notice to read it and take it.'
+            : 'Check back later for new notices.'
+        }</p>`,
+      picked,
+    )
+  }
+
   return {
     get open() {
       return panel.open
     },
     /** open the sheet, or fold it away */
     toggle: () => {
-      was = ''
+      picked = null
+      shown = []
+      draw()
       panel.toggle()
     },
     close: panel.close,
@@ -183,13 +216,7 @@ export let noticeboard = (panel: Panel, acts: Acts) => {
           list.length == 1 ? 'notice' : 'notices'
         }</small>`,
       )
-      let html = `<div class=Notices>${
-        list.map(card).join('') ||
-        '<p class=Notices_None>Nothing is pinned here just now.</p>'
-      }</div>`
-      if (html == was) return
-      was = html
-      panel.body.innerHTML = html
+      draw()
     },
   }
 }
