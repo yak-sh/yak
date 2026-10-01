@@ -95,14 +95,14 @@ export let BUILT = 'esbuild/'
 // Edits belong to the next version, while the app's source names the version
 // visitors read. A failed release keeps its draft for correction and retry.
 export let draftOf = (space: { slug: string }, app: App) =>
-  `${space.slug}/.drafts/${app.eid}/${app.source ? 'delta-' : ''}v${
+  `${space.slug}/.drafts/${app.eid}/delta-v${
     (app.version ?? 0) + 1
   }-${crypto.randomUUID()}`
 
 let delta = (draft: string) => draft.split('/').pop()?.startsWith('delta-v')
 
-// A draft keeps only what differs from its immutable source. The old vN
-// drafts are complete copies and remain readable until their next deploy.
+// A draft keeps only what differs from its release or legacy file prefix.
+// Old vN drafts are complete copies, readable until their next deploy.
 // Deletions are keys outside the app's file set, so a missing draft file can
 // still mean "read the source" without reviving a deleted path.
 export let draftFiles = (
