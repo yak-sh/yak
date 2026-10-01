@@ -34,6 +34,16 @@ for (let repair of [false, true]) {
         ]),
       ])
       for (let [path, bytes] of originals) await blobs.put(prefix + path, bytes)
+      for (
+        let path of [
+          'blobs/audio.mp3',
+          'history/edit.json',
+          'versions/v1.json',
+          'esbuild/main.js',
+        ]
+      ) {
+        await blobs.put(prefix + path, new Uint8Array([42]))
+      }
       let files = await manifest(blobs, prefix)
       // A legacy deploy has a manifest but no source release pointer.
       await dir.stamp({
@@ -99,6 +109,11 @@ for (let repair of [false, true]) {
         unreleased: false,
       })
       let released = (await dir.app((await dir.space('ada'))!, 'cookbook'))!
+      assertEquals(
+        (await r2Objects(p.env.BLOBS).list(`${released.source}/`))
+          .filter((key) => /\/(blobs|history|versions)\//.test(key)),
+        [],
+      )
       for (let [path, bytes] of originals) {
         if (path != 'vocab.json') {
           assertEquals(

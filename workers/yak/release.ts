@@ -25,11 +25,13 @@ let pinned = async (raw: Objects, source: string): Promise<Index> => {
   let space = spaceOf(root)
   let prior = await indexOf(raw, root)
   if (complete(prior)) return prior
+  let names = prior
+    ? []
+    : (await raw.list(root)).map((key) => key.slice(root.length))
   let paths = prior ?? Object.fromEntries(
-    (await raw.list(root)).map((key) => [
-      key.slice(root.length),
-      { key: key.slice(space.length) },
-    ]),
+    (release(root) ? names : own(names)).map(
+      (path) => [path, { key: (root + path).slice(space.length) }],
+    ),
   )
   let pin = pins(raw, space)
   let index = Object.fromEntries(
