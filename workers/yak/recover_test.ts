@@ -156,20 +156,22 @@ test('the store answers where it stands, and wakes where it is told', async () =
   let stands = await (await at(store, '/restore')).json()
   assertEquals(stands.to, '')
   assertStringIncludes(stands.from, 'at-')
+  // A moment inside the window, whenever the test runs.
+  let then = new Date(Date.now() - DAY).toISOString()
   let asked = await (await at(
     store,
-    '/restore?at=2026-09-01T00%3A00%3A00.000Z',
+    `/restore?at=${encodeURIComponent(then)}`,
   )).json()
   // A bookmark for the moment, and nothing has moved: reading is a read.
-  assertEquals(asked.to, 'at-2026-09-01T00:00:00.000Z')
+  assertEquals(asked.to, `at-${then}`)
   assertEquals(ctx.pitr.restore, '')
   assertEquals(ctx.pitr.aborts, 0)
   let done = await at(store, '/restore', {
     method: 'POST',
     body: JSON.stringify({ bookmark: asked.to }),
   })
-  assertEquals(await done.json(), { undo: 'undo-at-2026-09-01T00:00:00.000Z' })
-  assertEquals(ctx.pitr.restore, 'at-2026-09-01T00:00:00.000Z')
+  assertEquals(await done.json(), { undo: `undo-at-${then}` })
+  assertEquals(ctx.pitr.restore, `at-${then}`)
   // The restart is asked for after the answer went out — `abort` fails every
   // in-flight request, this one included — so it lands a turn later.
   assertEquals(ctx.pitr.aborts, 0)
