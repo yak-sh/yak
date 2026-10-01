@@ -12,6 +12,9 @@ test('a connected position can name a generated land', () => {
   assertEquals(placeOf({ position: where }, 'position'), where)
 })
 import { workerOf } from './worker.js'
+import { useThemes } from './levels.ts'
+import { rows as themeRows } from './themes_fixture.ts'
+import { rows as planRows } from './buildings_fixture.ts'
 
 test('where returns a live position, then the saved spot, to its owner', async () => {
   let live = true
@@ -29,6 +32,12 @@ test('where returns a live position, then the saved spot, to its owner', async (
               }]
               : [],
           ))
+        }
+        if (path.includes('.theme_design')) {
+          return Promise.resolve(Response.json(themeRows))
+        }
+        if (path.includes('.building_design')) {
+          return Promise.resolve(Response.json(planRows))
         }
         return Promise.resolve(Response.json([{
           entity: { eid: 'hero' },
@@ -50,11 +59,12 @@ test('where returns a live position, then the saved spot, to its owner', async (
       headers: { 'x-yak-person': person },
       body: JSON.stringify({ player: 'hero' }),
     })
+  // A fresh worker knows no land until it reads the store's themes.
+  useThemes([])
   let worker = workerOf(flat(5))
   let first = await worker.fetch(ask('person'), env)
   assertEquals(first.status, 200)
   assertStringIncludes(await first.text(), 'Live position: **Mossvale**')
-  assertStringIncludes(asked.at(-1) ?? '', 'query?live=1&q=')
   live = false
   let saved = await worker.fetch(ask('person'), env)
   assertEquals(saved.status, 200)

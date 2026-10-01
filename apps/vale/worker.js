@@ -111,7 +111,7 @@ let tick = async (req, env, v, themes) => {
   return Response.json({ wrote: rows.length })
 }
 
-let where = async (req, env) => {
+let where = async (req, env, themes) => {
   let args = await req.json().catch(() => null)
   let player = args?.player
   if (typeof player != 'string' || !player) {
@@ -127,10 +127,11 @@ let where = async (req, env) => {
   if (!owner && (!person || hero.created?.by != person)) {
     return new Response('You can only locate your own hero.', { status: 403 })
   }
-  let [current] = await live(
-    env,
-    `.eid=${JSON.stringify(player)}&.position`,
-  )
+  let [[current]] = await Promise.all([
+    live(env, `.eid=${JSON.stringify(player)}&.position`),
+    themes(env),
+  ])
+  // A place names its land, which the store's themes draw.
   let place = placeOf(current, 'position')
   let source = 'live'
   if (!place) {
@@ -428,7 +429,7 @@ export let workerOf = (v) => {
         return spawn(req, env, themes)
       }
       if (req.method == 'POST' && path.endsWith('/where')) {
-        return where(req, env)
+        return where(req, env, themes)
       }
       if (req.method == 'POST' && path.endsWith('/inspect')) {
         return inspect(req, env, v, themes)
