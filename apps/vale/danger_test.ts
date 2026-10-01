@@ -3,6 +3,7 @@ import { test } from '@yaks/testing'
 import { assert } from '@std/assert'
 import { ITEMS } from './items.ts'
 import { foeOf, landLevel, skull } from './danger.ts'
+import { beastId } from './beasts.ts'
 import { kitOf } from './gear.ts'
 import { dens } from './homes.ts'
 import { HOPS, LEVELS } from './levels.ts'
@@ -23,6 +24,10 @@ import { seedThemes } from './themes_fixture.ts'
 seedDesigns()
 seedThemes()
 
+// A creature by its alias's own word, as it fights in a land.
+let named = (name: string) => beastId(`beast:${name}`)!
+let fighter = (beast: string, land: string) => foeOf(beast, land)!
+
 let wear = (lvl: number, tier: number, full: boolean, known: string[]) => {
   let kinds = full
     ? ['sword', 'shield', 'helm', 'cuirass', 'greaves']
@@ -37,10 +42,10 @@ let wear = (lvl: number, tier: number, full: boolean, known: string[]) => {
 let encounter = (
   lvl: number,
   kit: ReturnType<typeof wear>,
-  kind: string,
+  beast: string,
   land: string,
 ) => {
-  let foe = foeOf(kind, land)
+  let foe = fighter(beast, land)
   let health = maxHp(lvl) + kit.hp
   let bite = biteOf(foe.dmg, foe.lvl, lvl, kit.armour)
   return {
@@ -55,15 +60,15 @@ let encounter = (
 test('every land has encounters on the level-one-to-sixty path', () => {
   let lands = Object.values(LEVELS)
   for (let lv of lands) {
-    let foes = [...new Set(dens(lv).map((d) => d.kind))]
-      .map((kind) => foeOf(kind, lv.id))
+    let foes = [...new Set(dens(lv).map((d) => d.beast))]
+      .map((beast) => fighter(beast, lv.id))
     assert(foes.length > 0, lv.id)
     assert(
       foes.every((b) => b.lvl >= landLevel(HOPS[lv.id]) && b.lvl <= 60),
       lv.id,
     )
   }
-  assert(foeOf('cinderwyrm', 'maw').lvl == 60)
+  assert(fighter(named('cinderwyrm'), 'maw').lvl == 60)
 })
 
 test('outward roads get riskier, and skipping two lands is fatal', () => {
@@ -71,21 +76,21 @@ test('outward roads get riskier, and skipping two lands is fatal', () => {
     let hops = HOPS[land.id]
     if (!hops) continue
     let hero = landLevel(Math.max(0, hops - 1)) + 2
-    let foes = [...new Set(dens(land).map((d) => d.kind))]
-      .filter((kind) => {
-        let b = foeOf(kind, land.id)
+    let foes = [...new Set(dens(land).map((d) => d.beast))]
+      .filter((beast) => {
+        let b = fighter(beast, land.id)
         return b.aggro > 0 && !b.boss
       })
     let geared = wear(hero, Math.min(5, Math.ceil(hero / 12)), true, [])
     assert(
-      foes.some((kind) => encounter(hero, geared, kind, land.id).bites <= 7),
+      foes.some((b) => encounter(hero, geared, b, land.id).bites <= 7),
       land.id,
     )
     if (hops < 2) continue
     let under = landLevel(hops - 2) + 2
     let bare = wear(under, 1, false, [])
     assert(
-      foes.some((kind) => encounter(under, bare, kind, land.id).bites == 1),
+      foes.some((b) => encounter(under, bare, b, land.id).bites == 1),
       land.id,
     )
   }
@@ -95,10 +100,10 @@ test('equipment and a friend turn the next land from fatal to possible', () => {
   let lvl = 17
   let bare = wear(lvl, 1, false, [])
   let geared = wear(lvl, 2, true, ['brawn', 'hide', 'keen'])
-  let home = encounter(lvl, geared, 'bear', 'clovermead')
-  let ahead = encounter(lvl, geared, 'direwolf', 'wolfden')
-  let unready = encounter(lvl, bare, 'direwolf', 'wolfden')
-  let distant = encounter(lvl, bare, 'frostwolf', 'frostmoor')
+  let home = encounter(lvl, geared, named('bear'), 'clovermead')
+  let ahead = encounter(lvl, geared, named('direwolf'), 'wolfden')
+  let unready = encounter(lvl, bare, named('direwolf'), 'wolfden')
+  let distant = encounter(lvl, bare, named('frostwolf'), 'frostmoor')
   assert(home.bites > ahead.bites)
   assert(unready.bites <= 2 && unready.killTime > unready.surviveTime)
   assert(ahead.bites >= 3 && ahead.killTime > ahead.surviveTime * 0.7)
@@ -110,7 +115,7 @@ test('equipment and a friend turn the next land from fatal to possible', () => {
 test('the final boss asks more of a hero than the best plain kit', () => {
   let lvl = 60
   let kit = wear(lvl, 5, true, [])
-  let boss = encounter(lvl, kit, 'cinderwyrm', 'maw')
+  let boss = encounter(lvl, kit, named('cinderwyrm'), 'maw')
   assert(boss.killTime > boss.surviveTime)
   assert(boss.killTime / 2 < boss.surviveTime)
 })
@@ -128,8 +133,8 @@ test('saved awards retain their value while new lands reward their level', () =>
     questsOf([quest], [{ ...done, xp: questXp(quest) }], [], [])[0].award ==
       questXp(quest),
   )
-  let old = { creature: 'a', by: 'p', kind: 'wolf', at: 1, xp: 200 }
-  let raised = { ...old, lvl: foeOf('wolf', 'birchmere').lvl }
+  let old = { creature: 'a', by: 'p', beast: named('wolf'), at: 1, xp: 200 }
+  let raised = { ...old, lvl: fighter(named('wolf'), 'birchmere').lvl }
   let seed = { ...quest, id: 'seed', xp: need(7) }
   let before = [{ quest: 'seed', step: 'done', at: 0 }]
   assert(xpOf([raised], [seed], before) > xpOf([old], [seed], before))

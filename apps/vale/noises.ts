@@ -12,17 +12,18 @@ import type { Body } from './sim.ts'
 import { placesOf, regionOf } from './regions.ts'
 import { groundAt, hearthNear, type Vale, WATER } from './terrain.ts'
 
-/** Something heard: `of` is the eid of whoever made it, and a creature's
- * body plan (beasts.ts) and size say how it sounds; a hero's plan is
- * `hero`. */
+/** Something heard: `of` is the eid of whoever made it. A creature's
+ * sounds name the sfx row it cries or steps with (`sfx`), and its body plan
+ * (beasts.ts) and size say how its procedural voice sounds until that row has
+ * a recording; a hero's plan is `hero`. */
 export type Noise =
-  | { type: 'step'; of: string; plan: string; size: number }
+  | { type: 'step'; of: string; sfx?: string; plan: string; size: number }
   | { type: 'swing'; of: string }
   | { type: 'roll'; of: string }
   | {
     type: 'cry'
     of: string
-    kind: string
+    sfx?: string
     plan: string
     size: number
     loud: boolean
@@ -32,7 +33,7 @@ export type Noise =
 export type Scene = {
   body: Body
   others: (Pick<Other, 'eid' | 'swing' | 'roll'> & { body: Body })[]
-  mobs: Pick<Mob, 'eid' | 'kind' | 'body' | 'down' | 'bite'>[]
+  mobs: Pick<Mob, 'eid' | 'beast' | 'body' | 'down' | 'bite'>[]
 }
 
 // How far a step carries a hero, and a creature of each body plan at size 1,
@@ -81,6 +82,7 @@ let WATERS: [string, 'water' | 'marsh' | 'surf'][] = [
  * import { seedDesigns } from './designs_fixture.ts'
  * seedDesigns()
  * import { assertEquals } from '@std/assert'
+ * import { beastId } from './beasts.ts'
  * let body = (x: number, gait = 'walk') =>
  *   ({ x, y: 5, z: 0, vy: 0, yaw: 0, speed: 3, gait })
  * let hear = noises()
@@ -89,7 +91,8 @@ let WATERS: [string, 'water' | 'marsh' | 'surf'][] = [
  *     body: body(x, gait),
  *     others: [{ eid: 'wren', body: body(40, 'idle'), swing, roll: -1 }],
  *     mobs: [{
- *       eid: 'blob', kind: 'slime', body: body(60, 'idle'), down: false, bite,
+ *       eid: 'blob', beast: beastId('beast:slime')!, body: body(60, 'idle'),
+ *       down: false, bite,
  *     }],
  *   }, 'me', 1 / 60, () => 1).map((n) => `${n.type} ${n.of}`)
  * // Ten and a half metres walked is ten steps; standing still, none.
@@ -114,7 +117,13 @@ export let noises = () => {
     let was = walked
     walked = new Map()
     // A step each stride walked or run; none in the air, rolling or down.
-    let walk = (of: string, b: Body, plan: string, size: number) => {
+    let walk = (
+      of: string,
+      b: Body,
+      plan: string,
+      size: number,
+      sfx?: string,
+    ) => {
       let stride = (STRIDE[plan] ?? 0) * size
       if (!stride) return
       let [x, z, d] = was.get(of) ?? [b.x, b.z, 0]
@@ -122,7 +131,7 @@ export let noises = () => {
       let on = (b.gait == 'walk' || b.gait == 'run') && moved < LEAP
       let now = on ? d + moved : d
       if (Math.floor(now / stride) > Math.floor(d / stride)) {
-        out.push({ type: 'step', of, plan, size })
+        out.push({ type: 'step', of, ...sfx && { sfx }, plan, size })
       }
       walked.set(of, [b.x, b.z, now])
     }
@@ -139,30 +148,21 @@ export let noises = () => {
     }
     let bites = new Map<string, number>()
     for (let m of f.mobs) {
-      let beast = BEASTS[m.kind]
+      let beast = BEASTS[m.beast]
       if (!beast || m.down) continue
       let { plan } = beast.look, size = beast.size
-      walk(m.eid, m.body, plan, size)
+      walk(m.eid, m.body, plan, size, beast.step)
       let b = bit.get(m.eid) ?? -1
-      if (m.bite >= 0 && (b < 0 || m.bite < b)) {
-        out.push({
-          type: 'cry',
-          of: m.eid,
-          kind: m.kind,
-          plan,
-          size,
-          loud: true,
-        })
-      } else if (m.bite < 0 && rand() < dt / CALL) {
-        out.push({
-          type: 'cry',
-          of: m.eid,
-          kind: m.kind,
-          plan,
-          size,
-          loud: false,
-        })
-      }
+      let cry = (loud: boolean): Noise => ({
+        type: 'cry',
+        of: m.eid,
+        ...beast.cry && { sfx: beast.cry },
+        plan,
+        size,
+        loud,
+      })
+      if (m.bite >= 0 && (b < 0 || m.bite < b)) out.push(cry(true))
+      else if (m.bite < 0 && rand() < dt / CALL) out.push(cry(false))
       bites.set(m.eid, m.bite)
     }
     ;[swung, rolled, bit] = [swings, rolls, bites]
@@ -177,7 +177,7 @@ export let where = (f: Scene, me: string) => {
     at.set(of, [b.x, b.y + up, b.z])
   put(me, f.body, HERO)
   for (let o of f.others) put(o.eid, o.body, HERO)
-  for (let m of f.mobs) put(m.eid, m.body, (BEASTS[m.kind]?.size ?? 1) / 2)
+  for (let m of f.mobs) put(m.eid, m.body, (BEASTS[m.beast]?.size ?? 1) / 2)
   return at
 }
 

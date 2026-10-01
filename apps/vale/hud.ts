@@ -646,7 +646,7 @@ export let hud = (
       let m = f.foe
       foe.hidden = !m
       if (m) {
-        let b = BEASTS[m.kind]
+        let b = BEASTS[m.beast]
         let danger = skull(m.lvl, s.lvl)
         put(
           'foe',
@@ -661,7 +661,7 @@ export let hud = (
             } / ${m.most}</small>`,
           ),
         )
-        foe.classList.toggle('Foe-boss', !!b.boss)
+        foe.classList.toggle('Foe-boss', !!b.combat?.boss)
         foe.classList.toggle('Foe-danger', danger)
       }
       let [sky, word] = CLOCKS[clock]

@@ -188,7 +188,8 @@ export type Vitals = { hp: number; max: number; lvl: number }
 /** A creature as this frame sees it. */
 export type Mob = {
   eid: string
-  kind: string
+  /** the creature it is (beasts.ts) */
+  beast: string
   land: string
   lvl: number
   home: [number, number]
@@ -209,6 +210,8 @@ export type Mob = {
   near: number
   /** held still by someone's blow: it neither moves nor bites */
   held: boolean
+  /** seconds from a fall until it is up again; never, without */
+  respawn?: number
 }
 
 /** Another player within sight, as this frame sees them. */
@@ -594,7 +597,7 @@ export let game = (
       return {
         creature: str(s.creature),
         by: str(s.by),
-        kind: str(s.kind),
+        beast: str(s.beast),
         at: num(s.at),
         xp: num(s.xp),
         ...s.lvl != null && { lvl: num(s.lvl) },
@@ -1050,12 +1053,12 @@ export let game = (
       let homes = homesNear(body.x, body.z, SIGHT)
       let mobs: Mob[] = []
       for (let h of homes) {
-        if (!BEASTS[h.kind]) continue
-        let beast = foeOf(h.kind, h.level)
+        let beast = foeOf(h.beast, h.level)
+        if (!beast) continue
         let eid = h.eid
         let e = c.ent(eid)
         let home = { x: h.home[0], z: h.home[1] }
-        let f = fallOf(falls.get(eid) ?? [], beast.respawn, now)
+        let f = fallOf(falls.get(eid) ?? [], h.respawn ?? Infinity, now)
         let life = f.fell
         let hpNow = f.down ? 0 : hpOf(eid, beast.hp, life, all)
         let wasHp = hpWas.get(eid) ?? beast.hp
@@ -1237,7 +1240,7 @@ export let game = (
         last.set(eid, mb)
         mobs.push({
           eid,
-          kind: h.kind,
+          beast: h.beast,
           land: h.level,
           lvl: beast.lvl,
           home: h.home,
@@ -1252,6 +1255,7 @@ export let game = (
           reach: beast.reach + LUNGE,
           near: dist(mb, body),
           held: stuck,
+          ...h.respawn != null && { respawn: h.respawn },
         })
       }
 
@@ -1260,13 +1264,14 @@ export let game = (
         let key = `${m.eid}:${life}`
         if (shares.has(key)) return
         shares.add(key)
-        let beast = foeOf(m.kind, m.land)
+        let beast = foeOf(m.beast, m.land)
+        if (!beast) return
         net.keep({
           entity: { eid: crypto.randomUUID() },
           slain: {
             creature: m.eid,
             by: me,
-            kind: m.kind,
+            beast: m.beast,
             at: when,
             xp: beast.xp,
             lvl: beast.lvl,
@@ -1276,7 +1281,7 @@ export let game = (
         events.push({
           type: 'fall',
           eid: m.eid,
-          beast: m.kind,
+          beast: m.beast,
           at: at(m.body, 0.5),
         })
         // What the kill is worth to me, at the level I am before it.
@@ -1312,8 +1317,10 @@ export let game = (
       // A blow landing on a creature: what I have dealt it in this life of
       // it, and, when the blow holds it, until when.
       let land = (m: Mob, dmg: number, great: boolean, held = 0, by = '') => {
-        let beast = foeOf(m.kind, m.land)
-        let life = fallOf(falls.get(m.eid) ?? [], beast.respawn, now).fell
+        let beast = foeOf(m.beast, m.land)
+        if (!beast) return
+        let life = fallOf(falls.get(m.eid) ?? [], m.respawn ?? Infinity, now)
+          .fell
         let d = fought.dealt.find((d) => d.foe == m.eid && d.life == life)
         if (!d) fought.dealt.push(d = { foe: m.eid, life, dmg: 0, held: 0 })
         d.dmg += dmg
@@ -1325,7 +1332,7 @@ export let game = (
           events.push({
             type: 'hit',
             eid: m.eid,
-            beast: m.kind,
+            beast: m.beast,
             at: at(m.body, beast.size + 0.4),
             dmg,
             great,
@@ -1412,7 +1419,7 @@ export let game = (
           if (target) face(target)
           let dashEffect = effect(a.effects, 'dash')
           if (target && dashEffect) {
-            let gap = BEASTS[target.kind].size * 0.5 + 0.9
+            let gap = BEASTS[target.beast].size * 0.5 + 0.9
             let ang = Math.atan2(
               target.body.x - body.x,
               target.body.z - body.z,
@@ -1491,7 +1498,7 @@ export let game = (
         if (lead) fought.foe = lead.eid
         // A shot flies at the creature it was aimed at, or straight on at
         // nothing, and what it takes, it takes when it gets there.
-        let to = lead ? at(lead.body, BEASTS[lead.kind].size * 0.6) : at({
+        let to = lead ? at(lead.body, BEASTS[lead.beast].size * 0.6) : at({
           x: body.x + Math.sin(body.yaw) * k.reach,
           y: body.y,
           z: body.z + Math.cos(body.yaw) * k.reach,
@@ -1587,7 +1594,7 @@ export let game = (
       for (let d of fought.dealt) {
         let m = d.dmg > 0 && mobs.find((m) => m.eid == d.foe)
         if (!m) continue
-        let f = fallOf(falls.get(m.eid) ?? [], BEASTS[m.kind].respawn, now)
+        let f = fallOf(falls.get(m.eid) ?? [], m.respawn ?? Infinity, now)
         if (f.down && f.fell > d.life) fell(m, d.life, f.fell)
         else if (m.down && f.fell == d.life) fell(m, d.life, now)
       }
@@ -1595,7 +1602,7 @@ export let game = (
       // after it falls.
       fought.dealt = fought.dealt.filter((d) => {
         let m = mobs.find((m) => m.eid == d.foe)
-        let f = m && fallOf(falls.get(d.foe) ?? [], BEASTS[m.kind].respawn, now)
+        let f = m && fallOf(falls.get(d.foe) ?? [], m.respawn ?? Infinity, now)
         return !!f && (f.fell == d.life || now - f.fell < KEPT)
       })
 

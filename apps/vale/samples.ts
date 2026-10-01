@@ -41,6 +41,15 @@ export let catalog = (rows: Row[]): Record<string, string> => {
 let PINNED = new Set(Object.keys(SAMPLES))
 let waiting = new Map<string, Set<(hash: string) => void>>()
 let watching: Promise<void> | null = null
+// Each sound row's name, by its eid, as the store has them.
+let named = new Map<string, string>()
+
+/** The name of the sound row an eid names (a creature's `sounds`), once the
+ * store has said; until then a sound plays its procedural voice. */
+export let nameOf = (sfx: string): string | undefined => {
+  void watch()
+  return named.get(sfx)
+}
 
 /** Follow hosted outputs so a rebuilt description is heard on the next play. */
 export let watch = () => {
@@ -57,6 +66,9 @@ export let watch = () => {
           for (let ready of waiting.get(name) ?? []) ready(hash)
           waiting.delete(name)
         }
+      })
+      subscribe('.sfx', (rows: Row[]) => {
+        named = new Map(rows.map((row) => [row.entity.eid, row.sfx!.name]))
       })
     })
     .catch((error) => {

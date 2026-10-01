@@ -3,7 +3,7 @@
 import { test } from '@yaks/testing'
 import { seedBuildings } from './buildings_fixture.ts'
 import { assert, assertEquals } from '@std/assert'
-import { BEASTS } from './beasts.ts'
+import { beastId, beastOf, BEASTS } from './beasts.ts'
 import { homesOf } from './homes.ts'
 import { inVillage, prowl, rest, sheltered } from './sim.ts'
 import { EDGE } from './streets.ts'
@@ -49,21 +49,26 @@ test('creatures live and wander off traveled paths', () => {
     let homes = homesOf(id)
     assert(homes.length > 0)
     for (let h of homes) {
-      assert(!sheltered(v, ...h.home), `${id}: ${h.kind} home`)
+      assert(!sheltered(v, ...h.home), `${id}: ${BEASTS[h.beast].name} home`)
       for (let t of [0, 22_500, 45_000, 90_000]) {
         let b = rest(v, h.home, h.roam, h.seed, t)
-        assert(!sheltered(v, b.x, b.z), `${id}: ${h.kind} wander`)
+        assert(!sheltered(v, b.x, b.z), `${id}: ${BEASTS[h.beast].name} wander`)
         for (let i = 1; i < 10; i++) {
           let x = h.home[0] + (b.x - h.home[0]) * i / 10
           let z = h.home[1] + (b.z - h.home[1]) * i / 10
-          assert(!sheltered(v, x, z), `${id}: ${h.kind} crossed a path`)
+          assert(
+            !sheltered(v, x, z),
+            `${id}: ${BEASTS[h.beast].name} crossed a path`,
+          )
         }
       }
     }
   }
-  assert(homesOf('mossvale').some((h) => h.kind == 'slime'))
-  assert(homesOf('mossvale').some((h) => h.kind == 'thornback'))
-  assert(homesOf('birchmere').some((h) => h.kind == 'slime'))
+  let lives = (id: string, name: string) =>
+    homesOf(id).some((h) => h.beast == beastId(`beast:${name}`))
+  assert(lives('mossvale', 'slime'))
+  assert(lives('mossvale', 'thornback'))
+  assert(lives('birchmere', 'slime'))
 })
 
 test('a creature pursuing a traveler stops at a road', () => {
@@ -76,8 +81,9 @@ test('a creature pursuing a traveler stops at a road', () => {
   let v = flat(6)
   v.world = true
   let b = { x, y: 6, z, vy: 0, yaw: 0, speed: 0, gait: 'idle' }
+  let boar = beastOf('beast:boar')!.combat!
   for (let j = 0; j < 100; j++) {
-    b = prowl(v, b, BEASTS.boar, [x, z], 8, 1, j * 50, 0.05, {
+    b = prowl(v, b, boar, [x, z], 8, 1, j * 50, 0.05, {
       x: c.xs[i],
       z: c.zs[i],
     })

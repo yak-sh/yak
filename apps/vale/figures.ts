@@ -22,7 +22,7 @@
 import * as THREE from 'three'
 import type { Box } from './boxes.ts'
 import type { Pose } from './abilities.ts'
-import { BEASTS, type Look, type Plans } from './beasts.ts'
+import { beastOf, BEASTS, type Look, type Plans } from './beasts.ts'
 import type { Hand } from './gear.ts'
 import { halo } from './halo.ts'
 import { ITEMS } from './items.ts'
@@ -625,10 +625,10 @@ let PLANS: { [P in keyof Plans]: (l: Plans[P]) => Puppet } = {
 let draw = <P extends keyof Plans>(l: { plan: P } & Plans[P]) =>
   PLANS[l.plan](l)
 
-/** A creature of the given kind, drawn by its row's body plan (beasts.ts) at
- * its row's scale. */
-export let beast = (kind: string): Puppet => {
-  let l: Look = (BEASTS[kind] ?? BEASTS.slime).look
+/** A creature, by eid, drawn by its row's body plan (beasts.ts) at its row's
+ * scale; a moss slime until the store has it. */
+export let beast = (eid: string): Puppet => {
+  let l: Look = (BEASTS[eid] ?? beastOf('beast:slime')!).look
   let f = sewn(draw(l))
   let k = l.scale ?? 1
   f.root.scale.setScalar(k)

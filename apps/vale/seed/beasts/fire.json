@@ -3,18 +3,32 @@
     "entity": {
       "eid": "1728c3dc-42a0-8ce7-ad77-d7b2d151fe7e"
     },
+    "alias": {
+      "name": "beast:emberslime"
+    },
     "beast_design": {
-      "kind": "emberslime",
       "name": "Ember slime",
+      "size": 1,
+      "dust": 15759914,
+      "look": {
+        "plan": "slime",
+        "body": 15229482,
+        "moss": 5913130,
+        "bloom": 16764992,
+        "scale": 1.1
+      }
+    },
+    "combat": {
       "lvl": 12,
       "hp": 576,
       "dmg": 28,
       "speed": 2.4,
-      "xp": 263,
       "reach": 1.4,
       "aggro": 6,
-      "respawn": 70,
-      "loot": [
+      "xp": 263
+    },
+    "loot": {
+      "drops": [
         [
           "ember",
           0.6
@@ -23,51 +37,76 @@
           "jelly",
           0.3
         ]
-      ],
-      "size": 1,
-      "dust": 15759914,
-      "haunts": [
-        {
-          "near": "volcano",
-          "count": 4,
-          "within": 22,
-          "apart": 7,
-          "roam": 4
-        },
-        {
-          "near": "ashfield",
-          "count": 4,
-          "within": 26,
-          "apart": 7,
-          "roam": 4,
-          "odds": 0.8
-        }
-      ],
-      "look": {
-        "plan": "slime",
-        "body": 15229482,
-        "moss": 5913130,
-        "bloom": 16764992,
-        "scale": 1.1
-      }
+      ]
+    },
+    "sounds": {
+      "cry": "db78951a-a908-480d-bf10-85279c3467a0",
+      "step": "bf7f7c18-c25a-42a9-9b11-91e78f23f4bd"
+    }
+  },
+  {
+    "entity": {
+      "eid": "83c5b87f-a1a5-43ee-b5f7-8c0efb9abf27"
+    },
+    "den": {
+      "beast": "1728c3dc-42a0-8ce7-ad77-d7b2d151fe7e",
+      "near": "volcano",
+      "count": 4,
+      "within": 22,
+      "apart": 7,
+      "roam": 4,
+      "respawn": 70
+    }
+  },
+  {
+    "entity": {
+      "eid": "596cc8de-2e03-4897-b3e7-f1509a879111"
+    },
+    "den": {
+      "beast": "1728c3dc-42a0-8ce7-ad77-d7b2d151fe7e",
+      "near": "ashfield",
+      "count": 4,
+      "within": 26,
+      "apart": 7,
+      "roam": 4,
+      "odds": 0.8,
+      "respawn": 70
     }
   },
   {
     "entity": {
       "eid": "c6a126ad-6fc7-82df-8d7f-1aa3a9af6351"
     },
+    "alias": {
+      "name": "beast:salamander"
+    },
     "beast_design": {
-      "kind": "salamander",
       "name": "Salamander",
+      "size": 1.2,
+      "dust": 15755818,
+      "look": {
+        "plan": "crawler",
+        "shell": 14174250,
+        "under": 15769664,
+        "leg": 12073504,
+        "eye": 16769088,
+        "pairs": 2,
+        "tail": true,
+        "mark": 2759188,
+        "scale": 1.6
+      }
+    },
+    "combat": {
       "lvl": 14,
       "hp": 728,
       "dmg": 33,
       "speed": 4,
-      "xp": 322,
       "reach": 1.8,
       "aggro": 9,
-      "respawn": 100,
-      "loot": [
+      "xp": 322
+    },
+    "loot": {
+      "drops": [
         [
           "ember",
           0.6
@@ -80,56 +119,80 @@
           "coin",
           0.5
         ]
-      ],
-      "size": 1.2,
-      "dust": 15755818,
-      "haunts": [
-        {
-          "near": "volcano",
-          "count": 4,
-          "within": 22,
-          "apart": 7,
-          "roam": 5,
-          "odds": 0.9
-        },
-        {
-          "near": "ashfield",
-          "count": 4,
-          "within": 26,
-          "apart": 7,
-          "roam": 5,
-          "odds": 0.8
-        }
-      ],
-      "look": {
-        "plan": "crawler",
-        "shell": 14174250,
-        "under": 15769664,
-        "leg": 12073504,
-        "eye": 16769088,
-        "pairs": 2,
-        "tail": true,
-        "mark": 2759188,
-        "scale": 1.6
-      }
+      ]
+    },
+    "sounds": {
+      "cry": "ea85ae11-6947-4704-88a9-d90168c8cd48",
+      "step": "737066e7-b18d-41fb-94a6-a2590eca2a81"
+    }
+  },
+  {
+    "entity": {
+      "eid": "d50b45e8-9d91-4d14-8fd7-9da7f8fd48fe"
+    },
+    "den": {
+      "beast": "c6a126ad-6fc7-82df-8d7f-1aa3a9af6351",
+      "near": "volcano",
+      "count": 4,
+      "within": 22,
+      "apart": 7,
+      "roam": 5,
+      "odds": 0.9,
+      "respawn": 100
+    }
+  },
+  {
+    "entity": {
+      "eid": "dfe717d4-71b9-4720-b63c-278e1b5857c3"
+    },
+    "den": {
+      "beast": "c6a126ad-6fc7-82df-8d7f-1aa3a9af6351",
+      "near": "ashfield",
+      "count": 4,
+      "within": 26,
+      "apart": 7,
+      "roam": 5,
+      "odds": 0.8,
+      "respawn": 100
     }
   },
   {
     "entity": {
       "eid": "56712616-5728-8890-870e-5505021eb4fa"
     },
+    "alias": {
+      "name": "beast:imp"
+    },
     "beast_design": {
-      "kind": "imp",
       "name": "Cinder imp",
+      "size": 1.1,
+      "dust": 14174250,
+      "look": {
+        "plan": "biped",
+        "skin": 13123626,
+        "garb": 3809312,
+        "eye": 16764992,
+        "head": "horns",
+        "top": 2759188,
+        "club": 4864564,
+        "build": [
+          0.75,
+          0.7
+        ],
+        "stoop": 0.2
+      }
+    },
+    "combat": {
       "lvl": 15,
       "hp": 810,
       "dmg": 35,
       "speed": 4.2,
-      "xp": 353,
       "reach": 1.8,
       "aggro": 10,
-      "respawn": 100,
-      "loot": [
+      "xp": 353
+    },
+    "loot": {
+      "drops": [
         [
           "ember",
           0.4
@@ -146,59 +209,75 @@
           "elixir",
           0.05
         ]
-      ],
-      "size": 1.1,
-      "dust": 14174250,
-      "haunts": [
-        {
-          "near": "volcano",
-          "count": 4,
-          "within": 20,
-          "apart": 6,
-          "roam": 5,
-          "odds": 0.7
-        },
-        {
-          "near": "ashfield",
-          "count": 4,
-          "within": 26,
-          "apart": 6,
-          "roam": 5,
-          "odds": 0.8
-        }
-      ],
-      "look": {
-        "plan": "biped",
-        "skin": 13123626,
-        "garb": 3809312,
-        "eye": 16764992,
-        "head": "horns",
-        "top": 2759188,
-        "club": 4864564,
-        "build": [
-          0.75,
-          0.7
-        ],
-        "stoop": 0.2
-      }
+      ]
+    },
+    "sounds": {
+      "cry": "653cc767-79a0-475f-b141-91e5c798224e",
+      "step": "e6a2e95c-1480-4662-ad5a-be0cf3304e73"
+    }
+  },
+  {
+    "entity": {
+      "eid": "5786100a-8f05-4500-9f83-d37d55375e7e"
+    },
+    "den": {
+      "beast": "56712616-5728-8890-870e-5505021eb4fa",
+      "near": "volcano",
+      "count": 4,
+      "within": 20,
+      "apart": 6,
+      "roam": 5,
+      "odds": 0.7,
+      "respawn": 100
+    }
+  },
+  {
+    "entity": {
+      "eid": "80f957ad-0c9e-4534-9b73-0bb5648c8060"
+    },
+    "den": {
+      "beast": "56712616-5728-8890-870e-5505021eb4fa",
+      "near": "ashfield",
+      "count": 4,
+      "within": 26,
+      "apart": 6,
+      "roam": 5,
+      "odds": 0.8,
+      "respawn": 100
     }
   },
   {
     "entity": {
       "eid": "6b402807-ccc9-8cad-bf01-18ff70eebdc3"
     },
+    "alias": {
+      "name": "beast:emberback"
+    },
     "beast_design": {
-      "kind": "emberback",
       "name": "Emberback",
+      "size": 1.6,
+      "dust": 5917252,
+      "look": {
+        "plan": "crag",
+        "stone": 4866624,
+        "light": 6181968,
+        "moss": 3813420,
+        "eye": 16752688,
+        "crystals": 16738858,
+        "scale": 1.1
+      }
+    },
+    "combat": {
       "lvl": 17,
       "hp": 986,
       "dmg": 39,
       "speed": 2.4,
-      "xp": 417,
       "reach": 2,
       "aggro": 6,
-      "respawn": 90,
-      "loot": [
+      "xp": 417
+    },
+    "loot": {
+      "drops": [
         [
           "ember",
           0.6
@@ -211,54 +290,79 @@
           "coin",
           0.8
         ]
-      ],
-      "size": 1.6,
-      "dust": 5917252,
-      "haunts": [
-        {
-          "near": "volcano",
-          "count": 4,
-          "within": 20,
-          "apart": 8,
-          "roam": 5,
-          "odds": 0.9
-        },
-        {
-          "near": "ashfield",
-          "count": 2,
-          "within": 24,
-          "apart": 8,
-          "roam": 5,
-          "odds": 0.8
-        }
-      ],
-      "look": {
-        "plan": "crag",
-        "stone": 4866624,
-        "light": 6181968,
-        "moss": 3813420,
-        "eye": 16752688,
-        "crystals": 16738858,
-        "scale": 1.1
-      }
+      ]
+    },
+    "sounds": {
+      "cry": "a7e67d84-7a1b-4fe7-bb5f-475202a0996b",
+      "step": "84a55217-9863-43ee-9780-d088553e960f"
+    }
+  },
+  {
+    "entity": {
+      "eid": "4e37ad9d-68f7-4345-b7a0-dcf6e727c8fc"
+    },
+    "den": {
+      "beast": "6b402807-ccc9-8cad-bf01-18ff70eebdc3",
+      "near": "volcano",
+      "count": 4,
+      "within": 20,
+      "apart": 8,
+      "roam": 5,
+      "odds": 0.9,
+      "respawn": 90
+    }
+  },
+  {
+    "entity": {
+      "eid": "e8af0b73-830e-4e8a-a57f-f860290adb86"
+    },
+    "den": {
+      "beast": "6b402807-ccc9-8cad-bf01-18ff70eebdc3",
+      "near": "ashfield",
+      "count": 2,
+      "within": 24,
+      "apart": 8,
+      "roam": 5,
+      "odds": 0.8,
+      "respawn": 90
     }
   },
   {
     "entity": {
       "eid": "a447e25f-d77d-8663-9db2-1c50cd7b578c"
     },
+    "alias": {
+      "name": "beast:cinderwyrm"
+    },
     "beast_design": {
-      "kind": "cinderwyrm",
       "name": "The Cinder Wyrm",
+      "size": 3.4,
+      "dust": 14174762,
+      "look": {
+        "plan": "serpent",
+        "skin": 9054750,
+        "belly": 15769664,
+        "eye": 16769088,
+        "band": 4856340,
+        "frill": 16742954,
+        "horns": 2760736,
+        "length": 9,
+        "girth": 2.4,
+        "scale": 1.5
+      }
+    },
+    "combat": {
       "lvl": 20,
       "hp": 4480,
       "dmg": 53,
       "speed": 3.4,
-      "xp": 2080,
       "reach": 3.6,
       "aggro": 10,
-      "respawn": 600,
-      "loot": [
+      "xp": 2080,
+      "boss": true
+    },
+    "loot": {
+      "drops": [
         [
           "ember",
           1
@@ -275,51 +379,60 @@
           "blade6",
           0.3
         ]
-      ],
-      "size": 3.4,
-      "dust": 14174762,
-      "haunts": [
-        {
-          "near": "volcano",
-          "count": 1,
-          "beyond": 3,
-          "within": 8,
-          "apart": 1,
-          "roam": 6,
-          "odds": 0.25
-        }
-      ],
-      "look": {
-        "plan": "serpent",
-        "skin": 9054750,
-        "belly": 15769664,
-        "eye": 16769088,
-        "band": 4856340,
-        "frill": 16742954,
-        "horns": 2760736,
-        "length": 9,
-        "girth": 2.4,
-        "scale": 1.5
-      },
-      "boss": true
+      ]
+    },
+    "sounds": {
+      "cry": "09dd6dd0-280c-4e16-8530-88d9082f6a7a",
+      "step": "73617de7-bbec-4b2c-98b7-bd72813c0878"
+    }
+  },
+  {
+    "entity": {
+      "eid": "273f0fd4-afc8-4a56-9e76-bf00ccf3ded5"
+    },
+    "den": {
+      "beast": "a447e25f-d77d-8663-9db2-1c50cd7b578c",
+      "near": "volcano",
+      "count": 1,
+      "within": 8,
+      "beyond": 3,
+      "apart": 1,
+      "roam": 6,
+      "odds": 0.25,
+      "respawn": 600
     }
   },
   {
     "entity": {
       "eid": "f33f92e4-f68d-8d96-b524-ee53c88f34ed"
     },
+    "alias": {
+      "name": "beast:flameling"
+    },
     "beast_design": {
-      "kind": "flameling",
       "name": "Flameling",
+      "size": 1,
+      "dust": 16747050,
+      "look": {
+        "plan": "wisp",
+        "core": 16773280,
+        "glow": 16738842,
+        "mote": 16760896,
+        "fly": 0.8,
+        "scale": 1.1
+      }
+    },
+    "combat": {
       "lvl": 16,
       "hp": 896,
       "dmg": 37,
       "speed": 4.2,
-      "xp": 385,
       "reach": 1.8,
       "aggro": 9,
-      "respawn": 100,
-      "loot": [
+      "xp": 385
+    },
+    "loot": {
+      "drops": [
         [
           "ember",
           0.8
@@ -332,53 +445,75 @@
           "coin",
           0.6
         ]
-      ],
-      "size": 1,
-      "dust": 16747050,
-      "haunts": [
-        {
-          "near": "volcano",
-          "count": 4,
-          "within": 22,
-          "apart": 8,
-          "roam": 7,
-          "odds": 0.9
-        },
-        {
-          "near": "ashfield",
-          "count": 4,
-          "within": 26,
-          "apart": 8,
-          "roam": 7,
-          "odds": 0.8
-        }
-      ],
-      "look": {
-        "plan": "wisp",
-        "core": 16773280,
-        "glow": 16738842,
-        "mote": 16760896,
-        "fly": 0.8,
-        "scale": 1.1
-      }
+      ]
+    },
+    "sounds": {
+      "cry": "8bb918b8-28c5-4948-9b1b-23990ab8831f",
+      "step": "bf543dd1-8035-40ad-8381-2847d5eb1299"
+    }
+  },
+  {
+    "entity": {
+      "eid": "2bfec180-ac5b-44a4-9d7a-b3612b67312d"
+    },
+    "den": {
+      "beast": "f33f92e4-f68d-8d96-b524-ee53c88f34ed",
+      "near": "volcano",
+      "count": 4,
+      "within": 22,
+      "apart": 8,
+      "roam": 7,
+      "odds": 0.9,
+      "respawn": 100
+    }
+  },
+  {
+    "entity": {
+      "eid": "1c2a5900-3699-466f-8ac8-60a7af46ccf9"
+    },
+    "den": {
+      "beast": "f33f92e4-f68d-8d96-b524-ee53c88f34ed",
+      "near": "ashfield",
+      "count": 4,
+      "within": 26,
+      "apart": 8,
+      "roam": 7,
+      "odds": 0.8,
+      "respawn": 100
     }
   },
   {
     "entity": {
       "eid": "9db32b2f-f619-87d7-9a54-65f79e380d25"
     },
+    "alias": {
+      "name": "beast:cindercrag"
+    },
     "beast_design": {
-      "kind": "cindercrag",
       "name": "Cinder crag",
+      "size": 1.8,
+      "dust": 5917252,
+      "look": {
+        "plan": "crag",
+        "stone": 3813424,
+        "light": 5917252,
+        "moss": 14174250,
+        "eye": 16764992,
+        "crystals": 16747050,
+        "scale": 1.2
+      }
+    },
+    "combat": {
       "lvl": 18,
       "hp": 1080,
       "dmg": 42,
       "speed": 2.4,
-      "xp": 451,
       "reach": 2.2,
       "aggro": 8,
-      "respawn": 120,
-      "loot": [
+      "xp": 451
+    },
+    "loot": {
+      "drops": [
         [
           "ember",
           0.8
@@ -391,35 +526,40 @@
           "gem",
           0.1
         ]
-      ],
-      "size": 1.8,
-      "dust": 5917252,
-      "haunts": [
-        {
-          "near": "volcano",
-          "count": 4,
-          "within": 20,
-          "apart": 9,
-          "roam": 4
-        },
-        {
-          "near": "ashfield",
-          "count": 2,
-          "within": 24,
-          "apart": 9,
-          "roam": 4,
-          "odds": 0.8
-        }
-      ],
-      "look": {
-        "plan": "crag",
-        "stone": 3813424,
-        "light": 5917252,
-        "moss": 14174250,
-        "eye": 16764992,
-        "crystals": 16747050,
-        "scale": 1.2
-      }
+      ]
+    },
+    "sounds": {
+      "cry": "a7e67d84-7a1b-4fe7-bb5f-475202a0996b",
+      "step": "84a55217-9863-43ee-9780-d088553e960f"
+    }
+  },
+  {
+    "entity": {
+      "eid": "8e604e4f-4fd5-4de9-ab35-a3083cb8c881"
+    },
+    "den": {
+      "beast": "9db32b2f-f619-87d7-9a54-65f79e380d25",
+      "near": "volcano",
+      "count": 4,
+      "within": 20,
+      "apart": 9,
+      "roam": 4,
+      "respawn": 120
+    }
+  },
+  {
+    "entity": {
+      "eid": "3fc639b5-aad0-41f6-b140-7b1bb67eddb0"
+    },
+    "den": {
+      "beast": "9db32b2f-f619-87d7-9a54-65f79e380d25",
+      "near": "ashfield",
+      "count": 2,
+      "within": 24,
+      "apart": 9,
+      "roam": 4,
+      "odds": 0.8,
+      "respawn": 120
     }
   }
 ]

@@ -205,7 +205,7 @@ export let deals = (net: Net) => {
   let kills = () =>
     net.mine('slain').map((b) => {
       let s = comp(b, 'slain')
-      return { kind: str(s.kind), at: num(s.at) }
+      return { beast: str(s.beast), at: num(s.at) }
     })
   let worn = (s: Sheet) =>
     new Set(Object.values(s.worn).flatMap((h) => h ? [h.eid] : []))

@@ -230,14 +230,19 @@ export let connect = (base: URL, vocab: ReturnType<typeof loadVocab>) => {
       })
     })
 
-  // A design family is a store query. A page starts with its rows and keeps
-  // the same readers current when an editor adds or changes a design.
+  // A design family is a store query: the rows wearing every component
+  // `names` says, with each of `also` they wear. A page starts with its rows
+  // and keeps the same readers current when an editor adds or changes a
+  // design.
   let designs = (
-    name: string,
+    names: string[],
     use: (rows: Bundle[]) => void,
+    also: string[] = [],
   ): Promise<void> => {
-    let watch = c.watch(`.${name}`)
-    watchDesigns(watch, name, use)
+    let watch = c.watch(
+      [...names.map((n) => `.${n}`), ...also.map((n) => `?${n}`)].join(' '),
+    )
+    watchDesigns(watch, [...names, ...also], use)
     return ready(watch)
   }
 

@@ -1,6 +1,7 @@
 import { test } from '@yaks/testing'
 import { seedBuildings } from './buildings_fixture.ts'
 import { seedBeasts } from './beasts_fixture.ts'
+import { beastOf } from './beasts.ts'
 import { assert, assertEquals } from '@std/assert'
 import { NEAR } from './ears.ts'
 import { ambience, noises } from './noises.ts'
@@ -37,20 +38,21 @@ test('village fire is near the square but not beyond surrounding buildings', () 
   }
 })
 
-test('a wolf bite keeps its kind for the recorded cry', () => {
+test('a creature cries with its own sound row', () => {
   let body = { x: 0, y: 5, z: 0, vy: 0, yaw: 0, speed: 0, gait: 'idle' }
-  let scene = (kind: string, bite: number) => ({
+  let scene = (beast: string, bite: number) => ({
     body,
     others: [],
-    mobs: [{ eid: 'wolf-1', kind, body, down: false, bite }],
+    mobs: [{ eid: 'it', beast, body, down: false, bite }],
   })
-  for (let kind of ['wolf', 'direwolf', 'frostwolf']) {
+  for (let name of ['wolf', 'slime', 'hen']) {
     let hear = noises()
-    hear(scene(kind, -1), 'hero', 1 / 60, () => 1)
+    let beast = beastOf(`beast:${name}`)!
+    hear(scene(beast.eid, -1), 'hero', 1 / 60, () => 1)
     assertEquals(
-      hear(scene(kind, 0.1), 'hero', 1 / 60, () => 1)
-        .filter((n) => n.type == 'cry').map((n) => n.kind),
-      [kind],
+      hear(scene(beast.eid, 0.1), 'hero', 1 / 60, () => 1)
+        .filter((n) => n.type == 'cry').map((n) => n.sfx),
+      [beast.cry],
     )
   }
 })

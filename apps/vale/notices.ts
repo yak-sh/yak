@@ -102,10 +102,11 @@ let levelOf = new Map(GIVERS.map((g) => [g.id, g.level]))
  * // another land's quests are on that land's board
  * assertEquals(on([]).every((n) => n.level == 'mossvale'), true)
  * // and so is a job a villager of the land pinned there
+ * import { beastId } from './beasts.ts'
  * let job = {
  *   eid: 'j', giver: GIVERS.find((g) => g.level == 'mossvale')!,
  *   give: [{ kind: 'coin', n: 5 }],
- *   take: [{ kind: 'slime', n: 2 }, { kind: 'tusk', n: 1 }],
+ *   take: [{ kind: beastId('beast:slime')!, n: 2 }, { kind: 'tusk', n: 1 }],
  *   state: 'open' as const, ends: 0, steps: [], ready: false,
  * }
  * let board = notices([], 'mossvale', {}, [0, 0], [job])

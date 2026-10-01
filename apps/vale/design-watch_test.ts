@@ -25,7 +25,7 @@ test('a design watch ignores equivalent rows and reports changed designs', () =>
       },
       subscribe: (fn) => notify = fn,
     },
-    'theme_design',
+    ['theme_design'],
     (rows) => seen.push(rows.map((r) => r.theme_design.name)),
   )
   notify()

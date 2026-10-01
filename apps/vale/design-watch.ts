@@ -5,14 +5,17 @@ type Row = { entity: { eid: string }; [name: string]: unknown }
 
 export let watchDesigns = <T extends Row>(
   watch: { ready: boolean; value: T[]; subscribe: (fn: () => void) => unknown },
-  name: string,
+  names: string[],
   use: (rows: T[]) => void,
 ) => {
   let used: string | undefined
   let update = () => {
     if (!watch.ready) return
     let rows = watch.value
-    let parts = rows.map((b): [string, unknown] => [b.entity.eid, b[name]])
+    let parts = rows.map((b): [string, unknown[]] => [
+      b.entity.eid,
+      names.map((name) => b[name]),
+    ])
     parts.sort(([a], [b]) => a.localeCompare(b))
     let next = JSON.stringify(parts)
     if (next == used) return

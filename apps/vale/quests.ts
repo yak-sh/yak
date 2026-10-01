@@ -3,8 +3,8 @@
 // place of a level (levels.ts). A giver offers their quests one at a time,
 // each once the quest it comes `after` is done, which may be another giver's:
 // that is how a story walks a player from one person, and one level, to the
-// next. A quest names what to slay by creature kind (beasts.ts) and what to
-// gather or give by item kind (items.ts). Its id is what a player's journal
+// next. A quest names what to slay by the creature's alias, such as
+// beast:boar (beasts.ts), and what to gather or give by item kind (items.ts). Its id is what a player's journal
 // remembers, so an id, once played, never changes.
 //
 // The story they tell: a briar is creeping into the vale, and a beast it
@@ -62,7 +62,8 @@ export type Quest = {
   /** the level what it asks for is found in, when not the giver's own */
   level?: string
   goal: 'slay' | 'gather'
-  /** a creature kind to slay, or an item kind to gather and hand over */
+  /** a creature to slay, by its alias (beasts.ts), or an item kind to
+   * gather and hand over */
   target: string
   count: number
   xp: number
@@ -84,7 +85,7 @@ export let GIVERS: Giver[] = LANDS.flatMap((l) => l.givers)
  * import { seedDesigns } from './designs_fixture.ts'
  * seedDesigns()
  * import { assertEquals } from '@std/assert'
- * import { BEASTS } from './beasts.ts'
+ * import { BEASTS, beastId } from './beasts.ts'
  * import { dens } from './homes.ts'
  * import { ITEMS } from './items.ts'
  * import { LEVELS } from './levels.ts'
@@ -92,10 +93,10 @@ export let GIVERS: Giver[] = LANDS.flatMap((l) => l.givers)
  * let ids = new Set(QUESTS.map((q) => q.id))
  * let found = (q: Quest) => {
  *   let lv = LEVELS[q.level ?? giver.get(q.giver)?.level ?? '']
- *   let kinds = lv ? dens(lv).map((d) => d.kind) : []
+ *   let beasts = lv ? dens(lv).map((d) => d.beast) : []
  *   return q.goal == 'slay'
- *     ? kinds.includes(q.target)
- *     : kinds.some((k) => BEASTS[k].loot.some(([i]) => i == q.target))
+ *     ? beasts.includes(beastId(q.target)!)
+ *     : beasts.some((b) => BEASTS[b].drops.some(([i]) => i == q.target))
  * }
  * let stuck = QUESTS.filter((q) => {
  *   let g = giver.get(q.giver)

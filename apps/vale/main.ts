@@ -17,7 +17,8 @@ import { ABILITIES, type Ability, useAbilities } from './abilities.ts'
 import { effect } from './ability-effects.ts'
 import { bar } from './bar.ts'
 import { board } from './board.ts'
-import { BEASTS, useBeasts } from './beasts.ts'
+import { BEASTS, useBeasts, useDens } from './beasts.ts'
+import { useNames } from './names.ts'
 import { aim, bearing, type Cam, depth, moveLook, steer } from './cam.ts'
 import { cast } from './cast.ts'
 import { chatbox } from './chatbox.ts'
@@ -131,23 +132,25 @@ let asking = opening.me().then(async (me) => ({
 let hadThemes = false
 let hadBuildings = false
 let redraw: (affects: Affects, kinds?: Set<string>) => void = () => {}
-let themeReady = opening.designs('theme_design', (rows) => {
+let themeReady = opening.designs(['theme_design'], (rows) => {
   let affects = useThemeRows(rows)
   if (hadThemes) redraw(affects)
   hadThemes = true
 })
-let buildingReady = opening.designs('building_design', (rows) => {
+let buildingReady = opening.designs(['building_design'], (rows) => {
   let { affects, kinds } = useBuildingDesigns(rows)
   if (hadBuildings) redraw(affects, kinds)
   hadBuildings = true
 })
-let itemReady = opening.designs('item_design', (rows) => {
+let itemReady = opening.designs(['item_design'], (rows) => {
   useItems(rows)
   refreshSprites()
 })
 await Promise.all([
-  opening.designs('ability_design', useAbilities),
-  opening.designs('beast_design', useBeasts),
+  opening.designs(['ability_design'], useAbilities),
+  opening.designs(['beast_design'], useBeasts, ['combat', 'loot', 'sounds']),
+  opening.designs(['den'], useDens),
+  opening.designs(['alias', 'key'], useNames),
   itemReady,
   themeReady,
   buildingReady,
@@ -1178,7 +1181,7 @@ let loop = (t: number) => {
   aim(cam, camera, target, v, dt, home)
   let foes = (last?.mobs ?? []).filter((m) => m.aim && !m.down && m.near < 8)
     .sort((a, b) => a.near - b.near).slice(0, FOES).map((m) => {
-      let size = BEASTS[m.kind].size
+      let size = BEASTS[m.beast].size
       return new THREE.Vector4(
         m.body.x,
         m.body.y + size * .55,

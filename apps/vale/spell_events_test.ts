@@ -10,11 +10,12 @@ import type { Net } from './net.ts'
 import { type Event, game } from './play.ts'
 import { flat } from './terrain.ts'
 import { seedDesigns } from './designs_fixture.ts'
+import { beastId } from './beasts.ts'
 
 seedDesigns()
 
 let encounter = (item: string, gap: number) => {
-  let home = homesOf('mossvale').find((h) => h.kind == 'wolf')!
+  let home = homesOf('mossvale').find((h) => h.beast == beastId('beast:wolf'))!
   let [x, z] = home.home
   let rows: Record<string, Record<string, unknown>> = {
     hero: {

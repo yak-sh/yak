@@ -9,7 +9,7 @@
 // trunk, a rock), deep water, or a cave's roof too low for it. A building is
 // solid as it is drawn (solid.ts): its walls stop a walker, its floors and
 // stairs carry it, and its doors open for it unless it is a creature.
-import { type Beast } from './beasts.ts'
+import type { Combat } from './beasts.ts'
 import { wander } from './rules.ts'
 import { beforeFoot, hits, over, shut, standOn } from './solid.ts'
 import {
@@ -334,7 +334,7 @@ let beforeShelter = (v: Vale, from: [number, number], to: [number, number]) => {
 export let prowl = (
   v: Vale,
   b: Body,
-  beast: Beast,
+  beast: Combat,
   home: [number, number],
   roam: number,
   seed: number,

@@ -473,49 +473,11 @@
       "component": true,
       "type": "object",
       "floor": "editor",
-      "unique": [["kind"]],
-      "description": "One creature kind: its body, fight, loot and habitats. Its created stamp records who invented it.",
+      "description": "A kind of creature, and what players call it. Its other aspects are components of their own beside it: combat (how it fights), loot (what it leaves) and sounds (how it sounds); a den row says where it lives. An alias key such as beast:boar names it in quests, seeds and commands, and everything stored refers to it by its eid. Its created stamp records who invented it.",
       "properties": {
-        "kind": { "type": "string", "minLength": 1, "index": true },
         "name": { "type": "string", "minLength": 1 },
-        "lvl": { "type": "number", "minimum": 1 },
-        "hp": { "type": "number", "exclusiveMinimum": 0 },
-        "dmg": { "type": "number", "minimum": 0 },
-        "speed": { "type": "number", "minimum": 0 },
-        "xp": { "type": "number", "minimum": 0 },
-        "reach": { "type": "number", "exclusiveMinimum": 0 },
-        "aggro": { "type": "number", "minimum": 0 },
-        "respawn": { "type": "number", "minimum": 0 },
-        "loot": {
-          "type": "array",
-          "items": {
-            "type": "array",
-            "prefixItems": [
-              { "type": "string" },
-              { "type": "number", "minimum": 0, "maximum": 1 }
-            ],
-            "minItems": 2,
-            "maxItems": 2
-          }
-        },
         "size": { "type": "number", "exclusiveMinimum": 0 },
         "dust": { "type": "integer", "minimum": 0, "maximum": 16777215 },
-        "haunts": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "near": { "type": "string" },
-              "count": { "type": "integer", "minimum": 0 },
-              "within": { "type": "number", "exclusiveMinimum": 0 },
-              "beyond": { "type": "number", "minimum": 0 },
-              "apart": { "type": "number", "minimum": 0 },
-              "roam": { "type": "number", "minimum": 0 },
-              "odds": { "type": "number", "minimum": 0, "maximum": 1 }
-            },
-            "required": ["near", "count", "within", "apart", "roam"]
-          }
-        },
         "look": {
           "type": "object",
           "description": "A body plan and that plan's colours and proportions.",
@@ -538,25 +500,108 @@
             }
           },
           "required": ["plan"]
+        }
+      },
+      "required": ["name", "size", "dust", "look"]
+    },
+    "combat": {
+      "component": true,
+      "type": "object",
+      "floor": "editor",
+      "description": "How a creature fights, and what felling it is worth, at its own level. A land rescales lvl, hp, dmg and xp together for the creatures it grows (danger.ts). A creature without one can't be fought.",
+      "properties": {
+        "lvl": { "type": "number", "minimum": 1 },
+        "hp": { "type": "number", "exclusiveMinimum": 0 },
+        "dmg": { "type": "number", "minimum": 0 },
+        "speed": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Metres a second when it means it."
         },
-        "boss": { "type": "boolean" }
+        "reach": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "How close it must be to bite."
+        },
+        "aggro": {
+          "type": "number",
+          "minimum": 0,
+          "description": "How near a hero wakes it; 0 is never, until struck."
+        },
+        "xp": { "type": "number", "minimum": 0 },
+        "boss": {
+          "type": "boolean",
+          "description": "One of a kind, with its name on its plate."
+        }
+      },
+      "required": ["lvl", "hp", "dmg", "speed", "reach", "aggro", "xp"]
+    },
+    "loot": {
+      "component": true,
+      "type": "object",
+      "floor": "editor",
+      "description": "What a creature may leave when it falls: item kinds (items.ts), each with the chance of one dropping.",
+      "properties": {
+        "drops": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              { "type": "string" },
+              { "type": "number", "minimum": 0, "maximum": 1 }
+            ],
+            "minItems": 2,
+            "maxItems": 2
+          }
+        }
+      },
+      "required": ["drops"]
+    },
+    "sounds": {
+      "component": true,
+      "type": "object",
+      "floor": "editor",
+      "description": "The sound rows a creature cries and steps with; several creatures may share one. Until a row has a recording, and for a sound it names no row for, the procedural voice of its body plays.",
+      "properties": {
+        "cry": { "type": "string", "ref": "sfx", "death": "detach" },
+        "step": { "type": "string", "ref": "sfx", "death": "detach" }
+      }
+    },
+    "den": {
+      "component": true,
+      "type": "object",
+      "floor": "editor",
+      "description": "Where a creature lives, as an auto-spawner: around each place of kind near in a land that suits it (homes.ts), count of beast, between beyond and within metres of the place and apart metres from each other, each wandering roam metres from its home and up again respawn seconds after it falls. With odds, only around that share of the places, each picked by its own name and land. A den's creatures are derived on every page and never stored; a creature with no den lives nowhere until it is spawned.",
+      "properties": {
+        "beast": {
+          "type": "string",
+          "ref": "beast_design",
+          "death": "cascade"
+        },
+        "near": {
+          "type": "string",
+          "description": "A kind of place (features.ts)."
+        },
+        "count": { "type": "integer", "minimum": 0 },
+        "within": { "type": "number", "exclusiveMinimum": 0 },
+        "beyond": { "type": "number", "minimum": 0 },
+        "apart": { "type": "number", "minimum": 0 },
+        "roam": { "type": "number", "minimum": 0 },
+        "odds": { "type": "number", "minimum": 0, "maximum": 1 },
+        "respawn": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Seconds from a fall until it is up again."
+        }
       },
       "required": [
-        "kind",
-        "name",
-        "lvl",
-        "hp",
-        "dmg",
-        "speed",
-        "xp",
-        "reach",
-        "aggro",
-        "respawn",
-        "loot",
-        "size",
-        "dust",
-        "haunts",
-        "look"
+        "beast",
+        "near",
+        "count",
+        "within",
+        "apart",
+        "roam",
+        "respawn"
       ]
     },
     "figure": {
@@ -1007,7 +1052,12 @@
       "properties": {
         "creature": { "type": "string", "index": true },
         "by": { "type": "string", "index": true, "description": "The player." },
-        "kind": { "type": "string" },
+        "beast": {
+          "type": "string",
+          "ref": "beast_design",
+          "death": "keep",
+          "description": "The kind of creature it was."
+        },
         "at": { "type": "number", "description": "When it fell, in ms." },
         "xp": { "type": "number" },
         "lvl": { "type": "integer", "description": "Its level in this land." }
@@ -1399,7 +1449,7 @@
         },
         "take": {
           "type": "string",
-          "description": "What it is for, in words: things to bring and creatures to fell (3 tusk, 1 thornback), each a step of its own. Empty for a gift."
+          "description": "What it is for, in words: things to bring and creatures to fell (3 tusk, 1 beast:thornback), each a step of its own. Empty for a gift."
         }
       }
     },
@@ -1736,7 +1786,7 @@
         },
         "take": {
           "type": "string",
-          "description": "What you ask, a count and a kind each: things to bring and creatures to fell, 3 tusk, 1 thornback."
+          "description": "What you ask, a count and a kind each: things to bring and creatures to fell, 3 tusk, 1 beast:thornback."
         }
       },
       "required": [
@@ -1768,7 +1818,7 @@
         },
         "take": {
           "type": "string",
-          "description": "What you ask, a count and a kind each: things to bring and creatures to fell, 3 tusk, 1 thornback."
+          "description": "What you ask, a count and a kind each: things to bring and creatures to fell, 3 tusk, 1 beast:thornback."
         }
       },
       "required": [

@@ -27,8 +27,8 @@ test('frontier cells grow named lands with their own terrain and wildlife', () =
   assert(dens(near).length > 0)
   assert(homesOf(near.id).length > 0)
   assert(hopsOf(far.id) > hopsOf(near.id))
-  let kind = dens(near)[0].kind
-  assert(foeOf(kind, far.id).lvl > foeOf(kind, near.id).lvl)
+  let beast = dens(near)[0].beast
+  assert(foeOf(beast, far.id)!.lvl > foeOf(beast, near.id)!.lvl)
 })
 
 test('roads carry the frontier into authored country and onward', () => {

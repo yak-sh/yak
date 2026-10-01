@@ -3,46 +3,13 @@
     "entity": {
       "eid": "149cf0f1-ab8e-8f67-acab-7c1d2779d986"
     },
+    "alias": {
+      "name": "beast:snowhare"
+    },
     "beast_design": {
-      "kind": "snowhare",
       "name": "Snow hare",
-      "lvl": 9,
-      "hp": 298,
-      "dmg": 13,
-      "speed": 5,
-      "xp": 152,
-      "reach": 1,
-      "aggro": 0,
-      "respawn": 50,
-      "loot": [
-        [
-          "hide",
-          0.6
-        ],
-        [
-          "frost",
-          0.2
-        ]
-      ],
       "size": 0.6,
       "dust": 16054008,
-      "haunts": [
-        {
-          "near": "snowfield",
-          "count": 4,
-          "within": 28,
-          "apart": 6,
-          "roam": 6
-        },
-        {
-          "near": "glacier",
-          "count": 4,
-          "within": 22,
-          "apart": 6,
-          "roam": 6,
-          "odds": 0.7
-        }
-      ],
       "look": {
         "plan": "hopper",
         "fur": 16054008,
@@ -52,24 +19,92 @@
         "tail": "puff",
         "scale": 1.3
       }
+    },
+    "combat": {
+      "lvl": 9,
+      "hp": 298,
+      "dmg": 13,
+      "speed": 5,
+      "reach": 1,
+      "aggro": 0,
+      "xp": 152
+    },
+    "loot": {
+      "drops": [
+        [
+          "hide",
+          0.6
+        ],
+        [
+          "frost",
+          0.2
+        ]
+      ]
+    },
+    "sounds": {
+      "cry": "44246952-93cb-4357-a704-1215e816be20",
+      "step": "515decdd-2c90-4979-95d8-154162a42de2"
+    }
+  },
+  {
+    "entity": {
+      "eid": "f7977e7e-9a87-433e-bdad-c17ceb1c815c"
+    },
+    "den": {
+      "beast": "149cf0f1-ab8e-8f67-acab-7c1d2779d986",
+      "near": "snowfield",
+      "count": 4,
+      "within": 28,
+      "apart": 6,
+      "roam": 6,
+      "respawn": 50
+    }
+  },
+  {
+    "entity": {
+      "eid": "cc21ab64-46da-400f-b415-b774d493f338"
+    },
+    "den": {
+      "beast": "149cf0f1-ab8e-8f67-acab-7c1d2779d986",
+      "near": "glacier",
+      "count": 4,
+      "within": 22,
+      "apart": 6,
+      "roam": 6,
+      "odds": 0.7,
+      "respawn": 50
     }
   },
   {
     "entity": {
       "eid": "cfe634dc-148e-8b8a-ab85-7659f89dea91"
     },
+    "alias": {
+      "name": "beast:frostslime"
+    },
     "beast_design": {
-      "kind": "frostslime",
       "name": "Frost slime",
+      "size": 1.1,
+      "dust": 13167871,
+      "look": {
+        "plan": "slime",
+        "body": 10148080,
+        "moss": 15792383,
+        "bloom": 16777215,
+        "scale": 1.2
+      }
+    },
+    "combat": {
       "lvl": 10,
       "hp": 440,
       "dmg": 24,
       "speed": 2.2,
-      "xp": 206,
       "reach": 1.4,
       "aggro": 5,
-      "respawn": 80,
-      "loot": [
+      "xp": 206
+    },
+    "loot": {
+      "drops": [
         [
           "frost",
           0.6
@@ -78,52 +113,75 @@
           "jelly",
           0.3
         ]
-      ],
-      "size": 1.1,
-      "dust": 13167871,
-      "haunts": [
-        {
-          "near": "snowfield",
-          "count": 4,
-          "within": 26,
-          "apart": 7,
-          "roam": 4,
-          "odds": 0.8
-        },
-        {
-          "near": "glacier",
-          "count": 4,
-          "within": 22,
-          "apart": 7,
-          "roam": 4,
-          "odds": 0.8
-        }
-      ],
-      "look": {
-        "plan": "slime",
-        "body": 10148080,
-        "moss": 15792383,
-        "bloom": 16777215,
-        "scale": 1.2
-      }
+      ]
+    },
+    "sounds": {
+      "cry": "db78951a-a908-480d-bf10-85279c3467a0",
+      "step": "bf7f7c18-c25a-42a9-9b11-91e78f23f4bd"
+    }
+  },
+  {
+    "entity": {
+      "eid": "f2e19819-6cf6-4e3b-93d5-f457e898e814"
+    },
+    "den": {
+      "beast": "cfe634dc-148e-8b8a-ab85-7659f89dea91",
+      "near": "snowfield",
+      "count": 4,
+      "within": 26,
+      "apart": 7,
+      "roam": 4,
+      "odds": 0.8,
+      "respawn": 80
+    }
+  },
+  {
+    "entity": {
+      "eid": "89d56452-ef16-4c74-9cec-d1c5d98b59d6"
+    },
+    "den": {
+      "beast": "cfe634dc-148e-8b8a-ab85-7659f89dea91",
+      "near": "glacier",
+      "count": 4,
+      "within": 22,
+      "apart": 7,
+      "roam": 4,
+      "odds": 0.8,
+      "respawn": 80
     }
   },
   {
     "entity": {
       "eid": "6805ea19-6822-84c0-b70f-2d4b9de83df3"
     },
+    "alias": {
+      "name": "beast:frostback"
+    },
     "beast_design": {
-      "kind": "frostback",
       "name": "Frostback",
+      "size": 1.6,
+      "dust": 14216440,
+      "look": {
+        "plan": "crag",
+        "stone": 9083560,
+        "light": 14215408,
+        "moss": 15792383,
+        "eye": 7000319,
+        "crystals": 11067647,
+        "scale": 1.1
+      }
+    },
+    "combat": {
       "lvl": 12,
       "hp": 576,
       "dmg": 28,
       "speed": 2.2,
-      "xp": 263,
       "reach": 2,
       "aggro": 6,
-      "respawn": 100,
-      "loot": [
+      "xp": 263
+    },
+    "loot": {
+      "drops": [
         [
           "frost",
           0.7
@@ -136,99 +194,54 @@
           "coin",
           0.8
         ]
-      ],
-      "size": 1.6,
-      "dust": 14216440,
-      "haunts": [
-        {
-          "near": "glacier",
-          "count": 2,
-          "within": 20,
-          "apart": 8,
-          "roam": 4,
-          "odds": 0.9
-        },
-        {
-          "near": "snowfield",
-          "count": 2,
-          "within": 24,
-          "apart": 8,
-          "roam": 4,
-          "odds": 0.8
-        }
-      ],
-      "look": {
-        "plan": "crag",
-        "stone": 9083560,
-        "light": 14215408,
-        "moss": 15792383,
-        "eye": 7000319,
-        "crystals": 11067647,
-        "scale": 1.1
-      }
+      ]
+    },
+    "sounds": {
+      "cry": "a7e67d84-7a1b-4fe7-bb5f-475202a0996b",
+      "step": "84a55217-9863-43ee-9780-d088553e960f"
+    }
+  },
+  {
+    "entity": {
+      "eid": "68ff43c2-c951-47c7-9840-a46b28967fc3"
+    },
+    "den": {
+      "beast": "6805ea19-6822-84c0-b70f-2d4b9de83df3",
+      "near": "glacier",
+      "count": 2,
+      "within": 20,
+      "apart": 8,
+      "roam": 4,
+      "odds": 0.9,
+      "respawn": 100
+    }
+  },
+  {
+    "entity": {
+      "eid": "33b63afd-6b79-42ca-8a9a-a1ca75e36e96"
+    },
+    "den": {
+      "beast": "6805ea19-6822-84c0-b70f-2d4b9de83df3",
+      "near": "snowfield",
+      "count": 2,
+      "within": 24,
+      "apart": 8,
+      "roam": 4,
+      "odds": 0.8,
+      "respawn": 100
     }
   },
   {
     "entity": {
       "eid": "5b68cec5-1ac3-820f-9414-46b84642bb87"
     },
+    "alias": {
+      "name": "beast:frostwolf"
+    },
     "beast_design": {
-      "kind": "frostwolf",
       "name": "Frost wolf",
-      "lvl": 13,
-      "hp": 650,
-      "dmg": 31,
-      "speed": 5.2,
-      "xp": 292,
-      "reach": 1.8,
-      "aggro": 11,
-      "respawn": 100,
-      "loot": [
-        [
-          "fang",
-          0.6
-        ],
-        [
-          "pelt",
-          0.6
-        ],
-        [
-          "frost",
-          0.2
-        ],
-        [
-          "coin",
-          0.5
-        ]
-      ],
       "size": 1.2,
       "dust": 15266036,
-      "haunts": [
-        {
-          "near": "snowfield",
-          "count": 4,
-          "within": 26,
-          "apart": 6,
-          "roam": 7,
-          "odds": 0.8
-        },
-        {
-          "near": "glacier",
-          "count": 4,
-          "within": 22,
-          "apart": 6,
-          "roam": 7,
-          "odds": 0.7
-        },
-        {
-          "near": "pinewood",
-          "count": 4,
-          "within": 24,
-          "apart": 6,
-          "roam": 7,
-          "odds": 0.8
-        }
-      ],
       "look": {
         "plan": "quadruped",
         "hide": 15265522,
@@ -247,49 +260,97 @@
         "muzzle": 2,
         "scale": 1.2
       }
+    },
+    "combat": {
+      "lvl": 13,
+      "hp": 650,
+      "dmg": 31,
+      "speed": 5.2,
+      "reach": 1.8,
+      "aggro": 11,
+      "xp": 292
+    },
+    "loot": {
+      "drops": [
+        [
+          "fang",
+          0.6
+        ],
+        [
+          "pelt",
+          0.6
+        ],
+        [
+          "frost",
+          0.2
+        ],
+        [
+          "coin",
+          0.5
+        ]
+      ]
+    },
+    "sounds": {
+      "cry": "4487aef5-1c7e-4c03-89bb-597c6fb35493",
+      "step": "fedf5f99-63cf-4042-af85-65005b11cdd0"
+    }
+  },
+  {
+    "entity": {
+      "eid": "3ea70ca1-278c-4277-bd60-004ad07ff7d2"
+    },
+    "den": {
+      "beast": "5b68cec5-1ac3-820f-9414-46b84642bb87",
+      "near": "snowfield",
+      "count": 4,
+      "within": 26,
+      "apart": 6,
+      "roam": 7,
+      "odds": 0.8,
+      "respawn": 100
+    }
+  },
+  {
+    "entity": {
+      "eid": "1fc33bff-160f-4dc7-8d8c-800cc65bde95"
+    },
+    "den": {
+      "beast": "5b68cec5-1ac3-820f-9414-46b84642bb87",
+      "near": "glacier",
+      "count": 4,
+      "within": 22,
+      "apart": 6,
+      "roam": 7,
+      "odds": 0.7,
+      "respawn": 100
+    }
+  },
+  {
+    "entity": {
+      "eid": "ae0d33f4-add2-4d6f-8d0b-1089adfe1a39"
+    },
+    "den": {
+      "beast": "5b68cec5-1ac3-820f-9414-46b84642bb87",
+      "near": "pinewood",
+      "count": 4,
+      "within": 24,
+      "apart": 6,
+      "roam": 7,
+      "odds": 0.8,
+      "respawn": 100
     }
   },
   {
     "entity": {
       "eid": "a2aa9110-43ba-8f31-9c2d-d18f81131305"
     },
+    "alias": {
+      "name": "beast:mammoth"
+    },
     "beast_design": {
-      "kind": "mammoth",
       "name": "Woolly mammoth",
-      "lvl": 14,
-      "hp": 1100,
-      "dmg": 38,
-      "speed": 3,
-      "xp": 400,
-      "reach": 2.8,
-      "aggro": 0,
-      "respawn": 180,
-      "loot": [
-        [
-          "pelt",
-          1
-        ],
-        [
-          "ivory",
-          0.8
-        ],
-        [
-          "draught",
-          0.3
-        ]
-      ],
       "size": 2.4,
       "dust": 6965812,
-      "haunts": [
-        {
-          "near": "snowfield",
-          "count": 2,
-          "within": 24,
-          "apart": 12,
-          "roam": 8,
-          "odds": 0.7
-        }
-      ],
       "look": {
         "plan": "quadruped",
         "hide": 6965812,
@@ -309,24 +370,91 @@
         "muzzle": 1.5,
         "scale": 1.45
       }
+    },
+    "combat": {
+      "lvl": 14,
+      "hp": 1100,
+      "dmg": 38,
+      "speed": 3,
+      "reach": 2.8,
+      "aggro": 0,
+      "xp": 400
+    },
+    "loot": {
+      "drops": [
+        [
+          "pelt",
+          1
+        ],
+        [
+          "ivory",
+          0.8
+        ],
+        [
+          "draught",
+          0.3
+        ]
+      ]
+    },
+    "sounds": {
+      "cry": "81c850db-a49a-482e-bc61-547a31f4db7a",
+      "step": "fedf5f99-63cf-4042-af85-65005b11cdd0"
+    }
+  },
+  {
+    "entity": {
+      "eid": "e1455b64-7359-4dbe-9346-76443157f283"
+    },
+    "den": {
+      "beast": "a2aa9110-43ba-8f31-9c2d-d18f81131305",
+      "near": "snowfield",
+      "count": 2,
+      "within": 24,
+      "apart": 12,
+      "roam": 8,
+      "odds": 0.7,
+      "respawn": 180
     }
   },
   {
     "entity": {
       "eid": "34298e10-b323-809c-9f88-e41b05f1064d"
     },
+    "alias": {
+      "name": "beast:frostmaw"
+    },
     "beast_design": {
-      "kind": "frostmaw",
       "name": "Frostmaw",
+      "size": 2.8,
+      "dust": 15266040,
+      "look": {
+        "plan": "biped",
+        "skin": 10137800,
+        "garb": 15265524,
+        "eye": 3854591,
+        "head": "horns",
+        "top": 9083562,
+        "build": [
+          1.6,
+          1.25
+        ],
+        "long": true,
+        "stoop": 0.25,
+        "scale": 1.9
+      }
+    },
+    "combat": {
       "lvl": 16,
       "hp": 3140,
       "dmg": 43,
       "speed": 3,
-      "xp": 1540,
       "reach": 3,
       "aggro": 9,
-      "respawn": 600,
-      "loot": [
+      "xp": 1540,
+      "boss": true
+    },
+    "loot": {
+      "drops": [
         [
           "frost",
           1
@@ -343,62 +471,82 @@
           "blade5",
           0.25
         ]
-      ],
-      "size": 2.8,
-      "dust": 15266040,
-      "haunts": [
-        {
-          "near": "glacier",
-          "count": 1,
-          "beyond": 3,
-          "within": 12,
-          "apart": 1,
-          "roam": 5,
-          "odds": 0.25
-        },
-        {
-          "near": "snowfield",
-          "count": 1,
-          "within": 14,
-          "apart": 1,
-          "roam": 5,
-          "odds": 0.2
-        }
-      ],
-      "look": {
-        "plan": "biped",
-        "skin": 10137800,
-        "garb": 15265524,
-        "eye": 3854591,
-        "head": "horns",
-        "top": 9083562,
-        "build": [
-          1.6,
-          1.25
-        ],
-        "long": true,
-        "stoop": 0.25,
-        "scale": 1.9
-      },
-      "boss": true
+      ]
+    },
+    "sounds": {
+      "cry": "653cc767-79a0-475f-b141-91e5c798224e",
+      "step": "e6a2e95c-1480-4662-ad5a-be0cf3304e73"
+    }
+  },
+  {
+    "entity": {
+      "eid": "0c734512-35d5-479a-8c51-a1820fab6f96"
+    },
+    "den": {
+      "beast": "34298e10-b323-809c-9f88-e41b05f1064d",
+      "near": "glacier",
+      "count": 1,
+      "within": 12,
+      "beyond": 3,
+      "apart": 1,
+      "roam": 5,
+      "odds": 0.25,
+      "respawn": 600
+    }
+  },
+  {
+    "entity": {
+      "eid": "36e88313-e8d3-418c-ae4e-e39720852e12"
+    },
+    "den": {
+      "beast": "34298e10-b323-809c-9f88-e41b05f1064d",
+      "near": "snowfield",
+      "count": 1,
+      "within": 14,
+      "apart": 1,
+      "roam": 5,
+      "odds": 0.2,
+      "respawn": 600
     }
   },
   {
     "entity": {
       "eid": "df4fec38-d6a3-87f5-b71d-098e81c82bd9"
     },
+    "alias": {
+      "name": "beast:skyreaver"
+    },
     "beast_design": {
-      "kind": "skyreaver",
       "name": "The Skyreaver",
+      "size": 3,
+      "dust": 4868714,
+      "look": {
+        "plan": "bird",
+        "feather": 3816018,
+        "wing": 2763326,
+        "beak": 15253568,
+        "eye": 16728112,
+        "belly": 5921400,
+        "crest": 14170682,
+        "bill": "hook",
+        "tail": "fan",
+        "fly": 1.6,
+        "span": 1.8,
+        "scale": 3.4
+      }
+    },
+    "combat": {
       "lvl": 18,
       "hp": 3780,
       "dmg": 48,
       "speed": 4.4,
-      "xp": 1800,
       "reach": 3.2,
       "aggro": 10,
-      "respawn": 600,
-      "loot": [
+      "xp": 1800,
+      "boss": true
+    },
+    "loot": {
+      "drops": [
         [
           "plume",
           1
@@ -415,61 +563,81 @@
           "blade5",
           0.3
         ]
-      ],
-      "size": 3,
-      "dust": 4868714,
-      "haunts": [
-        {
-          "near": "glacier",
-          "count": 1,
-          "beyond": 4,
-          "within": 10,
-          "apart": 1,
-          "roam": 8,
-          "odds": 0.15
-        },
-        {
-          "near": "mesa",
-          "count": 1,
-          "within": 10,
-          "apart": 1,
-          "roam": 8,
-          "odds": 0.12
-        }
-      ],
-      "look": {
-        "plan": "bird",
-        "feather": 3816018,
-        "wing": 2763326,
-        "beak": 15253568,
-        "eye": 16728112,
-        "belly": 5921400,
-        "crest": 14170682,
-        "bill": "hook",
-        "tail": "fan",
-        "fly": 1.6,
-        "span": 1.8,
-        "scale": 3.4
-      },
-      "boss": true
+      ]
+    },
+    "sounds": {
+      "cry": "40641ebf-4970-46e3-958b-be1428f0eec8",
+      "step": "d8fa963d-ffb9-4780-a3f6-71d5d3bff194"
+    }
+  },
+  {
+    "entity": {
+      "eid": "bc1a72a4-c0d6-4671-9f62-c0a64f4ff181"
+    },
+    "den": {
+      "beast": "df4fec38-d6a3-87f5-b71d-098e81c82bd9",
+      "near": "glacier",
+      "count": 1,
+      "within": 10,
+      "beyond": 4,
+      "apart": 1,
+      "roam": 8,
+      "odds": 0.15,
+      "respawn": 600
+    }
+  },
+  {
+    "entity": {
+      "eid": "476fc4a5-bf25-4e42-9199-2bb7b010564e"
+    },
+    "den": {
+      "beast": "df4fec38-d6a3-87f5-b71d-098e81c82bd9",
+      "near": "mesa",
+      "count": 1,
+      "within": 10,
+      "apart": 1,
+      "roam": 8,
+      "odds": 0.12,
+      "respawn": 600
     }
   },
   {
     "entity": {
       "eid": "b1e10f27-4028-8ff3-a0a6-c66fe8675c2d"
     },
+    "alias": {
+      "name": "beast:yeti"
+    },
     "beast_design": {
-      "kind": "yeti",
       "name": "Yeti",
+      "size": 1.8,
+      "dust": 15265522,
+      "look": {
+        "plan": "biped",
+        "skin": 10137792,
+        "garb": 15660280,
+        "eye": 3832504,
+        "build": [
+          1.5,
+          1.45
+        ],
+        "head": "horns",
+        "top": 13160664,
+        "long": true,
+        "stoop": 0.2
+      }
+    },
+    "combat": {
       "lvl": 16,
       "hp": 1792,
       "dmg": 46,
       "speed": 3.6,
-      "xp": 847,
       "reach": 2.4,
       "aggro": 9,
-      "respawn": 180,
-      "loot": [
+      "xp": 847
+    },
+    "loot": {
+      "drops": [
         [
           "pelt",
           1
@@ -486,41 +654,41 @@
           "draught",
           0.2
         ]
-      ],
-      "size": 1.8,
-      "dust": 15265522,
-      "haunts": [
-        {
-          "near": "snowfield",
-          "count": 2,
-          "within": 24,
-          "apart": 14,
-          "roam": 6,
-          "odds": 0.9
-        },
-        {
-          "near": "glacier",
-          "count": 2,
-          "within": 20,
-          "apart": 14,
-          "roam": 6,
-          "odds": 0.9
-        }
-      ],
-      "look": {
-        "plan": "biped",
-        "skin": 10137792,
-        "garb": 15660280,
-        "eye": 3832504,
-        "build": [
-          1.5,
-          1.45
-        ],
-        "head": "horns",
-        "top": 13160664,
-        "long": true,
-        "stoop": 0.2
-      }
+      ]
+    },
+    "sounds": {
+      "cry": "653cc767-79a0-475f-b141-91e5c798224e",
+      "step": "e6a2e95c-1480-4662-ad5a-be0cf3304e73"
+    }
+  },
+  {
+    "entity": {
+      "eid": "51fc4397-8ce2-4e32-8e15-200c952fbe1e"
+    },
+    "den": {
+      "beast": "b1e10f27-4028-8ff3-a0a6-c66fe8675c2d",
+      "near": "snowfield",
+      "count": 2,
+      "within": 24,
+      "apart": 14,
+      "roam": 6,
+      "odds": 0.9,
+      "respawn": 180
+    }
+  },
+  {
+    "entity": {
+      "eid": "13a8e340-1245-48f9-9148-d7ddd4787f9a"
+    },
+    "den": {
+      "beast": "b1e10f27-4028-8ff3-a0a6-c66fe8675c2d",
+      "near": "glacier",
+      "count": 2,
+      "within": 20,
+      "apart": 14,
+      "roam": 6,
+      "odds": 0.9,
+      "respawn": 180
     }
   }
 ]

@@ -4,8 +4,8 @@
 // so every page reaches the same answer from the same rows. What there is to
 // fight, carry and do is data of its own: beasts.ts, items.ts, quests.ts.
 import { spoil, tierOf } from './arms.ts'
-import { BEASTS } from './beasts.ts'
-import type { Beast } from './beasts.ts'
+import { beastId, BEASTS } from './beasts.ts'
+import type { Fighter } from './beasts.ts'
 import type { Quest } from './quests.ts'
 import { need, power } from './progress.ts'
 import { hashOf, noise, stream } from './rand.ts'
@@ -53,8 +53,8 @@ export let levelOf = (xp: number): number => {
  * import { foeAt } from './danger.ts'
  * import { ITEMS } from './items.ts'
  * let plate = (t: number) => ['helm', 'cuirass', 'greaves'].map((n) => ITEMS[n + t])
- * for (let raw of Object.values(BEASTS).filter((b) => !b.boss)) {
- *   let b = foeAt(raw, Math.min(8, Math.floor((raw.lvl - 1) / 2)))
+ * for (let raw of Object.values(BEASTS).filter((b) => b.combat && !b.combat.boss)) {
+ *   let b = foeAt(raw, Math.min(8, Math.floor((raw.combat!.lvl - 1) / 2)))!
  *   let t = tierOf(b.lvl)
  *   let blows = b.hp / power(b.lvl, ITEMS[`sword${t}`].dmg)
  *   assert(blows > 1 && blows < 12, `${b.name}: ${blows} blows`)
@@ -128,7 +128,8 @@ export let biteOf = (
 export type Slain = {
   creature: string
   by: string
-  kind: string
+  /** the kind of creature it was (beasts.ts), by eid */
+  beast: string
   at: number
   xp: number
   lvl?: number
@@ -263,20 +264,22 @@ export type Found = { kind: string; n: number; rarity?: Rarity }
  * import { seedDesigns } from './designs_fixture.ts'
  * seedDesigns()
  * import { assert, assertEquals } from '@std/assert'
- * import { BEASTS } from './beasts.ts'
+ * import { beastId } from './beasts.ts'
  * import { foeOf } from './danger.ts'
  * import { ITEMS } from './items.ts'
- * assertEquals(lootOf(BEASTS.boar, 'c1', 5, 'p1'), lootOf(BEASTS.boar, 'c1', 5, 'p1'))
+ * let boar = foeOf(beastId('beast:boar')!, 'mossvale')!
+ * assertEquals(lootOf(boar, 'c1', 5, 'p1'), lootOf(boar, 'c1', 5, 'p1'))
  * // The Cinder Wyrm always leaves a piece of the last tier, never plain.
+ * let wyrm = foeOf(beastId('beast:cinderwyrm')!, 'maw')!
  * for (let fell = 0; fell < 20; fell++) {
- *   let [gear] = lootOf(foeOf('cinderwyrm', 'maw'), 'c2', fell, 'p1').filter((l) => l.rarity)
+ *   let [gear] = lootOf(wyrm, 'c2', fell, 'p1').filter((l) => l.rarity)
  *   assertEquals(ITEMS[gear.kind].tier, 5)
  *   assert(gear.rarity != 'common')
  * }
  * ```
  */
 export let lootOf = (
-  beast: Beast,
+  beast: Fighter,
   creature: string,
   fell: number,
   player: string,
@@ -284,7 +287,7 @@ export let lootOf = (
   find = 0,
 ): Found[] => {
   let r = stream(hashOf(`${creature}:${fell}:${player}`))
-  let found = beast.loot.flatMap(([item, chance]): Found[] =>
+  let found = beast.drops.flatMap(([item, chance]): Found[] =>
     r() < chance
       ? [{
         kind: item,
@@ -427,8 +430,9 @@ export let questsOf = (
       ? 'open'
       : 'locked'
     let since = taken.get(q.id) ?? Infinity
+    let fell = q.goal == 'slay' && beastId(q.target)
     let have = q.goal == 'slay'
-      ? kills.filter((k) => k.kind == q.target && k.at >= since).length
+      ? kills.filter((k) => k.beast == fell && k.at >= since).length
       : bag.filter((b) => b.kind == q.target).reduce((n, b) => n + b.n, 0)
     let word = words.get(q.id)
     return {
@@ -470,15 +474,16 @@ export let worth = (xp: number, lvl: number, hero: number): number =>
  * import { seedDesigns } from './designs_fixture.ts'
  * seedDesigns()
  * import { assert, assertEquals } from '@std/assert'
- * import { BEASTS } from './beasts.ts'
+ * import { beastOf } from './beasts.ts'
+ * let slime = beastOf('beast:slime')!
  * let slimes = (n: number) =>
  *   Array.from({ length: n }, (_, i) => ({
- *     creature: `c${i}`, by: 'p', kind: 'slime', at: i, xp: 14,
+ *     creature: `c${i}`, by: 'p', beast: slime.eid, at: i, xp: 14,
  *   }))
  * // A handful of slimes makes a hero, and no number of them makes one
  * // more than five levels above a slime.
  * assert(levelOf(xpOf(slimes(10), [], [])) >= 2)
- * assertEquals(levelOf(xpOf(slimes(3000), [], [])), BEASTS.slime.lvl + 5)
+ * assertEquals(levelOf(xpOf(slimes(3000), [], [])), slime.combat!.lvl + 5)
  * ```
  */
 export let xpOf = (kills: Slain[], quests: Quest[], journal: Entry[]) => {
@@ -497,7 +502,7 @@ export let xpOf = (kills: Slain[], quests: Quest[], journal: Entry[]) => {
     xp += e.kill
       ? worth(
         e.kill.xp,
-        e.kill.lvl ?? BEASTS[e.kill.kind]?.lvl ?? 1,
+        e.kill.lvl ?? BEASTS[e.kill.beast]?.combat?.lvl ?? 1,
         levelOf(xp),
       )
       : e.xp ?? 0

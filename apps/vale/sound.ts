@@ -27,7 +27,7 @@ import {
 import { bus, fireLevel } from './bus.ts'
 import { ambience, type Noise, noises, where } from './noises.ts'
 import { music } from './music.ts'
-import { load, loaded, looping, watch } from './samples.ts'
+import { load, loaded, looping, nameOf, watch } from './samples.ts'
 import type { Frame, Vec3 } from './play.ts'
 import type { Vale } from './terrain.ts'
 import * as voices from './voices.ts'
@@ -309,23 +309,26 @@ let loop = (kind: keyof typeof LOOP): Keep => (c, into) => {
   }
 }
 
+// A creature's sound row by its eid, or its procedural voice while it has
+// none, or the row has no name yet.
+let voiced = (sfx: string | undefined, fallback: Voice, gain: number) => {
+  let name = ctx && sfx ? nameOf(sfx) : undefined
+  return name ? sampled(name, fallback, gain) : fallback
+}
+
 let noisy = (n: Noise) =>
   make(
     n.of,
     n.type == 'step'
-      ? sampled(`step-${n.plan}`, voices.step(n.plan, n.size), 0.25)
+      ? n.plan == 'hero'
+        ? sampled('step-hero', voices.step(n.plan, n.size), 0.25)
+        : voiced(n.sfx, voices.step(n.plan, n.size), 0.25)
       : n.type == 'cry'
-      ? n.kind.endsWith('wolf')
-        ? sampled(
-          'wolf',
-          voices.cry(n.plan, n.size, n.loud),
-          n.loud ? 0.35 : 0.2,
-        )
-        : sampled(
-          `cry-${n.plan}`,
-          voices.cry(n.plan, n.size, n.loud),
-          n.loud ? 0.32 : 0.2,
-        )
+      ? voiced(
+        n.sfx,
+        voices.cry(n.plan, n.size, n.loud),
+        n.loud ? 0.32 : 0.2,
+      )
       : n.type == 'swing'
       ? sampled('swing', voices.whiff, 0.25)
       : sampled('roll', voices.roll, 0.25),

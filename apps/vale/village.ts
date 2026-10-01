@@ -175,7 +175,7 @@ export let village = (net: Net, deal: Deals) => {
       if (!here.has(str(s.creature))) return []
       return [{
         by: net.who(str(s.by))?.name ?? 'a hero',
-        kind: str(s.kind),
+        beast: str(s.beast),
         at: num(s.at),
       }]
     })

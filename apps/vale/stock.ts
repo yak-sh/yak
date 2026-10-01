@@ -18,6 +18,7 @@
 // in the order the store took them, so every page reaches the same answer.
 import { tierOf } from './arms.ts'
 import { BEASTS } from './beasts.ts'
+import { aliasOf } from './names.ts'
 import { foeOf, landLevel } from './danger.ts'
 import { isA } from './features.ts'
 import { LODES, yieldKinds } from './gather.ts'
@@ -46,17 +47,23 @@ export let GAP = 30 * MIN
 /** How far a deal may pay over what it asks is worth. */
 export let BAND = 1.5
 
-/** Some goods: so many of each kind (items.ts), or of a creature to fell
- * (beasts.ts). */
+/** Some goods: so many of each kind (items.ts), or of a creature to fell,
+ * by its eid (beasts.ts). */
 export type Goods = { kind: string; n: number }[]
 
-// Every word a kind goes by: its own, and its name.
+// Every word a kind goes by: its own (an item's kind, a creature's alias),
+// and its name.
 let words = () =>
-  new Map<string, string>(
-    [...Object.entries(ITEMS), ...Object.entries(BEASTS)].flatMap((
-      [kind, t],
-    ) => [[kind, kind], [t.name.toLowerCase(), kind]]),
-  )
+  new Map<string, string>([
+    ...Object.entries(ITEMS).flatMap(([kind, t]): [string, string][] => [
+      [kind, kind],
+      [t.name.toLowerCase(), kind],
+    ]),
+    ...Object.values(BEASTS).flatMap((b): [string, string][] => [
+      ...aliasOf(b.eid) ? [[aliasOf(b.eid)!, b.eid] as [string, string]] : [],
+      [b.name.toLowerCase(), b.eid],
+    ]),
+  ])
 
 let kindOf = (word: string): string | null => {
   let known = words()
@@ -67,8 +74,9 @@ let kindOf = (word: string): string | null => {
 
 /**
  * Goods as a villager says them: parts split by commas or "and", each a count
- * and a kind, by its own word or its name. Nothing when any part names
- * nothing the vale has.
+ * and a kind, by its own word or its name: an item's kind, or a creature's
+ * alias, which it is told as its eid. Nothing when any part names nothing
+ * the vale has.
  *
  * ```ts
  * import { seedDesigns } from './designs_fixture.ts'
@@ -79,7 +87,10 @@ let kindOf = (word: string): string | null => {
  *   { kind: 'tonic', n: 1 },
  *   { kind: 'tusk', n: 2 },
  * ])
- * assertEquals(goods('1 thornback'), [{ kind: 'thornback', n: 1 }])
+ * import { beastId } from './beasts.ts'
+ * let thornback = beastId('beast:thornback')!
+ * assertEquals(goods('1 beast:thornback'), [{ kind: thornback, n: 1 }])
+ * assertEquals(goods('2 Old Thornbacks'), [{ kind: thornback, n: 2 }])
  * assertEquals(goods(''), [])
  * assertEquals(goods('3 dragons'), null)
  * assertEquals(goods('-2 coin'), null)
@@ -138,7 +149,9 @@ let valued: {
 let values = () => {
   if (valued?.beasts == BEASTS) return valued
   let encounters = Object.values(LEVELS).flatMap((lv) =>
-    [...new Set(dens(lv).map((d) => d.kind))].map((kind) => foeOf(kind, lv.id))
+    [...new Set(dens(lv).map((d) => d.beast))].flatMap((beast) =>
+      foeOf(beast, lv.id) ?? []
+    )
   )
   let kill = [1, 2, 3, 4, 5].map((t) =>
     mean(
@@ -148,7 +161,7 @@ let values = () => {
   )
   let drops = new Map<string, number>()
   for (let b of encounters) {
-    for (let [kind, chance] of b.loot) {
+    for (let [kind, chance] of b.drops) {
       let each = kind == 'coin' ? (3 * b.lvl + 1) / 2 : 1
       let v = b.xp / (chance * each)
       if (!(v >= (drops.get(kind) ?? Infinity))) drops.set(kind, v)
@@ -192,9 +205,12 @@ export let priceOf = (kind: string): number =>
 export let lvlOf = (level: string): number =>
   Math.min(60, landLevel(hopsOf(level)) + 1)
 
-// The kinds of creature a land grows.
+// The creatures a land grows that can be fought, by eid.
 let bred = (level: string): string[] =>
-  levelOf(level) ? [...new Set(dens(levelOf(level)!).map((d) => d.kind))] : []
+  levelOf(level)
+    ? [...new Set(dens(levelOf(level)!).map((d) => d.beast))]
+      .filter((b) => BEASTS[b]?.combat)
+    : []
 
 // What a land's creatures leave, and what its nodes give.
 let found = (level: string): string[] => {
@@ -206,7 +222,7 @@ let found = (level: string): string[] => {
   ).flatMap(yieldKinds)
   return [
     ...new Set([
-      ...bred(level).flatMap((k) => BEASTS[k].loot.map(([kind]) => kind)),
+      ...bred(level).flatMap((k) => BEASTS[k].drops.map(([kind]) => kind)),
       ...gathered,
     ]),
   ]
@@ -236,9 +252,12 @@ let WARES = {
  * import { seedDesigns } from './designs_fixture.ts'
  * seedDesigns()
  * import { assert } from '@std/assert'
+ * import { beastId } from './beasts.ts'
  * let vale = wares('mossvale')
- * assert(vale.has('thornback') && vale.has('tusk') && vale.has('sword1'))
- * assert(!vale.has('frostwolf') && !vale.has('pearl'))
+ * let [thornback, frostwolf] = ['thornback', 'frostwolf']
+ *   .map((b) => beastId(`beast:${b}`)!)
+ * assert(vale.has(thornback) && vale.has('tusk') && vale.has('sword1'))
+ * assert(!vale.has(frostwolf) && !vale.has('pearl'))
  * ```
  */
 export let wares = (level: string): Set<string> => {
@@ -247,7 +266,7 @@ export let wares = (level: string): Set<string> => {
   }
   let had = WARES.byLevel.get(level)
   if (had) return had
-  let tiers = new Set(bred(level).map((k) => tierOf(foeOf(k, level).lvl)))
+  let tiers = new Set(bred(level).map((k) => tierOf(foeOf(k, level)!.lvl)))
   let gear = Object.keys(ITEMS).filter((k) =>
     ITEMS[k].slot && tiers.has(ITEMS[k].tier ?? 0)
   )
@@ -265,7 +284,7 @@ export let wares = (level: string): Set<string> => {
 // What each land's creatures teach, on average: a gift's measure.
 let taught = (level: string) =>
   mean(
-    bred(level).map((k) => foeOf(k, level)).filter((b) => !b.boss).map((b) =>
+    bred(level).map((k) => foeOf(k, level)!).filter((b) => !b.boss).map((b) =>
       b.xp
     ),
   )
@@ -273,6 +292,13 @@ let taught = (level: string) =>
 /** The most a gift from a villager of a land is worth: about what eight of
  * its creatures teach. */
 export let most = (level: string): number => 8 * taught(level)
+
+// What felling a creature teaches a hero of a land, or nothing for one that
+// can't be fought there.
+let fellWorth = (beast: string, level: string): number => {
+  let f = foeOf(beast, level)
+  return f ? worth(f.xp, f.lvl, lvlOf(level)) : 0
+}
 
 /**
  * What goods are worth: things by what getting them costs, creatures by what
@@ -282,15 +308,15 @@ export let most = (level: string): number => 8 * taught(level)
  * import { seedDesigns } from './designs_fixture.ts'
  * seedDesigns()
  * import { assertEquals } from '@std/assert'
- * assertEquals(worthOf([{ kind: 'slime', n: 2 }], 'mossvale'), 2 * 11)
+ * import { beastId } from './beasts.ts'
+ * let slime = beastId('beast:slime')!
+ * assertEquals(worthOf([{ kind: slime, n: 2 }], 'mossvale'), 2 * 11)
  * ```
  */
 export let worthOf = (g: Goods, level: string): number =>
   g.reduce(
     (sum, { kind, n }) =>
-      sum + n * (BEASTS[kind]
-          ? worth(foeOf(kind, level).xp, foeOf(kind, level).lvl, lvlOf(level))
-          : valueOf(kind)),
+      sum + n * (BEASTS[kind] ? fellWorth(kind, level) : valueOf(kind)),
     0,
   )
 
@@ -310,7 +336,7 @@ export let wants = (level: string, most = 6) => {
   return {
     creatures: dear(bred(level)),
     things: dear([...yields(level), potion(level)]),
-    tiers: [...new Set(bred(level).map((k) => tierOf(foeOf(k, level).lvl)))]
+    tiers: [...new Set(bred(level).map((k) => tierOf(foeOf(k, level)!.lvl)))]
       .sort(),
   }
 }
@@ -726,10 +752,12 @@ export type Step = { kind: string; n: number; have: number; deed: boolean }
  * import { seedDesigns } from './designs_fixture.ts'
  * seedDesigns()
  * import { assertEquals } from '@std/assert'
- * let kills = [{ kind: 'thornback', at: 5 }, { kind: 'thornback', at: 1 }]
+ * import { beastId } from './beasts.ts'
+ * let thornback = beastId('beast:thornback')!
+ * let kills = [{ beast: thornback, at: 5 }, { beast: thornback, at: 1 }]
  * let bag = [{ eid: 'a', kind: 'tusk', n: 1 }]
- * assertEquals(steps(goods('1 thornback, 2 tusk')!, 3, kills, bag), [
- *   { kind: 'thornback', n: 1, have: 1, deed: true },
+ * assertEquals(steps(goods('1 beast:thornback, 2 tusk')!, 3, kills, bag), [
+ *   { kind: thornback, n: 1, have: 1, deed: true },
  *   { kind: 'tusk', n: 2, have: 1, deed: false },
  * ])
  * ```
@@ -737,13 +765,13 @@ export type Step = { kind: string; n: number; have: number; deed: boolean }
 export let steps = (
   take: Goods,
   since: number,
-  kills: { kind: string; at: number }[],
+  kills: { beast: string; at: number }[],
   bag: Held[],
 ): Step[] =>
   take.map(({ kind, n }) => {
     let deed = !!BEASTS[kind]
     let have = deed
-      ? kills.filter((k) => k.kind == kind && k.at >= since).length
+      ? kills.filter((k) => k.beast == kind && k.at >= since).length
       : bag.filter((b) => b.kind == kind).reduce((s, b) => s + b.n, 0)
     return { kind, n, have: Math.min(have, n), deed }
   })

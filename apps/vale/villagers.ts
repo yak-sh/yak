@@ -18,6 +18,7 @@
 // their land, so a vale nobody plays asks no model at all.
 import type { Line } from './chat.ts'
 import { BEASTS } from './beasts.ts'
+import { aliasOf } from './names.ts'
 import { PLANS } from './buildings.ts'
 import { DAY, day } from './day.ts'
 import { ITEMS } from './items.ts'
@@ -297,8 +298,9 @@ let ware = (kind: string, n: number) =>
 let landOf = (level: string) => {
   let w = wants(level)
   let name = (kind: string) => BEASTS[kind]?.name ?? ITEMS[kind]?.name ?? kind
+  let word = (kind: string) => aliasOf(kind) ?? kind
   let list = (xs: { kind: string; price: number }[]) =>
-    xs.map((x) => `${name(x.kind)} (${x.kind}) ${x.price}`).join(', ')
+    xs.map((x) => `${name(x.kind)} (${word(x.kind)}) ${x.price}`).join(', ')
   let gear = w.tiers.map((t) => `ring${t}`).join(', ')
   return `creatures to fell, worth in coin: ${list(w.creatures)}; things, ` +
     `price in coin: ${list(w.things)}; and arms and armour of tier ` +
@@ -359,6 +361,8 @@ let stores = (g: Giver, holds: Map<string, number>) => {
  * seedDesigns()
  * import { assertStringIncludes } from '@std/assert'
  * import { GIVERS } from './quests.ts'
+ * import { beastId } from './beasts.ts'
+ * let thornback = beastId('beast:thornback')!
  * let wren = GIVERS.find((g) => g.id == 'wren')!
  * let told = persona(wren, {
  *   hero: { eid: 'h1', name: 'Bramble', lvl: 2 },
@@ -367,10 +371,10 @@ let stores = (g: Giver, holds: Map<string, number>) => {
  *   bag: new Map([['tusk', 3]]),
  *   dealt: [{
  *     give: [{ kind: 'staff2', n: 1 }],
- *     take: [{ kind: 'thornback', n: 1 }, { kind: 'toadstone', n: 1 }],
+ *     take: [{ kind: thornback, n: 1 }, { kind: 'toadstone', n: 1 }],
  *     taken: true,
  *     steps: [
- *       { kind: 'thornback', n: 1, have: 1, deed: true },
+ *       { kind: thornback, n: 1, have: 1, deed: true },
  *       { kind: 'toadstone', n: 1, have: 0, deed: false },
  *     ],
  *   }],
@@ -391,7 +395,7 @@ let stores = (g: Giver, holds: Map<string, number>) => {
  * }), 'did not address you')
  * assertStringIncludes(told, 'What you hold: 18 coin.')
  * assertStringIncludes(told, 'Bramble carries: 3 Boar tusk (tusk, 5 coin each)')
- * assertStringIncludes(told, 'Old Thornback (thornback)')
+ * assertStringIncludes(told, 'Old Thornback (beast:thornback)')
  * assertStringIncludes(told, 'felled 1 of 1 Old Thornback, brought 0 of 1')
  * assertStringIncludes(told, 'Your home is near the plaza in Mossvale.')
  * assertStringIncludes(told, 'You work at the hall near the plaza.')
@@ -500,8 +504,9 @@ export let persona = (g: Giver, f: Facts): string => {
   ].join('\n')
 }
 
-/** A fall as a villager hears of it: who, what kind, and when, in ms. */
-export type Fall = { by: string; kind: string; at: number }
+/** A fall as a villager hears of it: who, what creature (by eid), and when,
+ * in ms. */
+export type Fall = { by: string; beast: string; at: number }
 
 /**
  * What heroes did lately, a line each: who felled how many of what, most
@@ -511,11 +516,13 @@ export type Fall = { by: string; kind: string; at: number }
  * import { seedDesigns } from './designs_fixture.ts'
  * seedDesigns()
  * import { assertEquals } from '@std/assert'
+ * import { beastId } from './beasts.ts'
+ * let [slime, boar] = ['beast:slime', 'beast:boar'].map((b) => beastId(b)!)
  * let falls = [
- *   { by: 'Tansy', kind: 'slime', at: 5 },
- *   { by: 'Tansy', kind: 'slime', at: 6 },
- *   { by: 'Rook', kind: 'boar', at: 7 },
- *   { by: 'Rook', kind: 'boar', at: 1 },
+ *   { by: 'Tansy', beast: slime, at: 5 },
+ *   { by: 'Tansy', beast: slime, at: 6 },
+ *   { by: 'Rook', beast: boar, at: 7 },
+ *   { by: 'Rook', beast: boar, at: 1 },
  * ]
  * assertEquals(deeds(falls, 4), ['Tansy felled 2 Moss slimes', 'Rook felled a Bristleboar'])
  * ```
@@ -524,12 +531,12 @@ export let deeds = (falls: Fall[], since: number, most = 4): string[] => {
   let n = new Map<string, number>()
   for (let f of falls) {
     if (f.at >= since) {
-      n.set(`${f.by}\0${f.kind}`, (n.get(`${f.by}\0${f.kind}`) ?? 0) + 1)
+      n.set(`${f.by}\0${f.beast}`, (n.get(`${f.by}\0${f.beast}`) ?? 0) + 1)
     }
   }
   return [...n].sort(([, a], [, b]) => b - a).slice(0, most).map(([k, c]) => {
-    let [by, kind] = k.split('\0')
-    let name = BEASTS[kind]?.name ?? kind
+    let [by, beast] = k.split('\0')
+    let name = BEASTS[beast]?.name ?? 'creature'
     return c == 1
       ? `${by} felled ${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name}`
       : `${by} felled ${c} ${name}s`
@@ -848,6 +855,8 @@ export type Goings = { self: string | null; others: string[] }
  * ```ts
  * import { assertEquals } from '@std/assert'
  * import { GIVERS } from './quests.ts'
+ * import { beastId } from './beasts.ts'
+ * let thornback = beastId('beast:thornback')!
  * let wren = GIVERS.find((g) => g.id == 'wren')!
  * let plans = new Map([
  *   ['pip', [{ go: 'visit' as const, at: 5 }]],

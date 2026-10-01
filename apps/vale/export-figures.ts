@@ -122,8 +122,9 @@ let written = (rows: unknown[]) => json(rows) + '\n'
 if (import.meta.main) await main()
 
 async function main() {
-  // Every creature's eid and kind, by the land its seed file is named for.
-  type Row = { entity: { eid: string }; beast_design: { kind: string } }
+  // Every creature's eid, by the land its seed file is named for; its dens
+  // sit beside it there.
+  type Row = { entity: { eid: string }; beast_design?: unknown }
   let lands = [
     'meadow',
     'woods',
@@ -141,9 +142,9 @@ async function main() {
         new URL(`./seed/beasts/${land}.json`, import.meta.url),
       ),
     )
-    let out = list.map(({ entity: { eid }, beast_design: { kind } }) => {
-      let f = exported(eid, BEASTS[kind], beast(kind))
-      figures.set(kind, f)
+    let out = list.filter((r) => r.beast_design).map(({ entity: { eid } }) => {
+      let f = exported(eid, BEASTS[eid], beast(eid))
+      figures.set(eid, f)
       return { entity: { eid: uuidOf(`figure/${eid}`) }, figure: f }
     })
     if (!Deno.args.includes('--check')) {
@@ -215,9 +216,9 @@ async function main() {
     let random = Math.random
     Math.random = () => 0
     let report: Record<string, string[]> = {}
-    for (let [kind, f] of figures) {
-      let k = BEASTS[kind].look.scale ?? 1
-      let old = beast(kind), now = puppet(f)
+    for (let [eid, f] of figures) {
+      let k = BEASTS[eid].look.scale ?? 1
+      let old = beast(eid), now = puppet(f)
       let draw = far(corners(old), corners(now))
       let box = new THREE.Box3(), v = new THREE.Vector3()
       for (let pts of corners(now)) {
@@ -261,9 +262,9 @@ async function main() {
         }
         worst[name] = Math.round(w / f.height * 100)
       }
-      let plan = BEASTS[kind].look.plan
+      let plan = BEASTS[eid].look.plan
       ;(report[plan] ??= []).push(
-        `${kind} k=${k} bulk/k=${(bulk / k).toFixed(2)} draw=${
+        `${BEASTS[eid].name} k=${k} bulk/k=${(bulk / k).toFixed(2)} draw=${
           draw.toFixed(4)
         } moves(%h)=${
           Object.entries(worst).map(([a, n]) => `${a}:${n}`).join(' ')

@@ -3,7 +3,7 @@
 import { companionTick } from './companion-tick.ts'
 import { LODES } from './gather.ts'
 import { destinationOf } from './teleport.ts'
-import { refreshTerrain, vale } from './terrain.ts'
+import { installBuildingDesigns, refreshTerrain, vale } from './terrain.ts'
 import { placeOf, placeText } from './place.ts'
 import { resolveTarget } from './target.ts'
 import { GIVERS } from './quests.ts'
@@ -333,11 +333,19 @@ let teleport = async (req, env, v, themes) => {
 }
 
 export let workerOf = (v) => {
-  let seen
+  // The ground is grown from the store's themes and building plans, as on
+  // the page (main.ts): without the plans, nothing near a building stands.
+  let seen, built
   let themes = async (env) => {
-    let rows = await read(env.STORE, '.theme_design')
+    let [rows, plans] = await Promise.all([
+      read(env.STORE, '.theme_design'),
+      read(env.STORE, '.building_design'),
+    ])
     let sorted = rows.sort((a, b) => a.entity.eid.localeCompare(b.entity.eid))
     let next = JSON.stringify(sorted)
+    let planned = JSON.stringify(plans)
+    if (planned != built) installBuildingDesigns(plans)
+    built = planned
     if (next == seen) return
     useThemes(sorted)
     refreshTerrain()

@@ -6,6 +6,7 @@ import { flat } from './terrain.ts'
 import { eidOf } from './villager-id.ts'
 import { workerOf } from './worker.js'
 import { rows as themeRows } from './themes_fixture.ts'
+import { rows as planRows } from './buildings_fixture.ts'
 import { seedDesigns } from './designs_fixture.ts'
 
 seedDesigns()
@@ -44,6 +45,8 @@ test('inspect worker checks owner and reads live hero state', async () => {
         reads.push(line)
         let rows = line == '.theme_design'
           ? themeRows
+          : line == '.building_design'
+          ? planRows
           : url.searchParams.has('live')
           ? [{
             entity: { eid: HERO },
@@ -97,6 +100,8 @@ test('inspect worker resolves land and villager names', async () => {
         return Promise.resolve(Response.json(
           line == '.theme_design'
             ? themeRows
+            : line == '.building_design'
+            ? planRows
             : line.startsWith('.eid=')
             ? [project(elder, line)]
             : [],

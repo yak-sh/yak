@@ -83,7 +83,7 @@ let look = { tint: '#4a7ab8', hair: '#6a4a30', skin: '#e8c0a0' }
 test('no creature fights itself', () => {
   assertEquals(
     fighting(Object.fromEntries(
-      Object.keys(BEASTS).map((kind) => [kind, () => beast(kind)]),
+      Object.values(BEASTS).map((b) => [b.name, () => beast(b.eid)]),
     )),
     {},
   )

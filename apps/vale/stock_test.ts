@@ -140,7 +140,7 @@ test('a hand-in counts once, from the person who made the hero', () => {
 
 test('what a deal set aside is free again if it is never handed in', () => {
   // Wren's fine staff, for repeated dangerous work and a rare stone.
-  let staff = deal(0, '1 staff2', '7 thornback, 1 toadstone')
+  let staff = deal(0, '1 staff2', '7 beast:thornback, 1 toadstone')
   let holds = (now: number, hands: Reply[] = []) =>
     book([staff], hands, now, ['staff2', 'toadstone']).holds
   assertEquals(holds(1), [0, 0])
@@ -167,7 +167,7 @@ test('a trade moves only things both sides hold', () => {
   // And a hero pays only from their bag.
   let bag = [{ eid: 't1', kind: 'tusk', n: 1 }]
   assertEquals(pay(bag, goods('3 tusk')!), null)
-  assertEquals(pay(bag, goods('1 tusk, 1 thornback')!), {
+  assertEquals(pay(bag, goods('1 tusk, 1 beast:thornback')!), {
     spend: ['t1'],
     back: [],
   })
@@ -177,7 +177,7 @@ test('a deal asks only for what the land has', () => {
   let asks = [
     deal(0, '5 coin', '1 frostwolf'),
     deal(1, '5 coin', '1 pearl', 'bob', 'rook'),
-    deal(2, '5 coin', '2 boar', 'cat', 'cat'),
+    deal(2, '5 coin', '2 beast:boar', 'cat', 'cat'),
     deal(3, '5 coin', '1 tusk', 'dan', 'dan'),
   ]
   assertEquals(book(asks).states, ['void', 'void', 'open', 'open'])
@@ -186,8 +186,8 @@ test('a deal asks only for what the land has', () => {
 test('a deal gives about what its ask is worth, and precious things only for much', () => {
   let asks = [
     // The staff asks for many hard fights; the stone makes the offer fair.
-    deal(0, '1 staff2', '7 thornback'),
-    deal(1, '1 staff2', '7 thornback, 1 toadstone', 'bob', 'rook'),
+    deal(0, '1 staff2', '7 beast:thornback'),
+    deal(1, '1 staff2', '7 beast:thornback, 1 toadstone', 'bob', 'rook'),
     // Never for nothing: a plain rack sword is worth nothing.
     deal(2, '1 ring1', '1 sword1', 'cat', 'cat'),
   ]
@@ -224,7 +224,7 @@ test('every page reaches the same answer from the same rows', () => {
 })
 
 test('a job on the board goes to the first hero to take it', () => {
-  let j = job(0, '5 coin', '2 boar')
+  let j = job(0, '5 coin', '2 beast:boar')
   let states = (replies: Reply[]) => book([j], replies).states
   let rook = agree(j, 1, 'bob')
   // Taken by Rook, it is gone for the hero after, and Rook's to hand in.
@@ -237,20 +237,20 @@ test('a job holds to what the villager holds, the land has, and its worth', () =
   let one = (give: string, take: string) => book([job(0, give, take)]).states
   assertEquals(
     [
-      one('1000 coin', '2 boar'),
+      one('1000 coin', '2 beast:boar'),
       one('5 coin', '1 frostwolf'),
-      one('1 staff2', '1 slime'),
+      one('1 staff2', '1 beast:slime'),
       one('5 coin', ''),
     ].flat(),
     ['void', 'void', 'void', 'void'],
   )
-  assertEquals(one('1 staff2', '7 thornback, 1 toadstone'), ['open'])
+  assertEquals(one('1 staff2', '7 beast:thornback, 1 toadstone'), ['open'])
 })
 
 test('a villager posts now and then, and a board holds a few jobs', () => {
-  let first = job(0, '1 coin', '1 slime')
+  let first = job(0, '1 coin', '1 beast:slime')
   let again = (at: number, replies: Reply[] = []) =>
-    book([first, job(at, '1 coin', '1 slime')], replies, at + 1).states[1]
+    book([first, job(at, '1 coin', '1 beast:slime')], replies, at + 1).states[1]
   let done = [agree(first, 1), hand(first, 2)]
   // One of theirs on the board at a time, and a while between them.
   assertEquals(again(RARE / MIN), 'void')
@@ -259,7 +259,9 @@ test('a villager posts now and then, and a board holds a few jobs', () => {
   // Every one of Birchmere's people posts one: the board takes the first
   // few, and has room again once a hero takes one of them.
   let mere = land('birchmere')
-  let jobs = [...mere.keys()].map((v, i) => job(i, '1 coin', '1 adder', v))
+  let jobs = [...mere.keys()].map((v, i) =>
+    job(i, '1 coin', '1 beast:adder', v)
+  )
   let at = (replies: Reply[]) => ledger(mere, jobs, replies, owner, 20 * MIN)
   let books = at([])
   assertEquals(

@@ -14,7 +14,8 @@ import type { Kit } from './gear.ts'
 /** A creature, as far as a blow cares: where it is, and how near. */
 export type Mark = {
   eid: string
-  kind: string
+  /** the creature it is (beasts.ts) */
+  beast: string
   down: boolean
   /** metres, middle to middle */
   near: number
@@ -38,7 +39,7 @@ let HOLD = 0.8
 // How far a sweep reaches with a weapon that shoots: the arm's length.
 let HAND = 1.4
 
-let size = (m: Mark) => BEASTS[m.kind]?.size ?? 1
+let size = (m: Mark) => BEASTS[m.beast]?.size ?? 1
 let off = (me: Me, m: Mark) => {
   let a = Math.atan2(m.body.x - me.x, m.body.z - me.z)
   return Math.abs(Math.atan2(Math.sin(a - me.yaw), Math.cos(a - me.yaw)))
@@ -74,8 +75,10 @@ export let farOf = (a: Ability): number =>
  * import { assertEquals } from '@std/assert'
  * import { ABILITIES } from './abilities.ts'
  * import { HANDLES } from './arms.ts'
- * let at = (eid: string, x: number, z: number, kind = 'slime') =>
- *   ({ eid, kind, down: false, near: Math.hypot(x, z), body: { x, z } })
+ * import { beastId } from './beasts.ts'
+ * let slime = beastId('beast:slime')!
+ * let at = (eid: string, x: number, z: number, beast = slime) =>
+ *   ({ eid, beast, down: false, near: Math.hypot(x, z), body: { x, z } })
  * let kit = (family: string) => ({ ...HANDLES[family], family } as never)
  * let aim = (
  *   mobs: ReturnType<typeof at>[],
@@ -99,7 +102,10 @@ export let farOf = (a: Ability): number =>
  * assertEquals(aim([at('far', 0, 6)], 'sword', '', ['lunge']), 'far')
  * // What a blow reaches comes first: an aurochs at hand, before a hen a
  * // little nearer that only a lunge reaches.
- * let herd = [at('hen', 0, 3.2, 'hen'), at('aurochs', 1, 3.7, 'aurochs')]
+ * let herd = [
+ *   at('hen', 0, 3.2, beastId('beast:hen')!),
+ *   at('aurochs', 1, 3.7, beastId('beast:aurochs')!),
+ * ]
  * assertEquals(aim(herd, 'sword', '', ['lunge']), 'aurochs')
  * // The one aimed at holds until another is a good deal nearer.
  * let two = [at('a', 0, 3), at('b', 1, 2.6)]
@@ -135,7 +141,7 @@ export let aimOf = <M extends Mark>(
  * import { ABILITIES } from './abilities.ts'
  * import { HANDLES } from './arms.ts'
  * let kit = (family: string) => ({ ...HANDLES[family], family } as never)
- * let m = { eid: 'm', kind: 'slime', down: false, near: 6, body: { x: 0, z: 6 } }
+ * let m = { eid: 'm', beast: 'slime', down: false, near: 6, body: { x: 0, z: 6 } }
  * assertEquals(aimFor(m, kit('sword')), null)
  * assertEquals(aimFor(m, kit('sword'), ABILITIES.lunge), m)
  * assertEquals(aimFor(m, kit('sword'), ABILITIES.cleave), null)
@@ -157,7 +163,7 @@ export let aimFor = <M extends Mark>(
  * import { assertEquals } from '@std/assert'
  * import { HANDLES } from './arms.ts'
  * let at = (eid: string, x: number, z: number) =>
- *   ({ eid, kind: 'slime', down: false, near: Math.hypot(x, z), body: { x, z } })
+ *   ({ eid, beast: 'slime', down: false, near: Math.hypot(x, z), body: { x, z } })
  * let me = { x: 0, z: 0, yaw: 0 }
  * let sword = { ...HANDLES.sword, family: 'sword' } as never
  * let mobs = [at('ahead', 0, 1.8), at('beside', 0.6, 1.2), at('far', 0, 4)]
@@ -194,7 +200,7 @@ export let landOf = <M extends Mark>(
  * import { ABILITIES } from './abilities.ts'
  * import { HANDLES } from './arms.ts'
  * let at = (eid: string, x: number, z: number) =>
- *   ({ eid, kind: 'slime', down: false, near: Math.hypot(x, z), body: { x, z } })
+ *   ({ eid, beast: 'slime', down: false, near: Math.hypot(x, z), body: { x, z } })
  * let me = { x: 0, z: 0, yaw: 0 }
  * let mobs = [at('ahead', 0, 2), at('left', 2, 0.5), at('behind', 0, -2), at('far', 0, 9)]
  * let kit = (family: string) => ({ ...HANDLES[family], family } as never)

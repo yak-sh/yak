@@ -1,13 +1,14 @@
-// Where each creature of a level lives: for every kind (beasts.ts) that suits
-// the level's danger, and every place of the kind it haunts, or the share of
-// them its odds pick (`dens`), homes picked around the place from the level's
-// own numbers, where a creature can stand: in the level's region, dry, level,
-// clear of trunks and rocks, and nearer that place than any place of another
-// kind. A home on a traveled path moves into nearby open country. Picked on
-// the smooth ground (terrain.ts `rise`), the homes are the same at every voxel
-// size. The same list on every page, and each creature's eid is named by its
-// generated slot, so no page has to be told what another grew.
-import { type Beast, BEASTS, type Haunt } from './beasts.ts'
+// Where each creature of a level lives: for every den (beasts.ts) of a
+// creature that suits the level's danger, and every place of the den's kind,
+// or the share of them its odds pick (`dens`), homes picked around the place
+// from the level's own numbers, where a creature can stand: in the level's
+// region, dry, level, clear of trunks and rocks, and nearer that place than
+// any place of another kind. A home on a traveled path moves into nearby open
+// country. Picked on the smooth ground (terrain.ts `rise`), the homes are the
+// same at every voxel size. The same list on every page, and each creature's
+// eid is named by its den and its generated slot, so no page has to be told
+// what another grew.
+import { type Beast, BEASTS, type Den } from './beasts.ts'
 import { PLANS } from './buildings.ts'
 import { isA } from './features.ts'
 import { hopsOf, type Level, levelOf, type Place } from './levels.ts'
@@ -17,55 +18,57 @@ import { RADIUS, sheltered } from './sim.ts'
 import { onFoot } from './solid.ts'
 import { rise, SHORE, type Spot, steep, vale, wallsNear } from './terrain.ts'
 
-/** A place of a level a kind of creature lives around, by one of its
- * haunts. */
-export type Den = { kind: string; haunt: Haunt; name: string; place: Place }
+/** A den at one place of a level: the place, by its name. */
+export type DenAt = Den & { name: string; place: Place }
 
-/** Whether a species belongs in a land `hops` roads from home. Its native
- * level selects a habitat here; danger.ts gives each encounter its level.
+/** Whether a creature belongs in a land `hops` roads from home. A creature's
+ * native level selects a habitat here; danger.ts gives each encounter its
+ * level. A creature that can't be fought suits every land.
  *
  * ```ts
  * import { seedDesigns } from './designs_fixture.ts'
  * seedDesigns()
  * import { assertEquals } from '@std/assert'
- * import { BEASTS } from './beasts.ts'
- * let at = (kind: string, hops: number) => suits(BEASTS[kind], hops)
- * assertEquals([at('slime', 0), at('slime', 6), at('thornback', 0)], [
- *   true,
- *   false,
- *   true,
- * ])
+ * import { beastOf } from './beasts.ts'
+ * let at = (name: string, hops: number) => suits(beastOf(name)!, hops)
+ * assertEquals(
+ *   [at('beast:slime', 0), at('beast:slime', 6), at('beast:thornback', 0)],
+ *   [true, false, true],
+ * )
  * ```
  */
 export let suits = (b: Beast, hops: number): boolean =>
-  b.lvl >= 2 * hops - 1 && b.lvl <= 2 * hops + 5 + (b.boss ? 4 : 0)
+  !b.combat || b.combat.lvl >= 2 * hops - 1 &&
+    b.combat.lvl <= 2 * hops + 5 + (b.combat.boss ? 4 : 0)
 
 /**
- * Every place of a level each kind of creature lives around: for each kind
- * that suits the level, each place of a kind it haunts, or the share of them
- * its odds pick, each by its own name. Only the level's rows are read, so
- * asking is cheap.
+ * Every place of a level each creature lives around: for each den of a
+ * creature that suits the level, each place of its kind, or the share of
+ * them its odds pick, each by its own name. Only the level's rows are read,
+ * so asking is cheap.
  *
  * ```ts
  * import { seedDesigns } from './designs_fixture.ts'
  * seedDesigns()
  * import { assertEquals } from '@std/assert'
+ * import { beastId } from './beasts.ts'
  * import { LEVELS } from './levels.ts'
- * let where = (kind: string) =>
- *   dens(LEVELS.mossvale).filter((d) => d.kind == kind).map((d) => d.name)
- * assertEquals(where('thornback'), ['ridge'])
+ * let where = (name: string) =>
+ *   dens(LEVELS.mossvale).filter((d) => d.beast == beastId(name))
+ *     .map((d) => d.name)
+ * assertEquals(where('beast:thornback'), ['ridge'])
  * assertEquals(dens(LEVELS.mossvale), dens(LEVELS.mossvale))
  * ```
  */
-export let dens = (lv: Level): Den[] =>
-  Object.entries(BEASTS).flatMap(([kind, beast]) =>
+export let dens = (lv: Level): DenAt[] =>
+  Object.values(BEASTS).flatMap((beast) =>
     !suits(beast, lv.habitat ?? hopsOf(lv.id))
       ? []
-      : beast.haunts.flatMap((haunt) =>
+      : beast.dens.flatMap((den) =>
         Object.entries(lv.places).flatMap(([name, place]) =>
-          isA(place.kind, haunt.near) &&
-            rand(hashOf(`${lv.id}/${kind}/${name}`), 7) < (haunt.odds ?? 1)
-            ? [{ kind, haunt, name, place }]
+          isA(place.kind, den.near) &&
+            rand(hashOf(`${lv.id}/${den.eid}/${name}`), 7) < (den.odds ?? 1)
+            ? [{ ...den, name, place }]
             : []
         )
       )
@@ -73,7 +76,8 @@ export let dens = (lv: Level): Den[] =>
 
 export type Home = {
   eid: string
-  kind: string
+  /** the creature it is (beasts.ts) */
+  beast: string
   /** the level it belongs to */
   level: string
   /** where it wanders from, in world metres */
@@ -82,6 +86,8 @@ export type Home = {
   roam: number
   /** what its wandering is salted with */
   seed: number
+  /** seconds from a fall until it is up again; never, without */
+  respawn?: number
 }
 
 let listed = new Map<string, Home[]>()
@@ -110,33 +116,33 @@ export let homesOf = (id: string): Home[] => {
     kind: p.kind,
     at: [ox + p.at[0], oz + p.at[1]],
   }))
-  let belongs = (den: Den, x: number, z: number, extra = 0) => {
+  let belongs = (den: DenAt, x: number, z: number, extra = 0) => {
     let [px, pz] = [ox + den.place.at[0], oz + den.place.at[1]]
     let d = Math.hypot(x - px, z - pz)
-    return d <= den.haunt.within + extra && d >= (den.haunt.beyond ?? 0) &&
+    return d <= den.within + extra && d >= (den.beyond ?? 0) &&
       places.every((p) =>
         p.kind == den.place.kind || Math.hypot(x - p.at[0], z - p.at[1]) > d
       )
   }
   let out: Home[] = []
-  let origin = new Map<string, Den>()
+  let origin = new Map<string, DenAt>()
   let taken = new Map<string, Spot[]>()
   for (let den of dens(lv)) {
-    let { kind, haunt, name, place } = den
-    let mine = taken.get(kind) ?? []
-    taken.set(kind, mine)
-    let key = `${id}/${kind}/${name}`
+    let { beast, name, place } = den
+    let mine = taken.get(beast) ?? []
+    taken.set(beast, mine)
+    let key = `${id}/${den.eid}/${name}`
     let salt = hashOf(key)
     let [px, pz] = [ox + place.at[0], oz + place.at[1]]
     let n = 0
-    let r = haunt.within
-    for (let tries = 0; n < haunt.count && tries < 4000; tries++) {
+    let r = den.within
+    for (let tries = 0; n < den.count && tries < 4000; tries++) {
       let x = px + (rand(tries, salt, 1) * 2 - 1) * r
       let z = pz + (rand(tries, salt, 2) * 2 - 1) * r
       if (!belongs(den, x, z) || regionOf(x, z) != id) continue
       if (rise(x, z) <= SHORE || steep(rise, x, z) > 1) continue
       if (blocked(x, z)) continue
-      if (mine.some(([a, b]) => Math.hypot(a - x, b - z) < haunt.apart)) {
+      if (mine.some(([a, b]) => Math.hypot(a - x, b - z) < den.apart)) {
         continue
       }
       mine.push([x, z])
@@ -144,11 +150,12 @@ export let homesOf = (id: string): Home[] => {
       origin.set(eid, den)
       out.push({
         eid,
-        kind,
+        beast,
         level: id,
         home: [x, z],
-        roam: haunt.roam,
+        roam: den.roam,
         seed: hashOf(eid),
+        respawn: den.respawn,
       })
     }
   }
@@ -169,7 +176,7 @@ export let homesOf = (id: string): Home[] => {
         let z = h.home[1] + Math.sin(a) * r
         let d = Math.hypot(x - px, z - pz)
         if (
-          d > den.haunt.within + 24 || d < (den.haunt.beyond ?? 0) ||
+          d > den.within + 24 || d < (den.beyond ?? 0) ||
           regionOf(x, z) != id
         ) continue
         if (sheltered(v, x, z) || rise(x, z) <= SHORE) continue
@@ -177,8 +184,8 @@ export let homesOf = (id: string): Home[] => {
         if (onFoot(v, x, z, RADIUS * 2)) continue
         if (
           clear.some((c) =>
-            c.kind == h.kind &&
-            Math.hypot(c.home[0] - x, c.home[1] - z) < den.haunt.apart
+            c.beast == h.beast &&
+            Math.hypot(c.home[0] - x, c.home[1] - z) < den.apart
           )
         ) continue
         found = [x, z]

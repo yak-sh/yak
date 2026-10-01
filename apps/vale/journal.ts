@@ -8,7 +8,7 @@
 // (notices.ts); the glass tracks the pinned ones, the map rings where each
 // goes next, and the compass points to the first. L or the tray's scroll
 // opens it, and so does a tap on the tracker.
-import { BEASTS } from './beasts.ts'
+import { beastId, beastOf, BEASTS } from './beasts.ts'
 import type { View } from './deals.ts'
 import { type Glyph, glyph } from './glyphs.ts'
 import { dens } from './homes.ts'
@@ -27,7 +27,7 @@ let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
 /** One step of a task: what it asks, how far it has come when it counts,
  * whether it is done, and where it is done: a level, and there whoever to go
- * to or what to fell or find. */
+ * to or what to fell (a creature's eid) or find (an item kind). */
 export type Step = {
   text: string
   have?: number
@@ -93,7 +93,7 @@ export let quest = (s: Standing): Task => {
   let state = s.state
   let fell = q.goal == 'slay'
   let name = fell
-    ? BEASTS[q.target]?.name ?? q.target
+    ? beastOf(q.target)?.name ?? q.target
     : ITEMS[q.target]?.name ?? q.target
   let steps: Step[] = state == 'open' || state == 'locked'
     ? [{
@@ -109,7 +109,7 @@ export let quest = (s: Standing): Task => {
         need: q.count,
         done: state == 'done' || s.have >= q.count,
         level: q.level ?? g?.level ?? '',
-        kind: q.target,
+        kind: fell ? beastId(q.target) ?? q.target : q.target,
         fell,
       },
       back(q.giver, state == 'done'),
@@ -181,19 +181,22 @@ export let told = (t: Step, here: string): string =>
 export let next = (t: Task): Step | undefined => t.steps.find((s) => !s.done)
 
 // The places in a level where a kind is found: the dens of a creature to
-// fell, or of the creatures that drop a thing to find. They never move, so
-// each is looked for once.
+// fell, or of the creatures that drop a thing to find. They move only when
+// the store's creatures do, so each is looked for once until then.
 let found = new Map<string, Spot[]>()
+let from = BEASTS
 let haunts = (level: string, kind: string, fell: boolean): Spot[] => {
+  if (from != BEASTS) found.clear()
+  from = BEASTS
   let key = `${level}/${kind}/${fell}`
   let spots = found.get(key)
   if (spots) return spots
   let holds = (k: string) =>
-    fell ? k == kind : BEASTS[k]?.loot.some(([i]) => i == kind)
+    fell ? k == kind : BEASTS[k]?.drops.some(([i]) => i == kind)
   let [ox, oz] = originOf(level)
   spots = [
     ...new Map(
-      dens(levelOf(level)!).filter((d) => holds(d.kind)).map((
+      dens(levelOf(level)!).filter((d) => holds(d.beast)).map((
         d,
       ): [string, Spot] => [d.name, [ox + d.place.at[0], oz + d.place.at[1]]]),
     ).values(),

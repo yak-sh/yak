@@ -98,7 +98,7 @@ test('creatures live and wander outside building footprints', () => {
     let homes = homesOf(id)
     assert(homes.length > 0)
     for (let h of homes) {
-      assert(clear(v, ...h.home), `${id}: ${h.kind} lives in a building`)
+      assert(clear(v, ...h.home), `${id}: ${h.beast} lives in a building`)
     }
   }
 

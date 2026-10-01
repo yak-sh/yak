@@ -1,0 +1,338 @@
+[
+  {
+    "entity": {
+      "eid": "653cc767-79a0-475f-b141-91e5c798224e"
+    },
+    "alias": {
+      "name": "sfx:cry-biped"
+    },
+    "doc": {
+      "title": "cry-biped",
+      "body": "Sound effect only: A hostile biped creature gives one low guttural battle growl. No human words. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "cry-biped",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "40641ebf-4970-46e3-958b-be1428f0eec8"
+    },
+    "alias": {
+      "name": "sfx:cry-bird"
+    },
+    "doc": {
+      "title": "cry-bird",
+      "body": "Sound effect only: A wild bird gives two short piercing chirps, natural and lively. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "cry-bird",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "a7e67d84-7a1b-4fe7-bb5f-475202a0996b"
+    },
+    "alias": {
+      "name": "sfx:cry-crag"
+    },
+    "doc": {
+      "title": "cry-crag",
+      "body": "Sound effect only: A stone creature gives one deep grinding bellow, rock-on-rock texture and falling grit. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "cry-crag",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "ea85ae11-6947-4704-88a9-d90168c8cd48"
+    },
+    "alias": {
+      "name": "sfx:cry-crawler"
+    },
+    "doc": {
+      "title": "cry-crawler",
+      "body": "Sound effect only: A large crawler gives one rasping hiss and chitter, close and unsettling. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "cry-crawler",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "44e869be-49a3-495c-ac12-6aa0dacb2a1d"
+    },
+    "alias": {
+      "name": "sfx:cry-flier"
+    },
+    "doc": {
+      "title": "cry-flier",
+      "body": "Sound effect only: A large flying creature gives one short rough aerial screech and wing rustle. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "cry-flier",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "44246952-93cb-4357-a704-1215e816be20"
+    },
+    "alias": {
+      "name": "sfx:cry-hopper"
+    },
+    "doc": {
+      "title": "cry-hopper",
+      "body": "Sound effect only: A hostile hopping creature gives one sharp throaty bark with a short trill. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "cry-hopper",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "81c850db-a49a-482e-bc61-547a31f4db7a"
+    },
+    "alias": {
+      "name": "sfx:cry-quadruped"
+    },
+    "doc": {
+      "title": "cry-quadruped",
+      "body": "Sound effect only: A wild four-legged beast gives one throaty growl with a short snarl, canine rather than feline. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "cry-quadruped",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "09dd6dd0-280c-4e16-8530-88d9082f6a7a"
+    },
+    "alias": {
+      "name": "sfx:cry-serpent"
+    },
+    "doc": {
+      "title": "cry-serpent",
+      "body": "Sound effect only: A serpent gives one long breathy hiss that tapers off, no roar. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "cry-serpent",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "db78951a-a908-480d-bf10-85279c3467a0"
+    },
+    "alias": {
+      "name": "sfx:cry-slime"
+    },
+    "doc": {
+      "title": "cry-slime",
+      "body": "Sound effect only: A gelatinous slime gives one wet burbling call and low wobbling squeak. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "cry-slime",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "8bb918b8-28c5-4948-9b1b-23990ab8831f"
+    },
+    "alias": {
+      "name": "sfx:cry-wisp"
+    },
+    "doc": {
+      "title": "cry-wisp",
+      "body": "Sound effect only: A floating wisp gives one thin spectral ascending call, airy and brief. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "cry-wisp",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "e6a2e95c-1480-4662-ad5a-be0cf3304e73"
+    },
+    "alias": {
+      "name": "sfx:step-biped"
+    },
+    "doc": {
+      "title": "step-biped",
+      "body": "Sound effect only: One firm biped creature footfall on soil: heavier than a person, short dull thud. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "step-biped",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "d8fa963d-ffb9-4780-a3f6-71d5d3bff194"
+    },
+    "alias": {
+      "name": "sfx:step-bird"
+    },
+    "doc": {
+      "title": "step-bird",
+      "body": "Sound effect only: One small bird hop on earth: tiny tap and soft feather shuffle. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "step-bird",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "84a55217-9863-43ee-9780-d088553e960f"
+    },
+    "alias": {
+      "name": "sfx:step-crag"
+    },
+    "doc": {
+      "title": "step-crag",
+      "body": "Sound effect only: One stone creature footfall: dense rocky knock, grit and a short low rumble. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "step-crag",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "737066e7-b18d-41fb-94a6-a2590eca2a81"
+    },
+    "alias": {
+      "name": "sfx:step-crawler"
+    },
+    "doc": {
+      "title": "step-crawler",
+      "body": "Sound effect only: One many-legged crawler movement on dirt: quick small taps and a dry scrape. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "step-crawler",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "810074bc-5566-4147-9753-d7f2c15ecc59"
+    },
+    "alias": {
+      "name": "sfx:step-flier"
+    },
+    "doc": {
+      "title": "step-flier",
+      "body": "Sound effect only: One flying creature movement: a compact flap of leathery wings through air. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "step-flier",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "515decdd-2c90-4979-95d8-154162a42de2"
+    },
+    "alias": {
+      "name": "sfx:step-hopper"
+    },
+    "doc": {
+      "title": "step-hopper",
+      "body": "Sound effect only: One small hopping creature landing: springy light thump and brief settling rustle. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "step-hopper",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "fedf5f99-63cf-4042-af85-65005b11cdd0"
+    },
+    "alias": {
+      "name": "sfx:step-quadruped"
+    },
+    "doc": {
+      "title": "step-quadruped",
+      "body": "Sound effect only: One padded four-legged beast paw landing on soil: soft low thump with a little claw scrape. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "step-quadruped",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "73617de7-bbec-4b2c-98b7-bd72813c0878"
+    },
+    "alias": {
+      "name": "sfx:step-serpent"
+    },
+    "doc": {
+      "title": "step-serpent",
+      "body": "Sound effect only: One serpent slithering movement: dry scales and earth brushing under the body. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "step-serpent",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "bf7f7c18-c25a-42a9-9b11-91e78f23f4bd"
+    },
+    "alias": {
+      "name": "sfx:step-slime"
+    },
+    "doc": {
+      "title": "step-slime",
+      "body": "Sound effect only: One gelatinous slime movement: low wet squelch with a tiny bubble pop. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "step-slime",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "bf543dd1-8035-40ad-8381-2847d5eb1299"
+    },
+    "alias": {
+      "name": "sfx:step-wisp"
+    },
+    "doc": {
+      "title": "step-wisp",
+      "body": "Sound effect only: One floating wisp movement: very brief airy shimmer rather than a footfall. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "step-wisp",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "4487aef5-1c7e-4c03-89bb-597c6fb35493"
+    },
+    "alias": {
+      "name": "sfx:wolf"
+    },
+    "doc": {
+      "title": "wolf",
+      "body": "Sound effect only: A grey wolf gives a nasal bark, then a teeth-baring growl and a short mournful yowl. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "wolf",
+      "loop": false
+    }
+  }
+]

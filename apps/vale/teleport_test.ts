@@ -16,6 +16,7 @@ import { flat, vale } from './terrain.ts'
 import { workerOf } from './worker.js'
 import { seedDesigns } from './designs_fixture.ts'
 import { rows as themeRows } from './themes_fixture.ts'
+import { rows as planRows } from './buildings_fixture.ts'
 
 seedDesigns()
 
@@ -62,6 +63,9 @@ test('the teleport worker admits owner and refuses editor', async () => {
         if (path.includes('.theme_design')) {
           return Promise.resolve(Response.json(themeRows))
         }
+        if (path.includes('.building_design')) {
+          return Promise.resolve(Response.json(planRows))
+        }
         if (path.startsWith('query?')) {
           return Promise.resolve(Response.json([{
             entity: { eid: 'hero' },
@@ -107,6 +111,9 @@ test('teleport targets live positions and stored companion spots', async () => {
       fetch: (path: string, init?: RequestInit) => {
         if (path.includes('.theme_design')) {
           return Promise.resolve(Response.json(themeRows))
+        }
+        if (path.includes('.building_design')) {
+          return Promise.resolve(Response.json(planRows))
         }
         if (path.startsWith('query?live=1')) {
           return Promise.resolve(Response.json(
@@ -175,6 +182,9 @@ test('teleport can meet a villager at their current world position', async () =>
       fetch: (path: string, init?: RequestInit) => {
         if (path.includes('.theme_design')) {
           return Promise.resolve(Response.json(themeRows))
+        }
+        if (path.includes('.building_design')) {
+          return Promise.resolve(Response.json(planRows))
         }
         if (path.startsWith('query?live=1')) {
           return Promise.resolve(Response.json([]))

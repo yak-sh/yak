@@ -78,21 +78,5 @@
       "name": "spell",
       "loop": false
     }
-  },
-  {
-    "entity": {
-      "eid": "$wolf"
-    },
-    "alias": {
-      "name": "sfx:wolf"
-    },
-    "doc": {
-      "title": "wolf",
-      "body": "Sound effect only: A grey wolf gives a nasal bark, then a teeth-baring growl and a short mournful yowl. No speech, words, music, or other sounds."
-    },
-    "sfx": {
-      "name": "wolf",
-      "loop": false
-    }
   }
 ]

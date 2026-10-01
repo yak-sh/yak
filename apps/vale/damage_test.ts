@@ -3,6 +3,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { homesNear } from './homes.ts'
+import { beastId } from './beasts.ts'
 import { type Intent } from './input.ts'
 import { type Bundle, type Net } from './net.ts'
 import { game } from './play.ts'
@@ -30,7 +31,9 @@ let still: Intent = {
 }
 
 test('damage off revives and protects until damage is turned on', () => {
-  let home = homesNear(128, 128, 90).find((h) => h.kind == 'boar')!
+  let home = homesNear(128, 128, 90).find((h) =>
+    h.beast == beastId('beast:boar')
+  )!
   let [x, z] = home.home
   let hero = 'hero'
   let now = 1000

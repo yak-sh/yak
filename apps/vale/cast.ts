@@ -579,10 +579,10 @@ export let cast = (
       mark.visible = false
       for (let w of warns.values()) w.zone.visible = w.fill.visible = false
       for (let m of f.mobs) {
-        let b = BEASTS[m.kind]
+        let b = BEASTS[m.beast]
         // Small things are lost in the haze sooner than big ones.
         if (m.near > Math.min(75, 30 + 25 * b.size)) continue
-        let a = actor(m.eid, () => beast(m.kind))
+        let a = actor(m.eid, () => beast(m.beast))
         let gone = m.down ? (f.now - m.since) / 1000 : 0
         // A fallen creature lies a moment, sinks into the moss, and is gone
         // until it wakes.
@@ -641,7 +641,7 @@ export let cast = (
             }>${skull(m.lvl, f.sheet.lvl) ? '☠' : m.lvl}</em></span>${
               bar(m.hp / m.most, 'Plate_Bar-foe')
             }`,
-            `Plate Plate-foe${b.boss ? ' Plate-boss' : ''}`,
+            `Plate Plate-foe${b.combat?.boss ? ' Plate-boss' : ''}`,
           )
         }
       }

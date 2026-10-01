@@ -94,21 +94,5 @@
       "name": "step-hero",
       "loop": false
     }
-  },
-  {
-    "entity": {
-      "eid": "$step-biped"
-    },
-    "alias": {
-      "name": "sfx:step-biped"
-    },
-    "doc": {
-      "title": "step-biped",
-      "body": "Sound effect only: One firm biped creature footfall on soil: heavier than a person, short dull thud. No speech, words, music, or other sounds."
-    },
-    "sfx": {
-      "name": "step-biped",
-      "loop": false
-    }
   }
 ]
