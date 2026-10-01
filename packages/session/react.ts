@@ -163,7 +163,10 @@ export type Deps = {
   /** Optional bounded model-facing tool-result projection; storage stays unchanged. */
   resultText?: (entry: Bundle) => Promise<string>
   /** Resolve explicitly admitted multimodal context without storing bytes in entries. */
-  contextItems?: (window: Bundle[], entries: Bundle[]) => Promise<Item[]>
+  contextItems?: (
+    window: Bundle[],
+    entries: Bundle[],
+  ) => Promise<Map<Eid, Item[]>>
   /** Unexpected model/tool defects, separate from expected refusals. */
   report?: (error: unknown, session: Eid, phase: string) => void
   mint?: () => Eid
@@ -249,6 +252,7 @@ export let project = (
   opts: {
     anchor?: Eid
     results?: Map<Eid, string>
+    media?: Map<Eid, Item[]>
   } = {},
 ): Item[] => {
   let out: Item[] = []
@@ -281,6 +285,7 @@ export let project = (
         output: typeof ms == 'number' ? took(text, ms) : text,
       })
     }
+    out.push(...opts.media?.get(b.entity.eid) ?? [])
   }
   return out
 }
@@ -800,6 +805,8 @@ export let react = async (
       v == 'text' || v == 'image' || v == 'audio'
     )
     : undefined
+  // Resolve media once, before admission, and project beside its source entry.
+  let media = await deps.contextItems?.(window, entries)
   let req: Request = {
     signal: deps.signal,
     model: spelled,
@@ -820,6 +827,7 @@ export let react = async (
       {
         anchor: anchorId ? asked!.entity.eid : undefined,
         results,
+        media,
       },
     ),
     tools: tools.map(({ name, description, parameters }) => ({
@@ -923,11 +931,6 @@ export let react = async (
     tail = tail.then(work).catch((e) => {
       streamFailure ??= e
     })
-  }
-  // Resolve inputs before admitting the request: a local image read failure
-  // must not be mistaken for an ambiguous network dispatch.
-  if (deps.contextItems) {
-    req.items.push(...await deps.contextItems(window, entries))
   }
   // Graceful stop closes admission, not a request already admitted below.
   if (deps.stopping?.aborted) return nothing

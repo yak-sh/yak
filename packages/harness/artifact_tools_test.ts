@@ -3,6 +3,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { artifactTools, imageContext } from './artifact_tools.ts'
 import { input } from '@yaks/openai'
 import type { Bundle } from '@yaks/graph'
+import type { Item } from '@yaks/model'
 import { artifactStore, fileBlobs } from '@yaks/blob'
 import { harness } from './testing.ts'
 
@@ -48,11 +49,13 @@ test('file import snapshots bytes; attach is user-only; explicit view projects b
     let rows = await h.g.read('.entry&*')
     assertEquals(
       await imageContext(h.g, [result], rows, blobs),
-      [],
+      new Map(),
     )
     await invoke('image_view', { artifact: imported.artifact })
     rows = await h.g.read('.entry&*')
-    let items = await imageContext(h.g, [result], rows, blobs)
+    let items = (await imageContext(h.g, [result], rows, blobs)).get(
+      result.entity.eid,
+    )!
     assertEquals(items.length, 1)
     assertEquals(items[0].kind, 'image')
     if (items[0].kind == 'image') assertEquals(items[0].bytes, png)
@@ -67,7 +70,7 @@ test('file import snapshots bytes; attach is user-only; explicit view projects b
     // Explicit image exposure only follows its result, not unrelated subsequent windows.
     assertEquals(
       await imageContext(h.g, [], rows, blobs),
-      [],
+      new Map(),
     )
     await assertRejects(() => invoke('image_view', { artifact: 'missing' }))
     await Deno.writeTextFile(dir + '/blobs/' + imported.address, 'corrupt')
@@ -85,6 +88,7 @@ test('tool-driven vision reaches the next model request and survives database re
   let record = await artifactStore(h.artifacts)(png, 'image/png')
   await h.g.apply([{ entity: { eid: 'picture' }, artifact: record }])
   let turn = 0
+  let prefix: Item[] = []
   let a = local({
     h,
     cwd: dir,
@@ -113,6 +117,8 @@ test('tool-driven vision reaches the next model request and survives database re
       }
       assertEquals(req.items.filter((i) => i.kind == 'image').length, 1)
       assertEquals(req.items.filter((i) => i.kind == 'result').length, 2)
+      if (turn == 2) prefix = req.items.slice()
+      else assertEquals(req.items.slice(0, prefix.length), prefix)
       return Promise.resolve({
         id: 'two',
         model: 'fake',
@@ -124,12 +130,20 @@ test('tool-driven vision reaches the next model request and survives database re
     let session = await a.start('inspect and attach')
     await a.idle(session)
     assertEquals(turn, 2)
+    await a.send(session, 'What did you see?')
+    await a.idle(session)
+    assertEquals(turn, 3)
     let entries = await a.transcript(session)
     assertEquals(entries.filter((e) => e.attachment).length, 2)
     assertEquals(entries.filter((e) => e.exception).length, 0)
     await a.close()
     h = await harness(dir + '/test.db')
-    let restored = await imageContext(h.g, entries, entries, h.artifacts)
+    let restored = [...(await imageContext(
+      h.g,
+      entries,
+      entries,
+      h.artifacts,
+    )).values()].flat()
     assertEquals(restored.length, 1)
     h.close()
   } finally {

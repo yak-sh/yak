@@ -161,8 +161,8 @@ export let imageContext = async (
   window: Bundle[],
   entries: Bundle[],
   blobs?: Blobs,
-): Promise<Item[]> => {
-  let items: Item[] = []
+): Promise<Map<string, Item[]>> => {
+  let items = new Map<string, Item[]>()
   let total = 0
   let byId = new Map(entries.map((b) => [b.entity.eid, b]))
   for (let entry of window) {
@@ -186,13 +186,13 @@ export let imageContext = async (
     if (imageType(bytes) != mediaType) {
       throw new ToolError('image', 'Unsupported or invalid image type')
     }
-    items.push({
+    items.set(entry.entity.eid, [{
       kind: 'image',
       bytes,
       mediaType,
       label: 'Image requested by tool call ' +
         String((call?.call as Comp)?.id) + ': ' + eid,
-    })
+    }])
   }
   return items
 }
