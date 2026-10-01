@@ -244,6 +244,7 @@ export let BOUNDARIES = [
   'yak/store/filed/6',
   'yak/store/tool/7',
   'yak/store/args/11',
+  'yak/store/for/12',
 ]
 
 /** The schema's own catalogue, narrowed to one type of object. */

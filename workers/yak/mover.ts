@@ -59,8 +59,11 @@ export let RULES: Rule[] = [
   // the first entity of the tuple its `match` holds. Builds started before
   // the property carry none; this gives each one it, and moves no key, call or
   // output. A build of a builder with no query has none to give (T-61625).
+  // Rehearsed clean over 104 stores: 51 builds, in yourname/vale and one
+  // probe's store; the directory and git stores hold none.
   {
     mark: 'yak/store/for/12',
+    live: 'apps',
     find: '.build&!build.for',
     move: (row) => {
       let match = (row.build as { match?: string } | undefined)?.match
