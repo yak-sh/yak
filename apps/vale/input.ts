@@ -281,10 +281,12 @@ export let listen = (
 
   stage.addEventListener('contextmenu', (e) => e.preventDefault())
   stage.addEventListener('pointerdown', (e) => {
-    stage.setPointerCapture(e.pointerId)
+    if (!document.pointerLockElement) stage.setPointerCapture(e.pointerId)
     if (e.pointerType == 'mouse') {
       mouse.down(e.button)
-      if (mouse.active() && hideCursor && stage.requestPointerLock) {
+      if (
+        mouse.active() && hideCursor && !locked() && stage.requestPointerLock
+      ) {
         locking = true
         // Older browsers return void; newer ones also reject a promise.
         stage.requestPointerLock()?.catch(() => {
@@ -384,7 +386,7 @@ export let listen = (
     if (e.pointerType == 'mouse' && (locking || locked())) return
     // Chrome drops capture when the second mouse button goes down.
     if (e.pointerType == 'mouse' && mouse.active() && e.buttons & 3) {
-      stage.setPointerCapture(e.pointerId)
+      if (!document.pointerLockElement) stage.setPointerCapture(e.pointerId)
       return
     }
     drags.delete(e.pointerId)

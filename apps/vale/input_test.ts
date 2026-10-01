@@ -179,7 +179,12 @@ test('left touch walks right while right touch orbits', () => {
 let mouseProbe = (
   run: (p: {
     hands: ReturnType<typeof listen>
-    send: (type: string, button?: number, buttons?: number) => void
+    send: (
+      type: string,
+      button?: number,
+      buttons?: number,
+      pointerType?: string,
+    ) => void
     lock: () => void
     keys: Map<string, string>
     requests: () => number
@@ -210,7 +215,11 @@ let mouseProbe = (
     let stage = document.createElement('div')
     let requests = 0
     Object.assign(stage, {
-      setPointerCapture: () => {},
+      setPointerCapture: () => {
+        if (document.pointerLockElement) {
+          throw new DOMException('A pointer is locked', 'InvalidStateError')
+        }
+      },
       hasPointerCapture: () => false,
       requestPointerLock: () => {
         requests++
@@ -233,14 +242,19 @@ let mouseProbe = (
         Object.assign(document, { pointerLockElement: stage })
         document.dispatchEvent(new window.Event('pointerlockchange'))
       },
-      send: (type, button = 0, buttons = button == 0 ? 1 : 2) => {
+      send: (
+        type,
+        button = 0,
+        buttons = button == 0 ? 1 : 2,
+        pointerType = 'mouse',
+      ) => {
         let e = new window.Event(type)
         Object.assign(e, {
-          pointerId: 1,
-          pointerType: 'mouse',
+          pointerId: pointerType == 'mouse' ? 1 : 2,
+          pointerType,
           button,
           buttons,
-          clientX: 400,
+          clientX: pointerType == 'mouse' ? 400 : 100,
           clientY: 300,
           movementX: 10,
           movementY: 5,
@@ -343,5 +357,25 @@ test('hide cursor preference is stored and restored', () => {
     assertEquals(again.hidesCursor(), false)
     again.hideCursor()
     assertEquals(p.keys.get('mossvale.drag.hideCursor'), '1')
+  })
+})
+
+test('a second button while locked needs neither capture nor another lock', () => {
+  mouseProbe((p) => {
+    p.send('pointerdown')
+    p.lock()
+    p.send('pointerdown', 2, 3)
+    assertEquals(p.requests(), 1)
+    assertEquals(p.hands.read().move, [0, 1])
+  })
+})
+
+test('touch input still starts while a mouse drag is pointer locked', () => {
+  mouseProbe((p) => {
+    p.send('pointerdown')
+    p.lock()
+    p.send('pointerdown', 0, 1, 'touch')
+    assertEquals(p.locked(), true)
+    assertEquals(p.requests(), 1)
   })
 })
