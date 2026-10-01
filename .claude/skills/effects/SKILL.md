@@ -9,7 +9,8 @@ description: >
   or a role, write an `/effects` or `/rules` facet or an `effect: true` or
   `rule: true` entry in a vocab.json, or debug something that runs after a
   write: a run that loops, never fires, fires too often, retries forever, or
-  runs in the wrong process.
+  runs in the wrong process. Where a facet's code lives and how a plugin is
+  wired is `package`; a one-time fix of stored rows is `migrate`.
 scope: tasks-v2
 volatility: stable
 ---

@@ -10,8 +10,9 @@ description: >
   connector tool, its prompts or the guide, spend money on an account's behalf,
   or debug a yaks app that is broken, slow, refusing or showing the wrong thing,
   even if the request only names an app ("jill's app", "yourname/trip"). Not
-  for the box's own server (`yak serve`); designing words is the `vocabulary`
-  skill and moving stored rows is `migrate`.
+  for the box's own server (`yak serve`). Designing words is `vocabulary`,
+  moving stored rows is `migrate`, building a platform page's parts is `ui`,
+  vectors and `.near` in a store are `search`, and its tests are `test`.
 scope: tasks-v2
 volatility: stable
 ---

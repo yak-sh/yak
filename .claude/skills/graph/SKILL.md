@@ -9,7 +9,9 @@ description: >
   the graph (`yak graph query`, `graph_query`, a board, a filter), write any
   script or SQL against the db, or are surprised by a refusal, a missing
   component, a wrong count, a write that landed as the wrong writer, or a
-  deleted entity that came back.
+  deleted entity that came back. Designing a component is `vocabulary`, moving
+  stored rows to a new shape is `migrate`, what runs after a write (rules,
+  effects) is `effects`, and full-text and `.near` are `search`.
 scope: tasks-v2
 volatility: stable
 ---

@@ -10,8 +10,9 @@ description: >
   answers a design's open questions and it needs revising, deciding (`yak
   design decide`) or turning into tasks; or when an agent's draft needs
   reviewing before it goes on a D- entity. Not for a bug fix or a small
-  feature, which are just done. How each proposed component is shaped is the
-  `vocabulary` skill; this one is the document around it.
+  feature, which are just done. How each proposed component is shaped is
+  `vocabulary`, and making and wiring a package is `package`; this one is the
+  document around them.
 ---
 
 # Writing a design for Jeff

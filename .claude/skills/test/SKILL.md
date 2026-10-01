@@ -8,7 +8,8 @@ description: >
   workerd tests in workers/yak, the Stripe sandbox, and which tests a change can
   break. Use it whenever you write, change, run, narrow, time or debug a test,
   a doctest or a README example, when a run fails or is slow, when a brief says
-  "add a test", or before landing to decide what to run.
+  "add a test", or before landing to decide what to run. Proving a change by
+  hand in a browser or a terminal is the `probe` skill.
 ---
 
 # Testing

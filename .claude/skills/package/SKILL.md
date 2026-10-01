@@ -9,8 +9,9 @@ description: >
   ~/.yak/yak.json, hit an import cycle between packages, publish to jsr, or
   land with `yak land --allow-revert`, even if the task only says "put this
   somewhere", "share this helper" or "make it reusable". Not for the words a
-  package declares (the `vocabulary` skill) or what its effects and rules do
-  (the `effects` skill).
+  package declares (`vocabulary`), what its effects and rules do (`effects`) or
+  what its views draw (`ui`); a new package or a boundary Jeff should decide
+  gets a `design` first.
 scope: tasks-v2
 volatility: stable
 ---

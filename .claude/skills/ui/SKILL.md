@@ -9,8 +9,9 @@ description: >
   packages/ui, packages/ux, packages/tui, packages/inspect or
   packages/web/components, or when a screen is confusing, ugly, slow to read or
   looks different in the terminal, even if the request never says "UI". Not for
-  a yaks app's own pages, which are its author's; proving the screen works once
-  built is the `probe` skill.
+  a yaks app's own pages, which are its author's; a page the platform serves
+  from workers/yak takes this skill and `yaks-app` together. Proving a screen
+  works is `probe`; wiring a package's /views facet is `package`.
 ---
 
 # Building UI

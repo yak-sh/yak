@@ -9,8 +9,8 @@ description: >
   browser", "in the terminal", "live", on a "probe server" or "against real
   data", take a screenshot of this app, audit how a screen behaves, or verify a
   UI, query, write path or migration by hand, even if the task only says "make
-  sure it works" or "check it". Not for writing automated tests, and never
-  aimed at the live graph or yak.service.
+  sure it works" or "check it". Not for writing automated tests (`test`), and
+  never aimed at the live graph or yak.service.
 ---
 
 # Probing a change

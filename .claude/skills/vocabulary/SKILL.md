@@ -9,7 +9,7 @@ description: >
   proposes components, even when the request never says "vocabulary" or
   "component": "add a field", "track whether X happened", "store Y on the
   entity", "link X to Y", "keep a list of". Moving rows already stored into
-  the new shape is the `migrate` skill.
+  the new shape is `migrate`; how a read or write of them behaves is `graph`.
 ---
 
 # Designing vocabulary

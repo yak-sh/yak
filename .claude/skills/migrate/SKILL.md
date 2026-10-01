@@ -8,8 +8,8 @@ description: >
   backfills, changes a default or how a missing value reads, writes a one-time
   script, or re-keys anything people hold (links, tokens, saved queries), even
   when the task only says "rename", "clean up", "drop", "purge", "backfill" or
-  "fix the old rows". Deciding the new shape is the `vocabulary` skill; this one
-  is getting the existing data there.
+  "fix the old rows". Deciding the new shape is `vocabulary`; how one write or
+  query behaves is `graph`; this one is getting the existing data there.
 scope: tasks-v2
 volatility: stable
 ---
