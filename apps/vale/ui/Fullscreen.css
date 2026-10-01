@@ -1,0 +1,13 @@
+.Fullscreen_Icon {
+  width: calc(var(--size) * 0.48);
+  height: calc(var(--size) * 0.48);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.Fullscreen:disabled {
+  opacity: 0.55;
+}

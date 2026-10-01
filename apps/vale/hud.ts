@@ -45,6 +45,7 @@ import { BEASTS } from './beasts.ts'
 import { skull } from './danger.ts'
 import { STATIONS } from './craft.ts'
 import { type Glyph, glyph } from './glyphs.ts'
+import { fullscreen } from './ui/fullscreen.ts'
 import { ITEMS } from './items.ts'
 import { next, type Task, told, toward } from './journal.ts'
 import type { Spot } from './levels.ts'
@@ -375,6 +376,12 @@ export let hud = (
     panel.menu.toggle,
     panel.menu,
   )
+
+  let screen = fullscreen(document, (error) => {
+    reportError(error)
+    toast('The browser could not change full screen.')
+  })
+  if (screen) trayBox.append(screen)
 
   // Said once, to a hero by a fire with nothing in hand.
   let nudged = false
