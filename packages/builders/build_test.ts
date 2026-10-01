@@ -400,8 +400,8 @@ test('an archived builder builds by no door until the mark is removed', async ()
   let { g, vocab } = await shop({}, [marksDoc], [code()])
   let [build] = loadTools(builderDoc, runs({ vocab }))
     .filter((t) => t.name == 'builder_build')
-  let ask = () =>
-    build.run({
+  let ask = async () =>
+    await build.run({
       entity: { eid: crypto.randomUUID() },
       call: { args: { builder: ids.builder } },
     }, g)
