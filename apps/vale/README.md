@@ -8,7 +8,7 @@ grammar descriptors, `slash-completion.ts` supplies chat replacement ranges, and
 `@yaks/ux/completion`, the same behavior reused by filter fields, with drafts
 kept by the host.
 
-## Build the slash runtime before staging files
+## Build the shared page runtime before staging files
 
 From the checkout root:
 
@@ -17,11 +17,12 @@ deno run -A apps/vale/build-slash.ts
 ```
 
 The script bundles `apps/vale/slash-runtime.ts` for the browser into
-`apps/vale/slash-runtime.bundle.js` and copies `packages/ui/Choices.css` to
-`apps/vale/ui/Choices.css`. The single runtime bundle keeps the grammar,
-completion, drafts, client, Preact and signals together, including workspace
-exports not yet available in published packages. `index.html` maps those imports
-to `./slash-runtime.bundle.js`; `ui/components.css` imports `Choices.css`.
+`apps/vale/slash-runtime.bundle.js` and copies the base UI styles at their
+bundle-relative addresses. The single runtime bundle keeps the grammar,
+completion, drafts, client, Preact, signals, UI and UX kits together, including
+workspace exports not yet available in published packages. `index.html` maps
+those imports to `./slash-runtime.bundle.js`; `ui/components.css` imports
+`Choices.css`.
 
 For an app upload, explicitly stage both generated files together with the app's
 other runtime files:
@@ -55,3 +56,12 @@ The creature-build subscription uses server evaluation: `built.current` is
 computed by the store, and the page has neither the complete build graph nor a
 local rule for it. Rebuild this runtime whenever `@yaks/client` changes, not
 just when chat changes, because Vale's network graph shares that bundled client.
+
+The runtime also produces thin `ui-runtime.js`, `ux-runtime.js`, `ux-facet.js`,
+`hooks-runtime.js`, `guide-runtime.js`, `graph-runtime.js` and
+`query-runtime.js` doors to that same bundle, plus root base CSS and `ledger/`
+CSS. Stage every generated runtime door and stylesheet, not a tracked-file-only
+file list. The new kits live in Vale (`ui-kit.ts`, `ux-kit.ts`), and its partial
+skin in `skin.ts`/`kit/skin`. `guide.html` shows the very same composition
+without starting the world. Panel navigation and selection are declared
+page-only words in the page graph, distinct from the game's server rows.

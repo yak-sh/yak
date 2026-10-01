@@ -51,3 +51,5 @@
 @import 'Fullscreen.css';
 
 @import './Split.css';
+
+@import '../kit/panel-host.css';

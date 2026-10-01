@@ -1,0 +1,63 @@
+/* Field-book rendering of Panes, carrying its base structural contract. */
+/* The window in columns: a narrow nav on the surface, the page on the floor
+   beside it (or whatever column follows, a Stack of pages), a hairline
+   between each two. Each pane keeps its top where it is and scrolls its
+   body. A phone-width window stacks them, and the page scrolls as one. */
+.Panes {
+  display: flex;
+  height: 100dvh;
+  min-height: 0;
+}
+.Panes_Pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.Panes > * + * {
+  border-left: 1px solid var(--border);
+}
+.Panes_Pane-nav {
+  flex: 0 0 15rem;
+  background: var(--surface);
+}
+.Panes_Pane-main {
+  flex: 1 1 0;
+}
+.Panes_Top {
+  padding: var(--half-gap) var(--gap);
+  border-bottom: 1px solid var(--border);
+}
+.Panes_Body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--gap);
+}
+@media (max-width: 56rem) {
+  .Panes {
+    display: block;
+    height: auto;
+  }
+  .Panes > * + * {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+  .Panes_Body {
+    overflow: visible;
+  }
+}
+
+.Panes {
+  background: var(--bg);
+}
+.Panes_Pane-nav {
+  background: var(--surface);
+}
+.Panes_Top {
+  background: var(--card);
+  border-bottom-color: var(--border);
+}
+.Panes_Body {
+  color: var(--text);
+}

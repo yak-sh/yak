@@ -138,3 +138,22 @@ test('UI and UX with the same names retain distinct specimens and navigation', (
   assert(reserved.includes('id="ui/Controls/Extra"'))
   assert(reserved.includes('id="Button"'))
 })
+
+test('inlined external styles retain their own relative asset and import addresses', async () => {
+  let dir = await Deno.makeTempDir()
+  try {
+    await Deno.writeTextFile(
+      `${dir}/part.css`,
+      '@import "theme.css"; .Extra {background:url(icons/mark.svg)}',
+    )
+    let outside = {
+      ...external,
+      Extra: { ...external.Extra, css: new URL(`file://${dir}/part.css`) },
+    }
+    let css = await stylesheet({ kits: { outside }, theme: everforest })
+    assert(css.includes(`@import "file://${dir}/theme.css"`))
+    assert(css.includes(`url("file://${dir}/icons/mark.svg")`))
+  } finally {
+    await Deno.remove(dir, { recursive: true })
+  }
+})

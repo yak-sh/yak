@@ -1,0 +1,22 @@
+/* A paper notice; lifetime and screen placement stay with its consumer. */
+.ValeToast {
+  --tint: var(--ink);
+  padding: 0.4rem 0.9rem;
+  border-radius: var(--radius);
+  background: var(--glass);
+  box-shadow: var(--flat);
+  font-size: 0.95rem;
+  text-align: center;
+  color: var(--tint);
+  overflow-wrap: anywhere;
+}
+.ValeToast-positive {
+  --tint: var(--positive);
+}
+.ValeToast-negative {
+  --tint: var(--negative);
+}
+.ValeToast-special {
+  --tint: var(--legendary);
+  box-shadow: var(--flat), 0 0 0 2px var(--legendary);
+}

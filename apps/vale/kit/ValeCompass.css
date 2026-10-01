@@ -1,0 +1,51 @@
+/* The Vale rose's cardinal marks rotate about a fixed forward notch. */
+.ValeCompass {
+  --r: calc(var(--rose) * 0.34);
+  position: relative;
+  width: var(--rose);
+  height: var(--rose);
+  border-radius: 50%;
+  background: var(--glass);
+  box-shadow: 0 2px 0 var(--lip), inset 0 0 0 2px var(--line);
+}
+.ValeCompass::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -0.2rem;
+  translate: -50% 0;
+  border: 0.24rem solid transparent;
+  border-top: 0.36rem solid var(--deep);
+  border-bottom: 0;
+}
+.ValeCompass_Mark,
+.ValeCompass_Goal {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(calc(var(--at) - var(--turn)))
+    translateY(calc(-1 * var(--r))) rotate(calc(var(--turn) - var(--at)));
+}
+.ValeCompass_Mark {
+  font-size: 0.8rem;
+  font-style: normal;
+  line-height: 1;
+  color: var(--muted);
+}
+.ValeCompass_Mark-north {
+  font-size: 1rem;
+  color: var(--ember);
+}
+.ValeCompass_Goal {
+  --r: calc(var(--rose) * 0.5 - 0.05rem);
+  width: 0.62rem;
+  height: 0.62rem;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 0 2px var(--paper);
+}
+/* Text for the terminal's bearing; the browser conveys it through the rose
+   and its accessible name rather than fitting a number inside the ring. */
+.ValeCompass_Read {
+  display: none;
+}

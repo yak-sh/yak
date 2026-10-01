@@ -6,7 +6,8 @@
     "./routes": "./routes.ts",
     "./cli": "./cli.ts",
     "./ui": "./ui.ts",
-    "./contributions": "./contributions.ts"
+    "./contributions": "./contributions.ts",
+    "./guide": "./guide.ts"
   },
   "license": "Apache-2.0",
   "description": "Display-only UI components with semantic variants, each a Preact component, a CSS file and terminal sheet entries, so it paints in a browser and in @yaks/tui; themes, and a style guide at /ui and in a terminal as yak ui.",

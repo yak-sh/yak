@@ -133,7 +133,20 @@ export let sheet = (c: Composition): Sheet =>
 let read = async (url: URL) => {
   let response = await fetch(url)
   if (!response.ok) throw new Error(`UI stylesheet ${url}: ${response.status}`)
-  return response.text()
+  let css = await response.text()
+  // Inlining must retain each external sheet's address for images and imports.
+  let at = (path: string) =>
+    path.startsWith('#') || path.startsWith('data:')
+      ? path
+      : new URL(path, url).href
+  return css.replace(
+    /url\(\s*(['"]?)([^)'"\s]+)\1\s*\)/g,
+    (_, _quote, path) => `url("${at(path)}")`,
+  )
+    .replace(
+      /(@import\s+)(['"])([^'"]+)\2/g,
+      (_, start, _quote, path) => `${start}"${at(path)}"`,
+    )
 }
 
 /** Theme first, then one rendering per part: skin where named, kit otherwise. */

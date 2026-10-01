@@ -1,0 +1,81 @@
+/* Field-book rendering of Head, carrying its base structural contract. */
+/* The top of a page: the title large and ink, with its id and kind small
+   beside it; what it is under it, muted; then the facts, small and dim,
+   dotted apart. Whatever follows it starts a gap below. */
+.Head {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.Head + * {
+  margin-top: var(--gap);
+}
+.Head_Title {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--half-gap);
+  min-width: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+a.Head_Title,
+.Head_Title > a {
+  color: inherit;
+  text-decoration: none;
+}
+a.Head_Title:hover,
+.Head_Title > a:hover {
+  text-decoration: underline;
+}
+.Head_Id,
+.Head_Kind {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: normal;
+  color: var(--dim);
+}
+.Head_Sub {
+  margin: 0;
+  color: var(--muted);
+  max-width: var(--measure);
+}
+.Head_Sub-refused {
+  color: var(--negative);
+}
+.Head_Facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--half-gap);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+}
+.Head_Sep {
+  color: var(--border2);
+}
+
+.Head {
+  padding-bottom: var(--half-gap);
+  border-bottom: 1px solid var(--border);
+}
+.Head_Title {
+  color: var(--heading);
+  font-family: var(--font);
+}
+.Head_Id,
+.Head_Kind,
+.Head_Facts {
+  color: var(--muted);
+}
+
+/* The retained shell owns geometry while domain panels migrate individually. */
+.Head.Panel_Head { display: flex; gap: 0; border: 0; padding-bottom: 0; }
+.Head.Panel_Head + .Panel_Body { margin-top: 0; }
+/* A migrated shell keeps the retained panel's box contract. */
+.Head.Panel_Head { display: flex; align-items: center; gap: var(--gap); min-height: 3.25rem; padding: 0.35rem 0.6rem 0.35rem 1rem; border-bottom: 2px solid var(--rim); background: var(--well); }

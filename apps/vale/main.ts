@@ -32,6 +32,7 @@ import { fires } from './fires.ts'
 import { exploration } from './explore.ts'
 import { map } from './map.ts'
 import { menu } from './menu.ts'
+import { dressVale } from './ui-style.ts'
 import { BUILD, hero, type Puppet, stature } from './figures.ts'
 import { bits, type Kind, overlay } from './fx.ts'
 import { glyphText } from './glyphs.ts'
@@ -126,6 +127,7 @@ fit()
 addEventListener('resize', fit)
 
 let base = new URL('api/', document.baseURI)
+await dressVale()
 let opening = connect(base, await vocabulary(base))
 // The world, shops, crafting and item pictures read store designs. Start
 // asking about the hero alongside the watches, then grow ground from them.

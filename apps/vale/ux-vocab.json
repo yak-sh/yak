@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "List": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "A controlled list's selected row and keyboard pane, on the entity its consumer names.",
+      "properties": {
+        "cursor": {
+          "type": "string",
+          "description": "The selected row's eid in the consumer's graph, not a local reference."
+        },
+        "pane": {
+          "type": "string",
+          "enum": [
+            "list",
+            "detail"
+          ],
+          "description": "The pane holding the keyboard, never a layout switch."
+        }
+      }
+    },
+    "Panels": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "The open panel and its tab, on the page's named panel-manager entity.",
+      "properties": {
+        "panel": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "The open panel's eid; absent when all panels are closed."
+        },
+        "pane": {
+          "type": "string",
+          "description": "The tab the panel's consumer draws, if it has tabs."
+        }
+      }
+    },
+    "Panel": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "A panel heading on its named page entity.",
+      "properties": {
+        "head": {
+          "type": "string",
+          "description": "The panel heading supplied by its consumer."
+        }
+      }
+    },
+    "Tab": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "A tab notification mark on its named page entity.",
+      "properties": {
+        "marked": {
+          "type": "boolean",
+          "description": "Whether this tab has something new to show."
+        }
+      }
+    }
+  }
+}

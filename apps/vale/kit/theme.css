@@ -1,0 +1,42 @@
+/* Carry the existing Vale token source until its consumers move. Semantic
+   roles dress the base kit in field-book paper and moss, not a new palette. */
+@import url('../ui/theme.css');
+
+:root {
+  --bg: var(--book-paper);
+  --surface: var(--book-paper-dark);
+  --card: var(--book-paper-light);
+  --border: var(--book-line);
+  --border2: var(--book-gold);
+  --text: var(--book-ink);
+  --muted: var(--book-muted);
+  --dim: var(--faint);
+  --accent: var(--book-green);
+  --link: var(--book-rare);
+  --heading: var(--book-leather);
+  --info: var(--book-rare);
+  --active: var(--amber);
+  --positive: var(--book-good);
+  --negative: var(--book-alert);
+  --caution: var(--amber);
+  --special: var(--epic);
+  --number: var(--amber);
+  --literal: var(--book-alert);
+  --time: var(--book-rare);
+  --who: var(--book-green);
+  --keyword: var(--book-alert);
+  --string: var(--book-good);
+  --fn: var(--book-rare);
+  --type: var(--amber);
+  --attr: var(--book-green);
+  --hue-0: var(--book-rare);
+  --hue-1: var(--amber);
+  --hue-2: var(--epic);
+  --hue-3: var(--book-good);
+  --hue-4: var(--legendary);
+  --hue-5: var(--book-alert);
+  --font: Georgia, 'Times New Roman', serif;
+  --mono: ui-monospace, monospace;
+  --measure: 90ch;
+  --shadow: 0 8px 30px var(--book-shadow);
+}

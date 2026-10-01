@@ -10,7 +10,9 @@
 // opens the panel on it, and its key again, while it shows, folds it away.
 // Each tab's owner holds it as it would a panel of its own.
 import { type Glyph, glyph } from './glyphs.ts'
-import { tip } from './tip.ts'
+import { h, render } from 'preact'
+import { Body, Button, Head } from '@yaks/ui'
+import { type PageState, pageState } from './page-state.ts'
 
 /** Where an owner draws, and whether it shows: a panel, or one tab of one. */
 export type Page = {
@@ -49,155 +51,236 @@ export type Spec = {
  * that open the panel on it. */
 export type TabSpec = { title: string; icon: Glyph; keys: string[] }
 
-let el = (tag: string, cls: string) => {
-  let e = document.createElement(tag)
-  e.className = cls
-  return e
+// Native bodies belong to their page owners, not to Preact's child diff.
+let body = (doc: Document, tab = false) => {
+  let node = doc.createElement('div')
+  node.className = 'Panel_Body'
+  if (tab) node.setAttribute('role', 'tabpanel')
+  let mount = (host: HTMLDivElement | null) => {
+    if (host && node.parentNode != host) host.append(node)
+  }
+  return { node, mount }
 }
 
-/** The panels over `glass`. `busy` says when the keyboard belongs to
- * something else: a line being written, someone being talked to. */
-export let panels = (glass: HTMLElement, busy: () => boolean) => {
-  // Every page, the keys that open it, and the box it shows in.
-  let all: { keys?: string[]; page: Page; box: HTMLElement }[] = []
+type Leaf = {
+  name?: string
+  spec?: TabSpec
+  page: Page
+  mount: ReturnType<typeof body>['mount']
+}
 
-  // A sheet over the glass, its head holding its close button, and its box
-  // shown, folding every other away, or hidden.
-  let sheet = (id: string, spec: Spec, key: string) => {
-    let box = el('section', `Panel Panel-${id}`)
-    box.hidden = true
-    box.setAttribute('aria-label', spec.title)
-    if (spec.tall) box.style.setProperty('--tall', spec.tall)
-    let paper = el('div', 'Panel_Sheet')
-    let top = el('header', 'Panel_Head')
-    let shut = el('button', 'Orb Orb-small Panel_Close')
-    shut.innerHTML = glyph('x')
-    tip(shut, { name: 'Close', key })
-    top.append(shut)
-    paper.append(top)
-    box.append(paper)
-    glass.append(box)
-    let hide = () => {
-      box.hidden = true
+/** The panels over `glass`. Navigation, headings and marks live in `state`;
+ * native page bodies stay mounted even while their sheet is folded away. */
+export let panels = (
+  glass: HTMLElement,
+  busy: () => boolean,
+  state: PageState = pageState(),
+) => {
+  let doc = glass.ownerDocument
+  let all: { keys?: string[]; page: Page }[] = []
+  let paints: (() => void)[] = []
+  let clean: (() => void)[] = []
+  let watch = state.watch()
+  clean.push(watch.subscribe(() => paints.forEach((paint) => paint())))
+  clean.push(() => watch.close())
+
+  let sheet = (id: string, spec: Spec, leaves: Leaf[]) => {
+    let host = doc.createElement('div')
+    host.className = 'Panel_Mount'
+    glass.append(host)
+    let tabs = leaves.some((leaf) => leaf.name !== undefined)
+    let key = tabs ? 'Esc' : cap(spec.keys?.[0] ?? 'Escape')
+    let paint = () =>
+      render(
+        h(
+          'section',
+          {
+            class: `Panel Panel-${id}${tabs ? ' Panel-tabs' : ''}`,
+            hidden: state.opened != id,
+            'aria-label': spec.title,
+            style: spec.tall ? { '--tall': spec.tall } : undefined,
+            onpointerdown: (event: PointerEvent) => {
+              event.stopPropagation()
+              if (event.target == event.currentTarget) state.close(id)
+            },
+          },
+          h(
+            'div',
+            { class: 'Panel_Sheet' },
+            h(
+              Head,
+              { class: 'Panel_Head' },
+              tabs
+                ? h(
+                  'nav',
+                  { class: 'Panel_Tabs', role: 'tablist' },
+                  leaves.map((leaf) =>
+                    h(
+                      Button,
+                      {
+                        key: leaf.name,
+                        type: 'button',
+                        class: `Panel_Tab${
+                          state.marked(`${id}/${leaf.name}`)
+                            ? ' Panel_Tab-new'
+                            : ''
+                        }`,
+                        role: 'tab',
+                        'aria-selected': String(state.pane == leaf.name),
+                        'aria-label': leaf.spec!.title,
+                        'data-tip': leaf.spec!.title,
+                        'data-tip-key': cap(leaf.spec!.keys[0]),
+                        onClick: leaf.page.show,
+                      },
+                      h('span', {
+                        dangerouslySetInnerHTML: {
+                          __html: glyph(leaf.spec!.icon),
+                        },
+                      }),
+                      h('span', {}, leaf.spec!.title),
+                      h('kbd', { class: 'Key' }, cap(leaf.spec!.keys[0])),
+                    )
+                  ),
+                )
+                : h('h2', {
+                  class: 'Panel_Title',
+                  dangerouslySetInnerHTML: { __html: state.heading(id) },
+                }),
+              h(Button, {
+                type: 'button',
+                class: 'Orb Orb-small Panel_Close',
+                'aria-label': 'Close',
+                'data-tip': 'Close',
+                'data-tip-key': key,
+                onClick: () => state.close(id),
+                dangerouslySetInnerHTML: { __html: glyph('x') },
+              }),
+            ),
+            leaves.map((leaf) => {
+              leaf.page.body.hidden = tabs && state.pane != leaf.name
+              return h(
+                Body,
+                { key: leaf.name ?? id, class: 'Panel_Content' },
+                h('div', { class: 'Panel_Native', ref: leaf.mount }),
+              )
+            }),
+          ),
+        ),
+        host,
+      )
+    paints.push(paint)
+    let ids = [
+      id,
+      ...leaves.filter((leaf) => leaf.name !== undefined)
+        .map((leaf) => `${id}/${leaf.name}`),
+    ]
+    for (let eid of ids) {
+      let row = state.watchPanel(eid)
+      clean.push(row.subscribe(paint), () => row.close())
     }
-    let show = () => {
-      for (let o of all) if (o.box != box) o.box.hidden = true
-      box.hidden = false
-    }
-    // A tap beside the sheet folds it away, and no tap on it reaches the
-    // scene.
-    box.addEventListener('pointerdown', (e) => {
-      e.stopPropagation()
-      if (e.target == box) hide()
+    clean.push(() => {
+      render(null, host)
+      host.remove()
     })
-    shut.addEventListener('click', hide)
-    return { box, paper, top, show, hide }
+    paint()
   }
 
   let add = (id: string, spec: Spec): Panel => {
-    let s = sheet(id, spec, spec.keys?.length ? cap(spec.keys[0]) : 'Esc')
-    let title = el('h2', 'Panel_Title')
-    title.textContent = spec.title
-    s.top.prepend(title)
-    let body = el('div', 'Panel_Body')
-    s.paper.append(body)
-    let was = ''
+    if (!state.heading(id)) {
+      state.head(
+        id,
+        spec.title.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`),
+      )
+    }
+    let native = body(doc)
     let panel: Panel = {
-      body,
+      body: native.node,
       get open() {
-        return !s.box.hidden
+        return state.opened == id
       },
-      show: s.show,
-      close: s.hide,
-      toggle: () => panel.open ? s.hide() : s.show(),
+      show: () => {
+        state.open(id)
+      },
+      close: () => {
+        state.close(id)
+      },
+      toggle: () => {
+        state.toggle(id)
+      },
       head: (html) => {
-        if (html == was) return
-        was = html
-        title.innerHTML = html
+        state.head(id, html)
       },
     }
-    all.push({ keys: spec.keys, page: panel, box: s.box })
+    all.push({ keys: spec.keys, page: panel })
+    sheet(id, spec, [{ page: panel, mount: native.mount }])
     return panel
   }
 
-  /** A panel with tabs, in the order its spec gives them. Its sheet keeps
-   * one size whichever shows (ui/Panel.css `Panel-tabs`). */
   let book = <T extends string>(
     id: string,
     spec: Spec & { tabs: Record<T, TabSpec> },
   ): Record<T, Tab> => {
-    let s = sheet(id, spec, 'Esc')
-    s.box.classList.add('Panel-tabs')
-    let row = el('nav', 'Panel_Tabs')
-    row.setAttribute('role', 'tablist')
-    s.top.prepend(row)
-    let on = ''
-    let made = Object.entries<TabSpec>(spec.tabs).map(([name, t]) => {
-      let key = cap(t.keys[0])
-      let b = el('button', 'Panel_Tab')
-      b.setAttribute('role', 'tab')
-      b.innerHTML = `${
-        glyph(t.icon)
-      }<span>${t.title}</span><kbd class=Key>${key}</kbd>`
-      tip(b, { name: t.title, key })
-      row.append(b)
-      let body = el('div', 'Panel_Body')
-      body.setAttribute('role', 'tabpanel')
-      body.hidden = true
-      s.paper.append(body)
+    let leaves = Object.entries<TabSpec>(spec.tabs).map(([name, tab]) => {
+      let native = body(doc, true)
       let page: Tab = {
-        body,
+        body: native.node,
         get open() {
-          return !s.box.hidden && on == name
+          return state.opened == id && state.pane == name
         },
         show: () => {
-          on = name
-          for (let m of made) {
-            m.body.hidden = m.name != name
-            m.b.setAttribute('aria-selected', String(m.name == name))
-          }
-          s.show()
+          state.open(id, name)
         },
         close: () => {
-          if (on == name) s.hide()
+          if (state.pane == name) state.close(id)
         },
-        toggle: () => page.open ? page.close() : page.show(),
-        mark: (yes) => {
-          b.classList.toggle('Panel_Tab-new', yes)
+        toggle: () => {
+          state.toggle(id, name)
+        },
+        mark: (on) => {
+          state.mark(`${id}/${name}`, on)
         },
       }
-      b.addEventListener('click', page.show)
-      all.push({ keys: t.keys, page, box: s.box })
-      return { name, b, body, page }
+      all.push({ keys: tab.keys, page })
+      return { name, spec: tab, page, mount: native.mount }
     })
-    return Object.fromEntries(made.map((m) => [m.name, m.page])) as Record<
-      T,
-      Tab
-    >
+    sheet(id, spec, leaves)
+    return Object.fromEntries(
+      leaves.map((leaf) => [leaf.name, leaf.page]),
+    ) as Record<T, Tab>
   }
 
-  addEventListener('keydown', (e) => {
-    if (e.code == 'Escape' && document.pointerLockElement) return
-    if (glass.hidden || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return
-    if (e.target instanceof HTMLInputElement) return
-    let open = all.find((o) => o.page.open)?.page
-    if (e.code == 'Escape' && open) {
-      e.preventDefault()
+  let keys = (event: KeyboardEvent) => {
+    if (event.code == 'Escape' && doc.pointerLockElement) return
+    if (
+      glass.hidden || event.metaKey || event.ctrlKey || event.altKey ||
+      event.repeat
+    ) return
+    let target = event.target
+    if (
+      target instanceof doc.defaultView!.HTMLElement &&
+      (target.matches('input, textarea') || target.isContentEditable)
+    ) return
+    let open = all.find((row) => row.page.open)?.page
+    if (event.code == 'Escape' && open) {
+      event.preventDefault()
       return open.close()
     }
     if (busy()) return
-    let hit = all.find((o) => o.keys?.includes(e.code))?.page
+    let hit = all.find((row) => row.keys?.includes(event.code))?.page
     if (!hit) return
-    e.preventDefault()
+    event.preventDefault()
     hit.toggle()
-  })
-
+  }
+  doc.defaultView?.addEventListener('keydown', keys)
   return {
     add,
     book,
-    /** the page open now, if one */
     get open() {
-      return all.find((o) => o.page.open)?.page ?? null
+      return all.find((row) => row.page.open)?.page ?? null
+    },
+    dispose: () => {
+      doc.defaultView?.removeEventListener('keydown', keys)
+      clean.splice(0).forEach((off) => off())
     },
   }
 }

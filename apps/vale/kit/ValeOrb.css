@@ -1,0 +1,48 @@
+/* A moss action on paper, keeping the old orb's lip without child rules. */
+.ValeOrb {
+  --size: var(--orb);
+  --face: var(--glass);
+  --tint: var(--deep);
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--size);
+  height: var(--size);
+  padding: 0;
+  border: 2px solid var(--rim);
+  border-radius: 50%;
+  background: var(--face);
+  color: var(--tint);
+  box-shadow: 0 3px 0 var(--lip),
+    0 6px 16px color-mix(in srgb, var(--ink) 16%, transparent);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.ValeOrb:active {
+  translate: 0 2px;
+  box-shadow: 0 1px 0 var(--lip);
+}
+.ValeOrb:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.ValeOrb:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.ValeOrb-on {
+  --face: var(--deep);
+  --tint: var(--paper);
+  border-color: var(--deep);
+}
+.ValeOrb-new::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: var(--ember);
+  box-shadow: 0 0 0 2px var(--paper);
+}

@@ -1,0 +1,47 @@
+/* Field-book rendering of Edit, carrying its base structural contract. */
+/* A value where it can be changed. The span is the value itself, typed over
+   where it stands (base.css dresses it while it is contenteditable), so it
+   is exactly the text around it. A control that reads as the value it holds
+   has a hairline under it to say it can be changed, and the border's colour
+   once it has the keyboard. */
+.Edit {
+  font: inherit;
+  color: var(--text);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+:is(input, select).Edit {
+  background: none;
+  border: 0;
+  border-bottom: 1px dotted var(--border2);
+  border-radius: 0;
+  outline: 0;
+  padding: 1px 0;
+  width: 100%;
+  max-width: 40em;
+}
+:is(input, select).Edit:focus {
+  border-bottom: 1px solid var(--accent);
+}
+:is(input, select).Edit-fit {
+  width: auto;
+}
+select.Edit option {
+  background: var(--card);
+  color: var(--text);
+}
+
+.Edit {
+  color: var(--text);
+}
+:is(input, select).Edit {
+  padding: 0.25rem var(--half-gap);
+  border: 1px solid var(--border);
+  border-radius: var(--book-round);
+  background: var(--card);
+}
+:is(input, select).Edit:focus {
+  border: 1px solid var(--book-focus);
+  outline: 1px solid var(--book-focus);
+}

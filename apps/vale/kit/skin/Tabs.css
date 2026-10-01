@@ -1,0 +1,71 @@
+/* Field-book rendering of Tabs, carrying its base structural contract. */
+/* A row of tabs: chips that read as controls, gapless (a tab's padding is
+   the spacing), the one showing lit. A badge says what waits behind a tab
+   without opening it: raised beside the face, a gap from it, never over
+   it, so the tab is as wide as both. */
+.Tabs {
+  display: flex;
+  align-items: center;
+}
+.Tabs_Tab {
+  font: inherit;
+  color: var(--dim);
+  text-decoration: none; /* a tab that links reads as a tab */
+  background: none;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) - 2px);
+  padding: 3px 4px;
+  cursor: pointer;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  display: flex;
+  align-items: center; /* the face stays centred as the floor grows */
+  justify-content: center;
+  gap: 3px;
+}
+.Tabs_Tab:hover,
+.Tabs_Tab-hover {
+  color: var(--muted); /* the face alone answers the pointer: no fill */
+}
+.Tabs_Tab-on {
+  color: var(--text);
+  background: var(--soft);
+  border-color: var(--border2);
+}
+/* Raised like a superscript; the shift is paint only, so the line keeps
+   its height. */
+.Tabs_Badge {
+  position: relative;
+  top: -0.5em;
+  min-width: 1.1em;
+  padding: 0 0.25em;
+  border-radius: 1em;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 0.65em;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.Tabs {
+  gap: var(--half-gap);
+}
+.Tabs_Tab {
+  border-radius: var(--book-round) var(--book-round) 0 0;
+  padding: 0.3rem var(--book-gap);
+  background: var(--surface);
+  border-color: var(--border);
+}
+.Tabs_Tab-on {
+  color: var(--accent);
+  background: var(--card);
+  border-bottom-color: var(--accent);
+}
+.Tabs_Badge {
+  background: var(--accent);
+  color: var(--book-cream);
+}
+.Tabs_Tab:focus-visible {
+  outline: 2px solid var(--book-focus);
+}

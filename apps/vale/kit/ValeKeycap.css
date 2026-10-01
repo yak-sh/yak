@@ -1,0 +1,15 @@
+/* The keycap's own face; no selectors for the controls that may hold it. */
+.ValeKeycap {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 0 0.3em;
+  border-radius: 5px;
+  background: var(--paper);
+  box-shadow: 0 1px 0 var(--rim), inset 0 0 0 1px var(--line);
+  font: inherit;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  text-align: center;
+  color: var(--ink);
+  white-space: nowrap;
+}

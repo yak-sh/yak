@@ -1,0 +1,3 @@
+/* Bridges around still-native domain bodies must not add a formatting box.
+   Bodies, canvas/drafts, scroll and the fixed list/detail contract stay put. */
+.Panel_Mount, .Panel_Content, .Panel_Native { display: contents; }
