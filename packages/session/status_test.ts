@@ -41,6 +41,61 @@ let said = (n: number, source: string) =>
 
 // Every shape, as the entries that make it.
 let shapes: [string, Bundle[], TranscriptStatus][] = [
+  ['a deliberate refusal is terminal without an ask', [
+    request(1),
+    entry(2, { refusal: { code: 'no_model' }, content: { body: 'no model' } }),
+  ], 'failed'],
+  ['a deliberate refusal after a completed ask is terminal', [
+    request(1),
+    entry(2, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),
+    entry(3, {
+      refusal: { code: 'http_400' },
+      output: { source: 'e2' },
+      content: { body: 'no' },
+    }),
+  ], 'failed'],
+  ['new input during a deliberately refused ask still needs an answer', [
+    request(1),
+    entry(2, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),
+    input(3),
+    entry(4, {
+      refusal: { code: 'http_400' },
+      output: { source: 'e2' },
+      content: { body: 'no' },
+    }),
+  ], 'pending'],
+  ['an unassociated compaction refusal is terminal after fresh input', [
+    request(1),
+    entry(2, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),
+    said(3, 'e2'),
+    input(4),
+    entry(5, {
+      refusal: { code: 'compaction' },
+      content: { body: 'empty summary' },
+    }),
+  ], 'failed'],
+  ['a refusal only follows the ask its output names', [
+    request(1),
+    entry(2, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),
+    input(3),
+    entry(4, { ask: { through: 'e3' }, attempt: { state: 'completed' } }),
+    entry(5, { refusal: { code: 'http_400' }, output: { source: 'e2' } }),
+  ], 'pending'],
+  ['new input after a deliberate refusal allows recovery', [
+    request(1),
+    entry(2, { refusal: { code: 'no_model' }, content: { body: 'no model' } }),
+    input(3),
+  ], 'pending'],
+  ['refusal prose does not count as fresh input after an ask', [
+    request(1),
+    entry(2, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),
+    entry(3, {
+      refusal: { code: 'http_400' },
+      output: { source: 'e2' },
+      content: { body: 'no' },
+    }),
+    said(4, 'e2'),
+  ], 'settled'],
   ['completed provider refusal is terminal', [
     request(1),
     entry(2, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),
@@ -254,7 +309,11 @@ test('kindOf: prose alone is an input, prose with an output is one', () => {
     kindOf(entry(4, { error: { code: 'x' }, content: { body: 'x' } })),
     'error',
   )
-  assertEquals(kindOf(entry(5, {})), undefined)
+  assertEquals(
+    kindOf(entry(5, { refusal: { code: 'x' }, content: { body: 'no' } })),
+    'refusal',
+  )
+  assertEquals(kindOf(entry(6, {})), undefined)
 })
 
 let store = (): Graph => {

@@ -1045,6 +1045,18 @@ test('an over-budget media transcript without a summarizer never asks for a summ
   assertEquals((await transcript(g, ids.s)).some((b) => !!b.checkpoint), false)
 })
 
+test('no model is a deliberate refusal and does not keep the runner pending', async () => {
+  let g = world()
+  await g.apply([{ entity: { eid: ids.m }, $delete: true }])
+  let { model, asked } = scripted([])
+  await react(g, ids.s, { model, tools: [], mint })
+  let entries = await transcript(g, ids.s)
+  assertEquals(entries.map(kindOf), ['input', 'refusal'])
+  assertEquals(entries.at(-1)?.refusal, { code: 'no_model' })
+  assertEquals(statusOf(entries), 'failed')
+  assertEquals(asked.length, 0)
+})
+
 test('a refused model ask ends without another provider call', async () => {
   let g = world()
   let { model, asked } = scripted([])
@@ -1054,8 +1066,21 @@ test('a refused model ask ends without another provider call', async () => {
   assertEquals(await kinds(g, ids.s), [
     'input',
     'ask',
-    'error',
+    'refusal',
   ])
+})
+
+test('input arriving during a provider refusal remains pending for another ask', async () => {
+  let g = world()
+  let model: Model = async () => {
+    await appendEntry(g, ids.s, 'and one more thing')
+    throw new ModelError('http_400', 'invalid request')
+  }
+  let step = await react(g, ids.s, { model, tools: [], mint })
+  assertEquals(step.status, 'pending')
+  let entries = await transcript(g, ids.s)
+  assertEquals(entries.map(kindOf), ['input', 'ask', 'input', 'refusal'])
+  assertEquals(entries.at(-1)?.output, { source: entries[1].entity.eid })
 })
 
 test('an audio provider refusal keeps its cause and makes one ask', async () => {
@@ -1071,8 +1096,8 @@ test('an audio provider refusal keeps its cause and makes one ask', async () => 
   assertEquals(await rest(g, ids.s, { model, tools: [], mint }), 'failed')
   let entries = await transcript(g, ids.s)
   assertEquals(calls, 1)
-  assertEquals(entries.map(kindOf), ['input', 'ask', 'error'])
-  assertEquals((entries.at(-1)?.error as Comp).code, 'http_400')
+  assertEquals(entries.map(kindOf), ['input', 'ask', 'refusal'])
+  assertEquals((entries.at(-1)?.refusal as Comp).code, 'http_400')
   assertEquals(
     textOf(entries.at(-1)!),
     'OpenRouter speech request failed (400)',
@@ -1104,13 +1129,13 @@ let failing = (error: () => ModelError) => {
   return { model, seen }
 }
 
-// The ask and the error line a failed turn leaves: its attempt state, and the
-// error's code and prose.
+// The ask and outcome line a failed turn leaves: its attempt state, and the
+// refusal or interruption code and prose.
 let outcome = async (g: Graph) => {
   let [ask, error] = (await transcript(g, ids.s)).slice(-2)
   return [
     (ask.attempt as Comp | undefined)?.state,
-    (error.error as Comp).code,
+    ((error.refusal ?? error.error) as Comp).code,
     textOf(error),
   ]
 }
@@ -1157,8 +1182,11 @@ test('a provider’s refusal is final and keeps its own code, streamed or not', 
       let deps = { model, tools: [], streaming, mint }
       assertEquals(await rest(g, ids.s, deps), 'failed')
       assertEquals(seen.calls, 1)
-      assertEquals(await kinds(g, ids.s), ['input', 'ask', 'error'])
+      assertEquals(await kinds(g, ids.s), ['input', 'ask', 'refusal'])
       assertEquals(await outcome(g), ['completed', code, said])
+      let entries = await transcript(g, ids.s)
+      assertEquals(entries.at(-1)?.output, { source: entries[1].entity.eid })
+      assertEquals(entries.at(-1)?.error, undefined)
     }
   }
 })
@@ -1193,7 +1221,7 @@ test('a summary the provider keeps failing ends the transcript, never loops', as
     assertEquals(seen.calls, 3)
     assertEquals(
       (await kinds(g, ids.s)).slice(-4),
-      ['input', 'error', 'error', 'error'],
+      ['input', ...Array(3).fill(error().retry ? 'error' : 'refusal')],
     )
     assertEquals((await outcome(g))[1], error().code)
   }
@@ -1221,13 +1249,13 @@ test('a call for a tool this session does not serve is refused, not left open', 
   // The tool row is in the graph and the session serves no function for it.
   assertEquals(await rest(g, ids.s, { model, tools: [], mint }), 'settled')
   let entries = await transcript(g, ids.s)
-  // The refusal is an error beside the result, which is what any expected
+  // The refusal is beside the result, which is what any expected
   // failure lands — the model hears it and the transcript goes on.
   assertEquals(entries.map(kindOf), [
     'input',
     'ask',
     'call',
-    'error',
+    'refusal',
     'result',
     'ask',
     'output',
@@ -1611,7 +1639,7 @@ test('a request refused at its limit is not retried', async () => {
     return Promise.reject(new ModelError('limit', 'This space is at its limit'))
   }
   assertEquals(await rest(g, ids.s, { model, tools: [], mint }), 'failed')
-  assertEquals([asked, await kinds(g, ids.s)], [1, ['input', 'ask', 'error']])
+  assertEquals([asked, await kinds(g, ids.s)], [1, ['input', 'ask', 'refusal']])
   await appendEntry(g, ids.s, 'and now?')
   assertEquals(statusOf(await transcript(g, ids.s)), 'pending')
 })

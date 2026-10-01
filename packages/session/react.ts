@@ -61,6 +61,7 @@ import {
   EXCEPTION,
   FORK,
   OUTPUT,
+  REFUSAL,
   RESULT,
   USING,
 } from './native.ts'
@@ -109,7 +110,7 @@ export type ToolContext = {
   signal?: AbortSignal
 }
 
-/** A refused tool invocation: expected, recorded as an error and a result. */
+/** A refused tool invocation: expected, recorded as a refusal and a result. */
 export { UnknownSession } from './unknown.ts'
 import { UnknownSession } from './unknown.ts'
 import { took } from './timing.ts'
@@ -827,7 +828,7 @@ export let react = async (
   let modelName = String(served?.name ?? '')
   if (!modelName) {
     return append([
-      line({ [ERROR]: { code: 'no_model' } }, 'no model in force'),
+      line({ [REFUSAL]: { code: 'no_model' } }, 'no model in force'),
     ])
   }
   const { model: providerModel, name: spelled } = deps.resolveModel
@@ -1187,7 +1188,10 @@ export let react = async (
       },
       [
         refused || retried
-          ? line(failing(g, e as ModelError), (e as ModelError).message)
+          ? line({
+            ...failing(g, e as ModelError),
+            [OUTPUT]: { source: ask.entity.eid },
+          }, (e as ModelError).message)
           : defect && deps.streaming
           ? line({ [EXCEPTION]: {} }, String(e))
           : line(

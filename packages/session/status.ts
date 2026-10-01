@@ -18,6 +18,7 @@
 //   output        → settled   the turn returned prose and asked for nothing
 //   stop          → stopped   nothing may be done
 //   exception     → failed    the runner could not continue past it
+//   refusal       → failed    a deliberate no, until new input
 //   model error   → failed after one completed provider attempt
 //   model error, its ask interrupted → pending   the provider may yet answer:
 //                   the pool asks again after its backoff (./react.ts)
@@ -39,7 +40,7 @@
 //
 // Prose is `content{body}`; alone it is an input, and an `output{source}`
 // beside it records what produced it — the ask, for what a model returned. A
-// result, error or exception carries its prose the same way and is its own
+// result, refusal, error or exception carries its prose the same way and is its own
 // kind.
 
 import type { Bundle, Comp } from '@yaks/graph'
@@ -75,6 +76,7 @@ import {
   ERROR,
   EXCEPTION,
   OUTPUT,
+  REFUSAL,
   RESULT,
   STOP_ENTRY,
   USING,
@@ -93,6 +95,7 @@ export type Kind =
   | 'output'
   | 'result'
   | 'stop'
+  | 'refusal'
   | 'error'
   | 'exception'
 
@@ -117,6 +120,7 @@ export let LIMIT = 'limit'
 let KINDS: [string, Kind][] = [
   [STOP_ENTRY, 'stop'],
   [EXCEPTION, 'exception'],
+  [REFUSAL, 'refusal'],
   [ERROR, 'error'],
   [ASK, 'ask'],
   [CALL, 'call'],
@@ -197,11 +201,15 @@ export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
   if (all.some((b) => (b.attempt as Comp | undefined)?.state == 'inflight')) {
     return 'running'
   }
-  let afterAsk = () => {
-    let ask = newestAsk(all)
+  let afterAsk = (ask = newestAsk(all)) => {
     return ask && all.some((b) => seqOf(b) > seqOf(ask) && kindOf(b) == 'input')
       ? 'pending'
       : 'failed'
+  }
+  if (kind == 'refusal') {
+    let source = (newest.output as Comp | undefined)?.source
+    let ask = all.find((b) => b.entity.eid == source && kindOf(b) == 'ask')
+    return ask ? afterAsk(ask) : 'failed'
   }
   let prior = all.at(-2)
   let code = (newest.error as Comp | undefined)?.code
@@ -425,6 +433,7 @@ export let sessionStatus = {
             'notice',
             'result',
             'error',
+            'refusal',
             'exception',
             'ask',
             'call',
@@ -480,6 +489,20 @@ export let sessionStatus = {
       order: [desc(col('seq', 'p'))],
       limit: lit(1),
     }))
+    // Provider refusals name their ask; compaction and no-model refusals do
+    // not. Only input arriving after the associated ask still needs an answer.
+    let refusedAsk = sub(select({
+      cols: [col('seq', 'r')],
+      from: table('output', 'ro'),
+      joins: [
+        join(table('entry', 'r'), eq(col('entity', 'r'), col('source', 'ro'))),
+      ],
+      where: and(
+        eq(col('entity', 'ro'), n),
+        mine('r'),
+        has(ASK, col('entity', 'r')),
+      ),
+    }))
     // What the newest entry, `n`, says the transcript is doing.
     let verdict = when(
       [
@@ -488,6 +511,7 @@ export let sessionStatus = {
         [wears(EXCEPTION), lit('failed')],
         [inflight, lit('running')],
         [queued, lit('queued')],
+        [wears(REFUSAL), iff(input(refusedAsk), lit('pending'), lit('failed'))],
         [
           and(
             wears(ERROR),

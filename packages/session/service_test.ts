@@ -239,3 +239,27 @@ test('a session quiet past its full depth is stripped to its prose and its cost'
     ])
     assertEquals(await stale(g), [])
   }))
+
+test('stripping old imports removes refusals but keeps cost-bearing refusals', async () => {
+  let s = store()
+  let g = locked(s)
+  seed(s, {
+    entity: { eid: 'refused' },
+    entry: { session: ids.run1 },
+    imported: { source: 'one.jsonl', line: 1 },
+    refusal: { code: 'http_400' },
+    content: { body: 'invalid request' },
+  }, {
+    entity: { eid: 'spent-refusal' },
+    entry: { session: ids.run1 },
+    imported: { source: 'one.jsonl', line: 2 },
+    refusal: { code: 'limit' },
+    content: { body: 'at the limit' },
+    cost: { dollars: 0.25, reported: true },
+  })
+  let eids = await stale(g, { full: 0, now: Date.now() + DAY })
+  assertEquals(eids, ['refused'])
+  await strip(g, eids)
+  assertEquals((await g.read('.eid=refused&.refusal')).length, 0)
+  assertEquals((await g.get(['spent-refusal']))[0].refusal, { code: 'limit' })
+})

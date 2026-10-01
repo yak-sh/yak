@@ -285,6 +285,7 @@ let STRIPPED = [
   'notice',
   'result',
   'error',
+  'refusal',
   'exception',
   'stop',
   'usage',
