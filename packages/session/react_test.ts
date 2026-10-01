@@ -1783,3 +1783,35 @@ test('a failed compaction records reported failure usage and never invents count
     assertEquals((ask.error as Comp).code, 'refused')
   }
 })
+
+test('empty compaction replies retain billed usage without runnable orphan sessions', async () => {
+  let g = world()
+  await windowed(g, 100_000)
+  await appendEntry(g, ids.s, 'x'.repeat(240_000))
+  let conversation = ''
+  let model: Model = (req) => {
+    conversation = req.conversation!
+    return Promise.resolve({
+      id: 'empty',
+      model: 'fake-1',
+      items: [],
+      usage: { input_tokens: 1234, output_tokens: 0 },
+    })
+  }
+  assertEquals(
+    await rest(g, ids.s, {
+      model: scripted([], false).model,
+      tools: [],
+      mint,
+      compactModel: { model, name: 'fake-1' },
+    }),
+    'failed',
+  )
+  let own = await transcript(g, conversation)
+  assertEquals(statusOf(own), 'settled')
+  let ask = own.find((b) => b.ask)!
+  assertEquals((ask.error as Comp).code, 'compaction')
+  assertEquals(ask.usage, { input_tokens: 1234, output_tokens: 0 })
+  assertEquals((ask.attempt as Comp).state, 'completed')
+  assertEquals(own.some((b) => b.output && textOf(b) == 'Empty summary'), true)
+})

@@ -109,7 +109,9 @@ export let compactAsk = async (
         ...e instanceof ModelError
           ? {
             error: { code: e.code },
-            ...e.response ? { response: e.response } : {},
+            ...e.response && g.vocab.comp('response')
+              ? { response: e.response }
+              : {},
           }
           : { exception: {} },
       },
@@ -122,23 +124,30 @@ export let compactAsk = async (
     ])
     throw e
   }
+  let text = compacted.items.filter((i) => i.kind == 'assistant')
+    .map((i) => i.text).join('\n').trim()
+  let empty = !text ? new ModelError('compaction', 'Empty summary') : undefined
   await save([
     {
       entity: { eid: ask },
       using,
       attempt: { state: 'completed' },
+      ...empty ? { error: { code: empty.code } } : {},
       ...served.model.mark?.(compacted),
       ...compacted.usage ? { usage: compacted.usage } : {},
       ...compacted.cost == null ? {} : {
         cost: { dollars: compacted.cost, reported: true },
       },
     },
-    ...compacted.items.filter((i) => i.kind == 'assistant').map((i) => ({
-      entity: { eid: crypto.randomUUID() },
-      entry: { session: conversation },
-      output: { source: ask },
-      content: { body: i.text },
-    })),
+    ...(empty
+      ? [{ kind: 'assistant', text: empty.message }]
+      : compacted.items.filter((i) => i.kind == 'assistant')).map((i) => ({
+        entity: { eid: crypto.randomUUID() },
+        entry: { session: conversation },
+        output: { source: ask },
+        content: { body: i.text },
+      })),
   ])
+  if (empty) throw empty
   return compacted
 }
