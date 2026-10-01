@@ -160,10 +160,10 @@ test('the build and output rules key existing ordinary and link eids by tuple an
   ])
   await s.alarm()
   assertEquals([await s.query('.build'), await s.query('.built')], before)
-  assertEquals(await count(s, '.key'), 0)
-  assertEquals((await s.moves()).map((r) => [r.live, r.done]), [
-    [false, undefined],
-    [false, undefined],
+  assertEquals(await count(s, '.key'), 3)
+  assertEquals((await s.moves()).map((r) => [r.live, !!r.done]), [
+    [true, true],
+    [true, true],
   ])
 })
 

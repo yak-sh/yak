@@ -109,6 +109,7 @@ export let RULES: Rule[] = [
   // is the row it already is. A link keeps its ends-derived eid and gains a key too.
   {
     mark: 'yak/store/build_of/13',
+    live: 'apps',
     find: '.build',
     move: (row) => {
       let b = row.build as Comp
@@ -136,6 +137,7 @@ export let RULES: Rule[] = [
   },
   {
     mark: 'yak/store/output_of/14',
+    live: 'apps',
     find: '.built',
     move: (row) => {
       let b = row.built as Comp
