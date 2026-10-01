@@ -9,7 +9,6 @@
     "@cloudflare/worker-bundler": "0.2.4",
     "@cloudflare/workers-oauth-provider": "0.10.3",
     "@modelcontextprotocol/core": "2.2.0",
-    "@modelcontextprotocol/sdk": "1.29.0",
     "@modelcontextprotocol/server": "2.2.0",
     "@sentry/cloudflare": "10.75.0",
     "@sentry/core": "10.75.0",

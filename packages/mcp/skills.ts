@@ -8,7 +8,7 @@ import {
   ProtocolError,
   ResourceTemplate,
 } from '@modelcontextprotocol/server'
-import { CfWorkerJsonSchemaValidator } from '@modelcontextprotocol/server/validators/cf-worker'
+import { DefaultJsonSchemaValidator } from '@modelcontextprotocol/server/_shims'
 import { type Bundle, type Graph, Refused } from '@yaks/graph'
 import { repoSkills, skillFiles } from '@yaks/persona/skills'
 import { renderSkill } from '@yaks/persona/skill-text'
@@ -187,7 +187,7 @@ export let attachSkills = async (
   options: SkillOptions,
 ): Promise<void> => {
   let view = await snapshot(options)
-  let validator = new CfWorkerJsonSchemaValidator()
+  let validator = new DefaultJsonSchemaValidator()
   let schema = (
     properties: JsonSchemaType['properties'],
     required: string[] = [],

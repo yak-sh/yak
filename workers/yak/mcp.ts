@@ -78,11 +78,8 @@
 // all — one that probes anonymously, reads the 200 as "no sign-in needed" and
 // never asks again. The address is the lever, since a client like that is not
 // ours to fix.
-import {
-  fromJsonSchema,
-  type McpServer,
-} from 'npm:@modelcontextprotocol/server@2.2.0'
-import { CfWorkerJsonSchemaValidator } from 'npm:@modelcontextprotocol/server@2.2.0/validators/cf-worker'
+import { fromJsonSchema, type McpServer } from '@modelcontextprotocol/server'
+import { CfWorkerJsonSchemaValidator } from '@modelcontextprotocol/server/validators/cf-worker'
 import { mcp, roster, rosterVersion } from '@yaks/mcp'
 import { reaching, searching } from './agent.ts'
 import { anonymous, asked, opened, READS, scope } from './anon.ts'

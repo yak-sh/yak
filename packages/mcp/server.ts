@@ -18,7 +18,7 @@ import { fromJsonSchema, ProtocolError } from '@modelcontextprotocol/server'
 // something the agent reads and corrects, not a broken connection.
 
 import { McpServer } from '@modelcontextprotocol/server'
-import { CfWorkerJsonSchemaValidator } from '@modelcontextprotocol/server/validators/cf-worker'
+import { DefaultJsonSchemaValidator } from '@modelcontextprotocol/server/_shims'
 import type { CallToolResult } from '@modelcontextprotocol/server'
 import {
   type Actor,
@@ -376,8 +376,8 @@ export let annotated = (
 
 // Shared schema authorship/elicitation validator. The runner, not the SDK's
 // high-level registerTool wrapper, owns tool argument validation.
-let checked: CfWorkerJsonSchemaValidator | undefined
-let validator = () => checked ??= new CfWorkerJsonSchemaValidator()
+let ajv: DefaultJsonSchemaValidator | undefined
+let validator = () => ajv ??= new DefaultJsonSchemaValidator()
 
 /**
  * Build the MCP server for a graph: the generic tier (`graph_apply`,
