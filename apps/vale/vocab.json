@@ -485,31 +485,127 @@
       "floor": "editor",
       "description": "How a creature fights, and what felling it is worth, at its own level. A land rescales lvl, hp, dmg and xp together for the creatures it grows (danger.ts). A creature without one can't be fought.",
       "properties": {
-        "lvl": { "type": "number", "minimum": 1 },
-        "hp": { "type": "number", "exclusiveMinimum": 0 },
-        "dmg": { "type": "number", "minimum": 0 },
+        "lvl": {
+          "type": "number",
+          "minimum": 1,
+          "validate": true,
+          "maximum": 20
+        },
+        "hp": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "validate": true,
+          "maximum": 5000
+        },
+        "dmg": {
+          "type": "number",
+          "minimum": 0,
+          "validate": true,
+          "maximum": 80
+        },
         "speed": {
           "type": "number",
           "minimum": 0,
-          "description": "Metres a second when it means it."
+          "description": "Metres a second when it means it.",
+          "validate": true,
+          "maximum": 6
         },
         "reach": {
           "type": "number",
           "exclusiveMinimum": 0,
-          "description": "How close it must be to bite."
+          "description": "How close it must be to bite.",
+          "validate": true,
+          "maximum": 4
         },
         "aggro": {
           "type": "number",
           "minimum": 0,
-          "description": "How near a hero wakes it; 0 is never, until struck."
+          "description": "How near a hero wakes it; 0 is never, until struck.",
+          "validate": true,
+          "maximum": 12
         },
-        "xp": { "type": "number", "minimum": 0 },
+        "xp": {
+          "type": "number",
+          "minimum": 0,
+          "validate": true,
+          "maximum": 2200
+        },
         "boss": {
           "type": "boolean",
           "description": "One of a kind, with its name on its plate."
         }
       },
-      "required": ["lvl", "hp", "dmg", "speed", "reach", "aggro", "xp"]
+      "required": [
+        "lvl",
+        "hp",
+        "dmg",
+        "speed",
+        "reach",
+        "aggro",
+        "xp"
+      ],
+      "constraints": [
+        {
+          "name": "hp_per_level",
+          "value": {
+            "sum": [
+              {
+                "product": [
+                  {
+                    "field": "hp"
+                  },
+                  {
+                    "field": "lvl",
+                    "inverse": true
+                  }
+                ]
+              }
+            ]
+          },
+          "maximum": 250,
+          "message": "hp must not exceed 250 times lvl"
+        },
+        {
+          "name": "dmg_per_level",
+          "value": {
+            "sum": [
+              {
+                "product": [
+                  {
+                    "field": "dmg"
+                  },
+                  {
+                    "field": "lvl",
+                    "inverse": true
+                  }
+                ]
+              }
+            ]
+          },
+          "maximum": 4,
+          "message": "dmg must not exceed 4 times lvl"
+        },
+        {
+          "name": "xp_per_level",
+          "value": {
+            "sum": [
+              {
+                "product": [
+                  {
+                    "field": "xp"
+                  },
+                  {
+                    "field": "lvl",
+                    "inverse": true
+                  }
+                ]
+              }
+            ]
+          },
+          "maximum": 110,
+          "message": "xp must not exceed 110 times lvl"
+        }
+      ]
     },
     "loot": {
       "component": true,
@@ -583,7 +679,7 @@
       "component": true,
       "type": "object",
       "floor": "owner",
-      "description": "One creature an owner put at a spot with /spawn; the row's eid is the creature's. It wanders roam metres from x, z as a den's creature wanders from its home, fights at lvl, its spawner's level when it was spawned, and stays down once a slain row names it. Its place says the land and chunk it stands in (spawn.ts).",
+      "description": "One creature an owner put at a spot with /spawn; the row's eid is the creature's. It wanders roam metres from x, z as a den's creature wanders from its home, fights at lvl, its spawner's level when it was spawned, and stays down once a slain row names it. Its place says the land and chunk it stands in (spawn.ts). With no beast, doc.body asks the creature builder; its current main kind output supplies the species through build.for. Until that kind has a figure, the spot shimmers.",
       "properties": {
         "beast": {
           "type": "string",
@@ -610,7 +706,12 @@
           "description": "How far it wanders from x, z, in metres."
         }
       },
-      "required": ["lvl", "x", "z", "roam"]
+      "required": [
+        "lvl",
+        "x",
+        "z",
+        "roam"
+      ]
     },
     "figure": {
       "component": true,
@@ -1574,12 +1675,12 @@
     "spawn": {
       "tool": true,
       "floor": "owner",
-      "description": "Put a creature at a Mossvale hero's feet. Only the app owner may do this, and the hero has to be in the game. Name an existing creature by its name or alias, such as Bristleboar or beast:boar. It wanders a few metres from that spot, fights at the hero's level, and does not come back once it falls.",
+      "description": "Put a creature at a Mossvale hero's feet. Only the app owner may do this, and the hero has to be in the game. Name an existing creature by its name or alias, or describe a new one, such as a spider with a tophat. A description leaves a shimmering spot until the creature and its figure arrive. It wanders a few metres from that spot, fights at the hero's level, and does not come back once it falls.",
       "input": {
         "player": { "type": "string", "description": "The hero's eid." },
         "beast": {
           "type": "string",
-          "description": "A creature's name or alias, such as Bristleboar or beast:boar."
+          "description": "An existing creature's name or alias, or a description to invent."
         }
       },
       "required": ["player", "beast"],

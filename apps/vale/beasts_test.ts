@@ -1,9 +1,10 @@
 // Creature designs enter through the app store and shape the world on a page.
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import { aliasDoc, aliases } from '@yaks/alias'
 import { docDoc } from '@yaks/doc'
 import { graph } from '@yaks/graph'
+import { admitSchema } from '@yaks/graph/schema'
 import { keyDoc, keyKeywords, keys } from '@yaks/key'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
@@ -29,7 +30,7 @@ let store = async () => {
   let g = graph({
     storage: ram(vocab),
     vocab,
-    plugins: [keys(vocab), aliases()],
+    plugins: [keys(vocab), aliases(), admitSchema(vocab)],
   })
   await g.apply(rows)
   let read = async () => {
@@ -106,4 +107,96 @@ test('every sound a seeded creature names is a seeded sound row', async () => {
   for (let b of Object.values(BEASTS)) {
     for (let s of [b.cry, b.step]) assert(!s || sounds.has(s), b.name)
   }
+})
+
+test('combat admission bounds full merged rows, including partial patches', async () => {
+  let { g } = await store()
+  let eid = crypto.randomUUID()
+  let combat = {
+    lvl: 1,
+    hp: 250,
+    dmg: 4,
+    speed: 6,
+    reach: 4,
+    aggro: 12,
+    xp: 110,
+  }
+  let put = (patch: Record<string, unknown>) =>
+    g.apply([{ entity: { eid }, combat: patch }])
+  await put(combat)
+  for (
+    let [field, value] of Object.entries({
+      lvl: 21,
+      hp: 5001,
+      dmg: 81,
+      speed: 6.01,
+      reach: 4.01,
+      aggro: 12.01,
+      xp: 2201,
+    })
+  ) {
+    await assertRejects(
+      async () => put({ [field]: value }),
+      Error,
+      `combat.${field}`,
+    )
+  }
+  for (
+    let [field, value] of Object.entries({
+      lvl: 0,
+      hp: 0,
+      dmg: -1,
+      speed: -1,
+      reach: 0,
+      aggro: -1,
+      xp: -1,
+    })
+  ) {
+    await assertRejects(
+      async () => put({ [field]: value }),
+      Error,
+      `combat.${field}`,
+    )
+  }
+  for (let field of ['hp', 'dmg', 'xp']) {
+    await assertRejects(
+      async () => put({ [field]: combat[field as keyof typeof combat] + 0.1 }),
+      Error,
+      `combat.${field}_per_level`,
+    )
+  }
+  await put({ lvl: 20, hp: 5000, dmg: 80, xp: 2200 })
+  await assertRejects(async () => put({ lvl: 1 }), Error, 'combat.hp_per_level')
+  await put({ hp: 4999 })
+  // Admission checks each ordered operation, rolling back the whole batch.
+  await assertRejects(
+    async () =>
+      g.apply([
+        { entity: { eid }, combat: { lvl: 1 } },
+        { entity: { eid }, combat: { hp: 250, dmg: 4, xp: 110 } },
+      ]),
+    Error,
+    'combat.hp_per_level',
+  )
+  await put({ lvl: 1, hp: 250, dmg: 4, xp: 110 })
+  await put({ aggro: 0, dmg: 0, speed: 0, xp: 0 })
+  for (let field of Object.keys(combat)) {
+    await assertRejects(
+      async () => put({ [field]: null }),
+      Error,
+      `${field} is required`,
+    )
+  }
+  await assertRejects(
+    async () =>
+      g.apply([{
+        entity: { eid: crypto.randomUUID() },
+        combat: { lvl: 1 },
+      }]),
+    Error,
+    'is required',
+  )
+  await g.apply([{ entity: { eid }, combat: null }])
+  await put(combat)
+  await g.apply([{ entity: { eid }, $delete: true }])
 })

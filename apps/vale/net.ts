@@ -19,6 +19,7 @@ import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { areaOf, looksOf, REACH } from './area.ts'
 import { writer } from './chat.ts'
 import { watchDesigns } from './design-watch.ts'
+import { SPAWN_KINDS, useSpawnKinds } from './spawn.ts'
 import { groupOf } from './party-state.ts'
 import type { Tools } from './slash.ts'
 import { SIZE } from './levels.ts'
@@ -460,6 +461,11 @@ export let connect = (base: URL, vocab: ReturnType<typeof loadVocab>) => {
   addEventListener('pagehide', flush)
   let opened = false
   return {
+    spawnKinds: () => {
+      let watch = c.watch(SPAWN_KINDS)
+      watchDesigns(watch, ['built', 'build', 'spawned'], useSpawnKinds)
+      return ready(watch)
+    },
     designs,
     me: net.me,
     heroes: net.heroes,

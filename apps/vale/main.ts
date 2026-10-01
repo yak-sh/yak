@@ -20,6 +20,7 @@ import { board } from './board.ts'
 import { useBeasts, useDens } from './beasts.ts'
 import { useNames } from './names.ts'
 import { FIGURES, sizeOf, useFigures } from './figure.ts'
+import { pendingSpawns } from './spawn.ts'
 import { aim, bearing, type Cam, depth, moveLook, steer } from './cam.ts'
 import { cast } from './cast.ts'
 import { chatbox } from './chatbox.ts'
@@ -155,6 +156,7 @@ await Promise.all([
   opening.designs(['den'], useDens),
   opening.designs(['alias', 'key'], useNames),
   opening.designs(['figure'], useFigures),
+  opening.spawnKinds(),
   itemReady,
   themeReady,
   buildingReady,
@@ -1050,6 +1052,22 @@ let loop = (t: number) => {
           g,
         ): [number, number, number] => [g.x, groundAt(v, g.x, g.z), g.z]),
       ], dt)
+      for (
+        let spot of pendingSpawns(net.spawned(), (kind) => !!FIGURES[kind])
+      ) {
+        if (Math.hypot(spot.x - f.body.x, spot.z - f.body.z) > 40) continue
+        let a = Math.random() * Math.PI * 2
+        glow.emit(
+          new THREE.Vector3(
+            spot.x + Math.sin(a) * 0.6,
+            groundAt(v, spot.x, spot.z) + 0.2 + Math.random(),
+            spot.z + Math.cos(a) * 0.6,
+          ),
+          0xa9e8d1,
+          1,
+          { speed: 0.2, up: 0.5, life: 0.8, size: 0.06, fall: -0.2 },
+        )
+      }
       for (let e of f.events) react(e, target)
       for (let e of job.events) worked(e)
       for (let e of helping.events) worked(e)

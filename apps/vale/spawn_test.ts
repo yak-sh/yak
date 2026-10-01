@@ -6,7 +6,14 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Bundle } from './net.ts'
 import { beastId } from './beasts.ts'
 import { fighter } from './danger.ts'
-import { heroLevel, ROAM, spawnedNear } from './spawn.ts'
+import {
+  heroLevel,
+  kindOf,
+  pendingSpawns,
+  ROAM,
+  spawnedNear,
+  useSpawnKinds,
+} from './spawn.ts'
 import { flat } from './terrain.ts'
 import { workerOf } from './worker.js'
 import { seedDesigns } from './designs_fixture.ts'
@@ -86,11 +93,56 @@ test('/spawn puts the named creature at the hero, at their level', async () => {
   assertEquals(fighter(home.beast, home.lvl!)?.lvl, lvl)
 })
 
-test('/spawn refuses an editor, an unknown creature and an absent hero', async () => {
+test('/spawn refuses an editor and an absent hero', async () => {
   let { wrote, ask } = store(playing)
   assertEquals((await ask('editor', 'beast:boar')).status, 403)
-  assertEquals((await ask('owner', 'gryphon')).status, 404)
   let away = store([])
   assertEquals((await away.ask('owner', 'beast:boar')).status, 404)
   assertEquals([...wrote, ...away.wrote], [])
+})
+
+test('/spawn keeps a description at the hero until its current main kind', async () => {
+  let { wrote, ask } = store(playing)
+  let said = await ask('owner', 'a spider with a tophat')
+  assertEquals(said.status, 200)
+  assertStringIncludes(await said.text(), 'shimmers at your feet')
+  assertEquals(wrote[0].doc, { body: 'a spider with a tophat' })
+  assertEquals(wrote[0].spawned, {
+    lvl: heroLevel(kills, []),
+    x: 50,
+    z: 52,
+    roam: ROAM,
+  })
+  assertEquals(spawnedNear(wrote, 50, 52, 30), [])
+  let eid = wrote[0].entity.eid
+  useSpawnKinds([
+    {
+      entity: { eid: 'shadow' },
+      built: {
+        current: true,
+        slot: 'kind',
+        build: 'shadow-build',
+      },
+    },
+    { entity: { eid: 'shadow-build' }, build: { variant: 'shadow', for: eid } },
+  ])
+  assertEquals(kindOf(wrote[0]), undefined)
+  assertEquals(pendingSpawns(wrote, () => false).length, 1)
+  useSpawnKinds([
+    {
+      entity: { eid: 'minted-kind' },
+      built: {
+        current: true,
+        slot: 'kind',
+        build: 'main-build',
+      },
+    },
+    { entity: { eid: 'main-build' }, build: { variant: 'main', for: eid } },
+  ])
+  assertEquals(kindOf(wrote[0]), 'minted-kind')
+  assertEquals(spawnedNear(wrote, 50, 52, 30)[0].beast, 'minted-kind')
+  assertEquals(pendingSpawns(wrote, () => false).length, 1)
+  assertEquals(pendingSpawns(wrote, (b) => b == 'minted-kind'), [])
+  useSpawnKinds([])
+  assertEquals(kindOf(wrote[0]), undefined)
 })

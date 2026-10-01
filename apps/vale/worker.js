@@ -370,11 +370,6 @@ let spawn = async (req, env, themes) => {
   } catch (e) {
     return new Response(e.message, { status: 400 })
   }
-  if (!beast) {
-    return new Response(`No creature is called ${word.trim()}.`, {
-      status: 404,
-    })
-  }
   let at = placeOf(hero, 'position')
   if (!at) {
     return new Response(
@@ -384,6 +379,7 @@ let spawn = async (req, env, themes) => {
   }
   let lvl = heroLevel(slain, journal)
   let row = spawnedAt(beast, at.x, at.z, lvl)
+  if (!beast) row.doc = { body: word.trim() }
   let saved = await env.STORE.fetch('apply', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -393,7 +389,9 @@ let spawn = async (req, env, themes) => {
   await saved.body?.cancel()
   let name = beasts.find((b) => b.entity.eid == beast)?.beast_design?.name
   return new Response(
-    `${name ?? 'A creature'} stands at your feet, at level ${lvl}.`,
+    beast
+      ? `${name ?? 'A creature'} stands at your feet, at level ${lvl}.`
+      : `A spot shimmers at your feet, awaiting ${word.trim()}, at level ${lvl}.`,
   )
 }
 

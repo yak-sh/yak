@@ -32,7 +32,7 @@ import { abilitiesOf, again, BLEEDS, WARD, type Went } from './abilities.ts'
 import { effect } from './ability-effects.ts'
 import { type Slot, SLOTS } from './arms.ts'
 import { BEASTS } from './beasts.ts'
-import { sizeOf } from './figure.ts'
+import { FIGURES, sizeOf } from './figure.ts'
 import { fighter, foeOf } from './danger.ts'
 import { heed } from './gaze.ts'
 import {
@@ -1037,7 +1037,8 @@ export let game = (
       // The creatures living within sight: the dens', and those spawned.
       let homes = [
         ...homesNear(body.x, body.z, SIGHT),
-        ...spawnedNear(net.spawned(), body.x, body.z, SIGHT),
+        ...spawnedNear(net.spawned(), body.x, body.z, SIGHT)
+          .filter((home) => !!FIGURES[home.beast]),
       ]
       let mobs: Mob[] = []
       for (let h of homes) {

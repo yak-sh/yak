@@ -98,14 +98,14 @@ export let heroLevel = (slain: Bundle[], journal: Bundle[]): number =>
 /** The row /spawn writes: creature `beast` standing at (x, z), fighting at
  * `lvl`, in the region and chunk that spot belongs to. */
 export let spawnedAt = (
-  beast: string,
+  beast: string | null,
   x: number,
   z: number,
   lvl: number,
   eid: string = crypto.randomUUID(),
 ): Bundle => ({
   entity: { eid },
-  spawned: { beast, lvl, x, z, roam: ROAM },
+  spawned: { ...(beast ? { beast } : {}), lvl, x, z, roam: ROAM },
   place: placeOf(x, z),
 })
 
@@ -131,7 +131,8 @@ export let spawnedAt = (
  * ```
  */
 export let homeOf = (row: Bundle): Home | null => {
-  let { beast, lvl, x, z, roam } = comp(row, 'spawned')
+  let { lvl, x, z, roam } = comp(row, 'spawned')
+  let beast = kindOf(row)
   let { level } = comp(row, 'place')
   if (
     typeof beast != 'string' || typeof level != 'string' ||
@@ -159,4 +160,47 @@ export let spawnedNear = (
   rows.flatMap((row) => {
     let h = homeOf(row)
     return h && Math.hypot(h.home[0] - x, h.home[1] - z) < r ? [h] : []
+  })
+
+/** Current main kind outputs, joined through build.for, never derived ids. */
+export let SPAWN_KINDS = '.built.current=true&.built.slot=kind' +
+  '&.built.build.build.variant=main&.built.build.build.for.spawned' +
+  '&.fields=built.current,built.slot,built.build.build.variant,' +
+  'built.build.build.for.spawned'
+
+let kinds = new Map<string, string>()
+
+/** Resolve only the current main kind; shadow builds stay review-only. */
+export let useSpawnKinds = (rows: Bundle[]) => {
+  let at = new Map(rows.map((row) => [row.entity.eid, row]))
+  kinds = new Map(rows.flatMap((row) => {
+    let built = comp(row, 'built')
+    let build = typeof built.build == 'string'
+      ? comp(at.get(built.build) ?? { entity: { eid: '' } }, 'build')
+      : {}
+    return built.current === true && built.slot == 'kind' &&
+        build.variant == 'main' && typeof build.for == 'string'
+      ? [[build.for, row.entity.eid] as [string, string]]
+      : []
+  }))
+}
+
+/** A named spawn's species, or the main build of a description spawn. */
+export let kindOf = (row: Bundle): string | undefined => {
+  let beast = comp(row, 'spawned').beast
+  return typeof beast == 'string' ? beast : kinds.get(row.entity.eid)
+}
+
+/** A pending spot keeps shimmering until its species has a figure. */
+export let pendingSpawns = (
+  rows: Bundle[],
+  ready: (beast: string) => boolean,
+): { eid: string; x: number; z: number }[] =>
+  rows.flatMap((row) => {
+    let { x, z } = comp(row, 'spawned')
+    let beast = kindOf(row)
+    return typeof x == 'number' && typeof z == 'number' &&
+        (!beast || !ready(beast))
+      ? [{ eid: row.entity.eid, x, z }]
+      : []
   })
