@@ -107,10 +107,13 @@ things:
 - **Stopping**: there is no stop for a native session yet. `yak session stop`
   stops managed spawns and refuses this one as "not a managed session"
   (T-42246).
-- **A restart of `yak serve`** gives effects in flight 30 s
-  (packages/cli/signal.ts `GRACE`; T-61776 changes that), then cuts them. When
-  it is back, the session picks up where it was, told that its step was
-  interrupted (packages/session/react.ts).
+- **A restart of `yak serve`** interrupts nothing: serve takes no new step,
+  lets the step in flight finish (its model request, a tool call running for
+  minutes), then exits, and the journal says which runs it is waiting on
+  (@yaks/process/wind, packages/cli/drain.ts). The next `yak serve` takes the
+  session's next step. A second SIGTERM (`systemctl --user kill yak`) ends the
+  step where it stands; the session then picks up where it was, told that its
+  step was interrupted (packages/session/react.ts).
 - **Afterwards**, leave the worktree. When `yak serve` next starts, a
   worktree under ~/.yak/worktrees that is clean and landed, and that no running
   session uses, is removed with its branch (packages/harness/worktrees.ts
