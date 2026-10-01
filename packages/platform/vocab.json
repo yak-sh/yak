@@ -63,7 +63,7 @@
       "properties": {
         "app": {
           "type": "string",
-          "ref": "app",
+          "ref": "entity",
           "death": "cascade"
         },
         "version": {
@@ -77,9 +77,23 @@
         },
         "script": {
           "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "description": "the source release this installed copy came from"
+        },
+        "reload": {
+          "type": "string",
+          "enum": [
+            "required"
+          ],
+          "description": "a contract change: pages crossing this release must reload; absent derives the level from files"
         }
       },
-      "description": "one release of an app: the files it shipped, and the worker built from them"
+      "description": "one release of an app: the files it shipped, and the worker built from them",
+      "before": [
+        "doc"
+      ]
     },
     "hostname": {
       "component": true,
@@ -135,7 +149,7 @@
           "description": "when the space's owner put the copy in a sandbox, a browser origin of its own; empty while it runs like the space's own apps"
         }
       },
-      "description": "a copy of somebody else’s app, at the version it was copied from"
+      "description": "a copy of somebody else\u2019s app, at the version it was copied from"
     },
     "meter": {
       "component": true,
@@ -206,7 +220,7 @@
         "status": {
           "type": "string",
           "stamped": true,
-          "description": "that subscription's status as Stripe last said it (`active`, `past_due`, `canceled`, …), mirrored by the webhook and never moved by anything here: Stripe's state machine, not ours"
+          "description": "that subscription's status as Stripe last said it (`active`, `past_due`, `canceled`, \u2026), mirrored by the webhook and never moved by anything here: Stripe's state machine, not ours"
         },
         "until": {
           "type": "string",
@@ -326,7 +340,7 @@
           "death": "detach"
         }
       },
-      "description": "one customer’s area of the platform, at its own slug"
+      "description": "one customer\u2019s area of the platform, at its own slug"
     }
   }
 }

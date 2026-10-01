@@ -579,11 +579,11 @@ export let coreDocs: VocabDoc[] = storeDocs([
 
 /**
  * What @yaks/platform declares and the directory keeps: a `hostname` pointed
- * at a space or an app (T-34596), and the `plan` a space pays for, a mirror of
+ * at a space or an app (T-34596), each `deploy`, and the `plan` a space pays for, a mirror of
  * one Stripe subscription (billing.ts). The rest of the directory's words are
  * still {@link platformDoc}'s own.
  */
-let hostingDoc: VocabDoc = pick(platformWords, ['hostname', 'plan'])
+let hostingDoc: VocabDoc = pick(platformWords, ['hostname', 'plan', 'deploy'])
 
 /**
  * The platform's own components — what the directory IS, as one JSON Schema
@@ -763,21 +763,6 @@ export let platformDoc: VocabDoc = {
       component: true,
       type: 'object',
       properties: { address: text },
-    },
-    deploy: {
-      component: true,
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      unique: [['app', 'version']],
-      properties: {
-        app: ref('cascade'),
-        version: num,
-        files: text,
-        worker: text,
-        script: text,
-        source: text,
-      },
     },
     // One time this app's store was put back to a moment (recover.ts,
     // T-34507): when it was asked for, the moment asked for, who asked, and

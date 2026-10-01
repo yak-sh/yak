@@ -5,7 +5,10 @@
  * being paid for and the `meter` usage it is billed on, a `signin` in progress
  * and a `report` of an error a deployed app hit.
  *
- * Components only — the Worker that serves them is `workers/yak`.
+ * Declarations and pure release comparisons. The Worker that serves them is
+ * `workers/yak`.
  */
 
 export { platformDoc } from './vocab.ts'
+
+export * from './release.ts'
