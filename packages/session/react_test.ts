@@ -1815,3 +1815,57 @@ test('empty compaction replies retain billed usage without runnable orphan sessi
   assertEquals((ask.attempt as Comp).state, 'completed')
   assertEquals(own.some((b) => b.output && textOf(b) == 'Empty summary'), true)
 })
+// A reply save may fail before commit, or after commit while reading status.
+// The effect retries only finalization, with the same reply and entry ids.
+for (let committed of [false, true]) {
+  test(`completed reply survives ${committed ? 'post' : 'pre'}-commit failure`, async () => {
+    let g = world()
+    let { model, asked } = scripted([calls(['c1', 'hi']), says('r2', 'done')])
+    let apply = g.apply, read = g.read
+    let failed = false, saves = 0, landed = false
+    g.apply = (batch, opts) => {
+      if (batch.some((b) => (b.attempt as Comp)?.state == 'completed')) {
+        saves++
+        if (!committed && !failed) {
+          failed = true
+          throw new Error('no such column: model.enforced')
+        }
+        landed = true
+      }
+      return apply(batch, opts)
+    }
+    g.read = (...args) => {
+      if (committed && landed && !failed) {
+        failed = true
+        throw new Error('no such column: model.enforced')
+      }
+      return read(...args)
+    }
+    let retried = 0
+    let deps = {
+      model,
+      tools: [echo],
+      mint,
+      attempt: {
+        last: () => false,
+        progressed: () => Promise.resolve(),
+        retry: async <T>(body: () => Promise<T>): Promise<T> => {
+          try {
+            return await body()
+          } catch {
+            retried++
+            return body()
+          }
+        },
+      },
+    }
+    assertEquals(await rest(g, ids.s, deps), 'settled')
+    assertEquals(retried, 1)
+    assertEquals(asked.length, 2)
+    assertEquals(saves, 3)
+    let entries = await transcript(g, ids.s)
+    assertEquals(entries.filter((b) => b.call).length, 1)
+    assertEquals(entries.filter((b) => b.result).length, 1)
+    assertEquals(entries.filter((b) => b.exception).length, 0)
+  })
+}

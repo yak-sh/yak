@@ -131,6 +131,9 @@ export type Attempt = {
    * not one more in a row. For a run that does many steps, where one success
    * should give the next failure its full tries back. */
   progressed: () => Promise<void>
+  /** Retry a local completion without replaying the handler's external work.
+   * Uses this run's remaining tries and backoff, retaining its lease. */
+  retry?: <T>(body: () => Promise<T>) => Promise<T>
 }
 
 /** The longest a worker waits between passes (ms): how soon a run another
@@ -351,17 +354,43 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       expiry: Date.parse(String(row.lease_expiry)),
       run: Promise.resolve(),
     }
+    let tries = held.attempts
     let settle = (patch: Comp) =>
-      swap(g, eid, { lease_token: held.token, attempts: held.attempts }, patch)
+      swap(g, eid, { lease_token: held.token, attempts: held.attempts }, {
+        ...patch,
+        attempts: tries,
+      })
     // A success puts the count back at this attempt, the first: only a run
     // that has failed before has anything to write.
     let attempt: Attempt = {
-      last: () => held.attempts >= limit(s),
+      last: () => tries >= limit(s),
       progressed: async () => {
+        tries = 1
         if (held.attempts <= 1) return
         let was = { lease_token: held.token, attempts: held.attempts }
         if (await swap(g, eid, was, { attempts: 1 })) held.attempts = 1
       },
+    }
+    attempt.retry = async <T>(body: () => Promise<T>): Promise<T> => {
+      while (true) {
+        try {
+          return await body()
+        } catch (err) {
+          if (attempt.last()) throw err
+          ctx.report(err, {
+            handler: String(row.handler),
+            slot: s,
+            event: {
+              kind: String(row.kind) as Kind,
+              entity: { eid: String(row.target) },
+              name: String(row.comp ?? ''),
+            },
+          })
+          let due = Math.max(wait(tries), asked(err))
+          await sleep(due)
+          tries++
+        }
+      }
     }
     let go = async () => {
       let tx = detached(g.storage)
@@ -399,7 +428,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         if (last || !retried(err)) {
           ctx.report(err, { handler: String(row.handler), event, slot: s })
         }
-        let due = Math.max(wait(held.attempts), asked(err))
+        let due = Math.max(wait(tries), asked(err))
         await settle(
           last ? { state: 'failed', error: said(err), next: null, ...free } : {
             state: 'pending',

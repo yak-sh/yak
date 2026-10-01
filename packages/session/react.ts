@@ -604,7 +604,18 @@ export let react = async (
       if (
         e instanceof Stale && e.eid == attempt.entity.eid &&
         e.comp == 'attempt' && e.prop == 'state'
-      ) return
+      ) {
+        // The commit may have succeeded before append's status read failed.
+        // A completed ask still owes its newly saved calls a turn.
+        if (
+          (patch.attempt as Comp)?.state == 'completed' &&
+          comp((await g.get([attempt.entity.eid], ['attempt']))[0], 'attempt')
+              ?.state == 'completed'
+        ) {
+          return { ...await current(), did: 'asked' }
+        }
+        return
+      }
       throw e
     }
   }
@@ -1271,7 +1282,9 @@ export let react = async (
       },
     }))
   }
-  try {
+  // The reply and its minted entry ids stay in this closure. A commit followed
+  // by a failed transcript read retries the guarded finish, not the provider.
+  let finalize = async () => {
     if (!deps.streaming) {
       return await finish(ask, finalAsk, added.slice(1)) ?? await current()
     }
@@ -1295,28 +1308,11 @@ export let react = async (
       return omitted
     }
     return await finish(ask, finalAsk, added.slice(1)) ?? await current()
-  } catch (e) {
-    if (!deps.streaming) {
-      deps.report?.(e, session, 'finalize')
-      return await finish(
-        ask,
-        { entity: ask.entity, attempt: { state: 'interrupted' } },
-        [line(
-          { [EXCEPTION]: {} },
-          'Could not finalize provider reply: ' + String(e),
-        )],
-      ) ?? await current()
-    }
-    return await finish(
-      ask,
-      { entity: ask.entity, attempt: { state: 'interrupted' } },
-      [
-        line(
-          { [EXCEPTION]: {} },
-          'Could not finalize provider reply: ' + String(e),
-        ),
-      ],
-    ) ?? await current()
+  }
+  try {
+    return await (deps.attempt?.retry
+      ? deps.attempt.retry(finalize)
+      : finalize())
   } finally {
     for (const active of stream.values()) active.writer.discard()
   }

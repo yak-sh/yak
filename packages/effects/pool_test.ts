@@ -404,3 +404,31 @@ test('what a process that ended left claimed is run at once, not waited out', as
   assertEquals(await orphaned([]), [])
   assertEquals(await orphaned(['w1']), ['created p1'])
 })
+
+test('local completion retry retains reply, respects backoff and bounds', async () => {
+  for (let recover of [true, false]) {
+    let a = proc(store(), { backoff: () => 0 })
+    let external = 0, saves = 0
+    a.fx.handle({
+      post_note: async (_e, _tx, _write, attempt) => {
+        let receipt = ++external
+        await attempt.retry!(async () => {
+          saves++
+          if (!recover || saves == 1) throw new Error('storage unavailable')
+          assertEquals(receipt, 1)
+        })
+      },
+    })
+    await a.g.apply([post('p1')])
+    await a.fx.work(a.g)
+    await a.fx.idle()
+    assertEquals(external, 1)
+    assertEquals(saves, 2)
+    assertEquals(
+      (await run(a.g, 'post_note')).state,
+      recover ? 'done' : 'failed',
+    )
+    assertEquals((await run(a.g, 'post_note')).attempts, 2)
+    await a.fx.stop()
+  }
+})
