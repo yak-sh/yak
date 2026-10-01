@@ -160,7 +160,7 @@ test('an app names no app, and the copy works at its own address', async () => {
 // Putting an app back (T-32886, V-32361: error-correction over initial
 // correctness). The person's own repair when their assistant breaks a working
 // page is "put it back", so every deploy is a version and one word restores
-// one — as a new version, since history is never rewritten.
+// one without changing the kept deploys.
 test('a deploy is a version, and one word puts it back', async () => {
   let k = await kernel()
   try {
@@ -199,9 +199,9 @@ test('a deploy is a version, and one word puts it back', async () => {
     assertMatch(list, /- v2 \(live\) 20\d\d-\d\d-\d\dT/)
     assertStringIncludes(list, 'added broken.js, changed index.html')
 
-    // One word. It names what came back and where, and goes out as v3.
+    // One word moves the pointer and names the kept version now live.
     let back = await agent.tool('app_rollback', app)
-    assertStringIncludes(back, 'put undo31/recipes back to v1, live now as v3')
+    assertStringIncludes(back, 'put undo31/recipes back to v1, live now')
     assertStringIncludes(back, 'https://undo31.yaks.app/recipes/')
     assertStringIncludes(back, 'changed index.html, removed broken.js')
 
@@ -215,14 +215,14 @@ test('a deploy is a version, and one word puts it back', async () => {
     assertStringIncludes((await served('')).text, '<h1>lemon cake</h1>')
     assertEquals((await served('broken.js')).status, 404)
 
-    // History is not rewritten: three versions, and v2 is still there to go
+    // History is not rewritten: two versions, and v2 is still there to go
     // forward to by name.
     let after = await agent.tool('app_versions', app)
-    assertStringIncludes(after, 'undo31/recipes: 3 versions')
-    assertStringIncludes(after, 'v3 (live)')
+    assertStringIncludes(after, 'undo31/recipes: 2 versions')
+    assertStringIncludes(after, 'v1 (live)')
     assertMatch(
       await agent.tool('app_rollback', { ...app, version: 2 }),
-      /put undo31\/recipes back to v2, live now as v4/,
+      /put undo31\/recipes back to v2, live now/,
     )
     assertStringIncludes((await served('')).text, 'OOPS')
     assertEquals((await served('broken.js')).status, 200)
@@ -235,7 +235,7 @@ test('a deploy is a version, and one word puts it back', async () => {
         () => agent.tool('app_rollback', { ...app, version: 9 }),
         Error,
       )).message,
-      'no v9 of undo31/recipes — it keeps v4, v3, v2, v1',
+      'no v9 of undo31/recipes — it keeps v2, v1',
     )
     let listing = await agent.answer('app_files', { ...app, op: 'list' })
     assertEquals(listing.text.split('\n').sort(), ['broken.js', 'index.html'])
@@ -510,16 +510,17 @@ test(
       await agent.tool('app_deploy', app)
       assertStringIncludes(
         await agent.tool('app_rollback', app),
-        'back to v1, live now as v3',
+        'back to v1, live now',
       )
 
-      // A version a rollback made says so, beside what it changed to do it.
+      // The list names the live kept version and its pointer move.
       let list = await agent.tool('app_versions', app)
       assertMatch(
         list,
-        /- v3 \(live\) 20\d\d-\d\d-\d\dT.* — restored v1, changed index\.html/,
+        /- v1 \(live\) 20\d\d-\d\d-\d\dT/,
       )
-      // And the ones that put nothing back say only what they changed.
+      assertStringIncludes(list, 'moved v2 → v1')
+      // The deploy rows still say only what they changed.
       assert(!/- v2 .*restored/.test(list), 'v2 restored nothing')
       assert(!/- v1 .*restored/.test(list), 'v1 restored nothing')
 
@@ -610,7 +611,7 @@ test('the deploy that fixes a break closes it', async () => {
     })
     let out = await agent.tool('app_deploy', app)
     assertMatch(out, /v2/)
-    assertStringIncludes(out, 'closed 1 break from earlier versions')
+    assertStringIncludes(out, 'closed 1 break from other versions')
     assertEquals(await agent.tool('app_errors', app), 'no open errors')
     assert(
       !(await agent.tool('app_list', { space: 'mend34' })).includes('open'),

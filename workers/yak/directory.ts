@@ -311,6 +311,15 @@ type Id = string | { eid: string }
 let idOf = (v: Id): string => typeof v == 'string' ? v : v.eid
 
 type Row = {
+  switched?: {
+    app: string
+    from?: string | null
+    to: string
+    source?: string | null
+    at?: string | null
+    by?: string | null
+    via?: string | null
+  }
   entity: { eid: string }
   space?: { slug: string }
   app?: {
@@ -1139,6 +1148,7 @@ export let directory = (via: Fetcher, now = false) => {
       }
       return out
     },
+    switches: (app: App) => query(`.switched.app=${app.eid}`, true),
     // Every deploy of an app, newest first — the versions app_versions pages
     // through, app_rollback picks from, and the retention sweep marks live
     // bytes off (versions.ts). None is ever buried, so this grows with the

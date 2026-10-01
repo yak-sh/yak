@@ -57,7 +57,7 @@ import { accountUrl } from './workers_api.ts'
 import { oops } from './pages.ts'
 import type { Who } from './session.ts'
 import type { Dispatch } from './door.ts'
-import { failed, noted, refusal, serving } from './unseen.ts'
+import { failed, noted, refusal } from './unseen.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import {
   type Bound,
@@ -356,7 +356,7 @@ export let workerBreak = async (
   if (refused(error) || refusal(error.message)) return
   let request = `worker ${req.method} ${new URL(req.url).pathname}`
   caught(error, { request, space: space.slug, app: app.slug })
-  let version = await serving(env, space, app)
+  let version = app.version
   await noted((bundles) =>
     metaOf(appStore(env.STORE, space, app))
       .apply(bundles, KERNEL), {
@@ -792,7 +792,7 @@ export let carried = async (
 // API has returned that in several forms — a version id on the versioned upload
 // door, a deployment id and an etag on this one — so whichever it hands back
 // is read, and none of them is what a rollback restores FROM: putting an app
-// back re-uploads the worker.js its version pinned, so it never depends on
+// back selects the script kept with its version; legacy preparation uses
 // Cloudflare having kept anything.
 export let upload = async (
   env: Env,

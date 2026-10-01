@@ -350,7 +350,7 @@ where it reaches only its own data and the platform supplies its storage.
 Whatever breaks — a page's own error, a refused write, a request that failed
 — arrives at the end of a later reply, once. Fix what you see. And when a
 change of yours is what broke it, or they simply want it back: app_rollback
-puts every file of an earlier deploy back and releases it as a new version,
+moves the live pointer to a kept version, without making a new deploy,
 and app_versions is the list to pick from. A whole app deleted comes back the
 same way: app_delete puts it in the trash for 30 days, keeping everything,
 and app_restore takes it back out — and a whole space the same, with

@@ -90,7 +90,6 @@ import { ending } from './billing.ts'
 import { NOTES } from './standing.ts'
 import {
   draftFiles,
-  GRACE as PIN_GRACE,
   moved,
   own,
   type Pinner,
@@ -704,18 +703,6 @@ export let collected = async (env: Env, now = new Date()) => {
     if (await renamed(blobs, dir, one, 'AGENTS.md', NOTES)) notes++
   }
   let unpinned = await pruned(dir, blobs, standing, now.getTime())
-  if (env.CF_WORKERS_TOKEN) {
-    for (let { app } of standing) {
-      for (let v of await versions(dir, app)) {
-        if (!v.script || v.script == app.script) continue
-        if (!v.at || now.getTime() - Date.parse(v.at) < PIN_GRACE) continue
-        await drop(env, v.script, true)
-        await dir.apply({
-          entities: [{ entity: { eid: v.eid }, deploy: { script: null } }],
-        })
-      }
-    }
-  }
   if (gone) console.log(`yak-trash: ${gone} erased at ${now.toISOString()}`)
   if (carried) console.log(`yak-trash: ${carried} pins carried to sha/`)
   if (notes) console.log(`yak-trash: ${notes} AGENTS.md renamed to ${NOTES}`)

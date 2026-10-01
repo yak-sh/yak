@@ -81,8 +81,8 @@ nested URLs.
 <!-- versions.ts KEEP = 20 -->
 
 Each deployment creates a version, and the last twenty are kept. A rollback
-restores an earlier set of files as a new version. Rollbacks do not change saved
-app data.
+moves the live pointer to a kept version without minting a new version.
+Rollbacks do not change saved app data.
 
 ## Server-side code
 

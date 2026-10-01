@@ -28,7 +28,7 @@ let fixture = async (env: Env) => {
   return { ctx, dir, args, write, history }
 }
 
-test('deploy reload marks survive recording, rollback is required, and notices follow the commit', async () => {
+test('deploy reload marks survive recording, and pointer notices follow the commit', async () => {
   using scenario = platform('reload-secret')
   let { env } = scenario
   let store = env.STORE as unknown as Namespace
@@ -66,19 +66,23 @@ test('deploy reload marks survive recording, rollback is required, and notices f
   await call(f.ctx, 'app_rollback', { ...f.args, version: 2 })
   assertEquals((await f.history()).map((v) => v.reload), [
     'required',
-    'required',
     null,
     null,
   ])
-  assertEquals(committed, [1, 2, 3, 4].map((v) => ['POST', '1', v, v]))
-  assertEquals(versions, [1, 2, 3, 4])
+  assertEquals(
+    committed,
+    [[1, 1], [2, 2], [3, 3], [3, 2]].map((
+      [newest, live],
+    ) => ['POST', '1', newest, live]),
+  )
+  assertEquals(versions, [1, 2, 3, 2])
   await assertRejects(() =>
     call(f.ctx, 'app_deploy', {
       ...f.args,
       reload: 'never',
     })
   )
-  assertEquals(versions, [1, 2, 3, 4])
+  assertEquals(versions, [1, 2, 3, 2])
 
   await f.write('failed')
   let blocked = new Proxy(f.dir, {
@@ -99,8 +103,8 @@ test('deploy reload marks survive recording, rollback is required, and notices f
     Error,
     'record refused',
   )
-  assertEquals(versions, [1, 2, 3, 4])
-  assertEquals((await f.history())[0].version, 4)
+  assertEquals(versions, [1, 2, 3, 2])
+  assertEquals((await f.history())[0].version, 3)
 })
 
 for (let mode of ['network', 'non-ok']) {
@@ -195,4 +199,105 @@ test('updates carry every crossed required source mark but exclude the installed
   }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
   await update()
   assertEquals((await installed())[0].reload, null)
+})
+
+test('rollback selects kept bytes without minting or changing deploys, then deploy allocates above history', async () => {
+  using scenario = platform('rollback-secret')
+  let f = await fixture(scenario.env)
+  await f.write('one')
+  await call(f.ctx, 'app_deploy', f.args)
+  await f.write('two')
+  await call(f.ctx, 'app_deploy', f.args)
+  let before = await f.history()
+  await call(f.ctx, 'app_rollback', f.args)
+  assertEquals(await f.history(), before)
+  let space = (await f.dir.space('ada'))!
+  assertEquals((await f.dir.app(space, 'recipes'))!.version, 1)
+  let list = (await call(f.ctx, 'app_versions', f.args)).text
+  assertEquals(list.includes('v1 (live)'), true)
+  assertEquals(list.includes('moved v2 → v1'), true)
+  await call(f.ctx, 'app_rollback', { ...f.args, version: 2 })
+  assertEquals(await f.history(), before)
+  await call(f.ctx, 'app_rollback', { ...f.args, version: 1 })
+  await f.write('three')
+  await call(f.ctx, 'app_deploy', f.args)
+  assertEquals((await f.history()).map((v) => v.version), [3, 2, 1])
+  assertEquals((await f.history()).slice(1), before)
+})
+
+test('worker errors after rollback and an in-flight pointer move name the routed bytes', async () => {
+  using scenario = platform('rollback-errors')
+  let f = await fixture(scenario.env)
+  await f.write('one')
+  await call(f.ctx, 'app_deploy', f.args)
+  await f.write('two')
+  await call(f.ctx, 'app_deploy', f.args)
+  await call(f.ctx, 'app_rollback', { ...f.args, version: 1 })
+  let space = (await f.dir.space('ada'))!
+  let app = (await f.dir.app(space, 'recipes'))!
+  let { ran } = await import('./dispatch.ts')
+  let env: Env = {
+    ...scenario.env,
+    DISPATCH: {
+      get: () => ({
+        fetch: async () => {
+          await call(f.ctx, 'app_rollback', { ...f.args, version: 2 })
+          return new Response('version one failed', { status: 500 })
+        },
+      }),
+    },
+  }
+  let visitor = new Request('https://ada.yaks.app/recipes/')
+  let { workerBreak } = await import('./dispatch.ts')
+  await workerBreak(
+    scenario.env,
+    space,
+    { ...app, version: 2 },
+    visitor,
+    new Error('version two failed'),
+  )
+  await call(f.ctx, 'app_rollback', { ...f.args, version: 1 })
+  let current = (await call(f.ctx, 'app_errors', f.args)).text
+  assertEquals(current, 'no open errors')
+  await workerBreak(
+    scenario.env,
+    space,
+    app,
+    visitor,
+    new Error('version one failed'),
+  )
+  current = (await call(f.ctx, 'app_errors', f.args)).text
+  assertEquals(current.includes('v1'), true, current)
+  await call(f.ctx, 'app_errors', { ...f.args, seen: ['all'] })
+  await ran(env, space, app, new Request('https://ada.yaks.app/recipes/'), {
+    person: ADA,
+    role: 'owner',
+  })
+  let errors = (await call(f.ctx, 'app_errors', { ...f.args })).text
+  assertEquals(errors.includes('v1'), true, errors)
+  assertEquals(errors.includes('v2'), false, errors)
+})
+
+test('legacy source-less rollback keeps deploy rows unchanged and remains undoable', async () => {
+  using scenario = platform('rollback-legacy')
+  let f = await fixture(scenario.env)
+  await f.write('one')
+  await call(f.ctx, 'app_deploy', f.args)
+  await f.write('two')
+  await call(f.ctx, 'app_deploy', f.args)
+  let all = await f.history()
+  await f.dir.stamp({
+    entities: [{
+      entity: { eid: all[1].eid },
+      deploy: { source: null, script: null },
+    }],
+  })
+  let before = await f.history()
+  await call(f.ctx, 'app_rollback', { ...f.args, version: 1 })
+  assertEquals(await f.history(), before)
+  await call(f.ctx, 'app_rollback', { ...f.args, version: 2 })
+  assertEquals(await f.history(), before)
+  await f.write('three')
+  await call(f.ctx, 'app_deploy', f.args)
+  assertEquals((await f.history()).slice(1), before)
 })

@@ -242,7 +242,6 @@ import {
   releaseOf,
   replaced,
   restore,
-  restored,
   same,
   sha256,
   unfenced,
@@ -864,7 +863,7 @@ let published = async (
   release: string,
   fence: string,
   files: Awaited<ReturnType<typeof staged>>,
-  candidate?: { source: string; script: string },
+  target?: Version,
   reload?: Reload,
 ) => {
   let c = ctx.clock ?? clock()
@@ -877,7 +876,8 @@ let published = async (
   // release index also records any package-lock.json the compile writes.
   let keys = (await blobs.list(prefix)).map((k) => k.slice(prefix.length))
   // Compile in the private release candidate. A failure leaves serving alone.
-  let made = await c.time(
+  let kept = target?.source && target.script ? target : undefined
+  let made = kept ? { lines: [] } : await c.time(
     'compile',
     () =>
       compiled(
@@ -893,7 +893,8 @@ let published = async (
   )
   // What this release will be called. Its seed is staged under this version
   // and applied when the directory moves the declaration pointer.
-  let version = (app.version ?? 0) + 1
+  let all = await versions(ctx.dir, standing)
+  let version = target?.version ?? (all[0]?.version ?? 0) + 1
   // Read the serving release before preparing the next one. This also gives
   // a store first reached during a deploy the declaration to keep on failure.
   await answer(store, '/vocab')
@@ -927,7 +928,7 @@ let published = async (
   // renamed property arrives beside the old one, and the old one keeps every
   // row already written under it (C-32652 item 4).
   let added: string[] = []
-  let kept: string[] = []
+  let retained: string[] = []
   // And the words this app uses rather than homes (T-32728).
   let uses: Record<string, string> = {}
   let staged: { app: App; release: string }[] = []
@@ -1072,7 +1073,7 @@ let published = async (
   planted = mine.comps ?? []
   dropped = mine.dropped ?? []
   added = [...added, ...(mine.added ?? [])]
-  kept = mine.kept ?? []
+  retained = mine.kept ?? []
   await answer(
     draft,
     '/uses',
@@ -1160,20 +1161,22 @@ let published = async (
   // grew is graph_apply's schema, not its name. The roster is the same for
   // everybody and moves only when the platform is released (stream.ts).
   toolsTook('tools')
-  let script = candidate?.script ?? `app-${app.eid}-r-${crypto.randomUUID()}`
+  let script = kept?.script ?? `app-${app.eid}-r-${crypto.randomUUID()}`
   let stagedApp = { ...app, source: release, script }
-  let deployed = await c.time(
-    'worker',
-    () =>
-      deployWorker(
-        ctx.env,
-        space,
-        stagedApp,
-        bytesAt,
-        parsed,
-        made.worker,
-      ),
-  )
+  let deployed = kept
+    ? { ready: true, worker: kept.worker, lines: [] }
+    : await c.time(
+      'worker',
+      () =>
+        deployWorker(
+          ctx.env,
+          space,
+          stagedApp,
+          bytesAt,
+          parsed,
+          made.worker,
+        ),
+    )
   if (!deployed.ready) {
     throw refuse(
       'unavailable',
@@ -1186,7 +1189,7 @@ let published = async (
   // What this release IS, kept so one word puts it back (T-32886): the files
   // as a manifest of path to the name of their bytes, those bytes pinned
   // beside them, and Cloudflare's name for the script this uploaded. The
-  // app's version counter and the row that records the version move together.
+  // app's live pointer and its move record commit together.
   let pinned = await c.time('snapshot', () => files.finish())
   await c.time(
     'record',
@@ -1204,6 +1207,7 @@ let published = async (
         fence,
         sowed.length > 0,
         reload,
+        target,
       ),
   )
   await releaseNotice(store, version, {
@@ -1242,7 +1246,7 @@ let published = async (
   // was the bug (T-33146) — installers kept taking v1 while v2 served and
   // nothing said so — and the fix is that the deploy door says it.
   let offer = app.published
-  let trailing = offer && offer.version < version
+  let trailing = offer && offer.version != version
     ? `\noffered as ${offer.name} is still v${offer.version}, so anyone ` +
       'installing it gets that code — app_publish again to offer this one'
     : ''
@@ -1253,7 +1257,7 @@ let published = async (
       (closed
         ? `\nclosed ${closed} ${
           closed == 1 ? 'break' : 'breaks'
-        } from earlier versions`
+        } from other versions`
         : '') +
       // What this app can now be asked to do, as `command` takes them: bare
       // names, because a command is said with its app beside it rather than
@@ -1276,9 +1280,9 @@ let published = async (
       // rename nobody was told to finish (C-32730 item 4).
       // …named in the file the app actually wrote, since either format of
       // it is a manifest (`spelled` above, M-34605).
-      (kept.length
+      (retained.length
         ? `\nkept, not in ${vocabFile} (the rows are there): ${
-          kept.join(', ')
+          retained.join(', ')
         } — name it in ${vocabFile} again to keep writing it, or move its ` +
           'rows to the new word yourself, a row at a time with graph_query ' +
           'then graph_apply. Nothing is migrated behind you; once no row ' +
@@ -1296,23 +1300,48 @@ let released = async (
   app: App,
   who: Who,
   store: Door,
-  candidate?: { source: string; script: string },
+  target?: Version,
   reload?: Reload,
 ) => {
   let standing = await waiting(ctx.dir, space, app, who)
   let blobs = r2RawObjects(ctx.env.BLOBS)
-  let work = candidate?.source ?? await editing(ctx.dir, space, standing, who)
-  let release = releaseOf(space, standing)
-  let draft = candidate ? standing.draft ?? null : standing.draft ?? work
+  let kept = target?.source && target.script ? target : undefined
+  let work = target
+    ? kept?.source ?? releaseOf(space, standing)
+    : await editing(ctx.dir, space, standing, who)
+  if (target && !kept) {
+    await restore(
+      r2Objects(ctx.env.BLOBS),
+      `${work}/`,
+      target.files,
+      `${space.slug}/${standing.slug}/`,
+    )
+  }
+  let release = kept?.source ?? releaseOf(space, standing)
+  let draft = target ? standing.draft ?? null : standing.draft ?? work
+  if (kept) {
+    let held = pins(r2Objects(ctx.env.BLOBS), `${space.slug}/${app.slug}/`)
+    await Promise.all(
+      Object.values(kept.files).map(async (sha) => {
+        if (!await held.get(sha)) throw refuse('missing', `no blob for ${sha}`)
+      }),
+    )
+  }
   let fence = await fenced(ctx.dir, standing, draft, who)
   try {
-    let files = await staged(
-      blobs,
-      standing.source,
-      work,
-      release,
-      !candidate && work.split('/').pop()?.startsWith('delta-v') == true,
-    )
+    let files = kept
+      ? {
+        files: r2Objects(ctx.env.BLOBS),
+        manifest: () => kept.files,
+        finish: () => Promise.resolve(kept.files),
+      }
+      : await staged(
+        blobs,
+        standing.source,
+        work,
+        release,
+        !target && work.split('/').pop()?.startsWith('delta-v') == true,
+      )
     return await published(
       ctx,
       space,
@@ -1322,7 +1351,7 @@ let released = async (
       release,
       fence,
       files,
-      candidate,
+      target,
       reload,
     )
   } finally {
@@ -3062,6 +3091,8 @@ let OURS: Row[] = [
           space,
         }
       }
+      let moves = await ctx.dir.switches(app)
+      let numbers = new Map(all.map((v) => [v.eid, v.version]))
       // The newest KEEP, and the count says how many there are: an app keeps
       // every version it ever deployed (versions.ts), so the list is a page
       // and the older ones are still there to roll back to by number.
@@ -3071,16 +3102,20 @@ let OURS: Row[] = [
             all.length == 1 ? 'version' : 'versions'
           }${all.length > KEEP ? `, newest ${KEEP}` : ''}`,
           ...all.slice(0, KEEP).map((v, i) => {
-            // A version a rollback made says so first: "restored v2" is what
-            // the person asked for, and the file list is how it did it.
-            let back = restored(all, i)
             return `- v${v.version}${
               v.version == app.version ? ' (live)' : ''
             }${v.version == app.published?.version ? ' (offered)' : ''}${
               v.at ? ` ${v.at}` : ''
-            } — ${back ? `restored v${back}, ` : ''}${
-              whatChanged(all[i + 1]?.files ?? null, v.files)
-            }`
+            } — ${whatChanged(all[i + 1]?.files ?? null, v.files)}`
+          }),
+          ...moves.sort((a, b) =>
+            String(b.switched?.at).localeCompare(String(a.switched?.at))
+          ).slice(0, KEEP).map((row) => {
+            let move = row.switched!
+            return `- moved ${
+              move.from ? `v${numbers.get(String(move.from))}` : 'undeployed'
+            } → v${numbers.get(String(move.to))}` +
+              ` ${move.at} by ${move.by ?? 'unknown'} via ${move.via ?? 'none'}`
           }),
         ].join('\n'),
         space,
@@ -3112,7 +3147,7 @@ let OURS: Row[] = [
       if (args.version == null) {
         // The one before the live one: the deploy that broke the page is the
         // newest, so "put it back" means the one under it.
-        want = all[1]
+        want = all.find((v) => v.version < (app.version ?? 0))
         if (!want) {
           throw refuse(
             'missing',
@@ -3137,34 +3172,18 @@ let OURS: Row[] = [
       let blobs = r2Objects(ctx.env.BLOBS)
       let prefix = fileKey(space, app, '')
       let now = await manifest(blobs, prefix)
-      let next = (app.version ?? 0) + 1
-      let candidate = {
-        source: `${space.slug}/.releases/${app.eid}/v${next}`,
-        script: `app-${app.eid}-r-${next}`,
-      }
-      await restore(
-        blobs,
-        `${candidate.source}/`,
-        want.files,
-        `${space.slug}/${app.slug}/`,
-      )
-      // A rollback is a release — of files that were live once — so the same
-      // door plants the vocabulary, the tools and the worker this version
-      // pinned, and records it as a new version. History is never rewritten.
       let { version, said } = await released(
         ctx,
         space,
         app,
         who,
         store,
-        candidate,
-        'required',
+        want,
       )
       return {
-        text: `put ${space.slug}/${app.slug} back to v${want.version}, live ` +
-          `now as v${version}: ${url(space, app, ctx.env)} — ${
-            whatChanged(now, want.files)
-          }` + said,
+        text: `put ${space.slug}/${app.slug} back to v${version}, live ` +
+          `now: ${url(space, app, ctx.env)} — ${whatChanged(now, want.files)}` +
+          said,
         space,
       }
     },

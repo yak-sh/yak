@@ -265,7 +265,7 @@ app_deploy:
     published version does not move with it: what strangers install stays
     the version you published until you call app_publish again, and this
     tool says so when the published version starts falling behind. To undo:
-    app_rollback, which puts an earlier deploy back as a new version. Pass
+    app_rollback, which moves the live pointer to a kept version. Pass
     the app slug. Returns the new version, URL, and any schema, seed,
     command or worker deployment details. Documentation:
     https://yaks.app/docs.
@@ -315,24 +315,20 @@ store_load:
 app_versions:
   title: List app versions
   description: >-
-    List the newest 20 deploys of the named app, newest first, with when
-    each went out and which files changed. It is the list a version is named
-    from for app_rollback. All deploys are kept; the response reports the
-    total, and an older version can still be rolled back to by number.
-    Documentation: https://yaks.app/docs/errors.
+    List the newest 20 kept deploys, newest first, their dates and file changes,
+    which version is live, and recorded pointer moves (from, to, when, by whom
+    and through which session). All deploys are kept; the total is reported,
+    and any kept version can be selected by app_rollback. Documentation:
+    https://yaks.app/docs/errors.
 app_rollback:
   title: Roll back to an earlier version
   description: >-
-    Put the app back to an earlier deploy: every file of that deploy, its
-    components, its tools and its worker code with them. For a change that
-    broke something, or the old version back. It goes out as a new version,
-    so nothing is lost and a rollback can itself be rolled back. Leave
-    version out for the deploy before the live one, or name one from
-    app_versions. Existing data rows are not restored or deleted: files are
-    restored and their schema is reapplied using the same additive rules as
-    app_deploy. To undo: another app_rollback, since this goes out as a new
-    version and app_versions still lists the one you left. Returns the
-    source version, new version, URL and deployment details. Documentation:
+    Move the live pointer to a kept version without minting a new version.
+    Its files, vocabulary, commands and worker become live together, and the
+    move is recorded. Leave version out for the deploy before the live one,
+    or name any kept version from app_versions, including a newer one to undo
+    a rollback. Existing data rows are not restored or deleted. Returns the
+    version now live, URL and changed files. Documentation:
     https://yaks.app/docs/errors.
 store_restore:
   title: Restore the store to a point in time

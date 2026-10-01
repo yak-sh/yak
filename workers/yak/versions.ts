@@ -2,8 +2,7 @@
 // V-32361: "we want to prioritize error-correction over initial correctness").
 // When an agent breaks a page the person was using, their own repair is "put
 // it back" — so every `app_deploy` records the version it made and
-// `app_rollback` restores one, as a new version, so history is never
-// rewritten.
+// `app_rollback` selects one, and each live pointer move is recorded.
 //
 // A version is a manifest — path to the SHA-256 of that file's bytes — and
 // never a copy of the bytes: the address is the person's. The bytes are pinned
@@ -71,9 +70,7 @@ export type Version = {
   at: string
   files: Files
   // Cloudflare's own name for the script upload this deploy made, empty
-  // where the app has no worker. Informational: a rollback re-uploads the
-  // worker.js the manifest names, so putting an app back never depends on
-  // Cloudflare having kept anything.
+  // where the app has no worker. The script and source select this release.
   worker: string
   script?: string
   source?: string | null
@@ -564,22 +561,6 @@ export let same = (a: Files, b: Files) => {
     paths.every((p) => a[p] == b[p])
 }
 
-// The version this one PUT back, or 0 where it put nothing back — what a
-// rollback did, said in the list rather than only in the moment (C-32905 item
-// 6). Read off the manifests, because restoring files is the whole of a
-// rollback and the files are therefore its own record: this version's files
-// are not the ones under it, and are exactly some earlier version's. `all` is
-// the list newest first, `i` the one being said.
-export let restored = (all: Version[], i: number) => {
-  let now = all[i]
-  let before = all[i + 1]
-  if (!before || same(before.files, now.files)) return 0
-  for (let j = i + 2; j < all.length; j++) {
-    if (same(all[j].files, now.files)) return all[j].version
-  }
-  return 0
-}
-
 // Every version of an app, newest first.
 export let versions = (dir: Directory, app: App) => dir.deploys(app)
 
@@ -610,12 +591,11 @@ export let record = async (
   fenceWas = app.fence,
   seeded = false,
   reload?: Reload,
+  target?: Version,
 ) => {
-  let prior = sourceWas
-    ? (await dir.deploys(app)).find((v) =>
-      v.version == app.version && !v.source
-    )
-    : null
+  let all = await dir.deploys(app)
+  let prior = all.find((v) => v.version == app.version)
+  let eid = target?.eid ?? mint()
   return await dir.stamp({
     entities: [
       {
@@ -644,15 +624,8 @@ export let record = async (
         app: { declaration: release },
         $was: { app: { declaration: token(app.declaration) } },
       })),
-      ...(prior
-        ? [{
-          entity: { eid: prior.eid },
-          deploy: { source: sourceWas },
-          $was: { deploy: { source: token(prior.source) } },
-        }]
-        : []),
-      {
-        entity: { eid: mint() },
+      ...target ? [] : [{
+        entity: { eid },
         deploy: {
           app: app.eid,
           version,
@@ -662,6 +635,18 @@ export let record = async (
           source: app.source,
           // Optional is derived; the stored mark can only raise severity.
           ...reload == 'required' ? { reload } : {},
+        },
+      }],
+      {
+        entity: { eid: mint() },
+        switched: {
+          app: app.eid,
+          from: prior?.eid ?? null,
+          to: eid,
+          source: app.source,
+          at: new Date().toISOString(),
+          by: who.person || null,
+          via: null,
         },
       },
     ],
@@ -861,9 +846,16 @@ export let pruned = async (
     let space = `${prefix.split('/')[0]}/`
     let stage = `${space}.releases/${app.eid}/`
     let releases = await versions(dir, app)
+    let moves = await dir.switches(app)
     let sources = new Set(
-      [app.source, ...releases.map((v) => v.source)]
-        .filter((source): source is string => !!source)
+      [
+        app.source,
+        ...releases.map((v) => v.source),
+        ...moves.map((r) => r.switched?.source),
+      ]
+        .filter((source): source is string =>
+          typeof source == 'string' && !!source
+        )
         .map((source) => space + source.slice(source.indexOf('/') + 1)),
     )
     let namedFiles = new Set<string>()

@@ -121,4 +121,8 @@ test('crossing a required release raises the reload level even with equal vocab 
   assertEquals(await get(1), { version: 3, reload: 'required' })
   // The mark on the page's own release is not crossed.
   assertEquals(await get(2), { version: 3, reload: 'optional' })
+  await stamp(env, {
+    entities: [{ entity: { eid: app.eid }, app: { version: 1 } }],
+  })
+  assertEquals(await get(3), { version: 1, reload: 'required' })
 })

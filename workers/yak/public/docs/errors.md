@@ -226,11 +226,12 @@ group, so archiving one archives them all.
 
 You will rarely archive by hand, because **new releases close what the old ones
 broke.** Every `app_deploy`, `app_install` and `app_rollback` archives every
-open break from an earlier version (and every one that names no version at all,
-since nothing can tell whether those are still happening); the deploy's reply
-reports how many. An `app_files` write stays in a private draft until deploy, so
-a page's "failed to load app.js" is fixed when that deploy succeeds. A break the
-new files still produce is written again the next time it happens.
+open break from a version other than the one now live (and every one that names
+no version at all, since nothing can tell whether those are still happening);
+the deploy's reply reports how many. An `app_files` write stays in a private
+draft until deploy, so a page's "failed to load app.js" is fixed when that
+deploy succeeds. A break the new files still produce is written again the next
+time it happens.
 
 ## app_versions
 
@@ -261,19 +262,22 @@ Puts the app back the way it was. Leave `version` out for the deploy before the
 live one — "that change broke it" almost always means the one under the newest.
 Name one off `app_versions` for anything else.
 
-What moves: every file that version named, restored from its pinned bytes, and
-every file the app has now that the version did not name, deleted. Then the
-whole release runs again over those files — the components and the commands its
-`vocab.json` declares, its `worker.js` re-uploaded — because everything a deploy
-plants is a file, so restoring the files is the whole of a rollback.
+What moves: the live pointer selects the kept release's immutable files and
+worker. Its vocabulary and commands are selected together under the store's
+additive schema rules. A legacy version without its own source is prepared from
+pinned bytes before switching; its deploy record stays unchanged.
 
 What never moves: the app's data. Every row, every upload, everything the store
 learned. Only the files.
 
-A rollback goes out as a **new version**, so nothing is lost and a rollback can
-itself be rolled back. The reply names both numbers:
+A rollback moves the live pointer to a kept version. It creates no new version
+and leaves every stored deploy unchanged, including copies older rollbacks
+created. Each pointer move records its source and target deploy, time, actor and
+session (when identifiable). `app_versions` shows these moves and marks the
+version now live. To undo, name the version you left in another `app_rollback`.
+Errors and reload notices name the version whose bytes run.
 
-    put yourname/recipes back to v2, live now as v4:
+    put yourname/recipes back to v2, live now:
     https://yourname.yaks.app/recipes/ — changed index.html
 
 Two refusals: an app with one deploy or none has nothing earlier to go back to,

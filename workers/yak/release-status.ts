@@ -19,7 +19,7 @@ export let releaseStatus = async (
   version: number,
 ) => {
   let now = app.version ?? 0
-  if (version >= now) return { version: now }
+  if (version == now) return { version: now }
   let cache = held.get(env)
   if (!cache) held.set(env, cache = new Map())
   let key = `${app.eid}:${version}:${now}`
@@ -46,7 +46,10 @@ export let releaseStatus = async (
       return reloadLevel(
         { files: oldFiles, vocab: oldVocab },
         { files: newFiles, vocab: newVocab },
-        all.filter((v) => v.version > version && v.version <= now),
+        all.filter((v) =>
+          v.version > Math.min(version, now) &&
+          v.version <= Math.max(version, now)
+        ),
       )
     })()
     if (cache.size >= 1024) cache.delete(cache.keys().next().value!)

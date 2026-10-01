@@ -584,7 +584,12 @@ export let coreDocs: VocabDoc[] = storeDocs([
  * one Stripe subscription (billing.ts). The rest of the directory's words are
  * still {@link platformDoc}'s own.
  */
-let hostingDoc: VocabDoc = pick(platformWords, ['hostname', 'plan', 'deploy'])
+let hostingDoc: VocabDoc = pick(platformWords, [
+  'hostname',
+  'plan',
+  'deploy',
+  'switched',
+])
 
 /**
  * The platform's own components — what the directory IS, as one JSON Schema

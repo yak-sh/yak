@@ -37,7 +37,6 @@ import {
   renamed,
   replaced,
   restore,
-  restored,
   SHA,
   sha256,
   snapshot,
@@ -179,6 +178,7 @@ let directory = () => {
     return Promise.resolve([])
   }
   let dir = {
+    switches: () => Promise.resolve([]),
     // Per app, because the sweep now marks from every app in the bucket and
     // what one names has to be tellable from what another does.
     deploys: (app: App) =>
@@ -267,27 +267,7 @@ test('a rollback restores the bytes, and only the files', async () => {
 
 // What a version PUT back, read off the manifests: a rollback restores files,
 // so the files are its record (T-32910, C-32905 item 6).
-test('a version made by a rollback says which one it restored', () => {
-  let v = (version: number, index: string): Version => ({
-    eid: `d${version}`,
-    version,
-    at: '',
-    files: { 'index.html': index },
-    worker: '',
-  })
-  // v1 lemon, v2 oops, v3 the rollback, v4 a deploy of the same bytes again.
-  let all = [v(4, 'lemon'), v(3, 'lemon'), v(2, 'oops'), v(1, 'lemon')]
-  assertEquals(restored(all, 1), 1, 'v3 put v1 back')
-  assertEquals(restored(all, 2), 0, 'v2 is its own change')
-  assertEquals(restored(all, 3), 0, 'the first deploy put nothing back')
-  // A deploy that changed nothing is not a rollback, whatever it matches.
-  assertEquals(restored(all, 0), 0, 'v4 changed nothing')
-})
 
-// The retention rule (T-34952): a version is kept forever, because git derives
-// an app's commit chain from the manifests, and its bytes are kept as long as
-// it is — so the oldest rollback an app offers works however many deploys
-// later.
 test('no version is ever buried, and every one keeps its bytes', async () => {
   let { blobs, clock } = memory()
   let { dir, rows } = directory()
@@ -424,7 +404,7 @@ test('published releases keep versioned bytes after newer deploys', async () => 
   )
 })
 
-test('a deploy records the source of the release it replaces', async () => {
+test('a deploy never changes the stored release it replaces', async () => {
   let { dir, rows } = directory()
   let old = 'jeff/.releases/a1/old'
   let next = 'jeff/.releases/a1/next'
@@ -444,7 +424,7 @@ test('a deploy records the source of the release it replaces', async () => {
     [],
     old,
   )
-  assertEquals(rows().find((v) => v.version == 1)?.source, old)
+  assertEquals(rows().find((v) => v.version == 1)?.source, null)
   assertEquals(rows().find((v) => v.version == 2)?.source, next)
 })
 

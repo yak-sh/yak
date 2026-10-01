@@ -237,38 +237,26 @@ test('app bindings survive redeploy, removal and trash until permanent deletion'
   }
 })
 
-test('rollback switches files and worker only after the upload succeeds', async () => {
+test('rollback selects the kept files and worker without uploading or minting a deploy', async () => {
   let k = await fixture()
   try {
     await k.write({ main: 'worker.js' })
     await k.tool('app_deploy')
+    let space = (await k.dir.space('ada'))!
+    let first = (await k.dir.app(space, 'cookbook'))!
     await k.tool('app_files', {
       files: [{ path: 'index.html', content: '<h1>second</h1>' }],
     })
     await k.tool('app_deploy')
-    let stage = `app-${k.app.eid}-r-3`
-    let space = (await k.dir.space('ada'))!
-    let before = (await k.dir.app(space, 'cookbook'))!
-    k.state.fail = stage
-    await assertRejects(() => k.tool('app_rollback'))
-    let app = (await k.dir.app(space, 'cookbook'))!
-    assertEquals(app.version, 2)
-    assertEquals(app.source, before.source)
-    assertEquals(app.script, before.script)
-    assertEquals(
-      await k.tool('app_files', { op: 'read', path: 'index.html' }),
-      '<h1>second</h1>',
-    )
-
-    k.state.fail = ''
+    let history = await k.dir.deploys(first)
+    let scripts = k.state.scripts.size
     await k.tool('app_rollback')
-    app = (await k.dir.app(space, 'cookbook'))!
-    assertEquals(app.version, 3)
-    assertEquals(app.script, stage)
-    assertStringIncludes(app.source!, '/.releases/')
-    assert(k.state.scripts.has(
-      `/workers/dispatch/namespaces/yak-apps/scripts/${stage}`,
-    ))
+    let app = (await k.dir.app(space, 'cookbook'))!
+    assertEquals(app.version, 1)
+    assertEquals(app.source, first.source)
+    assertEquals(app.script, first.script)
+    assertEquals(await k.dir.deploys(app), history)
+    assertEquals(k.state.scripts.size, scripts)
   } finally {
     k.done()
   }

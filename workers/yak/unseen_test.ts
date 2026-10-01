@@ -81,6 +81,7 @@ test('named: all, and nothing else sweeping', () => {
 test('past: what the rider is quiet about', () => {
   // News: it happened on what the app is serving now.
   assert(!past({ version: 2 }, hit))
+  assert(past({ version: 1 }, hit))
   // A release replaced the code that made it.
   assert(past({ version: 3 }, hit))
   // An app that has never been deployed serves v0, and a break on v0 is news.

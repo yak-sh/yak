@@ -63,3 +63,17 @@ rollback. Otherwise a dropped or retyped definition/property, or any crossed
 `deploy.reload` can raise the reload level, never lower it. `source` keeps the
 source release of an installed copy. Neither this rule nor a required notice
 reloads pages automatically.
+
+## Live versions
+
+`app{version, source, script, declaration}` selects a kept deploy's serving
+bytes. `deploy{app, version, files, worker, script, source, reload}` is the
+immutable release record. Rollback moves the live pointer, creates no deploy,
+and leaves existing deploy rows unchanged. A subsequent deploy allocates above
+the highest kept version, not above the live pointer.
+
+`switched{app, from, to, source, at, by, via}` records every pointer move, with
+references to the kept deploys and server-stamped provenance. `from` is absent
+on the first deploy; `via` is null when no session can be identified. Its source
+keeps the serving bytes of a legacy source-less deploy reachable without
+rewriting that deploy. Reload comparison works in either direction.

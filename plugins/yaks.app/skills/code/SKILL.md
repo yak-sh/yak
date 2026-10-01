@@ -646,8 +646,9 @@ When the script went up, the deploy reports
 `worker: worker.js answers first; a 404 from it serves the files`. Delete
 `worker.js` and the next deploy removes the script with it, so what serves is
 always what the files describe. A deploy is also what a rollback replays:
-`app_rollback` re-uploads the `worker.js` that version pinned, so putting an app
-back puts its code back too.
+`app_rollback` selects the kept worker and files; a legacy version without its
+own immutable source is prepared from its pinned bytes before switching, so
+putting an app back puts its code back too.
 
 ## The build sandbox is signed in as you
 

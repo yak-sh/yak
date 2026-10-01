@@ -96,10 +96,12 @@ A deployer can raise the level for a contract the vocabulary does not describe:
 Use this when, for example, a worker route or the meaning of a value sent to a
 peer changes incompatibly. The only explicit value is `'required'`. Leaving
 `reload` out means **derive from the releases**, not "force optional"; a
-deployer cannot lower a required change. `app_rollback` marks its new release
-required. `app_update` carries required marks from the source releases it
-crosses. The identical-files rule still takes precedence. Neither operation
-rolls back saved data; plan any store migration with the release.
+deployer cannot lower a required change. `app_rollback` compares the page with
+the kept version now live, including backward moves; dropping words or crossing
+a required mark requires reload. `app_update` carries required marks from the
+source releases it crosses. The identical-files rule still takes precedence.
+Neither operation rolls back saved data; plan any store migration with the
+release.
 
 ### The default notice
 

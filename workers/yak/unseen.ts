@@ -324,19 +324,11 @@ export let openIn = async (
   }
 }
 
-// What the app has already moved past, for the rider only (T-34338). A break
-// names the version it happened on, read past the directory's cache
-// ({@link serving}), so one naming a version under the app's own was produced
-// by code a later release replaced — `healed` archived its cohort at that
-// release and this one only arrived afterwards. A break naming no version at
-// all predates the counter and goes with them.
-//
-// It stays open, and `app_errors` still lists it: this decides only what is
-// worth interrupting a reply with. Unseen means unheard, not merely unstamped,
-// and news about code that no longer runs is neither.
+// Errors from code other than the live version remain readable but do not
+// interrupt a reply. Version order says nothing about which bytes run.
 export let past = (app: { version?: number | null }, h: Hit) => {
   let was = broke(h).version
-  return was == null || was < (app.version ?? 0)
+  return was == null || was != (app.version ?? 0)
 }
 
 // Serve, then mark: what is open, and `notified` on each item that had
@@ -438,7 +430,7 @@ export let archive = async (
 // And fixed by a release, which is how a break usually ends. D-32318 §Errors,
 // verbatim: "One is open until a later deploy stops producing it or the agent
 // marks it fixed." The code that produced it is not what serves any more, so
-// every deploy, install and rollback closes what the versions before it broke
+// every deploy, install and rollback closes what other versions broke
 // (tools.ts `released`); a break the new code still produces is written again
 // the next time it happens, and `app_list`'s open count follows either way.
 // A break that names no version at all predates the counter, and goes with
@@ -452,7 +444,7 @@ export let healed = async (
 ) => {
   let old = (await openIn(env, space, app, who, true)).filter((h) => {
     let was = broke(h).version
-    return was == null || was < version
+    return was == null || was != version
   })
   return old.length ? close(env, space, app, who, old) : 0
 }

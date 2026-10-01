@@ -272,8 +272,8 @@ test('draft files stay private through a refused deploy and rollback', async () 
   assert((await s.served('index.html')).body.includes('candidate'))
   assert((await s.tool('app_versions')).includes('3 versions'))
   await s.tool('app_rollback', { version: 2 })
-  assert((await s.served('index.html')).body.includes('first'))
-  assert((await s.tool('app_versions')).includes('4 versions'))
+  assert((await s.served('index.html')).body.includes('second'))
+  assert((await s.tool('app_versions')).includes('3 versions'))
 })
 
 test('concurrent first edits share one private draft', async () => {

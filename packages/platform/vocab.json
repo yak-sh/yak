@@ -341,6 +341,49 @@
         }
       },
       "description": "one customer\u2019s area of the platform, at its own slug"
+    },
+    "switched": {
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "description": "One move of an app's live pointer between kept deploys; source keeps the immutable serving bytes selected at that moment.",
+      "properties": {
+        "app": {
+          "type": "string",
+          "ref": "app",
+          "death": "cascade"
+        },
+        "from": {
+          "type": "string",
+          "ref": "deploy",
+          "death": "keep"
+        },
+        "to": {
+          "type": "string",
+          "ref": "deploy",
+          "death": "keep"
+        },
+        "source": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        }
+      }
     }
   }
 }
