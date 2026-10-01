@@ -1,14 +1,18 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { type Item, ModelError, type Request } from '@yaks/model'
-import { workersAi } from './mod.ts'
+import { type Binding, usageOf, workersAi } from './mod.ts'
 
 // A binding that answers `answer` (or throws it) and keeps what it was asked.
 let binding = (answer: unknown) => {
-  let asked: { model: string; input: unknown }[] = []
+  let asked: {
+    model: string
+    input: unknown
+    options?: Parameters<Binding['run']>[2]
+  }[] = []
   let model = workersAi({
-    run: (model, input) => {
-      asked.push({ model, input })
+    run: (model, input, options) => {
+      asked.push({ model, input, options })
       return answer instanceof Error
         ? Promise.reject(answer)
         : Promise.resolve(answer)
@@ -218,4 +222,42 @@ test("a binding's own ModelError is passed on as it is", async () => {
   let refused = new ModelError('limit', 'This space has used its allowance')
   let e = await assertRejects(() => binding(refused).model(ask([])))
   assertEquals(e, refused)
+})
+
+test('conversation routes affinity while tool order stays stable', async () => {
+  let { asked, model } = binding({ response: 'ok' })
+  let tools = [
+    { name: 'z', description: 'last', parameters: {} },
+    { name: 'a', description: 'first', parameters: {} },
+  ]
+  await model(ask([], { conversation: 'chat-1', tools }))
+  await model(ask([], { conversation: 'chat-1', tools: [...tools].reverse() }))
+  assertEquals(asked[0].options, {
+    extraHeaders: { 'x-session-affinity': 'chat-1' },
+  })
+  assertEquals(asked[1], asked[0])
+  await model(ask([]))
+  assertEquals(asked[2].options, undefined)
+})
+
+test('nested cached counts keep explicit zero distinct from unknown', () => {
+  assertEquals(
+    usageOf({
+      usage: {
+        input_tokens: 100,
+        input_tokens_details: { cached_tokens: 70 },
+      },
+    }),
+    { input_tokens: 100, cached_tokens: 70 },
+  )
+  assertEquals(
+    usageOf({
+      usage: {
+        prompt_tokens: 100,
+        prompt_tokens_details: { cached_tokens: 0 },
+      },
+    }),
+    { input_tokens: 100, cached_tokens: 0 },
+  )
+  assertEquals(usageOf({}), {})
 })

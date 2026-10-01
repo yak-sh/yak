@@ -39,6 +39,7 @@ import { Store } from './graph.ts'
 import { Wire as Wired } from './stream.ts'
 import type { Limiter } from './rate.ts'
 import { sha256 } from './versions.ts'
+import type { Binding as AiBinding } from '@yaks/workers-ai'
 
 // The streaming HTML rewriter, in the one shape apps.ts asks for it
 // (`reported` weaves the reporter into every page): a tag prepended inside the
@@ -212,18 +213,20 @@ export type Turn = {
  * text with (embedding.ts) as Workers AI does, a vector per text, so a store's
  * own embedding never spends a turn a test scripted.
  */
-export let embeds = <
-  A extends { run: (model: string, input: unknown) => Promise<unknown> },
->(ai: A): A => ({
+export let embeds = <A extends AiBinding>(ai: A): A => ({
   ...ai,
-  run: (model: string, input: unknown) =>
+  run: (
+    model: string,
+    input: unknown,
+    options?: Parameters<AiBinding['run']>[2],
+  ) =>
     model == EMBEDDER
       ? Promise.resolve({
         data: (input as { text: string[] }).text.map((_, i) =>
           Array.from({ length: DIM }, (_, j) => j == i % DIM ? 1 : 0)
         ),
       })
-      : ai.run(model, input),
+      : ai.run(model, input, options),
 })
 
 /**

@@ -31,7 +31,11 @@ let FLASH = '@cf/zai-org/glm-5.3-flash'
 let JEV = 'typesafe/jev'
 let SEED = 'bytedance-seed/seed-audio-1-0'
 
-type Asked = { model: string; input: Record<string, unknown> }
+type Asked = {
+  model: string
+  input: Record<string, unknown>
+  options?: { extraHeaders?: Record<string, string> }
+}
 
 // A platform with one space, Ada's, holding one app, and Workers AI answering
 // each call with what `answer` says. `access` is the app's; `manifest` is its
@@ -47,8 +51,8 @@ let vale = async (
 ) => {
   let asked: Asked[] = []
   let AI = embeds({
-    run: (model: string, input: unknown) => {
-      let a = { model, input: input as Record<string, unknown> }
+    run: (model: string, input: unknown, options?: Asked['options']) => {
+      let a = { model, input: input as Record<string, unknown>, options }
       asked.push(a)
       return Promise.resolve(answer(a, asked.length))
     },
@@ -115,13 +119,18 @@ let vale = async (
   )
   // `./api/ai/run` at the app's own address, as a page posts it: signed in
   // as `person`, or signed out.
-  let run = async (body: unknown, person: string | null = ADA) => {
+  let run = async (
+    body: unknown,
+    person: string | null = ADA,
+    headers: Record<string, string> = {},
+  ) => {
     let res = await apps.fetch(
       visit('/vale/api/ai/run', {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
           ...(person ? { cookie: await signedIn(person) } : {}),
+          ...headers,
         },
         body: JSON.stringify(body),
       }),
@@ -282,15 +291,28 @@ let said = (b: Bundle) => (b.content as Comp | undefined)?.body
 test('a page asks its store for a turn and the answer lands beside it', async () => {
   let v = await vale(() => ({
     response: 'Welcome, traveller.',
-    usage: { prompt_tokens: 1_000, completion_tokens: 100 },
+    usage: {
+      prompt_tokens: 1_000,
+      completion_tokens: 100,
+      input_tokens_details: { cached_tokens: 800 },
+    },
   }))
   let s = crypto.randomUUID()
   assertEquals((await v.send('/apply', asking(s, FLASH))).status, 200)
   let [reply] = await v.landed(`.entry.session=${s}&.output&*`)
   assertEquals(said(reply), 'Welcome, traveller.')
+  assertEquals(v.asked[0].options, {
+    extraHeaders: { 'x-session-affinity': s },
+  })
+  let [counted] = await v.read(`.entry.session=${s}&.usage&*`)
+  assertEquals((counted.usage as Comp).cached_tokens, 800)
   assertEquals(v.asked.map((a) => a.model), [FLASH])
   // The space paid for it, at the model's price.
-  let cost = weigh(priceOf(FLASH)!, { input_tokens: 1_000, output_tokens: 100 })
+  let cost = weigh(priceOf(FLASH)!, {
+    input_tokens: 1_000,
+    output_tokens: 100,
+    cached_tokens: 800,
+  })
   await until(async () => (await v.spent()).meter?.models)
   assertAlmostEquals((await v.spent()).meter!.models, cost)
   // And the transcript records it, on the ask and summed on the session.
@@ -433,7 +455,7 @@ test('./api/ai/run answers what the model said, and the space pays for it', asyn
     status: 200,
     said: { response: 'Welcome.', usage },
   })
-  assertEquals(v.asked, [{ model: FLASH, input }])
+  assertEquals(v.asked, [{ model: FLASH, input, options: undefined }])
   let cost = weigh(priceOf(FLASH)!, { input_tokens: 2_000, output_tokens: 50 })
   assertAlmostEquals((await v.spent()).meter!.models, cost)
   // A model the catalogue does not offer is refused before anything is spent.
@@ -480,4 +502,33 @@ test('connected OpenRouter text candidates are planted as server offers', () => 
     assertEquals((provider.provider as Comp).name, 'openrouter')
     assertEquals((model.model as Comp).modalities, ['text'])
   }
+})
+
+test('./api/ai/run carries affinity through its metered binding', async () => {
+  let p = await vale(() => ({
+    response: 'ok',
+    usage: {
+      input_tokens: 1000,
+      output_tokens: 10,
+      input_tokens_details: { cached_tokens: 900 },
+    },
+  }))
+  await p.run({ model: FLASH, input: {}, session_id: 'chat-body' })
+  assertEquals(p.asked.at(-1)?.options, {
+    extraHeaders: { 'x-session-affinity': 'chat-body' },
+  })
+  await p.run({ model: FLASH, input: {}, session_id: 'chat-body' }, ADA, {
+    'x-session-affinity': 'chat-header',
+  })
+  assertEquals(p.asked.at(-1)?.options, {
+    extraHeaders: { 'x-session-affinity': 'chat-header' },
+  })
+  await p.run({ model: FLASH, input: {} })
+  assertEquals(p.asked.at(-1)?.options, undefined)
+  let cost = weigh(priceOf(FLASH)!, {
+    input_tokens: 3000,
+    output_tokens: 30,
+    cached_tokens: 2700,
+  })
+  assertAlmostEquals((await p.spent()).meter!.models, cost)
 })

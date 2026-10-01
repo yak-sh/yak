@@ -673,7 +673,9 @@ test('an ai binding is the app asking ./api/ai/run, and a refusal throws its sen
       `${dir}/worker.js`,
       `export default {
         async fetch(req, env) {
-          let said = await env.AI.run('typesafe/jev', { prompt: 'hi' })
+          let said = await env.AI.run('typesafe/jev', { prompt: 'hi' }, {
+            extraHeaders: { 'x-session-affinity': 'worker-chat' },
+          })
           let no = await env.AI.run('typesafe/jev', {}).catch((e) => e)
           return Response.json([said, no.message, no.code])
         },
@@ -714,6 +716,7 @@ test('an ai binding is the app asking ./api/ai/run, and a refusal throws its sen
     ])
     assertEquals(asked[0].url, 'https://jeff.yaks.app/vale/api/ai/run')
     assertEquals(asked[0].method, 'POST')
+    assertEquals(asked[0].headers.get('x-session-affinity'), 'worker-chat')
     assertEquals(await asked[0].json(), {
       model: 'typesafe/jev',
       input: { prompt: 'hi' },

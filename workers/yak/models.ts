@@ -235,21 +235,22 @@ let asker = (ctx?: ToolContext): string | null => {
  * what it reads.
  */
 export let tooled = (at: Stored): Tool[] =>
-  Object.entries(at.commands()).filter(([, def]) => def.model).map((
-    [name, def],
-  ) => ({
-    name,
-    description: def.description,
-    parameters: schemaOf(def),
-    run: async (args, ctx) => {
-      let act = filled(def, args, { session: ctx?.session })
-      if (act.query != null) return worded(await at.graph.read(act.query))
-      let bundles = Array.isArray(act.apply) ? act.apply : [act.apply]
-      return worded(
-        await at.as(asker(ctx), bundles as Bundle[], ctx?.session),
-      )
-    },
-  }))
+  Object.entries(at.commands()).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
+    .filter(([, def]) => def.model).map((
+      [name, def],
+    ) => ({
+      name,
+      description: def.description,
+      parameters: schemaOf(def),
+      run: async (args, ctx) => {
+        let act = filled(def, args, { session: ctx?.session })
+        if (act.query != null) return worded(await at.graph.read(act.query))
+        let bundles = Array.isArray(act.apply) ? act.apply : [act.apply]
+        return worded(
+          await at.as(asker(ctx), bundles as Bundle[], ctx?.session),
+        )
+      },
+    }))
 
 // The space an app's calls are counted against, read fresh each time it is
 // asked (meter.ts `metered`).
@@ -341,11 +342,17 @@ let STATUS: Record<string, number> = {
 
 // What the door is posted: the model's name and its input, as Workers AI
 // takes them.
-let posted = (body: string): { model: string; input: object } | null => {
+let posted = (
+  body: string,
+): { model: string; input: object; session_id?: string } | null => {
   try {
-    let { model, input } = JSON.parse(body)
+    let { model, input, session_id } = JSON.parse(body)
     return typeof model == 'string' && input && typeof input == 'object'
-      ? { model, input }
+      ? {
+        model,
+        input,
+        ...typeof session_id == 'string' && session_id ? { session_id } : {},
+      }
       : null
   } catch {
     return null
@@ -395,9 +402,18 @@ let run: Answer = async (
         'asked as Workers AI takes it',
     )
   }
+  let conversation = req.headers.get('x-session-affinity') || asked.session_id
   try {
     return Response.json(
-      said(await metered(env, payer(app.eid)).run(asked.model, asked.input)),
+      said(
+        await metered(env, payer(app.eid)).run(
+          asked.model,
+          asked.input,
+          conversation
+            ? { extraHeaders: { 'x-session-affinity': conversation } }
+            : undefined,
+        ),
+      ),
     )
   } catch (e) {
     if (e instanceof ModelError) {

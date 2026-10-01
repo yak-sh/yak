@@ -41,7 +41,9 @@ inside AI Gateway's envelope, `{state, result}` (with optional
 A call that arrives without an id is given one derived from the reply's, so a
 result can always name its call. `usage.prompt_tokens`, `completion_tokens`,
 `total_tokens` and `cached_tokens` become the reply's usage; a count the model
-leaves out stays unknown.
+leaves out stays unknown. Cached counts also come from
+`usage.input_tokens_details.cached_tokens` or
+`usage.prompt_tokens_details.cached_tokens`.
 
 `usageOf(answer)` is that reading, exported, for whoever holds a raw answer from
 the binding (a meter counting a call made without this package): it reads a chat
@@ -66,7 +68,12 @@ cannot be interrupted.
 ## Context and failures
 
 Workers AI keeps nothing between requests. Every request carries the whole
-conversation, and the model has no `anchor`, `mark` or `vocab`.
+conversation, and the model has no `anchor`, `mark` or `vocab`. A request's
+`conversation` is forwarded as
+`run(model, input, {extraHeaders: {'x-session-affinity': conversation}})`, so
+supported models can reuse their cached prefix. Tool definitions are ordered by
+name without changing the caller's array. Affinity improves routing; it does not
+guarantee a cache hit, nor add caching to a model that does not support it.
 
 A rate limit or a model at capacity throws `ModelError` with code `busy` and the
 binding's own message. Credits the account has spent (a partner model such as

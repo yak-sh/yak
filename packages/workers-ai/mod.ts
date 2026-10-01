@@ -39,7 +39,11 @@ import {
 
 /** The part of the `AI` binding this package calls. */
 export type Binding = {
-  run(model: string, input: unknown): Promise<unknown>
+  run(
+    model: string,
+    input: unknown,
+    options?: { extraHeaders?: Record<string, string> },
+  ): Promise<unknown>
 }
 
 // A call as a chat model is sent it: OpenAI's shape, which the catalog's
@@ -181,7 +185,14 @@ export let usageOf = (answer: unknown): Usage => {
       count(at(raw, 'completion_tokens') ?? at(raw, 'output_tokens')),
     ],
     ['total_tokens', count(at(raw, 'total_tokens'))],
-    ['cached_tokens', count(at(raw, 'cached_tokens'))],
+    [
+      'cached_tokens',
+      count(
+        at(raw, 'cached_tokens') ??
+          at(raw, 'input_tokens_details', 'cached_tokens') ??
+          at(raw, 'prompt_tokens_details', 'cached_tokens'),
+      ),
+    ],
   ]
   return Object.fromEntries(counts.filter(([, n]) => n != undefined))
 }
@@ -245,7 +256,11 @@ let input = (req: Request) =>
   req.questions ? { state: messages(req), questions: req.questions } : {
     messages: messages(req),
     ...req.tools.length
-      ? { tools: req.tools.map((f) => ({ type: 'function', function: f })) }
+      ? {
+        tools: [...req.tools].sort((a, b) =>
+          a.name < b.name ? -1 : a.name > b.name ? 1 : 0
+        ).map((f) => ({ type: 'function', function: f })),
+      }
       : {},
     ...req.tokens ? { max_tokens: req.tokens } : {},
     ...req.effort ? { reasoning_effort: req.effort } : {},
@@ -273,7 +288,13 @@ export let failure = (e: unknown): unknown =>
 export let workersAi = (ai: Binding): Model => async (req) => {
   req.signal?.throwIfAborted()
   let out = said(
-    await ai.run(req.model, input(req)).catch((e) => {
+    await ai.run(
+      req.model,
+      input(req),
+      req.conversation
+        ? { extraHeaders: { 'x-session-affinity': req.conversation } }
+        : undefined,
+    ).catch((e) => {
       throw failure(e)
     }),
   )

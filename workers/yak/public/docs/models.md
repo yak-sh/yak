@@ -197,6 +197,15 @@ said. An app's worker asks the same way through a binding:
 `env.AI.run(model, input)` (see [Code](/docs/code)), which asks as the app
 itself.
 
+To keep calls from the same conversation on the same cache-capable model worker,
+add a stable `session_id` beside `model` and `input`, or send the
+`x-session-affinity` header (the header takes precedence). An app's worker can
+use `env.AI.run(model, input, {extraHeaders: {'x-session-affinity': session}})`.
+Existing calls with only `model` and `input` keep working. Affinity is a routing
+hint, not a promise of a cache hit or support on every model. Transcripts send
+their session id automatically; keep instructions and tools stable where their
+meaning has not changed.
+
 The same people may call it as may ask for a turn (below), and the same account
 budget pays. A refusal comes in the envelope every door answers with: `429` past
 the budget, with the sentence that says so, and `503` while the model is busy.

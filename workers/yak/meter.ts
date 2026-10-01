@@ -820,7 +820,7 @@ export let metered = (
   bind: { AI?: Binding; STORE?: Namespace } & Host,
   spaceOf: (dir: Directory) => Promise<Space | null>,
 ): Binding => ({
-  run: async (model, input) => {
+  run: async (model, input, options) => {
     let price = priceOf(model)
     if (!price?.offered) {
       throw new ModelError(
@@ -841,7 +841,7 @@ export let metered = (
     }
     let no = await refusedSpend(dir, space, 'models', bind)
     if (no) throw new ModelError(LIMIT, no)
-    let answer = await bind.AI.run(model, input).catch((e) => {
+    let answer = await bind.AI.run(model, input, options).catch((e) => {
       let said = failure(e)
       if (said instanceof ModelError && said.code == LIMIT) {
         defect(e, { request: `model ${model}`, space: space.slug })

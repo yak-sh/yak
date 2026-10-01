@@ -64,7 +64,7 @@ import {
   over,
   pooled,
 } from './meter.ts'
-import { priceOf } from './models.ts'
+import { guess, priceOf } from './models.ts'
 import { asset } from './preauth.ts'
 import { asleep, released, spending } from './sandbox.ts'
 import type { Who } from './session.ts'
@@ -74,7 +74,7 @@ import { caught } from './sentry.ts'
 
 /** What one response used, in tokens; its model's price weighs it in dollars
  * (@yaks/model `weigh`). */
-export type Usage = { input: number; output: number; cached: number }
+export type Usage = { input?: number; output?: number; cached?: number }
 
 /** One tool the model asked for, with its arguments still as the JSON text
  * the model wrote — parsed once, where it is called. */
@@ -107,6 +107,7 @@ type Run = ReturnType<typeof running>
 /** One turn, asked of a model. */
 export type Ask = {
   system: string
+  conversation?: string
   said: Line[]
   fns: Fn[]
   /** the most this turn may write */
@@ -137,6 +138,8 @@ export type Beat =
 
 /** How far the loop may go before it says so. */
 export type Opts = {
+  /** stable across turns of the same conversation */
+  conversation?: string
   /** who is watching this build happen, if anybody */
   on?: (b: Beat) => void
   /** the model to run, where the caller has one already (tests, a retry) */
@@ -238,14 +241,16 @@ let tooLong = (ms: number) =>
  * makes (agent.ts).
  */
 export let roster = (ctx: Ctx): { fn: Fn; run: Run }[] =>
-  TOOLS.map((t) => ({
-    fn: {
-      name: t.name,
-      description: hosted(t.description, ctx.env),
-      parameters: JSON.parse(hosted(JSON.stringify(t.input), ctx.env)),
-    },
-    run: running(ctx, t),
-  }))
+  [...TOOLS].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0).map(
+    (t) => ({
+      fn: {
+        name: t.name,
+        description: hosted(t.description, ctx.env),
+        parameters: JSON.parse(hosted(JSON.stringify(t.input), ctx.env)),
+      },
+      run: running(ctx, t),
+    }),
+  )
 
 // The words in an answer: a platform tool answers bundles, and its sentence
 // is the prose one of them carries (@yaks/tools `worded`), so this is where
@@ -302,7 +307,11 @@ export let prompt = async (env: Env, ctx?: Ctx): Promise<string> => {
 
 // ---- the providers ---------------------------------------------------------
 
-let n = (v: unknown): number => typeof v == 'number' && v > 0 ? v : 0
+let n = (v: unknown): number | undefined =>
+  typeof v == 'number' && v >= 0 ? v : undefined
+
+let sum = (a: number | undefined, b: number | undefined) =>
+  a == null || b == null ? undefined : a + b
 
 // The loop's lines as @yaks/model items, and a reply back as the loop's
 // answer: @yaks/workers-ai speaks Workers AI, and the loop still speaks `Line`.
@@ -326,9 +335,9 @@ let answer = (reply: Reply): Answer => ({
     i.kind == 'call' ? [{ id: i.id, name: i.name, args: i.args }] : []
   ),
   usage: {
-    input: reply.usage?.input_tokens ?? 0,
-    output: reply.usage?.output_tokens ?? 0,
-    cached: reply.usage?.cached_tokens ?? 0,
+    input: reply.usage?.input_tokens,
+    output: reply.usage?.output_tokens,
+    cached: reply.usage?.cached_tokens,
   },
 })
 
@@ -339,13 +348,14 @@ let answer = (reply: Reply): Answer => ({
 let binding = (env: Env, id: string): Model => ({
   id,
   price: priceOf(id),
-  ask: async ({ system, said, fns, tokens }) => {
+  ask: async ({ system, conversation, said, fns, tokens }) => {
     if (!env.AI) throw new Error(NO_AI)
     let model = workersAi(env.AI)
     return answer(
       await model({
         model: id,
         instructions: system,
+        conversation,
         items: items(said),
         tools: fns,
         tokens,
@@ -379,7 +389,7 @@ let gateway = async (env: Env): Promise<string | null> => {
 export let openai = (env: Env, id: string): Model => ({
   id,
   price: priceOf(id),
-  ask: async ({ system, said, fns, tokens }) => {
+  ask: async ({ system, conversation, said, fns, tokens }) => {
     let at = await gateway(env)
     let key = env.OPENAI_API_KEY
     let aig = env.AI_GATEWAY_TOKEN
@@ -418,8 +428,11 @@ export let openai = (env: Env, id: string): Model => ({
       body: JSON.stringify({
         model: id,
         instructions: system,
+        ...conversation ? { prompt_cache_key: conversation } : {},
         input,
-        tools: fns.map((f) => ({ type: 'function', ...f })),
+        tools: [...fns].sort((a, b) =>
+          a.name < b.name ? -1 : a.name > b.name ? 1 : 0
+        ).map((f) => ({ type: 'function', ...f })),
         max_output_tokens: tokens,
         store: false,
       }),
@@ -521,14 +534,8 @@ export let build = async (
   // What the model this build runs on costs, once one is picked; and what the
   // conversation has spent on it so far, in dollars.
   let price: Price | undefined
-  let cost = () =>
-    price
-      ? weigh(price, {
-        input_tokens: usage.input,
-        output_tokens: usage.output,
-        cached_tokens: usage.cached,
-      })
-      : 0
+  let dollars = 0
+  let cost = () => dollars
   // A listener's own failure is not the build's: a socket that went away
   // mid-round must not end a conversation that is still going.
   let on = (b: Beat) => {
@@ -594,6 +601,7 @@ export let build = async (
   let by = new Map(tools.map((t) => [t.fn.name, t.run]))
   let fns = tools.map((t) => t.fn)
   let system = await prompt(env, ctx)
+  let conversation = opts.conversation ?? space.eid
   let max = opts.rounds ?? 12
   let tokens = opts.tokens ?? 4096
   let ms = opts.ms ?? 60_000
@@ -609,7 +617,13 @@ export let build = async (
     if (now() - started > ms) return await end(tooLong(ms))
     let answer: Answer
     try {
-      answer = await model.ask({ system, said: lines, fns, tokens })
+      answer = await model.ask({
+        system,
+        conversation,
+        said: lines,
+        fns,
+        tokens,
+      })
     } catch (e) {
       if (!busy(e)) caught(e, { request: 'build model', space: space.slug })
       return await end(
@@ -617,9 +631,15 @@ export let build = async (
       )
     }
     rounds++
-    usage.input += answer.usage.input
-    usage.output += answer.usage.output
-    usage.cached += answer.usage.cached
+    // Estimates charge the budget, never masquerade as reported usage.
+    dollars += weigh(price, {
+      input_tokens: answer.usage.input ?? guess({ system, lines, fns }),
+      output_tokens: answer.usage.output ?? guess(answer.text),
+      cached_tokens: answer.usage.cached,
+    })
+    usage.input = sum(usage.input, answer.usage.input)
+    usage.output = sum(usage.output, answer.usage.output)
+    usage.cached = sum(usage.cached, answer.usage.cached)
     lines.push({
       said: 'builder',
       text: answer.text,

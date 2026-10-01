@@ -196,10 +196,15 @@ export default {
     // The models, as Workers AI's binding is called: what the model said,
     // or the door's refusal thrown with its sentence.
     let models = {
-      run: async (model, input) => {
+      run: async (model, input, options) => {
         let res = await door(api, self).fetch('ai/run', {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: {
+            'content-type': 'application/json',
+            ...(options?.extraHeaders?.['x-session-affinity']
+              ? { 'x-session-affinity': options.extraHeaders['x-session-affinity'] }
+              : {}),
+          },
           body: JSON.stringify({ model, input }),
         })
         let said = await res.json()

@@ -411,8 +411,30 @@ test('the paid build reaches the gateway with no key of ours', async () => {
     assertEquals(said.heard[0].auth, null)
     // And the request is the Responses API's, with the tools on it.
     assertEquals(said.heard[0].body.model, 'gpt-5.6-terra')
+    assertEquals(said.heard[0].body.prompt_cache_key, space.eid)
     assert(Array.isArray(said.heard[0].body.tools))
     assertStringIncludes(String(said.heard[0].body.instructions), 'app_new')
+    let next = await build(
+      env,
+      owner,
+      space,
+      [...out.lines, ...asked('again')],
+      {
+        model: terra(env),
+      },
+    )
+    assertEquals(next.refused, undefined)
+    assertEquals(said.heard[1].body.prompt_cache_key, space.eid)
+    assertEquals(
+      said.heard[1].body.instructions,
+      said.heard[0].body.instructions,
+    )
+    assertEquals(said.heard[1].body.tools, said.heard[0].body.tools)
+    assertEquals(out.lines.at(-1), {
+      said: 'builder',
+      text: 'here you go',
+      usage: out.usage,
+    })
   } finally {
     await said.stop()
   }
@@ -431,4 +453,41 @@ test('a busy model is a wait, not a failure', async () => {
   } finally {
     await said.stop()
   }
+})
+
+test('builder affinity and tools survive followups; missing usage stays unknown', async () => {
+  let calls: Parameters<NonNullable<Env['AI']>['run']>[] = []
+  let { env, space } = await seeded({
+    AI: {
+      run: (...args) => {
+        calls.push(args)
+        return Promise.resolve({ response: 'hi' })
+      },
+      gateway: () => ({ getUrl: () => Promise.resolve('') }),
+    },
+  })
+  let first = await build(env, owner, space, asked('hi'))
+  await build(env, owner, space, [...first.lines, ...asked('again')])
+  calls = calls.filter(([model]) => model == idOf(env, space))
+  assertEquals(calls[0][2], {
+    extraHeaders: { 'x-session-affinity': space.eid },
+  })
+  assertEquals(calls[1][2], calls[0][2])
+  let input = (v: unknown) =>
+    v as {
+      tools: unknown[]
+      messages: { content: string }[]
+    }
+  assertEquals(input(calls[0][1]).tools, input(calls[1][1]).tools)
+  assertEquals(input(calls[0][1]).messages[0], input(calls[1][1]).messages[0])
+  assertEquals(first.usage, {
+    input: undefined,
+    output: undefined,
+    cached: undefined,
+  })
+  assertEquals(first.lines.at(-1), {
+    said: 'builder',
+    text: 'hi',
+    usage: first.usage,
+  })
 })
