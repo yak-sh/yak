@@ -388,6 +388,9 @@ export let rpc = (session: string) => {
     }
     let reply = await r.json()
     if (reply.error) {
+      if (reply.error.code == -32602) {
+        throw new CallError('mcp_request', reply.error.message)
+      }
       throw new Error(`${reply.error.code}: ${reply.error.message}`)
     }
     return reply.result

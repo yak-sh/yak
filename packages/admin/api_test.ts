@@ -317,6 +317,30 @@ test('an expired MCP session is a refusal, not a defect', async () => {
   }
 })
 
+test('an MCP protocol refusal is caller input, not a defect', async () => {
+  let old = globalThis.fetch
+  globalThis.fetch = (() =>
+    Promise.resolve(Response.json({
+      jsonrpc: '2.0',
+      id: 1,
+      error: { code: -32602, message: 'Tool space_list not found' },
+    }))) as typeof fetch
+  try {
+    let error = await assertRejects(
+      () =>
+        rpc('session')('tools/call', {
+          name: 'space_list',
+          arguments: {},
+        }),
+      CallError,
+      'Tool space_list not found',
+    )
+    assertEquals(error.code, 'mcp_request')
+  } finally {
+    globalThis.fetch = old
+  }
+})
+
 test('an MCP 500 names its request without dumping an HTML page', async () => {
   let old = globalThis.fetch
   globalThis.fetch = (() =>
