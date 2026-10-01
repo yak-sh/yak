@@ -1,0 +1,962 @@
+[
+  {
+    "entity": {
+      "eid": "14ff04b7-b46e-437a-b31c-0fb1a7ca1ad8"
+    },
+    "alias": {
+      "name": "song:mossvale:1"
+    },
+    "song": {
+      "land": "fc120972-eb25-80f3-ac51-798a8707c5c6",
+      "theme": "a generous village welcome"
+    }
+  },
+  {
+    "entity": {
+      "eid": "60670eb3-b470-47c5-8524-31d02471a139"
+    },
+    "alias": {
+      "name": "song:mossvale:2"
+    },
+    "song": {
+      "land": "fc120972-eb25-80f3-ac51-798a8707c5c6",
+      "theme": "a quiet return along the lake"
+    }
+  },
+  {
+    "entity": {
+      "eid": "3141c5af-90f8-4f4e-9a0c-98a4b0bb2ec9"
+    },
+    "alias": {
+      "name": "song:birchmere:1"
+    },
+    "song": {
+      "land": "def322d5-5ef5-8a0a-bf03-f1d2b1f3ded0",
+      "theme": "a fresh, hopeful waterside melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "ba4de893-4c06-4969-b392-9f3b0aa5a711"
+    },
+    "alias": {
+      "name": "song:birchmere:2"
+    },
+    "song": {
+      "land": "def322d5-5ef5-8a0a-bf03-f1d2b1f3ded0",
+      "theme": "a gentle reflection among birches"
+    }
+  },
+  {
+    "entity": {
+      "eid": "496a84fa-d319-4986-b8ef-96d28f5ec405"
+    },
+    "alias": {
+      "name": "song:clovermead:1"
+    },
+    "song": {
+      "land": "523f9665-21e9-80bb-8346-bd45c0e029c0",
+      "theme": "a playful meadow dance"
+    }
+  },
+  {
+    "entity": {
+      "eid": "bc801980-f3f5-411e-bf33-1fdaee28c3d5"
+    },
+    "alias": {
+      "name": "song:clovermead:2"
+    },
+    "song": {
+      "land": "523f9665-21e9-80bb-8346-bd45c0e029c0",
+      "theme": "an unhurried tune in the afternoon sun"
+    }
+  },
+  {
+    "entity": {
+      "eid": "308eab03-2295-45e3-b8bf-580985a291cb"
+    },
+    "alias": {
+      "name": "song:fernwood:1"
+    },
+    "song": {
+      "land": "ba419339-309e-8642-8cf0-a62c3ae3562f",
+      "theme": "an intimate, winding woodland melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "faa35576-1c20-4a46-b6bf-4d019eaab31d"
+    },
+    "alias": {
+      "name": "song:fernwood:2"
+    },
+    "song": {
+      "land": "ba419339-309e-8642-8cf0-a62c3ae3562f",
+      "theme": "a curious tune near the fern heart"
+    }
+  },
+  {
+    "entity": {
+      "eid": "793947b5-3982-46fe-9053-6b18f4733842"
+    },
+    "alias": {
+      "name": "song:elderglade:1"
+    },
+    "song": {
+      "land": "67454fab-35f1-8601-b3c0-b3d40b0a4d39",
+      "theme": "a reverent melody beneath old branches"
+    }
+  },
+  {
+    "entity": {
+      "eid": "cddea1c2-f5ae-4762-b3fb-8d26776d97a9"
+    },
+    "alias": {
+      "name": "song:elderglade:2"
+    },
+    "song": {
+      "land": "67454fab-35f1-8601-b3c0-b3d40b0a4d39",
+      "theme": "a luminous, gentle answer by the pool"
+    }
+  },
+  {
+    "entity": {
+      "eid": "5b7c6ac9-7939-4cd6-953c-ff0168a5caf8"
+    },
+    "alias": {
+      "name": "song:greypine:1"
+    },
+    "song": {
+      "land": "d20ffb96-7a2b-89f0-a434-5b1b9a83a115",
+      "theme": "a searching phrase across the tarn"
+    }
+  },
+  {
+    "entity": {
+      "eid": "c74d302a-1c33-4bf1-9a83-af43f9eb2efe"
+    },
+    "alias": {
+      "name": "song:greypine:2"
+    },
+    "song": {
+      "land": "d20ffb96-7a2b-89f0-a434-5b1b9a83a115",
+      "theme": "a cool, spacious watch melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "e305ef6a-3c04-45da-9476-67f45f2219b5"
+    },
+    "alias": {
+      "name": "song:wolfden:1"
+    },
+    "song": {
+      "land": "d0c38670-0eaf-87b5-968a-e4488dd1ab8d",
+      "theme": "a wary, brave melody through the hollow"
+    }
+  },
+  {
+    "entity": {
+      "eid": "94bdde9b-4902-48e1-b604-1a3805320558"
+    },
+    "alias": {
+      "name": "song:wolfden:2"
+    },
+    "song": {
+      "land": "d0c38670-0eaf-87b5-968a-e4488dd1ab8d",
+      "theme": "a guarded theme that finds resolve"
+    }
+  },
+  {
+    "entity": {
+      "eid": "55026da9-a603-4869-9c59-79b74d1f48ea"
+    },
+    "alias": {
+      "name": "song:gullwick:1"
+    },
+    "song": {
+      "land": "686312d2-19b2-85d2-99e7-fcaa038c5942",
+      "theme": "a lively, welcoming harbour melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "920f61c2-59b9-4d3b-93e8-565d7b755d10"
+    },
+    "alias": {
+      "name": "song:gullwick:2"
+    },
+    "song": {
+      "land": "686312d2-19b2-85d2-99e7-fcaa038c5942",
+      "theme": "a warm homeward tide tune"
+    }
+  },
+  {
+    "entity": {
+      "eid": "c8420d3e-bb45-41c9-aef5-d4d6edaf1181"
+    },
+    "alias": {
+      "name": "song:driftwood:1"
+    },
+    "song": {
+      "land": "43c046a6-b5b7-891c-9b78-922c014fd963",
+      "theme": "a wide, weathered shore melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "cd3d2ad4-a92b-4b78-8f41-b42c1106a3a1"
+    },
+    "alias": {
+      "name": "song:driftwood:2"
+    },
+    "song": {
+      "land": "43c046a6-b5b7-891c-9b78-922c014fd963",
+      "theme": "a wistful tune that endures the salt wind"
+    }
+  },
+  {
+    "entity": {
+      "eid": "38c34fcd-fae6-41c9-8df5-ec5be4443172"
+    },
+    "alias": {
+      "name": "song:saltreach:1"
+    },
+    "song": {
+      "land": "777253c1-5182-825d-ad54-5aa129bfacd0",
+      "theme": "an open, shimmering salt-flat melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "0e45078c-1653-49d0-b8ac-a833121e01d8"
+    },
+    "alias": {
+      "name": "song:saltreach:2"
+    },
+    "song": {
+      "land": "777253c1-5182-825d-ad54-5aa129bfacd0",
+      "theme": "a reflective tune at the distant tide"
+    }
+  },
+  {
+    "entity": {
+      "eid": "23d192bc-22b7-49ec-93bc-2b205138f233"
+    },
+    "alias": {
+      "name": "song:shellstrand:1"
+    },
+    "song": {
+      "land": "4b5c8677-f120-89a6-849f-85c529ed5aa9",
+      "theme": "a lilting island melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "ec5229fc-3d10-43e6-87f0-126e0e88024e"
+    },
+    "alias": {
+      "name": "song:shellstrand:2"
+    },
+    "song": {
+      "land": "4b5c8677-f120-89a6-849f-85c529ed5aa9",
+      "theme": "a calm refrain shaped like the ebbing tide"
+    }
+  },
+  {
+    "entity": {
+      "eid": "bc5c3399-5664-4e9f-89d4-69945543d06e"
+    },
+    "alias": {
+      "name": "song:stormhead:1"
+    },
+    "song": {
+      "land": "0ccb76d5-e8b2-87a5-8f1f-89e117897f72",
+      "theme": "a bold melody against the gale"
+    }
+  },
+  {
+    "entity": {
+      "eid": "993e382e-a9b8-4564-a5c3-02b475bc96a1"
+    },
+    "alias": {
+      "name": "song:stormhead:2"
+    },
+    "song": {
+      "land": "0ccb76d5-e8b2-87a5-8f1f-89e117897f72",
+      "theme": "a watchful theme opening toward the beacon"
+    }
+  },
+  {
+    "entity": {
+      "eid": "c4fc1d2f-aeb6-4ef7-9f98-8a85e82eab40"
+    },
+    "alias": {
+      "name": "song:reedmarsh:1"
+    },
+    "song": {
+      "land": "b0d9c165-af46-8b93-8ce9-ba37e77e1264",
+      "theme": "a buoyant tune through the reeds"
+    }
+  },
+  {
+    "entity": {
+      "eid": "81f24cfe-fb0b-4725-b06d-52e483acbeed"
+    },
+    "alias": {
+      "name": "song:reedmarsh:2"
+    },
+    "song": {
+      "land": "b0d9c165-af46-8b93-8ce9-ba37e77e1264",
+      "theme": "a patient waterborne melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "ac19f765-7222-451e-bc6b-2c1318056eb3"
+    },
+    "alias": {
+      "name": "song:mirewood:1"
+    },
+    "song": {
+      "land": "909a7af6-cc4a-87a6-8b1b-53662450deac",
+      "theme": "a low, searching melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "7a9448b3-f89f-4ddf-9989-fd7256bef11b"
+    },
+    "alias": {
+      "name": "song:mirewood:2"
+    },
+    "song": {
+      "land": "909a7af6-cc4a-87a6-8b1b-53662450deac",
+      "theme": "a slow tune with glimmers in the mire"
+    }
+  },
+  {
+    "entity": {
+      "eid": "055624bb-317c-4542-a393-05c8d77ea68e"
+    },
+    "alias": {
+      "name": "song:fenhollow:1"
+    },
+    "song": {
+      "land": "0ea1a470-00a0-8cb8-a4f7-d3b1d78581ca",
+      "theme": "a curious, measured excavation theme"
+    }
+  },
+  {
+    "entity": {
+      "eid": "17060097-2261-4adb-940f-b83daa42898d"
+    },
+    "alias": {
+      "name": "song:fenhollow:2"
+    },
+    "song": {
+      "land": "0ea1a470-00a0-8cb8-a4f7-d3b1d78581ca",
+      "theme": "a quiet echo of buried history"
+    }
+  },
+  {
+    "entity": {
+      "eid": "104e2ab0-f19f-4e1f-befd-9faaa2c95f41"
+    },
+    "alias": {
+      "name": "song:sunkenkirk:1"
+    },
+    "song": {
+      "land": "6aec223e-28b1-8bd4-aecd-ff29c4d79280",
+      "theme": "a graceful memorial melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "c7eb9af5-4ce4-4787-9510-889306c4594d"
+    },
+    "alias": {
+      "name": "song:sunkenkirk:2"
+    },
+    "song": {
+      "land": "6aec223e-28b1-8bd4-aecd-ff29c4d79280",
+      "theme": "a mournful theme slowly finding light"
+    }
+  },
+  {
+    "entity": {
+      "eid": "6225f2ba-0e70-458a-b1f4-d92fbed49a3d"
+    },
+    "alias": {
+      "name": "song:bogheart:1"
+    },
+    "song": {
+      "land": "a635c17a-f381-8e60-bf05-eb279be1d688",
+      "theme": "a wary, earthy wandering melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "c4fa072b-9be0-4bd9-b3a9-6c47484a4f10"
+    },
+    "alias": {
+      "name": "song:bogheart:2"
+    },
+    "song": {
+      "land": "a635c17a-f381-8e60-bf05-eb279be1d688",
+      "theme": "an uncanny tune that keeps its warmth"
+    }
+  },
+  {
+    "entity": {
+      "eid": "21d335b2-be8e-4c93-8067-876f4d2fefff"
+    },
+    "alias": {
+      "name": "song:sporefen:1"
+    },
+    "song": {
+      "land": "1297a6ea-909e-84ef-8f78-d4770309648c",
+      "theme": "a curious, buoyant melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "59c2f8eb-a627-48b4-b04a-1953a7895c32"
+    },
+    "alias": {
+      "name": "song:sporefen:2"
+    },
+    "song": {
+      "land": "1297a6ea-909e-84ef-8f78-d4770309648c",
+      "theme": "a softly enchanted drifting theme"
+    }
+  },
+  {
+    "entity": {
+      "eid": "8d16bb86-d7be-4c17-a90a-fdcfc5bc5d7b"
+    },
+    "alias": {
+      "name": "song:stonestep:1"
+    },
+    "song": {
+      "land": "79d50f21-107f-8885-9183-0e00ec2da734",
+      "theme": "a welcoming hill-country melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "da73b3b7-6b0e-4ded-add7-13db66a55fc7"
+    },
+    "alias": {
+      "name": "song:stonestep:2"
+    },
+    "song": {
+      "land": "79d50f21-107f-8885-9183-0e00ec2da734",
+      "theme": "a broad tune climbing the quarry steps"
+    }
+  },
+  {
+    "entity": {
+      "eid": "67ac4c8f-05a0-4d1b-82d5-29a58871c9ad"
+    },
+    "alias": {
+      "name": "song:heatherfell:1"
+    },
+    "song": {
+      "land": "884ce51a-1841-833b-9968-1badedb5026f",
+      "theme": "an airy roaming melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "25d10a79-072e-493b-86a5-3178aa684d31"
+    },
+    "alias": {
+      "name": "song:heatherfell:2"
+    },
+    "song": {
+      "land": "884ce51a-1841-833b-9968-1badedb5026f",
+      "theme": "a wistful hillside refrain"
+    }
+  },
+  {
+    "entity": {
+      "eid": "2532675a-03c5-4deb-aa98-1e8c9acaa9d6"
+    },
+    "alias": {
+      "name": "song:oldwall:1"
+    },
+    "song": {
+      "land": "50e57ef0-ab71-8342-be41-2bf42e0034bc",
+      "theme": "a nostalgic melody by the old stones"
+    }
+  },
+  {
+    "entity": {
+      "eid": "1f91604c-edef-4e2c-acf9-812961bd325d"
+    },
+    "alias": {
+      "name": "song:oldwall:2"
+    },
+    "song": {
+      "land": "50e57ef0-ab71-8342-be41-2bf42e0034bc",
+      "theme": "a dignified theme of a forgotten kingdom"
+    }
+  },
+  {
+    "entity": {
+      "eid": "6345c65d-6882-495b-95c3-a4b0ef3e9bd2"
+    },
+    "alias": {
+      "name": "song:kingsbarrow:1"
+    },
+    "song": {
+      "land": "bc962115-0909-8aa7-8499-5150ca6cd336",
+      "theme": "a noble but weathered hall melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "8a2512a5-aea1-4873-b9c7-eef61bd3e908"
+    },
+    "alias": {
+      "name": "song:kingsbarrow:2"
+    },
+    "song": {
+      "land": "bc962115-0909-8aa7-8499-5150ca6cd336",
+      "theme": "a quiet memorial for the buried king"
+    }
+  },
+  {
+    "entity": {
+      "eid": "40f0b816-e131-4ddc-8a24-03a5f645eac9"
+    },
+    "alias": {
+      "name": "song:giantsteps:1"
+    },
+    "song": {
+      "land": "aa2c8069-55b4-8b14-a0d7-4ad9448bd595",
+      "theme": "a broad melody climbing the stair"
+    }
+  },
+  {
+    "entity": {
+      "eid": "fd521cf4-026f-4ec6-81ec-54f1fd7bbbc6"
+    },
+    "alias": {
+      "name": "song:giantsteps:2"
+    },
+    "song": {
+      "land": "aa2c8069-55b4-8b14-a0d7-4ad9448bd595",
+      "theme": "a spacious theme from the summit"
+    }
+  },
+  {
+    "entity": {
+      "eid": "f364aae4-7f23-471d-97bc-4564ce9e42bc"
+    },
+    "alias": {
+      "name": "song:glowcap:1"
+    },
+    "song": {
+      "land": "269b1327-3b1c-8f75-83ae-e3b33b4ddf9c",
+      "theme": "a gentle wonder-filled melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "c24fe640-0223-417d-9296-b962d7002fbd"
+    },
+    "alias": {
+      "name": "song:glowcap:2"
+    },
+    "song": {
+      "land": "269b1327-3b1c-8f75-83ae-e3b33b4ddf9c",
+      "theme": "a playful nocturnal village tune"
+    }
+  },
+  {
+    "entity": {
+      "eid": "0f29f4cc-8139-470f-ab7d-06a0e4f322d1"
+    },
+    "alias": {
+      "name": "song:gleamdeep:1"
+    },
+    "song": {
+      "land": "2e5a9483-fb59-875e-a2c7-1965d2fc36f0",
+      "theme": "a luminous winding melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "572a087a-6037-4115-b723-a044eea83653"
+    },
+    "alias": {
+      "name": "song:gleamdeep:2"
+    },
+    "song": {
+      "land": "2e5a9483-fb59-875e-a2c7-1965d2fc36f0",
+      "theme": "a serene theme reflected in crystal water"
+    }
+  },
+  {
+    "entity": {
+      "eid": "e659b69b-8134-437c-b48d-0a3159017e17"
+    },
+    "alias": {
+      "name": "song:shardvault:1"
+    },
+    "song": {
+      "land": "7d8c0923-67e1-8985-9788-c6d22a680c2e",
+      "theme": "a precise, mysterious vault melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "280f49e8-9616-4e37-803a-f70e59001b42"
+    },
+    "alias": {
+      "name": "song:shardvault:2"
+    },
+    "song": {
+      "land": "7d8c0923-67e1-8985-9788-c6d22a680c2e",
+      "theme": "an expansive theme in the cold light"
+    }
+  },
+  {
+    "entity": {
+      "eid": "b6a91088-eb77-4e8b-82ee-d2f49f2fc62a"
+    },
+    "alias": {
+      "name": "song:dustmere:1"
+    },
+    "song": {
+      "land": "313b0258-1f29-8199-8e7c-ab5d38f5e399",
+      "theme": "a spare, resilient travel melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "23375436-ef5c-4bf5-a9c8-82a12b163c67"
+    },
+    "alias": {
+      "name": "song:dustmere:2"
+    },
+    "song": {
+      "land": "313b0258-1f29-8199-8e7c-ab5d38f5e399",
+      "theme": "a wistful memory of water"
+    }
+  },
+  {
+    "entity": {
+      "eid": "2c076739-ad41-49d7-b9e4-390ec7ae0eae"
+    },
+    "alias": {
+      "name": "song:palmwell:1"
+    },
+    "song": {
+      "land": "bd584c26-2210-8251-b462-856f99ec128f",
+      "theme": "a warm caravan traveling melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "59ff95b4-162d-4438-91d6-b976f243c3e0"
+    },
+    "alias": {
+      "name": "song:palmwell:2"
+    },
+    "song": {
+      "land": "bd584c26-2210-8251-b462-856f99ec128f",
+      "theme": "a restful tune in green shade by water"
+    }
+  },
+  {
+    "entity": {
+      "eid": "adc3268f-3d8e-4098-b82d-b25d8e091fe8"
+    },
+    "alias": {
+      "name": "song:sunscar:1"
+    },
+    "song": {
+      "land": "0265d74a-6854-810b-ade9-95dcb059049c",
+      "theme": "a tense, wide-open crossing theme"
+    }
+  },
+  {
+    "entity": {
+      "eid": "d621666f-fbe8-4434-8364-13f9f8902221"
+    },
+    "alias": {
+      "name": "song:sunscar:2"
+    },
+    "song": {
+      "land": "0265d74a-6854-810b-ade9-95dcb059049c",
+      "theme": "a searching melody rising above the dunes"
+    }
+  },
+  {
+    "entity": {
+      "eid": "329e7631-5218-4ffe-9400-6ddb7fed8809"
+    },
+    "alias": {
+      "name": "song:redmesa:1"
+    },
+    "song": {
+      "land": "e91abe8a-c35b-8eba-b1dd-ac24b6754ff2",
+      "theme": "a spacious red-rock melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "bf499a8b-d448-48ad-89a2-19ce290d16da"
+    },
+    "alias": {
+      "name": "song:redmesa:2"
+    },
+    "song": {
+      "land": "e91abe8a-c35b-8eba-b1dd-ac24b6754ff2",
+      "theme": "a warm, wandering tune toward the spring"
+    }
+  },
+  {
+    "entity": {
+      "eid": "3048acc7-c83d-400f-a260-f956bae75546"
+    },
+    "alias": {
+      "name": "song:tombsands:1"
+    },
+    "song": {
+      "land": "397b0469-a6b9-8867-b7b9-bc6c3c1263f6",
+      "theme": "an ancient theme gathering grandeur as the lost city appears"
+    }
+  },
+  {
+    "entity": {
+      "eid": "17160c47-2bcd-42d1-98a8-0251d0dcf886"
+    },
+    "alias": {
+      "name": "song:tombsands:2"
+    },
+    "song": {
+      "land": "397b0469-a6b9-8867-b7b9-bc6c3c1263f6",
+      "theme": "a solemn melody settling into peace among the tombs"
+    }
+  },
+  {
+    "entity": {
+      "eid": "23ab2062-33a0-4b97-928b-fe528fafcd24"
+    },
+    "alias": {
+      "name": "song:frostmoor:1"
+    },
+    "song": {
+      "land": "e1753484-688a-8249-8f52-6bbd3271529b",
+      "theme": "a wind-bitten crossing melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "8df118b0-adc6-4ac8-a606-ce06fb980b45"
+    },
+    "alias": {
+      "name": "song:frostmoor:2"
+    },
+    "song": {
+      "land": "e1753484-688a-8249-8f52-6bbd3271529b",
+      "theme": "a brave, measured theme in the cold"
+    }
+  },
+  {
+    "entity": {
+      "eid": "a49a05eb-9123-433b-94a4-86baf73caa12"
+    },
+    "alias": {
+      "name": "song:rimeholt:1"
+    },
+    "song": {
+      "land": "227db9d4-ed56-80b1-9c47-35335bc86113",
+      "theme": "a cozy winter refuge melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "738b9f06-60c3-460c-8f48-770050a4f2b4"
+    },
+    "alias": {
+      "name": "song:rimeholt:2"
+    },
+    "song": {
+      "land": "227db9d4-ed56-80b1-9c47-35335bc86113",
+      "theme": "a hushed, crystalline snow theme"
+    }
+  },
+  {
+    "entity": {
+      "eid": "da394921-5f46-412b-a9dd-d8741542efea"
+    },
+    "alias": {
+      "name": "song:frostpine:1"
+    },
+    "song": {
+      "land": "d3fe7ce0-3409-8d1b-8cdd-dd84cd381b13",
+      "theme": "a dark, steady woodland tune"
+    }
+  },
+  {
+    "entity": {
+      "eid": "19c0a95f-89a5-4258-90a2-4155c1a96302"
+    },
+    "alias": {
+      "name": "song:frostpine:2"
+    },
+    "song": {
+      "land": "d3fe7ce0-3409-8d1b-8cdd-dd84cd381b13",
+      "theme": "a hushed snowfall melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "8ee625e9-514e-46e3-9cc2-77dd81685502"
+    },
+    "alias": {
+      "name": "song:icefall:1"
+    },
+    "song": {
+      "land": "a6377eb3-29d1-84ab-a838-9249d50948dd",
+      "theme": "a cascading, clear melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "89284a35-bd7c-469e-95de-aa7d4c8ee1dc"
+    },
+    "alias": {
+      "name": "song:icefall:2"
+    },
+    "song": {
+      "land": "a6377eb3-29d1-84ab-a838-9249d50948dd",
+      "theme": "a cautious crossing tune above the ice"
+    }
+  },
+  {
+    "entity": {
+      "eid": "fe696140-cd43-4b56-8535-ff5708d9dee5"
+    },
+    "alias": {
+      "name": "song:whitepeak:1"
+    },
+    "song": {
+      "land": "9bc0e0e6-060b-8bb9-b30c-f287d3f2b217",
+      "theme": "an open melody reaching the summit"
+    }
+  },
+  {
+    "entity": {
+      "eid": "0bccf9fd-df1f-4556-ba04-d763a0f9cc6b"
+    },
+    "alias": {
+      "name": "song:whitepeak:2"
+    },
+    "song": {
+      "land": "9bc0e0e6-060b-8bb9-b30c-f287d3f2b217",
+      "theme": "a still, majestic theme in clear air"
+    }
+  },
+  {
+    "entity": {
+      "eid": "5c17b555-4263-432b-b9f2-6a9dae1a73a3"
+    },
+    "alias": {
+      "name": "song:emberfall:1"
+    },
+    "song": {
+      "land": "7a002309-dd16-808a-bc52-526e8ff4afa4",
+      "theme": "a determined forge melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "cb7da356-9442-40d1-aef4-16a168b3cdcc"
+    },
+    "alias": {
+      "name": "song:emberfall:2"
+    },
+    "song": {
+      "land": "7a002309-dd16-808a-bc52-526e8ff4afa4",
+      "theme": "a warm but uneasy tune beside the fires"
+    }
+  },
+  {
+    "entity": {
+      "eid": "d4c0940b-3562-466c-bc9e-ce68b2119dbd"
+    },
+    "alias": {
+      "name": "song:cinderreach:1"
+    },
+    "song": {
+      "land": "4a234d10-e4f5-8ac7-8588-520f9b2c0f09",
+      "theme": "a weathered journey through stillness and heat"
+    }
+  },
+  {
+    "entity": {
+      "eid": "5c9478cf-4a45-4e71-89fa-8b059434f23e"
+    },
+    "alias": {
+      "name": "song:cinderreach:2"
+    },
+    "song": {
+      "land": "4a234d10-e4f5-8ac7-8588-520f9b2c0f09",
+      "theme": "a stark melody gathering strength toward calm"
+    }
+  },
+  {
+    "entity": {
+      "eid": "f36bfc34-45a4-473a-8b3e-6698018b2aeb"
+    },
+    "alias": {
+      "name": "song:ashkeep:1"
+    },
+    "song": {
+      "land": "24f21836-e4d4-8e19-95a7-e137e86469ec",
+      "theme": "a noble, weary melody"
+    }
+  },
+  {
+    "entity": {
+      "eid": "049a990c-2cc4-43e2-94b6-726fe2d21320"
+    },
+    "alias": {
+      "name": "song:ashkeep:2"
+    },
+    "song": {
+      "land": "24f21836-e4d4-8e19-95a7-e137e86469ec",
+      "theme": "a humane last-watch theme"
+    }
+  },
+  {
+    "entity": {
+      "eid": "be7ab06c-a259-46ad-9b4f-a05001ead75b"
+    },
+    "alias": {
+      "name": "song:maw:1"
+    },
+    "song": {
+      "land": "4da9b7b8-beca-87b6-91fa-973977f86bac",
+      "theme": "a grave heroic finale"
+    }
+  },
+  {
+    "entity": {
+      "eid": "7aaf6569-2838-4e3a-a6e3-33f59e96c4a6"
+    },
+    "alias": {
+      "name": "song:maw:2"
+    },
+    "song": {
+      "land": "4da9b7b8-beca-87b6-91fa-973977f86bac",
+      "theme": "a dark climb toward a hard-won hopeful ending"
+    }
+  }
+]

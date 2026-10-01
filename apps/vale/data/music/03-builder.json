@@ -1,0 +1,25 @@
+[
+  {
+    "entity": {
+      "eid": "7126027c-0805-4b6b-8e54-3c2202bd0850"
+    },
+    "alias": {
+      "name": "builder:music"
+    },
+    "doc": {
+      "title": "Vale music builder"
+    },
+    "staged": {},
+    "builder": {
+      "query": "$song .song, song.land=$land, song.theme=$theme; $land .theme_design, doc.title=$name, doc.body=$brief, music_design.instruments=$instruments, music_design.motif=$motif, music_design.voice=$voice",
+      "to": "5663fa91-2d32-8dd0-82d1-95402b2e82c4",
+      "immediate": true
+    },
+    "using": {
+      "model": "53b69a88-81a5-8478-90e7-cf0bf7c0eee6"
+    },
+    "content": {
+      "body": "Create a full-length fantasy game soundtrack song for $name.\n\nLand brief: $brief\nThis song’s theme: $theme\nFeature these instruments: $instruments.\nReturn to this melodic motif throughout the song: $motif\nVoice direction: $voice. For none, purely instrumental throughout: no human voice, humming, vocal pads, choir, singing, speech or chanting. For solo, one distant solo wordless voice may carry a phrase, no choir. For choir, wordless choir voices may carry the melody. Never lyrics, chanting, speech or spoken words.\nMake a distinct and complete song with a memorable melodic theme, natural dynamics and a satisfying ending. Use clean, natural acoustic production without distortion, lo-fi filtering or electronic effects. Produce one audio artifact in slot main."
+    }
+  }
+]
