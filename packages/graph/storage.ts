@@ -141,7 +141,9 @@ export type Storage = {
   /** run `body` in a transaction: commit on return, roll back on throw. Like
    * every other member it is async or sync — an embedded adapter returns
    * whatever the body returned, an adapter over a network returns a promise
-   * that settles once the transaction has committed. */
+   * that settles once the transaction has committed. A refusal before the
+   * body runs may carry `retryable: true`: no work ran or committed, so the
+   * caller may safely retry the same transaction. */
   tx: <R>(body: (tx: Tx) => R) => R | Promise<Awaited<R>>
 }
 

@@ -5,6 +5,7 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
+import { FakeTime } from '@std/testing/time'
 import {
   argsOf,
   type Bundle,
@@ -438,6 +439,58 @@ test('a throw is an error entity, a result, and a failed execution', async () =>
   assertEquals(answer.find((b) => b.result)!.result !== undefined, true)
   assertEquals((await g.read('.execution&*'))[0].execution, { state: 'failed' })
 })
+
+for (let readOnly of [false, true]) {
+  test(`a completed answer survives storage contention (${readOnly})`, async () => {
+    using time = new FakeTime()
+    let { g } = world()
+    let runs = 0, attempts = 0, now = 0
+    let reports: unknown[] = [], changes: Bundle[][] = []
+    let busy = Object.assign(new Error('storage unavailable'), {
+      retryable: true,
+    })
+    let tool: Tool = {
+      ...echo,
+      readOnly,
+      run: (call, graph) => {
+        runs++
+        now = 7
+        return echo.run(call, graph)
+      },
+    }
+    let r = runner(g, {
+      tools: [tool],
+      now: () => now,
+      report: (e) => void reports.push(e),
+    })
+    await r.ensure()
+    let apply = g.apply
+    g.apply = (b, opts) => {
+      if (b.some((one) => one.result)) {
+        changes.push(b)
+        if (++attempts <= 2) throw busy
+      }
+      return apply(b, opts)
+    }
+    let call = called('example_echo', { value: 'precious' })
+    let pending = r.call(call)
+    await time.runMicrotasks()
+    assertEquals(reports, [busy])
+    now = 100
+    await time.tickAsync(1000)
+    await time.runMicrotasks()
+    await time.tickAsync(2000)
+    let answer = await pending
+    assertEquals([runs, attempts], [1, 3])
+    assertEquals(changes.every((b) => b === changes[0]), true)
+    assertEquals(body(answer.find((b) => b.output)), 'precious 2')
+    assertEquals(answer.some((b) => b.exception || b.error), false)
+    assertEquals((answer.find((b) => b.result)!.result as Comp).ms, 7)
+    assertEquals((await g.get([call.entity.eid]))[0].execution, {
+      state: 'done',
+    })
+  })
+}
 
 test('a defect is reported with its tool; a refusal is not', async () => {
   let said: [unknown, string | undefined][] = []

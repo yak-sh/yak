@@ -64,6 +64,7 @@ import {
 } from '@yaks/sql'
 import { checks, objects, type Stood, stood } from './physical.ts'
 import { unit } from './unit.ts'
+import { busy } from './error.ts'
 
 /**
  * The key/value table's name. Named `server_meta`, not `meta`, because a
@@ -729,8 +730,3 @@ export let analyzed = (driver: Driver): void => {
     set(Number(wait ?? 0))
   }
 }
-
-/** SQLite refusing a lock another connection holds, as the driver reports
- * it: SQLITE_BUSY's own sentence. */
-let busy = (e: unknown): boolean =>
-  e instanceof Error && /database is (locked|busy)/.test(e.message)

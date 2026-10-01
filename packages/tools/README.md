@@ -86,6 +86,12 @@ state. A call with `check: true` to a tool that writes is a rehearsal: the
 runner applies the tool's output with every check and rolls it back, answers
 what a kept write would have returned, and stores only its own bookkeeping.
 
+A storage refusal marked `retryable: true` keeps the completed answer in memory
+and retries its persistence with backoff. The tool runs once; its answer and
+duration stay the same. The first refusal is reported through `report`.
+Admission and precondition refusals still fail the call. Until persistence
+succeeds, a process crash can still lose the in-memory answer.
+
 <a id="running-a-tool"></a>
 
 ## Ordinary usage

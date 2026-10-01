@@ -2,7 +2,7 @@
 // schema and speaks bundles — a write in, a read out, over one round trip.
 
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import {
@@ -350,6 +350,41 @@ test('a bundle written and read back is the same entity', () => {
   assertEquals((p.doc as Record<string, unknown>).title, 'Kettle')
   assertEquals((p.product as Record<string, unknown>).price, 40)
   assertEquals((p.product as Record<string, unknown>).status, 'live')
+})
+
+test('only contention before a write transaction starts is retryable', () => {
+  let dir = Deno.makeTempDirSync({ prefix: 'yaks-contention-' })
+  let first = open(`${dir}/graph.sqlite`)
+  let a = storage(first, shop)
+  a.install()
+  let second = open(`${dir}/graph.sqlite`)
+  try {
+    second.query({ t: 'pragma', name: 'busy_timeout', value: 0 })
+    let b = storage(second, shop), ran = false
+    a.tx(() => {
+      let failure = assertThrows(() => b.tx(() => ran = true), Error)
+      assertEquals('retryable' in failure && failure.retryable, true)
+      assertEquals(ran, false)
+    })
+    b.tx((tx) => {
+      ran = true
+      tx.patch([{ entity: { eid: 'kept' }, doc: { title: 'answer' } }])
+    })
+    assertEquals(ran, true)
+    assertEquals(b.get(['kept'])[0].doc, { title: 'answer', body: null })
+    let failure = assertThrows(
+      () =>
+        b.tx(() => {
+          throw new Error('database is locked')
+        }),
+      Error,
+    )
+    assertEquals('retryable' in failure, false)
+  } finally {
+    second.close()
+    first.close()
+    Deno.removeSync(dir, { recursive: true })
+  }
 })
 
 test('a driver over a FILE takes the write lock up front', () => {

@@ -79,6 +79,7 @@ import { effectsIn } from '@yaks/vocab'
 import { CallError, parsed, resolved, validated } from './args.ts'
 import { toolsDoc } from './vocab.ts'
 import { valueIn } from './value.ts'
+import { persist } from './persist.ts'
 
 // What each call is doing right now in this process, keyed per graph, not per
 // runner: a second runner over the same graph that is asked for a call in
@@ -712,10 +713,14 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       state: string,
       keeps = !tool.readOnly || state == 'failed',
     ): Promise<Bundle[]> => {
-      let landed = await g.apply([
+      let change = [
         ...(keeps ? made : []),
         ...ending(call, started, state, made),
-      ])
+      ]
+      let landed = await persist(
+        () => g.apply(change),
+        (e) => opts.report?.(e, call, tool.name),
+      )
       return keeps ? landed : [...made, ...landed]
     }
     let answered: Bundle[]

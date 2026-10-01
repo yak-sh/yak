@@ -1,4 +1,5 @@
 import type { Driver, Stmt } from '@yaks/sql'
+import { busy } from './error.ts'
 
 // SQLite has one transaction per connection, so nesting is done with
 // SAVEPOINTs: a store used inside a transaction the caller already opened (an
@@ -36,11 +37,20 @@ export let unit = <R>(
   let held = depth.get(driver) ?? 0
   let outer = !!driver.file && held == 0
   let name = `yaks_tx_${held}`
-  driver.query(
-    outer
-      ? { t: 'begin', mode: mode == 'read' ? 'deferred' : 'immediate' }
-      : { t: 'savepoint', name },
-  )
+  try {
+    driver.query(
+      outer
+        ? { t: 'begin', mode: mode == 'read' ? 'deferred' : 'immediate' }
+        : { t: 'savepoint', name },
+    )
+  } catch (e) {
+    // No callback ran and no write landed. Callers may retry this refusal,
+    // unlike a failure after the body could have performed external work.
+    if (outer && mode == 'write' && busy(e)) {
+      throw Object.assign(e, { retryable: true })
+    }
+    throw e
+  }
   depth.set(driver, held + 1)
   let close = (...stmts: Stmt[]) => {
     depth.set(driver, (depth.get(driver) ?? 1) - 1)
