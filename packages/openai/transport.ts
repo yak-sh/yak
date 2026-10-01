@@ -103,9 +103,10 @@ export type ResponseOptions = {
 export type RunOptions = {
   /** Do not replay once callers expose partial output. Checked after failure. */
   noRetry?: boolean | (() => boolean)
-  /** The conversation the exchange continues: the Codex endpoint keys its
-   * prompt cache by its `session_id` header, and without one caches nothing
-   * a later request reads. */
+  /** Stable conversation affinity. Local Codex probes observed reuse with
+   * `session_id`; upstream emits `session-id`. Keep the measured form until
+   * an independently warmed comparison justifies changing it. Cache reuse
+   * remains the provider's decision, never guaranteed by this header. */
   conversation?: string
   signal?: AbortSignal
   event?: (event: ResponseEvent) => void
