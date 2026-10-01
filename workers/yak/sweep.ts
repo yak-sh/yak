@@ -15,9 +15,10 @@
 // kernel, never by a caller, so a name the listing does not hold is refused
 // rather than waking an object nobody made.
 import * as dirPart from './directory.ts'
-import { directory, storeName } from './directory.ts'
+import { directory } from './directory.ts'
 import { GIT_STORE, PLATFORM_STORE, storeOf } from './door.ts'
 import { bound, type Env } from './env.ts'
+import { keys, pages, part } from './key-audit.ts'
 import { KERNEL } from './meta.ts'
 import { whoIs } from './session.ts'
 
@@ -35,14 +36,23 @@ let json = (status: number, code: string, message: string) =>
 /** Every store there is, trashed apps' included: a restore brings one back
  * holding whatever shape it was left in. */
 export let stores = async (env: Env): Promise<Swept[]> => {
-  let dir = dirOf(env)
-  let spaces = await dir.all()
-  let of = new Map(spaces.map((s) => [s.eid, s]))
-  let apps = (await dir.apps(spaces)).flatMap((app) => {
-    let space = of.get(app.space)
-    return space
-      ? [{ store: storeName(space, app), at: `${space.slug}/${app.slug}` }]
-      : []
+  // The roster itself must not stop at a listing cap, nor omit trash or
+  // private apps. The directory's immutable app.store is the authority.
+  let rows = await pages(storeOf(env.STORE, PLATFORM_STORE))
+  let spaces = new Map(
+    rows.filter((row) => part(row, 'space')).map((
+      row,
+    ) => [row.entity.eid, part(row, 'space')!]),
+  )
+  let apps = rows.flatMap((row) => {
+    let app = part(row, 'app')
+    let space = typeof app?.space == 'string'
+      ? spaces.get(app.space)
+      : undefined
+    if (!app || !space) return []
+    let at = `${space.slug}/${app.slug ?? row.entity.eid}`
+    let store = typeof app.store == 'string' ? app.store : at
+    return [{ store, at }]
   })
   return [
     ...apps,
@@ -81,6 +91,14 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     // This is evidence retrieval, not a write door or a second query grammar.
     // UUIDs bound the selection; .refs is the graph's existing provenance read.
     let eid = url.searchParams.get('eid') ?? ''
+    if (
+      !eid && !url.searchParams.has('refs') && !url.searchParams.has('after')
+    ) {
+      return Response.json({
+        store: name,
+        ...keys(await pages(storeOf(env.STORE, name))),
+      })
+    }
     let after = url.searchParams.get('after') ?? ''
     let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (!uuid.test(eid) || (after && !uuid.test(after))) {

@@ -61,7 +61,7 @@ let spaces = async () => {
     )
     return { status: r.status, body: await r.json() }
   }
-  return { scenario, door }
+  return { scenario, door, dir }
 }
 
 test('the platform’s owner sweeps every store, one at a time', async () => {
@@ -101,7 +101,13 @@ test('only the platform owner reads bounded sweep evidence', async () => {
   let store = listed.body.find((s: sweep.Swept) => s.at == 'directory').store
   at = `?store=${store}&audit=builder-keys`
   assertEquals((await door(ADA, `${at}&eid=${JEFF}`)).status, 403)
-  assertEquals((await door(JEFF, at)).status, 400)
+  assertEquals((await door(JEFF, at)).status, 200)
+  assertEquals((await door(JEFF, at)).body.counts, {
+    build: 0,
+    built: 0,
+    build_of: 0,
+    output_of: 0,
+  })
   assertEquals((await door(JEFF, `${at}&eid=${JEFF}&after=bad`)).status, 400)
   assertEquals((await door(JEFF, `${at}&eid=${JEFF}`)).status, 200)
   assertEquals((await door(JEFF, `${at}&eid=${JEFF}&refs=1`)).status, 200)
@@ -109,4 +115,41 @@ test('only the platform owner reads bounded sweep evidence', async () => {
     (await door(JEFF, `?store=unknown&audit=builder-keys&eid=${JEFF}`)).status,
     404,
   )
+})
+
+test('the audit reaches private trash, git and platform by the roster only', async () => {
+  let { scenario, door, dir } = await spaces()
+  using _ = scenario
+  let [app] = await dir.apply({
+    entities: [{
+      entity: { eid: '$trash' },
+      app: {
+        space: (await dir.space('ada'))!.eid,
+        store: 'actual.a5b47c',
+        access: 'private',
+      },
+      former: { slug: 'trashed' },
+    }],
+  }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
+  let roster = (await door(JEFF)).body
+  assertEquals(
+    roster.some((s: sweep.Swept) => s.store == 'actual.a5b47c'),
+    true,
+  )
+  for (let at of ['git', 'directory']) {
+    let store = roster.find((s: sweep.Swept) => s.at == at).store
+    let audit = await door(JEFF, `?store=${store}&audit=builder-keys`)
+    assertEquals(audit.status, 200)
+    assertEquals(audit.body.counts, {
+      build: 0,
+      built: 0,
+      build_of: 0,
+      output_of: 0,
+    })
+  }
+  assertEquals(
+    (await door(JEFF, '?store=actual.a5b47c&audit=builder-keys')).status,
+    200,
+  )
+  assertEquals(!!app.app, true)
 })
