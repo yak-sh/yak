@@ -64,14 +64,40 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     return json(403, 'not_owner', `a sweep is an owner of ${meta.slug}'s`)
   }
   let all = await stores(env)
-  if (req.method == 'GET') return Response.json(all)
-  if (req.method != 'POST') {
+  let url = new URL(req.url)
+  let audit = url.searchParams.get('audit')
+  if (req.method == 'GET' && !audit) return Response.json(all)
+  if (req.method == 'GET' && audit != 'builder-keys') {
+    return json(400, 'no_audit', 'the sweep reads builder-keys')
+  }
+  if (req.method != 'POST' && req.method != 'GET') {
     return json(405, 'method_not_allowed', 'list the stores, or post to one')
   }
-  let url = new URL(req.url)
   let name = url.searchParams.get('store') ?? ''
   if (!all.some((s) => s.store == name)) {
     return json(404, 'no_store', `no store is named ${name || '(nothing)'}`)
+  }
+  if (req.method == 'GET') {
+    // This is evidence retrieval, not a write door or a second query grammar.
+    // UUIDs bound the selection; .refs is the graph's existing provenance read.
+    let eid = url.searchParams.get('eid') ?? ''
+    let after = url.searchParams.get('after') ?? ''
+    let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuid.test(eid) || (after && !uuid.test(after))) {
+      return json(
+        400,
+        'bad_eid',
+        'select an eid UUID, and an optional after UUID',
+      )
+    }
+    let refs = url.searchParams.get('refs') == '1'
+    let q = refs ? `.refs=${eid}&*` : `.entity.eid=${eid}&*`
+    q += `&.limit=200${after ? `&.after=${after}` : ''}`
+    return await storeOf(env.STORE, name)(
+      `/query?q=${encodeURIComponent(q)}`,
+      { method: 'GET' },
+      KERNEL,
+    )
   }
   let rehearse = url.searchParams.get('rehearse') == '1'
   return await storeOf(env.STORE, name)(

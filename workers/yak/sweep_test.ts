@@ -91,3 +91,22 @@ test('nobody else sweeps', async () => {
     403,
   )
 })
+
+test('only the platform owner reads bounded sweep evidence', async () => {
+  let { scenario, door } = await spaces()
+  using _ = scenario
+  let at = '?store=directory&audit=builder-keys'
+  // Take a real directory eid from the same roster, without an app route.
+  let listed = await door(JEFF)
+  let store = listed.body.find((s: sweep.Swept) => s.at == 'directory').store
+  at = `?store=${store}&audit=builder-keys`
+  assertEquals((await door(ADA, `${at}&eid=${JEFF}`)).status, 403)
+  assertEquals((await door(JEFF, at)).status, 400)
+  assertEquals((await door(JEFF, `${at}&eid=${JEFF}&after=bad`)).status, 400)
+  assertEquals((await door(JEFF, `${at}&eid=${JEFF}`)).status, 200)
+  assertEquals((await door(JEFF, `${at}&eid=${JEFF}&refs=1`)).status, 200)
+  assertEquals(
+    (await door(JEFF, `?store=unknown&audit=builder-keys&eid=${JEFF}`)).status,
+    404,
+  )
+})
