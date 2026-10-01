@@ -32,7 +32,7 @@
 // the app stores, then every store, the directory last. The release that
 // makes a rule live adds its mark to migrate.ts `BOUNDARIES`, so a rollback
 // never lands on code that cannot read what it moved.
-import type { Bundle, Comp, Row } from '@yaks/graph'
+import { type Bundle, type Comp, type Row, token } from '@yaks/graph'
 import { BUILD_OF, buildOf, OUTPUT_OF, outputOf } from '@yaks/builders'
 import { keyed } from '@yaks/key'
 import { isPromise } from '@yaks/fp'
@@ -52,6 +52,52 @@ export type Rule = {
   move: (row: Bundle) => Bundle[]
   /** Where it runs for real. Absent, it is only rehearsed. */
   live?: 'apps' | 'all'
+}
+
+// This converter is rehearsed with an explicitly composed scratch vocabulary.
+// Registration in hosted RULES must wait for the app/retained-vocabulary scan.
+// This is only a rehearsal while old writers still set dispatch{state}.
+// Keep that vocabulary and its authoritative reader until the writer cutover.
+// The envelope stays on queued/active/waiting rows; settling gives it up.
+export let dispatchMove = (row: Bundle): Bundle[] => {
+  let dispatch = row.dispatch as Comp | undefined
+  let state = dispatch?.state
+  if (
+    typeof state != 'string' ||
+    !['queued', 'active', 'waiting', 'settled'].includes(state)
+  ) {
+    return []
+  }
+  let marks = ['admitted', 'waiting']
+  let was = Object.fromEntries(marks.map((name) => {
+    let mark = row[name] as Comp | undefined
+    return [
+      name,
+      Object.fromEntries(
+        ['at', 'by', 'via'].map((prop) => [prop, token(mark?.[prop])]),
+      ),
+    ]
+  }))
+  return [{
+    entity: row.entity,
+    dispatch: state == 'settled' ? null : { state: null },
+    admitted: state == 'active' ? {} : null,
+    waiting: state == 'waiting' ? {} : null,
+    $was: {
+      dispatch: {
+        state: token(state),
+        args: token(dispatch?.args),
+        order: token(dispatch?.order),
+      },
+      ...was,
+    },
+  }]
+}
+
+export let dispatchRule: Rule = {
+  mark: 'yak/store/dispatch/1',
+  find: '.dispatch.state=queued,active,waiting,settled&*',
+  move: dispatchMove,
 }
 
 /** Every rule a release carries. A rule leaves in the release after the sweep
