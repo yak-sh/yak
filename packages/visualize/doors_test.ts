@@ -74,8 +74,10 @@ let other = {} as Graph
 let decoded = <T>(rows: Bundle[]): T => {
   equal(rows.length, 1)
   let content = rows[0].content
-  if (!content || typeof content != 'object' || !('body' in content) ||
-    typeof content.body != 'string') throw new Error('expected a JSON reply')
+  if (
+    !content || typeof content != 'object' || !('body' in content) ||
+    typeof content.body != 'string'
+  ) throw new Error('expected a JSON reply')
   return JSON.parse(content.body)
 }
 
