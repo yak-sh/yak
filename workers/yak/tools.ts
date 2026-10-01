@@ -1337,7 +1337,7 @@ let released = async (
       }
       : await staged(
         blobs,
-        standing.source,
+        prefixOf(space, standing),
         work,
         release,
         !target && work.split('/').pop()?.startsWith('delta-v') == true,

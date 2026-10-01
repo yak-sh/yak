@@ -90,6 +90,25 @@ for (let repair of [false, true]) {
         }
       }
       assertEquals((await tool('read', { path: 'vocab.json' })).text, schema)
+      await call(ctx, 'app_deploy', { space: 'ada', app: 'cookbook' })
+      assertEquals((await tool('list')).value, {
+        files: Object.keys(expected).sort().map((path) => ({
+          path,
+          sha: expected[path],
+        })),
+        unreleased: false,
+      })
+      let released = (await dir.app((await dir.space('ada'))!, 'cookbook'))!
+      for (let [path, bytes] of originals) {
+        if (path != 'vocab.json') {
+          assertEquals(
+            await r2Objects(p.env.BLOBS).get(
+              `${released.source}/${path}`,
+            ),
+            bytes,
+          )
+        }
+      }
     },
   )
 }
