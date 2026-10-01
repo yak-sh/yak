@@ -142,6 +142,31 @@ test('concurrent creation and retry share identity, dirty files stay home, detac
   }
 })
 
+test('checkout retries compare the commit, not its revision spelling', async () => {
+  let f = await fixture()
+  try {
+    let path = f.dir + '/child'
+    let head = await git(f.repo, 'rev-parse', 'HEAD')
+    let tree = await createWorktree(f.h.g, f.repo, { path, base: head })
+    assertEquals(
+      (await createWorktree(f.h.g, f.repo, {
+        path,
+        base: head.slice(0, 8),
+      })).entity.eid,
+      tree.entity.eid,
+    )
+    await Deno.writeTextFile(f.repo + '/file', 'next')
+    await git(f.repo, 'commit', '-am', 'next')
+    await assertRejects(
+      () => createWorktree(f.h.g, f.repo, { path, base: 'HEAD' }),
+      Error,
+      'conflicts with pinned base intent',
+    )
+  } finally {
+    await f.free()
+  }
+})
+
 test('host preparation separates home and cwd, defaults to sharing, and refuses failures before launch', async () => {
   let f = await fixture()
   try {

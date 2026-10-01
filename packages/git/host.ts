@@ -201,6 +201,13 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
 }
 
 export type CheckoutRequest = { path: string; base?: string; branch?: string }
+let resolve = async (source: string, base: string): Promise<string> =>
+  (await git(source, [
+    'rev-parse',
+    '--verify',
+    '--end-of-options',
+    base + '^{commit}',
+  ]))!
 /** Create a worktree, safely repeatable after a failure. A path that already
  * exists must be a checkout of the same repository. HEAD is detached unless a
  * branch is named, and the base is resolved to a commit, so uncommitted files
@@ -213,8 +220,13 @@ let create = async (g: Graph, source: string, request: CheckoutRequest) => {
   let eid = worktreeEid(repository, path)
   let old = await row(g, eid)
   let intent = old?.checkout as Comp | undefined
-  if (intent && request.base != null && intent.requested != request.base) {
-    throw new Error('checkout request conflicts with pinned base intent')
+  let resolved: string | undefined
+  if (intent && request.base != null) {
+    resolved = await resolve(source, request.base)
+    let pinned = intent.base ?? await resolve(source, String(intent.requested))
+    if (pinned != resolved) {
+      throw new Error('checkout request conflicts with pinned base intent')
+    }
   }
   if (intent && (intent.branch ?? null) !== (request.branch ?? null)) {
     throw new Error('checkout request conflicts with existing branch intent')
@@ -252,12 +264,9 @@ let create = async (g: Graph, source: string, request: CheckoutRequest) => {
   }])
   let base: string
   try {
-    base = intent?.base ? String(intent.base) : (await git(source, [
-      'rev-parse',
-      '--verify',
-      '--end-of-options',
-      (request.base ?? 'HEAD') + '^{commit}',
-    ]))!
+    base = intent?.base
+      ? String(intent.base)
+      : resolved ?? await resolve(source, request.base ?? 'HEAD')
     await g.apply([{ entity: { eid }, checkout: { base } }])
   } catch (error) {
     await g.apply([{
