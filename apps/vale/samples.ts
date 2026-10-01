@@ -1,13 +1,6 @@
-// Generated effects are blobs in the vale's store. The listening set is pinned
-// here; hosted builders supply the rest through their output rows. A missing
-// or undecodable blob leaves the procedural voice in place.
-export let SAMPLES: Record<string, string> = {
-  forge: '579c76352d873716929daf518eebd007471c463d67f1ac237310ffbf39b37248',
-  hammer: '410000827723e43c197861e59ee1045fead0f8ec34503e1f80294a3bfbd41c35',
-  sword: 'fa331f1e59bd6e42fadbe184c5f6c424640d57103ad93aa3de1e5e26e534e0d5',
-  spell: 'f39d94d4680b9fd6b85e8ccad2919848718f7fc18696e73c346479302550ca0b',
-  wolf: 'd5a019cc0df66f1cc3e2ca5a049235b12678f78595d7fd0759058623a1b3911c',
-}
+// Hosted builder outputs name every sound clip. A missing or undecodable
+// blob leaves the procedural voice in place.
+let clips: Record<string, string> = {}
 
 /** Every output a build now holds for a sound, each with the sound it was
  * built for (`build.for`) and its clip, which ride beside it. */
@@ -24,21 +17,19 @@ export type Row = {
 }
 
 /** The clip of each sound, from {@link SOUNDS}' rows: an audio clip, for a
- * sound whose clip is not pinned. */
+ * sound. */
 export let catalog = (rows: Row[]): Record<string, string> => {
   let at = new Map(rows.map((row) => [row.entity.eid, row]))
   return Object.fromEntries(rows.flatMap(({ built }) => {
     let made = built && at.get(built.build)?.build?.for
     let name = made && at.get(made)?.sfx?.name
     let blob = built?.artifact && at.get(built.artifact)?.artifact
-    return name && blob && blob.media_type.startsWith('audio/') &&
-        !PINNED.has(name)
+    return name && blob && blob.media_type.startsWith('audio/')
       ? [[name, blob.address]]
       : []
   }))
 }
 
-let PINNED = new Set(Object.keys(SAMPLES))
 let waiting = new Map<string, Set<(hash: string) => void>>()
 let watching: Promise<void> | null = null
 // Each sound row's name, by its eid, as the store has them.
@@ -51,21 +42,26 @@ export let nameOf = (sfx: string): string | undefined => {
   return named.get(sfx)
 }
 
+/** Accept the current catalogue delivered by the store subscription. */
+export let accept = (rows: Row[]) => {
+  let current = catalog(rows)
+  for (let name of Object.keys(clips)) {
+    if (!(name in current)) delete clips[name]
+  }
+  for (let [name, hash] of Object.entries(current)) {
+    clips[name] = hash
+    for (let ready of waiting.get(name) ?? []) ready(hash)
+    waiting.delete(name)
+  }
+}
+
 /** Follow hosted outputs so a rebuilt description is heard on the next play. */
 export let watch = () => {
   if (watching) return watching
   watching = import(new URL('api/client.js', document.baseURI).href)
     .then(({ subscribe }) => {
       subscribe(SOUNDS, (rows: Row[]) => {
-        let current = catalog(rows)
-        for (let name of Object.keys(SAMPLES)) {
-          if (!PINNED.has(name) && !(name in current)) delete SAMPLES[name]
-        }
-        for (let [name, hash] of Object.entries(current)) {
-          SAMPLES[name] = hash
-          for (let ready of waiting.get(name) ?? []) ready(hash)
-          waiting.delete(name)
-        }
+        accept(rows)
       })
       subscribe('.sfx', (rows: Row[]) => {
         named = new Map(rows.map((row) => [row.entity.eid, row.sfx!.name]))
@@ -79,7 +75,7 @@ export let watch = () => {
 }
 
 let address = (name: string): Promise<string> => {
-  if (SAMPLES[name]) return Promise.resolve(SAMPLES[name])
+  if (clips[name]) return Promise.resolve(clips[name])
   void watch()
   return new Promise((ready) => {
     let group = waiting.get(name) ?? new Set()
@@ -103,7 +99,7 @@ let state = (ctx: BaseAudioContext) => {
 }
 
 export let loaded = (ctx: BaseAudioContext, name: string) =>
-  state(ctx).buffers.get(name)?.hash == SAMPLES[name]
+  state(ctx).buffers.get(name)?.hash == clips[name]
     ? state(ctx).buffers.get(name)?.buffer
     : undefined
 
@@ -153,7 +149,7 @@ export let load = (ctx: AudioContext, name: string) => {
       )
       if (!response.ok) throw new Error(`Sound ${name}: ${response.status}`)
       let buffer = await ctx.decodeAudioData(await response.arrayBuffer())
-      if (SAMPLES[name] != hash) return null
+      if (clips[name] != hash) return null
       s.buffers.set(name, { hash, buffer })
       return buffer
     } catch (error) {

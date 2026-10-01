@@ -1,20 +1,31 @@
-// Hosted sound rows name the blob the player hears; the listening set keeps
-// its reviewed clips even if a builder has a candidate with the same name.
+// Hosted sound rows name every clip, and replacing an output changes playback.
 import { test } from '@yaks/testing'
 import { assertEquals, assertStrictEquals } from '@std/assert'
 import { shop } from '../../packages/builders/testing.ts'
 import vale from './vocab.json' with { type: 'json' }
 import {
+  accept,
   blendLoop,
   catalog,
   load,
   loaded,
   type Row,
-  SAMPLES,
   SOUNDS,
 } from './samples.ts'
 
 test('sound samples retry a missing blob and share a successful load', async () => {
+  accept([
+    {
+      entity: { eid: 'test-output' },
+      built: { build: 'test-build', artifact: 'test-clip' },
+    },
+    { entity: { eid: 'test-build' }, build: { for: 'test-sound' } },
+    { entity: { eid: 'test-sound' }, sfx: { name: 'hammer' } },
+    {
+      entity: { eid: 'test-clip' },
+      artifact: { address: 'test-hammer', media_type: 'audio/mpeg' },
+    },
+  ])
   let doc = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let report = Object.getOwnPropertyDescriptor(globalThis, 'reportError')
   let fetchWas = globalThis.fetch
@@ -54,8 +65,8 @@ test('sound samples retry a missing blob and share a successful load', async () 
     assertStrictEquals(loaded(ctx, 'hammer'), buffer)
     assertStrictEquals(await load(ctx, 'hammer'), buffer)
     assertEquals(requests, [
-      `https://yourname.yaks.app/vale/api/blob/${SAMPLES.hammer}`,
-      `https://yourname.yaks.app/vale/api/blob/${SAMPLES.hammer}`,
+      `https://yourname.yaks.app/vale/api/blob/test-hammer`,
+      `https://yourname.yaks.app/vale/api/blob/test-hammer`,
     ])
   } finally {
     globalThis.fetch = fetchWas
@@ -65,7 +76,7 @@ test('sound samples retry a missing blob and share a successful load', async () 
   }
 })
 
-test('hosted audio outputs supply clips without replacing the listening set', () => {
+test('hosted audio outputs supply every sound clip', () => {
   // One output as SOUNDS answers it: the output, then what rides beside it.
   let output = (name: string, media_type = 'audio/mpeg', sound = true) => [
     {
@@ -86,7 +97,7 @@ test('hosted audio outputs supply clips without replacing the listening set', ()
       ...output('letter', 'text/plain'),
       ...output('figure', 'audio/mpeg', false),
     ]),
-    { water: 'water-blob' },
+    { water: 'water-blob', forge: 'forge-blob' },
   )
 })
 
