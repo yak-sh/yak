@@ -193,8 +193,38 @@ export let answer = async (
   let [run] = await tx.get([source])
   let b = comp(run, BUILD)
   if (!b || b.call != call.entity.eid) return []
-  let args = comp(call, 'call')?.args as { binding?: Binding; key?: string }
+  let args = comp(call, 'call')?.args as {
+    binding?: Binding
+    key?: string
+    supplied?: boolean
+  }
   if (!args?.binding || args.key != b.key) return []
+  return [{
+    entity: run.entity,
+    [BUILD]: { call: call.entity.eid },
+    $was: {
+      [BUILD]: {
+        call: token(call.entity.eid),
+        key: token(b.key),
+        stale: token(b.stale ?? null),
+      },
+    },
+  }, ...await outputs(tx, run, call, value, vocab, !args.supplied)]
+}
+
+/** Write an answer's slots using their output_of keys. A supplied slot leaves
+ * every other slot alone; a full tool answer drops links it no longer states. */
+export let outputs = async (
+  tx: Tx,
+  run: Bundle,
+  call: Bundle,
+  value: unknown,
+  vocab: Vocab,
+  drop = true,
+): Promise<Bundle[]> => {
+  let source = run.entity.eid
+  let b = comp(run, BUILD)!
+  let args = comp(call, 'call')?.args as { binding: Binding }
   // Only a nonedge slot's output_of key chooses its owner. Enumeration below
   // is history for dropped links, never a second way to locate an output.
   let slots = object(value) && Array.isArray(value.outputs)
@@ -224,6 +254,7 @@ export let answer = async (
   // The links an earlier answer of this build stated and this one does not.
   let made = await tx.read(`.${BUILT}.build=${source}&*`)
   let dropped = made.filter((row) =>
+    drop &&
     row[EDGE] && !eids.includes(row.entity.eid)
   )
   let have = new Map(prior.map((row) => [row.entity.eid, row]))
@@ -233,17 +264,10 @@ export let answer = async (
     ),
   ])
   let found = new Map(targets.map((row) => [row.entity.eid, row]))
-  let writes: Bundle[] = [{
-    entity: run.entity,
-    [BUILD]: { call: call.entity.eid },
-    $was: {
-      [BUILD]: {
-        call: token(call.entity.eid),
-        key: token(b.key),
-        stale: token(b.stale ?? null),
-      },
-    },
-  }, ...dropped.map((row): Bundle => ({ entity: row.entity, $delete: true }))]
+  let writes: Bundle[] = dropped.map((row) => ({
+    entity: row.entity,
+    $delete: true,
+  }))
   for (let spec of specs) {
     let eid = spec.eid
     let named = spec.slot

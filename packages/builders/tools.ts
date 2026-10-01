@@ -21,6 +21,7 @@ import type { Vocab } from '@yaks/vocab'
 import { held } from '@yaks/key'
 import { BUILD_OF, buildOf, clock, type Options, reconcile } from './build.ts'
 import { type Desk, modelTool } from './model.ts'
+import { type Supply, supply } from './supply.ts'
 
 let str = (v: unknown): string => v == null ? '' : String(v)
 let said = (call: Bundle, body: string): Bundle => ({
@@ -124,6 +125,16 @@ export let runs = (
   options: Omit<Options, 'vocab'> & { desk?: Desk } = {},
 ): Runs => ({
   builder_model: modelTool(options.desk).run,
+  builder_supply: async (call, graph): Promise<Bundle[]> => {
+    let output = await supply(
+      graph,
+      host.vocab,
+      argsOf(call) as Supply,
+      who(call),
+      options,
+    )
+    return [said(call, output)]
+  },
   builder_build: async (call, graph): Promise<Bundle[]> => {
     let ask = argsOf(call) as Ask
     let builds = await build(graph, host.vocab, ask, who(call), options)

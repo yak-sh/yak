@@ -819,3 +819,15 @@ app_secret_remove:
     value. Any other connection stays on the person's connections page. Pass
     the name, not its value. Returns a removal confirmation. Documentation:
     https://yaks.app/docs/code.
+
+builder_supply:
+  title: Supply an app builder's existing artifact
+  description: >-
+    Answer exactly one outer binding of any builder with an artifact already
+    in this app's store. Supply takes the builder, the first entity of its
+    binding (for), a slot and an artifact, all as ids or aliases. It works
+    while staged, spends nothing, and makes that slot current at the key
+    reconciliation computes now. Later input or definition edits rebuild it
+    normally. Other slots are left alone. Optional args keeps the original
+    prompt, model, loudness audit or other provenance on the supplied call.
+    Only someone who can write the app may supply. Returns the output id.

@@ -513,4 +513,9 @@ export let WORDS: Record<string, Words> = {
     'description':
       "Stop the app's worker reading env.NAME. A key handed to the worker itself, as app_secret_set hands one, is forgotten once no other app reads it, and nothing can restore it: to undo, set it again with the value. Any other connection stays on the person's connections page. Pass the name, not its value. Returns a removal confirmation. Documentation: https://yaks.app/docs/code.",
   },
+  'builder_supply': {
+    'title': "Supply an app builder's existing artifact",
+    'description':
+      "Answer exactly one outer binding of any builder with an artifact already in this app's store. Supply takes the builder, the first entity of its binding (for), a slot and an artifact, all as ids or aliases. It works while staged, spends nothing, and makes that slot current at the key reconciliation computes now. Later input or definition edits rebuild it normally. Other slots are left alone. Optional args keeps the original prompt, model, loudness audit or other provenance on the supplied call. Only someone who can write the app may supply. Returns the output id.",
+  },
 }

@@ -62,7 +62,10 @@
       "component": true,
       "type": "object",
       "wire": false,
-      "identity": ["builder", "source"],
+      "identity": [
+        "builder",
+        "source"
+      ],
       "properties": {
         "builder": {
           "type": "string",
@@ -182,7 +185,12 @@
         "current": {
           "type": "boolean",
           "computed": true,
-          "reads": ["built.build", "built.key", "build.key", "build.stale"],
+          "reads": [
+            "built.build",
+            "built.key",
+            "build.key",
+            "build.stale"
+          ],
           "description": "its build still selects its binding and still wants the key it was made under; a downstream builder selects only current outputs"
         }
       },
@@ -196,12 +204,23 @@
       "description": "Open a model session for one frozen builder binding",
       "surfaces": [],
       "input": {
-        "binding": { "type": "object" },
-        "key": { "type": "string" },
-        "template": { "type": "string" },
-        "using": { "type": "object" }
+        "binding": {
+          "type": "object"
+        },
+        "key": {
+          "type": "string"
+        },
+        "template": {
+          "type": "string"
+        },
+        "using": {
+          "type": "object"
+        }
       },
-      "required": ["binding", "key"]
+      "required": [
+        "binding",
+        "key"
+      ]
     },
     "builder_build": {
       "tool": true,
@@ -231,7 +250,10 @@
         },
         "only": {
           "type": "array",
-          "items": { "type": "string", "ref": "entity" },
+          "items": {
+            "type": "string",
+            "ref": "entity"
+          },
           "description": "build only the bindings whose outer entities these name, and leave the other builds as they are"
         },
         "limit": {
@@ -299,8 +321,13 @@
     },
     "builder_model_answer": {
       "effect": true,
-      "created": ["attempt", "error"],
-      "changed": ["attempt.state"],
+      "created": [
+        "attempt",
+        "error"
+      ],
+      "changed": [
+        "attempt.state"
+      ],
       "description": "adapt a model session's reply to a builder tool output once its ask completes"
     },
     "builder_change": {
@@ -317,6 +344,51 @@
         "created"
       ],
       "description": "check immediate builders when an entity enters, changes or leaves their query"
+    },
+    "builder_supply": {
+      "tool": true,
+      "noun": "builder",
+      "verb": "supply",
+      "title": "Supply an existing artifact",
+      "description": "Answer one binding's slot with an existing artifact, spending nothing. The binding is current until its inputs, template, model settings or tool revision change. A staged builder accepts supply; an archived builder does not.",
+      "input": {
+        "builder": {
+          "type": "string",
+          "ref": "builder"
+        },
+        "for": {
+          "type": "string",
+          "ref": "entity",
+          "description": "the first entity in exactly one outer binding"
+        },
+        "slot": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifact": {
+          "type": "string",
+          "ref": "artifact"
+        },
+        "args": {
+          "type": "object",
+          "description": "provenance kept beside the frozen binding on the supplied call"
+        }
+      },
+      "required": [
+        "builder",
+        "for",
+        "slot",
+        "artifact"
+      ],
+      "options": {
+        "positional": [
+          "builder",
+          "for",
+          "slot",
+          "artifact"
+        ]
+      },
+      "idempotent": true
     }
   }
 }

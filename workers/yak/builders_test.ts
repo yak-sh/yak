@@ -305,3 +305,55 @@ test('shadow outputs do not start downstream immediate builders', async () => {
   )
   assertEquals((await v.read(`.build.builder=${next}&*`)).length, 1)
 })
+
+test('builder_supply in an app store is current without any model spending', async () => {
+  let v = await app()
+  let artifact = 'a0000000-0000-4000-8000-0000000000cc'
+  assertEquals(
+    (await v.send('/apply', [{
+      entity: { eid: SOURCE },
+      doc: { title: 'Source', body: 'Village.' },
+    }, {
+      entity: { eid: artifact },
+      artifact: { address: 'existing-song', media_type: 'audio/wav', size: 4 },
+    }, {
+      entity: { eid: BUILDER },
+      content: { body: 'Make a villager from $body.' },
+      using: { model: MODEL },
+      builder: {
+        query: '$s .doc.title=Source, doc.body=$body',
+        to: toolEid('builder_model'),
+      },
+      staged: {},
+    }])).status,
+    200,
+  )
+  let ask = {
+    builder: BUILDER,
+    for: SOURCE,
+    slot: 'song',
+    artifact,
+    by: ADA,
+    args: { prompt: 'Original prompt', model: 'Original model', loudness: -16 },
+  }
+  assertEquals((await v.send('/supply', ask)).status, 404)
+  let r = await v.kernel('/supply', ask)
+  assertEquals(r.status, 200)
+  let { output } = await r.json()
+  let [made] = await v.read(`.entity.eid=${output}&*`)
+  assertEquals((made.built as Comp).artifact, artifact)
+  assertEquals((made.built as Comp).current, true)
+  let [call] = await v.read(`.entity.eid=${(made.built as Comp).call}&*`)
+  let args = (call.call as Comp).args as Comp
+  assertEquals(args.prompt, ask.args.prompt)
+  assertEquals(args.model, ask.args.model)
+  assertEquals(args.loudness, -16)
+  assertEquals((call.cost as Comp).dollars, 0)
+  assertEquals(v.asked, [])
+  assertEquals(
+    (await v.kernel('/build', { builder: BUILDER, by: ADA })).status,
+    200,
+  )
+  assertEquals((await v.read('.call')).length, 1)
+  assertEquals(v.asked, [])
+})

@@ -195,7 +195,7 @@ import {
   wakesOf,
 } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
-import { builderModelTool, building } from './builders.ts'
+import { builderModelTool, building, supplying } from './builders.ts'
 import type { Env } from './env.ts'
 import { resumed, seeded } from './wake.ts'
 import type { Binding } from './post.ts'
@@ -613,6 +613,7 @@ let routes = new Set([
   '/alarm',
   '/move',
   '/build',
+  '/supply',
   '/ws',
   '/apply',
   '/query',
@@ -2684,6 +2685,17 @@ export class Store {
       if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
       try {
         return await building(
+          this.#stored(this.#graph).graph,
+          await request.json(),
+        )
+      } catch (e) {
+        return refuse(e, request)
+      }
+    }
+    if (path == '/supply' && request.method == 'POST') {
+      if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
+      try {
+        return await supplying(
           this.#stored(this.#graph).graph,
           await request.json(),
         )

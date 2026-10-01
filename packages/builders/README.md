@@ -161,3 +161,18 @@ Compose @yaks/kernel, @yaks/tools, @yaks/edge, @yaks/key, @yaks/session,
 @yaks/blob, @yaks/model and @yaks/wake vocabulary where the model adapter runs.
 Storage must implement `Tx.bindings` so bracket collections and outer bindings
 have one meaning. @yaks/sqlite does.
+
+## Supplying an existing artifact
+
+`builder supply <builder> <for> <slot> <artifact>` answers one outer binding
+without calling its tool or spending money. `for` names the binding's first
+entity, and must identify exactly one binding. Supply works on staged builders,
+not archived ones. Build and output ids are found through their `build_of` and
+`output_of` keys, so a supplied output keeps its id on later rebuilds.
+
+`builder_supply` takes the same arguments as named fields. Optional `args` keeps
+provenance (the original prompt, model, loudness audit) beside the frozen
+binding on the completed call. Other slots are left alone. Reconciliation asks
+nothing until the binding's inputs, template, model settings or tool revision
+change. The package's `supply(graph, vocab, ask, actor)` function serves hosted
+stores too; yaks.app exposes it through the editor-only `builder_supply` tool.

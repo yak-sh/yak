@@ -10,3 +10,5 @@ export { builderDoc } from './vocab.ts'
 export * from './key.ts'
 export * from './build.ts'
 export { modelTool, modelToolEid, render } from './model.ts'
+
+export { type Supply, supply } from './supply.ts'

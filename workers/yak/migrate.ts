@@ -403,10 +403,9 @@ export let install = (
   vocab: Vocab,
   derived: Derived = {},
 ): Error[] => {
-  let before = standing(d, vocab)
   let stood = new Set(named(d, 'index').map((i) => i.name))
   for (let stmt of tabled(vocab, derived)) d.query(stmt)
-  let unfit = fit(d, vocab, before)
+  let unfit = fit(d, vocab)
   for (let stmt of retired(d, vocab)) d.query(stmt)
   let held = new Set(named(d, 'index').map((i) => i.name))
   let ready = {
