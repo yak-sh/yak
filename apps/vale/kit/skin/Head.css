@@ -79,3 +79,4 @@ a.Head_Title:hover,
 .Head.Panel_Head + .Panel_Body { margin-top: 0; }
 /* A migrated shell keeps the retained panel's box contract. */
 .Head.Panel_Head { display: flex; align-items: center; gap: var(--gap); min-height: 3.25rem; padding: 0.35rem 0.6rem 0.35rem 1rem; border-bottom: 2px solid var(--rim); background: var(--well); }
+.Head.Panel_Head + .Panel_Content { margin-top: 0; }
