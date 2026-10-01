@@ -1,0 +1,44 @@
+/* A release is a lip above the glass, including an open sheet or the gate.
+   Its measured height leaves room below it rather than covering a draft. */
+:is(.Hud, .Gate) {
+  padding-top: calc(var(--safe-t) + var(--release-height, 0px));
+}
+
+.Hud:has(> .Panel:not([hidden])) > .Release {
+  visibility: visible;
+}
+
+.Hud > .Panel {
+  padding-top: calc(var(--safe-t) + var(--release-height, 0px));
+}
+
+.Hud > .Panel-hero {
+  padding-top: calc(var(--safe-t) + var(--release-height, 0px) + 6rem);
+}
+
+@media (min-width: 55rem) {
+  .Hud > .Panel-hero {
+    padding-top: calc(var(--safe-t) + var(--release-height, 0px));
+  }
+}
+
+.Release {
+  position: fixed;
+  top: var(--safe-t);
+  left: var(--safe-l);
+  right: var(--safe-r);
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  border: 2px solid var(--rim);
+  border-radius: var(--round);
+  background: var(--paper);
+  box-shadow: var(--flat);
+  color: var(--ink);
+  pointer-events: auto;
+  user-select: text;
+}

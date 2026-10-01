@@ -17,7 +17,7 @@ import { ABILITIES, type Ability, useAbilities } from './abilities.ts'
 import { effect } from './ability-effects.ts'
 import { bar } from './bar.ts'
 import { board } from './board.ts'
-import { BEASTS, useBeasts, useDens } from './beasts.ts'
+import { useBeasts, useDens } from './beasts.ts'
 import { useNames } from './names.ts'
 import { FIGURES, sizeOf, useFigures } from './figure.ts'
 import { aim, bearing, type Cam, depth, moveLook, steer } from './cam.ts'
@@ -42,6 +42,7 @@ import {
   useThemeRows,
 } from './grown.ts'
 import { type Clock, hud } from './hud.ts'
+import { releaseNotice } from './release.ts'
 import { guide, journal, tasksOf } from './journal.ts'
 import { pack } from './pack.ts'
 import { pace } from './pace.ts'
@@ -99,6 +100,7 @@ let canvas = document.querySelector<HTMLCanvasElement>('.Stage')!
 let gate = document.querySelector<HTMLElement>('.Gate')!
 let gateCard = gate.querySelector<HTMLElement>('.Gate_Card')!
 let glass = document.querySelector<HTMLElement>('.Hud')!
+releaseNotice(glass, gate)
 
 let phone = matchMedia('(pointer: coarse)').matches
 let renderer = new THREE.WebGLRenderer({
