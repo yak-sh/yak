@@ -410,7 +410,7 @@ let comps = (vocab: Vocab, was: Standing): string[] =>
 // lacks is `grown`'s, and arrives with its check. A column that refuses a null
 // its vocabulary now allows (a property no longer `required`, or no longer
 // named and kept for its values) could never be cleared, so it could never
-// empty and leave; a column that admits a null its vocabulary refuses is how
+// be cleared; a column that admits a null its vocabulary refuses is how
 // `grown` adds one on purpose, and admission holds the writes.
 let fits = (t: Stood, fresh: CreateTable, changes: number): boolean => {
   let keyed = fresh.cols.filter((c) => c.ref).map((c) => c.name)

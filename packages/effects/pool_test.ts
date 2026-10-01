@@ -412,7 +412,8 @@ test('local completion retry retains reply, respects backoff and bounds', async 
     a.fx.handle({
       post_note: async (_e, _tx, _write, attempt) => {
         let receipt = ++external
-        await attempt.retry!(async () => {
+        assert(attempt?.retry)
+        await attempt.retry(async () => {
           saves++
           if (!recover || saves == 1) throw new Error('storage unavailable')
           assertEquals(receipt, 1)
