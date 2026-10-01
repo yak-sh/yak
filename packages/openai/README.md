@@ -63,8 +63,10 @@ Codex backend requires `store: false`.
 
 Operational transport failures are mapped to `ModelError`, except a provider
 `invalid_request_error`, which remains a `ResponseError` so callers can inspect
-invalid request history. Other exceptions, including application callback
-failures, propagate unchanged.
+invalid request history. The `ModelError` keeps the provider's message, the
+transport's `retry` for a failure that may pass, and `response{body, headers}`:
+the redacted body and the limit headers, never the request's. Other exceptions,
+including application callback failures, propagate unchanged.
 
 ## Provider-native transport
 
@@ -106,12 +108,14 @@ PII filter. Observation vocabulary is not part of this package.
 
 The native transport defaults to two bounded retries for credential loading and
 for transient request failures: an unestablished connection, a truncated body, a
-stalled stream, a stream ending without completion, a 5xx or 429, and any
-failure whose provider `code` indicates capacity (`server_is_overloaded`,
-`server_error`, `overloaded`, `overloaded_error`, `rate_limit_exceeded`)
-whatever its status. Auth and validation refusals fail fast. `Retry-After`
-extends the backoff, up to 60s. One refresh on 401 when supplied. `retries` sets
-the attempt limit and `pause` supplies the delay function. `patienceMs` can
+stalled stream, a stream ending without completion or in `response.failed` or
+`error`, a 5xx or 429, and any failure whose provider `code` indicates capacity
+(`server_is_overloaded`, `server_error`, `overloaded`, `overloaded_error`,
+`rate_limit_exceeded`) whatever its status. Auth and validation refusals, and a
+code that says the request itself cannot succeed (a spent allowance, a prompt
+too long or refused), fail fast. `Retry-After`, or a rate limit's "try again
+in", extends the backoff, up to 60s. One refresh on 401 when supplied. `retries`
+sets the attempt limit and `pause` supplies the delay function. `patienceMs` can
 extend HTTP retries beyond that limit; its default of zero keeps the attempt
 limit. `run(request, { noRetry: true })` prevents replay; a function can defer
 that decision until partial output is exposed. `shape` replaces the default
@@ -122,13 +126,17 @@ authorization.
 
 Native failures are `ResponseError`s with a stable `kind` and optional provider
 `code` (the error body's or event's `code`, or its `type` when the code is
-null), HTTP `status`, rate `limits`, and partial `items`/`evidence`. Fetch
-failures include a bounded, redacted cause chain with URL parameters removed.
-The model adapter uses the same retry defaults and stops replay after it has
-delivered a public text delta, preventing duplicate streamed text. It accepts
-the transport policies plus `refresh`, `signal`, and `event`; error mapping and
-continuation behavior are described above. `frames(stream)` exposes the same SSE
-decoder without transport policies or redaction and releases its reader on exit.
+null), HTTP `status`, rate `limits` (Retry-After, `x-ratelimit-*` and the Codex
+backend's `x-codex-*` plan windows), the redacted `body` the provider sent (an
+error status's body, or the event that ended the stream), and partial
+`items`/`evidence`. Its message is the provider's own: the code and message it
+sent, and `(rate limited; asked to wait 2s)` for a rate limit. Fetch failures
+include a bounded, redacted cause chain with URL parameters removed. The model
+adapter uses the same retry defaults and stops replay after it has delivered a
+public text delta, preventing duplicate streamed text. It accepts the transport
+policies plus `refresh`, `signal`, and `event`; error mapping and continuation
+behavior are described above. `frames(stream)` exposes the same SSE decoder
+without transport policies or redaction and releases its reader on exit.
 
 Completed Responses usage is returned as provider-neutral `Reply.usage` and
 persisted by the session on the model-request entry's `usage` component. Counts

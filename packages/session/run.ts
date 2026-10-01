@@ -28,6 +28,12 @@
 // A process leaving (`stopping`) starts no step after it and lets the step in
 // flight finish; what is left is owed, for the next worker's sweep.
 //
+// A model request the provider failed but may yet answer ends the run: the
+// step records it and throws, and the pool runs it again after its backoff, up
+// to `session_run`'s tries (@yaks/effects `Attempt`). A step that gets
+// somewhere gives the run its tries back, so a run going for hours counts the
+// failures in a row, not all it ever met (T-62140).
+//
 // What the runner is lent — the models, the tools, the limits — is the host's
 // ({@link Runner}): nothing here names a machine or a provider.
 
@@ -244,6 +250,7 @@ let turns = async (g: Graph, session: Eid, r: Runner): Promise<number> => {
     if (owner && owner.holder != r.holder) break
     let s = await step(g, session, r)
     r.each?.(s)
+    if (s.did != 'nothing') await r.attempt?.progressed()
     if (ENDED.includes(s.status)) {
       await ended(g, session, r)
       break
@@ -434,8 +441,16 @@ let release = async (g: Graph, e: Event): Promise<void> => {
  * ```
  */
 export let running = (g: Graph, r: Runner): Handlers => ({
-  session_run: async (e) => {
-    for (let session of await about(g, e)) await answer(g, session, r)
+  session_run: async (e, _tx, _write, attempt) => {
+    // Every transcript the event names is answered; a failure in one, a
+    // request to ask again among them, is thrown once the others are.
+    let thrown: unknown
+    for (let session of await about(g, e)) {
+      await answer(g, session, { ...r, attempt }).catch((err) => {
+        thrown ??= err
+      })
+    }
+    if (thrown) throw thrown
   },
   ...effectsIn(g.vocab.docs).some((e) => e.name == 'session_release')
     ? { session_release: (e: Event) => release(g, e) }

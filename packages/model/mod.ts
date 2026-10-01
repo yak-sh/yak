@@ -67,6 +67,7 @@ export let ANSWER = 'answer'
 export let USAGE = 'usage'
 export let PRICE = 'price'
 export let COST = 'cost'
+export let RESPONSE = 'response'
 
 /**
  * A provider or a model named where an eid is expected: `gpt-6-astra` in
@@ -249,16 +250,34 @@ export type Model = ((req: Request) => Promise<Reply>) & {
   vocab?: VocabDoc
 }
 
+/** What a provider answered a failed request with, as it arrived: the body of
+ * an error status, or the event that ended its stream, and the headers that
+ * speak of its limits. Stored as `response{body, headers}` beside the line
+ * recording the failure. */
+export type Answered = {
+  body?: string
+  headers?: Record<string, string>
+}
+
 /** A failure the caller expects: `code` is the provider's own error code when
  * it gave one, otherwise a name for the kind of failure. */
 export class ModelError extends Error {
   code: string
-  /** A provider can ask the runner to retry before its reply is visible. */
+  /** The failure may pass: the caller can ask again, no sooner than `after`
+   * milliseconds where the provider said how long to wait. */
   retry?: { after?: number }
-  constructor(code: string, message = code, retry?: { after?: number }) {
+  /** what the provider sent, where it sent anything */
+  response?: Answered
+  constructor(
+    code: string,
+    message = code,
+    retry?: { after?: number },
+    response?: Answered,
+  ) {
     super(message)
     this.name = 'ModelError'
     this.code = code
     this.retry = retry
+    this.response = response
   }
 }

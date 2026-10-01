@@ -72,13 +72,26 @@ import {
   type Policy,
   type Registration,
 } from './registration.ts'
-import { EFFECT, type Owed, pool, type PoolOpts, type Run } from './pool.ts'
+import {
+  type Attempt,
+  EFFECT,
+  type Owed,
+  pool,
+  type PoolOpts,
+  type Run,
+} from './pool.ts'
 export type { Description, Policy, Registration } from './registration.ts'
 
 /** A post-commit handler: what happened, a detached transaction to read
- * through, and the callback to write through ({@link Write}). Its return value
- * is awaited when it is a promise. */
-export type Handler = (event: Event, tx: Tx, write: Write) => unknown
+ * through, the callback to write through ({@link Write}), and, for a run the
+ * pool claimed, which attempt it is ({@link Attempt}). Its return value is
+ * awaited when it is a promise. */
+export type Handler = (
+  event: Event,
+  tx: Tx,
+  write: Write,
+  attempt?: Attempt,
+) => unknown
 
 /** The code for declared effects, by the name each is declared under. */
 export type Handlers = Record<string, Handler>

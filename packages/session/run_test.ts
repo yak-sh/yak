@@ -22,13 +22,19 @@ import { loadVocab, pick, type VocabDoc } from '@yaks/vocab'
 import { taskDoc } from '@yaks/task/vocab'
 import { kernelDoc } from '@yaks/kernel/vocab'
 import { processDoc } from '@yaks/process'
-import { type Model, modelDoc, type Request } from '@yaks/model'
+import {
+  type Model,
+  modelDoc,
+  ModelError,
+  type Reply,
+  type Request,
+} from '@yaks/model'
 import { toolEid } from '@yaks/tools'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { sessionDoc } from './comp.ts'
 import { sessions } from './plugin.ts'
 import { transcript } from './react.ts'
-import { kindOf, sessionDerived, statusOf } from './status.ts'
+import { kindOf, sessionDerived, statusOf, textOf } from './status.ts'
 import { answers } from './providers.ts'
 import { sessionTools } from './children.ts'
 import { RUN, type Runner, running, settle } from './run.ts'
@@ -88,16 +94,19 @@ let fake = (gate?: Promise<unknown>) => {
   return { model, asked }
 }
 
-// A process over `s`: its graph, registry, and the runner it lends.
+// A process over `s`: its graph, registry, and the runner it lends; `now` is
+// its pool's clock, for a test that waits out a backoff.
 let proc = (
   s: Storage,
   holder: string,
   model: Model,
   more: Partial<Runner> = {},
+  now?: () => number,
 ) => {
   let fx = effects(vocab, {
     owner: holder,
     write: (b) => g.apply(b, { trusted: true }),
+    ...now ? { now } : {},
   })
   let g = graph({ storage: s, vocab, plugins: [sessions(), fx] })
   let r: Runner = {
@@ -139,6 +148,48 @@ let child = (eid: string, order: number, parent = 'root'): Bundle[] => [
 
 let kinds = async (p: { g: ReturnType<typeof graph> }, s: string) =>
   (await transcript(p.g, s)).map(kindOf)
+
+// A provider that answers each ask with `reply(n)`, the nth ask's, which is a
+// failure to throw or a reply, and counts the asks.
+let script = (reply: (n: number) => ModelError | Reply['items']) => {
+  let asks = 0
+  let model: Model = (req) => {
+    let said = reply(++asks)
+    return said instanceof ModelError
+      ? Promise.reject(said)
+      : Promise.resolve({ id: `r${asks}`, model: req.model, items: said })
+  }
+  return { model, asks: () => asks }
+}
+let done: Reply['items'] = [{ kind: 'assistant', text: 'done' }]
+
+// A process working the pool on a clock the test moves, with `s1` asked.
+let clocked = async (model: Model) => {
+  let clock = { t: 0 }
+  let p = proc(store(), 'w1', model, {}, () => clock.t)
+  await p.fx.work(p.g)
+  await p.g.apply(ask('s1'))
+  await p.fx.idle()
+  // Move the clock to `t` and work what fell due by then.
+  let at = async (t: number) => {
+    clock.t = t
+    await p.fx.work(p.g)
+    await p.fx.idle()
+  }
+  // The transcript's status as the store computes it, and its newest lines.
+  let status = async () =>
+    String(((await p.g.get(['s1']))[0].session as Comp).status)
+  let last = async (n: number) => (await transcript(p.g, 's1')).slice(-n)
+  // When the session's run is next due, if it waits on a backoff.
+  let due = async () => {
+    let [row] = await p.g.read(
+      '.effect.handler=session_run .effect.state=pending .effect.next&*',
+    )
+    let next = (row?.effect as Comp | undefined)?.next
+    return next == null ? undefined : Date.parse(String(next))
+  }
+  return { p, at, status, last, due }
+}
 
 test('a request one process writes is answered by a process working the pool', async () => {
   let s = store()
@@ -500,4 +551,79 @@ test('a worker reclaims claims left by already ended transcripts', async () => {
   await p.fx.idle()
   assertEquals((await p.g.get(['work']))[0].claim, undefined)
   assertEquals(((await p.g.get(['active']))[0].claim as Comp)?.session, 's2')
+})
+
+test('a request the provider failed is asked again once the wait it named is up', async () => {
+  let failed = { body: '{"type":"response.failed"}' }
+  let { model, asks } = script((n) =>
+    n == 1
+      ? new ModelError('rate_limit_exceeded', 'try again in 5s', {
+        after: 5_000,
+      }, failed)
+      : done
+  )
+  let { at, status, last } = await clocked(model)
+  // Kept in the provider's words and with what it sent; the ask is cut off,
+  // so the session is owed another.
+  let [asked, error] = await last(2)
+  assertEquals(
+    [
+      (asked.attempt as Comp).state,
+      (error.error as Comp).code,
+      (error.response as Comp).body,
+    ],
+    ['interrupted', 'rate_limit_exceeded', failed.body],
+  )
+  assertEquals(await status(), 'pending')
+  await at(4_999)
+  assertEquals(asks(), 1)
+  await at(5_000)
+  assertEquals([asks(), await status()], [2, 'settled'])
+})
+
+test('failures in a row wait longer each time, and the last one stands', async () => {
+  let { model, asks } = script(() =>
+    new ModelError('unknown', 'responses: failed — unknown', {})
+  )
+  let { at, status, last, due } = await clocked(model)
+  let waits: number[] = []
+  for (let t = 0, next; (next = await due()) != null; t = next) {
+    waits.push(next - t)
+    await at(next)
+  }
+  // `session_run` declares eight tries: a second, doubling, between them.
+  assertEquals(waits, [1, 2, 4, 8, 16, 32, 64].map((s) => s * 1000))
+  assertEquals([asks(), await status()], [8, 'failed'])
+  let [asked, error] = await last(2)
+  assertEquals(
+    [(asked.attempt as Comp).state, (error.error as Comp).code, textOf(error)],
+    [
+      'interrupted',
+      'interrupted',
+      'Response interrupted: ModelError: responses: failed — unknown',
+    ],
+  )
+})
+
+test('a reply between failures gives the next failure its tries back', async () => {
+  // Seven failures, a reply asking for a tool, then one more failure: the
+  // eighth try in the run, but the first since the run got somewhere.
+  let { model, asks } = script((n) =>
+    n <= 7 || n == 9
+      ? new ModelError('server_error', 'responses: failed', {})
+      : n == 8
+      ? [{ kind: 'call', id: 'c1', name: 'nope', args: '{}' }]
+      : done
+  )
+  let { at, status, due } = await clocked(model)
+  for (let next; (next = await due()) != null;) await at(next)
+  assertEquals([asks(), await status()], [10, 'settled'])
+})
+
+test('a provider’s no is not asked again, whatever the pool allows', async () => {
+  let { model, asks } = script(() =>
+    new ModelError('context_length_exceeded', 'the input is too long')
+  )
+  let { status, due } = await clocked(model)
+  assertEquals([asks(), await status(), await due()], [1, 'failed', undefined])
 })

@@ -296,7 +296,14 @@ renewing their claims while they go, and `running()` lists them.
 
 A run that throws is due again after a backoff (a second, doubling, capped at
 five minutes) until it spends its attempts (`tries`, default three) and stays
-`failed` with its error. A run interrupted mid-way is run again, unless its
+`failed` with its error. An error carrying `retry` (as @yaks/model's
+`ModelError` does for a provider's transient failure) is expected: it is not
+reported until the run's last attempt, and its `retry.after`, a wait in
+milliseconds such as a provider's Retry-After, puts the next attempt no sooner
+than that. A pooled handler's fourth argument is its `Attempt`: `last()` says
+whether a failure now would stand, so the handler can record it as final, and
+`progressed()` says a run of many steps got somewhere, so its next failure
+counts as its first. A run interrupted mid-way is run again, unless its
 declaration says `idempotent: false`, where it is left failed: a second run
 could repeat something that already reached an external system. A run rebuilds
 its event from the target's current state, so a handler needing a historical

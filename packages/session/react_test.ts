@@ -617,116 +617,14 @@ test('a retryable audio failure never resends an ambiguous request', async () =>
   assertEquals(await kinds(g, ids.s), ['input', 'ask', 'error'])
 })
 
-test('a transient model failure retries before a streaming reply is visible', async () => {
-  let g = world(), calls = 0, pauses: number[] = []
-  let model: Model = () => {
-    calls++
-    return calls < 3
-      ? Promise.reject(
-        new ModelError('transport', 'connection reset', {
-          after: 0,
-        }),
-      )
-      : Promise.resolve(says('r1', 'done'))
-  }
-  assertEquals(
-    await rest(g, ids.s, {
-      model,
-      tools: [],
-      streaming: true,
-      mint,
-      pause: (ms) => {
-        pauses.push(ms)
-      },
-    }),
-    'settled',
-  )
-  assertEquals(calls, 3)
-  assertEquals(pauses, [1000, 4000])
-  assertEquals(await kinds(g, ids.s), ['input', 'ask', 'output'])
-})
-
-test('exhausted transient failures explain the terminal outcome', async () => {
-  let g = world(), calls = 0
-  let model: Model = () => {
-    calls++
-    return Promise.reject(
-      new ModelError('http_503', 'provider unavailable', { after: 0 }),
-    )
-  }
-  assertEquals(
-    await rest(g, ids.s, {
-      model,
-      tools: [],
-      streaming: true,
-      mint,
-      pause: () => {},
-    }),
-    'failed',
-  )
-  assertEquals(calls, 3)
-  assertEquals(await kinds(g, ids.s), ['input', 'ask', 'error'])
-  let error = (await transcript(g, ids.s)).at(-1)!
-  assertEquals(
-    (error.content as Comp).body,
-    'Response interrupted: ModelError: Model request failed after 3 attempts (http_503): provider unavailable',
-  )
-})
-
-test('an exhausted nonstream request does not start another transcript ask', async () => {
-  let g = world(), calls = 0
-  let model: Model = () => {
-    calls++
-    return Promise.reject(
-      new ModelError('http_503', 'provider unavailable', { after: 0 }),
-    )
-  }
-  assertEquals(
-    await rest(g, ids.s, {
-      model,
-      tools: [],
-      mint,
-      pause: () => {},
-    }),
-    'failed',
-  )
-  assertEquals(calls, 3)
-  assertEquals(await kinds(g, ids.s), ['input', 'ask', 'error'])
-})
-
-test('stopping during model backoff starts no further attempt', async () => {
-  let g = world(), calls = 0, stop = new AbortController()
-  let model: Model = () => {
-    calls++
-    return Promise.reject(
-      new ModelError('transport', 'connection lost', { after: 0 }),
-    )
-  }
-  assertEquals(
-    await rest(g, ids.s, {
-      model,
-      tools: [],
-      streaming: true,
-      mint,
-      stopping: stop.signal,
-      pause: () => stop.abort(),
-    }),
-    'failed',
-  )
-  assertEquals(calls, 1)
-})
-
-// A failing model, counting its calls and the backoff it was made to wait.
+// A failing model, counting its calls.
 let failing = (error: () => ModelError) => {
-  let seen = { calls: 0, pauses: [] as number[] }
+  let seen = { calls: 0 }
   let model: Model = () => {
     seen.calls++
     return Promise.reject(error())
   }
-  let pause = (ms: number) => {
-    seen.pauses.push(ms)
-  }
-  return { model, pause, seen }
+  return { model, seen }
 }
 
 // The ask and the error line a failed turn leaves: its attempt state, and the
@@ -740,6 +638,35 @@ let outcome = async (g: Graph) => {
   ]
 }
 
+test('outside the pool, a failure that may pass stands at once as an interruption, in the provider’s words', async () => {
+  let response = { body: '{"type":"response.failed"}' }
+  for (
+    let error of [
+      () => new ModelError('transport', 'connection reset'),
+      () => new ModelError('http_503', 'provider unavailable', { after: 0 }),
+      () =>
+        new ModelError('unknown', 'responses: failed — unknown', {}, response),
+    ]
+  ) {
+    for (let streaming of [false, true]) {
+      let g = world()
+      let { model, seen } = failing(error)
+      let deps = { model, tools: [], streaming, mint }
+      // Nobody here would ask again: the request stands interrupted, for a
+      // person to continue from.
+      assertEquals(await rest(g, ids.s, deps), 'failed')
+      assertEquals(seen.calls, 1)
+      assertEquals(await outcome(g), [
+        'interrupted',
+        'interrupted',
+        'Response interrupted: ' + String(error()),
+      ])
+      let line = (await transcript(g, ids.s)).at(-1)!
+      assertEquals(line.response, error().response)
+    }
+  }
+})
+
 test('a provider’s refusal is final and keeps its own code, streamed or not', async () => {
   for (
     let [code, said] of [
@@ -749,38 +676,13 @@ test('a provider’s refusal is final and keeps its own code, streamed or not', 
   ) {
     for (let streaming of [false, true]) {
       let g = world()
-      let { model, pause, seen } = failing(() => new ModelError(code, said))
-      let deps = { model, pause, tools: [], streaming, mint }
+      let { model, seen } = failing(() => new ModelError(code, said))
+      let deps = { model, tools: [], streaming, mint }
       assertEquals(await rest(g, ids.s, deps), 'failed')
       assertEquals(seen.calls, 1)
       assertEquals(await kinds(g, ids.s), ['input', 'ask', 'error'])
       assertEquals(await outcome(g), ['completed', code, said])
     }
-  }
-})
-
-test('an overloaded provider is retried with backoff, then left interrupted', async () => {
-  for (let audio of [false, true]) {
-    let g = world()
-    if (audio) {
-      await g.apply([{
-        entity: { eid: ids.m },
-        model: { modalities: ['audio'] },
-      }])
-    }
-    let { model, pause, seen } = failing(() =>
-      new ModelError('server_is_overloaded', 'overloaded', { after: 0 })
-    )
-    assertEquals(
-      await rest(g, ids.s, { model, pause, tools: [], mint }),
-      'failed',
-    )
-    // Audio is never resent: the provider may have made paid media.
-    assertEquals(
-      seen,
-      audio ? { calls: 1, pauses: [] } : { calls: 3, pauses: [1000, 4000] },
-    )
-    assertEquals((await outcome(g)).slice(0, 2), ['interrupted', 'interrupted'])
   }
 })
 
@@ -798,22 +700,20 @@ test('a summary the provider keeps failing ends the transcript, never loops', as
     })
     await appendEntry(g, ids.s, 'Remember the blue bridge. '.repeat(4))
     // A summarizer that would answer on its tenth call, if it got one.
-    let { model, pause, seen } = failing(error)
+    let { model, seen } = failing(error)
     let summarizer: Model = (req) =>
       seen.calls == 9 ? Promise.resolve(says('sum', 'Blue.')) : model(req)
     let deps = {
       model: scripted([says('r2', 'ok')], false).model,
-      pause,
       tools: [],
       mint,
       contextTokens: 20,
       compactModel: { model: summarizer, name: 'fake-1' },
     }
     assertEquals(await rest(g, ids.s, deps), 'failed')
-    let transient = error().retry
-    // Three runner steps, each asking three times when the failure is
-    // transient and once when it is the provider's no.
-    assertEquals(seen.calls, transient ? 9 : 3)
+    // Three runner steps, one ask each: outside the pool nothing asks again
+    // sooner, whether the failure may pass or is the provider's no.
+    assertEquals(seen.calls, 3)
     assertEquals(
       (await kinds(g, ids.s)).slice(-4),
       ['input', 'error', 'error', 'error'],

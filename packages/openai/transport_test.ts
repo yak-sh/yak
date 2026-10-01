@@ -251,6 +251,7 @@ test('responses rejects malformed stream data and missing item types', async () 
 test('responses scrubs failed-stream evidence and credential errors', async () => {
   let failed = responses({
     credentials: auth(),
+    pause: () => Promise.resolve(),
     fetch: () =>
       Promise.resolve(sse(
         { type: 'response.future.delta', value: 'secret-old' },
@@ -270,7 +271,11 @@ test('responses scrubs failed-stream evidence and credential errors', async () =
   let error = await assertRejects(
     () => failed.run({ model: 'm', input: [] }),
   ) as ResponseFault
-  assertEquals(error.message, 'responses: failed — schema_changed')
+  assertEquals(
+    error.message,
+    'responses: failed — schema_changed: [redacted] [redacted]',
+  )
+  assertEquals(error.body?.includes('secret-old'), false)
   assertEquals(error.code, 'schema_changed')
   assertEquals(error.items?.length, 1)
   assertEquals(JSON.stringify(error.evidence).includes('secret-old'), false)
@@ -457,7 +462,14 @@ test('responses names 429 limits after bounded retries without echoing secrets',
   ) as ResponseFault
   assertEquals(calls, 3)
   // The body message rides into the fault message, redacted along the way.
-  assertEquals(error.message, 'responses: HTTP 429 — [redacted]')
+  assertEquals(
+    error.message,
+    'responses: HTTP 429 — [redacted] (rate limited; asked to wait 2s)',
+  )
+  assertEquals(
+    error.body,
+    '{"error":{"code":"rate_limit","message":"[redacted]"}}',
+  )
   assertEquals(error.code, 'rate_limit')
   assertEquals(error.retry, { after: 2000 })
   assertEquals(error.limits, {

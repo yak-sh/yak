@@ -45,7 +45,16 @@
 // How many attempts a run gets is the declaration's (`tries`), never a
 // handler's, so no effect carries retry code of its own. A run that spent them
 // is left `failed` with the error it last threw, for a person (the
-// `effect_check` tool).
+// `effect_check` tool). An error that asks to be tried again (it carries
+// `retry`, as @yaks/model's `ModelError` does for a provider's transient
+// failure) is expected: it is kept on the row and reported only once nothing
+// will try it again, and where it says when to come back (`retry.after`, a
+// provider's Retry-After in milliseconds) it is due no sooner than that.
+//
+// A handler is told which attempt it is ({@link Attempt}): whether this is its
+// last, so the failure it records there is the one that stands; and a way to
+// say it got somewhere, so a long run that fails again after succeeding counts
+// that failure as its first, not as one more in a row.
 //
 // A worker winds down by leaving: the moment its signal aborts it claims
 // nothing more, and what it started runs to its end, however long that is,
@@ -87,9 +96,41 @@ export let EFFECT = 'effect'
 export let TRIES = 3
 
 /** How long after the nth attempt the next one falls due: a second, doubling,
- * and never more than five minutes apart. */
+ * and never more than five minutes apart.
+ *
+ * ```ts
+ * import { backoff } from '@yaks/effects'
+ *
+ * [1, 2, 3, 10].map(backoff) // [1000, 2000, 4000, 300000]
+ * ```
+ */
 export let backoff = (attempts: number): number =>
   Math.min(300_000, 1000 * 2 ** (attempts - 1))
+
+// A thrown error that asks to be tried again: it carries `retry`, with the
+// wait it asks for as `retry.after` in milliseconds, the shape a provider's
+// Retry-After takes (@yaks/model `ModelError`).
+let retryOf = (err: unknown) =>
+  (err as { retry?: { after?: unknown } } | null)?.retry
+let retried = (err: unknown): boolean => {
+  let retry = retryOf(err)
+  return retry != null && typeof retry == 'object'
+}
+let asked = (err: unknown): number => {
+  let after = retryOf(err)?.after
+  return typeof after == 'number' && after > 0 ? after : 0
+}
+
+/** A run the pool claimed, as its handler sees it. */
+export type Attempt = {
+  /** Whether this attempt is the run's last: if it fails now, it is left
+   * failed, so what the handler records about the failure is what stands. */
+  last: () => boolean
+  /** The run got somewhere: a failure after this counts as its first attempt,
+   * not one more in a row. For a run that does many steps, where one success
+   * should give the next failure its full tries back. */
+  progressed: () => Promise<void>
+}
 
 /** The longest a worker waits between passes (ms): how soon a run another
  * process wrote is picked up. */
@@ -289,19 +330,28 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   // handler, and the outcome written back under the same claim.
   let start = (g: Graph, eid: Eid, row: Comp) => {
     let s = handled(String(row.handler))
-    let attempts = Number(row.attempts)
     let held: Held = {
       eid,
       handler: String(row.handler),
       target: String(row.target),
       since: clock(),
       token: String(row.lease_token),
-      attempts,
+      attempts: Number(row.attempts),
       expiry: Date.parse(String(row.lease_expiry)),
       run: Promise.resolve(),
     }
     let settle = (patch: Comp) =>
-      swap(g, eid, { lease_token: held.token, attempts }, patch)
+      swap(g, eid, { lease_token: held.token, attempts: held.attempts }, patch)
+    // A success puts the count back at this attempt, the first: only a run
+    // that has failed before has anything to write.
+    let attempt: Attempt = {
+      last: () => held.attempts >= limit(s),
+      progressed: async () => {
+        if (held.attempts <= 1) return
+        let was = { lease_token: held.token, attempts: held.attempts }
+        if (await swap(g, eid, was, { attempts: 1 })) held.attempts = 1
+      },
+    }
     let go = async () => {
       let tx = detached(g.storage)
       let kind = String(row.kind) as Kind
@@ -316,19 +366,24 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       }
       try {
         if (!s?.run) throw new Error(`no effect is handled as ${row.handler}`)
-        await s.run(event, tx, ctx.writer(Number(row.generation ?? 0)))
+        await s.run(event, tx, ctx.writer(Number(row.generation ?? 0)), attempt)
         await settle({ state: 'done', error: null, next: null, ...free })
       } catch (err) {
-        ctx.report(err, { handler: String(row.handler), event, slot: s })
+        // An error that asks to be tried again is the handler waiting on
+        // something outside, expected and kept on the row; it is reported
+        // only once nothing will try it again.
+        let last = attempt.last()
+        if (last || !retried(err)) {
+          ctx.report(err, { handler: String(row.handler), event, slot: s })
+        }
+        let due = Math.max(wait(held.attempts), asked(err))
         await settle(
-          attempts < limit(s)
-            ? {
-              state: 'pending',
-              error: said(err),
-              next: stamp(clock() + wait(attempts)),
-              ...free,
-            }
-            : { state: 'failed', error: said(err), next: null, ...free },
+          last ? { state: 'failed', error: said(err), next: null, ...free } : {
+            state: 'pending',
+            error: said(err),
+            next: stamp(clock() + due),
+            ...free,
+          },
         )
       }
     }

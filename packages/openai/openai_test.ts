@@ -205,10 +205,15 @@ test('a refusal, a failed stream and no credential are errors', async () => {
 
   let dead = serving(200, sse({ type: 'response.failed', response: {} }))
   e = await assertRejects(
-    () => responses({ credential: () => codex, fetch: dead.fetcher })(req),
+    () =>
+      responses({
+        credential: () => codex,
+        fetch: dead.fetcher,
+        pause: () => Promise.resolve(),
+      })(req),
     ModelError,
   )
-  assertEquals(e.code, 'failed')
+  assertEquals([e.code, e.retry], ['failed', { after: 0 }])
 
   e = await assertRejects(
     () =>

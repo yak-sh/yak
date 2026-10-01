@@ -79,9 +79,15 @@ What to get right:
 - **A run reads the present.** It rebuilds its event from the target's current
   state; a value the handler needs as it was at the time, it stores itself.
 - **Failures are classified, not relabelled.** `tries` (default three) with
-  backoff, then `failed` with its error. A failure that is final (a usage
-  limit, a refusal) must stay final: relabelling it as an interruption made a
-  run retry forever (d92933dc1).
+  backoff (1s, doubling, at most 5 min), then `failed` with its error. A
+  failure that is final (a usage limit, a refusal) must stay final:
+  relabelling it as an interruption made a run retry forever (d92933dc1). One
+  that may pass throws an error carrying `retry` (a `ModelError`'s): the pool
+  reports it only once no try follows, and waits at least `retry.after` ms.
+  The handler's fourth argument, `Attempt`, says whether this is the `last()`
+  try, and `progressed()` gives a long run that got somewhere its tries back
+  (`session_run` calls it after each reply), so a handler needs no backoff of
+  its own.
 - **Start-up work is `start: true`.** It is owed once when a process starts
   working the pool, by that process, for the code it has; a CLI command opening
   the graph owes nothing (43b4d4e26). Keep its no-change case cheap: compare a

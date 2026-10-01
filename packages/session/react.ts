@@ -3,10 +3,13 @@ export { CallError as ToolError } from '@yaks/tools'
 import { argsOf, Stale, token, transient } from '@yaks/graph'
 // The runner's one step. `react(graph, session)` reads the newest entry of a
 // transcript and does the one next thing it calls for: a pending input or
-// result asks the model; an open tool call is run; an error within the retry
-// limit asks the model again; everything else does nothing. It appends what
-// happened as entries and returns, so a loop over it is a session, and that
-// loop run as pool work is the runner (./run.ts).
+// result asks the model; an open tool call is run; a failure the provider may
+// yet answer, or an error within the retry limit, asks the model again;
+// everything else does nothing. It appends what happened as entries and
+// returns, so a loop over it is a session, and that loop run as pool work is
+// the runner (./run.ts). A request the provider failed but may yet answer is
+// recorded and then thrown, so the pool asks again after its backoff
+// (`Deps.attempt`).
 //
 // It owns no transport and no tools: it is handed a @yaks/model `Model` and a
 // table of tools, so the same code runs over @yaks/openai in a CLI, over a
@@ -42,6 +45,7 @@ import {
   type Questions,
   type Reply,
   type Request,
+  RESPONSE,
   TOOL,
   type Tool as Declared,
 } from '@yaks/model'
@@ -69,7 +73,7 @@ import {
   usingBefore,
 } from './status.ts'
 import { context, prefix, suffix } from './compact.ts'
-import { ask as retry, type Pause } from './retry.ts'
+import type { Attempt } from '@yaks/effects'
 
 /** The caller, supplied by react rather than by model arguments, and a
  * signal that aborts when the process running the transcript is leaving: a
@@ -110,8 +114,11 @@ export type Deps = {
   streaming?: boolean
   /** Minimum interval between durable stream checkpoints; zero disables. */
   checkpointMs?: number
-  /** Override model retry backoff, chiefly for a host with its own clock. */
-  pause?: Pause
+  /** The pooled run taking this step (@yaks/effects): a model request the
+   * provider failed but may yet answer is recorded and thrown, for the pool to
+   * ask again after its backoff, unless this attempt is the run's last. A step
+   * taken outside the pool has nobody to ask again, so such a failure stands. */
+  attempt?: Attempt
   /** Approximate input-token budget before a transcript is compacted. */
   contextTokens?: number
   /** A text-capable model for checkpoints, independent of the transcript model.
@@ -307,14 +314,34 @@ let askingOf = (entries: Bundle[]): Bundle | undefined => {
     : undefined
 }
 
-// A model failure is the provider's no, final under its own code with the ask
-// completed, unless the provider marked it `retry` (overloaded, rate limited:
-// come back later) or its outcome there is unknown (the connection or the reply
-// was lost, maybe after the work was done). Those leave the ask interrupted.
+// A model failure may pass: the provider marked it `retry` (overloaded, rate
+// limited, a failed stream: come back later), or its outcome there is unknown
+// (the connection or the reply was lost, maybe after the work was done). Any
+// other is the provider's no: its ask completed, its code on the line. One
+// that may pass leaves its ask interrupted. The pool asks it again
+// (`Deps.attempt`) under the provider's code, until the run's attempts are
+// spent; it never asks again once text was shown (the answer is no longer
+// private) or for audio (the provider may have made paid media). One that
+// stands is the `interrupted` line a person continues from (T-62140).
 let lost =
   /^(transport|media_response|media_payload|media_storage|http_408|http_5\d\d)$/
-let refusal = (e: unknown): e is ModelError =>
-  e instanceof ModelError && !e.retry && !lost.test(e.code)
+let passing = (e: unknown): e is ModelError =>
+  e instanceof ModelError && (!!e.retry || lost.test(e.code))
+
+// What a failed request's line carries: the provider's code, and what it sent
+// where this graph keeps it (@yaks/model `response{body, headers}`).
+let failing = (
+  g: Graph,
+  e: ModelError,
+  code = e.code,
+): Record<string, Comp> => ({
+  [ERROR]: { code },
+  ...e.response && g.vocab.comp(RESPONSE) ? { [RESPONSE]: e.response } : {},
+})
+
+// The error a step throws for the pool to ask again: one that says so.
+let again = (e: ModelError) =>
+  e.retry ? e : new ModelError(e.code, e.message, {}, e.response)
 
 let two = (n: number) => String(Math.round(n * 100) / 100)
 
@@ -702,8 +729,7 @@ export let react = async (
       let through = chunk.at(-1)
       if (!through) return nothing
       try {
-        let compacted = await retry(
-          deps.compactModel.model,
+        let compacted = await deps.compactModel.model(
           {
             model: deps.compactModel.name,
             instructions:
@@ -724,8 +750,6 @@ export let react = async (
             tokens: 4096,
             signal: deps.signal,
           },
-          deps.stopping,
-          deps.pause,
         )
         let summary = compacted.items.filter((i) => i.kind == 'assistant')
           .map((i) => i.text).join('\n').trim()
@@ -740,10 +764,13 @@ export let react = async (
           ),
         ])
       } catch (e) {
+        // A summary that may yet come is asked again by the pool, with
+        // nothing written; one that stands is the line the bound counts.
+        if (passing(e) && deps.attempt && !deps.attempt.last()) throw again(e)
         if (!(e instanceof ModelError)) deps.report?.(e, session, 'compaction')
         return append([
           e instanceof ModelError
-            ? line({ [ERROR]: { code: e.code } }, e.message)
+            ? line(failing(g, e), e.message)
             : line({ [EXCEPTION]: {} }, String(e)),
         ])
       }
@@ -828,14 +855,16 @@ export let react = async (
   }
   let reply: Reply
   try {
-    reply = await retry(providerModel, req, deps.stopping, deps.pause)
+    reply = await providerModel(req)
     accepting = false
     await tail
     if (streamFailure) throw streamFailure
   } catch (e) {
     accepting = false
     await tail
-    let refused = refusal(e) ? e : undefined
+    let refused = e instanceof ModelError && !passing(e) ? e : undefined
+    let retried = passing(e) && !modalities?.includes('audio') &&
+      !stream.size && !!deps.attempt && !deps.attempt.last()
     let defect = !(e instanceof ModelError) &&
       !(e instanceof Error && e.name == 'AbortError')
     if (defect) deps.report?.(e, session, 'model')
@@ -846,12 +875,14 @@ export let react = async (
         attempt: { state: refused ? 'completed' : 'interrupted' },
       },
       [
-        refused
-          ? line({ [ERROR]: { code: refused.code } }, refused.message)
+        refused || retried
+          ? line(failing(g, e as ModelError), (e as ModelError).message)
           : defect && deps.streaming
           ? line({ [EXCEPTION]: {} }, String(e))
           : line(
-            { [ERROR]: { code: 'interrupted' } },
+            e instanceof ModelError
+              ? failing(g, e, 'interrupted')
+              : { [ERROR]: { code: 'interrupted' } },
             'Response interrupted: ' + String(e),
           ),
       ],
@@ -869,6 +900,7 @@ export let react = async (
         }
       }
     }
+    if (failed && retried) throw again(e as ModelError)
     return failed ?? await current()
   }
   const finalAsk: Bundle = {

@@ -71,6 +71,14 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
     entry(6, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),
     entry(7, { error: { code: 'exhausted' } }),
   ], 'failed'],
+  ['a failure the provider may yet answer is pending: the pool asks again', [
+    request(1),
+    entry(2, { ask: { through: 'e1' }, attempt: { state: 'interrupted' } }),
+    entry(3, {
+      error: { code: 'unknown' },
+      content: { body: 'responses: failed — unknown' },
+    }),
+  ], 'pending'],
   ['interrupted response is failed until new input', [
     input(1),
     entry(2, { ask: { through: 'e1' }, attempt: { state: 'interrupted' } }),

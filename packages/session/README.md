@@ -80,10 +80,12 @@ Session status is derived from entries rather than stored. `statusOf()` returns
 `sessionDerived` exposes the corresponding `session.status` SQL-derived
 property. An unanswered call from the newest model request keeps a transcript
 `running` regardless of later entries. Otherwise, input/result means `pending`,
-ask/call means `running`, output means `settled`, stop means `stopped`, and
-exception, three consecutive errors, or one error coded `limit` (`LIMIT`, a
-request refused at a ceiling, which asking again would meet too) means `failed`.
-No entries means `empty`. There is no separate `input` component.
+ask/call means `running`, output means `settled`, stop means `stopped`, a
+provider's error beside an interrupted ask means `pending` (the pool asks
+again), and exception, an error beside a completed ask, three consecutive
+errors, or one error coded `limit` (`LIMIT`, a request refused at a ceiling,
+which asking again would meet too) means `failed`. No entries means `empty`.
+There is no separate `input` component.
 
 A request's `cost{dollars, reported}` (@yaks/model) is written beside its
 `usage`: the provider's own dollars where it reports them, and otherwise, in the
@@ -177,6 +179,20 @@ console.log(await transcript(g, 'session'))
 
 Replace the local function with `responses({ credential })` from `@yaks/openai`
 to use that provider; also load its `openaiDoc` vocabulary.
+
+A model request that fails is recorded at once as an `error{code}` entry in the
+provider's words, with `response{body, headers}` (@yaks/model) beside it: what
+the provider sent. One that may pass (a `ModelError` carrying `retry`, or a lost
+connection) leaves its ask `interrupted` and the transcript `pending`, and
+`session_run` throws it, so the @yaks/effects pool asks again after its backoff,
+no sooner than the wait the provider named: eight tries, waiting 1, 2, 4 … 64
+seconds. A reply between failures gives the run its tries back
+(`Attempt.progressed()`). A failure that cannot pass (a spent allowance, a
+prompt too long) completes its ask under the provider's code. One that may pass
+but is not asked again (its last try, text already shown, an audio request, a
+step outside the pool) stands as an `error{code: interrupted}` line in the
+provider's words, which a person can continue from. Either leaves the transcript
+`failed` until new input.
 
 An entry wearing `questions{asked}` (typed questions in Jev's terms, by name;
 @yaks/model `Questions`) asks them with the next turn: the runner sends them as

@@ -19,6 +19,8 @@
 //   stop          → stopped   nothing may be done
 //   exception     → failed    the runner could not continue past it
 //   model error   → failed after one completed provider attempt
+//   model error, its ask interrupted → pending   the provider may yet answer:
+//                   the pool asks again after its backoff (./react.ts)
 //   other error   → failed once the last RETRIES entries are all errors,
 //                   else pending (the runner retries)
 //   error `limit` → failed    a ceiling refused it, and asking again would
@@ -202,14 +204,21 @@ export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
       : 'failed'
   }
   let prior = all.at(-2)
+  let code = (newest.error as Comp | undefined)?.code
   if (
     kind == 'error' && prior?.ask &&
     (prior.attempt as Comp | undefined)?.state == 'completed'
   ) return afterAsk()
-  if (kind == 'error' && (newest.error as Comp)?.code == 'interrupted') {
+  // A failure the provider may yet answer keeps the provider's code beside an
+  // interrupted ask; one cut off here says `interrupted`.
+  if (
+    kind == 'error' && prior?.ask && code != null && code != 'interrupted' &&
+    (prior.attempt as Comp | undefined)?.state == 'interrupted'
+  ) return 'pending'
+  if (kind == 'error' && code == 'interrupted') {
     return afterAsk()
   }
-  if (kind == 'error' && (newest.error as Comp)?.code == LIMIT) return 'failed'
+  if (kind == 'error' && code == LIMIT) return 'failed'
   if (kind == 'error') {
     // failed once the last RETRIES entries are all errors
     let tail = all.filter((b) =>
@@ -471,6 +480,18 @@ export let sessionStatus = {
             ),
           ),
           iff(input(asked), lit('pending'), lit('failed')),
+        ],
+        [
+          and(
+            wears(ERROR, not(eq(col('code', 'k'), lit('interrupted')))),
+            has(ASK, prior),
+            has(
+              'attempt',
+              prior,
+              eq(col('state', 'k'), lit('interrupted')),
+            ),
+          ),
+          lit('pending'),
         ],
         [
           wears(ERROR, eq(col('code', 'k'), lit('interrupted'))),

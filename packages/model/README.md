@@ -75,7 +75,7 @@ the model. Neither imports the other.
 
 The root module exports these types, `ModelError`, `weigh`, `modelDoc`, the
 `models()` graph plugin, and the `PROVIDER`, `MODEL`, `TOOL`, `QUESTIONS`,
-`ANSWER`, `USAGE`, `PRICE` and `COST` component-name constants.
+`ANSWER`, `USAGE`, `PRICE`, `COST` and `RESPONSE` component-name constants.
 `@yaks/model/vocab` exports `modelDoc` and `docs: [modelDoc]` for plugin
 loaders. `@yaks/model/rules` exports `rules()`, which supplies that plugin: the
 schema and the name lookup, and no other write-time behavior. The package has no
@@ -83,8 +83,12 @@ database or conversation storage; the calling application stores the provider
 and model records if it needs them.
 
 A model that throws `ModelError` failed in a way the caller expects — a refusal,
-a rate limit, a missing credential. Other exceptions are unexpected failures
-that the caller can record separately.
+a rate limit, a missing credential. Its `retry` says the failure may pass (with
+`retry.after`, the wait the provider asked for, in milliseconds), and its
+`response` is what the provider sent, as it arrived: the body of an error status
+or the event that ended its stream, and the headers about its limits. The caller
+keeps that as `response{body, headers}` beside the line recording the failure.
+Other exceptions are unexpected failures that the caller can record separately.
 
 ## Minimal implementation
 

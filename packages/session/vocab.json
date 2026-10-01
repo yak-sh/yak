@@ -640,7 +640,8 @@
       "changed": ["dispatch.state"],
       "removed": ["contains", "requires"],
       "sweep": ".session.status=pending,running,queued (.entries.using|.entries.ask)|.dispatch.state=active,queued",
-      "description": "run a transcript until it has nothing more to do: a `using` on an entry asks for a turn, a cancel withdraws the request in flight, a stop ends it (and gives up a child's place), a child is admitted, or a task a transcript holds completes, is cancelled or loses a dependency"
+      "tries": 8,
+      "description": "run a transcript until it has nothing more to do: a `using` on an entry asks for a turn, a cancel withdraws the request in flight, a stop ends it (and gives up a child's place), a child is admitted, or a task a transcript holds completes, is cancelled or loses a dependency. A model request the provider failed but may yet answer is asked again after the pool's backoff, eight tries in a row at most"
     },
     "session_release": {
       "effect": true,

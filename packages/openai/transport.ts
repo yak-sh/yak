@@ -64,6 +64,9 @@ export type ResponseFault = Error & {
   limits?: RateLimits
   evidence?: ResponseEvent[]
   items?: ResponseItem[]
+  /** what the provider sent, redacted: an error status's body, or the event
+   * that ended the stream */
+  body?: string
 }
 
 /** HTTP-edge policy. No environment, filesystem, or Tasks dependencies. */
@@ -186,6 +189,7 @@ export class ResponseError extends Error {
   limits?: RateLimits
   evidence?: ResponseEvent[]
   items?: ResponseItem[]
+  body?: string
 
   constructor(public kind: string, message: string) {
     super(message)
@@ -217,30 +221,75 @@ let busy = new Set([
 
 // A spent allowance also answers 429, but it is the provider's no: the Codex
 // backend's plan window and the API's billing quota stay spent for hours, so
-// asking again in seconds meets the same limit.
+// asking again in seconds meets the same limit. A request the model cannot
+// take (too long, malformed, refused) fails the same way however often it is
+// sent.
 let spent = new Set(['usage_limit_reached', 'insufficient_quota'])
+let final = new Set([
+  ...spent,
+  'usage_not_included',
+  'context_length_exceeded',
+  'invalid_prompt',
+  'invalid_request_error',
+])
 
 // Final provider failures and malformed events are not network failures.
 // A stall is a network failure: a connection that was established and then went
 // silent told us nothing about this request, so the next attempt starts as
 // cleanly as it would after a dropped connection
-// (T-37332 — two stalls ended a session that had retries left).
+// (T-37332 — two stalls ended a session that had retries left). A stream that
+// ends in `response.failed` or an `error` event is the provider failing this
+// request — the Codex backend says `unknown` or `server_error` — and is asked
+// again unless its code says the request itself cannot succeed, as the Codex
+// CLI does (T-62140).
 let transient = (error: ResponseError) =>
-  !(error.code != null && spent.has(error.code)) && (
+  !(error.code != null && final.has(error.code)) && (
     error.kind == 'transport' || error.kind == 'disconnected' ||
-    error.kind == 'stalled' ||
+    error.kind == 'stalled' || error.kind == 'failed' ||
+    error.kind == 'error' ||
     error.kind == 'no_stream' || error.status == 429 ||
     (error.status != null && error.status >= 500 && error.status < 600) ||
     (error.code != null && busy.has(error.code))
   )
 
-let retryAfter = (error: ResponseError) => {
-  let value = error.limits?.['retry-after']
-  if (!value) return 0
-  let ms = /^\d+(\.\d+)?$/.test(value)
+// A rate limit: a request refused for coming too fast, which passes, unlike a
+// spent allowance, which does not.
+let limited = (status?: number, code?: string) =>
+  !(code != null && spent.has(code)) &&
+  (status == 429 || code == 'rate_limit_exceeded')
+
+// The wait a rate limit asks for in its prose: "Please try again in 1.898s".
+let waitIn = (text: string) => {
+  let m = /try again in\s*(\d+(?:\.\d+)?)\s*(ms|s|seconds?)\b/i.exec(text)
+  return m ? Number(m[1]) * (m[2].toLowerCase() == 'ms' ? 1 : 1000) : 0
+}
+
+/** How long the provider asked to wait before the next attempt, in
+ * milliseconds, up to a minute: a Retry-After header, or a rate limit's
+ * "try again in". */
+let waitOf = (kept: RateLimits | undefined, text: string) => {
+  let value = kept?.['retry-after']
+  let ms = !value
+    ? waitIn(text)
+    : /^\d+(\.\d+)?$/.test(value)
     ? Number(value) * 1000
     : Date.parse(value) - Date.now()
   return Number.isFinite(ms) ? Math.min(60_000, Math.max(0, ms)) : 0
+}
+
+let retryAfter = (error: ResponseError) => waitOf(error.limits, error.message)
+
+// A failure's line, in the provider's own words: what ended the request, then
+// its code and its message, and for a rate limit (`limit`, the wait it asked
+// for) that it is one.
+let said = (what: string, detail: (string | undefined)[], limit?: number) => {
+  let words = detail.filter(Boolean).join(': ')
+  let rate = limit == null
+    ? ''
+    : ` (rate limited${
+      limit ? `; asked to wait ${Math.round(limit / 100) / 10}s` : ''
+    })`
+  return `responses: ${what}${words ? ` — ${words}` : ''}${rate}`
 }
 
 // Stop is prompt even during backoff, and never starts another HTTP attempt.
@@ -361,6 +410,16 @@ let eventCode = (frame: ResponseEvent | undefined) => {
     : codeOf(response.code)
 }
 
+// The provider's own words for a stream's failure: the message of the error it
+// carried, which names what went wrong where the code is only `unknown`.
+let eventMessage = (frame: ResponseEvent | undefined) => {
+  if (!frame) return undefined
+  let response = record(frame.response) ? frame.response : frame
+  let error = record(response.error) ? response.error : response
+  let message = typeof error.message == 'string' ? error.message.trim() : ''
+  return message || undefined
+}
+
 let incomplete = (frame: ResponseEvent | undefined) => {
   if (frame?.type != 'response.incomplete') return undefined
   let response = record(frame.response) ? frame.response : {}
@@ -370,20 +429,18 @@ let incomplete = (frame: ResponseEvent | undefined) => {
   return codeOf(details.reason)
 }
 
-let limitNames = new Set([
-  'retry-after',
-  'x-ratelimit-limit-requests',
-  'x-ratelimit-limit-tokens',
-  'x-ratelimit-remaining-requests',
-  'x-ratelimit-remaining-tokens',
-  'x-ratelimit-reset-requests',
-  'x-ratelimit-reset-tokens',
-])
+// The headers that speak of the account's limits: Retry-After, the API's
+// rate limits, and the Codex backend's plan windows and credits
+// (`x-codex-primary-used-percent`, …), but not the opaque turn state it hands
+// back beside them.
+let limitName = (name: string) =>
+  name == 'retry-after' || name.startsWith('x-ratelimit-') ||
+  name.startsWith('x-codex-') && name != 'x-codex-turn-state'
 
 let limits = (headers: Headers): RateLimits => {
   let out: RateLimits = {}
   headers.forEach((value, name) => {
-    if (limitNames.has(name.toLowerCase())) out[name.toLowerCase()] = value
+    if (limitName(name.toLowerCase())) out[name.toLowerCase()] = value
   })
   return out
 }
@@ -455,21 +512,30 @@ let terminal = async (
       frame.type == 'error'
     ) ended = frame
   }
-  if (!completed) {
-    let status = ended?.type?.replace('response.', '') ?? 'disconnected'
-    let reason = incomplete(ended) ?? eventCode(ended)
-    throw fault(status, `responses: ${status}${reason ? ` — ${reason}` : ''}`, {
-      code: eventCode(ended) ?? reason,
-      // A 200 that ends in an overload still carries the account's rate-limit
-      // headers; pass them along so the backoff honors a Retry-After sent there.
-      limits: limits(response.headers),
-      evidence: ended ? [...unknown, ended] : unknown,
+  // A 200 that ends in an overload still carries the account's rate-limit
+  // headers; pass them along so the backoff honors a Retry-After sent there,
+  // and keep the event that ended it, as sent, for whoever reads the failure.
+  let failing = (kind: string, frame?: Record<string, unknown>) => {
+    let code = eventCode(frame as ResponseEvent) ??
+      incomplete(frame as ResponseEvent)
+    let reason = eventMessage(frame as ResponseEvent)
+    let kept = limits(response.headers)
+    let rate = limited(200, code) ? waitOf(kept, reason ?? '') : undefined
+    return fault(kind, said(kind, [code, reason], rate), {
+      code,
+      limits: kept,
+      ...frame ? { body: JSON.stringify(frame) } : {},
+      evidence: frame ? [...unknown, frame as ResponseEvent] : unknown,
       items,
     })
   }
-  if (completed.status != 'completed') {
-    throw fault('failed', `responses: ${String(completed.status ?? 'failed')}`)
+  if (!completed) {
+    throw failing(
+      ended?.type?.replace('response.', '') ?? 'disconnected',
+      ended,
+    )
   }
+  if (completed.status != 'completed') throw failing('failed', completed)
   if (typeof completed.model != 'string') {
     throw fault(
       'malformed_stream',
@@ -651,10 +717,19 @@ export let transport = (options: ResponseOptions): {
           let body = await response.text().catch(() => '')
           let status = response.status
           let { code, reason } = explain(body, secrets)
+          let kept = limits(response.headers)
+          let rate = limited(status, code)
+            ? waitOf(kept, reason ?? '')
+            : undefined
           throw fault(
             `http_${status}`,
-            `responses: HTTP ${status}${reason ? ` — ${reason}` : ''}`,
-            { status, code, limits: limits(response.headers) },
+            said(`HTTP ${status}`, [reason], rate),
+            {
+              status,
+              code,
+              limits: kept,
+              ...body ? { body: scrub(body, secrets) as string } : {},
+            },
           )
         }
         return await terminal(response, secrets, run.event, dog.kick)

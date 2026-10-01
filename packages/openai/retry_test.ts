@@ -145,6 +145,81 @@ test('a capacity code is transient however it arrives, whatever the status', asy
   }
 })
 
+test('a stream the provider failed is asked again, after the wait a rate limit names', async () => {
+  for (
+    let [error, wait] of [
+      // What the Codex backend sent on 2026-10-01: a code of `unknown`.
+      [{ code: 'unknown', message: 'An error occurred' }, 1000],
+      [{
+        code: 'rate_limit_exceeded',
+        message: 'Rate limit reached. Please try again in 1.898s.',
+      }, 1898],
+    ] as const
+  ) {
+    let calls = 0
+    let pauses: number[] = []
+    let client = transport({
+      credentials,
+      pause: (ms) => {
+        pauses.push(ms)
+        return Promise.resolve()
+      },
+      fetch: () =>
+        Promise.resolve(
+          ++calls == 1
+            ? sse({ type: 'response.failed', response: { error } })
+            : complete(),
+        ),
+    })
+    assertEquals((await client.run(req)).items, [item('done').item])
+    assertEquals([calls, pauses], [2, [wait]])
+  }
+})
+
+test('a failure says what the provider said, and keeps what it sent', async () => {
+  let failed = {
+    type: 'response.failed',
+    response: {
+      id: 'resp_1',
+      status: 'failed',
+      error: {
+        code: 'rate_limit_exceeded',
+        message: 'Rate limit reached. Please try again in 2s.',
+      },
+    },
+  }
+  let model = responses({
+    credential: credentials.get,
+    retries: 0,
+    fetch: () =>
+      Promise.resolve(
+        new Response(`data: ${JSON.stringify(failed)}\n\n`, {
+          headers: {
+            'x-codex-primary-used-percent': '21',
+            'x-codex-turn-state': 'opaque',
+          },
+        }),
+      ),
+  })
+  let e = await assertRejects(
+    () => model({ model: 'm', items: [], tools: [] }),
+    ModelError,
+  )
+  assertEquals(
+    [e.code, e.message, e.retry],
+    [
+      'rate_limit_exceeded',
+      'responses: failed — rate_limit_exceeded: Rate limit reached. Please ' +
+      'try again in 2s. (rate limited; asked to wait 2s)',
+      { after: 2000 },
+    ],
+  )
+  assertEquals(e.response, {
+    body: JSON.stringify(failed),
+    headers: { 'x-codex-primary-used-percent': '21' },
+  })
+})
+
 test('an overloaded backend recovers with no error, or exhausts into exactly one', async () => {
   for (let mode of ['recover', 'exhaust', 'unauthorized'] as const) {
     let calls = 0
@@ -219,7 +294,11 @@ test('HTTP auth and validation, malformed SSE, provider failures and hook defect
       () => new Response(broken().body, { status: 401 }),
       () => new Response('', { status: 400 }),
       () => new Response('data: {bad}\n\n'),
-      () => sse({ type: 'response.failed' }),
+      () =>
+        sse({
+          type: 'response.failed',
+          response: { error: { code: 'context_length_exceeded' } },
+        }),
       () => sse({ type: 'response.incomplete' }),
     ]
   ) {

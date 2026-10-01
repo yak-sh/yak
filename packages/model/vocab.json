@@ -168,6 +168,22 @@
         }
       }
     },
+    "response": {
+      "component": true,
+      "type": "object",
+      "description": "what a provider answered a model request that failed, as it arrived, kept beside the line recording the failure so the failure can be read rather than reconstructed; never the request's credentials",
+      "properties": {
+        "body": {
+          "type": "string",
+          "store": "blob",
+          "description": "the body of an error status, or the event that ended the stream, as sent"
+        },
+        "headers": {
+          "type": "object",
+          "description": "the headers that speak of the provider's limits (retry-after, rate limits, plan usage), by lowercase name"
+        }
+      }
+    },
     "questions": {
       "component": true,
       "type": "object",

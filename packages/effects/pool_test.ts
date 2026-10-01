@@ -145,6 +145,54 @@ test('a run that throws comes back due, and rests failed once its tries are spen
   assertEquals(a.oops.length, 2)
 })
 
+test('an error asking to be retried waits as long as it asks, unreported until its last try', async () => {
+  let t = 0
+  let a = proc(store(), { now: () => t })
+  let tries = 0
+  a.fx.handle({
+    post_note: () => {
+      tries++
+      throw Object.assign(new Error('busy'), { retry: { after: 5_000 } })
+    },
+  })
+  await a.fx.work(a.g)
+  await a.g.apply([post('p1')])
+  await a.fx.idle()
+  assertEquals(a.oops, [])
+  // The backoff alone would be a second; the error asked for five.
+  t = 4_999
+  await a.fx.work(a.g)
+  assertEquals(tries, 1)
+  t = 5_000
+  await a.fx.work(a.g)
+  assertEquals([tries, (await run(a.g, 'post_note')).state], [2, 'failed'])
+  assertEquals(a.oops.length, 1)
+})
+
+test('a run that got somewhere counts its next failure as its first', async () => {
+  let t = 0
+  let a = proc(store(), { now: () => t })
+  let last: boolean[] = []
+  a.fx.handle({
+    post_note: async (_e, _tx, _write, attempt) => {
+      last.push(attempt!.last())
+      if (last.length == 2) {
+        await attempt!.progressed()
+        last.push(attempt!.last())
+      }
+      throw new Error('no')
+    },
+  })
+  await a.fx.work(a.g)
+  await a.g.apply([post('p1')])
+  await a.fx.idle()
+  for (t of [1_000, 2_000]) await a.fx.work(a.g)
+  // `post_note` declares two tries: the second attempt was its last until it
+  // got somewhere, and then the third was.
+  assertEquals(last, [false, true, false, true])
+  assertEquals((await run(a.g, 'post_note')).state, 'failed')
+})
+
 test('a run its worker dropped is run again, unless running twice is not safe', async () => {
   let s = store()
   // A worker that claims both runs as it writes them, and dies in both.
