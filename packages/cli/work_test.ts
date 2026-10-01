@@ -9,6 +9,13 @@ import { compose, read } from './host.ts'
 
 let text = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
 let exists = (path: string) => Deno.stat(path).then(() => true, () => false)
+let reap = (pid: number) => {
+  try {
+    Deno.kill(-pid, 'SIGKILL')
+  } catch (error) {
+    if (!(error instanceof Deno.errors.NotFound)) throw error
+  }
+}
 let root = new URL('../../deno.json', import.meta.url).pathname
 let cli = new URL('./yak.ts', import.meta.url).pathname
 let box = new URL('../harness/box.ts', import.meta.url).href
@@ -267,13 +274,7 @@ os.execvp(args[0], [arg.replace('$$', '$') for arg in args])
       )
       if (pid) pids.push(pid)
     }
-    for (let pid of new Set(pids)) {
-      try {
-        Deno.kill(-pid, 'SIGKILL')
-      } catch (error) {
-        if (!(error instanceof Deno.errors.NotFound)) throw error
-      }
-    }
+    for (let pid of new Set(pids)) reap(pid)
     await host?.close()
     await server.shutdown()
     await Deno.remove(dir, { recursive: true })
