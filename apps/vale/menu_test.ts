@@ -28,6 +28,8 @@ test('voxel slider shows a choice before applying it', () => {
       voice: level,
       swapped: () => false,
       swap: () => {},
+      hidesCursor: () => true,
+      hideCursor: () => {},
       strafes: () => false,
       strafe: () => {},
       voxel: { current: 0.25, apply: (size) => chosen = size },

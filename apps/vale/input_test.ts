@@ -175,3 +175,173 @@ test('left touch walks right while right touch orbits', () => {
     }
   }
 })
+
+let mouseProbe = (
+  run: (p: {
+    hands: ReturnType<typeof listen>
+    send: (type: string, button?: number, buttons?: number) => void
+    lock: () => void
+    keys: Map<string, string>
+    requests: () => number
+    locked: () => boolean
+  }) => void,
+) => {
+  let { document, window } = parseHTML('<html><body></body></html>')
+  let events = new window.EventTarget()
+  let keys = new Map<string, string>()
+  let values = {
+    document,
+    innerWidth: 800,
+    addEventListener: events.addEventListener.bind(events),
+    localStorage: {
+      getItem: (key: string) => keys.get(key) ?? null,
+      setItem: (key: string, value: string) => keys.set(key, value),
+    },
+  }
+  let before = Object.fromEntries(
+    Object.keys(values).map((
+      key,
+    ) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]),
+  )
+  for (let [key, value] of Object.entries(values)) {
+    Object.defineProperty(globalThis, key, { configurable: true, value })
+  }
+  try {
+    let stage = document.createElement('div')
+    let requests = 0
+    Object.assign(stage, {
+      setPointerCapture: () => {},
+      hasPointerCapture: () => false,
+      requestPointerLock: () => {
+        requests++
+      },
+    })
+    Object.assign(document, {
+      pointerLockElement: null,
+      exitPointerLock: () => {
+        Object.assign(document, { pointerLockElement: null })
+        document.dispatchEvent(new window.Event('pointerlockchange'))
+      },
+    })
+    let hands = listen(stage, document.createElement('div'), () => false)
+    run({
+      hands,
+      keys,
+      requests: () => requests,
+      locked: () => document.pointerLockElement == stage,
+      lock: () => {
+        Object.assign(document, { pointerLockElement: stage })
+        document.dispatchEvent(new window.Event('pointerlockchange'))
+      },
+      send: (type, button = 0, buttons = button == 0 ? 1 : 2) => {
+        let e = new window.Event(type)
+        Object.assign(e, {
+          pointerId: 1,
+          pointerType: 'mouse',
+          button,
+          buttons,
+          clientX: 400,
+          clientY: 300,
+          movementX: 10,
+          movementY: 5,
+          code: 'Escape',
+        })
+        if (type == 'mouseup' || type == 'keydown') events.dispatchEvent(e)
+        else if (type == 'pointerlockchange') document.exitPointerLock()
+        else stage.dispatchEvent(e)
+      },
+    })
+  } finally {
+    for (let [key, descriptor] of Object.entries(before)) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor)
+      else Reflect.deleteProperty(globalThis, key)
+    }
+  }
+}
+
+test('steering and orbit use locked deltas or captured drags in either swap', () => {
+  for (let hide of [true, false]) {
+    for (let swap of [true, false]) {
+      for (let button of [0, 2]) {
+        mouseProbe((p) => {
+          assertEquals(p.hands.hidesCursor(), true)
+          if (!hide) p.hands.hideCursor()
+          if (swap) p.hands.swap()
+          p.send('pointerdown', button)
+          assertEquals(p.requests(), hide ? 1 : 0)
+          if (hide) {
+            p.lock()
+            // Gaining lock drops capture but must keep the gesture.
+            p.send('lostpointercapture', button)
+            p.send('mousemove', button)
+          } else p.send('pointermove', button)
+          let intent = p.hands.read()
+          assertAlmostEquals(intent.orbit[0], -0.06)
+          assertAlmostEquals(intent.orbit[1], 0.03)
+          assertEquals(intent.look, lookDrag(button, 'mouse', swap))
+          p.send('pointerup', button, 0)
+          p.send('mouseup', button, 0)
+          assertEquals(p.locked(), false)
+          assertEquals(p.hands.read().look, false)
+        })
+      }
+    }
+  }
+})
+
+test('locked mouse chord stays locked until both buttons release', () => {
+  mouseProbe((p) => {
+    p.send('pointerdown')
+    p.lock()
+    p.send('mousedown', 2, 3)
+    p.send('mousemove', 2, 3)
+    assertEquals(p.hands.read().move, [0, 1])
+    p.send('mouseup', 0, 2)
+    assertEquals(p.locked(), true)
+    p.send('mouseup', 2, 0)
+    assertEquals(p.locked(), false)
+    let intent = p.hands.read()
+    assertEquals(intent.move, [0, 0])
+    assertEquals(intent.strike, false)
+    assertEquals(intent.dodge, false)
+  })
+})
+
+test('escape and native unlock cancel the mouse without a stuck gesture', () => {
+  for (let type of ['keydown', 'pointerlockchange']) {
+    mouseProbe((p) => {
+      p.send('pointerdown', 2)
+      p.lock()
+      p.send(type)
+      assertEquals(p.locked(), false)
+      p.send('mousemove', 2)
+      p.send('mouseup', 2, 0)
+      let intent = p.hands.read()
+      assertEquals(intent.orbit, [0, 0])
+      assertEquals(intent.look, false)
+      assertEquals(intent.dodge, false)
+    })
+  }
+})
+
+test('a late pointer lock grant after release immediately unlocks', () => {
+  mouseProbe((p) => {
+    p.send('pointerdown')
+    p.send('pointerup', 0, 0)
+    p.send('mouseup', 0, 0)
+    p.lock()
+    assertEquals(p.locked(), false)
+  })
+})
+
+test('hide cursor preference is stored and restored', () => {
+  mouseProbe((p) => {
+    p.hands.hideCursor()
+    assertEquals(p.keys.get('mossvale.drag.hideCursor'), '0')
+    let stage = document.createElement('div')
+    let again = listen(stage, document.createElement('div'), () => false)
+    assertEquals(again.hidesCursor(), false)
+    again.hideCursor()
+    assertEquals(p.keys.get('mossvale.drag.hideCursor'), '1')
+  })
+})

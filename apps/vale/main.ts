@@ -306,6 +306,8 @@ let settings = menu(h.panels.menu, {
   voice: sound.voice,
   swapped: hands.swapped,
   swap: hands.swap,
+  hidesCursor: hands.hidesCursor,
+  hideCursor: hands.hideCursor,
   strafes: hands.strafes,
   strafe: hands.strafe,
   voxel: {

@@ -177,6 +177,7 @@ export let panels = (glass: HTMLElement, busy: () => boolean) => {
   }
 
   addEventListener('keydown', (e) => {
+    if (e.code == 'Escape' && document.pointerLockElement) return
     if (glass.hidden || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return
     if (e.target instanceof HTMLInputElement) return
     let open = all.find((o) => o.page.open)?.page

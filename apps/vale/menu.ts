@@ -22,6 +22,8 @@ export type Settings = {
   voice: Level
   swapped: () => boolean
   swap: () => void
+  hidesCursor: () => boolean
+  hideCursor: () => void
   strafes: () => boolean
   strafe: () => void
   voxel: { current: number; apply: (size: number) => void }
@@ -84,6 +86,7 @@ export let menu = (panel: Panel, o: Settings) => {
     if (act == 'sound') o.mute()
     if (act == 'music') o.music.toggle()
     if (act == 'swap') o.swap()
+    if (act == 'hideCursor') o.hideCursor()
     if (act == 'strafe') o.strafe()
     if (act == 'frames') o.frames.set(o.frames.current == 60 ? 30 : 60)
     if (act == 'voxel' && selected != o.voxel.current) {
@@ -91,7 +94,7 @@ export let menu = (panel: Panel, o: Settings) => {
     }
     if (
       act == 'sound' || act == 'music' || act == 'swap' ||
-      act == 'strafe' || act == 'frames'
+      act == 'strafe' || act == 'hideCursor' || act == 'frames'
     ) {
       was = ''
     }
@@ -161,8 +164,10 @@ export let menu = (panel: Panel, o: Settings) => {
       if (!panel.open) return
       let sound = !o.muted(), swapped = o.swapped()
       let strafes = o.strafes()
+      let hidesCursor = o.hidesCursor()
       let playing = !o.music.muted
-      let key = `${sound} ${playing} ${swapped} ${strafes} ${o.frames.current}`
+      let key =
+        `${sound} ${playing} ${swapped} ${strafes} ${o.frames.current} ${hidesCursor}`
       if (key == was) return
       was = key
       let html = `<div class=Menu>` +
@@ -197,6 +202,12 @@ export let menu = (panel: Panel, o: Settings) => {
           swapped
             ? 'Right drag steers; left drag looks'
             : 'Left drag steers; right drag looks',
+        ) +
+        toggle(
+          'hideCursor',
+          hidesCursor,
+          glyph('video'),
+          'Hide cursor when steering',
         ) +
         toggle(
           'strafe',

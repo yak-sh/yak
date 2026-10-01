@@ -199,9 +199,11 @@ export let listen = (
   let zoom = 0
   let swapped = false
   let strafe = false
+  let hideCursor = true
   try {
     swapped = localStorage.getItem('mossvale.drag.swap') == '1'
     strafe = localStorage.getItem('mossvale.keys.strafe') == '1'
+    hideCursor = localStorage.getItem('mossvale.drag.hideCursor') != '0'
   } catch { /* this page keeps its setting */ }
   let isLook = (button: number, type: string) => lookDrag(button, type, swapped)
   let stick:
@@ -212,6 +214,32 @@ export let listen = (
     { x: number; y: number; far: number; button: number; type: string }
   >()
   let mouse = mouseButtons()
+  let locking = false
+  let locked = () => document.pointerLockElement == stage
+  let unlock = () => {
+    if (locked()) document.exitPointerLock()
+  }
+  let cancelMouse = () => {
+    mouse.cancel()
+    for (let [id, d] of drags) if (d.type == 'mouse') drags.delete(id)
+    looked = false
+  }
+  document.addEventListener('pointerlockchange', () => {
+    locking = false
+    if (locked()) {
+      // A quick release can precede the browser granting the request.
+      if (!hideCursor || !mouse.active()) unlock()
+    } else cancelMouse()
+  })
+  document.addEventListener('pointerlockerror', () => {
+    locking = false // A refused lock leaves the captured drag usable.
+  })
+  addEventListener('keydown', (e) => {
+    if (e.code != 'Escape' || !locked()) return
+    e.stopImmediatePropagation()
+    cancelMouse()
+    unlock()
+  }, { capture: true })
 
   let base = document.createElement('div')
   base.className = 'Stick'
@@ -242,6 +270,7 @@ export let listen = (
     looked = false
     zoom = 0
     mouse.cancel()
+    unlock()
     for (let id of drags.keys()) {
       if (stage.hasPointerCapture(id)) stage.releasePointerCapture(id)
     }
@@ -253,7 +282,16 @@ export let listen = (
   stage.addEventListener('contextmenu', (e) => e.preventDefault())
   stage.addEventListener('pointerdown', (e) => {
     stage.setPointerCapture(e.pointerId)
-    if (e.pointerType == 'mouse') mouse.down(e.button)
+    if (e.pointerType == 'mouse') {
+      mouse.down(e.button)
+      if (mouse.active() && hideCursor && stage.requestPointerLock) {
+        locking = true
+        // Older browsers return void; newer ones also reject a promise.
+        stage.requestPointerLock()?.catch(() => {
+          locking = false
+        })
+      }
+    }
     if (e.pointerType == 'touch' && !stick && e.clientX < innerWidth * 0.45) {
       stick = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, dy: 0 }
       base.classList.remove('Stick-rest')
@@ -276,8 +314,21 @@ export let listen = (
   addEventListener('mouseup', (e) => {
     let action = mouse.up(e.button)
     if (action) pressed.add(action)
+    if (!mouse.active()) {
+      for (let [id, d] of drags) if (d.type == 'mouse') drags.delete(id)
+      unlock()
+    }
+  })
+  stage.addEventListener('mousemove', (e) => {
+    if (!locked() || !mouse.active()) return
+    mouse.move(e.buttons, Math.hypot(e.movementX, e.movementY))
+    orbit[0] -= e.movementX * 0.006
+    orbit[1] += e.movementY * 0.006
+    let d = [...drags.values()].find((d) => d.type == 'mouse')
+    if (d && !mouse.chorded() && isLook(d.button, d.type)) looked = true
   })
   stage.addEventListener('pointermove', (e) => {
+    if (e.pointerType == 'mouse' && locked()) return
     if (stick?.id == e.pointerId) {
       let dx = e.clientX - stick.x, dy = e.clientY - stick.y
       let d = Math.hypot(dx, dy)
@@ -317,6 +368,7 @@ export let listen = (
         let action = mouse.up(e.button)
         if (action) pressed.add(action)
       }
+      if (!mouse.active()) unlock()
       return
     }
     // Touch and pen use their pointer release; a tap on the right of a phone
@@ -329,6 +381,7 @@ export let listen = (
   stage.addEventListener('pointerup', up)
   stage.addEventListener('pointercancel', up)
   stage.addEventListener('lostpointercapture', (e) => {
+    if (e.pointerType == 'mouse' && (locking || locked())) return
     // Chrome drops capture when the second mouse button goes down.
     if (e.pointerType == 'mouse' && mouse.active() && e.buttons & 3) {
       stage.setPointerCapture(e.pointerId)
@@ -354,6 +407,14 @@ export let listen = (
       swapped = !swapped
       try {
         localStorage.setItem('mossvale.drag.swap', swapped ? '1' : '0')
+      } catch { /* this page keeps its setting */ }
+    },
+    hidesCursor: () => hideCursor,
+    hideCursor: () => {
+      hideCursor = !hideCursor
+      if (!hideCursor) unlock()
+      try {
+        localStorage.setItem('mossvale.drag.hideCursor', hideCursor ? '1' : '0')
       } catch { /* this page keeps its setting */ }
     },
     strafes: () => strafe,
