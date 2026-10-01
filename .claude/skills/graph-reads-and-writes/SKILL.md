@@ -92,7 +92,7 @@ with what the delete cascaded (packages/journal/README.md, "Undo"), but not its
 ## Reading
 
 How a query is written (prefixes, operators, walks, directives, rule matches,
-ambiguity) is the `query-grammar` skill. This is how one is answered.
+naming a property with its component) is the `query-grammar` skill. This is how one is answered.
 
 - Ask for what you need: `.count` instead of rows, `.fields` instead of whole
   bundles, `g.get(eids, comps)` instead of a query by eid. Row reads are the

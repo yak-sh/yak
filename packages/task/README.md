@@ -219,9 +219,8 @@ and removes `cancelled`; `cancelled` does the reverse; `open` removes both.
 Omitted arguments leave existing values unchanged.
 
 `task_list` always includes `.task`, combines it with the caller's query using
-`&`, and defaults to `.task.status=open`. The qualified status name avoids
-ambiguity with components such as `session.status`. Every store reads that
-computed status from the vocabulary, as described above.
+`&`, and defaults to `.task.status=open`. Every store reads that computed status
+from the vocabulary, as described above.
 
 The tools can write `doc` and `filed` without importing their packages because
 bundles are plain data. Load `@yaks/doc` and `@yaks/project` to keep those

@@ -6,7 +6,7 @@ description: >
   qualifiers, directives (`.order` `.limit` `.after` `.count` `.tally`
   `.distinct` `.fields` `*` `.refs` `.near` `.edges`), time values, reverse
   associations, rule matches with `;` `$vars` `+` and brackets, and the
-  ambiguity refusal. Use it whenever you write or read a query anywhere:
+  refusal of a property named without its component. Use it whenever you write or read a query anywhere:
   `yak graph query`, a tool's `q`, `graph_query`, a board's query, a filter
   field, a rule's or effect's `match`, a builder's query, a `.near` search, a
   saved query in data; and before adding syntax to the grammar, since it is
@@ -69,8 +69,9 @@ their `doc`; add `?doc` or `.fields=doc.title` to read titles.
 A property is always named with its component: `.task.status=open`. A name by
 itself tests for a component, and a property named alone is refused with the
 forms that name it: `.status=open` answers `.status is a property, not a
-component — name it .connection.status, .session.status or .task.status`. The
-refusal never picks one for you. A path through a reference goes on with the
+component — name it .connection.status, .plan.status, .request.status,
+.session.status, .task.status or ._extends.status`. The refusal never picks one
+for you. A path through a reference goes on with the
 target's own `comp.prop` (`.filed.project.doc.title~=yak`), and the entity's id
 is `.entity.eid`. Completion offers the qualified forms of a name as it is
 typed: `.ti` offers `.timing` and `.doc.title`, and a form whose component is

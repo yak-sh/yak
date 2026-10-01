@@ -714,9 +714,13 @@ export let loadVocab = (
   for (let name of names) routes.set(name, Object.keys(props(name)))
 
   // The components that declare a property of this name, for the refusal of a
-  // property named alone. The spine's eid is declared by no document.
+  // property named alone; a `_` component describes the vocabulary itself, so
+  // it follows the application's own, as completion orders them. The spine's
+  // eid is declared by no document.
   let homes = (prop: string): string[] =>
-    prop == EID ? [SPINE] : names.filter((c) => routes.get(c)!.includes(prop))
+    prop == EID ? [SPINE] : names
+      .filter((c) => routes.get(c)!.includes(prop))
+      .toSorted((a, b) => Number(a[0] == '_') - Number(b[0] == '_'))
 
   // A plural that is a name, not English: uniqueness is the goal, so 'shelf' →
   // 'shelfs' is fine and 'series' → 'series' stays put.

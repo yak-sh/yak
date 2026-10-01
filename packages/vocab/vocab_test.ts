@@ -94,9 +94,11 @@ test('a property named alone is refused with the forms that name it', () => {
   assertEquals((e as Unknown).prop, 'title')
   // a presence test is held to the same rule
   assertThrows(() => v.aim('title', true), Unknown, '.doc.title')
-  // every component that declares it, each a form to choose from
+  // every component that declares it, each a form to choose from, the
+  // vocabulary's own `_` components last
   let w = loadVocab({
     $defs: {
+      _rung: { component: true, properties: { status: { type: 'string' } } },
       task: { component: true, properties: { status: { type: 'string' } } },
       session: { component: true, properties: { status: { type: 'string' } } },
     },
@@ -104,8 +106,8 @@ test('a property named alone is refused with the forms that name it', () => {
   assertThrows(
     () => w.aim('status'),
     Unknown,
-    '.status is a property, not a component — name it .session.status or ' +
-      '.task.status',
+    '.status is a property, not a component — name it .session.status, ' +
+      '.task.status or ._rung.status',
   )
   // past a reference too
   assertThrows(() => v.aim('comment.target.title'), Unknown, '.doc.title')
