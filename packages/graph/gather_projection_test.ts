@@ -131,6 +131,7 @@ for (let async of [false, true]) {
     let changed = await g.apply([{ entity: { eid: 'b' }, book: { pages: 5 } }])
     assertEquals(comp(changed[0], 'created'), {}) // no second birth stamp
     assert(comp(changed[0], 'updated').at)
+    let before = await base.get(['b'])
     await assertRejects(
       async () =>
         await g.apply([
@@ -149,6 +150,7 @@ for (let async of [false, true]) {
       'late refusal',
     )
     assertEquals(checks, [4, 5, 6])
+    assertEquals(await base.get(['b']), before)
     let held = (await base.tx((tx) => tx.get(['b'])))[0]
     assertEquals(comp(held, 'book').pages, 5)
     assertEquals(held.created, initial[0].created)
@@ -164,15 +166,26 @@ for (let async of [false, true]) {
       'late refusal',
     )
     assertEquals(checks, [4, 5, 6, 5, 6])
+    assertEquals(await base.get(['b']), before)
     assertEquals(
       comp((await base.tx((tx) => tx.get(['b'])))[0], 'book').pages,
       5,
     )
     await g.apply([{ entity: { eid: 'b' }, tombstone: {} }])
-    assertEquals(
-      await g.apply([{ entity: { eid: 'b' }, book: { pages: 9 } }]),
-      [],
+    let grave = await base.get(['b'])
+    // A fresh write reaches the checks even after a prior delete. Refusal
+    // leaves the grave intact; an allowed write revives it.
+    await assertRejects(
+      async () => await g.apply([{ entity: { eid: 'b' }, book: { pages: 9 } }]),
+      Error,
+      'late refusal',
     )
+    assertEquals(await base.get(['b']), grave)
+    let revived = await g.apply([{ entity: { eid: 'b' }, book: { pages: 6 } }])
+    assertEquals(comp(revived[0], 'book').pages, 6)
+    let fresh = (await base.get(['b']))[0]
+    assertEquals(comp(fresh, 'book').pages, 6)
+    assertEquals(fresh.tombstone, undefined)
   })
 
   test(`projected gather: completing keeps already observed facets (${async})`, async () => {
