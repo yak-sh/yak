@@ -3,6 +3,11 @@
 // only the lookup retries, never the paid generation.
 import { ModelError } from '@yaks/model'
 
+let obj = (value: unknown): Record<string, unknown> =>
+  value != null && typeof value == 'object' && !Array.isArray(value)
+    ? Object.fromEntries(Object.entries(value))
+    : {}
+
 let pause = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
     let abort = () => {
@@ -37,7 +42,7 @@ export let generationCost = async (
       { headers, signal },
     )
     let cost = response.ok
-      ? (await response.json())?.data?.total_cost
+      ? obj(obj(await response.json()).data).total_cost
       : undefined
     if (typeof cost == 'number' && Number.isFinite(cost) && cost >= 0) {
       return cost
