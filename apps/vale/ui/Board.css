@@ -1,8 +1,12 @@
 /* The skill board (board.ts), a pack whose tiles are skills: the points to
    spend, then the three disciplines side by side, each skill a tile in its
-   row, gold once learned, dim until it can be. Where the panel is narrow, as
-   on a phone, the disciplines stack, each across the whole panel, so every
+   row, gold once learned, dim until it can be. Where the list is narrow, including
+   a desktop split, the disciplines stack, each across the whole panel, so every
    name reads. */
+.Board {
+  container: board / inline-size;
+}
+
 .Board_Points {
   align-self: start;
 }
@@ -104,7 +108,7 @@
   opacity: 1;
 }
 
-@container panel (width < 38rem) {
+@container board (width < 38rem) {
   .Board_Cols {
     grid-template-columns: minmax(0, 1fr);
     gap: 0.7rem;
