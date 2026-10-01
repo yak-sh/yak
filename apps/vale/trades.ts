@@ -6,6 +6,7 @@
 // the next (`ledger`).
 import { type Glyph, glyph } from './glyphs.ts'
 import type { Page } from './panel.ts'
+import { split } from './ui/split.ts'
 
 /** A trade a hero gathers by. */
 export type Gather = 'wood' | 'ore' | 'herb' | 'fish'
@@ -84,36 +85,58 @@ export let tradesOf = (works: [Trade, number][]): Trades => {
   }
 }
 
-/** The Trades tab, drawn into its tab (panel.ts): the gathering trades, then
- * the making ones, each with its glyph, its level, and a bar of the xp
- * toward the next, written again only when the count changed. */
+/** The Trades tab: gathering and making summaries beside the selected trade's
+ * level and progress. Picking leaves the list and its scroll in place. */
 export let ledger = (tab: Page) => {
-  let was: Trades | null = null
-  let row = (t: Trade, { xp, lvl }: { xp: number; lvl: number }) => {
-    let from = tradeNeed(lvl), to = tradeNeed(lvl + 1)
-    return `<li class=Trades_Row><i>${glyph(TRADES[t].icon)}</i><b>${
-      TRADES[t].name
-    }</b><span class=Badge>Level ${lvl}</span><div class="Bar Bar-xp"><i style="--k:${
-      ((xp - from) / (to - from)).toFixed(3)
-    }"></i><span>${xp - from} / ${to - from} xp</span></div></li>`
-  }
+  let panes = split(tab.body)
+  let mine: Trades | null = null
+  let picked: Trade | null = null
+  let row = (t: Trade, { lvl }: { lvl: number }) =>
+    `<li><button class=Split_Row type=button data-select=${t}><i>${
+      glyph(TRADES[t].icon)
+    }</i><b>${TRADES[t].name}</b><small>Level ${lvl}</small></button></li>`
   let list = (head: string, ts: Trade[], mine: Trades) =>
     `<h3 class=Pack_Head>${head}</h3><ul class=Trades_List>${
       ts.map((t) => row(t, mine[t])).join('')
     }</ul>`
+  let detail = (t: Trade, { xp, lvl }: { xp: number; lvl: number }) => {
+    let from = tradeNeed(lvl), to = tradeNeed(lvl + 1)
+    return `<div class=Trades><h3 class=Pack_Head>${glyph(TRADES[t].icon)} ${
+      TRADES[t].name
+    }</h3><p>${
+      GATHERING.includes(t as Gather) ? 'Gathering' : 'Making'
+    } · <span class=Badge>Level ${lvl}</span></p><div class="Bar Bar-xp"><i style="--k:${
+      ((xp - from) / (to - from)).toFixed(3)
+    }"></i><span>${xp - from} / ${to - from} xp</span></div><p>${
+      to - xp
+    } xp to level ${lvl + 1}</p><p>${xp} total xp earned</p></div>`
+  }
+  let draw = () => {
+    if (!tab.open || !mine) return
+    panes.render(
+      `<div class=Trades>${list('Gathering', GATHERING, mine)}${
+        list('Making', MAKING, mine)
+      }</div>`,
+      picked
+        ? detail(picked, mine[picked])
+        : '<p>Select a trade to see progress toward its next level.</p>',
+      picked,
+    )
+  }
+  tab.body.addEventListener('click', (e) => {
+    let row = e.target instanceof Element
+      ? e.target.closest<HTMLElement>('[data-select]')
+      : null
+    let t = ALL.find((t) => t == row?.dataset.select)
+    if (!t) return
+    picked = t
+    draw()
+  })
   return {
-    /** show the hero's trades, from what the stations read (work.ts), when
-     * the tab is open and they changed */
-    show: (mine: Trades) => {
-      if (!tab.open) {
-        was = null
-        return
-      }
-      if (mine == was) return
-      was = mine
-      tab.body.innerHTML = `<div class=Trades>${
-        list('Gathering', GATHERING, mine)
-      }${list('Making', MAKING, mine)}</div>`
+    /** Show the hero's trades from what the stations read (work.ts). */
+    show: (latest: Trades) => {
+      mine = latest
+      draw()
     },
   }
 }
