@@ -6,7 +6,7 @@ export type Release = { files: string; vocab: VocabDoc }
 export type Reload = 'optional' | 'required'
 
 /** Same files are the same page, including a rollback. A caller supplies the
- * marks on every release crossed; a mark may raise, never lower, severity. */
+ * marks on every release crossed; a mark may raise, never lower, the reload level. */
 export let reloadLevel = (
   was: Release,
   next: Release,

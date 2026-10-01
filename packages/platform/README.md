@@ -60,6 +60,6 @@ Deno and Node — a JSON document, with no runtime calls.
 and intervening deploy marks. Identical files produce no notice, even for a
 rollback. Otherwise a dropped or retyped definition/property, or any crossed
 `reload: 'required'` mark, requires reload; all other changes are optional.
-`deploy.reload` can raise severity, never lower it. `source` keeps the source
-release of an installed copy. Neither this rule nor a required notice reloads
-pages automatically.
+`deploy.reload` can raise the reload level, never lower it. `source` keeps the
+source release of an installed copy. Neither this rule nor a required notice
+reloads pages automatically.

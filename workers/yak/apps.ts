@@ -105,6 +105,7 @@ import { nameOf } from './signin.ts'
 import { written } from './reach.ts'
 import { borrowed, queried, sources, vocabulary } from './page-graph.ts'
 import { pageSocket } from './page-socket.ts'
+import { releaseStatus } from './release-status.ts'
 import { type Bundle, Stale, token } from '@yaks/graph'
 import { edits, mode, reads, writes } from '@yaks/member'
 import type { Door } from './door.ts'
@@ -1306,6 +1307,23 @@ let api = async (
       return json(404, 'no_such_file')
     }
     return versionedAsset(req, env, app, source, versioned.path, c)
+  }
+  if (path == '/release') {
+    if (req.method != 'GET') return json(405, 'method_not_allowed')
+    if (!mayRead) return refused('not_a_reader')
+    let value = new URL(req.url).searchParams.get('version')
+    let version = value == null || !/^[0-9]+$/.test(value) ? NaN : Number(value)
+    if (!Number.isSafeInteger(version)) return json(400, 'invalid_version')
+    try {
+      return Response.json(await releaseStatus(env, dir, space, app, version), {
+        headers: { 'cache-control': 'no-store' },
+      })
+    } catch (e) {
+      if (e instanceof Error && e.message == 'no_such_release') {
+        return json(404, 'no_such_release')
+      }
+      throw e
+    }
   }
   if (path == '/commands') {
     if (req.method != 'GET') return json(405, 'method_not_allowed')
