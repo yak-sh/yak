@@ -1,7 +1,7 @@
 /** Native asset adapter. The data/stream core remains runtime-independent. */
 import type { Route } from '@yaks/api'
 import { bundle, kept } from '@yaks/cli/page'
-import { everforest, rosepine, stylesheet } from '@yaks/ui'
+import { everforest, kits, rosepine, stylesheet } from '@yaks/ui'
 import { guarded, type Hosting, http } from './http.ts'
 
 export let PAGE = '<!doctype html><html lang="en"><head>' +
@@ -54,7 +54,7 @@ export let routes = (host: Hosting): Route[] => {
       return bundle({ code: entry(main.href), at: main }, signal)
     }),
     asset('/visualize/styles.css', 'text/css; charset=utf-8', async (signal) =>
-      (await stylesheet(everforest)) + '\n' +
+      (await stylesheet({ kits, theme: everforest })) + '\n' +
       (await text(new URL('./visualize.css', import.meta.url), signal))),
     ...Object.entries({ everforest, rosepine }).map(([name, theme]) =>
       asset(`/visualize/themes/${name}.css`, 'text/css; charset=utf-8',
