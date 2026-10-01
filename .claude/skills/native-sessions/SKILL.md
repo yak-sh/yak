@@ -72,7 +72,7 @@ things:
 
 - **The skills by path.** It cannot load them, so name each SKILL.md its work
   needs and tell it to read them first.
-- **Nobody is at its prompt.** When only Jeff can decide something, it says so
+- **Nobody is at its prompt.** When only the owner can decide something, it says so
   on the task and stops there, rather than guessing or waiting.
 - **How its children land**, when it may delegate. The harness gives it
   `spawn`, `fork` and `wait` tools (packages/harness/README.md, "Forks and
@@ -92,7 +92,7 @@ things:
   `yak graph show S-<n>` (its home, dispatch and parent).
 - **Saying more**: `yak session send S-<n> '<text>'` adds an input it reads on
   its next turn, and waits for it to settle, so it runs in the background too.
-  Relay Jeff's words verbatim.
+  Relay the owner's words verbatim.
 - **Waiting for the work.** `yak session new` and `yak session wait` return
   when the session's own transcript settles (packages/session/status.ts reads
   its transcript, never its children's). A root that handed work to children

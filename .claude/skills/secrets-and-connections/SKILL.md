@@ -102,7 +102,7 @@ credential shapes it recognizes (packages/session/readers.ts `scrub`). A value
 an agent typed is a value leaked. So an agent writes an `op://` reference, or
 the person enters the value where no transcript sees it: `yak auth [name]` takes
 a sign-in's return URL as masked input, and yaks.app's connections page takes a
-pasted key. Never ask Jeff to paste a key into a chat.
+pasted key. Never ask the owner to paste a key into a chat.
 
 To check one: `yak graph query '.secret.name=NAME&*'`. It wears `provisional`
 while its value is on the way to the vault, `error` while a seal is retried, and
@@ -187,7 +187,7 @@ written through the graph does not.
   task, a comment, a memory, a brief, an error message or any bundle but
   `secret.value` (M-17876). A secret found in git history is rotated, not hidden
   (M-37867).
-- **Owner keys stay on this server.** `~/code/holdco/.env` and Jeff's 1Password
+- **Owner keys stay on this server.** `~/code/holdco/.env` and the owner's 1Password
   are never embedded, sent or reused off the box. A service that needs access
   gets a newly minted key scoped to that one service, never the account key, and
   an owner-configured credential's auth is never changed (M-4524).
@@ -199,7 +199,7 @@ written through the graph does not.
   changing how a token is sealed, a value is encrypted or a sentinel is derived,
   breaks what people hold. Such a change is a migration in which the old form
   keeps working until it could have expired, as workers/yak/lib/token_legacy.ts
-  does, and one that cannot avoid a break is Jeff's call before it lands.
+  does, and one that cannot avoid a break is the owner's call before it lands.
 
 ## When a call fails on auth
 

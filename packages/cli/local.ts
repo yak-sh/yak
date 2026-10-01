@@ -67,7 +67,7 @@ let asides = new Set<Aside>()
  * can only run where they were committed.
  *
  * TODO(T-39522): a process that stays up takes the roles its config gives it;
- * which config key says so is Jeff's to pick.
+ * which config key says so is the owner's to pick.
  */
 export let rolesOf = (
   tool: Pick<Declared, 'roles'>,

@@ -78,7 +78,7 @@ predicate") is the contract; this is how it works and what has been learned.
 
 ## What has been learned
 
-- **Lookup cost matters more than embedding cost** (Jeff, on T-59058). A
+- **Lookup cost matters more than embedding cost** (the owner, on T-59058). A
   vector is made once; it is searched every time. Measure the indexed `.near`
   at the live vector count, on the server, before choosing a model or width.
   On the box a request to Ollama costs 40–80 ms whatever the model, so a small

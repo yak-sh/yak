@@ -12,7 +12,7 @@ description: >
   when the request only says "document this", "write this down", "so agents
   know how this works" or "make a skill". Anthropic's `skill-creator` covers the
   format; this is the judgment on top. A brief for one agent is
-  `agent-briefs`; a proposal for Jeff is `design-docs`.
+  `agent-briefs`; a proposal for the owner is `design-docs`.
 ---
 
 # Writing skills
@@ -40,7 +40,7 @@ Ask who needs it, and when.
 
 - **The persona** (memories preloaded by `contains` edges, M-6995) holds what
   is true for every agent in every task here: the principles, the invariants,
-  Jeff's standing direction. Every session pays for every word of it, and it
+  the owner's standing direction. Every session pays for every word of it, and it
   reaches every harness, so it stays small.
 - **A skill** holds one area (how a subsystem works and the judgment around
   it), a workflow (probing a change, migrating data) or a recurring task
@@ -51,7 +51,7 @@ Ask who needs it, and when.
   outside this repo too. A skill points at it and adds the judgment:
   `vocabulary` leans on the keyword table in packages/vocab/README.md rather
   than repeating it.
-- **Jeff's words** stay verbatim in the memory or comment that recorded them
+- **The owner's words** stay verbatim in the memory or comment that recorded them
   (M-31946). A skill cites the id where they set the direction (`testing` cites
   M-39441) and does not paraphrase them into rules.
 - **A comment or doctest** holds the invariant of one file or function.
@@ -59,7 +59,7 @@ Ask who needs it, and when.
   what is.
 
 A memory preloaded into the persona that only one area needs is a skill waiting
-to be written. Moving it changes the persona, so propose it to Jeff in a line
+to be written. Moving it changes the persona, so propose it to the owner in a line
 (M-31947).
 
 ## The name
@@ -68,7 +68,7 @@ The name is also the slash command (`/query-grammar`). A skill that teaches
 gets a longer name that says its subject (`query-grammar`,
 `graph-reads-and-writes`, `end-to-end-checks`); short verb-like names (`query`,
 `test`, `design`) are kept for skills that do something, someday (M-61646).
-Lowercase words and hyphens, the same as the folder. Jeff kept `vocabulary`,
+Lowercase words and hyphens, the same as the folder. The owner kept `vocabulary`,
 `sharing` and `yaks-app` as they were.
 
 A rename is a rename (M-17871): `git mv` the folder, change `name:`, and change
@@ -105,7 +105,7 @@ any other key. All of "when to use it" goes in the description, since the body
 is read only after the choice is made.
 
 To check a description, write three requests that need the skill without
-naming it, the way Jeff would type them, and find the words in the description
+naming it, the way the owner would type them, and find the words in the description
 each one would match. skill-creator's trigger evals measure it properly and
 cost time and money; save them for a skill that keeps failing to fire.
 
@@ -129,7 +129,7 @@ Write for an agent who has just loaded it mid-task and will act on it at once.
   a wrong flag in one is repeated by every agent that loads it (M-37958).
 - **What is, and a bug is not what is.** Name the task that fixes it rather
   than teaching the workaround. Today's behavior written as the rule is how a
-  skill, like a brief, preserves what Jeff wants gone.
+  skill, like a brief, preserves what the owner wants gone.
 - **Mark what is designed but not built**, with its id: "Namespacing (D-59567)
   is designed, not built". The line changes when it lands.
 - **No dates, war stories, "used to" or "supersedes"** (M-4404). The history
@@ -174,15 +174,15 @@ change to it goes to the template too.
 
 ## Writing one from a session
 
-A session that learned how an area works, by building it or from Jeff's
+A session that learned how an area works, by building it or from the owner's
 corrections, loses it at its end unless something holds it. The context that
 holds it writes the skill: a fork of that session, which has all of it, not a
 fresh agent handed a summary. Then the locus reads the skill before calling it
 done. The writer writes fluently whether or not it checked; the reader, who
-was there, catches the claim nobody ran, the paraphrase of Jeff, the copy of
+was there, catches the claim nobody ran, the paraphrase of the owner, the copy of
 what another skill owns.
 
-When Jeff corrects something in one area, the fix is usually in that area's
+When the owner corrects something in one area, the fix is usually in that area's
 skill: find the line that produced the wrong behavior and rewrite it, rather
 than adding a line beside it (M-4404, M-14769).
 

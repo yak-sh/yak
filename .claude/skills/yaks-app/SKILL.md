@@ -118,7 +118,7 @@ lives in `public/docs/components.md`, and a test checks it.
   platform's own tracker lands (D-45640).
 - `yak admin tail --admin` follows live events.
 - `yak admin throwaway` signs in a test account for probes. `--owner` acts as
-  Jeff, only for an act he asked for (M-31958).
+  the owner, only for an act he asked for (M-31958).
 - An app's own errors surface through `app_errors` and the unseen block
   (`unseen.ts`).
 - Examples to look at live in the `yourname` space (M-37804).

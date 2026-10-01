@@ -58,7 +58,7 @@ Each entity in a change is stamped with the writer its own first bundle names in
 `$actor`, else the change's writer (`writers()` in packages/graph/stamp.ts), and
 the journal records one transaction per writer. So a session's own rows (a
 persona snapshot, a report) name the session, and the person is the writer only
-of what that person typed or asked for. Jeff is the actor only for an act he
+of what that person typed or asked for. The owner is the actor only for an act he
 explicitly asked for (M-31958). A row stamped with the wrong writer is fixed
 with a migration (the `data-migration` skill), and the writer that stamped it is
 fixed at its root.

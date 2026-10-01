@@ -16,7 +16,7 @@
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as Jeff" }
+        "owner": { "type": "boolean", "description": "as the owner" }
       },
       "readOnly": true,
       "openWorld": true
@@ -51,7 +51,7 @@
       "noun": "admin",
       "verb": "login",
       "title": "Sign in as a yaks.app account",
-      "description": "Sign this box in as the yaks.app account at an address. A @bot.yak.sh code is read from the letter in this graph; anyone else’s is typed, or given with --code. Signing in as anybody but a test account is a named act: --owner for Jeff’s, --admin for admin@bot.yak.sh.\n\n  yak admin login you@example.com --owner\n  yak admin login admin@bot.yak.sh --admin",
+      "description": "Sign this box in as the yaks.app account at an address. A @bot.yak.sh code is read from the letter in this graph; anyone else’s is typed, or given with --code. Signing in as anybody but a test account is a named act: --owner for the owner’s, --admin for admin@bot.yak.sh.\n\n  yak admin login you@example.com --owner\n  yak admin login admin@bot.yak.sh --admin",
       "input": {
         "address": { "type": "string", "description": "the account’s address" },
         "code": { "type": "string", "description": "the six-digit code" },
@@ -59,7 +59,7 @@
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as Jeff" }
+        "owner": { "type": "boolean", "description": "as the owner" }
       },
       "required": ["address"],
       "options": { "positional": ["address"] },
@@ -82,7 +82,7 @@
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as Jeff" }
+        "owner": { "type": "boolean", "description": "as the owner" }
       },
       "required": ["letter"],
       "options": { "positional": ["letter"] },
@@ -136,7 +136,7 @@
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as Jeff" }
+        "owner": { "type": "boolean", "description": "as the owner" }
       },
       "openWorld": true
     },
@@ -156,7 +156,7 @@
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as Jeff" }
+        "owner": { "type": "boolean", "description": "as the owner" }
       },
       "options": { "positional": ["bps"] },
       "openWorld": true
@@ -185,7 +185,7 @@
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as Jeff" }
+        "owner": { "type": "boolean", "description": "as the owner" }
       },
       "options": { "positional": ["where"] },
       "openWorld": true
@@ -220,7 +220,7 @@
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as Jeff" }
+        "owner": { "type": "boolean", "description": "as the owner" }
       },
       "required": ["space"],
       "options": { "positional": ["space", "act"] },
@@ -239,7 +239,7 @@
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as Jeff" }
+        "owner": { "type": "boolean", "description": "as the owner" }
       },
       "required": ["space"],
       "options": { "positional": ["space"] },
@@ -268,7 +268,7 @@
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as Jeff" }
+        "owner": { "type": "boolean", "description": "as the owner" }
       },
       "required": ["where"],
       "options": { "positional": ["where"], "rest": "filters" },
@@ -292,7 +292,7 @@
           "type": "boolean",
           "description": "as the platform's admin"
         },
-        "owner": { "type": "boolean", "description": "as Jeff" }
+        "owner": { "type": "boolean", "description": "as the owner" }
       },
       "required": ["where", "path"],
       "options": { "positional": ["where", "path"] },
@@ -323,7 +323,7 @@
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as Jeff" }
+        "owner": { "type": "boolean", "description": "as the owner" }
       },
       "required": ["name", "id"],
       "options": { "positional": ["name", "id", "secret"] },
@@ -343,7 +343,7 @@
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as Jeff" }
+        "owner": { "type": "boolean", "description": "as the owner" }
       },
       "required": ["name"],
       "options": { "positional": ["name"], "rest": "args" },
@@ -378,7 +378,7 @@
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as Jeff" }
+        "owner": { "type": "boolean", "description": "as the owner" }
       },
       "required": ["dir"],
       "options": { "positional": ["dir"] },
@@ -395,7 +395,7 @@
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as Jeff" }
+        "owner": { "type": "boolean", "description": "as the owner" }
       },
       "readOnly": true,
       "openWorld": true
@@ -415,7 +415,7 @@
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as Jeff" }
+        "owner": { "type": "boolean", "description": "as the owner" }
       },
       "readOnly": true,
       "openWorld": true
@@ -432,7 +432,7 @@
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as Jeff" }
+        "owner": { "type": "boolean", "description": "as the owner" }
       },
       "readOnly": true,
       "openWorld": true
@@ -452,7 +452,7 @@
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as Jeff" }
+        "owner": { "type": "boolean", "description": "as the owner" }
       },
       "options": { "positional": ["version"] },
       "destructive": true,
@@ -470,7 +470,7 @@
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as Jeff" }
+        "owner": { "type": "boolean", "description": "as the owner" }
       },
       "options": { "positional": ["sha"] },
       "destructive": true,

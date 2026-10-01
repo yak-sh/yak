@@ -49,7 +49,7 @@ let as = async (person: string) =>
     SECRET,
   )}`
 
-// Ada owns `ada`; Jeff owns `yak`, the platform's own space.
+// Ada owns `ada`; the owner owns `yak`, the platform's own space.
 let spaces = async (vars: Partial<Env> = TOKENS) => {
   let scenario = platform(SECRET, vars)
   let { env } = scenario

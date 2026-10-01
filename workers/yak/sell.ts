@@ -1,6 +1,6 @@
 // Selling through yaks.app (T-34523): a space connects its own Stripe account
 // and its apps take money on it, with the platform taking a fee on the way
-// past. Jeff configured Connect on our sandbox with the "charge merchants
+// past. The owner configured Connect on our sandbox with the "charge merchants
 // directly" model, and every decision below follows from that one choice.
 //
 // Direct charges, and what that means for every line here. The connected

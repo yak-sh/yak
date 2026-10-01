@@ -111,7 +111,7 @@ test('a bindings query is a query, and it is nothing but bindings', () => {
 })
 
 test('a bound variable in a write position supplies the value', () => {
-  // Jeff's own example: `+foo.bar=$x` merged with `$x=5` creates an entity
+  // The owner's own example: `+foo.bar=$x` merged with `$x=5` creates an entity
   // with bar=5.
   let m = filled('+result.ms=$x', { x: 5 })
   assertEquals(m.patterns[0].sets, [{

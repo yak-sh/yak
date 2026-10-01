@@ -117,12 +117,12 @@ commit times and marks that estimate in its output.
 
 The incident commands, using this box’s Wrangler/GitHub login. An agent names
 the act with `--admin` and it is recorded as the platform’s admin person
-(`admin@bot.yak.sh`, seeded into the directory); Jeff names it with `--owner`
+(`admin@bot.yak.sh`, seeded into the directory); the owner names it with `--owner`
 and it is his. Same commands, same credentials — the flag says whose act it is,
 and the banner on stderr says so out loud.
 
 ```sh
-yak admin deploys --admin        # or --owner, when it is Jeff
+yak admin deploys --admin        # or --owner, when it is the owner
 yak admin errors --since 10m --admin
 yak admin tail --admin
 yak admin rollback [version] --admin

@@ -13,7 +13,7 @@ let SECRET = 'a probe secret'
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let JEFF = 'a0000000-0000-4000-8000-00000000000f'
 
-// Ada owns `ada`, which holds one app; Jeff owns `yak`, the platform's own.
+// Ada owns `ada`, which holds one app; the owner owns `yak`, the platform's own.
 let spaces = async () => {
   let scenario = platform(SECRET)
   let { env } = scenario

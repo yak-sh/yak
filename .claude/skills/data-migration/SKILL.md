@@ -15,7 +15,7 @@ description: >
 
 # Migrating stored data
 
-Stored data is people's: Jeff's on the box, everyone's in a yaks.app store. A
+Stored data is people's: the owner's on the box, everyone's in a yaks.app store. A
 migration is the one change that can lose it for good, so it earns more care
 than the code around it. The persona states the rules (M-17876 invariants,
 M-17871 one shape, M-37923 what people hold, M-59093 input is precious,
@@ -83,7 +83,7 @@ passes: expand, then contract").
   inside a Worker the clock does not move while code runs.
 - `store_restore` brings one store back if a move went wrong.
 
-Jeff's standing word for these, on D-45640 and D-59037: migrations must not
+The owner's standing word for these, on D-45640 and D-59037: migrations must not
 bring down yaks apps.
 
 ## Before calling it done

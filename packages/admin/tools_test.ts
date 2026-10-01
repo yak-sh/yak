@@ -136,7 +136,7 @@ test('a platform operation names whose act it is before it runs anything', async
   )
 })
 
-// The same act, named by an agent instead of by Jeff (D-35373): it gets past
+// The same act, named by an agent instead of by the owner (D-35373): it gets past
 // the guard, and the banner says it is the admin's.
 test('an agent names a platform operation with --admin', async () => {
   await assertRejects(

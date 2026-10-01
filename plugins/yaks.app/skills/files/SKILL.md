@@ -80,8 +80,8 @@ and you never have to remember what it used to contain.
     app_files(app, op: 'history', path: 'index.html')
     → index.html in yourname/recipes:
       now — 4213 bytes, sha256 9f2a…
-      - until 2026-09-06T14:20:11Z — 3980 bytes, sha256 c41d…, by Jeff
-      - until 2026-09-04T09:02:47Z — 1204 bytes, sha256 7b19…, by Jeff
+      - until 2026-09-06T14:20:11Z — 3980 bytes, sha256 c41d…, by the owner
+      - until 2026-09-04T09:02:47Z — 1204 bytes, sha256 7b19…, by the owner
 
 An entry reads **"the file was these bytes until then"** — the time and the name
 are the write that took them away. So the top entry is one step back from now,

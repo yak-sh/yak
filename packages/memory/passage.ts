@@ -45,7 +45,7 @@ let MORE = 'There are more — memory_recall finds any of them by what they ' +
  * `name` is the person the heading is about — whoever said most of them.
  *
  * ```ts
- * // ## What Jeff has said
+ * // ## What the owner has said
  * // In ada, his own words, newest first…
  * //
  * // "use grams, never cups"

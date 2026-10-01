@@ -16,7 +16,7 @@
 // reaching the owner's takes `--owner` and reaching the platform's admin takes
 // `--admin` on that command line, and every command that runs as either wears
 // a banner on stderr (./accounts.ts). `--admin` is what an agent uses for a
-// platform act, so the act is recorded as the admin and not as Jeff (D-35373).
+// platform act, so the act is recorded as the admin and not as the owner (D-35373).
 // The default test account is the one `yak admin use` remembered, and only
 // that verb moves it: a sign-in never does, so one agent's throwaway never
 // becomes the account another agent's bare command acts as. A probe names its
@@ -227,14 +227,14 @@ let one = (all: Account[], want: string): Account => {
 let root = fileURLToPath(new URL('../../', import.meta.url)).replace(/\/$/, '')
 
 // The act is named either way; the flag says WHOSE it is — an agent's
-// (`--admin`) or Jeff's (`--owner`) — and the banner says that out loud. The
+// (`--admin`) or the owner's (`--owner`) — and the banner says that out loud. The
 // credentials used below are this box's Cloudflare/GitHub login for both,
 // until the admin path has a token of its own (T-35375).
 let platform = (a: Args): void => {
   if (a.admin !== true && a.owner !== true) {
     throw new Refused(
       'yaks.app operations are a named act: add --admin (an agent) or ' +
-        '--owner (Jeff)',
+        '--owner (the owner)',
     )
   }
   note(
@@ -417,7 +417,7 @@ export let runs = (
       if (a.owner !== true && a.admin !== true) {
         throw new Refused(
           'the fee is the platform’s: add --admin (an agent) or --owner ' +
-            '(Jeff). A test account cannot read it or set it.',
+            '(the owner). A test account cannot read it or set it.',
         )
       }
       // Read before the account is: a typo is a typo whoever is signed in.
@@ -520,7 +520,7 @@ export let runs = (
       let a = argsOf(call)
       if (a.owner !== true && a.admin !== true) {
         throw new Refused(
-          'a client is the platform’s: add --admin (an agent) or --owner (Jeff)',
+          'a client is the platform’s: add --admin (an agent) or --owner (the owner)',
         )
       }
       let name = word(a, 'name') ?? ''

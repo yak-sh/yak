@@ -34,7 +34,7 @@ synonym for something that already exists and it will feel like the same word
 (M-12915). Look first: `grep '"<word>"' packages/*/vocab.json`, `yak graph
 schema`, or the inspector's component list. If the codebase already has the
 idea under another name, use that name. If two names exist for one idea, or the
-existing name is bad, propose one to Jeff; he picks.
+existing name is bad, propose one to the owner; he picks.
 
 Look a new component's name up as a property too. A bare `.name` in a query
 routes to a property of that name before a component (`route` in
@@ -199,16 +199,16 @@ a missing value as the safe side: an app with no access mode is private
 failure. A reader that falls back to the open choice turns a lost or stale row
 into an exposure.
 
-## Requirements come from Jeff, not from today's behavior
+## Requirements come from the owner, not from today's behavior
 
 When a component replaces something, its shape follows what it is for, not
 what the old code happened to do. Drafts were kept per browser tab only because
 sessionStorage did that, and a `durable: tab` lifetime was invented to keep it;
-Jeff had always wanted a draft kept and synced everywhere, and the keyword was
+The owner had always wanted a draft kept and synced everywhere, and the keyword was
 deleted. A draft is `draft{by, place, text, rev}` (@yaks/draft): synced, kept
 for good, on an eid every interface derives the same way. A person's input is
 never given a short lifetime (M-59093). Before writing a constraint into a
-component, ask whether it came from Jeff or from the code.
+component, ask whether it came from the owner or from the code.
 
 ## Configuration that varies is rows
 
@@ -271,7 +271,7 @@ Decide these per component, on purpose:
   twice; relations are refs or edges, never lists of eids; nothing derivable is
   stored; nothing is keyed on a name.
 - No stored state; lifecycles are marks plus `status`.
-- A missing value reads as the safe side, and every constraint traces to Jeff.
+- A missing value reads as the safe side, and every constraint traces to the owner.
 - Its description says what it is in a sentence a stranger can use.
 - Stored rows on the box and on the platform are migrated with the
   `data-migration` skill, and no app's own vocab.json declares the new word

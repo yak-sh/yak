@@ -11,7 +11,7 @@ description: >
   "share this helper" or "make it reusable". Not for the words a package
   declares (`vocabulary`), what its effects and rules do (`effects-and-rules`)
   or what its views draw (`ui-building`); a key a plugin reads is
-  `secrets-and-connections`; a new package or a boundary Jeff should decide
+  `secrets-and-connections`; a new package or a boundary the owner should decide
   gets a design first (`design-docs`).
 ---
 
@@ -26,7 +26,7 @@ export") is the reference for facets and `compose()`.
 
 ## Where code belongs
 
-Package boundaries are the decision Jeff makes; inside one, mess is cheap to fix
+Package boundaries are the decision the owner makes; inside one, mess is cheap to fix
 later (M-38025). Left alone you put new code next to the nearest code that
 needed it, and a helper lands in workers/yak or a second copy of an idea grows
 inside the package that first wanted it.
@@ -98,7 +98,7 @@ then edit it and `systemctl --user restart yak`. A key in `with` is
 - A new package has no page on jsr.io, and CI's publish refuses it until one
   exists: `deno task jsr` shows what would change, and
   `deno task jsr --apply --create` creates missing pages (it needs a JSR token,
-  so this is often Jeff's to run). bin/release.ts refuses to cut a release
+  so this is often the owner's to run). bin/release.ts refuses to cut a release
   while a package has no page.
 - Releases are one version for the whole family: bin/release.ts writes it,
   commits and tags; pushing the tag publishes.

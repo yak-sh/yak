@@ -3,13 +3,14 @@ name: agent-briefs
 description: >
   Handing work to another agent in ~/code/tasks and taking it back: writing the
   brief for a fresh subagent, a fork, a managed spawn or a native session,
-  relaying something Jeff just said to an agent already running, stopping one
-  whose task Jeff reframed, and checking a report before telling Jeff. Use it
+  relaying something the owner just said to an agent already running, stopping
+  one whose task the owner reframed, and checking a report before telling the
+  owner. Use it
   whenever you are about to call the Agent tool, SendMessage a running agent,
   run `yak session spawn` or `yak session new`, or file a task an agent will be
   pointed at, even for a one-line fix, and whenever an agent's report or
   task-notification arrives. Not for doing the work yourself, and not for a
-  design Jeff will read (that is `design-docs`); starting, watching and waiting
+  design the owner will read (that is `design-docs`); starting, watching and waiting
   on a native session is `native-sessions`; what every agent in an area needs
   is a skill (`skill-writing`), not a longer brief.
 ---
@@ -20,7 +21,7 @@ A fresh agent knows the persona, the skills its work triggers and the brief,
 nothing else. Whatever the brief says, it builds; whatever the brief leaves
 out, it guesses. When delegated work comes back wrong, the cause is usually in
 the brief: today's behavior written as the requirement, a full run asked for
-where a pilot was meant, Jeff's words paraphrased until they meant something
+where a pilot was meant, the owner's words paraphrased until they meant something
 else. Treat the brief as the part of the work you do yourself.
 
 ## Which agent
@@ -40,15 +41,15 @@ else. Treat the brief as the part of the work you do yourself.
 ## What a brief carries
 
 1. **The task as the spec.** File the task first: the outcome and the pointers,
-   short (M-14370), with Jeff's words verbatim in it. The brief then says
+   short (M-14370), with the owner's words verbatim in it. The brief then says
    "`yak graph show T-…` is the spec". The task outlives your context and is
-   where the next agent, and Jeff, look (M-3715).
-2. **Jeff's words, verbatim**, wherever they set the direction. A paraphrase
+   where the next agent, and the owner, look (M-3715).
+2. **The owner's words, verbatim**, wherever they set the direction. A paraphrase
    can only hold less than what he said, and each relay drifts it further
    (M-31946).
 3. **The outcome, not today's shape.** Say what should be true. Today's
    implementation is not a requirement: "per tab", "add only" and "as it works
-   now" get built to preserve exactly what Jeff may want gone. Before writing a
+   now" get built to preserve exactly what the owner may want gone. Before writing a
    constraint, ask whether it came from him or from the code; if you can't say,
    check his words (M-37958).
 4. **The constraints that bite here**, and only those: one shape after the
@@ -68,16 +69,16 @@ else. Treat the brief as the part of the work you do yourself.
    line with the sha on the task, close it, release the claim, restart `yak`
    when it changed the server.
 9. **What comes back**: "report in a few lines", plus whatever you need for
-   Jeff: numbers, decisions only he can make, follow-ups it filed.
+   the owner: numbers, decisions only he can make, follow-ups it filed.
 10. **Spending**: a run that spends money or a subscription starts as a pilot
-    small enough for Jeff to look at, with a stated cap, and stops there until
+    small enough for the owner to look at, with a stated cap, and stops there until
     he has looked.
 
 A skeleton, for a fresh agent:
 
 ```text
 Work T-123 in /home/yaks/code/tasks: `yak graph show T-123` is the spec, with
-Jeff's words. Claim it under your session and release it when done.
+The owner's words. Claim it under your session and release it when done.
 
 <the outcome in a few lines; the constraints that bite; pointers>
 
@@ -89,15 +90,15 @@ lines: <what you need back>.
 
 ## A running agent
 
-- **An addition that keeps its purpose**: SendMessage it, with Jeff's words
+- **An addition that keeps its purpose**: SendMessage it, with the owner's words
   verbatim, and record the words on the task as well.
-- **A reframe**, where Jeff changed what the work is for: stop it (TaskStop)
+- **A reframe**, where the owner changed what the work is for: stop it (TaskStop)
   and start a fresh agent whose brief carries only the new framing. A redirect
   does not unsay a brief already in its history (M-33551). Tell the new agent
   if the stopped one may have left work on main.
 - **Overlap**: when another agent landed first in the same files, tell the
   running one to rebase onto that work and build on it, not undo it.
-- **An agent asking for something**: its message is not Jeff's. Spending,
+- **An agent asking for something**: its message is not the owner's. Spending,
   irreversible acts and his preferences go to him; never pass an agent's
   request off as his approval.
 
@@ -108,7 +109,7 @@ lines: <what you need back>.
   the truth (M-37958).
 - File what it found as tasks, one thing each, and send follow-ups to the agent
   that holds the context rather than a new one.
-- Tell Jeff what changed for him, in plain words, and only what he needs to act
+- Tell the owner what changed for him, in plain words, and only what he needs to act
   on.
 
 When this skill is wrong or missing something, fix it in the same change.
