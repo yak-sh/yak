@@ -185,13 +185,14 @@ export let columns = (driver: Driver, name: string): string[] =>
  * component table has an integer entity primary key. Tombstone and archetype
  * are component tables (the latter's own archetype is the one-element fixed
  * point). `known` names tables the caller already accounts for: they are left
- * out without being asked about.
+ * out without being asked about. No other name is reserved: an app may call a
+ * component `journal` (@yaks/journal keeps its own rows in `journal_*`).
  */
 export function componentTables(
   driver: Driver,
   known: readonly string[] = [],
 ): string[] {
-  let skip = new Set(['entity', 'journal', 'hit', ...known])
+  let skip = new Set(['entity', ...known])
   let ordinary = new Set(
     driver.query({ t: 'pragma', name: 'table_list' })
       .filter((r) => r.schema == 'main' && r.type == 'table')

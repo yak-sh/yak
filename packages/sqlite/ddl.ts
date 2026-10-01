@@ -380,7 +380,7 @@ export let retired = (driver: Driver, vocab: Vocab): Stmt[] => {
  * fingerprint instead, and moving it fits every store once more: move it when
  * fitting learns to see something it did not.
  */
-export let FIT = 4
+export let FIT = 5
 
 /**
  * What fitting reads off a file before an install creates anything: each

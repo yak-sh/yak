@@ -488,6 +488,28 @@ test('archetype: reclassify classifies rows written past the graph, no triggers'
   assertEquals(backfill(driver), { entities: 0, archetypes: 0, retired: 0 })
 })
 
+test('archetype: an app may name a component journal or hit', () => {
+  let words = loadVocab([archetypeDoc, {
+    $defs: {
+      journal: {
+        component: true,
+        type: 'object',
+        properties: { quest: { type: 'string' } },
+      },
+      hit: { component: true, type: 'object' },
+    },
+  }])
+  let driver = mem()
+  let store = storage(driver, words)
+  store.install()
+  let g = graph({ storage: store, vocab: words, plugins: [archetypes()] })
+  g.apply([{ entity: { eid: 'q' }, journal: { quest: 'boars' }, hit: {} }])
+  assertEquals(reclassify(driver, ['q']), [])
+  assertEquals(store.read('.journal .hit').map((b) => b.journal), [
+    { quest: 'boars' },
+  ])
+})
+
 test('archetype: drift finds the pointer a raw writer left behind', () => {
   let { driver, g } = setup()
   g.apply([
