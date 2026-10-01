@@ -226,6 +226,25 @@ test('erasing a Store closes its subscribers and serves the empty Store', async 
   assertEquals((await get(store, '/vocab', owner)).status, 200)
 })
 
+test('a kernel apply dry run returns the patch without keeping it', async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  let store = new Store(ctx)
+  let kernel = { kernel: true }
+  let eid = crypto.randomUUID()
+  let patch = [{ entity: { eid }, doc: { title: 'Draft' } }]
+  let q = `/query?q=${encodeURIComponent(`.entity.eid=${eid}&.doc`)}`
+  let checked = await post(store, '/apply?check=1', patch, kernel)
+  assertEquals(checked.status, 200, await checked.clone().text())
+  let applied = await checked.json()
+  assertEquals(applied[0].doc.title, 'Draft')
+  assertEquals(await (await get(store, q, kernel)).json(), [])
+  let committed = await post(store, '/apply', patch, kernel)
+  assertEquals(committed.status, 200, await committed.text())
+  let [row] = await (await get(store, q, kernel)).json()
+  assertEquals(row.doc.title, 'Draft')
+})
+
 test('a Store checks a large delete as one batch', async () => {
   let ctx = state()
   using _db = ctx.storage
