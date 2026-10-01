@@ -122,8 +122,11 @@ shows what is live and `yak admin errors` what broke.
 
 A probe is done when nothing of it is left running or on disk:
 
-- the server: `kill $(cat $D/serve.pid)`, then `kill -0` it, or `curl` its port
-  and see nothing answer;
+- the server and its worker: a plain `yak serve` starts a detached `yak work`
+  for the duty roles nobody serves, and that worker outlives the server by
+  design. Kill every process whose command line names the config,
+  `pkill -f "$D/yak.jso[n]"`, and confirm `pgrep -f "$D/yak.jso[n]"` finds
+  none and nothing answers on the port;
 - Chrome: the pid you started is a launcher, and the browser is a dozen
   processes. Kill every one whose command line names the profile,
   `pkill -f "user-data-dir=/tmp/cdp-<tas>[k]"` (the bracket keeps `pkill` from
