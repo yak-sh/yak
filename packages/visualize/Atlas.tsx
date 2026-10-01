@@ -9,7 +9,7 @@ import { ActivityView } from './ActivityView.tsx'
 import { AnatomyList, matchingEdges, PAGE_SIZE } from './AnatomyList.tsx'
 import { Detail } from './Detail.tsx'
 import {
-  filtered, groupName, sections, Spine, Topology, zoomed,
+  filtered, groupName, mapParts, sections, Spine, Topology, zoomed,
 } from './Topology.tsx'
 
 let connectionNames: Record<string, string> = {
@@ -48,14 +48,18 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
   let bound = parts.filter((node) => node.bound).length
   let unattempted = parts.filter((node) =>
     node.group == 'facets' && node.detail.attempted === false).length
-  let shown = state.group == 'relations'
-    ? matchingEdges(model).length : filtered(model).length
+  let unobserved = Object.entries(model.coverage)
+    .filter(([, observed]) => !observed).map(([group]) => groupName(group))
+  let shown = state.group == 'relations' ? matchingEdges(model).length
+    : state.view == 'map' ? mapParts(model).length : filtered(model).length
   let connection = state.paused ? 'paused' : state.connected
   let changeGroup = (group: string) => model.set({
-    group, listPage: 0, ...(group == 'relations' && { view: 'list' as const }),
+    group, listPage: 0, ...(['relations', 'phases'].includes(group) &&
+      { view: 'list' as const }),
   })
   let map = () => model.set({
-    view: 'map', ...(state.group == 'relations' && { group: 'all' }),
+    view: 'map', ...(['relations', 'phases'].includes(state.group) &&
+      { group: 'all' }),
   })
   let press = (event: KeyboardEvent) => {
     let target = event.target as Element
@@ -70,7 +74,8 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
     if (key == 'arrowdown' || key == 'arrowup') {
       event.preventDefault()
       let ids = state.group == 'relations' ? matchingEdges(model).map((e) => e.id)
-        : filtered(model).map((node) => node.id)
+        : (state.view == 'map' ? mapParts(model) : filtered(model))
+          .map((node) => node.id)
       if (!ids.length) return
       let at = ids.indexOf(state.selected)
       let index = at < 0 ? key == 'arrowdown' ? 0 : ids.length - 1
@@ -158,6 +163,11 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
           subscribed; other processes and unobserved intervals are not represented.</p>
         <span class="Atlas_Safety">Names & contracts. No entity or secret values.</span>
       </div>
+      {unobserved.length > 0 && <details class="Atlas_Unobserved">
+        <summary>{unobserved.length} categories unobserved here</summary>
+        <p>{unobserved.join(' · ')}</p>
+        <p>An empty unobserved category is not evidence that its parts are absent.</p>
+      </details>}
       {(state.error || state.gap > 0 || state.paused) && <section class="Atlas_Notices"
         aria-label="Connection and recording notices">
         {state.error && <div class="Atlas_Notice" data-tone="negative" role="alert">
@@ -166,8 +176,9 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
         </div>}
         {state.gap > 0 && <div class="Atlas_Notice" data-tone="caution" role="status">
           <strong>Observation gaps ({state.gap})</strong>
-          <span>Reconnects, epoch changes or overflow broke continuity.
-            Loss may be unknown; this is not a missed-record count.</span>
+          <span>Pauses, epoch changes or known omissions broke continuity.
+            This counts episodes, not missed records. Disconnection alone does
+            not prove record loss.</span>
         </div>}
         {state.paused && <div class="Atlas_Notice" data-tone="muted" role="status">
           <strong>Recording paused.</strong>
@@ -204,6 +215,7 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
               {sections.map((section) => <optgroup key={section.id} label={section.name}>
                 {section.groups.map((group) => <option key={group} value={group}>
                   {groupName(group)} ({counts.get(group) ?? 0})
+                  {model.coverage[group] === false && ' · unobserved'}
                 </option>)}
               </optgroup>)}
               <option value="relations">Relationships ({model.edges.length})</option>

@@ -93,6 +93,9 @@
 .Atlas_Coverage { display: flex; align-items: center; gap: 14px; padding: 12px 16px; margin-bottom: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 .Atlas_Scope { flex: none; }
 .Atlas_Coverage p { flex: 1; color: var(--muted); font-size: 11px; }
+.Atlas_Unobserved { margin: -4px 0 16px; padding: 0 16px; color: var(--muted); font-size: 11px; }
+.Atlas_Unobserved summary { width: fit-content; color: var(--caution); }
+.Atlas_Unobserved p { margin-top: 6px; overflow-wrap: anywhere; }
 .Atlas_Safety { flex: none; color: var(--muted); font: 10px/1.5 var(--mono); }
 .Atlas_Notices { display: grid; gap: 8px; margin-bottom: 16px; }
 .Atlas_Notice { --notice: var(--muted); display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 11px 16px; border: 1px solid var(--border); border-left: 3px solid var(--notice); border-radius: var(--radius); background: var(--surface); font-size: 12px; }
@@ -105,7 +108,7 @@
 .Spine_Intro strong { font: 18px/1.5 var(--mono); }
 .Spine_Intro > span:last-child { color: var(--muted); font-size: 10px; }
 .Spine_Path { display: flex; list-style: none; padding: 0; overflow-x: auto; padding-bottom: 4px; }
-.Spine_Step { position: relative; flex: 1; min-width: 80px; }
+.Spine_Step { position: relative; flex: 1 0 100px; min-width: 100px; }
 .Spine_Step + .Spine_Step::before { content: ''; position: absolute; top: 22px; left: -6px; width: 12px; border-top: 1px solid var(--border2); }
 .Spine_Phase { position: relative; display: grid; align-content: start; justify-items: start; gap: 5px; width: 100%; min-height: 80px; padding: 7px 10px; border: 1px solid transparent; border-radius: var(--radius); color: var(--text); background: none; text-align: left; font: 10px/1.4 var(--mono); }
 .Spine_Phase:hover { background: var(--card); border-color: var(--border2); }
@@ -370,7 +373,7 @@
   .Atlas_Connection { margin-right: 0; }
   .Spine { grid-template-columns: 1fr; gap: 14px; }
   .Spine_Intro { display: flex; align-items: baseline; gap: 12px; }
-  .Spine_Step { min-width: 86px; }
+  .Spine_Step { min-width: 100px; }
   .Atlas_Anatomy { grid-template-columns: minmax(0, 1fr) 240px; gap: 12px; }
   .Atlas_Toolbar { flex-wrap: wrap; gap: 8px; }
   .Atlas_Search { flex-basis: 100%; }

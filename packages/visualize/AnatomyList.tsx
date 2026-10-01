@@ -19,6 +19,7 @@ export let matchingEdges = (model: AtlasModel) => {
 
 export let AnatomyList = ({ model }: { model: AtlasModel }) => {
   let relations = model.state.group == 'relations'
+  let unobserved = model.coverage[model.state.group] === false
   let nodes = relations ? [] : filtered(model)
   let edges = relations ? matchingEdges(model) : []
   let total = relations ? edges.length : nodes.length
@@ -38,8 +39,11 @@ export let AnatomyList = ({ model }: { model: AtlasModel }) => {
       <span>{relations ? 'Relationship' : 'Group / state'}</span>
     </div>
     {!total ? <div class="AnatomyList_Empty" role="status">
-      <h3>No matching {relations ? 'relationships' : 'parts'}.</h3>
-      <p>Try a shorter filter or choose a different anatomy group.</p>
+      <h3>{unobserved ? 'Category unobserved here.'
+        : `No matching ${relations ? 'relationships' : 'parts'}.`}</h3>
+      <p>{unobserved
+        ? 'This host does not report coverage for this category. No matches cannot establish absence.'
+        : 'Try a shorter filter or choose a different anatomy group.'}</p>
       {model.state.filter && <Button type="button" onClick={() => {
         model.search('')
         model.set({ listPage: 0 })

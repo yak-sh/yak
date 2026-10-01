@@ -15,7 +15,7 @@ export let sections = [
     groups: ['packages', 'roles', 'facets'], color: 'info', mark: '01' },
   { id: 'vocabulary', name: 'Vocabulary', note: 'Components & their contracts',
     groups: ['comps'], color: 'positive', mark: '02' },
-  { id: 'automation', name: 'Automation', note: 'Phases, rules, hooks & effects',
+  { id: 'automation', name: 'Automation', note: 'Rules, hooks & effects',
     groups: ['phases', 'rules', 'hooks', 'effects'], color: 'active', mark: '03' },
   { id: 'interfaces', name: 'Interfaces', note: 'Tools, commands & routes',
     groups: ['tools', 'commands', 'routes'], color: 'special', mark: '04' },
@@ -28,7 +28,7 @@ export let sections = [
 
 let labels: Record<string, string> = {
   packages: 'Packages', roles: 'Roles', facets: 'Facets', comps: 'Components',
-  phases: 'Apply phases', rules: 'Rules', hooks: 'Hooks', effects: 'Effects',
+  phases: 'Pipeline labels', rules: 'Rules', hooks: 'Hooks', effects: 'Effects',
   tools: 'Tools', commands: 'Commands', routes: 'Routes', views: 'Views',
   inspectViews: 'Inspector views', tui: 'Terminal views', kits: 'UI kits',
   themes: 'Themes', secrets: 'Secret names', skills: 'Skills',
@@ -38,7 +38,8 @@ export let groupName = (group: string) => labels[group] ?? group
 export let colorOf = (node: Node) =>
   sections.find((s) => s.groups.includes(node.group))?.color ?? 'info'
 
-export let statusOf = (node: Node) => node.bound ? 'bound'
+export let statusOf = (node: Node) => node.group == 'phases' ? 'pipeline label'
+  : node.bound ? 'bound'
   : node.loaded ? 'loaded'
   : node.group == 'facets' && node.detail.attempted === false ? 'unattempted'
   : node.declared ? 'declared' : 'not declared'
@@ -53,6 +54,10 @@ export let filtered = (model: AtlasModel) => {
   ).sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
 }
 
+// Phase labels belong to the spine (and list), never the composition map.
+export let mapParts = (model: AtlasModel) =>
+  filtered(model).filter((node) => node.group != 'phases')
+
 export let elapsed = (event?: Activity) => event?.duration == undefined
   ? event?.stage == 'start' ? 'in flight' : '—'
   : `${event.duration < 1 ? event.duration.toFixed(2)
@@ -62,16 +67,17 @@ let phaseOf = (event: Activity, node: Node) => event.kind == 'phase' &&
   (event.node == node.id || event.name == node.detail.phase ||
     event.name.split('.').at(-1) == node.detail.phase)
 
-/** The host supplies the actual spine; no guessed phase names or ordering. */
+/** The model supplies explanatory pipeline labels, not bound host handlers.
+ * Only retained phase observations supply timing and pulses. */
 export let Spine = ({ model }: { model: AtlasModel }) => {
   let recent = model.events.slice(-PULSE_LIMIT)
   let phases = model.nodes.filter((node) => node.group == 'phases')
     .sort((a, b) => Number(a.detail.order ?? 0) - Number(b.detail.order ?? 0))
-  return <section class="Spine" aria-label="Apply phase spine">
+  return <section class="Spine" aria-label="Pipeline labels and observed phase activity">
     <div class="Spine_Intro">
-      <span class="Atlas_Eyebrow">Write path</span>
+      <span class="Atlas_Eyebrow">Pipeline labels</span>
       <strong>apply()</strong>
-      <span>Observed phases. Not simulated.</span>
+      <span>Labels ≠ bound handlers. Activity is observed.</span>
     </div>
     {phases.length ? <ol class="Spine_Path">
       {phases.map((node, i) => {
@@ -95,7 +101,7 @@ export let Spine = ({ model }: { model: AtlasModel }) => {
           </button>
         </li>
       })}
-    </ol> : <p class="Spine_Empty">Waiting for the host's phase anatomy.</p>}
+    </ol> : <p class="Spine_Empty">Pipeline labels are not available in this page.</p>}
   </section>
 }
 
@@ -164,7 +170,7 @@ type Drag = {
 /** The map has no clocks or animation loop. At most 48 observed records pulse. */
 export let Topology = ({ model }: { model: AtlasModel }) => {
   let state = model.state
-  let nodes = filtered(model)
+  let nodes = mapParts(model)
   let { frames, placed, height, width } = geometry(nodes)
   let positions = new Map(placed.map((p) => [p.node.id, p]))
   let relations = model.edges.filter((e) =>
@@ -250,7 +256,9 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
             <text x={f.x + 414} y={f.y + 29} text-anchor="end"
               class="Map_LaneCount">{f.shown.length}/{f.total}</text>
             {!f.total && <text x={f.x + 18} y={f.y + 112}
-              class="Map_EmptyLane">No matching declarations</text>}
+              class="Map_EmptyLane">{f.groups.some((group) =>
+                model.coverage[group] === false)
+                ? 'Includes unobserved categories' : 'No matching declarations'}</text>}
           </g>)}
           <g class="Map_Relations">
             {edges.map((edge) => {

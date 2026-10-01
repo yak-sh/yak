@@ -6,6 +6,8 @@ import { Button, Chip, Timeline } from '@yaks/ui'
 import type { Activity, AtlasModel } from './model.ts'
 import { elapsed } from './Topology.tsx'
 
+// The model clears history and cause on epoch change, so these span IDs
+// are compared only within one retained recording. Offsets never use a clock.
 export let spanEvents = (events: readonly Activity[]) => {
   let spans = new Map<string, { event: Activity; at: number }>()
   events.forEach((event, at) => spans.set(event.id, { event, at }))
@@ -101,7 +103,7 @@ let Cause = ({ model }: { model: AtlasModel }) => {
       <div class="Cause_PathHead"><h3>Causal path</h3>
         <span>{related.length} retained spans</span></div>
       <ol class="Cause_Path">
-        {related.map((event) => <li key={event.id}
+        {related.map((event) => <li key={`${event.epoch}:${event.id}`}
           style={{ '--depth': Math.min(5, depthOf(event, related)) }}>
           <button type="button" class="Cause_Span"
             data-selected={event.id == selected.id}

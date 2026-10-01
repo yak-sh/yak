@@ -52,6 +52,7 @@ let metadata = (node: Node): [string, string][] => {
     ['attempted', 'Attempted'], ['noop', 'No-op binding'],
     ['method', 'Method'], ['path', 'Path'], ['handler', 'Handler'],
     ['tier', 'Tier'], ['extends', 'Open vocabulary'],
+    ['observed', 'Category observed'],
   ]) {
     let value = node.detail[key]
     if (typeof value == 'boolean') rows.push([label, value ? 'Yes' : 'No'])
@@ -139,6 +140,12 @@ let NodeDetail = ({ model, node }: { model: AtlasModel; node: Node }) => {
         ? 'rollback' : 'apply'} path, not a separately bound implementation.
       Timing appears only when this process reports an observed phase.
     </p> : <Flags node={node} />}
+    {node.detail.observed === false && <p class="Detail_Callout"
+      data-tone="caution">
+      <strong>Category unobserved here.</strong> The host does not report
+      coverage for this category. Unreported parts or bindings are not
+      evidence of absence.
+    </p>}
     {node.group == 'facets' && node.detail.attempted === false &&
       <p class="Detail_Callout" data-tone="caution">
         <strong>Not attempted, not absent.</strong> This lazy facet has not been
