@@ -8,7 +8,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
-import { NOW, sync, wikiGraph } from './testing.ts'
+import { derived, NOW, sync, wikiGraph } from './testing.ts'
 import { journalDoc } from './vocab.ts'
 import { runs } from './tools.ts'
 
@@ -17,7 +17,7 @@ let fixture = () => {
   return {
     g,
     j,
-    tools: runs({ sql }),
+    tools: runs({ sql, derived }),
     apply: (change: Bundle[]) => sync(g.apply(change)),
   }
 }

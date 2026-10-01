@@ -31,6 +31,7 @@ import {
   as,
   col,
   type CreateTable,
+  type Derived,
   desc,
   eq,
   type Expr,
@@ -106,6 +107,12 @@ export type LogOpts = {
   spine?: { table?: string; id?: string; eid?: string }
   /** content-addressed properties, if the graph has any */
   cas?: Cas
+  /** the store's read overrides (@yaks/sql `Derived`, the ones it was opened
+   * with): a property whose stored value reads as something else — the
+   * address @yaks/blob keeps in place of a body — is recorded as stored and
+   * read back through its `text`, so history, the feed and undo hold what a
+   * reader of the graph sees and what a writer writes */
+  derived?: Derived
   /** who this log writes as: the one host (a graph opened by one process or
    * thread) whose transactions it records, so a reader can tell its own from
    * another host's (./feed.ts). Default: a fresh id, one per log. */
@@ -279,6 +286,7 @@ export let log = (opts: LogOpts): Log => {
   let idCol = opts.spine?.id ?? 'id'
   let eidCol = opts.spine?.eid ?? 'eid'
   let cas = opts.cas
+  let derived = opts.derived ?? {}
   let host = opts.host ?? crypto.randomUUID()
   let jt = (c: string) => col(c, 'jt')
   let jc = (c: string) => col(c, 'jc')
@@ -342,6 +350,15 @@ export let log = (opts: LogOpts): Log => {
       order: [jf('ordinal')],
     })
 
+  // A recorded value as the graph reads it: one the store keeps in another
+  // form is read back through that property's `text`, and one it cannot read
+  // back stays as recorded.
+  let read = (comp: string, prop: string, stored: unknown): unknown => {
+    let text = derived[`${comp}.${prop}`]?.text
+    if (!text || typeof stored != 'string') return stored
+    return one(select({ cols: [as(text(val(stored)), 'v')] }))?.v ?? stored
+  }
+
   let rebuild = (found: Row[]): Patch[] =>
     found.map((ch) => {
       let target = String(ch.eid)
@@ -349,7 +366,8 @@ export let log = (opts: LogOpts): Log => {
       if (ch.operation == 'remove') return { target, comp, value: null }
       let value: Comp = {}
       for (let f of rows(fieldsOf(ch.id))) {
-        value[String(f.field)] = f.text ?? dec(f.value)
+        let prop = String(f.field)
+        value[prop] = f.text ?? read(comp, prop, dec(f.value))
       }
       return { target, comp, value }
     })
@@ -730,9 +748,11 @@ export let log = (opts: LogOpts): Log => {
       ),
       order: [jc('tx'), jf('id')],
     })).flatMap((r) =>
-      r.target == null
-        ? []
-        : [{ target: String(r.target), value: dec(r.value), seq: num(r.seq) }]
+      r.target == null ? [] : [{
+        target: String(r.target),
+        value: read(comp, prop, dec(r.value)),
+        seq: num(r.seq),
+      }]
     )
 
   /** The highest seq the log holds, or 0 — the cursor a reader starts from. */

@@ -40,6 +40,11 @@ for the fields known to the journal, keeping their history continuous across
 removal and recreation. Previous values are reconstructed from the entity's own
 indexed history rather than stored alongside each new value.
 
+A property the store keeps in another form, such as the address @yaks/blob keeps
+in place of a body, is recorded as stored and read back through the store's read
+overrides (`log({ derived })`; `@yaks/journal/rules` binds the host's). History,
+the feed and undo then hold the text a reader of the graph sees.
+
 The tables hold no rows of the entity table and are not included in graph
 snapshots. Normal writes append records; explicit redaction methods can modify
 stored history. The graph reads the records as entities, below.

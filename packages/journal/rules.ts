@@ -10,23 +10,31 @@
 // this host wrote itself.
 
 import type { Bundle, Plugin } from '@yaks/graph'
-import type { Driver } from '@yaks/sql'
+import type { Derived, Driver, Stmt } from '@yaks/sql'
 import { ddl, grown, journal, type Log, log } from './mod.ts'
 import { follow, type Heard } from './feed.ts'
 
 let logs = new WeakMap<object, Log>()
 
+/** What a log is bound to: the host's own connection, and the read overrides
+ * its store was opened with, so a value the store keeps in another form reads
+ * back the way the graph reads it (./log.ts `LogOpts.derived`). */
+export type Bound = { sql: Driver; derived?: Derived }
+
 /** The log bound to a host: the three tables, read and written over that
  * host's own connection, as that host. The same host gets the same log. */
-export let logFor = (host: { sql: Driver }): Log => {
+export let logFor = (host: Bound): Log => {
   let found = logs.get(host)
-  if (!found) logs.set(host, found = log({ rows: (s) => host.sql.query(s) }))
+  if (!found) {
+    let rows = (s: Stmt) => host.sql.query(s)
+    logs.set(host, found = log({ rows, derived: host.derived }))
+  }
   return found
 }
 
 /** Record who wrote what, inside the transaction that wrote it. A store an
  * older journal made gains the columns it predates first. */
-export let rules = (host: { sql: Driver }): Plugin[] => {
+export let rules = (host: Bound): Plugin[] => {
   for (let s of ddl()) host.sql.query(s)
   let has = host.sql.query({
     t: 'pragma',
@@ -58,7 +66,7 @@ export let TRIES = 5
  * command's beside `yak serve`, or the effect pool's in its own thread.
  */
 export let feed = (
-  host: { sql: Driver; stopping: AbortSignal },
+  host: Bound & { stopping: AbortSignal },
   options: { every?: number } = {},
 ) =>
 (each: Each): () => void => {

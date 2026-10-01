@@ -5,6 +5,7 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
+import { blobKeywords } from '@yaks/blob'
 import { edgeKeywords } from '@yaks/edge'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -18,6 +19,7 @@ import { NOW, sync, wiki } from './testing.ts'
 
 let vocab = loadVocab([...wiki.docs, metaDoc, journalDoc], [
   edgeKeywords,
+  blobKeywords,
 ])
 
 // A wiki journaling into its own database, read through the journal's

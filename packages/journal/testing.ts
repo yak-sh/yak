@@ -4,13 +4,21 @@
 // a page — so a deleted page takes its notes and its citations with it, leaves
 // its children without a parent and drops the pins on it, every way a delete
 // spreads (@yaks/graph's cascade) is something the tests can watch the journal
-// record.
+// record. A page's text is kept by its address (@yaks/blob), as a body is on
+// the box, so the tests also watch the log read it back as text.
 //
 // The log is tables beside the store's own, so a fixture is a database: one
 // `mem()`, the wiki's tables installed on it, the journal's `ddl()` run against
 // it, and a graph over both. The clock is fixed, so a test can assert on the
 // timestamp a transaction was stamped with.
 
+import {
+  blobKeywords,
+  blobRead,
+  blobs,
+  blobSchema,
+  sqliteBlobs,
+} from '@yaks/blob'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import { isPromise } from '@yaks/fp'
 import { type Graph, graph, type Options } from '@yaks/graph'
@@ -34,7 +42,7 @@ let doc: VocabDoc = {
       kind: true,
       properties: {
         title: { type: 'string' },
-        text: { type: 'string' },
+        text: { type: 'string', store: 'blob' },
         locked: { type: 'boolean' },
         // A page whose parent is deleted is still a page.
         parent: { type: 'string', ref: 'page', death: 'detach' },
@@ -86,7 +94,10 @@ let doc: VocabDoc = {
 }
 
 /** The wiki vocabulary the tests write against. */
-export let wiki: Vocab = loadVocab([doc, edgeDoc], [edgeKeywords])
+export let wiki: Vocab = loadVocab([doc, edgeDoc], [edgeKeywords, blobKeywords])
+
+/** How the wiki's store reads a page's text back from the address it keeps. */
+export let derived = blobRead(wiki)
 
 /** The timestamp every fixture transaction is stamped with. */
 export let NOW = '2026-01-01T00:00:00.000Z'
@@ -110,9 +121,10 @@ export let wikiLog = (): {
   other: () => { g: Graph; j: Log }
 } => {
   let db = mem()
-  let store = storage(db, wiki)
+  let store = storage(db, wiki, { derived })
   store.install()
-  for (let s of ddl()) db.query(s)
+  for (let s of [...blobSchema(), ...ddl()]) db.query(s)
+  let texts = blobs(wiki, sqliteBlobs(db))
   db.query({
     t: 'insert',
     into: 'entity',
@@ -123,15 +135,21 @@ export let wikiLog = (): {
     graph({
       storage: store,
       vocab: wiki,
-      plugins: [journal(j, { now: () => NOW }), edges(wiki), ...plugins],
+      plugins: [
+        journal(j, { now: () => NOW }),
+        edges(wiki),
+        texts,
+        ...plugins,
+      ],
     })
-  let j = log({ rows: (s) => db.query(s) })
+  let bound = () => log({ rows: (s) => db.query(s), derived })
+  let j = bound()
   return {
     g: (plugins = []) => as(j, plugins),
     j,
     sql: db,
     other: () => {
-      let j = log({ rows: (s) => db.query(s) })
+      let j = bound()
       return { g: as(j), j }
     },
   }

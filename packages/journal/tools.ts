@@ -17,10 +17,9 @@
 
 import { argsOf, type Bundle, type Comp, Refused } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
-import type { Driver } from '@yaks/sql'
 import type { Batch } from './batch.ts'
 import { applied } from './undo.ts'
-import { logFor } from './rules.ts'
+import { type Bound, logFor } from './rules.ts'
 
 // Who wrote the transaction, when, and through what — the same stamp a graph
 // already carries for an entity's last write, reported here about a moment in
@@ -39,7 +38,7 @@ let said = (b: Batch): Bundle[] =>
 
 /** The functions behind the tools ./vocab.json declares — read over this
  * server's own connection, which is why this export is a factory. */
-export let runs = (host: { sql: Driver }): Runs => {
+export let runs = (host: Bound): Runs => {
   let j = logFor(host)
   return {
     history: (call): Bundle[] => {

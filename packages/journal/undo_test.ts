@@ -62,6 +62,14 @@ test('an undo is itself in history, with its own actor', () => {
   ])
 })
 
+test('undo of an edit to text kept by its address restores the text', () => {
+  let f = fixture()
+  f.apply([{ entity: { eid: 'p1' }, page: { text: 'one' } }])
+  f.apply([{ entity: { eid: 'p1' }, page: { text: 'two' } }])
+  f.back(2)
+  assertEquals(f.page('p1')?.text, 'one')
+})
+
 test('undoing an undo is a redo', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' } }])
