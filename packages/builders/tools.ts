@@ -112,7 +112,11 @@ export let build = async (
   // A new build was written under an alias; its key names it now.
   let values = result.plans.map((p) => buildOf(p.builder, p.match, p.variant))
   let found = await held(graph, BUILD_OF, values)
-  return values.map((v, i) => found.get(v) ?? result.plans[i].build)
+  return values.map((v) => {
+    let owner = found.get(v)
+    if (!owner) throw new CallError('refused', `build_of key ${v} has no owner`)
+    return owner
+  })
 }
 
 export let runs = (

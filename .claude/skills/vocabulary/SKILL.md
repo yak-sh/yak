@@ -122,9 +122,15 @@ as a migration, the most expensive change there is (the `data-migration` skill).
   claiming it again lands on its owner (packages/key/README.md). An entity can
   hold any number of keys, beside an identity of its own. `identity` is in the
   core keyword table and `key` only in its package, which is why agents reach
-  for `identity` where a key belongs. @yaks/builders' `built{build, slot}` and
-  `build{builder, match, variant}` are still identities; T-61728 moves them to
-  keys.
+  for `identity` where a key belongs. @yaks/builders' minted builds are found
+  by `build_of{}` on `key{of, value}` (builder/variant/binding tuple), and
+  all outputs by `output_of{}` (build/slot). Read owners in batches with
+  `held` and fetch them by eid; `build{builder, match, variant}` and
+  `built{build, slot}` describe history, not an alternate lookup. Enumerate
+  only for history, stale builds or dropped links. Edge outputs also keep their
+  ends-and-relation identity. A missing key is not permission to reuse a row
+  with matching properties; migrate every store before integrating key-only
+  readers, rather than keeping an old-shape fallback.
 - **Reuse an outside system's id when it is already unique:** a Claude
   session's id is the session entity's eid, a commit's sha is the commit's.
   Matching the two then needs no lookup.

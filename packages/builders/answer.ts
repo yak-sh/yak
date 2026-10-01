@@ -22,7 +22,7 @@ import {
 import type { Vocab } from '@yaks/vocab'
 import { and, eq, present } from '@yaks/query'
 import { EDGE, edgeEid, link, relations, unlink } from '@yaks/edge'
-import { keyed, keyEid, unkeyed } from '@yaks/key'
+import { held, keyed, keyEid, unkeyed } from '@yaks/key'
 import { verify } from '@yaks/kernel'
 import { BUILD, BUILT, ids, OUTPUT_OF, outputOf } from './build.ts'
 
@@ -195,15 +195,25 @@ export let answer = async (
   if (!b || b.call != call.entity.eid) return []
   let args = comp(call, 'call')?.args as { binding?: Binding; key?: string }
   if (!args?.binding || args.key != b.key) return []
-  // What this build already made: an output in a slot is rewritten where it
-  // stands, and a slot new to it gets an entity of its own.
-  let made = await tx.read(`.${BUILT}.build=${source}&*`)
-  let at = new Map(
-    made.filter((row) => !row[EDGE]).map((row) => [
-      str(comp(row, BUILT)?.slot),
-      row.entity.eid,
-    ]),
+  // Only a nonedge slot's output_of key chooses its owner. Enumeration below
+  // is history for dropped links, never a second way to locate an output.
+  let slots = object(value) && Array.isArray(value.outputs)
+    ? value.outputs.flatMap((item) =>
+      object(item) && object(item.components) &&
+        item.components[EDGE] == null && typeof item.slot == 'string'
+        ? [item.slot]
+        : []
+    )
+    : []
+  let owners = await held(
+    tx,
+    OUTPUT_OF,
+    slots.map((slot) => outputOf(source, slot)),
   )
+  let at = new Map(slots.flatMap((slot) => {
+    let owner = owners.get(outputOf(source, slot))
+    return owner ? [[slot, owner] as const] : []
+  }))
   let place = (slot: string) => {
     if (!at.has(slot)) at.set(slot, crypto.randomUUID())
     return at.get(slot)!
@@ -212,6 +222,7 @@ export let answer = async (
   let eids = specs.map((s) => s.eid)
   let prior = await tx.get(eids)
   // The links an earlier answer of this build stated and this one does not.
+  let made = await tx.read(`.${BUILT}.build=${source}&*`)
   let dropped = made.filter((row) =>
     row[EDGE] && !eids.includes(row.entity.eid)
   )

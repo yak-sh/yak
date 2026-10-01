@@ -263,7 +263,8 @@ export let reconcile = async (
   if (!tool?.tool) throw new Error(`builder tool ${to} is missing`)
   let variant = o.variant ?? 'main'
   chosen ??= await selected(tx, builder, o.vocab)
-  let prior = await tx.read(
+  let partial = o.only != null || o.limit != null
+  let prior = partial ? [] : await tx.read(
     `.build.builder=${builder.entity.eid}&.build.variant=${
       encodeURIComponent(variant)
     }&*`,
@@ -272,14 +273,21 @@ export let reconcile = async (
   // The build each outer tuple already has. A new one is written under an
   // alias beside its key, so a reconciliation racing this one to the same
   // tuple resolves onto the build that committed first (@yaks/key).
-  let had = new Map(prior.map((b) => [str(comp(b, BUILD), 'match'), b]))
-  let partial = o.only != null || o.limit != null
+  let wanted = narrow(chosen, o.only, o.limit)
+  let values = wanted.map(({ binding }) =>
+    buildOf(builder.entity.eid, JSON.stringify(binding.entities), variant)
+  )
+  let owners = await held(tx, BUILD_OF, values)
+  let have = new Map(
+    (await tx.get([...new Set(owners.values())])).map((b) => [b.entity.eid, b]),
+  )
   let plans: Plan[] = []
   let writes: Bundle[] = [...dep]
-  for (let { binding, rows } of narrow(chosen, o.only, o.limit)) {
+  for (let { binding, rows } of wanted) {
     let entities = binding.entities
     let match = JSON.stringify(entities)
-    let build = had.get(match)?.entity.eid ?? `$build${plans.length}`
+    let build = owners.get(buildOf(builder.entity.eid, match, variant)) ??
+      `$build${plans.length}`
     let p: Plan = {
       builder: builder.entity.eid,
       build,
@@ -295,7 +303,7 @@ export let reconcile = async (
       using: { ...comp(builder, 'using'), ...o.using },
     }
     plans.push(p)
-    let before = comp(left.get(build), BUILD)
+    let before = comp(have.get(build), BUILD)
     left.delete(build)
     let same = str(before, 'key') == p.key
     if (same && before?.stale) {

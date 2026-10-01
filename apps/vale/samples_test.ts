@@ -2,7 +2,17 @@
 // its reviewed clips even if a builder has a candidate with the same name.
 import { test } from '@yaks/testing'
 import { assertEquals, assertStrictEquals } from '@std/assert'
-import { blendLoop, catalog, load, loaded, SAMPLES } from './samples.ts'
+import { shop } from '../../packages/builders/testing.ts'
+import vale from './vocab.json' with { type: 'json' }
+import {
+  blendLoop,
+  catalog,
+  load,
+  loaded,
+  type Row,
+  SAMPLES,
+  SOUNDS,
+} from './samples.ts'
 
 test('sound samples retry a missing blob and share a successful load', async () => {
   let doc = Object.getOwnPropertyDescriptor(globalThis, 'document')
@@ -86,4 +96,43 @@ test('an ambient overlap meets at neighboring source samples', () => {
   assertEquals(output.length, 6)
   assertEquals(output[0], 4)
   assertEquals(output[5], 5)
+})
+
+test('the sound query projects current main outputs through qualified references', async () => {
+  let { g, failed } = await shop({}, [{ $defs: { sfx: vale.$defs.sfx } }])
+  await g.apply([
+    { entity: { eid: 'sound' }, sfx: { name: 'contraction-audio' } },
+    {
+      entity: { eid: 'clip' },
+      artifact: { address: 'audio-blob', media_type: 'audio/mpeg', size: 3 },
+    },
+    ...['main', 'shadow', 'stale'].flatMap((variant) => [
+      {
+        entity: { eid: `${variant}-build` },
+        build: {
+          for: 'sound',
+          variant: variant == 'shadow' ? 'candidate' : 'main',
+          key: 'current',
+          stale: variant == 'stale',
+        },
+      },
+      {
+        entity: { eid: `${variant}-output` },
+        built: { build: `${variant}-build`, key: 'current', artifact: 'clip' },
+      },
+    ]),
+    {
+      entity: { eid: 'old-output' },
+      built: { build: 'main-build', key: 'previous', artifact: 'clip' },
+    },
+  ], { trusted: true })
+  let rows = await g.read(SOUNDS) as Row[]
+  assertEquals(rows.map((row) => row.entity.eid).toSorted(), [
+    'clip',
+    'main-build',
+    'main-output',
+    'sound',
+  ])
+  assertEquals(catalog(rows), { 'contraction-audio': 'audio-blob' })
+  assertEquals(failed, [])
 })

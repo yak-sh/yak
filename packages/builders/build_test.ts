@@ -15,7 +15,9 @@ import { CallError, toolEid } from '@yaks/tools'
 import { marksDoc } from '@yaks/kernel/vocab'
 import { ids, noon, shop } from './testing.ts'
 import {
+  BUILD_OF,
   buildFor,
+  buildOf,
   current,
   OUTPUT_OF,
   outputFor,
@@ -25,7 +27,7 @@ import {
 import { answer as answerWrites } from './answer.ts'
 import { key } from './key.ts'
 import { render } from './model.ts'
-import { runs } from './tools.ts'
+import { build, runs } from './tools.ts'
 import { builderDoc } from './vocab.ts'
 import { loadTools } from '@yaks/graph/tools'
 
@@ -172,6 +174,135 @@ let currentOf = async (g: Graph, s: string) =>
     (await mainOf(g, s))!,
     comp(await one(g, await outOf(g, await runOf(g, [s]))), 'built')!,
   )
+
+test('reconciliation reuses keyed owners outside build history in a batch', async () => {
+  let { g, vocab } = await shop({}, [], [code()])
+  await g.apply([
+    source('a'),
+    source('b'),
+    { ...builder(), staged: {} },
+    ...['a', 'b'].flatMap((s): Bundle[] => [
+      {
+        entity: { eid: `owner-${s}` },
+        build: { builder: ids.builder, match: '["old"]', variant: 'old' },
+        doc: { body: 'Keep the owner' },
+      },
+      keyed(BUILD_OF, `owner-${s}`, buildOf(ids.builder, JSON.stringify([s]))),
+      {
+        entity: { eid: `history-${s}` },
+        build: {
+          builder: ids.builder,
+          match: JSON.stringify([s]),
+          variant: 'main',
+        },
+      },
+    ]),
+  ])
+  let builds = await build(g, vocab, { builder: ids.builder }, null)
+  assertEquals(builds.toSorted(), ['owner-a', 'owner-b'])
+  for (let s of ['a', 'b']) {
+    assertEquals(await runOf(g, [s]), `owner-${s}`)
+    assertEquals(
+      comp(await one(g, `owner-${s}`), 'build')?.match,
+      JSON.stringify([s]),
+    )
+    assertEquals(
+      comp(await one(g, `owner-${s}`), 'doc')?.body,
+      'Keep the owner',
+    )
+    assertEquals((await calls(g, `owner-${s}`)).length, 1)
+    assertEquals(comp(await one(g, `history-${s}`), 'build')?.stale, true)
+    assertEquals((await calls(g, `history-${s}`)).length, 0)
+  }
+  assertEquals(await build(g, vocab, { builder: ids.builder }, null), builds)
+  assertEquals((await calls(g, 'owner-a')).length, 1)
+  assertEquals((await calls(g, 'owner-b')).length, 1)
+})
+
+test('a matching build without its key is history, not a reuse fallback', async () => {
+  let { g, vocab } = await shop({}, [], [code()])
+  await g.apply([
+    source('a'),
+    { ...builder(), staged: {} },
+    {
+      entity: { eid: 'history' },
+      build: { builder: ids.builder, match: '["a"]', variant: 'main' },
+    },
+  ])
+  let [made] = await build(g, vocab, { builder: ids.builder }, null)
+  assertNotEquals(made, 'history')
+  assertEquals(await runOf(g, ['a']), made)
+  assertEquals(comp(await one(g, 'history'), 'build')?.stale, true)
+  assertEquals((await calls(g, 'history')).length, 0)
+})
+
+test('an answer reuses keyed slot owners outside output history and resolves siblings', async () => {
+  let tool = answering([
+    { slot: 'main', inputs: ['a'], components: { doc: { body: 'Made' } } },
+    {
+      slot: 'note',
+      inputs: [],
+      components: { note: { parent: '$main', text: 'Sibling' } },
+    },
+  ])
+  let { g, vocab, runner, failed } = await shop({}, [notes], [tool])
+  await g.apply([source('a'), { ...builder(), staged: {} }])
+  let [run] = await build(g, vocab, { builder: ids.builder }, null)
+  await g.apply(
+    ['main', 'note'].flatMap((slot): Bundle[] => [
+      {
+        entity: { eid: `owner-${slot}` },
+        doc: { title: 'Keep me' },
+        built: {
+          build: 'older-build',
+          slot: 'old',
+          call: 'older-call',
+          key: 'before',
+        },
+      },
+      keyed(OUTPUT_OF, `owner-${slot}`, outputOf(run, slot)),
+      {
+        entity: { eid: `history-${slot}` },
+        built: { build: run, slot, key: 'old' },
+        doc: { body: 'History' },
+      },
+    ]),
+    { trusted: true },
+  )
+  await drive(g, runner, run)
+  assertEquals(failed, [])
+  assertEquals(await outOf(g, run), 'owner-main')
+  assertEquals(await outOf(g, run, 'note'), 'owner-note')
+  assertEquals(comp(await one(g, 'owner-main'), 'doc'), {
+    title: 'Keep me',
+    body: 'Made',
+  })
+  assertEquals(comp(await one(g, 'owner-note'), 'note')?.parent, 'owner-main')
+  for (let slot of ['main', 'note']) {
+    assertEquals(comp(await one(g, `owner-${slot}`), 'built')?.build, run)
+    assertEquals(comp(await one(g, `history-${slot}`), 'doc')?.body, 'History')
+    assertEquals(comp(await one(g, `history-${slot}`), 'built')?.key, 'old')
+  }
+  assertEquals((await rows(g, '.edge.from=owner-main&.cites')).length, 1)
+})
+
+test('a matching output without its key is retained history, not a slot fallback', async () => {
+  let { g, vocab, runner, failed } = await shop({}, [], [code()])
+  await g.apply([source('a'), { ...builder(), staged: {} }])
+  let [run] = await build(g, vocab, { builder: ids.builder }, null)
+  await g.apply([{
+    entity: { eid: 'history' },
+    built: { build: run, slot: 'main', key: 'old' },
+    doc: { body: 'History' },
+  }], { trusted: true })
+  await drive(g, runner, run)
+  assertEquals(failed, [])
+  let made = await outOf(g, run)
+  assertNotEquals(made, 'history')
+  assertEquals(comp(await one(g, made), 'doc')?.body, 'Made')
+  assertEquals(comp(await one(g, 'history'), 'doc')?.body, 'History')
+  assertEquals(comp(await one(g, 'history'), 'built')?.key, 'old')
+})
 
 test('outer query bindings make independent builds and tool calls', async () => {
   let { g, runner } = await shop({}, [], [code()])
