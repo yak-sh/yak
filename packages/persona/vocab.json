@@ -113,6 +113,88 @@
       "changed": ["persona.home", "doc.title", "doc.body"],
       "removed": ["persona", "contains", "reads"],
       "description": "write the persona files again: a persona, its home, a doc a persona says, or a link carrying or reading one moved"
+    },
+    "skill": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "before": [
+        "doc",
+        "content"
+      ],
+      "properties": {
+        "invoke": {
+          "type": "string",
+          "enum": [
+            "user",
+            "model",
+            "both"
+          ],
+          "description": "who may load the skill; both when omitted"
+        },
+        "arguments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "the argument names the skill accepts"
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "the path globs the skill applies under"
+        },
+        "fork": {
+          "type": "boolean",
+          "description": "run in a context of its own"
+        },
+        "options": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "other Claude frontmatter options, preserved without interpreting or executing them"
+        }
+      },
+      "description": "instructions loaded on demand: doc.title is the name and folder, doc.body the description an agent decides by, content.body the instructions. A references edge points to its repository file; names do not determine its identity"
+    },
+    "skill_files": {
+      "effect": true,
+      "created": [
+        "skill",
+        "file",
+        "content",
+        "edge",
+        "repository",
+        "worktree",
+        "references"
+      ],
+      "changed": [
+        "skill",
+        "doc.title",
+        "doc.body",
+        "content.body",
+        "file",
+        "repository",
+        "worktree",
+        "edge"
+      ],
+      "removed": [
+        "skill",
+        "file",
+        "content",
+        "references",
+        "edge",
+        "doc",
+        "repository",
+        "worktree"
+      ],
+      "description": "reconcile repository skills after graph changes when skills mirroring is enabled; exports land through a dedicated worktree"
+    },
+    "skill_watch": {
+      "effect": true,
+      "start": true,
+      "description": "reconcile repository skill files at startup and while the filesystem changes, only when skills mirroring is enabled"
     }
   }
 }

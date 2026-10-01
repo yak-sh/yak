@@ -135,6 +135,64 @@ It is off by default because the paths come from the graph, not the database: a
 host opened on a copy of a graph would write into the checkouts the original
 names.
 
+## Repository skills
+
+Skills are reusable instructions, not tools. A skill has a stable minted id and
+`skill{invoke, arguments, paths, fork, options}` beside `doc{title, body}` and
+`content{body}`. The title is its folder name, the document body is its short
+description, and the content body is the instructions. Unknown Claude YAML
+fields survive in `options`; parsing does not run or expand them.
+
+A `references` edge from the skill to a separate `file{path, repository}`
+locates its `.claude/skills/<title>/SKILL.md`. The locator uses the existing
+file identity and has no content. Companion files use `file` plus `content`.
+Renaming a title keeps the skill id, moves its companions, and changes the
+locator only after the repository change lands. An unlinked skill remains
+readable in the graph but cannot be exported into a repository.
+
+```ts ignore
+import { loadSkill, skillsAt } from '@yaks/persona/skills'
+import { syncSkills } from '@yaks/persona/skill-mirror'
+
+let catalogue = await skillsAt(graph, sessionCheckout)
+let skill = await loadSkill(graph, 'testing', sessionCheckout)
+let report = await syncSkills(
+  graph,
+  primaryCheckout,
+  '/tmp/skills-baseline.json',
+)
+```
+
+`repoSkills(graph, repository?)` reads graph skills; `skillLocation` follows the
+locator, and `skillFiles(graph, repository)` renders repository-relative text.
+`skillsAt` and `loadSkill` overlay a session checkout's actual files read-only:
+local edits, additions and deletions are visible without importing them. A
+missing or ambiguous title is refused. Instructions are loaded by title only
+when needed; discovery needs just titles and descriptions.
+
+`syncSkills` uses [@yaks/mirror](../mirror) to reconcile tracked text files in
+the primary checkout with graph values. Imports are atomic, attributed and
+guarded against concurrent graph changes. Concurrent file/graph changes are
+conflicts, not last-writer wins. Exports use a clean dedicated linked worktree,
+commit only skills and land before updating the agreement. A dirty primary
+checkout blocks pending exports. A git-common lock serializes manual and
+automatic passes.
+
+The host enables this independently of persona files:
+
+```json
+{ "use": "@yaks/persona", "with": { "skills": true } }
+```
+
+The awaited `skill_files` effect reconciles graph edits; `skill_watch` polls the
+files continuously with a singleton watcher lease. Per-root agreements are
+stored under `mirror/skills` beside the configured database. Without a database
+(or with `:memory:`), effects retain agreement bytes in instance memory and
+materialize an owned temporary directory for each awaited handler batch. A live
+watcher keeps that directory until shutdown or failure; cleanup is awaited. They
+never fall back to another host's database environment. This option is off by
+default because repository paths come from the graph.
+
 ## What an agent is owed
 
 The persona files reach only the checkout a person keeps. An agent's own
@@ -174,12 +232,14 @@ specialists, each saying its home's common persona beside the checkout's
 
 ## Exports
 
-| subpath     | what it provides                                                                    |
-| ----------- | ----------------------------------------------------------------------------------- |
-| `.`         | `wear`, `voice`, `owed`, `common`, the component names, and the vocabulary document |
-| `./vocab`   | the component declarations alone                                                    |
-| `./tools`   | `runs(host)` — `persona_read` returns the Markdown, `persona_sync` writes           |
-| `./effects` | `effects(host, {files})` — keeps the persona files current                          |
+| subpath          | what it provides                                                                    |
+| ---------------- | ----------------------------------------------------------------------------------- |
+| `.`              | `wear`, `voice`, `owed`, `common`, the component names, and the vocabulary document |
+| `./vocab`        | the component declarations alone                                                    |
+| `./tools`        | `runs(host)` — `persona_read` returns the Markdown, `persona_sync` writes           |
+| `./effects`      | `effects(host, {files, skills})` — independently enables persona files and skills   |
+| `./skills`       | Graph skill reads and read-only checkout views                                      |
+| `./skill-mirror` | `syncSkills`, `skillRoots` — bidirectional landed repository mirror                 |
 
 The two edge relations are borrowed rather than invented here: `contains` is
 [@yaks/task](../task)'s and `reads` is [@yaks/kernel](../kernel)'s. A relation

@@ -18,3 +18,13 @@ test('one that did handles what the vocabulary declares', () => {
   assert(handled.length)
   assert(handled.every((n) => declared.includes(n)), `${handled}`)
 })
+
+test('skills are an independent opt-in', () => {
+  let skills = Object.keys(effects(host, { skills: true }))
+  assertEquals(skills.sort(), ['skill_files', 'skill_watch'])
+  assertEquals(Object.keys(effects(host, { files: true })), ['persona_files'])
+  assertEquals(
+    Object.keys(effects(host, { files: true, skills: true })).sort(),
+    ['persona_files', 'skill_files', 'skill_watch'],
+  )
+})

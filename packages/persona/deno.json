@@ -5,12 +5,15 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./tools": "./tools.ts",
-    "./effects": "./effects.ts"
+    "./effects": "./effects.ts",
+    "./skills": "./skills.ts",
+    "./skill-mirror": "./skill-mirror.ts"
   },
   "license": "Apache-2.0",
   "description": "Who is acting and what they are responsible for — the people a graph knows, the personas an agent runs with, the roles those personas are assigned to, and a persona rendered as one markdown document.",
   "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "@std/yaml": "jsr:@std/yaml@^1.2.0"
   },
   "publish": {
     "exclude": [

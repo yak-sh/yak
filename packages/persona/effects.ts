@@ -19,28 +19,26 @@
 // host shuts down.
 
 import type { Handlers } from '@yaks/effects'
-import type { Eid, Graph } from '@yaks/graph'
+import type { Eid } from '@yaks/graph'
 import { EDGE } from '@yaks/edge'
 import { DOC } from '@yaks/doc'
 import { sync } from '@yaks/mirror'
 import { personaMirror, remembered } from './files.ts'
+import { skillEffects, type SkillHost } from './skill-effects.ts'
 
 /** What this plugin reads from its entry in a config. */
-export type Options = { files?: boolean }
+export type Options = { files?: boolean; skills?: boolean }
 
 /** How long a burst of writes settles before one pass answers all of it. */
 export let AFTER = 1_000
 
 /** The code that keeps the persona files current, when `files` is on. */
 export let effects = (
-  host: {
-    graph: Graph
-    config?: { db?: string }
-    stopping?: AbortSignal
-  },
+  host: SkillHost,
   options: Options = {},
 ): Handlers => {
-  if (!options.files) return {}
+  let skills = skillEffects(host, options)
+  if (!options.files) return skills
   let db = host.config?.db ?? Deno.env.get('DB_PATH')
   let said = new Set<Eid>()
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -69,6 +67,7 @@ export let effects = (
   let about = (...eids: unknown[]) =>
     (!said.size || eids.some((e) => said.has(String(e)))) && soon()
   return {
+    ...skills,
     // A doc or a new link counts when it touches what the last pass said; a
     // persona moving, or a link carrying or reading one going — gone before
     // anybody can read which ends it had — always does.

@@ -28,6 +28,9 @@ export let PERSONA = 'persona'
 /** The component that marks a standing job. */
 export let ROLE = 'role'
 
+/** The component that marks instructions loaded on demand. */
+export let SKILL = 'skill'
+
 /**
  * The persona vocabulary, loaded beside {@link https://jsr.io/@yaks/doc |
  * @yaks/doc}'s and your own: `loadVocab([docDoc, personaDoc, ...mine])`. Every

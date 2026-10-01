@@ -31,6 +31,21 @@ let doc: VocabDoc = {
     },
     contains: { component: true, type: 'object', edge: true },
     reads: { component: true, type: 'object', edge: true },
+    references: { component: true, type: 'object', edge: true },
+    content: {
+      component: true,
+      type: 'object',
+      properties: { body: { type: 'string' } },
+    },
+    file: {
+      component: true,
+      type: 'object',
+      identity: ['path', 'repository'],
+      properties: {
+        path: { type: 'string' },
+        repository: { type: 'string', ref: 'entity', death: 'keep' },
+      },
+    },
     memory: { component: true, type: 'object', kind: true, prefix: 'M' },
     proposed: { component: true, type: 'object' },
     decided: {
