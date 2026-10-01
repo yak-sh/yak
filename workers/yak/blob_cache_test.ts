@@ -10,6 +10,7 @@ import { state } from './testing.ts'
 import { doorOf } from './door.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { appVocab } from './vocab.ts'
+import { appStore } from './directory.ts'
 import { ADA, ADA_OWNS, as, platform, seeded, visit } from './serving-probe.ts'
 
 test('private app blobs keep the cache behind authorization', async () => {
@@ -142,4 +143,42 @@ test('an anonymous blob read revives a removed immutable representation', async 
   let live = await (await store(`/inspect?eid=${rep}`, {}, KERNEL)).json()
   assertEquals(live.identity.tombstoned, false)
   assertEquals(live.identity.tables.includes('representation'), true)
+})
+
+test('a dropped representation write never redirects to an absent file', async () => {
+  using scenario = platform()
+  let { env } = scenario
+  let { space, app } = await seeded(env, 'open')
+  let graph = metaOf(appStore(env.STORE, space, app, env))
+  let bytes = new Uint8Array([73, 68, 51, 4, 0, 0, 0, 0, 0, 0, 1, 2, 3])
+  let file = await apps.filed(
+    env,
+    space,
+    app,
+    graph,
+    bytes,
+    'audio/mpeg',
+    'song.mp3',
+  )
+  await graph.apply(file.bundles.filter((b) => !b.representation), KERNEL)
+  let ns = env.STORE
+  let get = ns.get.bind(ns)
+  ns.get = (id) => {
+    let stub = get(id)
+    return {
+      fetch: async (req) => {
+        if (
+          new URL(req.url).pathname == '/apply' &&
+          (await req.clone().text()).includes('representation')
+        ) {
+          return Response.json([])
+        }
+        return stub.fetch(req)
+      },
+    }
+  }
+  let result = await apps.fetch(visit(`/cookbook/api/blob/${file.sha}`), env)
+  assertEquals(result.status, 503)
+  assertEquals(result.headers.get('location'), null)
+  assertEquals(await graph.query('.representation'), [])
 })

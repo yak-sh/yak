@@ -1101,15 +1101,28 @@ let gave = async (
           })
         }
       }
-      await graph.apply(changes, KERNEL)
+      let applied = await graph.apply(changes, KERNEL)
+      if (
+        !applied.some((b) =>
+          b.entity.eid == rep.eid && b.representation &&
+          represents(rep.eid, b.representation as typeof rep.row)
+        )
+      ) {
+        throw new Error(`blob representation write was not applied: ${rep.eid}`)
+      }
       return rep
     }
     let rep
     try {
-      rep = await current()
+      try {
+        rep = await current()
+      } catch (e) {
+        if (!(e instanceof Stale)) throw e
+        rep = await current()
+      }
     } catch (e) {
-      if (!(e instanceof Stale)) throw e
-      rep = await current()
+      caught(e, { request: 'GET /api/blob', space: space.slug, app: app.slug })
+      return json(503, 'blob_unavailable')
     }
     if (!rep) return json(404, 'no_such_file')
     let to = new URL(req.url)
