@@ -976,6 +976,91 @@ let router = async (
   }
 }
 
+test('worker HTML carries its reporter without changing its page or headers', async () => {
+  let csp = "default-src 'self'; script-src 'self'"
+  for (
+    let html of [
+      '<!doctype html><head><title>Menu</title></head><body>menu</body>',
+      '<body>menu</body>',
+      'menu',
+    ]
+  ) {
+    using k = await router(() =>
+      new Response(
+        new ReadableStream({
+          start(c) {
+            c.enqueue(new TextEncoder().encode(html))
+            c.close()
+          },
+        }),
+        {
+          status: 201,
+          statusText: 'Created menu',
+          headers: {
+            'content-type': 'text/html; charset=utf-8',
+            'content-security-policy': csp,
+            'cache-control': 'no-store',
+            'x-menu': 'today',
+          },
+        },
+      ), ['/garden/*'])
+    // Its own slug, the home mount and the home router all serve worker HTML.
+    for (
+      let [path, at] of [
+        ['/cookbook/menu', '/'],
+        ['/menu', '/'],
+        ['/garden/print', '/'],
+      ]
+    ) {
+      let page = await k.at(path)
+      assertEquals(page.status, 201)
+      assertEquals(page.statusText, 'Created menu')
+      assertEquals(page.headers.get('content-security-policy'), csp)
+      assertEquals(page.headers.get('cache-control'), 'no-store')
+      assertEquals(page.headers.get('x-menu'), 'today')
+      assertStringIncludes(
+        page.headers.get('reporting-endpoints')!,
+        `${at}api/report`,
+      )
+      let body = await page.text()
+      assertEquals(body.split(`src="${at}api/report.js"`).length - 1, 1)
+      assertEquals(body.replace(/<script[^>]*><\/script>/g, ''), html)
+    }
+    // A non-home app keeps its slug prefix instead of the home mount.
+    await stamp(k.env, {
+      entities: [{ entity: { eid: k.app.eid }, home: null }],
+    })
+    let page = await k.at('/cookbook/menu')
+    let body = await page.text()
+    assertEquals(body.split('src="/cookbook/api/report.js"').length - 1, 1)
+    assertEquals(body.replace(/<script[^>]*><\/script>/g, ''), html)
+  }
+})
+
+test('worker non-HTML and bodyless answers are not rewritten', async () => {
+  for (
+    let [body, status, type] of [
+      ['{"menu":true}', 202, 'application/json'],
+      ['menu', 200, 'text/plain'],
+      [null, 304, 'text/html'],
+      [null, 200, 'text/html'],
+    ] as const
+  ) {
+    using k = await router(() =>
+      new Response(body, {
+        status,
+        headers: { 'content-type': type, 'x-menu': 'today' },
+      }), ['/garden/*'])
+    for (let path of ['/cookbook/menu', '/menu', '/garden/print']) {
+      let page = await k.at(path)
+      assertEquals(page.status, status)
+      assertEquals(page.headers.get('content-type'), type)
+      assertEquals(page.headers.get('x-menu'), 'today')
+      assertEquals(await page.text(), body ?? '')
+    }
+  }
+})
+
 test('monthly visit quota stops all app serving before dispatch or files', async () => {
   for (let tier of ['free', 'plus'] as const) {
     let calls = 0

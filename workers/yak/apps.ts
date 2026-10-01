@@ -2255,7 +2255,14 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
         res: early.page,
         at: seen(space, early.app),
       })
-      let res = reporting(early.page, req, '/')
+      let page = early.page
+      if (
+        page.body &&
+        page.headers.get('content-type')?.startsWith('text/html')
+      ) {
+        page = reported('/', page)
+      }
+      let res = reporting(page, req, '/')
       return sandboxed(early.app) ? walled(res) : res
     }
   }
@@ -2343,6 +2350,14 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   // The worker passed, and the files are not this visitor's to see.
   if (!own && !file) {
     return who.person ? nothingHere(env) : redirect(signInAt(req.url, env), 303)
+  }
+  // File pages already pass through woven(). Worker pages use the same
+  // reporter, without buffering or changing their navigation and asset URLs.
+  if (
+    own?.body &&
+    own.headers.get('content-type')?.startsWith('text/html')
+  ) {
+    own = reported(at, own)
   }
   let page = own ?? await file!
   // Rung 4, and it is last rather than fourth in the code because rungs 3 and
