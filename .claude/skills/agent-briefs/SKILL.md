@@ -2,15 +2,16 @@
 name: agent-briefs
 description: >
   Handing work to another agent in ~/code/tasks and taking it back: writing the
-  brief for a fresh subagent, a fork or a managed spawn, relaying something Jeff
-  just said to an agent already running, stopping one whose task Jeff reframed,
-  and checking a report before telling Jeff. Use it whenever you are about to
-  call the Agent tool, SendMessage a running agent, run `yak session spawn`, or
-  file a task an agent will be pointed at, even for a one-line fix, and whenever
-  an agent's report or task-notification arrives. Not for doing the work
-  yourself, and not for a design Jeff will read (that is `design-docs`); what
-  every agent in an area needs is a skill (`skill-writing`), not a longer
-  brief.
+  brief for a fresh subagent, a fork, a managed spawn or a native session,
+  relaying something Jeff just said to an agent already running, stopping one
+  whose task Jeff reframed, and checking a report before telling Jeff. Use it
+  whenever you are about to call the Agent tool, SendMessage a running agent,
+  run `yak session spawn` or `yak session new`, or file a task an agent will be
+  pointed at, even for a one-line fix, and whenever an agent's report or
+  task-notification arrives. Not for doing the work yourself, and not for a
+  design Jeff will read (that is `design-docs`); starting, watching and waiting
+  on a native session is `native-sessions`; what every agent in an area needs
+  is a skill (`skill-writing`), not a longer brief.
 ---
 
 # Briefing an agent
@@ -22,7 +23,7 @@ the brief: today's behavior written as the requirement, a full run asked for
 where a pilot was meant, Jeff's words paraphrased until they meant something
 else. Treat the brief as the part of the work you do yourself.
 
-## Fork or fresh agent
+## Which agent
 
 - **Fork**: inherits your whole history, so its brief is the ask in a line. It
   costs nothing while your context is short and gets heavy once it is long; a
@@ -30,6 +31,9 @@ else. Treat the brief as the part of the work you do yourself.
 - **Fresh agent** (the Agent tool with `isolation: "worktree"`, coding on the
   model M-37542 names): starts from the persona alone and needs the full brief
   below.
+- **Native session** (`yak session new`, our own harness, on a GPT model):
+  the full brief below, plus what `native-sessions` adds; that skill also
+  covers saying more to one, waiting for its work and stopping it.
 - **Neither**: knowing and recording stay with the locus (M-33551). Read the
   code, file the task, save the memory, then delegate the work.
 

@@ -1010,8 +1010,8 @@ An existing model entity ID (EID) can also be passed to `fork` or `spawn`. The
 parent's provider stays while it serves that model; otherwise the one provider
 this harness can reach that serves it answers, and a model two reachable
 providers serve needs the provider named in `using`. The command
-`harness new --provider openrouter --model vendor/model 'message'` creates a new
-session under that provider; authorize beforehand in the TUI or with
+`yak session new 'message' --provider openrouter --model vendor/model` creates a
+new session under that provider; authorize beforehand in the TUI or with
 `yak auth openrouter`. Embedding applications can use
 `local({provider: 'openrouter', name: 'vendor/model'})`; configuration is
 recorded in the graph. Tests can inject `providers: {openrouter: fakeModel}`.
