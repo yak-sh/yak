@@ -1,8 +1,9 @@
 // The command reads the serving process, not a freshly composed graph.
 
-import type { CliCommand } from '@yaks/cli/host'
+import type { Ctx } from '@yaks/cli'
+import type { CliCommand, Host } from '@yaks/cli/host'
 import type { Capture } from './capture.ts'
-import type { Snapshot } from './snapshot.ts'
+import { GROUPS, type Snapshot } from './snapshot.ts'
 
 let anatomy = (value: Snapshot): string => {
   let { selection, coverage } = value
@@ -13,8 +14,9 @@ let anatomy = (value: Snapshot): string => {
         `${selection.total} total${selection.truncated ? ' (truncated)' : ''}`,
     )
   }
-  for (let [group, parts] of Object.entries(value.anatomy)) {
-    if (group == 'edges' || !Array.isArray(parts) || !parts.length) continue
+  for (let group of GROUPS) {
+    let parts = value.anatomy[group]
+    if (!parts.length) continue
     lines.push(
       `${group}: ${parts.length}; ` +
         `declared ${parts.filter((p) => p.declared).length}, ` +
@@ -57,7 +59,7 @@ let activity = (value: Capture): string => {
 }
 
 /** The CLI door into the same served snapshots used by the page. */
-export let commands: CliCommand[] = [{
+export let commands = [{
   name: 'visualize',
   description:
     'Read the serving platform’s anatomy or bounded causal activity. ' +
@@ -130,7 +132,11 @@ export let commands: CliCommand[] = [{
     },
   },
   options: { positional: ['what'] },
-  run: async (args, host, context) => {
+  run: async (
+    args: Record<string, unknown>,
+    host: Pick<Host, 'config'>,
+    context: Pick<Ctx, 'host' | 'json' | 'state' | 'via' | 'out' | 'note'>,
+  ) => {
     try {
       let what = args.what ?? 'anatomy'
       if (what != 'anatomy' && what != 'activity') {
@@ -205,4 +211,4 @@ export let commands: CliCommand[] = [{
       return 1
     }
   },
-}]
+}] satisfies CliCommand[]

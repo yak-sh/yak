@@ -2,7 +2,6 @@
 // and the serving process's HTTP replies, never a second composed graph.
 
 import type { Anatomy, AnatomyTool } from '@yaks/code/anatomy'
-import type { Ctx } from '@yaks/cli'
 import type { Host as CliHost } from '@yaks/cli/host'
 import type { Bundle, Graph } from '@yaks/graph'
 import { equal, ok, test } from '@yaks/testing'
@@ -74,7 +73,10 @@ let asked = (args: Record<string, unknown> = {}): Bundle => ({
 let other = {} as Graph
 let decoded = <T>(rows: Bundle[]): T => {
   equal(rows.length, 1)
-  return JSON.parse(rows[0].content!.body as string)
+  let content = rows[0].content
+  if (!content || typeof content != 'object' || !('body' in content) ||
+    typeof content.body != 'string') throw new Error('expected a JSON reply')
+  return JSON.parse(content.body)
 }
 
 test('anatomy tool uses shared selection, node counts and included-only edges', async () => {
@@ -201,7 +203,7 @@ let terminal = async (
     json?: boolean
     host?: string
     via?: string
-    config?: Record<string, unknown>
+    config?: CliHost['config']
     tokens?: Record<string, string>
     token?: string
     status?: number
@@ -235,13 +237,13 @@ let terminal = async (
     via: opts.via,
     out: (s: string) => out.push(s),
     note: (s: string) => notes.push(s),
-  } as Ctx
+  }
   let host = {
     config: opts.config ?? {},
     get graph() {
       throw new Error('the CLI must not read a newly composed graph')
     },
-  } as CliHost
+  }
   try {
     let code = await commands[0].run(args, host, context)
     return { code, sent, keys, out, notes }
