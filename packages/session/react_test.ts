@@ -830,17 +830,105 @@ test('compaction restores admitted persona, skills and claimed tasks verbatim', 
     },
     { kind: 'instruction', text: 'Offline recovery remains.' },
   ])
-  // Releasing the claim removes its spec; nothing stale was stored in a
-  // summary entry or a second task snapshot.
+  // A release appends a correction without changing the frozen prefix.
   await g.apply([{ entity: { eid: 'held-task' }, claim: null }])
   let released = scripted([says('released', 'Ready.')], false)
   deps.model = released.model
   await appendEntry(g, ids.s, 'Continue without that task.')
   assertEquals(await rest(g, ids.s, deps), 'settled')
   assertEquals(
-    JSON.stringify(released.asked[0].items).includes('Claimed task'),
-    false,
+    JSON.stringify(released.asked[0].items).includes('Released task held-task'),
+    true,
   )
+})
+
+test('task edits and claim changes append context without rewriting the checkpoint prefix', async () => {
+  for (let kept of [false, true]) {
+    let g = world()
+    await windowed(g, 100_000)
+    await g.apply([
+      {
+        entity: { eid: 'held' },
+        task: {},
+        doc: { title: 'Draft', body: 'Old spec.' },
+        claim: { session: ids.s },
+      },
+      {
+        entity: { eid: 'summary' },
+        entry: { session: ids.s },
+        notice: {},
+        checkpoint: {
+          through: 'e1',
+          seq: 1,
+          tasks: { held: { title: 'Draft', body: 'Old spec.' } },
+        },
+        content: { body: 'History summary.' },
+      },
+    ])
+    await appendEntry(g, ids.s, 'Continue.')
+    let worker = scripted([
+      says('one', 'Ready.'),
+      says('two', 'Ready.'),
+      says('three', 'Ready.'),
+      says('four', 'Ready.'),
+    ], kept)
+    let summarizer = scripted([], false)
+    let deps = {
+      model: worker.model,
+      tools: [],
+      mint,
+      compactModel: { model: summarizer.model, name: 'fake-1' },
+    }
+    assertEquals(await rest(g, ids.s, deps), 'settled')
+    let first = JSON.stringify(worker.asked[0].items)
+    await g.apply([{ entity: { eid: 'held' }, doc: { body: 'New spec.' } }])
+    await appendEntry(g, ids.s, 'Apply my changes.')
+    assertEquals(await rest(g, ids.s, deps), 'settled')
+    assertEquals(
+      JSON.stringify(worker.asked[1].items).includes('New spec.'),
+      true,
+    )
+    if (kept) {
+      assertEquals(worker.asked[1].anchor, 'one')
+      assertEquals(
+        JSON.stringify(worker.asked[1].items).includes('Old spec.'),
+        false,
+      )
+    } else {
+      assertEquals(JSON.stringify(worker.asked[1].items.slice(0, 3)), first)
+    }
+    await g.apply([
+      { entity: { eid: 'held' }, claim: null },
+      {
+        entity: { eid: 'new-held' },
+        task: {},
+        doc: { body: 'New claim.' },
+        claim: { session: ids.s },
+      },
+    ])
+    await appendEntry(g, ids.s, 'Move on.')
+    assertEquals(await rest(g, ids.s, deps), 'settled')
+    let sent = JSON.stringify(worker.asked[2].items)
+    assertEquals(sent.includes('Released task held'), true)
+    assertEquals(sent.includes('New claim.'), true)
+    if (!kept) {
+      assertEquals(JSON.stringify(worker.asked[2].items.slice(0, 3)), first)
+    }
+    let entries = await transcript(g, ids.s)
+    let mark = entries.find((b) => b.entity.eid == 'summary')!
+    assertEquals((mark.checkpoint as Comp).tasks, {
+      held: { title: 'Draft', body: 'Old spec.' },
+    })
+    assertEquals(entries.filter((b) => b.task_context).length, 2)
+    // Restarting the runner/another ordinary turn doesn't append duplicate notices.
+    await appendEntry(g, ids.s, 'Continue again.')
+    assertEquals(await rest(g, ids.s, { ...deps }), 'settled')
+    assertEquals(
+      (await transcript(g, ids.s)).filter((b) => b.task_context).length,
+      2,
+    )
+    assertEquals(summarizer.asked.length, 0)
+  }
 })
 
 test('ordinary turns keep the admitted prefix byte-stable without a summary call', async () => {

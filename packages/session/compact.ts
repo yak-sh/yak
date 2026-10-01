@@ -40,7 +40,7 @@ export let retained = (entries: Bundle[]): Bundle[] =>
   entries.filter((b) => b.prompt)
 
 export let history = (entries: Bundle[]): Bundle[] =>
-  entries.filter((b) => !b.prompt)
+  entries.filter((b) => !b.prompt && !b.task_context)
 
 export let context = (entries: Bundle[]): Bundle[] => {
   let mark = entries.filter((b) => b.checkpoint).at(-1)
@@ -51,7 +51,7 @@ export let context = (entries: Bundle[]): Bundle[] => {
   if (!Number.isSafeInteger(seq) || seq < 1) {
     throw new Error('Checkpoint has no boundary: ' + through)
   }
-  let rest = history(entries).filter((b) => b != mark)
+  let rest = entries.filter((b) => !b.prompt && b != mark)
   let from = rest.findIndex((b) => seqOf(b) > seq)
   return [
     ...retained(entries),

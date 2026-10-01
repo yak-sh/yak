@@ -89,6 +89,14 @@ import {
   tokens,
   tooLong,
 } from './compact.ts'
+import {
+  admitted,
+  changes,
+  items as taskItems,
+  snapshot,
+  spec,
+  type Tasks,
+} from './task-context.ts'
 import type { Attempt } from '@yaks/effects'
 
 /** The caller, supplied by react rather than by model arguments, and a
@@ -256,6 +264,7 @@ export let project = (
     anchor?: Eid
     results?: Map<Eid, string>
     media?: Map<Eid, Item[]>
+    history?: boolean
   } = {},
 ): Item[] => {
   let out: Item[] = []
@@ -263,7 +272,15 @@ export let project = (
   for (let b of window) {
     let kind = kindOf(b)
     let c = comp(b, CALL)
-    if (b.prompt || b.checkpoint) {
+    if (b.prompt || b.checkpoint || b.task_context) {
+      if (b.checkpoint && !opts.history) {
+        out.push(
+          ...taskItems(
+            (b.checkpoint as Comp).tasks as Tasks ??
+              {},
+          ),
+        )
+      }
       out.push({ kind: 'instruction', text: textOf(b) })
     } else if (kind == 'input') out.push({ kind: 'user', text: textOf(b) })
     else if (kind == 'output') out.push({ kind: 'assistant', text: textOf(b) })
@@ -420,7 +437,7 @@ let compaction = async (o: {
         ),
       )
       : undefined
-    let sizes = project(o.entries, lines, o.tools, { results })
+    let sizes = project(o.entries, lines, o.tools, { results, history: true })
       .map((i) => tokens(JSON.stringify(i).length))
     return { sizes, results }
   }
@@ -451,22 +468,24 @@ let tasksOf = async (g: Graph, session: Eid): Promise<Bundle[]> =>
   (await g.read(`.task .claim.session=${session}&*`))
     .toSorted((a, b) => a.entity.eid.localeCompare(b.entity.eid))
 
-let specOf = (b: Bundle): string =>
-  [comp(b, 'doc')?.title, comp(b, 'doc')?.body]
-    .filter((v) => v != null).join('\n\n')
-
-let taskItems = (tasks: Bundle[]): Item[] =>
-  tasks.map((b) => ({
-    kind: 'instruction',
-    text: 'Claimed task ' + b.entity.eid + '\n' + specOf(b),
-  }))
-
 // A task-spawn's original input is its specification, not conversational
 // progress. Leave it out of the summary too; the held row is restored above.
-let summaryLines = (chunk: Bundle[], tasks: Bundle[]): Bundle[] =>
-  history(chunk).filter((b) =>
-    kindOf(b) != 'input' || !tasks.some((t) => textOf(b) == specOf(t))
+let summaryLines = (
+  entries: Bundle[],
+  chunk: Bundle[],
+  tasks: Bundle[],
+): Bundle[] => {
+  let specs = [
+    snapshot(tasks),
+    ...entries.flatMap((b) => {
+      let held = comp(b, 'checkpoint')?.tasks ?? comp(b, 'task_context')?.tasks
+      return held ? [held as Tasks] : []
+    }),
+  ].flatMap((held) => Object.values(held).map(spec))
+  return history(chunk).filter((b) =>
+    kindOf(b) != 'input' || !specs.includes(textOf(b))
   )
+}
 
 // Both proactive cuts and a refused request use the same summary door.
 let summarize = async (
@@ -495,8 +514,9 @@ let summarize = async (
     items: [{
       kind: 'user',
       text: JSON.stringify(
-        project(entries, summaryLines(chunk, tasks), tools, {
+        project(entries, summaryLines(entries, chunk, tasks), tools, {
           results,
+          history: true,
         }),
       ),
     }],
@@ -824,6 +844,16 @@ export let react = async (
     )
     : recent(said, using?.window)
   let held = checkpoint ? await tasksOf(g, session) : []
+  if (checkpoint) {
+    let tasks = snapshot(held)
+    let changed = changes(admitted(entries, checkpoint), tasks)
+    if (changed) {
+      return append([line({
+        task_context: { checkpoint: checkpoint.entity.eid, tasks },
+        notice: {},
+      }, changed)])
+    }
+  }
   let effort = using?.effort ?? served?.effort
   const results = deps.resultText
     ? new Map(
@@ -873,12 +903,6 @@ export let react = async (
     anchor: anchorId,
     conversation: session,
   }
-  if (!anchorId && checkpoint) {
-    let at = req.items.findIndex((i) =>
-      i.kind == 'instruction' && i.text == textOf(checkpoint!)
-    )
-    req.items.splice(at < 0 ? 0 : at, 0, ...taskItems(held))
-  }
   // Compact once the next request would fill `compactAt` of the model's
   // window: the oldest lines become one summary checkpoint, and the newest
   // that fit half the limit are kept, so the steps after it have room to grow
@@ -890,7 +914,7 @@ export let react = async (
     ? {
       g,
       entries,
-      said: history(said),
+      said: said.filter((b) => !b.prompt),
       tools: toolEntities,
       window: await windowOf(g, served, using?.provider),
       reads: await windowOf(
@@ -906,7 +930,7 @@ export let react = async (
           JSON.stringify(req.tools).length +
           JSON.stringify(project(entries, retained(entries), toolEntities))
             .length +
-          JSON.stringify(taskItems(held)).length,
+          JSON.stringify(taskItems(snapshot(held))).length,
       ),
       share: deps.compactAt ?? SHARE,
       resultText: deps.resultText,
@@ -917,7 +941,7 @@ export let react = async (
     : undefined
   if (summarizing && !checkpoint) {
     held = await tasksOf(g, session)
-    cut!.fixed += tokens(JSON.stringify(taskItems(held)).length)
+    cut!.fixed += tokens(JSON.stringify(taskItems(snapshot(held))).length)
     summarizing = await compaction(cut!)
   }
   if (summarizing) {
@@ -940,7 +964,11 @@ export let react = async (
       return append([
         line(
           {
-            checkpoint: { through: through.entity.eid, seq: seqOf(through) },
+            checkpoint: {
+              through: through.entity.eid,
+              seq: seqOf(through),
+              tasks: snapshot(held),
+            },
             notice: {},
           },
           summary,
@@ -1067,7 +1095,7 @@ export let react = async (
         // not an optimistic configured window. Never touch the fixed prefix.
         if (!checkpoint) {
           held = await tasksOf(g, session)
-          cut.fixed += tokens(JSON.stringify(taskItems(held)).length)
+          cut.fixed += tokens(JSON.stringify(taskItems(snapshot(held))).length)
         }
         let smaller = enforced ?? tokens(JSON.stringify(req.items).length) / 2
         let forced = await compaction({
@@ -1099,6 +1127,7 @@ export let react = async (
                   through: through.entity.eid,
                   seq: seqOf(through),
                   overflow: ask.entity.eid,
+                  tasks: snapshot(held),
                 },
                 notice: {},
               }, summary),

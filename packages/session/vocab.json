@@ -88,9 +88,53 @@
           "ref": "ask",
           "death": "keep",
           "description": "the request refused for length that forced this checkpoint; only one compacted retry follows it"
+        },
+        "tasks": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "body": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "description": "claimed task specifications frozen at this boundary, keyed by entity id"
         }
       },
       "description": "everything through this entry is settled: a compaction boundary"
+    },
+    "task_context": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "checkpoint": {
+          "type": "string",
+          "ref": "checkpoint",
+          "death": "keep"
+        },
+        "tasks": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "body": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "description": "claimed task specifications frozen at this boundary, keyed by entity id"
+        }
+      },
+      "description": "an admitted change to claimed task specifications, appended as passive context after its checkpoint; content carries the exact changes"
     },
     "claim": {
       "component": true,
