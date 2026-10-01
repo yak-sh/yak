@@ -73,7 +73,13 @@ things:
 - **The skills by path.** It cannot load them, so name each SKILL.md its work
   needs and tell it to read them first.
 - **Nobody is at its prompt.** When only the owner can decide something, it says so
-  on the task and stops there, rather than guessing or waiting.
+  on the task and stops there, rather than guessing or waiting. Only spending,
+  an irreversible act or a preference he alone holds is his. A session told it
+  may stop for the owner reaches for that door at the first hard thing: a
+  failing check or a bug it found becomes "owner decision required", and every
+  session waiting on it stalls. Say in the brief that a bug it meets is its to
+  fix, and that a check it was given is a check, not a gate the owner must
+  waive.
 - **How its children land**, when it may delegate. The harness gives it
   `spawn`, `fork` and `wait` tools (packages/harness/README.md, "Forks and
   subagents"). `spawn({task})` cuts each child a worktree of its own from the
