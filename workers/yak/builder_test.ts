@@ -206,15 +206,12 @@ test('an account out of budget is told so before a model is asked', async () => 
   assertEquals(model.asked.length, 0)
 })
 
-// Nothing a build spends goes uncounted: a model the catalogue has no price
-// for is never asked (models.ts).
-test('a model with no price is never asked', async () => {
+test('a provider-reported cost needs no model price', async () => {
   let { env, space } = await seeded()
-  let model = { ...fake([{ text: 'never asked' }]), price: undefined }
+  let model = { ...fake([{ text: 'hello', cost: 0.012 }]), price: undefined }
   let out = await build(env, owner, space, asked('hi'), { model })
-
-  assertEquals(out.refused, unpriced('fake'))
-  assertEquals(model.asked.length, 0)
+  assertEquals(out.refused, undefined)
+  assertEquals(model.asked.length, 1)
 })
 
 test('an anonymous caller is refused before a tool runs', async () => {

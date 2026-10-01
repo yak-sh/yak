@@ -64,7 +64,8 @@ import {
   over,
   pooled,
 } from './meter.ts'
-import { guess, priceOf } from './models.ts'
+import { guess } from './models.ts'
+import { modelInfo } from '@yaks/workers-ai'
 import { asset } from './preauth.ts'
 import { asleep, released, spending } from './sandbox.ts'
 import type { Who } from './session.ts'
@@ -115,7 +116,7 @@ export type Ask = {
 }
 
 /** What a model answered: its words, the tools it wants run, what it spent. */
-export type Answer = { text: string; calls: Call[]; usage: Usage }
+export type Answer = { text: string; calls: Call[]; usage: Usage; cost?: number }
 
 /** A model, whichever provider it is behind, and its price in the catalogue
  * (models.ts). One with no price is never asked: what it spent could not be
@@ -329,6 +330,7 @@ let items = (said: Line[]): Item[] =>
   ).filter((i) => i.kind != 'assistant' || i.text)
 
 let answer = (reply: Reply): Answer => ({
+  cost: reply.cost,
   text: reply.items.flatMap((i) => i.kind == 'assistant' ? [i.text] : [])
     .join('\n'),
   calls: reply.items.flatMap((i) =>
@@ -347,7 +349,6 @@ let answer = (reply: Reply): Answer => ({
  */
 let binding = (env: Env, id: string): Model => ({
   id,
-  price: priceOf(id),
   ask: async ({ system, conversation, said, fns, tokens }) => {
     if (!env.AI) throw new Error(NO_AI)
     let model = workersAi(env.AI)
@@ -388,7 +389,6 @@ let gateway = async (env: Env): Promise<string | null> => {
  */
 export let openai = (env: Env, id: string): Model => ({
   id,
-  price: priceOf(id),
   ask: async ({ system, conversation, said, fns, tokens }) => {
     let at = await gateway(env)
     let key = env.OPENAI_API_KEY
@@ -497,12 +497,13 @@ export let fake = (script: Partial<Answer>[]) => {
   let at = 0
   return {
     id: 'fake',
-    price: priceOf(FREE),
+    price: { input: 0, output: 0 },
     asked,
     ask: (a: Ask) => {
       asked.push(a)
       let one = script[at++] ?? {}
       return Promise.resolve({
+        cost: one.cost,
         text: one.text ?? '',
         calls: one.calls ?? [],
         usage: one.usage ?? { input: 0, output: 0, cached: 0 },
@@ -596,7 +597,6 @@ export let build = async (
   let ctx: Ctx = { env, dir, person: who.person, spend }
   let model = opts.model ?? modelOf(env, opts.id ?? idOf(env, space))
   price = model.price
-  if (!price) return await end(unpriced(model.id))
   let tools = roster(ctx)
   let by = new Map(tools.map((t) => [t.fn.name, t.run]))
   let fns = tools.map((t) => t.fn)
@@ -631,12 +631,13 @@ export let build = async (
       )
     }
     rounds++
+    if (answer.cost == null && !price) price = (await modelInfo(model.id)).price
     // Estimates charge the budget, never masquerade as reported usage.
-    dollars += weigh(price, {
+    dollars += answer.cost ?? (price ? weigh(price, {
       input_tokens: answer.usage.input ?? guess({ system, lines, fns }),
       output_tokens: answer.usage.output ?? guess(answer.text),
       cached_tokens: answer.usage.cached,
-    })
+    }) : (() => { throw new Error(unpriced(model.id)) })())
     usage.input = sum(usage.input, answer.usage.input)
     usage.output = sum(usage.output, answer.usage.output)
     usage.cached = sum(usage.cached, answer.usage.cached)

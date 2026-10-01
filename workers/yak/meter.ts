@@ -39,7 +39,8 @@ import {
   said,
   usageOf,
 } from '@yaks/workers-ai'
-import { CATALOGUE, guess, priceOf } from './models.ts'
+import { guess } from './models.ts'
+import { modelInfo } from '@yaks/workers-ai'
 import { defect } from './sentry.ts'
 
 /** The hourly reading: `fired` on this tagged wake runs the existing meter. */
@@ -782,7 +783,7 @@ export let countedRealtime = async (
  * its address yet — the way an unset analytics token meters nothing.
  */
 export let metering = (
-  bind: { STORE?: Namespace } & Host,
+  bind: { STORE?: Namespace; MODEL_FETCH?: typeof fetch } & Host,
   from: () => string | null,
   sender: Sender,
 ): Sender => ({
@@ -824,18 +825,10 @@ export let metering = (
  * can buy more.
  */
 export let metered = (
-  bind: { AI?: Binding; STORE?: Namespace } & Host,
+  bind: { AI?: Binding; STORE?: Namespace; MODEL_FETCH?: typeof fetch } & Host,
   spaceOf: (dir: Directory) => Promise<Space | null>,
 ): Binding => ({
   run: async (model, input, options) => {
-    let price = priceOf(model)
-    if (!price?.offered) {
-      throw new ModelError(
-        'model',
-        `${model} is not a model an app here can ask — it can ask ` +
-          CATALOGUE.filter((r) => r.offered).map((r) => r.name).join(', '),
-      )
-    }
     let ns = bind.STORE
     let dir = ns ? directoryOf(ns) : null
     let space = dir ? await spaceOf(dir) : null
@@ -855,14 +848,15 @@ export let metered = (
       }
       throw said
     })
+    let price = (await modelInfo(model, bind.MODEL_FETCH)).price
     let n = usageOf(answer)
     let cost = music(model)
       ? (await pricedAudio(model, input, said(answer))).cost
-      : weigh(price, {
+      : price ? weigh(price, {
         input_tokens: n.input_tokens ?? guess(input),
         output_tokens: n.output_tokens ?? guess(answer),
         cached_tokens: n.cached_tokens,
-      })
+      }) : (() => { throw new Error(`No price reported for ${model}`) })()
     await countedSpend({ STORE: ns }, space, cost, 0)
     return answer
   },

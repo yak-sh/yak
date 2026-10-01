@@ -578,6 +578,33 @@
         }
       },
       "description": "A child has stepped aside while it waits for its own children. Removing the mark queues it again."
+    },
+    "pending": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it began awaiting confirmation"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "who requested confirmation"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "what the write was made through — the session or client it came in on"
+        }
+      },
+      "description": "Awaiting its first successful answer or confirmation."
     }
   }
 }

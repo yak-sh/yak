@@ -46,6 +46,9 @@
 import { after } from '@yaks/fp'
 import {
   dead,
+  type Bundle,
+  type Comp,
+  type Hook,
   type Eid,
   identityEid,
   minted,
@@ -54,6 +57,7 @@ import {
   type Tx,
 } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
+import { edgeEid } from '@yaks/edge'
 import type { Artifact } from '@yaks/blob'
 import { modelDoc } from './vocab.ts'
 
@@ -103,6 +107,7 @@ export let models = (): Plugin => ({
   name: '@yaks/model',
   vocab: [modelDoc],
   address: addressed,
+  hooks: { admit: requesting },
 })
 
 /** One line of a conversation as a model sees it. */
@@ -251,6 +256,7 @@ export type Mark = Record<string, Record<string, unknown>>
  * A plain function is a model that stores nothing.
  */
 export type Model = ((req: Request) => Promise<Reply>) & {
+  list?: () => Promise<Listed[]>
   mark?: (reply: Reply) => Mark
   anchor?: (comps: Record<string, unknown>) => string | undefined
   vocab?: VocabDoc
@@ -286,4 +292,54 @@ export class ModelError extends Error {
     this.retry = retry
     this.response = response
   }
+}
+
+/** What a provider says about one of its models, in graph vocabulary. */
+export type Listed = {
+  name: string
+  label?: string
+  context?: number
+  modalities?: string[]
+  price?: Price
+}
+
+/** A requested name exists before dispatch, but is not offered until answered. */
+export let requesting: Hook = (bundles, tx) => {
+  let names = new Map<string, string>()
+  let out: Bundle[] = bundles.map((b) => {
+    let using = b.using as Comp | undefined
+    let name = using?.model
+    if (typeof name != 'string' || minted(name) || name.startsWith('$')) return b
+    let eid = identityEid(MODEL, [name])
+    names.set(eid, name)
+    return { ...b, using: { ...using, model: eid } }
+  })
+  for (let b of out) {
+    let name = (b.model as Comp | undefined)?.name
+    if (typeof name == 'string') names.set(identityEid(MODEL, [name]), name)
+  }
+  return after(tx.get([...names.keys()], [MODEL, 'pending']), (rows) => {
+    let held = new Map(rows.map((b) => [b.entity.eid, b]))
+    return [...out, ...[...names].flatMap(([eid, name]): Bundle[] =>
+      held.get(eid)?.model ? [] : [{
+        entity: { eid }, model: { name, offered: false }, pending: {},
+      }])]
+  })
+}
+
+/** A provider's answer confirms a requested model; old asks keep their row. */
+export let confirmed = (
+  provider: string,
+  name: string,
+  listing?: Listed,
+): Bundle[] => {
+  let eid = identityEid(MODEL, [name])
+  let { price, ...model } = listing ?? { name }
+  return [{
+    entity: { eid }, model: { ...model, name, offered: true }, pending: null,
+    ...price ? { price } : {},
+  }, {
+    entity: { eid: edgeEid(provider, 'serves', eid) },
+    edge: { from: provider, to: eid }, serves: { name },
+  }]
 }

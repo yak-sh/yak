@@ -15,11 +15,12 @@ import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { accounted, BUDGET, monthOf } from './meter.ts'
-import { catalogued, priceOf } from './models.ts'
+import { identityEid } from '@yaks/graph'
 import { type Model, ModelError, weigh } from '@yaks/model'
 import { workersAi } from '@yaks/workers-ai'
 import { artifactStore, memoryBlobs } from '@yaks/blob'
 import { assertRejects } from '@std/assert'
+
 import { parseTools } from '@yaks/tools/declared'
 import type { VocabDoc } from '@yaks/vocab'
 import { embeds, platform } from './testing.ts'
@@ -61,7 +62,9 @@ let vale = async (
     },
     gateway: () => ({ getUrl: () => Promise.resolve('') }),
   })
-  let p = platform('a probe secret', { AI, ...env } as Partial<Env>)
+  let p = platform('a probe secret', { AI, MODEL_FETCH: async () =>
+    new Response('Context Window | 100,000 tokens\nUnit Pricing | $0.15 per M input tokens, $0.5 per M output tokens, $0.03 per M cached input tokens'),
+    ...env } as Partial<Env>)
   let dir = directory({ fetch: (r) => dirPart.fetch(r, p.env) }, true)
   await dir.apply({
     entities: [
@@ -310,7 +313,9 @@ let asking = (
     entity: { eid: crypto.randomUUID() },
     entry: { session },
     content: { body: 'a stranger comes to the forge' },
-    using: { model },
+    using: { model, provider: identityEid('provider', [
+      model.startsWith('@cf/') || model == JEV ? 'workers-ai' : 'openrouter',
+    ]) },
   },
 ]
 
@@ -336,7 +341,7 @@ test('a page asks its store for a turn and the answer lands beside it', async ()
   assertEquals((counted.usage as Comp).cached_tokens, 800)
   assertEquals(v.asked.map((a) => a.model), [FLASH])
   // The space paid for it, at the model's price.
-  let cost = weigh(priceOf(FLASH)!, {
+  let cost = weigh({ input: 0.15, cached: 0.03, output: 0.5 }, {
     input_tokens: 1_000,
     output_tokens: 100,
     cached_tokens: 800,
@@ -484,11 +489,11 @@ test('./api/ai/run answers what the model said, and the space pays for it', asyn
     said: { response: 'Welcome.', usage },
   })
   assertEquals(v.asked, [{ model: FLASH, input, options: undefined }])
-  let cost = weigh(priceOf(FLASH)!, { input_tokens: 2_000, output_tokens: 50 })
+  let cost = weigh({ input: 0.15, cached: 0.03, output: 0.5 }, { input_tokens: 2_000, output_tokens: 50 })
   assertAlmostEquals((await v.spent()).meter!.models, cost)
-  // A model the catalogue does not offer is refused before anything is spent.
-  assert((await v.run({ model: '@cf/zai-org/glm-5.3', input })).status >= 400)
-  assertEquals(v.asked.length, 1)
+  // A release not previously requested goes straight to its provider.
+  assertEquals((await v.run({ model: '@cf/example/new-release', input })).status, 200)
+  assertEquals(v.asked.length, 2)
 })
 
 test('./api/ai/run answers a visitor only where the app opens its models', async () => {
@@ -512,26 +517,6 @@ test('./api/ai/run answers a visitor only where the app opens its models', async
   assertEquals((await read.run(body, BOB)).status, 403)
 })
 
-test('connected OpenRouter text candidates are planted as server offers', () => {
-  let rows = catalogued()
-  for (
-    let [name, input, output] of [
-      ['openai/gpt-4.1-nano', 0.1, 0.4],
-      ['openai/gpt-4.1-mini', 0.4, 1.6],
-    ] as const
-  ) {
-    let model = rows.find((r) => (r.model as Comp)?.name == name)!
-    assert(model)
-    assertEquals(model.price && (model.price as Comp).input, input)
-    assertEquals(model.price && (model.price as Comp).output, output)
-    let offer = rows.find((r) => (r.serves as Comp)?.name == name)!
-    assertEquals((offer.edge as Comp).to, model.entity.eid)
-    let provider = rows.find((r) => r.entity.eid == (offer.edge as Comp).from)!
-    assertEquals((provider.provider as Comp).name, 'openrouter')
-    assertEquals((model.model as Comp).modalities, ['text'])
-  }
-})
-
 test('./api/ai/run carries affinity through its metered binding', async () => {
   let p = await vale(() => ({
     response: 'ok',
@@ -553,7 +538,7 @@ test('./api/ai/run carries affinity through its metered binding', async () => {
   })
   await p.run({ model: FLASH, input: {} })
   assertEquals(p.asked.at(-1)?.options, undefined)
-  let cost = weigh(priceOf(FLASH)!, {
+  let cost = weigh({ input: 0.15, cached: 0.03, output: 0.5 }, {
     input_tokens: 3000,
     output_tokens: 30,
     cached_tokens: 2700,

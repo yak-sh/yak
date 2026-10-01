@@ -1,3 +1,5 @@
+import { listing, type Listing } from './list.ts'
+export { listed, listing, modelInfo, pagePrice } from './list.ts'
 /**
  * @yaks/workers-ai implements @yaks/model's {@link Model} over Cloudflare
  * Workers AI, through the `AI` binding a Worker is given. The binding is the
@@ -42,6 +44,7 @@ export { audioPrice, audioSeconds, music, pricedAudio } from './audio.ts'
 
 /** The part of the `AI` binding this package calls. */
 export type Binding = {
+  models?: (params?: { per_page?: number; page?: number }) => Promise<Listing[]>
   run(
     model: string,
     input: unknown,
@@ -293,7 +296,7 @@ export let workersAi = (
   ai: Binding,
   options: { media?: MediaStore; fetch?: typeof fetch } = {},
 ): Model =>
-async (req) => {
+Object.assign(async (req: Request) => {
   req.signal?.throwIfAborted()
   if (music(req.model) && !options.media) {
     throw new ModelError('media_storage', 'Music requires artifact storage')
@@ -359,4 +362,4 @@ async (req) => {
     ],
     ...counted,
   }
-}
+}, { list: () => listing(ai) })

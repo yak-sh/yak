@@ -40,6 +40,7 @@ export type Inbound = {
 }
 
 export type Env = {
+  MODEL_FETCH?: typeof fetch
   APEX?: string
   STORE: Namespace
   // The directory's store answered in-process, set only by the object that IS

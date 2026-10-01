@@ -1,24 +1,6 @@
-// The models an account may spend its budget on, each with its price:
-// the platform's catalogue (D-40545). A model with no row here has no price,
-// so nothing asks it: a call is weighed in dollars by its row (@yaks/model
-// `weigh`) and counted on the space's meter (meter.ts `models`), and a call
-// that could not be weighed could not be counted.
-//
-// Prices are Workers AI's own, in dollars per million tokens, from each
-// model's page at developers.cloudflare.com/workers-ai/models. A row an app
-// may ask is `offered`; the rest are the builder's alone (builder.ts).
-//
-// It is also how an app asks one, as a plugin (plugin.ts): the catalogue's
-// offered rows planted in every app's store as @yaks/model's provider, model
-// (with its `price`, so each ask records its `cost`) and serves rows, and that
-// store's own transcript runner (@yaks/session),
-// lent providers through one resolver, with Workers AI on the metered binding
-// (meter.ts `metered`) and OpenRouter through a connected integration, and the
-// commands the app marks `"model": true` as its tools. A page writes an entry
-// wearing `using{model}` and the answer lands beside it.
+// Providers lent to each app store; model offerings come from successful answers.
 import type { Bundle, Comp, Eid } from '@yaks/graph'
-import { identityEid, token } from '@yaks/graph'
-import { edgeEid } from '@yaks/edge'
+import { identityEid } from '@yaks/graph'
 import {
   answers,
   providerResolver,
@@ -29,6 +11,7 @@ import {
 import { worded } from '@yaks/tools'
 import { edits, mode, writes } from '@yaks/member'
 import { type Model, ModelError, type Price } from '@yaks/model'
+
 import type { VocabDoc } from '@yaks/vocab'
 import { music, said, workersAi } from '@yaks/workers-ai'
 import { artifactStore, objectBlobs } from '@yaks/blob'
@@ -50,167 +33,22 @@ import {
   type Stored,
 } from './plugin.ts'
 
-/** One model in the catalogue, by the name Workers AI runs it under. */
-export type Row = Price & { name: string; label: string; offered: boolean }
-
-export let CATALOGUE: Row[] = [
-  {
-    name: '@cf/zai-org/glm-5.3-flash',
-    label: 'GLM 5.3 Flash',
-    input: 0.15,
-    cached: 0.03,
-    output: 0.5,
-    offered: true,
-  },
-  {
-    name: 'typesafe/jev',
-    label: 'Jev',
-    input: 0.042,
-    output: 0,
-    offered: true,
-  },
-  {
-    name: '@cf/baai/bge-base-en-v1.5',
-    label: 'BGE base (embeddings)',
-    input: 0.067,
-    output: 0,
-    offered: true,
-  },
-  {
-    name: '@cf/zai-org/glm-5.3',
-    label: 'GLM 5.3',
-    input: 1.4,
-    cached: 0.26,
-    output: 4.4,
-    offered: false,
-  },
-]
-
-let priced = new Map(CATALOGUE.map((r) => [r.name, r]))
-
-/** A model's row, or undefined for one the catalogue does not price. */
-export let priceOf = (name: string): Row | undefined => priced.get(name)
-
-/** A count a model left unsaid, estimated from what was sent or said: four
- * characters to a token, the usual rule for English. An embedding model
- * reports no usage at all, and its text is what it is billed on. */
 export let guess = (sent: unknown) =>
   Math.ceil(JSON.stringify(sent ?? '').length / 4)
 
-// ---- in an app's store ------------------------------------------------------
-
-/** The provider every model in the catalogue is served by, as its row names
- * it and the runner is lent it. */
 export let PROVIDER = 'workers-ai'
 let OPENROUTER = 'openrouter'
-let SPEECH = 'bytedance-seed/seed-audio-1-0'
 
-// The integration pays OpenRouter itself; text prices also weigh unreported
-// request costs without introducing a separate platform allowance.
-let integrated = [{
-  provider: OPENROUTER,
-  name: SPEECH,
-  label: 'Seed Audio 1.0',
-  modalities: ['audio'],
-  speech: true,
-}, {
-  provider: OPENROUTER,
-  name: 'openai/gpt-4.1-nano',
-  label: 'GPT-4.1 Nano',
-  modalities: ['text'],
-  speech: false,
-  price: { input: 0.1, output: 0.4, cached: 0.025 },
-}, {
-  provider: OPENROUTER,
-  name: 'openai/gpt-4.1-mini',
-  label: 'GPT-4.1 Mini',
-  modalities: ['text'],
-  speech: false,
-  price: { input: 0.4, output: 1.6, cached: 0.1 },
-}]
-
-let modelEid = (name: string): Eid => identityEid('model', [name])
-
-/** The catalogue as an app's store holds it: the provider, each model an app
- * may ask, and the edge saying the one serves the other under the model's own
- * name, which is what a request is sent with. */
-export let catalogued = (): Bundle[] => [
-  ...[PROVIDER, OPENROUTER].map((name): Bundle => ({
-    entity: { eid: identityEid('provider', [name]) },
-    provider: { name, transport: 'http', offered: true },
-  })),
-  ...[
-    ...CATALOGUE.filter((r) => r.offered).map((r) => ({
-      provider: PROVIDER,
-      name: r.name,
-      label: r.label,
-      price: {
-        input: r.input,
-        output: r.output,
-        ...r.cached == null ? {} : { cached: r.cached },
-      },
-    })),
-    ...integrated,
-  ].flatMap((r): Bundle[] => [
-    {
-      entity: { eid: modelEid(r.name) },
-      model: {
-        name: r.name,
-        label: r.label,
-        offered: true,
-        ...'modalities' in r ? { modalities: r.modalities } : {},
-      },
-      ...'price' in r ? { price: r.price } : {},
-    },
-    {
-      entity: {
-        eid: edgeEid(
-          identityEid('provider', [r.provider]),
-          'serves',
-          modelEid(r.name),
-        ),
-      },
-      edge: {
-        from: identityEid('provider', [r.provider]),
-        to: modelEid(r.name),
-      },
-      serves: { name: r.name },
-    },
-  ]),
-]
-
-// Whether a store's row already says everything a wanted one does: each value
-// the same by the graph's own measure (`token`), so a list read back is the
-// list it was written as, not a different array.
-let says = (want: Bundle, held: Bundle | undefined) =>
-  !!held && Object.entries(want).every(([name, comp]) =>
-    name == 'entity' ||
-    Object.entries(comp as Comp).every(([prop, v]) =>
-      token((held[name] as Comp | undefined)?.[prop]) == token(v)
-    )
-  )
-
-/**
- * The catalogue brought up to date in an app's store, as a change: a row that
- * is missing or moved is written again, and a model the catalogue has stopped
- * offering stays (a past ask still names it) and is marked not offered.
- */
+// Only providers are installed. Model rows stay as history and are never retired
+// because a newer release or a code list stopped naming them.
 export let planting: Install = async (read, at) => {
   if (at.meta || !at.app) return []
-  let want = catalogued()
-  let held = new Map(
-    (await read(`.entity.eid=${want.map((b) => b.entity.eid).join(',')}&*`))
-      .map((b) => [b.entity.eid, b]),
-  )
-  let names = new Set(want.map((b) => (b.model as Comp | undefined)?.name))
-  let retired = (await read('.model&*')).filter((b) => {
-    let m = b.model as Comp
-    return m.offered && !names.has(m.name)
-  })
-  return [
-    ...want.filter((b) => !says(b, held.get(b.entity.eid))),
-    ...retired.map((b) => ({ entity: b.entity, model: { offered: false } })),
-  ]
+  let held = await read('.provider&*')
+  return [PROVIDER, OPENROUTER, 'openai'].flatMap((name): Bundle[] =>
+    held.some((b) => (b.provider as Comp).name == name) ? [] : [{
+      entity: { eid: identityEid('provider', [name]) },
+      provider: { name, transport: 'http', offered: true },
+    }])
 }
 
 // Who asked for the turn a tool call belongs to: the author of the newest
@@ -277,7 +115,6 @@ let mediaStore = (at: Stored): import('@yaks/openai').MediaStore => ({
 // integration's declared hosts. Nothing here reads or records the key.
 let connected = (at: Stored) =>
   openrouter({
-    speech: integrated.filter((r) => r.speech).map((r) => r.name),
     key: async () => {
       if (!at.env.STORE) {
         throw new ModelError('unbound', 'This app has no integration store')
@@ -316,6 +153,7 @@ let connected = (at: Stored) =>
  */
 let asking: Effect = (on, at) => {
   if (at.meta || !at.app) return
+<<<<<<< HEAD
   let text = workersAi(metered(at.env, payer(at.app)))
   let audio = accounted(
     at.env,
@@ -329,6 +167,10 @@ let asking: Effect = (on, at) => {
     [PROVIDER]: served,
     [OPENROUTER]: accounted(at.env, payer(at.app), connected(at)),
   }
+=======
+  let served = workersAi(metered(at.env, payer(at.app)), { media: mediaStore(at) })
+  let lent = { [PROVIDER]: served, [OPENROUTER]: connected(at) }
+>>>>>>> 10d14b290 (Discover requested models from provider answers (T-63093, work in progress))
   let run = running(at.graph, {
     holder: at.app,
     model: served,
@@ -443,7 +285,7 @@ let run: Answer = async (
   }
 }
 
-/** Models, as a plugin of this Worker: the catalogue in every app's store,
+/** Models, as a plugin of this Worker: the providers in every app's store,
  * that store's runner, and the door a page or a worker asks one through. */
 export let modelsPlugin: Plugin = {
   name: 'models',

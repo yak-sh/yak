@@ -1,3 +1,4 @@
+import { listing } from './list.ts'
 import { generatedImages, type Images } from './images.ts'
 // Provider-neutral model items in and out; transport.ts alone owns the HTTP
 // calls to the Responses API.
@@ -205,6 +206,7 @@ export let items = (done: Frame[]): Item[] => {
  */
 export let responses = (opts: Options): Model =>
   Object.assign(ask(opts), {
+    list: async () => listing(await opts.credential(), opts.fetch),
     vocab: openaiDoc,
     mark: (reply: Reply) => ({ [OPENAI_COMP]: { response_id: reply.id } }),
     anchor: (comps: Record<string, unknown>) => {

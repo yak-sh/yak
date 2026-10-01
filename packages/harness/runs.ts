@@ -25,7 +25,6 @@ import type { Runs } from '@yaks/graph/tools'
 import type { Host } from '@yaks/cli/host'
 import { MODEL, PROVIDER } from '@yaks/model'
 import { parse } from '@yaks/query'
-import { CODEX, type Credential, type TransportCredential } from '@yaks/openai'
 import { instructionFiles } from '@yaks/context/host'
 import { transcript, usingBefore } from '@yaks/session'
 import { ASTRA, begin, seed, through } from './agent.ts'
@@ -77,60 +76,11 @@ let text = (call: Bundle, body: string): Bundle => ({
   output: { source: call.entity.eid },
 })
 
-// This is the Codex catalog protocol level the harness understands. The
-// backend filters its models by client_version: the package release number
-// would return an empty catalog even when the account can use those models.
 export let CODEX_CLIENT_VERSION = '0.157.1'
-
-/** A model a provider's catalog lists: its name, and its context window in
- * tokens where the catalog says it (the Codex catalog's `context_window`,
- * OpenRouter's `context_length`). */
-export type Listed = { name: string; context?: number }
-
-let listed = (name: unknown, context: unknown): Listed => {
-  if (typeof name != 'string') throw new Error('Invalid model catalog')
-  let n = Number(context)
-  return Number.isSafeInteger(n) && n > 0 ? { name, context: n } : { name }
-}
-
-/** The models the endpoint this credential serves lists. */
-export let modelCatalog = async (
-  cred: Credential,
-  fetcher: typeof fetch = fetch,
-  refresh?: (stale: TransportCredential) => Promise<Credential>,
-): Promise<Listed[]> => {
-  let url = new URL(cred.base.replace(/\/$/, '') + '/models')
-  if (cred.base == CODEX) {
-    url.searchParams.set('client_version', CODEX_CLIENT_VERSION)
-  }
-  let res = await fetcher(url, {
-    headers: {
-      authorization: `Bearer ${cred.token}`,
-      ...(cred.account ? { 'chatgpt-account-id': cred.account } : {}),
-    },
-  })
-  if (res.status == 401 && cred.base == CODEX && refresh) {
-    await res.body?.cancel()
-    return modelCatalog(await refresh(cred), fetcher)
-  }
-  if (!res.ok) {
-    await res.body?.cancel()
-    throw new Error(`${url.pathname} says ${res.status}`)
-  }
-  let body = await res.text()
-  let catalog = JSON.parse(body) as {
-    data?: { id: unknown; context_length?: unknown; context_window?: unknown }[]
-    models?: { slug: unknown; context_window?: unknown }[]
-  }
-  if (cred.base == CODEX) {
-    if (!Array.isArray(catalog.models)) throw new Error('Invalid model catalog')
-    return catalog.models.map((m) => listed(m.slug, m.context_window))
-  }
-  if (!Array.isArray(catalog.data)) throw new Error('Invalid model catalog')
-  return catalog.data.map((m) =>
-    listed(m.id, m.context_length ?? m.context_window)
-  )
-}
+export { listing as modelCatalog } from '@yaks/openai'
+import { listing as modelCatalog } from '@yaks/openai'
+import type { Listed } from '@yaks/model'
+export type { Listed } from '@yaks/model'
 
 /** Give each listed model's row the window its catalog says, where the row
  * has none of its own: a window set by hand stands. Answers each listed

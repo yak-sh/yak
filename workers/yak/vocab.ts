@@ -171,7 +171,7 @@ export let RELATIONS: string[] = relationDocs.flatMap((d) =>
  * opened, archived, quarantined or verified it — and an image's size. */
 let markDocs: VocabDoc[] = [
   marksDoc,
-  pick(kernelWords, ['image', 'quarantined', 'verified']),
+  pick(kernelWords, ['image', 'quarantined', 'verified', 'pending']),
 ]
 
 /**
@@ -439,7 +439,7 @@ let askingDoc: VocabDoc = sealed(
     'questions',
     'answer',
   ]),
-  ['provider', 'model', 'serves', 'price'],
+  ['provider', 'serves', 'price'],
 )
 
 // A hosted builder uses this store's session runner. Its `builder build` is

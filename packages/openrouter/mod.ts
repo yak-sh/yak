@@ -1,3 +1,5 @@
+import { listing } from './list.ts'
+export { listed, listing } from './list.ts'
 /** OpenRouter's stateless OpenResponses adapter. */
 import type { Model, Reply, Request } from '@yaks/model'
 import {
@@ -46,6 +48,7 @@ export let responses = (options: Options): Model => {
   return Object.assign(
     model,
     {
+      list: () => listing(options.fetch),
       vocab: openrouterDoc,
       mark: (reply: Reply) => ({ openrouter: { response_id: reply.id } }),
     },

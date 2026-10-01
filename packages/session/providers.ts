@@ -7,7 +7,7 @@
 // agent @yaks/spawn launches, or another host lent that provider.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
-import { type Model, ModelError } from '@yaks/model'
+import { confirmed, type Model, ModelError } from '@yaks/model'
 import type { Served } from './react.ts'
 
 /** One provider's offering of a model: who serves it, under what name, and
@@ -80,9 +80,16 @@ export let providerResolver = (
 ): (using: Comp | undefined, model: Bundle) => Promise<Served> =>
 async (using, model) => {
   let all = await offers(g, model.entity.eid, implementations)
+  if (using?.provider && !all.some((o) => o.provider == using.provider)) {
+    let [row] = await g.get([String(using.provider)])
+    let provider = String((row?.provider as Comp | undefined)?.name ?? '')
+    all.push({ provider: String(using.provider), model: model.entity.eid,
+      name: String((model.model as Comp).name), serve: implementations[provider] })
+  }
   let found = override && using?.provider == null
     ? {
       serve: override,
+      provider: all[0]?.provider ?? String(using?.provider ?? ''),
       name: all[0]?.name ?? String((model.model as Comp).name),
     }
     : offerFor(
@@ -93,7 +100,17 @@ async (using, model) => {
     let refuse: Model = () => Promise.reject(new ModelError('provider', found))
     return { model: refuse, name: String((model.model as Comp).name) }
   }
-  return { model: found.serve!, name: found.name }
+  let serve = found.serve!
+  let wrapped: Model = Object.assign(async (req: Parameters<Model>[0]) => {
+    let reply = await serve(req)
+    if (found.provider && (model.pending || !(model.model as Comp).offered)) {
+      let listing = (await serve.list?.())?.find((m) => m.name == found.name)
+      await g.apply(confirmed(found.provider, String((model.model as Comp).name),
+        listing), { trusted: true })
+    }
+    return reply
+  }, serve)
+  return { model: wrapped, name: found.name }
 }
 
 /** Whether this host answers a transcript asking with `using`: the provider

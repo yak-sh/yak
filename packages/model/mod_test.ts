@@ -4,7 +4,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, type Comp, graph, identityEid } from '@yaks/graph'
-import { kernelKeywords, spineDoc } from '@yaks/kernel'
+import { kernelDoc, kernelKeywords, spineDoc } from '@yaks/kernel'
 import { nameKeywords } from '@yaks/names'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
@@ -24,7 +24,7 @@ let using = {
 }
 
 let shelf = () => {
-  let vocab = loadVocab([spineDoc, modelDoc, using], [
+  let vocab = loadVocab([kernelDoc, modelDoc, using], [
     kernelKeywords,
     nameKeywords,
   ])
@@ -61,4 +61,14 @@ test('a name a provider and a model both hold is refused', () => {
   let g = shelf()
   g.apply([{ entity: { eid: '$m' }, model: { name: 'codex' } }])
   assertThrows(() => g.address(['codex']), Error, 'both a provider and a model')
+})
+
+test('a new name on a staged builder exists pending, never offered', () => {
+  let g = shelf()
+  g.apply([{ entity: { eid: E }, using: { provider: 'codex', model: 'new-release' } }])
+  let eid = identityEid('model', ['new-release'])
+  let [row] = g.get([eid]) as Bundle[]
+  assertEquals(row.model, { name: 'new-release', offered: false })
+  assertEquals(!!row.pending, true)
+  assertEquals(((g.get([E]) as Bundle[])[0].using as Comp).model, eid)
 })
