@@ -551,6 +551,50 @@ test('refitting removes only empty undeclared columns', () => {
   assertEquals(cols(d, 'product').includes('used'), true)
 })
 
+// A pet whose properties are `said`, of which `required` must be given.
+let pets = (said: string[], required = said) =>
+  loadVocab({
+    $defs: {
+      entity: { component: true, type: 'object', wire: false, properties: {} },
+      pet: {
+        component: true,
+        type: 'object',
+        properties: Object.fromEntries(
+          said.map((p) => [p, { type: 'string' }]),
+        ),
+        required,
+      },
+    },
+  })
+
+test('a property no longer required clears, then leaves once empty', () => {
+  let d = mem()
+  let s = storage(d, pets(['name', 'sound']))
+  s.install()
+  let rex = (pet: Record<string, unknown>) =>
+    s.tx((tx) => tx.patch([{ entity: { eid: 'rex' }, pet }]))
+  rex({ name: 'Rex', sound: 'woof' })
+  // kept for the value it holds, as a deploy keeps a word it stopped naming
+  s = storage(d, pets(['name', 'sound'], ['name']))
+  s.install()
+  rex({ sound: null })
+  // and forgotten once it holds nothing
+  s = storage(d, pets(['name']))
+  s.install()
+  assertEquals(cols(d, 'pet').includes('sound'), false)
+  assertEquals(s.read('.pet').map((b) => b.pet), [{ name: 'Rex' }])
+})
+
+test('a required column its vocabulary forgot while full can be cleared', () => {
+  let d = mem()
+  storage(d, pets(['name', 'sound'])).install()
+  d.query(insert('entity', { id: 1, eid: 'rex' }))
+  d.query(insert('pet', { entity: 1, name: 'Rex', sound: 'woof' }))
+  storage(d, pets(['name'])).install()
+  d.query({ t: 'update', table: 'pet', set: { sound: val(null) } })
+  assertEquals(scan(d, 'pet', undefined, ['sound']), [{ sound: null }])
+})
+
 test('a death word that moved rebuilds its table without the key', () => {
   let d = mem()
   storage(d, shop).install()

@@ -380,7 +380,7 @@ export let retired = (driver: Driver, vocab: Vocab): Stmt[] => {
  * fingerprint instead, and moving it fits every store once more: move it when
  * fitting learns to see something it did not.
  */
-export let FIT = 3
+export let FIT = 4
 
 /**
  * What fitting reads off a file before an install creates anything: each
@@ -404,17 +404,23 @@ let comps = (vocab: Vocab, was: Standing): string[] =>
   tables(vocab).filter((name) => name in was)
 
 // Whether a table that stood already says what its fresh statement says about
-// the two things only a rebuild changes: which columns are keyed to another
-// table, and what each column checks. A column the table lacks is `grown`'s,
-// and arrives with its check.
+// the three things only a rebuild changes: which columns are keyed to another
+// table, what each column checks, and which refuse a null. A column the table
+// lacks is `grown`'s, and arrives with its check. A column that refuses a null
+// its vocabulary now allows (a property no longer `required`, or no longer
+// named and kept for its values) could never be cleared, so it could never
+// empty and leave; a column that admits a null its vocabulary refuses is how
+// `grown` adds one on purpose, and admission holds the writes.
 let fits = (t: Stood, fresh: CreateTable, changes: number): boolean => {
   let keyed = fresh.cols.filter((c) => c.ref).map((c) => c.name)
   let checked = checks(render(fresh).sql)
   let names = ['', ...t.cols.map((r) => String(r.name).toLowerCase())]
+  let loose = new Set(fresh.cols.filter((c) => !c.notNull).map((c) => c.name))
   return keyed.length == t.keys.length &&
     keyed.every((c) => t.keys.includes(c)) &&
     !changes &&
-    names.every((n) => (t.checks[n] ?? '') == (checked[n] ?? ''))
+    names.every((n) => (t.checks[n] ?? '') == (checked[n] ?? '')) &&
+    !t.cols.some((r) => Number(r.notnull) && loose.has(String(r.name)))
 }
 
 // An eid and its integer reference are two storage forms for one entity.
@@ -475,8 +481,8 @@ export let unresolved = (
 /**
  * What {@link grown} cannot fix: a constraint the vocabulary changed its mind
  * about after a table was created. A reference's death word decides whether its
- * column carries a foreign key, an enum is its column's check (`closed`), and
- * SQLite alters neither in place. So a table whose keys or checks disagree with
+ * column carries a foreign key, an enum is its column's check (`closed`),
+ * `required` is its NOT NULL, and SQLite alters none of them in place. So a table whose keys or checks disagree with
  * the vocabulary is rebuilt: its rows set aside as they are, the table made
  * again as the vocabulary says, and the rows brought back. It is made under its
  * own name rather than renamed into it, because a rename checks every view and
