@@ -24,7 +24,7 @@
     box-shadow: none;
   }
 
-  & .Pack_Tile-on {
+  & .Craft_Tier-on {
     border-color: var(--rim);
     border-bottom-color: var(--paper);
     background: var(--paper);

@@ -38,6 +38,7 @@ import type { Sheet } from './play.ts'
 import { cards, tipped } from './tip.ts'
 import { type Craft, least, tradeNeed, TRADES, type Trades } from './trades.ts'
 import { madeBy, MOST, upgradeOf } from './upgrade.ts'
+import { split } from './ui/split.ts'
 import type { Job } from './work.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -50,6 +51,7 @@ export type Acts = {
 /** The station's sheet, in its `panel`, until a station is worked. */
 export let station = (panel: Panel, acts: Acts) => {
   let box = panel.body
+  let panes = split(box)
   let at: Craft | null = null
   let tier = 1
   // Upgrading rather than making; what is picked is then a piece's row.
@@ -67,7 +69,7 @@ export let station = (panel: Panel, acts: Acts) => {
       tier = up ? tier : Number(tab)
       picked = null
     }
-    if (pick) picked = picked == pick ? null : pick
+    if (pick) picked = pick
     if (act == 'make' && picked) acts.make(picked)
     if (act == 'upgrade' && picked) acts.upgrade(picked)
     was = []
@@ -241,14 +243,14 @@ export let station = (panel: Panel, acts: Acts) => {
     let tabs =
       tiers(c).map((n) =>
         `<button class="Pack_Tile${
-          !up && n == tier ? ' Pack_Tile-on' : ''
+          !up && n == tier ? ' Craft_Tier-on' : ''
         }" data-tier=${n}><span>${
           mine.lvl >= least(n) ? '' : glyphText('lock')
         }${tierName(n)}</span></button>`
       ).join('') +
       (Object.values(recipes()).some((r) => r.at == c && ITEMS[r.makes]?.slot)
         ? `<button class="Pack_Tile Craft_Up${
-          up ? ' Pack_Tile-on' : ''
+          up ? ' Craft_Tier-on' : ''
         }" data-tier=up${tipped({ name: 'Upgrade what you carry' })}>${
           glyphText('sparkles')
         }<span>Upgrade</span></button>`
@@ -283,12 +285,13 @@ export let station = (panel: Panel, acts: Acts) => {
         glyphText(trade.icon)
       } ${trade.name} ${mine.lvl}</span><small class=Panel_Note>${mine.xp} / ${next} xp</small>`,
     )
-    box.innerHTML = `<div class="Pack Craft">` +
-      `<div class=Craft_Tiers>${tabs}</div>` +
-      `<div class=Pack_Grid>${tiles}</div>` +
-      `<div class=Pack_Pick>${
-        up ? upgrading(s, trades, job) : card(s, trades, job)
-      }</div></div>`
+    panes.render(
+      `<div class="Pack Craft">` +
+        `<div class=Craft_Tiers>${tabs}</div>` +
+        `<div class=Pack_Grid>${tiles}</div></div>`,
+      up ? upgrading(s, trades, job) : card(s, trades, job),
+      picked,
+    )
   }
 
   return {
