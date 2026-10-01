@@ -33,6 +33,7 @@ import type { Frame, Sheet } from './play.ts'
 import type { Held } from './rules.ts'
 import { formOf } from './skills.ts'
 import { cards, tipped } from './tip.ts'
+import { split } from './ui/split.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
@@ -129,6 +130,7 @@ export let carried = (s: Pick<Sheet, 'bag' | 'worn'>) => {
 /** The pack, drawn into its tab (panel.ts). */
 export let pack = (panel: Page, acts: Acts) => {
   let box = panel.body
+  let panes = split(box)
   // What is picked.
   let picked: { from: From; key: string } | null = null
   let sheet: Sheet | null = null
@@ -140,7 +142,7 @@ export let pack = (panel: Page, acts: Acts) => {
     let act = t?.closest<HTMLElement>('[data-do]')?.dataset.do
     if (pick) {
       let [from, key] = pick.split(':') as [From, string]
-      picked = picked?.from == from && picked.key == key ? null : { from, key }
+      picked = { from, key }
     } else if (act && s && picked) {
       let { from, key } = picked
       if (act == 'off') acts.wear(key as Slot)
@@ -288,13 +290,17 @@ export let pack = (panel: Page, acts: Acts) => {
         ).join('')
       }</div>`
       : ''
-    box.innerHTML = `<div class=Pack>` +
-      `<div class=Pack_Worn>${worn}</div>` +
-      `<h3 class=Pack_Head>In your bag</h3>` +
-      `<div class=Pack_Grid>${
-        bag || '<span class=Pack_Hint>Your bag is empty.</span>'
-      }</div>${rack}` +
-      `<div class=Pack_Pick>${card(s, f)}</div></div>`
+    panes.render(
+      `<div class=Pack>` +
+        `<div class=Pack_Worn>${worn}</div>` +
+        `<h3 class=Pack_Head>In your bag</h3>` +
+        `<div class=Pack_Grid>${
+          bag || '<span class=Pack_Hint>Your bag is empty.</span>'
+        }</div>${rack}` +
+        `</div>`,
+      card(s, f),
+      picked ? `${picked.from}:${picked.key}` : null,
+    )
   }
 
   return {

@@ -1,0 +1,96 @@
+/* Shared list/detail geometry. Selection only paints, never measures. */
+.Split_Sheet {
+  width: min(64rem, 100%);
+  height: 40rem;
+}
+
+.Panel-tabs .Split_Sheet {
+  width: min(64rem, 100%);
+}
+
+.Split_Host {
+  overflow: hidden;
+  padding: 0;
+  min-width: 0;
+}
+
+.Split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.Split_List,
+.Split_Detail {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 0.75rem 1rem 1rem;
+}
+
+.Split_Detail {
+  border-left: 3px solid var(--rim);
+  background: var(--well);
+}
+
+.Split_Content {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.Split_List > .Pack {
+  width: auto;
+  min-height: 0;
+}
+
+.Split_Row {
+  display: block;
+  width: 100%;
+  margin: 0 0 0.4rem;
+  padding: 0.65rem;
+  border: 2px solid var(--rim);
+  border-radius: 8px;
+  background: var(--well);
+  color: var(--ink);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.Split_Row small {
+  display: block;
+  color: var(--faint);
+}
+
+.Split_Row-on {
+  outline: 2px solid var(--gold);
+  outline-offset: -4px;
+}
+
+.Split_Back {
+  display: none;
+}
+
+@container panel (max-width: 44rem) {
+  .Split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .Split_Detail {
+    display: none;
+    border-left: 0;
+  }
+  .Split-picked .Split_List {
+    display: none;
+  }
+  .Split-picked .Split_Detail {
+    display: block;
+  }
+  .Split_Back {
+    display: block;
+    margin-bottom: 0.75rem;
+  }
+}
