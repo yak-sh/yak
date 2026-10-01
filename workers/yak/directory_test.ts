@@ -453,3 +453,22 @@ test('an app row that says no access mode is read as private', () => {
   let open = { ...row, app: { ...row.app, access: 'open' as const } }
   assertEquals(dirPart.appOf(open).access, 'open')
 })
+
+test('pointer history lowers expanded actor and session references', async () => {
+  let dir = directory({
+    fetch: () =>
+      Promise.resolve(Response.json([{
+        entity: { eid: 'move' },
+        switched: {
+          app: 'a1',
+          from: 'v1',
+          to: 'v2',
+          by: { eid: 'person' },
+          via: { eid: 'session' },
+        },
+      }])),
+  })
+  let [row] = await dir.switches(an)
+  assertEquals(row.switched?.by, 'person')
+  assertEquals(row.switched?.via, 'session')
+})

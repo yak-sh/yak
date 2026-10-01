@@ -216,6 +216,8 @@ test('rollback selects kept bytes without minting or changing deploys, then depl
   let list = (await call(f.ctx, 'app_versions', f.args)).text
   assertEquals(list.includes('v1 (live)'), true)
   assertEquals(list.includes('moved v2 → v1'), true)
+  assertEquals(list.includes(`by ${ADA}`), true)
+  assertEquals(list.includes('[object Object]'), false)
   await call(f.ctx, 'app_rollback', { ...f.args, version: 2 })
   assertEquals(await f.history(), before)
   await call(f.ctx, 'app_rollback', { ...f.args, version: 1 })
