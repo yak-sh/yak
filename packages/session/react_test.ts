@@ -22,6 +22,9 @@ import {
 import { toolsDoc } from '@yaks/tools/vocab'
 import { toolEid } from '@yaks/tools'
 import { sessionDoc } from './comp.ts'
+import { contextDoc } from '@yaks/context'
+import { taskDoc } from '@yaks/task/vocab'
+import { docDoc } from '@yaks/doc/vocab'
 import { kindOf, statusOf, textOf } from './status.ts'
 import { appendEntry } from './append.ts'
 import { sessions } from './plugin.ts'
@@ -41,7 +44,15 @@ let fakeDoc: VocabDoc = {
     },
   },
 }
-let vocab = loadVocab([sessionDoc, toolsDoc, modelDoc, fakeDoc])
+let vocab = loadVocab([
+  sessionDoc,
+  toolsDoc,
+  modelDoc,
+  fakeDoc,
+  contextDoc,
+  taskDoc,
+  docDoc,
+])
 
 let ids = {
   s: 'sess',
@@ -721,6 +732,172 @@ test('a provider’s equivalent length message with no ceiling also recovers', a
   )
   assertEquals(asks, 2)
   assertEquals(((await g.get([ids.m]))[0].model as Comp).enforced, undefined)
+})
+
+test('compaction restores admitted persona, skills and claimed tasks verbatim', async () => {
+  let g = world()
+  await windowed(g, 30_000)
+  let persona = 'Persona: build small composable parts.'
+  let skill = 'Skill: use graph patches, never driver SQL.'
+  let title = 'Keep the owner’s draft'
+  let body = 'Never lose it, even across interfaces.'
+  await g.apply([
+    {
+      entity: { eid: 'persona' },
+      entry: { session: ids.s },
+      prompt: { source: 'persona:common', scope: 'shared' },
+      content: { body: persona },
+    },
+    {
+      entity: { eid: 'skill' },
+      entry: { session: ids.s },
+      prompt: { source: 'skill:effects-and-rules', scope: 'local' },
+      content: { body: skill },
+    },
+    {
+      entity: { eid: 'held-task' },
+      task: {},
+      doc: { title, body },
+      claim: { session: ids.s },
+    },
+    {
+      entity: { eid: 'other-task' },
+      task: {},
+      doc: { title: 'Somebody else’s work', body: 'Not this session.' },
+      claim: { session: ids.f },
+    },
+    { entity: { eid: ids.f }, session: { id: 'other' } },
+  ])
+  await appendEntry(g, ids.s, title + '\n\n' + body)
+  await appendEntry(
+    g,
+    ids.s,
+    'Progress: the draft is synced. ' + 'x'.repeat(100_000),
+  )
+  let summary = 'The draft is synced; check offline recovery next.'
+  let summarizer = scripted([says('sum', summary)], false)
+  let worker = scripted([says('ok', 'Ready.')], false)
+  let deps = {
+    model: worker.model,
+    tools: [],
+    mint,
+    compactModel: { model: summarizer.model, name: 'fake-1' },
+  }
+  assertEquals(await rest(g, ids.s, deps), 'settled')
+  let compacted = JSON.stringify(summarizer.asked[0].items)
+  assertEquals(compacted.includes(persona), false)
+  assertEquals(compacted.includes(skill), false)
+  assertEquals(compacted.includes(body), false)
+  assertEquals(compacted.includes('Progress: the draft is synced.'), true)
+  assertEquals(worker.asked[0].items, [
+    { kind: 'instruction', text: persona },
+    { kind: 'instruction', text: skill },
+    {
+      kind: 'instruction',
+      text: 'Claimed task held-task\n' + title + '\n\n' + body,
+    },
+    { kind: 'instruction', text: summary },
+  ])
+  // Two cuts still keep the original instruction text, not its summary.
+  for (let i = 0; i < GAP; i++) {
+    worker = scripted([says('r' + i, 'Ready.')], false)
+    deps.model = worker.model
+    await appendEntry(g, ids.s, 'Continue.')
+    assertEquals(await rest(g, ids.s, deps), 'settled')
+  }
+  await g.apply([{
+    entity: { eid: 'held-task' },
+    doc: { body: 'Updated task: preserve edits while offline.' },
+  }])
+  let second = scripted([says('sum2', 'Offline recovery remains.')], false)
+  deps.compactModel.model = second.model
+  let next = scripted([says('next', 'Ready.')], false)
+  deps.model = next.model
+  await appendEntry(g, ids.s, 'y'.repeat(100_000))
+  assertEquals(await rest(g, ids.s, deps), 'settled')
+  assertEquals(JSON.stringify(second.asked[0].items).includes(persona), false)
+  assertEquals(JSON.stringify(second.asked[0].items).includes(skill), false)
+  assertEquals(JSON.stringify(second.asked[0].items).includes(body), false)
+  assertEquals(next.asked[0].items.slice(0, 4), [
+    { kind: 'instruction', text: persona },
+    { kind: 'instruction', text: skill },
+    {
+      kind: 'instruction',
+      text: 'Claimed task held-task\n' + title +
+        '\n\nUpdated task: preserve edits while offline.',
+    },
+    { kind: 'instruction', text: 'Offline recovery remains.' },
+  ])
+  // Releasing the claim removes its spec; nothing stale was stored in a
+  // summary entry or a second task snapshot.
+  await g.apply([{ entity: { eid: 'held-task' }, claim: null }])
+  let released = scripted([says('released', 'Ready.')], false)
+  deps.model = released.model
+  await appendEntry(g, ids.s, 'Continue without that task.')
+  assertEquals(await rest(g, ids.s, deps), 'settled')
+  assertEquals(
+    JSON.stringify(released.asked[0].items).includes('Claimed task'),
+    false,
+  )
+})
+
+test('ordinary turns keep the admitted prefix byte-stable without a summary call', async () => {
+  let g = world()
+  await windowed(g, 100_000)
+  await g.apply([{
+    entity: { eid: 'persona' },
+    entry: { session: ids.s },
+    prompt: { source: 'persona:common' },
+    content: { body: 'Verbatim persona.' },
+  }])
+  let worker = scripted([says('one', 'Ready.'), says('two', 'Ready.')], false)
+  let summarizer = scripted([], false)
+  let deps = {
+    model: worker.model,
+    tools: [],
+    mint,
+    compactModel: { model: summarizer.model, name: 'fake-1' },
+  }
+  assertEquals(await rest(g, ids.s, deps), 'settled')
+  let prefix = JSON.stringify(worker.asked[0].items)
+  await appendEntry(g, ids.s, 'Continue.')
+  assertEquals(await rest(g, ids.s, deps), 'settled')
+  assertEquals(JSON.stringify(worker.asked[1].items.slice(0, 2)), prefix)
+  assertEquals(summarizer.asked.length, 0)
+})
+
+test('a forced overflow cut also restores admitted context above the summary', async () => {
+  let g = await overflowing()
+  await g.apply([{
+    entity: { eid: 'persona' },
+    entry: { session: ids.s },
+    prompt: { source: 'persona:common' },
+    content: { body: 'Keep me verbatim.' },
+  }])
+  let requests: Request[] = []
+  let model: Model = (req) => {
+    requests.push(req)
+    if (requests.length == 1) throw lengthError()
+    return Promise.resolve(says('ok', 'Ready.'))
+  }
+  let summarizer = scripted([says('sum', 'Short summary.')], false)
+  assertEquals(
+    await rest(g, ids.s, {
+      model,
+      tools: [],
+      mint,
+      compactModel: { model: summarizer.model, name: 'fake-1' },
+    }),
+    'settled',
+  )
+  assertEquals(
+    JSON.stringify(summarizer.asked[0].items).includes('Keep me verbatim.'),
+    false,
+  )
+  assertEquals(requests[1].items, [
+    { kind: 'instruction', text: 'Keep me verbatim.' },
+    { kind: 'instruction', text: 'Short summary.' },
+  ])
 })
 
 test('media transcripts compact only through a text model without persona instructions', async () => {

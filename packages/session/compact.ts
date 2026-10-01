@@ -1,6 +1,7 @@
 // A checkpoint is the summary of a transcript prefix. The summary can be
 // appended after newer entries: `through` names the last entry it replaces,
-// so the next model sees the summary first, then a protocol-complete suffix.
+// so the next model sees retained instructions, the summary, then a
+// protocol-complete suffix.
 
 import type { Bundle, Comp } from '@yaks/graph'
 import { seqOf } from './status.ts'
@@ -32,6 +33,15 @@ let paired = (entries: Bundle[], end: number): number => {
 export let suffix = (entries: Bundle[], from: number): Bundle[] =>
   entries.slice(paired(entries, from))
 
+/** Explicitly admitted context (persona, skills, delegation instructions) is
+ * kept verbatim. Ordinary file reads and tool results are history, not a way
+ * to admit instructions. */
+export let retained = (entries: Bundle[]): Bundle[] =>
+  entries.filter((b) => b.prompt)
+
+export let history = (entries: Bundle[]): Bundle[] =>
+  entries.filter((b) => !b.prompt)
+
 export let context = (entries: Bundle[]): Bundle[] => {
   let mark = entries.filter((b) => b.checkpoint).at(-1)
   if (!mark) return entries
@@ -41,9 +51,13 @@ export let context = (entries: Bundle[]): Bundle[] => {
   if (!Number.isSafeInteger(seq) || seq < 1) {
     throw new Error('Checkpoint has no boundary: ' + through)
   }
-  let rest = entries.filter((b) => b != mark)
+  let rest = history(entries).filter((b) => b != mark)
   let from = rest.findIndex((b) => seqOf(b) > seq)
-  return [mark, ...suffix(rest, from < 0 ? rest.length : from)]
+  return [
+    ...retained(entries),
+    mark,
+    ...suffix(rest, from < 0 ? rest.length : from),
+  ]
 }
 
 /** The context window, in tokens, of a model whose row and provider name
