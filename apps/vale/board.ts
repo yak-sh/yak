@@ -10,6 +10,7 @@ import type { Page } from './panel.ts'
 import type { Frame, Sheet } from './play.ts'
 import { canLearn, DISCIPLINES, SKILLS } from './skills.ts'
 import { tipped } from './tip.ts'
+import { split } from './ui/split.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
@@ -31,13 +32,14 @@ let COLS = Object.entries(DISCIPLINES).map(([d, about]) => {
 /** The board, drawn into its tab (panel.ts). */
 export let board = (panel: Page, acts: Learning) => {
   let box = panel.body
+  let panes = split(box)
   let picked = ''
   let was: unknown[] = []
   box.addEventListener('click', (e) => {
     let t = e.target instanceof Element ? e.target : null
     let pick = t?.closest<HTMLElement>('[data-skill]')?.dataset.skill
     let act = t?.closest<HTMLElement>('[data-do]')?.dataset.do
-    if (pick) picked = picked == pick ? '' : pick
+    if (pick) picked = pick
     if (act == 'learn' && picked) acts.learn(picked)
     if (act == 'respec') {
       acts.respec()
@@ -106,12 +108,15 @@ export let board = (panel: Page, acts: Learning) => {
       : f.rack
       ? `<button class="Btn Btn-small" data-do=respec>Forget them all, to choose again</button>`
       : `<p class=Pack_Hint>By a village's fire you can forget them all, free, to choose again.</p>`
-    box.innerHTML = `<div class="Pack Board">` +
-      `<span class="Badge Board_Points${
-        s.points ? ' Badge-points' : ''
-      }">✦ ${s.points} to spend</span>` +
-      `<div class=Board_Cols>${cols}</div>${forget}` +
-      `<div class=Pack_Pick>${card(s)}</div></div>`
+    panes.render(
+      `<div class="Pack Board">` +
+        `<span class="Badge Board_Points${
+          s.points ? ' Badge-points' : ''
+        }">✦ ${s.points} to spend</span>` +
+        `<div class=Board_Cols>${cols}</div>${forget}</div>`,
+      card(s),
+      picked || null,
+    )
   }
 
   return {

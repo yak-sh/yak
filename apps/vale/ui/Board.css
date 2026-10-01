@@ -98,7 +98,7 @@
   opacity: 0.45;
 }
 
-.Board_Skill-on {
+.Board_Skill.Split_Row-on {
   --face: #fff3c4;
   --outline: inset 0 0 0 2px var(--deep);
   opacity: 1;
