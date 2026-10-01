@@ -56,6 +56,7 @@ test('every session tool is declared and implemented', () => {
     'claim_take',
     'hooks_install',
     'session_brief',
+    'session_cache',
     'session_check',
     'session_context',
     'session_listen',

@@ -642,6 +642,36 @@
       "input": {},
       "readOnly": true
     },
+    "session_cache": {
+      "tool": true,
+      "surfaces": [
+        "cli"
+      ],
+      "noun": "session",
+      "verb": "cache",
+      "title": "Report prompt-cache observations",
+      "description": "Report input-token-weighted cached share by session, provider, model and derived path. Uses request created.at in [from, until). Share is sum(cached_tokens)/sum(input_tokens) over requests reporting both counts; missing counts are unknown, not zero. Reports unknown coverage and explicit zero-cache requests. No date bounds reads all history. Returns JSON in content.body and output.value; no stored rollup. Imported usage entries may be turn totals, not individual model requests.",
+      "input": {
+        "from": {
+          "type": "string",
+          "description": "inclusive ISO instant with timezone, e.g. 2026-10-01T20:10:00Z"
+        },
+        "until": {
+          "type": "string",
+          "description": "exclusive ISO instant with timezone, e.g. 2026-10-01T20:10:00Z"
+        },
+        "session": {
+          "type": "string",
+          "ref": "session",
+          "description": "only this session; pass its id or registered name"
+        },
+        "requests": {
+          "type": "boolean",
+          "description": "include individual request ids, times, counts and shares"
+        }
+      },
+      "readOnly": true
+    },
     "session_check": {
       "tool": true,
       "noun": "session",

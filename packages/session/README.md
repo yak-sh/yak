@@ -11,6 +11,49 @@ deno add jsr:@yaks/session
 # or: npx jsr add @yaks/session
 ```
 
+## Prompt-cache observations
+
+`yak session cache` reads request usage without keeping a second rollup. It
+reports token-weighted cached share and separate groups for session, provider,
+model and path. `--requests` adds each observation's id, time, counts and share.
+
+```sh
+yak session cache --until 2026-10-01T20:10:00Z
+yak session cache --from 2026-10-01T20:10:00Z
+yak session cache --from 2026-10-01T20:10:00Z \
+  --until 2026-10-02T00:00:00Z --session S-123 --requests
+```
+
+Dates are ISO instants with a timezone, selected by request `created.at`. `from`
+is inclusive and `until` exclusive: the two sides of the 20:10 UTC cut never
+overlap. Without bounds, all observations are read. Undated observations appear
+only in an unbounded report.
+
+`cached_share` is `reported_cached_tokens / reported_input_tokens`, summed over
+requests reporting both counts, not an average of request percentages. It is
+null when that input denominator is zero. `input_tokens` and `cached_tokens` sum
+all reported counts; the paired `reported_*` totals explain the share.
+`unknown_cache_input_tokens`, `unknown_input_requests` and
+`unknown_cache_requests` expose missing coverage; `zero_cache_requests` counts
+explicitly reported zeros. Requests not yet reporting usage remain unknown.
+Imported usage entries can be turn totals rather than individual requests. An
+endpoint that omits cached usage (or reports null) is unknown, not a cache miss;
+it does not enter the share denominator.
+
+Paths come from existing provenance: a session without `session{source}` is
+`native`; `session.source` → `call{source}` → `build{}` is `builder`; a source
+call whose registered `tool{name}` or `call{name}` is `session_compact` is
+`compaction`; another source is `other`. Usage-only entries are `imported`.
+Provider and model names are resolved from their rows; missing identity is
+`unknown`, not guessed from output text.
+
+`cacheOf(rows, metadata, options)` is the pure reducer.
+`cacheRead(graph,
+options)` accepts only `read` and `get`, so an app-store
+consumer can use the same report without a box-specific adapter. Both are
+exported by `@yaks/session`; there is no second consumer needing aggregation in
+`@yaks/model` yet.
+
 ## Storage model
 
 <a id="the-transcript"></a>

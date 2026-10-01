@@ -67,6 +67,7 @@ import { ordered, statusOf } from './status.ts'
 import { install, settingsPath } from './hooks.ts'
 import type { Options as Reading } from './service.ts'
 import { listen } from './listen.ts'
+import { cacheRead } from './cache.ts'
 
 /** What a config file can set for this package: the checks' patience, and how
  * the duty reads transcripts (./service.ts). */
@@ -189,6 +190,21 @@ export let runs = (
   },
   options: Options = {},
 ): Runs => ({
+  session_cache: async (call, graph): Promise<Bundle[]> => {
+    let args = argsOf(call)
+    let value = await cacheRead(graph, {
+      from: typeof args.from == 'string' ? args.from : undefined,
+      until: typeof args.until == 'string' ? args.until : undefined,
+      session: typeof args.session == 'string' ? args.session : undefined,
+      requests: args.requests == true,
+    })
+    return [{
+      entity: { eid: '$said' },
+      content: { body: JSON.stringify(value, null, 2) },
+      output: { source: call.entity.eid, value },
+    }]
+  },
+
   claim_take: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)
     return [{
