@@ -6,7 +6,7 @@ import type { Comp } from '@yaks/graph'
 // and the same steps run themselves as `session_run`.
 
 import { assertEquals } from '@std/assert'
-import type { Bundle, Graph } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { graph, identityEid } from '@yaks/graph'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
@@ -606,6 +606,8 @@ test('a transcript of huge tool results is not compacted again on the next steps
   }
   assertEquals(gaps.length > 0, true)
   assertEquals(gaps.filter((n) => n < GAP), [])
+  assertEquals(summarizer.asked.length > 1, true)
+  assertEquals(new Set(summarizer.asked.map((r) => r.conversation)).size, 1)
   let sent = worker.asked.map((req) =>
     JSON.stringify([req.instructions, req.tools, req.items]).length / 4
   )
@@ -1609,4 +1611,87 @@ test("a window counts the conversation, never a wake's typed questions", async (
     ...conversation,
     { kind: 'user', text: 'and now?' },
   ])
+})
+
+test('compaction asks keep their own usage and provenance outside parent history', async () => {
+  let g = world()
+  await windowed(g, 100_000)
+  await appendEntry(g, ids.s, 'x'.repeat(240_000))
+  let requests: Request[] = []
+  let usage = {
+    input_tokens: 60_010,
+    cached_tokens: 10_000,
+    output_tokens: 12,
+    total_tokens: 60_022,
+  }
+  let summarizer: Model = (req) => {
+    requests.push(req)
+    return Promise.resolve({ ...says('sum', 'The story.'), usage, cost: 0.03 })
+  }
+  summarizer.mark = () => ({ fake: { reply: 'sum' } })
+  let deps = {
+    model: scripted([says('r', 'ok')], false).model,
+    tools: [],
+    mint,
+    compactModel: { model: summarizer, name: 'fake-1', provider: ids.p },
+  }
+  await rest(g, ids.s, deps)
+  let [session] = await g.get([requests[0].conversation!])
+  let [source] = await g.get([String((session.session as Comp).source)])
+  let [tool] = await g.get([String((source.call as Comp).to)])
+  assertEquals((tool.tool as Comp).name, 'session_compact')
+  assertEquals(typeof (source.call as Comp).source, 'string')
+  let own = await transcript(g, session.entity.eid)
+  let ask = own.find((b) => b.ask)!
+  assertEquals(ask.usage, usage)
+  assertEquals(ask.cost, { dollars: 0.03, reported: true })
+  assertEquals(ask.fake, { reply: 'sum' })
+  assertEquals((ask.using as Comp).provider, ids.p)
+  assertEquals((ask.attempt as Comp).state, 'completed')
+  assertEquals(
+    (await transcript(g, ids.s)).some((b) => b.usage == usage),
+    false,
+  )
+  assertEquals(own.filter((b) => b.output).every((b) => !b.usage), true)
+})
+
+test('a failed compaction records reported failure usage and never invents counts', async () => {
+  for (let reported of [true, false]) {
+    let g = world()
+    await windowed(g, 100_000)
+    await appendEntry(g, ids.s, 'x'.repeat(240_000))
+    let conversation = ''
+    let model: Model = (req) => {
+      conversation = req.conversation!
+      throw new ModelError('refused', 'No summary', undefined, {
+        body: JSON.stringify({
+          response: {
+            usage: reported
+              ? {
+                input_tokens: 1234,
+                input_tokens_details: { cached_tokens: 1024 },
+                output_tokens: 1,
+              }
+              : {},
+          },
+        }),
+      })
+    }
+    await rest(g, ids.s, {
+      model: scripted([], false).model,
+      tools: [],
+      mint,
+      compactModel: { model, name: 'fake-1' },
+    })
+    let own = await transcript(g, conversation)
+    let ask = own.find((b) => b.ask)!
+    assertEquals(
+      ask.usage,
+      reported
+        ? { input_tokens: 1234, cached_tokens: 1024, output_tokens: 1 }
+        : undefined,
+    )
+    assertEquals((ask.attempt as Comp).state, 'completed')
+    assertEquals((ask.error as Comp).code, 'refused')
+  }
 })

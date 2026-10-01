@@ -354,7 +354,11 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
     // Compaction is a text task, even when this transcript selects a media
     // model. Never resolve it through the transcript's `using` record.
     compactModel: implementations.openai
-      ? { model: implementations.openai, name: ASTRA }
+      ? {
+        model: implementations.openai,
+        name: ASTRA,
+        provider: identityEid(PROVIDER, ['openai']),
+      }
       : undefined,
     answers: answers(h.g, implementations, opts.model),
     tools,
