@@ -82,7 +82,7 @@ import {
   fromJsonSchema,
   type McpServer,
 } from 'npm:@modelcontextprotocol/server@2.2.0'
-import { AjvJsonSchemaValidator } from 'npm:@modelcontextprotocol/server@2.2.0/validators/ajv'
+import { CfWorkerJsonSchemaValidator } from 'npm:@modelcontextprotocol/server@2.2.0/validators/cf-worker'
 import { mcp, roster, rosterVersion } from '@yaks/mcp'
 import { reaching, searching } from './agent.ts'
 import { anonymous, asked, opened, READS, scope } from './anon.ts'
@@ -154,7 +154,7 @@ let refused = (req: Request, id: unknown, env: Env) => {
 // the pages an app declares (declared.ts, T-32687), which only someone who can
 // reach that app is told about. The platform contributes none of its own. The
 // prompts are the ones a person picks by name (prompts.ts, T-32981).
-let promptValidator = new AjvJsonSchemaValidator()
+let promptValidator = new CfWorkerJsonSchemaValidator()
 let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
   for (let doc of docs(ctx.env)) {
     server.registerResource(doc.name, doc.uri, {

@@ -8,7 +8,7 @@ import {
   ProtocolError,
   ResourceTemplate,
 } from '@modelcontextprotocol/server'
-import { AjvJsonSchemaValidator } from '@modelcontextprotocol/server/validators/ajv'
+import { CfWorkerJsonSchemaValidator } from '@modelcontextprotocol/server/validators/cf-worker'
 import { type Bundle, type Graph, Refused } from '@yaks/graph'
 import { repoSkills, skillFiles } from '@yaks/persona/skills'
 import { renderSkill } from '@yaks/persona/skill-text'
@@ -187,7 +187,7 @@ export let attachSkills = async (
   options: SkillOptions,
 ): Promise<void> => {
   let view = await snapshot(options)
-  let validator = new AjvJsonSchemaValidator()
+  let validator = new CfWorkerJsonSchemaValidator()
   let schema = (
     properties: JsonSchemaType['properties'],
     required: string[] = [],

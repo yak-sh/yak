@@ -512,9 +512,9 @@ database_id = "88b2e161-99bf-4777-ab6d-b18fcf66ca95"
 "zod-to-json-schema" = "./node_modules/zod-to-json-schema/dist/esm/index.js"
 # SDK v2 runtime exports, including the dynamically loaded MCP routes.
 "npm:@modelcontextprotocol/server@2.2.0" = "./node_modules/@modelcontextprotocol/server/dist/index.mjs"
-"npm:@modelcontextprotocol/server@2.2.0/validators/ajv" = "./node_modules/@modelcontextprotocol/server/dist/validators/ajv.mjs"
+"npm:@modelcontextprotocol/server@2.2.0/validators/cf-worker" = "./node_modules/@modelcontextprotocol/server/dist/validators/cfWorker.mjs"
 "@modelcontextprotocol/server" = "./node_modules/@modelcontextprotocol/server/dist/index.mjs"
-"@modelcontextprotocol/server/validators/ajv" = "./node_modules/@modelcontextprotocol/server/dist/validators/ajv.mjs"
+"@modelcontextprotocol/server/validators/cf-worker" = "./node_modules/@modelcontextprotocol/server/dist/validators/cfWorker.mjs"
 "@modelcontextprotocol/core" = "./node_modules/@modelcontextprotocol/core/dist/index.mjs"
 # @yaks/mcp-client loads these SDK v1 client modules dynamically.
 "@modelcontextprotocol/sdk/client/index.js" = "./node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js"
