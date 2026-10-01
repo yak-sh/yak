@@ -191,8 +191,10 @@ test('streamed OpenRouter audio becomes one blob artifact with no encoded bytes 
             },
           }],
         },
-        { choices: [{ delta: { audio: { data: encoded.slice(5) } } }],
-          usage: { cost: 0.24 } },
+        {
+          choices: [{ delta: { audio: { data: encoded.slice(5) } } }],
+          usage: { cost: 0.24 },
+        },
       ]
       return Promise.resolve(
         new Response(
@@ -267,7 +269,10 @@ test('a speech model uses the audio door and stores its bytes as an artifact', a
     media: { store: artifactStore(memoryBlobs()) },
     fetch: (url, init) => {
       if (String(url).includes('/generation?')) {
-        assertEquals(new Headers(init?.headers).get('authorization'), 'Bearer probe-key')
+        assertEquals(
+          new Headers(init?.headers).get('authorization'),
+          'Bearer probe-key',
+        )
         return Promise.resolve(Response.json({ data: { total_cost: 0.0123 } }))
       }
       assertEquals(url, 'https://openrouter.ai/api/v1/audio/speech')
@@ -350,4 +355,66 @@ test('media HTTP failures tell the session which ones can retry', async () => {
     assert(error instanceof ModelError)
     assertEquals(error.retry, status == 503 ? { after: 0 } : undefined)
   }
+})
+
+test('audio with no inline bill queries its generation without regenerating', async () => {
+  let posts = 0, reads = 0
+  let model = responses({
+    key: () => 'fixture-key',
+    media: { store: artifactStore(memoryBlobs()) },
+    fetch: (url, init) => {
+      if (String(url).includes('/generation?')) {
+        reads++
+        assertEquals(
+          new Headers(init?.headers).get('authorization'),
+          'Bearer fixture-key',
+        )
+        return Promise.resolve(Response.json({ data: { total_cost: 0.08 } }))
+      }
+      posts++
+      return Promise.resolve(
+        new Response(
+          [
+            'data: ' + JSON.stringify({ id: 'lyria-1', choices: [] }),
+            'data: [DONE]',
+            '',
+          ].join('\n\n'),
+          { headers: { 'content-type': 'text/event-stream' } },
+        ),
+      )
+    },
+  })
+  let reply = await model({
+    model: 'google/lyria-3-pro-preview',
+    modalities: ['audio'],
+    items: [{ kind: 'user', text: 'A quiet tune' }],
+    tools: [],
+  })
+  assertEquals(reply.cost, 0.08)
+  assertEquals([posts, reads], [1, 1])
+})
+
+test('generation metadata lag retries only lookup and obeys cancellation', async () => {
+  let { generationCost } = await import('./cost.ts')
+  let reads = 0
+  let cost = await generationCost('already-generated', {
+    key: () => 'fixture',
+    fetch: () =>
+      Promise.resolve(
+        ++reads == 1
+          ? new Response('', { status: 404 })
+          : Response.json({ data: { total_cost: 0.05 } }),
+      ),
+  })
+  assertEquals([cost, reads], [0.05, 2])
+  let controller = new AbortController()
+  await assertRejects(() =>
+    generationCost('already-generated', {
+      key: () => 'fixture',
+      signal: controller.signal,
+      fetch: () => {
+        controller.abort(new DOMException('cancelled', 'AbortError'))
+        return Promise.resolve(new Response('', { status: 404 }))
+      },
+    }), DOMException)
 })

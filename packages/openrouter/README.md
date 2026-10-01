@@ -121,3 +121,8 @@ Tests capture interface requests and use mocked responses, not paid provider
 calls. They check reusable prefixes, cache boundaries beyond the lookback
 window, streamed text/tool assembly, reported usage, cancellation, errors, and
 media.
+
+Audio cost is the provider's billed amount: chat audio uses `usage.cost`, and
+speech uses its `X-Generation-Id` to read `/api/v1/generation`'s
+`data.total_cost`. Missing audio usage takes the same lookup. Only metadata
+lookups retry; a paid generation is never replayed to obtain its bill.

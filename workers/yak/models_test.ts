@@ -14,9 +14,12 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
-import { BUDGET, monthOf } from './meter.ts'
+import { accounted, BUDGET, monthOf } from './meter.ts'
 import { catalogued, priceOf } from './models.ts'
-import { weigh } from '@yaks/model'
+import { type Model, ModelError, weigh } from '@yaks/model'
+import { workersAi } from '@yaks/workers-ai'
+import { artifactStore, memoryBlobs } from '@yaks/blob'
+import { assertRejects } from '@std/assert'
 import { parseTools } from '@yaks/tools/declared'
 import type { VocabDoc } from '@yaks/vocab'
 import { embeds, platform } from './testing.ts'
@@ -156,7 +159,7 @@ test('a connected OpenRouter model puts generated audio in the app store', async
   let vaultKey = btoa(String.fromCharCode(...new Uint8Array(32).fill(4)))
   let v = await vale(() => ({ response: 'workers-only' }), {
     env: { VAULT: d1() as unknown as D1Like, VAULT_KEY: vaultKey },
-    models: BUDGET.free,
+    models: BUDGET.free - 0.125,
   })
   let c = ctxOf(v.env, { person: ADA, role: 'owner' })
   let space = (await v.dir.space('ada'))!
@@ -186,6 +189,10 @@ test('a connected OpenRouter model puts generated audio in the app store', async
     (async (input: string | URL | Request, init?: RequestInit) => {
       let sent = new Request(input, init)
       calls++
+      if (sent.url.includes('/generation?')) {
+        assertEquals(sent.headers.get('authorization'), 'Bearer ' + key)
+        return Response.json({ data: { total_cost: 0.125 } })
+      }
       assertEquals(sent.url, 'https://openrouter.ai/api/v1/audio/speech')
       assertEquals(sent.headers.get('authorization'), 'Bearer ' + key)
       assertEquals((await sent.json()).model, SEED)
@@ -219,7 +226,14 @@ test('a connected OpenRouter model puts generated audio in the app store', async
     assertEquals(file.status, 200)
     assertEquals(file.headers.get('content-type'), 'audio/mpeg')
     assertEquals(new Uint8Array(await file.arrayBuffer()), bytes)
-    assertEquals(calls, 1)
+    assertEquals(calls, 2)
+    let [cost] = await v.read(`.entry.session=${session}&.cost&*`)
+    assertEquals(cost.cost, { dollars: 0.125, reported: true })
+    let blocked = crypto.randomUUID()
+    await v.send('/apply', asking(blocked, SEED))
+    let [error] = await v.landed(`.entry.session=${blocked}&.error&*`)
+    assertEquals((error.error as Comp).code, 'limit')
+    assertEquals(calls, 2)
     assertEquals(v.asked.length, 0)
     assertEquals((await v.spent()).meter!.models, BUDGET.free)
     assert(
@@ -531,4 +545,64 @@ test('./api/ai/run carries affinity through its metered binding', async () => {
     cached_tokens: 2700,
   })
   assertAlmostEquals((await p.spent()).meter!.models, cost)
+})
+
+test('raw Workers AI audio debits its tariff once and refuses at the account limit', async () => {
+  let v = await vale(() => ({ audio: 'https://media.example/song.mp3' }), {
+    models: BUDGET.free - 0.15,
+  })
+  let raw = workersAi(v.env.AI!, {
+    media: { store: artifactStore(memoryBlobs()) },
+    fetch: () =>
+      Promise.resolve(
+        new Response(
+          new Uint8Array([
+            0xff,
+            0xfb,
+            0x90,
+            0x64,
+            ...new Array(413).fill(0),
+          ]),
+        ),
+      ),
+  })
+  let model = accounted(v.env, (dir) => dir.space('ada'), raw)
+  let req = {
+    model: 'minimax/music-2.6',
+    items: [{ kind: 'user' as const, text: 'A quiet tune' }],
+    tools: [],
+  }
+  let reply = await model(req)
+  assertEquals(reply.cost, 0.15)
+  assertEquals(reply.costReported, false)
+  assertEquals(reply.artifacts?.[0].media_type, 'audio/mpeg')
+  assertAlmostEquals((await v.spent()).meter!.models, BUDGET.free)
+  await assertRejects(() => model(req), ModelError)
+  assertEquals(v.asked.length, 1)
+})
+
+test('accounting preserves provider continuation metadata and passes requests whole', async () => {
+  let v = await vale(() => ({}))
+  let raw: Model = Object.assign(async (req: Parameters<Model>[0]) => {
+    assertEquals(req.anchor, 'prior')
+    req.onText?.({ index: 0, text: 'hello' })
+    return { id: 'reply', model: req.model, items: [], cost: 0 }
+  }, {
+    mark: () => ({ openrouter: { response_id: 'reply' } }),
+    anchor: () => 'prior',
+    vocab: { $defs: {} },
+  })
+  let model = accounted(v.env, (dir) => dir.space('ada'), raw)
+  assertEquals(model.mark, raw.mark)
+  assertEquals(model.anchor, raw.anchor)
+  assertEquals(model.vocab, raw.vocab)
+  let text = ''
+  await model({
+    model: 'fixture',
+    items: [],
+    tools: [],
+    anchor: 'prior',
+    onText: (delta) => text += delta.text,
+  })
+  assertEquals(text, 'hello')
 })

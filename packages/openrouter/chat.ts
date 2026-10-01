@@ -211,11 +211,11 @@ export let chat = async (
   let billed = usage(reported)
   if (audio && billed.cost == null) {
     billed.cost = await generationCost(id, {
-    ...options,
-    signal: req.signal && options.signal
-      ? AbortSignal.any([req.signal, options.signal])
-      : req.signal ?? options.signal,
-  })
+      ...options,
+      signal: req.signal && options.signal
+        ? AbortSignal.any([req.signal, options.signal])
+        : req.signal ?? options.signal,
+    })
   }
   return {
     id,

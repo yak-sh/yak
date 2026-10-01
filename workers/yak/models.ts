@@ -28,9 +28,9 @@ import {
 } from '@yaks/session'
 import { worded } from '@yaks/tools'
 import { edits, mode, writes } from '@yaks/member'
-import { ModelError, type Price } from '@yaks/model'
+import { type Model, ModelError, type Price } from '@yaks/model'
 import type { VocabDoc } from '@yaks/vocab'
-import { said, workersAi } from '@yaks/workers-ai'
+import { music, said, workersAi } from '@yaks/workers-ai'
 import { artifactStore, objectBlobs } from '@yaks/blob'
 import { resolve } from '@yaks/connections'
 import { responses as openrouter } from '@yaks/openrouter'
@@ -38,7 +38,7 @@ import { appStore, type Directory, directoryOf } from './directory.ts'
 import { ctxOf } from './connections.ts'
 import { blobPrefix } from './blob-key.ts'
 import { filled, schemaOf } from '@yaks/tools/declared'
-import { metered } from './meter.ts'
+import { accounted, metered } from './meter.ts'
 import { outbound } from './outbound.ts'
 import { caught } from './sentry.ts'
 import {
@@ -316,8 +316,19 @@ let connected = (at: Stored) =>
  */
 let asking: Effect = (on, at) => {
   if (at.meta || !at.app) return
-  let served = workersAi(metered(at.env, payer(at.app)))
-  let lent = { [PROVIDER]: served, [OPENROUTER]: connected(at) }
+  let text = workersAi(metered(at.env, payer(at.app)))
+  let audio = accounted(
+    at.env,
+    payer(at.app),
+    workersAi(at.env.AI!, {
+      media: mediaStore(at),
+    }),
+  )
+  let served: Model = (req) => music(req.model) ? audio(req) : text(req)
+  let lent = {
+    [PROVIDER]: served,
+    [OPENROUTER]: accounted(at.env, payer(at.app), connected(at)),
+  }
   let run = running(at.graph, {
     holder: at.app,
     model: served,
