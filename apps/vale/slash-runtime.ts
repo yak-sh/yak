@@ -7,7 +7,7 @@ export { uxDoc } from '@yaks/ux/vocab'
 export { desk, draftDoc, drafts } from '@yaks/draft'
 export { client, idb } from '@yaks/client'
 export { loadVocab } from '@yaks/vocab'
-export { h, render } from 'preact'
+export * from 'preact'
 export { batch, computed, effect, signal, untracked } from '@preact/signals'
 // One Preact realm for both the completion bar and Vale's pluggable kits.
 export * as UI from '@yaks/ui'
