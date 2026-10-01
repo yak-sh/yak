@@ -1,5 +1,5 @@
 // The compile itself, over @cloudflare/worker-bundler: npm packages installed
-// at the pinned versions, then esbuild (as WebAssembly) bundling the worker
+// at the pinned versions alongside compiler-owned toolkit sources, then esbuild (as WebAssembly) bundling the worker
 // and each page script. It runs only inside workerd, so a host runs it in a
 // Worker of its own and posts it a {@link Ask}; `default` is that Worker's
 // fetch, answering an {@link Answer}.
@@ -22,6 +22,8 @@ import { packageOf, relative, resolved, twins } from './graph.ts'
 import { lockfile, type Pins, pins, reached, split, wanted } from './lock.ts'
 import { type Answer, type Ask, dependencies } from './plan.ts'
 import { said } from './said.ts'
+import { type Catalog, type Seed, seed } from './platform.ts'
+export type { Catalog, Toolkit } from './platform.ts'
 
 /** The module a compiled worker is uploaded as: its source's path, as
  * JavaScript.
@@ -51,10 +53,18 @@ let needs = (fs: InMemoryFileSystem) => (name: string) => {
 
 /** Install what package.json asks at what the lock pins, and say the lock
  * that results. Throws what the installer could not do. */
-let install = async (fs: InMemoryFileSystem, ask: Ask) => {
+let install = async (
+  fs: InMemoryFileSystem,
+  ask: Ask,
+  setup: Seed,
+  catalog: Catalog,
+) => {
   let pkg = ask.files['package.json'] ?? null
   let ranges = dependencies(pkg)
-  let want = wanted(ranges, pins(ask.files['package-lock.json'] ?? null))
+  let want = wanted(
+    setup.dependencies,
+    pins(ask.files['package-lock.json'] ?? null),
+  )
   fs.write('package.json', JSON.stringify({ dependencies: want }))
   let { installed, warnings } = Object.keys(want).length
     ? await installDependencies(fs)
@@ -66,8 +76,19 @@ let install = async (fs: InMemoryFileSystem, ask: Ask) => {
     )
     throw new Error(lines.join('\n'))
   }
-  let all: Pins = Object.fromEntries(installed.map(split))
-  let kept = reached(Object.keys(ranges), all, needs(fs))
+  let all: Pins = {
+    ...Object.fromEntries(installed.map(split)),
+    ...setup.platform,
+  }
+  let npm = needs(fs)
+  let kept = reached(
+    Object.keys(ranges),
+    all,
+    (name) =>
+      name in setup.platform
+        ? Object.keys(catalog[name].dependencies)
+        : npm(name),
+  )
   let name = pkg == null ? undefined : JSON.parse(pkg).name
   return {
     installed: Object.entries(kept).map(([n, v]) => `${n}@${v}`).sort(),
@@ -117,12 +138,18 @@ let checked = (
   )
 
 /** Compile what an ask names. Never throws for the app's own mistakes: those
- * are the answer's `errors`. */
-export let compile = async (ask: Ask): Promise<Answer> => {
+ * are the answer's `errors`. The host supplies its toolkit catalog separately
+ * from the app's ask. */
+export let compile = async (
+  ask: Ask,
+  catalog: Catalog = {},
+): Promise<Answer> => {
   let answer: Answer = { pages: {}, installed: [], notes: [], errors: [] }
-  let fs = new InMemoryFileSystem(ask.files)
+  let fs: InMemoryFileSystem
   try {
-    Object.assign(answer, await install(fs, ask))
+    let setup = seed(ask.files, catalog)
+    fs = new InMemoryFileSystem(setup.files)
+    Object.assign(answer, await install(fs, ask, setup, catalog))
   } catch (e) {
     return { ...answer, errors: said(e) }
   }

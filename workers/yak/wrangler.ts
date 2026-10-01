@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-net=registry.cloudflare.com --allow-env=WRANGLER_CI_OVERRIDE_NETWORK_MODE_HOST --allow-run=npm,npx,git,pgrep,kill,docker,env
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-net=registry.cloudflare.com --allow-env=WRANGLER_CI_OVERRIDE_NETWORK_MODE_HOST --allow-run=deno,npm,npx,git,pgrep,kill,docker,env
 // The one door to this Worker's wrangler: `deno task deploy:yak`,
 // `deno task dev:yak`, their `-staging` variants and the test runner
 // (bin/test.ts) all come through here, so the pinned version is written once
@@ -117,6 +117,11 @@ export let aliased = (root = repo, to = TSCONFIG) => {
  */
 export let ready = async (root = dir, timeout = 600_000) => {
   aliased()
+  let generated = await new Deno.Command('deno', {
+    args: ['run', '-A', join(repo, 'bin/compiler-packages.ts')],
+    stdin: 'null',
+  }).spawn().status
+  if (!generated.success) throw new Error('Compiler catalog generation failed')
   if (!stale(root)) return false
   let lock = `${root}/node_modules.lock`
   try {

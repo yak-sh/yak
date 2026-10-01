@@ -8,60 +8,29 @@ grammar descriptors, `slash-completion.ts` supplies chat replacement ranges, and
 `@yaks/ux/completion`, the same behavior reused by filter fields, with drafts
 kept by the host.
 
-## Build the shared page runtime before staging files
+## Deployment
 
-From the checkout root:
+Vale ships source files and `package.json`; it has no local build or generated
+runtime files to stage. The platform compiler compiles `main.ts` and its module
+worker at deploy. Toolkit dependencies marked `platform` come from the current
+source packages shipped with that compiler, not an older registry release.
+Preact, signals, Three.js and marked are ordinary npm dependencies.
 
-```sh
-deno run -A apps/vale/build-slash.ts
-```
+The grammar, completion, drafts, network client, Markdown and voice packages
+join the same compiled page runtime. The creature-build subscription uses server
+evaluation: `built.current` is computed by the store, and the page has neither
+the complete build graph nor a local rule for it.
 
-The script bundles `apps/vale/slash-runtime.ts` for the browser into
-`apps/vale/slash-runtime.bundle.js` and copies the base UI styles at their
-bundle-relative addresses. The single runtime bundle keeps the grammar,
-completion, drafts, client, Preact, signals, UI and UX kits together, including
-workspace exports not yet available in published packages. `index.html` maps
-those imports to `./slash-runtime.bundle.js`; `ui/components.css` imports
-`Choices.css`.
+`ui/Choices.css` is a tracked port of the shared UI part's stylesheet. It is
+loaded by `ui/components.css`; deployment does not copy or generate CSS.
 
-For an app upload, explicitly stage both generated files together with the app's
-other runtime files:
-
-- `slash-runtime.bundle.js`
-- `ui/Choices.css`
-
-Both outputs are ignored by Git, so a tracked-file-only upload list omits them.
-Rebuild and include both whenever the slash runtime or shared completion UI
-changes. Here, staging means preparing the app's upload files, not adding these
-ignored outputs to Git.
-
-`build-slash.ts` and `slash-runtime.ts` are local build inputs, not upload
-files. The deployed page loads the generated JavaScript bundle, not the
-TypeScript dependency entry. Building prepares local artifacts only; it does not
-publish packages or deploy the app.
-
-For a complete push, use the build script's optional staging-directory argument.
-It includes both generated assets and excludes tests, fixtures, documentation
-and local build inputs. A tracked-file-only push deletes the generated bundle
-and breaks the page; do not push the raw checkout or a Git-only file list.
+Deploy only from the main checkout after the release's commits have landed:
 
 ```sh
-stage="$(mktemp -d /tmp/vale-release-XXXXXX)"
-deno run -A apps/vale/build-slash.ts "$stage"
-yak admin push "$stage" --space=yourname --app=vale --owner
-rm -rf "$stage"
+yak admin push apps/vale --space=yourname --app=vale --owner
+yak admin tool app_errors space=yourname app=vale --owner
 ```
 
-The creature-build subscription uses server evaluation: `built.current` is
-computed by the store, and the page has neither the complete build graph nor a
-local rule for it. Rebuild this runtime whenever `@yaks/client` changes, not
-just when chat changes, because Vale's network graph shares that bundled client.
-
-The runtime also produces thin `ui-runtime.js`, `ux-runtime.js`, `ux-facet.js`,
-`hooks-runtime.js`, `guide-runtime.js`, `graph-runtime.js` and
-`query-runtime.js` doors to that same bundle, plus root base CSS and `ledger/`
-CSS. Stage every generated runtime door and stylesheet, not a tracked-file-only
-file list. The new kits live in Vale (`ui-kit.ts`, `ux-kit.ts`), and its partial
-skin in `skin.ts`/`kit/skin`. `guide.html` shows the very same composition
-without starting the world. Panel navigation and selection are declared
-page-only words in the page graph, distinct from the game's server rows.
+Check `app_errors` immediately after every deploy and fix new errors before
+continuing. A feature worktree is not a release source: deploying its snapshot
+can undo another landed change.

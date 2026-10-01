@@ -17,7 +17,8 @@ export type Pins = Record<string, string>
 
 let TOP = /^node_modules\/((?:@[^/]+\/)?[^/]+)$/
 
-/** The versions a package-lock.json pins, by package name; none without one.
+/** The npm versions a package-lock.json pins; toolkit provenance is not an
+ * installer input, including legacy @yaks registry versions.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -39,7 +40,11 @@ export let pins = (text: string | null): Pins => {
   let out: Pins = {}
   for (let [key, entry] of Object.entries(lock?.packages ?? {})) {
     let name = key.match(TOP)?.[1]
-    if (name && typeof entry?.version == 'string') out[name] = entry.version
+    if (
+      name && !name.startsWith('@yaks/') &&
+      typeof entry?.version == 'string' &&
+      !entry.version.startsWith('sha256:') && entry.version != 'platform'
+    ) out[name] = entry.version
   }
   return out
 }
@@ -59,9 +64,18 @@ export let pins = (text: string | null): Pins => {
  * ```
  */
 export let wanted = (ranges: Record<string, string>, pinned: Pins): Pins => {
-  let out: Pins = { ...pinned }
+  let out: Pins = Object.fromEntries(
+    Object.entries(pinned).filter(([n, v]) =>
+      !n.startsWith('@yaks/') && v != 'platform' && !v.startsWith('sha256:')
+    ),
+  )
   for (let [name, range] of Object.entries(ranges)) {
-    let pin = pinned[name]
+    if (name.startsWith('@yaks/') || range == 'platform') {
+      throw new Error(
+        `${name}: seed platform dependencies before npm installation`,
+      )
+    }
+    let pin = out[name]
     if (!pin || !safely(pin, range)) out[name] = range
   }
   return out
@@ -121,7 +135,12 @@ export let lockfile = (
         ...Object.fromEntries(
           Object.keys(versions).sort().map((
             pkg,
-          ) => [`node_modules/${pkg}`, { version: versions[pkg] }]),
+          ) => [`node_modules/${pkg}`, {
+            version: versions[pkg],
+            ...(versions[pkg].startsWith('sha256:')
+              ? { resolved: 'platform' }
+              : {}),
+          }]),
         ),
       },
     },

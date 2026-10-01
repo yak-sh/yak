@@ -266,3 +266,22 @@ test('the runtime reads a specifier exactly, esbuild tries the extensions', asyn
     'w.js',
   ])
 })
+
+test('declared platform toolkit imports plan compiled pages and module workers', async () => {
+  let got = await planned({
+    'index.html': PAGE('main.js'),
+    'main.js': `import { c } from '@yaks/client'
+` +
+      `new Worker(new URL('./tool.js', import.meta.url), { type: 'module' })`,
+    'tool.js': `import { run } from '@yaks/slash/runtime'`,
+    'package.json': JSON.stringify({
+      dependencies: {
+        '@yaks/client': 'platform',
+        '@yaks/slash': 'platform',
+      },
+    }),
+  })
+  assertEquals(got?.pages, ['main.js', 'tool.js'])
+  assertEquals(got?.notes, [])
+  assertEquals(got?.sent, ['main.js', 'package.json', 'tool.js'])
+})

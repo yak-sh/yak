@@ -73,6 +73,7 @@
     "npm:sucrase@^3.35.0": "3.35.1",
     "npm:three@~0.186.1": "0.186.1",
     "npm:typescript@5.6.3": "5.6.3",
+    "npm:typescript@6.0.3": "6.0.3",
     "npm:wrangler@4.111.0": "4.111.0_@cloudflare+workers-types@4.20260702.1",
     "npm:zod-to-json-schema@3.25.2": "3.25.2_zod@3.25.76",
     "npm:zod-to-json-schema@^3.25.1": "3.25.2_zod@3.25.76",
@@ -1970,21 +1971,10 @@
       "npm:postal-mime@3.0.0",
       "npm:preact@^10.29.1",
       "npm:sucrase@^3.35.0",
+      "npm:three@~0.186.1",
       "npm:zod@^3.24.0"
     ],
     "members": {
-      "apps/vale": {
-        "dependencies": [
-          "npm:preact-render-to-string@6.7.0",
-          "npm:preact@^10.29.1",
-          "npm:three@~0.186.1"
-        ],
-        "packageJson": {
-          "dependencies": [
-            "npm:three@~0.186.1"
-          ]
-        }
-      },
       "packages/admin": {
         "dependencies": [
           "jsr:@std/assert@1"

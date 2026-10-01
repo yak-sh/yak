@@ -1,5 +1,19 @@
 {
   "dependencies": {
-    "three": "^0.186.1"
+    "@yaks/cli": "platform",
+    "@yaks/client": "platform",
+    "@yaks/draft": "platform",
+    "@yaks/markdown": "platform",
+    "@yaks/rtc": "platform",
+    "@yaks/ux": "platform",
+    "@yaks/vocab": "platform",
+    "@preact/signals": "^2.9.0",
+    "marked": "18.0.6",
+    "preact": "^10.29.1",
+    "three": "^0.186.1",
+    "@yaks/graph": "platform",
+    "@yaks/query": "platform",
+    "@yaks/render": "platform",
+    "@yaks/ui": "platform"
   }
 }

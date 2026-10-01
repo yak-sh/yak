@@ -9,7 +9,7 @@
 # the one way in, and the npm registry the one way out. The kernel's deploy
 # deploys it first, to the same environment (../wrangler.ts `siblings`).
 name = "yak-esbuild"
-main = "../../../packages/esbuild/worker.ts"
+main = "index.ts"
 account_id = "0f9613dfd3f0451df0bd0f12a1372ea3"
 compatibility_date = "2026-06-01"
 # `node:module`'s isBuiltin tells a worker's Node import from a package it

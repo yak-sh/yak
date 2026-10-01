@@ -1,8 +1,9 @@
 # @yaks/esbuild
 
-Compiles a web app's TypeScript and npm imports with esbuild, at deploy: the
-server source (a Worker module) and each `<script type="module" src>` a page
-loads. An app that needs neither plans nothing and deploys as it is written.
+Compiles a web app's TypeScript, npm and platform toolkit imports with esbuild,
+at deploy: the server source (a Worker module) and each
+`<script type="module" src>` a page loads. An app that needs neither plans
+nothing and deploys as it is written.
 
 Two halves, because the compiler runs only inside workerd:
 
@@ -38,6 +39,42 @@ Two halves, because the compiler runs only inside workerd:
   what its import maps name.
 - `dependencies(text)` reads `package.json`'s `dependencies`.
 
+## Platform toolkit sources
+
+An app declares toolkit dependencies in `package.json` with the compiler-owned
+version, not a registry version:
+
+```json
+{ "dependencies": { "@yaks/client": "platform", "preact": "^10" } }
+```
+
+`compile(ask, catalog = {})` accepts the catalog from its host wrapper. The app
+sends only its `Ask`; it cannot supply a catalog. Existing npm-only callers need
+no second argument. A toolkit dependency requires that its compiler has the
+package and rejects any version other than `"platform"`, never fetching a stale
+`@yaks/*` registry release.
+
+`platform.ts` exports `Catalog`, a map from package name to
+`{files, dependencies, version}`. `files` are npm-shaped paths relative to the
+package root, including `package.json` with its exports. The host's generator
+normalizes source imports and includes runtime dependencies, not test imports or
+unrelated server exports. `dependencies` maps toolkit packages to `"platform"`
+and external npm packages to their ranges. `version` is
+`sha256:<64 lowercase hex digits>` over the generated package's source bytes.
+
+The pure `seed(files, catalog)` returns `{files, dependencies, platform}`: app
+files plus the declared toolkit roots and their package-level dependency closure
+under `node_modules/`, npm roots including every reached toolkit external, and
+toolkit names mapped to exact source digests. Unused catalog entries stay out.
+External ranges from multiple consumers must overlap because this installer is
+flat. Toolkit externals are explicit npm roots because worker-bundler skips
+preseeded packages without installing their dependencies or reporting them as
+installed.
+
+The wrapper's catalog is part of the compiler deployment. A host reusing build
+output includes its compiler deployment version in the reuse fingerprint; an
+app's old lock never selects an old toolkit source.
+
 ## What is compiled
 
 - The server source, when a file it reaches is TypeScript or JSX, or when it
@@ -63,4 +100,8 @@ package to add to `package.json`, never a module left missing.
 `package-lock.json`, npm's lockfile version 3, top level only. Every locked
 version installs exactly; a declared range installs only where the lock holds no
 version satisfying it. The answer's `lock` is the lock rewritten from what the
-declared packages reach, so the next deploy installs the same code.
+declared packages reach, so the next deploy installs the same external code.
+Toolkit entries instead hold the compiler's current exact source digest in
+`version`, with `resolved: "platform"`. Old toolkit pins (including old registry
+versions) are never passed to the npm installer. The current catalog replaces
+that provenance on every compile, while external versions remain pinned.
