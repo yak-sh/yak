@@ -1,17 +1,18 @@
 ---
-name: ui
+name: ui-building
 description: >
-  How to build interface in this repo, browser and terminal alike: a new @yaks/ui
-  part, a theme, a UX component in @yaks/ux (editing, picking, stacking,
-  popovers), or a page or view that shows entities (the inspector, web's canvas
-  and TUI, the style guides, a package's /views). Use it whenever a change adds
-  or changes something a person sees or presses, restyles anything, touches
-  packages/ui, packages/ux, packages/tui, packages/inspect or
+  How to build interface in this repo, browser and terminal alike: a new
+  @yaks/ui part, a theme, a UX component in @yaks/ux (editing, picking,
+  stacking, popovers), or a page or view that shows entities (the inspector,
+  web's canvas and TUI, the style guides, a package's /views). Use it whenever a
+  change adds or changes something a person sees or presses, restyles anything,
+  touches packages/ui, packages/ux, packages/tui, packages/inspect or
   packages/web/components, or when a screen is confusing, ugly, slow to read or
   looks different in the terminal, even if the request never says "UI". Not for
   a yaks app's own pages, which are its author's; a page the platform serves
   from workers/yak takes this skill and `yaks-app` together. Proving a screen
-  works is `probe`; wiring a package's /views facet is `package`.
+  works is `end-to-end-checks`; wiring a package's /views facet is
+  `packages-and-plugins`.
 ---
 
 # Building UI
@@ -124,8 +125,8 @@ lost (M-59093).
   browser, and `yak ui` in a terminal (`t` switches theme). Look at both themes,
   light and dark, at phone width, and in the terminal.
 - **The app itself:** drive it as a person would, in a browser over CDP and in
-  tmux, against a probe server (the `probe` skill). Assert on the DOM, since
-  screenshots don't work for this app.
+  tmux, against a probe server (the `end-to-end-checks` skill). Assert on the
+  DOM, since screenshots don't work for this app.
 - **Tests:** `deno task test packages/ui` (and `packages/ux`, `packages/inspect`)
   run the part tests and the guide's checks.
 

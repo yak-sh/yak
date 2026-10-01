@@ -1,5 +1,5 @@
 ---
-name: graph
+name: graph-reads-and-writes
 description: >
   How writing to and reading from the yaks graph works, and why a read or write
   behaves as it does: bundles and patch rules, `$was` preconditions, who a write
@@ -11,8 +11,8 @@ description: >
   component, a wrong count, a write that landed as the wrong writer, or a
   deleted entity that came back. How a query is written is `query-grammar`;
   designing a component is `vocabulary`, moving stored rows to a new shape is
-  `migrate`, what runs after a write (rules, effects) is `effects`, and
-  full-text and `.near` are `search`.
+  `data-migration`, what runs after a write (rules, effects) is
+  `effects-and-rules`, and full-text and `.near` are `search-and-embeddings`.
 scope: tasks-v2
 volatility: stable
 ---
@@ -56,14 +56,14 @@ actually read, never guess it.
 
 ## Who a write is stamped as
 
-Each entity in a change is stamped with the writer its own first bundle names
-in `$actor`, else the change's writer (`writers()` in packages/graph/stamp.ts),
-and the journal records one transaction per writer. So a session's own rows
-(a persona snapshot, a report) name the session, and the person is the writer
-only of what that person typed or asked for. Jeff is the actor only for an act he
+Each entity in a change is stamped with the writer its own first bundle names in
+`$actor`, else the change's writer (`writers()` in packages/graph/stamp.ts), and
+the journal records one transaction per writer. So a session's own rows (a
+persona snapshot, a report) name the session, and the person is the writer only
+of what that person typed or asked for. Jeff is the actor only for an act he
 explicitly asked for (M-31958). A row stamped with the wrong writer is fixed
-with a migration (the `migrate` skill), and the writer that stamped it is fixed
-at its root.
+with a migration (the `data-migration` skill), and the writer that stamped it is
+fixed at its root.
 
 ## Deleting
 
@@ -110,13 +110,14 @@ ambiguity) is the `query-grammar` skill. This is how one is answered.
 
 Write through the graph: a script opens it, or a change goes through
 `yak graph apply`. Then stamps, journal, archetype pointers and the full-text
-and vector indexes stay right. SQL is @yaks/sql's AST, and nothing else
-writes a SQL string (M-39498). A raw SQL writer that must exist calls
+and vector indexes stay right. SQL is @yaks/sql's AST, and nothing else writes a
+SQL string (M-39498). A raw SQL writer that must exist calls
 `reclassify(driver, eids)` from @yaks/sqlite in the same transaction
 (packages/sqlite/README.md); otherwise pointers go stale and presence filters,
 status filters and whole-entity reads answer wrong. `archetype_check` finds
 drift. Never experiment on the live ~/.yak/yak.db: copy it with `VACUUM INTO`
-and point a scratch config at the copy (the `probe` and `migrate` skills).
+and point a scratch config at the copy (the `end-to-end-checks` and
+`data-migration` skills).
 
 ## Rules and effects
 

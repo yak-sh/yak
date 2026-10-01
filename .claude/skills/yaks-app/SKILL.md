@@ -9,10 +9,11 @@ description: >
   app's vocab.json or its stored rows, add or rename a platform word, change a
   connector tool, its prompts or the guide, spend money on an account's behalf,
   or debug a yaks app that is broken, slow, refusing or showing the wrong thing,
-  even if the request only names an app ("jill's app", "yourname/trip"). Not
-  for the box's own server (`yak serve`). Designing words is `vocabulary`,
-  moving stored rows is `migrate`, building a platform page's parts is `ui`,
-  vectors and `.near` in a store are `search`, and its tests are `test`.
+  even if the request only names an app ("jill's app", "yourname/trip"). Not for
+  the box's own server (`yak serve`). Designing words is `vocabulary`, moving
+  stored rows is `data-migration`, building a platform page's parts is
+  `ui-building`, vectors and `.near` in a store are `search-and-embeddings`, and
+  its tests are `testing`.
 scope: tasks-v2
 volatility: stable
 ---
@@ -84,7 +85,7 @@ A store's vocabulary is the platform's core documents plus the app's own
   every door that reads it.
 
 Namespacing (D-59567) is designed, not built. The `vocabulary` skill covers
-designing words; the `migrate` skill covers moving stored rows.
+designing words; the `data-migration` skill covers moving stored rows.
 
 ## People's things
 

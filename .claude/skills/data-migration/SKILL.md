@@ -1,5 +1,5 @@
 ---
-name: migrate
+name: data-migration
 description: >
   Move stored data from one shape to another without losing any of it or taking
   an app down: on the box (~/.yak/yak.db) or in yaks.app stores. Use whenever a
@@ -9,7 +9,8 @@ description: >
   script, or re-keys anything people hold (links, tokens, saved queries), even
   when the task only says "rename", "clean up", "drop", "purge", "backfill" or
   "fix the old rows". Deciding the new shape is `vocabulary`; how one write or
-  query behaves is `graph`; this one is getting the existing data there.
+  query behaves is `graph-reads-and-writes`; this one is getting the existing
+  data there.
 scope: tasks-v2
 volatility: stable
 ---

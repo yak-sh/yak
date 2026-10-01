@@ -1,17 +1,17 @@
 ---
-name: package
+name: packages-and-plugins
 description: >
   How an @yaks package or plugin is made, wired and published in ~/code/tasks,
-  and where code belongs. Use it whenever you add a package or plugin, move
-  code from one package to another (or out of workers/yak or packages/web),
-  add or change a subpath export or facet (./vocab, ./rules, ./tools,
-  ./effects, ./routes, ./service, ./cli, ./views, ./tui), add a plugin to
-  ~/.yak/yak.json, hit an import cycle between packages, publish to jsr, or
-  land with `yak land --allow-revert`, even if the task only says "put this
-  somewhere", "share this helper" or "make it reusable". Not for the words a
-  package declares (`vocabulary`), what its effects and rules do (`effects`) or
-  what its views draw (`ui`); a new package or a boundary Jeff should decide
-  gets a `design` first.
+  and where code belongs. Use it whenever you add a package or plugin, move code
+  from one package to another (or out of workers/yak or packages/web), add or
+  change a subpath export or facet (./vocab, ./rules, ./tools, ./effects,
+  ./routes, ./service, ./cli, ./views, ./tui), add a plugin to ~/.yak/yak.json,
+  hit an import cycle between packages, publish to jsr, or land with
+  `yak land --allow-revert`, even if the task only says "put this somewhere",
+  "share this helper" or "make it reusable". Not for the words a package
+  declares (`vocabulary`), what its effects and rules do (`effects-and-rules`)
+  or what its views draw (`ui-building`); a new package or a boundary Jeff
+  should decide gets a design first (`design-docs`).
 scope: tasks-v2
 volatility: stable
 ---
@@ -42,7 +42,7 @@ inside the package that first wanted it.
   that isn't their own screen or glue belongs in a package (M-37867). SQL is
   @yaks/sql's AST, and only SQL-facing packages know SQLite exists (M-39498).
 - **Before building a part, look for it.** packages/web often has it already;
-  port it and split it to fit (the `ui` skill).
+  port it and split it to fit (the `ui-building` skill).
 - **No cycles.** When two packages need the same type or helper, it moves down
   into a package both already depend on. Restating it on one side to dodge the
   cycle is a second shape (T-58961 is one such case). `deno task check:publish`
@@ -90,8 +90,8 @@ Consequences worth knowing:
 A plugin runs on the box only once `~/.yak/yak.json` lists it in `plugins`,
 either as a name or as `{"use": "@yaks/x", "with": {…}}`, and the server is
 restarted. Adding one has broken every `yak` command before, so prove the config
-on a scratch server first (the `probe` skill), back up yak.json, then edit it
-and `systemctl --user restart yak`.
+on a scratch server first (the `end-to-end-checks` skill), back up yak.json,
+then edit it and `systemctl --user restart yak`.
 
 ## Publishing
 

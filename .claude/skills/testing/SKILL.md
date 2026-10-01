@@ -1,5 +1,5 @@
 ---
-name: test
+name: testing
 description: >
   How tests work in ~/code/tasks and how to write one that earns its place:
   @yaks/testing (`test`, `suite`, `equal`, `until`, `///` doctests, fenced
@@ -9,7 +9,7 @@ description: >
   break. Use it whenever you write, change, run, narrow, time or debug a test,
   a doctest or a README example, when a run fails or is slow, when a brief says
   "add a test", or before landing to decide what to run. Proving a change by
-  hand in a browser or a terminal is the `probe` skill.
+  hand in a browser or a terminal is the `end-to-end-checks` skill.
 ---
 
 # Testing

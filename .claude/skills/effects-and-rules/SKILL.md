@@ -1,5 +1,5 @@
 ---
-name: effects
+name: effects-and-rules
 description: >
   How work that follows a write is done in ~/code/tasks: declared rules inside
   the transaction, effects after the commit (the pool, start-up work, sweeps,
@@ -10,7 +10,8 @@ description: >
   `rule: true` entry in a vocab.json, or debug something that runs after a
   write: a run that loops, never fires, fires too often, retries forever, or
   runs in the wrong process. Where a facet's code lives and how a plugin is
-  wired is `package`; a one-time fix of stored rows is `migrate`.
+  wired is `packages-and-plugins`; a one-time fix of stored rows is
+  `data-migration`.
 scope: tasks-v2
 volatility: stable
 ---

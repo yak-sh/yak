@@ -1,5 +1,5 @@
 ---
-name: probe
+name: end-to-end-checks
 description: >
   Prove a change works end to end in ~/code/tasks before calling it done: run
   the branch's own code as a scratch `yak serve` with its own config, port and
@@ -9,7 +9,7 @@ description: >
   browser", "in the terminal", "live", on a "probe server" or "against real
   data", take a screenshot of this app, audit how a screen behaves, or verify a
   UI, query, write path or migration by hand, even if the task only says "make
-  sure it works" or "check it". Not for writing automated tests (`test`), and
+  sure it works" or "check it". Not for writing automated tests (`testing`), and
   never aimed at the live graph or yak.service.
 ---
 

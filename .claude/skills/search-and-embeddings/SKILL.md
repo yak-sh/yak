@@ -1,5 +1,5 @@
 ---
-name: search
+name: search-and-embeddings
 description: >
   How finding things works in the graph, on the box and in yaks.app stores:
   full-text search (@yaks/fts), embeddings and vectors (@yaks/embedding),
@@ -8,10 +8,10 @@ description: >
   costs. Use it whenever a change or question touches search, `.near`,
   embeddings, vectors, similarity, neighbours, recall, ranking, `search: true`,
   `embed: false`, an embedder's config or model, or why something is or isn't
-  found, even if the request only says "find", "related", "duplicates" or
-  "slow query". How a query is written is `query-grammar`, how the archetype
-  index answers one is `graph`; re-embedding stored vectors after a model
-  change is still this skill.
+  found, even if the request only says "find", "related", "duplicates" or "slow
+  query". How a query is written is `query-grammar`, how the archetype index
+  answers one is `graph-reads-and-writes`; re-embedding stored vectors after a
+  model change is still this skill.
 scope: tasks-v2
 volatility: stable
 ---
@@ -97,11 +97,11 @@ predicate") is the contract; this is how it works and what has been learned.
 - **A similarity floor belongs to its model's space.** A threshold measured on
   one model means something else on another; changing the model means
   measuring the floor again (twin.ts says how it was measured).
-- **Changing the model or width is a migration** (the `migrate` skill). Every
-  vector is made again; on the box, while two models share the table no index
-  is built and every search reads every vector; in a store, `.near` answers
-  only from what is done until the sweep finishes. Back up ~/.yak/yak.json
-  first and prove it on a `VACUUM INTO` copy.
+- **Changing the model or width is a migration** (the `data-migration` skill).
+  Every vector is made again; on the box, while two models share the table no
+  index is built and every search reads every vector; in a store, `.near`
+  answers only from what is done until the sweep finishes. Back up
+  ~/.yak/yak.json first and prove it on a `VACUUM INTO` copy.
 - **Open:** 1-bit codes for the box's scan (T-59519), `.near` on D1 (T-59333),
   embedding calls spending from an account's budget (T-59279).
 

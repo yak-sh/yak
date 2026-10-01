@@ -1,5 +1,5 @@
 ---
-name: brief
+name: agent-briefs
 description: >
   Handing work to another agent in ~/code/tasks and taking it back: writing the
   brief for a fresh subagent, a fork or a managed spawn, relaying something Jeff
@@ -8,7 +8,7 @@ description: >
   call the Agent tool, SendMessage a running agent, run `yak session spawn`, or
   file a task an agent will be pointed at, even for a one-line fix, and whenever
   an agent's report or task-notification arrives. Not for doing the work
-  yourself, and not for a design Jeff will read (that is `design`).
+  yourself, and not for a design Jeff will read (that is `design-docs`).
 ---
 
 # Briefing an agent
@@ -51,10 +51,10 @@ work you do yourself.
    what matters.
 5. **Pointers, not copies**: the task, design, shas, files, memory ids. A
    pointer stays true; a pasted excerpt goes stale.
-6. **How it proves the work**: the end-to-end check it must run (the `probe`
-   skill), against a probe server, never the live graph, with a scratch
-   directory named for its task. Agents of one session share the session's
-   scratchpad, and fixed names like `scratchpad/probe` collide.
+6. **How it proves the work**: the end-to-end check it must run (the
+   `end-to-end-checks` skill), against a probe server, never the live graph,
+   with a scratch directory named for its task. Agents of one session share the
+   session's scratchpad, and fixed names like `scratchpad/probe` collide.
 7. **Tests**: "run only the tests your change could break", plus the behavior a
    new test must catch, or no test at all. "Add a test" alone gets one that
    restates the code (M-39441).

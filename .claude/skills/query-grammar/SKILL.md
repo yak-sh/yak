@@ -6,12 +6,13 @@ description: >
   qualifiers, directives (`.order` `.limit` `.after` `.count` `.tally`
   `.distinct` `.fields` `*` `.refs` `.near` `.edges`), time values, reverse
   associations, rule matches with `;` `$vars` `+` and brackets, and the
-  ambiguity refusal. Use it whenever you write or read a query anywhere: `yak
-  graph query`, a tool's `q`, `graph_query`, a board's query, a filter field, a
-  rule's or effect's `match`, a builder's query, a `.near` search, a saved
-  query in data; and before adding syntax to the grammar, since it is often
-  already there. How the answer is computed (the archetype index, row cost,
-  writes) is `graph`; full-text ranking and `.near` internals are `search`.
+  ambiguity refusal. Use it whenever you write or read a query anywhere:
+  `yak graph query`, a tool's `q`, `graph_query`, a board's query, a filter
+  field, a rule's or effect's `match`, a builder's query, a `.near` search, a
+  saved query in data; and before adding syntax to the grammar, since it is
+  often already there. How the answer is computed (the archetype index, row
+  cost, writes) is `graph-reads-and-writes`; full-text ranking and `.near`
+  internals are `search-and-embeddings`.
 scope: tasks-v2
 volatility: stable
 ---
@@ -43,7 +44,7 @@ filter. A malformed clause throws rather than becoming a search term.
 | `.p=a,b` / `.p=1..5` | any of / range (`1...5` excludes the end) |
 | `.p!=v` `.p~=v` | not equal / contains a literal substring |
 | `.p<v` `.p<=v` `.p>v` `.p>=v` | comparisons |
-| `word`, `"two words"`, `lemo*` | full-text terms (see `search`) |
+| `word`, `"two words"`, `lemo*` | full-text terms (see `search-and-embeddings`) |
 
 - Whitespace, `&` and `,` between terms all mean AND; `&` survives a URL.
   `|` is OR and binds looser: `.a .b|.c` is `(a and b) or c`; parentheses
@@ -82,7 +83,8 @@ The parser emits plain scalars; the compiler reads them by the property's type.
   against the span (packages/query/time.ts).
 - **References:** a human id or eid, `.filed.project=P-19`.
 - **Computed properties** filter like stored ones: `.task.status=wip`, from the
-  `status` keyword; a status filter binds as presence (`graph`).
+  `status` keyword; a status filter binds as presence
+  (`graph-reads-and-writes`).
 - **Kinds:** `.kind=memory` expands to the components that kind implies.
 - **Reverse associations:** a plural of a component that references this one:
   `.task .comments>=3` counts referrers; `.reviews!.rating!=5` is the
@@ -113,7 +115,7 @@ A directive belongs to the whole line wherever it is written.
 | `.order=` | `.order=-created.at` | `-` is descending; `similar` (with `.near`), `search` (with words) and `hot` are rankings |
 | `.limit=` `.after=` | `.limit=50&.after=T-13882` | a window; `.after` continues past an entity in any order |
 | `.refs=` | `.refs=D-45640 .count` | what references it; `.refs` / `!refs` alone |
-| `.near=` | `.task .near=T-6461 .limit=3` | ranked by meaning (`search`) |
+| `.near=` | `.task .near=T-6461 .limit=3` | ranked by meaning (`search-and-embeddings`) |
 | `.edges` | `.edges[requires]` | the edges touching the answer |
 
 `.order`, `.limit` and `.after` shape rows, so an aggregate ignores them:
@@ -143,7 +145,7 @@ and a bracket gathers inner matches into one binding:
 - `$region .region; [$sfx .sfx, sfx.region=$region]`: one binding per region
   holding all its sfx (a builder runs one build per outer binding).
 
-How rules run is the `effects` skill.
+How rules run is the `effects-and-rules` skill.
 
 ## Writing one well
 
@@ -153,7 +155,7 @@ How rules run is the `effects` skill.
 - Ask for the least you'll read: `.count` over rows, `.fields` over whole
   bundles.
 - A saved query (a board, a wake's `while`, a builder's query) is data that
-  outlives the names in it; a rename has to move it too (`migrate`).
+  outlives the names in it; a rename has to move it too (`data-migration`).
 - New syntax goes in @yaks/query and every evaluator in the same change, so
   every door gets it; never a private dialect in one caller.
 

@@ -8,8 +8,9 @@ description: >
   that something happened or how two things relate, or review a design that
   proposes components, even when the request never says "vocabulary" or
   "component": "add a field", "track whether X happened", "store Y on the
-  entity", "link X to Y", "keep a list of". Moving rows already stored into
-  the new shape is `migrate`; how a read or write of them behaves is `graph`.
+  entity", "link X to Y", "keep a list of". Moving rows already stored into the
+  new shape is `data-migration`; how a read or write of them behaves is
+  `graph-reads-and-writes`.
 ---
 
 # Designing vocabulary
@@ -51,9 +52,9 @@ term in the tools it comes from (Sentry, Java, git, SQL) before naming.
 
 ## Normalize: one aspect per component, one fact in one place
 
-Factoring well pays back in every query: a component spans every kind that
-wears it, and the next kind inherits it for free. Factoring badly is paid back
-later as a migration, the most expensive change there is (the `migrate` skill).
+Factoring well pays back in every query: a component spans every kind that wears
+it, and the next kind inherits it for free. Factoring badly is paid back later
+as a migration, the most expensive change there is (the `data-migration` skill).
 
 - **One aspect per component.** Its properties describe one aspect and are
   written together; two properties that change for different reasons are two
@@ -187,7 +188,7 @@ A name is declared in exactly one vocab.json; composing two declarations
 throws. Another package adds properties with `extends: true`, never a second
 declaration (M-17871). Two shapes of one thing is the bug; a rename is a
 rename, done everywhere in one change with the stored data migrated (the
-`migrate` skill), including every app store and kept version.
+`data-migration` skill), including every app store and kept version.
 
 A description has one home too: a component's lives in its declaration, where
 agents, the inspector and the MCP schema all read it; a package's lives in its
@@ -237,7 +238,7 @@ Decide these per component, on purpose:
 - A missing value reads as the safe side, and every constraint traces to Jeff.
 - Its description says what it is in a sentence a stranger can use.
 - Stored rows on the box and on the platform are migrated with the
-  `migrate` skill, and no app's own vocab.json declares the new word
+  `data-migration` skill, and no app's own vocab.json declares the new word
   (`deno task app-grep`).
 
 When this skill is wrong or missing something, fix it in the same change.

@@ -1,5 +1,5 @@
 ---
-name: design
+name: design-docs
 description: >
   Write, revise, file and decide a design (a D- entity) for Jeff in the yaks
   repo: a proposal he reads before anything is built, with where things live,
@@ -7,11 +7,11 @@ description: >
   whenever you are asked to pitch, propose, draft, design, "write up" or "think
   through" a change bigger than a bug fix; when a change moves code between
   packages or adds a package, a vocabulary keyword or a worker; when Jeff
-  answers a design's open questions and it needs revising, deciding (`yak
-  design decide`) or turning into tasks; or when an agent's draft needs
-  reviewing before it goes on a D- entity. Not for a bug fix or a small
-  feature, which are just done. How each proposed component is shaped is
-  `vocabulary`, and making and wiring a package is `package`; this one is the
+  answers a design's open questions and it needs revising, deciding
+  (`yak design decide`) or turning into tasks; or when an agent's draft needs
+  reviewing before it goes on a D- entity. Not for a bug fix or a small feature,
+  which are just done. How each proposed component is shaped is `vocabulary`,
+  and making and wiring a package is `packages-and-plugins`; this one is the
   document around them.
 ---
 
@@ -63,8 +63,8 @@ design drifts unless you check it against the code.
 1. A gist: what changes and why, in a short paragraph.
 2. The model: the components (`comp{…}`), how they behave, how it composes.
 3. Where things live: per package or worker, what it gains, offers and loses.
-4. Migration, when stored data changes: one shape after, proven on a copy,
-   never taking a yaks app down (Jeff's standing ask; the `migrate` skill).
+4. Migration, when stored data changes: one shape after, proven on a copy, never
+   taking a yaks app down (Jeff's standing ask; the `data-migration` skill).
 5. Open questions, each with a recommendation.
 6. A task tree (see below), once the shape is settled.
 7. Jeff's words, verbatim, dated.
