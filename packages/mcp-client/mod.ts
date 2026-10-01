@@ -342,7 +342,7 @@ export const connect = (server: Server, options: Options = {}): Connection => {
             entity: { eid: '$said' },
             content: { body: said.join('\n') },
             output: { source: asked.entity.eid },
-            ...(reply.isError ? { error: { code: 'mcp_tool' } } : {}),
+            ...(reply.isError ? { refusal: { code: 'mcp_tool' } } : {}),
           }]
         },
       })))

@@ -74,9 +74,10 @@ these components:
 - `content{body}` stores text. `output{source, id?, value?}` identifies what
   produced output, can preserve provider-specific output metadata, and carries
   the output as data where its producer declared a shape for it.
-- `error{code}` records an expected failure. `exception` records an unexpected
-  failure and can carry diagnostic fields supplied by the graph's stamping
-  rules.
+- `refusal{code}` records a deliberate no. Legacy `error{code}` remains readable
+  during migration and still records interruptions and check verdicts.
+  `exception` records an unexpected failure and can carry diagnostic fields
+  supplied by the graph's stamping rules.
 
 The call is written before its tool runs, so the request remains recorded if
 execution is interrupted. Tool output, the result, and the final execution state
@@ -264,7 +265,7 @@ argument names nothing of the declared kind, so a stray eid never becomes a new
 entity. A read-only tool is answered about whatever the id names.
 
 Throw `CallError(code, message)` for an expected refusal. The runner stores an
-`error{code}` bundle, marks the execution failed, and returns a result. Other
+`refusal{code}` bundle, marks the execution failed, and returns a result. Other
 thrown values produce an `exception` bundle and are also passed to `report`.
 Argument parsing, schema validation, and rejected graph writes follow the same
 failure path, ensuring a claimed call ends in `failed` with a result.
@@ -329,14 +330,14 @@ both plus the effect rules.
 Invocation history lives in the graph rather than in a separate telemetry table.
 The former log fields map to graph data as follows:
 
-| Information | Graph field                                                               |
-| ----------- | ------------------------------------------------------------------------- |
-| Tool        | `call.to`, referring to `tool{name}`                                      |
-| Caller      | `created.by` on the call                                                  |
-| Duration    | `result.ms`                                                               |
-| Outcome     | `execution.state`                                                         |
-| Failure     | An `error` or `exception` bundle whose `output.source` refers to the call |
-| Time        | `created.at`                                                              |
+| Information | Graph field                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------------- |
+| Tool        | `call.to`, referring to `tool{name}`                                                        |
+| Caller      | `created.by` on the call                                                                    |
+| Duration    | `result.ms`                                                                                 |
+| Outcome     | `execution.state`                                                                           |
+| Failure     | A `refusal` (legacy `error`) or `exception` bundle whose `output.source` refers to the call |
+| Time        | `created.at`                                                                                |
 
 For example:
 

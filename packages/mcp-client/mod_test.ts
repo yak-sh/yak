@@ -103,13 +103,17 @@ test('allowlists restrict list and invocation; errors are not mutation retries',
   try {
     f.toolError()
     assertEquals((await other.call('publish_mockup', {})).isError, true)
+    const [tool] = await other.tools()
+    const refused = await tool.run(...asking())
+    assertEquals(refused[0].refusal, { code: 'mcp_tool' })
+    assertEquals(refused[0].error, undefined)
     f.fail()
     await assertRejects(
       () => other.call('publish_mockup', {}),
       Error,
       'No retry',
     )
-    assertEquals(f.calls.filter((x) => x.method === 'tools/call').length, 2)
+    assertEquals(f.calls.filter((x) => x.method === 'tools/call').length, 3)
   } finally {
     await other.close()
   }

@@ -421,7 +421,7 @@ test('a holder that died is interrupted for, from what the graph says it held', 
   })
 })
 
-test('a throw is an error entity, a result, and a failed execution', async () => {
+test('a defect is an exception entity, a result, and a failed execution', async () => {
   let { g, r } = world([{
     ...echo,
     run: () => {
@@ -513,10 +513,12 @@ test('a defect is reported with its tool; a refusal is not', async () => {
     report: (err, _call, tool) => said.push([err, tool]),
   })
   await r.ensure()
-  await r.call(called('example_refuse', { value: 'x' }))
+  let refused = await r.call(called('example_refuse', { value: 'x' }))
+  assertEquals(refused.find((b) => b.refusal)?.refusal, { code: 'member' })
+  assertEquals(refused.some((b) => b.error), false)
   // A graph refusal is the caller's too, recorded under its own name.
   let named = await r.call(called('example_named', { value: 'x' }))
-  assertEquals(named.find((b) => b.error)?.error, { code: 'Refused' })
+  assertEquals(named.find((b) => b.refusal)?.refusal, { code: 'Refused' })
   assertEquals(said, [])
   await r.call(called('example_broke', { value: 'x' }))
   assertEquals(said, [[broke, 'example_broke']])
@@ -529,7 +531,7 @@ test('a batch the graph refuses is the call failing, not a call left claimed', a
   }])
   await r.ensure()
   let answer = await r.call(called('example_echo', { value: 'x' }))
-  assertEquals(answer.some((b) => b.exception || b.error), true)
+  assertEquals(answer.some((b) => b.exception || b.refusal), true)
   assertEquals((await g.read('.execution&*'))[0].execution, { state: 'failed' })
   assertEquals((await g.read('.result&*')).length, 1)
 })
@@ -550,6 +552,23 @@ test('a tool that ANSWERS a fault has not failed', async () => {
   let landed = await r.call(asked)
   assertEquals(landed.some((b) => b.error), true)
   assertEquals(faulted(landed, asked.entity.eid), false)
+})
+
+test('returned refusal rows are data, not a failed call', async () => {
+  let { g, r } = world([{
+    ...echo,
+    readOnly: true,
+    inputSchema: { type: 'object', properties: {} },
+    run: (_, g) => g.read('.refusal&*'),
+  }])
+  await r.ensure()
+  await g.apply([{ entity: { eid: 'no1' }, refusal: { code: 'member' } }])
+  let before = (await g.read('.refusal&*'))[0]
+  let asked = called('example_echo')
+  let landed = await r.call(asked)
+  assertEquals(answerOf(landed, asked.entity.eid), [before])
+  assertEquals(faulted(landed, asked.entity.eid), false)
+  assertEquals((await g.read('.refusal&*'))[0], before)
 })
 
 test("a tool that reads calls answers them, and only its own record is the runner's", async () => {
@@ -609,8 +628,8 @@ test('an answer too long to send whole is refused, not crashed on', async () => 
   let r = runner(g, { tools: [many], most: 300, report: () => {} })
   await r.ensure()
   let answer = await r.call(called('example_echo'))
-  let error = answer.find((b) => b.error)!
-  assertEquals((error.error as Comp).code, 'too_large')
+  let error = answer.find((b) => b.refusal)!
+  assertEquals((error.refusal as Comp).code, 'too_large')
   assertEquals(body(error).includes('\n'), false)
   assertEquals(answer.some((b) => b.entity.eid == 'e0'), false)
   assertEquals((await g.read('.execution&*'))[0].execution, { state: 'failed' })
@@ -650,11 +669,14 @@ test('a search answer says its marked hit as text', () => {
   )
 })
 
-test('a refused argument is an error code, not an exception', async () => {
+test('a refused argument is a refusal code, not an exception', async () => {
   let { r } = world()
   await r.ensure()
   let answer = await r.call(called('example_echo'))
-  assertEquals((answer.find((b) => b.error)!.error as Comp).code, 'arguments')
+  assertEquals(
+    (answer.find((b) => b.refusal)!.refusal as Comp).code,
+    'arguments',
+  )
 })
 
 // A tool whose argument names a person, and whose answer says which eid it
@@ -708,9 +730,12 @@ test('a write naming nothing of its kind is refused, and mints nothing', async (
   await g.apply([{ entity: { eid: 'c1' }, content: { body: 'not a person' } }])
   for (let who of ['ghost', 'c1']) {
     let answer = await r.call(called('person_mark', { who }))
-    assertEquals((answer.find((b) => b.error)!.error as Comp).code, 'arguments')
     assertEquals(
-      body(answer.find((b) => b.error)),
+      (answer.find((b) => b.refusal)!.refusal as Comp).code,
+      'arguments',
+    )
+    assertEquals(
+      body(answer.find((b) => b.refusal)),
       `CallError: who: ${who} names no person`,
     )
   }

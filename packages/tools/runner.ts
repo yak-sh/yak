@@ -315,7 +315,7 @@ let hitLine = (b: Bundle, hit: Comp): string => {
 }
 
 // What a tool's text answer carries: the spine every row has (@yaks/kernel),
-// its words, the call it answers, and a fault's `error` or `exception`. An
+// its words, the call it answers, and a fault's `refusal`, legacy `error` or `exception`. An
 // entity carrying more (a transcript entry, a comment, a memory, a row a tool
 // made) is data, and its words alone would drop which one it is and who wrote
 // it.
@@ -325,6 +325,7 @@ let SPOKEN = new Set([
   'updated',
   'content',
   'output',
+  'refusal',
   'error',
   'exception',
 ])
@@ -683,7 +684,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     let started = now()
     held.set(id, { call, started })
     // What a thrown error becomes: the fault as its own entity, recording
-    // which call it came from. An expected refusal gets `error{code}`: a
+    // which call it came from. An expected refusal gets `refusal{code}`: a
     // `CallError` with its code, or an error the graph's `status` puts below
     // 500 (a `Refused` write, an `Unknown` name) with its name. Anything else
     // is a defect, passed to `report` as well as recorded.
@@ -698,7 +699,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         entity: { eid: '$fault' },
         content: { body: String(error) },
         output: { source: id },
-        ...code == undefined ? { exception: {} } : { error: { code } },
+        ...code == undefined ? { exception: {} } : { refusal: { code } },
       }]
     }
     // Writing the answer. A read-only tool's answer is not a write — its

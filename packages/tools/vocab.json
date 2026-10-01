@@ -78,6 +78,17 @@
         }
       }
     },
+    "refusal": {
+      "component": true,
+      "type": "object",
+      "description": "A deliberate no: the tool or provider refused the request. Never tracked; its prose is on the content component beside it.",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "the tool or provider's reason for refusing"
+        }
+      }
+    },
     "error": {
       "component": true,
       "type": "object",
