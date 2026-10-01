@@ -16,10 +16,11 @@
       "immediate": true
     },
     "using": {
-      "model": "53b69a88-81a5-8478-90e7-cf0bf7c0eee6"
+      "provider": "openrouter",
+      "model": "google/lyria-3-pro-preview"
     },
     "content": {
-      "body": "Create a full-length fantasy game soundtrack song for $name.\n\nLand brief: $brief\nThis song’s theme: $theme\nFeature these instruments: $instruments.\nReturn to this melodic motif throughout the song: $motif\nVoice direction: $voice. For none, purely instrumental throughout: no human voice, humming, vocal pads, choir, singing, speech or chanting. For solo, one distant solo wordless voice may carry a phrase, no choir. For choir, wordless choir voices may carry the melody. Never lyrics, chanting, speech or spoken words.\nMake a distinct and complete song with a memorable melodic theme, natural dynamics and a satisfying ending. Use clean, natural acoustic production without distortion, lo-fi filtering or electronic effects. Produce one audio artifact in slot main."
+      "body": "Create a full-length fantasy game soundtrack song for $name.\n\nLand brief: $brief\nThis song\u2019s theme: $theme\nFeature these instruments: $instruments.\nReturn to this melodic motif throughout the song: $motif\nVoice direction: $voice. For none, purely instrumental throughout: no human voice, humming, vocal pads, choir, singing, speech or chanting. For solo, one distant solo wordless voice may carry a phrase, no choir. For choir, wordless choir voices may carry the melody. Never lyrics, chanting, speech or spoken words.\nMake a distinct and complete song with a memorable melodic theme, natural dynamics and a satisfying ending. Use clean, natural acoustic production without distortion, lo-fi filtering or electronic effects. Produce one audio artifact in slot main."
     }
   }
 ]
