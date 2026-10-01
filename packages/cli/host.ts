@@ -928,7 +928,13 @@ export let compose = async (
     // asked, which happens a moment later — `who` reads the variable rather
     // than a copy of its value.
     for (let [ui, , plugin] of dressed) {
-      observed.observe({ package: plugin, facet: 'ui', loaded: true, bound: true, value: ui })
+      observed.observe({
+        package: plugin,
+        facet: 'ui',
+        loaded: true,
+        bound: true,
+        value: ui,
+      })
     }
     let self = writer(vocab)
     let authenticate: Authenticate = () => self

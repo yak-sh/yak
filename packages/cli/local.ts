@@ -272,14 +272,23 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
     for (let o of loadedViews) host.observe?.(o)
     return made
   }
-  let loaded = await Promise.all(plugins().map(async (plugin) => ({
-    plugin, value: await facet(plugin, 'cli'),
-  })))
+  let loaded = await Promise.all(
+    plugins().map(async (plugin) => ({
+      plugin,
+      value: await facet(plugin, 'cli'),
+    })),
+  )
   let observe = (host: Served) => {
     if (!host.observe) return
-    for (let { plugin, value } of loaded) host.observe({
-      package: plugin, facet: 'cli', loaded: value !== null, bound: true, value,
-    })
+    for (let { plugin, value } of loaded) {
+      host.observe({
+        package: plugin,
+        facet: 'cli',
+        loaded: value !== null,
+        bound: true,
+        value,
+      })
+    }
   }
   let direct = loaded.flatMap(({ value }) => value?.commands ?? [])
   let tools = said.tools().filter(offered('cli')).map((declared) => ({
@@ -323,7 +332,17 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
           await drawn(host),
           host.vocab,
           answer,
-          c.tui ? { views: await terminal(plugins(), undefined, undefined, host.observe), config: c.config } : {},
+          c.tui
+            ? {
+              views: await terminal(
+                plugins(),
+                undefined,
+                undefined,
+                host.observe,
+              ),
+              config: c.config,
+            }
+            : {},
           {
             lookup: (eids) => host.graph.get(eids),
             query: (q) => host.graph.read(q),

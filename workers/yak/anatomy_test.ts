@@ -15,21 +15,45 @@ let words = loadVocab([{
 }])
 
 let tool: NamedTool = {
-  name: 'note_list', inputSchema: { type: 'object', properties: {} }, run: () => [],
+  name: 'note_list',
+  inputSchema: { type: 'object', properties: {} },
+  run: () => [],
 }
 
 test('worker anatomy is per-store composition, not a native or connector roster', () => {
   let count = 0
   let guarded: GraphPlugin = {
-    name: 'guarded', resources: { Env: () => { count++; return { TOKEN: 'never' } } },
-    hooks: { admit: () => { count++ } },
+    name: 'guarded',
+    resources: {
+      Env: () => {
+        count++
+        return { TOKEN: 'never' }
+      },
+    },
+    hooks: {
+      admit: () => {
+        count++
+      },
+    },
   }
   let app = workerAnatomy(words), directory = workerAnatomy(words)
-  app.graph([guarded], [{ name: 'domain', rules: [{ name: 'declared_rule', phase: 'rules', match: '.note', produce: { note: { text: 'not serialized' } } }] }])
+  app.graph([guarded], [{
+    name: 'domain',
+    rules: [{
+      name: 'declared_rule',
+      phase: 'rules',
+      match: '.note',
+      produce: { note: { text: 'not serialized' } },
+    }],
+  }])
   directory.graph([{ name: 'directory', hooks: { commit: () => {} } }], [])
-  app.commands({ note_list: {
-    description: 'List notes', input: {}, query: '.note',
-  } }, [tool])
+  app.commands({
+    note_list: {
+      description: 'List notes',
+      input: {},
+      query: '.note',
+    },
+  }, [tool])
   let first = app.read(), second = directory.read()
   assertEquals(first.scope, 'worker')
   assertEquals(first.host, 'worker/store')
@@ -61,8 +85,17 @@ test('worker effect ownership observes real registration once, never replays cal
   let calls = 0, runs = 0
   let made = () => {
     calls++
-    registry.handle({ note_seen: () => { runs++ } })
-    registry.on('note', { created: () => { runs++ }, doc: 'Observe a note' })
+    registry.handle({
+      note_seen: () => {
+        runs++
+      },
+    })
+    registry.on('note', {
+      created: () => {
+        runs++
+      },
+      doc: 'Observe a note',
+    })
   }
   let done = capture.registration('domain', registry)
   made()
@@ -72,21 +105,26 @@ test('worker effect ownership observes real registration once, never replays cal
   assertEquals(calls, 1)
   assertEquals(runs, 0)
   let declared = first.effects.find((e) => e.name == 'note_seen')!
-  assertEquals([declared.declared, declared.loaded, declared.bound], [true, true, true])
+  assertEquals([declared.declared, declared.loaded, declared.bound], [
+    true,
+    true,
+    true,
+  ])
   assertEquals(declared.handler, 'domain')
   let observer = first.effects.find((e) => e.registration)!
   assertEquals(observer.package, 'domain')
   assertEquals(observer.triggers, { kind: 'created', comp: 'note' })
   assertEquals(observer.description, 'Observe a note')
   assertEquals(first.effects.map((e) => e.id), again.effects.map((e) => e.id))
-  assert(!JSON.stringify(first).includes('\"run\":'))
+  assert(!JSON.stringify(first).includes('"run":'))
 })
-
 
 test('worker command replacement updates loading evidence without invoking a run', () => {
   let capture = workerAnatomy(words)
   capture.graph([], [])
-  capture.commands({ note_list: { description: 'List notes', input: {}, query: '.note' } }, [tool])
+  capture.commands({
+    note_list: { description: 'List notes', input: {}, query: '.note' },
+  }, [tool])
   let before = capture.read().tools.find((t) => t.name == 'note_list')!
   capture.commands({}, [])
   let after = capture.read().tools.find((t) => t.name == 'note_list')!

@@ -1501,9 +1501,11 @@ test('a Store anatomy supplier observes its own conditional composition without 
   assert(app.rules.some((r) => r.name == 'yak/weigh'))
   assert(!app.packages.some((p) => p.name == '@yaks/visualize'))
   let meta = new Store(state())
-  await meta.fetch(new Request('http://store/query?query=.entity', {
-    headers: { 'x-store': PLATFORM_STORE },
-  }))
+  await meta.fetch(
+    new Request('http://store/query?query=.entity', {
+      headers: { 'x-store': PLATFORM_STORE },
+    }),
+  )
   let directory = meta.anatomy()
   assert(!directory.rules.some((r) => r.name == 'yak/weigh'))
   assert(directory.rules.some((r) => r.name == 'yak/rules'))

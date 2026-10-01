@@ -2,12 +2,12 @@
 // The caller supplies the arrays it actually composed. No factory, registry
 // callback, tool, graph query or binding is evaluated to answer a snapshot.
 import {
+  type Anatomy,
+  anatomy,
   anatomyData,
   anatomyDocuments,
-  anatomy,
-  anatomyPlugin,
-  type Anatomy,
   type AnatomyEffect,
+  anatomyPlugin,
   type AnatomySeed,
   type AnatomySource,
   type AnatomyTool,
@@ -33,13 +33,14 @@ let text = (input: unknown, key: string) => {
   let v = value(input, key)
   return typeof v == 'string' ? v : undefined
 }
-let hints = (input: unknown) => anatomyData(Object.fromEntries(
-  ['title', 'readOnly', 'destructive', 'idempotent', 'openWorld']
-    .flatMap((key) => {
-      let v = value(input, key)
-      return v === undefined ? [] : [[key, v]]
-    }),
-))
+let hints = (input: unknown) =>
+  anatomyData(Object.fromEntries(
+    ['title', 'readOnly', 'destructive', 'idempotent', 'openWorld']
+      .flatMap((key) => {
+        let v = value(input, key)
+        return v === undefined ? [] : [[key, v]]
+      }),
+  ))
 
 /** Capture exists per incarnation. Shared vocabulary caches hold no loading state. */
 export let workerAnatomy = (vocab: Vocab) => {
@@ -58,17 +59,36 @@ export let workerAnatomy = (vocab: Vocab) => {
     // Anonymous Worker doors are not a method/path registry. Nor are the
     // analytics views plugin, a prompt file, or Env evidence of these groups.
     observed: {
-      packages: false, roles: false, facets: false, comps: false, tools: false,
-      commands: false, effects: false, rules: false, hooks: false,
-      routes: false, views: false, inspectViews: false, tui: false,
-      kits: false, themes: false, skills: false, secrets: false,
+      packages: false,
+      roles: false,
+      facets: false,
+      comps: false,
+      tools: false,
+      commands: false,
+      effects: false,
+      rules: false,
+      hooks: false,
+      routes: false,
+      views: false,
+      inspectViews: false,
+      tui: false,
+      kits: false,
+      themes: false,
+      skills: false,
+      secrets: false,
     },
   }
   let loaded = new Set<string>()
   let owner = (name: string) => {
     let row = source.packages!.find((p) => p.name == name)
     if (!row) {
-      row = { name, configured: false, declared: true, loaded: true, bound: true }
+      row = {
+        name,
+        configured: false,
+        declared: true,
+        loaded: true,
+        bound: true,
+      }
       source.packages!.push(row)
     }
     return row
@@ -77,8 +97,15 @@ export let workerAnatomy = (vocab: Vocab) => {
     owner(name)
     let row = source.facets!.find((f) => f.package == name && f.name == part)
     if (!row) {
-      row = { name: part, package: name, selected: true, attempted: true,
-        declared: true, loaded: true, bound }
+      row = {
+        name: part,
+        package: name,
+        selected: true,
+        attempted: true,
+        declared: true,
+        loaded: true,
+        bound,
+      }
       source.facets!.push(row)
     } else row.bound ||= bound
   }
@@ -88,7 +115,10 @@ export let workerAnatomy = (vocab: Vocab) => {
     source.comps = projected.comps.map((c) => ({ ...c, bound: true }))
     source.tools = projected.tools
     source.effects = projected.effects
-    source.rules = [...projected.rules.map((r) => ({ ...r, bound: true })), ...source.rules!]
+    source.rules = [
+      ...projected.rules.map((r) => ({ ...r, bound: true })),
+      ...source.rules!,
+    ]
     for (let c of source.comps) {
       if (c.extends) continue
       c.rules = anatomyData(vocab.comp(c.name))
@@ -98,19 +128,34 @@ export let workerAnatomy = (vocab: Vocab) => {
         .map(([name, a]) => ({ name, prop: a.prop }))
       for (let p of c.props) p.rules = anatomyData(vocab.prop(c.name, p.name))
     }
-    for (let rows of [source.comps, source.tools, source.effects, projected.rules]) {
+    for (
+      let rows of [source.comps, source.tools, source.effects, projected.rules]
+    ) {
       for (let row of rows) {
         row.package ??= 'worker/store'
         facet(row.package, 'vocab')
       }
     }
-    source.observed!.packages = source.observed!.facets = source.observed!.comps = true
+    source.observed!.packages =
+      source.observed!.facets =
+      source.observed!
+        .comps =
+        true
     loaded.add('vocab')
   }
   let graph = (plugins: GraphPlugin[], domains: Plugin[]) => {
     documents()
-    source.observed!.roles = source.observed!.rules = source.observed!.hooks = true
-    source.roles!.push({ name: 'graph', facets: ['vocab', 'rules'], declared: true, loaded: true, bound: true })
+    source.observed!.roles =
+      source.observed!.rules =
+      source.observed!.hooks =
+        true
+    source.roles!.push({
+      name: 'graph',
+      facets: ['vocab', 'rules'],
+      declared: true,
+      loaded: true,
+      bound: true,
+    })
     plugins.forEach((p, i) => {
       let name = text(p, 'name') ?? 'worker/store'
       let projected = anatomyPlugin(name, p, String(i))
@@ -134,11 +179,18 @@ export let workerAnatomy = (vocab: Vocab) => {
     documents()
     source.observed!.tools = source.observed!.commands = true
     source.commands = entries(declared).map(([name, d]) => ({
-      name, package: 'worker/store', facet: 'commands', declared: true,
-      loaded: true, bound: tools.some((t) => t.name == name),
-      description: text(d, 'description'), schema: {
-        type: 'object', properties: anatomyData(value(d, 'input')),
-        required: anatomyData({ required: value(d, 'required') }).required ?? [],
+      name,
+      package: 'worker/store',
+      facet: 'commands',
+      declared: true,
+      loaded: true,
+      bound: tools.some((t) => t.name == name),
+      description: text(d, 'description'),
+      schema: {
+        type: 'object',
+        properties: anatomyData(value(d, 'input')),
+        required: anatomyData({ required: value(d, 'required') }).required ??
+          [],
       },
     }))
     source.tools = source.tools!.filter((t) => t.facet != 'commands')
@@ -151,12 +203,16 @@ export let workerAnatomy = (vocab: Vocab) => {
         existing.loaded = existing.bound = true
         existing.inputSchema = anatomyData(value(t, 'inputSchema'))
         existing.hints = hints(t)
-      }
-      else {
+      } else {
         let row: AnatomySeed<AnatomyTool> = {
-          name, package: 'worker/store', facet: 'commands', loaded: true, bound: true,
+          name,
+          package: 'worker/store',
+          facet: 'commands',
+          loaded: true,
+          bound: true,
           inputSchema: anatomyData(value(t, 'inputSchema')),
-          description: text(t, 'description'), hints: hints(t),
+          description: text(t, 'description'),
+          hints: hints(t),
         }
         source.tools!.push(row)
       }
@@ -170,7 +226,9 @@ export let workerAnatomy = (vocab: Vocab) => {
     let before = new Map(registry.slots().map((s) => [s.id, s.run]))
     return () => {
       for (let s of registry.slots()) {
-        if (!before.has(s.id) || before.get(s.id) != s.run) slotOwners.set(s.id, name)
+        if (!before.has(s.id) || before.get(s.id) != s.run) {
+          slotOwners.set(s.id, name)
+        }
       }
       facet(name, 'effects')
     }
@@ -178,7 +236,13 @@ export let workerAnatomy = (vocab: Vocab) => {
   let effects = (slots: Slot[], host = 'worker/store') => {
     documents()
     source.observed!.effects = true
-    source.roles!.push({ name: 'effects', facets: ['effects'], declared: true, loaded: true, bound: true })
+    source.roles!.push({
+      name: 'effects',
+      facets: ['effects'],
+      declared: true,
+      loaded: true,
+      bound: true,
+    })
     source.effects = source.effects!.filter((e) => !e.registration)
     let declared = new Map(source.effects!.map((e) => [e.name, e]))
     for (let [i, s] of slots.entries()) {
@@ -197,11 +261,24 @@ export let workerAnatomy = (vocab: Vocab) => {
         continue
       }
       let row: AnatomySeed<AnatomyEffect> = {
-        name, package: handler, facet: 'effects', key: String(i), registration: true,
-        declared: false, loaded: run, bound: run, noop: false,
-        description: text(s, 'doc'), handler: run ? handler : undefined,
-        triggers: anatomyData({ kind: value(s, 'kind'), comp: value(s, 'comp'),
-          props: value(s, 'props'), watch: value(s, 'watch'), gone: value(s, 'gone') }),
+        name,
+        package: handler,
+        facet: 'effects',
+        key: String(i),
+        registration: true,
+        declared: false,
+        loaded: run,
+        bound: run,
+        noop: false,
+        description: text(s, 'doc'),
+        handler: run ? handler : undefined,
+        triggers: anatomyData({
+          kind: value(s, 'kind'),
+          comp: value(s, 'comp'),
+          props: value(s, 'props'),
+          watch: value(s, 'watch'),
+          gone: value(s, 'gone'),
+        }),
       }
       source.effects!.push(row)
       facet(handler, 'effects')

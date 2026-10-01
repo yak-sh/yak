@@ -1440,8 +1440,16 @@ test('web gathers UI facets before building routes, graph does not import them',
   let host = await composing(config, ['graph', 'web'], load)
   try {
     assertEquals(host.ui.kits, kits)
-    assertEquals(host.anatomy().kits.filter((k) => k.package == 'shop').map((k) => k.name), ['base'])
-    assertEquals(host.anatomy().themes.filter((t) => t.package == 'shop').map((t) => t.name), Object.keys(themes))
+    assertEquals(
+      host.anatomy().kits.filter((k) => k.package == 'shop').map((k) => k.name),
+      ['base'],
+    )
+    assertEquals(
+      host.anatomy().themes.filter((t) => t.package == 'shop').map((t) =>
+        t.name
+      ),
+      Object.keys(themes),
+    )
     let response = await serving(host)(new Request('http://box/dressed'))
     assertEquals(await response.text(), 'base')
     assert(seen.includes('shop/ui'))

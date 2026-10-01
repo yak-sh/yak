@@ -168,7 +168,7 @@ import {
 } from '@yaks/member'
 import { parse } from '@yaks/query'
 import { effectsIn, type Vocab, type VocabDoc } from '@yaks/vocab'
-import { anatomy, type Anatomy } from '@yaks/code/anatomy'
+import { type Anatomy, anatomy } from '@yaks/code/anatomy'
 import { workerAnatomy } from './anatomy.ts'
 import { reconcile, type Runner, runner } from '@yaks/tools'
 import { commands, type Tools } from '@yaks/tools/declared'
@@ -1091,7 +1091,12 @@ export class Store {
    * words — not `call`, `result` or `tool` — so the record lives in a graph of
    * its own for the life of this door rather than as three tables in
    * everybody's app. */
-  get door(): { graph: Graph; authenticate: Authenticate; calls: Graph; anatomy: () => Anatomy } {
+  get door(): {
+    graph: Graph
+    authenticate: Authenticate
+    calls: Graph
+    anatomy: () => Anatomy
+  } {
     return {
       graph: this.#graph,
       authenticate: this.#auth,
@@ -1101,9 +1106,12 @@ export class Store {
   }
 
   /** Value-free metadata captured by this incarnation, never a graph read. */
-  anatomy = (): Anatomy => this.#anatomy?.read() ?? anatomy({
-    host: 'worker/store', scope: 'worker', observed: {},
-  })
+  anatomy = (): Anatomy =>
+    this.#anatomy?.read() ?? anatomy({
+      host: 'worker/store',
+      scope: 'worker',
+      observed: {},
+    })
 
   #get(k: Word): string | null {
     if (this.#kv.has(k)) return this.#kv.get(k)!

@@ -1,10 +1,10 @@
 /** Per-composition evidence, separate from the shared vocabulary cache. */
 import {
   type Anatomy,
-  type AnatomyObservation,
   anatomy,
   anatomyData,
   anatomyDocuments,
+  type AnatomyObservation,
   anatomyPlugin,
   type AnatomySeed,
   type AnatomySource,
@@ -164,8 +164,11 @@ export let nativeAnatomy = (
     ownerOf(o.package).loaded = true
     if (o.bound) binding(o.package, o.facet)
     let common = {
-      package: o.package, facet: o.facet, declared: true,
-      loaded: true, bound: o.bound,
+      package: o.package,
+      facet: o.facet,
+      declared: true,
+      loaded: true,
+      bound: o.bound,
     }
     if (o.facet == 'ui') {
       for (let group of ['kits', 'themes'] as const) {
@@ -173,7 +176,8 @@ export let nativeAnatomy = (
         source[group] = [
           ...source[group]?.filter((p) => p.package != o.package) ?? [],
           ...entries(readValue(o.value, group)).map(([name]) => ({
-            ...common, name,
+            ...common,
+            name,
           })),
         ]
       }
@@ -188,7 +192,9 @@ export let nativeAnatomy = (
           if (typeof name != 'string') return []
           let description = readValue(c, 'description')
           return [{
-            ...common, name, key: String(i),
+            ...common,
+            name,
+            key: String(i),
             schema: anatomyData(readValue(c, 'inputSchema')),
             ...typeof description == 'string' ? { description } : {},
           }]
@@ -196,7 +202,11 @@ export let nativeAnatomy = (
       ]
       return
     }
-    for (let group of o.facet == 'tui' ? ['tui'] as const : ['views', 'inspectViews'] as const) {
+    for (
+      let group of o.facet == 'tui'
+        ? ['tui'] as const
+        : ['views', 'inspectViews'] as const
+    ) {
       let raw = group == 'inspectViews'
         ? readValue(o.value, 'inspectViews')
         : readValue(readValue(o.value, 'views'), 'renderers')

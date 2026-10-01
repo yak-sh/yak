@@ -58,7 +58,9 @@ let dressed = async (): Promise<Sheet> => {
 
 /** How one plugin's `./views` becomes a module: {@link subpath} unless a test
  * hands its modules over inline. */
-export type Views = (plugin: string) => Promise<{ views?: Registry; inspectViews?: unknown } | null>
+export type Views = (
+  plugin: string,
+) => Promise<{ views?: Registry; inspectViews?: unknown } | null>
 
 type Hit = {
   kind: string
@@ -146,11 +148,29 @@ export let registry = async (
   let named = [...new Set([...plugins, '@yaks/tools'])]
   let found = await Promise.all(named.map(async (plugin) => {
     let m = await load(plugin)
-    observe?.({ package: plugin, facet: 'views', loaded: m !== null, bound: true, value: m })
+    observe?.({
+      package: plugin,
+      facet: 'views',
+      loaded: m !== null,
+      bound: true,
+      value: m,
+    })
     return m
   }))
-  observe?.({ package: '@yaks/cli', facet: 'views', loaded: true, bound: true, value: { views: define([search]) } })
-  observe?.({ package: '@yaks/render', facet: 'views', loaded: true, bound: true, value: { views: generic } })
+  observe?.({
+    package: '@yaks/cli',
+    facet: 'views',
+    loaded: true,
+    bound: true,
+    value: { views: define([search]) },
+  })
+  observe?.({
+    package: '@yaks/render',
+    facet: 'views',
+    loaded: true,
+    bound: true,
+    value: { views: generic },
+  })
   return define([
     ...found.flatMap((m) => m?.views?.renderers ?? []),
     search,
@@ -174,7 +194,13 @@ export let terminal = async (
 ): Promise<Held> => {
   let own = await Promise.all(plugins.map(async (plugin) => {
     let m = await held(plugin)
-    observe?.({ package: plugin, facet: 'tui', loaded: m !== null, bound: true, value: m })
+    observe?.({
+      package: plugin,
+      facet: 'tui',
+      loaded: m !== null,
+      bound: true,
+      value: m,
+    })
     return m
   }))
   return define([
