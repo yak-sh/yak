@@ -86,6 +86,14 @@ component table needs on top:
 | `durable`    | comp  | how long a value lives: `forever` (default) \| `connection` \| `5s`     |
 | `pace`       | comp  | how often a writer's value is taken: relayed, or stored (`1s`)          |
 
+Two packages add keywords of their own, passed to `loadVocab` beside the
+documents: `edge: true` marks a relation component riding on an edge
+([@yaks/edge](../edge/README.md)), and `key: true` marks a key tag
+([@yaks/key](../key/README.md)). Reach for a key, not `identity`, when the
+facts locate an entity that has a life of its own: the entity keeps a minted
+eid, and a value it holds finds it again. `identity` derives the eid itself,
+and fits only where the facts are the entity, as a link is its two ends.
+
 A component whose name starts with `_` gives none of its properties a bare name,
 whatever `bare` says: `.name` never means `_prop.name`. An authored name starts
 with a letter, so `_` names only the components that describe a vocabulary

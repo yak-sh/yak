@@ -114,15 +114,24 @@ as a migration, the most expensive change there is (the `data-migration` skill).
 
 ## Identity: an eid, never a name
 
-- **Derive the eid where the same facts must land on one entity:** `identity`
-  makes two writers stating the same facts touch one entity instead of minting
-  two: `file{path, repository}`, `built{build, slot, …}`, `_prop{comp, name, …}`.
-  Writing the same identity again patches that entity, and @yaks/graph refuses
-  a bundle whose eid disagrees with it (packages/vocab/README.md, "`identity`
-  declares deterministic entity ids"). So an entity whose eid something else
-  already derives (a builder's output, from its build and slot; an edge, from
-  from, relation and to) can't also carry an identity of its own; it points at
-  its subject with a plain ref.
+- **Derive the eid only where the facts are the entity.** `identity` makes
+  two writers stating the same facts land on one entity: a link is its two
+  ends and its relation, so `edge{from, to}` derives its eid, and two peers
+  stating one link agree without asking each other (M-39645). Writing the same
+  identity again patches that entity, and @yaks/graph refuses a bundle whose
+  eid disagrees with it (packages/vocab/README.md, "`identity` declares
+  deterministic entity ids").
+- **Find an entity again by a key when the facts only locate it.** Something
+  with a life of its own (a builder's output, rebuilt, cited and revised; an
+  item a player holds) keeps a minted eid, and a key finds it again: a
+  @yaks/key tag component declared `key: true`, whose `key{of, value}` row has
+  the derived eid, so the value is unique by construction and a write
+  claiming it again lands on its owner (packages/key/README.md). An entity can
+  hold any number of keys, beside an identity of its own. `identity` is in the
+  core keyword table and `key` only in its package, which is why agents reach
+  for `identity` where a key belongs. @yaks/builders' `built{build, slot}` and
+  `build{builder, match, variant}` are still identities; T-61728 moves them to
+  keys.
 - **Reuse an outside system's id when it is already unique:** a Claude
   session's id is the session entity's eid, a commit's sha is the commit's.
   Matching the two then needs no lookup.
