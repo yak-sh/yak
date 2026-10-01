@@ -37,6 +37,21 @@ let checks = (vocab: Vocab): Map<string, Map<string, Check>> => {
   return out
 }
 
+// A flat joint tree names each node once, after the parent it hangs from.
+let tree = (value: unknown, key: string, parent: string): boolean => {
+  if (!Array.isArray(value)) return false
+  let seen = new Set<unknown>()
+  for (let node of value) {
+    if (!node || typeof node != 'object') return false
+    let fields = Object.fromEntries(Object.entries(node))
+    let name = fields[key], above = fields[parent]
+    if (typeof name != 'string' || !name || seen.has(name)) return false
+    if (above != null && !seen.has(above)) return false
+    seen.add(name)
+  }
+  return true
+}
+
 let bounds = (vocab: Vocab): Map<string, NumericConstraint[]> =>
   new Map(vocab.all.flatMap((name) => {
     let said = vocab.def(name)?.constraints ?? []
@@ -94,6 +109,13 @@ export let admitSchema = (vocab: Vocab): Plugin => {
             let errors = verify(value[prop])
             if (errors.length) {
               throw new Refused(`${comp}.${prop}: ${errorsText(errors)}`)
+            }
+            let shape = vocab.def(comp)?.properties?.[prop]?.tree
+            if (shape && !tree(value[prop], shape.key, shape.parent)) {
+              throw new Refused(
+                `${comp}.${prop}: names must be unique and ` +
+                  'parents must precede their children',
+              )
             }
           }
           for (let limit of limited.get(comp) ?? []) {

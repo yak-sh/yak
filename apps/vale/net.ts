@@ -13,6 +13,7 @@
 // through `keep`, which holds them a moment and sends them together: a visitor
 // may write 30 times a minute, and a busy fight earns more rows than that.
 // Until they are sent, `mine` counts them already, so nothing on screen waits.
+import { FIGURE_BUILDS, FIGURE_ROWS, useFigures } from './figure.ts'
 import { type Client, client, type ClientOpts, type Watch } from '@yaks/client'
 import { comp, num, str } from './bundle.ts'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
@@ -470,6 +471,26 @@ export let connect = (
     close: () => {
       removeEventListener('pagehide', flush)
       c.close()
+    },
+    figures: () => {
+      let watch = c.watch(FIGURE_ROWS, { evaluate: 'server' })
+      let builds = c.watch(FIGURE_BUILDS, { evaluate: 'server' })
+      let install = () => {
+        if (!watch.ready || !builds.ready) return
+        let rows = new Map(watch.value.map((row) => [row.entity.eid, row]))
+        for (let row of builds.value) {
+          let prior = rows.get(row.entity.eid)
+          rows.set(row.entity.eid, {
+            ...prior,
+            ...row,
+            built: { ...comp(prior, 'built'), ...comp(row, 'built') },
+          })
+        }
+        useFigures([...rows.values()])
+      }
+      watchDesigns(watch, ['figure', 'built'], install)
+      watchDesigns(builds, ['built', 'build'], install)
+      return Promise.all([ready(watch), ready(builds)]).then(() => {})
     },
     spawnKinds: () => {
       let watch = c.watch(SPAWN_KINDS, { evaluate: 'server' })

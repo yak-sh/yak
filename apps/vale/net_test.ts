@@ -122,3 +122,63 @@ import { loadVocab } from '@yaks/vocab'
 import { builderDoc } from '@yaks/builders/vocab'
 import { pair } from '../../packages/sync/testing.ts'
 import { kindOf, SPAWN_KINDS, useSpawnKinds } from './spawn.ts'
+
+test('figures wait for current-main provenance and disappear when stale', async () => {
+  let socket = pair().client
+  let page = connect(
+    new URL('https://example.test/vale/api/'),
+    loadVocab([words, core, builderDoc]),
+    {
+      connect: () => socket,
+      fetch: () => Response.json([]),
+      timer: () => {},
+    },
+  )
+  try {
+    let opening = page.figures()
+    socket.emit('open')
+    let asks = socket.sent as { id: string; subscribe?: string }[]
+    let figures = asks.find((a) => a.subscribe == FIGURE_ROWS)!
+    let builds = asks.find((a) => a.subscribe == FIGURE_BUILDS)!
+    assert(figures && builds)
+    let figure = { ...figureSeeds[0].figure, of: 'made' }
+    socket.emit(
+      'message',
+      JSON.stringify({
+        id: figures.id,
+        bundles: [{
+          entity: { eid: 'figure' },
+          figure,
+          built: { build: 'build' },
+        }],
+      }),
+    )
+    assertEquals(FIGURES.made, undefined)
+    socket.emit(
+      'message',
+      JSON.stringify({
+        id: builds.id,
+        bundles: [
+          {
+            entity: { eid: 'figure' },
+            built: { current: true, build: 'build' },
+          },
+          { entity: { eid: 'build' }, build: { variant: 'main' } },
+        ],
+      }),
+    )
+    await opening
+    assertEquals<unknown>(FIGURES.made, figure)
+    socket.emit(
+      'message',
+      JSON.stringify({ id: builds.id, bundles: [], gone: ['figure', 'build'] }),
+    )
+    assertEquals(FIGURES.made, undefined)
+  } finally {
+    page.close()
+    useFigures(figureSeeds)
+  }
+})
+
+import { FIGURE_BUILDS, FIGURE_ROWS, FIGURES, useFigures } from './figure.ts'
+import { rows as figureSeeds } from './figures_fixture.ts'

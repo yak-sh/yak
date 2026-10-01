@@ -550,6 +550,15 @@
         "stamped": {
           "type": "boolean"
         },
+        "tree": {
+          "type": "object",
+          "required": ["key", "parent"],
+          "additionalProperties": false,
+          "properties": {
+            "key": { "type": "string", "minLength": 1 },
+            "parent": { "type": "string", "minLength": 1 }
+          }
+        },
         "validate": {
           "type": "boolean"
         },

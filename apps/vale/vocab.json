@@ -774,7 +774,8 @@
           "ref": "beast_design",
           "death": "cascade",
           "index": true,
-          "description": "The creature it draws."
+          "description": "The creature it draws.",
+          "validate": true
         },
         "parts": {
           "type": "array",
@@ -782,29 +783,45 @@
           "items": {
             "type": "object",
             "properties": {
-              "name": { "type": "string", "minLength": 1 },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 48
+              },
               "parent": {
                 "type": "string",
-                "description": "The part it hangs from, by name; none hangs from the figure."
+                "description": "The part it hangs from, by name; none hangs from the figure.",
+                "minLength": 1,
+                "maxLength": 48
               },
               "pivot": {
                 "type": "array",
                 "description": "Where it turns, in its parent's space.",
-                "items": { "type": "number" },
+                "items": {
+                  "type": "number",
+                  "minimum": -12,
+                  "maximum": 12
+                },
                 "minItems": 3,
                 "maxItems": 3
               },
               "turn": {
                 "type": "array",
                 "description": "How it is turned at rest, in radians about y, then x, then z.",
-                "items": { "type": "number" },
+                "items": {
+                  "type": "number",
+                  "minimum": -12,
+                  "maximum": 12
+                },
                 "minItems": 3,
                 "maxItems": 3
               },
               "cell": {
                 "type": "number",
                 "exclusiveMinimum": 0,
-                "description": "The edge of the voxels its colour is speckled in; 0.1 unless it says."
+                "description": "The edge of the voxels its colour is speckled in; 0.1 unless it says.",
+                "minimum": 0.03,
+                "maximum": 2
               },
               "boxes": {
                 "type": "array",
@@ -814,22 +831,40 @@
                   "prefixItems": [
                     {
                       "type": "array",
-                      "items": { "type": "number" },
+                      "items": {
+                        "type": "number",
+                        "minimum": -8,
+                        "maximum": 8
+                      },
                       "minItems": 3,
                       "maxItems": 3
                     },
                     {
                       "type": "array",
-                      "items": { "type": "number", "minimum": 0 },
+                      "items": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "maximum": 8
+                      },
                       "minItems": 3,
                       "maxItems": 3
                     },
-                    { "type": "integer", "minimum": 0, "maximum": 16777215 },
-                    { "type": "number", "minimum": 0 }
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 16777215
+                    },
+                    {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
                   ],
                   "minItems": 3,
                   "maxItems": 4
-                }
+                },
+                "minItems": 1,
+                "maxItems": 24
               },
               "move": {
                 "type": "object",
@@ -840,76 +875,162 @@
                   "leg": {
                     "type": "object",
                     "properties": {
-                      "phase": { "type": "number", "minimum": 0, "maximum": 1 }
-                    }
+                      "phase": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "phase"
+                    ]
                   },
                   "arm": {
                     "type": "object",
                     "properties": {
-                      "phase": { "type": "number", "minimum": 0, "maximum": 1 }
-                    }
+                      "phase": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "phase"
+                    ]
                   },
                   "wing": {
                     "type": "object",
                     "properties": {
-                      "beat": { "type": "number", "minimum": 0 }
-                    }
+                      "beat": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 12
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "beat"
+                    ]
                   },
-                  "tail": { "type": "object" },
-                  "head": { "type": "object" },
-                  "jaw": { "type": "object" },
-                  "spin": { "type": "object" },
+                  "tail": {
+                    "type": "object",
+                    "additionalProperties": false
+                  },
+                  "head": {
+                    "type": "object",
+                    "additionalProperties": false
+                  },
+                  "jaw": {
+                    "type": "object",
+                    "additionalProperties": false
+                  },
+                  "spin": {
+                    "type": "object",
+                    "additionalProperties": false
+                  },
                   "link": {
                     "type": "object",
                     "properties": {
-                      "n": { "type": "integer", "minimum": 1 }
-                    }
+                      "n": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 32
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "n"
+                    ]
                   }
                 },
                 "additionalProperties": false
               }
             },
-            "required": ["name", "pivot", "boxes"]
+            "required": [
+              "name",
+              "pivot",
+              "boxes"
+            ],
+            "additionalProperties": false
+          },
+          "validate": true,
+          "minItems": 1,
+          "maxItems": 32,
+          "tree": {
+            "key": "name",
+            "parent": "parent"
           }
         },
         "height": {
           "type": "number",
           "exclusiveMinimum": 0,
-          "description": "Where its name plate sits, in metres above the ground."
+          "description": "Where its name plate sits, in metres above the ground.",
+          "validate": true,
+          "maximum": 12
         },
         "size": {
           "type": "number",
           "exclusiveMinimum": 0,
-          "description": "How big the game takes it to be: how far a blow must reach it, and how heavy its footfalls."
+          "description": "How big the game takes it to be: how far a blow must reach it, and how heavy its footfalls.",
+          "validate": true,
+          "maximum": 8
         },
         "dust": {
           "type": "integer",
           "minimum": 0,
           "maximum": 16777215,
-          "description": "The colour of the dust a blow knocks off it."
+          "description": "The colour of the dust a blow knocks off it.",
+          "validate": true
         },
         "gait": {
           "type": "string",
-          "enum": ["walk", "hop", "hover", "slide", "drift"]
+          "enum": [
+            "walk",
+            "hop",
+            "hover",
+            "slide",
+            "drift"
+          ],
+          "validate": true
         },
         "bite": {
           "type": "string",
-          "enum": ["lunge", "peck", "smash", "thrust", "dive", "leap", "flare"]
+          "enum": [
+            "lunge",
+            "peck",
+            "smash",
+            "thrust",
+            "dive",
+            "leap",
+            "flare"
+          ],
+          "validate": true
         },
         "fall": {
           "type": "string",
-          "enum": ["topple", "flip", "back", "flatten"]
+          "enum": [
+            "topple",
+            "flip",
+            "back",
+            "flatten"
+          ],
+          "validate": true
         },
         "speckle": {
           "type": "number",
           "minimum": 0,
-          "description": "How grainy its stuff looks; 0.1 unless it says."
+          "description": "How grainy its stuff looks; 0.1 unless it says.",
+          "validate": true,
+          "maximum": 1
         },
         "glow": {
           "type": "integer",
           "minimum": 0,
           "maximum": 16777215,
-          "description": "The colour it shines by its own light, if it does."
+          "description": "The colour it shines by its own light, if it does.",
+          "validate": true
         }
       },
       "required": [

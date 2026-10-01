@@ -19,7 +19,7 @@ import { bar } from './bar.ts'
 import { board } from './board.ts'
 import { useBeasts, useDens } from './beasts.ts'
 import { useNames } from './names.ts'
-import { FIGURES, sizeOf, useFigures } from './figure.ts'
+import { FIGURES, sizeOf } from './figure.ts'
 import { pendingSpawns } from './spawn.ts'
 import { aim, bearing, type Cam, depth, moveLook, steer } from './cam.ts'
 import { cast } from './cast.ts'
@@ -157,7 +157,7 @@ await Promise.all([
   opening.designs(['beast_design'], useBeasts, ['combat', 'loot', 'sounds']),
   opening.designs(['den'], useDens),
   opening.designs(['alias', 'key'], useNames),
-  opening.designs(['figure'], useFigures),
+  opening.figures(),
   opening.spawnKinds(),
   itemReady,
   themeReady,

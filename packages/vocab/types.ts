@@ -248,6 +248,8 @@ export type PropSchema = {
   stamped?: boolean
   /** Opt in to full JSON Schema validation by a graph's schema plugin. */
   validate?: boolean
+  /** A flat tree: unique keys, with parents appearing before children. */
+  tree?: { key: string; parent: string }
   /** Bounds over numeric expressions evaluated against the complete row. */
   constraints?: NumericConstraint[]
   // On a component: who is told about a write, how long the value lives, and

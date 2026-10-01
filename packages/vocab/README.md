@@ -266,6 +266,9 @@ An app can set `validate: true` on a property to have the hosted Store check its
 complete JSON Schema, including nested items and numeric bounds, before each
 write. The Store also checks the component's `required` list for these rows.
 `v.check` remains a lightweight type check for other graphs.
+An opted-in array may also declare `tree: {key: 'name', parent: 'parent'}`:
+nodes have unique string keys, and any parent must appear earlier in the array.
+This bounds ancestry and refuses missing parents or cycles before installation.
 
 A component can declare a numeric `constraints` entry with `name`, `value`,
 `maximum` and `message`. `value` is a finite weighted sum:

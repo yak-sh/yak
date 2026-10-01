@@ -103,6 +103,14 @@ export type Figure = {
 /** Every creature's figure, by the creature's eid. */
 export let FIGURES: Record<string, Figure> = {}
 
+/** Seeded looks, or the current main output and its build provenance. */
+export let FIGURE_ROWS = '.figure !built | .figure .built.current=true ' +
+  '.built.build.build.variant=main *'
+
+export let FIGURE_BUILDS = '.figure .built.current=true ' +
+  '.built.build.build.variant=main ' +
+  '.fields=built.current,built.build.build.variant'
+
 let installed: Bundle[] | undefined
 
 /** Install the store's current figures. A creature drawn twice keeps the
@@ -112,6 +120,12 @@ export let useFigures = (rows: Bundle[]) => {
   installed = rows
   FIGURES = Object.fromEntries(rows.flatMap((row) => {
     let f = comp(row, 'figure') as Figure
+    let built = comp(row, 'built')
+    let build = rows.find((r) => r.entity.eid == built.build)
+    if (
+      row.built && (built.current !== true ||
+        comp(build, 'build').variant != 'main')
+    ) return []
     return typeof f.of == 'string' ? [[f.of, f]] : []
   }))
 }
