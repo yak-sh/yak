@@ -205,7 +205,19 @@ test('a connected OpenRouter model puts generated audio in the app store', async
     }) as typeof fetch
   try {
     let session = crypto.randomUUID()
-    assertEquals((await v.send('/apply', asking(session, SEED))).status, 200)
+    let builder = crypto.randomUUID(), build = crypto.randomUUID()
+    let call = crypto.randomUUID()
+    let request = asking(session, SEED)
+    request[0] = { ...request[0], session: { source: call } }
+    assertEquals(
+      (await v.send('/apply', [
+        { entity: { eid: builder }, builder: { query: '' }, staged: {} },
+        { entity: { eid: build }, build: { builder } },
+        { entity: { eid: call }, call: { source: build } },
+        ...request,
+      ])).status,
+      200,
+    )
     let [attachment] = await v.landed(`.entry.session=${session}&.attachment&*`)
     let eid = (attachment.attachment as Comp).artifact as string
     let [artifact] = await v.read(`.entity.eid=${eid}&.artifact&*`)
@@ -229,6 +241,8 @@ test('a connected OpenRouter model puts generated audio in the app store', async
     assertEquals(calls, 2)
     let [cost] = await v.read(`.entry.session=${session}&.cost&*`)
     assertEquals(cost.cost, { dollars: 0.125, reported: true })
+    let [built] = await v.read(`.entity.eid=${build}&.build&*`)
+    assertEquals((built.build as Comp).cost, 0.125)
     let blocked = crypto.randomUUID()
     await v.send('/apply', asking(blocked, SEED))
     let [error] = await v.landed(`.entry.session=${blocked}&.error&*`)
