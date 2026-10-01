@@ -18,7 +18,8 @@ import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { GIT_STORE, PLATFORM_STORE, storeOf } from './door.ts'
 import { bound, type Env } from './env.ts'
-import { keys, pages, part } from './key-audit.ts'
+import { repair } from './key-repair.ts'
+import { auditRows, keys, pages, part } from './key-audit.ts'
 import { KERNEL } from './meta.ts'
 import { whoIs } from './session.ts'
 
@@ -38,7 +39,11 @@ let json = (status: number, code: string, message: string) =>
 export let stores = async (env: Env): Promise<Swept[]> => {
   // The roster itself must not stop at a listing cap, nor omit trash or
   // private apps. The directory's immutable app.store is the authority.
-  let rows = await pages(storeOf(env.STORE, PLATFORM_STORE))
+  let roster = storeOf(env.STORE, PLATFORM_STORE)
+  let rows = [
+    ...await pages(roster, '.space&*'),
+    ...await pages(roster, '.app&*'),
+  ]
   let spaces = new Map(
     rows.filter((row) => part(row, 'space')).map((
       row,
@@ -90,13 +95,32 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   if (req.method == 'GET') {
     // This is evidence retrieval, not a write door or a second query grammar.
     // UUIDs bound the selection; .refs is the graph's existing provenance read.
+    let select = url.searchParams.get('select')
+    if (select) {
+      if (!/^[a-z][a-z0-9_]*$/.test(select)) {
+        return json(400, 'bad_select', 'select one component name')
+      }
+      let after = url.searchParams.get('after') ?? ''
+      if (
+        after &&
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          after,
+        )
+      ) return json(400, 'bad_eid', 'after must be an eid UUID')
+      let q = `.${select}&*&.limit=200${after ? `&.after=${after}` : ''}`
+      return await storeOf(env.STORE, name)(
+        `/query?q=${encodeURIComponent(q)}`,
+        { method: 'GET' },
+        KERNEL,
+      )
+    }
     let eid = url.searchParams.get('eid') ?? ''
     if (
       !eid && !url.searchParams.has('refs') && !url.searchParams.has('after')
     ) {
       return Response.json({
         store: name,
-        ...keys(await pages(storeOf(env.STORE, name))),
+        ...keys(await auditRows(storeOf(env.STORE, name))),
       })
     }
     let after = url.searchParams.get('after') ?? ''
@@ -116,6 +140,13 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
       { method: 'GET' },
       KERNEL,
     )
+  }
+  let fix = url.searchParams.get('repair')
+  if (fix) {
+    if (fix != 'builder-keys') {
+      return json(400, 'no_repair', 'the sweep repairs builder-keys metadata')
+    }
+    return await repair(req, storeOf(env.STORE, name))
   }
   let rehearse = url.searchParams.get('rehearse') == '1'
   return await storeOf(env.STORE, name)(

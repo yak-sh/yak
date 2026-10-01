@@ -40,6 +40,17 @@ export let pages = async (
   }
 }
 
+/** Only audit-bearing rows, not git blobs or the platform's unrelated rows. */
+export let auditRows = async (door: Pick<Door, 'consume'>) => {
+  let rows = new Map<string, Bundle>()
+  for (let name of ['build', 'built', 'build_of', 'output_of']) {
+    for (let row of await pages(door, `.${name}&*`)) {
+      rows.set(row.entity.eid, row)
+    }
+  }
+  return [...rows.values()]
+}
+
 let string = (value: unknown): value is string =>
   typeof value == 'string' && !!value.trim()
 

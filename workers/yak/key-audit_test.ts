@@ -3,7 +3,7 @@ import { assertEquals } from '@std/assert'
 import { type Bundle } from '@yaks/graph'
 import { keyed } from '@yaks/key'
 import { buildOf, outputOf } from '@yaks/builders'
-import { keys, pages } from './key-audit.ts'
+import { auditRows, keys, pages } from './key-audit.ts'
 import { KERNEL } from './meta.ts'
 
 test('the audit checks keys without changing complete or malformed evidence', () => {
@@ -87,4 +87,37 @@ test('the audit walks past 1000 and short pages with the graph cursor and kernel
   }
   assertEquals(await pages(door), rows)
   assertEquals(calls, 18)
+})
+
+test('audit scans only its four components and deduplicates owners', async () => {
+  let calls: string[] = []
+  let same: Bundle = {
+    entity: { eid: 'same' },
+    build: { builder: 'builder', match: '[]' },
+    built: { build: 'same', slot: 'main' },
+  }
+  let door = {
+    consume: async <T>(
+      path: string,
+      read: (r: Response) => T | Promise<T>,
+    ): Promise<T> => {
+      let q = new URL(`https://store${path}`).searchParams.get('q')!
+      calls.push(q)
+      return await read(
+        Response.json(
+          q.includes('.after=')
+            ? []
+            : q.startsWith('.build&') || q.startsWith('.built&')
+            ? [same]
+            : [],
+        ),
+      )
+    },
+  }
+  assertEquals(await auditRows(door), [same])
+  assertEquals(calls.some((q) => q.startsWith('.entity')), false)
+  assertEquals(
+    calls.filter((q) => !q.includes('.after=')).map((q) => q.split('&')[0]),
+    ['.build', '.built', '.build_of', '.output_of'],
+  )
 })

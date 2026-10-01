@@ -5,6 +5,8 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { directory, stamp } from './directory.ts'
 import * as dirPart from './directory.ts'
+import { storeOf } from './door.ts'
+import { KERNEL } from './meta.ts'
 import { sign } from './lib/token.ts'
 import * as sweep from './sweep.ts'
 import { platform } from './testing.ts'
@@ -47,7 +49,12 @@ let spaces = async () => {
       },
     }],
   })
-  let door = async (who: string, query = '', method = 'GET') => {
+  let door = async (
+    who: string,
+    query = '',
+    method = 'GET',
+    body?: unknown,
+  ) => {
     let cookie = `yak_session=${await sign(
       { person: who, space: null, exp: Date.now() + 60_000 },
       SECRET,
@@ -55,6 +62,7 @@ let spaces = async () => {
     let r = await sweep.fetch(
       new Request(`https://yaks.app${sweep.PATH}${query}`, {
         method,
+        body: body === undefined ? undefined : JSON.stringify(body),
         headers: { cookie },
       }),
       env,
@@ -152,4 +160,90 @@ test('the audit reaches private trash, git and platform by the roster only', asy
     200,
   )
   assertEquals(!!app.app, true)
+})
+
+test('the repair is missing-field-only CAS, with a kernel dry run', async () => {
+  let { scenario, door } = await spaces()
+  using _ = scenario
+  let store = 'ada/notes.abc123'
+  let raw = storeOf(scenario.env.STORE, store)
+  let builder = 'dcbeb828-567c-4b95-9671-7c31f29eaca1'
+  let build = '9ebb31ac-46ee-8458-85e6-a1725bfdcb9f'
+  let output = '8693d7a4-4d42-8fa1-b662-c36c0ac30b06'
+  let input = '1f4b7b6e-44df-432f-844f-85393dabe0b7'
+  let seeded = await raw('/apply', {
+    method: 'POST',
+    body: JSON.stringify([
+      { entity: { eid: builder }, builder: { query: '.doc' } },
+      { entity: { eid: input }, doc: { body: 'evidence' } },
+      { entity: { eid: build }, build: { builder, variant: 'main' } },
+      { entity: { eid: output }, built: { slot: 'summary' } },
+    ]),
+  }, KERNEL)
+  assertEquals(seeded.status, 200)
+  let at = `?store=${store}&repair=builder-keys`
+  let change = [
+    {
+      entity: { eid: build },
+      build: { match: JSON.stringify([input]) },
+      $was: { build: { match: null } },
+    },
+    {
+      entity: { eid: output },
+      built: { build },
+      $was: { built: { build: null } },
+    },
+  ]
+  assertEquals(
+    (await door(ADA, at, 'POST', { check: true, change })).status,
+    403,
+  )
+  assertEquals((await door(JEFF, at, 'POST', { change })).status, 400)
+  assertEquals(
+    (await door(JEFF, at, 'POST', {
+      check: true,
+      change: [{ ...change[0], doc: { body: 'no' } }],
+    })).status,
+    400,
+  )
+  assertEquals(
+    (await door(JEFF, at, 'POST', {
+      check: true,
+      change: [{ ...change[0], $was: { build: { match: 'bad' } } }],
+    })).status,
+    409,
+  )
+  assertEquals(
+    (await door(JEFF, at, 'POST', { check: true, change })).status,
+    200,
+  )
+  let read = `?store=${store}&audit=builder-keys&eid=${build}`
+  assertEquals((await door(JEFF, read)).body[0].build.match, null)
+  assertEquals(
+    (await door(JEFF, at, 'POST', { check: false, change })).status,
+    200,
+  )
+  assertEquals(
+    (await door(JEFF, read)).body[0].build.match,
+    JSON.stringify([input]),
+  )
+  assertEquals(
+    (await door(JEFF, at, 'POST', { check: false, change })).status,
+    400,
+  )
+  let selection = await door(
+    JEFF,
+    `?store=${store}&audit=builder-keys&select=doc`,
+  )
+  assertEquals(selection.status, 200)
+  assertEquals(selection.body.length, 1)
+  assertEquals(
+    (await door(JEFF, `?store=${store}&audit=builder-keys&eid=${output}`))
+      .body[0].built.build,
+    build,
+  )
+  assertEquals(
+    (await door(ADA, `?store=${store}&audit=builder-keys&select=doc`)).status,
+    403,
+  )
 })

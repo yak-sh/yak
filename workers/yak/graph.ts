@@ -2661,7 +2661,9 @@ export class Store {
       path == '/apply' && request.method == 'POST' &&
       (kernel || logged(request))
     ) {
-      return this.#commit(request)
+      return this.#commit(request, null, {
+        check: new URL(request.url).searchParams.has('check'),
+      })
     }
     if (path == '/query') return await this.#asked(request)
     return await this.#route(request)
