@@ -56,7 +56,7 @@ test('server evaluation never parses, filters or primes the query locally', asyn
       'café',
       '.near=a',
       '.requires->a',
-      '.title=unloaded&.fields=eid',
+      '.doc.title=unloaded&.fields=entity.eid',
       '.limit=1&.after=50',
       '.tally=recipe.course',
     ]
@@ -100,7 +100,7 @@ test('server membership is authoritative even when fields/far targets are unload
 
 test('replacement preserves server ranking; content deltas do not reorder', () => {
   let { c, frame } = fixture()
-  let w = c.watch('.order=title&.limit=2', server)
+  let w = c.watch('.order=doc.title&.limit=2', server)
   frame({ id: 's1', bundles: [row('z'), row('a')] })
   assertEquals(ids(w.value), ['z', 'a']) // do not sort on incomplete local fields
   frame({ id: 's1', bundles: [row('a'), row('z')], reset: true })

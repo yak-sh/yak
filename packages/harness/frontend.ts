@@ -289,7 +289,7 @@ export let frontend = (vault: Vault | false = false): Frontend => {
           viewport: { follow: true, offset: 0 },
         }])
       }
-      let watch = c.watch('.eid=' + id)
+      let watch = c.watch('.entity.eid=' + id)
       return {
         watch,
         set: (

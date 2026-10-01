@@ -1,5 +1,5 @@
 import { test } from '@yaks/testing'
-import { assertEquals, assertThrows } from '@std/assert'
+import { assertEquals } from '@std/assert'
 import { loadVocab, storable } from '@yaks/vocab'
 import { idKeywords } from '@yaks/id'
 import { nameKeywords } from '@yaks/names'
@@ -41,11 +41,6 @@ test('a camera is centre, scale and window size', () => {
 test("a client's ip is the server's to write", () => {
   assertEquals(v.comp('client')!.stamped, ['ip'])
   assertEquals(v.comp('client')!.writable, ['user_agent', 'actor'])
-})
-
-test('pane.parent is said in full, never bare', () => {
-  assertThrows(() => v.route('parent'))
-  assertEquals(v.route('zoom'), { comp: 'camera', prop: 'zoom' })
 })
 
 test('the plugin contributes the document and no hook', () => {

@@ -101,7 +101,7 @@ test('edges builder', () => {
 
 // Accessors pick directives out of a clause list.
 test('accessors', () => {
-  let ast = parse('.status=open&.order=hot&.near=T-3&.limit=50&.after=900')
+  let ast = parse('.task.status=open&.order=hot&.near=T-3&.limit=50&.after=900')
   assertEquals(orderOf(ast), 'hot')
   assertEquals(nearOf(ast), 'T-3')
   assertEquals(windowOf(ast), { limit: 50, after: 900 })

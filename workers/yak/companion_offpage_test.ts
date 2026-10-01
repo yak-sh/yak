@@ -142,7 +142,7 @@ test('a companion works off-page across pause, restart and retry', async () => {
   }
   time.tick(5_000)
   let first = await fire()
-  let [chosen] = await read(door, `.eid=${eid}&?companion`)
+  let [chosen] = await read(door, `.entity.eid=${eid}&?companion`)
   assert(
     chosen.companion,
     JSON.stringify({
@@ -175,7 +175,7 @@ test('a companion works off-page across pause, restart and retry', async () => {
   }
   door = appStore(p.env.STORE, k.space, k.app)
   await fire()
-  let [paused] = await read(door, `.eid=${eid}&?companion`)
+  let [paused] = await read(door, `.entity.eid=${eid}&?companion`)
   assertEquals(paused.companion.call, chosen.companion.call)
   await write('/apply', {
     entities: [{
@@ -187,10 +187,10 @@ test('a companion works off-page across pause, restart and retry', async () => {
   for (let i = 0; i < 8; i++) {
     time.tick(5_000)
     await fire()
-    let [current] = await read(door, `.eid=${eid}&?companion`)
+    let [current] = await read(door, `.entity.eid=${eid}&?companion`)
     if (current.companion.status == 'Done') break
   }
-  let [finished] = await read(door, `.eid=${eid}&?companion&?wake`)
+  let [finished] = await read(door, `.entity.eid=${eid}&?companion&?wake`)
   assertEquals(finished.companion.status, 'Done')
   assertEquals(finished.wake, undefined)
   let items = await read(door, `.item.owner=${hero}&?gathered`)

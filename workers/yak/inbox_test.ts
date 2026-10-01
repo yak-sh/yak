@@ -380,7 +380,7 @@ test(
       let agent = connector(k, them.cookie)
       let dir = meta(k)
       let spent = async () => {
-        let [row] = await dir.query(`.eid=${them.eids.jeff28}&?meter`)
+        let [row] = await dir.query(`.entity.eid=${them.eids.jeff28}&?meter`)
         return ((row?.meter ?? {}) as { emails?: number }).emails ?? 0
       }
       let write = async (subject: string) =>

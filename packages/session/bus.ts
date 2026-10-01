@@ -29,7 +29,7 @@ let candidates = async (g: Graph): Promise<Eid[]> => {
       ? [
         unsaid(
           present('knock'),
-          { ...present('knock.target.session'), facet: true },
+          present('knock.target.session'),
         ),
         unsaid(present('knock'), present('knock.target.claim.session')),
       ]
@@ -37,7 +37,7 @@ let candidates = async (g: Graph): Promise<Eid[]> => {
     ...g.vocab.comp('deliver')
       ? [unsaid(
         present('deliver'),
-        { ...present('deliver.to.session'), facet: true },
+        present('deliver.to.session'),
       )]
       : [],
   ]

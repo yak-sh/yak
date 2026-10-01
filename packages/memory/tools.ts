@@ -81,7 +81,7 @@ let byWhom = async (graph: Graph, said: string): Promise<string> =>
 // A memory as it stands right now, for a patch to be judged against: the
 // entity the caller named, or nothing where it names no memory of this graph.
 let held = async (graph: Graph, eid: string): Promise<Bundle | undefined> =>
-  (await graph.read(`.eid=${eid}&.${MEMORY}&*`))[0]
+  (await graph.read(`.entity.eid=${eid}&.${MEMORY}&*`))[0]
 
 // Where the graph already holds what `by` said: the earliest entity they
 // wrote whose text holds the words verbatim. Only the speaker's own: the same

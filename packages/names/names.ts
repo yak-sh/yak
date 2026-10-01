@@ -18,22 +18,26 @@ export type Comps = Record<string, Record<string, unknown> | undefined>
 /** The shape a candidate must have to be resolved: the components it carries. */
 export type Carried = { comps: Comps }
 
-/** How names are read: `prop` is the default name property, given unqualified
- * and resolved through the vocabulary (`title` → `doc.title` in most
- * vocabularies), and `close` is the match threshold — 1 accepts exact names
- * only. */
+/** How names are read: `prop` is the default name property, named with its
+ * component (`doc.title` unless said), and `close` is the match threshold — 1
+ * accepts exact names only. */
 export type Opts = { prop?: string; close?: number }
 
 // A component's declaration → the property its name is held in. `true` uses the
-// vocabulary's default name property; a string names another. Anything else
-// (absent, false) means this component's entities have no name.
+// vocabulary's default name property; a string names another, with its
+// component (`shelf.label`). Anything else (absent, false) means this
+// component's entities have no name.
 let holder = (v: Vocab, said: unknown, prop: string): Hop | undefined => {
   if (said !== true && typeof said != 'string') return undefined
-  let bare = said === true ? prop : said
-  // route() throws for a property the vocabulary does not declare — the caller
+  let path = said === true ? prop : said
+  // aim() throws for a property the vocabulary does not declare — the caller
   // asked for names from a property that is not there, and returning nothing
   // would instead read as "no component is addressable by name".
-  return v.route(bare)
+  let [hop, ...more] = v.aim(path)
+  if (more.length || !hop.prop) {
+    throw new Error(`a name is one property, as comp.prop: ${path}`)
+  }
+  return hop
 }
 
 /**
@@ -45,7 +49,11 @@ let holder = (v: Vocab, said: unknown, prop: string): Hop | undefined => {
 export let named = (v: Vocab, opts: Opts = {}): Record<string, Hop> => {
   let out: Record<string, Hop> = {}
   for (let name of v.all) {
-    let hop = holder(v, v.comp(name)?.keywords.by_name, opts.prop ?? 'title')
+    let hop = holder(
+      v,
+      v.comp(name)?.keywords.by_name,
+      opts.prop ?? 'doc.title',
+    )
     if (hop) out[name] = hop
   }
   return out

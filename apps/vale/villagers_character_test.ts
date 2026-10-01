@@ -33,7 +33,7 @@ test('loading character data keeps a villager’s existing fields', async () => 
     villager: { id: wren.id, level: wren.level, role: 'elder' },
   }])
   await g.apply([characters.find((row) => row.entity.eid == eid)!])
-  let [saved] = await g.read(`.eid=${eid}&.villager&.character`)
+  let [saved] = await g.read(`.entity.eid=${eid}&.villager&.character`)
   assertEquals(comp(saved, 'villager').role, 'elder')
   assertEquals(comp(saved, 'villager').level, wren.level)
   assertEquals(comp(saved, 'character').story, characters[0].character.story)
@@ -44,7 +44,7 @@ test('loading character data keeps a villager’s existing fields', async () => 
     entity: { eid },
     villager: { id: wren.id, level: wren.level },
   }])
-  let [born] = await installed.read(`.eid=${eid}&.villager&.character`)
+  let [born] = await installed.read(`.entity.eid=${eid}&.villager&.character`)
   assertEquals(comp(born, 'villager').level, wren.level)
   assertEquals(comp(born, 'character').story, characters[0].character.story)
 })

@@ -629,8 +629,8 @@ export let stamp = async (
 // A listing carries the components the filter names (@yaks/graph `wanted`),
 // so every read here asks for what it reads: a space with its title, plan and
 // meter, an app with its title, the address its store is named by, and its
-// meter. `.eid=` names no component and answers the whole bundle, which is why
-// those are bare.
+// meter. `.entity.eid=` names no component and answers the whole bundle,
+// which is why those are bare.
 // What every read of an app asks for beside the app row itself, in one place
 // because `appOf` reads all of it and a filter that forgets one answers null
 // where there is a value.
@@ -1072,13 +1072,13 @@ export let directory = (via: Fetcher, now = false) => {
     },
     // A space by eid, which is how an app names the space it belongs to.
     at: async (eid: string) => {
-      let row = await one(`.eid=${eid}`)
+      let row = await one(`.entity.eid=${eid}`)
       return row?.space ? spaceOf(row) : null
     },
     // One app by eid, with the space it belongs to — what an installed app's
     // pin names (`installed.of`), and how an offer is read back.
     appAt: async (eid: string) => {
-      let row = await one(`.eid=${eid}`, true)
+      let row = await one(`.entity.eid=${eid}`, true)
       if (!row?.app) return null
       let app = appOf(row)
       let space = await self.at(app.space)
@@ -1153,7 +1153,7 @@ export let directory = (via: Fetcher, now = false) => {
           true,
         ))?.deploy
       if (await holds(source)) return true
-      let row = await one(`.eid=${app.space}`, true)
+      let row = await one(`.entity.eid=${app.space}`, true)
       let space = row?.space ? spaceOf(row) : null
       let path = source.slice(source.indexOf('/') + 1)
       for (let slug of space?.slugs ?? []) {
@@ -1220,7 +1220,7 @@ export let directory = (via: Fetcher, now = false) => {
     // One invitation by the eid its letter carries. Fresh, because the click
     // that accepts it is often the second one on the same letter.
     invitation: async (eid: string) => {
-      let row = await one(`.eid=${eid}`, true)
+      let row = await one(`.entity.eid=${eid}`, true)
       return row?.invite
         ? {
           eid: row.entity.eid,
@@ -1233,7 +1233,7 @@ export let directory = (via: Fetcher, now = false) => {
     // How many invitations this person has sent in the hour it names. Fresh:
     // two invitations a second apart must not both read the same count.
     inviting: async (person: string) =>
-      (await one(`.eid=${person}`, true))?.inviting ?? null,
+      (await one(`.entity.eid=${person}`, true))?.inviting ?? null,
     // Everyone in a space, by person eid — who to tell when an app's tools
     // move (declared.ts `toolsChanged`), since reaching the app is exactly
     // being in the space.
@@ -1268,7 +1268,7 @@ export let directory = (via: Fetcher, now = false) => {
     // Both at once, from the person's one row: what to call them and where to
     // write to them. Null for anybody the platform has no address for.
     known: async (person: string) => {
-      let row = await one(`.eid=${person}`)
+      let row = await one(`.entity.eid=${person}`)
       return row?.email
         ? {
           name: nameOf(row.doc?.title, row.email.address),
@@ -1299,7 +1299,7 @@ export let directory = (via: Fetcher, now = false) => {
       // never seen — someone who signed in before it kept a row — makes the
       // question itself unanswerable. No row, no memberships. Nobody at all
       // (an empty person, `member` above) belongs to nothing either.
-      if (!person || !(await one(`.eid=${person}`))) return []
+      if (!person || !(await one(`.entity.eid=${person}`))) return []
       let members = await query(
         `.member.person=${person}${role ? `&.member.role=${role}` : ''}`,
       )
@@ -1308,9 +1308,9 @@ export let directory = (via: Fetcher, now = false) => {
         if (m.member) held.set(idOf(m.member.space), m.member.role)
       }
       if (!held.size) return []
-      // Bare `.eid=` and nothing else: naming components would project the row
+      // Bare `.entity.eid=` and nothing else: naming components would project the row
       // down to them, and a space is read whole ({@link spaceOf}).
-      let rows = await query(`.eid=${[...held.keys()].join(',')}`)
+      let rows = await query(`.entity.eid=${[...held.keys()].join(',')}`)
       return rows
         .filter((r) => r.space)
         .map((r) => ({ space: spaceOf(r), role: held.get(r.entity.eid)! }))
@@ -1343,7 +1343,7 @@ export let directory = (via: Fetcher, now = false) => {
     // choice is moot here and `/connect` is where they move (T-34137).
     own: async (person: string, want?: string): Promise<Space> => {
       let mine = await self.spaces(person, 'owner')
-      let row = await one(`.eid=${person}`)
+      let row = await one(`.entity.eid=${person}`)
       let wanted = slugFor(row?.email?.address ?? 'space')
       if (mine.length) return mine.find((s) => s.slug == wanted) ?? mine[0]
       let chosen = !!want && SLUG.test(want) && !RESERVED.has(want) &&

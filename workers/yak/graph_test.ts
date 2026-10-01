@@ -853,7 +853,9 @@ test('a Store live query sees only connected peer positions', async () => {
   }], owner)
   let ws = wire()
   ctx.live.push(ws)
-  let path = `/query?live=1&q=${encodeURIComponent(`.eid=${CAKE}&.position`)}`
+  let path = `/query?live=1&q=${
+    encodeURIComponent(`.entity.eid=${CAKE}&.position`)
+  }`
   let positions = async () =>
     await (await get(store, path, owner)).json() as Bundle[]
   assertEquals(await positions(), [])
@@ -1150,7 +1152,7 @@ test('a visitor to an open app adds, and touches no price, order or row of the o
     200,
   )
   assertEquals(
-    await (await get(store, `/query?q=.eid=${O}`, own)).json(),
+    await (await get(store, `/query?q=.entity.eid=${O}`, own)).json(),
     [],
   )
   let platform: Vouch = { app: APP, person: APP, role: 'editor', kernel: true }
@@ -1162,11 +1164,13 @@ test('a visitor to an open app adds, and touches no price, order or row of the o
     await status(own, { entity: { eid: O }, order: { status: 'refunded' } }),
     200,
   )
-  let rows = await (await get(store, `/query?q=.eid=${P},${O}`, own)).json()
+  let rows = await (await get(store, `/query?q=.entity.eid=${P},${O}`, own))
+    .json()
   let of = (eid: string) => rows.find((r: Bundle) => r.entity.eid == eid)
   assertEquals(of(P).product.price_cents, 2800)
   assertEquals(of(O).order.status, 'paid')
-  let [cake] = await (await get(store, `/query?q=.eid=${CAKE}`, own)).json()
+  let [cake] = await (await get(store, `/query?q=.entity.eid=${CAKE}`, own))
+    .json()
   assertEquals(cake.recipe.serves, 8)
 })
 

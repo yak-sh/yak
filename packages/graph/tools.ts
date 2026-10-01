@@ -132,8 +132,8 @@ export let runs = (seams: Seams = {}): Runs => {
     // back. `check: true` makes the call a rehearsal, which the runner answers
     // with what a kept write would have returned (@yaks/tools).
     graph_apply: (call) => formed(argsOf(call).change),
-    // The one concession to typing by hand is the query line: `.status=shelved`
-    // is the grammar @yaks/query owns, so this takes it as a string, and each
+    // The one concession to typing by hand is the query line:
+    // `.book.status=shelved` is the grammar @yaks/query owns, so this takes it as a string, and each
     // of the optional `filters` narrows the whole of it (`conjoin`). It stays a
     // line, because a graph may pass it on as one: the yaks.app reach reads its
     // riders off the text and asks each store over HTTP. A line that asks for

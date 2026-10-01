@@ -112,12 +112,12 @@ test('a held value takes the batch onto its holder', () => {
   assertEquals(out.find((b) => b.$alias == '$b')!.entity.eid, 'b1')
   assertEquals(read(g, '.book'), ['b1', 'b2'])
   assertEquals(
-    (g.read('.eid=b1') as Bundle[])[0].doc,
+    (g.read('.entity.eid=b1') as Bundle[])[0].doc,
     undefined,
     'the patch landed on the holder',
   )
   assertEquals(
-    ((g.read('.eid=b1') as Bundle[])[0].book as { title: string }).title,
+    ((g.read('.entity.eid=b1') as Bundle[])[0].book as { title: string }).title,
     'Dune (1965)',
   )
 })

@@ -107,7 +107,7 @@
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "the entity it was built for: the first its outer binding holds, so a query reaches what was built for X (`.built.build.for=X`), which `match` as JSON cannot"
+          "description": "the entity it was built for: the first its outer binding holds, so a query reaches what was built for X (`.built.build.build.for=X`), which `match` as JSON cannot"
         },
         "key": {
           "type": "string",
@@ -155,17 +155,14 @@
         "build": {
           "type": "string",
           "ref": "build",
-          "death": "keep",
-          "bare": false
+          "death": "keep"
         },
         "slot": {
-          "type": "string",
-          "bare": false
+          "type": "string"
         },
         "key": {
           "type": "string",
-          "stamped": true,
-          "bare": false
+          "stamped": true
         },
         "call": {
           "type": "string",

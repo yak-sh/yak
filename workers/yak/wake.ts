@@ -63,7 +63,7 @@ export let seeded = async (
 ): Promise<void> => {
   for (let row of rows) {
     let eid = row.entity.eid
-    if ((await graph.read(`.eid=${eid}`)).length) continue
+    if ((await graph.read(`.entity.eid=${eid}`)).length) continue
     let every = row.wake.every
     let at = row.wake.at !== undefined
       ? row.wake.at

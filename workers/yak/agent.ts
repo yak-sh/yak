@@ -283,12 +283,12 @@ let scope = (line: string) => {
   return { said, line: segs.filter((s) => !/^\.in=/.test(s)).join('&') }
 }
 
-// The identity operand list, wherever it appears on a line: `.eid=a,b` — which
+// The identity operand list, wherever it appears on a line: `.entity.eid=a,b` — which
 // is what the page's `id=` becomes (wire.ts `lined`) — names a set rather than
 // comparing a property, so its operands are ids and a word among them may be a
-// name (T-34390, @yaks/alias). `.eid!=` and the rest are untouched: this is the
+// name (T-34390, @yaks/alias). `.entity.eid!=` and the rest are untouched: this is the
 // one operator whose right-hand side is an identity.
-let IDS = /(^|&)(\.(?:entity\.)?eid=)([^&]*)/g
+let IDS = /(^|&)(\.entity\.eid=)([^&]*)/g
 
 // That line with every name in it replaced by the entity it names. Nothing to
 // resolve costs nothing: a uuid is not asked about, and a line naming no id is
@@ -339,7 +339,7 @@ let held = (ctx: Ctx, reach: Reach[]): Storage => {
     let { said, line } = scope(String(q))
     let where = said ? [await named(ctx, said)] : reach
     // An agent's grammar is the page's (guide.md): `id=`, `limit=` and `after=`
-    // where the store writes `.eid=`, `.limit=` and `.after=`, and a value
+    // where the store writes `.entity.eid=`, `.limit=` and `.after=`, and a value
     // written as it reads rather than as a store would parse it. One
     // translation for every door a person's own line arrives at (wire.ts).
     let one = await byName(self, lined(line))

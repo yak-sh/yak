@@ -293,7 +293,7 @@ export let connectionsOf = async (
   }
   let apps = [...new Set(links.map((l) => String(comp(l, 'edge').from)))]
   if (apps.length) {
-    for (let b of await read(`.eid=${apps.join(',')}&.app&*`)) {
+    for (let b of await read(`.entity.eid=${apps.join(',')}&.app&*`)) {
       named.set(
         b.entity.eid,
         String(comp(b, 'doc').title || comp(b, 'app').slug),
@@ -473,7 +473,7 @@ export let connecting = async (
       if (i && !keyed(i)) return signingIn(req, env, c, space, who, eid)
     }
     let [b] = EID.test(eid)
-      ? await c.graph.read(`.eid=${eid}&.${CONNECTION}`)
+      ? await c.graph.read(`.entity.eid=${eid}&.${CONNECTION}`)
       : []
     let owner = comp(b, CONNECTION).owner
     if (!b || (owner != space.eid && owner != who.person)) {
@@ -531,7 +531,7 @@ export let connecting = async (
     if (!key) return no('Paste the key first.')
     await connect(c, eid, { key })
     await rebound(env, apps)
-    let [now] = await c.graph.read(`.eid=${eid}&.${CONNECTION}&*`)
+    let [now] = await c.graph.read(`.entity.eid=${eid}&.${CONNECTION}&*`)
     return now?.error || now?.exception
       ? no(String(comp(now, 'content').body ?? 'The key could not be saved.'))
       : { say: 'Saved. The key is kept safe and never shown again.', no: false }
@@ -564,7 +564,7 @@ let callback: Door = async ({ env, req, path, space }) => {
   let who = at &&
     await whoIs(req, env.SESSION_SECRET, (p) => dir.role(at, p))
   let [b] = held && who?.person == held.person
-    ? await readOf(env)(`.eid=${held.connection}&.${CONNECTION}`)
+    ? await readOf(env)(`.entity.eid=${held.connection}&.${CONNECTION}`)
     : []
   let owner = comp(b, CONNECTION).owner
   if (
@@ -649,7 +649,7 @@ let own: Answer = async ({ env, req, path, space, app, who, refuse }) => {
   try {
     // Their own is read by the name the app's ask gives it.
     let [ask] = await c.graph.read(
-      `.eid=${edgeEid(app.eid, USES, asked.entity.eid)}&.${USES}`,
+      `.entity.eid=${edgeEid(app.eid, USES, asked.entity.eid)}&.${USES}`,
     )
     let binding = comp(ask, USES).binding
     let [made] = await c.graph.apply(
@@ -665,7 +665,7 @@ let own: Answer = async ({ env, req, path, space, app, who, refuse }) => {
     let eid = made.entity.eid
     if (!keyed(i)) return signingIn(req, env, c, space, who, eid, back)
     await connect(c, eid, { key })
-    let [now] = await c.graph.read(`.eid=${eid}&.${CONNECTION}&*`)
+    let [now] = await c.graph.read(`.entity.eid=${eid}&.${CONNECTION}&*`)
     return now?.error || now?.exception
       ? page(
         no(String(comp(now, 'content').body ?? 'The key could not be saved.')),
@@ -682,7 +682,7 @@ let own: Answer = async ({ env, req, path, space, app, who, refuse }) => {
 let hookable = async (env: Env, space: Space, app: App, eid: string) => {
   if (!EID.test(eid)) return null
   let read = readOf(env)
-  let [b] = await read(`.eid=${eid}&.${CONNECTION}&*`)
+  let [b] = await read(`.entity.eid=${eid}&.${CONNECTION}&*`)
   if (!b || comp(b, CONNECTION).owner != space.eid) return null
   let used = await read(`.edge.from=${app.eid}&.edge.to=${eid}&.${USES}`)
   return used.length ? b : null
@@ -864,9 +864,9 @@ let CONNECTIONS: Row[] = [
       )
       // The connection: made now, or the one the app already used.
       let eid = made.find((b) => !b.edge && !b[INTEGRATION])!.entity.eid
-      let [b] = await c.graph.read(`.eid=${eid}&.${CONNECTION}&*`)
+      let [b] = await c.graph.read(`.entity.eid=${eid}&.${CONNECTION}&*`)
       let [l] = await c.graph.read(
-        `.eid=${edgeEid(app.eid, USES, eid)}&.${USES}&*`,
+        `.entity.eid=${edgeEid(app.eid, USES, eid)}&.${USES}&*`,
       )
       let status = comp(b, CONNECTION).status
       let u = comp(l, USES)

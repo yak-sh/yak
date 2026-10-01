@@ -54,7 +54,7 @@ test('archetype plans: facets/kinds use the spine, only values add joins', () =>
       query,
     )
   }
-  let r = bind(parse('.task .doc !claim .title=hello'), v, { archetypes })
+  let r = bind(parse('.task .doc !claim .doc.title=hello'), v, { archetypes })
   assertEquals(r.joins?.map((j) => isRaw(j.src) && j.src.sql), ['"doc"'])
   assertEquals(bind(parse('?doc'), v, { archetypes }).joins, [])
   let empty = archetypeSet(new Archetypes(), new Map())
@@ -101,7 +101,7 @@ test('an AND of facets binds one archetype list, not one per facet', () => {
   assertEquals(sql.sql.split('"entity"."archetype" in (').length - 1, 1)
   assertEquals(bind(parse('.task .doc !claim'), v, { archetypes }).joins, [])
   // A facet beside a value keeps the value's own join and its parameter.
-  let mixed = compile(parse('.task !claim .title=hello'), v, { archetypes })
+  let mixed = compile(parse('.task !claim .doc.title=hello'), v, { archetypes })
   assertEquals(mixed.params, ['[12]', 'hello'])
 })
 
@@ -151,11 +151,13 @@ test('a status filter on a ladder binds as a lookup on the archetype index', () 
   }
   assertEquals(chosen('.task.status=open'), [11, 17])
   assertEquals(chosen('.task.status=done'), [12, 15])
-  assertEquals(chosen('.status=wip'), [13])
+  assertEquals(chosen('.task.status=wip'), [13])
   assertEquals(chosen('.task.status=cancelled'), [14])
-  assertEquals(chosen('.status=open,wip'), [11, 13, 17])
+  assertEquals(chosen('.task.status=open,wip'), [11, 13, 17])
   // beside another presence test, still one lookup
   assertEquals(chosen('.doc .task.status=open'), [17])
   // a status no rung gives reads the `case`, and finds what it finds
-  assert(compile(parse('.status=gone'), v, { archetypes }).sql.includes('case'))
+  assert(
+    compile(parse('.task.status=gone'), v, { archetypes }).sql.includes('case'),
+  )
 })

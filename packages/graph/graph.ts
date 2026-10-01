@@ -75,7 +75,6 @@ import { fire, registry, type Resource, type Rule, stands } from './rules.ts'
 import { own, type Ready, ready, settle } from './declared.ts'
 import { state } from './state.ts'
 import { addressing } from './said.ts'
-import { meaning } from '@yaks/query'
 import { flat, named, only, projection } from './projection.ts'
 
 /** The options one `apply()` call can pass. */
@@ -673,13 +672,6 @@ export let graph = (opts: Options): Graph => {
   // type is resolved to the eid the store keys rows by (said.ts).
   let aim = addressing(vocab)
 
-  // The other half of reading a query the way it was meant: a bare property
-  // name the vocabulary cannot place on its own is resolved to the component
-  // the query already selects (@yaks/query's meant.ts). Both run before storage sees the
-  // query, so every caller reading through this graph gets the same
-  // interpretation.
-  let mean = meaning(vocab)
-
   // What a caller asks before reading by id: every plugin that knows how a
   // name becomes an eid, asked in turn, each about the ids no earlier plugin
   // resolved. It runs outside any transaction — the caller is asking before it
@@ -730,7 +722,7 @@ export let graph = (opts: Options): Graph => {
     // the entities its paths reach beside the ones it selects.
     read: (query, readOpts) =>
       after(
-        aim(mean(query), address),
+        aim(query, address),
         (q) => {
           let p = projection(vocab, q)
           if (p) {
@@ -747,7 +739,7 @@ export let graph = (opts: Options): Graph => {
         },
       ),
     rows: (query, readOpts) =>
-      after(aim(mean(query), address), (q) => storage.rows(q, readOpts)),
+      after(aim(query, address), (q) => storage.rows(q, readOpts)),
     get: (eids, comps) => storage.get(eids, comps),
     apply,
   }

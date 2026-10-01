@@ -28,7 +28,7 @@ test('a dream is a scheduled builder and reads as a dream', async () => {
   assert(
     String(comp(line, 'content')?.body).startsWith('Write up what is waiting.'),
   )
-  let [dream] = await g.read('.eid=z-writeup')
+  let [dream] = await g.read('.entity.eid=z-writeup')
   assertEquals(vocab.kindOf(dream), 'dream')
   assertEquals(comp(dream, 'builder')?.floor, '2026-09-19T13:00:00.000Z')
 })

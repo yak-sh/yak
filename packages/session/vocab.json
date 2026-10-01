@@ -44,7 +44,6 @@
     "attention": {
       "component": true,
       "type": "object",
-      "bare": false,
       "properties": {},
       "description": "an entry to be read before the next ask"
     },
@@ -62,7 +61,6 @@
     "cancel": {
       "component": true,
       "type": "object",
-      "bare": false,
       "properties": {
         "target": {
           "type": "string",
@@ -75,7 +73,6 @@
     "checkpoint": {
       "component": true,
       "type": "object",
-      "bare": false,
       "properties": {
         "through": {
           "type": "string",
@@ -204,7 +201,6 @@
           "type": "string",
           "ref": "entry",
           "death": "keep",
-          "bare": false,
           "description": "the entry this fork continues from: the parent's entries up to it are this transcript's prefix"
         }
       }
@@ -212,7 +208,6 @@
     "imported": {
       "component": true,
       "type": "object",
-      "bare": false,
       "properties": {
         "source": {
           "type": "string",
@@ -228,7 +223,6 @@
     "log": {
       "component": true,
       "type": "object",
-      "bare": false,
       "properties": {
         "session": {
           "type": "string",
@@ -269,7 +263,6 @@
     "reasoning": {
       "component": true,
       "type": "object",
-      "bare": false,
       "properties": {},
       "description": "an entry the model reasoned with rather than returned"
     },
@@ -381,14 +374,12 @@
         "parent": {
           "type": "string",
           "ref": "session",
-          "death": "keep",
-          "bare": false
+          "death": "keep"
         },
         "call": {
           "type": "string",
           "ref": "entry",
-          "death": "keep",
-          "bare": false
+          "death": "keep"
         }
       }
     },

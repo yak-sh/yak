@@ -36,13 +36,6 @@ schema`, or the inspector's component list. If the codebase already has the
 idea under another name, use that name. If two names exist for one idea, or the
 existing name is bad, propose one to the owner; he picks.
 
-Look a new component's name up as a property too. A bare `.name` in a query
-routes to a property of that name before a component (`route` in
-packages/vocab/vocab.ts), so a component named like an existing property can't
-be asked for bare: beside `fight{foe, …}`, a `foe{…}` component's `.foe`
-would quietly mean `fight.foe`, and a `body{…}` component's `.body` is refused
-as ambiguous among `doc.body`, `content.body` and the rest.
-
 The same holds for anything a model or agent names at run time: two builds
 looking for a topic at once minted "market design" and "economic market design"
 for one subject. Whatever mints a named entity looks up the existing ones first

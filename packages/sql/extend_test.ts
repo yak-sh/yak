@@ -131,7 +131,7 @@ test('an extension supplies an order value that names no property', () => {
   // property
   let down = compile(parse('.order=-similar'), v, { extend: [ranks] })
   assert(down.sql.includes('else 1 end desc'), down.sql)
-  let byTitle = compile(parse('.order=title'), v, { extend: [ranks] })
+  let byTitle = compile(parse('.order=doc.title'), v, { extend: [ranks] })
   assert(
     byTitle.sql.endsWith(
       'order by "doc"."title", "entity"."num" desc, "entity"."id" desc',
@@ -181,7 +181,7 @@ test('an extension is handed the screen for the rest of the line', () => {
           : null,
     },
   }
-  compile(parse('.near=b1&.title=Dune&.limit=2'), v, { extend: [ranker] })
+  compile(parse('.near=b1&.doc.title=Dune&.limit=2'), v, { extend: [ranker] })
   // its own clause and the window are gone; the filter that narrows is not
   assert(seen[0]?.includes('"doc"."title"'), `${seen[0]}`)
   assert(seen[0]?.endsWith('<< Dune'), `${seen[0]}`)

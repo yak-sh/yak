@@ -81,7 +81,7 @@ await g.apply([
     post: { published: true, author: 'kate' },
   },
 ])
-console.log(await g.read('.published=1'))
+console.log(await g.read('.post.published=1'))
 sql.close()
 ```
 

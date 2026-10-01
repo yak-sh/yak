@@ -179,7 +179,7 @@ export let accountOf = (answer: Answer, now: Date): Usage | null => {
 
 let accountAlert = async (env: Env, usage: Usage) => {
   let graph = meta(env)
-  let [row] = await graph.query('.eid=yak-meter') as {
+  let [row] = await graph.query('.entity.eid=yak-meter') as {
     account_usage?: Usage
     account_alert?: Alerts
   }[]

@@ -76,16 +76,19 @@ const b4 = {
 }
 const bundles = [b1, b4]
 
-let cheap = matcher('.status=shelved .price<20 .order=-price', vocab)
+let cheap = matcher(
+  '.book.status=shelved .book.price<20 .order=-book.price',
+  vocab,
+)
 cheap(bundles) // [b1, b4] — the shelved books under 20, most expensive first
 
 // A single bundle, tested alone or with the entities its references reach:
-let mine = filter('.status=shelved .author=a1', vocab)
+let mine = filter('.book.status=shelved .book.author=a1', vocab)
 mine(b1) // true
 mine(b1, bundles)
 
 // A read override, here for a stored property:
-const discounted = matcher('.price<10', vocab, {
+const discounted = matcher('.book.price<10', vocab, {
   computed: {
     'book.price': (b) => Number((b.book as { price: number }).price) / 2,
   },
@@ -94,7 +97,7 @@ discounted(bundles) // [b1, b4]
 ```
 
 Whitespace and `&` both separate clauses, so the query above can also be written
-`.status=shelved&.price<20&.order=-price`.
+`.book.status=shelved&.book.price<20&.order=-book.price`.
 
 The array you pass in is all the data the run can see. Following a reference to
 its target, finding the backlinks of an id, listing the children of a reverse
@@ -120,7 +123,7 @@ bundles: `.fields`, `*` and optional-property predicates do not trim the result.
 A query compiles once, the way a regular expression does: `@yaks/query` returns
 the same tree for the same text, and the compiled test is kept against that
 tree, the vocabulary and the `computed` rules. A query whose answer depends on
-when it is asked (`.released=today`) is compiled again for each moment.
+when it is asked (`.book.released=today`) is compiled again for each moment.
 
 A compiled query also knows the sets its matches must lie inside: the entities
 wearing a component it requires, the entities whose text, enum or reference
@@ -142,30 +145,30 @@ rows. `opts.computed` is described under
 
 ## Operators
 
-| query                | matches                                                   |
-| -------------------- | --------------------------------------------------------- |
-| `.price=12`          | the property equals the operand                           |
-| `.status=draft,sold` | any of the listed values                                  |
-| `.price=7.5..12`     | an inclusive range                                        |
-| `.price=0...12`      | a range that excludes its upper bound                     |
-| `!author`            | the property is absent or empty                           |
-| `.author`            | the property has a value                                  |
-| `.status!=sold`      | not equal, including entities with no `status` at all     |
-| `.title~=spring`     | contains, case-insensitive                                |
-| `.price<20`          | less than; also `<=`, `>`, `>=`                           |
-| `?price`             | a request for the property in the result; filters nothing |
+| query                     | matches                                                   |
+| ------------------------- | --------------------------------------------------------- |
+| `.book.price=12`          | the property equals the operand                           |
+| `.book.status=draft,sold` | any of the listed values                                  |
+| `.book.price=7.5..12`     | an inclusive range                                        |
+| `.book.price=0...12`      | a range that excludes its upper bound                     |
+| `!book.author`            | the property is absent or empty                           |
+| `.book.author`            | the property has a value                                  |
+| `.book.status!=sold`      | not equal, including entities with no `status` at all     |
+| `.doc.title~=spring`      | contains, case-insensitive                                |
+| `.book.price<20`          | less than; also `<=`, `>`, `>=`                           |
+| `?book.price`             | a request for the property in the result; filters nothing |
 
 An absent property never compares true under `<`, `<=`, `>` or `>=`, and `~=`
-with an empty operand (`.title~=`) asks for presence rather than selecting
+with an empty operand (`.doc.title~=`) asks for presence rather than selecting
 everything.
 
 Number, priority and boolean properties compare numerically; every other type
 compares as text. A boolean is stored as 0 or 1, and `true` and `false` name
-those, so `.available=true` and `.available=1` both select the books in stock.
-An operand no stored number could equal selects nothing rather than raising:
-`.price=12.0` is empty, because a stored `12` formats back as `12`. A comparison
-is stricter — `.price>cheap` is refused at compile time, because there is no
-number to compare against.
+those, so `.book.available=true` and `.book.available=1` both select the books
+in stock. An operand no stored number could equal selects nothing rather than
+raising: `.book.price=12.0` is empty, because a stored `12` formats back as
+`12`. A comparison is stricter — `.book.price>cheap` is refused at compile time,
+because there is no number to compare against.
 
 ### Time properties
 
@@ -179,15 +182,16 @@ compares with it (`timeEdges` in @yaks/query):
   `>=` from its start, `>` after its end, `<` before its start, `<=` before its
   end.
 - `=` selects the stretch, or for a moment the time between now and it:
-  `.released=today`, and `.released=10-minutes-ago` for the last ten minutes.
+  `.book.released=today`, and `.book.released=10-minutes-ago` for the last ten
+  minutes.
 - `lo..hi` runs from `lo` through `hi`, and `lo...hi` stops before `hi`:
-  `.released=yesterday..today`.
+  `.book.released=yesterday..today`.
 
 A comma list of phrases under `=` is any-of, and under `!=` is none-of. When the
 operand is not a phrase at all, the ordinary rules apply, so
-`.released<2024-01-01` compares strings. The matcher expects canonical ISO 8601
-timestamps whose string order is chronological. Values outside the supported
-timestamp range do not match time comparisons.
+`.book.released<2024-01-01` compares strings. The matcher expects canonical ISO
+8601 timestamps whose string order is chronological. Values outside the
+supported timestamp range do not match time comparisons.
 
 ### Components
 
@@ -196,12 +200,12 @@ the ones that do not. This works for a component with no properties at all — a
 tag that records a boolean property through its presence — as well as for one
 with properties.
 
-A trailing `!` on a bare name is resolved as a component before it is resolved
-as a property. In the bookshop `.book` selects the four books (the entities with
-a `book` component), while `.book=b1` still resolves to `review.book`, the
-reference property of that name, and selects the two reviews of `b1`. Use the
-qualified property name to avoid this ambiguity: `.review.book` selects the
-reviews that name a book.
+A name alone is always a component, and a property is named with its component.
+In the bookshop `.book` selects the four books (the entities with a `book`
+component), and `.review.book=b1` selects the two reviews of `b1`. A property
+named alone is refused, and the message names each component that declares it:
+`.price` answers `.price is a property, not a component — name it
+.book.price`.
 
 ### Kinds
 
@@ -215,12 +219,12 @@ means `.kind=book`. A value that names no kind is refused.
 
 ### References and paths
 
-A reference property holds another entity's id, so `.author=a1` selects that
-author's books. A dotted path follows the reference and tests a property on the
-entity it points at:
+A reference property holds another entity's id, so `.book.author=a1` selects
+that author's books. A dotted path follows the reference and tests a property on
+the entity it points at:
 
 ```
-.author.doc.title~=vale   // books whose author's title contains "vale"
+.book.author.doc.title~=vale   // books whose author's title contains "vale"
 ```
 
 Every hop but the last must be a reference property; anything else is refused
@@ -230,7 +234,7 @@ entity missing from it reads as absent.
 For the operators only a present value can satisfy — `!`, the four comparisons,
 and `=` or `~=` with a non-empty operand — the entity must also have the root
 component of the path. The absent forms do not require it, so
-`!author.doc.title` selects entities with no author at all as well as books
+`!book.author.doc.title` selects entities with no author at all as well as books
 whose author has no title: a missing entity anywhere along the path reads as an
 absent value. @yaks/sql emits the same narrowing, which also lets its query
 planner start from the root component's table.
@@ -243,7 +247,7 @@ A vocabulary derives a reverse association for a reference: because
 - `.reviews` — has at least one review
 - `!reviews` — has none
 - `.reviews>=2` — a count, with any of `=`, `!=`, `<`, `<=`, `>`, `>=`
-- `.reviews.stars=5` — at least one review matching that predicate
+- `.reviews.review.stars=5` — at least one review matching that predicate
 
 A child predicate is compiled by the same clause compiler, over the child
 bundle, so anything refused there refuses the whole hop. A child predicate may
@@ -260,16 +264,16 @@ that book. Only a nonempty `=` operand is supported here. The parser accepts
 
 ### Identity
 
-`.eid=b1`, `.eid=b1,b2` and `.num=3` name entities rather than filter them, and
-are answered as a lookup in the array. A human-readable id works in either
-property: `B-3` is read as the entity numbered 3 (the prefix is ignored for
-lookup), so one operand form fetches by eid, by entity number, or by the id a
-person types.
+`.entity.eid=b1`, `.entity.eid=b1,b2` and `.entity.num=3` name entities rather
+than filter them, and are answered as a lookup in the array. A human-readable id
+works in either property: `B-3` is read as the entity numbered 3 (the prefix is
+ignored for lookup), so one operand form fetches by eid, by entity number, or by
+the id a person types.
 
 ### Walks
 
-A walk selects by reachability. `.author->a1` selects the entities that reach
-`a1` by following `author` references — the two books by that author. `<-`
+A walk selects by reachability. `.book.author->a1` selects the entities that
+reach `a1` by following `author` references — the two books by that author. `<-`
 reverses the direction, selecting the entities the target reaches. A bracket
 caps the hops: `.cites[<=3]->p1` allows at most three. Without a bracket the
 closure is unbounded, capped at @yaks/query's `WALK_LIMIT` rows.
@@ -282,8 +286,8 @@ One hop is a `(from, to)` pair, and a bundle can state one in three ways:
 - a reference property on the entity itself — `.fork.from->S-7` reads
   `fork.from` as this entity → the entry it names;
 - a chain of reference properties composed into one pair —
-  `.fork.from.session->S-1` reads this entity → the session of the entry it
-  forked from.
+  `.fork.from.entry.session->S-1` reads this entity → the session of the entry
+  it forked from.
 
 Reachable entities are computed breadth-first and cached within each evaluation
 of the supplied array. The target itself is selected only when a cycle leads
@@ -305,10 +309,10 @@ in it at all matches nothing, never everything.
 
 ## Ordering and paging
 
-`.order=price` sorts ascending by that property and `.order=-price` descending.
-The property may be one a chain of references reaches, as in a path predicate:
-`.order=review.book.book.price` orders reviews by their book's price, and
-`rows()` projects `.fields=review.book.doc.title` the same way. Values sort
+`.order=book.price` sorts ascending by that property and `.order=-book.price`
+descending. The property may be one a chain of references reaches, as in a path
+predicate: `.order=review.book.book.price` orders reviews by their book's price,
+and `rows()` projects `.fields=review.book.doc.title` the same way. Values sort
 absent first, then numbers, then text — the order SQLite's `ORDER BY` gives over
 the same values — and the entity number breaks ties, so ties are deterministic.
 Ascending property order puts missing values first; descending order reverses
@@ -386,9 +390,9 @@ which an `Index` answers through its `gone` member (@yaks/ram's rules supply
 it). A source without one holds no pending change, and the clause matches
 nothing, as @yaks/sql answers it with no batch under the statement.
 
-- **A predicate the property's type cannot answer** (`.price>cheap`), **a path
-  whose root is not a reference property**, and **a reverse hop that is neither
-  a count nor a child filter**.
+- **A predicate the property's type cannot answer** (`.book.price>cheap`), **a
+  path whose root is not a reference property**, and **a reverse hop that is
+  neither a count nor a child filter**.
 
 The evaluators also differ in their text behavior:
 

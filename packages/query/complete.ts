@@ -8,16 +8,17 @@
 // Each candidate is the whole word as it reads once taken, labeled with where
 // it comes from — its component, `· stamped` for a property only the server
 // writes, `· ref` for a reference, the operator's meaning, the enum's
-// property. A word that already reads whole (`.effect`, `.status=open`) is
-// never offered back; the answer says it is `whole`, so a field keeps it as
+// property. A word that already reads whole (`.effect`, `.task.status=open`)
+// is never offered back; the answer says it is `whole`, so a field keeps it as
 // typed, and what extends it comes before what rewrites it (`!effect`).
 //
-// A bare property is offered the way the query will be read: by the
-// vocabulary alone (@yaks/vocab's `route`), and where several components
-// declare it, by the rest of the line (./meant.ts), so `.task .status=` offers
-// a task's statuses and a bare `.status` is offered only where the line says
-// whose. A name the vocabulary never lets stand bare (a `_` component's
-// properties, one marked `bare: false`) is reached through its component.
+// A property is offered as it must be written, with its component: `.ti`
+// offers the component `.timing` and the properties `.foo.timing` and
+// `.doc.title`, so a person who remembers a property's name and not its
+// component finds both. Exact names come first, then what the rest of the
+// line already names (`.task .s` puts `.task.status` before
+// `.session.status`); that orders the list and never decides what a word
+// means.
 //
 // What only a graph can answer — the entities a reference could name, the
 // values a property holds — comes from a source the caller supplies, so this
@@ -25,10 +26,10 @@
 // a promise; one that answers at once keeps it synchronous.
 
 import { cmp } from '@yaks/fp'
-import { Ambiguous, type Hop, type Vocab } from '@yaks/vocab'
+import type { Hop, Vocab } from '@yaks/vocab'
+import type { Clause } from './ast.ts'
 import { DIRECTIVES, OPERATORS } from './teach.ts'
 import { parse, valued } from './parse.ts'
-import { about, qualify } from './meant.ts'
 
 /** One thing that could be typed: the word as it reads once taken, and where
  * it comes from. */
@@ -59,7 +60,7 @@ export type Source<F extends Found = Found> = {
   ranks?: string[]
 }
 
-type At = { v: Vocab; within: Set<string>; source: Source }
+type At = { v: Vocab; line: Set<string>; source: Source }
 
 let then = <A, B>(x: A | Promise<A>, f: (a: A) => B): B | Promise<B> =>
   x instanceof Promise ? x.then(f) : f(x)
@@ -87,59 +88,31 @@ let start = (text: string, caret: number): number => {
   return from + cut
 }
 
-// The components the rest of the line names outright, which decide what an
-// ambiguous bare name means. A line that does not parse yet names none.
-let context = (v: Vocab, rest: string): Set<string> => {
-  try {
-    return about(v, parse(rest).clauses)
-  } catch {
-    return new Set()
-  }
-}
-
-// Every name that stands bare, and the components it can mean: one, `''` for a
-// reference several components share, or several for the line to choose from.
-// Read once per vocabulary.
-let bared = new WeakMap<Vocab, Map<string, string[]>>()
-let bares = (v: Vocab): Map<string, string[]> => {
-  let got = bared.get(v)
-  if (got) return got
-  got = new Map()
-  for (let comp of v.all) {
-    for (let prop of v.props(comp)) {
-      if (got.has(prop)) continue
-      try {
-        let hop = v.route(prop)
-        if (hop.prop) got.set(prop, [hop.comp])
-      } catch (e) {
-        if (e instanceof Ambiguous) got.set(prop, e.comps)
-      }
+// The components the rest of the line names outright, which come first among
+// the candidates. A line that does not parse yet names none.
+let named = (v: Vocab, rest: string): Set<string> => {
+  let out = new Set<string>()
+  let add = (path: string[]) => v.comp(path[0]) && out.add(path[0])
+  let walk = (cs: Clause[]): void => {
+    for (let c of cs) {
+      if (c.kind == 'and' || c.kind == 'or') walk(c.clauses)
+      else if (c.kind == 'pred' || c.kind == 'tally' || c.kind == 'distinct') {
+        add(c.path)
+      } else if (c.kind == 'fields') c.fields.forEach((f) => add(f.path))
     }
   }
-  bared.set(v, got)
-  return got
+  try {
+    walk(parse(rest).clauses)
+  } catch { /* a line still being typed names nothing yet */ }
+  return out
 }
 
-// The component a bare name means where `within` holds the components in
-// play, or undefined where it cannot stand alone there.
-let owner = (
-  v: Vocab,
-  name: string,
-  within: Set<string>,
-): string | undefined => {
-  let comps = bares(v).get(name)
-  if (!comps) return undefined
-  if (comps.length == 1) return comps[0]
-  let picked = comps.filter((c) => within.has(c))
-  return picked.length == 1 ? picked[0] : undefined
-}
-
-// Past a reference the path reads another row, so the line decides nothing.
-let NONE = new Set<string>()
+// The spine's eid is no declared column, and is still named `.entity.eid`.
+let columns = (v: Vocab, comp: string): string[] =>
+  comp == 'entity' ? [...v.props(comp), 'eid'] : v.props(comp)
 
 // A property's label: its component, and what it is when that matters.
 let mark = (v: Vocab, comp: string, prop: string): string => {
-  if (!comp) return 'ref'
   let p = v.prop(comp, prop)
   return p?.category == 'ref'
     ? `${comp} · ref`
@@ -149,37 +122,30 @@ let mark = (v: Vocab, comp: string, prop: string): string => {
 }
 
 let ref = (v: Vocab, hop: Hop): boolean =>
-  !hop.comp || v.prop(hop.comp, hop.prop)?.category == 'ref'
+  v.prop(hop.comp, hop.prop)?.category == 'ref'
 
 // Where a settled path leaves the next segment: on a component, which offers
 // its own properties; past a reference (or at the head of a line), where
 // anything an entity carries can follow; or nowhere. The walk is @yaks/vocab's
 // `aim` taken one step at a time, since the last segment is still being
-// typed: a component with a segment after it is the explicit `comp.prop`
-// form, and any other segment is a bare name.
-type Next = { comp: string } | { far: Set<string> } | null
-let next = (at: At, segs: string[]): Next => {
-  if (!segs.length) return { far: at.within }
+// typed: a component and one of its properties, then the next pair.
+type Next = { comp: string } | { far: true } | null
+let next = (v: Vocab, segs: string[]): Next => {
   let hop: Hop | undefined
   for (let i = 0; i < segs.length;) {
-    if (hop && !ref(at.v, hop)) return null
+    if (hop && !ref(v, hop)) return null
     let seg = segs[i]
-    if (at.v.comp(seg)) {
+    if (v.comp(seg)) {
       if (i + 1 == segs.length) return { comp: seg }
-      if (!at.v.props(seg).includes(segs[i + 1])) return null
+      if (!columns(v, seg).includes(segs[i + 1])) return null
       hop = { comp: seg, prop: segs[i + 1] }
       i += 2
-    } else if (i == 0 && at.v.assoc(seg)) {
+    } else if (i == 0 && v.assoc(seg)) {
       // A reverse association at the head reads its children from here on.
       i += 1
-    } else {
-      let comp = owner(at.v, seg, i ? NONE : at.within)
-      if (comp == null) return null
-      hop = { comp, prop: seg }
-      i += 1
-    }
+    } else return null
   }
-  return !hop || ref(at.v, hop) ? { far: NONE } : null
+  return !hop || ref(v, hop) ? { far: true } : null
 }
 
 // A `_` component describes the vocabulary itself (`_comp`, `_prop`), so it
@@ -187,11 +153,25 @@ let next = (at: At, segs: string[]): Next => {
 let inner = (a: string, b: string): number =>
   Number(a.startsWith('_')) - Number(b.startsWith('_')) || cmp(a, b)
 
+// A candidate and where it ranks: an exact name first, then one whose
+// component the line names, each family's own order kept within.
+type Ranked = Cand & { rank: number }
+let ranked =
+  (at: At, pre: string, comp: string, name: string) => (c: Cand): Ranked => ({
+    ...c,
+    rank: (name.toLowerCase() == pre.toLowerCase() ? 0 : 2) +
+      (at.line.has(comp) ? 0 : 1),
+  })
+let sorted = (cs: Ranked[]): Cand[] =>
+  cs.map((c, i) => ({ c, i }))
+    .toSorted((a, b) => a.c.rank - b.c.rank || a.i - b.i)
+    .map(({ c: { text, kind } }) => ({ text, kind }))
+
 // The names that can follow `lead` (a prefix character and the settled
 // segments), by family: components (`dot` leads on to their properties, for
-// where a component alone is no word), properties, and the reverse
-// associations a clause may start with.
-type Names = { comps: Cand[]; props: Cand[]; reverse: Cand[] }
+// where a component alone is no word), properties, each with its component,
+// and the reverse associations a clause may start with.
+type Names = { comps: Ranked[]; props: Ranked[]; reverse: Ranked[] }
 let names = (
   at: At,
   lead: string,
@@ -199,33 +179,45 @@ let names = (
   pre: string,
   dot: boolean,
 ): Names => {
-  let n = next(at, segs)
+  let n = next(at.v, segs)
   let v = at.v
   if (!n) return { comps: [], props: [], reverse: [] }
   if ('comp' in n) {
     let comp = n.comp
     return {
       comps: [],
-      props: v.props(comp).filter((p) => starts(p, pre)).toSorted()
-        .map((p) => ({ text: lead + p, kind: mark(v, comp, p) })),
+      props: columns(v, comp).filter((p) => starts(p, pre)).toSorted()
+        .map((p) =>
+          ranked(at, pre, comp, p)({ text: lead + p, kind: mark(v, comp, p) })
+        ),
       reverse: [],
     }
   }
-  let within = n.far
+  let all = v.all.toSorted(inner)
   return {
-    comps: v.all.filter((c) => starts(c, pre)).toSorted(inner).map((c) => ({
-      text: lead + c + (dot && v.props(c).length ? '.' : ''),
-      kind: 'comp',
-    })),
-    props: [...bares(v).keys()].filter((p) => starts(p, pre)).toSorted()
-      .flatMap((p) => {
-        let comp = owner(v, p, within)
-        return comp == null ? [] : [{ text: lead + p, kind: mark(v, comp, p) }]
-      }),
+    comps: all.filter((c) => starts(c, pre)).map((c) =>
+      ranked(at, pre, c, c)({
+        text: lead + c + (dot && columns(v, c).length ? '.' : ''),
+        kind: 'comp',
+      })
+    ),
+    props: all
+      .flatMap((c) =>
+        columns(v, c).filter((p) => starts(p, pre)).map((p) => ({ c, p }))
+      )
+      .toSorted((a, b) => cmp(a.p, b.p) || inner(a.c, b.c))
+      .map(({ c, p }) =>
+        ranked(at, pre, c, p)({ text: `${lead}${c}.${p}`, kind: mark(v, c, p) })
+      ),
     reverse: segs.length ? [] : v.assocs()
       .filter(([name]) => starts(name, pre))
       .toSorted(([a], [b]) => a.localeCompare(b))
-      .map(([name, a]) => ({ text: lead + name, kind: `${a.comp} · reverse` })),
+      .map(([name, a]) =>
+        ranked(at, pre, a.comp, name)({
+          text: lead + name,
+          kind: `${a.comp} · reverse`,
+        })
+      ),
   }
 }
 
@@ -245,15 +237,12 @@ let presence = (name: string): Cand[] => [
 // What may follow a word that already names something: a component's
 // properties, a property's operators.
 let exact = (at: At, segs: string[], name: string, word: string): Cand[] => {
-  let n = next(at, segs)
+  let n = next(at.v, segs)
   if (!n || !name) return []
-  if ('comp' in n) return at.v.props(n.comp).includes(name) ? ops(word) : []
-  return [
-    ...at.v.comp(name) && at.v.props(name).length
-      ? [{ text: word + '.', kind: 'comp' }]
-      : [],
-    ...owner(at.v, name, n.far) != null ? ops(word) : [],
-  ]
+  if ('comp' in n) return columns(at.v, n.comp).includes(name) ? ops(word) : []
+  return at.v.comp(name) && columns(at.v, name).length
+    ? [{ text: word + '.', kind: 'comp' }]
+    : []
 }
 
 // The directives written as a dotted name: `.order=`, `.count`, `.limit=`.
@@ -262,14 +251,14 @@ let directives = (pre: string): Cand[] =>
     d.spell.startsWith('.') && starts(d.spell.slice(1), pre)
   ).map((d) => ({ text: d.spell, kind: d.word }))
 
-// A path being typed: `.sta`, `.task.`, `.assignee.ti`, `!propo`, `?lo`.
+// A path being typed: `.sta`, `.task.`, `.task.assignee.ti`, `!propo`, `?lo`.
 let path = (at: At, word: string, sigil: string, dotted: string): Cand[] => {
   let segs = dotted.split('.')
   let pre = segs.pop()!
   let lead = sigil + segs.map((s) => s + '.').join('')
   let n = names(at, lead, segs, pre, false)
-  if (sigil == '?') return fits(n.comps, word)
-  let found = fits([...n.comps, ...n.props, ...n.reverse], word)
+  if (sigil == '?') return sorted(n.comps)
+  let found = sorted([...n.comps, ...n.props, ...n.reverse])
   if (sigil == '!') return found
   return [
     ...exact(at, segs, pre, word),
@@ -279,7 +268,7 @@ let path = (at: At, word: string, sigil: string, dotted: string): Cand[] => {
   ]
 }
 
-// A half-typed operator wants the rest of itself: `.status!` → `.status!=`.
+// A half-typed operator wants the rest of itself: `.p!` → `.p!=`.
 let half = (word: string, op: string): Cand[] =>
   OPERATORS.filter((o) => o.spell != op && o.spell.startsWith(op))
     .map((o) => ({ text: word.slice(0, -op.length) + o.spell, kind: o.word }))
@@ -302,7 +291,7 @@ let ids = (at: At, ref: string, pre: string): Found =>
 // entities, a flag is 1 or 0, a time takes a phrase, and anything else is what
 // the source has seen it hold.
 let slot = (at: At, hop: Hop, pre: string): Found => {
-  if (!hop.comp || hop.prop == 'eid') return ids(at, 'entity', pre)
+  if (hop.prop == 'eid') return ids(at, 'entity', pre)
   let p = at.v.prop(hop.comp, hop.prop)
   if (!p) return []
   if (p.category == 'enum') return fits(cands(p.values ?? [], hop.prop), pre)
@@ -317,17 +306,15 @@ let slot = (at: At, hop: Hop, pre: string): Found => {
   return at.source.values?.(hop.comp, hop.prop, pre) ?? []
 }
 
-// A property path as a directive's value (`.tally=status`, `.fields=pin.x`),
-// the properties first, since a component alone is no value there.
+// A property path as a directive's value (`.tally=task.status`,
+// `.fields=pin.x`), the properties first, since a component alone is no value
+// there.
 let field = (at: At, typed: string): Cand[] => {
   let segs = typed.split('.')
   let pre = segs.pop()!
   let lead = segs.map((s) => s + '.').join('')
   let n = names(at, lead, segs, pre, true)
-  return fits(
-    [...n.props, ...n.comps.filter((c) => c.text.endsWith('.'))],
-    typed,
-  )
+  return sorted([...n.props, ...n.comps.filter((c) => c.text.endsWith('.'))])
 }
 
 // A directive's value: a ranking or a property to order by, the property an
@@ -375,7 +362,7 @@ let value = (
   let lead = head + typed.slice(0, cut), pre = typed.slice(cut)
   let hops: Hop[]
   try {
-    hops = at.v.aim(qualify(at.v, segs, at.within).join('.'))
+    hops = at.v.aim(segs.join('.'))
   } catch {
     return []
   }
@@ -432,8 +419,11 @@ let offer = (at: At, word: string): Found => {
  *     },
  *   },
  * })
- * complete(v, '.status=o')
- * // { from: 0, to: 9, cands: [{ text: '.status=open', kind: 'status' }],
+ * complete(v, '.sta')
+ * // { from: 0, to: 4, cands: [{ text: '.task.status', kind: 'task' }],
+ * //   whole: false }
+ * complete(v, '.task.status=o')
+ * // { from: 0, to: 14, cands: [{ text: '.task.status=open', kind: 'status' }],
  * //   whole: false }
  * ```
  */
@@ -456,8 +446,8 @@ export function complete(
   source: Source = {},
 ): Completion | Promise<Completion> {
   let from = start(text, caret)
-  let within = context(v, `${text.slice(0, from)} ${text.slice(caret)}`)
+  let line = named(v, `${text.slice(0, from)} ${text.slice(caret)}`)
   let word = text.slice(from, caret)
-  let found = offer({ v, within, source }, word)
+  let found = offer({ v, line, source }, word)
   return then(found, (cands) => ({ from, to: caret, ...answer(word, cands) }))
 }

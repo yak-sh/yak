@@ -2,10 +2,10 @@
 // characters on a component name, the operators, the bracket a path may carry,
 // the list and range forms of a value, the reserved directives, and how `&`,
 // whitespace and quotes separate tokens — and nothing about any schema. Where a
-// meaning needs the vocabulary (which component a bare `.status` belongs to,
-// whether a scalar is a time phrase or a plain word, whether `.comments` names
-// a reverse association), the parser keeps the raw tokens and leaves the
-// reading to a compiler that has a schema. See README for the full division.
+// meaning needs the vocabulary (whether `.task.status` names a declared
+// property, whether a scalar is a time phrase or a plain word, whether
+// `.comments` names a reverse association), the parser keeps the raw tokens
+// and leaves the reading to a compiler that has a schema. See README for the full division.
 //
 // A token is one of three things by how it is written, so nothing is ever
 // parsed by trying one reading and falling back to another: a clause on a
@@ -80,8 +80,9 @@ let splitOutside = (s: string, sep: string, brackets = false): string[] => {
   return out
 }
 
-let LIST = 'a list has no spaces and no empty member (.status=open,wip); ' +
-  'quote a value with spaces (.status="open wip")'
+let LIST =
+  'a list has no spaces and no empty member (.task.status=open,wip); ' +
+  'quote a value with spaces (.doc.title="open wip")'
 
 // One atom: a range (`x..y`, or `x...y` for an exclusive end) or a scalar.
 // Recognizing a range needs no type, because the current matcher applies `..`
@@ -561,7 +562,7 @@ let VALUED = new RegExp(
  *
  * ```ts
  * import { valued } from '@yaks/query'
- * valued('.status=open') // true
+ * valued('.task.status=open') // true
  * valued('.entity') // false
  * ```
  */
@@ -631,8 +632,8 @@ let clauses = (toks: string[], opts: ParseOpts): Clause[] =>
  *
  * Whitespace and `&` both separate terms, every term
  * stands on its own, and a value containing a space is quoted
- * (`.title~="two words"`); unquoted, `.title~=two words` is the filter `two`
- * plus the search term `words`. Filters and text terms mix the way they do in a
+ * (`.doc.title~="two words"`); unquoted, `.doc.title~=two words` is the filter
+ * `two` plus the search term `words`. Filters and text terms mix the way they do in a
  * search box. A comma between clauses is accepted and means nothing; inside a
  * value it means any-of.
  *

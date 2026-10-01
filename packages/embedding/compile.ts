@@ -2,7 +2,7 @@
 // becomes an ordering, and the similarity comes back as a component.
 //
 // A query mixes a neighbourhood with ordinary filters — `.near=cake-01
-// .price<20` — and @yaks/query parses `.near` as a directive that @yaks/sql
+// .book.price<20` — and @yaks/query parses `.near` as a directive that @yaks/sql
 // refuses on its own, because the vectors are here and not there. This module
 // is the @yaks/sql extension that answers it, registered through
 // `compile(ast, vocab, { extend: [semantic(db, embedder)] })`. It takes the

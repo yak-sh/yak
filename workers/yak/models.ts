@@ -184,7 +184,7 @@ export let planting: Install = async (read, at) => {
   if (at.meta || !at.app) return []
   let want = catalogued()
   let held = new Map(
-    (await read(`.eid=${want.map((b) => b.entity.eid).join(',')}&*`))
+    (await read(`.entity.eid=${want.map((b) => b.entity.eid).join(',')}&*`))
       .map((b) => [b.entity.eid, b]),
   )
   let names = new Set(want.map((b) => (b.model as Comp | undefined)?.name))

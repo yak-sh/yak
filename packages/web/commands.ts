@@ -61,7 +61,7 @@ let a = (name: string, eg?: string, opts: Partial<Arg> = {}): Arg => ({
 // session speaking — a browser has none, so :claim must name one there.
 //
 // `read` is the door's VALUE convention for a dot-param — client.ts
-// inflate(), so `.body=@file` is the file and `.body=@-` is stdin, the
+// inflate(), so `.doc.body=@file` is the file and `.doc.body=@-` is stdin, the
 // same reading `task set` and `task new` give it. It rides the context
 // because it is a fact about the door, not about the verb: this module
 // touches no filesystem, so the doors that HAVE one (the shell, the TUI)
@@ -82,7 +82,7 @@ export type Ctx = {
   graph?: Reader
   session?: string
   // `as` is the token the typist actually reached for — an error must
-  // never name `.body=` at a door where the body is bare words.
+  // never name `.doc.body=` at a door where the body is bare words.
   read?: (p: Param, io?: Stdin, as?: string) => Param
 }
 
@@ -298,7 +298,7 @@ export type Command = {
   about: string
   run: Verb
   words?: [min: number, max: number]
-  // This verb reads dot-params (`.prop=value`) — the write/spec commands
+  // This verb reads dot-params (`.comp.prop=value`) — the write/spec commands
   // (new/fix/set, the card mints, chat). Every other colon verb takes
   // positional words, so an unknown dot-param at it is a mistake to refuse by
   // name, not text to absorb (T-14291) — the same guard the CLI verbs carry.
@@ -352,10 +352,10 @@ let card = (kind: typeof cardCommands[number]): Command => ({
   args: [a(
     kind == 'task' ? 'title' : 'params',
     {
-      task: 'P1 .domain=Eng title…',
-      session: '.id=review',
-      doc: '.title=Notes .body=…',
-      memory: '.title=Lesson .memory.scope=home',
+      task: 'P1 .filed.domain=Eng title…',
+      session: '.session.id=review',
+      doc: '.doc.title=Notes .doc.body=…',
+      memory: '.doc.title=Lesson .memory.scope=home',
     }[kind],
     { rest: true, need: false },
   )],
@@ -367,7 +367,7 @@ let card = (kind: typeof cardCommands[number]): Command => ({
     // value may contain spaces. Otherwise a task speaks the typed-task
     // grammar: first line title, following lines body.
     let explicit = kind == 'task' && /^\s*\./.test(line) &&
-      /(?:^|\s)\.(?:doc\.)?(?:title|body)=/.test(line)
+      /(?:^|\s)\.doc\.(?:title|body)=/.test(line)
     let typed = kind == 'task' && !explicit ? spec(rest, ctx.read) : undefined
     let text = kind == 'task' && explicit ? line : rest.trim()
     let args = typed || !text ? [] : text.split(/\s+(?=\.)/)
@@ -434,11 +434,11 @@ let commentChanges = (...args: Parameters<typeof agentCommentChanges>) =>
   )
 
 export let commands: Record<string, Command> = {
-  // :new speaks the spec grammar (client.ts): 'P1 .domain=Eng Ship it'
+  // :new speaks the spec grammar (client.ts): 'P1 .filed.domain=Eng Ship it'
   // — typed setters win over what the context hands down.
   new: {
     dots: true,
-    args: [a('title', 'P1 .domain=Eng title…', { rest: true })],
+    args: [a('title', 'P1 .filed.domain=Eng title…', { rest: true })],
     about: 'file a task where you stand',
     run: (rest, ctx) => {
       let { title, body, grouped } = spec(rest, ctx.read)
@@ -467,7 +467,7 @@ export let commands: Record<string, Command> = {
   // A fix without a named task is a fix for the TOOL you're typing into
   // — whatever card you're looking at — so it routes to the deployment's
   // own project (venture alias `tasks`; the sole repo-bearing project when no
-  // alias stands). Explicit .project= always wins. The spawn is an
+  // alias stands). Explicit .filed.project= always wins. The spawn is an
   // INTENT like go: this module never touches the wire.
   fix: {
     dots: true,
@@ -518,10 +518,16 @@ export let commands: Record<string, Command> = {
   },
   chat: {
     dots: true,
-    args: [a('prompt', '.provider=codex .model=gpt-5.6-sol prompt…', {
-      rest: true,
-      need: false,
-    })],
+    args: [
+      a(
+        'prompt',
+        '.session.provider=codex .session.model=gpt-5.6-sol prompt…',
+        {
+          rest: true,
+          need: false,
+        },
+      ),
+    ],
     about: 'start a taskless chat in the tray',
     run: (rest, ctx) => {
       let { title, body, grouped } = spec(rest, ctx.read)
@@ -552,7 +558,7 @@ export let commands: Record<string, Command> = {
   },
   comment: {
     dots: true,
-    args: [a('text', '.body=@- | words…', { rest: true })],
+    args: [a('text', '.doc.body=@- | words…', { rest: true })],
     about: 'comment on the focused entity',
     run: (rest, ctx) => {
       let r = here(ctx)
@@ -562,7 +568,7 @@ export let commands: Record<string, Command> = {
         throw new Error(`comment: cannot set ${p.comp}.${p.prop}`)
       }
       let body = p ? String(p.value) : page(text, ctx)
-      if (!body) throw new Error('comment: needs words or .body=<text>')
+      if (!body) throw new Error('comment: needs words or .doc.body=<text>')
       let made = commentChanges(
         corpus(r, ctx.session ? graphOf(ctx).session(ctx.session) : undefined),
         r.eid,
@@ -936,20 +942,20 @@ export let commands: Record<string, Command> = {
     },
   },
   // Params start at a dot, which is what lets a value hold spaces
-  // (:set .title=two words) without quoting rules the CLI's argv gives
+  // (:set .doc.title=two words) without quoting rules the CLI's argv gives
   // it for free. Values ride ctx.read — one @file convention for every
   // door that has a filesystem, the same one `task set` speaks.
   set: {
     dots: true,
     args: [
-      a('param', '.prop=value'),
+      a('param', '.comp.prop=value'),
       a('more', '…', { rest: true, need: false }),
     ],
     about: 'patch the focused entity',
     run: (rest, ctx) => {
       let r = here(ctx)
       let args = rest.trim().split(/\s+(?=\.)/).filter(Boolean)
-      if (!args.length) throw new Error('set: needs .prop=value')
+      if (!args.length) throw new Error('set: needs .comp.prop=value')
       let ps = readParams(args, ctx)
       return {
         changes: Object.entries(patches(ps))
@@ -1040,7 +1046,7 @@ export let commandOut = (
   let out = run(line.replace(/^:/, ''), { eid, rows: all, session, graph })
   if (!out.changes) return out
   // Resolve the output's references — a verb may leave a human id in a ref
-  // value (`:set .project=P-19`). Over the db reader that resolution is a keyed
+  // value (`:set .filed.project=P-19`). Over the db reader that resolution is a keyed
   // lookup, never a whole-graph corpus; over rows it reads what's in hand.
   let changes = graph
     ? derefWith(

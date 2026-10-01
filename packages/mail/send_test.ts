@@ -23,7 +23,7 @@ let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 
 let read = async (g: { read: (q: string) => unknown }, eid: string) =>
-  ((await g.read(`.eid=${eid}`)) as Bundle[])[0]
+  ((await g.read(`.entity.eid=${eid}`)) as Bundle[])[0]
 
 test('a letter that asks to go, goes — and says so', async () => {
   let { g, post } = await seeded()

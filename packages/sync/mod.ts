@@ -14,7 +14,7 @@
  *
  * // let g = graph({ storage: ram(vocab, { adopt: true }), vocab })
  * // let link = sync(g, { url: 'https://recipes.example' })
- * // link.subscribe('.dinner&.serves>4')
+ * // link.subscribe('.recipe.course=dinner&.recipe.serves>4')
  * ```
  *
  * ## Writes are optimistic A write commits locally first — the page renders it

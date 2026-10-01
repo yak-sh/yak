@@ -115,7 +115,7 @@ test('a held reference list asks for no rows of its own', async () => {
   try {
     await Promise.resolve()
     let lines = sent.map((f) => f.subscribe)
-    assertEquals(lines.includes(`.eid=${cited}&*`), true)
+    assertEquals(lines.includes(`.entity.eid=${cited}&*`), true)
     assertEquals(lines.some((l) => String(l).includes(peer)), false)
   } finally {
     asked.free()

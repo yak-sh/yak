@@ -81,7 +81,7 @@ test('a load lands in chunks, and a blank line is not a bundle', async () => {
   assertEquals(widths, [CHUNK, CHUNK, 20])
   assertEquals(comp(answered[0] as Bundle, 'book'), { price: 1 })
   assertEquals(typeof answered[0].entity.num, 'number')
-  assertEquals((await (await handler(ask('.price>0'))).json()).length, 120)
+  assertEquals((await (await handler(ask('.book.price>0'))).json()).length, 120)
 })
 
 test('the answer is line for line: bookkeeping stays out of it', async () => {
@@ -119,7 +119,10 @@ test('a refusal is the last line: which line, and what landed', async () => {
   assertEquals(no.line, CHUNK + 2)
   assertEquals(no.committed, CHUNK)
   // Its chunk rolled back whole, and nothing after it was read.
-  assertEquals((await (await handler(ask('.price>0'))).json()).length, CHUNK)
+  assertEquals(
+    (await (await handler(ask('.book.price>0'))).json()).length,
+    CHUNK,
+  )
 })
 
 test('a line that is not JSON names itself', async () => {

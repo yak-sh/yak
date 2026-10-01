@@ -49,7 +49,7 @@ export let authorize = (h: Pick<Harness, 'g' | 'vault'>): Authorization => {
   ): Promise<MCPAuthReply> => {
     if (action == 'list') {
       let reply = await mcp.control(action)
-      let router = await h.g.read(`.eid=${OPENROUTER}&.provider`)
+      let router = await h.g.read(`.entity.eid=${OPENROUTER}&.provider`)
       return {
         ...reply,
         servers: [

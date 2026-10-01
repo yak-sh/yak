@@ -12,7 +12,7 @@ export let SAMPLES: Record<string, string> = {
 /** Every output a build now holds for a sound, each with the sound it was
  * built for (`build.for`) and its clip, which ride beside it. */
 export let SOUNDS = '.built.current=true&.built.artifact' +
-  '&.built.build.variant=main&.fields=built.build.for.sfx.name,' +
+  '&.built.build.build.variant=main&.fields=built.build.build.for.sfx.name,' +
   'built.artifact.artifact.address,built.artifact.artifact.media_type'
 
 export type Row = {

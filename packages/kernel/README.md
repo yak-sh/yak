@@ -104,11 +104,6 @@ three that the core meta-model does not cover, registered by passing
 | `lazy`     | a component | its rows are not included in the snapshot a client loads at startup; a reader asks for them by partition    |
 | `well`     | a property  | the name of a list of suggested values, offered for completion beside the values the property already holds |
 
-A transcript line needs no keyword of its own. Being reached only by its
-qualified filter name (`.entry.session=`, never a bare `.session=`) is what
-makes it one, and the core meta-model already has a keyword for that:
-`bare: false`.
-
 ## Entry points
 
 `deno.json` names four, and a program imports only the ones it needs:

@@ -155,7 +155,7 @@ test('a batch applied comes back as it landed, and reads back', async () => {
 
   let found = bundles(result(
     await called(client, 'graph_query', {
-      q: '.price<20&?doc',
+      q: '.book.price<20&?doc',
     }),
   ))
   assertEquals(found.map((b) => b.entity.eid), ['b1'])
@@ -203,8 +203,8 @@ test('filters and limit narrow the whole query line', async () => {
   })
   let found = bundles(result(
     await called(client, 'graph_query', {
-      q: '.price',
-      filters: ['.price<20'],
+      q: '.book.price',
+      filters: ['.book.price<20'],
       limit: 5,
     }),
   ))
@@ -212,7 +212,7 @@ test('filters and limit narrow the whole query line', async () => {
   assertEquals(
     bundles(result(
       await called(client, 'graph_query', {
-        q: '.price',
+        q: '.book.price',
         limit: 0,
       }),
     )),
@@ -221,8 +221,8 @@ test('filters and limit narrow the whole query line', async () => {
   // a filter narrows every alternative, not just the last one
   let either = bundles(result(
     await called(client, 'graph_query', {
-      q: '.price=40|.price=12',
-      filters: ['.price<20'],
+      q: '.book.price=40|.book.price=12',
+      filters: ['.book.price<20'],
     }),
   ))
   assertEquals(either.map((b) => b.entity.eid), ['b1'])
@@ -258,7 +258,10 @@ test('the server signs the batch, never the client', async () => {
   })
   // What landed is what this is about: the call was written as the door's
   // actor, and the runner signed the tool's bundles with the same name.
-  assertEquals(comp((await graph.read('.price=12&*'))[0], 'created').by, 'm1')
+  assertEquals(
+    comp((await graph.read('.book.price=12&*'))[0], 'created').by,
+    'm1',
+  )
 })
 
 test('a tool runs as whoever called it', async () => {
@@ -281,7 +284,7 @@ test('a tool runs as whoever called it', async () => {
   // The tool was handed the caller, not the process running it…
   assertEquals(seen, 'm1')
   // …and what it answered is written in that name.
-  let [shelved] = await graph.read('.status=shelved&*')
+  let [shelved] = await graph.read('.book.status=shelved&*')
   assertEquals(comp(shelved, 'created').by, 'm1')
   await client.close()
 })
@@ -293,7 +296,7 @@ test('an unattributed server leaves the actor off', async () => {
     change: [{ ...spring, $actor: { by: 'villain' } }],
   })
   assertEquals(
-    comp((await graph.read('.price=12&*'))[0], 'created').by,
+    comp((await graph.read('.book.price=12&*'))[0], 'created').by,
     undefined,
   )
 })
@@ -461,12 +464,12 @@ test('a plugin contributes tools the way it contributes components', async () =>
   assertEquals(out.map((b) => b.entity.eid), ['b1'])
   let found = bundles(result(
     await called(client, 'graph_query', {
-      q: '.status=shelved',
+      q: '.book.status=shelved',
     }),
   ))
   assertEquals(found.map((b) => b.entity.eid), ['b1'])
   assertEquals(
-    comp((await graph.read('.status=shelved&*'))[0], 'created').by,
+    comp((await graph.read('.book.status=shelved&*'))[0], 'created').by,
     'm1',
   )
 })
@@ -567,7 +570,7 @@ test('a session that connected against another roster is told, once', async () =
       return line
     },
   })
-  let out = await called(client, 'graph_query', { q: '.price' })
+  let out = await called(client, 'graph_query', { q: '.book.price' })
   let blocks = out.content as { text: string }[]
   assertEquals(blocks.length, 2)
   assertEquals(
@@ -578,7 +581,7 @@ test('a session that connected against another roster is told, once', async () =
   // The answer itself is untouched — a described value stays parsable.
   assertEquals(JSON.parse(blocks[0].text), [])
   // Once per changed set: the next reply is quiet again.
-  let quiet = await called(client, 'graph_query', { q: '.price' })
+  let quiet = await called(client, 'graph_query', { q: '.book.price' })
   assertEquals((quiet.content as { text: string }[]).length, 1)
   assertEquals(told, 1)
   await client.close()

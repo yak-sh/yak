@@ -11,10 +11,6 @@
 // of the meaning (a reading list, a table of contents). It is optional; a
 // relation with no order simply never writes it.
 //
-// The endpoints do not claim their property names as query shorthand
-// (`bare: false`): `from` and `to` are too ordinary for this component to own
-// vocabulary-wide, so a query writes them in full — `.edge.from=<id>`.
-//
 // The component itself is declared in `./vocab.json` — plain JSON Schema,
 // readable by anything that reads JSON. This file re-exports it under the name
 // callers import and keeps the explanation of why it is shaped this way.

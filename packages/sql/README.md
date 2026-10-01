@@ -30,7 +30,7 @@ let vocab = loadVocab({
     },
   },
 })
-let ast = parse('.status=open&.priority>=1')
+let ast = parse('.task.status=open&.task.priority>=1')
 let { sql, params } = compile(ast, vocab)
 // Execute sql with params using your database driver.
 ```
@@ -193,9 +193,9 @@ the backing (`_change.tx`) holds the row's id, and paths follow it
 (`._change.tx._tx.via=S-7`).
 
 An entity's eid is its id in eight or more hex digits, then the tag
-(`eidOf(tag, 42)` is `0000002a` and the tag), so nothing stores it and `.eid=`,
-a reference equality and a `.after` cursor read the id back out (`idOf`). A
-computed component's entities have no number.
+(`eidOf(tag, 42)` is `0000002a` and the tag), so nothing stores it and
+`.entity.eid=`, a reference equality and a `.after` cursor read the id back out
+(`idOf`). A computed component's entities have no number.
 
 ## Extensions
 
@@ -251,8 +251,8 @@ search run beside one.
 
 ## Ordering and paging
 
-`.order=price` sorts ascending; `.order=-price` sorts descending. The ordered
-property may sit on the entity a chain of references reaches, as a path
+`.order=book.price` sorts ascending; `.order=-book.price` sorts descending. The
+ordered property may sit on the entity a chain of references reaches, as a path
 predicate's does: `.order=review.book.book.price` orders reviews by their book's
 price, and `.fields=_prop.comp._comp.name` projects each property's component
 name beside it. An extension may supply the order expression. Explicit ordering
@@ -276,10 +276,10 @@ sorting and cursor comparison.
 Supported constructs include property predicates, any-of lists, ranges, time
 phrases, booleans, reference paths, reverse associations, `.kind`,
 presence/absence, ordering, `.limit`/`.after`, `.count`/`.distinct`/`.tally`,
-`.fields`, `*` projections, `.refs=`, and `.eid=`/`.num=`. Individual
-combinations can still be unsupported; the binder throws `Unsupported` rather
-than silently ignoring them. Callers may report the error or use another
-evaluator.
+`.fields`, `*` projections, `.refs=`, and `.entity.eid=`/`.entity.num=`.
+Individual combinations can still be unsupported; the binder throws
+`Unsupported` rather than silently ignoring them. Callers may report the error
+or use another evaluator.
 
 `.distinct` and `.tally` count a number as the number it is and a text, enum or
 eid as its text (`tallied`), and refuse any other type. Over a reference they
@@ -296,16 +296,16 @@ stay within the engine's compound-query limit.
 
 ## Naming entities
 
-`.eid=` and `.num=` accept sets. `@yaks/id` also parses display ids such as
-`B-7`: the letter is a label, and 7 is the entity number. A set binds as one
-JSON parameter however long it is, since a host caps how many parameters one
-statement binds (a Durable Object's SQLite takes 100). Property any-of lists of
-scalar equalities use the same one-parameter set.
+`.entity.eid=` and `.entity.num=` accept sets. `@yaks/id` also parses display
+ids such as `B-7`: the letter is a label, and 7 is the entity number. A set
+binds as one JSON parameter however long it is, since a host caps how many
+parameters one statement binds (a Durable Object's SQLite takes 100). Property
+any-of lists of scalar equalities use the same one-parameter set.
 
 ```text
-.eid=a3f1,b7c2  "entity"."eid" in (select value from json_each(?))  ["a3f1","b7c2"]
-.num=3,4       "entity"."num" in (select value from json_each(?))  [3,4]
-.eid=B-7       "entity"."num" in (select value from json_each(?))  [7]
+.entity.eid=a3f1,b7c2  "entity"."eid" in (select value from json_each(?))  ["a3f1","b7c2"]
+.entity.num=3,4        "entity"."num" in (select value from json_each(?))  [3,4]
+.entity.eid=B-7        "entity"."num" in (select value from json_each(?))  [7]
 ```
 
 `@yaks/match` applies the same identity predicates to a bundle: one entity's
@@ -334,8 +334,8 @@ entity metadata are among the unsupported cases.
 (CTE), up to the query's depth limit. The compiler supplies a one-step relation
 with `from` and `to` integer owner ids.
 
-A chained path such as `.fork.from.session->S-1` composes its reference joins
-into that step:
+A chained path such as `.fork.from.entry.session->S-1` composes its reference
+joins into that step:
 
 ```sql
 select "fork"."entity" as "from", "__w1"."session" as "to"

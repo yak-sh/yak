@@ -28,7 +28,7 @@ test('a word finds prose in any component', () => {
 })
 
 test('words and filters mix on one line', () => {
-  assertEquals(found('dragon .price<15'), ['book-1'])
+  assertEquals(found('dragon .book.price<15'), ['book-1'])
 })
 
 test('two words both have to match', () => {

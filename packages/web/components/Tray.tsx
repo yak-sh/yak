@@ -241,7 +241,7 @@ let SessionGroup = (
 
 export let SessionRows = ({ ls }: { ls: [string, Ent][] }) => {
   useQueryEids(
-    `.eid=${ls.map(([eid]) => eid).join(',')}&` +
+    `.entity.eid=${ls.map(([eid]) => eid).join(',')}&` +
       sessionDetail.split('&')[1] +
       '&.edges[worked]&.edges.peers=doc.title,task.status',
     true,

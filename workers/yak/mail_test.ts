@@ -238,7 +238,7 @@ let platform = async (meter?: Record<string, unknown>) => {
   }], KERNEL)
   // What the space has spent this month, as the directory holds it.
   let spent = async () => {
-    let [row] = await store.query(`.eid=${SPACE}&?meter`)
+    let [row] = await store.query(`.entity.eid=${SPACE}&?meter`)
     return (row?.meter ?? {}) as { emails?: number }
   }
   return { ns, spent }

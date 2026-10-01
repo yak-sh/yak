@@ -49,7 +49,7 @@ test('a release is served only after its deploy records it', async () => {
   let dir = directory({
     fetch: (req: Request) => {
       let q = new URL(req.url).searchParams.get('q') ?? ''
-      if (q == '.eid=s1') {
+      if (q == '.entity.eid=s1') {
         return Promise.resolve(Response.json([{
           entity: { eid: 's1' },
           space: { slug: 'jeff' },
@@ -303,7 +303,7 @@ let held = () => {
     return rows.filter((row) =>
       terms.every((t) => {
         let [key, want] = t.split('=')
-        if (key == '.eid') return row.entity.eid == want
+        if (key == '.entity.eid') return row.entity.eid == want
         if (key == '.limit' || key == '.after') return true
         let [, name, prop] = key.split('.')
         let comp = row[name] as Record<string, unknown> | undefined

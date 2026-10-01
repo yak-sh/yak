@@ -26,7 +26,7 @@ test('a client with no server is a whole graph on its own', () => {
   let c = boxClient()
   c.mutate([dal()])
   assertEquals(comp(c.ent('r1'), 'doc').title, 'Dal')
-  assertEquals(titles(c.read('.course=dinner&?doc')), ['Dal'])
+  assertEquals(titles(c.read('.recipe.course=dinner&?doc')), ['Dal'])
   assertEquals(c.wire, undefined)
   c.close()
 })
@@ -160,7 +160,12 @@ test('a read answers the rows a watch on the same query holds', () => {
   let c = boxClient()
   c.mutate([dal(), note])
   for (
-    let q of ['.course=dinner', '.recipe&?doc', '.note.recipe=r1', '.doc&*']
+    let q of [
+      '.recipe.course=dinner',
+      '.recipe&?doc',
+      '.note.recipe=r1',
+      '.doc&*',
+    ]
   ) {
     let w = c.watch(q)
     assertEquals(c.read(q), w.value)
@@ -222,7 +227,7 @@ test("a caller's plugin runs on the client graph", () => {
 test('close stops the watches and the socket', async () => {
   let srv = server()
   let c = boxClient(srv, { vault: stash() })
-  c.watch('.course=dinner')
+  c.watch('.recipe.course=dinner')
   await c.idle()
 
   c.close()
@@ -238,7 +243,7 @@ test('a projected watch holds what it names, and keeps what it reaches', async (
     { ...dal(), recipe: { serves: 4, cook: 'c1' } },
   ])
   let c = boxClient(srv, { retention: 0 })
-  let cook = c.watch('.eid=c1')
+  let cook = c.watch('.entity.eid=c1')
   let w = c.watch('.recipe&.fields=recipe.serves,recipe.cook.doc.title')
   await c.idle()
   let dal4 = (cook: string) => ({
@@ -288,8 +293,8 @@ test("a watch sees a peer's value, and nothing stores it", async () => {
   let a = boxClient(srv)
   let b = boxClient(srv, { wireVault: disk, epoch: 'boot' })
   await b.ready
-  let dinners = b.watch('.course=dinner&?pointing')
-  a.watch('.course=dinner')
+  let dinners = b.watch('.recipe.course=dinner&?pointing')
+  a.watch('.recipe.course=dinner')
   a.mutate([dal()])
   await a.idle()
   await b.idle()
@@ -329,8 +334,8 @@ test('a replica can leave provenance exclusively to its authority', () => {
 let pointing = async () => {
   let srv = server()
   let a = boxClient(srv), b = boxClient(srv)
-  a.watch('.course=dinner')
-  b.watch('.course=dinner&?pointing')
+  a.watch('.recipe.course=dinner')
+  b.watch('.recipe.course=dinner&?pointing')
   a.mutate([dal()])
   let seen = async () => {
     for (let i = 0; i < 2; i++) await Promise.all([a.idle(), b.idle()])

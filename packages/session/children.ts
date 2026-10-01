@@ -45,7 +45,7 @@ let row = async (g: Graph, eid: Eid) => (await g.get([eid]))[0]
 let taskRow = async (g: Graph, id: string): Promise<Bundle> => {
   let b = await row(g, id)
   let num = /^T-(\d+)$/i.exec(id)?.[1]
-  if (!b && num) [b] = await g.read(`.task .num=${Number(num)} *`)
+  if (!b && num) [b] = await g.read(`.task .entity.num=${Number(num)} *`)
   if (!b?.task) throw new ToolError('task', `not a task: ${id}`)
   return b
 }

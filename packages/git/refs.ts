@@ -100,7 +100,7 @@ export let refAt = async (
   app: Eid,
   name = MAIN,
 ): Promise<string | null> => {
-  let [row] = await refs.read(`.eid=${refEid(app, name)}`)
+  let [row] = await refs.read(`.entity.eid=${refEid(app, name)}`)
   return id((row?.[REF] as Record<string, unknown> | undefined)?.commit) || null
 }
 

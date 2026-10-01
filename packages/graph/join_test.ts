@@ -88,8 +88,8 @@ test('what a match reads is what an overlay must cover', () => {
     reads(match('$c .call; .result, result.call=$c, +!doc'), vocab).sort(),
     ['call', 'doc', 'result'],
   )
-  // A bare word is routed: `.title` is the `doc` component's property.
-  assertEquals(reads(match('.title=Dune'), vocab), ['doc'])
+  // A property is read off its component.
+  assertEquals(reads(match('.doc.title=Dune'), vocab), ['doc'])
   // A removal is a read: the overlay carries the batch's deletions only for
   // the components it covers.
   assertEquals(reads(match('.call, -result'), vocab).sort(), ['call', 'result'])

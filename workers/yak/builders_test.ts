@@ -137,7 +137,7 @@ test('a hosted builder writes named outputs and spends the account budget', asyn
   assertEquals((built.doc as Comp).body, 'Keeps the forge.')
   assertEquals((built.villager as Comp).role, 'smith')
   let buildId = String((built.built as Comp).build)
-  let [build] = await v.read(`.eid=${buildId}&.build&*`)
+  let [build] = await v.read(`.entity.eid=${buildId}&.build&*`)
   assertEquals((build.build as Comp).builder, BUILDER)
   let [cite] = await v.read(`.edge.from=${built.entity.eid}&.cites&*`)
   assertEquals((cite.edge as Comp).to, SOURCE)

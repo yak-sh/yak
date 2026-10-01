@@ -16,7 +16,7 @@ let comps = (text: string) => {
 // ONE fresh eid — dropping the chip on the canvas lands a live board.
 test('pasted: doc+board JSON mints a board', () => {
   cache.value = {}
-  let q = 'fable .status=open'
+  let q = 'fable .task.status=open'
   let spec = pasted(JSON.stringify({
     doc: { title: q, body: '' },
     board: { query: q },

@@ -176,10 +176,10 @@ let deployOf = (b: Bundle): Deploy | null => {
  * on the web. Both are addresses — they move when a slug does — which is why
  * they are read at mint time and not kept. */
 let placed = async (dir: Held, env: Bound, app: Eid) => {
-  let [row] = await dir.read(`.eid=${app}`)
+  let [row] = await dir.read(`.entity.eid=${app}`)
   let a = row?.app as Record<string, unknown> | undefined
   if (!a) return null
-  let [space] = await dir.read(`.eid=${id(a.space)}`)
+  let [space] = await dir.read(`.entity.eid=${id(a.space)}`)
   let s = space?.space as Record<string, unknown> | undefined
   if (!s) return null
   return {
@@ -192,7 +192,7 @@ let placed = async (dir: Held, env: Bound, app: Eid) => {
  * restore — is authored by the platform that wrote it. */
 let author = async (dir: Held, deploy: Deploy) => {
   if (!deploy.by) return { ...COMMITTER, at: deploy.at }
-  let [row] = await dir.read(`.eid=${deploy.by}`)
+  let [row] = await dir.read(`.entity.eid=${deploy.by}`)
   let doc = row?.doc as Record<string, unknown> | undefined
   return {
     name: str(doc?.title) || deploy.by,
@@ -261,7 +261,7 @@ let landing = async (
 export let releases = (env: Bound, dir: Held): Releases => ({
   comp: 'deploy',
   of: async (b) => {
-    let [row] = await dir.read(`.eid=${b.entity.eid}`)
+    let [row] = await dir.read(`.entity.eid=${b.entity.eid}`)
     let deploy = row && deployOf(row)
     return deploy ? await landing(env, dir, deploy) : null
   },

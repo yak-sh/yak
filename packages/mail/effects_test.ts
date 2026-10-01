@@ -71,7 +71,7 @@ let letter = (eid: string, extra: Bundle = { entity: { eid } }): Bundle => ({
 })
 
 let read = async (g: { read: (q: string) => unknown }, eid: string) =>
-  ((await g.read(`.eid=${eid}`)) as Bundle[])[0]
+  ((await g.read(`.entity.eid=${eid}`)) as Bundle[])[0]
 
 test('a transport that is named and complete sends', async () => {
   let [code, warned] = await quietly(() =>

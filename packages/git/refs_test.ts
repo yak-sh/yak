@@ -68,7 +68,7 @@ test('a manifest lands as a commit and the branch follows it', async () => {
   assertEquals(follows.map((e) => String(comp(e, 'edge').to)), [one.oid])
 
   // One row per branch, patched — not a second row nobody notices is stale.
-  let [row] = await g.read(`.eid=${refEid(APP, MAIN)}`)
+  let [row] = await g.read(`.entity.eid=${refEid(APP, MAIN)}`)
   assertEquals(comp(row, 'ref').name, MAIN)
 })
 

@@ -20,10 +20,6 @@
 // the property would have been wrong anyway: two kinds may hold the same
 // string, and only the pair is the constraint.
 //
-// Both properties give up their unqualified filter names (`bare: false`): `of`
-// and `value` are far too ordinary to claim vocabulary-wide, so a filter names
-// them in full — `.key.value=lemon-cake`.
-//
 // The document itself is `./vocab.json` — plain JSON Schema, readable by
 // anything that reads JSON. This file re-exports it under the name callers
 // import and holds the explanation of why it is shaped the way it is.

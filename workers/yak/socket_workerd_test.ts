@@ -142,7 +142,7 @@ test('a page watches a component homed in another app', async () => {
       await agent.tool('graph_query', {
         space: slug,
         app: 'probe',
-        filter: `.eid=${eid}&.fire`,
+        filter: `.entity.eid=${eid}&.fire`,
       }),
     ) as { fire: { village: string } }[]
     assertEquals(home[0].fire.village, 'Forest')

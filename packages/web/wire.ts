@@ -48,10 +48,12 @@ export let changesOf = (rows: Bundle[]): Change[] =>
 // row arrives whole.
 let aside = /^(?:\.edges(?:\.[a-z]+=.*|\[[^\]]*\])?$|\.fields=)/
 
-/** A view's query line as the host reads it: an id list is `.eid=`, and the
+/** A view's query line as the host reads it: an id list is `.entity.eid=`, and the
  * edge riders and projections are left out. */
 export let yakLine = (q: string): string =>
   q.split('&')
     .filter((term) => !aside.test(term))
-    .map((term) => term.startsWith('id=') ? `.eid=${term.slice(3)}` : term)
+    .map((term) =>
+      term.startsWith('id=') ? `.entity.eid=${term.slice(3)}` : term
+    )
     .join('&')

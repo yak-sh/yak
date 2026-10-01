@@ -196,7 +196,6 @@ type Field = { read: (b: Bundle, among: Index) => unknown; tag: Tag }
 let field = (ctx: Ctx, path: string): Field => {
   let hops = ctx.v.aim(path)
   let leaf = hops[hops.length - 1]
-  if (!leaf.comp) throw new Unsupported('a shared reference', path, BY)
   if (!leaf.prop) throw whole(ctx.v, leaf.comp, BY)
   chained(ctx.v, hops)
   let read = reader(ctx.v, leaf.comp, leaf.prop, ctx.computed)
@@ -303,7 +302,8 @@ let candidates = (needs: Need[], among: Index): Iterable<Bundle> => {
  *
  * Throws {@link Unsupported} at compile time for anything this package cannot
  * answer exactly — see "Refused queries" in the README.
- * `matcher('.status=live&.price<20', vocab)(bundles)` is the matching bundles.
+ * `matcher('.book.status=shelved&.book.price<20', vocab)(bundles)` is the
+ * matching bundles.
  */
 export let matcher = (
   query: Query,
@@ -387,7 +387,7 @@ let SEQUENCE = new Set(['order', 'limit', 'after'])
  * let sold = (eid: string) => ({ entity: { eid }, book: { status: 'sold' } })
  * let r1 = { entity: { eid: 'r1' }, review: { book: 'b2' } }
  * let shop = [sold('b1'), sold('b2'), r1]
- * assertEquals(rows('.book&.tally=status', vocab)(shop), [
+ * assertEquals(rows('.book&.tally=book.status', vocab)(shop), [
  *   { value: 'sold', n: 2 },
  * ])
  * assertEquals(rows('.review&.fields=review.book.book.status', vocab)(shop), [

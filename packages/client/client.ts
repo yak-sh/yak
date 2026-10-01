@@ -219,7 +219,7 @@ let paged =
  * let vocab = loadVocab(recipeBox)
  * let box = client(vocab, [], { url: 'https://recipes.example', signal })
  *
- * let dinners = box.watch('.course=dinner&.serves>4')
+ * let dinners = box.watch('.recipe.course=dinner&.recipe.serves>4')
  * box.mutate([{ entity: { eid: mint() }, doc: { title: 'Dal' } }])
  * ```
  *

@@ -178,7 +178,8 @@ let opened = () => {
 }
 
 let titleOf = (s: Storage, eid: string) =>
-  ((s.read(`.eid=${eid}`) as Bundle[])[0]?.pick as { title?: string })?.title
+  ((s.read(`.entity.eid=${eid}`) as Bundle[])[0]?.pick as { title?: string })
+    ?.title
 
 test('a visitor adds to an open thing and changes nobody else’s row', () => {
   let s = opened()

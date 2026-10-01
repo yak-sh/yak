@@ -112,16 +112,16 @@ test('an aggregate answers the same rows on both sides', () => {
       '.review&.count',
       // an aggregate counts the whole selection, whatever window rides along
       '.kind=book&.limit=0&.count',
-      '.kind=book&.order=price&.limit=1&.after=6&.tally=status',
-      '.distinct=status',
-      '.tally=status',
-      '.price<20&.tally=status',
-      '.tally=author',
+      '.kind=book&.order=book.price&.limit=1&.after=6&.tally=book.status',
+      '.distinct=book.status',
+      '.tally=book.status',
+      '.book.price<20&.tally=book.status',
+      '.tally=book.author',
       '.distinct=review.book',
       '.tally=review.book.book.author',
       // a number is counted as the number it is, never as its text
-      '.tally=price',
-      '.distinct=price',
+      '.tally=book.price',
+      '.distinct=book.price',
       '.tally=review.book.book.price',
     ]
   ) assertEquals(rows(q, shop, { now: NOW })(bundles), s.rows(q), q)
@@ -137,8 +137,8 @@ test('a projection answers the same rows on both sides', () => {
   let s = sql()
   let answers = [
     '.review&.fields=review.stars,review.book.doc.title&.order=review.stars',
-    '.kind=book&.fields=book.available,book.author.doc.title&.order=price',
-    '.kind=review&.fields=review.book.book.author.doc.title,review.book.num' +
+    '.kind=book&.fields=book.available,book.author.doc.title&.order=book.price',
+    '.kind=review&.fields=review.book.book.author.doc.title,review.book.entity.num' +
     '&.order=review.stars',
     '.kind=review&.fields=review.book.book.available&.order=-review.stars',
     // a window projects only its own page
@@ -181,8 +181,8 @@ test('a query neither side can answer is declined by both', () => {
       // a path through a hop that is no reference, or to a whole component
       '.review&.fields=review.stars.doc.title',
       '.order=book.author.member',
-      '.tally=available',
-      '.distinct=released',
+      '.tally=book.available',
+      '.distinct=book.released',
     ]
   ) {
     assertThrows(() => s.rows(q), Error, 'cannot compile', q)
@@ -277,7 +277,7 @@ test('a walk over nothing declares is declined by both', () => {
 // ---- the walk over a chain of reference properties, both evaluators
 // ------------
 //
-// `.fork.from.session->S-1` is one step over a composed relation: a session's
+// `.fork.from.entry.session->S-1` is one step over a composed relation: a session's
 // `fork` names the entry it forked from, and that entry names the session it
 // was written in — so the pair is (session, the session it forked out of), and
 // the walk over it is the fork lineage. Three levels of it, both directions,
@@ -330,15 +330,15 @@ let lineage: Bundle[] = [1, 2, 3, 4].flatMap((n) => [
 ])
 
 let CHAINS = [
-  '.fork.from.session->S-1',
-  '.fork.from.session[<=1]->S-1',
-  '.fork.from.session[<=2]->S-1',
-  '.fork.from.session->s1',
-  '.fork.from.session<-s4',
-  '.fork.from.session[<=1]<-s4',
-  '.fork.from.session->s4',
+  '.fork.from.entry.session->S-1',
+  '.fork.from.entry.session[<=1]->S-1',
+  '.fork.from.entry.session[<=2]->S-1',
+  '.fork.from.entry.session->s1',
+  '.fork.from.entry.session<-s4',
+  '.fork.from.entry.session[<=1]<-s4',
+  '.fork.from.entry.session->s4',
   // beside an ordinary filter, the way a board reads
-  '.fork.from.session->s1&.session.title=s3',
+  '.fork.from.entry.session->s1&.session.title=s3',
 ]
 
 test('a walk over a chain of references selects the same entities', () => {
@@ -350,14 +350,16 @@ test('a walk over a chain of references selects the same entities', () => {
   // and the agreement is not vacuous: the lineage above s1, capped and whole
   let sel = (q: string) =>
     eids(matcher(q, forked, { now: NOW })(lineage)).sort()
-  assertEquals(sel('.fork.from.session->S-1'), ['s2', 's3', 's4'])
-  assertEquals(sel('.fork.from.session[<=2]->S-1'), ['s2', 's3'])
-  assertEquals(sel('.fork.from.session<-s4'), ['s1', 's2', 's3'])
+  assertEquals(sel('.fork.from.entry.session->S-1'), ['s2', 's3', 's4'])
+  assertEquals(sel('.fork.from.entry.session[<=2]->S-1'), ['s2', 's3'])
+  assertEquals(sel('.fork.from.entry.session<-s4'), ['s1', 's2', 's3'])
 })
 
 test('a chain with a hop that is no reference is declined by both', () => {
   let s = loaded(forked, lineage)
-  for (let q of ['.fork.from.text->s1', '.entry.session.title->s1']) {
+  for (
+    let q of ['.fork.from.entry.text->s1', '.entry.session.session.title->s1']
+  ) {
     assertThrows(() => s.read(q), Error, 'cannot compile', q)
     assertThrows(() => matcher(q, forked), Error, 'cannot compile', q)
   }
@@ -420,24 +422,24 @@ let todos: Bundle[] = ROWS.map((b, i) => ({
 }))
 
 let STATUS = [
-  '.status=open',
-  '.status=done',
-  '.status=cancelled',
-  '.status=open,done',
-  '.status!=done',
-  '.status~=cancel',
+  '.task.status=open',
+  '.task.status=done',
+  '.task.status=cancelled',
+  '.task.status=open,done',
+  '.task.status!=done',
+  '.task.status~=cancel',
   // absence and presence: a non-task has no status to read
-  '!status',
-  '.status',
+  '!task.status',
+  '.task.status',
   // beside an ordinary property, the way a board actually reads
-  '.status=open&.priority=1',
-  '.status!=cancelled&.priority>=2',
-  '.kind=task&.status=done',
+  '.task.status=open&.filed.priority=1',
+  '.task.status!=cancelled&.filed.priority>=2',
+  '.kind=task&.task.status=done',
   // and ordered by the computed property itself, windowed as a page would ask
-  '.status&.order=status',
-  '.status&.order=-status',
-  '.status&.order=status&.limit=2',
-  '.status&.order=status&.after=2',
+  '.task.status&.order=task.status',
+  '.task.status&.order=-task.status',
+  '.task.status&.order=task.status&.limit=2',
+  '.task.status&.order=task.status&.after=2',
 ]
 
 test("a task's status agrees on both sides, read from its ladder", () => {
@@ -451,8 +453,11 @@ test("a task's status agrees on both sides, read from its ladder", () => {
     else assertEquals(mine.sort(), theirs.sort(), label)
   }
   // and the agreement is not vacuous
-  assertEquals(eids(select('.status=open')(todos)), ['t1'])
-  assertEquals(eids(select('.status=cancelled')(todos)).sort(), ['t3', 't4'])
+  assertEquals(eids(select('.task.status=open')(todos)), ['t1'])
+  assertEquals(eids(select('.task.status=cancelled')(todos)).sort(), [
+    't3',
+    't4',
+  ])
 })
 
 test('a computed property nobody registered still declines', () => {
@@ -466,12 +471,12 @@ test('a computed property nobody registered still declines', () => {
     },
   }])
   let e = assertThrows(
-    () => matcher('.glow=on', lamps),
+    () => matcher('.lamp.glow=on', lamps),
     Unsupported,
   ) as Unsupported
   assertEquals(e.by, '@yaks/match')
   // ordering by one declines the same way
-  assertThrows(() => matcher('.lamp&.order=glow', lamps), Unsupported)
+  assertThrows(() => matcher('.lamp&.order=lamp.glow', lamps), Unsupported)
 })
 
 // ---- a status ladder, declared once in the vocabulary
@@ -519,15 +524,15 @@ let LADDER = [
   '.job.status=done',
   '.job.status=failed',
   '.job.status=running',
-  '.status=pending,running',
-  '.job.status=failed,done&.rank>=3',
+  '.job.status=pending,running',
+  '.job.status=failed,done&.job.rank>=3',
   '.job.status!=done',
   '.job.status~=ail',
   '!job.status',
   '.job.status',
-  '.job .order=status',
-  '.job .order=-status&.limit=3',
-  '.job .order=status&.after=4',
+  '.job .order=job.status',
+  '.job .order=-job.status&.limit=3',
+  '.job .order=job.status&.after=4',
 ]
 
 test('a status ladder reads the same from both sides, from the vocabulary alone', () => {

@@ -22,8 +22,8 @@ test('a scalar filter selects the matching entities', () => {
     { entity: { eid: 'p1' }, product: { price: 10 } },
     { entity: { eid: 'p2' }, product: { price: 20 } },
   ])
-  assertEquals(eids(s.read('.price=10')), ['p1'])
-  assertEquals(eids(s.read('.price>=15')), ['p2'])
+  assertEquals(eids(s.read('.product.price=10')), ['p1'])
+  assertEquals(eids(s.read('.product.price>=15')), ['p2'])
 })
 
 // A Durable Object's SQLite binds at most 100 parameters per statement, and an
@@ -42,7 +42,7 @@ test('an any-of list past 100 values binds under the Durable Object limit', () =
     { entity: { eid: 'p3' }, product: { price: 3 } },
   ])
   let many = Array.from({ length: 150 }, (_, i) => i + 10).join(',')
-  assertEquals(eids(s.read(`.price=3,x,1,${many}`)), ['p1', 'p3'])
+  assertEquals(eids(s.read(`.product.price=3,x,1,${many}`)), ['p1', 'p3'])
 })
 
 test('a reference reads back as the target eid', () => {
@@ -74,7 +74,7 @@ test('a reverse child property presence tests the child', () => {
     { entity: { eid: 'r1' }, review: { product: 'p1' }, doc: { title: 'A' } },
     { entity: { eid: 'r2' }, review: { product: 'p2' }, doc: {} },
   ])
-  assertEquals(eids(s.read('.reviews.title')), ['p1'])
+  assertEquals(eids(s.read('.reviews.doc.title')), ['p1'])
 })
 
 test('a bare-word query requires an explicitly registered extension', () => {
@@ -99,7 +99,7 @@ test('rows() hands back an aggregate shape verbatim', () => {
     { entity: { eid: 'p2' }, product: { status: 'live' } },
     { entity: { eid: 'p3' }, product: { status: 'draft' } },
   ])
-  assertEquals(Number(s.rows('.status=live&.count')[0].n), 2)
+  assertEquals(Number(s.rows('.product.status=live&.count')[0].n), 2)
 })
 
 test('the newest-first window pages a prefix', () => {
@@ -122,7 +122,7 @@ test('a gathered bundle carries the entity number storage minted', () => {
     { entity: { eid: 'p1' }, product: { price: 1 } },
     { entity: { eid: 'p2' }, product: { price: 2 } },
   ])
-  assertEquals(s.read('.price=2')[0].entity, { eid: 'p2', num: 2 })
+  assertEquals(s.read('.product.price=2')[0].entity, { eid: 'p2', num: 2 })
 })
 
 test('whole-set gathers are bounded by vocabulary, not the 100 entities; get preserves identity order', () => {
@@ -343,7 +343,7 @@ test('a disjunction longer than SQLite nests expressions reads', () => {
   // one bound array; a disjunction over the entity table alone stays one
   // boolean tree, as long as the list of alternatives.
   let makers = Array.from({ length: 1001 }, (_, i) => `m${i}`)
-  assertEquals(eids(s.read(`.maker=${makers}`)), ['p1'])
-  let any = or(...makers.map((m) => eq('eid', m)))
+  assertEquals(eids(s.read(`.product.maker=${makers}`)), ['p1'])
+  let any = or(...makers.map((m) => eq('entity.eid', m)))
   assertEquals(eids(s.read(and(any))), ['m1'])
 })

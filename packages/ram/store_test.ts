@@ -111,13 +111,16 @@ test('a read is the query grammar, answered from the map', () => {
     { entity: { eid: 'p2' }, doc: { title: 'Cup' }, product: { price: 4 } },
     { entity: { eid: 'd1' }, doc: { title: 'Manual' } },
   )
-  assertEquals(s.read('.price<10').map((b) => b.entity.eid), ['p2'])
-  assertEquals(s.read('.kind=product&.order=-price').map((b) => b.entity.eid), [
-    'p1',
-    'p2',
-  ])
-  assertEquals(s.rows('.price<10'), [{ eid: 'p2' }])
-  assertEquals(s.rows('.price<10&.count'), [{ value: '', n: 1 }])
+  assertEquals(s.read('.product.price<10').map((b) => b.entity.eid), ['p2'])
+  assertEquals(
+    s.read('.kind=product&.order=-product.price').map((b) => b.entity.eid),
+    [
+      'p1',
+      'p2',
+    ],
+  )
+  assertEquals(s.rows('.product.price<10'), [{ eid: 'p2' }])
+  assertEquals(s.rows('.product.price<10&.count'), [{ value: '', n: 1 }])
 })
 
 // A read through the store's indexes selects what a scan of the same bundles
@@ -139,7 +142,7 @@ test('an indexed read answers every query the way a scan does', () => {
 
 test('a read by value follows the value through writes and a rollback', () => {
   let s = shopRam()
-  let live = () => s.read('.status=live').map((b) => b.entity.eid)
+  let live = () => s.read('.product.status=live').map((b) => b.entity.eid)
   put(s, { entity: { eid: 'p1' }, product: { status: 'live' } })
   assertEquals(live(), ['p1'])
   put(s, { entity: { eid: 'p2' }, product: { status: 'live' } })
@@ -155,13 +158,13 @@ test('a read by value follows the value through writes and a rollback', () => {
   assertEquals(live(), ['p2'])
   s.tx((tx) => tx.remove([{ eid: 'p2' }]))
   assertEquals(live(), [])
-  assertEquals(s.read('.status=sold').map((b) => b.entity.eid), ['p1'])
+  assertEquals(s.read('.product.status=sold').map((b) => b.entity.eid), ['p1'])
 })
 
 test('a range of numbers follows each value through writes and a rollback', () => {
   let s = shopRam()
-  let cheap = () => s.read('.price=0..9').map((b) => b.entity.eid)
-  let under = () => s.read('.price<=9.5').map((b) => b.entity.eid)
+  let cheap = () => s.read('.product.price=0..9').map((b) => b.entity.eid)
+  let under = () => s.read('.product.price<=9.5').map((b) => b.entity.eid)
   put(s, { entity: { eid: 'p1' }, product: { price: 5 } })
   put(s, { entity: { eid: 'p2' }, product: { price: 50 } })
   assertEquals(cheap(), ['p1'])

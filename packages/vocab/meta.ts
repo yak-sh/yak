@@ -13,7 +13,7 @@ import type { VocabDoc } from './types.ts'
 export type JsonSchema = Record<string, unknown>
 
 // The core yaks keywords: ref, death, computed, status, stamped, search,
-// sync, durable, kind, before, wire, bare, aliases — what a component table
+// sync, durable, kind, before, wire, aliases — what a component table
 // needs beyond native JSON Schema.
 export let coreVocabulary: JsonSchema = coreDoc
 

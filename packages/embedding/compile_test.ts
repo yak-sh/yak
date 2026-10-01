@@ -61,7 +61,7 @@ test('a window pages within the neighbourhood, nearest first', async () => {
 test('the rest of the query line still filters', async () => {
   let db = await stocked()
   let near = semantic(db, embedder)
-  assertEquals(ask(db, '.near=book-1&.price<15&.order=similar', near), [
+  assertEquals(ask(db, '.near=book-1&.book.price<15&.order=similar', near), [
     'book-3',
   ])
   assertEquals(ask(db, '.near=book-1&.kind=review', near), ['review-4'])
@@ -75,7 +75,7 @@ test('the neighbourhood is taken among what the rest of the line selects', async
   let near = semantic(db, embedder, { limit: 1 })
   assertEquals(ask(db, '.near=book-1', near), ['book-2'])
   assertEquals(ask(db, '.near=book-1&.kind=review', near), ['review-4'])
-  assertEquals(ask(db, '.near=book-1&.price<15', near), ['book-3'])
+  assertEquals(ask(db, '.near=book-1&.book.price<15', near), ['book-3'])
   // and the screen is this question's: the next one is not screened by it
   assertEquals(ask(db, '.near=book-1', near), ['book-2'])
 })

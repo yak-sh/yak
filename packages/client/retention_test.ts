@@ -43,7 +43,7 @@ test('inactive LRU is bounded, reads touch without changing query order', async 
   assertEquals(c.cache.size(), 2)
   c.ent('a') // b is now the least recently used; query order stays a,b
   assertEquals(readIds(await c.graph.read('.doc')), ['a', 'b'])
-  let z = c.watch('.title=c')
+  let z = c.watch('.doc.title=c')
   frame('s2', [row('c')])
   z.close()
   assertEquals(c.ent('b'), undefined)
@@ -55,7 +55,7 @@ test('inactive LRU is bounded, reads touch without changing query order', async 
 test('active/shared owners exceed the inactive bound and gone is per answer', () => {
   let { c, frame } = fixture({ retention: 0 })
   let a = c.watch('.doc')
-  let b = c.watch('.title=a')
+  let b = c.watch('.doc.title=a')
   frame('s1', [row('a'), row('b')])
   frame('s2', [row('a')])
   assertEquals(c.cache.size(), 0)
@@ -82,7 +82,7 @@ test('reopen before first frame pins retained hits; empty frame reconciles stale
   let again = c.watch('.doc')
   assertEquals(readIds(again.value), ['a'])
   assertEquals(again.ready, false)
-  let other = c.watch('.title=b')
+  let other = c.watch('.doc.title=b')
   frame('s3', [row('b')])
   other.close()
   assert(c.ent('a'))
@@ -92,7 +92,7 @@ test('reopen before first frame pins retained hits; empty frame reconciles stale
   assertEquals(c.ent('a'), undefined)
   // Authoritative first answer also reconciles retained matches never owned
   // by this particular query text.
-  let unseen = c.watch('.title=b')
+  let unseen = c.watch('.doc.title=b')
   assertEquals(readIds(unseen.value), ['b'])
   frame('s4')
   assertEquals(unseen.value, [])
@@ -475,7 +475,7 @@ test('a synchronous first frame filters stale shared hits before watch returns',
     let message = JSON.parse(data)
     if (message.subscribe) frame(message.id)
   }
-  let b = c.watch('.title=a')
+  let b = c.watch('.doc.title=a')
   assertEquals(b.ready, true)
   assertEquals(b.value, [])
   assertEquals(readIds(a.value), ['a'])

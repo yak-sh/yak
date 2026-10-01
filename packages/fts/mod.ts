@@ -16,7 +16,7 @@
  *   triggers that keep them in step with the component tables;
  * - {@link search} — the {@link https://jsr.io/@yaks/sql | @yaks/sql} extension
  *   — makes a bare word in a query compile to an FTS5 `match`, so words and
- *   filters mix in one query: `hobbit .price<20`;
+ *   filters mix in one query: `hobbit .book.price<20`;
  * - {@link find} ranks the matches and marks each one for display.
  *
  * ```ts
@@ -45,7 +45,7 @@
  *
  * // which books match, with the rest of the query still filtering
  * let matched = db.query(
- *   compile(parse('hobbit .price<20'), shop, { extend: [search(text)] }),
+ *   compile(parse('hobbit .book.price<20'), shop, { extend: [search(text)] }),
  * )
  *
  * // and which come first, with a snippet marking each match

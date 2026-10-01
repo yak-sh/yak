@@ -40,7 +40,10 @@ test('/ws through this upgrade serves subscriptions', async () => {
     assertEquals((await handler(ws())).status, 101)
     let socket = made[0][1]
 
-    socket.emit('message', JSON.stringify({ subscribe: '.price<20', id: 'c' }))
+    socket.emit(
+      'message',
+      JSON.stringify({ subscribe: '.book.price<20', id: 'c' }),
+    )
     assertEquals(socket.taken(), [{ id: 'c', bundles: [], transientReset: [] }])
 
     await handler(req('/apply', {

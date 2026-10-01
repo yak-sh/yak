@@ -26,7 +26,7 @@ let { drafts } = await import('../drafts.ts')
 test('board columns request a projected, priority-ordered screenful', () => {
   let q = columnLine('.task', 'open', 8)
   assertEquals(windowOf(parseQuery(q)), { limit: 8 })
-  assertEquals(orderOf(parseQuery(q)), 'priority')
+  assertEquals(orderOf(parseQuery(q)), 'filed.priority')
   assertEquals(edgeRider(parseQuery(q))?.limit, 32)
   assertEquals(fieldsOf(parseQuery(q))?.some((f) => f.prop == 'body'), false)
   assertEquals(windowOf(parseQuery(columnLine('.limit=3 .task', 'open', 8))), {
@@ -47,7 +47,7 @@ test('quick-add previews empty facets and ordinary properties', async () => {
   try {
     let input = mounted.root.querySelector<HTMLTextAreaElement>('.Board_New')!
     input.setSelectionRange = () => {}
-    input.value = '.design=true .architecture=false .domain=Eng Ship'
+    input.value = '.design=true .architecture=false .filed.domain=Eng Ship'
     input.dispatchEvent(
       new input.ownerDocument.defaultView!.Event('input', { bubbles: true }),
     )

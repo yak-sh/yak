@@ -111,7 +111,7 @@ test(
       ],
       ['Weather', 'connected', true, ['api.weather.test'], '', ''],
     )
-    let [b] = await s.at.query(`.eid=${one.eid}&.secret`)
+    let [b] = await s.at.query(`.entity.eid=${one.eid}&.secret`)
     let handle = (b.secret as { value: string }).value
     assert(isHandle(handle))
     assertEquals(
@@ -191,7 +191,7 @@ test(
     let s = await setup()
     let hosts = async () => {
       let [b] = await s.at.query(
-        `.eid=${integrationEid('openrouter')}&.integration`,
+        `.entity.eid=${integrationEid('openrouter')}&.integration`,
       )
       let i = b.integration as { hosts: string[]; built: boolean }
       return [i.hosts, i.built]

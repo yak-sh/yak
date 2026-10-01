@@ -250,7 +250,7 @@ test('an app worker query can read a connected peer position', async () => {
       relay: [{ entity: { eid: CAKE }, position: { x: 4, z: 7 } }],
     }),
   )
-  let q = encodeURIComponent(`.eid=${CAKE}&.position`)
+  let q = encodeURIComponent(`.entity.eid=${CAKE}&.position`)
   let res = await apps.fetch(
     visit(`/cookbook/api/query?live=1&q=${q}`),
     env,

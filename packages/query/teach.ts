@@ -63,7 +63,8 @@ export let DIRECTIVES: Taught[] = [
   {
     spell: '.edges',
     word: 'rider',
-    means: 'the edges incident to the answer; .edges.peers=status,title ' +
+    means: 'the edges incident to the answer; ' +
+      '.edges.peers=task.status,doc.title ' +
       'projects the far endpoint; .edges[type,via] selects one type',
   },
   {
@@ -79,9 +80,10 @@ let row = (t: Taught) => `'${t.spell}' ${t.word}: ${t.means}`
 // What a CLI or an MCP server prints when asked how a query is written. Every
 // statement here is one the parser enforces; a caller that knows a schema adds
 // its own after it.
-export let FORMAT = `Filters are dot-params: '.prop=value'. Operators — ${
-  OPERATORS.map(row).join('; ')
-}.
+export let FORMAT = `Filters are dot-params: '.comp.prop=value'. A property is
+always named with its component ('.task.status=open'); a name alone is a
+component, and a property named alone is refused with the forms that name it.
+Operators — ${OPERATORS.map(row).join('; ')}.
 A time-typed property takes time phrases: today, yesterday, tomorrow, now,
 this|last|next minute|hour|day|week|month|year, '5 minutes ago', 'in 2 days'
 (or 'in 60m', 'after 8h'), clock times (9am, 9:30pm, 14:00, noon, '9am
@@ -96,20 +98,20 @@ Whitespace separates terms; every term stands alone. Between terms '&' and
 between terms is OR and binds looser than the AND of adjacent terms
 ('.a=1 .b=2|.c=3' is (a and b) or c), and parentheses group ('.a=1 (.b=2|.c=3)').
 A directive stays outside the '|'; inside a value ',' is the list operator,
-with no spaces ('.status=open,wip', never 'open, wip'). Quotes, double or
+with no spaces ('.task.status=open,wip', never 'open, wip'). Quotes, double or
 single, hold a value together against both separators
-('.web.url="https://x.test/p?a=1&b=2"' is one predicate, '.title~="two words"'
-one filter, where unquoted '.title~=two words' is the filter 'two' and the
-search word 'words'). Bare words are text terms (the document contains them;
-a trailing * matches a prefix).
-A DOTTED path walks a reference: '.author.title~=j' tests the target's title;
-a first segment naming a component is the explicit form ('.pin.x=12') and
-never dereferences, and a directive's path walks the same way
-('.order=author.title'). A reverse association, named by the schema, walks the
-other way: '.comments.author=jeff' keeps what has ANY such child;
-'.comments' has any, '!comments' none, '.comments>=5' counts, and '!' on the
-association negates ('.comments!.author=jeff' has NONE by jeff;
-'.comments!.author!=jeff' has EVERY comment by jeff, by De Morgan).
+('.web.url="https://x.test/p?a=1&b=2"' is one predicate,
+'.doc.title~="two words"' one filter, where unquoted '.doc.title~=two words' is
+the filter 'two' and the search word 'words'). Bare words are text terms (the
+document contains them; a trailing * matches a prefix).
+A path is component.property pairs: '.pin.x=12' is pin's x, and past a
+reference the next pair reads the entity it names ('.book.author.doc.title~=j'
+tests the author's title); a directive's path reads the same way
+('.order=book.author.doc.title'). A reverse association, named by the schema,
+walks the other way: '.comments.comment.author=jeff' keeps what has ANY such
+child; '.comments' has any, '!comments' none, '.comments>=5' counts, and '!' on
+the association negates ('.comments!.comment.author=jeff' has NONE by jeff;
+'.comments!.comment.author!=jeff' has EVERY comment by jeff, by De Morgan).
 Directives ride beside the filters — ${DIRECTIVES.map(row).join('; ')}.
 A WALK has no hop cap by default and returns at most 10,000 nearest nodes;
 only an explicit [<=N] caps it. The bracket is a QUALIFIER on the path, and a

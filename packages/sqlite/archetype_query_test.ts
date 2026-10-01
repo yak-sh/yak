@@ -51,12 +51,12 @@ test('archetype query golden: presence/kind, value joins, boolean, paths, revers
       '.kind=doc',
       '.kind=products',
       '.kind=review',
-      '.doc .price>=4',
+      '.doc .product.price>=4',
       '!doc.title',
       '.doc !doc.title',
       '.doc .count',
       '.product .tally=product.status',
-      '.doc .order=title .limit=1',
+      '.doc .order=doc.title .limit=1',
       '.product.maker.marker',
       '!product.maker.marker',
       '.reviews.marker',
@@ -140,7 +140,7 @@ test('a path through a reference reads the archetype of the entity it names', ()
     { entity: { eid: 'r1' }, review: { product: 'b', stars: 5 } },
     { entity: { eid: 'r2' }, review: { product: 'p', stars: 3 } },
   ])
-  let [of] = s.rows('.eid=b&.fields=entity.archetype')
+  let [of] = s.rows('.entity.eid=b&.fields=entity.archetype')
   let set = of['entity.archetype'] as string
   assertEquals(
     s.read(`.review.product.entity.archetype=${set}`)
@@ -149,7 +149,8 @@ test('a path through a reference reads the archetype of the entity it names', ()
   )
   assertEquals(s.rows('.review&.tally=review.product.entity.archetype'), [
     ...[{ value: set, n: 1 }, {
-      value: s.rows('.eid=p&.fields=entity.archetype')[0]['entity.archetype'],
+      value:
+        s.rows('.entity.eid=p&.fields=entity.archetype')[0]['entity.archetype'],
       n: 1,
     }].toSorted((a, b) => String(a.value).localeCompare(String(b.value))),
   ])

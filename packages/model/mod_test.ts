@@ -53,7 +53,7 @@ test('a name is accepted wherever a model reference is', () => {
   g.apply([{ entity: { eid: E }, using: { model: 'gpt-6-astra' } }])
   let read = (q: string) =>
     (g.read(q) as Bundle[]).map((b) => [b.entity.eid, (b.using as Comp).model])
-  assertEquals(read(`.eid=${E}`), [[E, ASTRA]])
+  assertEquals(read(`.entity.eid=${E}`), [[E, ASTRA]])
   assertEquals(read('.using.model=gpt-6-astra'), [[E, ASTRA]])
 })
 

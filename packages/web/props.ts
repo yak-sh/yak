@@ -19,8 +19,8 @@ export type PropContext = {
   resolve?: (id: string) => string | undefined
   describe?: (eid: string) => string | undefined
   // What the caller probably meant, already checked to resolve (near.ts).
-  // `comp` is the reference's declared target, so a bad `.project=` can
-  // only ever be answered with a project.
+  // `comp` is the reference's declared target, so a bad `.filed.project=`
+  // can only ever be answered with a project.
   near?: (id: string, comp: string) => string | undefined
 }
 
@@ -170,7 +170,7 @@ let oneOf = (p: Prop, v: unknown): string => {
   return value ?? fail(p, `one of ${type.enum.join(', ')}`, v)
 }
 
-// `.project=tasks` is the shape: a token that IS a venture in the fleet,
+// `.filed.project=tasks` is the shape: a token that IS a venture in the fleet,
 // under an alias that diverges. When a near match resolves, naming it is
 // the whole message — the grammar is not what the caller got wrong, and
 // it is spelled by the noun the column carries ('no project', not 'no
@@ -199,7 +199,7 @@ let text = (p: Prop, v: unknown): string =>
 // A page address is text with ONE canonical spelling (url.ts normalize).
 // Living here is what keeps a save and a query in agreement without
 // either side knowing: both grammars parse their scalars through this
-// module, so `.url=https://x.com/p?utm_source=n#top` written and the same
+// module, so `.web.url=https://x.com/p?utm_source=n#top` written and the same
 // string filtered land on the same characters.
 let url = (p: Prop, v: unknown): string => normalize(text(p, v))
 
@@ -268,7 +268,7 @@ let ref = (name: string): Prop => ({
 })
 
 // What an id with no column to type it resolves through: `.refs=T-3`, a walk's
-// target, `.eid=T-3`. A plain entity reference, so the id turns into its eid
+// target, `.entity.eid=T-3`. A plain entity reference, so the id turns into its eid
 // at delivery exactly as a declared reference's would.
 export let anyRef: Prop = ref('refs')
 let requiredRef = (
@@ -290,7 +290,7 @@ export let isFieldOp = (v: unknown): boolean =>
 
 // The same operator, said at a DOT-PARAM door, where every value arrives as
 // text: the JSON graph_apply takes as a comp value, spelled inline —
-// `.body={"$edit":{"old":"a","new":"b"}}`. Undefined for anything else, so
+// `.doc.body={"$edit":{"old":"a","new":"b"}}`. Undefined for anything else, so
 // ordinary prose (JSON included) stays a literal; only the reserved `$` sigil
 // is read as an operator. Without this the JSON stored AS the body and
 // clobbered the doc it was meant to patch (T-33926).

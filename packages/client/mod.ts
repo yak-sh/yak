@@ -36,7 +36,7 @@
  * hook `subscribe` and `() => value`.
  *
  * ```ts ignore
- * let dinners = box.watch('.course=dinner&.serves>4')
+ * let dinners = box.watch('.recipe.course=dinner&.recipe.serves>4')
  * dinners.value // the bundles
  * let stop = dinners.subscribe((bundles) => render(bundles))
  * ```

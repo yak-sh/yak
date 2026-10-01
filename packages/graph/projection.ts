@@ -4,7 +4,7 @@
 // optional but requested. asking for all comps is i imagine most useful for
 // debugging". So a row carries the components the filter names — by presence
 // (`.book`), by request (`?loan`), or by a predicate of its own — and nothing
-// else. A filter that names none (an `.eid=` fetch, a bare search term) left
+// else. A filter that names none (an `.entity.eid=` fetch, a bare search term) left
 // nothing out and answers the whole bundle, which is also the only useful
 // answer to someone who does not yet know what they found; `*` asks for
 // everything by name.
@@ -27,7 +27,7 @@
 // tables. `only` keeps the answer true for an adapter that cannot narrow its
 // read.
 
-import { type And, type Fields, meaning, parse } from '@yaks/query'
+import { type And, type Fields, parse } from '@yaks/query'
 import type { Hop, Vocab } from '@yaks/vocab'
 import { after } from '@yaks/fp'
 import { type Bundle, type Comp, type Eid, reserved } from './bundle.ts'
@@ -126,8 +126,7 @@ let cover = (into: Record<string, string[]>, s: Hop) => {
  * ```
  */
 export let projection = (vocab: Vocab, query: Query): Projection | null => {
-  let meant = meaning(vocab)(query)
-  let ast = typeof meant == 'string' ? parse(meant) : meant
+  let ast = typeof query == 'string' ? parse(query) : query
   let asked = ast.clauses.find((c): c is Fields => c.kind == 'fields')
   if (!asked) return null
   let paths = asked.fields.map((f) => {
@@ -214,12 +213,12 @@ export let project = (
 export let flat = ({ found, reached }: Projected): Bundle[] =>
   reached.length ? composed([...found, ...reached]) : found
 
-/** The components a meant query's rows carry, or `null` for every one of
- * them. A `.fields` projection carries the components its paths start from. A
- * component asserted absent (`!archived`) names nothing the answer
- * could carry, and a word the vocabulary does not know asks for nothing. A lone
- * word asked for as present (`.module`) or requested (`?module`) is the
- * component, even where another component has a property of that name. */
+/** The components a query's rows carry, or `null` for every one of them. A
+ * `.fields` projection carries the components its paths start from. A
+ * component asserted absent (`!archived`) names nothing the answer could
+ * carry, and a word the vocabulary does not know asks for nothing. A lone word
+ * asked for as present (`.module`) or requested (`?module`) is the component.
+ */
 export let named = (vocab: Vocab, query: Query): Set<string> | null => {
   let { clauses } = typeof query == 'string' ? parse(query) : query
   let fields = clauses.find((c): c is Fields => c.kind == 'fields')
@@ -248,12 +247,6 @@ export let named = (vocab: Vocab, query: Query): Set<string> | null => {
   }
   return want.size ? want : null
 }
-
-/** The same for a query as it was typed: a bare property counts for the
- * component it resolves to (@yaks/query's meant.ts). `Graph.read` has meant its query
- * already, so it asks {@link named}. */
-export let wanted = (vocab: Vocab, query: Query): Set<string> | null =>
-  named(vocab, meaning(vocab)(query))
 
 /** A row cut to what was asked for. The spine names it, its tombstone says it
  * is gone, a text query's `rank` is the answer's own word about it, and `$`

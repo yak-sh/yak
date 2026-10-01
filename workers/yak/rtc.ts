@@ -136,7 +136,7 @@ let lapsing: Effect = (on, at) => {
     let realtime = realtimeOf(at.env)
     if (!realtime) return
     void (async () => {
-      let [row] = await store.read(`.eid=${e.entity.eid}`)
+      let [row] = await store.read(`.entity.eid=${e.entity.eid}`)
       if (row?.sfu) await lapse(realtime, store, row)
     })().catch((error) => defect(error, { request: 'rtc lapse', app }))
   })

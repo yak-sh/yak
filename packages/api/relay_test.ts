@@ -135,7 +135,7 @@ test('a live query reads the current peer value and loses it on disconnect', asy
   let subs = subscriptions(graph)
   let writer = ear()
   let handle = api({ graph, subs })
-  let q = encodeURIComponent('.eid=b1&.browsing')
+  let q = encodeURIComponent('.entity.eid=b1&.browsing')
   let ask = async () => {
     let res = await handle(new Request(`http://shop/query?live=1&q=${q}`))
     assertEquals(res.status, 200)
@@ -150,10 +150,10 @@ test('a live query reads the current peer value and loses it on disconnect', asy
     browsing: { x: 9, y: 2 },
   }])
   assertEquals((await ask())[0].browsing, { x: 4, y: 7 })
-  let visitor = await subs.snapshot('.eid=visitor&.browsing')
+  let visitor = await subs.snapshot('.entity.eid=visitor&.browsing')
   assert(Array.isArray(visitor))
   assertEquals(visitor[0].browsing, { x: 9, y: 2 })
-  assertEquals(await subs.snapshot('.eid=b1&.browsing&.count'), {
+  assertEquals(await subs.snapshot('.entity.eid=b1&.browsing&.count'), {
     count: 1,
   })
   subs.drop(writer.to)
@@ -177,7 +177,7 @@ test('a late subscriber is told what the peers are already saying', () => {
   ])
 })
 
-for (let query of ['.book', '.book&.order=price']) {
+for (let query of ['.book', '.book&.order=book.price']) {
   test(`an entity joining ${query} brings what the peers already say of it`, () => {
     let graph = shop()
     let subs = subscriptions(graph)

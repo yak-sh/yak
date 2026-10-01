@@ -36,7 +36,7 @@ test('a subscription opens on the set it already selects', () => {
   ])
   let subs = subscriptions(graph)
   let { to, take } = ear()
-  subs.open(to, 'cheap', '.price<20')
+  subs.open(to, 'cheap', '.book.price<20')
   let [first] = take()
   assertEquals(first.id, 'cheap')
   assertEquals(ids(first), ['b1'])
@@ -54,7 +54,7 @@ test('restoring shared watches reads each answer once and keeps each live', () =
   let subs = subscriptions(spy)
   let ears = Array.from({ length: 4 }, ear)
   subs.restore(ears.flatMap(({ to }, i) => [
-    { sink: to, id: `books${i}`, query: '.price<20' },
+    { sink: to, id: `books${i}`, query: '.book.price<20' },
     { sink: to, id: `count${i}`, query: '.book&.count' },
   ]))
   assertEquals([reads, counts], [1, 1])
@@ -88,7 +88,7 @@ test('restoring shared watches reads each answer once and keeps each live', () =
   }
 
   let later = ear()
-  subs.open(later.to, 'later', '.price<20')
+  subs.open(later.to, 'later', '.book.price<20')
   assertEquals(ids(later.take()[0]), ['b1', 'b2'])
   assertEquals(reads, 2)
 })
@@ -97,7 +97,7 @@ test('a commit pushes what the query selects, and nothing else', () => {
   let graph = shop()
   let subs = subscriptions(graph)
   let { to, take } = ear()
-  subs.open(to, 'cheap', '.price<20')
+  subs.open(to, 'cheap', '.book.price<20')
   take()
 
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
@@ -139,7 +139,7 @@ test('an aggregate is answered with its value, and again when it moves', () => {
   let subs = subscriptions(graph)
   let { to, take } = ear()
   subs.open(to, 'n', '.book&.count')
-  subs.open(to, 'by', '.book&.tally=status')
+  subs.open(to, 'by', '.book&.tally=book.status')
   assertEquals(take(), [
     { id: 'n', count: 1 },
     { id: 'by', tally: { shelved: 1 } },
@@ -172,7 +172,7 @@ test('`*` projects, and never narrows a subscription', () => {
   let graph = shop()
   let subs = subscriptions(graph)
   let { to, take } = ear()
-  subs.open(to, 'cheap', '.price<20&*')
+  subs.open(to, 'cheap', '.book.price<20&*')
   take()
 
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
@@ -208,7 +208,7 @@ test('a projection sends what it names, and says what that covers', () => {
   ])
   let subs = subscriptions(graph)
   let { to, take } = ear()
-  subs.open(to, 'cheap', '.price<20&.fields=doc.title')
+  subs.open(to, 'cheap', '.book.price<20&.fields=doc.title')
   let dune = { entity: { eid: 'b1' }, doc: { title: 'Dune' } }
   assertEquals(take().map(told), [{
     bundles: [dune],
@@ -277,7 +277,7 @@ test('an entity that stops matching is reported gone', () => {
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let subs = subscriptions(graph)
   let { to, take } = ear()
-  subs.open(to, 'cheap', '.price<20')
+  subs.open(to, 'cheap', '.book.price<20')
   take()
 
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 99 } }])
@@ -291,7 +291,7 @@ test('a deleted member is reported gone', () => {
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let subs = subscriptions(graph)
   let { to, take } = ear()
-  subs.open(to, 'cheap', '.price<20')
+  subs.open(to, 'cheap', '.book.price<20')
   take()
 
   graph.apply([{ entity: { eid: 'b1' }, $delete: true }])
@@ -329,7 +329,7 @@ test('a windowed query re-reads its whole answer', () => {
   let { to, take } = ear()
   // `.limit` pages newest-first, so this set can change when an entity the
   // batch never named moves — the fallback path, not the per-bundle test.
-  subs.open(to, 'newest', '.price<20&.limit=1')
+  subs.open(to, 'newest', '.book.price<20&.limit=1')
   assertEquals(ids(take()[0]), ['b1'])
 
   graph.apply([{ entity: { eid: 'b2' }, book: { price: 10 } }])
@@ -505,7 +505,7 @@ test('commits made while a pass reads are one pass after it', async () => {
     },
   }
   let subs = subscriptions(spy), e = ear()
-  let window = '.book&.order=price&.limit=2'
+  let window = '.book&.order=book.price&.limit=2'
   subs.open(e.to, 'cheapest', window)
   e.take()
   reads = []
@@ -611,7 +611,7 @@ test('a referenced computed dependency refreshes only its owner', () => {
 
   g.apply([{ entity: { eid: 'r1' }, review: { book: 'b1', stars: 5 } }])
   assertEquals(reads.length, 1)
-  assertEquals(reads[0], query + '&.eid=b1')
+  assertEquals(reads[0], query + '&.entity.eid=b1')
   assertEquals(one.take().map(ids), [['b1']])
   assertEquals(two.take().map(ids), [['b1']])
 
@@ -692,12 +692,12 @@ test('a computed property reading its own row refreshes that row', () => {
   reads.length = 0
 
   g.apply([{ entity: { eid: 'b1' }, book: { status: 'sold' } }])
-  assertEquals(reads, [q + '&.eid=b1'])
+  assertEquals(reads, [q + '&.entity.eid=b1'])
   assertEquals(take()[0].gone, ['b1'])
 
   reads.length = 0
   g.apply([{ entity: { eid: 'b2' }, book: { price: 10 } }])
-  assertEquals(reads, [q + '&.eid=b2'])
+  assertEquals(reads, [q + '&.entity.eid=b2'])
   assertEquals(ids(take()[0]), ['b2'])
 })
 
@@ -735,7 +735,7 @@ test('a commit that touches nothing a query reads does not run it', () => {
   }
   let subs = subscriptions(spy)
   let { to, take } = ear()
-  subs.open(to, 'newest', '.book&.price<20&.limit=1')
+  subs.open(to, 'newest', '.book&.book.price<20&.limit=1')
   subs.open(to, 'n', '.book&.count')
   take()
   let before = runs
@@ -791,7 +791,7 @@ test('a component a query holds out is not one its members wear', () => {
   let g = shop()
   let subs = subscriptions(g)
   let { to, take } = ear()
-  subs.open(to, 'plain', '.price<20&!doc&.limit=5')
+  subs.open(to, 'plain', '.book.price<20&!doc&.limit=5')
   take()
 
   g.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
@@ -819,8 +819,8 @@ test('closing and dropping stop the pushes', () => {
   let subs = subscriptions(graph)
   let one = ear()
   let two = ear()
-  subs.open(one.to, 'cheap', '.price<20')
-  subs.open(two.to, 'cheap', '.price<20')
+  subs.open(one.to, 'cheap', '.book.price<20')
+  subs.open(two.to, 'cheap', '.book.price<20')
   one.take()
   two.take()
 

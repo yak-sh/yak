@@ -40,7 +40,7 @@ export let sheet = (c: Colors): Sheet => ({
 /** Empty, typed in, typed in with the caret shown, and bare. */
 export let specimens = (): Specimen[] => [
   ['Field, empty', h(Field, { value: '', placeholder: 'filter…' })],
-  ['Field', h(Field, { value: '.status=open' })],
-  ['Field, caret', h(Field, { value: '.status=open', caret: 7 })],
+  ['Field', h(Field, { value: '.task.status=open' })],
+  ['Field, caret', h(Field, { value: '.task.status=open', caret: 12 })],
   ['Field-bare, lines', h(Field, { mod: 'bare', lines: true, value: 'set' })],
 ]

@@ -7,7 +7,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab, type PropSchema } from '@yaks/vocab'
 import type { Bundle } from './bundle.ts'
 import { graph } from './graph.ts'
-import { wanted } from './projection.ts'
+import { named } from './projection.ts'
 import { books } from './testing.ts'
 
 let comp = (properties: Record<string, PropSchema> = {}) => ({
@@ -26,7 +26,7 @@ let vocab = loadVocab([{
   },
 }])
 
-let asks = (query: string) => [...wanted(vocab, query) ?? ['*']].sort()
+let asks = (query: string) => [...named(vocab, query) ?? ['*']].sort()
 
 test('a read answers the components its query names', () => {
   for (
@@ -39,7 +39,7 @@ test('a read answers the components its query names', () => {
       ['id=f1', ['*']],
       // a projection carries the components its paths start from
       ['.file&.fields=doc.title', ['doc']],
-      ['id=f1&.fields=eid', []],
+      ['id=f1&.fields=entity.eid', []],
     ] as const
   ) assertEquals(asks(query), [...comps], query)
 })

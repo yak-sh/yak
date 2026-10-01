@@ -47,7 +47,7 @@ test('the door records a letter and answers with its id', async () => {
   let answer = await post({})
   assertEquals(answer.status, 200)
   let { eid } = await answer.json() as { eid: string }
-  let letter = ((await g.read(`.eid=${eid}`)) as Bundle[])[0]
+  let letter = ((await g.read(`.entity.eid=${eid}`)) as Bundle[])[0]
   assertEquals(comp(letter, 'doc').title, 'Is there soup?')
   assertEquals(comp(letter, 'mail').from, 'ana@books.example')
   assertEquals(comp(letter, 'mail').target, ana)

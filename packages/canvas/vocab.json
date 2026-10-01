@@ -200,7 +200,6 @@
           "type": "string",
           "ref": "pane",
           "death": "cascade",
-          "bare": false,
           "description": "the pane it sits inside"
         },
         "size": {

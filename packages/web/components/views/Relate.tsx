@@ -40,7 +40,7 @@ let said = (v: V) => v.out ? v.type : up(v.type)
 // Add an edge by finishing its sentence: pick a verb chip, then type —
 // the list is a live search over documented entities; Enter (or a click)
 // links the pick, and text that matches nothing becomes a NEW task, spec-parsed
-// (`P1 .domain=Eng title` works here), created and linked in one atomic
+// (`P1 .filed.domain=Eng title` works here), created and linked in one atomic
 // apply, inheriting the host's project and domain. The list overlays —
 // nothing below it moves.
 export let Relate = ({ e }: { e: Ent }) => {

@@ -20,12 +20,10 @@
             "commit",
             "tag"
           ],
-          "bare": false,
           "description": "the object type, as written in the object's own header"
         },
         "size": {
           "type": "number",
-          "bare": false,
           "description": "the body's length in bytes, as written in that same header"
         }
       }
@@ -37,7 +35,6 @@
       "properties": {
         "sha": {
           "type": "string",
-          "bare": false,
           "description": "the SHA-256 of the bytes; for a Git blob this is the file's own address in the store, not a re-encoded copy"
         }
       }
@@ -51,12 +48,10 @@
       "properties": {
         "name": {
           "type": "string",
-          "bare": false,
           "description": "the child's name in this tree; one object can be a child of several trees under different names, so the name belongs to the link"
         },
         "mode": {
           "type": "string",
-          "bare": false,
           "description": "the mode as the tree body writes it: 100644 for a file, 40000 for a directory"
         }
       }

@@ -251,7 +251,7 @@ test('taskEntry references the stable prefix without copying later inputs', asyn
       before.some((b) => b.entity.eid.includes('snapshot-limit')),
       false,
     )
-    let [child] = await h.g.read('.eid=' + result.child)
+    let [child] = await h.g.read('.entity.eid=' + result.child)
     assertEquals((child.fork as Comp).from, 'first')
     assertEquals(before.some((b) => b.entity.eid == 'partial'), false)
     assertEquals(before.some((b) => b.entity.eid == 'first'), true)

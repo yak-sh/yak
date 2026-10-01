@@ -330,7 +330,7 @@ for (let phase of ['beforeCreate', 'beforeUploadReply'] as const) {
       await k.write(configuration)
       k.state[phase] = () => k.tool('app_delete', { forever: true })
       await assertRejects(() => k.tool('app_deploy'))
-      assertEquals(await k.rows(`.eid=${k.app.eid}&.app`), [])
+      assertEquals(await k.rows(`.entity.eid=${k.app.eid}&.app`), [])
       assertEquals(await k.rows('.binding'), [])
       assertEquals(k.resources.size, 0)
       assertEquals(k.state.scripts.size, 0)

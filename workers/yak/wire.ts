@@ -30,9 +30,9 @@ import { refuse } from './tool.ts'
 
 // The riders the page's grammar writes bare and the Store's writes dotted. They
 // are the same three words meaning the same three things; only the syntax
-// moved (@yaks/query: `.limit=`, `.after=`, and `.eid=` for an address).
+// moved (@yaks/query: `.limit=`, `.after=`, and `.entity.eid=` for an address).
 let RIDERS: Record<string, string> = {
-  id: '.eid',
+  id: '.entity.eid',
   limit: '.limit',
   after: '.after',
 }

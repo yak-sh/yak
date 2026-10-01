@@ -69,7 +69,7 @@ test('hourly account alert is mailed once and kept on the wake row', async () =>
     MAIL_TOKEN: 'test',
     MAIL_API: 'https://mail.invalid',
   })
-  await meta(p.env).query('.eid=yak-meter')
+  await meta(p.env).query('.entity.eid=yak-meter')
   let sent: { to: string[]; text: string }[] = []
   let total = 20e9
   let fail = true
@@ -100,7 +100,7 @@ test('hourly account alert is mailed once and kept on the wake row', async () =>
   try {
     await assertRejects(() => sweep(p.env, at(10)), Error, 'mail failed')
     assertEquals(
-      (await meta(p.env).query('.eid=yak-meter'))[0].account_alert,
+      (await meta(p.env).query('.entity.eid=yak-meter'))[0].account_alert,
       undefined,
     )
     await sweep(p.env, at(10))
@@ -111,7 +111,7 @@ test('hourly account alert is mailed once and kept on the wake row', async () =>
     total = 25e9
     await sweep(p.env, at(11))
     assertEquals(sent.length, 2)
-    let [row] = await meta(p.env).query('.eid=yak-meter')
+    let [row] = await meta(p.env).query('.entity.eid=yak-meter')
     assertEquals((row.account_alert as { rows_read: string }).rows_read, 'over')
   } finally {
     globalThis.fetch = was

@@ -162,8 +162,8 @@ let stubResolve = (
 ) => {
   let calls: string[] = []
   let wire = host((a) => {
-    if (!a.subscribe.startsWith('.eid=')) return
-    let id = a.subscribe.slice('.eid='.length).split('&')[0]
+    if (!a.subscribe.startsWith('.entity.eid=')) return
+    let id = a.subscribe.slice('.entity.eid='.length).split('&')[0]
     calls.push(id)
     let n = handler(id, a)
     if (n === undefined) return
@@ -212,7 +212,7 @@ test('queryEids indexes any {eid} reference with no bespoke index', () => {
     },
   }
   deps.value = []
-  let q = resolveRefs(parseQuery('.assignee=person'), findEid)
+  let q = resolveRefs(parseQuery('.filed.assignee=person'), findEid)
   let held = holdQuery(q)
   try {
     assertEquals(held.value, ['t1'])
@@ -689,7 +689,7 @@ test('boardsOver: awake only when a board names or drops the target', () => {
   cache.value = {
     b1: {
       entity: { eid: 'b1', num: 1 },
-      board: { eid: 'b1', query: '.project=P-9' },
+      board: { eid: 'b1', query: '.filed.project=P-9' },
     },
     b2: {
       entity: { eid: 'b2', num: 2 },
@@ -715,7 +715,11 @@ test('boardsOver: awake only when a board names or drops the target', () => {
     assertEquals(runs, 1)
 
     // a board that still doesn't mention P-9 — asleep
-    applyLocal([{ eid: 'b2', name: 'board', comp: { query: '.priority=1' } }])
+    applyLocal([{
+      eid: 'b2',
+      name: 'board',
+      comp: { query: '.filed.priority=1' },
+    }])
     assertEquals(runs, 1)
 
     // a new board naming P-9 wakes it and joins the answer
@@ -724,7 +728,7 @@ test('boardsOver: awake only when a board names or drops the target', () => {
       {
         eid: 'b3',
         name: 'board',
-        comp: { query: '.project=P-9&.task.status=open' },
+        comp: { query: '.filed.project=P-9&.task.status=open' },
       },
     ])
     assertEquals(runs, 2)
@@ -1021,7 +1025,7 @@ test('relationship indices wake only their affected targets', () => {
       {
         eid: 'index_board',
         name: 'board',
-        comp: { query: '.project=index_target' },
+        comp: { query: '.filed.project=index_target' },
       },
     ])
     assertEquals(runs, {
@@ -1795,7 +1799,7 @@ test('predsToQuery round-trips membership shapes, refuses the rest', () => {
   // those columns and the sub's identity includes which.
   assertEquals(
     predsToQuery([{ comp: '', prop: '', op: PROJECT, value: '', fields: [] }]),
-    '.fields=eid',
+    '.fields=entity.eid',
   )
   assertEquals(
     predsToQuery([
@@ -2756,7 +2760,8 @@ test('a lost socket reconnects in place; the painted cache survives', async () =
   using time = new FakeTime()
   let wire = host()
   let asks = () =>
-    wire.asked().filter((a) => a.subscribe.startsWith(`.eid=${D}`)).length
+    wire.asked().filter((a) => a.subscribe.startsWith(`.entity.eid=${D}`))
+      .length
   let off = () => {}
   try {
     off = routeSub(D, ROW)
@@ -2796,7 +2801,9 @@ test('frames that arrive together land in one batch', async () => {
     })
     let before = runs
     for (let [i, eid] of ids.entries()) {
-      let ask = wire.asked().find((a) => a.subscribe.startsWith(`.eid=${eid}`))!
+      let ask = wire.asked().find((a) =>
+        a.subscribe.startsWith(`.entity.eid=${eid}`)
+      )!
       wire.say({
         id: ask.id,
         bundles: [{ entity: { eid, num: 20 + i }, doc: { title: `t${i}` } }],
@@ -2854,7 +2861,9 @@ test('a list of rows is held in one sub and freed by its last holder', async () 
   let offs = [rowsSub(ids), rowsSub(ids)]
   try {
     await Promise.resolve()
-    let asks = sent.filter((f) => f.subscribe == `.eid=${ids.join(',')}&*`)
+    let asks = sent.filter((f) =>
+      f.subscribe == `.entity.eid=${ids.join(',')}&*`
+    )
     assertEquals(asks.length, 1)
     landSub({
       sub: name,
@@ -2891,7 +2900,7 @@ test('boot paints the first answer while the durable outbox never answers', asyn
   let D = 'd0c00000-0000-4000-8000-0000000000d1'
   cache.value = {}
   let wire = host((a) =>
-    a.subscribe.startsWith(`.eid=${D}`)
+    a.subscribe.startsWith(`.entity.eid=${D}`)
       ? { bundles: [{ entity: { eid: D, num: 7 }, doc: { title: 't' } }] }
       : undefined
   )

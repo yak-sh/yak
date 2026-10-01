@@ -31,11 +31,6 @@
 // letter goes out. Addressing a person rather than a string is what lets them
 // change their address without rewriting the mail that has not left yet.
 //
-// Two properties give up their bare filter name (`bare: false`), because in a
-// graph this size another component already claims it: `.to` is the recipient
-// (`deliver.to`), and `.at` is stamped by half a dozen components. Write those
-// two in full — `.mail.to`, `.mail.at`.
-//
 // `verified` is the receiving side's verdict on an arrival: whether the sending
 // domain signed for the letter (DKIM). It is a property and not a gate — a
 // letter nobody signed for is recorded with `verified: false` rather than

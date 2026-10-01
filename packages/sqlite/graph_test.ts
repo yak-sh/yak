@@ -168,7 +168,7 @@ test('a release reference drops its row, its owner lives', () => {
     { entity: { eid: 'u1' }, bookmark: { of: 'd1' } },
   ]))
   sync(g.apply([{ entity: { eid: 'd1' }, $delete: true }]))
-  let u = one(g, '.title~=reader')
+  let u = one(g, '.doc.title~=reader')
   assert(u)
   assertEquals(u.bookmark, undefined)
 })
@@ -187,7 +187,7 @@ test('a refused batch leaves the database as it was', () => {
     ]))
   )
   assertEquals(g.read('.kind=product&*') as Bundle[], [
-    ...(g.read(`.price=12&*`) as Bundle[]),
+    ...(g.read(`.product.price=12&*`) as Bundle[]),
   ])
   assertEquals((g.read('.kind=product&*') as Bundle[]).length, 1)
 })

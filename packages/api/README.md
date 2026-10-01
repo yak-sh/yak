@@ -42,7 +42,7 @@ curl http://localhost:8000/apply \
   -d '[{"entity":{"eid":"b1"},"doc":{"title":"Dune"},"book":{"price":12,"status":"shelved"}}]'
 
 curl -G http://localhost:8000/query \
-  --data-urlencode 'q=.status=shelved&.price<20'
+  --data-urlencode 'q=.book.status=shelved&.book.price<20'
 ```
 
 | Endpoint         | Request                    | Response                                |
@@ -172,7 +172,10 @@ reaches an open tab too. Open a socket to `/ws` and send:
 
 ```ts ignore
 socket.send(
-  JSON.stringify({ subscribe: '.status=shelved&.price<20', id: 'cheap' }),
+  JSON.stringify({
+    subscribe: '.book.status=shelved&.book.price<20',
+    id: 'cheap',
+  }),
 )
 // Initial response: { id: 'cheap', bundles: [...], transientReset: [...] }
 // If b1 stops matching: { id: 'cheap', bundles: [], gone: ['b1'] }
@@ -285,15 +288,15 @@ the property and its current value:
 }
 ```
 
-| Status | Cause                                                              |
-| ------ | ------------------------------------------------------------------ |
-| 400    | `Refused`, `Unsupported`, `SyntaxError`, `Unknown`, or `Ambiguous` |
-| 401    | `Unauthorized`                                                     |
-| 403    | `Denied`                                                           |
-| 404    | `NotFound` or an unknown route                                     |
-| 405    | Wrong HTTP method or `/ws` without an upgrade header               |
-| 409    | `Stale`                                                            |
-| 500    | An error name not in `STATUS`                                      |
+| Status | Cause                                                |
+| ------ | ---------------------------------------------------- |
+| 400    | `Refused`, `Unsupported`, `SyntaxError` or `Unknown` |
+| 401    | `Unauthorized`                                       |
+| 403    | `Denied`                                             |
+| 404    | `NotFound` or an unknown route                       |
+| 405    | Wrong HTTP method or `/ws` without an upgrade header |
+| 409    | `Stale`                                              |
+| 500    | An error name not in `STATUS`                        |
 
 HTTP errors use these statuses. Subscription errors are socket messages, and
 streaming import errors use the final NDJSON line described above. The

@@ -180,7 +180,7 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
       headers: { cookie },
     })).json()
     let [app] = await meta(k).query(
-      `.eid=${eids['jeff69/recipes']}&?app`,
+      `.entity.eid=${eids['jeff69/recipes']}&?app`,
     )
     let store = (app.app as { store: string }).store
     assert(store, 'the app has a store handle')

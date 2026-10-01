@@ -64,14 +64,17 @@ every component. A query that names no component (`.entity.eid=T-12`, a bare
 word) answers whole. So `.task .task.status=open` returns task rows without
 their `doc`; add `?doc` or `.fields=doc.title` to read titles.
 
-## Ambiguity
+## A name alone is a component
 
-A bare property two components declare is refused, naming them:
-`.status=open` answers `Ambiguous: .status is ambiguous (connection, session,
-task)`. Name the component (`.task.status=open`), or name it elsewhere on the
-line: `.task .status=open` reads as `.task.status=open` (`meant()` in
-packages/query/meant.ts). The properties of a `_` component never answer to a
-bare name.
+A property is always named with its component: `.task.status=open`. A name by
+itself tests for a component, and a property named alone is refused with the
+forms that name it: `.status=open` answers `.status is a property, not a
+component — name it .connection.status, .session.status or .task.status`. The
+refusal never picks one for you. A path through a reference goes on with the
+target's own `comp.prop` (`.filed.project.doc.title~=yak`), and the entity's id
+is `.entity.eid`. Completion offers the qualified forms of a name as it is
+typed: `.ti` offers `.timing` and `.doc.title`, and a form whose component is
+already on the line comes first.
 
 ## Values the vocabulary interprets
 
@@ -86,8 +89,8 @@ The parser emits plain scalars; the compiler reads them by the property's type.
   (`graph-reads-and-writes`).
 - **Kinds:** `.kind=memory` expands to the components that kind implies.
 - **Reverse associations:** a plural of a component that references this one:
-  `.task .comments>=3` counts referrers; `.reviews!.rating!=5` is the
-  all/none form.
+  `.task .comments>=3` counts referrers; `.reviews!.review.rating!=5` is
+  the all/none form.
 
 ## Walks
 

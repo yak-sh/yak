@@ -111,7 +111,7 @@ test('a command line goes through the published schema and answers', async () =>
   // And a filter line rides as the string it is, JSON-looking or not.
   let said = await ask('tools/call', {
     name: 'graph_query',
-    arguments: await argsFor(query, ['--q', '.price<20'], reads),
+    arguments: await argsFor(query, ['--q', '.book.price<20'], reads),
   })
   let { text } = saidBy(said)
   assertEquals(JSON.parse(text)[0].entity.eid, 'b1')

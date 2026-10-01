@@ -33,7 +33,7 @@ test('a question about other entities is left to its caller', () => {
       '.book.author.doc.title~=vale',
       '.reviews>=2',
       '.refs=a1',
-      '.kind=book&.order=price',
+      '.kind=book&.order=book.price',
       '.kind=book&.limit=2',
       '.near=b1',
     ]
@@ -43,8 +43,8 @@ test('a question about other entities is left to its caller', () => {
 
 test('moving an entity says which queries it is in now and which it left', () => {
   let n = net<string>(shop, { now: NOW })
-  n.add('cheap', '.price<10', ['b4'])
-  n.add('dear', '.price>=10')
+  n.add('cheap', '.book.price<10', ['b4'])
+  n.add('dear', '.book.price>=10')
   let b4 = bundles.find((b) => b.entity.eid == 'b4')!
   let dearer = { ...b4, book: { ...b4.book as object, price: 20 } }
   assertEquals(n.move(dearer), { into: ['dear'], out: ['cheap'] })
@@ -60,12 +60,12 @@ test('moving an entity says which queries it is in now and which it left', () =>
 
 test('a dropped query is never reached again, and what it shared still works', () => {
   let n = net<string>(shop, { now: NOW })
-  n.add('cheap', '.price<10')
-  n.add('cheap shelved', '.price<10&.status=shelved')
+  n.add('cheap', '.book.price<10')
+  n.add('cheap shelved', '.book.price<10&.book.status=shelved')
   let b4 = bundles.find((b) => b.entity.eid == 'b4')!
   assertEquals(n.route(b4).sort(), ['cheap', 'cheap shelved'])
   n.drop('cheap')
   assertEquals(n.route(b4), ['cheap shelved'])
-  n.add('cheap shelved', '.price>=10')
+  n.add('cheap shelved', '.book.price>=10')
   assertEquals(n.route(b4), [])
 })

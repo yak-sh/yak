@@ -174,12 +174,12 @@ export let script: Step[] = [
 let READS = [
   '.kind=product',
   '.kind=review',
-  '.kind=doc&.order=title',
-  '.price>0',
-  '.available=1',
-  '!status',
-  '.maker',
-  '.title~=mug',
+  '.kind=doc&.order=doc.title',
+  '.product.price>0',
+  '.product.available=1',
+  '!product.status',
+  '.product.maker',
+  '.doc.title~=mug',
 ]
 
 // Everything named, alive or in its grave: identity, not search.
@@ -336,10 +336,10 @@ let ANSWERS: [query: string, eids: string[]][] = [
   ['.created.at<=now', ['ago1h', 'ago30m', 'ago3h']],
   ['.created.at=2-hours-ago..now', ['ago1h', 'ago30m']],
   ['.created.at=1-hour-ago...in-1-hour', ['ago1h', 'ago30m', 'in30m']],
-  ['.available=true', ['ago3h', 'in30m']],
-  ['.available=false', ['ago1h', 'in1h']],
-  ['.available=true,false', ['ago1h', 'ago3h', 'in1h', 'in30m']],
-  ['.available!=true', ['ago1h', 'ago30m', 'in1h']],
+  ['.product.available=true', ['ago3h', 'in30m']],
+  ['.product.available=false', ['ago1h', 'in1h']],
+  ['.product.available=true,false', ['ago1h', 'ago3h', 'in1h', 'in30m']],
+  ['.product.available!=true', ['ago1h', 'ago30m', 'in1h']],
 ]
 
 let iso = (ms: number) => new Date(ms).toISOString()

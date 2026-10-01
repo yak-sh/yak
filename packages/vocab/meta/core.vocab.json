@@ -150,11 +150,6 @@
       "type": "boolean",
       "default": true
     },
-    "bare": {
-      "description": "false = this property (or every property of this component) never claims its bare filter name; it is reached qualified only (.comp.prop). Use it for a property that should only be queried explicitly — a large log partition, or a name another component already claims.",
-      "type": "boolean",
-      "default": true
-    },
     "aliases": {
       "description": "Input forms that resolve to an enum member; output always uses the canonical member.",
       "type": "object",

@@ -49,7 +49,7 @@ test('a new seat writes an invitation, and the invitation goes', async () => {
   assertEquals(post.last()?.to, 'ana@books.example')
   assertEquals(post.last()?.subject, 'You are in the book club')
   // The letter is an entity like any other: about the seat, and settled.
-  let [invite] = (await g.read('.eid=e-invite')) as Bundle[]
+  let [invite] = (await g.read('.entity.eid=e-invite')) as Bundle[]
   assertEquals((invite.mail as Comp).target, 'm-first')
   assertEquals((invite.mail as Comp).message_id, 'stash-1')
 })
@@ -71,6 +71,6 @@ test('a member with no address gets a bounced invitation, not silence', async ()
     member: { space: club, person: 'p-bo', role: 'member' },
   }])
   assertEquals(post.sent.length, 0)
-  let [invite] = (await g.read('.eid=e-invite')) as Bundle[]
+  let [invite] = (await g.read('.entity.eid=e-invite')) as Bundle[]
   assert(String((invite.bounced as Comp).reason).includes('no address on file'))
 })

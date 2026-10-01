@@ -986,7 +986,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
         env,
       )
     }
-    let [row] = await meta(env).query(`.eid=${who.person}`) as {
+    let [row] = await meta(env).query(`.entity.eid=${who.person}`) as {
       email?: { address: string }
     }[]
     return askAllow(

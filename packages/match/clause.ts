@@ -320,7 +320,7 @@ let refs = (ctx: Ctx, r: Refs): Test => {
 // edge entity, which has the relation's tag component alongside `edge{from,to}`
 // (`cites {}` beside `edge`); an entity's own reference property (`fork.from`
 // reads as this entity → the entry); or a chain of reference properties
-// composed into one pair (`fork.from.session` reads as this entity → the
+// composed into one pair (`fork.from.entry.session` reads as this entity → the
 // session of the entry it forked from). All three are resolved through the same
 // vocabulary
 // @yaks/edge and @yaks/sql read. The closure is one breadth-first traversal per
@@ -592,12 +592,7 @@ export let compile = (ctx: Ctx, c: Clause): Arm => {
     if (c.not || c.where) {
       throw new Unsupported('a reverse association', c.path.join('.'), BY)
     }
-    let hops = c.facet
-      ? [
-        ...(c.path.length > 1 ? ctx.v.aim(c.path.slice(0, -1).join('.')) : []),
-        { comp: c.path.at(-1)!, prop: '' },
-      ]
-      : ctx.v.aim(c.path.join('.'), bare(c))
+    let hops = ctx.v.aim(c.path.join('.'), bare(c))
     return hops.length == 1 ? single(ctx, hops[0], c) : path(ctx, hops, c)
   }
   throw new Unsupported(`the ${(c as Clause).kind} directive`, '', BY)

@@ -50,6 +50,9 @@ let v = loadVocab([{
       component: true,
       properties: { x: { type: 'number' }, hidden: { type: 'boolean' } },
     },
+    timing: { component: true, properties: {} },
+    statusbar: { component: true, properties: {} },
+    foo: { component: true, properties: { timing: { type: 'number' } } },
     _prop: { component: true, properties: { name: str, type: str } },
   },
 }])
@@ -80,27 +83,32 @@ let has: [string, string, string, string | undefined, Source<Cand[]>?][] = [
   ['a component is its own clause', '.', '.task', 'comp'],
   ['a whole one leads on to its properties', '.task', '.task.', 'comp'],
   ['a component with none is its own word', '.pro', '.proposed', 'comp'],
-  ['a bare property names its component', '.', '.priority', 'task'],
-  ['a stamped property says so', '.', '.num', 'entity · stamped'],
-  ['a reference says so', '.', '.assignee', 'task · ref'],
-  ['a shared reference is one word', '.', '.target', 'ref'],
-  ['an ambiguous name waits for the line', '.', '.status', undefined],
-  ['the line decides it', '.task .sta', '.status', 'task'],
-  ['a line naming both leaves it', '.task .session .sta', '.status', undefined],
+  ['a property comes with its component', '.', '.task.priority', 'task'],
+  ['a stamped property says so', '.', '.entity.num', 'entity · stamped'],
+  ['a reference says so', '.', '.task.assignee', 'task · ref'],
+  ['the spine names its eid', '.ei', '.entity.eid', 'entity'],
+  ['every component a name is on', '.sta', '.task.status', 'task'],
+  ['…each of them', '.sta', '.session.status', 'session'],
+  ['a property never stands alone', '.sta', '.status', undefined],
   ['the prefix filters', '.pri', '.proposed', undefined],
   ['a _ component is a component', '._', '._prop', 'comp'],
-  ['its properties never stand bare', '.', '.name', undefined],
-  ['but read through it', '._prop.', '._prop.name', '_prop'],
+  ['its properties come with it', '.na', '._prop.name', '_prop'],
+  ['and read through it', '._prop.', '._prop.name', '_prop'],
   ["a component's columns", '.pin.', '.pin.x', 'pin'],
   ['a stamped column', '.session.', '.session.started', 'session · stamped'],
   ['a column by prefix', '.pin.h', '.pin.hidden', 'pin'],
-  ['a whole property takes an operator', '.priority', '.priority<=', 'until'],
-  ['and a range', '.priority', '.priority=..', 'range'],
+  [
+    'a whole property takes an operator',
+    '.task.priority',
+    '.task.priority<=',
+    'until',
+  ],
+  ['and a range', '.task.priority', '.task.priority=..', 'range'],
   ['a whole column too', '.pin.x', '.pin.x!=', 'not'],
   ['a component alone asks absence', '.proposed', '!proposed', 'absent'],
   ['or wanted', '.proposed', '?proposed', 'wanted'],
-  ['a half operator', '.priority!', '.priority!=', 'not'],
-  ['a half contains', '.domain~', '.domain~=', 'contains'],
+  ['a half operator', '.task.priority!', '.task.priority!=', 'not'],
+  ['a half contains', '.task.domain~', '.task.domain~=', 'contains'],
   ['enum members', '.task.status=', '.task.status=open', 'status'],
   ['enum by prefix', '.task.status=d', '.task.status=done', 'status'],
   [
@@ -109,15 +117,15 @@ let has: [string, string, string, string | undefined, Source<Cand[]>?][] = [
     '.task.status=open,done',
     'status',
   ],
-  [
-    'the line decides a value too',
-    '.session .status=r',
-    '.status=running',
-    'status',
-  ],
+  ['another enum', '.session.status=r', '.session.status=running', 'status'],
   ['a flag', '.pin.hidden=', '.pin.hidden=1', 'true'],
   ['a time phrase', '.session.started>', '.session.started>today', 'time'],
-  ['past a reference, the far side', '.assignee.', '.assignee.title', 'doc'],
+  [
+    'past a reference, the far side',
+    '.task.assignee.',
+    '.task.assignee.doc.title',
+    'doc',
+  ],
   [
     'past a reference, a component',
     '.comment.target.',
@@ -142,29 +150,42 @@ let has: [string, string, string, string | undefined, Source<Cand[]>?][] = [
     '.comment.target.task.status=open',
     'status',
   ],
-  ['not past a plain column', '.domain.', '.domain.title', undefined],
+  [
+    'not past a plain column',
+    '.task.domain.',
+    '.task.domain.doc.title',
+    undefined,
+  ],
   ['a reverse association', '.comm', '.comments', 'comment · reverse'],
-  ['its children follow', '.cards.', '.cards.target', 'ref'],
+  ['its children follow', '.cards.', '.cards.card.target', 'card · ref'],
   ['a directive', '.lim', '.limit=', 'window'],
   ['an aggregate', '.ta', '.tally=', 'aggregate'],
   ['!: absent components', '!pro', '!proposed', 'comp'],
-  ['?: wanted components only', '?pr', '?priority', undefined],
-  ['a word after others', '.task .pri', '.priority', 'task'],
-  ['a word after a comma clause', '.entity,.pri', '.priority', 'task'],
-  ['a word inside a group', '(.pin|.pri', '.priority', 'task'],
-  ['a bare word is text, not a clause', 'pri', '.priority', undefined],
+  ['?: wanted components', '?pr', '?proposed', 'comp'],
+  ['?: never a property', '?pr', '?task.priority', undefined],
+  ['a word after others', '.task .pri', '.task.priority', 'task'],
+  ['a word after a comma clause', '.entity,.pri', '.task.priority', 'task'],
+  ['a word inside a group', '(.pin|.pri', '.task.priority', 'task'],
+  ['a bare word is text, not a clause', 'pri', '.task.priority', undefined],
   [
     'a reference names entities',
-    '.assignee=je',
-    '.assignee=jeff',
+    '.task.assignee=je',
+    '.task.assignee=jeff',
     'person',
     people,
   ],
-  ['a shared one names any', '.target=T', '.target=T-3', 'entity', people],
+  [
+    'any entity, where any is named',
+    '.comment.target=T',
+    '.comment.target=T-3',
+    'entity',
+    people,
+  ],
+  ['an eid names any', '.entity.eid=T', '.entity.eid=T-3', 'entity', people],
   [
     'a value the source has seen',
-    '.domain=',
-    '.domain=Ops',
+    '.task.domain=',
+    '.task.domain=Ops',
     'task.domain',
     people,
   ],
@@ -172,11 +193,11 @@ let has: [string, string, string, string | undefined, Source<Cand[]>?][] = [
   [
     'or a property to order by',
     '.order=pri',
-    '.order=priority',
+    '.order=task.priority',
     'task',
     people,
   ],
-  ['descending', '.order=-pri', '.order=-priority', 'task'],
+  ['descending', '.order=-pri', '.order=-task.priority', 'task'],
   ['a tally reads a property', '.tally=pin.', '.tally=pin.x', 'pin'],
   [
     'fields, one part at a time',
@@ -185,7 +206,12 @@ let has: [string, string, string, string | undefined, Source<Cand[]>?][] = [
     'pin',
   ],
   ['.near names an entity', '.near=je', '.near=jeff', 'entity', people],
-  ['mid-line, the word up to the caret', '.pri§ .task', '.priority', 'task'],
+  [
+    'mid-line, the word up to the caret',
+    '.pri§ .task',
+    '.task.priority',
+    'task',
+  ],
 ]
 for (let [name, text, cand, kind, source] of has) {
   test(`complete: ${name}`, () => {
@@ -194,7 +220,7 @@ for (let [name, text, cand, kind, source] of has) {
 }
 
 test('complete: the word itself is never offered', () => {
-  assertEquals(offered('.priority')['.priority'], undefined)
+  assertEquals(offered('.task.priority')['.task.priority'], undefined)
   assertEquals(offered('.task.status=open')['.task.status=open'], undefined)
 })
 
@@ -209,8 +235,8 @@ test('complete: an asynchronous source makes the answer a promise', async () => 
   let slow: Source = {
     ids: () => Promise.resolve([{ text: 'jeff', kind: 'person' }]),
   }
-  let c = await complete(v, '.assignee=j', undefined, slow)
-  assertEquals(c.cands, [{ text: '.assignee=jeff', kind: 'person' }])
+  let c = await complete(v, '.task.assignee=j', undefined, slow)
+  assertEquals(c.cands, [{ text: '.task.assignee=jeff', kind: 'person' }])
 })
 
 test('complete: nothing to offer is an empty list', () => {
@@ -219,24 +245,47 @@ test('complete: nothing to offer is an empty list', () => {
   assertEquals(complete(v, '.nothing.').cands, [])
 })
 
+let texts = (text: string) => Object.keys(offered(text))
+
+// `a` is offered, and before `b`.
+let before = (text: string, a: string, b: string) => {
+  let got = texts(text)
+  assertEquals(got.includes(a) && got.indexOf(a) < got.indexOf(b), true, a)
+}
+
 test("complete: a _ component follows the application's own", () => {
-  let texts = complete(v, '.').cands.map((c) => c.text)
-  assertEquals(texts.indexOf('._prop') > texts.indexOf('.task'), true)
+  before('.', '.task', '._prop')
 })
 
-let first = (text: string) => complete(v, text).cands[0]?.text
-
 test('complete: a component comes first, as the word it reads', () => {
-  assertEquals(first('.eff'), '.effect')
+  assertEquals(texts('.eff')[0], '.effect')
+})
+
+test('complete: a prefix offers components, then properties with theirs', () => {
+  before('.ti', '.timing', '.foo.timing')
+  before('.ti', '.foo.timing', '.doc.title')
+})
+
+test('complete: an exact name comes first', () => {
+  before('.status', '.session.status', '.statusbar')
+  before('.status', '.task.status', '.statusbar')
+})
+
+test('complete: what the line names comes next', () => {
+  before('.sta', '.session.status', '.task.status')
+  before('.task .sta', '.task.status', '.session.status')
+  before('.sta§ .task.priority=1', '.task.status', '.session.status')
 })
 
 test('complete: a whole word says so, and reads on before it is rewritten', () => {
   let whole = (text: string) => complete(v, text).whole
-  for (let w of ['.effect', '.priority', '!effect', '.task.status=open']) {
+  for (
+    let w of ['.effect', '.task.priority', '!effect', '.task.status=open']
+  ) {
     assertEquals(whole(w), true, w)
   }
-  for (let w of ['.eff', '.effect.', '.status', '.priority!']) {
+  for (let w of ['.eff', '.effect.', '.status', '.priority', '.priority!']) {
     assertEquals(whole(w), false, w)
   }
-  assertEquals(first('.effect'), '.effect.')
+  assertEquals(texts('.effect')[0], '.effect.')
 })

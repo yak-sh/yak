@@ -14,10 +14,6 @@
 // construction — no lookup to race, no uniqueness index to remember, and anyone
 // holding a URL can compute its entity id without asking. See ./url.ts.
 //
-// `bytes` opts out of the short form (`bare: false`): far too ordinary a name
-// for one component to claim vocabulary-wide, so a query names it in full —
-// `.web.bytes=<sha>`.
-//
 // The title is not here. A page's title and prose are `doc{title, body}` from
 // @yaks/doc, which this package loads beside its own rather than redefining: a
 // vocabulary refuses a component declared twice, so the component keeps one

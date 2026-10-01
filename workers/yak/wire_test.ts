@@ -8,7 +8,7 @@ import { batched, lined, receipt } from './wire.ts'
 
 let cases: [string, string][] = [
   // The riders the page writes bare
-  ['id=abc', '.eid=abc'],
+  ['id=abc', '.entity.eid=abc'],
   ['.doc&limit=10&after=3', '.doc&.limit=10&.after=3'],
   // Everything else is already the same grammar
   ['.doc.title~=cake&.recipe.serves<=4', '.doc.title~=cake&.recipe.serves<=4'],

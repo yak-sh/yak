@@ -4,7 +4,8 @@
 // signal for the component's life (releasing it on unmount), and reads it — so
 // the component re-renders only when its RESULT changes, never on an unrelated
 // patch. The query is the query.ts filter grammar boards and graph_query speak
-// (`.status=open`, `.deliver.to=S-31`, …); references resolve to eids at parse.
+// (`.task.status=open`, `.deliver.to=S-31`, …); references resolve to eids at
+// parse.
 //
 // The signal's backing is the store-agnostic seam (live.ts queryEids): today an
 // in-memory index, tomorrow an IDB indexed cursor — the call site never

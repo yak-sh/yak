@@ -293,8 +293,11 @@ export let connect = (base: URL, vocab: ReturnType<typeof loadVocab>) => {
     let read = async () => {
       let b = c.ent(eid)
       if (!b?.player || !b.created) {
-        b = (await once(`.eid=${JSON.stringify(eid)}&.player&?created&*`))[0] ??
-          b
+        b =
+          (await once(`.entity.eid=${JSON.stringify(eid)}&.player&?created&*`))[
+            0
+          ] ??
+            b
       }
       let looks = await once(`.look.player=${JSON.stringify(eid)}&*`)
       let look = newest(looks).get(eid)
@@ -327,7 +330,7 @@ export let connect = (base: URL, vocab: ReturnType<typeof loadVocab>) => {
       hero = eid
       tab.set(eid)
       chosen?.close()
-      chosen = c.watch(`.eid=${JSON.stringify(eid)}&?created&*`)
+      chosen = c.watch(`.entity.eid=${JSON.stringify(eid)}&?created&*`)
       followHero(eid)
       syncLooks()
     },
@@ -367,7 +370,7 @@ export let connect = (base: URL, vocab: ReturnType<typeof loadVocab>) => {
     },
     /** Whether the hero this tab remembers is still in the store. */
     known: async (eid: string): Promise<boolean> =>
-      (await once(`.eid=${JSON.stringify(eid)}&.player`)).length > 0,
+      (await once(`.entity.eid=${JSON.stringify(eid)}&.player`)).length > 0,
     /** my rows of one kind: what the store holds, and what is waiting */
     mine: (name: string): Bundle[] =>
       join(name, own[name]?.value ?? none, name),

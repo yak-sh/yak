@@ -574,11 +574,11 @@ export let buying = async (
   try {
     items = cart(body)
     // One read, whatever the cart's length: the products it names, whole.
-    // `.eid=` and not `id=` — the bare form is the page's grammar and this
+    // `.entity.eid=` and not `id=` — the bare form is the page's grammar and this
     // is a line built for the store (wire.ts `RIDERS` is the translation, and
     // this side of it never sees one).
     priceless = priced(
-      await rows(`.eid=${items.map((i) => i.product).join(',')}`),
+      await rows(`.entity.eid=${items.map((i) => i.product).join(',')}`),
       items,
     )
     let asked = body as { success?: unknown; cancel?: unknown; email?: unknown }
@@ -875,7 +875,7 @@ let sold = async (env: Env, space: Space, event: Event) => {
   if (items.length) {
     for (
       let row of await store.query(
-        `.eid=${items.map((i) => i.product).join(',')}`,
+        `.entity.eid=${items.map((i) => i.product).join(',')}`,
       ) as Product[]
     ) named.set(row.entity.eid, row.doc?.title ?? '')
   }

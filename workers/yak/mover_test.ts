@@ -74,7 +74,7 @@ test('a live rule moves every row from the alarm, and says it is done', async ()
   assertEquals([said.moved, !!said.done], [250, true])
   assertEquals(await count(s, '.was'), 0)
   assertEquals(await count(s, '.now'), 250)
-  let [moved] = await s.query(`.eid=${first.entity.eid}&.now`)
+  let [moved] = await s.query(`.entity.eid=${first.entity.eid}&.now`)
   assertEquals(moved.now, first.was)
 })
 

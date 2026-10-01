@@ -28,10 +28,6 @@
 // that moves somebody's open card by writing their `cursor`. State that never
 // leaves the tab can do none of that.
 //
-// `pane.parent` does not claim its property name as query shorthand
-// (`bare: false`): `parent` is far too ordinary a name for this component to
-// own vocabulary-wide, so a query writes it in full — `.pane.parent=<id>`.
-//
 // No component here declares `before`. A `before` names another kind, and
 // `kindOrder` rejects one that no loaded document declares — so a package that
 // ordered itself against a kind it does not ship could not load on its own. A

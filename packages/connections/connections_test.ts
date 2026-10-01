@@ -160,7 +160,7 @@ test('a space owner can attach a connected account in place of an unmet ask', as
     }).then((b) => b?.entity.eid),
     connected,
   )
-  assertEquals(await g.read(`.eid=${waiting}&.connection`), [])
+  assertEquals(await g.read(`.entity.eid=${waiting}&.connection`), [])
   let [link] = await g.read('.edge.from=app&.uses&*')
   assertEquals(of(link, 'uses'), { binding: 'SMS' })
   assertEquals(
@@ -219,7 +219,7 @@ test('attachment does not turn a direct-key request into an implicit grant', asy
 })
 
 let at = async (g: { read: Ctx['graph']['read'] }, eid: string) =>
-  (await g.read(`.eid=${eid}`))[0] as Bundle | undefined
+  (await g.read(`.entity.eid=${eid}`))[0] as Bundle | undefined
 
 let of = (b: Bundle | undefined, name: string) => (b?.[name] ?? {}) as Comp
 

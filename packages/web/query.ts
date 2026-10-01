@@ -1,6 +1,6 @@
 // The FILTER grammar — dot-params in URL query-param form. One parser for
 // every reader: a board's saved query, `task list`, MCP task_list, and
-// the search box. (Writes keep the plain `.prop=value` setter grammar in
+// the search box. (Writes keep the plain `.comp.prop=value` setter grammar in
 // client.ts — a setter's comma is a literal comma; only filters interpret
 // value forms.)
 //
@@ -45,29 +45,24 @@
 // midnight-to-midnight, .updated.at>="1 hour ago" is the last hour.
 // Schedulers want one moment instead — that's instant(), below span.
 //
-// Names resolve the way the host resolves them: @yaks/vocab routes each one,
-// and a bare property several components declare takes the component the rest
-// of the line names (@yaks/query's meant.ts: `.task .status=open`);
-// `.task.status` is the explicit spelling. A component name by itself tests
-// the facet: `!proposed` means absent, `.proposed` present.
+// Names resolve the way the host resolves them, through @yaks/vocab `aim`: a
+// property is named with its component (`.task.status=open`), and a name by
+// itself tests the component: `!proposed` means absent, `.proposed` present.
 //
-// References are ordinary props: `.assignee=jeff`; the VALUE resolves like
-// any id (alias, T-3, raw eid) at whichever door or evaluator holds the graph
-// (resolveRefs). And a
-// dotted first segment that names a COMPONENT is the explicit spelling
-// (`.pin.x=12`); any other first segment is a PATH — `.assignee.title~=j`
-// dereferences the eid column and predicates the target's prop. A path is an
-// N-hop CHAIN: each `{eid}` deref moves to the target entity and the next
-// segment(s) read there, so `.comment.target.doc.title~=foo` walks
-// comment→target then tests doc.title, arbitrarily deep (@yaks/vocab `aim`).
+// References are ordinary props: `.filed.assignee=jeff`; the VALUE resolves
+// like any id (alias, T-3, raw eid) at whichever door or evaluator holds the
+// graph (resolveRefs). A path is an N-hop CHAIN of `comp.prop` pairs: each
+// `{eid}` deref moves to the target entity and the next pair reads there, so
+// `.comment.target.doc.title~=foo` walks comment→target then tests doc.title,
+// arbitrarily deep.
 import { IdError } from './types.ts'
 import { anyRef, isRef, parseProp, type Prop, typed } from './props.ts'
 import {
   edges,
   kindOrder,
   kindWord,
+  lazy,
   resultComps,
-  sessionComps,
   statusOf,
   vocab,
 } from './types.ts'
@@ -75,14 +70,7 @@ import { Unknown } from '@yaks/vocab'
 import { term as ftsTerm } from '@yaks/fts'
 import { type Check, check } from '@yaks/match'
 import { type Tag, tagOf } from '@yaks/sql'
-import {
-  bare,
-  type Clause,
-  meant,
-  parse,
-  timeSpan,
-  type Value,
-} from '@yaks/query'
+import { bare, type Clause, parse, timeSpan, type Value } from '@yaks/query'
 export { ftsTerm }
 export { WALK_DEPTH, WALK_LIMIT } from '@yaks/query'
 
@@ -105,8 +93,8 @@ export type Pred = {
   // A path predicate's chain: deref the reference at `comp.prop`, then follow
   // each hop in `at` in turn — every hop but the LAST is another `{eid}` deref
   // — and test the final hop's column against op/value. A single-element `at`
-  // is one deref, the depth-1 path `.assignee.title`; `.comment.target.doc.title`
-  // is that same deref spelled with explicit `comp.prop` on both sides.
+  // is one deref: `.comment.target.doc.title` derefs comment.target and tests
+  // the target's doc.title.
   at?: Hop[]
   // What the LEAF column is, so the value rules (@yaks/match check()) compare a
   // number as a number and read a time phrase only where a time is stored. The
@@ -238,7 +226,7 @@ export let leafOf = (p: Pred): Hop => p.at ? p.at[p.at.length - 1] : p
 // shape of both a live-cache row and a client Row's `.comps`.
 export type Comps = Record<string, Record<string, unknown> | undefined>
 
-// One token — '.priority<=1', '.domain=Ops,Eng' — to a Pred; null if the
+// One token — '.filed.priority<=1', '.filed.domain=Ops,Eng' — to a Pred; null if the
 // string isn't a dot-param at all.
 export let EXISTS = 'exists'
 // `?loan` asks for a component WITHOUT filtering on it: an optional
@@ -275,8 +263,8 @@ export let orderOf = (preds: Pred[]) => preds.find((p) => p.op == ORDER)?.value
 export let NEAR = 'near'
 export let nearOf = (preds: Pred[]) => preds.find((p) => p.op == NEAR)?.value
 
-// An AGGREGATE directive rides the pred list like ORDER — `.distinct=domain`,
-// `.tally=domain`, `.count`. matchQuery passes AGG through (true), so the OTHER
+// An AGGREGATE directive rides the pred list like ORDER —
+// `.distinct=filed.domain`, `.tally=filed.domain`, `.count`. matchQuery passes AGG through (true), so the OTHER
 // preds select the universe the aggregate reduces; a reader pulls the projection
 // with aggOf() and computes it with tally() (or aggregateSql server-side).
 export let AGG = 'agg'
@@ -331,7 +319,13 @@ export let predComps = (preds: Pred[]): Set<string> | null => {
     }
     if (p.refs || p.at || p.rev) return null
     if (p.op == ORDER && p.value == 'hot') return null
-    if (p.op == ORDER && p.value == 'priority') out.add('filed')
+    // A column order reads its column: a write to it can move a row across a
+    // window's edge. One through a reference reads another entity.
+    if (p.op == ORDER && !RANKS.includes(p.value)) {
+      let path = p.value.replace(/^-/, '').split('.')
+      if (path.length > 2) return null
+      out.add(path[0])
+    }
     if (
       p.op == NEVER || p.op == ORDER || p.op == NEAR || p.op == PROJECT
     ) continue
@@ -452,9 +446,8 @@ export let reachesOf = (preds: Pred[]): Pred[] =>
 // the arrow. One per query — every row then tests with a Set lookup.
 export type Walk = (reach: Reach, target: string) => Set<string>
 
-// A query addresses the LAZY entry partition when it names any session-log
-// component (sessionComps) — `.entry.session`, `.generation.provider`,
-// `.response.status`, and the rest. Those entities are omitted from the root
+// A query addresses the LAZY entry partition when it names a component the
+// kernel declares `lazy` — `.entry.session`, `.entry`. Those entities are omitted from the root
 // snapshot, so a door reaches them only when the query OPTS IN by naming the
 // partition; that is an explicit scope, not a silent boundary. Every query
 // door reads this one predicate to decide whether entries are in its universe.
@@ -466,7 +459,7 @@ export type Walk = (reach: Reach, target: string) => Set<string>
 // past `entry` into entry-partition mode and orderedEntries dropped every row.
 // A positive reference (`.entry` EXISTS, `.entry.session=S-1`) still scopes in.
 export let namesLazy = (preds: Pred[]) =>
-  preds.some((p) => p.comp in sessionComps && !(p.prop == '' && p.op == ''))
+  preds.some((p) => lazy(p.comp) && !(p.prop == '' && p.op == ''))
 
 // The sessions an entry query is scoped to — the eids of every scalar
 // `.entry.session=` equality (a comma list is any-of). A range cannot name
@@ -680,7 +673,7 @@ let bindClause = (c: Clause): Pred[] => {
       return [text(c.value)]
     case 'resource':
       if (/^[0-9a-f]{6,64}$/i.test(c.comp)) {
-        return bindClause(parse(`.eid=#${c.comp}`))
+        return bindClause(parse(`.entity.eid=#${c.comp}`))
       }
       throw new Error(`a fleet read cannot evaluate resource #${c.comp}`)
     case 'every':
@@ -713,9 +706,9 @@ let bindClause = (c: Clause): Pred[] => {
         prop: '',
         op: PROJECT,
         value: '',
-        fields: c.fields.filter((f) => f.path.join('.') != 'eid').map((f) =>
-          fieldOf(f.path, f.wake)
-        ),
+        fields: c.fields
+          .filter((f) => f.path.join('.') != 'entity.eid')
+          .map((f) => fieldOf(f.path, f.wake)),
       }]
     case 'limit':
     case 'after': {
@@ -832,17 +825,10 @@ let bindClause = (c: Clause): Pred[] => {
 }
 
 // A clause's path as the hops it names (@yaks/vocab `aim`). A presence test
-// names a component even where a property shares its name; one naming a
-// component nothing declares is refused, as @yaks/sql refuses it, unless it is
-// a component a query answers beside a row (resultComps).
+// naming a component nothing declares is refused, as @yaks/sql refuses it,
+// unless it is a component a query answers beside a row (resultComps).
 let aimed = (c: Clause & { kind: 'pred' }): Hop[] => {
-  let segs = c.path
-  let hops = c.facet
-    ? [
-      ...(segs.length > 1 ? vocab.aim(segs.slice(0, -1).join('.')) : []),
-      { comp: segs[segs.length - 1], prop: '' },
-    ]
-    : vocab.aim(segs.join('.'), bare(c))
+  let hops = vocab.aim(c.path.join('.'), bare(c))
   let leaf = hops[hops.length - 1]
   if (!leaf.prop && !vocab.comp(leaf.comp) && !(leaf.comp in resultComps)) {
     throw new Unknown(leaf.comp)
@@ -902,8 +888,7 @@ export let NEVER = 'never'
 // recurses into the alternatives; every reader of directives ignores it.
 export let OR = 'or'
 export let never = (): Pred => ({ comp: '', prop: '', op: NEVER, value: '' })
-export let parseQuery = (q: string): Pred[] =>
-  bindClause(meant(vocab, parse(q)))
+export let parseQuery = (q: string): Pred[] => bindClause(parse(q))
 
 // The column's declared type, as the value rules read it: the tag its binder
 // resolved, or for a pred built by hand, the vocabulary's.
@@ -923,9 +908,10 @@ let compiled = (p: Pred, tag: Tag): Check | null => {
 // not-equals, contains, the comparisons and the time phrases all belong to
 // @yaks/match, which answers them exactly as the SQL lowering does — by the
 // column's DECLARED type, never by whether both sides happen to look numeric.
-// A question the type cannot answer (`.priority>soon`, `.title>5`) selects
-// nothing: @yaks/sql declines the same compile, and a board mid-render is no
-// place to throw.
+// A question the type cannot answer (`.filed.priority>soon`, `.doc.title>5`)
+// selects
+// nothing: @yaks/sql declines the same compile, and a board mid-render is
+// no place to throw.
 let test = (v: unknown, p: Pred, now?: number, tag = tagAt(p)): boolean => {
   let hit = tag == 'time'
     ? check(p.op, p.value, tag, now ?? Date.now())
@@ -969,8 +955,8 @@ export let resolveRefs = (
         : { ...p, rev: { ...p.rev, preds: inner } }
     }
     let { comp, prop: target } = leafOf(p)
-    // The spine's `.eid=` names entities, so its operands are ids like a
-    // reference's — resolved at the door the same way, so `.eid=T-3` lands.
+    // The spine's `.entity.eid=` names entities, so its operands are ids like a
+    // reference's — resolved at the door the same way, so `.entity.eid=T-3` lands.
     let spine = comp == 'entity' && target == 'eid'
     if ((!spine && !isRef(comp, target)) || (p.op != '' && p.op != '!')) {
       return p
@@ -995,9 +981,9 @@ export let resolveRefs = (
 // Does an entity satisfy every pred? A TEXT pred reads the doc itself —
 // one pred, either column. A path pred dereferences through `ent` (the
 // evaluator's graph), folding hop after hop; no ent, no ref, or no target
-// anywhere along the chain reads as an absent value — so `.assignee.title=x`
-// (and `.comment.target.doc.title=x`) misses and `!=x` holds, same as any
-// null column.
+// anywhere along the chain reads as an absent value — so
+// `.comment.target.doc.title=x` misses and `!=x` holds, same as any null
+// column.
 //
 // `now` is the clock a time phrase reads. It defaults to the wall clock,
 // which is what every door wants — a saved `today` must advance tomorrow.

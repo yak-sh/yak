@@ -36,7 +36,7 @@ export let CAP = 8
  * import { assertEquals } from '@std/assert'
  * import { typed } from '@yaks/filter'
  *
- * let cands = [{ text: '.status', kind: 'task' }]
+ * let cands = [{ text: '.task.status', kind: 'prop' }]
  * let found = { from: 0, to: 2, cands, whole: false }
  * assertEquals(typed('.s', 2, found).cands, found.cands)
  * ```
@@ -72,11 +72,11 @@ export let moved = (r: Row, d: number): Partial<Row> => ({
  * import { assertEquals } from '@std/assert'
  * import { taken, typed } from '@yaks/filter'
  *
- * let cands = [{ text: '.status=', kind: 'is' }]
+ * let cands = [{ text: '.task.status=', kind: 'is' }]
  * let found = { from: 6, to: 8, cands, whole: false }
  * assertEquals(taken(typed('.task .s x', 8, found)), {
- *   text: '.task .status= x',
- *   caret: 14,
+ *   text: '.task .task.status= x',
+ *   caret: 19,
  * })
  * ```
  */

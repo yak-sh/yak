@@ -21,7 +21,8 @@ it contains matching words.
 
 This package owns one keyword. A component that declares `"by_name": true` makes
 its entities addressable by name, read from the vocabulary's name property
-(`title` by default); a string names a different property.
+(`doc.title` by default); a string names a different property, with its
+component.
 
 ```json
 {
@@ -40,7 +41,7 @@ its entities addressable by name, read from the vocabulary's name property
       "type": "object",
       "component": true,
       "kind": true,
-      "by_name": "label",
+      "by_name": "shelf.label",
       "properties": { "label": { "type": "string" } }
     }
   }

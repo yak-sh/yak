@@ -48,7 +48,6 @@ let doc: VocabDoc = {
           type: 'string',
           ref: 'person',
           death: 'cascade',
-          bare: false,
         },
         role: { type: 'string', enum: ['owner', 'member'], default: 'member' },
       },

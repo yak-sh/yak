@@ -43,9 +43,12 @@ test('OpenAI authorization starts before a session or model exists', async () =>
     )
     assertEquals(url.searchParams.get('state')?.length != 0, true)
     let owner = identityEid('provider', ['openai'])
-    assertEquals((await h.g.read(`.eid=${owner}&.provider`)).length, 1)
+    assertEquals((await h.g.read(`.entity.eid=${owner}&.provider`)).length, 1)
     assertEquals((await h.g.address(['openai'])).get('openai'), owner)
-    assertEquals((await h.g.read(`.eid=${owner}&.doc.title=OpenAI`)).length, 1)
+    assertEquals(
+      (await h.g.read(`.entity.eid=${owner}&.doc.title=OpenAI`)).length,
+      1,
+    )
     await assertRejects(
       () => auth.run('complete', 'openai', 'invalid'),
       Error,

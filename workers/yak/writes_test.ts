@@ -32,7 +32,7 @@ let object = () => {
     tally(db(ctx), 'yak_writes', state ? by({ state }) : undefined)
   let query = (q: string) => door().query(q)
   let title = async (eid: string) =>
-    ((await query(`.eid=${eid}`))[0]?.doc as { title?: string })?.title
+    ((await query(`.entity.eid=${eid}`))[0]?.doc as { title?: string })?.title
   return {
     ctx,
     wake,

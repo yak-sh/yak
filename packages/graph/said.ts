@@ -7,17 +7,23 @@
 // `.decided.by=jeff` matched nothing while `.decided.by=<eid>` matched.
 //
 // A query names an entity in exactly five places: the entity's own eid
-// (`.eid=#47e9678bdf`), a reference property's value (`.decided.by=jeff`),
+// (`.entity.eid=#47e9678bdf`), a reference property's value (`.decided.by=jeff`),
 // the reverse-reference filter `.refs=`, a walk's target (`.requires->T-42`)
 // and the neighbour filter `.near=`. Nowhere else —
-// `.status=done` is an enum, and a value that happens to be somebody's name
+// `.task.status=done` is an enum, and a value that happens to be somebody's name
 // must not be turned into their eid just because it sat on a scalar property.
 //
 // Which properties are references is the vocabulary's to say, so this takes
 // one; which entity a name belongs to is a plugin's, so `addressing` takes an
 // `address` function between its two halves.
 
-import { type Clause, parse, type Query as Ast, type Value } from '@yaks/query'
+import {
+  bare,
+  type Clause,
+  parse,
+  type Query as Ast,
+  type Value,
+} from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import { after } from '@yaks/fp'
 import type { Eid } from './bundle.ts'
@@ -35,17 +41,10 @@ let refs = (vocab: Vocab, c: Clause & { kind: 'pred' }): boolean => {
   // whatever is stored, and a range of eids means nothing.
   if (c.op != '=' && c.op != '!=') return false
   // The entity's own eid names the entity it is.
-  let [first, second] = c.path
-  if (
-    c.path.length == 1
-      ? first == 'eid'
-      : c.path.length == 2 && first == 'entity' && second == 'eid'
-  ) {
-    return true
-  }
+  if (c.path.join('.') == 'entity.eid') return true
   let hops
   try {
-    hops = vocab.aim(c.path.join('.'), c.facet)
+    hops = vocab.aim(c.path.join('.'), bare(c))
   } catch {
     return false
   }

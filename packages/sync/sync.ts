@@ -133,7 +133,7 @@ let warn: Report = (t) =>
  *
  * // let g = graph({ storage: ram(vocab, { adopt: true }), vocab })
  * // let link = sync(g, { url: 'https://recipes.example' })
- * // link.subscribe('.dinner&.serves>4')
+ * // link.subscribe('.recipe.course=dinner&.recipe.serves>4')
  * ```
  *
  * From then on every write through `g.apply()` is applied locally at once and

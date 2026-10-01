@@ -1,6 +1,6 @@
 // The query half: a bare word in a query compiles to an FTS5 match.
 //
-// A query mixes words and filters — `hobbit .price<20` — and @yaks/query parses
+// A query mixes words and filters — `hobbit .book.price<20` — and @yaks/query parses
 // each bare word as a `text` clause. @yaks/sql compiles every clause except
 // that one; this module is the @yaks/sql extension that compiles it, registered
 // through `compile(ast, vocab, { extend: [search(fields)] })`.

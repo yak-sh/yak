@@ -5,7 +5,6 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import {
-  Ambiguous,
   cast,
   extendMeta,
   kindOrder,
@@ -78,32 +77,64 @@ test('stamped properties are readable, never writable', () => {
   assert(v.prop('claim', 'at')!.stamped)
 })
 
-test('bare props route to their home', () => {
-  assertEquals(v.route('title'), { comp: 'doc', prop: 'title' })
-  assertEquals(v.route('query'), { comp: 'board', prop: 'query' })
-  assertEquals(v.route('color'), { comp: 'project', prop: 'color' })
-  // several owners, all references: one read concept, comp ''
-  assertEquals(v.route('target'), { comp: '', prop: 'target' })
-  // a component name is a facet
-  assertEquals(v.route('task'), { comp: 'task', prop: '' })
-  assertThrows(() => v.route('nonsense'), Error, 'unknown prop')
+test('a property is named with its component', () => {
+  assertEquals(v.aim('doc.title'), [{ comp: 'doc', prop: 'title' }])
+  assertEquals(v.aim('board.query'), [{ comp: 'board', prop: 'query' }])
+  // a name alone is a component
+  assertEquals(v.aim('task'), [{ comp: 'task', prop: '' }])
+  assertThrows(() => v.aim('nonsense'), Error, 'unknown prop')
 })
 
-test('a `_` component’s properties are reached qualified only', () => {
+test('a property named alone is refused with the forms that name it', () => {
+  let e = assertThrows(() => v.aim('title'), Unknown)
+  assertEquals(
+    e.message,
+    '.title is a property, not a component — name it .doc.title',
+  )
+  assertEquals((e as Unknown).prop, 'title')
+  // a presence test is held to the same rule
+  assertThrows(() => v.aim('title', true), Unknown, '.doc.title')
+  // every component that declares it, each a form to choose from
+  let w = loadVocab({
+    $defs: {
+      task: { component: true, properties: { status: { type: 'string' } } },
+      session: { component: true, properties: { status: { type: 'string' } } },
+    },
+  })
+  assertThrows(
+    () => w.aim('status'),
+    Unknown,
+    '.status is a property, not a component — name it .session.status or ' +
+      '.task.status',
+  )
+  // past a reference too
+  assertThrows(() => v.aim('comment.target.title'), Unknown, '.doc.title')
+})
+
+test('a name alone is the component, even where a property shares it', () => {
+  let w = loadVocab({
+    $defs: {
+      name: { component: true, properties: {} },
+      recipe: { component: true, properties: { name: { type: 'string' } } },
+    },
+  })
+  assertEquals(w.aim('name'), [{ comp: 'name', prop: '' }])
+  assertEquals(w.aim('name', true), [{ comp: 'name', prop: '' }])
+  assertEquals(w.aim('recipe.name'), [{ comp: 'recipe', prop: 'name' }])
+})
+
+test('a `_` component’s properties are named like any other', () => {
   let v = loadVocab({
     $defs: {
       _comp: {
         component: true,
         properties: { name: { type: 'string' }, kind: { type: 'boolean' } },
       },
-      _prop: { component: true, properties: { type: { type: 'string' } } },
-      recipe: { component: true, properties: { name: { type: 'string' } } },
     },
   })
-  assertEquals(v.route('name'), { comp: 'recipe', prop: 'name' })
-  assertThrows(() => v.route('type'), Unknown)
-  assertEquals(v.route('_comp'), { comp: '_comp', prop: '' })
+  assertEquals(v.aim('_comp'), [{ comp: '_comp', prop: '' }])
   assertEquals(v.aim('_comp.kind'), [{ comp: '_comp', prop: 'kind' }])
+  assertThrows(() => v.aim('kind'), Unknown, '._comp.kind')
 })
 
 test('dotted paths aim to hops', () => {
@@ -111,8 +142,7 @@ test('dotted paths aim to hops', () => {
     { comp: 'comment', prop: 'target' },
     { comp: 'doc', prop: 'title' },
   ])
-  // the bare form of the same traversal
-  assertEquals(v.aim('assignee.title'), [
+  assertEquals(v.aim('task.assignee.doc.title'), [
     { comp: 'task', prop: 'assignee' },
     { comp: 'doc', prop: 'title' },
   ])
@@ -147,31 +177,26 @@ test('a write naming an undeclared property is told the declared types', () => {
   ])
 })
 
-test('a bare bang aims at the component a property shadows', () => {
-  // `project` is both a component and task's reference property. Every form but
-  // the bare bang keeps the property — `.project=P-3` must not change meaning.
-  assertEquals(v.aim('project'), [{ comp: 'task', prop: 'project' }])
-  // `.project` completes the component sentence: the facet has no other
-  // form, while the property keeps its qualified one.
+test('a name both a component and a property is the component', () => {
+  // `project` is a component and task's reference property
+  assertEquals(v.aim('project'), [{ comp: 'project', prop: '' }])
   assertEquals(v.aim('project', true), [{ comp: 'project', prop: '' }])
-  assertEquals(v.aim('task.project', true), [{ comp: 'task', prop: 'project' }])
-  // a name no component wears is routed as ever
-  assertEquals(v.aim('title', true), [{ comp: 'doc', prop: 'title' }])
+  assertEquals(v.aim('task.project'), [{ comp: 'task', prop: 'project' }])
 })
 
 test('presence can name an undeclared component, comparisons cannot', () => {
   assertEquals(v.aim('invoice', true), [{ comp: 'invoice', prop: '' }])
   assertEquals(v.aim('entity', true), [{ comp: 'entity', prop: '' }])
-  assertEquals(v.aim('eid', true), [{ comp: 'entity', prop: 'eid' }])
   assertThrows(() => v.aim('invoice'), Error, 'unknown prop')
   assertThrows(() => v.aim('invoice.total', true), Error, 'unknown prop')
 })
 
 test('the spine routes its own identity, declared or not', () => {
   // no document declares `entity.eid`; the loader routes it because every
-  // entity has one — so `.eid=` and `.entity.eid=` name entities
-  assertEquals(v.route('eid'), { comp: 'entity', prop: 'eid' })
+  // entity has one — so `.entity.eid=` names entities, and `.eid` alone is a
+  // property named without its component
   assertEquals(v.aim('entity.eid'), [{ comp: 'entity', prop: 'eid' }])
+  assertThrows(() => v.aim('eid', true), Unknown, '.entity.eid')
   // it stays out of the property set: identity is not prose, so it reaches no
   // text index, no embedding, and no component's DDL
   assertEquals(v.props('entity').includes('eid'), false)
@@ -430,22 +455,9 @@ test('a computed property reads but never writes', () => {
     },
   })
   assertEquals(w.comp('task')?.writable, ['priority'])
-  assertEquals(w.route('status'), { comp: 'task', prop: 'status' })
+  assertEquals(w.aim('task.status'), [{ comp: 'task', prop: 'status' }])
   assertEquals(w.prop('task', 'status')?.computed, true)
   assert(w.check('task', { status: 'open' }).length == 1)
-})
-
-test('an ambiguous word names its choices for whoever can decide', () => {
-  let w = loadVocab({
-    $defs: {
-      task: { component: true, properties: { status: { type: 'string' } } },
-      session: { component: true, properties: { status: { type: 'string' } } },
-    },
-  })
-  let e = assertThrows(() => w.route('status'), Ambiguous)
-  assertEquals((e as Ambiguous).prop, 'status')
-  assertEquals((e as Ambiguous).comps, ['session', 'task'])
-  assertEquals((e as Ambiguous).name, 'Ambiguous')
 })
 
 test('the order refuses cycles', () => {

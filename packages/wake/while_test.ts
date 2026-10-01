@@ -21,7 +21,8 @@ let world = () => {
     g.apply([{ entity: { eid: name }, plant: { name } }])
   let uproot = (...names: string[]) =>
     g.apply(names.map((eid) => ({ entity: { eid }, $delete: true })))
-  let at = () => wakeOf((g.read('.eid=world') as Bundle[])[0])?.at ?? null
+  let at = () =>
+    wakeOf((g.read('.entity.eid=world') as Bundle[])[0])?.at ?? null
   let sow = (wake: object) =>
     g.apply([{
       entity: { eid: 'world' },

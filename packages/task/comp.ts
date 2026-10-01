@@ -18,7 +18,7 @@
 // the mark anything finished wears), which gives it a computed `task.status`
 // that is readable and filterable, and that no writer sets. Finishing a task
 // means writing a fact with a time and an author rather than overwriting a
-// value. Both evaluators read the one declaration, so `.status=done` selects
+// value. Both evaluators read the one declaration, so `.task.status=done` selects
 // the same tasks in a database and in a page, and a package that adds a rung
 // (@yaks/session's `wip`) widens the closed set where it declares the rung.
 //

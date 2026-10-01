@@ -30,7 +30,7 @@
  *   { entity: { eid: 'b2' }, book: { status: 'live', price: 30 } },
  *   { entity: { eid: 'b3' }, book: { status: 'live', price: 15 } },
  * ]
- * let live = matcher('.status=live&.price<20&.order=-price', vocab)
+ * let live = matcher('.book.status=live&.book.price<20&.order=-book.price', vocab)
  * live(bundles) // b3, b1: the matching bundles, most expensive first
  * ```
  *

@@ -164,7 +164,7 @@ For the vocabulary in the in-memory example:
 ] }
 
 // graph_query
-{ "q": ".status=shelved&.price<20" }
+{ "q": ".book.status=shelved&.book.price<20" }
 
 // graph_show
 { "ids": ["b1"] }

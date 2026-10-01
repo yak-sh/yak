@@ -57,7 +57,6 @@
       "type": "object",
       "edge": "recalled",
       "reversed": "recalled by",
-      "bare": false,
       "properties": {
         "source": {
           "type": "string",

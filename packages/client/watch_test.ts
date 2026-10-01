@@ -26,7 +26,7 @@ test('a watch answers now, and again on a local apply', () => {
   let c = boxClient()
   c.mutate([dal()])
 
-  let dinners = c.watch('.course=dinner&?doc')
+  let dinners = c.watch('.recipe.course=dinner&?doc')
   assertEquals(titles(dinners.value), ['Dal'])
 
   let heard: string[][] = []
@@ -45,7 +45,7 @@ test('a watch answers now, and again on a local apply', () => {
 test('an entity that stops matching leaves the answer', () => {
   let c = boxClient()
   c.mutate([dal()])
-  let dinners = c.watch('.course=dinner')
+  let dinners = c.watch('.recipe.course=dinner')
 
   c.mutate([{ entity: { eid: 'r1' }, recipe: { course: 'pudding' } }])
   assertEquals(dinners.value, [])
@@ -55,7 +55,7 @@ test('an entity that stops matching leaves the answer', () => {
 test('a deleted entity leaves the answer', () => {
   let c = boxClient()
   c.mutate([dal()])
-  let dinners = c.watch('.course=dinner')
+  let dinners = c.watch('.recipe.course=dinner')
 
   c.mutate([{ entity: { eid: 'r1' }, $delete: true }])
   assertEquals(dinners.value, [])
@@ -65,7 +65,7 @@ test('a deleted entity leaves the answer', () => {
 test('an unrelated write does not wake a watch', () => {
   let c = boxClient()
   c.mutate([dal()])
-  let dinners = c.watch('.course=dinner')
+  let dinners = c.watch('.recipe.course=dinner')
   let heard = 0
   dinners.subscribe(() => heard++)
 
@@ -78,7 +78,7 @@ test('an ordered query re-reads, and comes back in order', () => {
   let c = boxClient()
   c.mutate([dal('r1', 4), { ...dal('r2', 9), doc: { title: 'Pie' } }])
 
-  let most = c.watch('.course=dinner&.order=-serves&?doc')
+  let most = c.watch('.recipe.course=dinner&.order=-recipe.serves&?doc')
   assertEquals(titles(most.value), ['Pie', 'Dal'])
 
   c.mutate([{ entity: { eid: 'r1' }, recipe: { serves: 20 } }])
@@ -88,7 +88,7 @@ test('an ordered query re-reads, and comes back in order', () => {
 
 test('a watch stops after close', () => {
   let c = boxClient()
-  let dinners = c.watch('.course=dinner')
+  let dinners = c.watch('.recipe.course=dinner')
   let heard = 0
   dinners.subscribe(() => heard++)
 
@@ -103,7 +103,7 @@ test('a watch stops after close', () => {
 test('a watch carries what its query names, after a change as at first', () => {
   let c = boxClient()
   c.mutate([dal()])
-  let dinners = c.watch('.course=dinner')
+  let dinners = c.watch('.recipe.course=dinner')
   let carried = () => Object.keys(dinners.value[0]).sort()
   assertEquals(carried(), ['entity', 'recipe'])
   c.mutate([{ entity: { eid: 'r1' }, recipe: { serves: 8 } }])
@@ -113,7 +113,7 @@ test('a watch carries what its query names, after a change as at first', () => {
 
 test('one listener stops without stopping the watch', () => {
   let c = boxClient()
-  let dinners = c.watch('.course=dinner&?doc')
+  let dinners = c.watch('.recipe.course=dinner&?doc')
   let heard = 0
   let stop = dinners.subscribe(() => heard++)
   stop()
@@ -129,7 +129,7 @@ test('a watch hears a frame the server pushed', async () => {
   let a = boxClient(srv)
   let b = boxClient(srv)
 
-  let dinners = b.watch('.course=dinner&?doc')
+  let dinners = b.watch('.recipe.course=dinner&?doc')
   let heard: string[][] = []
   dinners.subscribe((bundles) => heard.push(titles(bundles)))
   await b.idle()
@@ -150,11 +150,11 @@ test('a watch hears a frame the server pushed', async () => {
 test('a closed watch drops the server subscription', async () => {
   let srv = server()
   let c = boxClient(srv)
-  let dinners = c.watch('.course=dinner')
+  let dinners = c.watch('.recipe.course=dinner')
   await c.idle()
 
   assertEquals(subscribes(c.socket()?.sent), [
-    { subscribe: '.course=dinner', id: 's1' },
+    { subscribe: '.recipe.course=dinner', id: 's1' },
   ])
   dinners.close()
   assertEquals(c.socket()?.sent.at(-1), { unsubscribe: 's1' })
@@ -169,7 +169,7 @@ test('a signal factory backs the value', () => {
     return held
   }
   let c = boxClient(undefined, { signal })
-  let dinners = c.watch('.course=dinner&?doc')
+  let dinners = c.watch('.recipe.course=dinner&?doc')
   assertEquals(made.length, 2)
 
   c.mutate([dal()])
@@ -243,8 +243,8 @@ test('identical local watches share evaluation but not listener ownership', () =
 
 test('remote watches share one sub until the last independent close', async () => {
   let c = boxClient(server())
-  let a = c.watch('.course=dinner')
-  let b = c.watch('.course=dinner', { remote: true })
+  let a = c.watch('.recipe.course=dinner')
+  let b = c.watch('.recipe.course=dinner', { remote: true })
   assertEquals(a.ready, false)
   assertEquals(b.ready, false)
   assertEquals(c.watches.size(), 1)
@@ -255,7 +255,7 @@ test('remote watches share one sub until the last independent close', async () =
   assertEquals(b.ready, true)
   assertEquals(heard, [true]) // an empty answer is still an answer
   assertEquals(subscribes(c.socket()?.sent), [{
-    subscribe: '.course=dinner',
+    subscribe: '.recipe.course=dinner',
     id: 's1',
   }])
   a.close()
@@ -264,10 +264,10 @@ test('remote watches share one sub until the last independent close', async () =
   b.close()
   assertEquals(c.socket()?.sent.at(-1), { unsubscribe: 's1' })
   assertEquals(c.watches.size(), 0)
-  let again = c.watch('.course=dinner')
+  let again = c.watch('.recipe.course=dinner')
   await c.idle()
   assertEquals(subscribes(c.socket()?.sent)?.at(-1), {
-    subscribe: '.course=dinner',
+    subscribe: '.recipe.course=dinner',
     id: 's2',
   })
   assertEquals(again.ready, true)
@@ -281,7 +281,7 @@ test('different options and query text never collapse into one watch', async () 
   c.watch('.recipe', { remote: false })
   c.watch('.recipe', { now: 1 })
   c.watch('.recipe', { now: 2 })
-  c.watch('.course=dinner')
+  c.watch('.recipe.course=dinner')
   assertEquals(c.watches.size(), 5)
   await c.idle()
   assertEquals(subscribes(c.socket()?.sent)?.length, 4)

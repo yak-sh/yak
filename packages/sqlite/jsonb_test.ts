@@ -70,7 +70,9 @@ test('a JSON property answers presence, and refuses a filter by name', () => {
   let { s } = kitchenStore()
   s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
   assertEquals((s.read('.recipe.tags') as Bundle[]).length, 1)
-  for (let q of ['.recipe.tags=sweet', '.order=recipe.meta', '.tally=tags']) {
+  for (
+    let q of ['.recipe.tags=sweet', '.order=recipe.meta', '.tally=recipe.tags']
+  ) {
     assertThrows(() => s.read(q), Error, 'holds a JSON value')
   }
 })

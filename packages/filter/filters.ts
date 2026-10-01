@@ -212,7 +212,7 @@ export let filters = (front: Front, opts: Opts): Filters => {
 
   // Accepting in a browser edits the element the way typing does, caret and
   // all, so the host's own input listener hears it too and the list rolls on
-  // from the word taken (`.status=` into its values).
+  // from the word taken (`.task.status=` into its values).
   let take = (
     id: string,
     el: HTMLInputElement | HTMLTextAreaElement,

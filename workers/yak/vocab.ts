@@ -102,11 +102,10 @@ import { sweepDoc } from './wake.ts'
 // entity and says what happens to this row when that one dies; `owned` is
 // `stamped` — readable, never wire-writable, the kernel's own door the only
 // writer.
-let ref = (death: string, bare = true): PropSchema => ({
+let ref = (death: string): PropSchema => ({
   type: 'string',
   ref: 'entity',
   death,
-  ...(bare ? {} : { bare: false }),
 })
 let text: PropSchema = { type: 'string' }
 let num: PropSchema = { type: 'number' }
@@ -708,7 +707,7 @@ export let platformDoc: VocabDoc = {
       unique: [['space', 'person']],
       properties: {
         space: ref('cascade'),
-        person: ref('cascade', false),
+        person: ref('cascade'),
         role: { type: 'string', enum: ['owner', 'editor', 'viewer'] },
       },
     },
@@ -727,7 +726,7 @@ export let platformDoc: VocabDoc = {
       unique: [['app', 'person']],
       properties: {
         app: ref('cascade'),
-        person: ref('cascade', false),
+        person: ref('cascade'),
         access: { type: 'string', enum: ['owner', 'editor', 'viewer'] },
       },
     },
@@ -746,7 +745,7 @@ export let platformDoc: VocabDoc = {
       unique: [['to', 'person']],
       properties: {
         to: ref('cascade'),
-        person: ref('cascade', false),
+        person: ref('cascade'),
         role: { type: 'string', enum: ['owner', 'editor', 'viewer'] },
       },
     },

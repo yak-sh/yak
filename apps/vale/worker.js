@@ -82,12 +82,12 @@ let tick = async (req, env, v, themes) => {
   await themes(env)
   let [row] = await query(
     env,
-    `.eid=${JSON.stringify(directive)}&?directive&?created&?companion`,
+    `.entity.eid=${JSON.stringify(directive)}&?directive&?created&?companion`,
   )
   if (!row?.directive) return new Response('No directive', { status: 404 })
   let hero = row.directive.player
   let [[player], directives, items, upgraded, gathered] = await Promise.all([
-    query(env, `.eid=${JSON.stringify(hero)}&?player&?created&?seen`),
+    query(env, `.entity.eid=${JSON.stringify(hero)}&?player&?created&?seen`),
     query(env, `.directive.player=${JSON.stringify(hero)}&?created`),
     query(env, `.item.owner=${JSON.stringify(hero)}&?gathered`),
     query(env, `.upgraded.by=${JSON.stringify(hero)}`),
@@ -119,7 +119,7 @@ let where = async (req, env, themes) => {
   }
   let [hero] = await read(
     env.STORE,
-    `.eid=${JSON.stringify(player)}&.player&?created&?seen`,
+    `.entity.eid=${JSON.stringify(player)}&.player&?created&?seen`,
   )
   if (!hero) return new Response('No hero has that id.', { status: 404 })
   let owner = req.headers.get('x-yak-role') == 'owner'
@@ -128,7 +128,7 @@ let where = async (req, env, themes) => {
     return new Response('You can only locate your own hero.', { status: 403 })
   }
   let [[current]] = await Promise.all([
-    live(env, `.eid=${JSON.stringify(player)}&.position`),
+    live(env, `.entity.eid=${JSON.stringify(player)}&.position`),
     themes(env),
   ])
   // A place names its land, which the store's themes draw.
@@ -146,12 +146,12 @@ let where = async (req, env, themes) => {
 }
 
 let targetPlace = async (env, v, eid) => {
-  let [moving] = await live(env, `.eid=${JSON.stringify(eid)}&.position`)
+  let [moving] = await live(env, `.entity.eid=${JSON.stringify(eid)}&.position`)
   let placed = placeOf(moving, 'position')
   if (placed) return placed
   let [stored] = await read(
     env.STORE,
-    `.eid=${JSON.stringify(eid)}&?companion`,
+    `.entity.eid=${JSON.stringify(eid)}&?companion`,
   )
   placed = placeOf(stored, 'companion')
   if (placed) return placed
@@ -205,7 +205,7 @@ let inspect = async (req, env, v, themes) => {
   let id = to.eid
   let [stored] = await read(
     env.STORE,
-    `.eid=${JSON.stringify(id)}` +
+    `.entity.eid=${JSON.stringify(id)}` +
       '&?player&?villager&?directive&?item&?position&?seen&?companion&?doc&?created',
   )
   let at = await targetPlace(env, v, id)
@@ -314,7 +314,7 @@ let teleport = async (req, env, v, themes) => {
   }
   let found = await read(
     env.STORE,
-    `.eid=${JSON.stringify(player)}&.player`,
+    `.entity.eid=${JSON.stringify(player)}&.player`,
   )
   if (!found.length) {
     return new Response('No hero has that id.', { status: 404 })
@@ -358,7 +358,7 @@ let spawn = async (req, env, themes) => {
   let [beasts, keys, [hero], slain, journal] = await Promise.all([
     read(env.STORE, '.beast_design ?combat'),
     read(env.STORE, '.alias .key'),
-    live(env, `.eid=${who}&.position`),
+    live(env, `.entity.eid=${who}&.position`),
     read(env.STORE, `.slain.by=${who}`),
     read(env.STORE, `.journal.player=${who}`),
   ])

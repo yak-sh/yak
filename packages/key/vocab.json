@@ -15,12 +15,10 @@
           "type": "string",
           "ref": "entity",
           "death": "release",
-          "bare": false,
           "description": "the entity the value identifies; the row is removed when that entity is deleted, which frees the value"
         },
         "value": {
           "type": "string",
-          "bare": false,
           "description": "the value itself; unique within its kind, because the key's own id is derived from the kind and the value"
         }
       }

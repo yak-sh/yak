@@ -2,7 +2,7 @@
 // door, and everything else lands.
 
 import { test } from '@yaks/testing'
-import { assertEquals, assertThrows } from '@std/assert'
+import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
 import { Refused } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { unroutable } from './guard.ts'
@@ -17,13 +17,11 @@ let board = (query: string) => [{
 test('a query that routes is fine', () => {
   for (
     let q of [
-      '.status=open',
-      '.status=done,cancelled',
-      '.status!=done',
-      '.priority<3',
+      '.task.status=open',
+      '.task.status=done,cancelled',
+      '.task.status!=done',
       '.task',
       '.filed.project=p1',
-      '.project=p1',
       '.filed.priority<3',
       'widget', // a bare word is a text term, and a valid board query
       '', // the empty query selects nothing, on purpose
@@ -33,23 +31,25 @@ test('a query that routes is fine', () => {
 
 test('a property the vocabulary does not know is refused', () => {
   // the typo that is otherwise invisible forever
-  let why = unroutable('.staus=open', team)
+  let why = unroutable('.task.staus=open', team)
   assertEquals(typeof why, 'string')
+  // and a property named without its component names the form to write
+  assertStringIncludes(unroutable('.status=open', team)!, '.task.status')
 })
 
 test('a status outside the closed set is refused, by name', () => {
-  let why = unroutable('.status=complete', team)
+  let why = unroutable('.task.status=complete', team)
   assertEquals(
     why,
     'no such status: complete — this board knows cancelled, done, open',
   )
   // and in a list, where one bad member is just as invisible
-  assertEquals(typeof unroutable('.status=open,finished', team), 'string')
+  assertEquals(typeof unroutable('.task.status=open,finished', team), 'string')
 })
 
 test("the statuses a board may name are the vocabulary's ladder's", () => {
   // a graph with no lease has no `wip`
-  assertEquals(typeof unroutable('.status=wip', team), 'string')
+  assertEquals(typeof unroutable('.task.status=wip', team), 'string')
   // and one whose vocabulary adds the rung routes it, without @yaks/project
   // being told about leases
   let leased = loadVocab([...team.docs, {
@@ -57,25 +57,25 @@ test("the statuses a board may name are the vocabulary's ladder's", () => {
       task: { component: true, extends: true, status: { claim: 'wip' } },
     },
   }], team.keywords)
-  assertEquals(unroutable('.status=wip', leased), null)
+  assertEquals(unroutable('.task.status=wip', leased), null)
 })
 
 test('the graph refuses the bad board and keeps the good one', () => {
   let { g } = teamGraph()
   g.install()
-  g.apply(board('.status=open'))
+  g.apply(board('.task.status=open'))
   assertEquals((g.read('.board&*') as unknown[]).length, 1)
 
-  assertThrows(() => g.apply(board('.status=complete')), Refused)
+  assertThrows(() => g.apply(board('.task.status=complete')), Refused)
   // refused whole: the doc patch in the same batch did not land either
   let after = g.read('.board&*') as { board?: { query?: string } }[]
-  assertEquals(after[0].board?.query, '.status=open')
+  assertEquals(after[0].board?.query, '.task.status=open')
 })
 
 test('dropping a board states no query and is never refused', () => {
   let { g } = teamGraph()
   g.install()
-  g.apply(board('.status=open'))
+  g.apply(board('.task.status=open'))
   g.apply([{ entity: { eid: 'b1' }, board: null }])
   assertEquals((g.read('.board&*') as unknown[]).length, 0)
 })
@@ -113,7 +113,7 @@ test('filing stores separately and a bare priority query orders filed tasks', ()
     { entity: { eid: 'micro' }, task: {} },
   ])
   let rows = g.read(
-    '.priority>=0 .order=filed.priority ?task',
+    '.filed.priority>=0 .order=filed.priority ?task',
   ) as import('@yaks/graph').Bundle[]
   assertEquals(rows.map((b) => b.entity.eid), ['first', 'later'])
   assertEquals(rows[1].task, {})

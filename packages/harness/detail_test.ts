@@ -47,7 +47,9 @@ test('SOURCE authorizes inherited entry without reading transcript and pages Uni
       904,
     ])
     assert(
-      queries.every((q) => q.includes('.eid=') || q.includes('.entity.eid=')),
+      queries.every((q) =>
+        q.includes('.entity.eid=') || q.includes('.entity.eid=')
+      ),
     )
     queries.length = 0
     await assertRejects(

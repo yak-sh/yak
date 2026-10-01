@@ -400,7 +400,7 @@ let predLine = (p: Pred): string | undefined => {
           (f.wake ? '' : '~')
         ).join(',')
       }`
-      : '.fields=eid'
+      : '.fields=entity.eid'
   }
   if (p.agg) {
     return p.agg === 'count' ? '.count' : `.${p.agg}=${p.comp}.${p.prop}`
@@ -882,10 +882,10 @@ export let serverHost = () => {
 }
 export let base = () => `http${config.secure ? 's' : ''}://${serverHost()}`
 
-// The column sort, and the order `.order=priority` asks the server for, so a
-// column's next page lands below the rows it already shows: unprioritized
-// first (a missing value sorts before every number in @yaks/sql), then lower
-// priority higher, and the newer num breaks a tie.
+// The column sort, and the order `.order=filed.priority` asks the server
+// for, so a column's next page lands below the rows it already shows:
+// unprioritized first (a missing value sorts before every number in
+// @yaks/sql), then lower priority higher, and the newer num breaks a tie.
 export { settled, statuses, statusOf, uuid } from './types.ts'
 import { kindOf, uuid } from './types.ts'
 let priority = (e: Ent) => e.filed?.priority ?? -Infinity
@@ -1601,7 +1601,7 @@ export let useSocket = (fn: typeof socketFor): typeof socketFor => {
 let heal = async (changes: Change[]) => {
   let eids = [...new Set(changes.map((c) => c.eid))]
   let res = await fetch(
-    `${base()}/query?q=${encodeURIComponent(`.eid=${eids.join(',')}`)}`,
+    `${base()}/query?q=${encodeURIComponent(`.entity.eid=${eids.join(',')}`)}`,
   )
   if (!res.ok) return
   let rows = await res.json() as Bundle[]
@@ -2281,7 +2281,7 @@ export let retryEntrySub = (session: string) =>
   retrySubscription(`entries:${session}`)
 
 // The fullscreen root a client reaches by direct URL (or a peek) is one entity
-// that no defining set holds and the query grammar can't name (`.eid=` is
+// that no defining set holds and the query grammar can't name (`.entity.eid=` is
 // refused) — so a partial cache has nothing to render and the view blanks. A
 // route sub loads it whole by id: `route:<eid>` streams that entity's comps and
 // keeps them live (server derives the target from the sub name). Ref-counted so
@@ -2844,8 +2844,8 @@ export let shelfFor = (client: string): string | undefined => {
 // THIS tab's own screen-state rows — cursor, camera, fold, shelf: the
 // components whose `client` names this browser — streamed by one small server
 // sub per component per tab (T-21490, step 3 of D-21486). Named one by one,
-// because a bare `.client` is ambiguous wherever another plugin declares a
-// `client` that is not this reference (@yaks/connections' integration). Held
+// because another plugin declares a `client` that is not this reference
+// (@yaks/connections' integration). Held
 // for the tab's LIFE: the key space is exactly one value (this client's uuid),
 // so the eid-keyed teardown rule (T-21489) doesn't bite — O(tabs) wire subs,
 // not O(rows) — and the singleton readers stay LOCAL lookups over the rows the

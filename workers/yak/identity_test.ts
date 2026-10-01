@@ -937,14 +937,14 @@ test('account settings save the name and address', async () => {
       named.headers.get('location'),
       `https://yaks.app${managePath('settings', slug)}&saved=1`,
     )
-    let [them] = await dir.query(`.eid=${person}&?doc`)
+    let [them] = await dir.query(`.entity.eid=${person}&?doc`)
     assertEquals((them.doc as { title: string }).title, 'Dana')
 
     // Cleared, the front of their address comes back: a person is always
     // called something, or a member row reads back as an eid (T-32733).
     await (await post(slug, { name: '  ' }, cookie)).body
       ?.cancel()
-    let [quiet] = await dir.query(`.eid=${person}&?doc`)
+    let [quiet] = await dir.query(`.entity.eid=${person}&?doc`)
     assertEquals((quiet.doc as { title: string }).title, slug)
 
     // A taken address is refused in the sentence `/connect` says, and the page

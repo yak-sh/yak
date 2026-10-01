@@ -46,19 +46,26 @@ let settle = () => new Promise((r) => setTimeout(r))
 
 test('typing offers what can come next, and the keys walk and take it', () => {
   let f = field()
-  f.type('q', '.task .st')
-  assertEquals(words(f.row('q')?.cands), ['.task .status'.slice(6)])
+  // A property's name offers it with its component.
+  f.type('q', '.st')
+  assertEquals(words(f.row('q')?.cands), ['.task.status'])
   assertEquals(f.press('q', 'Tab'), true)
   // Taking a property rolls on to what may follow it.
-  assertEquals(f.text('q'), '.task .status')
-  assertEquals(words(f.row('q')?.cands).slice(0, 2), ['.status=', '.status!='])
+  assertEquals(f.text('q'), '.task.status')
+  assertEquals(words(f.row('q')?.cands).slice(0, 2), [
+    '.task.status=',
+    '.task.status!=',
+  ])
   f.press('q', 'Tab')
-  assertEquals(words(f.row('q')?.cands), ['.status=open', '.status=done'])
+  assertEquals(words(f.row('q')?.cands), [
+    '.task.status=open',
+    '.task.status=done',
+  ])
   f.press('q', 'ArrowDown')
   f.press('q', 'ArrowDown') // held to the list
   f.press('q', 'Enter')
-  assertEquals(f.row('q')?.caret, '.task .status=done'.length)
-  assertEquals(f.text('q'), '.task .status=done')
+  assertEquals(f.row('q')?.caret, '.task.status=done'.length)
+  assertEquals(f.text('q'), '.task.status=done')
 })
 
 test('what is typed is the draft: another page shows it, and not its list', () => {
@@ -100,13 +107,13 @@ test('a source that answers later lands its list unless typing moved on', async 
     ids: () => new Promise<Cand[]>((done) => asked.push(done)),
   }
   let f = field({ source })
-  f.type('q', '.owner=T')
-  assertEquals(f.text('q'), '.owner=T')
-  f.type('q', '.owner=T-')
+  f.type('q', '.task.owner=T')
+  assertEquals(f.text('q'), '.task.owner=T')
+  f.type('q', '.task.owner=T-')
   asked[0]([{ text: 'T-1', kind: 'task' }]) // stale: typed past it
   asked[1]([{ text: 'T-12', kind: 'task' }])
   await settle()
-  assertEquals(words(f.row('q')?.cands), ['.owner=T-12'])
+  assertEquals(words(f.row('q')?.cands), ['.task.owner=T-12'])
 })
 
 // A page: the field mounted in a document, typed into through its element.
@@ -163,13 +170,13 @@ test('in a page, the element types, the list paints, and a taken word lands at t
   try {
     await settle()
     assertEquals(p.input.value, '.task')
-    p.typeIn('.task .sta')
+    p.typeIn('.sta')
     await settle()
-    assertEquals(p.rows(), ['.statustask'])
+    assertEquals(p.rows(), ['.task.statustask'])
     assert(p.key('Tab'))
     await settle()
-    assertEquals(p.input.value, '.task .status')
-    assertEquals(p.input.selectionStart, '.task .status'.length)
+    assertEquals(p.input.value, '.task.status')
+    assertEquals(p.input.selectionStart, '.task.status'.length)
     assertEquals(p.key('Escape'), true)
     await settle()
     assertEquals(p.rows(), [])
@@ -182,11 +189,11 @@ test('in a page, the element types, the list paints, and a taken word lands at t
 
 test('in a terminal, the field paints its caret and its list under it', () => {
   let f = field()
-  f.type('q', '.task .st')
+  f.type('q', '.st')
   let painted = print(h(f.Filter, { id: 'q', active: true }), 40)
-  assert(painted.includes('.task .st\x1b[7m \x1b[0m'), 'the caret is a cell')
+  assert(painted.includes('.st\x1b[7m \x1b[0m'), 'the caret is a cell')
   assertEquals(painted.replace(STYLE, '').split('\n'), [
-    '.task .st ',
-    '.statustask',
+    '.st ',
+    '.task.statustask',
   ])
 })

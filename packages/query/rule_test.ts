@@ -36,7 +36,7 @@ test('an ensure filters nothing', () => {
 
 // A query with no sigils reads as a rule that only filters.
 test('a plain query declares nothing', () => {
-  let r = declared(parse('.status=open'))
+  let r = declared(parse('.task.status=open'))
   assertEquals(r.filter.clauses.length, 1)
   assertEquals([r.ensures, r.gates, r.writes, r.resources, r.vars], [
     [],

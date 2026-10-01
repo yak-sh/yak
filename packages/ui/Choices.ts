@@ -42,9 +42,9 @@ export let specimens = (): Specimen[] => [
     h(
       Choices,
       {},
-      choice('.status', 'task', 'on'),
-      choice('.stamp', 'doc · stamped'),
-      choice('.session', 'claim · ref', 'hover'),
+      choice('.task', 'comp', 'on'),
+      choice('.task.status', 'enum'),
+      choice('.claim.session', 'ref', 'hover'),
     ),
   ],
 ]

@@ -74,7 +74,9 @@ export default {
       { entity: { eid: 'b1' }, doc: { title: 'Dune' }, book: { price: 12 } },
       { entity: { eid: 'r1' }, review: { stars: 5, book: 'b1' } },
     ])
-    return Response.json(await g.read('.kind=book&.price<20&.order=-price'))
+    return Response.json(
+      await g.read('.kind=book&.book.price<20&.order=-book.price'),
+    )
   },
 }
 ```

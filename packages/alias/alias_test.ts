@@ -32,11 +32,11 @@ test('the sugar becomes a key entity of its own', () => {
   let r = out.find((b) => b.$alias == '$r')!.entity.eid
   assertEquals(read(g, '.alias'), [aliasEid(CAKE)])
   assertEquals(
-    (g.read(`.eid=${aliasEid(CAKE)}`) as Bundle[])[0].key,
+    (g.read(`.entity.eid=${aliasEid(CAKE)}`) as Bundle[])[0].key,
     { of: r, value: CAKE },
   )
   // and the name is not a property on the recipe
-  assertEquals((g.read(`.eid=${r}`) as Bundle[])[0].alias, undefined)
+  assertEquals((g.read(`.entity.eid=${r}`) as Bundle[])[0].alias, undefined)
 })
 
 test('the same seed loaded twice writes one entity', () => {
@@ -47,7 +47,8 @@ test('the same seed loaded twice writes one entity', () => {
   assertEquals(again.find((b) => b.$alias == '$r')!.entity.eid, r)
   assertEquals(read(g, '.recipe'), [r])
   assertEquals(
-    ((g.read(`.eid=${r}`) as Bundle[])[0].doc as { title: string }).title,
+    ((g.read(`.entity.eid=${r}`) as Bundle[])[0].doc as { title: string })
+      .title,
     'Lemon cakes (better)',
   )
 })
@@ -62,7 +63,8 @@ test('a reference by name resolves to the entity that holds it', () => {
     doc: { title: 'too sweet' },
   }]))
   assertEquals(
-    ((g.read('.eid=c1') as Bundle[])[0].comment as { target: string }).target,
+    ((g.read('.entity.eid=c1') as Bundle[])[0].comment as { target: string })
+      .target,
     r,
   )
 })
@@ -73,7 +75,8 @@ test('a bundle addressed by name patches that entity', () => {
     .find((b) => b.$alias == '$r')!.entity.eid
   sync(g.apply([{ entity: { eid: CAKE }, recipe: { serves: 12 } }]))
   assertEquals(
-    ((g.read(`.eid=${r}`) as Bundle[])[0].recipe as { serves: number }).serves,
+    ((g.read(`.entity.eid=${r}`) as Bundle[])[0].recipe as { serves: number })
+      .serves,
     12,
   )
   assertEquals(read(g, '.recipe'), [r])
@@ -88,11 +91,12 @@ test('an eid wins over a name that spells it', () => {
   ]))
   sync(g.apply([{ entity: { eid: 'cake' }, doc: { title: 'patched' } }]))
   assertEquals(
-    ((g.read('.eid=cake') as Bundle[])[0].doc as { title: string }).title,
+    ((g.read('.entity.eid=cake') as Bundle[])[0].doc as { title: string })
+      .title,
     'patched',
   )
   assertEquals(
-    ((g.read('.eid=r2') as Bundle[])[0].doc as { title: string }).title,
+    ((g.read('.entity.eid=r2') as Bundle[])[0].doc as { title: string }).title,
     'named',
   )
 })

@@ -295,10 +295,10 @@ let named = (row, { refs = [], names = {} }) => {
 // which does this on the way (workers/yak/wire.ts `lined`); a socket goes
 // straight to the store, so a subscription is translated here, and
 // `query(f)` and `subscribe(f)` ask one question. Three riders the page
-// writes bare are dotted words there (`id=` is an address, so it is `.eid=`).
+// writes bare are dotted words there (`id=` is an address, so it is `.entity.eid=`).
 // The platform's own rows are left out of either question where it is
 // answered (listing.ts `asking`).
-let RIDERS = { id: '.eid', limit: '.limit', after: '.after' }
+let RIDERS = { id: '.entity.eid', limit: '.limit', after: '.after' }
 let OPERATOR = /^([A-Za-z_.\-[\]][\w.\-[\]]*)(!=|~=|<=|>=|<|>|=)/
 
 let plain = (v) => {

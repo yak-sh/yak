@@ -37,14 +37,14 @@ test('a filter that throws answers the request, and nothing behind it runs', asy
   let res = await h(req('/hello'))
   assertEquals(res.status, 403)
   assertEquals((await res.json()).message, 'not you')
-  assertEquals(await status(h, '/query?q=.price'), 200)
+  assertEquals(await status(h, '/query?q=.book.price'), 200)
   assertEquals(asked, ['/hello', '/query'])
 })
 
 test('with no filter, every route and door answers as before', async () => {
   let h = host([])
   assertEquals(await (await h(req('/hello'))).text(), 'hi')
-  assertEquals(await status(h, '/query?q=.price'), 200)
+  assertEquals(await status(h, '/query?q=.book.price'), 200)
   assertEquals(await status(h, '/nowhere'), 404)
 })
 

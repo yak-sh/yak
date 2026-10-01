@@ -29,7 +29,7 @@
 // value it cannot read.
 //
 // The walk (`.fork.from->S-7`) compiles here when its path is a reference
-// property, or a chain of them (`.fork.from.session->S-1`, one step across the
+// property, or a chain of them (`.fork.from.entry.session->S-1`, one step across the
 // composed relation) — one recursive CTE over that step (./walk.ts). A path
 // naming a relation belongs to @yaks/edge: extensions are consulted first, and
 // that package owns the edge table and the types an edge can have, neither of
@@ -374,7 +374,7 @@ let lowerScalar = (
 
 // The entity table's identity columns as one set lookup, the list bound as one
 // parameter however long it is (the dialect's `among`), with a second term for
-// the numbers a `.num=` or a human-readable id named. An operand list that
+// the numbers a `.entity.num=` or a human-readable id named. An operand list that
 // names nothing at all compiles to a constant false.
 let inSet = (ctx: Ctx, set: Identity): Frag => {
   // A backed spine's eids are its ids written out, so naming one is reading
@@ -423,8 +423,8 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     // declared; SQL cannot, because it needs that component's table. Nothing
     // else can compile this either, so it is a refusal rather than a decline:
     // the component name is simply not in this vocabulary. The error is the
-    // vocabulary's own — the same message `route()` produces, so the CLI, the
-    // HTTP endpoint and the MCP server all report it identically.
+    // vocabulary's own, so the CLI, the HTTP endpoint and the MCP server all
+    // report it identically.
     if (!ctx.v.comp(hop.comp)) throw new Unknown(hop.comp)
     if (!worn(ctx, hop.comp)) return unworn(op, '', '')
     let present = op == '~' || op == EXISTS
@@ -439,26 +439,6 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     ctx.tables.add(hop.comp)
     let eid = ctx.d.col(hop.comp, 'eid', ctx.v)!
     return cond({ sql: `${eid} is ${present ? 'not ' : ''}null`, params: [] })
-  }
-  // A reference property that several components share (`.client=<eid>` is a
-  // property of `cursor`, of `camera` and of `fold`) routes with no owning
-  // component (@yaks/vocab's route() returns comp ''), so there is no single
-  // table to read it from. Equality is still one indexed lookup per owning
-  // component, so it compiles the way `.refs=` does — a union over those
-  // components' reference properties — rather than declining and falling back
-  // to a scan of every row.
-  if (!hop.comp) {
-    let value = flat(p.value)
-    if (op != '' || !value || value.includes(',') || value.includes('..')) {
-      throw new Unsupported('a shared reference', `.${hop.prop} ${p.op}`)
-    }
-    // The owners are stored components, which a backed spine never wears.
-    if (ctx.spine) return FALSE
-    return inRefs(
-      ctx,
-      ctx.v.refProps().filter(([, prop]) => prop == hop.prop),
-      value,
-    )
   }
   // A stored property's presence is a set of component owners, read first
   // (`owned`); it also leaves the outer row's order and tombstone check where
@@ -614,16 +594,6 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
   ctx.tables.add(root.comp)
   let target = chain(ctx, hops, refKey(ctx, root.comp, root.prop))
   let leaf = hops[hops.length - 1]
-  // A leaf property that several components share belongs to no one component
-  // (@yaks/vocab's route() returns comp '' — the leaf of
-  // `.claim.session.actor`), so there is no table to read it from. Decline,
-  // exactly as the same property name declines on a single hop, and let the
-  // in-memory matcher, which can read every owner, evaluate it instead.
-  // Lowered anyway, `source('')` wrote the table name as `""` and SQLite
-  // rejected the whole statement with `no such table:` (S-37088).
-  if (!leaf.comp) {
-    throw new Unsupported('a shared reference leaf', `.${leaf.prop}`)
-  }
   // A presence test on the leaf: does the entity the path reached have this
   // component?
   if (!leaf.prop) {
@@ -966,7 +936,7 @@ let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Cond => {
 // The reference walk: `.fork.from->S-7` follows one reference property of one
 // component, so the step is that component's own rows read as (owner, referent)
 // pairs. A path of several reference properties composes into one step — the
-// hops joined to each other (`.fork.from.session` is `fork` joined to the
+// hops joined to each other (`.fork.from.entry.session` is `fork` joined to the
 // `entry` its `from` names) — so `from` is the first component's owner and `to`
 // is the last hop's referent, and one rung of the CTE crosses the whole chain.
 // A path that names a relation was an extension's to claim first; a path with a
@@ -1015,7 +985,7 @@ let facetOf = (
   if (op == 'want') return null
   let hop: Hop
   try {
-    hop = c.facet ? { comp: name, prop: '' } : ctx.v.aim(name, bare(c))[0]
+    hop = ctx.v.aim(name, bare(c))[0]
   } catch {
     return null // a name that does not route: clause() owns the refusal
   }
@@ -1027,7 +997,7 @@ let facetOf = (
 
 // The computed components a clause holds only for an entity wearing — what
 // decides the spine a query reads (./spine.ts). A conjunction wants what any of
-// its parts wants and an alternation what all of them want; `.eid=` naming
+// its parts wants and an alternation what all of them want; `.entity.eid=` naming
 // only one backing's entities wants that backing.
 let wants = (v: Vocab, backed: Backings, c: Clause): string[] => {
   if (c.kind == 'and') return c.clauses.flatMap((x) => wants(v, backed, x))
@@ -1044,11 +1014,7 @@ let wants = (v: Vocab, backed: Backings, c: Clause): string[] => {
   }
   let hop: Hop | undefined
   try {
-    hop = !c.facet
-      ? v.aim(c.path.join('.'), bare(c))[0]
-      : c.path.length > 1
-      ? v.aim(c.path.slice(0, -1).join('.'))[0]
-      : { comp: c.path[0], prop: '' }
+    hop = v.aim(c.path.join('.'), bare(c))[0]
   } catch {
     return [] // a name that does not route: clause() owns the refusal
   }
@@ -1088,9 +1054,7 @@ let spineOf = (
 // the ladder rather than a caller's expression, is rewritten: anything else
 // reads the `case`.
 let rungs = (ctx: Ctx, c: Clause): Clause | null => {
-  if (c.kind != 'pred' || c.op != '=' || c.not || c.where || c.facet) {
-    return null
-  }
+  if (c.kind != 'pred' || c.op != '=' || c.not || c.where) return null
   if (claims(ctx, 'pred') || ctx.v.assoc(c.path[0])) return null
   let hops: Hop[]
   try {
@@ -1108,14 +1072,13 @@ let rungs = (ctx: Ctx, c: Clause): Clause | null => {
   let said = raw.includes('..') ? [] : raw.split(',')
   let given = [...l.rungs.map((r) => r.status), l.default]
   if (!said.length || said.some((s) => !given.includes(s))) return null
-  let facet = (p: Pred): Pred => ({ ...p, facet: true })
   let arm = (up: number, rung?: string): Clause => ({
     kind: 'and',
     clauses: [
       present(hop.comp),
       ...rung ? [present(rung)] : [],
       ...l.rungs.slice(0, up).map((r) => absent(r.comp)),
-    ].map(facet),
+    ],
   })
   let arms = said.flatMap((s) => [
     ...l.rungs.flatMap((r, i) => r.status == s ? [arm(i, r.comp)] : []),
@@ -1156,8 +1119,8 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
 // instead of running every arm over the whole graph first.
 let addressed = (ctx: Ctx, cs: Clause[]): Clause[] => {
   let eid = cs.find((c): c is Pred =>
-    c.kind == 'pred' && c.path.join('.') == 'eid' && c.op == '=' &&
-    c.value != null && !c.not && !c.where && !c.facet &&
+    c.kind == 'pred' && c.path.join('.') == 'entity.eid' && c.op == '=' &&
+    c.value != null && !c.not && !c.where &&
     !claims(ctx, 'pred')
   )
   return eid
@@ -1215,14 +1178,7 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
     if (c.not || c.where) throw new Unsupported('a reverse hop', c.path[0])
     let hops: Hop[]
     try {
-      hops = c.facet
-        ? [
-          ...(c.path.length > 1
-            ? ctx.v.aim(c.path.slice(0, -1).join('.'))
-            : []),
-          { comp: c.path.at(-1)!, prop: '' },
-        ]
-        : ctx.v.aim(c.path.join('.'), bare(c))
+      hops = ctx.v.aim(c.path.join('.'), bare(c))
     } catch (e) {
       if (!unplanted) throw e
       return TRUE
@@ -1306,7 +1262,6 @@ type Field = { expr: string; tag: Tag; key?: string }
 let resolveField = (ctx: Ctx, pathStr: string, owner?: string): Field => {
   let hops = ctx.v.aim(pathStr)
   let [root, leaf] = [hops[0], hops[hops.length - 1]]
-  if (!leaf.comp) throw new Unsupported('a shared reference', pathStr)
   if (!leaf.prop) throw whole(ctx.v, leaf.comp)
   chained(ctx.v, hops)
   let tag = tagAt(ctx.v, ctx.derived, leaf.comp, leaf.prop)
@@ -1462,7 +1417,7 @@ export let bound = (
   // An ordinary query. Ordering, then the window within it. `.order=-field` is descending, and an
   // explicit order survives a `.limit`/`.after` window: a window states how much
   // of a sequence to return, never which sequence — so a page of
-  // `.order=price&.limit=5` is the five cheapest, not the five newest. With no
+  // `.order=book.price&.limit=5` is the five cheapest, not the five newest. With no
   // `.order` the sequence is newest first by entity num, as it has always been.
   // @yaks/match applies a window the same way (its parity_test pins the two
   // together). The ordered property is resolved before the joins are read off:

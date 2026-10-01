@@ -72,12 +72,12 @@ export let sequencing: Hook = (bundles, tx) =>
                 batch.some((b) => entry(b)?.seq != null)
                   ? tx.read(
                     parse(
-                      '.entry.session=' + session + '&.seq>=' +
+                      '.entry.session=' + session + '&.entry.seq>=' +
                         Math.min(
                           ...batch.filter((b) => entry(b)?.seq != null).map((
                             b,
                           ) => Number(entry(b)!.seq)),
-                        ) + '&.seq<=' + Math.max(
+                        ) + '&.entry.seq<=' + Math.max(
                           ...batch.filter((b) => entry(b)?.seq != null).map((
                             b,
                           ) => Number(entry(b)!.seq)),

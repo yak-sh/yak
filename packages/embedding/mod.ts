@@ -65,7 +65,7 @@
  * // the books most like this one, still under the rest of the query's filters
  * let near = semantic(db, embedder)
  * let store = storage(db, shop, { extend: [near] })
- * let hits = near.rank(store.read('.near=book-1&.order=similar .price<20'))
+ * let hits = near.rank(store.read('.near=book-1&.order=similar .book.price<20'))
  * // each with a `rank.score`
  * ```
  *

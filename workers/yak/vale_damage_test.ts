@@ -39,7 +39,7 @@ test('the Mossvale owner turns a hero’s damage off and on', async () => {
         body: JSON.stringify({ name: 'damage', args: { player: hero, on } }),
       })
     let state = async () =>
-      (await page.get(`.eid=${hero}&?damageable`))[0]?.damageable
+      (await page.get(`.entity.eid=${hero}&?damageable`))[0]?.damageable
 
     let protectedHero = await pageDamage(owner.cookie, false)
     assertEquals(protectedHero.status, 200, await protectedHero.text())

@@ -67,7 +67,7 @@ export let columnLine = (q: string, status: string, limit: number): string => {
     'decided.verdict',
   ].join(',')
   return q + '&.task&.task.status=' + status +
-    (orderOf(preds) ? '' : '&.order=priority') +
+    (orderOf(preds) ? '' : '&.order=filed.priority') +
     '&.limit=' + Math.min(bound ?? Infinity, limit) + fields +
     '&.edges.peers=task.status,doc.title&.edges.limit=' + limit * 4
 }
@@ -127,7 +127,7 @@ export let QuickAdd = (
       <New
         elRef={box}
         rows={1}
-        placeholder='P1 .domain=Eng title…'
+        placeholder='P1 .filed.domain=Eng title…'
         onInput={(ev: InputEvent) =>
           sync(ev.currentTarget as HTMLTextAreaElement)}
         onKeyDown={(ev: KeyboardEvent) => {
@@ -328,7 +328,7 @@ export let Board = ({ e }: { e: Ent }) => {
   }
 
   // Quick-create: a task born INTO the column it was typed in. The line
-  // is PARSED, not just taken (client.ts spec): 'P1 .domain=Eng Ship it'
+  // is PARSED, not just taken (client.ts spec): 'P1 .filed.domain=Eng Ship it'
   // sets priority and domain, Shift+Enter lines become the body. The
   // column's status and the query's scalar equalities (adopt(), the
   // drop's own path) ride along, but what you TYPED wins over the auto

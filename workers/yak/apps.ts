@@ -942,7 +942,7 @@ export let filed = async (
   let sha = await sha256(bytes)
   let use = await useOf(sha)
   if (!name || mime == 'application/octet-stream') {
-    let [prior] = await graph.query(`.eid=${use}`) as {
+    let [prior] = await graph.query(`.entity.eid=${use}`) as {
       attachment?: { name?: string; mime?: string }
     }[]
     name ||= prior?.attachment?.name ?? ''
@@ -1051,7 +1051,7 @@ let gave = async (
   let blobs = r2Objects(env.BLOBS)
   if (!eid) {
     let current = async () => {
-      let rows = await graph.query(`.eid=${await useOf(sha)},${sha}&*`)
+      let rows = await graph.query(`.entity.eid=${await useOf(sha)},${sha}&*`)
       let file = (rows as {
         attachment?: { mime?: string; name?: string }
       }[]).find((r) => r.attachment)?.attachment
@@ -1061,7 +1061,7 @@ let gave = async (
       let mime = file?.mime ?? artifact?.media_type ?? ''
       let name = file?.name ?? ''
       let rep = representation(app.eid, sha, mime, name)
-      if ((await graph.query(`.eid=${rep.eid}`)).length) return rep
+      if ((await graph.query(`.entity.eid=${rep.eid}`)).length) return rep
       let bytes = await blobs.read(blobKey(space, app, sha))
       if (!bytes) return null
       let fixed = await contentType(bytes, mime)
@@ -1114,7 +1114,7 @@ let gave = async (
       },
     })
   }
-  let [found] = await graph.query(`.eid=${eid}`) as {
+  let [found] = await graph.query(`.entity.eid=${eid}`) as {
     representation?: {
       scope: string
       address: string

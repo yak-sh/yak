@@ -183,7 +183,7 @@ test('a person is found by their address, or minted at it', async () => {
   let one = await personOf(at, DANA)
   assertEquals(await personOf(at, DANA), one)
   let named = await personOf(at, 'ana@yaks.app', 'Ana')
-  let [row] = await at.query(`.eid=${named}`)
+  let [row] = await at.query(`.entity.eid=${named}`)
   assertEquals((row.doc as { title: string }).title, 'Ana')
   assertEquals((row.email as { address: string }).address, 'ana@yaks.app')
 })

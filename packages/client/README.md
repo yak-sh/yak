@@ -67,7 +67,7 @@ await box.mutate([{
   doc: { title: 'Dal' },
   recipe: { serves: 4, course: 'dinner' },
 }])
-let dinners = box.watch('.course=dinner')
+let dinners = box.watch('.recipe.course=dinner')
 console.log(dinners.value.length) // 1
 console.log(box.ent(eid)?.doc) // { title: 'Dal' }
 dinners.close()
@@ -153,7 +153,7 @@ A watch exposes `value` (the current bundle array), `ready`,
 `subscribe(listener)`, and `close()`:
 
 ```ts ignore
-let dinners = remote.watch('.course=dinner&.serves>4')
+let dinners = remote.watch('.recipe.course=dinner&.recipe.serves>4')
 console.log(dinners.value, dinners.ready)
 let stop = dinners.subscribe((bundles) => console.log(bundles))
 stop() // Remove this listener.
@@ -178,7 +178,7 @@ initial result. Local evaluation runs after committed graph changes, including
 server updates. Queries about one entity's own values test only changed
 entities. These results keep their initial order and append new matches. Queries
 that follow references, order, limit, or aggregate run again against the store.
-State an order explicitly, for example `.order=title`, when order matters.
+State an order explicitly, for example `.order=doc.title`, when order matters.
 Unrelated writes do not notify listeners.
 
 ### With a server
@@ -210,7 +210,7 @@ with `@preact/signals`:
 import { signal } from '@preact/signals'
 
 let reactive = client(vocab, [], { signal })
-let dinners = reactive.watch('.course=dinner')
+let dinners = reactive.watch('.recipe.course=dinner')
 ```
 
 A Preact component that reads `dinners.value` or `dinners.ready` then subscribes

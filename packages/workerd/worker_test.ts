@@ -44,7 +44,7 @@ test('a Worker answers apply and query over its bindings', async () => {
   )
   assertEquals(wrote.status, 200)
 
-  let read = await w.fetch(req('/query?q=.price%3C20'), env)
+  let read = await w.fetch(req('/query?q=.book.price%3C20'), env)
   let found: Bundle[] = await body(read)
   assertEquals(found.map((b) => b.entity.eid), ['b1'])
 })
@@ -56,7 +56,7 @@ test('the door names the writer of a request', async () => {
     env,
   )
   let anon: Bundle[] = await body(
-    await w.fetch(req('/query?q=.price=12%26%3Fcreated'), env),
+    await w.fetch(req('/query?q=.book.price=12%26%3Fcreated'), env),
   )
   assert(!(anon[0].created as { by?: string })?.by, 'nobody signed it')
 
@@ -69,27 +69,27 @@ test('the door names the writer of a request', async () => {
     env,
   )
   let signed: Bundle[] = await body(
-    await w.fetch(req('/query?q=.price=9%26%3Fcreated'), env),
+    await w.fetch(req('/query?q=.book.price=9%26%3Fcreated'), env),
   )
   assertEquals((signed[0].created as { by?: string }).by, 'm1')
 })
 
 test('a required door refuses with the api refusal shape', async () => {
   let { w } = shop({ required: true })
-  let r = await w.fetch(req('/query?q=.price%3C20'), env)
+  let r = await w.fetch(req('/query?q=.book.price%3C20'), env)
   assertEquals(r.status, 401)
   assertEquals((await body(r)).error, 'Unauthorized')
 })
 
 test('the api is built once for the isolate, not once a request', async () => {
   let { w, builds } = shop()
-  await w.fetch(req('/query?q=.price%3C20'), env)
-  await w.fetch(req('/query?q=.price%3C20'), env)
+  await w.fetch(req('/query?q=.book.price%3C20'), env)
+  await w.fetch(req('/query?q=.book.price%3C20'), env)
   await w.fetch(post('/apply', []), env)
   assertEquals(builds(), 1)
 
   // …and a Worker serving a second set of bindings builds a second time.
-  await w.fetch(req('/query?q=.price%3C20'), { DB: 'other' })
+  await w.fetch(req('/query?q=.book.price%3C20'), { DB: 'other' })
   assertEquals(builds(), 2)
 })
 
@@ -103,11 +103,14 @@ test('a build that throws is refused, and tried again next time', async () => {
     },
   })
 
-  let refused = await w.fetch(req('/query?q=.price%3C20'), env)
+  let refused = await w.fetch(req('/query?q=.book.price%3C20'), env)
   assertEquals(refused.status, 500)
   assertEquals((await body(refused)).message, 'DB binding is missing')
 
-  assertEquals((await w.fetch(req('/query?q=.price%3C20'), env)).status, 200)
+  assertEquals(
+    (await w.fetch(req('/query?q=.book.price%3C20'), env)).status,
+    200,
+  )
   assertEquals(tries, 2)
 })
 

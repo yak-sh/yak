@@ -16,7 +16,7 @@ import { status } from '@yaks/graph'
  * precondition's `eid`, `comp`, `prop` and `current`, say). */
 export type Refusal = {
   /** the error's name — `Refused`, `Stale`, `Unsupported`, `Unknown`,
-   * `Ambiguous`, `Unauthorized`, `Denied` */
+   * `Unauthorized`, `Denied` */
   error: string
   /** what was wrong, in the error's own words */
   message: string

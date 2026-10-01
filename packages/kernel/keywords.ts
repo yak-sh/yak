@@ -7,9 +7,7 @@
 // Three keywords, because three things about a graph of work are not the core
 // meta-model's business: which components a project answers for, which
 // components stay out of the snapshot a client loads at startup, and where a
-// text property's suggested values come from. What makes a component a log line
-// needs no keyword of its own — the core meta-model already covers it, as a
-// component reached only by its qualified filter name (`bare: false`).
+// text property's suggested values come from.
 
 import type { Keywords } from '@yaks/vocab'
 import doc from './meta/kernel.vocab.json' with { type: 'json' }

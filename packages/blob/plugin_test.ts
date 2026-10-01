@@ -77,7 +77,7 @@ for (let async of [false, true]) {
     let hashes = [address(values[0]), address(values[2])]
     assertEquals(seen, hashes)
     assertEquals(references, hashes)
-    assertEquals(post(db.read('.eid=p3')[0]).body, values[3])
+    assertEquals(post(db.read('.entity.eid=p3')[0]).body, values[3])
     // A second transaction checks its own store, rather than trusting a cache
     // retained by a previous successful hook invocation.
     await g.apply([{ entity: { eid: 'next' }, post: { body: values[2] } }])
@@ -132,8 +132,11 @@ test('a body reads back through a query predicate too', () => {
   ])
   // the filter resolves the address the same way the gather does, so a saved
   // query over a body property means one thing in both readers
-  assertEquals(db.rows('.body~=spain').map((r) => r.eid), ['p1'])
-  assertEquals(db.rows('.body="the rain in spain"').map((r) => r.eid), ['p1'])
+  assertEquals(db.rows('.post.body~=spain').map((r) => r.eid), ['p1'])
+  assertEquals(
+    db.rows('.post.body="the rain in spain"').map((r) => r.eid),
+    ['p1'],
+  )
 })
 
 test('the $was guard is hashed over the text, not the address', () => {

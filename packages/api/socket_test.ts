@@ -287,7 +287,7 @@ test('a subscriber opts into acknowledgements through the socket', () => {
   attach(subscriptions(graph), socket)
   socket.emit(
     'message',
-    JSON.stringify({ subscribe: '.price<20', id: 's', acks: true }),
+    JSON.stringify({ subscribe: '.book.price<20', id: 's', acks: true }),
   )
   let [first] = socket.taken()
   assert(typeof first.ack == 'string')
@@ -304,7 +304,10 @@ test('a socket subscribes, hears its set, and hears every change', () => {
   let socket = fake()
   attach(subscriptions(graph), socket)
 
-  socket.emit('message', JSON.stringify({ subscribe: '.price<20', id: 'c' }))
+  socket.emit(
+    'message',
+    JSON.stringify({ subscribe: '.book.price<20', id: 'c' }),
+  )
   assertEquals(ids(socket.taken()), ['b1'])
 
   graph.apply([{ entity: { eid: 'b2' }, book: { price: 9 } }])
@@ -320,7 +323,10 @@ test('unsubscribe stops one, closing stops them all', () => {
   let socket = fake()
   attach(subscriptions(graph), socket)
 
-  socket.emit('message', JSON.stringify({ subscribe: '.price<20', id: 'c' }))
+  socket.emit(
+    'message',
+    JSON.stringify({ subscribe: '.book.price<20', id: 'c' }),
+  )
   socket.emit('message', JSON.stringify({ subscribe: true, id: 'all' }))
   socket.taken()
 
@@ -340,7 +346,10 @@ test('frames sent before the socket opens are held for it', () => {
   socket.readyState = 0
   attach(subscriptions(graph), socket)
 
-  socket.emit('message', JSON.stringify({ subscribe: '.price<20', id: 'c' }))
+  socket.emit(
+    'message',
+    JSON.stringify({ subscribe: '.book.price<20', id: 'c' }),
+  )
   assertEquals(socket.sent, [])
 
   socket.readyState = 1
@@ -401,7 +410,10 @@ test('/ws upgrades through the host and serves that socket', async () => {
   let r = await handler(ws())
   assertEquals(r.status, 101)
 
-  socket.emit('message', JSON.stringify({ subscribe: '.price<20', id: 'c' }))
+  socket.emit(
+    'message',
+    JSON.stringify({ subscribe: '.book.price<20', id: 'c' }),
+  )
   assertEquals(ids(socket.taken()), [])
 
   await handler(req('/apply', {

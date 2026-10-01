@@ -29,7 +29,7 @@ test('status is readable and routable, and nobody can write it', () => {
   assertEquals(status.values, ['cancelled', 'done', 'open'])
   assert(!team.comp('task')!.writable.includes('status'))
   // still routable, so a board can filter on it
-  assertEquals(team.route('status'), { comp: 'task', prop: 'status' })
+  assertEquals(team.aim('task.status'), [{ comp: 'task', prop: 'status' }])
 })
 
 test('a board is a query — there is no membership property anywhere', () => {
@@ -73,7 +73,7 @@ test('a bare task has no writable properties; filing is optional and routes alon
     'project',
   ])
   for (let prop of ['project', 'priority', 'domain', 'assignee']) {
-    assertEquals(team.route(prop), { comp: 'filed', prop })
+    assertEquals(team.aim(`filed.${prop}`), [{ comp: 'filed', prop }])
     assertEquals(team.prop('task', prop), undefined)
   }
   assertEquals(team.prop('filed', 'assignee')!.death, 'detach')

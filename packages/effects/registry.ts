@@ -433,7 +433,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     // Asked about the entities this batch touched and no others: an index
     // lookup, not a scan with the batch picked out afterwards.
     let { filter } = one[0]
-    let about = eq('eid', list(...touched))
+    let about = eq('entity.eid', list(...touched))
     return after(
       tx.read({ ...filter, clauses: [...filter.clauses, about] }),
       (rows) =>

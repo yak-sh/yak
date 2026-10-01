@@ -47,7 +47,7 @@ test('memoryResolver resolves and subscribes an {eid}-ref query, narrowly', () =
     },
   }
   let r = memoryResolver(storeOver(graph))
-  let preds = q('.assignee=person')
+  let preds = q('.filed.assignee=person')
   // one-shot GET, then the live signal — the two doors, same answer.
   assertEquals(r.resolve(preds), ['t1'])
   let ids = r.subscribe(preds)

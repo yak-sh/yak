@@ -33,7 +33,8 @@ test('failed descriptor reads release and can retry on the next render', async (
   )
   try {
     let id = eidOf(['retry_plugin'])
-    let asks = () => wire.asked().filter((a) => a.subscribe == `.eid=${id}&*`)
+    let asks = () =>
+      wire.asked().filter((a) => a.subscribe == `.entity.eid=${id}&*`)
     let gone = (a: { id: string }) =>
       wire.sent.filter((m) => m.unsubscribe == a.id).length
     assertEquals(archetypeTables(id), undefined)

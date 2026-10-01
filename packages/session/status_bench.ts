@@ -38,5 +38,5 @@ Deno.bench('status by identity beside 2,700 other calls', () => {
 })
 
 Deno.bench('status by query beside 2,700 other calls', () => {
-  g.read('.eid=target&*')
+  g.read('.entity.eid=target&*')
 })

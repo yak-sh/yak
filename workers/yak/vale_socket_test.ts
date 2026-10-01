@@ -44,7 +44,7 @@ let watches = () => {
     area.query,
     looksOf(area, hero),
     ...own,
-    `.eid=${q}&?created&*`,
+    `.entity.eid=${q}&?created&*`,
     '.tool.name=think',
     `.villager.level=${JSON.stringify(level)}&*`,
     `.entry.session=${

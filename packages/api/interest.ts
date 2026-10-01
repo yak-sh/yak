@@ -70,8 +70,7 @@ let required = (
     c.kind != 'pred' || c.not || c.where || v.assoc(c.path[0]) ||
     c.op == '?' || c.op == '!=' || missing(c)
   ) return new Set()
-  if (c.facet && c.path.length != 1) return new Set()
-  let hops = v.aim(c.path.join('.'), bare(c) || !!c.facet)
+  let hops = v.aim(c.path.join('.'), bare(c))
   return hops.length == 1 && hops[0].comp != 'entity' &&
       (!hops[0].prop || worn(hops[0].comp, hops[0].prop))
     ? new Set([hops[0].comp])

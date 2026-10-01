@@ -266,7 +266,6 @@ export type PropSchema = {
   package?: string
   wire?: boolean
   embed?: boolean
-  bare?: boolean
   // On a property a boolean (this property alone); on a component the composite
   // property lists. `Vocab.indexes` merges the two forms. Stored references are
   // always indexed: index: true is redundant and false does not opt out.

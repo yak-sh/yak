@@ -63,7 +63,7 @@ test('the SHA-256 name is a key off the SHA-1 one', async () => {
 test('a tree links to each child under the name it holds it by', async () => {
   let { g, git, bytes } = fixture()
   await git.files(deployed(bytes))
-  let rows = await g.read(`.tree_entry&.edge.from=${ROOT_OID}&.order=ord`)
+  let rows = await g.read(`.tree_entry&.edge.from=${ROOT_OID}&.order=edge.ord`)
   assertEquals(
     rows.map((
       r,

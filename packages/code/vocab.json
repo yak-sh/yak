@@ -38,7 +38,6 @@
       "properties": {
         "blob": {
           "type": "string",
-          "bare": false,
           "description": "the Git blob id of the text it was read from; a sync reads the file again only when this moved"
         },
         "package": {
@@ -69,12 +68,10 @@
         },
         "kind": {
           "type": "string",
-          "bare": false,
           "description": "what it is, as `deno doc` says: function, variable, class, interface, typeAlias, enum or namespace"
         },
         "line": {
           "type": "number",
-          "bare": false,
           "description": "the line it is declared on, counting from 1"
         }
       }

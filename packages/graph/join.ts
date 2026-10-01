@@ -121,7 +121,7 @@ let pattern = (query: And): Pattern => {
     let name = variable(value)
     if (!name) return true
     // A variable is a slot two places share, so it joins on `=` alone:
-    // `.at<$now` would otherwise read as `.at=$now`.
+    // `.wake.at<$now` would otherwise read as `.wake.at=$now`.
     if (op != '=') {
       let written = `${path.join('.')}${op}$${name}`
       throw new Error(`a variable joins on =, not ${op}: ${written}`)
@@ -215,9 +215,9 @@ let fresh = (source: string): Match => {
 /**
  * Every component a match reads — what storage's overlay of the pending change
  * has to cover for the compiled statement to see that change. `+!` clauses
- * count too: testing that a component is absent is still a read. A bare
- * property name is resolved through the vocabulary, since `.title` means
- * `doc.title`.
+ * count too: testing that a component is absent is still a read. A path is
+ * resolved through the vocabulary, so a path through a reference reads the
+ * component it names on either side.
  */
 export let reads = (m: Match, v: Vocab): string[] => {
   let out = new Set<string>()

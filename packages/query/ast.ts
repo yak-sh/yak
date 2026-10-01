@@ -22,7 +22,7 @@ export type Op = '=' | '!=' | '~=' | '<' | '<=' | '>' | '>=' | '!' | '?'
 // `exclusiveEnd` (`x..y` against `x...y`); a time node is an explicit time
 // phrase, built either by a builder or by a compiler promoting a scalar —
 // `parse` never emits one, because telling a time literal from a plain word
-// (`.domain=today`) needs the property's type. `timeSpan` (time.ts) is the
+// (`.filed.domain=today`) needs the property's type. `timeSpan` (time.ts) is the
 // recognizer a compiler uses to promote a scalar.
 export type Scalar = { kind: 'scalar'; raw: string }
 export type List = { kind: 'list'; items: Value[] }
@@ -45,8 +45,6 @@ export type Pred = {
   value: Value | null
   /** Negate a reverse association child test (none rather than any). */
   not?: boolean
-  /** Builder-only: the last path segment names a component, not a property. */
-  facet?: boolean
   /** Child condition; path names the reverse association. Builders compose
    * conjunctions here; parsing uses it to preserve nested quantifiers. */
   where?: Clause
@@ -265,9 +263,9 @@ export let pred = (field: string, o: Op, value: Value | null): Pred => ({
 
 /**
  * Is this a bare component form — one segment, present (`.canvas`), absent
- * (`!canvas`), or requested (`?canvas`)? Each names a component, so an
- * evaluator resolves it to that component even where a property would win the
- * bare form (@yaks/vocab's `aim(path, facet)`).
+ * (`!canvas`), or requested (`?canvas`)? Each is a presence test, which may
+ * name a component the vocabulary does not declare (@yaks/vocab's
+ * `aim(path, facet)`).
  *
  * ```ts
  * import { absent, bare, eq, present, want } from '@yaks/query'

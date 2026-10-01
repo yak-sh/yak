@@ -1,7 +1,7 @@
-// The identity operand list. `.eid=` and `.num=` on the entity table name
-// entities rather than compare a column, so the right-hand side is a set — the
-// shape an index can look up, and the shape a client fetching named rows asks
-// for.
+// The identity operand list. `.entity.eid=` and `.entity.num=` on the entity
+// table name entities rather than compare a column, so the right-hand side is a
+// set — the shape an index can look up, and the shape a client fetching named
+// rows asks for.
 //
 // A human-readable id belongs here too: @yaks/id reads `B-7` as the entity
 // numbered 7 (the letter is for display, the number is the identity), so one
@@ -9,7 +9,7 @@
 // operand falls into one of the two sets an evaluator looks it up in.
 //
 // `undefined` is a deliberate decline: an empty value (which means absence), a
-// range, or an operand that is not a number under `.num`. The caller then
+// range, or an operand that is not a number under `.entity.num`. The caller then
 // compiles the column the ordinary way, so nothing that already worked
 // changes.
 

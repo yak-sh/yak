@@ -110,5 +110,5 @@ test('a value the engine will not take never reaches it', () => {
       product: { price: 1, available: false },
     }])
   )
-  assert(s.read('.available=0').length == 1)
+  assert(s.read('.product.available=0').length == 1)
 })

@@ -542,7 +542,7 @@ test('task fork title uses assignment rather than copied local context', async (
         content: { body: 'Improve sidebar navigation' },
       },
     ], { trusted: true })
-    const [child] = await h.g.read('.eid=child&*')
+    const [child] = await h.g.read('.entity.eid=child&*')
     assertEquals(await sessionTitle(h.g, child), 'Improve sidebar navigation')
   } finally {
     h.close()

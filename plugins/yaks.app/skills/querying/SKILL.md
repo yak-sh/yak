@@ -56,11 +56,11 @@ Every predicate must hold — `&` is an intersection, never an "or". (Any-of liv
 inside one predicate, below.) A predicate ends where the next `&` begins:
 `.recipe&.doc` is two filters, where `.recipe.doc` would be one path.
 
-Your own components must be written _qualified_ — `.recipe.serves`, never
-`.serves` — so a component you invent can never change what `.title` means in
-somebody else's store. The platform's properties do work bare (`.title~=lemon`
-is `.doc.title~=lemon`), but write the component anyway: it reads better, and it
-never becomes ambiguous.
+A property is always written with its component: `.recipe.serves`, `.doc.title`.
+A name by itself is a component, so `.serves` asks for entities wearing a
+`serves` component. Where no component has that name the query is refused, and
+the refusal names the form to write: `.recipe.serves`. A component you invent
+can never change what another name means.
 
 An empty filter selects nothing. There is no "everything" — `query('')` and a
 bare `query('limit=50')` both return `[]`. To list what you saved, name a

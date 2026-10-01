@@ -117,7 +117,7 @@ export let parties = (net: Net) => {
       if (active && !players.has(id)) {
         players.set(
           id,
-          net.client.watch(`.eid=${JSON.stringify(id)}&.player&*`),
+          net.client.watch(`.entity.eid=${JSON.stringify(id)}&.player&*`),
         )
       } else if (!active && players.has(id)) {
         players.get(id)?.close()

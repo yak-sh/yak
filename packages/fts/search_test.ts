@@ -33,7 +33,7 @@ test('the snippet comes from whichever property matched', () => {
 
 test('a screen narrows the hits to what the filters allow', () => {
   let db = shelf()
-  let screen = screenOf(parse('dragon .price<15'), shop, {
+  let screen = screenOf(parse('dragon .book.price<15'), shop, {
     extend: [search(text)],
   })
   assertEquals(

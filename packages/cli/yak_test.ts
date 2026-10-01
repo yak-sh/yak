@@ -90,7 +90,7 @@ test('init writes a config whose graph knows its person', async () => {
     let { person } = JSON.parse(first)
     let { opened, close } = await import('./local.ts')
     let host = await opened(path, ['graph'], false)
-    let [me] = await host.graph.read(`.eid=${person}&.person&.doc`)
+    let [me] = await host.graph.read(`.entity.eid=${person}&.person&.doc`)
     assertEquals((me?.doc as { title?: string } | undefined)?.title, 'Ada')
     await close(0)
     assertEquals(await line(['init', 'Bob']), 1)

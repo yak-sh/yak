@@ -31,11 +31,12 @@ import { kindOrder as deriveKindOrder } from './order.ts'
 import { appended, ladderOf, statusProp } from './status.ts'
 
 /** A name this vocabulary does not know. One error for every caller, raised
- * here because the vocabulary is what decides: `route()` raises it when
- * nothing claims the bare name, `aim()` when a component is named with a
- * property it does not declare (saying which ones it does), and the storage
- * binder (@yaks/sql) when a presence test names a component it has no table
- * for. `prop` is the name, unadorned. */
+ * here because the vocabulary is what decides: `aim()` raises it for a name no
+ * component declares, for a property named without its component (saying
+ * which components declare it, {@link unqualified}), and for a component named
+ * with a property it does not declare (saying which ones it does); the storage
+ * binder (@yaks/sql) raises it when a presence test names a component it has
+ * no table for. `prop` is the name, unadorned. */
 export class Unknown extends Error {
   prop: string
   constructor(prop: string, message = `unknown prop: .${prop}`) {
@@ -45,23 +46,23 @@ export class Unknown extends Error {
   }
 }
 
-/** A bare name several components declare. The vocabulary alone cannot decide
- * which is meant, so it reports which ones, and a caller that holds more than
- * the one name picks between them (@yaks/graph's `meaning`, which reads the
- * component off the rest of the query). Unresolved, it reaches the caller as
- * this error: the name, the candidates, and a qualified name to use
- * instead. */
-export class Ambiguous extends Error {
-  prop: string
-  comps: string[]
-  constructor(prop: string, comps: string[]) {
-    super(
-      `.${prop} is ambiguous (${comps.join(', ')}) — use .${comps[0]}.${prop}`,
-    )
-    this.prop = prop
-    this.comps = comps
-    this.name = 'Ambiguous'
-  }
+/**
+ * The refusal for a property named alone. A name alone is a component; a
+ * property is named with its component, so the message names each component
+ * that declares it. It only teaches: what the query means is unchanged.
+ *
+ * ```ts
+ * import { unqualified } from '@yaks/vocab'
+ * unqualified('status', ['session', 'task'])
+ * // '.status is a property, not a component — name it .session.status or .task.status'
+ * ```
+ */
+export let unqualified = (prop: string, comps: string[]): string => {
+  let forms = comps.map((c) => `.${c}.${prop}`)
+  let last = forms.pop()
+  return `.${prop} is a property, not a component — name it ${
+    forms.length ? `${forms.join(', ')} or ` : ''
+  }${last}`
 }
 
 // The keywords an extension entry may carry. Everything else about a component
@@ -339,12 +340,13 @@ export type Vocab = {
    * component whose entities take a minted id. @yaks/graph does the
    * derivation. */
   identity: (comp: string) => Identity
-  route: (prop: string) => { comp: string; prop: string }
-  /** A dotted path → the hops it names. Pass `facet` when the predicate is the
-   * bare presence test (`.name`): a single segment naming a component is then
-   * a test for that component, even if a property of the same name would
-   * otherwise claim the bare name. A name no property claims is read as a
-   * component too, since a presence test needs no property schema. */
+  /** A dotted path → the hops it names: `comp.prop` pairs, each past the
+   * first read on the entity the reference before it names, and a component
+   * alone at the end (`.task`, `.comment.target.task`). A name alone is
+   * always a component; a property is named with its component, and a name
+   * only properties hold is refused with the forms that name it. Pass `facet`
+   * for a presence test (`.name`, `!name`, `?name`): a name nothing declares
+   * is then a component too, since a presence test needs no schema. */
   aim: (path: string, facet?: boolean) => Hop[]
   assoc: (name: string) => Assoc | undefined
   /** Every reverse association, by name. */
@@ -436,7 +438,7 @@ let indexesOf = (
 // The spine component, and the identity property no vocabulary declares. A
 // document declares what `entity` stores beside it (the number a store mints);
 // the `eid` is built in — every entity has one — so the loader routes it
-// (`.eid=`, `.entity.eid=`) rather than making each vocabulary re-declare it.
+// (`.entity.eid=`, `.entity.eid=`) rather than making each vocabulary re-declare it.
 // It stays out of `props()` on purpose: an id is not prose and has no column
 // of its own, so it never reaches a text index, an embedding, or a component's
 // DDL.
@@ -711,21 +713,10 @@ export let loadVocab = (
   let routes = new Map<string, string[]>()
   for (let name of names) routes.set(name, Object.keys(props(name)))
 
-  // Reverse index: a bare prop to the components that declare it. A property
-  // (or whole component) marked `bare: false` never claims a bare name — it is
-  // reached qualified only — so it stays out of this index entirely. So does
-  // every property of a component whose name starts with `_`: those describe
-  // the system itself (`_prop.name`, `_prop.type`, ./bundles.ts; the journal's
-  // `_change.target`), and a `name` or a `type` in a query means the
-  // application's own.
-  let owners = new Map<string, string[]>()
-  for (let [comp, ps] of routes) {
-    if (defs[comp].bare === false || comp.startsWith('_')) continue
-    for (let p of ps) {
-      if (props(comp)[p].bare === false) continue
-      owners.set(p, [...(owners.get(p) ?? []), comp])
-    }
-  }
+  // The components that declare a property of this name, for the refusal of a
+  // property named alone. The spine's eid is declared by no document.
+  let homes = (prop: string): string[] =>
+    prop == EID ? [SPINE] : names.filter((c) => routes.get(c)!.includes(prop))
 
   // A plural that is a name, not English: uniqueness is the goal, so 'shelf' →
   // 'shelfs' is fine and 'series' → 'series' stays put.
@@ -736,17 +727,16 @@ export let loadVocab = (
   // hand listed, so a new reference property earns its reverse name for free. A
   // component with one reference is named by its plural (`review.book` →
   // `.reviews`); several references disambiguate with the property
-  // (`loan.book`, `loan.member` → `.loans_book`, `.loans_member`). A name a
-  // property or component already routes is left alone — the forward name
-  // always wins — and where two components pluralize alike the alphabetically
-  // first keeps it.
+  // (`loan.book`, `loan.member` → `.loans_book`, `.loans_member`). A
+  // component's name is left alone — the forward name always wins — and where
+  // two components pluralize alike the alphabetically first keeps it.
   let assocs = new Map<string, Assoc>()
   for (let comp of names) {
     let refs = Object.keys(props(comp))
       .filter((p) => propFor(comp, p)!.category == 'ref')
     for (let prop of refs) {
       let name = refs.length == 1 ? plural(comp) : `${plural(comp)}_${prop}`
-      if (owners.has(name) || routes.has(name) || assocs.has(name)) continue
+      if (routes.has(name) || assocs.has(name)) continue
       assocs.set(name, { comp, prop })
     }
   }
@@ -782,69 +772,39 @@ export let loadVocab = (
     prop: propFor,
     indexes: (comp) => indexesOf(defs[comp], (p) => propFor(comp, p)),
     identity: (comp) => identityOf(defs[comp]),
-    // Bare prop → its owning component. A stamped lifecycle property never
-    // takes a bare name from a writable one (`.status` stays the task's even
-    // though sessions carry a stamped status), so non-stamped owners are
-    // preferred first. A single owner wins; several owners that are all
-    // references mean one thing to a reader (comp '' — the filter scans every
-    // owner); any other collision throws {@link Ambiguous}, which names the
-    // candidates so a caller holding the rest of the query can pick among them.
-    // A bare name that is itself a component name routes as a presence test for
-    // that component.
-    route: (prop) => {
-      let own = owners.get(prop) ?? []
-      if (own.length > 1) {
-        let live = own.filter((c) => !propFor(c, prop)!.stamped)
-        if (live.length) own = live
-      }
-      if (own.length == 1) return { comp: own[0], prop }
-      if (own.length > 1) {
-        if (own.every((c) => propFor(c, prop)?.category == 'ref')) {
-          return { comp: '', prop }
-        }
-        throw new Ambiguous(prop, own)
-      }
-      if (routes.has(prop)) return { comp: prop, prop: '' }
-      if (prop == EID) return { comp: SPINE, prop: EID }
-      throw new Unknown(prop)
-    },
-    // A dotted path → the hops it names, one rule per step: a segment naming a
-    // component with another segment after it is the explicit `comp.prop`
-    // form and consumes two segments; anything else is a bare prop routed by
-    // name and consumes one. Every non-final hop must be a reference for the
+    // A dotted path → the hops it names, two segments at a time: a component
+    // and one of its properties, or a component alone at the end. A name no
+    // component declares is refused, teaching the qualified forms where
+    // properties of that name exist; only a presence test reads an undeclared
+    // name as a component, since bundles can carry plugin components before
+    // their schemas are loaded, and a store still decides whether it has a
+    // table for it. Every non-final hop must be a reference for the
     // dereference to stand.
-    //
-    // `facet` is the one exception, and it belongs to the presence test alone
-    // (`.name`): a name alone tests for a component, so the component wins
-    // over a property of the same name. It has to — a presence test has no
-    // other form, while the property keeps its qualified one
-    // (`.camera.canvas`).
-    // Without it, `.canvas` would test camera's canvas reference and return
-    // the wrong entities, or none. A name no property claims is read as a
-    // component too: bundles can carry plugin components before their schemas
-    // are loaded. A store still decides whether it has a table for that
-    // component.
     aim: (path, facet) => {
       let segs = path.split('.')
-      if (facet && segs.length == 1) {
-        let name = segs[0]
-        let owned = owners.has(name) || name == EID
-        if (routes.has(name) || !owned) return [{ comp: name, prop: '' }]
-      }
       let out: Hop[] = []
-      for (let i = 0; i < segs.length;) {
-        let own = routes.get(segs[i])
-        if (own && i + 1 < segs.length) {
-          let [a, b] = [segs[i], segs[i + 1]]
-          if (!own.includes(b) && !(a == SPINE && b == EID)) {
-            throw new Unknown(`${a}.${b}`, unknownProps(v, a, [b]))
-          }
+      for (let i = 0; i < segs.length; i += 2) {
+        let [a, b] = [segs[i], segs[i + 1]]
+        if (a == SPINE && b == EID) {
           out.push({ comp: a, prop: b })
-          i += 2
-        } else {
-          out.push(v.route(segs[i]))
-          i += 1
+          continue
         }
+        let own = routes.get(a)
+        if (!own) {
+          let at = homes(a)
+          if (at.length) throw new Unknown(a, unqualified(a, at))
+          if (b != null || !facet) throw new Unknown(a)
+          out.push({ comp: a, prop: '' })
+          continue
+        }
+        if (b == null) {
+          out.push({ comp: a, prop: '' })
+          continue
+        }
+        if (!own.includes(b)) {
+          throw new Unknown(`${a}.${b}`, unknownProps(v, a, [b]))
+        }
+        out.push({ comp: a, prop: b })
       }
       return out
     },

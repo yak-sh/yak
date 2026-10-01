@@ -325,7 +325,7 @@ test('a query reads what was built for an entity', async () => {
   for (let s of ['a', 'b']) await drive(g, runner, run(ids.builder, [s]))
   let eids = async (q: string) => (await rows(g, q)).map((b) => b.entity.eid)
   assertEquals(await eids('.build.for=a'), [run(ids.builder, ['a'])])
-  assertEquals(await eids('.built.build.for=b'), [
+  assertEquals(await eids('.built.build.build.for=b'), [
     output(run(ids.builder, ['b'])),
   ])
 })

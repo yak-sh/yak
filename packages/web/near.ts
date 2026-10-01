@@ -1,7 +1,7 @@
 // The near match a failed handle lookup names. Every door takes an entity
 // by something a person types — an alias, a human id, a title word — and
 // when that resolves to nothing the rejection is only a teaching moment if
-// it can name the thing meant: `.project=tasks` is rejected while the
+// it can name the thing meant: `.filed.project=tasks` is rejected while the
 // project called `tasks` exists under the alias `home`.
 //
 // Scoring lives here; RESOLVING does not. A caller offers the winner only

@@ -30,7 +30,7 @@ for (const name of [PLATFORM_STORE, GIT_STORE]) {
     let res = await request('/apply', [{ entity: { eid }, ...seed }])
     assertEquals(res.status, 200, await res.clone().text())
     const read = async () =>
-      await (await request('/query?q=.eid=' + eid)).json() as Bundle[]
+      await (await request('/query?q=.entity.eid=' + eid)).json() as Bundle[]
     const original = (await read())[0]
     assert(original.entity.archetype)
     const descriptors = await (await request('/query?q=.archetype'))
@@ -42,7 +42,7 @@ for (const name of [PLATFORM_STORE, GIT_STORE]) {
     }])
     assertEquals(forged.status, 400)
     assertEquals(
-      await (await request('/query?q=.eid=forged-descriptor&.archetype'))
+      await (await request('/query?q=.entity.eid=forged-descriptor&.archetype'))
         .json(),
       [],
     )
@@ -65,9 +65,10 @@ for (const name of [PLATFORM_STORE, GIT_STORE]) {
     assertEquals((await read())[0].alias, undefined)
     const final = (await read())[0]
     const shape =
-      (await (await request('/query?q=.eid=' + final.entity.archetype)).json())[
-        0
-      ]
+      (await (await request('/query?q=.entity.eid=' + final.entity.archetype))
+        .json())[
+          0
+        ]
     assert(!JSON.parse(shape.archetype.tables).includes('alias'))
     storage[Symbol.dispose]()
   })

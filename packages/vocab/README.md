@@ -30,7 +30,7 @@ const catalog = {
 const errors = storable(catalog)
 if (errors.length) throw new Error(errors.join('; '))
 const vocab = loadVocab(catalog)
-vocab.route('price') // { comp: 'book', prop: 'price' }
+vocab.aim('book.price') // [{ comp: 'book', prop: 'price' }]
 vocab.prop('book', 'price')?.scalar // 'number'
 vocab.check('book', { price: 12 }) // []
 ```
@@ -72,7 +72,6 @@ component table needs on top:
 | `stamped`    | prop  | `true` = the server owns it: clients read it, never write it            |
 | `search`     | both  | prop: `true` = full-text indexed. comp: `["content.body"]`, found by it |
 | `aliases`    | prop  | input forms that resolve to an enum member                              |
-| `bare`       | both  | `false` = only the qualified component/property name is accepted        |
 | `unique`     | both  | prop: no two rows share it. comp: `[["space","slug"]]`                  |
 | `index`      | both  | the same two forms, without the uniqueness                              |
 | `required`   | comp  | native: the properties every row holds (NOT NULL)                       |
@@ -94,10 +93,8 @@ locate an entity that has a life of its own: the entity keeps a minted eid, and
 a value it holds finds it again. `identity` derives the eid itself, and fits
 only where the facts are the entity, as a link is its two ends.
 
-A component whose name starts with `_` gives none of its properties a bare name,
-whatever `bare` says: `.name` never means `_prop.name`. An authored name starts
-with a letter, so `_` names only the components that describe a vocabulary
-itself ([below](#a-vocabulary-as-entities)).
+An authored name starts with a letter, so `_` names only the components that
+describe a vocabulary itself ([below](#a-vocabulary-as-entities)).
 
 A component named in CamelCase (`Edit`, `Refused`) belongs to a UX component
 ([@yaks/ux](../ux/README.md)): its own state, named after it, or an event it
@@ -371,12 +368,12 @@ v.kinds // display kinds: alphabetical, constrained by `before`
 v.prop('task', 'project')
 // { category: 'ref', ref: 'project', death: 'detach',
 //   affinity: 'integer', fk: true, stamped: false, computed: false, … }
-v.route('title') // { comp: 'doc', prop: 'title' }   bare prop → its component
-v.route('eid') // { comp: 'entity', prop: 'eid' }  the entity identity
 v.aim('comment.target.doc.title') // [{comment,target}, {doc,title}]  path → hops
-v.aim('project', true) // [{project,''}]  the presence form: `.project` asks
-// whether the entity has the `project` component, even where `task.project`
-// claims the bare name
+v.aim('entity.eid') // [{entity,eid}]  the entity identity
+v.aim('project') // [{project,''}]  a name alone is a component
+v.aim('title') // throws Unknown: '.title is a property, not a component —
+// name it .doc.title'. A property is named with its component; the refusal
+// names each component that declares it, and changes no query's meaning.
 
 v.assoc('reviews') // { comp: 'review', prop: 'book' }  a plural → its reverse
 v.kindOf({ task: 1, doc: 1 }) // 'task' — most specific kind wins
@@ -607,8 +604,7 @@ list it is. `_prop.package` names the package that declares the property, so a
 property another package adds with `extends` is told from the component's own,
 and a `_package` shows what it declares and what it extends. The components are
 `wire: false`: a graph fills them, and clients read them. Their names start with
-`_`, which no authored name can, and a `_` component's properties never take a
-bare name in a query.
+`_`, which no authored name can.
 
 `toBundles(doc, id)` reads one document into bundles, and `fromBundles(rows)`
 turns rows back into documents, one per package, that `loadVocab` loads as the
@@ -638,13 +634,13 @@ it with the vocabulary the graph is served with, each time a process starts.
 
 ## Exports
 
-The root export includes `loadVocab`, `Vocab`, schema and property types,
-`Unknown` and `Ambiguous` lookup errors, `pick`, `storable`, `reserved`,
-`kindOrder`, `composite`, `same`, `changed`, state-lifetime helpers, `rulesIn`,
-`RuleDecl`, `effectsIn` and `EffectDecl`. `CORE_URI`, `coreVocabulary` and
-`metaSchema` expose the bundled schema documents; `Keywords`, `JsonSchema` and
-`extendMeta` support extensions. `metaDoc`, `toBundles`, `fromBundles`, `Ids`
-and `Bundle` hold a vocabulary as entities.
+The root export includes `loadVocab`, `Vocab`, schema and property types, the
+`Unknown` lookup error and its `unqualified` message, `pick`, `storable`,
+`reserved`, `kindOrder`, `composite`, `same`, `changed`, state-lifetime helpers,
+`rulesIn`, `RuleDecl`, `effectsIn` and `EffectDecl`. `CORE_URI`,
+`coreVocabulary` and `metaSchema` expose the bundled schema documents;
+`Keywords`, `JsonSchema` and `extendMeta` support extensions. `metaDoc`,
+`toBundles`, `fromBundles`, `Ids` and `Bundle` hold a vocabulary as entities.
 
 The `@yaks/vocab/tools` sub-module exports `ToolDefinition`, `toolDefinition`,
 `toolDefinitionSchema`, `toolsIn`, `toolsSaid`, `validateToolInput`,

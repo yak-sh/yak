@@ -113,7 +113,7 @@ test('a change names its transaction, which reads like any entity', () => {
   assertEquals(read(`._change.tx=${tx}`).map((b) => b.entity.eid), [
     first.entity.eid,
   ])
-  assertEquals(read(`.eid=${second.entity.eid}`), [second])
+  assertEquals(read(`.entity.eid=${second.entity.eid}`), [second])
 })
 
 test('a transaction is found by who wrote it, and through it', () => {

@@ -138,11 +138,12 @@ upstream outputs it binds, so an upstream rebuild flows down by itself.
 ## Reading what was built
 
 - `.build.for=X` is the builds made for X, the first entity of each binding.
-- `.built.build.for=X&.built.current=true` is what X has now; add
-  `.built.build.variant=main` to leave shadows out.
+- `.built.build.build.for=X&.built.current=true` is what X has now: `built.build`
+  reaches the build, and `build.for` is read there. Add
+  `.built.build.build.variant=main` to leave shadows out.
 - `.fields` brings what an output points at in the same answer. The vale's
   sound catalogue is one subscription (apps/vale/samples.ts `SOUNDS`):
-  `.built.current=true&.built.artifact&.built.build.variant=main&.fields=built.build.for.sfx.name,built.artifact.artifact.address,…`.
+  `.built.current=true&.built.artifact&.built.build.build.variant=main&.fields=built.build.build.for.sfx.name,built.artifact.artifact.address,…`.
 - `build.match` is the binding as JSON, read whole; nothing filters on it.
 
 ## Cost

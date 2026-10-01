@@ -192,7 +192,7 @@ test('a connected OpenRouter model puts generated audio in the app store', async
     assertEquals((await v.send('/apply', asking(session, SEED))).status, 200)
     let [attachment] = await v.landed(`.entry.session=${session}&.attachment&*`)
     let eid = (attachment.attachment as Comp).artifact as string
-    let [artifact] = await v.read(`.eid=${eid}&.artifact&*`)
+    let [artifact] = await v.read(`.entity.eid=${eid}&.artifact&*`)
     assertEquals((artifact.artifact as Comp).media_type, 'audio/mpeg')
     let alias = await apps.fetch(
       visit(`/vale/api/blob/${eid}`, {
@@ -297,7 +297,7 @@ test('a page asks its store for a turn and the answer lands beside it', async ()
   let [ask] = await v.landed(`.entry.session=${s}&.cost&*`)
   assertEquals((ask.cost as Comp).reported, false)
   assertAlmostEquals(Number((ask.cost as Comp).dollars), cost)
-  let [session] = await v.landed(`.eid=${s}&*`)
+  let [session] = await v.landed(`.entity.eid=${s}&*`)
   assertAlmostEquals(Number((session.session as Comp).cost), cost)
 })
 
@@ -416,7 +416,7 @@ test('an account past its budget is told so, and the transcript rests', async ()
   assertEquals((stopped.error as Comp).code, 'limit')
   assert(String(said(stopped)).includes('account budget of $0.20'))
   assertEquals(v.asked.length, 0)
-  let [session] = await v.read(`.eid=${s}&*`)
+  let [session] = await v.read(`.entity.eid=${s}&*`)
   assertEquals((session.session as Comp).status, 'failed')
   // And a call asked outright is answered with the same sentence.
   let { status, said: no } = await v.run({ model: FLASH, input: {} })

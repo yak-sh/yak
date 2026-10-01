@@ -20,7 +20,7 @@ test('a body property is an ordinary text property to the meta-model', () => {
   // and it is writable, validated and routed like any other text property
   assertEquals(blog.comp('post')!.writable.includes('body'), true)
   assertEquals(blog.check('post', { body: 'a long essay' }), [])
-  assertEquals(blog.route('body'), { comp: 'post', prop: 'body' })
+  assertEquals(blog.aim('post.body'), [{ comp: 'post', prop: 'body' }])
 })
 
 test('a vocabulary loaded without the keyword declares no bodies', () => {

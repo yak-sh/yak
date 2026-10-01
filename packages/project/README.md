@@ -68,9 +68,10 @@ empty board and a board with a typo in its filter look exactly alike — no erro
 no empty state saying why, just a board that is always blank. Two ways a query
 is wrong are caught:
 
-- it names a property the vocabulary does not have (`.staus=open`);
-- it names a status outside the closed set (`.status=complete`, where @yaks/task
-  declares `done`, `cancelled` and `open`).
+- it names a property the vocabulary does not have (`.task.staus=open`), or a
+  property without its component (`.status=open`);
+- it names a status outside the closed set (`.task.status=complete`, where
+  @yaks/task declares `done`, `cancelled` and `open`).
 
 The set of statuses a board may name is the ladder the loaded vocabulary
 declares (@yaks/vocab's `status` keyword), so a graph that also loads

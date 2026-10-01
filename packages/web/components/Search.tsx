@@ -189,7 +189,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
             id={FIELD}
             mod='bare'
             elRef={box}
-            placeholder='search the graph… (* = prefix, .status=done .updated.at=today filter, ⌘⏎ = new tab)'
+            placeholder='search the graph… (* = prefix, .task.status=done .updated.at=today filter, ⌘⏎ = new tab)'
             onKey={key}
           />
           {

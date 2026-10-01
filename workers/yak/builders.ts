@@ -115,7 +115,7 @@ export let buildersPlugin: Plugin = {
   installs: [async (read, at) => {
     if (at.meta || !at.app) return []
     let row = toolRow(builderModelTool)
-    let [have] = await read(`.eid=${row.entity.eid}&*`)
+    let [have] = await read(`.entity.eid=${row.entity.eid}&*`)
     return JSON.stringify(have?.tool ?? null) == JSON.stringify(row.tool)
       ? []
       : [row]

@@ -9,8 +9,8 @@
  *
  * ## The `by_name` keyword This package owns one keyword. A component that
  * declares `"by_name": true` makes its entities addressable by name, read from
- * the vocabulary's name property (`title` by default); a string names a
- * different property.
+ * the vocabulary's name property (`doc.title` by default); a string names a
+ * different property, with its component (`"by_name": "shelf.label"`).
  *
  * ```json
  * { "$defs": { "author": { "type": "object", "kind": true, "by_name": true } } }

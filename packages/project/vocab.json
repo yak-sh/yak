@@ -118,7 +118,6 @@
     "paused": {
       "component": true,
       "type": "object",
-      "bare": true,
       "properties": {
         "at": {
           "type": "string",

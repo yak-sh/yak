@@ -147,7 +147,7 @@ let fresh = (owner: Eid, integration: string, scopes: string[]): Bundle => {
 
 // The connection as the graph holds it, or a refusal naming it.
 let held = async (read: Read, eid: Eid): Promise<Bundle> => {
-  let [b] = await read(`.eid=${eid}&.${CONNECTION}${ALL}`)
+  let [b] = await read(`.entity.eid=${eid}&.${CONNECTION}${ALL}`)
   if (!b) throw new Error(`no connection ${eid}`)
   return b
 }
@@ -169,7 +169,7 @@ export let using = async (
     .filter((l) => !comp(l, USES).each == !a.each)
   if (!out.length) return undefined
   let found = await read(
-    `.eid=${any(out.map((l) => far(l, 'from')))}&.${CONNECTION}`,
+    `.entity.eid=${any(out.map((l) => far(l, 'from')))}&.${CONNECTION}`,
   )
   return found.find((b) => {
     let c = comp(b, CONNECTION)
@@ -287,7 +287,7 @@ export let attach = async (
   if (old?.entity.eid == a.connection) return []
   let previous = old?.entity.eid
   let oldLink = previous && (await read(
-    `.eid=${edgeEid(a.app, USES, previous)}&.${USES}${ALL}`,
+    `.entity.eid=${edgeEid(a.app, USES, previous)}&.${USES}${ALL}`,
   ))[0]
   if (comp(oldLink || undefined, USES).direct) {
     throw new Error(
@@ -363,7 +363,7 @@ export let used = async (
   let out = await links(c.graph.read, 'from', app)
   if (!out.length) return []
   let found = await c.graph.read(
-    `.eid=${
+    `.entity.eid=${
       any(out.map((l) => far(l, 'from')))
     }&.${CONNECTION}.status=${'connected' satisfies Status}${ALL}`,
   )

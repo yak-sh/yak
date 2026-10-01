@@ -25,7 +25,7 @@ test('a bundle creates an entity wearing its components', () => {
     doc: { title: 'Mug' },
     product: { price: 12, status: 'live' },
   }])
-  let got = s.read('.status=live') as Bundle[]
+  let got = s.read('.product.status=live') as Bundle[]
   assertEquals(got.length, 1)
   assertEquals(got[0].entity.eid, 'p1')
   assertEquals(c(got[0], 'product').price, 12)
@@ -71,7 +71,7 @@ test('a null component drops the row, the entity survives', () => {
     product: { price: 12 },
   }])
   write(s, [{ entity: { eid: 'p1' }, product: null }])
-  let [p] = s.read('.title~=mug') as Bundle[]
+  let [p] = s.read('.doc.title~=mug') as Bundle[]
   assert(p)
   assertEquals(p.product, undefined)
   assertEquals(c(p, 'doc').title, 'Mug')
@@ -85,8 +85,8 @@ test('a boolean round-trips through integer storage', () => {
   ])
   let read = (q: string) =>
     (s.read(q) as Bundle[]).map((b) => c(b, 'product').available)
-  assertEquals(read('.available=1'), [true])
-  assertEquals(read('.available=0'), [false])
+  assertEquals(read('.product.available=1'), [true])
+  assertEquals(read('.product.available=0'), [false])
 })
 
 test('a reference may name a target minted later in the same batch', () => {
@@ -103,7 +103,7 @@ test('remove drops every component row and tombstones the identity', () => {
   let s = store()
   write(s, [{ entity: { eid: 'p1' }, doc: { title: 'Mug' } }])
   s.tx((tx) => tx.remove([{ eid: 'p1' }]))
-  assertEquals(s.read('.title~=mug'), [])
+  assertEquals(s.read('.doc.title~=mug'), [])
   let [b] = s.tx((tx) => tx.get(['p1'])) as Bundle[]
   assertEquals(b.tombstone, {}) // still an identity, just a dead one
   assertEquals(b.doc, undefined)
@@ -302,5 +302,5 @@ test('a batch past 100 entities binds under the Durable Object limit', async () 
     }))
   await g.apply(many(1))
   await g.apply(many(2))
-  assertEquals((s.read('.price=2') as Bundle[]).length, 150)
+  assertEquals((s.read('.product.price=2') as Bundle[]).length, 150)
 })

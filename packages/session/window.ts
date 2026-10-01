@@ -37,7 +37,7 @@ export let transcriptSegments = async (
     let from = (row.fork as Comp | undefined)?.from
     if (!from) break
     let [anchor] = await g.read(
-      '.eid=' + from + '&.fields=entry.session,entry.seq',
+      '.entity.eid=' + from + '&.fields=entry.session,entry.seq',
     )
     if (!anchor?.entry) break
     let entry = anchor.entry as Comp
@@ -62,7 +62,7 @@ export let transcriptPlan = async (
   let anchor: { segment: number; seq: number } | undefined
   if (request.anchor && !request.edge) {
     let [row] = await g.read(
-      '.eid=' + request.anchor + '&.fields=entry.session,entry.seq',
+      '.entity.eid=' + request.anchor + '&.fields=entry.session,entry.seq',
     )
     let entry = row?.entry as Comp | undefined
     let segment = segments.findIndex((s) =>

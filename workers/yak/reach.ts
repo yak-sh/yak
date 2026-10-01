@@ -150,24 +150,22 @@ async (line: string) => {
     : bundles
 }
 
-// The words a dotted segment can open with that name no component: the
-// grammar's own riders and its aggregates. Everything else after a dot is a
-// component or a prop that routes to one, and either way it is the segment's
-// part.
+// The words a dotted segment can open with that belong to the whole line: the
+// grammar's own riders, its aggregates, and the spine every store's entities
+// share (`.entity.eid=`, which is what `id=` becomes). Everything else after a
+// dot is a component, and it is the segment's part.
 let RIDERS = ['order', 'near', 'limit', 'after', 'edges', 'kind', 'fields']
 let AGGS = ['count', 'distinct', 'tally']
+let LINE = ['entity', ...RIDERS, ...AGGS]
 
 let firstWord = (seg: string) => /^[.!?]([a-z0-9_]+)/i.exec(seg)?.[1] ?? ''
 
 // The part a segment belongs to: the component it names, or '' for a segment
 // that is the whole line's business — `id=`, `limit=`, a bare word, a rider.
-// An unqualified prop (`.serves=4`) names no component textually and gets a
-// part of its own, since the store that knows the prop is the store that
-// knows the component behind it.
 let partOf = (seg: string) => {
   if (!/^[.!?]/.test(seg)) return ''
   let word = firstWord(seg)
-  return RIDERS.includes(word) || AGGS.includes(word) ? '' : word
+  return LINE.includes(word) ? '' : word
 }
 
 let segsOf = (line: string) => bare(line).split('&').filter(Boolean)
@@ -450,7 +448,7 @@ let gathered = async (
     let { at, bundles } of await asked(
       env,
       reach,
-      `.eid=${eids.join(',')}`,
+      `.entity.eid=${eids.join(',')}`,
       said,
       live,
     )
@@ -662,8 +660,8 @@ export let read = async (
   // The bundle is read from the stores that speak a word the line named, and
   // carries those components — the store's own rule (@yaks/graph `wanted`),
   // applied here because the composing read addresses the eids and names no
-  // component. A part this door cannot confirm is a component (an unqualified
-  // prop, a reference path) asks for the whole bundle rather than guess. `*` is
+  // component. A part this door cannot confirm is a component asks for the
+  // whole bundle rather than guess. `*` is
   // the grammar's widest projection (@yaks/query `every`, T-34070), read off the
   // parsed line the way the store reads it, so both doors agree about one word.
   // A projection reads its properties off the whole merge, wherever they live.
@@ -725,7 +723,7 @@ let projected = async (
   let read = rows({
     kind: 'and',
     clauses: [
-      ...parse(`.eid=${[...held.keys()].join(',')}`).clauses,
+      ...parse(`.entity.eid=${[...held.keys()].join(',')}`).clauses,
       ...p.query.clauses.filter((c) => c.kind == 'fields'),
     ],
   }, vocab)

@@ -59,7 +59,7 @@ test('inspect worker checks owner and reads live hero state', async () => {
           ? [ask]
           : line.startsWith('.gathered.directive=')
           ? [{ entity: { eid: 'log' }, gathered: { directive: 'ask' } }]
-          : line.startsWith('.eid=')
+          : line.startsWith('.entity.eid=')
           ? [project(hero, line)]
           : []
         return Promise.resolve(Response.json(rows))
@@ -102,7 +102,7 @@ test('inspect worker resolves land and villager names', async () => {
             ? themeRows
             : line == '.building_design'
             ? planRows
-            : line.startsWith('.eid=')
+            : line.startsWith('.entity.eid=')
             ? [project(elder, line)]
             : [],
         ))

@@ -11,8 +11,8 @@
 //
 // Two ways a query is wrong, both caught in one walk over its clauses:
 //
-//   Routing   `.staus=open` names no property. The vocabulary refuses it.
-//   Members   `.status=complete` names no status. The status set refuses it.
+//   Routing   `.task.staus=open` names no property. The vocabulary refuses it.
+//   Members   `.task.status=complete` names no status. The status set refuses it.
 //
 // The second is what a closed set of statuses buys: `complete` and `completed`
 // and `done` are all plausible, exactly one is a status, and a query naming
@@ -58,8 +58,8 @@ let tokens = (v: Value | null): string[] =>
  * ```ts
  * import { unroutable } from '@yaks/project'
  *
- * // unroutable('.status=open', vocab)     → null
- * // unroutable('.status=complete', vocab) → 'no such status: complete — …'
+ * // unroutable('.task.status=open', vocab)     → null
+ * // unroutable('.task.status=complete', vocab) → 'no such status: complete — …'
  * ```
  */
 export let unroutable = (query: string, vocab: Vocab): string | null => {
@@ -72,7 +72,8 @@ export let unroutable = (query: string, vocab: Vocab): string | null => {
         continue
       }
       let known = vocab.prop(last.comp, 'status')?.values ?? []
-      // An empty value is the absence form (`!status`), which names nothing.
+      // An empty value is the absence form (`!task.status`), which names
+      // nothing.
       for (let t of tokens(c.value).filter(Boolean)) {
         if (!known.includes(t)) {
           return `no such status: ${t} — this board knows ${known.join(', ')}`

@@ -87,7 +87,7 @@ test('a pending write that no longer matches drops out of a read', async () => {
   )
   let seen = await s.tx(async (tx) => {
     await tx.patch([{ entity: { eid: 'p1' }, product: { status: 'draft' } }])
-    return await tx.read('.status=live')
+    return await tx.read('.product.status=live')
   })
   assertEquals(seen as Bundle[], [])
 })

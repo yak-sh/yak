@@ -299,9 +299,6 @@
           },
           "minItems": 1
         },
-        "bare": {
-          "type": "boolean"
-        },
         "unique": {
           "$ref": "#/$defs/composites"
         },
@@ -559,9 +556,6 @@
         "search": {
           "type": "boolean"
         },
-        "bare": {
-          "type": "boolean"
-        },
         "unique": {
           "type": "boolean"
         },
@@ -655,9 +649,6 @@
           "type": "boolean"
         },
         "search": {
-          "type": "boolean"
-        },
-        "bare": {
           "type": "boolean"
         },
         "unique": {

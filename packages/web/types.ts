@@ -70,10 +70,6 @@ export let keywords: Keywords[] = [
 // registry, the browser replica).
 export let vocab: Vocab = loadVocab([], keywords)
 
-// Components a session's transcript is written in: they never claim a bare
-// spelling in a filter (`bare: false`).
-export let sessionComps: Record<string, Record<string, PropType>> = {}
-
 // The components and their wire-writable columns, each with what it IS.
 export let comps: Record<string, Record<string, PropType>> = {}
 
@@ -154,7 +150,6 @@ export let learn = (docs: VocabDoc[]): Vocab => {
   let v = loadVocab(docs, keywords)
   let c: typeof comps = {}
   let st: typeof stamped = {}
-  let log: typeof sessionComps = {}
   let ix: typeof indexes = {}
   let names = new Set<string>()
   let relations: string[] = []
@@ -165,7 +160,6 @@ export let learn = (docs: VocabDoc[]): Vocab => {
   if (spine.length) st.entity = Object.fromEntries(spine)
   for (let name of v.all.filter((n) => n != 'entity')) {
     let def = (v.def(name) ?? {}) as {
-      bare?: boolean
       edge?: string
       by_name?: boolean
       index?: string[][]
@@ -181,7 +175,6 @@ export let learn = (docs: VocabDoc[]): Vocab => {
     }
     c[name] = own
     if (Object.keys(server).length) st[name] = server
-    if (def.bare === false) log[name] = own
     let rows = [
       ...(def.unique ?? []).map((cols) => ({ cols, unique: true })),
       ...(def.index ?? []).map((cols) => ({ cols })),
@@ -194,7 +187,6 @@ export let learn = (docs: VocabDoc[]): Vocab => {
   vocab = v
   comps = c
   stamped = st
-  sessionComps = log
   indexes = ix
   prefix = prefixes(v)
   idOf = idsOf(v)
@@ -298,8 +290,8 @@ export let verdictName = (verdict?: string | null) =>
 // DERIVED columns (D-24102): readable exactly like a stored column — filter,
 // project, tally, sort — but absent from `comps`/`stamped`, so raw graph writes
 // cannot store one. The query evaluators compute the value (statusOf in query.ts
-// read() and its SQL CASE mirror). Merged into readable routing so `.status` and
-// `.task.status` resolve and type-check; CLI/MCP compatibility writers expand
+// read() and its SQL CASE mirror). Merged into readable routing so
+// `.task.status` resolves and type-checks; CLI/MCP compatibility writers expand
 // that spelling into facets. `status` is the first and only member: it reads
 // completed/cancelled/claim.
 export let derivedProps: Record<string, Record<string, PropType>> = {
@@ -310,7 +302,7 @@ export let derivedProps: Record<string, Record<string, PropType>> = {
 // `entity` (num); the `eid` beside it is the identity itself — readable on every
 // row, never writable, and derived
 // from nothing, so it belongs to neither map above. Declared here so both
-// routing tables carry it and `.eid=<id>` NAMES entities at this door exactly as
+// routing tables carry it and `.entity.eid=<id>` NAMES entities at this door exactly as
 // @yaks/sql and @yaks/match answer the same predicate.
 export let spineProps: Record<string, Record<string, PropType>> = {
   entity: { eid: 'text' },
@@ -590,7 +582,7 @@ export type Venture = {
 }
 
 // A board is a saved filter over tasks: `query` speaks the query.ts
-// grammar ('.project=…&.status=open,wip'); empty/null selects NOTHING —
+// grammar ('.filed.project=…&.task.status=open,wip'); empty/null selects NOTHING —
 // a board that means "every task" says `.task`.
 export type BoardTag = { eid: string; query?: string | null }
 

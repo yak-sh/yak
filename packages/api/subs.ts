@@ -47,6 +47,7 @@ import {
   aggregate,
   comps,
   type Coverage,
+  named,
   only,
   project,
   type Projected,
@@ -55,7 +56,6 @@ import {
   type Reduced,
   reduced,
   Refused,
-  wanted,
 } from '@yaks/graph'
 import { matcher, net, rows as matchRows } from '@yaks/match'
 import { type And, parse } from '@yaks/query'
@@ -171,7 +171,7 @@ type Sub = {
   /** one reference through which this query reads a peer value */
   ref?: { comp: string; prop: string; far: Set<string> }
   /** the components its rows carry, or `null` for every one (@yaks/graph
-   * `wanted`) */
+   * `named`) */
   want?: Set<string> | null
   /** its `.fields` projection, when it asks for one */
   plan?: Projection | null
@@ -328,7 +328,7 @@ let affected = (
  *
  * ```ts ignore
  * let subs = subscriptions(graph)
- * subs.open(sink, 'cheap', '.book&.price<20')
+ * subs.open(sink, 'cheap', '.book&.book.price<20')
  * ```
  */
 export let subscriptions = (graph: Graph, opts: {
@@ -521,7 +521,7 @@ export let subscriptions = (graph: Graph, opts: {
       sub.ref = plan.ref
       sub.agg = aggregate(ast)
       if (sub.agg) return tell(sub, true, answers)
-      sub.want = wanted(graph.vocab, line)
+      sub.want = named(graph.vocab, line)
       sub.plan = projection(graph.vocab, ast)
       sub.cut = sub.plan?.cut ?? only(sub.want)
       if (sub.peer && sub.plan?.reaches.length) {
@@ -635,7 +635,9 @@ export let subscriptions = (graph: Graph, opts: {
   ) => {
     if (sub.agg) return tell(sub)
     if (sub.plan?.reaches.length) scope = undefined
-    let query = scope ? sub.query + '&.eid=' + [...scope].join(',') : sub.query
+    let query = scope
+      ? sub.query + '&.entity.eid=' + [...scope].join(',')
+      : sub.query
     let loaded = sub.peer
       ? after(read(sub, scope, prepared), answered)
       : load(sub, query)
@@ -944,7 +946,7 @@ export let subscriptions = (graph: Graph, opts: {
     let op = aggregate(ast)
     let plan = peerPlan(ast, graph.vocab)
     let p = op ? null : projection(graph.vocab, ast)
-    let cut = p?.cut ?? only(wanted(graph.vocab, line))
+    let cut = p?.cut ?? only(named(graph.vocab, line))
     if (!plan.peers) {
       if (op) {
         return after(

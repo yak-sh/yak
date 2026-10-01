@@ -12,7 +12,7 @@ test('a picker line always parses', () => {
       ['ali', 'person'],
       ['', 'person'],
       ['widget line', 'task'],
-      ['.status=open', 'task'],
+      ['.task.status=open', 'task'],
     ]
   ) parse(pickLine(q, comp))
 })

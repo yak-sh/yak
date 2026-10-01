@@ -61,7 +61,7 @@ test('a session query and an eid include its error entry', () => {
   let body = JSON.stringify([error])
   assertEquals(asking('.entry.session=heal', ['error']), '.entry.session=heal')
   assertEquals(rows(listing(body, '.entry.session=heal&*')), [error])
-  assertEquals(rows(listing(body, '.eid=failure&*')), [error])
+  assertEquals(rows(listing(body, '.entity.eid=failure&*')), [error])
   assertEquals(rows(listing(body, '.content')), [])
 })
 

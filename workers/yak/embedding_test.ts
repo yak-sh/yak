@@ -55,7 +55,7 @@ test('words rank by meaning among what a line selects', async () => {
   let { door } = await notes()
   let hits = await door.meaning('dragon burglar', { within: '.doc', limit: 2 })
   assertEquals(hits.map((h) => h.entity).sort(), ['flight', 'hobbit'])
-  let none = await door.meaning('dragon', { within: '.eid=kitchen' })
+  let none = await door.meaning('dragon', { within: '.entity.eid=kitchen' })
   assertEquals(none.map((h) => h.entity), ['kitchen'])
 })
 

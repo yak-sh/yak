@@ -57,9 +57,10 @@ in the flow, under the field.
 `set(id, text)` is text the host put there, offering nothing; `set(id, '')`
 clears the field, which ends its draft. `move(id, d)`, `accept(id, i?)` and
 `dismiss(id)` walk, take and close the list; taking a word completes on from it,
-so `.status` rolls on to `.status=` and then its values. `press(id, key)` is a
-key, named as a browser names it, and says whether the list took it. Each is a
-patch to the field's row; `state.ts` is what each makes of a row, pure.
+so `.task.status` rolls on to `.task.status=` and then its values.
+`press(id, key)` is a key, named as a browser names it, and says whether the
+list took it. Each is a patch to the field's row; `state.ts` is what each makes
+of a row, pure.
 
 ## Keys
 

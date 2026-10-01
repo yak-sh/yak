@@ -66,7 +66,8 @@ test('projected descriptors batch, wake renderers, release, and survive eviction
       archetype: { tables: JSON.stringify(names) },
     })),
   }))
-  let asks = () => wire.asked().filter((a) => a.subscribe.startsWith('.eid='))
+  let asks = () =>
+    wire.asked().filter((a) => a.subscribe.startsWith('.entity.eid='))
   let off = () => {}
   try {
     let seen: (readonly string[] | undefined)[] = []
@@ -75,7 +76,7 @@ test('projected descriptors batch, wake renderers, release, and survive eviction
     })
     archetypeTables(id2)
     await tick()
-    assertEquals(asks().map((a) => a.subscribe), [`.eid=${id},${id2}&*`])
+    assertEquals(asks().map((a) => a.subscribe), [`.entity.eid=${id},${id2}&*`])
     await tick()
     assertEquals(seen.at(-1), tables)
     assertEquals(

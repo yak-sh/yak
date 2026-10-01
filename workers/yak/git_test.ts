@@ -93,7 +93,7 @@ let deploy = async (
 
 // A committed object's own bytes, read back from where @yaks/git put them.
 let bodyOf = async (env: Env, git: ReturnType<typeof metaOf>, oid: string) => {
-  let [row] = await git.query(`.eid=${oid}`)
+  let [row] = await git.query(`.entity.eid=${oid}`)
   assert(row, `no object ${oid}`)
   let sha = (row.blob as { sha: string }).sha
   let bytes = await r2Objects(env.BLOBS).read(BODY + sha)
@@ -156,7 +156,9 @@ test('a deploy mints one commit whose tree is the manifest', async () => {
   let page = entries.find((e) =>
     (e.tree_entry as { name: string }).name == 'index.html'
   )!
-  let [blob] = await git.query(`.eid=${(page.edge as { to: string }).to}`)
+  let [blob] = await git.query(
+    `.entity.eid=${(page.edge as { to: string }).to}`,
+  )
   assertEquals((blob.blob as { sha: string }).sha, manifest['index.html'])
 })
 

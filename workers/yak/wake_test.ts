@@ -25,7 +25,7 @@ import { ADA, platform as probe, seeded } from './serving-probe.ts'
 let at = (time: string) => Date.parse(`2026-09-07T${time}:00Z`)
 let iso = (time: string) => new Date(at(time)).toISOString()
 let wake = async (env: ReturnType<typeof platform>['env'], eid: string) =>
-  (await meta(env).query(`.eid=${eid}`))[0] as Wake
+  (await meta(env).query(`.entity.eid=${eid}`))[0] as Wake
 // The directory's own object, awake: a store learns which one it is from a
 // request, so one read is what makes its vocabulary the platform's.
 let directory = async (p: ReturnType<typeof platform>) => {
@@ -532,7 +532,7 @@ test('a recurring call is one invocation per firing, never a re-run', async () =
   assertEquals((await a.rows('.call.source=daily')).length, 1)
   assertEquals((await a.rows('.result.call=daily')).length, 0)
   // The next occurrence, a day on, is its own invocation and its own answer.
-  let [row] = await a.rows('.eid=daily&?wake')
+  let [row] = await a.rows('.entity.eid=daily&?wake')
   await a.ctx.storage.setAlarm(Date.parse((row.wake as { at: string }).at))
   await a.store.tick(Date.parse((row.wake as { at: string }).at))
   await a.holds('.result', 2)
@@ -577,7 +577,7 @@ test('an idle world advances offline, a missed stretch in one firing', async () 
     200,
   )
   let world = async () =>
-    (await a.rows('.eid=world&?wake&?fired'))[0] as unknown as {
+    (await a.rows('.entity.eid=world&?wake&?fired'))[0] as unknown as {
       wake: { at: string; every: string }
       fired: { at: string }
     }
@@ -620,7 +620,8 @@ test('a world with nobody in it stops ticking, and a player arriving wakes it', 
   let player = (bundle: object) =>
     a.ask('/apply', [{ entity: { eid: 'bea' }, ...bundle }])
   let owed = async () =>
-    ((await a.rows('.eid=world&?wake'))[0].wake as { at: string | null }).at
+    ((await a.rows('.entity.eid=world&?wake'))[0].wake as { at: string | null })
+      .at
   // Half-minute instants, which `at` and `iso` do not write.
   let sec = (time: string) => Date.parse(`2026-09-07T${time}Z`)
   let stamp = (time: string) => new Date(sec(time)).toISOString()

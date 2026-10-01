@@ -76,7 +76,7 @@ let status: Derived = {
 }
 
 test('a scalar predicate binds its value as a param, never inlined', () => {
-  let { sql, params } = compile(parse('.priority=1'), v)
+  let { sql, params } = compile(parse('.task.priority=1'), v)
   assertEquals(params, [1])
   assert(sql.includes('"task"."priority" = ?'), sql)
 })
@@ -86,19 +86,21 @@ test('a text term requires a search extension', () => {
 })
 
 test('a contains needle rides as a param', () => {
-  let { params } = compile(parse('.title~=hi'), v)
+  let { params } = compile(parse('.doc.title~=hi'), v)
   assert(params.includes('hi'))
 })
 
 test('the derived hook supplies a computed property expression', () => {
-  let { sql, params } = compile(parse('.status=open'), v, { derived: status })
+  let { sql, params } = compile(parse('.task.status=open'), v, {
+    derived: status,
+  })
   assert(sql.includes('case when'), sql)
   assertEquals(params, ['open'])
 })
 
 test('a computed property with no registration declines loudly', () => {
   assertThrows(
-    () => compile(parse('.status=open'), v),
+    () => compile(parse('.task.status=open'), v),
     Unsupported,
   )
 })
@@ -117,7 +119,7 @@ test('a derived read is NULL where the component is not worn', () => {
       expr: () => lit('x'),
     },
   }
-  let { sql } = compile(parse('.status=empty'), v, { derived: blind })
+  let { sql } = compile(parse('.task.status=empty'), v, { derived: blind })
   assert(
     sql.includes(`(case when "task"."entity" is not null then 'x' end)`),
     sql,
@@ -125,7 +127,9 @@ test('a derived read is NULL where the component is not worn', () => {
   // and the narrowing a value test keeps, now that the read can carry it
   assert(sql.includes('("task"."entity" is not null and '), sql)
   // over a dereferenced leaf the component is a row of its own, not a column
-  let deref = compile(parse('.note.about.status=empty'), v, { derived: blind })
+  let deref = compile(parse('.note.about.task.status=empty'), v, {
+    derived: blind,
+  })
   assert(
     deref.sql.includes(
       `(case when exists (select 1 from "task" as "__pw" where` +
@@ -148,7 +152,7 @@ test('a read marked worn: false keeps its value without the component', () => {
       expr: () => fn('coalesce', col('priority', 'task'), lit('open')),
     },
   }
-  let { sql } = compile(parse('.status=open'), v, { derived: fallback })
+  let { sql } = compile(parse('.task.status=open'), v, { derived: fallback })
   assert(!sql.includes('case when'), sql)
   assert(!sql.includes('("task"."entity" is not null and '), sql)
 })
@@ -177,7 +181,7 @@ test('a reverse hop compiles to a correlated EXISTS', () => {
 })
 
 // The step relation a chained walk composes: the hops joined on each other, so
-// one rung of the CTE crosses the whole chain. `.fork.from.session` is the
+// one rung of the CTE crosses the whole chain. `.fork.from.entry.session` is the
 // session a session forked out of.
 test('a walk over a chain of references composes one step', () => {
   let vocab = loadVocab({
@@ -204,7 +208,10 @@ test('a walk over a chain of references composes one step', () => {
       },
     },
   })
-  let { sql, params } = compile(parse('.fork.from.session[<=3]->S-1'), vocab)
+  let { sql, params } = compile(
+    parse('.fork.from.entry.session[<=3]->S-1'),
+    vocab,
+  )
   assert(
     sql.includes(
       'select "fork"."entity" as "from", "__w1"."session" as "to" from "fork"' +
@@ -215,7 +222,7 @@ test('a walk over a chain of references composes one step', () => {
   assertEquals(params, [1, 3])
   // a hop that is no reference is refused, never answered empty
   assertThrows(
-    () => compile(parse('.entry.session.num->S-1'), vocab),
+    () => compile(parse('.entry.session.entity.num->S-1'), vocab),
     Unsupported,
   )
 })
@@ -228,11 +235,11 @@ test('a reverse cardinality binds its count', () => {
 })
 
 test('a reverse child filter screens the child row', () => {
-  let { sql, params } = compile(parse('.notes.stars=5'), v)
+  let { sql, params } = compile(parse('.notes.note.stars=5'), v)
   assert(sql.includes('"note"."stars" = ?'), sql)
   assertEquals(params, [5])
   // a child property in another component is left-joined inside the subquery
-  let joinSql = compile(parse('.notes.title~=hi'), v).sql
+  let joinSql = compile(parse('.notes.doc.title~=hi'), v).sql
   assert(
     joinSql.includes(
       'left join "doc" on "doc"."entity" = ' +
@@ -246,7 +253,7 @@ test('a reverse hop with no count and no child filter declines', () => {
   let e = assertThrows(() => compile(parse('.notes~=lots'), v), Unsupported)
   assertEquals((e as Unsupported).feature, 'a reverse hop')
   // and one reaching for the spine, whose name means the outer row down there
-  assertThrows(() => compile(parse('.notes.num=3'), v), Unsupported)
+  assertThrows(() => compile(parse('.notes.entity.num=3'), v), Unsupported)
 })
 
 test('an unreachable directive throws Unsupported naming the feature', () => {
@@ -266,7 +273,7 @@ test('a rule sigil throws Unsupported rather than compiling', () => {
 })
 
 test('ordering by an unfiltered property still joins its table', () => {
-  let { sql } = compile(parse('.priority=1&.order=title'), v)
+  let { sql } = compile(parse('.task.priority=1&.order=doc.title'), v)
   assert(sql.includes('left join "doc"'), sql)
   // the spine breaks ties — the num where there is one, the row id always —
   // so the order a query asks for is total and a page of it is the same page
@@ -281,7 +288,7 @@ test('ordering by an unfiltered property still joins its table', () => {
 })
 
 test('a window with no .order is newest-first by spine num', () => {
-  let { sql, params } = compile(parse('.priority=1&.limit=2&.after=7'), v)
+  let { sql, params } = compile(parse('.task.priority=1&.limit=2&.after=7'), v)
   assert(sql.includes('order by "entity"."num" desc'), sql)
   assert(sql.includes('"entity"."num" < ?'), sql)
   assertEquals(params, [1, 7, 2])
@@ -297,14 +304,14 @@ let unnumbered = loadVocab({
 } as VocabDoc)
 
 test('a store with no numbers still states its order, by the spine id', () => {
-  let { sql } = compile(parse('.priority=1&.limit=2'), unnumbered)
+  let { sql } = compile(parse('.task.priority=1&.limit=2'), unnumbered)
   assert(sql.endsWith('order by "entity"."id" desc limit ?'), sql)
   assert(!sql.includes('"entity"."num"'), sql)
 })
 
 test('a cursor names an entity by number, and a store with none says so', () => {
   assertThrows(
-    () => compile(parse('.priority=1&.after=7'), unnumbered),
+    () => compile(parse('.task.priority=1&.after=7'), unnumbered),
     Unsupported,
     'does not number its entities',
   )
@@ -312,7 +319,7 @@ test('a cursor names an entity by number, and a store with none says so', () => 
 
 test('an eid cursor pages a store with no numbers', () => {
   let { sql } = compile(
-    parse('.priority=1&.order=-title&.limit=2&.after=child:abc'),
+    parse('.task.priority=1&.order=-doc.title&.limit=2&.after=child:abc'),
     unnumbered,
   )
   assert(sql.includes(`"__cur"."eid" = 'child:abc'`), sql)
@@ -320,7 +327,7 @@ test('an eid cursor pages a store with no numbers', () => {
 })
 
 test('an explicit .order survives a window', () => {
-  let { sql } = compile(parse('.priority=1&.order=-title&.limit=2'), v)
+  let { sql } = compile(parse('.task.priority=1&.order=-doc.title&.limit=2'), v)
   assert(
     sql.endsWith(
       'order by "doc"."title" desc, "entity"."num" desc, ' +
@@ -331,7 +338,7 @@ test('an explicit .order survives a window', () => {
 })
 
 test('.after pages within the asked order, keyed on the anchor', () => {
-  let { sql, params } = compile(parse('.order=title&.limit=2&.after=7'), v)
+  let { sql, params } = compile(parse('.order=doc.title&.limit=2&.after=7'), v)
   // the cursor names an entity by its num — the same form whatever the
   // order — and the anchor's own value is read back to page past it
   assert(sql.includes('where "__cur"."num" = 7'), sql)
@@ -343,7 +350,9 @@ test('.after pages within the asked order, keyed on the anchor', () => {
 })
 
 test('.after over a derived order reads the anchor through the hook', () => {
-  let { sql } = compile(parse('.order=status&.after=7'), v, { derived: status })
+  let { sql } = compile(parse('.order=task.status&.after=7'), v, {
+    derived: status,
+  })
   // the derived expression is written twice: once over the row, once over the
   // anchor's own owner id
   assert(sql.includes(`case when "task"."entity" is null`), sql)
@@ -356,11 +365,11 @@ test('.after over a derived order reads the anchor through the hook', () => {
 let among = (col: string) =>
   `"entity"."${col}" in (select value from json_each(?))`
 
-test('.eid names entities as one set lookup on the spine', () => {
-  let one = compile(parse('.eid=a3f1'), v)
+test('.entity.eid names entities as one set lookup on the spine', () => {
+  let one = compile(parse('.entity.eid=a3f1'), v)
   assert(one.sql.includes(among('eid')), one.sql)
   assertEquals(one.params, ['["a3f1"]'])
-  let many = compile(parse('.eid=a3f1,b7c2'), v)
+  let many = compile(parse('.entity.eid=a3f1,b7c2'), v)
   assert(many.sql.includes(among('eid')), many.sql)
   assertEquals(many.params, ['["a3f1","b7c2"]'])
   // the explicit form routes to the same place
@@ -368,20 +377,22 @@ test('.eid names entities as one set lookup on the spine', () => {
   // a list binds one parameter however long it is: a Durable Object's SQLite
   // refuses a statement binding more than 100
   let ids = Array.from({ length: 150 }, (_, i) => `e${i}`)
-  assertEquals(compile(parse(`.eid=${ids}`), v).params, [JSON.stringify(ids)])
+  assertEquals(compile(parse(`.entity.eid=${ids}`), v).params, [
+    JSON.stringify(ids),
+  ])
 })
 
-test('.num and a human id name entities by their spine number', () => {
-  let nums = compile(parse('.num=3,4'), v)
+test('.entity.num and a human id name entities by their spine number', () => {
+  let nums = compile(parse('.entity.num=3,4'), v)
   assert(nums.sql.includes(among('num')), nums.sql)
   assertEquals(nums.params, ['[3,4]'])
   // `T-7` is the entity numbered 7 — the letter is display, the number is
   // identity — so a human id lands on the num arm
-  let human = compile(parse('.eid=T-7'), v)
+  let human = compile(parse('.entity.eid=T-7'), v)
   assert(human.sql.includes(among('num')), human.sql)
   assertEquals(human.params, ['[7]'])
   // a mixed list asks both arms
-  let both = compile(parse('.eid=a3f1,T-7'), v)
+  let both = compile(parse('.entity.eid=a3f1,T-7'), v)
   assert(
     both.sql.includes(`(${among('eid')} or ${among('num')})`),
     both.sql,
@@ -417,12 +428,12 @@ test('a wide OR is cut into compounds workerd will take', () => {
 test('a spine value that is no operand list keeps the column road', () => {
   // an empty value is still absence grammar, and a range is a comparison the
   // spine's untyped column declines exactly as it did before
-  assert(compile(parse('!eid'), v).sql.includes('is null'), 'absence')
-  assertThrows(() => compile(parse('.num=3..5'), v), Unsupported)
+  assert(compile(parse('!entity.eid'), v).sql.includes('is null'), 'absence')
+  assertThrows(() => compile(parse('.entity.num=3..5'), v), Unsupported)
 })
 
 test('the membership statement excludes graves and answers one eid', () => {
-  let { sql } = compile(parse('.priority>=1'), v)
+  let { sql } = compile(parse('.task.priority>=1'), v)
   assert(sql.startsWith('select "entity"."eid" as eid from "entity"'), sql)
   assert(sql.includes('not exists (select 1 from tombstone'), sql)
 })
@@ -557,7 +568,7 @@ test('reference equality compares indexed keys, not projected eids', () => {
 })
 
 test('reverse NONE and compound child conditions bind without outer-owner leakage', () => {
-  let none = compile(parse('.notes!.stars=5'), v)
+  let none = compile(parse('.notes!.note.stars=5'), v)
   assert(none.sql.includes('not exists (select 1 from "note"'))
   assertEquals(none.params, [5])
   let ast = and({
@@ -575,7 +586,7 @@ test('reverse NONE and compound child conditions bind without outer-owner leakag
   assert(child.sql.includes('"note"."entity" > ?'), child.sql)
   assertEquals(child.params, [5, 0])
   assertThrows(
-    () => compile(and({ ...present('notes'), where: eq('num', 3) }), v),
+    () => compile(and({ ...present('notes'), where: eq('entity.num', 3) }), v),
     Unsupported,
   )
 })
@@ -594,7 +605,7 @@ test('a builder can preserve a terminal component facet across name collisions',
       },
     },
   })
-  let c = compile(and({ ...absent('book'), facet: true }), vocab)
+  let c = compile(and(absent('book')), vocab)
   assert(c.sql.includes('(select "book"."entity" from "book")'), c.sql)
   assert(!c.sql.includes('join "loan"'), c.sql)
 })
@@ -602,18 +613,9 @@ test('a builder can preserve a terminal component facet across name collisions',
 // A bare prop several reference properties share routes to comp '' — one read
 // concept with no one table behind it. Lowered, its path leaf named the table
 // `""` and SQLite refused the statement; the contract is to decline (S-37088).
-test('a shared reference equality unions its owners, other shapes decline', () => {
-  // Two components hold a reference property of the same name: the bare word
-  // routes to neither (vocab route(): comp ''), and its equality is one indexed
-  // question per owner, compiled the way `.refs=` is.
+test('a property named alone is refused with the forms that name it', () => {
   let shared = loadVocab({
     $defs: {
-      entity: {
-        component: true,
-        type: 'object',
-        wire: false,
-        properties: {},
-      },
       cursor: {
         component: true,
         type: 'object',
@@ -626,28 +628,36 @@ test('a shared reference equality unions its owners, other shapes decline', () =
       },
     } as VocabDoc['$defs'],
   })
-  let { sql, params } = compile(parse('.client=c1'), shared)
-  assertEquals(params, ['c1', 'c1'])
-  assert(
-    sql.includes(
-      '"entity"."id" in (select "camera"."entity" from "camera" where ' +
-        '"camera"."client" = (select id from "entity" where eid = ?) union ' +
-        'select "cursor"."entity" from "cursor" where ' +
-        '"cursor"."client" = (select id from "entity" where eid = ?))',
-    ),
-    sql,
-  )
-  for (let line of ['.client', '!client', '.client~=c1', '.client=c1,c2']) {
-    let e = assertThrows(() => compile(parse(line), shared), Unsupported)
-    assertEquals(e.feature, 'a shared reference')
+  for (let line of ['.client=c1', '.client', '!client', '.order=client']) {
+    assertThrows(
+      () => compile(parse(line), shared),
+      Unknown,
+      '.client is a property, not a component — name it .camera.client or ' +
+        '.cursor.client',
+    )
   }
+  assertThrows(() => compile(parse('.eid=c1'), v), Unknown, '.entity.eid')
+  // a name alone is the component, even where a property shares it
+  let named = loadVocab({
+    $defs: {
+      name: { component: true, type: 'object', properties: {} },
+      recipe: {
+        component: true,
+        type: 'object',
+        properties: { name: { type: 'string' } },
+      },
+    },
+  })
+  let { sql } = compile(parse('.name'), named)
+  assert(sql.includes('"name"'), sql)
+  assert(!sql.includes('"recipe"'), sql)
 })
 
 test('a property test says its component is present, so the planner drives from that table', () => {
   // `.board.query~=<id>` scanned the spine through a left join (243 ms on
   // the live graph) where the boards were 22 rows: a value test cannot hold
   // on a row without the component, and saying so lets SQLite start there.
-  let guarded = ['.priority=1', '.priority~=1', '.priority>1']
+  let guarded = ['.task.priority=1', '.task.priority~=1', '.task.priority>1']
   for (let line of guarded) {
     let { sql } = compile(parse(line), v)
     assert(sql.includes('("task"."entity" is not null and '), `${line}: ${sql}`)
@@ -660,35 +670,8 @@ test('a property test says its component is present, so the planner drives from 
     assert(sql.includes('("note"."entity" is not null and '), `${line}: ${sql}`)
   }
   // An absence or a not-equals must still see the rows without the component.
-  for (let line of ['!priority', '.priority!=1']) {
+  for (let line of ['!task.priority', '.task.priority!=1']) {
     let { sql } = compile(parse(line), v)
     assert(!sql.includes('"task"."entity" is not null'), `${line}: ${sql}`)
   }
-})
-
-test('a path leaf shared by several reference properties declines', () => {
-  let vocab = loadVocab({
-    $defs: {
-      claim: {
-        component: true,
-        type: 'object',
-        properties: { session: { type: 'string', ref: 'entity' } },
-      },
-      session: {
-        component: true,
-        type: 'object',
-        properties: { actor: { type: 'string', ref: 'entity' } },
-      },
-      crew: {
-        component: true,
-        type: 'object',
-        properties: { actor: { type: 'string', ref: 'entity' } },
-      },
-    },
-  })
-  let e = assertThrows(
-    () => compile(parse('.claim.session.actor=p1'), vocab),
-    Unsupported,
-  ) as Unsupported
-  assertEquals(e.feature, 'a shared reference leaf')
 })

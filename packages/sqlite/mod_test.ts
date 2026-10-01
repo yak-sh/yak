@@ -210,7 +210,7 @@ test('install() is idempotent', () => {
   s.install()
   s.install() // create-if-not-exists — a second run is a no-op, not an error
   s.tx((tx) => tx.patch([{ entity: { eid: 'x' }, doc: { title: 'Hi' } }]))
-  assertEquals((s.read('.title~=hi') as Bundle[])[0].entity.eid, 'x')
+  assertEquals((s.read('.doc.title~=hi') as Bundle[])[0].entity.eid, 'x')
 })
 
 test('an OR filtered by one or several entity ids keeps their matches', () => {
@@ -224,7 +224,7 @@ test('an OR filtered by one or several entity ids keeps their matches', () => {
       { entity: { eid: 'd' }, product: { price: 2 } },
     ])
   )
-  let query = '(.doc.title=a|.product.price=1)&.eid='
+  let query = '(.doc.title=a|.product.price=1)&.entity.eid='
   let ids = (q: string) =>
     (s.read(q) as Bundle[]).map((b) => b.entity.eid).sort()
   assertEquals(ids(query + 'b'), ['b'])
@@ -332,7 +332,7 @@ test('a driver that owns transactions is asked for them', () => {
   })
   assertEquals(inside, 1)
   assert(!seen.some((sql) => /savepoint|rollback|release/.test(sql)))
-  assertEquals((s.read('.title~=kettle') as Bundle[])[0].entity.eid, 'p1')
+  assertEquals((s.read('.doc.title~=kettle') as Bundle[])[0].entity.eid, 'p1')
 })
 
 test('a bundle written and read back is the same entity', () => {

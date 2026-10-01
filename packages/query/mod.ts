@@ -13,9 +13,8 @@
 // — and nothing about any schema. Whether `status` is a property, a reference
 // or an enum, and how a field maps to storage, is left to a compiler that has a
 // schema (`@yaks/sql` takes this AST plus a schema and compiles SQL). Given a
-// loaded vocabulary, two readers work over the text itself: `meant` resolves a
-// bare property from the rest of the line, and `complete` offers what can be
-// typed at the caret. See README.
+// loaded vocabulary, `complete` offers what can be typed at the caret. See
+// README.
 
 export * from './ast.ts'
 export * from './parse.ts'
@@ -23,5 +22,4 @@ export * from './multi.ts'
 export * from './rule.ts'
 export * from './time.ts'
 export * from './teach.ts'
-export * from './meant.ts'
 export * from './complete.ts'

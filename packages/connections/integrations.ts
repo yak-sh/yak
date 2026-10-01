@@ -97,7 +97,7 @@ export let known = async (
   read: Read,
   name: string,
 ): Promise<Integration | undefined> => {
-  let [b] = await read(`.eid=${integrationEid(name)}&.${INTEGRATION}`)
+  let [b] = await read(`.entity.eid=${integrationEid(name)}&.${INTEGRATION}`)
   return b?.[INTEGRATION] as Integration | undefined
 }
 
@@ -130,7 +130,7 @@ export let install = (
   seeds: Integration[] = SEEDS,
 ): Bundle[] | Promise<Bundle[]> =>
   after(
-    read(`.eid=${
+    read(`.entity.eid=${
       seeds.map((i) => integrationEid(i.name)).join(',')
     }&.${INTEGRATION}`),
     (found: Bundle[]) => {

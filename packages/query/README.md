@@ -9,10 +9,10 @@ property exists, and not whether a given backend can answer the query. Use
 bundle is one entity's components represented as a JSON object. This package
 stores no entities and opens no database; its output is plain JSON data.
 
-Given a loaded [@yaks/vocab](../vocab/README.md) vocabulary, two functions read
-a query the way it will be answered: `meant()` decides what a bare property
-means from the rest of the line, and `complete()` offers what can be typed next
-at a caret.
+A property is named with its component (`.task.status`), and a name alone is
+always a component (`.task`). Given a loaded [@yaks/vocab](../vocab/README.md)
+vocabulary, `complete()` offers what can be typed next at a caret, every
+property with its component.
 
 ## Install
 
@@ -26,13 +26,13 @@ deno add jsr:@yaks/query
 ```ts
 import { parse } from '@yaks/query'
 
-parse('.status=open .priority<=1 .team=frontend,backend')
+parse('.task.status=open .task.priority<=1 .task.team=frontend,backend')
 // {
 //   kind: 'and',
 //   clauses: [
-//     { kind: 'pred', path: ['status'],   op: '=',  value: { kind: 'scalar', raw: 'open' } },
-//     { kind: 'pred', path: ['priority'], op: '<=', value: { kind: 'scalar', raw: '1' } },
-//     { kind: 'pred', path: ['team'],     op: '=',
+//     { kind: 'pred', path: ['task', 'status'],   op: '=',  value: { kind: 'scalar', raw: 'open' } },
+//     { kind: 'pred', path: ['task', 'priority'], op: '<=', value: { kind: 'scalar', raw: '1' } },
+//     { kind: 'pred', path: ['task', 'team'],     op: '=',
 //       value: { kind: 'list', items: [ {kind:'scalar',raw:'frontend'}, {kind:'scalar',raw:'backend'} ] } },
 //   ],
 // }
@@ -58,11 +58,11 @@ builder calls:
 ```ts
 import { and, eq, le, list, parse } from '@yaks/query'
 
-let a = parse('.status=open .priority<=1 .team=frontend,backend')
+let a = parse('.task.status=open .task.priority<=1 .task.team=frontend,backend')
 let b = and(
-  eq('status', 'open'),
-  le('priority', 1),
-  eq('team', list('frontend', 'backend')),
+  eq('task.status', 'open'),
+  le('task.priority', 1),
+  eq('task.team', list('frontend', 'backend')),
 )
 // a deep-equals b
 ```
@@ -91,7 +91,7 @@ being treated as search text.
 A clause is `path [qualifiers]? operator value`. The bracket binds to the
 **path** and is read before any operator, so `.requires[<=3]->item-42` is the
 path `requires` with a depth cap, followed by the walk operator; a bracket after
-the operator is part of the value (`.title~=x[1]`).
+the operator is part of the value (`.doc.title~=x[1]`).
 
 ### Operators
 
@@ -151,12 +151,12 @@ therefore a clause, not a text term.
 `item-42` reaches. `.requires[<=3]->item-42` caps the depth at three hops.
 
 The path is a relation name, a reference property (`.fork.from->S-7`), or a
-chain of reference properties (`.fork.from.session->S-1`, one step composed of
-those hops, so walking it follows the fork lineage) — the vocabulary determines
-which form applies. The target is a single entity, named by eid or by human id.
-Under the standard evaluator contract, without a bracket a walk has no hop cap
-and returns at most 10,000 nearest nodes other than its target; only an explicit
-`[<=N]` adds a hop cap. It parses to a `walk` node:
+chain of reference properties (`.fork.from.entry.session->S-1`, one step
+composed of those hops, so walking it follows the fork lineage) — the vocabulary
+determines which form applies. The target is a single entity, named by eid or by
+human id. Under the standard evaluator contract, without a bracket a walk has no
+hop cap and returns at most 10,000 nearest nodes other than its target; only an
+explicit `[<=N]` adds a hop cap. It parses to a `walk` node:
 `walk(field, dir, target, depth?)`.
 
 ### Qualifiers
@@ -165,7 +165,7 @@ A path may carry a bracket of comma-separated arguments: `<=3` (an operator and
 a value), `key=value`, or a bare `word`. Each kind of clause declares which
 qualifiers it accepts — the walk accepts one depth cap, `.edges` accepts one or
 two bare words, and every other clause takes none. An unrecognized qualifier is
-rejected with an error naming it (`.status[<=3]=open` throws).
+rejected with an error naming it (`.task.status[<=3]=open` throws).
 
 ### Separators, grouping and quoting
 
@@ -181,9 +181,10 @@ top-level `|`.
 
 Inside a value, `,` is the any-of operator. A list has no spaces and no empty
 member: `.p=a,b` is one clause, and `.p=a, b` is refused rather than repaired. A
-value containing a space is quoted — `.title~="two words"`,
-`.status='open wip'`, with a backslash escaping inside the quotes — where the
-unquoted `.title~=two words` is the filter `two` plus the search term `words`.
+value containing a space is quoted — `.doc.title~="two words"`,
+`.task.status='open wip'`, with a backslash escaping inside the quotes — where
+the unquoted `.doc.title~=two words` is the filter `two` plus the search term
+`words`.
 
 ### The leading dot
 
@@ -207,13 +208,13 @@ references:
 | `.near=42`             | rank by similarity to this entity                                                                                                                                                                                     |
 | `.refs=42`             | everything that references entity 42; `.refs` references anything, `!refs` references nothing                                                                                                                         |
 | `.count`               | how many rows match, instead of the rows                                                                                                                                                                              |
-| `.distinct=prop`       | the distinct values of one property                                                                                                                                                                                   |
-| `.tally=prop`          | each value of one property with its count                                                                                                                                                                             |
+| `.distinct=comp.prop`  | the distinct values of one property                                                                                                                                                                                   |
+| `.tally=comp.prop`     | each value of one property with its count                                                                                                                                                                             |
 | `.fields=pin.x,pin.z~` | the properties each row carries; a path through a reference (`review.book.doc.title`) brings what it reaches as a bundle of its own; a trailing `~` excludes changes to that property from subscription notifications |
 | `*`                    | every component of each selected entity                                                                                                                                                                               |
 | `.limit=200`           | at most this many rows                                                                                                                                                                                                |
 | `.after=13882`         | continue past this entity                                                                                                                                                                                             |
-| `.edges`               | the edges touching the answer; `.edges.peers=status,title` projects the far endpoint; `.edges[watches,author.team]` selects one edge type                                                                             |
+| `.edges`               | the edges touching the answer; `.edges.peers=task.status,doc.title` projects the far endpoint; `.edges[watches,author.team]` selects one edge type                                                                    |
 
 `.after=<id>` is the paging cursor: an entity number, human id, or eid to
 continue past (`.after=T-13882` names the same number as `.after=13882`). An eid
@@ -234,8 +235,8 @@ rows, so an aggregate ignores them: `.count&.limit=20` counts every match.
 - `parse(q, { text: false })` refuses bare-word text terms, so a rule or a saved
   filter fails on a stray word instead of quietly gaining a search term. A
   quoted term is still allowed — quoting is how a strict query asks for a word.
-- Paths stay raw dotted segments: `.review.book.title~=magic` is three segments
-  and nothing more. Routing them to a schema is a downstream job.
+- Paths stay raw dotted segments: `.review.book.doc.title~=magic` is four
+  segments and nothing more. Routing them to a schema is a downstream job.
 - The empty query selects nothing: an empty string, or one with no clauses,
   parses to `{ kind: 'and', clauses: [{ kind: 'never' }] }`.
 
@@ -260,13 +261,13 @@ hand-written query, carries.
 
 ## Reading a query against a vocabulary
 
-A bare property several components declare (`status`, on a graph holding tasks
-and sessions) is ambiguous to the vocabulary, which refuses it and names the
-candidates. `meant(vocab, ast)` resolves it to the component the rest of the
-line names outright, when exactly one candidate is named: `.task&.status=open`
-reads as `.task&.task.status=open`. A branch of an `|` sees its own clauses and
-what encloses it, never its sibling's. `meaning(vocab)` does the same for a
-query as typed, and returns the very string when nothing changed.
+A property is named with its component: `.task.status=open`, never
+`.status=open`. A name alone is always a component, even where a property has
+the same name. An evaluator refuses a property named alone, and its message
+names each component that declares it
+(`.status is a property, not a component
+— name it .session.status or .task.status`);
+the message only teaches, and never changes what a query means.
 
 `complete(vocab, text, caret?, source?)` is the one completion engine for every
 place a query is typed. It reads the word under the caret and returns its span
@@ -289,17 +290,20 @@ let v = loadVocab({
 })
 complete(v, '.ta').cands // [{ text: '.task', kind: 'comp' }, …]
 complete(v, '.task').cands // '.task.' its properties, …, then '!task' absent
-complete(v, '.status').cands // the operators: '.status=' equals, '.status!=' not, …
-complete(v, '.status').whole // true
-complete(v, '.status=o').cands // [{ text: '.status=open', kind: 'status' }]
+complete(v, '.sta').cands // [{ text: '.task.status', kind: 'task' }]
+complete(v, '.task.status').cands // the operators: '=' equals, '!=' not, …
+complete(v, '.task.status').whole // true
+complete(v, '.task.status=o').cands // [{ text: '.task.status=open', kind: 'status' }]
 ```
 
 It offers components, properties (`· stamped` for a server-owned one, `· ref`
 for a reference), reverse associations, operators, the dotted directives and
 their values, enum members, `1`/`0` for a flag and time phrases for a time. A
-bare property is offered only where it stands: resolved by the vocabulary, or by
-the rest of the line as `meant()` would read it. The properties of a `_`
-component, and one marked `bare: false`, are reached through their component.
+property is offered with its component, so a name you remember finds the
+component it is on: `.ti` offers the component `.timing`, then `.foo.timing` and
+`.doc.title`. An exact name comes first, then a form whose component the rest of
+the line names (`.task .sta` puts `.task.status` before `.session.status`); the
+line orders the list and never decides a meaning.
 
 What only a graph knows comes from a `source` the caller supplies:
 `ids(ref,
@@ -314,21 +318,21 @@ for a browser and a terminal.
 
 Schema-dependent interpretation belongs to a compiler such as `@yaks/sql`:
 
-- **Field routing** — mapping a bare `.status` to the record type that owns it
-  (@yaks/vocab's `route` and `aim`). Paths stay raw segments in the AST;
-  `meant()` above only qualifies a bare name the line decides.
-- **Reference resolution** — turning an id or a name (`.author=alice`) into a
-  reference id, and resolving the targets of `.refs` and of reverse unions.
+- **Field routing** — reading `.task.status` as task's status, and refusing a
+  property named alone (@yaks/vocab's `aim`). Paths stay raw segments in the
+  AST.
+- **Reference resolution** — turning an id or a name (`.book.author=alice`) into
+  a reference id, and resolving the targets of `.refs` and of reverse unions.
 - **Type coercion** — reading a scalar as a number, an enum, a boolean or a
   time, and promoting time-typed scalars through `timeSpan`.
 - **Reverse associations** — `.reviews`, its cardinality (`.reviews>=5`), and
-  the mid-bang all/none form (`.reviews!.rating!=5`) are named by pluralizing a
-  record type that references this one, which is schema. Reverse forms without
+  the mid-bang all/none form (`.reviews!.review.rating!=5`) are named by
+  pluralizing a record type that references this one, which is schema. A child's
+  property is named with its component, like any other. Reverse forms without
   the bang parse as ordinary path predicates for the compiler to restructure.
   The mid-bang form carries `not: true`; nested quantifiers keep a child `where`
   clause. The binder refuses names that are not reverse associations. Builders
-  may also put a conjunction in `where`. A builder-set `facet: true` keeps a
-  trailing component name from being read as a same-named property.
+  may also put a conjunction in `where`.
 - **Scopes** — `.kind=book` parses as an ordinary predicate; expanding it into
   the presence and absence clauses that kind implies needs the schema's kind
   order.
@@ -367,4 +371,4 @@ The root export also includes AST types, `coerce()` for builder values,
 `unitMs()` for time-unit conversion. `WALK_LIMIT` is the standard 10,000-node
 traversal limit; `WALK_DEPTH` is the older exported depth constant (16), not the
 default for a walk without a depth qualifier. The package's one dependency is
-@yaks/vocab, for `meant()` and `complete()`; it uses no platform-specific APIs.
+@yaks/vocab, for `complete()`; it uses no platform-specific APIs.

@@ -102,7 +102,7 @@ let texts = await needs('texts')
 await connect(c, texts, { key: 'sk-live' })
 await g.apply([{ ...link('widget', USES, texts), [USES]: { anyone: true } }])
 let calendar = await needs('calendar')
-let [held] = await g.read(`.eid=${calendar}`)
+let [held] = await g.read(`.entity.eid=${calendar}`)
 await g.apply([{
   entity: { eid: calendar },
   connection: { status: 'connected' },

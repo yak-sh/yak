@@ -118,11 +118,11 @@ export let routes = (
     let { sha, eid } = at
     if (!eid) {
       let current = async () => {
-        let [row] = await host.graph.read(`.eid=${sha}`)
+        let [row] = await host.graph.read(`.entity.eid=${sha}`)
         let artifact = row?.artifact as Artifact | undefined
         let mime = artifact?.media_type ?? 'application/octet-stream'
         let rep = representation(SCOPE, sha, mime)
-        let [saved] = await host.graph.read(`.eid=${rep.eid}`)
+        let [saved] = await host.graph.read(`.entity.eid=${rep.eid}`)
         if (saved?.representation) return rep
         let bytes = await store.get(sha)
         if (!bytes) return null
@@ -158,7 +158,7 @@ export let routes = (
         headers: { location: to.href, 'cache-control': 'public, no-cache' },
       })
     }
-    let [found] = await host.graph.read(`.eid=${eid}`)
+    let [found] = await host.graph.read(`.entity.eid=${eid}`)
     let rep = found?.representation as Representation | undefined
     if (
       !rep || rep.scope != SCOPE || rep.address != sha ||

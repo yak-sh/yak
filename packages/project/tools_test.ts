@@ -37,7 +37,10 @@ let seeded = async (...bundles: Bundle[]) => {
 test('a board that still routes is nothing to report', async () => {
   let said = await checkup(
     'board_check',
-    await seeded({ entity: { eid: 'b1' }, board: { query: '.status=open' } }),
+    await seeded({
+      entity: { eid: 'b1' },
+      board: { query: '.task.status=open' },
+    }),
   )
   assertEquals(said.level, undefined)
   assert(said.body.endsWith('— nothing to report'), said.body)

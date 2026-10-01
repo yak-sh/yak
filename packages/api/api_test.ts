@@ -40,8 +40,8 @@ for (let async of [false, true]) {
       using logged = stub(console, 'error')
       let response = await handler(
         method == 'GET'
-          ? ask('.title=private-query-value')
-          : post('/query', { q: '.title=private-query-value' }),
+          ? ask('.doc.title=private-query-value')
+          : post('/query', { q: '.doc.title=private-query-value' }),
       )
       assertEquals(response.status, 500)
       assertEquals(await response.json(), {
@@ -93,7 +93,7 @@ test('/apply logs failed post-commit effects while preserving its successful res
   assertEquals(logged.calls.map((c) => c.args), [
     ['shelf failed at effect —', error],
   ])
-  assertEquals((await graph.read('.price=12')).length, 1)
+  assertEquals((await graph.read('.book.price=12')).length, 1)
 })
 
 test('a batch applied comes back as it landed, and reads back', async () => {
@@ -113,7 +113,7 @@ test('a batch applied comes back as it landed, and reads back', async () => {
   assertEquals(comp(applied[0], 'created').by, 'm1')
   assertEquals(applied[0].$actor, undefined)
 
-  let read = await handler(ask('.price<20&?doc'))
+  let read = await handler(ask('.book.price<20&?doc'))
   assertEquals(read.status, 200)
   let found: Bundle[] = await body(read)
   assertEquals(found.map((b) => b.entity.eid), ['b1'])
@@ -134,7 +134,7 @@ test('/query sends a selection larger than one piece of its stream, whole', asyn
   assertEquals(text, JSON.stringify(await graph.read('.book&?doc')))
   assertEquals((JSON.parse(text) as Bundle[]).length, 300)
   assertEquals(
-    await (await api({ graph })(ask('.book&.price>999'))).text(),
+    await (await api({ graph })(ask('.book&.book.price>999'))).text(),
     '[]',
   )
 })
@@ -145,7 +145,7 @@ test('POST /query reads the same line', async () => {
     post('/apply', [{ entity: { eid: 'b1' }, book: { price: 12 } }]),
   )
   let found: Bundle[] = await body(
-    await handler(post('/query', { q: '.price<20' })),
+    await handler(post('/query', { q: '.book.price<20' })),
   )
   assertEquals(found.map((b) => b.entity.eid), ['b1'])
 })
@@ -165,7 +165,9 @@ test('the door signs the batch, never the client', async () => {
     // the client claims someone else wrote this
     { entity: { eid: 'b1' }, book: { price: 12 }, $actor: { by: 'villain' } },
   ]))
-  let found: Bundle[] = await body(await handler(ask('.price=12&?created')))
+  let found: Bundle[] = await body(
+    await handler(ask('.book.price=12&?created')),
+  )
   assertEquals(comp(found[0], 'created').by, 'm1')
 })
 
@@ -174,7 +176,9 @@ test('an unattributed door leaves the actor off', async () => {
   await handler(post('/apply', [
     { entity: { eid: 'b1' }, book: { price: 12 }, $actor: { by: 'villain' } },
   ]))
-  let found: Bundle[] = await body(await handler(ask('.price=12&?created')))
+  let found: Bundle[] = await body(
+    await handler(ask('.book.price=12&?created')),
+  )
   assertEquals(comp(found[0], 'created').by ?? null, null)
 })
 
@@ -218,7 +222,7 @@ test('/apply?check=1 answers the batch it would take, and keeps none of it', asy
   assertEquals(asked.status, 200)
   let applied: Bundle[] = await body(asked)
   assertEquals(comp(applied[0], 'book'), { price: 12 })
-  assertEquals(await body(await handler(ask('.price<20'))), [])
+  assertEquals(await body(await handler(ask('.book.price<20'))), [])
   // And a batch it would refuse is refused at the same status a commit is.
   let no = await handler(post('/apply?check=1', [{
     entity: { eid: 'b1' },
@@ -269,7 +273,7 @@ test('/query answers an aggregate with its value, not a row set', async () => {
     { entity: { eid: 'b3' }, book: { price: 9, status: 'sold' } },
   ]))
   assertEquals(await body(await handler(ask('.book&.count'))), { count: 3 })
-  assertEquals(await body(await handler(ask('.book&.price<20&.count'))), {
+  assertEquals(await body(await handler(ask('.book&.book.price<20&.count'))), {
     count: 2,
   })
   assertEquals(await body(await handler(ask('.distinct=book.status'))), {
@@ -279,7 +283,7 @@ test('/query answers an aggregate with its value, not a row set', async () => {
     tally: { shelved: 2, sold: 1 },
   })
   // A line naming no aggregate still answers its members.
-  let found: Bundle[] = await body(await handler(ask('.book&.price<20')))
+  let found: Bundle[] = await body(await handler(ask('.book&.book.price<20')))
   assertEquals(found.map((b) => b.entity.eid).sort(), ['b1', 'b3'])
 })
 

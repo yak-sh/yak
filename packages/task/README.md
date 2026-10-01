@@ -204,7 +204,7 @@ them through CLI or MCP:
 
 ```sh
 yak task new 'Buy the cake' --project P-19 --priority 1
-yak task list '.filed.project=P-19&.priority<3'
+yak task list '.filed.project=P-19&.filed.priority<3'
 yak task update T-42 done
 ```
 
@@ -236,10 +236,10 @@ separate show, search or tree tool.
 ## The board guard
 
 [@yaks/project](../project) validates saved board queries in a `precondition`
-hook. It rejects unknown properties such as `.staus=open` and unsupported status
-values such as `.status=complete`. A refusal rolls back the whole batch. Writing
-`task.status` itself does not set status: graph admission drops computed
-properties before that hook runs.
+hook. It rejects unknown properties such as `.task.staus=open` and unsupported
+status values such as `.task.status=complete`. A refusal rolls back the whole
+batch. Writing `task.status` itself does not set status: graph admission drops
+computed properties before that hook runs.
 
 ## Integration
 

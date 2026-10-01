@@ -24,7 +24,7 @@
 //
 // A routed result keeps first-match order: the order the entities were read
 // in, with a new match appended at the end. A query that cares about order
-// states it (`.order=title`), and stating it puts the watch in refresh mode,
+// states it (`.order=doc.title`), and stating it puts the watch in refresh mode,
 // where the order is the one the store returned. Either way a watch's rows
 // carry what its query names, the answer `graph.read` gives (@yaks/graph
 // `only`), a `.fields` projection's the entities its paths reach too. Those
@@ -33,7 +33,7 @@
 
 import type { Bundle, Eid, Graph, Reduced } from '@yaks/graph'
 import { after, over } from '@yaks/fp'
-import { only, projection, transient, wanted } from '@yaks/graph'
+import { named, only, projection, transient } from '@yaks/graph'
 import { type Net, net } from '@yaks/match'
 import { parse } from '@yaks/query'
 
@@ -127,7 +127,7 @@ let plain: Make = <T>(value: T) => ({ value })
  *
  * ```ts ignore
  * let seen = watches(graph, { signal })
- * let dinners = seen.watch('.course=dinner&.serves>4')
+ * let dinners = seen.watch('.recipe.course=dinner&.recipe.serves>4')
  * dinners.value // the bundles, now
  * ```
  *
@@ -233,7 +233,7 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
       query,
       now,
       routed: false,
-      cut: p?.cut ?? only(wanted(graph.vocab, query)),
+      cut: p?.cut ?? only(named(graph.vocab, query)),
       members: new Map(),
       hold: make<Bundle[]>([]),
       ready: make(false),

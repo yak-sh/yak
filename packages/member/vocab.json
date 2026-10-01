@@ -17,7 +17,6 @@
           "type": "string",
           "ref": "entity",
           "death": "cascade",
-          "bare": false,
           "description": "the person the membership is for"
         },
         "role": {
@@ -47,7 +46,6 @@
           "type": "string",
           "ref": "entity",
           "death": "cascade",
-          "bare": false,
           "description": "the person it is for — absent on a share link, which names a token instead"
         },
         "token": {
@@ -62,7 +60,6 @@
             "viewer"
           ],
           "default": "viewer",
-          "bare": false,
           "description": "owner shares and deletes, editor writes, viewer reads"
         }
       }

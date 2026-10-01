@@ -149,7 +149,7 @@ export let line = (asked: Asked): string => {
   let ranked = !!(asked.eids?.length || asked.near)
   return [
     ...(said ? [said] : []),
-    ...(asked.eids?.length ? [`.eid=${asked.eids.join(',')}`] : []),
+    ...(asked.eids?.length ? [`.entity.eid=${asked.eids.join(',')}`] : []),
     ...(asked.near ? [`.near=${asked.near}`] : []),
     // A memory is what is being asked for, so the component is always in the
     // query; naming it with a space bounds the result and names it at once.

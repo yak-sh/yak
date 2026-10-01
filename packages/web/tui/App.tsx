@@ -427,7 +427,7 @@ export let overrides: Renderer[] = [
 // The command context here: the entity you're IN (the trail's head), or
 // the row the cursor is on at the board — the same "what you're looking
 // at" rule the web reads off its URL. A terminal has a filesystem, so
-// `:set .body=@file` reads it here; `@@` keeps a literal `@`.
+// `:set .doc.body=@file` reads it here; `@@` keeps a literal `@`.
 let file: Ctx['read'] = (p) => {
   let v = p.value
   if (typeof v != 'string' || !v.startsWith('@')) return p
@@ -638,7 +638,7 @@ export let TSearch = () => {
       <fields.Filter
         id={SEARCH}
         active
-        placeholder='search the graph… (.status=done filters)'
+        placeholder='search the graph… (.task.status=done filters)'
       />
       {found.map((h, i) => (
         <div class={i == pick ? 'TRow TRow-on' : 'TRow'} key={h.eid}>

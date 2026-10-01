@@ -24,10 +24,9 @@ test('doc is a kind, ordered against nothing it does not ship', () => {
   assertEquals(plain.comp(DOC)!.before, [])
 })
 
-test('both properties are text, and both route bare', () => {
+test('both properties are text', () => {
   for (let prop of [TITLE, BODY]) {
     assertEquals(plain.prop(DOC, prop)!.category, 'scalar')
-    assertEquals(plain.route(prop), { comp: DOC, prop })
   }
 })
 

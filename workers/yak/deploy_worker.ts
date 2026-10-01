@@ -115,7 +115,7 @@ export let deployWorker = async (
   try {
     bound = await provision(env, app, store, config)
   } catch (e) {
-    if (!(await meta(env).query(`.eid=${app.eid}&.app`)).length) throw e
+    if (!(await meta(env).query(`.entity.eid=${app.eid}&.app`)).length) throw e
     caught(e, { request: 'deploy worker', app: app.slug })
     held = await bindings(env, app)
     let why = e instanceof Error ? e.message : String(e)
@@ -150,7 +150,7 @@ export let deployWorker = async (
   }
   // An upload can finish after permanent deletion's script DELETE. Reconcile
   // that late effect while its ids are still in hand, before recording a release.
-  if (!(await meta(env).query(`.eid=${app.eid}&.app`)).length) {
+  if (!(await meta(env).query(`.entity.eid=${app.eid}&.app`)).length) {
     await drop(env, target, true)
     for (let binding of bound) await discard(env, binding)
     throw refuse(

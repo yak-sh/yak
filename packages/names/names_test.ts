@@ -32,7 +32,7 @@ let catalog: VocabDoc = {
       component: true,
       type: 'object',
       kind: true,
-      by_name: 'label',
+      by_name: 'shelf.label',
       properties: { label: { type: 'string' } },
     },
   },
@@ -89,9 +89,10 @@ test('exact-only resolution is one option away', () => {
 })
 
 test('the name property is the vocabulary’s, and a missing one refuses', () => {
-  let byLabel = nameOf(v, { prop: 'body' })
+  let byLabel = nameOf(v, { prop: 'doc.body' })
   assertEquals(byLabel(leguin), undefined) // the author's doc has no body
-  assertThrows(() => named(v, { prop: 'nonsense' }), Error, 'unknown prop')
+  assertThrows(() => named(v, { prop: 'doc.nonsense' }), Error, 'unknown prop')
+  assertThrows(() => named(v, { prop: 'title' }), Error, '.doc.title')
 })
 
 test('the keyword is registered, so the loader carries it', () => {

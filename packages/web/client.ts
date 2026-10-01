@@ -2,10 +2,8 @@
 // to a running tasks server over HTTP (/query to read, /apply
 // to write; writes broadcast to every live client), assembles entities
 // the same way live.ts does, and owns the dot-param grammar:
-//   .title=Hello        routes by prop — title lives only in doc
-//   .doc.title=Hello    the explicit spelling, for collisions (pin/camera
-//                       geometry) or clarity
-// Values that look like numbers become numbers.
+// `.doc.title=Hello` sets doc.title; a property is always named with its
+// component. Values that look like numbers become numbers.
 import { kindOf as entryKind } from '@yaks/session/status'
 import { IdError } from './types.ts'
 import { ownsSessionBranch } from './session_worktree.ts'
@@ -338,18 +336,20 @@ export type ComponentPatches = Record<
   Record<string, unknown> | null
 >
 
-// '.title=Hello' | '.doc.title=Hello' → {comp, prop, value}; null if the
-// argument isn't a dot-param at all (a bare word). Bare props route through
-// the vocabulary (@yaks/vocab), so '.assignee=jeff' patches filed.assignee and
-// derefParams turns the value into an eid at the door.
+// '.doc.title=Hello' → {comp, prop, value}; null if the argument isn't a
+// dot-param at all (a bare word). A property is named with its component, as
+// in a query: '.filed.assignee=jeff' patches filed.assignee and derefParams
+// turns the value into an eid at the door. A name alone is a component, and a
+// property named alone is refused with the forms that name it (@yaks/vocab
+// `aim`).
 // A hyphen is admitted into the NAME so a hyphenated spelling reaches
-// route() and earns the same `unknown prop` error as any other unknown.
+// aim() and earns the same `unknown prop` error as any other unknown.
 // No column is hyphenated, so nothing new routes — but before this, a
 // name the pattern rejected returned null, and cli.ts's split() files
 // every non-param token under `words`: `.blocked-by=T-1` became part of
 // a task's TITLE. Silence, not an edge and not an error.
 // `read` is the door's value convention (inflate, where there's a filesystem)
-// and it runs HERE, before the value is READ: `.body=@edit.json` routes a
+// and it runs HERE, before the value is READ: `.doc.body=@edit.json` routes a
 // $edit operator exactly as `--body=@edit.json` does. Applied after param()
 // it only ever saw an already-parsed value, so the file's text landed as prose.
 export let param = (
@@ -374,18 +374,7 @@ export let param = (
     }
     p = { comp: a, prop: b, value: raw }
   } else {
-    let r = vocab.route(a)
-    // A shared reference ('' comp) serves FILTERS; a write must aim at one
-    // component, so demand the explicit spelling.
-    if (!r.comp) {
-      let owners = Object.keys(comps).filter((c) => r.prop in comps[c])
-      throw new Error(
-        `.${a} is ambiguous for writes (${
-          owners.join(', ')
-        }) — use .comp.${r.prop}`,
-      )
-    }
-    p = { ...r, value: raw }
+    p = { ...vocab.aim(a)[0], value: raw }
   }
   if (!p.prop) {
     // A component name is a presence mark, not a column. Column-bearing marks
@@ -436,8 +425,8 @@ export let UUID =
 // The near match, offered only once the handle it prints RESOLVES here —
 // find() is the same reading of "what names an entity" the caller just
 // failed, so a suggestion can never route somewhere the retry won't.
-// `comp` narrows to the reference's declared target, so a bad `.project=`
-// is only ever answered with a project.
+// `comp` narrows to the reference's declared target, so a bad
+// `.filed.project=` is only ever answered with a project.
 //
 // A title is MATCHED only for the kinds it names (types.ts byName), though
 // every title still shows. Untargeted, the pool is the whole graph and a
@@ -541,7 +530,7 @@ export let patches = (params: Param[]): ComponentPatches => {
   return out
 }
 
-// A task, TYPED: 'P1 .domain=Eng Build a thing\nnotes…' — the first line
+// A task, TYPED: 'P1 .filed.domain=Eng Build a thing\nnotes…' — the first line
 // is setters + title, every later line is body. Dot-params parse
 // anywhere in the line (their syntax can't be prose); the P1 shorthand
 // only parses while it LEADS, so a title like 'Fix the P2 endpoint'
@@ -561,7 +550,7 @@ export let spec = (text: string, read: (p: Param) => Param = (p) => p) => {
     let priority = leading &&
       /^[Pp][+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(w)
     if (priority) {
-      ps.push(param(`.priority=${w}`)!)
+      ps.push(param(`.filed.priority=${w}`)!)
       continue
     }
     if (w.startsWith('.')) {
@@ -602,7 +591,7 @@ export let taskChanges = (
     ...(number ? { $num: true } : {}),
   },
   // A new task is born open — no mark (D-24102). status is derived, not
-  // writable, so drop any that rode in on the spec (`.status=` on new).
+  // writable, so drop any that rode in on the spec (`.task.status=` on new).
   {
     eid,
     name: 'task',
@@ -1302,10 +1291,11 @@ let resumptions = (
   let at = (r: Row) =>
     String(r.comps.resume?.at ?? r.comps.claim?.at ?? editedAt(r))
   // The claim arm is a forward deref — task's claim → its session → that
-  // session's actor — so it IS the traversal grammar: `.claim.session.actor`.
+  // session's actor — so it IS the traversal grammar:
+  // `.claim.session.session.actor`.
   // The resume/updated/created fallback has no single ref column, so it stays
   // JS/OR. `deref` is the pred's graph, keyed over the sessions already indexed.
-  let mineClaim = parseQuery('.claim.session.actor=' + actor)
+  let mineClaim = parseQuery('.claim.session.session.actor=' + actor)
   let deref = (eid: string) => sessions.get(eid)?.comps
   let hits = tasks
     .filter((r) => !settled(taskStatus(r)))

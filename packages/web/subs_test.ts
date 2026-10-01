@@ -9,13 +9,13 @@ import { diff, gaps } from './subs.ts'
 test('the only agreement gap is moving time', () => {
   let cases: [string, string[]][] = [
     ['.task.status=open', []],
-    ['.domain=Ops,Eng', []],
-    ['.priority=1..3', []],
+    ['.filed.domain=Ops,Eng', []],
+    ['.filed.priority=1..3', []],
     ['.task.status!=done', []],
-    ['.title~=flux', []],
+    ['.doc.title~=flux', []],
     ['.created.at=2026-07-01', []],
     ['.order=hot', []],
-    ['.assignee.title~=jeff', []],
+    ['.filed.assignee.doc.title~=jeff', []],
     ['.updated.at=today', ['moving-time']],
     ['.updated.at>="1 hour ago"', ['moving-time']],
   ]
