@@ -78,9 +78,11 @@
 // all — one that probes anonymously, reads the 200 as "no sign-in needed" and
 // never asks again. The address is the lever, since a client like that is not
 // ours to fix.
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { SetLevelRequestSchema } from '@modelcontextprotocol/sdk/types.js'
-import { z } from 'zod'
+import {
+  fromJsonSchema,
+  type McpServer,
+} from 'npm:@modelcontextprotocol/server@2.2.0'
+import { AjvJsonSchemaValidator } from 'npm:@modelcontextprotocol/server@2.2.0/validators/ajv'
 import { mcp, roster, rosterVersion } from '@yaks/mcp'
 import { reaching, searching } from './agent.ts'
 import { anonymous, asked, opened, READS, scope } from './anon.ts'
@@ -152,6 +154,7 @@ let refused = (req: Request, id: unknown, env: Env) => {
 // the pages an app declares (declared.ts, T-32687), which only someone who can
 // reach that app is told about. The platform contributes none of its own. The
 // prompts are the ones a person picks by name (prompts.ts, T-32981).
+let promptValidator = new AjvJsonSchemaValidator()
 let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
   for (let doc of docs(ctx.env)) {
     server.registerResource(doc.name, doc.uri, {
@@ -189,12 +192,15 @@ let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
     server.registerPrompt(p.name, {
       title: p.title,
       description: p.description,
-      argsSchema: Object.fromEntries(p.arguments.map((a) => [
-        a.name,
-        a.required
-          ? z.string().describe(a.description)
-          : z.string().describe(a.description).optional(),
-      ])),
+      argsSchema: fromJsonSchema<Record<string, string | undefined>>({
+        type: 'object',
+        properties: Object.fromEntries(p.arguments.map((a) => [
+          a.name,
+          { type: 'string', description: a.description },
+        ])),
+        required: p.arguments.filter((a) => a.required).map((a) => a.name),
+        additionalProperties: true,
+      }, promptValidator),
     }, (args: Record<string, string | undefined>) => ({
       description: p.description,
       messages: [{
@@ -203,7 +209,9 @@ let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
           type: 'text' as const,
           text: p.say(
             Object.fromEntries(
-              Object.entries(args ?? {}).map(([k, v]) => [k, String(v ?? '')]),
+              Object.entries(args ?? {})
+                .filter(([name]) => p.arguments.some((a) => a.name == name))
+                .map(([k, v]) => [k, String(v ?? '')]),
             ),
             made,
             ctx.env,
@@ -234,7 +242,7 @@ let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
   // logs is a break, at `error`, and nothing quieter is ever sent (unseen.ts
   // `noted`).
   server.server.registerCapabilities({ logging: {} })
-  server.server.setRequestHandler(SetLevelRequestSchema, () => ({}))
+  server.server.setRequestHandler('logging/setLevel', () => ({}))
 }
 
 // An old caller is answered, never corrected (C-32607 item 2). The generic

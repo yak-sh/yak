@@ -210,6 +210,8 @@ test(
       // read from the address that serves it — and the pages that go deep on
       // one subject each, beside it (T-32982).
       assert(init.capabilities.resources, 'resources are offered')
+      // The advertised logging door still answers on the SDK v2 extension.
+      assertEquals(await agent.call('logging/setLevel', { level: 'error' }), {})
       let { resources } = await agent.call('resources/list')
       assertEquals(
         resources.map((r: { uri: string }) => r.uri),
@@ -329,6 +331,14 @@ test(
         name: 'make',
         arguments: { what: 'a chore board for the house' },
       })
+      // Preserve the old Zod object's permissive stripping of extra keys.
+      assertEquals(
+        await agent.call('prompts/get', {
+          name: 'make',
+          arguments: { what: 'a chore board for the house', extra: 'ignored' },
+        }),
+        picked,
+      )
       assertEquals(picked.messages.length, 1)
       assertEquals(picked.messages[0].role, 'user')
       assertEquals(picked.messages[0].content.type, 'text')
