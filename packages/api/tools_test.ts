@@ -2,10 +2,25 @@
 // The `serve` tool, over a host written here: no database, no plugins, just
 // the four things it reads off the host it was composed into.
 
-import { test } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import type { Bundle, Graph } from '@yaks/graph'
-import { CallError, type Runner } from '@yaks/tools'
+import {
+  type Bundle,
+  type Graph,
+  graph as memory,
+  type Tool,
+} from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import {
+  callDoc,
+  CallError,
+  reconcile,
+  type Runner,
+  runner,
+  toolDoc,
+  toolEid,
+} from '@yaks/tools'
 import { PORT, runs, type Serving } from './tools.ts'
 
 // A port this box is not using, asked for and given back.
@@ -16,8 +31,7 @@ let free = (): number => {
   return port
 }
 
-// The tool reconciles before it binds, so the port is not up on the first
-// tick. Retry rather than count the ticks.
+// Wait for the listener rather than count startup ticks.
 let said = async (url: string, ms = 2000): Promise<string> => {
   let end = Date.now() + ms
   for (;;) {
@@ -64,9 +78,7 @@ test('serve answers with the host handler until the host stops', async () => {
   let { host, told, stopping } = fake(port)
   let call = runs(host).serve(asked(), graph) as Promise<Bundle[]>
   assertEquals(await said(`http://127.0.0.1:${port}`), 'ok')
-  // A process that is about to stay up finishes what a crash left claimed,
-  // and takes the duties in their long-running form.
-  assertEquals(told.driven, 1)
+  assertEquals(told.driven, 0)
   assertEquals(told.duties, 1)
   stopping.abort()
   let [answer] = await call
@@ -117,4 +129,70 @@ test('the call names the port, over the one the config named', async () => {
   assertEquals(await said(`http://127.0.0.1:${port}`), 'ok')
   stopping.abort()
   await call
+})
+
+test('a slow queued runner cannot block listening or stopping', async () => {
+  let vocab = loadVocab([callDoc, toolDoc])
+  let queued = memory({ vocab, storage: ram(vocab) })
+  let gate = Promise.withResolvers<void>()
+  let started = false
+  let finished = false
+  let slow: Tool = {
+    noun: 'example',
+    verb: 'slow',
+    description: 'Wait for release',
+    inputSchema: { type: 'object', properties: {} },
+    run: async () => {
+      started = true
+      await gate.promise
+      finished = true
+      return []
+    },
+  }
+  let recovery = runner(queued, {
+    tools: [slow],
+    report: (error) => {
+      throw error
+    },
+  })
+  await recovery.ensure()
+  await queued.apply([{
+    entity: { eid: 'queued' },
+    call: { to: toolEid('example_slow'), args: {} },
+    execution: { state: 'running' },
+  }])
+  let port = free()
+  let { host, stopping } = fake(port)
+  let stopped = false
+  let call =
+    (runs({ ...host, runner: recovery }).serve(asked(), queued) as Promise<
+      Bundle[]
+    >).then((answer) => {
+      stopped = true
+      return answer
+    })
+  try {
+    assertEquals(await said(`http://127.0.0.1:${port}`), 'ok')
+    stopping.abort()
+    await until(() => stopped, {
+      label: 'serve to stop with recovery unreleased',
+    })
+    assertEquals(started, false)
+    assertEquals(finished, false)
+    // The queued call really does wait; recovery can run independently after
+    // the listener has stopped, without web having consumed the queue.
+    let work = reconcile(recovery)
+    try {
+      await until(() => started, { label: 'queued tool to start' })
+      assertEquals(finished, false)
+    } finally {
+      gate.resolve()
+      await work
+    }
+    assertEquals(finished, true)
+  } finally {
+    gate.resolve()
+    stopping.abort()
+    await call
+  }
 })

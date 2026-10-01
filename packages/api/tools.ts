@@ -30,7 +30,7 @@
 
 import { argsOf, type Bundle } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
-import { CallError, reconcile, type Runner } from '@yaks/tools'
+import { CallError, type Runner } from '@yaks/tools'
 import { denoListen } from './deno.ts'
 import type { Handler } from './route.ts'
 
@@ -45,8 +45,7 @@ export let PORT = 8787
 export let HOSTNAME = '127.0.0.1'
 
 /** What this tool needs from the host that composed it: the request handler to
- * answer with, the runner whose interrupted calls a process that stays up
- * finishes, the duties it takes over while it is up, and the config
+ * answer with, the duties it takes over while it is up, and the config
  * that said where to listen. */
 export type Serving = {
   config: { db?: string; port?: number; hostname?: string }
@@ -75,13 +74,9 @@ export let runs = (host: Serving): Runs => ({
     let args = argsOf(call)
     let port = Number(args.port ?? host.config.port ?? PORT)
     let hostname = String(args.hostname ?? host.config.hostname ?? HOSTNAME)
-    // What a crash left behind, settled before this process takes new
-    // requests: each process that died without closing is closed for, and
-    // what is left claimed and unanswered is run. A one-shot command must not
-    // touch calls another process is running; a process that is about to stay
-    // up is the one that can afford to.
+    // Close for dead processes before accepting requests. Running their
+    // unanswered calls belongs to recovery, independently of listening.
     await host.bury?.()
-    await reconcile(host.runner)
     let at = ''
     let began = Date.now()
     let server
