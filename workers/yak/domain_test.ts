@@ -77,7 +77,7 @@ test('a hostname finds its app, and only one app', async () => {
     // The reporter is at the root too, so a page's breaks on the domain
     // reach the app's store: at the app's platform prefix its script was a
     // 404 on this hostname, and nothing reported (T-33040).
-    assertStringIncludes(html, '<script src="/api/report.js">')
+    assertStringIncludes(html, '<script src="/api/report.js" data-version="1">')
     assertEquals(
       (await k.at('herbusiness101.com', '/api/report.js')).status,
       200,

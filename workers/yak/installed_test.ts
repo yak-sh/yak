@@ -109,7 +109,10 @@ test('an installed copy runs like its space, or sandboxed', async () => {
       html,
       `<script src="${mine}api/storage.js"></script>`,
     )
-    assertStringIncludes(html, `<script src="${mine}api/report.js"></script>`)
+    assertStringIncludes(
+      html,
+      `<script src="${mine}api/report.js" data-version="2"></script>`,
+    )
 
     // The API hears the token, from its path or as a bearer, and never the
     // cookie. The page's origin is opaque, so it says `null`.

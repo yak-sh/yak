@@ -242,8 +242,10 @@ let moved = (req: Request, to: string) =>
 // door out of its own src: at the app's prefix normally, at the root for a
 // front page or a custom domain, where the prefix is an address the browser
 // asking cannot reach (T-33040).
-let reported = (at: string, page: Response) => {
-  let tag = `<script src="${at}api/report.js"></script>`
+let reported = (at: string, page: Response, version: number) => {
+  let tag =
+    `<script src="${at}api/report.js" data-version="${version}"></script>` +
+    `<script src="${at}api/release.js" data-version="${version}"></script>`
   let done = false
   let once = (put: (s: string, o: { html: boolean }) => void) => {
     if (done) return
@@ -701,6 +703,7 @@ let woven = async (
   return await reported(
     at,
     released(new Response(page), original, at, bare, app.source),
+    app.version ?? 0,
   ).text()
 }
 
@@ -1258,7 +1261,10 @@ let api = async (
   // The store client an app's pages import (public/client.js), served beside
   // the doors it wraps so a page needs no address but its own. One file for
   // every app, so it comes from the platform's assets, not the app's blobs.
-  if (path == '/client.js' || path == '/report.js' || path == '/storage.js') {
+  if (
+    path == '/client.js' || path == '/report.js' || path == '/release.js' ||
+    path == '/storage.js'
+  ) {
     return env.ASSETS.fetch(new Request(new URL(path, req.url)))
   }
   let store = appStore(env.STORE, space, app, env)
@@ -2278,7 +2284,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
         page.body &&
         page.headers.get('content-type')?.startsWith('text/html')
       ) {
-        page = reported('/', page)
+        page = reported('/', page, early.app.version ?? 0)
       }
       let res = reporting(page, req, '/')
       return sandboxed(early.app) ? walled(res) : res
@@ -2375,7 +2381,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     own?.body &&
     own.headers.get('content-type')?.startsWith('text/html')
   ) {
-    own = reported(at, own)
+    own = reported(at, own, app.version ?? 0)
   }
   let page = own ?? await file!
   // Rung 4, and it is last rather than fourth in the code because rungs 3 and

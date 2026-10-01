@@ -97,7 +97,12 @@ test('a page is served with its base and its reporter', async () => {
   assertEquals(page.status, 200)
   let html = await page.text()
   assert(html.includes('<base href="/cookbook/">'), html)
-  assert(html.includes('src="/cookbook/api/report.js"'), html)
+  assert(html.includes('src="/cookbook/api/report.js" data-version="1"'), html)
+  assert(html.includes('src="/cookbook/api/release.js" data-version="1"'), html)
+  assertEquals(
+    (await apps.fetch(visit('/cookbook/api/release.js'), env)).status,
+    200,
+  )
   // And the client an app imports is the platform's own file, beside the
   // doors it wraps.
   let js = await apps.fetch(visit('/cookbook/api/client.js'), env)
@@ -636,7 +641,7 @@ test('the page wire: apply, query and search round-trip', async () => {
   assertEquals((row.doc as { title: string }).title, 'Lemon drizzle')
 
   // An address, in the page's own grammar.
-  assertEquals((await page.query(`id=${eid}`)).length, 1)
+  assertEquals((await page.query(`.entity.eid=${eid}`)).length, 1)
 
   // Full text over the docs, and the platform's own rows stay out of the
   // answer: the store minted a `person` row for the writer.
@@ -1024,6 +1029,7 @@ test('worker HTML carries its reporter without changing its page or headers', as
       )
       let body = await page.text()
       assertEquals(body.split(`src="${at}api/report.js"`).length - 1, 1)
+      assertEquals(body.split(`src="${at}api/release.js"`).length - 1, 1)
       assertEquals(body.replace(/<script[^>]*><\/script>/g, ''), html)
     }
     // A non-home app keeps its slug prefix instead of the home mount.
@@ -1033,6 +1039,7 @@ test('worker HTML carries its reporter without changing its page or headers', as
     let page = await k.at('/cookbook/menu')
     let body = await page.text()
     assertEquals(body.split('src="/cookbook/api/report.js"').length - 1, 1)
+    assertEquals(body.split('src="/cookbook/api/release.js"').length - 1, 1)
     assertEquals(body.replace(/<script[^>]*><\/script>/g, ''), html)
   }
 })
