@@ -9,7 +9,8 @@
     "strict": true
   },
   "entries": [
-    "."
+    ".",
+    "./ui"
   ],
   "imports": {
     "@yaks/tui/theme": "../tui/theme.ts",

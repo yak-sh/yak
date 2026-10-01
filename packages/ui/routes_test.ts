@@ -42,3 +42,61 @@ test('/ui switches theme and scheme by link', async () => {
       fallback.startsWith('<!doctype html><html><head>'),
   )
 })
+
+test('/ui keeps the base beside installed kits, skins and UX specimens', async () => {
+  let { h } = await import('preact')
+  let { everforest } = await import('./everforest.ts')
+  let [route] = routes({
+    ui: {
+      kits: {
+        outside: {
+          Sample: {
+            Component: () => h('p', {}, 'outside'),
+            css: new URL('data:text/css,.Sample{display:block}'),
+            sheet: () => ({}),
+            description: 'an installed part',
+            specimens: () => [['sample', h('p', {}, 'outside')]],
+          },
+        },
+      },
+      themes: { outside: everforest },
+      skins: {
+        outside: {
+          Sample: { css: new URL('data:text/css,.Sample{display:grid}') },
+        },
+      },
+      ux: {
+        outside: {
+          description: 'behaviour',
+          components: {
+            SampleUX: {
+              description: 'external behaviour',
+              specimens: () => [['ux', h('p', {}, 'ux outside')]],
+            },
+          },
+        },
+      },
+    },
+  })
+  let page =
+    await (await route.handle(new Request('http://box/ui?skin=outside'))).text()
+  for (
+    let text of [
+      'id="Button"',
+      'id="ui/outside/Sample"',
+      'id="ux/outside/SampleUX"',
+      '.Sample{display:grid}',
+      'data-skin="skin"',
+      'ux outside',
+    ]
+  ) {
+    assert(page.includes(text), text)
+  }
+  assert(!page.includes('.Sample{display:block}'))
+  let [empty] = routes({ ui: { kits: {}, themes: {}, skins: {}, ux: {} } })
+  assert(
+    (await (await empty.handle(new Request('http://box/ui'))).text()).includes(
+      'id="Button"',
+    ),
+  )
+})

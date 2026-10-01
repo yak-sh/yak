@@ -34,7 +34,7 @@ import {
   type TElement,
   useKeys,
 } from '@yaks/tui'
-import { everforest, sheet } from '@yaks/ui'
+import { everforest, kits, sheet } from '@yaks/ui'
 import { cut, panesOf } from '@yaks/ux'
 import { docs as uxDocs } from '@yaks/ux/vocab'
 import { loadVocab } from '@yaks/vocab'
@@ -277,7 +277,7 @@ export let open = async (
   }
 
   try {
-    await run(App, { sheet: sheet(everforest) })
+    await run(App, { sheet: sheet({ kits, theme: everforest }) })
   } finally {
     box.close()
     front.close()

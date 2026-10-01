@@ -17,7 +17,7 @@ import { signal } from '@preact/signals'
 import { h } from 'preact'
 import { type Key, quit, run, Scroll, useKeys } from '@yaks/tui'
 import { Contents, Page, stops } from './guide.ts'
-import { sheet, themes } from './kit.ts'
+import { kits, sheet, themes } from './kit.ts'
 import { Pairs } from './Pairs.ts'
 import { Panes } from './Panes.ts'
 import { Tabs } from './Tabs.ts'
@@ -25,7 +25,7 @@ import { Tabs } from './Tabs.ts'
 /** Hold the style guide in this terminal until q or Ctrl-C. */
 export let open = async (): Promise<void> => {
   let names = Object.keys(themes)
-  let sheets = names.map((n) => sheet(themes[n]))
+  let sheets = names.map((n) => sheet({ kits, theme: themes[n] }))
   let at = signal(0)
   let theme = signal(0)
   let walk = (i: number) =>

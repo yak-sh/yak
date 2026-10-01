@@ -1,68 +1,110 @@
-/**
- * The style guide: every part of the kit in every variant, built of the kit's
- * own parts, so a browser and a terminal show the same guide: `/ui`
- * (./routes.ts) and `yak ui` (./tui.ts). It is a `Catalog` of the kit's
- * groups (kit.ts), each part an entry saying what it is over a `Gallery` of
- * its variants, and `Contents`, an `Index` of the same groups to jump
- * around it by.
- *
- * Its places are `stops`: the whole guide, then each group and the parts in
- * it. Each is also the id of its section, so `#Dot` is Dot's, and `Page`
- * shows any one of them alone.
- *
- * @module
- */
-
+/** The guide uses the page's composition: installed kits, UX specimens and
+ * skin coverage, rather than an inventory private to the base package. */
 import { h, type VNode } from 'preact'
 import { Catalog } from './Catalog.ts'
 import type { Props } from './el.ts'
 import { Gallery } from './Gallery.ts'
 import { Head } from './Head.ts'
 import { Index } from './Index.ts'
-import { groups, kit } from './kit.ts'
+import { composition, groups, kit, parts } from './kit.ts'
+import type { Composition, Piece } from './theme.ts'
 
-/** The guide's name, and the stop that is all of it. */
 export let title = '@yaks/ui'
+type Entry = Pick<Piece, 'description' | 'specimens'> & {
+  title?: string
+  part?: string
+}
+type Entries = Record<string, Entry>
 
-/** Every place in the guide, in order: all of it, then each group and its
- * parts. */
-export let stops: string[] = [
+/** The base retains its familiar groups; other kits carry their own names. */
+export let sections = (c: Composition): Record<string, Entries> => {
+  parts(c)
+  let out: Record<string, Entries> = {}
+  for (let [name, pieces] of Object.entries(c.kits)) {
+    if (pieces == kit) Object.assign(out, groups)
+    else {out[`ui/${name}`] = Object.fromEntries(
+        Object.entries(pieces).map((
+          [part, entry],
+        ) => [`ui/${name}/${part}`, { ...entry, title: part, part }]),
+      )}
+  }
+  for (let [name, ux] of Object.entries(c.ux ?? {})) {
+    out[`ux/${name}`] = Object.fromEntries(
+      Object.entries(ux.components).map((
+        [part, entry],
+      ) => [`ux/${name}/${part}`, { ...entry, title: part }]),
+    )
+  }
+  return out
+}
+export let stopsOf = (c: Composition): string[] => [
   title,
-  ...Object.entries(groups).flatMap(([g, parts]) => [g, ...Object.keys(parts)]),
+  ...Object.entries(sections(c)).flatMap((
+    [g, entries],
+  ) => [g, ...Object.keys(entries)]),
 ]
+export let stops = stopsOf(composition)
+let entries = (c: Composition): Entries => {
+  let out: Entries = {}
+  for (let group of Object.values(sections(c))) {
+    for (let [id, entry] of Object.entries(group)) {
+      if (Object.hasOwn(out, id)) {
+        throw new Error(`duplicate guide entry: ${id}`)
+      }
+      out[id] = entry
+    }
+  }
+  return out
+}
 
+let groupTitle = (name: string) =>
+  name.startsWith('ui/')
+    ? name.slice(3)
+    : name.startsWith('ux/')
+    ? `UX ${name.slice(3)}`
+    : name
+
+type Dressed = { composition?: Composition }
 let { Figure, Caption, Stage } = Gallery
 
-/** One part's entry: its name, what it is, and each variant on a stage of
- * its own under its label. */
-export let Specimens = ({ name }: { name: string }): VNode =>
-  h(
+/** One entry, including whether the skin names this part. */
+export let Specimens = (
+  { name, composition: c = composition }: Dressed & { name: string },
+): VNode => {
+  let part = entries(c)[name]
+  if (!part) throw new Error(`unknown guide entry: ${name}`)
+  let uiName = part.part ?? (!part.title ? name : undefined)
+  let skinned = !!uiName && !!c.skin?.[uiName]
+  return h(
     Catalog.Entry,
-    { id: name },
-    h(Catalog.Title, {}, name),
-    h(Catalog.Sub, {}, kit[name].description),
+    { id: name, 'data-skin': skinned ? 'skin' : 'kit' },
+    h(Catalog.Title, {}, part.title ?? name),
+    h(Catalog.Sub, {}, part.description),
+    c.skin && uiName &&
+      h(Catalog.Sub, {}, skinned ? 'skin rendering' : 'kit rendering'),
     h(
       Gallery,
       {},
-      kit[name].specimens().map(([label, node]) =>
+      part.specimens().map(([label, node]) =>
         h(Figure, { key: label }, h(Caption, {}, label), h(Stage, {}, node))
       ),
     ),
   )
-
-// One group's section: its heading, then each of its parts.
-let Group = ({ name }: { name: string }) =>
+}
+let Group = (
+  { name, composition: c = composition }: Dressed & { name: string },
+) =>
   h(
     Catalog.Group,
     { id: name },
-    h(Catalog.Heading, {}, name),
-    Object.keys(groups[name]).map((part) =>
-      h(Specimens, { key: part, name: part })
+    h(Catalog.Heading, {}, groupTitle(name)),
+    Object.keys(sections(c)[name]).map((part) =>
+      h(Specimens, { key: part, name: part, composition: c })
     ),
   )
 
-/** The whole guide: its head, then every group. */
-export let Guide = (): VNode =>
+/** The same composition as the page being checked. */
+export let Guide = ({ composition: c = composition }: Dressed = {}): VNode =>
   h(
     Catalog,
     { id: title },
@@ -73,38 +115,39 @@ export let Guide = (): VNode =>
       h(
         Head.Sub,
         {},
-        'Every part in every variant. Each is a Preact component, its CSS ' +
-          'and its terminal sheet, so the same tree paints in a browser and ' +
-          'in a terminal.',
+        'Every kit, every variant. Browser and terminal share the same parts.',
       ),
     ),
-    Object.keys(groups).map((g) => h(Group, { key: g, name: g })),
+    Object.keys(sections(c)).map((name) =>
+      h(Group, { key: name, name, composition: c })
+    ),
   )
-
-/** One stop alone: the whole guide, a group, or a part. */
-export let Page = ({ stop }: { stop: string }): VNode =>
-  stop == title ? h(Guide, {}) : h(
+export let Page = (
+  { stop, composition: c = composition }: Dressed & { stop: string },
+) =>
+  stop == title ? h(Guide, { composition: c }) : h(
     Catalog,
     {},
-    groups[stop] ? h(Group, { name: stop }) : h(Specimens, { name: stop }),
+    sections(c)[stop]
+      ? h(Group, { name: stop, composition: c })
+      : h(Specimens, { name: stop, composition: c }),
   )
-
-/** An index of every stop, grouped as the guide is; `entry` dresses each
- * one's link (where it goes, whether the walk is on it, what a press does). */
 export let Contents = (
-  { entry }: { entry: (stop: string) => Props },
+  { entry, composition: c = composition }: Dressed & {
+    entry: (stop: string) => Props
+  },
 ): VNode =>
   h(
     Index,
     {},
     h(Index.Group, {}, h(Index.Head, entry(title), title)),
-    Object.entries(groups).map(([g, parts]) =>
+    Object.entries(sections(c)).map(([g, parts]) =>
       h(
         Index.Group,
         { key: g },
-        h(Index.Head, entry(g), g),
-        Object.keys(parts).map((p) =>
-          h(Index.Item, { key: p, ...entry(p) }, p)
+        h(Index.Head, entry(g), groupTitle(g)),
+        Object.entries(parts).map(([p, part]) =>
+          h(Index.Item, { key: p, ...entry(p) }, part.title ?? p)
         ),
       )
     ),

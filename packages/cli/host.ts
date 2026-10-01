@@ -6,14 +6,13 @@
  * functions behind its tools (`/tools`), what runs after a commit
  * (`/effects`), the work it keeps doing while a process is up (`/service`), the
  * HTTP it adds (`/routes`), its terminal controls (`/cli`), and how its
- * entities are drawn (`/views`, `/tui`) and styled (`/styles`, the CSS files a
- * page that draws those views serves).
+ * entities are drawn (`/views`, `/tui`) and dressed (`/ui`, their kits, UX kits, themes and skins).
  * It never says where any of that runs. A process serves roles, and imports
  * only the facets of the roles it serves:
  *
  * ```
  * graph       vocab, rules, tools   open the file, admit writes, run tool calls
- * web         routes                the HTTP a listener answers with
+ * web         routes, ui            the HTTP a listener answers with
  * effects     effects               the code behind the effects a commit owes
  * @yaks/mail  that plugin's service the timer or poll one plugin keeps up
  * ```
@@ -50,6 +49,7 @@
  * @module
  */
 
+import { type Contributions, gather } from '@yaks/ui/contributions'
 import {
   type Actor,
   type Bundle,
@@ -174,6 +174,7 @@ export type Host = {
   /** every HTTP route the listed plugins contributed, in the order the config
    * names them. Gathered only by a process serving `web` where a plugin
    * hosts them: nothing else here answers a request. */
+  ui: Contributions
   routes: Route[]
   /** every filter the listed plugins put in front of those routes
    * ({@link RoutesFacet.filter}), gathered where the routes are. */
@@ -262,7 +263,7 @@ export type Host = {
  * command's (./answer.ts), and needs no graph open. */
 export let ROLES = {
   graph: ['vocab', 'rules', 'tools'],
-  web: ['routes'],
+  web: ['routes', 'ui'],
   effects: ['effects'],
 } as const
 
@@ -493,6 +494,7 @@ export type Facets = {
   rules: RulesFacet
   tools: ToolsFacet
   effects: EffectsFacet
+  ui: Contributions
   routes: RoutesFacet
   service: ServiceFacet
 }
@@ -839,11 +841,12 @@ export let compose = async (
   // and most of the plugins' code is for tools it will not run.
   let take = <F extends FacetName>(role: Role, name: F): Promise<Taken<F>> =>
     roles.includes(role) ? taking(plugins, name, load) : Promise.resolve([])
-  let [vocabs, ruled, watched, served, running] = await Promise.all([
+  let [vocabs, ruled, watched, served, dressed, running] = await Promise.all([
     take('graph', 'vocab'),
     take('graph', 'rules'),
     take('effects', 'effects'),
     take('web', 'routes'),
+    take('web', 'ui'),
     taking(plugins.filter(([p]) => services.includes(p)), 'service', load),
   ])
   let { vocab, derived, backed } = wordsOf(vocabs)
@@ -899,6 +902,7 @@ export let compose = async (
     let authenticate: Authenticate = () => self
     let host: Host = {
       config,
+      ui: gather(dressed.map(([facet]) => facet)),
       roles,
       vocab,
       sql,

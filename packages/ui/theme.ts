@@ -12,7 +12,7 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
-import type { VNode } from 'preact'
+import type { ComponentType, VNode } from 'preact'
 
 /** A theme's colours, named as its custom properties are (`hues` are
  * `--hue-0` to `--hue-5`). A terminal paints with one palette; where the
@@ -84,10 +84,45 @@ export type Theme = {
 export type Specimen = [label: string, node: VNode]
 
 /** What each part of the kit brings besides its component: a line saying
- * what it is, its terminal entries, and its samples. Its CSS is the file its
- * key in the kit names. */
-export type Kit = {
+ * what it is, its terminal entries, and its samples. Its CSS address travels with the part, wherever its author keeps it. */
+export type Piece = {
+  // Kits contain components with different props; consumers import their typed component.
+  // deno-lint-ignore no-explicit-any -- heterogeneous component registry
+  Component: ComponentType<any>
+  css: URL
   description: string
   sheet: (c: Colors) => Sheet
   specimens: () => Specimen[]
+}
+
+/** A kit names a set of parts, not one part. Names are shared with skins. */
+export type Kit = Record<string, Piece>
+
+/** Another rendering of just the parts it changes. Missing entries fall back
+ * to the kit; a missing terminal sheet keeps the kit's terminal rendering. */
+export type Skin = Record<string, {
+  css: URL
+  sheet?: (c: Colors) => Sheet
+}>
+
+/** The guide only needs UX specimens, not a dependency on their behaviour. */
+export type Behaviours = Record<string, {
+  description: string
+  components: Record<string, Pick<Piece, 'description' | 'specimens'>>
+}>
+
+/** Browser-safe contributions from a plugin's ./ui facet. */
+export type Contributions = {
+  kits?: Record<string, Kit>
+  ux?: Behaviours
+  themes?: Record<string, Theme>
+  skins?: Record<string, Skin>
+}
+
+/** The same value dresses a page and its guide in both renderers. */
+export type Composition = {
+  kits: Record<string, Kit>
+  theme: Theme
+  skin?: Skin
+  ux?: Behaviours
 }

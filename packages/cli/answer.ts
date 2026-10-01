@@ -51,8 +51,8 @@ import type { Tty } from './run.ts'
 // own classes, in Everforest. Loaded with the painter, so a printed answer
 // never pays for it.
 let dressed = async (): Promise<Sheet> => {
-  let { everforest, sheet: kit } = await import('@yaks/ui')
-  return { ...kit(everforest), ...sheet(everforest.colors) }
+  let { everforest, kits, sheet: kit } = await import('@yaks/ui')
+  return { ...kit({ kits, theme: everforest }), ...sheet(everforest.colors) }
 }
 
 /** How one plugin's `./views` becomes a module: {@link subpath} unless a test

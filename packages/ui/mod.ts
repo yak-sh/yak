@@ -18,7 +18,7 @@
  *   handed.
  * - `relative`: a moment in words, what a `Stamp` says.
  * - `themes`: every theme by name, `everforest` the first and `rosepine`;
- *   `stylesheet(theme)` dresses a browser, `sheet(theme)` a terminal (kit.ts).
+ *   `stylesheet(composition)` dresses a browser, `sheet(composition)` a terminal (kit.ts).
  * - `Guide`: every part in every variant, the guide `./routes` serves at `/ui`
  *   and `./cli` paints as `yak ui`; `Specimens`, one part's entry in it.
  *
@@ -68,6 +68,27 @@ export { Turns } from './Turns.ts'
 export { Value } from './Value.ts'
 export { everforest } from './everforest.ts'
 export { rosepine } from './rosepine.ts'
-export { groups, kit, sheet, stylesheet, themes } from './kit.ts'
+export {
+  composition,
+  gather,
+  groups,
+  kit,
+  kits,
+  parts,
+  sheet,
+  skins,
+  stylesheet,
+  themes,
+} from './kit.ts'
 export { Guide, Specimens } from './guide.ts'
-export type { Colors, Kit, Specimen, Theme } from './theme.ts'
+export type {
+  Behaviours,
+  Colors,
+  Composition,
+  Contributions,
+  Kit,
+  Piece,
+  Skin,
+  Specimen,
+  Theme,
+} from './theme.ts'

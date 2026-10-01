@@ -14,7 +14,7 @@ import {
   type Sheet,
   type TElement,
 } from '@yaks/tui'
-import { type Colors, everforest, sheet as dress } from '@yaks/ui'
+import { type Colors, everforest, kits, sheet as dress } from '@yaks/ui'
 
 // The board's own classes, in the theme's colours.
 let own = (c: Colors): Sheet => ({
@@ -71,7 +71,7 @@ let own = (c: Colors): Sheet => ({
 
 export let sheet: Sheet = {
   ...base,
-  ...dress(everforest),
+  ...dress({ kits, theme: everforest }),
   ...own(everforest.colors),
 }
 

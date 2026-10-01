@@ -18,7 +18,7 @@
 import type { Route } from '@yaks/api'
 import { dead, type Graph } from '@yaks/graph'
 import { prefixOf } from '@yaks/id'
-import { everforest, stylesheet } from '@yaks/ui'
+import { everforest, kits, stylesheet } from '@yaks/ui'
 import type { Vocab } from '@yaks/vocab'
 import { type Body, bundle, kept } from '@yaks/cli/page'
 import { addressId } from './url.ts'
@@ -45,7 +45,10 @@ let bytes = (path: string) => () =>
   fetch(here(path)).then(async (r) => new Uint8Array(await r.arrayBuffer()))
 
 let styles = async () =>
-  (await Promise.all([stylesheet(everforest), text('./styles.css')()]))
+  (await Promise.all([
+    stylesheet({ kits, theme: everforest }),
+    text('./styles.css')(),
+  ]))
     .join('\n')
 
 let files: [string, string, () => Promise<Body>][] = [

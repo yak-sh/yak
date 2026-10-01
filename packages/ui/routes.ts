@@ -1,33 +1,17 @@
-/**
- * The routes facet, exported as `@yaks/ui/routes`: `/ui` answers the style
- * guide (guide.ts) as one static page, the kit's stylesheet inline, in the
- * theme its `theme` names and the colour scheme its `scheme` names (`light`,
- * `dark`, or the system's). The page is `Panes`: beside the guide, a nav of
- * the guide's contents to jump to, under the switchers for each choice, so
- * every part is seen in every theme. The parts have no behaviour, so the
- * page needs no script.
- *
- * @module
- */
-
+/** The static guide composes the installed ./ui facets. Query links select
+ * theme, skin and colour scheme without loading any client script. */
 import type { Route } from '@yaks/api'
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { Contents, Guide, title } from './guide.ts'
-import { stylesheet, themes } from './kit.ts'
+import { kits, skins, stylesheet, themes } from './kit.ts'
 import { Pairs } from './Pairs.ts'
 import { Panes } from './Panes.ts'
 import { Tabs } from './Tabs.ts'
+import type { Composition, Contributions } from './theme.ts'
 
-// The colour schemes the page can be seen in: the system's, or one forced.
 let schemes = ['system', 'light', 'dark']
-let first: string = Object.keys(themes)[0]
-
-let at = (theme: string, scheme: string) =>
-  `?${new URLSearchParams({ theme, scheme })}`
-
-// A row of tabs for each choice, the one showing on, each a link to the page
-// with that one changed.
+let base: Contributions = { kits, themes, skins }
 let tabs = (all: string[], on: string, href: (pick: string) => string) =>
   h(
     Tabs,
@@ -41,59 +25,96 @@ let tabs = (all: string[], on: string, href: (pick: string) => string) =>
     ),
   )
 
-/** The switchers: which theme, and which scheme. */
-let Switch = ({ theme, scheme }: { theme: string; scheme: string }) =>
-  h(
+/** The guide's page, using contributions gathered by the page's host. */
+export let page = async (
+  theme = Object.keys(themes)[0],
+  scheme = 'system',
+  skin = 'base',
+  contributed: Contributions = base,
+): Promise<string> => {
+  let available = {
+    kits: { ...kits, ...contributed.kits },
+    themes: { ...themes, ...contributed.themes },
+    skins: { ...skins, ...contributed.skins },
+    ux: contributed.ux,
+  }
+  let allThemes = available.themes ?? themes
+  let allSkins = available.skins ?? skins
+  let t = allThemes[theme] ? theme : Object.keys(allThemes)[0]
+  let s = schemes.includes(scheme) ? scheme : 'system'
+  let k = allSkins[skin] ? skin : 'base'
+  let c: Composition = {
+    kits: available.kits ?? kits,
+    ux: available.ux,
+    theme: allThemes[t],
+    skin: allSkins[k],
+  }
+  let at = (theme: string, scheme: string, skin: string) =>
+    `?${new URLSearchParams({
+      theme,
+      scheme,
+      ...(skin != 'base' && { skin }),
+    })}`
+  let switches = h(
     Pairs,
     {},
     h(Pairs.Key, {}, 'theme'),
-    h(Pairs.Value, {}, tabs(Object.keys(themes), theme, (t) => at(t, scheme))),
+    h(
+      Pairs.Value,
+      {},
+      tabs(Object.keys(allThemes), t, (pick) => at(pick, s, k)),
+    ),
     h(Pairs.Key, {}, 'scheme'),
-    h(Pairs.Value, {}, tabs(schemes, scheme, (s) => at(theme, s))),
+    h(Pairs.Value, {}, tabs(schemes, s, (pick) => at(t, pick, k))),
+    h(Pairs.Key, {}, 'skin'),
+    h(
+      Pairs.Value,
+      {},
+      tabs(['base', ...Object.keys(allSkins)], k, (pick) => at(t, s, pick)),
+    ),
   )
-
-/** The guide beside its contents, the switchers over them. */
-let Shell = ({ theme, scheme }: { theme: string; scheme: string }) =>
-  h(
+  let shell = h(
     Panes,
     {},
     h(
       Panes.Pane,
       { mod: 'nav' },
-      h(Panes.Top, {}, h(Switch, { theme, scheme })),
+      h(Panes.Top, {}, switches),
       h(
         Panes.Body,
         {},
-        h(Contents, { entry: (stop: string) => ({ href: `#${stop}` }) }),
+        h(Contents, {
+          composition: c,
+          entry: (stop: string) => ({ href: `#${stop}` }),
+        }),
       ),
     ),
-    h(Panes.Pane, { mod: 'main' }, h(Panes.Body, {}, h(Guide, null))),
+    h(
+      Panes.Pane,
+      { mod: 'main' },
+      h(Panes.Body, {}, h(Guide, { composition: c })),
+    ),
   )
-
-/** The style guide's page, dressed in the theme named `theme` (the first,
- * unless one by that name is kept), in `scheme`. */
-export let page = async (
-  theme = first,
-  scheme = 'system',
-): Promise<string> => {
-  let t = themes[theme] ? theme : first
-  let s = schemes.includes(scheme) ? scheme : 'system'
   let forced = s == 'system' ? '' : ` style="color-scheme: ${s}"`
   return `<!doctype html><html${forced}><head><meta charset="utf-8">` +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
-    `<title>${title}</title>` +
-    `<style>${await stylesheet(themes[t])}</style></head>` +
-    `<body>${renderToString(h(Shell, { theme: t, scheme: s }))}</body></html>`
+    `<title>${title}</title><style>${await stylesheet(c)}</style></head>` +
+    `<body>${renderToString(shell)}</body></html>`
 }
 
-/** `GET /ui`: the style guide, `?theme=` and `?scheme=` picking its look. */
-export let routes = (): Route[] => [{
+/** A host passes its gathered facets; a standalone guide shows the base. */
+export let routes = (host?: { ui: Contributions }): Route[] => [{
   method: 'GET',
   path: '/ui',
   handle: async (req) => {
     let q = new URL(req.url).searchParams
     return new Response(
-      await page(q.get('theme') ?? undefined, q.get('scheme') ?? undefined),
+      await page(
+        q.get('theme') ?? undefined,
+        q.get('scheme') ?? undefined,
+        q.get('skin') ?? undefined,
+        host?.ui,
+      ),
       { headers: { 'content-type': 'text/html; charset=utf-8' } },
     )
   },

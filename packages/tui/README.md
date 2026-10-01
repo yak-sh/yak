@@ -134,7 +134,9 @@ Class names use the repository's `Block_Element-modifier` convention. Pass
 `sheet` to `run` or `ansiBackend`; its entries replace `base` entries with the
 same names. A sheet given as a function is read at every paint, so an app can
 change its theme while it runs. Colours come from a theme: `@yaks/ui` builds a
-sheet for its components and for these widgets from one (`sheet(everforest)`).
+sheet for its components and these widgets from a composition
+(`sheet({ kits, theme: everforest })`, importing `kits`, `sheet` and
+`everforest` from `@yaks/ui`).
 
 A `Style` may set `fg`, `bg`, `bold`, `dim`, `italic`, `underline`, `strike`,
 `inverse`, `glyph`, `indent`, `gap`, and `block`, which lays an inline tag (a

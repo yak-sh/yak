@@ -59,10 +59,10 @@ export function mergeConfigs(configs: { url: URL; config: Config }[]): Config {
 }
 
 /** The two subpaths the web door imports of every package that has them. */
-let WEB = ['./vocab', './views']
+let WEB = ['./vocab', './views', './ui']
 
 // Which files of one package the browser program checks: what its browser.json
-// names (default its front door), plus `./vocab` and `./views` whenever the
+// names (default its front door), plus `./vocab`, `./views` and `./ui` whenever the
 // package exports them — the web door's half of the facet split.
 function browserEntries(config: Config, deno: URL): string[] {
   let exports = JSON.parse(Deno.readTextFileSync(deno)).exports as

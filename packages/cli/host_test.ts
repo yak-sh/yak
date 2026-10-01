@@ -1417,3 +1417,54 @@ test('a duty held by a process that died on this machine is taken at once', asyn
     await host.close()
   }
 })
+
+test('web gathers UI facets before building routes, graph does not import them', async () => {
+  let { kits, themes } = await import('@yaks/ui')
+  let seen: string[] = []
+  let plugin: Plugged = {
+    ...shop,
+    ui: { kits, themes },
+    routes: {
+      routes: (host) => [{
+        method: 'GET',
+        path: '/dressed',
+        handle: () => new Response(Object.keys(host.ui.kits ?? {}).join(',')),
+      }],
+    },
+  }
+  let load: Load = (spec, name) => {
+    seen.push(`${spec}/${name}`)
+    return only({ shop: plugin })(spec, name)
+  }
+  let config = { db: ':memory:', plugins: [...HTTP, 'shop'] }
+  let host = await composing(config, ['graph', 'web'], load)
+  try {
+    assertEquals(host.ui.kits, kits)
+    let response = await serving(host)(new Request('http://box/dressed'))
+    assertEquals(await response.text(), 'base')
+    assert(seen.includes('shop/ui'))
+  } finally {
+    host.close()
+  }
+  seen.length = 0
+  let graph = await composing(config, ['graph'], load)
+  try {
+    assert(!seen.some((name) => name.endsWith('/ui')))
+    assertEquals(graph.ui.kits, {})
+  } finally {
+    graph.close()
+  }
+  await assertRejects(
+    () =>
+      composing(
+        config,
+        ['graph', 'web'],
+        (spec, name) =>
+          name == 'ui' && spec == 'shop'
+            ? Promise.reject(new SyntaxError('broken UI facet'))
+            : load(spec, name),
+      ),
+    SyntaxError,
+    'broken UI facet',
+  )
+})

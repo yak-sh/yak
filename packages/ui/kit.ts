@@ -43,13 +43,14 @@ import * as turns from './Turns.ts'
 import * as value from './Value.ts'
 import { everforest } from './everforest.ts'
 import { rosepine } from './rosepine.ts'
-import type { Kit, Theme } from './theme.ts'
+import { Fragment } from 'preact'
+import type { Composition, Contributions, Kit, Piece, Theme } from './theme.ts'
 
 /** Every part, by what it is for: the document's defaults, what is said
  * inline, what is pressed or typed in, the way around, lists of things, and
  * what frames a page. A group's name is never a part's: each is a place in
  * the guide. */
-export let groups: Record<string, Record<string, Kit>> = {
+let modules = {
   Prose: { base, Body: body, Quote: quote },
   Marks: { Dot: dot, Id: id, Stamp: stamp, Chip: chip, Value: value, Tip: tip },
   Controls: {
@@ -81,27 +82,64 @@ export let groups: Record<string, Record<string, Kit>> = {
   },
 }
 
-/** Every part, the document's defaults first, as the guide orders them. */
-export let kit: Record<string, Kit> = Object.assign(
-  {},
-  ...Object.values(groups),
+/** The base parts, with their component and CSS address carried by the part,
+ * so another package's kit need not live beside this module. */
+export let groups: Record<string, Kit> = Object.fromEntries(
+  Object.entries(modules).map(([group, parts]) => [
+    group,
+    Object.fromEntries(
+      Object.entries(parts).map(([name, part]) => [name, {
+        ...part,
+        Component: name == 'base' ? Fragment : Reflect.get(part, name),
+        css: new URL(`./${name}.css`, import.meta.url),
+      } as Piece]),
+    ),
+  ]),
 )
 
-/** Every theme, by name; the first is the default. */
+/** Every base part, document defaults first. */
+export let kit: Kit = Object.assign({}, ...Object.values(groups))
+export let kits: Record<string, Kit> = { base: kit }
 export let themes: Record<string, Theme> = { everforest, rosepine }
+export let skins: NonNullable<Contributions['skins']> = {}
+export let composition: Composition = { kits, theme: everforest }
 
-/** What @yaks/tui's painter dresses the kit with, in `theme`'s colours. */
-export let sheet = (theme: Theme): Sheet =>
-  Object.assign({}, ...Object.values(kit).map((k) => k.sheet(theme.colors)))
+export { gather } from './contributions.ts'
 
-let read = (url: URL) => fetch(url).then((r) => r.text())
+/** Parts may only have one home in a composition. */
+export let parts = ({ kits }: Composition): Kit => {
+  let out: Kit = {}
+  for (let kit of Object.values(kits)) {
+    for (let [name, part] of Object.entries(kit)) {
+      if (Object.hasOwn(out, name)) {
+        throw new Error(`duplicate UI part: ${name}`)
+      }
+      out[name] = part
+    }
+  }
+  return out
+}
 
-/** What a browser dresses the kit with: `theme`'s custom properties, then
- * every part's CSS. */
-export let stylesheet = async (theme: Theme): Promise<string> =>
-  (await Promise.all(
-    [
-      theme.css,
-      ...Object.keys(kit).map((k) => new URL(`./${k}.css`, import.meta.url)),
-    ].map(read),
-  )).join('\n')
+/** Theme colours, each kit's entries, and the skin's replacement entries. */
+export let sheet = (c: Composition): Sheet =>
+  Object.assign(
+    {},
+    ...Object.entries(parts(c)).map(([name, part]) =>
+      (c.skin?.[name]?.sheet ?? part.sheet)(c.theme.colors)
+    ),
+  )
+
+let read = async (url: URL) => {
+  let response = await fetch(url)
+  if (!response.ok) throw new Error(`UI stylesheet ${url}: ${response.status}`)
+  return response.text()
+}
+
+/** Theme first, then one rendering per part: skin where named, kit otherwise. */
+export let stylesheet = async (c: Composition): Promise<string> =>
+  (await Promise.all([
+    c.theme.css,
+    ...Object.entries(parts(c)).map(([name, part]) =>
+      c.skin?.[name]?.css ?? part.css
+    ),
+  ].map(read))).join('\n')

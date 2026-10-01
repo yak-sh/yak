@@ -4,6 +4,7 @@ import { print } from '@yaks/tui/print'
 import { h, type VNode } from 'preact'
 import { Dot } from './Dot.ts'
 import { everforest } from './everforest.ts'
+import { kits } from './kit.ts'
 import { Guide } from './guide.ts'
 import { sheet, stylesheet, themes } from './kit.ts'
 import { Menu } from './Menu.ts'
@@ -33,13 +34,13 @@ test("a theme's colours are its stylesheet's dark ones", async () => {
 })
 
 test('a browser gets the theme, then every part', async () => {
-  let css = await stylesheet(everforest)
+  let css = await stylesheet({ kits, theme: everforest })
   assert(css.indexOf('--bg:') < css.indexOf('.Dot {'))
   assert(css.includes('.Menu_Item-danger'))
 })
 
 test('a part paints in a terminal in the theme: shape a glyph, tone a colour', () => {
-  let dress = sheet(everforest)
+  let dress = sheet({ kits, theme: everforest })
   let c = everforest.colors
   let cases: [string[], string][] = [
     [[], `\x1b[${fg(c.dim)}m●`],
@@ -71,11 +72,16 @@ test('a part paints in a terminal in the theme: shape a glyph, tone a colour', (
 test("a tab's badge stands beside its face, never over it", () => {
   let { Tab, Badge } = Tabs
   let tab = h(Tabs, {}, h(Tab, {}, 'Mail', h(Badge, {}, '12')))
-  assertEquals(plain(print(tab, 20, sheet(everforest))), 'Mail 12')
+  assertEquals(
+    plain(print(tab, 20, sheet({ kits, theme: everforest }))),
+    'Mail 12',
+  )
 })
 
 test('the style guide paints in a terminal', () => {
-  let out = plain(print(h(Guide, null), 100, sheet(everforest)))
+  let out = plain(
+    print(h(Guide, null), 100, sheet({ kits, theme: everforest })),
+  )
   for (let label of ['Dot-ring', 'Id-retired', 'Stamp', 'Tip', 'table']) {
     assert(out.includes(label), label)
   }

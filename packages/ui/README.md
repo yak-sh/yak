@@ -127,10 +127,10 @@ nothing with it but the names: a serif, round corners, more room, and a palette
 with no green, so a part that leans on one theme's values shows in the other.
 
 ```ts ignore
-import { everforest, sheet, stylesheet } from '@yaks/ui'
+import { everforest, kits, sheet, stylesheet } from '@yaks/ui'
 
-let css = await stylesheet(everforest) // the theme, then every part's CSS
-let dress = sheet(everforest) // what @yaks/tui's painter styles them with
+let css = await stylesheet({ kits, theme: everforest }) // the theme, then every part's CSS
+let dress = sheet({ kits, theme: everforest }) // what @yaks/tui's painter styles them with
 ```
 
 `sheet()` also colours @yaks/tui's own widgets (tables, scrollbars, panels, the
@@ -176,3 +176,24 @@ picks it. It reads nothing from a graph.
 
 A new component is its module and its CSS file, and one line in its group in
 `kit.ts`.
+
+## Kits and skins from anywhere
+
+`Kit` is a record of parts, each a `Piece` carrying
+`{Component, css, sheet,
+description, specimens}`. CSS addresses are URLs owned
+by their parts; a kit need not live in this package. A `Skin` is a partial
+record of part names and `{css, sheet?}` replacements. Unnamed parts use their
+kit rendering; a missing terminal replacement uses the kit's sheet.
+
+A page passes `{kits, theme, skin?, ux?}` to `stylesheet`, `sheet` and
+`h(Guide, {composition})`. CSS order is the theme followed by one rendering per
+part in kit order. The guide shows external parts and controlled UX specimens,
+and marks each part's skin coverage. Duplicate part names are rejected rather
+than silently replacing another kit's part.
+
+A plugin's browser-safe `./ui` facet exports `{kits, ux, themes, skins}` (each
+optional, keyed by contribution name). The web host gathers the facets of all
+installed plugins into `host.ui`; `/ui` shows that composition, with links for
+each theme, skin and light/dark scheme. `gather` is also available to another
+page host; duplicate contribution names are a composition error.

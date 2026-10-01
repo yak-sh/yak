@@ -18,7 +18,7 @@
 import type { Route } from '@yaks/api'
 import type { Plug } from '@yaks/cli/config'
 import { bundle, kept } from '@yaks/cli/page'
-import { everforest, stylesheet } from '@yaks/ui'
+import { everforest, kits, stylesheet } from '@yaks/ui'
 import { contributed } from './plugins.ts'
 
 /** What this facet reads off the host it is composing into. */
@@ -36,7 +36,7 @@ export let PAGE = '<!doctype html><html><head><meta charset="utf-8">' +
   '<link rel="stylesheet" href="/inspect/styles.css"></head>' +
   '<body><script type="module" src="/inspect/app.js"></script></body></html>'
 
-let css = () => stylesheet(everforest)
+let css = () => stylesheet({ kits, theme: everforest })
 
 /**
  * The page's entry: `boot` with the inspector views each module of `specs`

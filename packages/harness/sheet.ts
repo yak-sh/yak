@@ -4,7 +4,7 @@
 
 import * as generic from '@yaks/render/views'
 import type { Sheet } from '@yaks/tui'
-import { type Colors, everforest, sheet } from '@yaks/ui'
+import { type Colors, everforest, kits, sheet } from '@yaks/ui'
 
 let own = (c: Colors): Sheet => ({
   Title: { bold: true },
@@ -22,7 +22,7 @@ let own = (c: Colors): Sheet => ({
 })
 
 export let dress: Sheet = {
-  ...sheet(everforest),
+  ...sheet({ kits, theme: everforest }),
   ...generic.sheet(everforest.colors),
   ...own(everforest.colors),
 }

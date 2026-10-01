@@ -46,8 +46,9 @@ web onto the moved one in the same change.
 
 ## A UI part
 
-A part is two files in packages/ui and one line in `groups` in
-packages/ui/kit.ts:
+A part lives in its author’s UI kit: two files and a `Piece` entry
+`{Component, css: URL, sheet, description, specimens}` in a `Kit` record.
+The base kit uses `groups` in packages/ui/kit.ts:
 
 - `Name.ts`: the Preact part, made with `el` or `block` (packages/ui/el.ts),
   with semantic variants through `mod` (`Block_Element-modifier` class names).
@@ -68,7 +69,8 @@ under the second theme, which is why Rosé Pine exists beside Everforest.
 - A **theme** is custom properties only: a CSS file of `--` names and the same
   colors for the terminal (packages/ui/everforest.css and .ts, rosepine.css and
   .ts; `themes` in kit.ts).
-- A **skin** is a whole other rendering of the same parts. None exists yet.
+- A **skin** replaces the CSS and optional terminal entries of the parts it names.
+  Unnamed parts fall back to their kit. A page and its guide share a composition.
 - A **kit** is a set of parts. A plugin may add a kit of its own.
 
 A consumer imports the parts and never knows which theme or skin paints them.
