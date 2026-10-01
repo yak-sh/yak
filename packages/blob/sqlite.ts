@@ -106,6 +106,7 @@ export let sqliteBlobs = (driver: Driver, layout: Layout = {}): Blobs => {
       where: eq(col(l.key), val(sha)),
     }))[0]?.[l.value]
   return {
+    transactional: true,
     has: (sha) => row(sha) != null,
     get: (sha) => {
       let found = row(sha)

@@ -105,18 +105,20 @@ inside the transaction and after the graph's `$was` guard checks the text the
 caller read. It restores text in the bundles returned from `apply()` during
 `commit`.
 
-`normalize`, `admit` and `mint` run before the transaction, so they are too
-early to make transactional blob inserts. `mutate` hooks run after the graph has
-passed component rows to storage, so they are too late to replace the values.
+External stores keep their content during `prepare`, before the graph takes its
+write lock. Preparation leaves text intact for the guard and carries references
+on the bundles. A later graph failure or dry run can leave unreferenced content
+in these stores, as their writes cannot roll back with the graph.
 
-SQLite blob inserts and component writes commit together only when they use the
-same active connection. Files and object stores are outside that transaction; a
-later graph failure can leave unreferenced content there.
+`sqliteBlobs` declares `transactional: true`: its inserts stay in `precondition`
+and commit or roll back with the component rows on the same active connection.
+`mutate` hooks run after storage has received component rows, too late to swap.
 
 ## The byte stores
 
 ```ts
 type Blobs = {
+  transactional?: boolean
   has: (sha: string) => boolean | Promise<boolean>
   get: (sha: string) => Uint8Array | undefined | Promise<Uint8Array | undefined>
   put: (sha: string, bytes: Uint8Array) => void | Promise<void>

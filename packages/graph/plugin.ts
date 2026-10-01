@@ -30,6 +30,9 @@ import type { VocabDoc } from '@yaks/vocab'
  *   properties, validate each value against the vocabulary.
  * - `mint` — give every `$alias` in the change a real id (a fresh one, or one
  *   derived from the content) and rewrite the references to it.
+ * - `prepare` — finish idempotent external work before taking the transaction's
+ *   write lock. Graph checks still run against current data inside it; prepared
+ *   external content may remain unreferenced after a refusal or dry run.
  * - `precondition` — the `$was` check, and any other "may this change be
  *   applied" check that has to read first (a lease, a quota). The transaction
  *   is open by now.
@@ -55,6 +58,7 @@ export type Phase =
   | 'normalize'
   | 'admit'
   | 'mint'
+  | 'prepare'
   | 'precondition'
   | 'rules'
   | 'mutate'
@@ -70,6 +74,7 @@ export let PHASES: Phase[] = [
   'normalize',
   'admit',
   'mint',
+  'prepare',
   'precondition',
   'rules',
   'mutate',

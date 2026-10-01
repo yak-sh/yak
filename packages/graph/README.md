@@ -190,6 +190,9 @@ The write pipeline separates the work done before anything is written, the
 writes themselves, and the observers that run after the commit. In particular:
 
 - `normalize` can rewrite incoming data.
+- `prepare` finishes idempotent external work after admission and minting, before
+  opening the transaction. Prepared content can remain after a refusal or dry
+  run; graph preconditions still check current data inside the transaction.
 - Admission and preconditions validate it against the vocabulary and the current
   state before any write is accepted. Admission refuses a component or property
   the vocabulary does not declare, naming it, and casts a string property's

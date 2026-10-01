@@ -38,11 +38,11 @@
  *
  * ## Apply is pluggable, in fixed phases
  * A change runs through an ordered list of {@link Phase}s — normalize, admit,
- * precondition, mutate, cascade, stamp, journal, commit, effect, audit. The
- * order matters, so a {@link Plugin} registers a {@link Hook} against a named
- * phase; the hook takes the list of changes and returns the list the next phase
- * sees, which is how a hook rewrites it, adds to it, or (by throwing) refuses
- * it. Every registry is per graph instance.
+ * mint, prepare, precondition, rules, mutate, cascade, stamp, journal, commit,
+ * effect, audit. The order matters, so a {@link Plugin} registers a {@link Hook}
+ * against a named phase; the hook takes the list of changes and returns what
+ * the next phase sees, which is how a hook rewrites it, adds to it, or (by
+ * throwing) refuses it. Every registry is per graph instance.
  *
  * A plugin can express the same thing as data: a {@link Rule} is a query over
  * one bundle in the transaction plus what it produces (`produce` a template, or

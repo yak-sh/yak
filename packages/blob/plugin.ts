@@ -1,29 +1,10 @@
 // The substitution, as a graph plugin. A writer sends text; the row keeps the
 // text's address and the bytes go to the store; a reader gets text back.
-// Neither the component that declared the property nor the application writing
-// to it has to know any of this happened — that is the whole point, and it is
-// why the substitution happens inside `apply()` rather than in a caller.
-//
-// Which phase, and why it is the only one that works. The bytes and the row
-// must land together — a row pointing at bytes that were never written is a
-// broken document, so the store write cannot happen before the transaction
-// opens (`normalize`, `admit` and `mint` are all outside it). Inside the
-// transaction the phases run precondition → mutate → cascade → stamp → journal
-// → commit, and within a phase the core runs first and plugin hooks after it.
-// So `mutate` is already too late: by the time a `mutate` hook is called, the
-// core has handed the bundles to storage and the text is in the row. The last
-// moment before that is a hook on `precondition`, which is also the correct
-// side of the `$was` precondition guard: the guard hashes the value the caller
-// read, and what a caller reads is the text, so it has to run against text —
-// and it does, because the core's guard runs first and this hook substitutes
-// after it.
-//
-// The substitution is undone at `commit`, the last phase inside the
-// transaction, so what `apply()` returns is what the caller wrote. A client
-// that applies the return value to its cache gets its document back, not a hash
-// of it. The text is carried between the two hooks on the bundle itself, under
-// `$blob` — a key beginning with `$` is never written as a property, which is
-// the ordinary way one phase passes a decision to a later one.
+// External stores keep content in `prepare`, before the graph takes its write
+// lock. Transactional stores keep it after the `$was` guard, so bytes and rows
+// roll back together. Both leave text intact until the guard checks it, then
+// substitute references in `precondition` and restore text in `commit`. `$blob`
+// carries the prepared references and original text through the change.
 
 import type { Bundle, Comp, Plugin } from '@yaks/graph'
 import { after, each } from '@yaks/fp'
@@ -31,10 +12,9 @@ import type { Vocab } from '@yaks/vocab'
 import { bodies, type Body } from './props.ts'
 import { address, type Blobs, encode } from './store.ts'
 
-/** Where the substituted-out text waits between the two hooks: `comp.prop` →
- * the text the caller sent. Never written as a property — the key starts with
- * `$`. */
 let STASH = '$blob'
+type Stored = { value: string; ref: string | number }
+type Stash = Record<string, Stored>
 
 // The bundle's patch for a component, when it carries one at all. A `null`
 // component is a deletion, not a value, and has no text to move.
@@ -50,24 +30,20 @@ let written = (b: Bundle, props: Body[]): [Body, string][] =>
     return typeof value == 'string' ? [[{ comp, prop }, value] as const] : []
   })
 
-// Convert one bundle: every body property's text becomes its address, the text
-// is stashed for the return trip, and the bytes go to the store — skipped when
-// the store already holds them, which is what makes a repeated value one
-// object.
-let swap = (
+// Keep content while leaving the text available to the graph's guard.
+let stage = (
   b: Bundle,
   props: Body[],
   intern: (value: string) => string | number | Promise<string | number>,
 ): Bundle | Promise<Bundle> => {
   let mine = written(b, props)
   if (!mine.length) return b
-  let stash: Record<string, string> = {}
+  let stash: Stash = {}
   let out: Bundle = { ...b }
   return after(
     each(mine, null, (_, [{ comp, prop }, value]) => {
-      stash[`${comp}.${prop}`] = value
       return after(intern(value), (ref) => {
-        out[comp] = { ...patch(out, comp)!, [prop]: ref }
+        stash[`${comp}.${prop}`] = { value, ref }
         return null
       })
     }),
@@ -78,13 +54,24 @@ let swap = (
   )
 }
 
+let swap = (b: Bundle): Bundle => {
+  let stash = b[STASH] as Stash | undefined
+  if (!stash) return b
+  let out = { ...b }
+  for (let [key, { ref }] of Object.entries(stash)) {
+    let [comp, prop] = key.split('.')
+    out[comp] = { ...patch(out, comp)!, [prop]: ref }
+  }
+  return out
+}
+
 // Put the text back where the caller wrote it, and take the stash away.
 let restore = (b: Bundle): Bundle => {
-  let stash = b[STASH] as Record<string, string> | undefined
+  let stash = b[STASH] as Stash | undefined
   if (!stash) return b
   let out: Bundle = { ...b }
   delete out[STASH]
-  for (let [key, value] of Object.entries(stash)) {
+  for (let [key, { value }] of Object.entries(stash)) {
     let [comp, prop] = key.split('.')
     let held = patch(out, comp)
     if (held) out[comp] = { ...held, [prop]: value }
@@ -94,7 +81,7 @@ let restore = (b: Bundle): Bundle => {
 
 /** How a store addresses an object from a component row. Usually the hash
  * itself; an existing SQL layout may instead keep an integer foreign key.
- * Called after `put`, inside the transaction, so the object it names exists. */
+ * Called after `put`, in the store's preparation phase. */
 export type Reference = (
   sha: string,
 ) => string | number | Promise<string | number>
@@ -139,40 +126,42 @@ export let blobs = (
 ): Plugin => {
   let props = opts.props ?? bodies(vocab)
   let reference = opts.reference ?? ((sha: string) => sha)
+  let prepare = (bundles: Bundle[]) => {
+    // Cache only within this change: a rolled-back transactional reference
+    // must never be reused. Equal values need one hash and one store call.
+    let refs = new Map<string, string | number>()
+    let intern = (value: string) => {
+      let held = refs.get(value)
+      if (held !== undefined) return held
+      let sha = address(value)
+      return after(
+        store.has(sha),
+        (exists) =>
+          after(
+            exists ? undefined : store.put(sha, encode(value)),
+            () =>
+              after(reference(sha), (ref) => {
+                refs.set(value, ref)
+                return ref
+              }),
+          ),
+      )
+    }
+    return each(
+      bundles,
+      [] as Bundle[],
+      (out, b) => after(stage(b, props, intern), (one) => [...out, one]),
+    )
+  }
   return {
     name: '@yaks/blob',
     hooks: {
-      precondition: (bundles) => {
-        // Intern equal text once per transaction, before hashing it. The store
-        // deduplicates bytes anyway, but repeatedly hashing one shared large
-        // body still costs its size times the number of rows. This map is
-        // transaction-local on purpose: a rollback (or an unrelated apply) must
-        // never reuse an uncommitted reference. `each` visits values
-        // sequentially even for asynchronous stores.
-        let refs = new Map<string, string | number>()
-        let intern = (value: string) => {
-          let held = refs.get(value)
-          if (held !== undefined) return held
-          let sha = address(value)
-          return after(
-            store.has(sha),
-            (exists) =>
-              after(
-                exists ? undefined : store.put(sha, encode(value)),
-                () =>
-                  after(reference(sha), (ref) => {
-                    refs.set(value, ref)
-                    return ref
-                  }),
-              ),
-          )
-        }
-        return each(
-          bundles,
-          [] as Bundle[],
-          (out, b) => after(swap(b, props, intern), (one) => [...out, one]),
-        )
-      },
+      prepare: (bundles) => store.transactional ? bundles : prepare(bundles),
+      precondition: (bundles) =>
+        after(
+          store.transactional ? prepare(bundles) : bundles,
+          (ready) => ready.map(swap),
+        ),
       commit: (bundles) => bundles.map(restore),
     },
   }

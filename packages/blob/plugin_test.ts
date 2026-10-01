@@ -111,6 +111,18 @@ test('interned references do not survive a rolled-back batch', () => {
   assertEquals(tally(driver, 'blob_text'), 1)
 })
 
+test('a dry run rolls back transactional bytes with the document', () => {
+  let { g, driver, db } = fixture()
+  let change = [{ entity: { eid: 'draft' }, post: { body: 'checked text' } }]
+  let out = g.apply(change, { check: true }) as Bundle[]
+  assertEquals(post(out[0]).body, 'checked text')
+  assertEquals(db.read('.post'), [])
+  assertEquals(tally(driver, 'blob_text'), 0)
+  g.apply(change)
+  assertEquals(post(db.read('.post')[0]).body, 'checked text')
+  assertEquals(tally(driver, 'blob_text'), 1)
+})
+
 test('a bundle that names no body property is untouched', () => {
   let { g, db } = fixture()
   g.apply([

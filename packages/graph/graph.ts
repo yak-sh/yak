@@ -15,6 +15,7 @@
 //                        server-owned ones, check the values
 //   mint        core     assign an id to every $alias, and rewrite the
 //                        references to it
+//   prepare     hooks    idempotent external work before taking the write lock
 //   ───────────────────  the transaction opens
 //   gather      core     every read this change is going to need, in one call
 //   precondition core    the `$was` check   (a lease check is a hook here)
@@ -659,6 +660,7 @@ export let graph = (opts: Options): Graph => {
           outside,
           (b) => identified(resolve(b, vocab, derives(), mint), vocab),
         ),
+        phase('prepare', outside),
         inside,
         (b) => timed('compose', () => composed(b)),
       ],
