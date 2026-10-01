@@ -66,9 +66,19 @@ turn no more than a short one. A line is what a model is sent (an input, a
 reply, a call, a result); the asks and errors kept beside them are not lines,
 and neither are the typed questions other turns asked or their answers. Without
 an explicit window, a long native transcript is summarized into a checkpoint
-before it fills the model's input budget. The next turn reads that summary and
-the entries after its boundary. A provider anchor before the checkpoint is not
-reused.
+once the next request would fill `Deps.compactAt` (half where absent, the same
+for every model) of its model's context window: `model.context` on the model's
+row, else `provider.context` on its provider's, else 128,000 tokens
+(./compact.ts). What it weighs is what the model holds: the provider's count of
+the newest request since the checkpoint, which includes any history an anchor
+kept there, plus the lines since. The summary replaces the oldest lines and
+keeps the newest that fit half the limit, no more than the summarizer's own
+window can read, and no checkpoint follows another within `GAP` asks, so a
+window set too small summarizes every few steps, never every step. The next turn
+reads that summary and the entries after its boundary. A provider anchor before
+the checkpoint is not reused. Every request names its session as
+`Request.conversation`, so between checkpoints a provider that keys its prompt
+cache by conversation reads the unchanged prefix from it.
 
 A fork has `fork{from}` on its session entity. Its logical transcript contains
 the parent transcript through the referenced entry, followed by its own entries.

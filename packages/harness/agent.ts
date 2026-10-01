@@ -145,6 +145,9 @@ export type Opts<H extends Host = Host> = ChildLimits & {
   instructions?: string
   /** Maximum tool-result code points before model-facing handle projection. */
   outputLimit?: number
+  /** the share of its model's context window a transcript fills before it is
+   * compacted, for every model (@yaks/session `Deps.compactAt`) */
+  compactAt?: number
   /** each step of every transcript, as it lands */
   each?: (step: Step) => void
   opening?: (persona?: Eid) => Promise<Opening>
@@ -380,6 +383,7 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
     },
     streaming: opts.streaming,
     checkpointMs: opts.checkpointMs,
+    compactAt: opts.compactAt,
     instructions: opts.instructions,
     resolveInstructions: (inherited) =>
       inheritedInstructions(inherited, opts.instructions),

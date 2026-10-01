@@ -548,6 +548,10 @@ test('a compaction refusal keeps the provider detail in its error entry', async 
         },
       },
     ], { trusted: true })
+    await h.g.apply([{
+      entity: { eid: identityEid('model', ['gpt-6-sol']) },
+      model: { context: 4 },
+    }], { trusted: true })
     let model = responses({
       credential: () => ({ token: 'test', account: 'acct', base: CODEX }),
       fetch: () =>
@@ -563,7 +567,7 @@ test('a compaction refusal keeps the provider detail in its error entry', async 
     let step = await react(h.g, 'session', {
       model,
       tools: [],
-      contextTokens: 4,
+      compactModel: { model, name: 'gpt-6-sol' },
     })
     let error = step.added.find((b) => b.error)!
     assertEquals((error.error as Comp).code, 'http_400')

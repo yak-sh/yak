@@ -19,5 +19,9 @@ test('a compaction prefix does not split an interleaved call and result', () => 
     entry(4, { content: { body: 'arrived while the call ran' } }),
     entry(5, { result: { call: 'e3' }, content: { body: 'done' } }),
   ]
-  assertEquals(prefix(entries, 1_000).map((b) => b.entity.eid), ['e1', 'e2'])
+  let cut = (keep: number) =>
+    prefix(entries, [40, 1, 1, 1, 1], keep).map((b) => b.entity.eid)
+  assertEquals(cut(3), ['e1', 'e2'])
+  // The only cut keeping two lines would part the result from its call.
+  assertEquals(cut(2), ['e1', 'e2', 'e3', 'e4', 'e5'])
 })

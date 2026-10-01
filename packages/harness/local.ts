@@ -80,6 +80,9 @@ export type Opts = ChildLimits & NotHarness & {
   instructions?: string
   /** Maximum tool-result code points before model-facing handle projection. */
   outputLimit?: number
+  /** the share of its model's context window a transcript fills before it is
+   * compacted, for every model (@yaks/session `Deps.compactAt`) */
+  compactAt?: number
   /** each step of every transcript, as it lands */
   each?: (step: Step) => void
   /** where a task child's checkout is cut (default `$HARNESS_WORKTREE_DIR`,

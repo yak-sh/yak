@@ -19,7 +19,9 @@ Three things, and no transport:
 - **`Model`** — `(Request) => Promise<Reply>`. A request is a model name, the
   items, the tools, an optional ceiling on the tokens the reply may write
   (`tokens`), and an optional provider response reference (an **anchor**) to
-  continue from; a reply is an id, the model that served it, and the items it
+  continue from, and the `conversation` it continues, which a provider that keys
+  its prompt cache by conversation is told (the Codex endpoint's `session_id`
+  header); a reply is an id, the model that served it, and the items it
   produced. A provider that stores its replies adds three optional members:
   `mark` (the component to write on the record of a reply), `anchor` (reads an
   anchor back off that record, or returns nothing) and `vocab` (the component
@@ -35,9 +37,14 @@ Three things, and no transport:
   request it serves. A provider reached over HTTP says where in `base` (its root
   URL) and which API it speaks in `api` (`ollama`, or `openai` for an
   OpenAI-compatible one): that is how [@yaks/embedding](../embedding) reaches an
-  embedding model, a provider and a model named in its config. The `tool`
-  component belongs to [@yaks/tools](../tools), not this vocabulary. `Tool` here
-  is the provider-neutral TypeScript type for a callable tool description.
+  embedding model, a provider and a model named in its config. `model.context`
+  is the model's context window in tokens, read from its provider's catalog
+  (`yak model list` fills a row that has none) or set by hand, which the catalog
+  never overwrites; `provider.context` is the window assumed for a model it
+  serves whose row names none. @yaks/session compacts a transcript at a share of
+  it. The `tool` component belongs to [@yaks/tools](../tools), not this
+  vocabulary. `Tool` here is the provider-neutral TypeScript type for a callable
+  tool description.
 
 What a request cost is two more components. `price{input, output, cached}` on a
 model's row is what it costs, in dollars per million tokens;

@@ -103,6 +103,10 @@ export type ResponseOptions = {
 export type RunOptions = {
   /** Do not replay once callers expose partial output. Checked after failure. */
   noRetry?: boolean | (() => boolean)
+  /** The conversation the exchange continues: the Codex endpoint keys its
+   * prompt cache by its `session_id` header, and without one caches nothing
+   * a later request reads. */
+  conversation?: string
   signal?: AbortSignal
   event?: (event: ResponseEvent) => void
 }
@@ -661,6 +665,9 @@ export let transport = (options: ResponseOptions): {
       headers.set('content-type', 'application/json')
       headers.set('x-client-request-id', requestId)
       if (auth.account) headers.set('chatgpt-account-id', auth.account)
+      if (endpoint == CODEX && run.conversation) {
+        headers.set('session_id', run.conversation)
+      }
 
       // One deadline spans this whole exchange — the connect, the wait on the
       // first frame, and every mid-stream gap — each frame pushing it forward.

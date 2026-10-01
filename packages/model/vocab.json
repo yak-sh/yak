@@ -42,6 +42,11 @@
         "fallback": {
           "type": "boolean"
         },
+        "context": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "the context window, in tokens, assumed for a model it serves whose own row names none"
+        },
         "offered": {
           "type": "boolean"
         }
@@ -89,6 +94,11 @@
         "effort": {
           "type": "string",
           "description": "the reasoning effort requested, unless a session overrides it"
+        },
+        "context": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "the model's context window, in tokens: the most one request holds, its input and reply together; read from its provider's catalog, or set by hand. A transcript is compacted at a share of it"
         },
         "offered": {
           "type": "boolean"

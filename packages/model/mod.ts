@@ -150,6 +150,10 @@ export type Request = {
    * followed it: whatever the same model's {@link Model.anchor} returned for an
    * earlier reply. Opaque to the caller. */
   anchor?: string
+  /** the conversation this request continues, the same for each of its
+   * requests, so a provider that keys its prompt cache by conversation finds
+   * the prefix the last one cached */
+  conversation?: string
 }
 
 /** Counts for one request. Cached input and reasoning output are subsets,

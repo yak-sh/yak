@@ -82,12 +82,23 @@ let text = (call: Bundle, body: string): Bundle => ({
 // would return an empty catalog even when the account can use those models.
 export let CODEX_CLIENT_VERSION = '0.157.1'
 
-/** Model names from the endpoint this credential serves. */
+/** A model a provider's catalog lists: its name, and its context window in
+ * tokens where the catalog says it (the Codex catalog's `context_window`,
+ * OpenRouter's `context_length`). */
+export type Listed = { name: string; context?: number }
+
+let listed = (name: unknown, context: unknown): Listed => {
+  if (typeof name != 'string') throw new Error('Invalid model catalog')
+  let n = Number(context)
+  return Number.isSafeInteger(n) && n > 0 ? { name, context: n } : { name }
+}
+
+/** The models the endpoint this credential serves lists. */
 export let modelCatalog = async (
   cred: Credential,
   fetcher: typeof fetch = fetch,
   refresh?: (stale: TransportCredential) => Promise<Credential>,
-): Promise<string[]> => {
+): Promise<Listed[]> => {
   let url = new URL(cred.base.replace(/\/$/, '') + '/models')
   if (cred.base == CODEX) {
     url.searchParams.set('client_version', CODEX_CLIENT_VERSION)
@@ -107,24 +118,40 @@ export let modelCatalog = async (
     throw new Error(`${url.pathname} says ${res.status}`)
   }
   let body = await res.text()
-  let listed = JSON.parse(body) as {
-    data?: { id: string }[]
-    models?: { slug: string }[]
+  let catalog = JSON.parse(body) as {
+    data?: { id: unknown; context_length?: unknown; context_window?: unknown }[]
+    models?: { slug: unknown; context_window?: unknown }[]
   }
   if (cred.base == CODEX) {
-    if (!Array.isArray(listed.models)) throw new Error('Invalid model catalog')
-    let names = listed.models.map((m) => m.slug)
-    if (names.some((name) => typeof name != 'string')) {
-      throw new Error('Invalid model catalog')
-    }
-    return names
+    if (!Array.isArray(catalog.models)) throw new Error('Invalid model catalog')
+    return catalog.models.map((m) => listed(m.slug, m.context_window))
   }
-  if (!Array.isArray(listed.data)) throw new Error('Invalid model catalog')
-  let names = listed.data.map((m) => m.id)
-  if (names.some((name) => typeof name != 'string')) {
-    throw new Error('Invalid model catalog')
-  }
-  return names
+  if (!Array.isArray(catalog.data)) throw new Error('Invalid model catalog')
+  return catalog.data.map((m) =>
+    listed(m.id, m.context_length ?? m.context_window)
+  )
+}
+
+/** Give each listed model's row the window its catalog says, where the row
+ * has none of its own: a window set by hand stands. Answers each listed
+ * model with the window its row now has. */
+export let windows = async (
+  graph: Graph,
+  models: Listed[],
+): Promise<Listed[]> => {
+  let eids = models.map((m) => identityEid(MODEL, [m.name]))
+  let rows = new Map(
+    (await graph.get(eids, [MODEL])).map((b) => [b.entity.eid, b[MODEL]]),
+  )
+  let own = (i: number) =>
+    Number((rows.get(eids[i]) as Comp | undefined)?.context) || undefined
+  let filled = models.flatMap((m, i) =>
+    rows.get(eids[i]) && !own(i) && m.context
+      ? [{ entity: { eid: eids[i] }, [MODEL]: { context: m.context } }]
+      : []
+  )
+  if (filled.length) await graph.apply(filled, { trusted: true })
+  return models.map((m, i) => ({ name: m.name, context: own(i) ?? m.context }))
 }
 
 /** The functions behind the tools the harness declares (./vocab.json). */
@@ -194,16 +221,21 @@ export let runs = (host?: Host): Runs => ({
     }])
     return await settled(graph, s, host?.stopping)
   },
-  model_list: async (call) => {
+  model_list: async (call, graph) => {
     if (!host) throw new Error('model list needs a host')
     let auth = openaiCredential(hosted(host))
     let cred = await auth.credential()
-    let names = await modelCatalog(cred, fetch, auth.refresh)
+    let models = await windows(
+      graph,
+      await modelCatalog(cred, fetch, auth.refresh),
+    )
     return [text(
       call,
       [
         `models from ${cred.base}`,
-        ...names.map((name) => `  ${name}`),
+        ...models.map(({ name, context }) =>
+          `  ${name}` + (context ? `  ${context} tokens` : '')
+        ),
       ].join('\n'),
     )]
   },

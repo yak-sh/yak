@@ -28,6 +28,7 @@ import { sessions } from './plugin.ts'
 import { type Deps, react, recent, transcript } from './react.ts'
 import { running, settle } from './run.ts'
 import { took } from './timing.ts'
+import { GAP } from './compact.ts'
 
 // What the fake provider keeps about an ask: its own comp, the way @yaks/openai
 // keeps `openai{response_id}`.
@@ -103,6 +104,10 @@ let world = (): Graph => {
   seed(g)
   return g
 }
+
+// The fake model's context window, in tokens, on its row.
+let windowed = (g: Graph, context: number) =>
+  g.apply([{ entity: { eid: ids.m }, model: { context } }])
 
 let kinds = async (g: Graph, s: string) =>
   (await transcript(g, s)).map((b) => kindOf(b))
@@ -463,6 +468,7 @@ test('a checkpoint keeps a call whose result followed an input', async () => {
 
 test('a long native transcript writes a checkpoint before continuing', async () => {
   let g = world()
+  await windowed(g, 20)
   await g.apply([{
     entity: { eid: 'later' },
     entry: { session: ids.s },
@@ -476,7 +482,6 @@ test('a long native transcript writes a checkpoint before continuing', async () 
     await rest(g, ids.s, {
       model,
       tools: [],
-      contextTokens: 20,
       compactModel: { model, name: 'fake-1' },
     }),
     'settled',
@@ -513,8 +518,92 @@ test('a long native transcript writes a checkpoint before continuing', async () 
   })
 })
 
+// A provider that counts what it was sent, about four characters a token,
+// the way a provider reports `usage.input_tokens`.
+let counting = (reply: (req: Request) => Reply) => {
+  let asked: Request[] = []
+  let model: Model = (req: Request) => {
+    asked.push(req)
+    let sent = JSON.stringify([req.instructions, req.tools, req.items])
+    return Promise.resolve({
+      ...reply(req),
+      usage: { input_tokens: Math.ceil(sent.length / 4) },
+    })
+  }
+  return { model, asked }
+}
+
+test('a transcript compacts at half its model’s window, not before', async () => {
+  let g = world()
+  await windowed(g, 100_000)
+  let summarizer = counting(() => says('sum', 'The story so far.'))
+  let deps = {
+    model: counting(() => says('r', 'ok')).model,
+    tools: [],
+    mint,
+    compactModel: { model: summarizer.model, name: 'fake-1' },
+  }
+  // About 40k tokens: under half the window.
+  await appendEntry(g, ids.s, 'x'.repeat(160_000))
+  assertEquals(await rest(g, ids.s, deps), 'settled')
+  assertEquals(summarizer.asked.length, 0)
+  // About 60k: over it.
+  await appendEntry(g, ids.s, 'y'.repeat(80_000))
+  assertEquals(await rest(g, ids.s, deps), 'settled')
+  assertEquals(summarizer.asked.length, 1)
+})
+
+test('a transcript of huge tool results is not compacted again on the next steps', async () => {
+  let g = world()
+  let window = 40_000
+  await windowed(g, window)
+  await g.apply([{
+    entity: { eid: toolEid('dump') },
+    tool: { name: 'dump', description: 'a lot' },
+  }])
+  let dump = {
+    name: 'dump',
+    description: 'a lot',
+    parameters: { type: 'object', properties: {} },
+    run: () => 'z'.repeat(28_000),
+  }
+  let n = 0
+  let worker = counting(() =>
+    ++n > 16 ? says('done', 'done') : {
+      id: `r${n}`,
+      model: 'fake-1',
+      items: [{ kind: 'call', id: `c${n}`, name: 'dump', args: '{}' }],
+    }
+  )
+  let summarizer = counting(() => says('sum', 'Dumped a lot.'))
+  assertEquals(
+    await rest(g, ids.s, {
+      model: worker.model,
+      tools: [dump],
+      mint,
+      compactModel: { model: summarizer.model, name: 'fake-1' },
+    }),
+    'settled',
+  )
+  // The asks between one checkpoint and the next.
+  let gaps: number[] = [], asks = -1
+  for (let b of await transcript(g, ids.s)) {
+    if (b.checkpoint) {
+      if (asks >= 0) gaps.push(asks)
+      asks = 0
+    } else if (kindOf(b) == 'ask' && asks >= 0) asks++
+  }
+  assertEquals(gaps.length > 0, true)
+  assertEquals(gaps.filter((n) => n < GAP), [])
+  let sent = worker.asked.map((req) =>
+    JSON.stringify([req.instructions, req.tools, req.items]).length / 4
+  )
+  assertEquals(sent.filter((n) => n > window), [])
+})
+
 test('media transcripts compact only through a text model without persona instructions', async () => {
   let g = world()
+  await windowed(g, 40)
   let media = scripted([says('media', 'Audio ready.')], false)
   let text = scripted([says('summary', 'Remember the blue bridge.')], false)
   let persona = 'PRIVATE PERSONA: never forward this'
@@ -530,7 +619,6 @@ test('media transcripts compact only through a text model without persona instru
     await rest(g, ids.s, {
       model: media.model,
       tools: [],
-      contextTokens: 40,
       compactModel: { model: text.model, name: 'text-only' },
     }),
     'settled',
@@ -546,6 +634,7 @@ test('media transcripts compact only through a text model without persona instru
 
 test('an over-budget media transcript without a summarizer never asks for a summary', async () => {
   let g = world()
+  await windowed(g, 40)
   let media = scripted([says('media', 'Audio ready.')], false)
   await g.apply([{
     entity: { eid: 'later' },
@@ -556,7 +645,6 @@ test('an over-budget media transcript without a summarizer never asks for a summ
     await rest(g, ids.s, {
       model: media.model,
       tools: [],
-      contextTokens: 40,
     }),
     'settled',
   )
@@ -694,6 +782,7 @@ test('a summary the provider keeps failing ends the transcript, never loops', as
     ]
   ) {
     let g = world()
+    await windowed(g, 20)
     await rest(g, ids.s, {
       model: scripted([says('r1', 'hi')]).model,
       tools: [],
@@ -707,7 +796,6 @@ test('a summary the provider keeps failing ends the transcript, never loops', as
       model: scripted([says('r2', 'ok')], false).model,
       tools: [],
       mint,
-      contextTokens: 20,
       compactModel: { model: summarizer, name: 'fake-1' },
     }
     assertEquals(await rest(g, ids.s, deps), 'failed')

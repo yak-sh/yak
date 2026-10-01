@@ -189,6 +189,25 @@ test('a streamed reply is read to its end', async () => {
   assertEquals((asked[0].body as { store: boolean }).store, false)
 })
 
+test('the Codex endpoint is told which conversation a request continues', async () => {
+  let done = sse({
+    type: 'response.completed',
+    response: { id: 'r1', model: 'm', status: 'completed' },
+  })
+  let sent = async (base: string, conversation?: string) => {
+    let { asked, fetcher } = serving(200, done)
+    let model = responses({
+      credential: () => ({ ...codex, base }),
+      fetch: fetcher,
+    })
+    await model({ ...req, anchor: undefined, conversation })
+    return asked[0].headers.get('session_id')
+  }
+  assertEquals(await sent(CODEX, 's1'), 's1')
+  assertEquals(await sent(CODEX), null)
+  assertEquals(await sent('https://api.openai.com/v1', 's1'), null)
+})
+
 test('a refusal, a failed stream and no credential are errors', async () => {
   let refused = serving(
     400,

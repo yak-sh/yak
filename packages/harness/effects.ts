@@ -16,7 +16,9 @@ let word = (options: Record<string, unknown>, name: string) =>
   typeof options[name] == 'string' ? options[name] : undefined
 
 /** The runner, lent this machine, over the host's graph. The model to ask for
- * by default and its provider may be named in the plugin's options. */
+ * by default and its provider may be named in the plugin's options, and so
+ * may `compactAt`, the share of its model's context window a transcript fills
+ * before it is compacted (half where absent). */
 export let effects = (
   host: Host,
   options: Record<string, unknown> = {},
@@ -24,6 +26,9 @@ export let effects = (
   let { lent } = here(hosted(host), {
     name: word(options, 'name'),
     provider: word(options, 'provider'),
+    compactAt: typeof options.compactAt == 'number'
+      ? options.compactAt
+      : undefined,
   })
   host.stopping.addEventListener('abort', () => void lent.release?.(), {
     once: true,

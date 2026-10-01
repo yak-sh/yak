@@ -221,6 +221,7 @@ let ask = (opts: Options) => {
             ? AbortSignal.any([req.signal, opts.signal])
             : req.signal ?? opts.signal,
           noRetry: () => !!req.onText && textIndexes.size > 0,
+          conversation: req.conversation,
           // Image payloads must never escape through diagnostic/event subscribers.
           event: (event) => {
             if (
