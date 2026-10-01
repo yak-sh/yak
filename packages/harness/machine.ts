@@ -80,6 +80,10 @@ let code = (c: number | null) =>
 let pid = (p: Proc) => p.pid ? ` (pid ${p.pid})` : ''
 
 let str = (description: string) => ({ type: 'string', description })
+let os = (description: string) => ({
+  ...str(description),
+  pattern: '^[^\\u0000]*$',
+})
 
 /** A machine tool without its machine: what a door lists before it has one
  * to run it on. */
@@ -96,8 +100,8 @@ export let machineDeclared = (o: MachineOpts = {}): MachineTool[] => [{
   parameters: {
     type: 'object',
     properties: {
-      command: str('the command line, run by bash'),
-      cwd: str('where to run it'),
+      command: os('the command line, run by bash'),
+      cwd: os('where to run it'),
       timeout: {
         type: 'number',
         description: `milliseconds to wait for it (default ${
@@ -146,7 +150,7 @@ export let machineDeclared = (o: MachineOpts = {}): MachineTool[] => [{
   parameters: {
     type: 'object',
     properties: {
-      path: str('the file, from the working directory unless rooted'),
+      path: os('the file, from the working directory unless rooted'),
     },
     required: ['path'],
   },
@@ -158,7 +162,7 @@ export let machineDeclared = (o: MachineOpts = {}): MachineTool[] => [{
   parameters: {
     type: 'object',
     properties: {
-      path: str('the file, from the working directory unless rooted'),
+      path: os('the file, from the working directory unless rooted'),
       content: str('the whole text of the file'),
     },
     required: ['path', 'content'],
