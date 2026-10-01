@@ -16,6 +16,7 @@
     "@yaks/trace": "../trace/mod.ts",
     "@yaks/model": "../model/mod.ts",
     "@yaks/blob": "../blob/mod.ts",
-    "@yaks/sql": "../sql/mod.ts"
+    "@yaks/sql": "../sql/mod.ts",
+    "@yaks/openai": "../openai/mod.ts"
   }
 }

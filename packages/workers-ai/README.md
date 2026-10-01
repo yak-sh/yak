@@ -84,3 +84,27 @@ binding that meters its caller, say) and anything else it throws are passed on
 as they were thrown.
 
 Tests use a stand-in binding, not paid inference.
+
+## Music artifacts
+
+`workersAi(binding, {media: {store}, fetch?})` supports the Workers AI music
+response (`{audio: HTTPS URL}`, optionally inside Gateway's `result`). The
+provider fetches it without credentials, bounds it by `media.maxBytes` (64 MiB
+default), validates its format and persists it through `ArtifactStore`. The
+reply carries `artifacts` with an audio call id and `cost` in dollars. Missing
+storage refuses before inference.
+
+`music(model)` distinguishes music request schemas from chat. ElevenLabs
+`elevenlabs/music-v2` gets a text prompt, a 30-second request and MP3 output.
+MiniMax `minimax/music-2.6` gets a text prompt and its required lyrics and
+instrumental flags. The model's own id is sent to `binding.run`; this package
+seeds no model rows or allowed-model catalogue.
+
+Cloudflare's published tariffs are $0.0025 per output audio second for
+ElevenLabs, and $0.15 per track plus $0.01 when MiniMax generates lyrics.
+`audioSeconds(bytes)` measures MP3 layer III frame duration, including variable
+bitrate; `audioPrice(model, input, seconds)` prices it.
+`pricedAudio(model, input, answer, {fetch?, signal?, maxBytes?})` fetches and
+returns `{bytes, mediaType, cost}` for hosts metering a raw binding response.
+Audio is never priced as estimated text tokens. A host debits `Reply.cost`
+against its existing account budget; this adapter introduces no allowance.

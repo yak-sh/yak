@@ -257,6 +257,21 @@ export let tooled = (at: Stored): Tool[] =>
 let payer = (app: string) => async (dir: Directory) =>
   (await dir.appAt(app))?.space ?? null
 
+let mediaStore = (at: Stored): import('@yaks/openai').MediaStore => ({
+  store: async (bytes, mediaType) => {
+    let found = at.env.STORE
+      ? await directoryOf(at.env.STORE).appAt(at.app!)
+      : null
+    if (!found || !at.env.BLOBS) {
+      throw new ModelError('media_storage', 'This app has no blob store')
+    }
+    return artifactStore(objectBlobs(
+      at.env.BLOBS,
+      blobPrefix(found.space, found.app),
+    ))(bytes, mediaType)
+  },
+})
+
 // A model calls out as the app whose store is running it. The sentinel comes
 // from that app's connected integration, and egress exchanges it only for the
 // integration's declared hosts. Nothing here reads or records the key.
@@ -290,20 +305,7 @@ let connected = (at: Stored) =>
         { app: at.app!, level: 'owner', person: null },
       )
     },
-    media: {
-      store: async (bytes, mediaType) => {
-        let found = at.env.STORE
-          ? await directoryOf(at.env.STORE).appAt(at.app!)
-          : null
-        if (!found || !at.env.BLOBS) {
-          throw new ModelError('media_storage', 'This app has no blob store')
-        }
-        return artifactStore(objectBlobs(
-          at.env.BLOBS,
-          blobPrefix(found.space, found.app),
-        ))(bytes, mediaType)
-      },
-    },
+    media: mediaStore(at),
   })
 
 /**

@@ -31,7 +31,14 @@ import { reporting } from './wake.ts'
 import { refuse } from './tool.ts'
 import { ModelError, weigh } from '@yaks/model'
 import { LIMIT } from '@yaks/session/status'
-import { type Binding, failure, usageOf } from '@yaks/workers-ai'
+import {
+  type Binding,
+  failure,
+  music,
+  pricedAudio,
+  said,
+  usageOf,
+} from '@yaks/workers-ai'
 import { CATALOGUE, guess, priceOf } from './models.ts'
 import { defect } from './sentry.ts'
 
@@ -849,11 +856,13 @@ export let metered = (
       throw said
     })
     let n = usageOf(answer)
-    let cost = weigh(price, {
-      input_tokens: n.input_tokens ?? guess(input),
-      output_tokens: n.output_tokens ?? guess(answer),
-      cached_tokens: n.cached_tokens,
-    })
+    let cost = music(model)
+      ? (await pricedAudio(model, input, said(answer))).cost
+      : weigh(price, {
+        input_tokens: n.input_tokens ?? guess(input),
+        output_tokens: n.output_tokens ?? guess(answer),
+        cached_tokens: n.cached_tokens,
+      })
     await countedSpend({ STORE: ns }, space, cost, 0)
     return answer
   },

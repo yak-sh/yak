@@ -36,6 +36,9 @@ import {
   type Request,
   type Usage,
 } from '@yaks/model'
+import { generatedBytes, type MediaStore } from '@yaks/openai'
+import { music, musicInput, pricedAudio } from './audio.ts'
+export { audioPrice, audioSeconds, music, pricedAudio } from './audio.ts'
 
 /** The part of the `AI` binding this package calls. */
 export type Binding = {
@@ -283,14 +286,23 @@ export let failure = (e: unknown): unknown =>
     : e
 
 /**
- * A model over the binding, failing as {@link failure} says.
+ * A model over the binding, failing as {@link failure} says. Music output
+ * needs artifact storage and returns its measured/priced dollar cost.
  */
-export let workersAi = (ai: Binding): Model => async (req) => {
+export let workersAi = (
+  ai: Binding,
+  options: { media?: MediaStore; fetch?: typeof fetch } = {},
+): Model =>
+async (req) => {
   req.signal?.throwIfAborted()
+  if (music(req.model) && !options.media) {
+    throw new ModelError('media_storage', 'Music requires artifact storage')
+  }
+  let sent = music(req.model) ? musicInput(req) : input(req)
   let out = said(
     await ai.run(
       req.model,
-      input(req),
+      sent,
       req.conversation
         ? { extraHeaders: { 'x-session-affinity': req.conversation } }
         : undefined,
@@ -300,6 +312,27 @@ export let workersAi = (ai: Binding): Model => async (req) => {
   )
   req.signal?.throwIfAborted()
   let id = str(at(out, 'id')) || crypto.randomUUID()
+  if (music(req.model)) {
+    let audio = await pricedAudio(req.model, sent, out, {
+      fetch: options.fetch,
+      signal: req.signal,
+      maxBytes: options.media?.maxBytes,
+    })
+    let artifact = await generatedBytes(
+      audio.bytes,
+      audio.mediaType,
+      id + ':audio',
+      options.media,
+    )
+    return {
+      id,
+      model: req.model,
+      items: [],
+      artifacts: [artifact],
+      cost: audio.cost,
+      costReported: false,
+    }
+  }
   let u = usageOf(out)
   let counted = Object.keys(u).length ? { usage: u } : {}
   if (req.questions) {
