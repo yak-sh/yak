@@ -13,6 +13,7 @@ import BookOpen from 'lucide/dist/esm/icons/book-open.mjs'
 import Bot from 'lucide/dist/esm/icons/bot.mjs'
 import Box from 'lucide/dist/esm/icons/box.mjs'
 import Braces from 'lucide/dist/esm/icons/braces.mjs'
+import Bug from 'lucide/dist/esm/icons/bug.mjs'
 import CircleAlert from 'lucide/dist/esm/icons/circle-alert.mjs'
 import CircleX from 'lucide/dist/esm/icons/circle-x.mjs'
 import Columns2 from 'lucide/dist/esm/icons/columns-2.mjs'
@@ -64,6 +65,7 @@ let glyphs: Record<string, IconNode> = {
   history: History,
   image: Image,
   braces: Braces,
+  bug: Bug,
   'scan-search': ScanSearch,
   drama: Drama,
   search: Search,

@@ -401,7 +401,7 @@ export let EntryLens = ({ eid }: { eid: string }) => {
   let pair = call ? [call, e] : out ? [e, out] : [e]
   let full = resolve(e, 'Entry.Full').view != 'JSON'
   let markdown = resolve(e, 'Entry.Markdown').view != 'JSON'
-  let views = [full && 'Full', markdown && 'Markdown', 'JSON', 'Inspect']
+  let views = [full && 'Full', markdown && 'Markdown', 'JSON', 'Debug']
     .filter(Boolean) as string[]
   let [view, setView] = useState(views[0])
   return (

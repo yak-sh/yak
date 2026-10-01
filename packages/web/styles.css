@@ -3461,3 +3461,189 @@ a[data-ref]:hover {
 .Fault_Retry {
   color: var(--text);
 }
+
+/* Debug: one full inspector; children are one linked ListTile row each. */
+.Debug {
+  display: grid;
+  gap: var(--half-gap);
+  font-size: 12px;
+}
+.Debug_Lens {
+  display: grid;
+  gap: var(--half-gap);
+}
+.Debug_Head {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+}
+.Debug_Head > .Debug_Item {
+  flex: 1;
+  min-width: 0;
+}
+.Debug_Tabs {
+  display: flex;
+  gap: var(--gap);
+  margin-left: auto;
+  flex: none;
+}
+.Debug_Item {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+}
+.Debug_Kids {
+  display: grid;
+  gap: 2px;
+  margin-left: var(--half-gap);
+  border-left: 1px solid var(--border2);
+  padding-left: var(--half-gap);
+}
+.Debug_Kind {
+  color: var(--dim);
+  font-size: 11px;
+}
+.Debug_Props {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px var(--gap);
+  align-items: baseline;
+}
+.Debug_Key {
+  color: var(--dim);
+  font-size: 11px;
+}
+.Debug_Comp {
+  color: var(--comp);
+}
+.Debug_Comp-0 {
+  --comp: var(--hue-0);
+}
+.Debug_Comp-1 {
+  --comp: var(--hue-1);
+}
+.Debug_Comp-2 {
+  --comp: var(--hue-2);
+}
+.Debug_Comp-3 {
+  --comp: var(--accent);
+}
+.Debug_Comp-4 {
+  --comp: var(--hue-4);
+}
+.Debug_Comp-5 {
+  --comp: var(--hue-5);
+}
+.Debug_Val-nil {
+  color: var(--dim);
+  font-style: italic;
+}
+.Debug_Val {
+  color: var(--text);
+}
+/* The inspector shows stored bytes: a multiline value (a doc body, a
+   final_text) keeps its newlines, and unbroken tokens break anywhere. */
+.Debug_Val,
+.Debug_Props .Prop_Val {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.Debug_Val-num {
+  color: var(--hue-2);
+}
+/* The eid a reference stored, trailing its association chip + title: dim
+   and small, the raw uuid beneath the entity it names. */
+.Debug_Val-id {
+  color: var(--dim);
+  font-size: 11px;
+}
+.Debug_Status {
+  font-size: 11px;
+}
+.Debug_Status-open {
+  color: var(--open);
+}
+.Debug_Status-wip {
+  color: var(--wip);
+}
+.Debug_Status-done {
+  color: var(--done);
+}
+.Debug_Status-cancelled {
+  color: var(--cancelled);
+}
+.Debug_More {
+  color: var(--dim);
+}
+/* The per-component remove × — one on each group's first key, a quiet
+   glyph that warms to danger on hover. A deliberate click: it deletes the
+   whole component from the entity. */
+.Debug_Rm {
+  font: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: var(--dim);
+  padding: 0 var(--half-gap);
+  border-radius: var(--radius);
+}
+.Debug_Rm:hover {
+  color: var(--hue-5);
+}
+/* The add-comp picker: a quiet trigger over a scrolling column of the
+   comps this entity lacks. Mirrors the Prop popover's list, but seated in
+   the flow (no overlay) — Debug is a page, not a card. */
+.Debug_Add {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+}
+.Debug_AddBtn {
+  font: inherit;
+  font-size: 11px;
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--dim);
+  cursor: pointer;
+  padding: 2px var(--half-gap);
+}
+.Debug_AddBtn:hover {
+  color: var(--text);
+  border-color: var(--dim);
+}
+.Debug_AddList {
+  display: grid;
+  gap: 1px;
+  max-height: 16rem;
+  overflow-y: auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2px;
+}
+.Debug_AddItem {
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+  padding: 2px var(--half-gap);
+}
+.Debug_AddItem:hover {
+  background: var(--soft);
+}
+
+
+.Debug_Linked {
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+}
+.Debug_Via {
+  color: var(--dim);
+  font-size: 11px;
+  white-space: nowrap;
+}
