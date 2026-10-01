@@ -54,25 +54,7 @@ export type Rule = {
 
 /** Every rule a release carries. A rule leaves in the release after the sweep
  * reports every store done with it, with the old words it moved out of. */
-export let RULES: Rule[] = [
-  // A build names the entity it was built for (@yaks/builders `build.for`):
-  // the first entity of the tuple its `match` holds. Builds started before
-  // the property carry none; this gives each one it, and moves no key, call or
-  // output. A build of a builder with no query has none to give (T-61625).
-  // Rehearsed clean over 104 stores: 51 builds, in yourname/vale and one
-  // probe's store; the directory and git stores hold none.
-  {
-    mark: 'yak/store/for/12',
-    live: 'apps',
-    find: '.build&!build.for',
-    move: (row) => {
-      let match = (row.build as { match?: string } | undefined)?.match
-      let [eid] = (JSON.parse(match ?? '[]') as (string | null)[])
-        .filter((e) => e != null)
-      return eid ? [{ entity: row.entity, build: { for: eid } }] : []
-    },
-  },
-]
+export let RULES: Rule[] = []
 
 /** How far one rule got in one store. `after` is the last row it moved past;
  * `unspoken` is a word the rule reads that this store does not declare, so
