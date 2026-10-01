@@ -175,7 +175,7 @@ export let refusalPatch = (
     // that shape before rejecting unrecognized payloads; never remove it.
     if (
       Object.keys(error).every((key) =>
-        ['at', 'message', 'code'].includes(key)
+        ['at', 'message', 'code'].includes(key) || error[key] == null
       ) &&
       typeof error.message == 'string' && typeof error.at == 'string' &&
       /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/
@@ -183,9 +183,11 @@ export let refusalPatch = (
     ) {
       return undefined
     }
-    // Only our code-only component is removable. An external error object is
-    // evidence, not a component this migration is entitled to discard.
-    if (Object.keys(error).some((key) => key != 'code')) unsafe(row, code)
+    // SQL projects absent columns as null; those are still code-only rows.
+    // Populated external payloads are evidence we may not discard.
+    if (
+      Object.keys(error).some((key) => key != 'code' && error[key] != null)
+    ) unsafe(row, code)
     if (retained.has(code)) return undefined
     if (tools.has(code)) {
       let id = text(row, 'output', 'source')

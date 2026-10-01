@@ -1,6 +1,9 @@
 // Historical examples are synthetic and secret-free. Tests exercise the pure
-// classifier and its read plan, not a database or the one-time migration.
-import type { Bundle } from '@yaks/graph'
+// classifier, its read plan and SQL projection, not the one-time migration.
+import { type Bundle, graph } from '@yaks/graph'
+import { storage } from '@yaks/sqlite'
+import { loadVocab } from '@yaks/vocab'
+import { mem } from '../sqlite/testing.ts'
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { refusalFind, refusalPatch, refusalSource } from './refusals.ts'
@@ -373,4 +376,85 @@ test('candidate queries never expand reached sources and source reads are bounde
   assertThrows(() =>
     refusalSource({ ...row('Refused'), output: { source: 'call&*' } })
   )
+})
+
+test('nullable SQL error columns are absent, not raw payload', () => {
+  for (let code of ['transport', 'exit', 'transient', 'warn', 'fail']) {
+    let answer = {
+      ...row(code),
+      error: { code, at: null, message: null, raw: undefined },
+    }
+    let before = structuredClone(answer)
+    assertEquals(refusalPatch(answer), undefined)
+    assertEquals(answer, before)
+  }
+  let answer = {
+    ...row('Refused'),
+    error: { code: 'Refused', at: null, message: null },
+    output: { source: 'call' },
+  }
+  assertEquals(refusalPatch(answer, source()), patch('Refused'))
+  for (let payload of ['', false, 0, {}, []]) {
+    assertThrows(() =>
+      refusalPatch(
+        { ...answer, error: { ...answer.error, raw: payload } },
+        source(),
+      )
+    )
+  }
+  let kernel = {
+    ...row('Refused'),
+    error: {
+      code: 'Refused',
+      at: '2026-10-01T00:00:00Z',
+      message: 'kernel',
+      raw: null,
+    },
+  }
+  assertEquals(refusalPatch(kernel), undefined)
+  assertThrows(() =>
+    refusalPatch({ ...kernel, error: { ...kernel.error, raw: 'payload' } })
+  )
+})
+
+test('native SQL projected nullable errors retain failures and migrate tool refusals', async () => {
+  let vocab = loadVocab([{
+    $defs: {
+      error: {
+        component: true,
+        properties: {
+          code: { type: 'string' },
+          at: { type: 'string' },
+          message: { type: 'string' },
+        },
+      },
+      refusal: { component: true, properties: { code: { type: 'string' } } },
+      output: { component: true, properties: { source: { type: 'string' } } },
+      call: { component: true, properties: { to: { type: 'string' } } },
+    },
+  }])
+  let db = storage(mem(), vocab)
+  db.install()
+  let g = graph({ vocab, storage: db })
+  await g.apply([
+    { entity: { eid: 'transport' }, error: { code: 'transport' } },
+    {
+      entity: { eid: 'answer' },
+      error: { code: 'Refused' },
+      output: { source: 'call' },
+    },
+    { entity: { eid: 'call' }, call: { to: 'tool' } },
+  ])
+  let [failed] = await g.read('.eid=transport&*')
+  assertEquals(failed.error, { code: 'transport', at: null, message: null })
+  assertEquals(refusalPatch(failed), undefined)
+  let [answer] = await g.read('.eid=answer&*')
+  let [called] = await g.read('.eid=call&*')
+  let moved = refusalPatch(answer, called)
+  assertEquals(moved, patch('Refused'))
+  await g.apply([moved!])
+  let [after] = await g.read('.eid=answer&*')
+  assertEquals(after.error, undefined)
+  assertEquals(after.refusal, { code: 'Refused' })
+  assertEquals(after.output, answer.output)
 })
