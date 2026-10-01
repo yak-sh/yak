@@ -54,6 +54,40 @@ test('wrangler: a deploy of the kernel deploys its siblings first, and nothing e
   ) assertEquals(siblings(args), [])
 })
 
+for (
+  let rollout of [
+    ['--containers-rollout=none'],
+    ['--containers-rollout', 'immediate'],
+  ]
+) {
+  test(`wrangler: siblings override ${rollout.join(' ')} once`, () => {
+    let argv = [
+      '--env',
+      'staging',
+      'deploy',
+      ...rollout,
+      '--message',
+      'build annotation',
+    ]
+    assertEquals(
+      siblings(argv),
+      SIBLINGS.map((c) => [
+        '--env',
+        'staging',
+        'deploy',
+        '--message',
+        'build annotation',
+        '-c',
+        c,
+        '--containers-rollout=none',
+      ]),
+    )
+    for (let config of [['-c', 'other.toml'], ['--config=other.toml']]) {
+      assertEquals(siblings([...argv, ...config]), [])
+    }
+  })
+}
+
 test('every @yaks/* the checker knows is the file the bundler gets', () => {
   let checked = (JSON.parse(read('./workers.json')) as {
     imports: Record<string, string>

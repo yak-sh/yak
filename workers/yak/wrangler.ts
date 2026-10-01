@@ -118,7 +118,7 @@ export let aliased = (root = repo, to = TSCONFIG) => {
 export let ready = async (root = dir, timeout = 600_000) => {
   aliased()
   let generated = await new Deno.Command('deno', {
-    args: ['run', '-A', join(repo, 'bin/compiler-packages.ts')],
+    args: ['run', '--no-lock', '-A', join(repo, 'bin/compiler-packages.ts')],
     stdin: 'null',
   }).spawn().status
   if (!generated.success) throw new Error('Compiler catalog generation failed')
@@ -172,11 +172,17 @@ export let SIBLINGS = ['outbound/wrangler.toml', 'esbuild/wrangler.toml']
 
 // Each sibling's deploy arguments, or none when these arguments are not a
 // deploy or already name a config of their own.
-export let siblings = (argv: string[]): string[][] =>
-  command(argv) != 'deploy' ||
+export let siblings = (argv: string[]): string[][] => {
+  if (
+    command(argv) != 'deploy' ||
     argv.some((a) => /^(-c|--config)(=|$)/.test(a))
-    ? []
-    : SIBLINGS.map((c) => [...argv, '-c', c, '--containers-rollout=none'])
+  ) return []
+  let args = argv.filter((a, i) =>
+    !/^--containers-rollout(=|$)/.test(a) &&
+    argv[i - 1] != '--containers-rollout'
+  )
+  return SIBLINGS.map((c) => [...args, '-c', c, '--containers-rollout=none'])
+}
 
 // What Workers Builds pins to this Worker. Inherited by another Worker's
 // deploy, the first deploys it under this Worker's name and the second fails
