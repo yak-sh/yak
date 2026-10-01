@@ -105,6 +105,23 @@ test('what an entry is decides its row', () => {
     kind: 'error',
     text: 'rate_limited',
   })
+  for (let mark of ['refusal', 'error']) {
+    assertEquals(
+      shown({
+        [mark]: { code: 'is_error' },
+        result: { call: 'c' },
+        content: { body: 'not permitted' },
+      }),
+      { kind: 'error', text: 'is_error: not permitted' },
+    )
+  }
+  assertEquals(
+    shown({
+      refusal: { code: 'rate_limited' },
+      error: { code: 'legacy' },
+    }),
+    { kind: 'error', text: 'rate_limited' },
+  )
   assertEquals(shown({ exception: { message: 'boom' } }), {
     kind: 'error',
     text: 'boom',

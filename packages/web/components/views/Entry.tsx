@@ -83,7 +83,8 @@ let body = (e: Ent) => e.content?.body ?? ''
 let said = (e: Ent) => e.output ? 'agent' : 'user'
 let speaker = (role: 'agent' | 'user') => role == 'agent' ? 'model' : 'person'
 let failed = (e: Ent) =>
-  (e.exit?.code != null && e.exit.code != 0) || !!e.error || !!e.exception ||
+  (e.exit?.code != null && e.exit.code != 0) || !!e.refusal || !!e.error ||
+  !!e.exception ||
   (e.response?.status != null && e.response.status >= 400)
 // Local-only: Session holds its entry partition and one root reverse list.
 // An entry rendered alone is best-effort, like other per-row badges.

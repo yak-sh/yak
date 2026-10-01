@@ -80,8 +80,13 @@ JSON object. The components beside `entry` determine its type:
 | `questions{asked}`                    | typed questions for the next ask   |
 | `answer{question, …}` with `output`   | a model's answer to one question   |
 | `stop`                                | no further transcript work         |
-| `error{code}`                         | an expected failure                |
+| `refusal{code}`                       | an expected failure                |
+| `error{code}`                         | a legacy expected failure          |
 | `exception`                           | an unexpected failure              |
+
+During the expand phase, transcript readers accept both `refusal{code}` and
+legacy `error{code}`. New expected failures use `refusal`; `error` remains
+available until stored entries have migrated.
 
 `entry.seq` is assigned transactionally when omitted. `appendEntry()` is the
 usual way to append text.
@@ -281,7 +286,7 @@ text as `content{body}` plus `output{source}` beside a `result` entry with its
 `call` and `ms` fields. A precommit rule adds `entry.session` to results before
 sequence allocation. The general tool-runner plugin is not registered because
 its effect-phase execution would race the session loop. An unknown tool is
-handled by a refusing tool, producing an `error{code}` result. A durable
+handled by a refusing tool, producing a `refusal{code}` result. A durable
 `execution.state=running` without a result is not replayed. On restart, a tool
 may recover its outcome from durable state; otherwise the runner records an
 interrupted result so the model can inspect the state before taking another

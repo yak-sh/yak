@@ -531,8 +531,9 @@ projections/submissions become an `exception` entity in the graph. Inspect
 `.exception` through the graph tools. These diagnostic entities have no `entry`:
 they neither enter a conversation nor wake a model. Their `content.body`
 contains JSON with the stack, recursive cause chain, timestamp, process ID,
-phase, and session when known. Expected tool refusals retain the existing
-`error` semantics.
+phase, and session when known. Expected tool refusals use `refusal{code}`.
+Transcript readers also accept legacy `error{code}` during the expand phase;
+that component remains available.
 
 There is no second journal. If no graph is available or the diagnostic graph
 write fails, the record is written to stderr as one JSON line. A failed

@@ -91,8 +91,13 @@ test('claude: a tool call and its result, a credential scrubbed from both', () =
     execution: { state: 'done' },
   }])
   assertEquals(
-    entries(claude, result(true))[0].execution,
-    { state: 'failed' },
+    entries(claude, result(true)),
+    [{
+      result: { call: 'toolu_1' },
+      content: { body: 'token=[redacted]' },
+      execution: { state: 'failed' },
+      refusal: { code: 'is_error' },
+    }],
   )
 })
 
@@ -132,7 +137,7 @@ test('claude: a managed run opens with its id and ends with its cost', () => {
       result: 'over quota',
     }),
     [{
-      error: { code: 'success' },
+      refusal: { code: 'success' },
       content: { body: 'over quota' },
       output: {},
       stop: {},
@@ -179,6 +184,7 @@ test('codex: what it said, what it ran, and the turn it closed', () => {
           result: { call: 'item_1' },
           content: { body: 'a\nb' },
           execution: { state: 'failed' },
+          refusal: { code: 'is_error' },
         },
       ],
     ],
@@ -205,7 +211,7 @@ test('codex: what it said, what it ran, and the turn it closed', () => {
     [
       { type: 'turn.failed', error: { message: 'nope' } },
       [{
-        error: { code: 'turn.failed' },
+        refusal: { code: 'turn.failed' },
         content: { body: 'nope' },
         output: {},
         stop: {},
@@ -217,4 +223,24 @@ test('codex: what it said, what it ran, and the turn it closed', () => {
     codex({ type: 'thread.started', thread_id: 't1' }).about,
     { session: { id: 't1' } },
   )
+})
+
+test('codex: imported tool outcomes mark refusals and leave external errors alone', () => {
+  let error = { message: 'token=ghp_0123456789abcdef' }
+  let event = (status: string): Event => ({
+    type: 'item.completed',
+    item: { id: 'mcp_1', type: 'mcp_tool_call', status, error },
+  })
+  assertEquals(entries(codex, event('failed'))[1], {
+    result: { call: 'mcp_1' },
+    content: { body: 'token=[redacted]' },
+    execution: { state: 'failed' },
+    refusal: { code: 'is_error' },
+  })
+  assertEquals(entries(codex, event('completed'))[1], {
+    result: { call: 'mcp_1' },
+    content: { body: 'token=[redacted]' },
+    execution: { state: 'done' },
+  })
+  assertEquals(error, { message: 'token=ghp_0123456789abcdef' })
 })

@@ -908,7 +908,7 @@ export type Mail = {
 // destination (`via` says how — cast S-9 / spawned S-9 / local / a
 // Message-ID), and `failed` is @yaks/kernel's mark on work that was tried and
 // given up on (`reason` says why). The word is a MARK, beside `delivered`,
-// because @yaks/tools spells a tool's own expected outcome `error{code}` and
+// because @yaks/tools spells a tool's own expected outcome `refusal{code}` and
 // one word answers to one idea. `.failed` is the fleet health query.
 export type Delivered = { eid: string; at?: string | null; via?: string | null }
 export type Failure = {

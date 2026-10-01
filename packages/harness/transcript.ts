@@ -154,6 +154,7 @@ export let transcriptViews = define([
   },
   row('.entry&.content&.entity.eid~=delivery:', 'notice', 'Muted', true),
   row('.entry&.error.code=interrupted', 'interrupted', 'Muted'),
+  row('.entry&.refusal', 'refusal', 'Bad'),
   row('.entry&.error', 'error', 'Bad'),
   row('.entry&.exception', 'exception', 'Bad'),
   row('.entry&.notice&.content', 'notice', 'Muted', true),

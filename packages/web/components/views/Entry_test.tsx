@@ -297,6 +297,44 @@ test('tool results settle their call row instead of adding a row', () => {
   cache.value = {}
 })
 
+test('refused and legacy failed results settle and render as failures', () =>
+  withDom((root) => {
+    for (let mark of ['refusal', 'error']) {
+      rows()
+      let [call, answer] = Object.keys(cache.value)
+      let { exit: _exit, ...out } = cache.value[answer]
+      cache.value = {
+        ...cache.value,
+        [answer]: { ...out, [mark]: { code: 'is_error' } },
+      }
+      let result = ent(answer)
+      for (let View of [ResultSummary, ResultFull]) {
+        render(h(View, { e: result }), root)
+        assertEquals(root.querySelector('.Entry-fail') != null, true)
+      }
+      render(h(CommandSummary, { e: ent(call) }), root)
+      assertEquals(root.querySelector('.Entry_Status')?.textContent, '✗ failed')
+      for (
+        let row of [
+          { kind: 'tool', name: 'shell' },
+          { kind: 'exec', command: 'printf one' },
+        ] as const
+      ) {
+        let merged = mergeTools([
+          { eid: call, seq: 1, line: '{}', row },
+          { eid: answer, call, seq: 2, line: '{}' },
+        ])
+        assertEquals(merged.length, 1)
+        assertEquals(
+          merged[0].row,
+          row.kind == 'tool'
+            ? { ...row, ok: false }
+            : { ...row, status: '✗ failed' },
+        )
+      }
+    }
+  }))
+
 test('normalized user messages render as entry markdown', () =>
   withDom((root) => {
     render(

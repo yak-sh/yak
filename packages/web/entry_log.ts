@@ -60,12 +60,14 @@ let usage = (u?: Record<string, unknown>) => {
 let toolOf = (c: EntryRow['comps'], name: Names) =>
   name(text(c.call?.to)) || 'tool'
 
-let failure = (c: EntryRow['comps']) =>
-  c.exception
+let failure = (c: EntryRow['comps']) => {
+  let refusal = c.refusal ?? c.error
+  return c.exception
     ? text(c.exception.message) || text(c.content?.body) || 'exception'
-    : c.error
-    ? [text(c.error.code), text(c.content?.body)].filter(Boolean).join(': ')
+    : refusal
+    ? [text(refusal.code), text(c.content?.body)].filter(Boolean).join(': ')
     : undefined
+}
 
 let shown = (
   row: EntryRow,
@@ -75,7 +77,7 @@ let shown = (
   let c = row.comps
   let b = bundle(row)
   let kind = kindOf(b)
-  if (kind == 'exception' || kind == 'error') {
+  if (kind == 'exception' || kind == 'refusal' || kind == 'error') {
     return { kind: 'error', text: failure(c)! }
   }
   if (kind == 'stop') return { kind: 'sys', tag: 'stop' }

@@ -20,7 +20,7 @@
 //   call{to, id, args}       a tool it called, by the tool's name
 //   result{call} + content   what the tool returned, and `execution{state}`
 //                            saying whether the call went through
-//   stop, usage, cost, error the end of a managed turn, and what it cost
+//   stop, usage, cost, refusal the end of a managed turn, and what it cost
 //
 // A tool's arguments and output pass through `scrub()`, since a command's
 // output is where a credential turns up. A person's words and the model's are
@@ -117,6 +117,7 @@ let result = (id: unknown, body: string, failed: boolean): Comps => ({
   result: { call: String(id ?? '') },
   content: { body: scrub(body) },
   execution: { state: failed ? 'failed' : 'done' },
+  ...(failed ? { refusal: { code: 'is_error' } } : {}),
 })
 
 // A count a harness reported, or nothing. Absent beats zero: a tier a vendor
@@ -228,7 +229,7 @@ let line: Reader = (e) => {
     ? [{
       ...(e.is_error
         ? {
-          error: { code: String(e.subtype ?? 'error') },
+          refusal: { code: String(e.subtype ?? 'error') },
           content: { body: String(e.result ?? 'the turn failed') },
           output: {},
         }
@@ -339,7 +340,7 @@ export let codex: Reader = (e) => {
     ? [{ stop: {}, ...codexUsage(e.usage) }]
     : e.type == 'turn.failed'
     ? [{
-      error: { code: 'turn.failed' },
+      refusal: { code: 'turn.failed' },
       content: { body: str(obj(e.error).message) || 'the turn failed' },
       output: {},
       stop: {},

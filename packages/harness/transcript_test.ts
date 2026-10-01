@@ -18,6 +18,7 @@ test('transcript dims sequence and tool prose and colors each entry kind', async
     'ask',
     'call',
     'result',
+    'refusal',
     'error',
     'exception',
     'stop',
@@ -91,6 +92,7 @@ test('queries outrank generic rows; overlapping facets use declared tie order', 
     let [facets, label, color] of [
       [{}, 'output', 'Accent'],
       [{ result: {} }, 'result', 'Muted'],
+      [{ result: {}, refusal: {} }, 'refusal', 'Bad'],
       [{ result: {}, error: {} }, 'error', 'Bad'],
       [{ call: {}, content: { body: 'args' } }, 'call', 'Key'],
     ] as const
