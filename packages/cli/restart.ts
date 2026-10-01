@@ -74,6 +74,7 @@ export let restart = async (options: RestartOptions): Promise<string> => {
   let file = `${
     options.runtimeDir.replace(/\/$/, '')
   }/yak-work-${instance}.ready`
+  let handed = false
   try {
     await call('--no-block', 'start', candidate)
     let deadline = now() + 15_000
@@ -85,10 +86,13 @@ export let restart = async (options: RestartOptions): Promise<string> => {
       if (found && now() < deadline) break
       await sleep(Math.min(100, Math.max(0, deadline - now())))
     }
+    handed = true
     if (old.length) await call('--no-block', 'stop', ...old)
     await call('--no-block', 'restart', 'yak.service')
     return candidate
   } catch (error) {
+    // Once ready, the pool must survive any later handover enqueue failure.
+    if (handed) throw error
     // Even a failed start may have queued a job. Recovery touches only this unit.
     try {
       await call('--no-block', 'stop', candidate)

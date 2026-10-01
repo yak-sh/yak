@@ -48,8 +48,10 @@ import {
   type Served,
   words,
 } from './host.ts'
+import { external } from './external.ts'
 import { readThread } from './read_thread.ts'
 import { type Aside, thread } from './thread.ts'
+import { reconcile } from '@yaks/tools'
 
 // One graph per config path and set of roles, for the life of the process:
 // every call a command makes goes through the same assembled graph, and
@@ -92,8 +94,8 @@ export let dutiesOf = (
   ].filter((r) => !mine.includes(r))
 
 // The graph a command opens: composed for its own roles, with its duty roles
-// planned in a thread beside it. Only a host explicitly serving duties starts
-// that thread. Every commit still records the effects it owes for a worker to
+// external for web, otherwise planned in a thread beside it. Only a host
+// explicitly serving duties starts that thread. Every commit still records the effects it owes for a worker to
 // claim, whether this command or another process wrote it.
 let open = async (
   path: string,
@@ -121,6 +123,17 @@ let open = async (
         reader,
       }),
     )
+  }
+  if (roles.includes('web')) {
+    let host = await compose(config, roles, facet, { reader })
+    try {
+      await external(host.graph, path, dutiesOf(host.vocab, config, roles))
+    } catch (error) {
+      await host.close()
+      await reader?.close()
+      throw error
+    }
+    return withReader(host)
   }
   let aside = thread()
   asides.add(aside)
@@ -151,6 +164,40 @@ export let opened = (
   let host = hosts.get(key)
   if (!host) hosts.set(key, host = open(path, roles, duties))
   return host
+}
+
+/** The independent duty process. Its graph is registered with the same wind
+ * down path as any command: stop claims, finish in-flight work, then close.
+ * Readiness means the pool's handlers and graph are assembled, not that old
+ * singleton services have surrendered their leases. */
+export let work = async (
+  path: string,
+  ready?: string,
+  only?: string[],
+): Promise<void> => {
+  let config = read(path)
+  let said = await words(config)
+  let duties = dutiesOf(said.vocab, config, [])
+  if (only?.some((role) => !duties.includes(role))) {
+    throw new Error('work was asked for a role this config does not serve')
+  }
+  let roles = ['graph', ...only ?? duties]
+  let key = JSON.stringify([path, roles])
+  let opening = compose(config, roles, facet)
+  hosts.set(key, opening)
+  let host = await opening
+  await host.bury()
+  let running = Promise.all([host.duties(), reconcile(host.runner)])
+  try {
+    if (ready) await Deno.writeTextFile(ready, `${Deno.pid}\n`)
+    await running
+  } finally {
+    if (ready) {
+      await Deno.remove(ready).catch((error) => {
+        if (!(error instanceof Deno.errors.NotFound)) throw error
+      })
+    }
+  }
 }
 
 /** Ask every graph this process opened to wind down (host.ts `stop`): it

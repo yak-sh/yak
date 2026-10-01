@@ -59,9 +59,9 @@ usage page opens no graph. A `./cli` command runs directly in the terminal
 process and is not a stored tool call: input such as an OAuth return URL cannot
 be replayed by another process. Running one opens the graph for that command's
 roles: the graph and the roles it declares (`serve` declares `web`). The duty
-roles, the effect pool and each plugin's service, run beside it in a thread of
-the same process where no live process serves them (see Duties). The rendering
-role imports `./views`, and `./tui` under `--tui`.
+roles, the effect pool and each plugin's service, run in independent processes
+for `serve` where no live process serves them (see Duties). The rendering role
+imports `./views`, and `./tui` under `--tui`.
 
 ## Where a command runs
 
@@ -339,20 +339,23 @@ await host.duties() // Run until the host shuts down.
 await host.duties(AbortSignal.abort()) // Run one pass, then release leases.
 ```
 
-A host that stays up runs its duties in a thread of its own
-([`thread.ts`](./thread.ts), [`worker.ts`](./worker.ts)), so the thread that
-runs the command and draws its answer never waits on them. The thread composes
-the same config for the duty roles as a host of its own, under a name the
-process gives it: it writes its own process row, in the process's pid, and its
-leases and claims name that row. A thread ended where it stands, or one that
-fails, writes no ending and its pid lives on, so the process writes its ending
-for it (`Host.end`): its calls interrupted, its leases released, its `exit`
-stamped, and nobody waits out what it held. Once the command's host is open, the
-process plans its duty roles but leaves the thread unstarted. The `serve` tool
-starts it through `host.duties()` for as long as it listens; a one-shot command
-leaves the effects it owes written down for a host that stays up. The thread
-takes the leases and the pool settles who does what. A live process renews its
-lease; another process can take over after the lease expires or is released.
+`yak serve` serves web without a duty thread in its process. It checks live
+process roles and starts an independent `yak work --roles <missing>` for any
+missing duties, using the current executable and module with detached, null
+stdio. Service leases remain singleton; duplicate effect workers are allowed. A
+successfully started worker survives web shutdown. `yak work` composes the graph
+and duty roles directly and stays up until interrupted. Its `--ready` file
+announces that handlers and graph are assembled, not that an old service has
+surrendered its lease. Other command hosts can still use a duty thread
+([`thread.ts`](./thread.ts), [`worker.ts`](./worker.ts)).
+
+On the box, `yak.service` runs `serve --no-duties`, and independent `yak-work@`
+units run the pool and plugin services. **Use `yak restart`**, not raw systemctl
+restart: it starts a replacement worker, waits for readiness, then queues old
+workers' graceful stops and the web restart without waiting for either shutdown.
+Web never waits for effects, and a session requesting its own restart can finish
+that request. A failed handover before readiness cleans up only the candidate;
+once ready, the candidate survives later enqueue errors.
 
 `yak --no-duties` (config `duties: false`) turns them off for a host that stays
 up: it takes no lease, works no effects, and runs neither the services nor the

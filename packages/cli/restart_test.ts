@@ -170,31 +170,33 @@ test('restart propagates readiness errors and stops only its candidate', async (
   ])
 })
 
-test('restart does not restart the service when old-worker stop fails', async () => {
+test('restart keeps the ready worker when old-worker stop fails', async () => {
   let f = fixture()
   fail(f, 'stop', 'yak-work@old.service')
   await assertRejects(() => restart(f.options), Error, 'failed stop')
-  assertEquals(f.calls.length, 4)
-  assertEquals(f.calls[3].args, [
-    '--user',
-    '--no-block',
-    'stop',
-    candidateOf(f),
-  ])
+  assertEquals(f.calls.length, 3)
+  assertEquals(
+    f.calls.some((call) =>
+      call.args.includes(candidateOf(f)) &&
+      call.args.includes('stop')
+    ),
+    false,
+  )
   assertEquals(f.calls.some((call) => call.args.includes('restart')), false)
 })
 
-test('restart reports a service restart failure without restarting old workers', async () => {
+test('restart keeps the replacement when web restart fails after old stop', async () => {
   let f = fixture()
   fail(f, 'restart')
   await assertRejects(() => restart(f.options), Error, 'failed restart')
-  assertEquals(f.calls.length, 5)
-  assertEquals(f.calls[4].args, [
-    '--user',
-    '--no-block',
-    'stop',
-    candidateOf(f),
-  ])
+  assertEquals(f.calls.length, 4)
+  assertEquals(
+    f.calls.some((call) =>
+      call.args.includes(candidateOf(f)) &&
+      call.args.includes('stop')
+    ),
+    false,
+  )
   assertEquals(f.calls.filter((call) => call.args.includes('start')).length, 1)
 })
 

@@ -1,8 +1,8 @@
-// The `yak` command. It has five subcommands of its own — `help`, `init`,
+// The `yak` command. It has built-in subcommands — `help`, `work`, `restart`, `init`,
 // `login`, `logout`, `apply` — and other subcommands are graph tools (local.ts),
 // an MCP server's tools (platform.ts), plugin terminal controls, or an app's
 // own commands (commands.ts). Either
-// list costs something to gather, so run.ts asks for it only when the five
+// list costs something to gather, so run.ts asks for it only when the
 // built-in subcommands did not match.
 //
 // `serve` is one of those tools, not one of these four: @yaks/api declares it
@@ -199,10 +199,46 @@ let init = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
   return 0
 }
 
-/** The command's own five subcommands, which shadow a tool of the same name
+/** The command's built-in subcommands, which shadow a tool of the same name
  * from either list. */
 export let own: Command[] = [
   helpTool(YAK),
+  {
+    name: 'work',
+    description: 'Run the effects pool and plugin services without the web',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ready: { type: 'string', description: 'Readiness file' },
+        roles: {
+          type: 'string',
+          description: 'Only these comma-separated duties',
+        },
+      },
+    },
+    run: async (args, c) => {
+      let path = c.config ?? ownConfig()
+      if (!path) throw new Usage('yak work needs --config')
+      let ready = typeof args.ready == 'string' ? args.ready : undefined
+      let roles = typeof args.roles == 'string'
+        ? args.roles.split(',')
+        : undefined
+      await (local ??= await import('./local.ts')).work(path, ready, roles)
+      return 0
+    },
+  },
+  {
+    name: 'restart',
+    description: 'Roll the duty worker, then restart the web without waiting',
+    inputSchema: { type: 'object', properties: {} },
+    run: async (_args, c) => {
+      let runtimeDir = Deno.env.get('XDG_RUNTIME_DIR')
+      if (!runtimeDir) throw new Usage('yak restart needs $XDG_RUNTIME_DIR')
+      let { restart } = await import('./restart.ts')
+      c.out(await restart({ runtimeDir }))
+      return 0
+    },
+  },
   {
     name: 'init',
     description:
@@ -276,7 +312,7 @@ export let own: Command[] = [
 ]
 
 /** What a plain install carries, in precedence order. The apps' commands come
- * after this command's own five and before the graph's tools, because one of
+ * after this command's built-ins and before the graph's tools, because one of
  * those tools is `command` itself: the graph's version takes the app's
  * arguments as a JSON object, and the one here takes them the way a person
  * types them. */
