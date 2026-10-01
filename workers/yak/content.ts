@@ -336,7 +336,7 @@ export let WORDS: Record<string, Words> = {
   'store_inspect': {
     'title': 'Inspect store size and dry-run cost',
     'description':
-      "Show bounded table row counts and index names for an app's store. With seq, dry-run one held write and report phase durations and bundle count. Only the space owner can inspect it. The dry run rolls back every graph change; this tool never retries or applies the write.",
+      "Show bounded table row counts and index names for an app's store. With seq, Inspect eid for bounded physical identity, tombstone and component-table presence, without component values. Name seq to dry-run one held write and report phase durations and bundle count. Only the space owner can inspect it. The dry run rolls back every graph change; this tool never retries or applies the write.",
   },
   'store_writes': {
     'title': 'Inspect kept store writes',
