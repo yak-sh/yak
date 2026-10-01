@@ -178,6 +178,12 @@ test('a changed text type gets a new URL without changing the old one', async ()
     'cannot be deleted',
   )
   await assertRejects(
+    async () => await h.graph.apply([{ entity: { eid: id }, tombstone: {} }]),
+    Error,
+    'cannot be deleted',
+  )
+  assertEquals((await ask(new Request(old))).status, 200)
+  await assertRejects(
     async () =>
       await h.graph.apply([{
         entity: { eid: id },

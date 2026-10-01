@@ -2,7 +2,7 @@
 // graph must never change or delete the row that gives that URL its headers.
 
 import { after } from '@yaks/fp'
-import { type Comp, type Plugin, Refused } from '@yaks/graph'
+import { type Comp, dead, type Plugin, Refused } from '@yaks/graph'
 import { type Representation, represents } from './representation.ts'
 
 export let representations = (): Plugin => ({
@@ -10,7 +10,7 @@ export let representations = (): Plugin => ({
   hooks: {
     precondition: (bundles, tx) => {
       let touched = bundles.filter((b) =>
-        b.$delete || b.representation !== undefined
+        dead(b) || b.representation !== undefined
       )
       if (!touched.length) return bundles
       return after(
@@ -22,7 +22,7 @@ export let representations = (): Plugin => ({
               | Representation
               | undefined
             let patch = b.representation as Comp | null | undefined
-            if (old && (b.$delete || patch === null)) {
+            if (old && (dead(b) || patch === null)) {
               throw new Refused('a blob representation cannot be deleted')
             }
             if (
