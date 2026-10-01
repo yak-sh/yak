@@ -1,0 +1,17 @@
+{
+  "_": "Only the IO-free grammar export is browser-safe; the CLI runtime is not.",
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "strict": true
+  },
+  "imports": {
+    "@yaks/vocab/tools": "../vocab/tools.ts"
+  },
+  "entries": [
+    "./grammar"
+  ]
+}

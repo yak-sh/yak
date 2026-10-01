@@ -30,7 +30,9 @@
       "properties": {
         "panes": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "the panes, bottom first, the top one last"
         }
       }
@@ -47,6 +49,46 @@
           "description": "why"
         }
       }
+    },
+    "Completion": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "properties": {
+        "caret": {
+          "type": "number",
+          "description": "where the caret stands, as an offset into what is typed"
+        },
+        "from": {
+          "type": "number",
+          "description": "where the word being completed starts"
+        },
+        "to": {
+          "type": "number",
+          "description": "where the word being completed ends"
+        },
+        "cands": {
+          "type": "array",
+          "description": "what can replace the span, each its text and the note shown beside it",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "pick": {
+          "type": "number",
+          "description": "which of cands is picked, -1 for none: what is typed already reads whole"
+        }
+      },
+      "description": "Completion at a caret, in the host page graph: the replacement span and choices. Text is the host-owned durable draft, not this component."
     }
   }
 }

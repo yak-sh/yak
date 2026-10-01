@@ -6,7 +6,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { complete, type Lookup } from './complete.ts'
-import type { Grammar } from './args.ts'
+import { argsFor, commandFor, type Grammar, tokensIn } from './args.ts'
 
 let tools: Grammar[] = [
   {
@@ -74,7 +74,7 @@ test('a ref and a searched text are the graph’s to answer, or nobody’s', asy
   assertEquals(await said('session list --task '), [])
   assertEquals(await said('session list --task ', look), ['task-1', 'task-2'])
   assertEquals(await said('session list --task task-1', look), ['task-1'])
-  assertEquals(await said('session list --words wat', look), ['wating water'])
+  assertEquals(await said('session list --words wat', look), ['"wating water"'])
 })
 
 test('a shell hook’s words are the same question as a line', async () => {
@@ -83,4 +83,49 @@ test('a shell hook’s words are the same question as a line', async () => {
     'fleet',
     'root',
   ])
+})
+
+test('offered entity words round-trip through the grammar in both flag forms', async () => {
+  let names = ['Bristleboar', 'Big boar', 'Boar "king"', 'Boar\\den']
+  let beast: Grammar = {
+    name: 'spawn',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        beast: { type: 'string', ref: 'beast' },
+        on: { type: 'boolean' },
+      },
+      required: ['beast'],
+    },
+    options: { positional: ['beast'] },
+  }
+  for (
+    let prefix of ['spawn b', 'spawn --beast b', 'spawn --beast=b', 'spawn "b']
+  ) {
+    let offers = await complete([beast], prefix, { ids: () => names })
+    assertEquals(offers.length, names.length)
+    for (let offer of offers) {
+      let last = tokensIn(prefix, true).at(-1)!
+      let line = prefix.slice(0, last.from) + offer
+      let words = tokensIn(line).map((w) => w.value)
+      let found = commandFor([beast], words)!
+      let result = await argsFor(found.verb, found.args)
+      assertEquals(names.includes(String(result.beast)), true)
+    }
+  }
+  assertEquals(
+    await complete([beast], ['spawn', '--beast', 'B'], { ids: () => names }),
+    names.sort(),
+  )
+})
+
+test('completion refuses invalid preceding values and missing flag values', async () => {
+  assertEquals(await said('session list --status bogus --'), [])
+  assertEquals(await said('session list --status --task '), [])
+  assertEquals(await said('session list --unknown x --'), [])
+  assertEquals(await said('session list --status --'), [])
+  assertEquals(await said('session list --all false --st'), ['--status'])
+  assertEquals(await said('session list --all=false --st'), ['--status'])
+  assertEquals(await said('session list --scope fleet '), [])
+  assertEquals(await said('session list -- --'), [])
 })

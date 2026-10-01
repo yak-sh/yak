@@ -199,6 +199,36 @@ off the page is neither: the draft waits for the remount. `Refused` is
 `durable: "0s"`, which is how a vocabulary marks an event: a graph applies it
 and carries it back in the applied change, and never stores it (@yaks/vocab).
 
+## Completion
+
+`@yaks/ux/completion` owns completion behavior shared by domain adapters. It
+extracts the caret, replacement range, candidate selection, keyboard actions and
+presentation from query-specific filter fields; `@yaks/filter` reuses it rather
+than keeping a second implementation. The domain still decides which
+replacements to offer, and `@yaks/ui`'s `Field` and `Choices` present them.
+
+`completion(front, opts)` returns a controller for fields in one front-end
+graph. Supply `opts.complete(text, caret)`, returning a `Result` or a promise of
+one, and host-owned `drafts{text, type}`. A `Result` has
+`{from, to, cands, whole}`: offsets delimit the text to replace, candidates have
+`{text, kind}`, and `whole` says whether the text already reads whole. Async
+results are applied only while the field still has the matching text and caret.
+
+The default state component is `Completion{caret, from, to, cands, pick}`; text
+stays in the host's draft. `opts.component` can name another component:
+`@yaks/filter` uses `filter`, preserving its existing state contract while
+supplying query completion from its vocabulary and source. `opts.Float` hosts
+the candidate list; without it, the list paints in the flow.
+
+The controller provides `Field` for a managed input, or `bind(id, element)` and
+`List` for an existing input. `bind` returns listener cleanup; `dispose()`
+releases the controller's graph subscription. Its actions are `type`, `set`,
+`move`, `accept`, `dismiss` and `press`, with reactive `row` and `text` reads.
+Tab accepts, arrows move the selection, Escape dismisses, and Enter accepts only
+when a candidate is selected; otherwise the key belongs to the host. The pure
+transitions (`typed`, `placed`, `moved`, `taken`, `dismissed`, `act`) and their
+types are exported from the same entry point.
+
 ## The host
 
 `h(Ux, { host }, tree)` hands a host to every UX component under it, so one page
@@ -226,17 +256,19 @@ without it a popout paints in the flow, as a terminal wants.
 
 ## Files
 
-| file         | owns                                                                |
-| ------------ | ------------------------------------------------------------------- |
-| `kit.ts`     | external kit metadata, boundary validation and vocabulary documents |
-| `ui.ts`      | the base kit and its browser-safe `./ui` facet and specimens        |
-| `vocab.json` | the `Edit`, `Stack` and `Refused` components                        |
-| `state.ts`   | the bundles: an `Edit`'s eid, its patches, what it emits            |
-| `live.ts`    | `useEdit`: an `Edit`'s state and its value's draft, read live       |
-| `emit.ts`    | typed or picked input, read as its type, sent as a bundle           |
-| `host.ts`    | `Host`, `Ux`                                                        |
-| `Edit.ts`    | `Edit`, its controls and faces, `views`                             |
-| `Text.ts`    | `Edit.Text`                                                         |
-| `Stack.ts`   | `Stack`, its eid and bundles                                        |
-| `hits.ts`    | a picker's line and its debounced search                            |
-| `read.ts`    | what a property is, off the vocabulary                              |
+| file                  | owns                                                                |
+| --------------------- | ------------------------------------------------------------------- |
+| `kit.ts`              | external kit metadata, boundary validation and vocabulary documents |
+| `ui.ts`               | the base kit and its browser-safe `./ui` facet and specimens        |
+| `vocab.json`          | the `Edit`, `Stack` and `Refused` components                        |
+| `state.ts`            | the bundles: an `Edit`'s eid, its patches, what it emits            |
+| `live.ts`             | `useEdit`: an `Edit`'s state and its value's draft, read live       |
+| `emit.ts`             | typed or picked input, read as its type, sent as a bundle           |
+| `host.ts`             | `Host`, `Ux`                                                        |
+| `Edit.ts`             | `Edit`, its controls and faces, `views`                             |
+| `Text.ts`             | `Edit.Text`                                                         |
+| `Stack.ts`            | `Stack`, its eid and bundles                                        |
+| `hits.ts`             | a picker's line and its debounced search                            |
+| `read.ts`             | what a property is, off the vocabulary                              |
+| `completion.ts`       | shared completion controller, field, list and input binding         |
+| `completion-state.ts` | pure completion transitions and candidate types                     |

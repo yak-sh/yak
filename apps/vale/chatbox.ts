@@ -16,6 +16,11 @@
 // row asks them to answer, and what they answer floats over their head and
 // joins the log like anybody's line.
 import type { Watch } from '@yaks/client'
+import { h, render } from 'preact'
+import { signal } from '@preact/signals'
+import { commandField, type CommandFieldOpts } from './command-field.ts'
+import { commandLookup } from './command-lookup.ts'
+import { slashComplete } from './slash-completion.ts'
 // @ts-types="npm:@types/three@^0.186.0"
 import type * as THREE from 'three'
 import {
@@ -76,7 +81,10 @@ export let chatbox = (
   marks: ReturnType<typeof overlay>,
   folk: Village,
   command?: (cmd: Command) => Promise<string>,
+  fieldOpts?: CommandFieldOpts,
 ) => {
+  let listeners = new AbortController()
+  let closed = false
   let box = el('div', 'Chat')
   let log = el('ol', 'Chat_Log')
   let form = el('form', 'Chat_Say')
@@ -98,6 +106,47 @@ export let chatbox = (
   let me: Me | null = null
   let speaks = () => !!me?.person && me.writes
   let commands: ReturnType<Net['commands']> | null = null
+  let person = signal<string | undefined>(undefined)
+  let place = 'mossvale.chat'
+  let refs = commandLookup(net)
+  let { fields, drafts, ready, close } = commandField(
+    net,
+    () => person.value,
+    async (text, caret) => {
+      if (!text.startsWith('/')) {
+        return { from: caret, to: caret, cands: [], whole: false }
+      }
+      try {
+        return await slashComplete(
+          await (commands ??= net.commands()),
+          text,
+          caret,
+          refs.lookup,
+        )
+      } catch (e) {
+        commands = null
+        throw e
+      }
+    },
+    fieldOpts,
+  )
+  input.disabled = true
+  void ready.then(() => {
+    if (!closed) input.disabled = false
+  }, (e) => {
+    if (!closed) notice(e instanceof Error ? e.message : 'Drafts unavailable.')
+  })
+  let unbind = fields.bind(place, input)
+  let choices = el('div', 'Chat_Choices')
+  form.append(choices)
+  render(h(fields.List, { id: place, anchor: { current: input } }), choices)
+  let spend = (text: string, by: string | undefined) => {
+    // A slow command listing must not spend words typed or an account switched
+    // while it was being read. The submitted snapshot can still run.
+    if (input.value != text || person.value != by) return
+    drafts.spend(place)
+    fields.set(place, '')
+  }
 
   // What the store holds: the lines said in this level, newest first, and
   // who made each hero, which the rule asks.
@@ -209,11 +258,13 @@ export let chatbox = (
     // Keep the opening key from the input it is about to focus.
     e.preventDefault()
     show()
-    if (e.key == '/' && open) input.value = '/'
-  })
+    if (e.key == '/' && open && !input.disabled) {
+      fields.type(place, '/', 1)
+    }
+  }, { signal: listeners.signal })
   input.addEventListener('keydown', (e) => {
-    if (e.key == 'Escape') hide()
-  })
+    if (e.key == 'Escape' && !e.defaultPrevented) hide()
+  }, { signal: listeners.signal })
   // Scrolling the log can blur the input; it must not fold the conversation.
   addEventListener('pointerdown', (e) => {
     if (
@@ -222,30 +273,47 @@ export let chatbox = (
     ) {
       hide()
     }
-  })
+  }, { signal: listeners.signal })
   // The opener keeps the line's focus, so a second tap folds it away.
-  opener.addEventListener('pointerdown', (e) => e.preventDefault())
-  opener.addEventListener('click', () => open ? hide() : show())
+  opener.addEventListener('pointerdown', (e) => e.preventDefault(), {
+    signal: listeners.signal,
+  })
+  opener.addEventListener('click', () => open ? hide() : show(), {
+    signal: listeners.signal,
+  })
+  let submitting = false
   form.addEventListener('submit', async (e) => {
     e.preventDefault()
-    let text = clean(input.value)
-    input.value = ''
+    if (input.disabled || submitting) return
+    let before = input.value
+    let by = person.value
+    let text = clean(before)
+    submitting = true
     let parsed
     try {
       parsed = text.startsWith('/')
-        ? slash(text, await (commands ??= net.commands()))
+        ? await slash(text, await (commands ??= net.commands()))
         : null
     } catch (e) {
       commands = null
-      notice(e instanceof Error ? e.message : 'Commands unavailable.')
+      if (!closed && person.value == by) {
+        notice(e instanceof Error ? e.message : 'Commands unavailable.')
+      }
       return
+    } finally {
+      submitting = false
     }
+    if (closed || person.value != by || !speaks()) return
     if (parsed) {
       if ('error' in parsed) notice(parsed.error)
       else if ('help' in parsed) {
+        spend(before, by)
         let n = notice(parsed.help)
         n.markdown = true
-      } else void run(parsed.command)
+      } else {
+        spend(before, by)
+        void run(parsed.command)
+      }
       return
     }
     // E conversations stay open for another line; open chat outside one
@@ -253,6 +321,7 @@ export let chatbox = (
     if (!folk.near()) hide()
     let hero = net.hero
     if (!text || !hero || !level || !speaks()) return
+    spend(before, by)
     outbox.push({
       eid: crypto.randomUUID(),
       player: hero,
@@ -262,7 +331,7 @@ export let chatbox = (
       level,
       to: folk.to(text),
     })
-  })
+  }, { signal: listeners.signal })
 
   // The log, written only when what it shows changed. A line is drawn part
   // way through its arrival and its fade, however late it is drawn; the open
@@ -345,6 +414,17 @@ export let chatbox = (
   }
 
   return {
+    close: () => {
+      if (closed) return
+      closed = true
+      listeners.abort()
+      unbind()
+      render(null, choices)
+      close()
+      refs.close()
+      lines?.close()
+      box.remove()
+    },
     /** E opens chat focused on the villager, while replies remain public. */
     converse: () => show(),
     /** the keyboard is the chat's while a line is being written */
@@ -354,6 +434,7 @@ export let chatbox = (
     /** who is looking: a person signed in speaks, a guest is asked to */
     me: (who: Me) => {
       me = who
+      person.value = who.person || undefined
       opener.classList.toggle('Orb-off', !speaks())
     },
     /** this frame: the level's lines, and the words over heads near me */

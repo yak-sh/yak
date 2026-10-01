@@ -189,6 +189,9 @@ let chat = chatbox(
   folk,
   (cmd) => net.command(cmd.name, cmd.args),
 )
+addEventListener('pagehide', (e) => {
+  if (!e.persisted) chat.close()
+})
 let m = map(h.panels.map, (to) => g.travel(to, camp.known()))
 let p = pack(h.panels.bag, { wear: g.wear, take: g.take })
 let you = character(h.panels.character, {

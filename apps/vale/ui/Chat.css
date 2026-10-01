@@ -126,3 +126,27 @@
     font-size: 0.85rem;
   }
 }
+
+/* @yaks/ui Choices is the same list used by query completion. Its palette
+   belongs to the vale; position stays with the native chat field. */
+.Chat_Say {
+  position: relative;
+}
+.Chat_Choices {
+  --card: var(--paper);
+  --border: var(--rim);
+  --soft: var(--moss);
+  --dim: var(--deep);
+  --mono: ui-monospace, monospace;
+  --half-gap: 0.4rem;
+  --shadow: 0 4px 16px #0004;
+  position: absolute;
+  bottom: calc(100% + 0.35rem);
+  left: 0;
+  z-index: 10;
+  max-height: 40vh;
+  overflow-y: auto;
+  color: var(--ink);
+  text-shadow: none;
+  max-width: 100%;
+}

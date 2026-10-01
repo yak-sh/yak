@@ -1,6 +1,14 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
-import { argsFor, type Reads, saidIn, Usage, valueOf } from './args.ts'
+import {
+  argsFor,
+  pairsIn,
+  type Reads,
+  saidIn,
+  scanned,
+  Usage,
+  valueOf,
+} from './args.ts'
 import type { Listed as Tool } from './tool.ts'
 
 let reads: Reads = {
@@ -113,5 +121,133 @@ test('a tool with no schema takes nothing', async () => {
   await assertRejects(
     () => argsFor({ name: 'app_list' }, ['--app', 'r'], reads),
     Usage,
+  )
+})
+
+test('both flag forms parse the same typed arguments including false', async () => {
+  for (
+    let [name, value, expected] of [
+      ['deploy', 'false', false],
+      ['deploy', 'true', true],
+      ['deploy', '0', false],
+      ['limit', '-2', -2],
+      ['meta', '{"x":1}', { x: 1 }],
+      ['path', 'two words', 'two words'],
+    ] as const
+  ) {
+    assertEquals(await args(['--app', 'r', `--${name}`, value]), {
+      app: 'r',
+      [name]: expected,
+    })
+    assertEquals(await args(['--app=r', `--${name}=${value}`]), {
+      app: 'r',
+      [name]: expected,
+    })
+  }
+  for (let flag of [['--deploy', '@bool'], ['--deploy=@bool']]) {
+    assertEquals(
+      await argsFor(tool, ['--app', 'r', ...flag], {
+        ...reads,
+        file: () => 'false',
+      }),
+      { app: 'r', deploy: false },
+    )
+  }
+})
+
+test('schema-less pairs accept legacy and both long option forms with JSON values', async () => {
+  for (let form of ['legacy', 'equals', 'space']) {
+    let words = [
+      ['title', 'two words'],
+      ['count', '-2'],
+      ['enabled', 'false'],
+      ['meta', '{"x":1}'],
+      ['tags', '["cake"]'],
+      ['empty', ''],
+      ['nil', 'null'],
+      ['literal', 'a=b'],
+    ].flatMap(([key, value]) =>
+      form == 'space'
+        ? [`--${key}`, value]
+        : [`${form == 'equals' ? '--' : ''}${key}=${value}`]
+    )
+    assertEquals(await pairsIn(words), {
+      title: 'two words',
+      count: -2,
+      enabled: false,
+      meta: { x: 1 },
+      tags: ['cake'],
+      empty: '',
+      nil: null,
+      literal: 'a=b',
+    })
+  }
+  assertEquals(await pairsIn(['--text=--literal', 'old=1', '--old', '2']), {
+    text: '--literal',
+    old: 2,
+  })
+})
+
+test('schema-less pair values inflate before JSON parsing in every form', async () => {
+  let reads: Reads = { file: () => '{"file":true}', stdin: () => '[1,2]' }
+  for (let value of ['@data.json', '-', '@-']) {
+    let expected = value.startsWith('@data') ? { file: true } : [1, 2]
+    for (
+      let words of [[`data=${value}`], [`--data=${value}`], ['--data', value]]
+    ) {
+      assertEquals(await pairsIn(words, reads), { data: expected })
+    }
+  }
+})
+
+test('schema-less flags require an explicit value rather than becoming booleans', async () => {
+  for (let words of [['--enabled'], ['--enabled', '--next=1']]) {
+    await assertRejects(() => pairsIn(words), Usage, '--enabled needs a value')
+  }
+  for (let word of ['bare', '=value', '--=value', '--']) {
+    await assertRejects(() => pairsIn([word]), Usage, 'not an argument')
+  }
+})
+
+test('unknown options stay refused without a declared object rest', async () => {
+  for (
+    let grammar of [
+      tool,
+      { ...tool, options: { rest: 'files' } },
+      { ...tool, options: { rest: 'path' } },
+      { name: 'empty', options: { rest: 'args' } },
+    ]
+  ) {
+    for (let words of [['--unknown=1'], ['--unknown', '1']]) {
+      await assertRejects(
+        () => argsFor(grammar, words),
+        Usage,
+        'Unknown option',
+      )
+    }
+  }
+  let listing = { ...tool, options: { positional: ['app'], rest: 'files' } }
+  assertEquals(
+    await argsFor(listing, ['r', '--', '--literal=1', '--other', '2']),
+    {
+      app: 'r',
+      files: ['--literal=1', '--other', '2'],
+    },
+  )
+})
+
+test('object rest completion can await an unknown flag without swallowing declared options', () => {
+  let grammar = { ...tool, options: { rest: 'meta' } }
+  let pending = scanned(grammar, ['--extra'], true)
+  assertEquals(pending.pending, 'extra')
+  assertEquals(pending.awaiting, 'extra')
+  assertEquals(scanned(grammar, ['--extra', 'false', '--app', 'r']).spare, [
+    '--extra',
+    'false',
+  ])
+  assertThrows(
+    () => scanned(grammar, ['--extra', '--app=r']),
+    Usage,
+    'needs a value',
   )
 })

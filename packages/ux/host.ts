@@ -22,7 +22,7 @@ import {
 } from 'preact'
 import { useContext } from 'preact/hooks'
 import type { Bundle } from '@yaks/graph'
-import type { Filters } from '@yaks/filter'
+import type { FieldProps } from './completion.ts'
 import type { EditOptions } from '@yaks/render'
 import type { Vocab } from '@yaks/vocab'
 import type { Find } from './hits.ts'
@@ -89,7 +89,7 @@ export type Host = {
   values?: (well: string) => string[]
   /** the query fields (@yaks/filter) a saved query is typed in; without
    * them a query is typed as text */
-  fields?: Pick<Filters, 'Filter'>
+  fields?: { Filter: FunctionComponent<FieldProps> }
   /** inline markdown as HTML: a value shown `inline` at rest */
   markup?: (text: string) => string
   /** what a choice wears beside its word: a status's dot */

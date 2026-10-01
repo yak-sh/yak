@@ -382,6 +382,44 @@ that; only the work knows how long it needs. A second interrupt ends the duty
 thread where it stands, closes with the interrupt's code (143, 130, 129) and
 exits.
 
+## Shared command grammar
+
+Import `@yaks/cli/grammar` for command parsing and completion in a browser or
+another host that does not need the CLI runtime. Both functions read the same
+`Grammar` descriptors: command names, `inputSchema`, and optional
+`options{positional, short, rest}`. A browser caller does not need a separate
+argument parser.
+
+```ts
+import { argsFor, complete, type Grammar } from '@yaks/cli/grammar'
+
+let greet: Grammar = {
+  name: 'greet',
+  inputSchema: {
+    type: 'object',
+    properties: { name: { type: 'string', enum: ['Ada', 'Lin'] } },
+    required: ['name'],
+  },
+}
+
+await argsFor(greet, ['--name=Ada']) // { name: 'Ada' }
+await argsFor(greet, ['--name', 'Ada']) // { name: 'Ada' }
+await complete([greet], 'greet --name A') // ['Ada']
+```
+
+`argsFor(tool, argv, reads?)` returns a promise of the typed, validated argument
+object, including schema defaults. It accepts both `--name=value` and
+`--name value`, declared short options, boolean flags, positional arguments, and
+repeated list options; `--` ends option parsing. Invalid input throws `Usage`.
+File and stdin expansion (`@path`, `-`, `@-`) happens only when the host
+supplies `Reads{file, stdin}`; without it, those words stay literal.
+
+`complete(tools, line, look?)` returns a promise of whole replacement words, not
+suffixes. `line` may be a string or a words array. It offers commands, options
+and schema values (enums, booleans and examples), recognizing both option-value
+forms. Optional `Lookup{ids, hits}` callbacks supply entity IDs and full-text
+matches without putting graph IO in the grammar.
+
 ## The command line
 
 `cli(commands, opts)` parses and runs one command and returns an exit code:
@@ -433,13 +471,16 @@ by `/yaks`:
 The tool cache avoids an MCP round trip for ordinary calls. A server response
 that reports a changed roster invalidates or updates the cache.
 
-The package exports seven entry points:
+The package exports eight entry points:
 
 - `@yaks/cli` exports command parsing, schema conversion, display and completion
   helpers, MCP transport, token and roster storage, config reading, remote tool
   listing and app-command adapters. It is what the command is built from, not
-  the command: importing it starts nothing and reads no `Deno` global, so a page
-  can run `cli()` too.
+  the command: importing it starts nothing. Browser callers use the IO-free
+  `@yaks/cli/grammar` entry point rather than the CLI runtime.
+- `@yaks/cli/grammar` is the browser-safe command grammar and completion entry
+  point, with no runtime IO: `argsFor`, `complete`, command lookup and token
+  helpers, and the `Grammar`, `Reads`, `Lookup`, `Prop` and `Schema` types.
 - `@yaks/cli/yak` is the command: the executable `main`, its built-in commands,
   and the `YAK`, `TOOLS` and `HOST` defaults it runs with. Run it directly or
   pass additional commands to `main(argv, extra)`.

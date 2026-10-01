@@ -15,8 +15,9 @@
   <link rel=stylesheet
     href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap">
   <link rel=stylesheet href=ui/components.css>
-  <!-- @yaks/client and @yaks/vocab arrive from JSR as esm.sh bundles;
-       keep ?bundle so each is one download. @yaks/rtc is a local browser
+  <!-- Slash grammar, completion, drafts, client, Preact and signals share
+       slash-runtime.bundle.js, built from slash-runtime.ts. Unpublished
+       subpaths must not point at the published 0.2.10 packages. @yaks/rtc is a local browser
        bundle of packages/rtc/mod.ts (deno bundle packages/rtc/mod.ts -o
        apps/vale/rtc.bundle.js), since the published 0.2.10 does not yet have
        the sender diagnostics. Its single file waits for the first voice.
@@ -24,15 +25,20 @@
   <script type=importmap>
   {
     "imports": {
-      "@yaks/client": "https://esm.sh/jsr/@yaks/client@0.2.10?bundle",
+      "@yaks/client": "./slash-runtime.bundle.js",
+      "@yaks/cli/grammar": "./slash-runtime.bundle.js",
+      "@yaks/ux/completion": "./slash-runtime.bundle.js",
+      "@yaks/ux/vocab": "./slash-runtime.bundle.js",
+      "@yaks/draft": "./slash-runtime.bundle.js",
+      "preact": "./slash-runtime.bundle.js",
+      "@preact/signals": "./slash-runtime.bundle.js",
       "@yaks/markdown": "https://esm.sh/jsr/@yaks/markdown@0.2.10?bundle",
       "@yaks/rtc": "./rtc.bundle.js",
-      "@yaks/vocab": "https://esm.sh/jsr/@yaks/vocab@0.2.10?bundle"
+      "@yaks/vocab": "./slash-runtime.bundle.js"
     }
   }
   </script>
-  <link rel=modulepreload href="https://esm.sh/jsr/@yaks/client@0.2.10?bundle">
-  <link rel=modulepreload href="https://esm.sh/jsr/@yaks/vocab@0.2.10?bundle">
+  <link rel=modulepreload href="./slash-runtime.bundle.js">
   <link rel=preload href=api/vocab.json as=fetch crossorigin>
   <canvas class=Stage></canvas>
   <div class=Hud hidden></div>

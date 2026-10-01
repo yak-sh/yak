@@ -269,7 +269,7 @@ export let connect = (base: URL, vocab: ReturnType<typeof loadVocab>) => {
   // caller and access checks. The selected hero is the page's default player.
   let command = async (
     name: string,
-    args: Record<string, string | number | boolean>,
+    args: Record<string, unknown>,
   ): Promise<string> => {
     let r = await fetch(new URL('command', base), {
       method: 'POST',

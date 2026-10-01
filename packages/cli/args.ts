@@ -138,7 +138,8 @@ export let valueOf = (name: string, raw: string, p?: Prop): unknown => {
 }
 
 /**
- * Bare `key=value` arguments as an object — the arguments of something whose
+ * `key=value`, `--key=value` and `--key value` arguments as an object —
+ * the arguments of something whose
  * schema this program does not have, such as an app's own command. Each value
  * is parsed as JSON where it parses as JSON, so a number stays a number and a
  * list stays a list, and is used as given otherwise; `@path` and `-` expand
@@ -157,14 +158,25 @@ export let pairsIn = async (
   reads?: Reads,
 ): Promise<Record<string, unknown>> => {
   let out: Record<string, unknown> = {}
-  for (let word of words) {
+  for (let i = 0; i < words.length; i++) {
+    let word = words[i]
     let eq = word.indexOf('=')
-    if (eq <= 0) throw new Usage(`not an argument: ${word} — want key=value`)
-    let raw = await inflate(word.slice(eq + 1), reads)
+    let flag = word.startsWith('--')
+    let name = flag ? word.slice(2, eq < 0 ? undefined : eq) : word.slice(0, eq)
+    if (!name || !flag && eq <= 0) {
+      throw new Usage(
+        `not an argument: ${word} — want key=value or --key value`,
+      )
+    }
+    let value = eq >= 0 ? word.slice(eq + 1) : words[++i]
+    if (value == undefined || eq < 0 && value.startsWith('--')) {
+      throw new Usage(`${word} needs a value`)
+    }
+    let raw = await inflate(value, reads)
     try {
-      out[word.slice(0, eq)] = JSON.parse(raw)
+      out[name] = JSON.parse(raw)
     } catch {
-      out[word.slice(0, eq)] = raw
+      out[name] = raw
     }
   }
   return out
@@ -195,13 +207,17 @@ export let argsFor = async (
   let { pairs, spare } = scanned(tool, argv)
   let out: Record<string, unknown> = {}
   for (let [name, raw] of pairs) {
-    let value = raw === true ? true : valueOf(name, await inflate(raw, reads), props[name])
+    let value = raw === true
+      ? true
+      : valueOf(name, await inflate(raw, reads), props[name])
     let had = out[name]
-    out[name] = Array.isArray(had) && Array.isArray(value) ? [...had, ...value] : value
+    out[name] = Array.isArray(had) && Array.isArray(value)
+      ? [...had, ...value]
+      : value
   }
 
   // The bare words nothing claimed, where the tool asked for them: an app's
-  // own arguments as `key=value` pairs, or a plain list, which joins what its
+  // own arguments as pairs (bare or long options), or a plain list, which joins what its
   // own option gathered (`--only a b` is both a and b).
   if (rest && spare.length) {
     let had = out[rest]
@@ -244,10 +260,12 @@ export let commandFor = <T extends Grammar>(
   }
 }
 
-
 /** A typed line's words and their replacement ranges. Incomplete quotes are
  * allowed only while completing; parsing asks for a closed line. */
-export let tokensIn = (line: string, partial = false): { value: string; from: number; to: number }[] => {
+export let tokensIn = (
+  line: string,
+  partial = false,
+): { value: string; from: number; to: number }[] => {
   let words: { value: string; from: number; to: number }[] = []
   let value = '', quote = '', from = -1
   for (let i = 0; i < line.length; i++) {
@@ -265,47 +283,121 @@ export let tokensIn = (line: string, partial = false): { value: string; from: nu
   }
   if (quote && !partial) throw new Usage('Close the quoted argument.')
   if (from >= 0) words.push({ value, from, to: line.length })
-  else if (partial) words.push({ value: '', from: line.length, to: line.length })
+  else if (partial) {
+    words.push({ value: '', from: line.length, to: line.length })
+  }
   return words
 }
 
 /** The single argument walk used by parsing and completion. A partial walk
  * reports the property still awaiting a value, without requiring the schema's
  * remaining mandatory properties. */
-export let scanned = (tool: Grammar, argv: readonly string[], partial = false) => {
+export let scanned = (
+  tool: Grammar,
+  argv: readonly string[],
+  partial = false,
+): {
+  pairs: [string, string | true][]
+  spare: string[]
+  given: Set<string>
+  literal: boolean
+  pending: string | undefined
+  awaiting: string | undefined
+} => {
   let props = ((tool.inputSchema ?? {}) as Schema).properties ?? {}
+  let rest = tool.options?.rest
+  let objectRest = rest && typeOf(props[rest]) == 'object'
   let positional = tool.options?.positional ?? []
   let shorts = tool.options?.short ?? {}
   let pairs: [string, string | true][] = [], spare: string[] = []
-  let given = new Set<string>(), at = 0, literal = false, awaiting: string | undefined
+  let given = new Set<string>(),
+    at = 0,
+    literal = false,
+    awaiting: string | undefined,
+    pending: string | undefined
   let put = (name: string, raw: string | true) => {
-    if (raw !== true) valueOf(name, raw, props[name])
+    if (partial && raw !== true && !raw.startsWith('@') && raw != '-') {
+      let value = valueOf(name, raw, props[name])
+      try {
+        validateToolInput({
+          inputSchema: { type: 'object', properties: { [name]: props[name] } },
+        }, { [name]: value })
+      } catch (e) {
+        throw new Usage((e as Error).message)
+      }
+    }
     pairs.push([name, raw])
     given.add(name)
   }
   for (let i = 0; i < argv.length; i++) {
     let word = argv[i]
-    if (!literal && word == '--') { literal = true; continue }
+    if (!literal && word == '--') {
+      literal = true
+      continue
+    }
     let eq = word.indexOf('=')
     let flag = eq > 0 ? word.slice(0, eq) : word
     let name = flag.startsWith('--') ? flag.slice(2) : shorts[flag.slice(1)]
     if (!literal && (flag.startsWith('--') || flag.startsWith('-') && name)) {
       let p = props[name]
-      if (!p) throw new Usage(`Unknown option: ${flag} — ${commandOf(tool)} takes ${listed(Object.keys(props))}`)
-      if (eq > 0) { put(name, word.slice(eq + 1)); continue }
+      if (!p && objectRest && flag.startsWith('--') && name) {
+        // Declared options always win; only an object rest can carry names
+        // whose schema belongs to the app rather than this command line.
+        spare.push(word)
+        if (eq > 0) continue
+        let next = argv[i + 1]
+        if (next == undefined || next.startsWith('--')) {
+          if (!partial || next != undefined) {
+            throw new Usage(`${flag} needs a value`)
+          }
+          awaiting = name
+          pending = name
+        } else spare.push(argv[++i])
+        continue
+      }
+      if (!p) {
+        throw new Usage(
+          `Unknown option: ${flag} — ${commandOf(tool)} takes ${
+            listed(Object.keys(props))
+          }`,
+        )
+      }
+      if (eq > 0) {
+        put(name, word.slice(eq + 1))
+        continue
+      }
       let next = argv[i + 1]
-      if (typeOf(p) == 'boolean' && (next == undefined || !['true', 'false', '1', '0'].includes(next))) {
+      if (
+        typeOf(p) == 'boolean' &&
+        (next == undefined ||
+          !['true', 'false', '1', '0', '-'].includes(next) &&
+            !next.startsWith('@'))
+      ) {
         put(name, true)
         if (partial && next == undefined) awaiting = name
       } else if (next == undefined || next.startsWith('--')) {
-        if (!partial) throw new Usage(`${flag} needs a value`)
+        if (!partial || next != undefined) {
+          throw new Usage(`${flag} needs a value`)
+        }
         awaiting = name
+        pending = name
       } else put(name, argv[++i])
       continue
     }
+    while (at < positional.length && given.has(positional[at])) at++
     if (at < positional.length) put(positional[at++], word)
     else if (tool.options?.rest) spare.push(word)
-    else throw new Usage(`${commandOf(tool)} takes ${listed(Object.keys(props))}, not ${word}`)
+    else {throw new Usage(
+        `${commandOf(tool)} takes ${listed(Object.keys(props))}, not ${word}`,
+      )}
   }
-  return { pairs, spare, given, literal, awaiting: awaiting ?? positional[at] }
+  while (at < positional.length && given.has(positional[at])) at++
+  return {
+    pairs,
+    spare,
+    given,
+    literal,
+    pending,
+    awaiting: awaiting ?? positional[at],
+  }
 }

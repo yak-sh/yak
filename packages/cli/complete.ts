@@ -41,7 +41,9 @@ let wordsIn = (line: string | readonly string[]): string[] =>
 export let quoted = (word: string): string => {
   let eq = word.startsWith('--') ? word.indexOf('=') : -1
   if (eq >= 0) return word.slice(0, eq + 1) + quoted(word.slice(eq + 1))
-  return /[\s"'\\]/.test(word) || !word ? JSON.stringify(word) : word
+  return /[\s"'\\]/.test(word) || !word
+    ? '"' + word.replace(/[\\"]/g, '\\$&') + '"'
+    : word
 }
 
 let props = (t: Grammar): Record<string, Prop> =>
@@ -81,7 +83,9 @@ let values = async (
 }
 
 let kept = (said: string[], partial: string): string[] =>
-  [...new Set(said)].filter((w) => w.startsWith(partial)).sort()
+  [...new Set(said)].filter((w) =>
+    w.toLowerCase().startsWith(partial.toLowerCase())
+  ).sort()
 
 /**
  * What could come next, given the tools and the line so far. Each result is a
@@ -106,9 +110,15 @@ export let complete = async (
   let t = found.verb
   let names = Object.keys(props(t))
   let state
-  try { state = scanned(t, found.args, true) } catch { return [] }
-  let emit = (said: string[]) => typeof line == 'string' ? said.map(quoted) : said
+  try {
+    state = scanned(t, found.args, true)
+  } catch {
+    return []
+  }
+  let emit = (said: string[]) =>
+    typeof line == 'string' ? said.map(quoted) : said
   if (!state.literal && partial.startsWith('--')) {
+    if (state.pending) return []
     let [name, ...rest] = partial.slice(2).split('=')
     // `--name=` introduces a value, in the one form that accepts a value
     // beginning with a dash.
@@ -121,5 +131,7 @@ export let complete = async (
       partial,
     )
   }
-  return emit(kept(await values(props(t)[state.awaiting ?? ''], partial, look), partial))
+  return emit(
+    kept(await values(props(t)[state.awaiting ?? ''], partial, look), partial),
+  )
 }

@@ -82,3 +82,9 @@ export {
   type Piece,
   type Specimen,
 } from './kit.ts'
+
+export {
+  completion,
+  type Controller as CompletionController,
+  type FieldProps,
+} from './completion.ts'

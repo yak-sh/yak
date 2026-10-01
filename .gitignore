@@ -39,3 +39,7 @@ node_modules.lock/
 # Fresh throughput measurements are local; only the accepted baseline is versioned.
 /bench/results.json
 /bench/*.json.tmp
+
+# Vale deployment assets built from the workspace; no second source of UI CSS.
+/apps/vale/slash-runtime.bundle.js
+/apps/vale/ui/Choices.css

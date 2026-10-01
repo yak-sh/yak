@@ -1680,6 +1680,7 @@
         "player": { "type": "string", "description": "The hero's eid." },
         "beast": {
           "type": "string",
+          "ref": "beast_design",
           "description": "An existing creature's name or alias, or a description to invent."
         }
       },
@@ -1694,10 +1695,12 @@
         "player": { "type": "string", "description": "The hero's eid." },
         "level": {
           "type": "string",
+          "ref": "theme_design",
           "description": "A land id or name, such as tombsands or Cinderreach; a bare /teleport name may also name an entity."
         },
         "to": {
           "type": "string",
+          "ref": "position",
           "description": "An entity eid or current name to teleport to. The entity needs a live position, saved companion spot, or computed villager location."
         },
         "x": {
