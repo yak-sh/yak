@@ -748,12 +748,7 @@
     },
     "session_release": {
       "effect": true,
-      "created": [
-        "stop",
-        "error",
-        "exception",
-        "exit"
-      ],
+      "created": ["stop", "refusal", "error", "exception", "exit"],
       "sweep": ".claim",
       "description": "release claims held by a transcript that stopped or failed; a worker also finds claims left by runs that ended while no worker was serving effects"
     }

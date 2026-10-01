@@ -8,7 +8,9 @@ import { type Bundle, type Comp, type Hook } from '@yaks/graph'
 export const resultEntries: Hook = (bundles, tx) => {
   const source = (b: Bundle) => {
     if (b.result) return (b.result as Comp).call
-    if (b.error || b.exception) return (b.output as Comp | undefined)?.source
+    if (b.refusal || b.error || b.exception) {
+      return (b.output as Comp | undefined)?.source
+    }
   }
   const candidates = bundles.filter((b) => !('entry' in b) && source(b) != null)
   if (!candidates.length) return bundles

@@ -117,3 +117,22 @@ test('independent callers can complete out of order without losing transcript as
     { session: 's', seq: 4 },
   ])
 })
+
+test('refusal diagnostics join their call transcript before sequencing', async () => {
+  let vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
+  let g = graph({ vocab, storage: ram(vocab), plugins: [sessions()] })
+  await g.apply([
+    { entity: { eid: 's' }, session: {} },
+    { entity: { eid: T }, tool: { name: 'echo' } },
+    { entity: { eid: 'c' }, entry: { session: 's' }, call: { to: T } },
+  ])
+  await g.apply([{
+    entity: { eid: 'no' },
+    refusal: { code: 'arguments' },
+    output: { source: 'c' },
+    content: { body: 'not allowed' },
+  }])
+  let [refused] = await g.get(['no'])
+  assertEquals((refused.entry as { session: string }).session, 's')
+  assertEquals(typeof (refused.entry as { seq: number }).seq, 'number')
+})

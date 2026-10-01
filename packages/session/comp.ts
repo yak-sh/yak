@@ -16,7 +16,7 @@
 //   entry{session, seq}      one line; the component beside it is its kind
 //     + content{body}        its prose, when it has any. Alone, an input: an
 //                            instruction (the first one is the request).
-//                            Beside a result, error or exception, theirs
+//                            Beside a result, refusal, error or exception, theirs
 //     + output{source}       what produced the prose beside it: the ask, for
 //                            what a model said
 //     + using{provider, model, effort, instructions}
@@ -28,7 +28,8 @@
 //                            a tool the model asked for, from that ask
 //     + result{call}         what a tool answered
 //     + stop                 the runner performs nothing after this
-//     + error{code}          expected and recorded: normal
+//     + refusal{code}        a deliberate no, never tracked
+//     + error{code}          legacy/interruption/check outcomes
 //     + exception            unexpected: a defect report, not a stop
 //
 // An ask and a call share no properties on purpose: one is the runner reaching
@@ -40,7 +41,7 @@
 //
 // Half the entry components above are declared by other packages, and this
 // document declares only its own: `content`, `output`, `call`, `result`,
-// `error` and `exception` are @yaks/tools's — a call is the record of having
+// `refusal`, `error` and `exception` are @yaks/tools's — a call is the record of having
 // asked a tool, whoever asked it — and an instruction assembled from parts is
 // @yaks/context's `prompt`. What a `using` names — `provider`, `model` — is
 // @yaks/model's, as are `questions` and `answer`, and what a `call.to` names is
