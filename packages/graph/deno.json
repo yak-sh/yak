@@ -16,6 +16,8 @@
     "exclude": [
       "**/*_test.ts",
       "./testing.ts",
+      "./activity_bench.ts",
+      "./.activity-base.ts",
       "./browser.json"
     ]
   }

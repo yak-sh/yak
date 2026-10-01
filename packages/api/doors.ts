@@ -19,6 +19,7 @@ import {
 } from '@yaks/graph'
 import type { Actor } from '@yaks/graph'
 import { parse } from '@yaks/query'
+import { parent, peek } from '@yaks/trace'
 import { signed } from './actor.ts'
 import { fault, json, refusal } from './refuse.ts'
 
@@ -68,12 +69,16 @@ let lines = async function* (
 // through is the offender. Nothing is re-applied until something has already
 // gone wrong, and when no single bundle is responsible — two bad lines, or a
 // chunk refused as a whole — the chunk's first line is reported.
-let culprit = async (graph: Graph, chunk: Bundle[]): Promise<number> => {
+let culprit = async (
+  graph: Graph,
+  chunk: Bundle[],
+  cause?: string,
+): Promise<number> => {
   for (let i = 0; i < chunk.length; i++) {
     let rest = chunk.filter((_, j) => j != i)
     if (!rest.length) return i
     try {
-      await graph.apply(rest, { check: true })
+      await graph.apply(rest, { check: true, ...(cause && { parent: cause }) })
       return i
     } catch {
       // Still refused: that bundle was not what broke it.
@@ -125,10 +130,12 @@ export let pour = (
   graph: Graph,
   request: Request,
   who: Actor | null,
+  activity: object = graph,
 ): Response => {
   let body = request.body
   if (!body) throw new Refused('/apply takes one bundle per line')
   let check = new URL(request.url).searchParams.has('check')
+  let cause = peek(activity) ? parent(activity, request) : undefined
   let out = new TransformStream<Uint8Array, Uint8Array>()
   let writer = out.writable.getWriter()
   let bytes = new TextEncoder()
@@ -147,9 +154,12 @@ export let pour = (
       let batch = signed(held, who)
       let applied: Bundle[]
       try {
-        applied = await graph.apply(batch, { check })
+        applied = await graph.apply(batch, {
+          check,
+          ...(cause && { parent: cause }),
+        })
       } catch (err) {
-        blame = at[await culprit(graph, batch)]
+        blame = at[await culprit(graph, batch, cause)]
         throw err
       }
       for (let b of asked(held, applied)) await say(b)
@@ -194,14 +204,21 @@ export let write = async (
   graph: Graph,
   request: Request,
   who: Actor | null,
+  activity: object = graph,
 ): Promise<Response> => {
-  if (poured(request)) return pour(graph, request, who)
+  if (poured(request)) return pour(graph, request, who, activity)
   let body = await request.json()
   if (!Array.isArray(body)) {
     throw new Refused('/apply takes a JSON array of bundles')
   }
   let check = new URL(request.url).searchParams.has('check')
-  return json(await graph.apply(signed(body, who), { check }))
+  let cause = peek(activity) ? parent(activity, request) : undefined
+  return json(
+    await graph.apply(signed(body, who), {
+      check,
+      ...(cause && { parent: cause }),
+    }),
+  )
 }
 
 // The query string a request carries: `?q=` on a GET, and on a POST either a
@@ -224,7 +241,11 @@ let lineOf = (body: unknown): string | null => {
  * than `read()`); the response body is then `{"count":n}`, `{"distinct":[…]}`
  * or `{"tally":{…}}`.
  */
-export let ask = async (graph: Graph, request: Request): Promise<Response> => {
+export let ask = async (
+  graph: Graph,
+  request: Request,
+  activity: object = graph,
+): Promise<Response> => {
   let q = request.method == 'GET'
     ? new URL(request.url).searchParams.get('q')
     : lineOf(await request.json())
@@ -233,10 +254,12 @@ export let ask = async (graph: Graph, request: Request): Promise<Response> => {
   // the string is parsed to decide which of them answers, and not parsed
   // again to answer.
   let ast = parse(q)
+  let cause = peek(activity) ? parent(activity, request) : undefined
+  let options = cause ? { parent: cause } : undefined
   let op = aggregate(ast)
   return op
-    ? json(reduced(op, await graph.rows(ast)))
-    : listed(await graph.read(ast))
+    ? json(reduced(op, await graph.rows(ast, options)))
+    : listed(await graph.read(ast, options))
 }
 
 // How much of a listed answer is said per piece of the stream.

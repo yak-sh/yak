@@ -47,11 +47,13 @@ import type {
   Eid,
   Graph,
   Hook,
+  HookContext,
   Match,
   Plugin,
   Tx,
 } from '@yaks/graph'
 import { after, each, isPromise, over } from '@yaks/fp'
+import { during, link, peek, unlink } from '@yaks/trace'
 import { asked, match, reads } from '@yaks/graph'
 import { type Clause, eq, list } from '@yaks/query'
 import { type EffectDecl, effectsIn, type Vocab } from '@yaks/vocab'
@@ -311,14 +313,26 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
 
   // The write callback as one run sees it: whatever it writes is marked a
   // generation on from the batch that owed it.
-  let writer = (gen: number): Write => (bundles) => {
+  let writer = (gen: number, context?: HookContext): Write => (bundles) => {
     if (!opts.write) {
       throw new Error(
         'this effect asked to write and no write door is registered — ' +
           'effects(vocab, { write: (b) => graph.apply(b, { trusted: true }) })',
       )
     }
-    return opts.write(marked(bundles, gen + 1))
+    let batch = marked(bundles, gen + 1)
+    if (!context?.parent || !peek(context.graph)) return opts.write(batch)
+    link(context.graph, batch, context.parent)
+    let clean = () => unlink(context.graph, batch)
+    try {
+      let out = opts.write(batch)
+      if (isPromise(out)) return out.finally(clean)
+      clean()
+      return out
+    } catch (error) {
+      clean()
+      throw error
+    }
   }
 
   let name = (comp: string, kind: Kind, prop?: string) => {
@@ -529,11 +543,38 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
   }
 
   // One observer run, isolated.
-  let fire = (s: Slot, event: Event, tx: Tx, write: Write): unknown => {
+  let fire = (
+    s: Slot,
+    event: Event,
+    tx: Tx,
+    write: Write,
+    gen: number,
+    context?: HookContext,
+  ): unknown => {
     let failed = (err: unknown) =>
       report(err, { handler: s.id, event, slot: s })
     try {
-      let out = s.run!(event, tx, write)
+      let c = context && peek(context.graph)
+      let out: unknown
+      if (!c) out = s.run!(event, tx, write)
+      else {
+        let span = c.begin({
+          kind: 'effect',
+          name: s.id,
+          package: '@yaks/effects',
+          plugin: opts.name,
+          parent: context!.parent,
+        })
+        out = during(span, () =>
+          s.run!(
+            event,
+            tx,
+            writer(gen, {
+              graph: context!.graph,
+              parent: span?.id,
+            }),
+          ))
+      }
       return isPromise(out) ? out.then(() => null, failed) : null
     } catch (err) {
       return failed(err)
@@ -557,7 +598,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
   let left = new WeakSet<Bundle>()
 
   // Inside the transaction: the runs this batch owes, written down.
-  let owe: Hook = (bundles, tx) => {
+  let owe: Hook = (bundles, tx, _err, context) => {
     if (generation(bundles) > depth) return bundles
     return after(
       matched(bundles, tx, (s) => !!s.effect),
@@ -565,6 +606,21 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
         !found.length ? bundles : after(
           pooled!.owe(tx, found, generation(bundles)),
           (mine) => {
+            let c = context && peek(context.graph)
+            if (c) {
+              for (let [s] of found) {
+                c.instant({
+                  kind: 'effect',
+                  name: s.id,
+                  package: '@yaks/effects',
+                  plugin: opts.name,
+                  parent: context!.parent,
+                }, { counts: { owed: 1 } })
+              }
+              for (let run of mine) {
+                if (context!.parent) link(context!.graph, run, context!.parent)
+              }
+            }
             if (mine.length) owed.set(bundles[0], mine)
             if (mine.length < found.length) left.add(bundles[0])
             return bundles
@@ -575,7 +631,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
 
   // After the commit: the runs this process claimed as it wrote them are
   // started, and every observer runs.
-  let effect: Hook = (bundles, tx) => {
+  let effect: Hook = (bundles, tx, _err, context) => {
     let mine = bundles[0] && owed.get(bundles[0])
     let clean = () => unmark(strip(bundles))
     if (mine) {
@@ -589,7 +645,20 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     return after(
       after(
         matched(bundles, tx, here),
-        (found) => over(found, ([s, e]) => fire(s, e, tx, write)),
+        (found) =>
+          over(found, ([s, e]) => {
+            let c = context && peek(context.graph)
+            if (c) {
+              c.instant({
+                kind: 'effect',
+                name: s.id,
+                package: '@yaks/effects',
+                plugin: opts.name,
+                parent: context!.parent,
+              }, { counts: { owed: 1 } })
+            }
+            return fire(s, e, tx, write, gen, context)
+          }),
       ),
       clean,
     )

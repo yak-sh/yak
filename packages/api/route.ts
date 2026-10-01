@@ -50,6 +50,8 @@ export let routed = (route: Route, method: string, path: string): boolean =>
 export type Options = {
   /** the graph this API reads and writes */
   graph: Graph
+  /** Runtime activity stays keyed by the composed graph, not a read overlay. */
+  activity?: object
   /** who is writing (default: nobody — writes are stored unattributed) */
   authenticate?: Authenticate
   /** the runtime's WebSocket upgrade (default: Deno's) */
@@ -83,7 +85,8 @@ export let DOORS: string[] = ['/apply', '/query', '/ws', '/vocab']
  */
 export let api = (opts: Options): Handler => {
   let { graph } = opts
-  let subs = opts.subs ?? subscriptions(graph)
+  let subs = opts.subs ??
+    subscriptions(graph, { activity: opts.activity ?? graph })
   let authenticate = opts.authenticate ?? nobody
   let upgrade = opts.upgrade ?? denoUpgrade
   let no = (message: string, code: number) =>
@@ -94,7 +97,7 @@ export let api = (opts: Options): Handler => {
     let who = await authenticate(request)
     if (path == '/apply') {
       return request.method == 'POST'
-        ? await write(graph, request, who)
+        ? await write(graph, request, who, opts.activity ?? graph)
         : no('/apply takes POST', 405)
     }
     if (path == '/query') {
@@ -107,7 +110,7 @@ export let api = (opts: Options): Handler => {
         if (q == null) throw new Refused('/query needs a query: ?q=…')
         return json(await subs.snapshot(q))
       }
-      return await ask(graph, request)
+      return await ask(graph, request, opts.activity ?? graph)
     }
     // What a client must load to read and write this graph as it does:
     // the documents and the keyword sets they are written with, for
@@ -131,6 +134,7 @@ export let api = (opts: Options): Handler => {
     return no(`no route for ${path}`, 404)
   }
   return served(door, {
+    graph: opts.activity ?? graph,
     report: opts.report,
     route: (request) => {
       let path = new URL(request.url).pathname

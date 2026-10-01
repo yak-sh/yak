@@ -70,10 +70,16 @@ export let handler = (host: Hosting): Handler => {
   // commits, and the host's feed for what every other process or thread
   // commits to the same store — a `yak` command beside `yak serve`, the effect
   // pool's thread — which that phase never runs for.
-  let subs = subscriptions(graph)
+  let subs = subscriptions(graph, { activity: host.graph })
   host.feed?.((applied) => subs.commit(applied))
   let report = host.report
-  let door = api({ graph, authenticate: host.who, subs, report })
+  let door = api({
+    graph,
+    activity: host.graph,
+    authenticate: host.who,
+    subs,
+    report,
+  })
   let claimed = (request: Request): Route | undefined => {
     let path = new URL(request.url).pathname
     let route = routes.filter((r) => routed(r, request.method, path))
@@ -88,5 +94,12 @@ export let handler = (host: Hosting): Handler => {
     for (let f of filters) await f(request)
     let route = claimed(request)
     return route ? route.handle(request) : door(request)
-  }, { report, route: (request) => claimed(request)?.path })
+  }, {
+    graph: host.graph,
+    report,
+    route: (request) => {
+      let path = new URL(request.url).pathname
+      return claimed(request)?.path ?? (DOORS.includes(path) ? path : undefined)
+    },
+  })
 }

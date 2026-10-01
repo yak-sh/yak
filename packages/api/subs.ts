@@ -35,6 +35,7 @@
 
 import type { Bundle, Eid, Graph } from '@yaks/graph'
 import { after, isPromise, over } from '@yaks/fp'
+import { during, link, parent, peek, unlink } from '@yaks/trace'
 import {
   admit,
   coalesced,
@@ -332,6 +333,8 @@ let affected = (
  * ```
  */
 export let subscriptions = (graph: Graph, opts: {
+  /** The composed graph when `graph` is only its read overlay. */
+  activity?: object
   /** A query may depend on entities outside its result (for example a computed
    * session status depends on transcript entries). Returning true refreshes
    * that subscription after this commit. It does not subscribe to those rows. */
@@ -671,6 +674,26 @@ export let subscriptions = (graph: Graph, opts: {
 
   // One pass over the transactions that committed since the last: each one
   // to the raw feeds, then all of them at once to the queries.
+  let fanout = (txs: Bundle[][]) => {
+    let target = opts.activity ?? graph
+    let c = peek(target)
+    if (!c) return commitNow(txs)
+    return during(
+      c.begin({
+        kind: 'fanout',
+        name: 'subscriptions',
+        package: '@yaks/api',
+        parent: parent(target, txs[0]),
+      }),
+      () => commitNow(txs),
+      'ok',
+      () => ({
+        transactions: txs.length,
+        bundles: txs.reduce((n, b) => n + b.length, 0),
+        subscriptions: all().length,
+      }),
+    )
+  }
   let commitNow = (txs: Bundle[][]) => {
     flush()
     backlinks.clear()
@@ -780,12 +803,12 @@ export let subscriptions = (graph: Graph, opts: {
       waiting.txs.push(applied)
       return waiting.done
     }
-    if (!pendingWork) return ordered(() => commitNow([applied]))
+    if (!pendingWork) return ordered(() => fanout([applied]))
     let next = { txs: [applied], done: Promise.resolve() }
     waiting = next
     next.done = ordered(() => {
       waiting = undefined
-      return commitNow(next.txs)
+      return fanout(next.txs)
     }) as Promise<void>
     return next.done
   }
@@ -1111,8 +1134,15 @@ export let subscriptions = (graph: Graph, opts: {
   graph.use({
     name: '@yaks/api',
     hooks: {
-      effect: (bundles) => {
+      effect: (bundles, _tx, _err, context) => {
+        let target = opts.activity ?? graph
+        if (context?.parent && peek(target)) {
+          link(target, bundles, context.parent)
+        }
         let pass = commit(bundles)
+        if (isPromise(pass)) {
+          pass.finally(() => unlink(target, bundles)).catch(() => {})
+        } else unlink(target, bundles)
         if (isPromise(pass)) pass.catch((err) => fault(err, 'subscriptions'))
         return bundles
       },

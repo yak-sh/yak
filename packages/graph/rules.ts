@@ -1,4 +1,4 @@
-import { type Context, during } from '@yaks/trace'
+import { type Context, during, live as observed } from '@yaks/trace'
 // The declarative way to extend a phase. A {@link Hook} is code that takes the
 // bundles; a rule is a query over one bundle in the change plus what the rule
 // produces — and the query expresses both at once. `.entity, +!created` states
@@ -441,53 +441,65 @@ export let fire = (
   }
   if (!hits.length) return bundles
   let firing = (out: Bundle[], [r, ready, i]: [Rule, Ready, number]) => {
-      let patch: Patch = {}
-      // The match guarantees a `+!` component is absent; a `+` component may
-      // already be present.
-      for (let c of ready.gates) patch[c] = {}
-      for (let c of ready.ensures) if (!views[i][c]) patch[c] = {}
-      Object.assign(patch, r.produce)
-      // What the rule sees: the entity's view, the components the `+` and `+!`
-      // clauses just added, and the resources it named. The cast is
-      // unavoidable — which resources are present depends on the rule's own
-      // match, which no static type can express.
-      let got: Record<string, unknown> = {}
-      for (let name of ready.resources) got[name] = hold(name)
-      let bound = { ...views[i], ...patch, ...got } as Bound
-      return after(r.run?.(bound), (made) => {
-        Object.assign(patch, made)
-        patch = resolved(patch)
-        let names = wrote(patch)
-        let read = names.filter((c) => c in tick.resources)
-        if (read.length) {
+    let patch: Patch = {}
+    // The match guarantees a `+!` component is absent; a `+` component may
+    // already be present.
+    for (let c of ready.gates) patch[c] = {}
+    for (let c of ready.ensures) if (!views[i][c]) patch[c] = {}
+    Object.assign(patch, r.produce)
+    // What the rule sees: the entity's view, the components the `+` and `+!`
+    // clauses just added, and the resources it named. The cast is
+    // unavoidable — which resources are present depends on the rule's own
+    // match, which no static type can express.
+    let got: Record<string, unknown> = {}
+    for (let name of ready.resources) got[name] = hold(name)
+    let bound = { ...views[i], ...patch, ...got } as Bound
+    return after(r.run?.(bound), (made) => {
+      Object.assign(patch, made)
+      patch = resolved(patch)
+      let names = wrote(patch)
+      let read = names.filter((c) => c in tick.resources)
+      if (read.length) {
+        throw new Error(
+          `rule ${named(r)} wrote the resource ${
+            read.map((c) => `#${c}`).join(', ')
+          }: resources are read-only`,
+        )
+      }
+      if (ready.checked) {
+        let stray = names.filter((c) => !ready.allowed.has(c))
+        if (stray.length) {
           throw new Error(
-            `rule ${named(r)} wrote the resource ${
-              read.map((c) => `#${c}`).join(', ')
-            }: resources are read-only`,
+            `rule ${named(r)} wrote outside its *write set: ` +
+              stray.join(', '),
           )
         }
-        if (ready.checked) {
-          let stray = names.filter((c) => !ready.allowed.has(c))
-          if (stray.length) {
-            throw new Error(
-              `rule ${named(r)} wrote outside its *write set: ` +
-                stray.join(', '),
-            )
-          }
-        }
-        if (!names.length) return out
-        return [...out, { entity: { eid: views[i].entity.eid }, ...patch }]
-      })
+      }
+      if (!names.length) return out
+      return [...out, { entity: { eid: views[i].entity.eid }, ...patch }]
+    })
   }
   return after(
-    each(hits, [] as Bundle[], tick.tracing ? (out, hit) => {
-      let [r] = hit
-      return during(tick.tracing!.channel.begin({
-        kind: 'rule', name: r.name ?? 'rule', package: '@yaks/graph',
-        parent: tick.tracing!.parent,
-        plugin: tick.owner?.(r) ?? tick.tracing!.plugin,
-      }), () => firing(out, hit))
-    } : firing),
+    each(
+      hits,
+      [] as Bundle[],
+      tick.tracing && observed(tick.tracing)
+        ? (out, hit) => {
+          if (!tick.tracing || !observed(tick.tracing)) return firing(out, hit)
+          let [r] = hit
+          return during(
+            tick.tracing!.channel.begin({
+              kind: 'rule',
+              name: r.name ?? 'rule',
+              package: '@yaks/graph',
+              parent: tick.tracing!.parent,
+              plugin: tick.owner?.(r) ?? tick.tracing!.plugin,
+            }),
+            () => firing(out, hit),
+          )
+        }
+        : firing,
+    ),
     (made) => {
       if (!made.length) return bundles
       // A phase's rules run after its core work, so from `mutate` onwards the

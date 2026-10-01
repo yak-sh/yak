@@ -43,6 +43,8 @@ export type Activity = {
 }
 export type End = { outcome?: Outcome; counts?: Counts }
 export type Span = {
+  /** False after end or after its subscriber recording disconnects. */
+  readonly active?: boolean
   readonly id: string
   readonly start: number
   end: (o?: End) => void
@@ -58,7 +60,10 @@ export type Channel = {
 let channels = new WeakMap<object, Channel>()
 let capacity = 256
 let recordings = new WeakMap<Channel, number>()
-let links = new WeakMap<object, WeakMap<object, { id: string; recording: number }>>()
+let links = new WeakMap<
+  object,
+  WeakMap<object, { id: string; recording: number }>
+>()
 
 let counts = (input?: Counts): Counts | undefined => {
   if (!input) return
@@ -119,7 +124,9 @@ let create = (): Channel => {
       }
     },
     history: (limit = capacity) => {
-      let n = Number.isNaN(limit) ? 0 : Math.min(size, Math.max(0, Math.floor(limit)))
+      let n = Number.isNaN(limit)
+        ? 0
+        : Math.min(size, Math.max(0, Math.floor(limit)))
       let out: Event[] = []
       for (let i = n; i > 0; i--) {
         out.push(ring[(next - i + capacity) % capacity])
@@ -130,12 +137,15 @@ let create = (): Channel => {
       if (!listeners.size) return
       // Copy code metadata before delivering: a listener may mutate its caller.
       a = { ...a }
-      let id = String(++sequence)
+      let id = `${epoch}.${++sequence}`
       let start = performance.now()
       let recording = epoch
       let ended = false
       emit({ ...event(a, id, 'start', start), start })
       return {
+        get active() {
+          return !ended && !!listeners.size && epoch == recording
+        },
         id,
         start,
         end: (o) => {
@@ -157,7 +167,7 @@ let create = (): Channel => {
     instant: (a, o) => {
       if (!listeners.size) return
       return emit({
-        ...event(a, String(++sequence), 'instant', performance.now()),
+        ...event(a, `${epoch}.${++sequence}`, 'instant', performance.now()),
         outcome: o?.outcome,
         counts: counts(o?.counts),
       })
@@ -183,13 +193,12 @@ export let peek = (target: object): Channel | undefined => {
   return found?.active ? found : undefined
 }
 
-
 /** A parent carried through a local callback, never through persisted rows.
  * Both keys matter: a read overlay must not quietly become another graph's
  * recording. Expired recordings cannot supply parents to later subscribers. */
 export let link = (target: object, carrier: object, id: string): void => {
   let c = peek(target)
-  if (!c) return
+  if (!c || !id.startsWith(`${recordings.get(c)}.`)) return
   let at = links.get(target)
   if (!at) links.set(target, at = new WeakMap())
   at.set(carrier, { id, recording: recordings.get(c)! })
@@ -206,16 +215,40 @@ export let unlink = (target: object, carrier: object): void => {
   links.get(target)?.delete(carrier)
 }
 
-export type Context = { channel: Channel; parent?: string; plugin?: string }
+export type Context = {
+  channel: Channel
+  parent?: string
+  plugin?: string
+  recording?: number
+}
+
+/** The recording a producer began in; a reconnect cannot revive its work. */
+export let recording = (c: Channel): number | undefined => recordings.get(c)
+export let live = (ctx: Context): boolean =>
+  ctx.channel.active &&
+  (ctx.recording == null || ctx.recording == recording(ctx.channel))
 
 /** Only the error's category, never its text or properties, is observable. */
 export let outcome = (error: unknown): Outcome => {
   let name = error instanceof Error ? error.name : undefined
+  if (name == 'AbortError') return 'interrupted'
   if (name == 'Checked') return 'check'
   return [
-    'Refused', 'Unsupported', 'SyntaxError', 'Unknown', 'UnknownSession',
-    'Unnamed', 'Unauthorized', 'Denied', 'Paced', 'NotFound', 'Stale', 'Bounced',
-  ].includes(name ?? '') ? 'refused' : 'error'
+      'Refused',
+      'Unsupported',
+      'SyntaxError',
+      'Unknown',
+      'UnknownSession',
+      'Unnamed',
+      'Unauthorized',
+      'Denied',
+      'Paced',
+      'NotFound',
+      'Stale',
+      'Bounced',
+    ].includes(name ?? '')
+    ? 'refused'
+    : 'error'
 }
 
 /** Called only inside a producer's active branch. It preserves a synchronous
@@ -227,11 +260,13 @@ export let during = <T>(
   count?: (value: T) => Counts,
 ): T | Promise<T> => {
   let done = (value: T): T => {
-    span?.end({ outcome: ok, counts: count?.(value) })
+    if (span && span.active !== false) {
+      span.end({ outcome: ok, counts: count?.(value) })
+    }
     return value
   }
   let failed = (error: unknown): never => {
-    span?.end({ outcome: outcome(error) })
+    if (span && span.active !== false) span.end({ outcome: outcome(error) })
     throw error
   }
   try {

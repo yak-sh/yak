@@ -13,6 +13,7 @@
 // that supplies none has it said on the console, as a failure was before.
 
 import { type Bundle, status } from '@yaks/graph'
+import { link, parent, peek, unlink } from '@yaks/trace'
 import { fault, json, refusal } from './refuse.ts'
 import type { Handler } from './route.ts'
 
@@ -141,6 +142,8 @@ let said: Report = (b, err) => {
 /** What {@link served} is told by the host it serves: where a request that
  * broke goes, and how to name the route that answered one. */
 export type Watch = {
+  /** Exact graph identity, even when the handler reads through an overlay. */
+  graph?: object
   report?: Report
   route?: (request: Request) => string | undefined
 }
@@ -154,6 +157,16 @@ export type Watch = {
  */
 export let served =
   (handle: Handler, o: Watch = {}): Handler => async (request) => {
+    let c = o.graph && peek(o.graph)
+    // Nested served handlers share this request's locally trusted parent.
+    let span = c && !parent(o.graph!, request)
+      ? c.begin({
+        kind: 'request',
+        name: o.route?.(request) ?? 'http',
+        package: '@yaks/api',
+      })
+      : undefined
+    if (span) link(o.graph!, request, span.id)
     let began = Date.now()
     let err: unknown
     let answer: Response
@@ -162,6 +175,19 @@ export let served =
     } catch (e) {
       err = e
       answer = json(refusal(e), status(e))
+    }
+    if (span) {
+      if (peek(o.graph!)) {
+        span.end({
+          outcome: answer.status >= 500
+            ? 'error'
+            : answer.status >= 400
+            ? 'refused'
+            : 'ok',
+          counts: { status: answer.status },
+        })
+      }
+      unlink(o.graph!, request)
     }
     if (answer.status < 500 || answer.headers.has('x-request-id')) return answer
     let id = crypto.randomUUID()

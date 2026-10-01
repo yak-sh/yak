@@ -68,8 +68,9 @@
 // lending one effect its code (a terminal running its own transcripts) works
 // that one, and says nothing about the rest.
 
-import type { Bundle, Comp, Eid, Graph, Tx } from '@yaks/graph'
+import type { Bundle, Comp, Eid, Graph, HookContext, Tx } from '@yaks/graph'
 import { after } from '@yaks/fp'
+import { outcome, parent, peek, type Span, unlink } from '@yaks/trace'
 import { derivedEid, detached, Stale, token } from '@yaks/graph'
 import { and, eq } from '@yaks/query'
 import type { VocabDoc } from '@yaks/vocab'
@@ -180,7 +181,7 @@ export type Ctx = {
   /** every registration, declared and observed */
   slots: () => Slot[]
   /** the write callback a run writes through, a generation on */
-  writer: (gen: number) => Write
+  writer: (gen: number, context?: HookContext) => Write
   report: Report
 }
 
@@ -328,8 +329,18 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
 
   // One claimed run: the event rebuilt from what the target holds now, the
   // handler, and the outcome written back under the same claim.
-  let start = (g: Graph, eid: Eid, row: Comp) => {
+  let start = (g: Graph, eid: Eid, row: Comp, cause?: string) => {
     let s = handled(String(row.handler))
+    let c = peek(g)
+    let span: Span | undefined
+    if (c) {
+      span = c.begin({
+        kind: 'effect',
+        name: s?.id ?? 'unhandled',
+        package: '@yaks/effects',
+        parent: cause,
+      })
+    }
     let held: Held = {
       eid,
       handler: String(row.handler),
@@ -366,9 +377,21 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       }
       try {
         if (!s?.run) throw new Error(`no effect is handled as ${row.handler}`)
-        await s.run(event, tx, ctx.writer(Number(row.generation ?? 0)), attempt)
+        await s.run(
+          event,
+          tx,
+          ctx.writer(
+            Number(row.generation ?? 0),
+            span && peek(g) ? { graph: g, parent: span.id } : undefined,
+          ),
+          attempt,
+        )
+        if (peek(g) && span?.active) span.end({ counts: { runs: 1 } })
         await settle({ state: 'done', error: null, next: null, ...free })
       } catch (err) {
+        if (peek(g) && span?.active) {
+          span.end({ outcome: outcome(err), counts: { runs: 1 } })
+        }
         // An error that asks to be tried again is the handler waiting on
         // something outside, expected and kept on the row; it is reported
         // only once nothing will try it again.
@@ -388,12 +411,13 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       }
     }
     held.run = go()
-      .catch((err) =>
-        ctx.report(err, {
+      .catch((err) => {
+        if (peek(g) && span?.active) span.end({ outcome: outcome(err) })
+        return ctx.report(err, {
           handler: String(row.handler),
           event: { kind: 'created', entity: { eid }, name: EFFECT },
         })
-      )
+      })
       .finally(() => running.delete(eid))
     running.set(eid, held)
     return held.run
@@ -668,7 +692,11 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       return after(tx.patch(rows), () => mine)
     },
     start: (owed) => {
-      for (let { eid, row } of owed) start(graph!, eid, row)
+      for (let run of owed) {
+        let cause = peek(graph!) ? parent(graph!, run) : undefined
+        start(graph!, run.eid, run.row, cause)
+        unlink(graph!, run)
+      }
     },
     work: async (g, signal = AbortSignal.abort()) => {
       graph = g

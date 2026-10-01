@@ -48,7 +48,14 @@
 // there.
 
 import { rulesIn, type Vocab } from '@yaks/vocab'
-import { type Context, during, parent, peek } from '@yaks/trace'
+import {
+  type Context,
+  during,
+  live,
+  parent,
+  peek,
+  recording,
+} from '@yaks/trace'
 import { after, each, isPromise } from '@yaks/fp'
 import { type Actor, type Bundle, comps, type Eid } from './bundle.ts'
 import type { Row, Storage, Tx } from './storage.ts'
@@ -199,7 +206,11 @@ export type Graph = {
    * `tombstone`, one that does not exist is absent. Each carries the
    * components `comps` names, or every one when it is left out. A lookup, not
    * a search, and it takes no write lock ({@link Storage.get}). */
-  get: (eids: Eid[], comps?: string[], opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
+  get: (
+    eids: Eid[],
+    comps?: string[],
+    opts?: ReadOpts,
+  ) => Bundle[] | Promise<Bundle[]>
   /** the ids a caller passed → the eids they refer to, for the ones that are
    * not eids already (see {@link Plugin.address}). Only the ids that changed
    * are in the returned map, so a caller reads it as `at.get(id) ?? id`; with
@@ -325,30 +336,30 @@ export let graph = (opts: Options): Graph => {
       ? signed(bundles, opts.actor)
       : bundles
 
-let legacy = <T>(
-      o: ApplyOpts,
-      name: Phase | 'gather' | 'transaction' | 'compose',
-      run: () => T | Promise<T>,
-    ): T | Promise<T> => {
-      if (!o.trace) return run()
-      let start = performance.now()
-      let done = () => {
-        try {
-          o.trace?.(name, performance.now() - start)
-        } catch (e) {
-          console.error('graph trace observer failed', e)
-        }
-      }
+  let legacy = <T>(
+    o: ApplyOpts,
+    name: Phase | 'gather' | 'transaction' | 'compose',
+    run: () => T | Promise<T>,
+  ): T | Promise<T> => {
+    if (!o.trace) return run()
+    let start = performance.now()
+    let done = () => {
       try {
-        let out = run()
-        if (isPromise(out)) return out.finally(done)
-        done()
-        return out
+        o.trace?.(name, performance.now() - start)
       } catch (e) {
-        done()
-        throw e
+        console.error('graph trace observer failed', e)
       }
     }
+    try {
+      let out = run()
+      if (isPromise(out)) return out.finally(done)
+      done()
+      return out
+    } catch (e) {
+      done()
+      throw e
+    }
+  }
 
   let applying = (bundles: Bundle[], o: ApplyOpts, tracing?: Context):
     | Bundle[]
@@ -367,23 +378,36 @@ let legacy = <T>(
       name: Phase | 'gather' | 'transaction' | 'compose',
       run: () => T | Promise<T>,
       plugin?: string,
+      compatibility = true,
     ): T | Promise<T> => {
-      if (!tracing) return legacy(o, name, run)
+      let c = tracing && live(tracing) && peek(g)
+      if (!c) return compatibility ? legacy(o, name, run) : run()
       let before = current
-      let span = tracing.channel.begin({
-        kind: 'phase', name, parent: before, package: '@yaks/graph', plugin,
+      let span = c.begin({
+        kind: 'phase',
+        name,
+        parent: before,
+        package: '@yaks/graph',
+        plugin,
       })
       current = span?.id ?? before
-      let restore = () => { current = before }
+      let restore = () => {
+        current = before
+      }
       try {
-        let out = during(span, () => legacy(o, name, run))
-        if (isPromise(out)) return out.then((value) => {
-          restore()
-          return value
-        }, (error) => {
-          restore()
-          throw error
-        })
+        let out = during(
+          span,
+          () => compatibility ? legacy(o, name, run) : run(),
+        )
+        if (isPromise(out)) {
+          return out.then((value) => {
+            restore()
+            return value
+          }, (error) => {
+            restore()
+            throw error
+          })
+        }
         restore()
         return out
       } catch (error) {
@@ -410,15 +434,34 @@ let legacy = <T>(
       let rules = ruled(name)
       if (rules.length) {
         steps.push((b) =>
-          fire(rules, { vocab, tx, phase: name, bundles: b, resources, of,
-            tracing: tracing ? { channel: tracing.channel, parent: current } : undefined,
-            owner: tracing ? (r) => plugins.find((p) => p.rules?.includes(r))?.name : undefined,
+          fire(rules, {
+            vocab,
+            tx,
+            phase: name,
+            bundles: b,
+            resources,
+            of,
+            tracing: tracing && live(tracing) && peek(g)
+              ? { ...tracing, parent: current }
+              : undefined,
+            owner: tracing && live(tracing) && peek(g)
+              ? (r) => plugins.find((p) => p.rules?.includes(r))?.name
+              : undefined,
           })
         )
       }
-      for (let [plugin, h] of hooks(name)) steps.push((b) => tracing
-        ? timed(name, () => h(b, tx, undefined, { graph: g, parent: current! }), plugin)
-        : h(b, tx))
+      for (let [plugin, h] of hooks(name)) {
+        steps.push((b) =>
+          tracing && live(tracing) && peek(g)
+            ? timed(
+              name,
+              () => h(b, tx, undefined, { graph: g, parent: current }),
+              plugin,
+              false,
+            )
+            : h(b, tx)
+        )
+      }
       return timed(name, () => each(steps, bundles, (b, step) => step(b)))
     }
 
@@ -477,7 +520,9 @@ let legacy = <T>(
                     resources: shared,
                     of: (eid) =>
                       held.get(eid),
-                    tracing: tracing ? { channel: tracing.channel, parent: current, plugin } : undefined,
+                    tracing: tracing && live(tracing) && peek(g)
+                      ? { ...tracing, parent: current, plugin }
+                      : undefined,
                   }),
                   (made) => [...b, ...made.slice(applied.length)],
                 )))
@@ -488,8 +533,17 @@ let legacy = <T>(
         after(
           each(hooks('effect'), b, (out, [plugin, hook]) =>
             observed(plugin, out, () =>
-              tracing
-                ? timed('effect', () => hook(out, outside, undefined, { graph: g, parent: current! }), plugin)
+              tracing && live(tracing) && peek(g)
+                ? timed(
+                  'effect',
+                  () =>
+                    hook(out, outside, undefined, {
+                      graph: g,
+                      parent: current,
+                    }),
+                  plugin,
+                  false,
+                )
                 : hook(out, outside))),
           () =>
             b,
@@ -505,8 +559,13 @@ let legacy = <T>(
     let auditing = (bundles: Bundle[], err: unknown) =>
       each(hooks('audit'), bundles, (b, [plugin, hook]) => {
         try {
-          let out = tracing
-            ? timed('audit', () => hook(b, outside, err, { graph: g, parent: current! }), plugin)
+          let out = tracing && live(tracing) && peek(g)
+            ? timed(
+              'audit',
+              () => hook(b, outside, err, { graph: g, parent: current }),
+              plugin,
+              false,
+            )
             : hook(b, outside, err)
           return isPromise(out)
             ? out.catch((e) => {
@@ -525,7 +584,9 @@ let legacy = <T>(
       let raise = (): never => {
         throw err
       }
-      let done = auditing(bundles, err)
+      let done = tracing && live(tracing) && peek(g)
+        ? timed('audit', () => auditing(bundles, err), undefined, false)
+        : auditing(bundles, err)
       return isPromise(done) ? done.then(raise) : raise()
     }
 
@@ -596,7 +657,9 @@ let legacy = <T>(
                       vocab,
                       ask,
                       (made) => admit(made, vocab, true),
-                      tracing ? { channel: tracing.channel, parent: current } : undefined,
+                      tracing && live(tracing) && peek(g)
+                        ? { ...tracing, parent: current }
+                        : undefined,
                     )
                   },
                   holds,
@@ -652,11 +715,22 @@ let legacy = <T>(
       }
       let observe = (b: Bundle[]) => {
         let defer = o.deferEffects ?? opts.deferEffects
-        if (!defer) return tracing ? timed('effect', () => effects(b)) : effects(b)
+        if (!defer) {
+          return tracing
+            ? timed('effect', () => effects(b), undefined, false)
+            : effects(b)
+        }
         // Sample the calling program's clock while its transaction-scoped
         // context still exists.
         instant ??= o.now ?? opts.clock?.() ?? now
-        defer(() => after(tracing ? timed('effect', () => effects(b)) : effects(b), () => {}))
+        defer(() =>
+          after(
+            tracing
+              ? timed('effect', () => effects(b), undefined, false)
+              : effects(b),
+            () => {},
+          )
+        )
         return b
       }
       return isPromise(committed)
@@ -714,15 +788,30 @@ let legacy = <T>(
     )
   }
 
-  let apply = (bundles: Bundle[], o: ApplyOpts = {}): Bundle[] | Promise<Bundle[]> => {
+  let apply = (
+    bundles: Bundle[],
+    o: ApplyOpts = {},
+  ): Bundle[] | Promise<Bundle[]> => {
     let c = peek(g)
     if (!c) return applying(bundles, o)
+    let epoch = recording(c)
     let span = c.begin({
-      kind: 'apply', name: 'apply', package: '@yaks/graph',
+      kind: 'apply',
+      name: 'apply',
+      package: '@yaks/graph',
       parent: o.parent ?? parent(g, bundles),
     })
-    return during(span, () => applying(bundles, o, { channel: c, parent: span?.id }),
-      o.check ? 'check' : 'ok', (out) => ({ input: bundles.length, output: out.length }))
+    return during(
+      span,
+      () =>
+        applying(bundles, o, {
+          channel: c,
+          parent: span?.id,
+          recording: epoch,
+        }),
+      o.check ? 'check' : 'ok',
+      (out) => ({ input: bundles.length, output: out.length }),
+    )
   }
 
   // The same convenience a tool's arguments get (tool.ts `addressed`), applied
@@ -764,24 +853,27 @@ let legacy = <T>(
     })
   }
 
-  let read = (query: Query, readOpts?: ReadOpts): Bundle[] | Promise<Bundle[]> => {
-      return after(
-        aim(query, address),
-        (q) => {
-          let p = projection(vocab, q)
-          if (p) {
-            return after(
-              storage.rows(p.query, readOpts),
-              (rows) => flat(p.fold(rows)),
-            )
-          }
-          let want = named(vocab, q)
+  let read = (
+    query: Query,
+    readOpts?: ReadOpts,
+  ): Bundle[] | Promise<Bundle[]> => {
+    return after(
+      aim(query, address),
+      (q) => {
+        let p = projection(vocab, q)
+        if (p) {
           return after(
-            storage.read(q, readOpts, want ? [...want] : undefined),
-            (rows) => rows.map(only(want)),
+            storage.rows(p.query, readOpts),
+            (rows) => flat(p.fold(rows)),
           )
-        },
-      )
+        }
+        let want = named(vocab, q)
+        return after(
+          storage.read(q, readOpts, want ? [...want] : undefined),
+          (rows) => rows.map(only(want)),
+        )
+      },
+    )
   }
 
   let g: Graph = {
@@ -801,24 +893,49 @@ let legacy = <T>(
     read: (query, readOpts) => {
       let c = peek(g)
       if (!c) return read(query, readOpts)
-      return during(c.begin({ kind: 'query', name: 'read', package: '@yaks/graph',
-        parent: readOpts?.parent }), () => read(query, readOpts),
-        'ok', (out) => ({ rows: out.length }))
+      return during(
+        c.begin({
+          kind: 'query',
+          name: 'read',
+          package: '@yaks/graph',
+          parent: readOpts?.parent,
+        }),
+        () => read(query, readOpts),
+        'ok',
+        (out) => ({ rows: out.length }),
+      )
     },
     rows: (query, readOpts) => {
       let c = peek(g)
-      if (!c) return after(aim(query, address), (q) => storage.rows(q, readOpts))
-      return during(c.begin({ kind: 'query', name: 'rows', package: '@yaks/graph',
-        parent: readOpts?.parent }),
+      if (!c) {
+        return after(aim(query, address), (q) => storage.rows(q, readOpts))
+      }
+      return during(
+        c.begin({
+          kind: 'query',
+          name: 'rows',
+          package: '@yaks/graph',
+          parent: readOpts?.parent,
+        }),
         () => after(aim(query, address), (q) => storage.rows(q, readOpts)),
-        'ok', (out) => ({ rows: out.length }))
+        'ok',
+        (out) => ({ rows: out.length }),
+      )
     },
     get: (eids, comps, readOpts) => {
       let c = peek(g)
       if (!c) return storage.get(eids, comps)
-      return during(c.begin({ kind: 'get', name: 'get', package: '@yaks/graph',
-        parent: readOpts?.parent }), () => storage.get(eids, comps),
-        'ok', (out) => ({ input: eids.length, rows: out.length }))
+      return during(
+        c.begin({
+          kind: 'get',
+          name: 'get',
+          package: '@yaks/graph',
+          parent: readOpts?.parent,
+        }),
+        () => storage.get(eids, comps),
+        'ok',
+        (out) => ({ input: eids.length, rows: out.length }),
+      )
     },
     apply,
   }

@@ -30,7 +30,7 @@
 // writes only `sync: none` components is a page's own (`own`): only a page
 // holds what it writes, so only a page runs it.
 
-import { type Context, during } from '@yaks/trace'
+import { type Context, during, live } from '@yaks/trace'
 import type { Bundle, Comp, Eid } from './bundle.ts'
 import { derivedEid } from './identity.ts'
 import {
@@ -239,17 +239,24 @@ export let settle = (
               )
             }
             fired.add(key)
-            if (!tracing) made.push(...emitted(r, row, vocab, resource))
-            else {
+            if (!tracing || !live(tracing)) {
+              made.push(...emitted(r, row, vocab, resource))
+            } else {
               let span = tracing.channel.begin({
-                kind: 'rule', name: r.rule.name, package: '@yaks/graph',
-                parent: tracing.parent, plugin: tracing.plugin,
+                kind: 'rule',
+                name: r.rule.name,
+                package: '@yaks/graph',
+                parent: tracing.parent,
+                plugin: tracing.plugin,
               })
-              made.push(...during(span, () => emitted(r, row, vocab, resource)) as Bundle[])
+              made.push(...during(span, () =>
+                emitted(r, row, vocab, resource)) as Bundle[])
             }
           }
         })
-        if (!made.length) return batch
+        if (!made.length) {
+          return batch
+        }
         // Admitted like anything else that reaches the graph: a property this
         // vocabulary does not declare is dropped, and a value it rejects
         // refuses the whole change. A rule is server code, so it is allowed to
