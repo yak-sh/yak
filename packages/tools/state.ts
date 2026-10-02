@@ -30,14 +30,15 @@ export let executionState = (call: Bundle, answers: readonly Bundle[] = []) => {
     component(b, 'output')?.source == call.entity.eid ||
     component(b, 'result')?.call == call.entity.eid
   )
+  let old = component(call, 'execution')?.state
   return own.some((b) => b.refusal || b.exception)
     ? 'failed'
     : own.some((b) => b.result)
     ? 'done'
+    : typeof old == 'string'
+    ? old
     : component(call, 'execution')?.by != null
     ? 'running'
-    : typeof component(call, 'execution')?.state == 'string'
-    ? String(component(call, 'execution')?.state)
     : null
 }
 
@@ -80,6 +81,27 @@ export let executionDerived = (vocab: Vocab): Derived => {
               ),
               lit('failed'),
             ],
+            ...!vocab.prop('execution', 'state')?.computed
+              ? [[
+                exists(
+                  select({
+                    cols: [lit(1)],
+                    from: table('execution', 'old'),
+                    where: and(
+                      eq(col('entity', 'old'), owner),
+                      notNull(col('state', 'old')),
+                    ),
+                  }),
+                ),
+                sub(
+                  select({
+                    cols: [col('state', 'old')],
+                    from: table('execution', 'old'),
+                    where: eq(col('entity', 'old'), owner),
+                  }),
+                ),
+              ] as [Expr, Expr]]
+              : [],
             [has('result', owner, 'call'), lit('done')],
             [
               exists(
