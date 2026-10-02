@@ -1,5 +1,6 @@
 // One socket's peer relay allowance. The vocabulary sets a component's pace;
-// a small transport ceiling also bounds components with no declared pace.
+// each entity gets that pace independently, and a transport ceiling bounds
+// the whole connection even when it moves many entities.
 
 import type { Bundle } from '@yaks/graph'
 
@@ -10,6 +11,7 @@ let BURST = 2
 let CEILING = 16 // at most about sixty unpaced messages a second
 let MAX_PATCHES = 64
 let STRIKES = 8
+let KEYS = 4096
 
 /** Admit a whole relay message or none of it. A rejected patch never replaces
  * the last value the relay accepted. A sustained sender loses its socket. */
@@ -29,7 +31,9 @@ export let admission = (
   return (bundles) => {
     let at = now()
     if (bundles.length > MAX_PATCHES) return 'close'
-    let counts = new Map<string, number>([['', 1]])
+    let counts = new Map<string, { cost: number; span: number }>([
+      ['', { cost: 1, span: CEILING }],
+    ])
     let patches = 0
     for (let b of bundles) {
       // Let the relay's normal admission report malformed bundles.
@@ -37,19 +41,24 @@ export let admission = (
       for (let [comp, patch] of Object.entries(b)) {
         if (comp == 'entity' || comp.startsWith('$')) continue
         if (++patches > MAX_PATCHES) return 'close'
-        if (patch == null || pace(comp) == null) continue
-        counts.set(comp, (counts.get(comp) ?? 0) + 1)
+        let span = pace(comp)
+        if (patch == null || span == null) continue
+        let key = JSON.stringify([b.entity?.eid, comp])
+        counts.set(key, { cost: (counts.get(key)?.cost ?? 0) + 1, span })
       }
     }
     let next = new Map<string, Bucket>()
-    for (let [comp, cost] of counts) {
-      let span = comp ? pace(comp)! : CEILING
-      let was = buckets.get(comp) ?? { at, left: BURST }
+    for (let [key, { cost, span }] of counts) {
+      let was = buckets.get(key) ?? { at, left: BURST }
       let left = Math.min(BURST, was.left + Math.max(0, at - was.at) / span)
       if (left < cost) return refuse(at)
-      next.set(comp, { at, left: left - cost })
+      next.set(key, { at, left: left - cost })
     }
-    for (let [comp, bucket] of next) buckets.set(comp, bucket)
+    for (let [key, bucket] of next) {
+      buckets.delete(key)
+      buckets.set(key, bucket)
+    }
+    while (buckets.size > KEYS) buckets.delete(buckets.keys().next().value!)
     return 'accept'
   }
 }
