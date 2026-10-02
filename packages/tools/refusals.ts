@@ -183,6 +183,8 @@ let interrupted = (row: Bundle, body: string): string | undefined => {
     }
   }
   if (
+    body == 'The previous model request may have completed at the ' +
+        'provider. Inspect it before asking again.' ||
     body == 'Response interrupted.' ||
     body == 'Response interrupted: AbortError: The signal has been aborted'
   ) {

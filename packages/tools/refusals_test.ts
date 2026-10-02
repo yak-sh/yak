@@ -675,3 +675,13 @@ test('the historical allowance sentence is a refusal only as a whole', () => {
     )
   }
 })
+
+test('store recovery warnings keep their interruption evidence', () => {
+  let body = 'The previous model request may have completed at the ' +
+    'provider. Inspect it before asking again.'
+  let answer = row('interrupted', body)
+  let before = structuredClone(answer)
+  assertEquals(refusalPatch(answer), undefined)
+  assertEquals(answer, before)
+  assertThrows(() => refusalPatch(row('interrupted', body + '?')))
+})
