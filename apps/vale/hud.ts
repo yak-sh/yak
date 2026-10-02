@@ -47,7 +47,7 @@ import { STATIONS } from './craft.ts'
 import { type Glyph, glyph } from './glyphs.ts'
 import { fullscreen } from './ui/fullscreen.ts'
 import { ITEMS } from './items.ts'
-import { next, type Task, told, toward } from './journal.ts'
+import { next, type Task, told, toward, tracked } from './journal.ts'
 import type { Spot } from './levels.ts'
 import { cap, type Page, panels, type Spec, type TabSpec } from './panel.ts'
 import type { Quest } from './quests.ts'
@@ -475,40 +475,27 @@ export let hud = (
     while (toasts.children.length > 3) toasts.firstElementChild?.remove()
   }
 
-  // The quests tracked (journal.ts): each pinned one, its title over the
-  // step it is on. With none pinned, how many are under way; with none under
-  // way, who has one on offer, the nearest first.
+  // Pins remain visible across lands; local work fills three extra slots.
   let line = (title: string, says: string) =>
     `<span class=Track_Quest><b>${title}</b><span>${says}</span></span>`
   let tracking = (tasks: Task[], f: Frame) => {
-    let on = tasks.filter((t) => t.state == 'taken')
-    let pinned = tasks.filter((t) => t.pinned).slice(0, 3)
-    if (pinned.length) {
-      return pinned.map((t) => {
-        let s = next(t)
-        return line(
-          esc(t.title),
-          s
-            ? esc(told(s, f.level)) +
-              (s.need ? ` <em>${s.have ?? 0} / ${s.need}</em>` : '')
-            : 'Done!',
-        )
-      }).join('')
+    let shown = tracked(tasks, f.level)
+    if (!shown.length) {
+      return line(
+        'No quests here.',
+        `Open your journal (${cap(TABS.journal.keys[0])})`,
+      )
     }
-    let key = cap(TABS.journal.keys[0])
-    if (on.length) {
-      return line(`${on.length} under way`, `Open your journal (${key})`)
-    }
-    let near = new Set(f.givers.map((g) => g.id))
-    let open = tasks.filter((t) => t.state == 'open')
-    let t = open.find((t) => near.has(t.giver)) ?? open[0]
-    if (!t) {
-      return line('The vale is at peace.', 'Every quest is done. Well walked.')
-    }
-    return line(
-      `${esc(t.from)} has a job for you`,
-      f.talk?.id == t.giver ? 'Say hello.' : esc(told(t.steps[0], f.level)),
-    )
+    return shown.map((t) => {
+      let s = next(t)
+      return line(
+        esc(t.title),
+        s
+          ? esc(told(s, f.level)) +
+            (s.need ? ` <em>${s.have ?? 0} / ${s.need}</em>` : '')
+          : 'Done!',
+      )
+    }).join('')
   }
 
   let hush = () => talk.hidden = true

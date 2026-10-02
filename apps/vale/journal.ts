@@ -5,7 +5,7 @@
 // journal, the tracker on the glass (hud.ts), the map (map.ts) and the
 // compass show them the same way. A task under way is pinned until the hero
 // unpins it, and a quest on offer is pinned once taken from a notice board
-// (notices.ts); the glass tracks the pinned ones, the map rings where each
+// (notices.ts); the glass adds three local tasks to pins, the map rings where each
 // goes next, and the compass points to the first. L or the tray's scroll
 // opens it, and so does a tap on the tracker.
 import { beastId, beastOf, BEASTS } from './beasts.ts'
@@ -44,9 +44,10 @@ export type Step = {
 export type Task = {
   id: string
   title: string
-  /** who asked it, by id and by name, and the level they are in */
+  /** who asked it, by id and by name */
   giver: string
   from: string
+  /** the land this task belongs to */
   level: string
   /** what doing it gives */
   gives: string
@@ -120,7 +121,7 @@ export let quest = (s: Standing): Task => {
     title: q.title,
     giver: q.giver,
     from: who,
-    level: g?.level ?? '',
+    level: q.level ?? g?.level ?? '',
     gives: `${s.award ?? questXp(q)} xp${
       q.gift ? `, ${ITEMS[q.gift]?.name ?? q.gift}` : ''
     }`,
@@ -172,6 +173,46 @@ export let tasksOf = (s: Sheet, views: View[]): Task[] => {
     made.set(s.quests, vale)
   }
   return [...vale, ...views.map((v) => deal(v, !s.unpinned.has(v.eid)))]
+}
+
+/** Pinned tasks everywhere, plus three local tasks: under way before offers,
+ * with the most progress first. Pins neither consume slots nor repeat. */
+export let tracked = (tasks: Task[], here: string): Task[] => {
+  let active = tasks.filter((t) => t.state == 'taken' || t.state == 'open')
+  let progress = (t: Task) => {
+    let steps = t.steps.filter((s) => s.need)
+    let need = steps.reduce((n, s) => n + s.need!, 0)
+    return need
+      ? steps.reduce((n, s) => n + Math.min(s.have ?? 0, s.need!), 0) /
+        need
+      : 0
+  }
+  let local = active.filter((t) => !t.pinned && t.level == here)
+    .sort((a, b) =>
+      Number(b.state == 'taken') - Number(a.state == 'taken') ||
+      progress(b) - progress(a)
+    ).slice(0, 3)
+  return [...active.filter((t) => t.pinned), ...local]
+}
+
+/** The journal's lands, current first; within each, pins and work in progress,
+ * then offers, then completions. */
+export let landsOf = (tasks: Task[], here: string) => {
+  let lands = [...new Set(tasks.map((t) => t.level))]
+    .sort((a, b) =>
+      Number(b == here) - Number(a == here) ||
+      nameOf(a).localeCompare(nameOf(b))
+    )
+  return lands.map((level) => {
+    let rows = tasks.filter((t) => t.level == level && t.state != 'locked')
+    return {
+      level,
+      taken: rows.filter((t) => t.state == 'taken' || t.pinned)
+        .sort((a, b) => Number(b.pinned) - Number(a.pinned)),
+      open: rows.filter((t) => t.state == 'open' && !t.pinned),
+      done: rows.filter((t) => t.state == 'done'),
+    }
+  }).filter((land) => land.taken.length || land.open.length || land.done.length)
 }
 
 /** A step as it reads from level `here`: where it is, when not here. */
@@ -363,21 +404,18 @@ export let journal = (panel: Page, acts: Acts) => {
     `<h3 class=Journal_Head>${head}</h3>${ts.map(summary).join('')}`
   let draw = () => {
     if (!panel.open) return
-    // A quest on offer pinned from a notice board is on its way: to
-    // whoever offers it.
-    let taken = tasks.filter((t) => t.state == 'taken' || t.pinned)
-      .sort((a, b) => Number(b.pinned) - Number(a.pinned))
-    let open = tasks.filter((t) => t.state == 'open' && !t.pinned)
-    let done = tasks.filter((t) => t.state == 'done')
-    let selected = [...taken, ...open, ...done].find((t) => t.id == picked)
+    let lands = landsOf(tasks, here)
+    let selected = tasks.find((t) => t.id == picked && t.state != 'locked')
     if (!selected) picked = null
-    let rows = `<div class=Journal>${group('Under way', taken)}${
-      taken.length
-        ? ''
-        : '<p class=Journal_None>Nothing yet. Whoever has a ! over their head has a job for you.</p>'
-    }${open.length ? group('On offer', open) : ''}${
-      done.length ? group(`Done · ${done.length}`, done) : ''
-    }</div>`
+    let rows = `<div class=Journal>${
+      lands.map(({ level, taken, open, done }) =>
+        `<h2 class=Journal_Head>${esc(nameOf(level))}${
+          level == here ? ' · Here' : ''
+        }</h2>${taken.length ? group('Under way', taken) : ''}${
+          open.length ? group('On offer', open) : ''
+        }${done.length ? group(`Done · ${done.length}`, done) : ''}`
+      ).join('')
+    }${lands.length ? '' : '<p class=Journal_None>No quests yet.</p>'}</div>`
     let content = selected
       ? `<div class=Journal>${task(selected, here)}</div>`
       : '<p class=Journal_None>Select a task to see its steps and rewards.</p>'

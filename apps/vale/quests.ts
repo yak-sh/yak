@@ -59,7 +59,7 @@ export type Quest = {
   giver: string
   /** the quest that must be done first */
   after?: string
-  /** the level what it asks for is found in, when not the giver's own */
+  /** the land it asks you to work in; defaults to the giver's land */
   level?: string
   goal: 'slay' | 'gather'
   /** a creature to slay, by its alias (beasts.ts), or an item kind to
@@ -107,7 +107,10 @@ export let GIVERS: Giver[] = LANDS.flatMap((l) => l.givers)
  * assertEquals(ids.size, QUESTS.length)
  * ```
  */
-export let QUESTS: Quest[] = LANDS.flatMap((l) => l.quests)
+export let QUESTS: Quest[] = LANDS.flatMap((l) => l.quests).map((q) => ({
+  ...q,
+  level: q.level ?? GIVERS.find((g) => g.id == q.giver)!.level,
+}))
 
 /** A new completion is worth the same share of a level as the quest was on
  * the old twenty-level scale. Saved completions keep their original award. */
