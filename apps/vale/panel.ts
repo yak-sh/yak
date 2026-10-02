@@ -31,7 +31,7 @@ export type Panel = Page & {
 }
 
 /** One tab of a panel with tabs: open while the panel is open on it. */
-export type Tab = Page & {
+export type Tab = Panel & {
   /** dot it, while something new waits behind it */
   mark: (on: boolean) => void
 }
@@ -129,7 +129,9 @@ export let panels = (
                         'aria-selected': String(state.pane == leaf.name),
                         'aria-label': leaf.spec!.title,
                         'data-tip': leaf.spec!.title,
-                        'data-tip-key': cap(leaf.spec!.keys[0]),
+                        'data-tip-key': leaf.spec!.keys[0]
+                          ? cap(leaf.spec!.keys[0])
+                          : undefined,
                         onClick: leaf.page.show,
                       },
                       h('span', {
@@ -139,7 +141,8 @@ export let panels = (
                         },
                       }),
                       h('span', { class: 'Panel_TabLabel' }, leaf.spec!.title),
-                      h('kbd', { class: 'Key' }, cap(leaf.spec!.keys[0])),
+                      leaf.spec!.keys[0] &&
+                        h('kbd', { class: 'Key' }, cap(leaf.spec!.keys[0])),
                     )
                   ),
                 )
@@ -161,7 +164,18 @@ export let panels = (
               leaf.page.body.hidden = tabs && state.pane != leaf.name
               return h(
                 Body,
-                { key: leaf.name ?? id, class: 'Panel_Content' },
+                {
+                  key: leaf.name ?? id,
+                  class: 'Panel_Content',
+                  hidden: tabs && state.pane != leaf.name,
+                },
+                leaf.name !== undefined &&
+                  state.heading(`${id}/${leaf.name}`) && h('h2', {
+                    class: 'Panel_Title Panel_Subtitle',
+                    dangerouslySetInnerHTML: {
+                      __html: state.heading(`${id}/${leaf.name}`),
+                    },
+                  }),
                 h('div', { class: 'Panel_Native', ref: leaf.mount }),
               )
             }),
@@ -225,6 +239,9 @@ export let panels = (
       let native = body(doc, true)
       let page: Tab = {
         body: native.node,
+        head: (html) => {
+          state.head(`${id}/${name}`, html)
+        },
         get open() {
           return state.opened == id && state.pane == name
         },

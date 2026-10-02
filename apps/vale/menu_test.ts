@@ -45,6 +45,24 @@ test('voxel slider shows a choice before applying it', () => {
     }
     let settings = menu(panel, o)
     settings.show()
+    let rows = [...document.querySelectorAll<HTMLElement>('[data-select]')]
+    assertEquals(rows.map((row) => row.textContent), [
+      'Audio',
+      'Display',
+      'Controls',
+      'Touch',
+      'Keys',
+    ])
+    assertEquals(rows.every((row) => row.querySelector('.Glyph') != null), true)
+    rows[1].dispatchEvent(new window.Event('click', { bubbles: true }))
+    assertEquals(
+      document.querySelector<HTMLElement>('[data-section=audio]')!.hidden,
+      true,
+    )
+    assertEquals(
+      document.querySelector<HTMLElement>('[data-section=display]')!.hidden,
+      false,
+    )
     let slider = document.querySelector<HTMLInputElement>('[data-voxel]')!
     let button = document.querySelector<HTMLButtonElement>('[data-do=voxel]')!
     let choice = document.querySelector('[data-voxel-choice]')!

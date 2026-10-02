@@ -8,19 +8,12 @@ import { labels } from './status.ts'
 // labels (fx.ts) are never seen through or between the glass: one that would
 // touch it is not shown (`under`).
 //
-// How a panel plugs in. Every sheet that opens over the glass is a panel
-// (panel.ts), one open at a time: the map, the hero's, a station's crafting,
-// the menu, the yaks.app badge, and the ones standing ready below. A panel is
-// a row of SHEETS;
-// `h.panels.<id>` hands its owner a `body` to draw into and `open` to say
-// whether to. Draw only while it is open and only when what it shows changed,
-// as map.ts and pack.ts do. Give it keys to open it, and a tray button with
-// `tray(...)` below if it needs one; one opened from where it is used (a
-// station, a villager) calls `show()`. What is about the hero is a tab of
-// their panel instead, a row of its `tabs`, handed out the same way. Style its
-// body in ui/<Name>.css, one block, from ui/theme.css's tokens; the sheet
-// around it (head, tabs, close, scrolling, safe areas) is ui/Panel.css's and
-// is never restyled per panel.
+// Every interface opens as a tab of one sheet (panel.ts). SHEETS lists its
+// tabs; `h.panels.<id>` gives each owner a body and whether it is open. Draw
+// only while it is open and only when its content changes. A key or tray
+// button opens its tab; a station or villager calls show(). Contextual titles
+// belong to head(), below the shared tabs. Style the content in ui/<Name>.css;
+// the shell, scrolling and safe areas belong to ui/Panel.css.
 //
 // How a button for the thumbs plugs in. `pad(action, face, title)` adds one,
 // pressing its action (input.ts). Touched, each sits in its own slot of the
@@ -165,34 +158,28 @@ let MICS: Record<Mic, string> = {
   spent: "This space's voice is spent for the month",
 }
 
-/** The panels the glass holds, and the keys that open them. The hero's is
- * one panel of tabs, each opened by its own keys (character.ts, pack.ts,
- * board.ts, trades.ts, journal.ts), and by a tap on the hero's frame on
- * themselves. Crafting opens at a station (station.ts), the notices at a
- * village's board (notices.ts), and the deals beside a villager (dealbox.ts).
- * The map and the menu are one size whatever is done in them, so each is as
- * tall as it is; every other sheet keeps one height (ui/Panel.css). */
+/** One panel for every interface, with each tab's icon and opening keys.
+ * Crafting, notices and deals are also opened from their places in the world. */
 export let SHEETS = {
-  about: { title: 'Make this world yours', tall: 'auto' },
-  map: { title: 'Map', keys: ['KeyM'], tall: 'auto' },
-  party: { title: 'Party', keys: ['KeyO'], tall: 'auto' },
   hero: {
-    title: 'Your hero',
+    title: 'Mossvale',
     tabs: {
       character: { title: 'Character', icon: 'user', keys: ['KeyH'] },
       bag: { title: 'Bag', icon: 'backpack', keys: ['KeyB', 'KeyI'] },
       skills: { title: 'Skills', icon: 'sparkles', keys: ['KeyK'] },
       trades: { title: 'Trades', icon: 'hammer', keys: ['KeyP'] },
       journal: { title: 'Journal', icon: 'journal', keys: ['KeyL'] },
+      map: { title: 'Map', icon: 'mountain', keys: ['KeyM'] },
+      party: { title: 'Party', icon: 'users', keys: ['KeyO'] },
+      menu: { title: 'Menu', icon: 'menu', keys: ['Escape'] },
+      craft: { title: 'Crafting', icon: 'anvil', keys: [] },
+      notices: { title: 'Notice board', icon: 'notices', keys: [] },
+      deal: { title: 'Deals', icon: 'handHeart', keys: [] },
+      about: { title: 'About', icon: 'lamp', keys: [] },
     },
   },
-  menu: { title: 'Menu', keys: ['Escape'], tall: 'auto' },
-  craft: { title: 'Crafting' },
-  notices: { title: 'Notice board' },
-  deal: { title: 'Deals' },
-} satisfies Record<string, Spec & { tabs?: Record<string, TabSpec> }>
+} satisfies Record<string, Spec & { tabs: Record<string, TabSpec> }>
 
-// The keys of the hero's tabs.
 let TABS = SHEETS.hero.tabs
 
 /** Build the HUD into `root`. `press` sends a button's action to the game;
@@ -224,13 +211,13 @@ export let hud = (
       }deg">${d}</i><i class=Rose_Tick style="--at:${k * 90 + 45}deg"></i>`
     ).join('') +
       `<i class=Rose_Goal hidden></i><kbd class=Key>${
-        cap(SHEETS.map.keys[0])
+        cap(TABS.map.keys[0])
       }</kbd>`,
     'button',
   )
   tip(rose, {
     name: 'Map',
-    key: cap(SHEETS.map.keys[0]),
+    key: cap(TABS.map.keys[0]),
     says: 'Where you are, where your quest goes next, and who is where.',
   })
   // Where the first quest tracked goes next, on the compass's rim.
@@ -249,16 +236,7 @@ export let hud = (
   tips(root)
 
   let shelf = panels(root, busy)
-  let panel = {
-    about: shelf.add('about', SHEETS.about),
-    map: shelf.add('map', SHEETS.map),
-    party: shelf.add('party', SHEETS.party),
-    ...shelf.book('hero', SHEETS.hero),
-    menu: shelf.add('menu', SHEETS.menu),
-    craft: shelf.add('craft', SHEETS.craft),
-    notices: shelf.add('notices', SHEETS.notices),
-    deal: shelf.add('deal', SHEETS.deal),
-  }
+  let panel = shelf.book('hero', SHEETS.hero)
   about(panel.about)
   badge.addEventListener('click', panel.about.toggle)
   rose.addEventListener('click', panel.map.toggle)
@@ -341,7 +319,7 @@ export let hud = (
     'users',
     {
       name: 'Party',
-      key: cap(SHEETS.party.keys[0]),
+      key: cap(TABS.party.keys[0]),
       says: 'Invitations, members, and where they are.',
     },
     panel.party.toggle,
@@ -358,7 +336,7 @@ export let hud = (
     'menu',
     {
       name: 'Menu',
-      key: cap(SHEETS.menu.keys[0]),
+      key: cap(TABS.menu.keys[0]),
       says: 'Sound, the camera, and every key and touch.',
     },
     panel.menu.toggle,

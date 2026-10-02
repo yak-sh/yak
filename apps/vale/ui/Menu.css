@@ -13,16 +13,14 @@
 }
 
 .Menu_Set {
-  --face: var(--well);
   --tint: var(--muted);
   display: flex;
   align-items: center;
   gap: 0.7rem;
   padding: 0.6rem 0.8rem;
   border: 0;
-  border-radius: var(--radius);
-  background: var(--face);
-  box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--rim) 50%, transparent);
+  background: transparent;
+  border-bottom: 1px solid var(--rim);
   text-align: left;
   color: var(--tint);
   cursor: pointer;
@@ -33,7 +31,6 @@
 }
 
 .Menu_Set-on {
-  --face: color-mix(in srgb, var(--moss) 22%, var(--paper));
   --tint: var(--deep);
 }
 
@@ -107,5 +104,15 @@
 
   & dd {
     margin: 0;
+  }
+}
+
+.Menu_Row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+
+  & .Glyph {
+    flex: none;
   }
 }

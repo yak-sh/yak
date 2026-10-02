@@ -119,6 +119,7 @@
   display: flex;
   flex: 1;
   align-items: end;
+  overflow-x: auto;
   gap: 0.2rem;
   min-width: 0;
 }
@@ -205,4 +206,30 @@
     width: 100%;
     max-height: 90%;
   }
+}
+
+.Panel_Subtitle {
+  padding: 0.5rem 1rem;
+  white-space: normal;
+}
+
+.Panel_Content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.Panel_Native {
+  flex: 1;
+  min-height: 0;
+}
+
+.Panel_Native > .Panel_Body {
+  height: 100%;
+  box-sizing: border-box;
 }

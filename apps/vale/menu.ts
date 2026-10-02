@@ -1,11 +1,11 @@
-// The menu, drawn into its panel (panel.ts): what a player sets for
+// The menu, drawn into its tab (panel.ts): what a player sets for
 // themselves, the vale's sound and camera controls, and every
 // key and touch the vale answers. The tray's last button opens it, and so does
 // Escape when nothing else is open.
-import { glyph } from './glyphs.ts'
+import { type Glyph, glyph } from './glyphs.ts'
 import { SHEETS } from './hud.ts'
 import { type Action, keysOf } from './input.ts'
-import { cap, type Panel } from './panel.ts'
+import { cap, type Page } from './panel.ts'
 import { VOXEL, VOXELS } from './terrain.ts'
 import { split } from './ui/split.ts'
 
@@ -61,11 +61,8 @@ let keys = (swapped: boolean, strafes: boolean) =>
     ...DOES.map(([a, what]) => [kbd(keysOf(a).map(cap)), what]),
     [kbd(['Enter']), 'Chat'],
     ...Object.values(SHEETS).flatMap((s) =>
-      'keys' in s
-        ? [[kbd(s.keys.map(cap)), s.title]]
-        : 'tabs' in s
-        ? Object.values(s.tabs).map((t) => [kbd(t.keys.map(cap)), t.title])
-        : []
+      Object.values(s.tabs).filter((t) => t.keys.length)
+        .map((t) => [kbd(t.keys.map(cap)), t.title])
     ),
   ].map(([k, what]) => `<dt>${k}</dt><dd>${what}</dd>`).join('')
 
@@ -76,18 +73,20 @@ let TOUCH = [
 ].map(([k, what]) => `<dt>${k}</dt><dd>${what}</dd>`).join('')
 
 /** The menu, answering `o`. */
-export let menu = (panel: Panel, o: Settings) => {
+export let menu = (panel: Page, o: Settings) => {
   let panes = split(panel.body)
   let picked = 'audio'
-  let sections = [
-    ['audio', 'Audio'],
-    ['display', 'Display'],
-    ['controls', 'Controls'],
-    ['touch', 'Touch'],
-    ['keys', 'Keys'],
+  let sections: [string, string, Glyph][] = [
+    ['audio', 'Audio', 'sound'],
+    ['display', 'Display', 'video'],
+    ['controls', 'Controls', 'cog'],
+    ['touch', 'Touch', 'handHeart'],
+    ['keys', 'Keys', 'menu'],
   ]
-  let rows = sections.map(([id, title]) =>
-    `<button class=Split_Row data-select=${id}>${title}</button>`
+  let rows = sections.map(([id, title, icon]) =>
+    `<button class="Split_Row Menu_Row" data-select=${id}>${
+      glyph(icon)
+    }<span>${title}</span></button>`
   ).join('')
   let content = ''
   let select = () => {
@@ -135,7 +134,9 @@ export let menu = (panel: Panel, o: Settings) => {
       selected = VOXELS[Number(e.target.value)] ?? o.voxel.current
       let choice = panel.body.querySelector('[data-voxel-choice]')
       if (choice) choice.textContent = `${selected} m`
-      let apply = panel.body.querySelector<HTMLButtonElement>('[data-do=voxel]')
+      let apply = panel.body.querySelector<HTMLButtonElement>(
+        '[data-do=voxel]',
+      )
       if (apply) apply.disabled = selected == o.voxel.current
       let cost = panel.body.querySelector<HTMLElement>('[data-voxel-cost]')
       if (cost) cost.hidden = selected != 0.125

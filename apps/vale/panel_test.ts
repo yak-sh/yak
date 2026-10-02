@@ -4,6 +4,7 @@ import { JSDOM } from 'npm:jsdom@26.1.0'
 import { render } from 'preact'
 import { cap, panels } from './panel.ts'
 import { pageState } from './page-state.ts'
+import { SHEETS } from './hud.ts'
 
 let mounted = async (
   run: (glass: HTMLElement, dom: JSDOM) => void | Promise<void>,
@@ -210,6 +211,60 @@ test('keys, backdrop and close button preserve input, busy and pointer-lock guar
         'Esc',
         'Space',
       ])
+    } finally {
+      manager.dispose()
+      state.dispose()
+    }
+  }))
+
+test('Mossvale opens every interface in one sheet and retains each tab heading', () =>
+  mounted((glass, dom) => {
+    let state = pageState('mossvale-panel-test')
+    let manager = panels(glass, () => false, state)
+    try {
+      let pages = manager.book('hero', SHEETS.hero)
+      equal(glass.querySelectorAll('.Panel_Sheet').length, 1)
+      let buttons = [...glass.querySelectorAll<HTMLButtonElement>('[role=tab]')]
+      for (let [name, page] of Object.entries(pages)) {
+        let button = buttons.find((button) =>
+          button.getAttribute('aria-label') ==
+            SHEETS.hero.tabs[name as keyof typeof pages].title
+        )!
+        ok(button.querySelector('.Glyph'))
+        button.click()
+        equal(manager.open, page)
+        equal(glass.querySelectorAll('.Panel_Content:not([hidden])').length, 1)
+        equal(page.body.hidden, false)
+      }
+      pages.map.head('The valley')
+      pages.map.show()
+      equal(
+        glass.querySelector('.Panel_Content:not([hidden]) h2')?.textContent,
+        'The valley',
+      )
+      pages.craft.head('Forge')
+      pages.craft.show()
+      equal(
+        glass.querySelector('.Panel_Content:not([hidden]) h2')?.textContent,
+        'Forge',
+      )
+      dom.window.dispatchEvent(
+        new dom.window.KeyboardEvent('keydown', { code: 'KeyO' }),
+      )
+      equal(pages.party.open, true)
+      dom.window.dispatchEvent(
+        new dom.window.KeyboardEvent('keydown', { code: 'Escape' }),
+      )
+      equal(manager.open, null)
+      dom.window.dispatchEvent(
+        new dom.window.KeyboardEvent('keydown', { code: 'Escape' }),
+      )
+      equal(pages.menu.open, true)
+      pages.map.show()
+      equal(
+        glass.querySelector('.Panel_Content:not([hidden]) h2')?.textContent,
+        'The valley',
+      )
     } finally {
       manager.dispose()
       state.dispose()
