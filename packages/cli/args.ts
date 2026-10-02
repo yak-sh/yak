@@ -1,7 +1,7 @@
 // The command line, parsed into a tool's arguments. The tool's own input
-// schema is the only grammar there is: `--name value` names a property, and
-// the type that property declares decides whether the argument stays a string,
-// is parsed as JSON, or becomes a number.
+// schema is the only grammar there is: `name=value` and `--name value` name a
+// property, and the type that property declares decides whether the argument
+// stays a string, is parsed as JSON, or becomes a number.
 //
 // Three forms expand a value before its type is ever consulted, because a body
 // is rarely something a person types out: `@path` is that file's text, `-` and
@@ -166,11 +166,11 @@ let restOf = (tool: Grammar): string | undefined => {
 /**
  * The arguments a tool was given, parsed through its own input schema — the
  * one grammar there is. The bare words fill `positional` in order; a final
- * name suffixed `...` takes the remaining words; `--name value`, `--name=value`
- * and a declared short `-n` name a property, a boolean one is a flag, a repeated one builds its
- * list, and `--` ends the options. Every value expands (`@path`, `-`) before
- * its type is consulted, and the whole object is then validated against the
- * schema, which is also what fills in its defaults.
+ * name suffixed `...` takes the remaining words; `name=value`, `--name value`,
+ * `--name=value` and a declared short `-n` name a property, a boolean one is a
+ * flag, a repeated one builds its list, and `--` ends the options. Every value
+ * expands (`@path`, `-`) before its type is consulted, and the whole object is
+ * then validated against the schema, which is also what fills in its defaults.
  *
  * Throws {@link Usage} — exit code 2 — for anything the command line got
  * wrong.
@@ -362,6 +362,22 @@ export let scanned = (
         awaiting = name
         pending = name
       } else put(name, argv[++i])
+      continue
+    }
+    if (!literal && eq > 0) {
+      let name = word.slice(0, eq)
+      if (forward && !props[name]) {
+        spare.push(word)
+        continue
+      }
+      if (!props[name]) {
+        throw new Usage(
+          `Unknown argument: ${name} — ${commandOf(tool)} takes ${
+            listed(Object.keys(props))
+          }`,
+        )
+      }
+      put(name, word.slice(eq + 1))
       continue
     }
     while (at < positional.length && given.has(positional[at])) at++

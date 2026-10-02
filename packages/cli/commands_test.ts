@@ -83,8 +83,43 @@ test('a connector schema is fetched first and its declared grammar wins over an 
   ])
 })
 
-test('a connector takes no guessed positionals and an empty schema takes no arguments', async () => {
-  for (let words of [['matt'], ['person=matt'], ['--unknown=1'], []]) {
+test('a forwarded connector call keeps bare named arguments', async () => {
+  let versions: Listed = {
+    name: 'app_versions',
+    inputSchema: {
+      type: 'object',
+      required: ['space', 'app'],
+      properties: {
+        space: { type: 'string' },
+        app: { type: 'string' },
+      },
+    },
+  }
+  let { ask, calls } = door([versions])
+  let notes: string[] = []
+  assertEquals(
+    await cli(appTools, {
+      argv: ['command', 'app_versions', 'space=yourname', 'app=vale'],
+      host: 'yaks.test',
+      env: () => undefined,
+      ask,
+      out: () => {},
+      note: (line) => notes.push(line),
+    }),
+    0,
+    notes.join('\n'),
+  )
+  assertEquals(
+    calls.at(-1),
+    executed('app_versions', {
+      space: 'yourname',
+      app: 'vale',
+    }),
+  )
+})
+
+test('a connector takes named arguments but no guessed positionals', async () => {
+  for (let words of [['matt'], ['--unknown=1'], []]) {
     let { ask, calls } = door([{
       name: 'where',
       inputSchema: {
@@ -96,6 +131,16 @@ test('a connector takes no guessed positionals and an empty schema takes no argu
     await assertRejects(() => toolCall(ask, 'where', words), Usage)
     assertEquals(calls, [{ method: 'tools/list', params: undefined }])
   }
+  let named = door([{
+    name: 'where',
+    inputSchema: {
+      type: 'object',
+      required: ['person'],
+      properties: { person: { type: 'string' } },
+    },
+  }])
+  assertEquals(await toolCall(named.ask, 'where', ['person=matt']), done)
+  assertEquals(named.calls.at(-1), executed('where', { person: 'matt' }))
   let { ask, calls } = door([{ name: 'app_list' }])
   assertEquals(await toolCall(ask, 'app_list', []), done)
   assertEquals(calls.at(-1), executed('app_list', {}))
@@ -168,11 +213,9 @@ test('shared app command names require a selector before execution', async () =>
   ])
 })
 
-test('apps without positionals accept flags only and invalid inputs never execute', async () => {
+test('apps without positionals accept named arguments and refuse bare words', async () => {
   let flags = { ...recipe, positional: undefined }
-  for (
-    let words of [['Cake'], ['title=Cake'], [], ['--title=Cake', '--unknown=1']]
-  ) {
+  for (let words of [['Cake'], [], ['--title=Cake', '--unknown=1']]) {
     let { ask, calls } = door([], [flags])
     await assertRejects(() => toolCall(ask, 'add_recipe', words), Usage)
     assertEquals(calls, [
@@ -184,6 +227,12 @@ test('apps without positionals accept flags only and invalid inputs never execut
   await toolCall(ask, 'add_recipe', ['--title=Cake', '--enabled=false'])
   assertEquals(
     calls.at(-1),
+    executed('add_recipe', { title: 'Cake', enabled: false }, 'recipes'),
+  )
+  let named = door([], [flags])
+  await toolCall(named.ask, 'add_recipe', ['title=Cake', 'enabled=false'])
+  assertEquals(
+    named.calls.at(-1),
     executed('add_recipe', { title: 'Cake', enabled: false }, 'recipes'),
   )
 })

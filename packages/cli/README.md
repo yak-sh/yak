@@ -408,7 +408,7 @@ await complete([greet], 'greet --name A') // ['Ada']
 ```
 
 `argsFor(tool, argv, reads?)` returns a promise of the typed, validated argument
-object, including schema defaults. It accepts both `--name=value` and
+object, including schema defaults. It accepts `name=value`, `--name=value` and
 `--name value`, declared short options, boolean flags, positional arguments, and
 repeated list options; `--` ends option parsing. Invalid input throws `Usage`.
 File and stdin expansion (`@path`, `-`, `@-`) happens only when the host
@@ -506,10 +506,10 @@ Application commands use `yak command <name> [arguments] --app <app>`, or the
 short form `yak <app> <name> [arguments]`, as the `yak login` account. The
 command's `vocab.json` declares `positional` beside `input`, with a final `...`
 suffix for every remaining bare word, and `short` on the input property it
-shortens. Without `positional`, it takes only `--flags`. Its input schema
-decides each value's type; `@path` reads a file and `-` reads stdin. `--app`
-selects an app when several share a command name. A graph tool with the same
-command name takes precedence.
+shortens. Without `positional`, it takes only named arguments (`name=value` or
+`--name value`). Its input schema decides each value's type; `@path` reads a
+file and `-` reads stdin. `--app` selects an app when several share a command
+name. A graph tool with the same command name takes precedence.
 
 `yak admin tool <name> [arguments]` uses the same grammar, acting as the account
 selected with `--as <account>`, `--owner` or `--admin`. It looks for a connector

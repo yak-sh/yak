@@ -123,7 +123,7 @@ test('a tool with no schema takes nothing', async () => {
   )
 })
 
-test('both flag forms parse the same typed arguments including false', async () => {
+test('all named forms parse the same typed arguments including false', async () => {
   for (
     let [name, value, expected] of [
       ['deploy', 'false', false],
@@ -139,6 +139,10 @@ test('both flag forms parse the same typed arguments including false', async () 
       [name]: expected,
     })
     assertEquals(await args(['--app=r', `--${name}=${value}`]), {
+      app: 'r',
+      [name]: expected,
+    })
+    assertEquals(await args(['app=r', `${name}=${value}`]), {
       app: 'r',
       [name]: expected,
     })
@@ -163,11 +167,13 @@ test('unknown options stay refused without a declared object rest', async () => 
       { name: 'empty', positional: ['args...'] },
     ]
   ) {
-    for (let words of [['--unknown=1'], ['--unknown', '1']]) {
+    for (
+      let words of [['--unknown=1'], ['--unknown', '1'], ['unknown=1']]
+    ) {
       await assertRejects(
         () => argsFor(grammar, words),
         Usage,
-        'Unknown option',
+        'Unknown',
       )
     }
   }
@@ -215,7 +221,7 @@ test('trailing text inflates each remaining word before joining', async () => {
   })
 })
 
-test('an app uses only its declared positionals and property shorts', async () => {
+test('an app uses its declared positionals, shorts and named arguments', async () => {
   let declaration = {
     input: {
       person: { type: 'string' },
@@ -238,9 +244,11 @@ test('an app uses only its declared positionals and property shorts', async () =
     person: 'matt',
     text: 'hello',
   })
-  for (let words of [['matt', 'hello'], ['person=matt', 'text=hello']]) {
-    await assertRejects(() => argsFor(flags, words), Usage)
-  }
+  await assertRejects(() => argsFor(flags, ['matt', 'hello']), Usage)
+  assertEquals(await argsFor(flags, ['person=matt', 'text=hello']), {
+    person: 'matt',
+    text: 'hello',
+  })
   await assertRejects(() => argsFor(flags, ['--person=matt']), Usage)
 })
 
@@ -287,6 +295,14 @@ test('a forwarding grammar keeps remote words intact while taking its selector',
     )
     assertEquals(expanded, 0)
   }
+  assertEquals(
+    await argsFor(forwarded, ['app_versions', 'space=yourname', 'app=vale']),
+    {
+      name: 'app_versions',
+      app: 'vale',
+      args: ['space=yourname'],
+    },
+  )
 })
 
 test('rest array words follow the declared item type', async () => {
