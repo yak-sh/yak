@@ -2,7 +2,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { talkHtml } from './hud.ts'
+import { hud, talkHtml } from './hud.ts'
 import { GIVERS } from './quests.ts'
 import { quests } from './quests/vale.ts'
 import { completion, WELCOME } from './village-tasks.ts'
@@ -95,4 +95,41 @@ test('talking to another hero offers a party invitation', () => {
     ['invite', 'close'],
   )
   assertEquals(document.querySelector('the')?.textContent, undefined)
+})
+
+test('the compass opens the map without a separate fire travel button', () => {
+  let { document, window } = parseHTML(
+    '<html><body><main></main></body></html>',
+  )
+  let globals = {
+    document,
+    MutationObserver: window.MutationObserver,
+    ResizeObserver: class {
+      observe() {}
+    },
+    addEventListener: window.addEventListener.bind(window),
+  }
+  let prior = Object.keys(globals).map((key) =>
+    [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+  )
+  for (let [key, value] of Object.entries(globals)) {
+    Object.defineProperty(globalThis, key, { configurable: true, value })
+  }
+  try {
+    let root = document.querySelector('main')!
+    let h = hud(root, () => {}, () => false)
+    assertEquals(root.querySelector('[data-tip="Travel by fire"]'), null)
+    let compass = root.querySelector<HTMLButtonElement>('[data-tip="Map"]')!
+    assert(compass)
+    assertEquals(h.panels.map.open, false)
+    compass.click()
+    assertEquals(h.panels.map.open, true)
+    compass.click()
+    assertEquals(h.panels.map.open, false)
+  } finally {
+    for (let [key, descriptor] of prior) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor)
+      else Reflect.deleteProperty(globalThis, key)
+    }
+  }
 })
