@@ -92,5 +92,12 @@ test('hosted provider, model and native input override keeps supplied main outpu
   let [entry] = await g.read('.entry&?using')
   assertEquals((entry.using as Comp).input, input)
   assertEquals(await g.get([builder, mainId, output]), before)
-  assertEquals(current(before[1].build as Comp, before[2].built as Comp), true)
+  assertEquals(
+    current(
+      before[1].build as Comp,
+      before[2].built as Comp,
+      !!before[2].chosen,
+    ),
+    true,
+  )
 })

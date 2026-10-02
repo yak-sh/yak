@@ -1,3 +1,4 @@
+import { choices } from '@yaks/builders'
 import { recovering } from './models.ts'
 import { archetypes } from '@yaks/archetype'
 // The Store Durable Object, built out of the packages (T-33810, D-33490): one
@@ -196,7 +197,7 @@ import {
   wakesOf,
 } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
-import { builderModelTool, building, supplying } from './builders.ts'
+import { builderModelTool, building, choosing, supplying } from './builders.ts'
 import type { Env } from './env.ts'
 import { resumed, seeded } from './wake.ts'
 import type { Binding } from './post.ts'
@@ -615,6 +616,7 @@ let routes = new Set([
   '/move',
   '/build',
   '/supply',
+  '/choose',
   '/recover',
   '/ws',
   '/apply',
@@ -931,6 +933,7 @@ export class Store {
         // is how anything addresses a row it wrote last week without having
         // kept the eid. The carrier goes first — the name rides it (T-34390).
         keys(vocab),
+        choices(),
         aliases(),
         blobs(vocab, bytes),
         representations(),
@@ -2708,6 +2711,17 @@ export class Store {
       if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
       try {
         return await supplying(
+          this.#stored(this.#graph).graph,
+          await request.json(),
+        )
+      } catch (e) {
+        return refuse(e, request)
+      }
+    }
+    if (path == '/choose' && request.method == 'POST') {
+      if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
+      try {
+        return await choosing(
           this.#stored(this.#graph).graph,
           await request.json(),
         )

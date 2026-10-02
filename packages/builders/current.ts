@@ -1,9 +1,6 @@
-// Whether an output is current, read and never stored. An output is current
-// while its build still selects its binding and still wants the key the output
-// was made under: a vanished binding marks the build stale, and a changed input
-// gives the build a new key, and either way the output stays as history. A
-// builder downstream selects `.built.current=true`, so what it gathers is what
-// its upstream builds say now, never a point a rebuild dropped.
+// Current outputs are chosen takes of still-selected bindings. A pending
+// reroll keeps playing the chosen take. The legacy branch lasts only through
+// the hosted take conversion, so old stores keep serving during the mover.
 
 import type { DerivedProp } from '@yaks/sql'
 import {
@@ -15,6 +12,7 @@ import {
   join,
   lit,
   ne,
+  notNull,
   or,
   select,
   table,
@@ -32,7 +30,17 @@ export let builtCurrent: DerivedProp = {
       ],
       where: and(
         eq(col('entity', 'u'), owner),
-        eq(col('key', 'b'), col('key', 'u')),
+        or(
+          and(
+            notNull(col('inputs', 'u')),
+            exists(select({
+              cols: [lit(1)],
+              from: table('chosen', 'ch'),
+              where: eq(col('entity', 'ch'), owner),
+            })),
+          ),
+          and(isNull(col('inputs', 'u')), eq(col('key', 'b'), col('key', 'u'))),
+        ),
         or(isNull(col('stale', 'b')), eq(col('stale', 'b'), lit(false))),
       ),
     })),

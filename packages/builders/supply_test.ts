@@ -44,7 +44,10 @@ test('supply is current, costs zero and rebuilds only after input edits', async 
   let buildId = (await buildFor(g, ids.builder, [source]))!
   assertEquals(await outputFor(g, buildId, 'song'), id)
   let [run, output] = await g.get([buildId, id])
-  assertEquals(current(comp(run, 'build'), comp(output, 'built')), true)
+  assertEquals(
+    current(comp(run, 'build'), comp(output, 'built'), !!output.chosen),
+    true,
+  )
   assertEquals(comp(output, 'built').artifact, blob)
   let [call] = await g.get([String(comp(run, 'build').call)])
   assertEquals(comp(call, 'execution').state, 'done')
@@ -59,41 +62,25 @@ test('supply is current, costs zero and rebuilds only after input edits', async 
   await g.apply([{ entity: { eid: source }, doc: { body: 'After' } }])
   await build(g, vocab, { builder: ids.builder }, null)
   assertEquals((await g.read('.call')).length, 2)
-  assertEquals((await g.read('.built.current=true')).length, 0)
+  assertEquals((await g.read('.built.current=true')).length, 1)
   assertEquals(await buildFor(g, ids.builder, [source]), buildId)
   assertEquals(await outputFor(g, buildId, 'song'), id)
 })
 
-test('supply reuses keyed outputs and keeps other slots and links', async () => {
+test('supply adds takes and keeps other chosen slots; replay does not undo a choice', async () => {
   let { g, vocab } = await shop()
   await g.apply(seed())
   let main = await supply(g, vocab, ask(), null)
   let other = await supply(g, vocab, ask('other'), null)
+  let next = await supply(g, vocab, ask(), null)
+  assertEquals(next == main, false)
+  assertEquals((await g.read('.built')).length, 3)
+  assertEquals((await g.read('.built.current=true')).length, 2)
   let buildId = (await buildFor(g, ids.builder, [source]))!
-  // An existing link output is history of a full answer, not this slot's.
-  let [run] = await g.get([buildId])
-  let [call] = await g.get([String(comp(run, 'build').call)])
-  let value = {
-    outputs: [{
-      slot: 'main',
-      inputs: [],
-      components: {},
-      artifact: blob,
-    }, {
-      slot: 'reference',
-      inputs: [],
-      components: { edge: { from: '$main', to: source }, references: {} },
-    }],
-  }
-  await g.apply(await g.storage.tx((tx) => answer(tx, call, value, vocab)), {
-    trusted: true,
-  })
-  let edge = edgeEid(main, 'references', source)
-  assertEquals((await g.get([edge])).length, 1)
-  assertEquals(await supply(g, vocab, ask(), null), main)
-  assertEquals(await supply(g, vocab, ask('other'), null), other)
-  assertEquals((await g.read('.built.current=true')).length, 3)
-  // Replaying the answer effect must also preserve unrelated slots/links.
+  assertEquals(await outputFor(g, buildId), next)
+  assertEquals(await outputFor(g, buildId, 'other'), other)
+  await g.apply([{ entity: { eid: main }, chosen: {} }], { trusted: true })
+  assertEquals(await outputFor(g, buildId), main)
   let replies = await g.read('.output')
   for (let reply of replies) {
     await g.storage.tx((tx) =>
@@ -109,9 +96,8 @@ test('supply reuses keyed outputs and keeps other slots and links', async () => 
       )
     )
   }
-  assertEquals((await g.get([edge])).length, 1)
-  assertEquals((await g.read('.call')).length, 4)
   assertEquals(await outputFor(g, buildId), main)
+  assertEquals((await g.read('.built')).length, 3)
 })
 
 test('supply refuses invalid or ambiguous bindings without writing a call', async () => {

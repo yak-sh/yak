@@ -173,7 +173,7 @@
       "component": true,
       "type": "object",
       "key": true,
-      "description": "the key an output is found by: `<build>/<slot>`, so a rebuild lands on the output already there; a link keeps its ends-derived eid and carries its slot key too"
+      "description": "the key of one take: <build>/<slot>/<call>, so replaying one answer keeps its entity and another answer adds a take"
     },
     "built": {
       "component": true,
@@ -213,18 +213,26 @@
           "reads": [
             "built.build",
             "built.key",
+            "built.inputs",
+            "chosen",
             "build.key",
+            "build.inputs",
             "build.stale"
           ],
-          "description": "its build still selects its binding and still wants the key it was made under; a downstream builder selects only current outputs"
+          "description": "chosen take of a still-selected binding; readers keep playing the chosen take while another attempt is pending"
         },
         "definition": {
           "type": "string",
           "stamped": true,
           "description": "definition fingerprint used to produce this output"
+        },
+        "inputs": {
+          "type": "string",
+          "stamped": true,
+          "description": "input fingerprint that produced this take"
         }
       },
-      "description": "one named output; current when its key equals its non-stale build key"
+      "description": "one retained take in one named output slot; chosen marks the one in use"
     },
     "builder_model": {
       "tool": true,
@@ -363,8 +371,14 @@
     },
     "builder_model_answer": {
       "effect": true,
-      "created": ["attempt", "error", "refusal"],
-      "changed": ["attempt.state"],
+      "created": [
+        "attempt",
+        "error",
+        "refusal"
+      ],
+      "changed": [
+        "attempt.state"
+      ],
       "description": "adapt a model session's reply to a builder tool output once its ask completes"
     },
     "builder_change": {
@@ -423,6 +437,57 @@
           "for",
           "slot",
           "artifact"
+        ]
+      },
+      "idempotent": true
+    },
+    "chosen": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it was staged"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "who staged it"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "what the write was made through"
+        }
+      },
+      "description": "the take in use for its build and slot; server-owned, changed through builder_choose, with at most one choice per slot",
+      "wire": false
+    },
+    "builder_choose": {
+      "tool": true,
+      "noun": "builder",
+      "verb": "choose",
+      "title": "Choose an output take",
+      "description": "Make one retained output the take in use for its build and slot, without a call or spending. Other slots stay chosen as they are.",
+      "input": {
+        "output": {
+          "type": "string",
+          "ref": "built",
+          "description": "output take to use"
+        }
+      },
+      "required": [
+        "output"
+      ],
+      "options": {
+        "positional": [
+          "output"
         ]
       },
       "idempotent": true

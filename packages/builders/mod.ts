@@ -14,3 +14,7 @@ export { modelTool, modelToolEid, render } from './model.ts'
 export { type Supply, supply } from './supply.ts'
 
 export { preserve } from './preserve.ts'
+
+export { choices, choose } from './choice.ts'
+
+export { takePatch, takes } from './takes.ts'

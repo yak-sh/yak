@@ -281,7 +281,8 @@ test('dispatch conversion refuses changes to the old state, envelope or marks', 
   let [written] = await s.query('.entity.eid=old-writer&*')
   assertEquals((written.dispatch as Comp).state, 'queued')
   assertEquals(
-    (await s.query(`${dispatchRule.find}&.entity.eid=old-writer`)).length,
+    (await s.query(`${dispatchRule.find}&.entity.eid=old-writer`))
+      .length,
     1,
   )
   await s.apply(dispatchMove(written))
@@ -444,4 +445,51 @@ test('refusal rehearsal and enabled batches preserve retry-pending provider erro
   assertEquals(await s.query(`.entity.eid=${pending}`), pendingBefore)
   assertEquals(await s.query(`.entity.eid=${ask}`), askBefore)
   assertEquals(await s.query(`.entity.eid=${completed}`), completedBefore)
+})
+
+test('take mover rehearses and converts without calls or lost served outputs', async () => {
+  let { takeRule } = await import('./mover.ts')
+  let { keyEid, keyed } = await import('@yaks/key')
+  let g = await store(0, takeRule)
+  let builder = crypto.randomUUID(), run = crypto.randomUUID()
+  let call = crypto.randomUUID(), output = crypto.randomUUID()
+  let { toolEid } = await import('@yaks/tools')
+  let tool = toolEid('take-test')
+  await g.apply([
+    { entity: { eid: tool }, tool: { name: 'take-test', description: 'test' } },
+    { entity: { eid: builder }, builder: { to: tool }, staged: {} },
+    { entity: { eid: call }, call: { to: tool, source: run, args: {} } },
+    { entity: { eid: run }, build: { builder, key: 'old', call } },
+    {
+      entity: { eid: output },
+      doc: { title: 'Saved' },
+      built: { build: run, slot: 'song', key: 'old', call },
+    },
+    keyed('output_of', output, `${run}/song`),
+  ])
+  let before = await g.query('.built.current=true&*')
+  assertEquals(before.length, 1)
+  let [rehearsed] = await g.rehearse()
+  assertEquals([rehearsed.rows, rehearsed.moved, rehearsed.failed], [
+    1,
+    1,
+    undefined,
+  ])
+  assertEquals(await g.query('.built.current=true&*'), before)
+  g.wake({ ...takeRule, live: 'all' })
+  await g.alarm()
+  assertEquals(await count(g, '.built.current=true'), 1)
+  let [kept] = await g.query(`.entity.eid=${output}&*`)
+  assertEquals((kept.doc as Comp).title, 'Saved')
+  assert(kept.chosen)
+  assertEquals(await count(g, '.call.source.build'), 1)
+  assertEquals(
+    (await g.query(`.entity.eid=${keyEid('output_of', `${run}/song`)}&*`))[0]
+      ?.key,
+    undefined,
+  )
+  let [locator] = await g.query(
+    `.entity.eid=${keyEid('output_of', `${run}/song/${call}`)}&*`,
+  )
+  assertEquals((locator.key as Comp).of, output)
 })

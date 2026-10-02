@@ -32,11 +32,11 @@ an entry that names a model with `using` asks for a turn:
       },
     ])
 
-`using.model` is the model's name (the list below), and `using.instructions` is
-what a conversational model is told before the transcript. Every entry that asks
-for a turn carries its own `using`, so each turn names its model and its
-instructions; an entry without one is part of the transcript the next turn
-reads, and asks for nothing.
+`using.model` is any model name its selected provider serves, and
+`using.instructions` is what a conversational model is told before the
+transcript. Every entry that asks for a turn carries its own `using`, so each
+turn names its model and its instructions; an entry without one is part of the
+transcript the next turn reads, and asks for nothing.
 
 Two more keep a turn cheap. `using.window` is how many of the transcript's
 newest lines the model reads, reaching back to the line that began the turn it
@@ -147,7 +147,7 @@ its answer becomes `built` rows:
 
 Each outer query match gets a durable `build` and a fresh tool `call` when its
 key changes. The model returns named slots with components and the selected
-input ids each used. A slot keeps its id across rebuilds; its citations are
+input ids each used. Each call keeps its own take in a slot; its citations are
 `cites` edges. Query `.build.builder=<builder-id>&*`, then
 `.built.build=<build-id>&*` to find the outputs; what was built for one row now
 is `.built.build.build.for=<row-id>&.built.current=true&*`. A vanished match
@@ -252,3 +252,14 @@ to show the sentence.
 A model's own rate is shared by every app on the platform. A turn that meets it
 is asked again; after three failures in a row the transcript rests as `failed`
 until a new entry asks.
+
+Builder definition edits do not regenerate existing outputs. `builder_build`
+without redo flags builds only new bindings or changed inputs. `outdated: true`
+redoes selected bindings made under an older definition; `rebuild: true` redoes
+every selected binding, including unchanged ones. Both accept `only` and
+`limit`. Try an alternate template or model as a shadow first.
+`.build.outdated=true` finds older definitions; `.built.current=true` keeps
+selecting the chosen take until its binding disappears or another take is
+chosen. A successful redo adds takes, newest chosen by default; `builder_choose`
+chooses a retained earlier output without spending. List all takes with
+`.built.build=<build>&*`; `.chosen` shows the one in use.

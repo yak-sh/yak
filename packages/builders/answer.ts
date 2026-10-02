@@ -1,14 +1,13 @@
 // Every tool returns the same named-output value. Validate it once, then write
-// stable built rows and their citations in one guarded graph change. An
-// output lands on the entity its slot already has in its build, or a new one,
-// and keeps it: its `output_of` key finds it again (build.ts). A reference in
+// retained output takes and their citations in one guarded graph change. Each
+// call has its own entity per slot, and replay keeps it: its `output_of` key finds it again (build.ts). A reference in
 // one output may name a sibling of the same answer as `$<slot>`.
 //
 // An output wearing `edge` is a link, and a link is identified by its ends and
 // its relation (@yaks/edge): it lands on that derived eid, which finds it again
 // and carries its slot and output key like any output. One of its ends is
 // something its answer made, which makes the link this build's alone; a later
-// answer that no longer states it deletes it.
+// answer leaves its links as history and clears their choice.
 
 import {
   type Binding,
@@ -103,7 +102,7 @@ export let parse = (
     for (let [name, value] of Object.entries(item.components)) {
       let info = vocab.comp(name)
       if (
-        !info?.wire || [BUILD, BUILT, 'builder'].includes(name) ||
+        !info?.wire || [BUILD, BUILT, 'builder', 'chosen'].includes(name) ||
         (value != null && !object(value))
       ) throw new Error(`${named} has no writable ${name} component`)
       if (value != null) {
@@ -192,33 +191,47 @@ export let answer = async (
   let source = str(comp(call, 'call')?.source)
   let [run] = await tx.get([source])
   let b = comp(run, BUILD)
-  if (!b || b.call != call.entity.eid) return []
+  if (!b) return []
   let args = comp(call, 'call')?.args as {
     binding?: Binding
     key?: string
+    inputs?: string
+    definition?: string
     supplied?: boolean
   }
-  if (!args?.binding || !args.key || (b.key != null && args.key != b.key)) {
-    return []
-  }
-  // A valid replay of the current call recovers a key cleared by a malformed
-  // companion reply. A call the build moved past can never restore its key.
-  let wanted = { ...run!, [BUILD]: { ...b, key: args.key } }
-  return [{
-    entity: run.entity,
-    [BUILD]: { call: call.entity.eid, key: args.key },
-    $was: {
-      [BUILD]: {
-        call: token(call.entity.eid),
-        key: token(b.key),
-        stale: token(b.stale ?? null),
-      },
+  if (!args?.binding || !args.key) return []
+  let latest = b.call == call.entity.eid
+  let wanted = {
+    ...run!,
+    [BUILD]: {
+      ...b,
+      key: args.key,
+      inputs: args.inputs ?? b.inputs,
+      definition: args.definition ?? b.definition,
     },
-  }, ...await outputs(tx, wanted, call, value, vocab, !args.supplied)]
+  }
+  // A late answer is another retained take, never the choice or desired key.
+  let writes = latest
+    ? [{
+      entity: run.entity,
+      [BUILD]: { call: call.entity.eid, key: args.key },
+      $was: {
+        [BUILD]: {
+          call: token(call.entity.eid),
+          key: token(b.key),
+          stale: token(b.stale ?? null),
+        },
+      },
+    }]
+    : []
+  return [
+    ...writes,
+    ...await outputs(tx, wanted, call, value, vocab, !args.supplied),
+  ]
 }
 
-/** Write an answer's slots using their output_of keys. A supplied slot leaves
- * every other slot alone; a full tool answer drops links it no longer states. */
+/** Write one call's takes. Supply leaves other slot choices alone; a full
+ * answer clears choices for slots it omits without deleting old takes. */
 export let outputs = async (
   tx: Tx,
   run: Bundle,
@@ -230,8 +243,8 @@ export let outputs = async (
   let source = run.entity.eid
   let b = comp(run, BUILD)!
   let args = comp(call, 'call')?.args as { binding: Binding }
-  // Only a nonedge slot's output_of key chooses its owner. Enumeration below
-  // is history for dropped links, never a second way to locate an output.
+  // Only a nonedge slot's take key chooses its owner. Links derive from the
+  // siblings this call made; enumeration below changes choices, never ids.
   let slots = object(value) && Array.isArray(value.outputs)
     ? value.outputs.flatMap((item) =>
       object(item) && object(item.components) &&
@@ -243,10 +256,10 @@ export let outputs = async (
   let owners = await held(
     tx,
     OUTPUT_OF,
-    slots.map((slot) => outputOf(source, slot)),
+    slots.map((slot) => outputOf(source, slot, call.entity.eid)),
   )
   let at = new Map(slots.flatMap((slot) => {
-    let owner = owners.get(outputOf(source, slot))
+    let owner = owners.get(outputOf(source, slot, call.entity.eid))
     return owner ? [[slot, owner] as const] : []
   }))
   let place = (slot: string) => {
@@ -258,10 +271,6 @@ export let outputs = async (
   let prior = await tx.get(eids)
   // The links an earlier answer of this build stated and this one does not.
   let made = await tx.read(`.${BUILT}.build=${source}&*`)
-  let dropped = made.filter((row) =>
-    drop &&
-    row[EDGE] && !eids.includes(row.entity.eid)
-  )
   let have = new Map(prior.map((row) => [row.entity.eid, row]))
   let targets = await tx.get([
     ...new Set(
@@ -269,10 +278,16 @@ export let outputs = async (
     ),
   ])
   let found = new Map(targets.map((row) => [row.entity.eid, row]))
-  let writes: Bundle[] = dropped.map((row) => ({
-    entity: row.entity,
-    $delete: true,
-  }))
+  // A replay never rewrites a take or changes the person's choice.
+  if (made.some((row) => comp(row, BUILT)?.call == call.entity.eid)) return []
+  let newest = b.call == call.entity.eid
+  let slotsMade = new Set(specs.map((spec) => spec.slot))
+  let writes: Bundle[] = !newest
+    ? []
+    : made.filter((row) =>
+      row.chosen && (drop || slotsMade.has(str(comp(row, BUILT)?.slot)))
+    )
+      .map((row) => ({ entity: row.entity, chosen: null }))
   for (let spec of specs) {
     let eid = spec.eid
     let named = spec.slot
@@ -283,11 +298,13 @@ export let outputs = async (
     writes.push({
       entity: { eid },
       ...spec.components,
+      ...newest ? { chosen: {} } : {},
       [BUILT]: {
         build: source,
         slot: spec.slot,
         key: b.key,
         definition: b.definition ?? null,
+        inputs: b.inputs ?? null,
         call: call.entity.eid,
         artifact: spec.artifact ?? null,
       },
@@ -297,7 +314,7 @@ export let outputs = async (
     // release only a key that still names this link, guarding its owner.
     let old = str(before?.slot)
     if (spec.link && before?.build == source && old && old != spec.slot) {
-      let value = outputOf(source, old)
+      let value = outputOf(source, old, call.entity.eid)
       let [row] = await tx.get([keyEid(OUTPUT_OF, value)])
       let owner = comp(row, 'key')?.of
       if (owner != null && owner != eid) {
@@ -310,7 +327,9 @@ export let outputs = async (
         })
       }
     }
-    writes.push(keyed(OUTPUT_OF, eid, outputOf(source, spec.slot)))
+    writes.push(
+      keyed(OUTPUT_OF, eid, outputOf(source, spec.slot, call.entity.eid)),
+    )
     let citations = await tx.read(
       and(eq(`${EDGE}.from`, eid), present('cites')),
     )

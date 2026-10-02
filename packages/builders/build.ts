@@ -66,8 +66,8 @@ export let due = (builder: Comp | undefined, at: string): boolean => {
 // A build and an output keep the eid they were minted with, which says nothing
 // about the builder that made them, and each is found again by a key
 // (@yaks/key): a row at an id derived from what it is the build or output of,
-// whose `key.of` names it. So a rebuild lands on the entity already there,
-// which stays free to be cited, revised and linked like any other.
+// whose `key.of` names it. A new answer adds takes; replay finds the takes
+// of that same call without replacing earlier answers.
 export let BUILD_OF = 'build_of'
 export let OUTPUT_OF = 'output_of'
 
@@ -76,8 +76,9 @@ export let OUTPUT_OF = 'output_of'
 export let buildOf = (builder: Eid, match: string, variant = 'main'): string =>
   `${builder}/${variant}/${match}`
 
-/** What an output's key says: the build it came from, and its slot. */
-export let outputOf = (build: Eid, slot = 'main'): string => `${build}/${slot}`
+/** What one take's key says: build, slot and producing call. */
+export let outputOf = (build: Eid, slot: string, call: Eid): string =>
+  `${build}/${slot}/${call}`
 
 /** The build a builder made for an outer tuple, found by its key. */
 export let buildFor = async (
@@ -90,18 +91,23 @@ export let buildFor = async (
   return (await held(g, BUILD_OF, [value])).get(value)
 }
 
-/** A build's output in one slot, found by its key. */
+/** One call's take in a slot; omitted call means the chosen take. */
 export let outputFor = async (
-  g: Pick<Tx, 'get'>,
+  g: Pick<Tx, 'get' | 'read'>,
   build: Eid,
   slot = 'main',
+  call?: Eid,
 ): Promise<Eid | undefined> => {
-  let value = outputOf(build, slot)
+  if (!call) {
+    return (await g.read(`.built.build=${build}&.chosen&*`))
+      .find((row) => (row.built as Comp).slot == slot)?.entity.eid
+  }
+  let value = outputOf(build, slot, call)
   return (await held(g, OUTPUT_OF, [value])).get(value)
 }
 
-export let current = (build: Comp, built: Comp): boolean =>
-  !build.stale && build.key != null && built.key == build.key
+export let current = (build: Comp, built: Comp, chosen: boolean): boolean =>
+  chosen && !build.stale && built.call != null
 
 /** The entity a binding is built for: the first its outer tuple holds, which
  * `build.for` names so a query can reach it. A builder with no query has

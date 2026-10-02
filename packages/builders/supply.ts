@@ -1,6 +1,6 @@
 // Supply one binding's slot through the same plan and output keys as a tool
-// answer. The call, its zero-dollar answer and its outputs land together, so
-// neither the tool runner nor reconciliation has work to do for this key.
+// answer. Each supply adds a take; its call, zero-dollar answer and choice
+// land together, so no runner work is owed.
 
 import {
   type Actor,
@@ -80,6 +80,7 @@ export let supply = async (
     let p = matches[0]
     if (p.build.startsWith('$')) p.build = crypto.randomUUID()
     let [before] = await tx.get([p.build])
+    p.key = crypto.randomUUID()
     let writes = start(p, before?.build as Comp | undefined, options.eid)
     let [run, call] = writes
     call.call = {

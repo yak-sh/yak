@@ -7,7 +7,7 @@
 // reconciles the builder as them, so what it asks a model spends the space's
 // budget like the builder's other calls. It is how a staged builder is tried
 // on a few rows before its mark comes off.
-import { preserve, type Supply, supply } from '@yaks/builders'
+import { choose, preserve, type Supply, supply, takes } from '@yaks/builders'
 import { watches } from '@yaks/builders/effects'
 import { modelTool } from '@yaks/builders/model'
 import { type Ask, build } from '@yaks/builders/tools'
@@ -65,7 +65,56 @@ export let supplying = async (
   }
 }
 
+export let choosing = async (
+  graph: Graph,
+  body: { output: string; by?: string },
+) => {
+  try {
+    return Response.json({
+      output: await choose(
+        graph,
+        body.output,
+        body.by ? { by: body.by } : null,
+      ),
+    })
+  } catch (e) {
+    if (!(e instanceof CallError)) throw e
+    return Response.json({ error: 'Refused', message: e.message }, {
+      status: 400,
+    })
+  }
+}
+
 let BUILDERS: Row[] = [{
+  name: 'builder_choose',
+  destructive: true,
+  input: {
+    type: 'object',
+    properties: {
+      space: SPACE,
+      app: APP,
+      output: str('the output take to use'),
+    },
+    required: ['app', 'output'],
+  },
+  run: async (ctx, args) => {
+    let { space, app, who, store } = await inApp(ctx, args, true)
+    let r = await store('/choose', {
+      method: 'POST',
+      body: JSON.stringify({
+        output: text(args.output, 'output'),
+        ...who.person ? { by: who.person } : {},
+      }),
+    }, KERNEL)
+    let said = await r.json() as { output?: string; message?: string }
+    if (!r.ok) throw rejected(r.status, said.message ?? '')
+    return {
+      space,
+      text: `chosen ${said.output} in ${space.slug}/${app.slug}`,
+      value: { output: said.output },
+    }
+  },
+}, {
   name: 'builder_build',
   destructive: true,
   openWorld: true,

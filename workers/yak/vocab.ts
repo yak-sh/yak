@@ -453,6 +453,7 @@ let hostedBuilderDoc = pick(builderDoc, [
   'build',
   'build_of',
   'built',
+  'chosen',
   'output_of',
   'builder_open',
   'builder_edit',

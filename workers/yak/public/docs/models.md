@@ -157,7 +157,7 @@ its answer becomes `built` rows:
 
 Each outer query match gets a durable `build` and a fresh tool `call` when its
 key changes. The model returns named slots with components and the selected
-input ids each used. A slot keeps its id across rebuilds; its citations are
+input ids each used. Each call keeps its own take in a slot; its citations are
 `cites` edges. Query `.build.builder=<builder-id>&*`, then
 `.built.build=<build-id>&*` to find the outputs; what was built for one row now
 is `.built.build.build.for=<row-id>&.built.current=true&*`. A vanished match
@@ -269,5 +269,7 @@ redoes selected bindings made under an older definition; `rebuild: true` redoes
 every selected binding, including unchanged ones. Both accept `only` and
 `limit`. Try an alternate template or model as a shadow first.
 `.build.outdated=true` finds older definitions; `.built.current=true` keeps
-selecting their outputs until their inputs change or a redo is explicitly
-requested.
+selecting the chosen take until its binding disappears or another take is
+chosen. A successful redo adds takes, newest chosen by default; `builder_choose`
+chooses a retained earlier output without spending. List all takes with
+`.built.build=<build>&*`; `.chosen` shows the one in use.

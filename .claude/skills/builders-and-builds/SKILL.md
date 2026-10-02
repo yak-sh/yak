@@ -41,10 +41,13 @@ is the reference; this is how to use them well.
   `$region .region; [$sfx .sfx, sfx.region=$region]` is one build per region.
 - `$name` in the template is that variable's value in the binding; inside a
   bracket it renders as the README's `modelTool()` paragraph says.
-- Each output is `built{build, slot, key, call, artifact, current}`, found by
-  its `output_of` key, which says the build and the slot, so a rebuild rewrites
-  the same entity. A slot the next answer leaves out stays as history, not
-  current.
+- Each answer adds `built{build,slot,key,inputs,definition,call,artifact,current}`
+  takes, keyed by build/slot/call. A replay keeps that call's takes. Each slot's
+  newest successful take receives `chosen{at,by,via}` by default; old takes and
+  their sibling links stay queryable. `yak builder choose <output>` chooses an
+  earlier take without spending. The server enforces one choice per build/slot.
+- `built.current` means chosen and the binding still exists. A pending reroll
+  keeps the choice playing. A late answer and a replay do not change it.
 - A build's or an output's eid is minted, never derived from what made it, so
   it is an ordinary entity to cite and link. `buildFor` and `outputFor`
   (@yaks/builders) find one by its key.
@@ -94,7 +97,7 @@ becomes a `cites` edge). Every write lands as one change, or none of it does.
   `{"slot": "needs <item>", "inputs": [], "components": {"edge": {"from":
   "$tome", "to": "<item>"}, "needs": {"count": 2}}}`. It lands on the link's
   own eid (@yaks/edge), carries an `output_of` key for its slot, one end must
-  be a nonedge sibling, and a later answer that leaves it out deletes it.
+  be a nonedge sibling, and a later answer leaves it linked to its take as history.
 - A malformed answer or a model turn that failed for good clears the build's
   key, so the next reconciliation asks again. A refusal answered to the model,
   or a request the runner retries, does not.
@@ -141,8 +144,7 @@ app: `yak admin tool builder_build space=<space> app=<app> builder=<id> …`.
 ## Chaining
 
 A downstream builder selects what an upstream one made with
-`.built.current=true`, so it never gathers an output its upstream dropped or is
-rebuilding. Shadows are never selected. A downstream build's input fingerprint hashes the
+`.built.current=true`, so it gathers the chosen take while a replacement is pending. Shadows are never selected. A downstream build's input fingerprint hashes the
 upstream outputs it binds, so an upstream rebuild flows down by itself.
 
 ## Reading what was built

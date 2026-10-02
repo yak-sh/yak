@@ -71,5 +71,11 @@ test('native input shadows preserve main and reach recorded calls and sessions',
   let [changed] = await g.get([other])
   assertNotEquals((changed.build as Comp).key, (shadow.build as Comp).key)
   assertEquals(await g.get([builder, main, output]), before)
-  assert(current(before[1].build as Comp, before[2].built as Comp))
+  assert(
+    current(
+      before[1].build as Comp,
+      before[2].built as Comp,
+      !!before[2].chosen,
+    ),
+  )
 })

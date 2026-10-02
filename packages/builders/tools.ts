@@ -22,6 +22,7 @@ import { held } from '@yaks/key'
 import { BUILD_OF, buildOf, clock, type Options, reconcile } from './build.ts'
 import { type Desk, modelTool } from './model.ts'
 import { type Supply, supply } from './supply.ts'
+import { choose } from './choice.ts'
 import { preserve } from './preserve.ts'
 
 let str = (v: unknown): string => v == null ? '' : String(v)
@@ -141,6 +142,12 @@ export let runs = (
   options: Omit<Options, 'vocab'> & { desk?: Desk } = {},
 ): Runs => ({
   builder_model: modelTool(options.desk).run,
+  builder_choose: async (
+    call,
+    graph,
+  ) => [
+    said(call, await choose(graph, String(argsOf(call).output), who(call))),
+  ],
   builder_supply: async (call, graph): Promise<Bundle[]> => {
     let output = await supply(
       graph,

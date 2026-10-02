@@ -22,17 +22,26 @@ deno add jsr:@yaks/builders
   binding marks its build stale and retains its outputs; a returning binding
   reuses the same build. An answer that lands after its binding vanished is kept
   too, so a binding returning under the same key has it without asking again.
-- `built{build,slot,key,call,artifact?}` is one named output. It is current when
-  its build is not stale and the two keys match, which `built.current` computes,
-  so a downstream builder selects `.built.current=true` and never gathers a
-  point its upstream dropped. An omitted slot remains as history, with its
-  previous key. Shadow builds are builds of their own and their outputs are not
-  selected by other builders.
-- A build and an output keep the eid they were minted with, which says nothing
-  about what made them, and each is found again by a key (@yaks/key): `build_of`
-  holds `<builder>/<variant>/<match>` and `output_of` holds `<build>/<slot>`. So
-  a rebuild lands on the entity already there, and two reconciliations racing to
-  one binding settle on one build. `buildFor` and `outputFor` read them.
+- `built{build,slot,key,inputs,definition,call,artifact?}` is one retained take
+  of a named slot. `chosen{at,by,via}` marks the take in use, one per
+  build/slot. The newest successful answer is chosen by default. `built.current`
+  means chosen and the binding still exists; a pending replacement keeps the
+  chosen take current. Readers selecting `.built.current=true` need no separate
+  take selection. Shadows remain separate variants, never downstream inputs.
+- Builds and takes keep minted eids, free to cite and link. `build_of` holds
+  `<builder>/<variant>/<match>`. A take's `output_of` holds
+  `<build>/<slot>/<call>`: replay finds that call's takes, a new call adds new
+  ones. `outputFor(graph, build, slot)` finds the chosen take;
+  `outputFor(graph, build, slot, call)` finds that call's take by its key.
+
+  yak builder choose <output>
+
+Choosing spends nothing and does not affect other slots. The choice is
+server-owned and every host enforces one choice per build/slot. All takes are
+queryable with `.built.build=<build>&*`; add `.chosen` for the choice. A late
+answer is retained but does not steal the current choice. Replaying an answer
+also leaves the person's choice alone. A full answer with an omitted slot clears
+that slot's choice, never its historical takes or links.
 
 A changed key writes a fresh `call{to,source,args}` with `source` set to the
 build and `args` containing the frozen binding tree, key, template and using.
@@ -109,10 +118,9 @@ An output wearing `edge{from,to}` and one relation beside it is a link:
 A link is identified by its ends and relation (@yaks/edge), so it lands on that
 derived id and carries an `output_of` key; its slot names it in its answer like
 any output's. One of its ends must be a nonedge sibling output, which makes the
-link this build's alone: an answer that no longer states a link the build's
-earlier answer did deletes it, so `.edge.from=X&.needs` reads what the latest
-answer said, and `.built.current=true` beside it leaves out a link whose build
-is being asked again.
+link this take's alone. An answer that omits a link leaves it as history, not
+chosen. `.built.build=<build>&.references` reads every take's links; add
+`.built.current=true` to read chosen links only.
 
 `modelTool()` is an internal registered tool for model builders. It renders
 `content.body` from the frozen binding (`$name` is a variable's value, or its
@@ -171,6 +179,7 @@ next input change or `builder build`.
 - `@yaks/builders`: vocabulary, `key`, `buildFor`, `outputFor`, `selected`, and
   `reconcile`.
 - `@yaks/builders/model`: `modelTool`, `modelToolEid`, and template `render`.
+- `@yaks/builders/rules`: the one-choice-per-slot invariant.
 - `@yaks/builders/effects`: `watches` and `effects`.
 - `@yaks/builders/tools`: the on-demand `builder build` tool, and `build`, the
   same reconciliation for a host that offers it through a door of its own.
@@ -188,7 +197,8 @@ have one meaning. @yaks/sqlite does.
 without calling its tool or spending money. `for` names the binding's first
 entity, and must identify exactly one binding. Supply works on staged builders,
 not archived ones. Build and output ids are found through their `build_of` and
-`output_of` keys, so a supplied output keeps its id on later rebuilds.
+`output_of` take keys. Each supply adds a take and chooses it; earlier supplied
+artifacts remain linked to the same binding.
 
 `builder_supply` takes the same arguments as named fields. Optional `args` keeps
 provenance (the original prompt, model, loudness audit) beside the frozen
