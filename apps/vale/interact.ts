@@ -104,3 +104,14 @@ export let interaction = (
 
 export let workTarget = (target: ReturnType<typeof interaction>) =>
   target == 'node' || target == 'bench' || target == 'board'
+
+/** Only the chosen target may offer an interaction prompt this frame. */
+export let prompted = <T extends Pick<Job, 'near' | 'bench' | 'board'>>(
+  job: T,
+  target: ReturnType<typeof interaction>,
+): T => ({
+  ...job,
+  near: target == 'node' ? job.near : null,
+  bench: target == 'bench' ? job.bench : null,
+  board: target == 'board' ? job.board : null,
+})

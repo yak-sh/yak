@@ -1053,6 +1053,7 @@ let loop = (t: number) => {
         natural,
       )
       let interactionTarget = interaction(f, job)
+      job = prompted(job, interactionTarget)
       if (interactionTarget != 'talk') f.talk = null
       if (interactionTarget != 'peer') f.peer = null
       let gaze = f.talk ?? f.peer?.body ??

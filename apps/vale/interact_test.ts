@@ -70,3 +70,18 @@ test('friendly selection follows the mouse among reachable villagers', () => {
   equal(choose('near'), 'near')
   equal(choose('gone'), 'pointed')
 })
+
+test('only the selected interaction keeps a prompt', () => {
+  let job = {
+    near: { eid: 'node' },
+    bench: { craft: 'forge' },
+    board: { id: 'board' },
+    doing: { k: 0.5 },
+  } as unknown as Job
+  let peer = prompted(job, 'peer')
+  equal([peer.near, peer.bench, peer.board], [null, null, null])
+  equal(peer.doing, job.doing)
+  let node = prompted(job, 'node')
+  equal(node.near, job.near)
+  equal([node.bench, node.board], [null, null])
+})
