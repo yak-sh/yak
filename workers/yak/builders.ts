@@ -91,6 +91,9 @@ let BUILDERS: Row[] = [{
         "a content.body template to try instead of the builder's own, as a " +
           'shadow variant',
       ),
+      provider: str(
+        "a provider to try instead of the builder's own, as a shadow variant",
+      ),
       model: str(
         "a model to try instead of the builder's own, as a shadow variant",
       ),
@@ -106,6 +109,7 @@ let BUILDERS: Row[] = [{
         : { only: (args.only as unknown[]).map(String) },
       ...args.limit == null ? {} : { limit: Number(args.limit) },
       ...args.template == null ? {} : { template: String(args.template) },
+      ...args.provider == null ? {} : { provider: String(args.provider) },
       ...args.model == null ? {} : { model: String(args.model) },
       ...who.person ? { by: who.person } : {},
     }
