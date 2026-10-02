@@ -37,7 +37,7 @@ test('store ability designs drive grants, skill forms and descriptions', async (
   }
   assertEquals(
     does(formOf('mend', ['kindness'])!, doer),
-    'Read a word of healing. Restores 54 Health.',
+    'Read a word of healing. Restores 54 Health · 18 Healing over 5 s.',
   )
   assertNotMatch(does(ABILITIES.crush, doer), /Stun/)
   assertMatch(

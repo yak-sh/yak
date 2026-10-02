@@ -40,7 +40,7 @@ export let applied = (
   now: number,
   blow: number,
   max: number,
-  id = crypto.randomUUID(),
+  id: string = crypto.randomUUID(),
 ): Status => ({
   id,
   target,
@@ -87,3 +87,13 @@ export let labels = (statuses: Status[], now: number): string =>
   statuses.filter((s) => s.until > now).map((s) =>
     `${s.name.replace(/[<>&"']/g, '')} ${Math.ceil((s.until - now) / 1000)}s`
   ).join(' · ')
+
+/** Refreshing a named source keeps one modifier. Periodic damage/healing
+ * retains its due tick and per-tick amount, rather than delaying it forever. */
+export let refreshed = (held: Status[], next: Status): Status[] => {
+  let prior = held.find((s) => s.id == next.id)
+  let keep = prior && (next.kind == 'dot' || next.kind == 'hot')
+    ? { ...next, next: prior.next, amount: prior.amount }
+    : next
+  return [...held.filter((s) => s.id != next.id), keep]
+}

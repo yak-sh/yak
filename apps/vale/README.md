@@ -51,3 +51,30 @@ yak admin tool app_errors space=yourname app=vale --owner
 Check `app_errors` immediately after every deploy and fix new errors before
 continuing. A feature worktree is not a release source: deploying its snapshot
 can undo another landed change.
+
+Ability seed changes do not rewrite existing Store rows. For this effect-set
+update, generate guarded patches against the previous shipped seed, preserving
+any property the person changed. Run from main after deploying the new schema:
+
+```sh
+mkdir -p /tmp/vale-ability-update
+yak admin query yourname/vale '.ability_design' --admin --json > /tmp/vale-ability-update/live.json
+git show ff0fc0c44:apps/vale/seed/abilities/abilities.json > /tmp/vale-ability-update/before.json
+deno run --allow-read --allow-write bin/vale-ability-update.ts /tmp/vale-ability-update/live.json /tmp/vale-ability-update/before.json /tmp/vale-ability-update/update.json
+yak admin apply yourname/vale @/tmp/vale-ability-update/update.json --admin --check
+yak admin apply yourname/vale @/tmp/vale-ability-update/update.json --admin
+```
+
+Then reread the rows and generate legacy scalar cleanup separately; `effects`
+is guarded and never changed by cleanup. A row without effects is untouched.
+The Store retains removed scalar properties until their stored values are
+cleared, so the cleanup is admitted by its retained schema. The next deploy
+drops those empty properties.
+
+```sh
+yak admin query yourname/vale '.ability_design' --admin --json > /tmp/vale-ability-update/live.json
+deno run --allow-read --allow-write bin/vale-ability-update.ts /tmp/vale-ability-update/live.json /tmp/vale-ability-update/before.json /tmp/vale-ability-update/clean.json clean
+yak admin apply yourname/vale @/tmp/vale-ability-update/clean.json --admin --check
+yak admin apply yourname/vale @/tmp/vale-ability-update/clean.json --admin
+rm -rf /tmp/vale-ability-update
+```

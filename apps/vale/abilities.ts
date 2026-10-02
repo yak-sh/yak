@@ -89,9 +89,9 @@ export let secs = (ms: number): string => `${+(ms / 1000).toFixed(1)} s`
  * import { formOf } from './skills.ts'
  * seedAbilities()
  * let d = { blow: 20, max: 120 }
- * assertEquals(does(ABILITIES.mend, d), 'Read a word of healing. Restores 36 Health.')
+ * assertEquals(does(ABILITIES.mend, d), 'Read a word of healing. Restores 36 Health · 18 Healing over 5 s.')
  * // Kindness mends nearer half, and Mend says so.
- * assertEquals(does(formOf('mend', ['kindness'])!, d), 'Read a word of healing. Restores 54 Health.')
+ * assertEquals(does(formOf('mend', ['kindness'])!, d), 'Read a word of healing. Restores 54 Health · 18 Healing over 5 s.')
  * assertEquals(
  *   does(ABILITIES.rend, d),
  *   'A deep cut. 28 Damage · 32 Bleed Damage over 4 s.',

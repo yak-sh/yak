@@ -331,7 +331,15 @@ export let SKILLS: Record<string, Skill> = {
     row: 2,
     after: 'focus',
     ability: 'blaze',
-    form: { far: 3.5, effects: [{ kind: 'damage', scale: 1.8 }] },
+    form: {
+      far: 3.5,
+      effects: [{ kind: 'damage', scale: 1.8 }, {
+        kind: 'area',
+        radius: 3.5,
+        ms: 6000,
+        effects: [{ kind: 'damage', scale: .4 }],
+      }],
+    },
   },
   wildfire: {
     name: 'Wildfire',

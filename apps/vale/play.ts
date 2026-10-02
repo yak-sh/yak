@@ -38,6 +38,7 @@ import {
   elapsed,
   factor,
   lasting,
+  refreshed,
   type Status,
 } from './status.ts'
 import {
@@ -1784,15 +1785,19 @@ export let game = (
           for (let e of area.effects) {
             if (e.kind == 'damage') land(m, area.blow * e.scale, false, 0)
             if (e.kind == 'dot' || e.kind == 'debuff') {
-              fought.statuses.push(applied(
-                e,
-                m.eid,
-                life,
-                area.name,
-                now,
-                area.blow,
-                area.max,
-              ))
+              fought.statuses = refreshed(
+                fought.statuses,
+                applied(
+                  e,
+                  m.eid,
+                  life,
+                  area.name,
+                  now,
+                  area.blow,
+                  area.max,
+                  `${area.id}:${m.eid}:${life}:${e.kind}`,
+                ),
+              )
             }
           }
         }
@@ -1809,15 +1814,19 @@ export let game = (
               if (n) events.push({ type: 'heal', n, at: at(body, 2) })
             }
             if (e.kind == 'hot' || e.kind == 'buff') {
-              fought.statuses.push(applied(
-                e,
-                me,
-                0,
-                area.name,
-                now,
-                area.blow,
-                s.max,
-              ))
+              fought.statuses = refreshed(
+                fought.statuses,
+                applied(
+                  e,
+                  me,
+                  0,
+                  area.name,
+                  now,
+                  area.blow,
+                  s.max,
+                  `${area.id}:${me}:${e.kind}`,
+                ),
+              )
             }
           }
         }
