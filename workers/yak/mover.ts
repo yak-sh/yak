@@ -36,7 +36,6 @@ import { type Bundle, type Comp, type Row, token } from '@yaks/graph'
 import { isPromise } from '@yaks/fp'
 import { conjoin } from '@yaks/query'
 import { Unknown } from '@yaks/vocab'
-import luna from './luna-move.json' with { type: 'json' }
 import { GIT_STORE, PLATFORM_STORE } from './door.ts'
 
 /** A rule's name: where its stamp is kept in a store's memory, and the
@@ -101,13 +100,7 @@ export let dispatchRule: Rule = {
 
 /** Every rule a release carries. A rule leaves in the release after the sweep
  * reports every store done with it, with the old words it moved out of. */
-export let lunaRule: Rule = {
-  mark: 'yak/store/creature-model/15',
-  find: `.builder&.entity.eid=${luna.builder}&.using.model!=${luna.eid}&*`,
-  move: (row) => [{ entity: row.entity, using: { model: luna.model } }],
-}
-
-export let RULES: Rule[] = [lunaRule]
+export let RULES: Rule[] = []
 
 let str = (v: unknown) => v == null ? '' : String(v)
 
