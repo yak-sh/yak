@@ -1,3 +1,4 @@
+import ArrowUpRight from 'lucide/dist/esm/icons/arrow-up-right.mjs'
 // The app's icon vocabulary. Lucide owns the SVGs; this small name map keeps
 // entity views data-driven and gives unknown views the document face.
 //
@@ -76,6 +77,7 @@ let glyphs: Record<string, IconNode> = {
   box: Box,
   workflow: Workflow,
   settings: Settings,
+  'arrow-up-right': ArrowUpRight,
 }
 
 /** One glyph as Lucide draws it: a 24-unit stroked SVG, sized in pixels. */

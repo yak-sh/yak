@@ -228,3 +228,17 @@ test('the TUI reads a decision and answers by number or preserved custom draft',
     cache.value = {}
   }
 })
+
+test('TUI search can open its query as a page and return with h', async () => {
+  let { searching, searchPage, key } = await import('./App.tsx')
+  let { fields } = await import('../components/fields.tsx')
+  let { mode } = await import('../live.ts')
+  fields.set('search', 'fleet .task')
+  searching.value = true
+  key('\x0f')
+  assertEquals(searchPage.value, 'fleet .task')
+  assertEquals(searching.value, false)
+  mode.value = 'normal'
+  key('h')
+  assertEquals(searchPage.value, null)
+})

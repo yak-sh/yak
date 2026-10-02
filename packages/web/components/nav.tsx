@@ -1,4 +1,4 @@
-import { addressId, entityPath } from '../url.ts'
+import { addressId, entityPath, searchAt } from '../url.ts'
 import { signal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import * as ui from '@yaks/ui'
@@ -265,7 +265,7 @@ export let linkProps = (e: Ent) => ({
 // is how a REMEMBERED route (below) is screened against the same resolver
 // the screen uses — a route naming a dead entity resolves to nothing.
 export let screenTarget = (at = route.value) => {
-  if (allSessionsAt(at)) return null
+  if (allSessionsAt(at) || searchAt(at) != null) return null
   let url = new URL(at, 'http://x')
   let id = addressId(decodeURIComponent(url.pathname.slice(1)))
   let view = url.searchParams.get('v') ?? undefined

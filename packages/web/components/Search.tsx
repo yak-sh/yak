@@ -1,8 +1,8 @@
-import { entityPath } from '../url.ts'
+import { entityPath, searchPath } from '../url.ts'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { type Hit, idOf, kindOrder, plural, uuid } from '../types.ts'
-import { capable, ent, mutate, searchOpen } from '../live.ts'
-import { navigate } from './nav.tsx'
+import { type Hit, idOf, kindOrder, plural } from '../types.ts'
+import { ent, searchOpen } from '../live.ts'
+import { follow } from './nav.tsx'
 import { block } from '@yaks/ui'
 import { Icon } from './icons.tsx'
 import { fields } from './fields.tsx'
@@ -21,12 +21,12 @@ export { searchOpen }
 let Frame = block('div', 'Search', {
   Box: 'div',
   Line: 'div',
-  Board: 'button',
+  Page: 'a',
   Head: 'div',
   Hit: 'div',
   Snip: 'span',
 })
-let { Box, Line, Board, Head, Hit: Row, Snip } = Frame
+let { Box, Line, Page, Head, Hit: Row, Snip } = Frame
 
 // The palette is a NAVIGATOR — you open a board or project, not read mail —
 // so hits group by kind: navigational kinds lead, bulky content kinds
@@ -137,19 +137,6 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
     close()
   }
   let href = (h: Hit) => entityPath(idOf(h.open == h.eid ? h : ent(h.open)))
-  // The board chip's click: the search BECOMES a board — the line is
-  // already a query (terms are text preds, query.ts), so the board saves
-  // it verbatim and stays live. Named by the line; retitle it in place.
-  let board = () => {
-    if (!q.trim()) return
-    let eid = uuid()
-    mutate(
-      { eid, name: 'doc', comp: { title: q.trim(), body: '' } },
-      { eid, name: 'board', $num: true, comp: { query: q.trim() } },
-    )
-    close()
-    navigate(entityPath(eid))
-  }
   // The field's list took its keys (Escape included) before these.
   let key = (e: KeyboardEvent) => {
     if (e.key == 'Escape') return close()
@@ -192,40 +179,26 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
             placeholder='search the graph… (* = prefix, .task.status=done .updated.at=today filter, ⌘⏎ = new tab)'
             onKey={key}
           />
-          {
-            /* The board chip: the line is a live query, and this is its
-              handle. Click saves it as a board and opens it; dragging it
-              onto the canvas drops the SPEC — a text/plain paste payload
-              the canvas already knows how to mint (paste.ts json()). While
-              the chip flies, the veil goes pointer-transparent so the drop
-              hit-tests through to the canvas beneath; a landed drop closes
-              the palette, a cancelled one restores it. */
-          }
           {!!q.trim() && (
-            <Board
-              type='button'
-              draggable={capable('canvas')}
-              data-tip={capable('canvas')
-                ? 'save as board — or drag onto the canvas'
-                : 'save as board'}
-              onClick={board}
+            <Page
+              href={searchPath(q)}
+              draggable
+              aria-label='Open search as page'
+              data-tip='open search as page — or drag its link'
+              onClick={(ev: MouseEvent) => {
+                follow(searchPath(q))(ev)
+                if (ev.defaultPrevented) close()
+              }}
               onDragStart={(ev: DragEvent) => {
-                ev.dataTransfer?.setData(
-                  'text/plain',
-                  JSON.stringify({
-                    doc: { title: q.trim(), body: '' },
-                    board: { query: q.trim() },
-                  }),
-                )
+                let url = new URL(searchPath(q), location.href).href
+                ev.dataTransfer?.setData('text/uri-list', url)
+                ev.dataTransfer?.setData('text/plain', url)
                 setDrag(true)
               }}
-              onDragEnd={(ev: DragEvent) => {
-                if (ev.dataTransfer?.dropEffect != 'none') close()
-                else setDrag(false)
-              }}
+              onDragEnd={() => setDrag(false)}
             >
-              <Icon name='kanban' />
-            </Board>
+              <Icon name='arrow-up-right' />
+            </Page>
           )}
         </Line>
         {err && <Snip>{err}</Snip>}
@@ -268,5 +241,32 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
         })}
       </Box>
     </Frame>
+  )
+}
+
+// The addressed page and the palette share the query door, grouping and tiles.
+export let SearchPage = ({ query }: { query: string }) => {
+  let [hits, setHits] = useState<Hit[]>([])
+  let [err, setErr] = useState('')
+  useEffect(() => {
+    let abort = new AbortController()
+    setHits([])
+    setErr('')
+    if (query.trim()) {
+      queryHits(query, 20, abort.signal).then(
+        (found) => !abort.signal.aborted && setHits(found),
+        (e) => !abort.signal.aborted && setErr(String(e)),
+      )
+    }
+    return () => abort.abort()
+  }, [query])
+  return (
+    <section class='SearchPage'>
+      <h1>Search: {query}</h1>
+      {err && <p>{err}</p>}
+      {group(hits, query).map((h) => (
+        <Entity key={h.eid} eid={h.open} view='Tile' slots={hitSlots(h)} />
+      ))}
+    </section>
   )
 }

@@ -1,3 +1,4 @@
+import { searchAt } from '../url.ts'
 import { entityPath } from '../url.ts'
 import { useEffect, useLayoutEffect } from 'preact/hooks'
 import { idOf } from '../types.ts'
@@ -20,7 +21,7 @@ import {
 } from './nav.tsx'
 import { Peek } from './Peek.tsx'
 import { Run, run } from './Run.tsx'
-import { Search, searchOpen } from './Search.tsx'
+import { Search, searchOpen, SearchPage } from './Search.tsx'
 import { Status } from './Status.tsx'
 import { Entity } from './Entity.tsx'
 import { tips } from '@yaks/ui'
@@ -149,6 +150,7 @@ export let App = () => {
   // defining set, so this is what loads it; a no-op under a whole-graph cache.
   let url = new URL(route.value, 'http://x')
   let sessions = allSessionsAt(route.value)
+  let search = searchAt(route.value)
   let t = sessions ? null : screenTarget()
   let rootEid = t?.eid
   useLayoutEffect(() => rootEid ? routeSub(rootEid) : undefined, [rootEid])
@@ -249,7 +251,9 @@ export let App = () => {
             )}
         </Bar>
         <Body>
-          {sessions
+          {search != null
+            ? <SearchPage query={search} />
+            : sessions
             ? <QueryList eid={allSessionsKey} query={allSessionsQuery} />
             : e
             ? <Entity eid={e.eid} view={view} />

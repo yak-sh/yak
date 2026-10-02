@@ -1697,7 +1697,7 @@ html {
   pointer-events: none;
   opacity: 0.15;
 }
-.Search_Board {
+.Search_Page {
   display: flex;
   align-items: center;
   padding: var(--half-gap);
@@ -1708,7 +1708,7 @@ html {
   border-radius: var(--radius);
   cursor: grab;
 }
-.Search_Board:hover {
+.Search_Page:hover {
   color: var(--text);
   background: var(--soft);
 }
@@ -3658,4 +3658,8 @@ a[data-ref]:hover {
   color: var(--dim);
   font-size: 11px;
   white-space: nowrap;
+}
+
+.SearchPage {
+  padding: 1rem;
 }

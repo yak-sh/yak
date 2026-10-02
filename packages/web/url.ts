@@ -79,3 +79,10 @@ export let normalize = (raw: string) => {
   if (u.pathname != '/') u.pathname = u.pathname.replace(/\/+$/, '')
   return u.href.replace(/\?$/, '')
 }
+
+// A search is a view of the store, not a saved entity.
+export let searchPath = (q: string) => `/?q=${encodeURIComponent(q.trim())}`
+export let searchAt = (at: string): string | null => {
+  let url = new URL(at, 'http://x')
+  return url.pathname == '/' ? url.searchParams.get('q') : null
+}

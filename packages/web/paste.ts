@@ -1,9 +1,10 @@
+import { searchBoard } from '@yaks/canvas'
 // Pasted content → the right entity. Matchers in specificity order: a bare
 // eid or T-123 id lands a card on the EXISTING entity; a URL mints a web
 // entity (rendered as the framed page); JSON minting comps, or carrying a
 // known eid, or shaped like a task, does the obvious; anything else becomes
 // a task — first line title, rest body.
-import { base, cache, findEid, uuid } from './live.ts'
+import { base, cache, capable, findEid, uuid } from './live.ts'
 import { SHORT } from '@yaks/id'
 import { type Change, EID } from './types.ts'
 
@@ -89,6 +90,11 @@ export let pasted = (raw: string): Pasted | null => {
     return eid ? { changes: [], target: eid } : null
   }
   if (/^https?:\/\/\S+$/.test(text)) {
+    let board = capable('canvas')
+      ? searchBoard(text, globalThis.location?.origin ?? 'https://tasks.yak.sh')
+      : null
+    if (board) return json(JSON.stringify(board))
+
     let eid = uuid()
     // Ask the server to freeze the page (fire-and-forget: the answer comes
     // back over the ws as web.frozen_at + a doc with the page title).

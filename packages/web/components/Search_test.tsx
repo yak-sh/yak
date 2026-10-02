@@ -101,3 +101,116 @@ test('search sends only the settled query while typing', async () => {
     }
   }
 })
+
+test('search page uses the palette query door and bare words remain text', async () => {
+  let { SearchPage } = await import('./Search.tsx')
+  let { searchAt, searchPath } = await import('../url.ts')
+  let q = 'fleet .task&!completed'
+  assertEquals(searchAt(searchPath(q)), q)
+  assertEquals(searchAt('/T-1?q=fleet'), null)
+  let host = config.host
+  let priorDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let priorFetch = globalThis.fetch
+  let { document } = parseHTML('<main></main>')
+  let asked: string[] = []
+  config.host = 'tasks.test'
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  globalThis.fetch = (input) => {
+    asked.push(new URL(String(input)).searchParams.get('q')!)
+    return Promise.resolve(Response.json([]))
+  }
+  let root = document.querySelector('main')!
+  try {
+    render(h(SearchPage, { query: 'fleet' }), root)
+    await until(() => asked.length > 0, { label: 'search page query' })
+    assertEquals(asked, ['fleet&.limit=20'])
+    assertEquals(root.textContent, 'Search: fleet')
+  } finally {
+    render(null, root)
+    config.host = host
+    globalThis.fetch = priorFetch
+    if (priorDocument) {
+      Object.defineProperty(globalThis, 'document', priorDocument)
+    } else delete (globalThis as Record<string, unknown>).document
+  }
+})
+
+test('search chip is a draggable link, modifiers keep native navigation', async () => {
+  let { fields } = await import('./fields.tsx')
+  let { route } = await import('./nav.tsx')
+  let priorDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let priorLocation = Object.getOwnPropertyDescriptor(globalThis, 'location')
+  let priorHistory = Object.getOwnPropertyDescriptor(globalThis, 'history')
+  Object.defineProperty(globalThis, 'history', {
+    value: { pushState: () => {} },
+    configurable: true,
+  })
+  let { document, window } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  Object.defineProperty(globalThis, 'location', {
+    value: { href: 'https://tasks.test/T-1' },
+    configurable: true,
+  })
+  let root = document.querySelector('main')!
+  let oldRoute = route.value
+  try {
+    fields.set('search', 'fleet .task')
+    searchOpen.value = true
+    render(h(Search, { open: () => {} }), root)
+    let link = root.querySelector('a.Search_Page')!
+    assertEquals(link.getAttribute('href'), '/?q=fleet%20.task')
+    assertEquals(link.hasAttribute('draggable'), true)
+    let payload: Record<string, string> = {}
+    let drag = new window.Event('dragstart', { bubbles: true })
+    Object.assign(drag, {
+      dataTransfer: { setData: (k: string, v: string) => payload[k] = v },
+    })
+    link.dispatchEvent(drag)
+    assertEquals(payload, {
+      'text/uri-list': 'https://tasks.test/?q=fleet%20.task',
+      'text/plain': 'https://tasks.test/?q=fleet%20.task',
+    })
+    for (
+      let props of [
+        { metaKey: true, button: 0 },
+        { ctrlKey: true, button: 0 },
+        { button: 1 },
+      ]
+    ) {
+      let ev = new window.Event('click', { bubbles: true, cancelable: true })
+      Object.assign(ev, props)
+      link.dispatchEvent(ev)
+      assertEquals(ev.defaultPrevented, false)
+      assertEquals(searchOpen.value, true)
+    }
+    let ev = new window.Event('click', { bubbles: true, cancelable: true })
+    Object.assign(ev, { button: 0 })
+    link.dispatchEvent(ev)
+    assertEquals(ev.defaultPrevented, true)
+    assertEquals(route.value, '/?q=fleet%20.task')
+    assertEquals(searchOpen.value, false)
+  } finally {
+    render(null, root)
+    fields.set('search', '')
+    searchOpen.value = false
+    route.value = oldRoute
+    for (
+      let [key, desc] of [['history', priorHistory], [
+        'document',
+        priorDocument,
+      ], [
+        'location',
+        priorLocation,
+      ]] as const
+    ) {
+      if (desc) Object.defineProperty(globalThis, key, desc)
+      else delete (globalThis as Record<string, unknown>)[key]
+    }
+  }
+})

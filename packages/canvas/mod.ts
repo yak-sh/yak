@@ -54,3 +54,5 @@ export * from './geom.ts'
 export * from './view.ts'
 export * from './place.ts'
 export * from './plugin.ts'
+
+export * from './search.ts'

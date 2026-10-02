@@ -1,3 +1,4 @@
+import { searchAt, searchPath } from '../url.ts'
 // The TUI app: browse the first board with vim keys. Everything
 // below this file is shared with the web — same cache, same registry, same
 // mode signal. Only Board and the task Full are overridden (columns become
@@ -221,6 +222,11 @@ let pointed = () => {
   let href = link(root, spot())
   if (!href?.startsWith('/')) return undefined
   let url = new URL(href, 'http://x')
+  let query = searchAt(href)
+  if (query != null) {
+    searchPage.value = query
+    return undefined
+  }
   let id = decodeURIComponent(url.pathname.slice(1))
   let v = url.searchParams.get('v')
   let seen = (eid: string) => {
@@ -234,17 +240,24 @@ let pointed = () => {
 
 // One step further along the trail, unless it is already there.
 let step = (eid: string): boolean => {
+  searchPage.value = null
   if (trail.value.at(-1) == eid) return false
   trail.value = [...trail.value, eid]
   return true
 }
 
 let enter = (): boolean => {
-  let s = trail.value.length || owner.value ? pointed() : selected()
+  let s = searchPage.value != null || trail.value.length || owner.value
+    ? pointed()
+    : selected()
   return !!s && step(s)
 }
 
 let back = () => {
+  if (searchPage.value != null) {
+    searchPage.value = null
+    return
+  }
   trail.value = trail.value.slice(0, -1)
   mode.value = 'normal'
 }
@@ -688,6 +701,7 @@ export let key = (k: string) => {
 // under it. The arrows walk the hits once the field's list is closed; Enter
 // opens the picked one.
 export let searching = signal(false)
+export let searchPage = signal<string | null>(null)
 let hitPick = signal(0)
 let SEARCH = 'search'
 let found: Hit[] = []
@@ -700,6 +714,11 @@ let closeSearch = () => {
 }
 
 let searchKey = (k: string) => {
+  if (k == '\x0f') {
+    searchPage.value = fields.text(SEARCH).trim()
+    closeSearch()
+    return
+  }
   if (fieldKey(SEARCH, k)) return
   if (k == '\x1b') closeSearch()
   else if (k == '\r') {
@@ -742,7 +761,7 @@ export let TSearch = () => {
         </div>
       ))}
       <div class='TSearch_Hint'>
-        ↑/↓ choose · Enter open · Tab complete · Esc close
+        ↑/↓ choose · Enter open · Ctrl-O search page · Tab complete · Esc close
       </div>
     </div>
   )
@@ -877,12 +896,30 @@ export let App = () => {
         ? <Guide />
         : navigationOpen.value
         ? <TNavigation />
+        : searchPage.value != null
+        ? <TSearchPage query={searchPage.value} />
         : here
         ? <Entity eid={here} view={viewOf(here)} />
         : owner.value
         ? <Entity eid={owner.value} view='Inbox' />
         : <div>Inbox needs a configured owner.</div>}
       <TStatus />
+    </div>
+  )
+}
+
+export let TSearchPage = ({ query }: { query: string }) => {
+  let found = group(useHits(query, 20, hits), query)
+  return (
+    <div class='TSearch'>
+      <div class='TSearch_Title'>Search: {query}</div>
+      <a href={searchPath(query)}>{searchPath(query)}</a>
+      {found.map((h) => (
+        <div class='TRow' key={h.eid}>
+          <a href={`/${idOf(h)}`}>{idOf(h)} {h.title || '(untitled)'}</a>{' '}
+          {h.kind}
+        </div>
+      ))}
     </div>
   )
 }
