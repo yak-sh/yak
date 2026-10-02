@@ -1,3 +1,12 @@
 /* Bridges around still-native domain bodies must not add a formatting box.
    Bodies, canvas/drafts, scroll and the fixed list/detail contract stay put. */
-.Panel_Mount, .Panel_Content, .Panel_Native { display: contents; }
+.Panel_Mount,
+.Panel_Content,
+.Panel_Native {
+  display: contents;
+}
+
+/* A page heading gap is not space between the shell tabs and their pane. */
+.Head.Panel_Head + .Panel_Content {
+  margin-top: 0;
+}

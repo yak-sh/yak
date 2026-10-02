@@ -77,5 +77,11 @@
 }
 
 /* Old class contracts keep their exact hitbox until their own port. */
-.Button.Panel_Tab, .Button.Orb, .Button.Btn { min-height: 0; }
-.Button.Panel_Tab { font: inherit; }
+.Button.Panel_Tab,
+.Button.Orb,
+.Button.Btn {
+  min-height: 0;
+}
+.Button.Panel_Tab {
+  box-shadow: none;
+}
