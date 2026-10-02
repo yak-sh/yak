@@ -643,7 +643,7 @@ export let react = async (
       unfinished,
       {
         entity: unfinished.entity,
-        attempt: { state: null, by: null },
+        attempt: { by: null },
         interrupted: { code: 'restart' },
         ...!deps.streaming
           ? {
@@ -1038,7 +1038,7 @@ export let react = async (
         },
       }
       : {},
-    attempt: { state: null, by: deps.owner ?? session },
+    attempt: { by: deps.owner ?? session },
   })
   const stream = new Map<
     string,
@@ -1177,7 +1177,7 @@ export let react = async (
             let through = forced.chunk.at(-1)!
             let step = await finish(ask, {
               entity: ask.entity,
-              attempt: { state: null, by: null },
+              attempt: { by: null },
               interrupted: { code: 'superseded' },
             }, [
               line({
@@ -1221,7 +1221,7 @@ export let react = async (
       ask,
       {
         entity: ask.entity,
-        attempt: { state: null, by: null },
+        attempt: { by: null },
         ...retried
           ? { provisional: { note: 'Provider retry still owed' } }
           : {},
@@ -1283,7 +1283,7 @@ export let react = async (
     ...reply.cost == null
       ? {}
       : { cost: { dollars: reply.cost, reported: reply.costReported ?? true } },
-    attempt: { state: null, by: null },
+    attempt: { by: null },
   }
   let added: Bundle[] = [finalAsk]
   let textIndex = 0
@@ -1375,7 +1375,7 @@ export let react = async (
         ask,
         {
           entity: ask.entity,
-          attempt: { state: null, by: null },
+          attempt: { by: null },
           interrupted: { code: 'superseded' },
         },
         [

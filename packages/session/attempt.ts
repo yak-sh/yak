@@ -11,11 +11,9 @@ import {
   eq,
   exists,
   type Expr,
-  fn,
   lit,
   notNull,
   select,
-  sub,
   table,
   when,
 } from '@yaks/sql'
@@ -24,8 +22,6 @@ export let attemptState = (ask: Bundle) =>
   ask.interrupted
     ? 'interrupted'
     : (ask.attempt as Comp | undefined)?.by != null
-    ? 'inflight'
-    : (ask.attempt as Comp | undefined)?.state == 'inflight'
     ? 'inflight'
     : 'completed'
 
@@ -59,17 +55,7 @@ export let attemptDerived = (vocab: Vocab): Derived => ({
             lit('inflight'),
           ],
         ],
-        vocab.prop('attempt', 'state')?.computed ? lit('completed') : fn(
-          'coalesce',
-          sub(
-            select({
-              cols: [col('state', 'old')],
-              from: table('attempt', 'old'),
-              where: eq(col('entity', 'old'), owner),
-            }),
-          ),
-          lit('completed'),
-        ),
+        lit('completed'),
       ),
   },
 })

@@ -79,7 +79,7 @@ export let compactAsk = async (
       entry: { session: conversation },
       notice: {},
       ask: { to: model, through: input },
-      attempt: { state: null, by: conversation },
+      attempt: { by: conversation },
     },
   ])
   // `using` admits runner work. Add it only with completion, when the
@@ -100,7 +100,7 @@ export let compactAsk = async (
       {
         entity: { eid: ask },
         using,
-        attempt: { state: null, by: null },
+        attempt: { by: null },
         ...e instanceof ModelError && e.retry
           ? { interrupted: { code: e.code } }
           : {},
@@ -130,7 +130,7 @@ export let compactAsk = async (
     {
       entity: { eid: ask },
       using,
-      attempt: { state: null, by: null },
+      attempt: { by: null },
       ...empty ? { error: { code: empty.code } } : {},
       ...served.model.mark?.(compacted),
       ...compacted.usage ? { usage: compacted.usage } : {},

@@ -103,7 +103,6 @@ import {
   type Raw,
   render,
   select,
-  sub,
   table,
   val,
 } from '@yaks/sql'
@@ -112,7 +111,6 @@ import {
   identity as inspectIdentity,
   inspect as inspectStorage,
   schema,
-  storage as storedRows,
 } from '@yaks/sqlite'
 import {
   driver,
@@ -267,6 +265,7 @@ import { apex, url } from './host.ts'
 import {
   documented,
   install,
+  lifecycleColumns,
   rebuild,
   recut,
   requestIds,
@@ -802,6 +801,7 @@ export class Store {
     // index, trigger and view from the vocabulary in the same transaction.
     if (held) recut(this.#sql)
     requestIds(this.#sql, vocab)
+    lifecycleColumns(this.#sql, vocab)
     for (let stmt of blobSchema()) this.#sql.query(stmt)
     let unfit = install(this.#sql, vocab, blobRead(vocab))
     for (let e of unfit) defect(e, { request: 'schema fit', store: name })
@@ -1901,38 +1901,15 @@ export class Store {
   // The store as a rule reaches it. The patch is the kernel's own write, and
   // its effects wait in `held` for the caller: run once the batch commits,
   // dropped when it is a rehearsal.
-  #mover = (held: (() => void | Promise<void>)[]): Moving => {
-    // Migrations need the stored evidence, not the replacement's read formula.
-    // Only the two lifecycle cells differ; all other computed reads stay intact.
-    let { derived } = shapeOf(this.#get('name') ?? '', this.#get('vocab'))
-    let stored: Derived = { ...derived }
-    for (let name of ['attempt', 'execution']) {
-      if (this.#vocab.comp(name)) {
-        stored[`${name}.state`] = {
-          tag: 'text',
-          expr: (owner) =>
-            sub(select({
-              cols: [col('state', 's')],
-              from: table(name, 's'),
-              where: eq(col('entity', 's'), owner),
-            })),
-        }
-      }
-    }
-    let read = storedRows(this.#sql, this.#vocab, {
-      derived: stored,
-      number: false,
-    })
-    return {
-      read: (q) => read.read(q),
-      rows: (q) => read.rows(q),
-      apply: (patch) =>
-        this.#trust(patch, null, {
-          deferEffects: (run) => void held.push(run),
-        }),
-      tx: (body) => this.#ctx.storage.transactionSync(body),
-    }
-  }
+  #mover = (held: (() => void | Promise<void>)[]): Moving => ({
+    read: (q) => this.#graph.read(q),
+    rows: (q) => this.#graph.rows(q),
+    apply: (patch) =>
+      this.#trust(patch, null, {
+        deferEffects: (run) => void held.push(run),
+      }),
+    tx: (body) => this.#ctx.storage.transactionSync(body),
+  })
 
   // A few batches, yielding the object between them, then the alarm again for
   // whatever is left.
@@ -1995,7 +1972,7 @@ export class Store {
       await this.#trust([
         ...inflight.map((b) => ({
           entity: b.entity,
-          attempt: { state: null, by: null },
+          attempt: { by: null },
           interrupted: { code: 'restart' },
           failed: {
             reason: 'Unfinished dispatched request; inspect before retry',

@@ -38,7 +38,8 @@
             "interrupted"
           ],
           "index": true,
-          "description": "Migration-only stored state; readers derive its replacement and the contract release removes this column."
+          "description": "The lifecycle derived from its interruption mark, holder and recorded answers.",
+          "computed": true
         },
         "by": {
           "type": "string",

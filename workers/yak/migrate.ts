@@ -463,3 +463,23 @@ let shadowed = (d: Driver): string[] =>
   named(d, 'table').filter((t) => /using\s+fts\d/i.test(t.sql)).map((t) =>
     t.name
   )
+
+/** The interruption contract emptied these cells before making them computed. */
+export let lifecycleColumns = (d: Driver, vocab: Vocab) => {
+  for (let name of ['attempt', 'execution']) {
+    if (
+      !vocab.prop(name, 'state')?.computed ||
+      !columns(d, name).includes('state')
+    ) continue
+    let [held] = d.query(
+      select({
+        cols: [lit(1)],
+        from: table(name),
+        where: notNull(col('state')),
+        limit: lit(1),
+      }),
+    )
+    if (held) throw new Error(`${name}.state contract has not completed`)
+    shed(d, vocab, vocab, name, 'state')
+  }
+}

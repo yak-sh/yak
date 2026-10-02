@@ -41,12 +41,6 @@ import {
   refusalPrior,
   refusalSource,
 } from '@yaks/tools/refusals'
-import {
-  interruptionContract,
-  interruptionContractFind,
-  interruptionFind,
-  interruptionMove,
-} from '@yaks/tools/interruptions'
 import { Unknown } from '@yaks/vocab'
 import { GIT_STORE, PLATFORM_STORE } from './door.ts'
 /** A rule's name: where its stamp is kept in a store's memory, and the
@@ -113,21 +107,6 @@ export let dispatchRule: Rule = {
 /** Every rule a release carries. A rule leaves in the release after the sweep
  * reports every store done with it, with the old words it moved out of. */
 export let RULES: Rule[] = [
-  ...interruptionFind.map((find, i): Rule => ({
-    mark: `yak/store/interruption/${i + 1}`,
-    live: 'all',
-    find,
-    move: (row, read) => {
-      if (!read) throw new Error('Interruption mover needs evidence reader')
-      return interruptionMove(row, read)
-    },
-  })),
-  ...interruptionContractFind.map((find, i): Rule => ({
-    mark: `yak/store/interruption-contract/${i + 1}`,
-    live: 'all',
-    find,
-    move: (row) => interruptionContract(row),
-  })),
   ...refusalFind.map((find, i): Rule => ({
     mark: i == 0 ? 'yak/store/refusal/1' : 'yak/store/refusal-imported/1',
     live: 'all',
