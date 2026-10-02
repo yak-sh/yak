@@ -19,7 +19,7 @@
 }
 
 /* A summary has two text lines; its pin shares the title's line. */
-.Journal_Row {
+.Split_Row.Journal_Row {
   margin: 0;
   padding: 0.35rem 0.5rem;
   font-size: 0.85rem;
