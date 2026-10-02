@@ -85,6 +85,7 @@ import {
   withoutSpent,
 } from './terrain.ts'
 import { ledger, TRADES } from './trades.ts'
+import { preview } from './trade-preview.ts'
 import { world } from './world.ts'
 import { village } from './village.ts'
 import { arriveOf } from './ways.ts'
@@ -222,7 +223,7 @@ let skills = board(h.panels.skills, {
   },
 })
 let log = journal(h.panels.journal, { pin: g.pin })
-let trades = ledger(h.panels.trades)
+let trades = ledger(h.panels.trades, preview)
 // A quest taken from a notice board is pinned while it is on offer, so the
 // way to whoever gives it is tracked; a villager's job is agreed to.
 let notes = noticeboard(h.panels.notices, {

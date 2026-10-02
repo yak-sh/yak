@@ -28,7 +28,7 @@ let page = () => {
       open = !open
     },
   }
-  return { tab, window, view: ledger(tab) }
+  return { tab, window, view: ledger(tab, preview) }
 }
 
 test('every trade shows name, level and xp before selection; picking keeps list identity', () => {

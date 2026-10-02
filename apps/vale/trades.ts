@@ -7,7 +7,6 @@
 import { type Glyph, glyph } from './glyphs.ts'
 import type { Page } from './panel.ts'
 import { split } from './ui/split.ts'
-import { preview } from './trade-preview.ts'
 
 /** A trade a hero gathers by. */
 export type Gather = 'wood' | 'ore' | 'herb' | 'fish'
@@ -88,7 +87,7 @@ export let tradesOf = (works: [Trade, number][]): Trades => {
 
 /** The Trades tab keeps each trade's progress beside its guide or station
  * preview. Picking leaves the list and its scroll in place. */
-export let ledger = (tab: Page) => {
+export let ledger = (tab: Page, guide: (trade: Trade, lvl: number) => string) => {
   let panes = split(tab.body)
   let mine: Trades | null = null
   let picked: Trade | null = null
@@ -115,7 +114,7 @@ export let ledger = (tab: Page) => {
         list('Making', MAKING, mine)
       }</div>`,
       picked
-        ? preview(picked, mine[picked].lvl)
+        ? guide(picked, mine[picked].lvl)
         : '<p>Select a trade for its gathering guide or crafting bench preview.</p>',
       picked,
     )
