@@ -89,10 +89,18 @@ environment to fall to.
 
 ## Writing one on the box
 
+The write doors are `graph_apply` and `yak graph apply`; both accept an optional
+`doc{title, body}` beside `secret{name, value}` in the same bundle. Suggest a
+human title and a body saying what the secret is for and which packages or
+services use it (T-64284). Neither is required. `secret.name` remains the config
+key and identity; the title describes it for people. Listings show the name and
+optional title, never the body, value or handle. Keep credentials and handles
+out of both doc fields.
+
 Write a reference, not a value:
 
 ```sh
-yak graph apply --change '[{"entity":{"eid":"$s"},"secret":{"name":"NAME","value":"op://<vault>/<item>/<field>"}}]'
+yak graph apply --change '[{"entity":{"eid":"$s"},"secret":{"name":"NAME","value":"op://<vault>/<item>/<field>"},"doc":{"title":"Service access","body":"Used by the service integration to authenticate outgoing requests."}}]'
 ```
 
 The plugin also strips a value out of `graph_apply`'s own call record, so the

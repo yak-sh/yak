@@ -1,3 +1,4 @@
+import { docDoc } from '@yaks/doc'
 // A secret through the graph: the value goes to the vault once the write has
 // committed, the graph keeps the handle, and nothing refused leaves anything
 // behind.
@@ -41,7 +42,7 @@ import {
 // text carries a whole change as JSON, and so are `error`, `exception` and
 // `content`, the words a failed seal is said in.
 let setup = <V extends Vault = Local>(vault: V = ramVault() as V) => {
-  let vocab = loadVocab([secretsDoc, provisionalDoc, toolsDoc])
+  let vocab = loadVocab([secretsDoc, provisionalDoc, toolsDoc, docDoc])
   let reported: unknown[] = []
   let g = graph({
     storage: ram(vocab),
@@ -288,4 +289,17 @@ test('records change under the lock and are written back through the graph', asy
   )
   assertEquals(await store.read('a'), { n: 3 })
   assert(isHandle((await row(g, 'count a'))!.value))
+})
+
+test('a secret can carry optional purpose documentation without changing its identity', async () => {
+  let { g, vault } = setup()
+  let doc = { title: 'Service access', body: 'Used by the mail service.' }
+  let out = await g.apply([{ ...sealed('DOCUMENTED', 'fixture-token'), doc }])
+  assertEquals(out[0].entity.eid, secretEid('DOCUMENTED'))
+  assertEquals((await whole(g, 'DOCUMENTED'))!.doc, doc)
+  assertEquals(await reveal(vault, 'DOCUMENTED'), 'fixture-token')
+  await g.apply([sealed('DOCUMENTED', 'rotated-fixture')])
+  assertEquals((await whole(g, 'DOCUMENTED'))!.doc, doc)
+  await g.apply([sealed('UNDOCUMENTED', 'fixture-token')])
+  assertEquals((await whole(g, 'UNDOCUMENTED'))!.doc, undefined)
 })
