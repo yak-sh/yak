@@ -2,7 +2,7 @@
 
 Task components and operations for [@yaks/graph](../graph). The package defines
 open, completed and cancelled tasks, counts unfinished dependencies, and
-supplies create, list and update tools.
+supplies create, list, update, decision and answer tools.
 
 A task is an entity with a `task` component. It can also carry a title from
 [@yaks/doc](../doc), filing information from [@yaks/project](../project), or
@@ -196,11 +196,11 @@ return values with synchronous storage and promises with asynchronous storage. A
 UI can display the dependency count as "3 left" and omit zero; this package does
 not render it.
 
-## The three tools
+## Tools
 
-`@yaks/task/tools` exports `runs()`, which supplies implementations for the
-three tool declarations in `taskDoc`. A server that loads these tools exposes
-them through CLI or MCP:
+`@yaks/task/tools` exports `runs()`, which supplies implementations for the tool
+declarations in `taskDoc`. A server that loads these tools exposes them through
+CLI or MCP:
 
 ```sh
 yak task new 'Buy the cake' --project P-19 --priority 1
@@ -231,6 +231,31 @@ Showing a complete entity uses the generic `graph_show` tool. Ranked search uses
 `search` when the server supplies a search implementation. Applying a plan uses
 `graph_apply`, whose `check` option previews it. This package supplies no
 separate show, search or tree tool.
+
+## Decisions
+
+`decision{question, choices, recommended}` is a question on a task. `choices` is
+two to four `{label, description}` values, and `recommended` is a listed label.
+An answer is kernel’s `decided{choice, at, by, via}`: a listed label or custom
+words, stamped as whoever answers. A transactional rule adds `completed` so
+requiring work proceeds. Ordinary approval verdicts do not complete tasks.
+
+```sh
+yak decision new 'Which route?' --choices '[{"label":"Train","description":"Arrive earlier"},{"label":"Bus","description":"Spend less"}]' --recommended Train --assignee <person>
+yak decision answer T-42 Bus
+yak decision answer T-42 'Walk together'
+```
+
+Every door validates the ask and answer, including partial graph edits. Empty
+answers, invalid recommendations, duplicate labels, and answers to cancelled or
+already answered decisions refuse the transaction. Server stamps reject client
+attribution. `answer(eid, choice)` gives interfaces the answer patch, leaving
+stamps and lifecycle to the graph.
+
+Blocking is derived only from incoming `requires` edges from unfinished work;
+without one, a decision is eventual. `contains` never makes a decision blocking.
+Filing and assignment use the same `filed` fields as other tasks. Nothing sends
+mail as part of asking or answering.
 
 ## The board guard
 

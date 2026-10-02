@@ -20,6 +20,7 @@
 // rehearses it before it is written. See the README.
 
 import { argsOf, type Bundle, type Comp } from '@yaks/graph'
+import { answer } from './decision.ts'
 import type { Runs } from '@yaks/graph/tools'
 import { conjoin } from '@yaks/query'
 
@@ -78,6 +79,28 @@ export let listing = (query?: unknown, limit?: unknown): string =>
  * like every subpath export in these packages, though this one needs nothing
  * from the server: everything a call reads arrives on the call it is handed. */
 export let runs = (): Runs => ({
+  decision_new: (call): Bundle[] => {
+    let args = argsOf(call)
+    let question = String(args.question).trim()
+    let filed = filedIn(args)
+    return [{
+      entity: { eid: '$decision' },
+      task: {},
+      doc: { title: question },
+      decision: {
+        question,
+        choices: args.choices,
+        recommended: args.recommended,
+      },
+      ...(filed ? { filed } : {}),
+    }]
+  },
+
+  decision_answer: (call): Bundle[] => {
+    let args = argsOf(call)
+    return answer(String(args.decision), String(args.choice))
+  },
+
   task_new: (call): Bundle[] => {
     let args = argsOf(call)
     let filed = filedIn(args)

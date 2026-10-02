@@ -187,9 +187,14 @@
           "ref": "entity",
           "death": "keep",
           "stamped": true
+        },
+        "choice": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The chosen label or custom answer to a decision question."
         }
       },
-      "description": "the decision itself: approved or declined, by whom and when"
+      "description": "A verdict or chosen answer, by whom and when."
     },
     "delegates": {
       "component": true,

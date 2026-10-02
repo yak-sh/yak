@@ -237,6 +237,148 @@
         }
       },
       "idempotent": true
+    },
+    "decision": {
+      "component": true,
+      "type": "object",
+      "description": "A task asking a question, with choices and the asker’s recommendation. Open work requiring it makes it blocking; no such edge makes it eventual.",
+      "properties": {
+        "question": {
+          "type": "string",
+          "minLength": 1,
+          "search": true
+        },
+        "choices": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "label",
+              "description"
+            ],
+            "additionalProperties": false
+          },
+          "description": "Two to four choices, each a label and a line saying what it means."
+        },
+        "recommended": {
+          "type": "string",
+          "description": "The label of the choice the asker recommends."
+        }
+      }
+    },
+    "decision_new": {
+      "tool": true,
+      "noun": "decision",
+      "verb": "new",
+      "title": "Ask a decision",
+      "description": "Ask a question as a task wearing decision{question, choices, recommended}. Give two to four labelled choices with descriptions and recommend one by label. Assign it to the person being asked. Work that requires it waits until it is answered; otherwise it is eventual. Returns applied bundles.",
+      "input": {
+        "question": {
+          "type": "string",
+          "minLength": 1
+        },
+        "choices": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "label",
+              "description"
+            ],
+            "additionalProperties": false
+          },
+          "description": "Two to four choices, each a label and a line saying what it means."
+        },
+        "recommended": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string",
+          "ref": "project",
+          "description": "the project to file it under; pass its id or registered name"
+        },
+        "priority": {
+          "type": "number",
+          "description": "queue order; lower is more urgent"
+        },
+        "assignee": {
+          "type": "string",
+          "ref": "entity",
+          "description": "id or registered name of the person or agent whose queue it goes in"
+        },
+        "domain": {
+          "type": "string",
+          "description": "the area of work"
+        }
+      },
+      "required": [
+        "question",
+        "choices",
+        "recommended"
+      ],
+      "options": {
+        "positional": [
+          "question"
+        ]
+      }
+    },
+    "decision_answer": {
+      "tool": true,
+      "noun": "decision",
+      "verb": "answer",
+      "title": "Answer a decision",
+      "description": "Answer with a listed choice’s label or your own words. Records decided{choice} attributed to the caller, completes the task, and releases work requiring it. An answered or cancelled decision refuses another answer. Returns applied bundles.",
+      "input": {
+        "decision": {
+          "type": "string",
+          "ref": "decision",
+          "description": "The decision task to answer; its id or registered name."
+        },
+        "choice": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A listed label or a custom answer."
+        }
+      },
+      "required": [
+        "decision",
+        "choice"
+      ],
+      "options": {
+        "positional": [
+          "decision",
+          "choice"
+        ]
+      }
+    },
+    "decision_answered": {
+      "rule": true,
+      "match": ".task .decision .decided !cancelled, +!completed",
+      "description": "An answered decision finishes its task, so work requiring it can proceed."
     }
   }
 }

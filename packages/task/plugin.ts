@@ -4,6 +4,7 @@
 // filing, belong to @yaks/project — and so does the guard over a board's query.
 
 import type { Plugin } from '@yaks/graph'
+import { deciding } from './decision.ts'
 import { taskDoc } from './comp.ts'
 
 /**
@@ -35,4 +36,5 @@ import { taskDoc } from './comp.ts'
 export let tasks = (): Plugin => ({
   name: '@yaks/task',
   vocab: [taskDoc],
+  hooks: { precondition: deciding },
 })

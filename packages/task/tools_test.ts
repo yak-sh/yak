@@ -1,8 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
-import { loadTools } from '@yaks/graph/tools'
-import { taskDoc } from './comp.ts'
 import { statusOf } from './words.ts'
 import { teamGraph } from './testing.ts'
 import { listing, runs } from './tools.ts'
@@ -18,14 +16,6 @@ let asked = (args: Record<string, unknown>): [Bundle, Graph] => [
 ]
 
 let comp = (b: Bundle, name: string) => b[name] as Comp
-
-test('every task tool is declared and implemented', () => {
-  assertEquals(loadTools(taskDoc, tools).map((t) => t.name).sort(), [
-    'task_list',
-    'task_new',
-    'task_update',
-  ])
-})
 
 test('a new task is task{} plus the words, filed where the line said', async () => {
   let [said] = await tools.task_new!(

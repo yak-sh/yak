@@ -47,7 +47,14 @@ let doc: VocabDoc = {
  * mark, the portfolio they are filed in (@yaks/project), `doc`, edges, and
  * their own. */
 export let team: Vocab = loadVocab(
-  [docDoc, edgeDoc, pick(kernelDoc, ['completed']), taskDoc, projectDoc, doc],
+  [
+    docDoc,
+    edgeDoc,
+    pick(kernelDoc, ['completed', 'decided']),
+    taskDoc,
+    projectDoc,
+    doc,
+  ],
   [edgeKeywords],
 )
 

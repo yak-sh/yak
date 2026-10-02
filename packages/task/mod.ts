@@ -69,3 +69,5 @@ export * from './words.ts'
 export * from './comp.ts'
 export * from './deps.ts'
 export * from './plugin.ts'
+
+export { answer, type Choice, type Decision } from './decision.ts'
