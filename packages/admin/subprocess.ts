@@ -6,6 +6,12 @@ export let GRACE = 5_000
 let interrupted = () =>
   new CallError('interrupted', 'the platform operation was interrupted')
 
+let SIGNALS = ['SIGTERM', 'SIGINT', 'SIGHUP']
+
+/** Whether the process was interrupted directly, before its host observed it. */
+export let wasInterrupted = (status: Deno.CommandStatus): boolean =>
+  status.signal != null && SIGNALS.includes(status.signal)
+
 /**
  * Start one platform command under the host's lifetime. The command gets its
  * own process group, so a signal to `yak` reaches the host first instead of
@@ -64,7 +70,7 @@ export let output = async (
   try {
     let result = await run.child.output()
     finished = true
-    if (run.stopped()) throw interrupted()
+    if (run.stopped() || wasInterrupted(result)) throw interrupted()
     return result
   } finally {
     if (!finished) run.stop()

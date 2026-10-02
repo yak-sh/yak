@@ -264,6 +264,21 @@ test('a command failure is still a defect when the host is not stopping', async 
   assert(!(error instanceof CallError))
 })
 
+test('a platform command interrupted directly is not a defect', async () => {
+  let error = await assertRejects(
+    () =>
+      command(
+        Deno.cwd(),
+        Deno.execPath(),
+        ['eval', "Deno.kill(Deno.pid, 'SIGTERM')"],
+        new AbortController().signal,
+      ),
+    CallError,
+    'was interrupted',
+  )
+  assertEquals(error.code, 'interrupted')
+})
+
 test('deployment history never overlaps Wrangler OAuth refreshes', async () => {
   let active = false
   let called: string[][] = []

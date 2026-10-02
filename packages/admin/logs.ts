@@ -10,7 +10,7 @@
 // place of the past.
 import { CallError } from '@yaks/tools'
 import { WRANGLER } from '../../workers/yak/wrangler.ts'
-import { spawn } from './subprocess.ts'
+import { spawn, wasInterrupted } from './subprocess.ts'
 
 export { GRACE } from './subprocess.ts'
 
@@ -202,14 +202,15 @@ let live = async (
       parser.push(chunk)
     }
     let status = await child.status
-    if (status.code != 0 && !run.stopped()) return status.code
+    let interrupted = run.stopped() || wasInterrupted(status)
+    if (status.code != 0 && !interrupted) return status.code
     try {
       parser.finish()
     } catch (error) {
-      if (!run.stopped()) throw error
+      if (!interrupted) throw error
       note('tail stopped during an event; that partial event was omitted')
     }
-    return run.stopped() ? 130 : 0
+    return interrupted ? 130 : 0
   } finally {
     run.stop()
     await run.finish()
