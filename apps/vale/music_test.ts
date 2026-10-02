@@ -3,15 +3,44 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
-import { heard, music } from './music.ts'
-import { TRACKS } from './music_tracks.ts'
+import { accept, heard, music } from './music.ts'
+import { catalog, type Row } from './music_catalog.ts'
+
+let hashes = {
+  mossvale: ['moss-1', 'moss-2'],
+  birchmere: ['birch-1', 'birch-2'],
+}
+let rows = (): Row[] =>
+  Object.entries(hashes).flatMap(([land, clips]) => [
+    { entity: { eid: land }, theme_design: { land } },
+    ...clips.flatMap((sha, i) => [
+      { entity: { eid: `${land}-${i}` }, song: { land, theme: `${i}` } },
+      {
+        entity: { eid: `build-${sha}` },
+        build: { for: `${land}-${i}`, variant: 'main' },
+      },
+      {
+        entity: { eid: `output-${sha}` },
+        built: {
+          build: `build-${sha}`,
+          artifact: sha,
+          current: true,
+        },
+      },
+      {
+        entity: { eid: sha },
+        artifact: { address: sha, media_type: 'audio/mpeg' },
+      },
+    ]),
+  ])
 import { seedThemes } from './themes_fixture.ts'
 
 test('a border holds the playing region until its neighbor leads', () => {
+  let songs = catalog(rows())
   let edge = { a: 'birchmere', b: 'mossvale', t: 0.55 }
-  assertEquals(heard(edge, 'mossvale'), 'mossvale')
-  assertEquals(heard(edge, 'birchmere'), 'birchmere')
-  assertEquals(heard({ ...edge, t: 0.8 }, 'mossvale'), 'birchmere')
+  assertEquals(heard(edge, 'mossvale', songs), 'mossvale')
+  assertEquals(heard(edge, 'birchmere', songs), 'birchmere')
+  assertEquals(heard({ ...edge, t: 0.8 }, 'mossvale', songs), 'birchmere')
 })
 
 test('region music finishes one source before starting another', async () => {
@@ -76,10 +105,25 @@ test('region music finishes one source before starting another', async () => {
   let mossvale: [number, number, number] = [128, 0, 128]
   let birchmere: [number, number, number] = [-128, 0, 128]
   try {
+    accept([])
     music.at(mossvale)
     music.start(ctx, {} as AudioNode)
     await time.tickAsync(0)
+    assertEquals(playing(), 0)
+    accept(rows().filter((row) => row.entity.eid != hashes.mossvale[0]))
+    await time.tickAsync(0)
+    assertEquals(playing(), 0)
+    accept(rows())
+    await time.tickAsync(0)
     assertEquals(playing(), 1)
+
+    accept([])
+    await time.tickAsync(0)
+    assertEquals(playing(), 1)
+    assertEquals(sources[0].stopped, false)
+    accept(rows())
+    await time.tickAsync(0)
+    assertEquals(sources.length, 1)
 
     music.at(birchmere)
     await time.tickAsync(300)
@@ -108,7 +152,7 @@ test('region music finishes one source before starting another', async () => {
     assertEquals(sources.length, 2)
     assertEquals(sources[1].stopped, false)
 
-    hold = TRACKS.mossvale[0]
+    hold = hashes.mossvale[0]
     music.at(mossvale)
     await time.tickAsync(700)
     await time.tickAsync(0)
@@ -120,6 +164,24 @@ test('region music finishes one source before starting another', async () => {
     await time.tickAsync(0)
     assertEquals(playing(), 1)
     assertEquals(sources.length, 3)
+
+    // Rebuilding while playing does not stop the source. Its next song waits
+    // for current artifact data, then plays the replacement after the quiet.
+    let pending = rows().filter((row) => row.entity.eid != hashes.birchmere[1])
+    accept(pending)
+    assertEquals(playing(), 1)
+    sources[2].stop()
+    await time.tickAsync(7999)
+    assertEquals(sources.length, 3)
+    await time.tickAsync(1)
+    assertEquals(sources.length, 3)
+    let rebuilt = rows()
+    rebuilt.find((row) => row.entity.eid == hashes.birchmere[1])!
+      .artifact!.address = 'rebuilt-birch'
+    accept(rebuilt)
+    await time.tickAsync(0)
+    assertEquals(playing(), 1)
+    assertEquals(sources.length, 4)
   } finally {
     held.resolve(new Response(new Uint8Array([1])))
     globalThis.fetch = fetchWas
@@ -135,7 +197,7 @@ test('unavailable songs are skipped and reported once for the page', async () =>
   using time = new FakeTime()
   seedThemes()
   // A fresh page owns its own music singleton and unavailable-song set.
-  let { music } = await import('./music.ts?unavailable')
+  let { accept, music } = await import('./music.ts?unavailable')
   let doc = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let sourceWas = Object.getOwnPropertyDescriptor(
     globalThis,
@@ -189,9 +251,9 @@ test('unavailable songs are skipped and reported once for the page', async () =>
     let sha = String(url).split('/').at(-1)!
     requests.push(sha)
     return Promise.resolve(
-      sha == TRACKS.mossvale[1]
+      sha == hashes.mossvale[1]
         ? new Response(new Uint8Array([1]))
-        : sha == TRACKS.birchmere[0]
+        : sha == hashes.birchmere[0]
         ? new Response(new Uint8Array([0]))
         : new Response('', { status: 404 }),
     )
@@ -199,24 +261,25 @@ test('unavailable songs are skipped and reported once for the page', async () =>
   let mossvale: [number, number, number] = [128, 0, 128]
   let birchmere: [number, number, number] = [-128, 0, 128]
   try {
+    accept(rows())
     music.at(mossvale)
     music.start(ctx, {} as AudioNode)
     await time.tickAsync(0)
-    assertEquals(requests, TRACKS.mossvale)
+    assertEquals(requests, hashes.mossvale)
     assertEquals(failures.length, 1)
     assertEquals(sources.length, 1)
 
     sources[0].stop()
     await time.tickAsync(8000)
     await time.tickAsync(0)
-    assertEquals(requests, [...TRACKS.mossvale, TRACKS.mossvale[1]])
+    assertEquals(requests, [...hashes.mossvale, hashes.mossvale[1]])
     assertEquals(failures.length, 1)
     assertEquals(sources.length, 2)
 
     music.at(birchmere)
     await time.tickAsync(700)
     await time.tickAsync(0)
-    let tried = [...TRACKS.mossvale, TRACKS.mossvale[1], ...TRACKS.birchmere]
+    let tried = [...hashes.mossvale, hashes.mossvale[1], ...hashes.birchmere]
     assertEquals(requests, tried)
     assertEquals(failures.length, 3)
     assertEquals(sources.length, 2)
@@ -230,7 +293,7 @@ test('unavailable songs are skipped and reported once for the page', async () =>
     assertEquals(sources.length, 3)
     music.at(birchmere)
     await time.tickAsync(60700)
-    assertEquals(requests, [...tried, TRACKS.mossvale[1]])
+    assertEquals(requests, [...tried, hashes.mossvale[1]])
     assertEquals(failures.length, 3)
     assertEquals(sources.length, 3)
   } finally {
