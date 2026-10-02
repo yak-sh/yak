@@ -100,6 +100,7 @@ import {
 } from './route.ts'
 import { covers, PLATFORM_PATHS } from './router.ts'
 import { nobody, titling, vouched, type Who, whoIs } from './session.ts'
+import { asking } from './identity.ts'
 import { seedy } from './seed.ts'
 import { nameOf } from './signin.ts'
 import { written } from './reach.ts'
@@ -2320,7 +2321,31 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   }
   let store = storeName(space, app)
   let itself = await granted(req, env.SESSION_SECRET, store)
-  let who = itself ??
+  // Machine clients use the same login bearer as the connector. Verify it
+  // at the app door too, before the cookie/page-token path, and read the
+  // caller's membership live. A narrowed CLI grant never crosses spaces;
+  // an invalid credential never falls back to a public read or a cookie.
+  let bearer: Who | undefined
+  // A sandboxed app already accepts its one-app page bearer. Keep that
+  // credential on its existing path rather than treating it as a CLI login.
+  let pageBearer = walls && env.SESSION_SECRET && bearerOf(req)
+    ? await paged(bearerOf(req)!, env.SESSION_SECRET, store)
+    : null
+  if (
+    !itself && !pageBearer && path.startsWith('/api/') &&
+    req.headers.has('authorization')
+  ) {
+    let { who: caller } = await asking(env, req)
+    if (!caller || (caller.space && caller.space != space.slug)) {
+      return json(401, 'not_a_reader', 'Sign in with yak login for this app')
+    }
+    bearer = {
+      person: caller.person,
+      role: await dir.role(space, caller.person),
+      until: caller.until,
+    }
+  }
+  let who = itself ?? bearer ??
     await c.time(
       'who',
       () =>
