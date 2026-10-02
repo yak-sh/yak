@@ -154,11 +154,10 @@ test('a large inbox finishes every derived read on one socket instead of reconne
   cache.value = {}
   let rejected = 0
   let wire = host((a) => {
-    // The real API closes this socket, and sync resends all its asks on reopen.
-    if ('close' in decode(JSON.stringify({ ...a, acks: true, frames: true }))) {
+    // Match the API's per-message admission, not a synthetic socket drop.
+    if ('error' in decode(JSON.stringify({ ...a, acks: true, frames: true }))) {
       rejected++
-      queueMicrotask(() => wire.drop())
-      return
+      return { refused: { error: 'Refused', message: 'oversized subscribe' } }
     }
     return { bundles: reader(data)(a.subscribe) }
   })
@@ -172,11 +171,6 @@ test('a large inbox finishes every derived read on one socket instead of reconne
       timeout: 10000,
       label: 'all inbox batches ready without a socket rejection',
     })
-    if (rejected) {
-      await until(() => wire.dials() > 1, {
-        label: 'sync reopens the rejected socket',
-      })
-    }
     assertEquals(rejected, 0)
     assertEquals(root.textContent, '600')
     assertEquals(wire.dials(), 1)

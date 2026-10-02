@@ -228,11 +228,14 @@ The socket reconnects with a delay that doubles from 250 ms to 30 seconds and
 resets when it opens. `wait` and `most` customize these limits. One reconnect
 timer is scheduled per connection manager.
 
-All subscriptions are resent after reconnecting. Their first successful frames
-are treated as complete replacement result sets. The connection manager compares
-new membership with the previous set and adds missing entities to `gone`,
-including entities that left while disconnected. Readiness resets on a new
-connection; old cached rows do not make a subscription ready.
+Only subscriptions that have not been refused are resent after reconnecting. A
+refusal is reported without removing the cached rows or reopening the socket. An
+explicit `subscribe` on that id can correct and retry the request; a later
+successful frame also clears its refusal. Their first successful frames are
+treated as complete replacement result sets. The connection manager compares new
+membership with the previous set and adds missing entities to `gone`, including
+entities that left while disconnected. Readiness resets on a new connection; old
+cached rows do not make a subscription ready.
 
 ## Both transports are injected
 

@@ -369,6 +369,50 @@ test('a frame the server cannot read is refused', () => {
   assert(said.every((f) => f.refused))
 })
 
+test('oversized and malformed requests are refused without closing other subscriptions', () => {
+  let graph = shopGraph()
+  let socket = fake()
+  let closed = 0
+  socket.close = () => void closed++
+  attach(subscriptions(graph), socket)
+  socket.emit('message', JSON.stringify({ subscribe: '.book', id: 'good' }))
+  socket.taken()
+
+  // The id follows the oversized payload, as sync serializes it.
+  let large = JSON.stringify({
+    subscribe: '.doc.title=' + 'x'.repeat(65536),
+    id: 'large',
+  })
+  socket.emit('message', large)
+  socket.emit(
+    'message',
+    JSON.stringify({ subscribe: 'é'.repeat(40000), id: 'utf8' }),
+  )
+  socket.emit('message', '{"id":"broken","subscribe":')
+  socket.emit('message', new ArrayBuffer(65537))
+  socket.emit('message', new Blob(['x'.repeat(65537)]))
+  socket.emit(
+    'message',
+    JSON.stringify({ ack: 'token', padding: 'x'.repeat(65536), id: 'ack' }),
+  )
+  let said = socket.taken()
+  assertEquals(said.map((f) => f.id), [
+    'large',
+    'utf8',
+    'broken',
+    '',
+    '',
+    'ack',
+  ])
+  assert(said.every((f) => f.refused))
+  assertEquals(closed, 0)
+
+  graph.apply([{ entity: { eid: 'new' }, book: { price: 3 } }])
+  assertEquals(ids(socket.taken()), ['new'])
+  socket.emit('message', JSON.stringify({ subscribe: '.book', id: 'next' }))
+  assertEquals(ids(socket.taken()), ['new'])
+})
+
 test('a flooding relay socket closes without affecting another socket', () => {
   let graph = shopGraph()
   let subs = subscriptions(graph)

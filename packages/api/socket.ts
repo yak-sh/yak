@@ -54,23 +54,65 @@ let gates = new WeakMap<Subs, WeakMap<Sink, ReturnType<typeof admission>>>()
 /** Decode one incoming frame before anyone dispatches it. A hibernating socket
  * can use the decoded shape to route its own work without parsing it again. */
 export type Incoming =
-  | { close: true }
-  | { error: unknown }
+  | { error: unknown; id?: string }
   | { value: unknown }
 
+// A refusal must name the request even when its query is too large to parse.
+// Scan without copying the payload, and decode only bounded top-level ids.
+// The same scan can identify an id before a syntax error; nested ids and text
+// inside a query are never mistaken for the request's identity.
+let requestId = (raw: string): string | undefined => {
+  let depth = 0
+  for (let i = 0; i < raw.length; i++) {
+    let c = raw[i]
+    if (c == '{' || c == '[') depth++
+    else if (c == '}' || c == ']') depth--
+    else if (c == '"') {
+      let start = i
+      while (++i < raw.length) {
+        if (raw[i] == '\\') i++
+        else if (raw[i] == '"') break
+      }
+      if (depth != 1 || i - start > 32) continue
+      let next = i + 1
+      while (/\s/.test(raw[next] ?? '') && next < raw.length) next++
+      if (raw[next++] != ':') continue
+      try {
+        if (JSON.parse(raw.slice(start, i + 1)) != 'id') continue
+        while (/\s/.test(raw[next] ?? '') && next < raw.length) next++
+        if (raw[next] != '"') continue
+        let end = next
+        while (++end < raw.length && end - next <= 1024) {
+          if (raw[end] == '\\') end++
+          else if (raw[end] == '"') {
+            return JSON.parse(raw.slice(next, end + 1))
+          }
+        }
+      } catch { /* no recoverable request id */ }
+    }
+  }
+}
+
 export let decode = (data: unknown): Incoming => {
+  let raw = typeof data == 'string' ? data : undefined
+  let large = raw !== undefined
+    ? raw.length > MAX_MESSAGE ||
+      new TextEncoder().encode(raw).byteLength > MAX_MESSAGE
+    : data instanceof ArrayBuffer
+    ? data.byteLength > MAX_MESSAGE
+    : data instanceof Blob && data.size > MAX_MESSAGE
+  if (large) {
+    let error = new Error(`socket message exceeds ${MAX_MESSAGE} bytes`)
+    error.name = 'Refused'
+    return { error, id: raw === undefined ? undefined : requestId(raw) }
+  }
   try {
-    if (data instanceof ArrayBuffer && data.byteLength > MAX_MESSAGE) {
-      return { close: true }
+    if (raw === undefined) {
+      throw new SyntaxError('expected a text socket message')
     }
-    if (data instanceof Blob && data.size > MAX_MESSAGE) {
-      return { close: true }
-    }
-    let raw = String(data)
-    if (raw.length > MAX_MESSAGE) return { close: true }
     return { value: JSON.parse(raw) }
   } catch (error) {
-    return { error }
+    return { error, id: raw === undefined ? undefined : requestId(raw) }
   }
 }
 
@@ -236,8 +278,10 @@ export let receive = (
     to({ id, refused: refusal(err) })
   }
   try {
-    if ('close' in input) return 'close'
-    if ('error' in input) throw input.error
+    if ('error' in input) {
+      id = input.id ?? ''
+      throw input.error
+    }
     let msg = input.value
     if (!msg || typeof msg != 'object') {
       throw new SyntaxError('expected {subscribe}, {unsubscribe} or {relay}')
@@ -290,16 +334,16 @@ export let attach = (
   socket.addEventListener('open', q.flush)
   socket.addEventListener('message', (e) => {
     if (shut) return
-    let msg: Record<string, unknown> | undefined
-    try {
-      msg = JSON.parse(String(e.data))
-    } catch { /* receive refuses it */ }
+    let input = decode(e.data)
+    let msg = 'value' in input && input.value && typeof input.value == 'object'
+      ? input.value as Record<string, unknown>
+      : undefined
     if (typeof msg?.ack == 'string') return q.ack(msg.ack)
     if (
       msg?.acks === true &&
       (typeof msg.subscribe == 'string' || msg.subscribe === true)
     ) q.enable(msg.frames === true)
-    if (receive(subs, to, e.data, now) == 'close') {
+    if (receive(subs, to, e.data, now, input) == 'close') {
       drop()
       socket.close?.(1008, 'relay flood')
     }

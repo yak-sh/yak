@@ -154,7 +154,19 @@ export let liveClient = (opts: {
       throw new Error('writes leave through the durable outbox (live.ts)')
     },
     report: (r) => {
-      if (r.error) console.warn('live client', r.error)
+      let error = r.error
+      if (r.refused) {
+        error = Object.assign(new Error(r.refused.message), {
+          name: r.refused.error,
+        })
+      }
+      // The page tracker captures console.error's first argument.
+      if (error) {
+        let message = error instanceof Error
+          ? `${error.name}: ${error.message}`
+          : String(error)
+        console.error(`live client — ${message}`, error)
+      }
     },
   })
   box.cache.onRows(opts.changed)

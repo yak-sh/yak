@@ -127,3 +127,30 @@ test('a test server speaks through receive, as changes', () => {
   assertEquals(c.members('a'), ['x'])
   assertEquals(frames.length, 1)
 })
+
+test('socket refusals reach the page tracker with their reason', async () => {
+  let heard: unknown[][] = []
+  let original = console.error
+  console.error = (...args) => void heard.push(args)
+  let { c, sent, say } = replica()
+  try {
+    c.open('bad', '.doc')
+    await say({
+      id: String(sent[0].id),
+      refused: {
+        error: 'Refused',
+        message: 'socket message exceeds 65536 bytes',
+      },
+    })
+    assertEquals(heard.length, 1)
+    assertEquals(
+      heard[0][0],
+      'live client — Refused: socket message exceeds 65536 bytes',
+    )
+    assertEquals(c.ready('bad'), false)
+    assertEquals(c.active(), 1)
+  } finally {
+    c.close('bad')
+    console.error = original
+  }
+})

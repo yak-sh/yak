@@ -12,7 +12,7 @@
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { api, type Handler } from '@yaks/api'
+import { api, type Handler, subscriptions } from '@yaks/api'
 import { marks } from './mark.ts'
 import type { Connect, Socket, Timer } from './socket.ts'
 import { type Sync, sync } from './sync.ts'
@@ -221,6 +221,18 @@ export let server = (): Server => {
   }
   let handler = api({
     graph: g,
+    // The registry batches peer fan-out too; it must use this fixture's clock,
+    // not leave a real timer running after idle() has returned.
+    subs: subscriptions(g, {
+      timer: (fn, ms) => {
+        let entry = { at: now + ms, fn }
+        due.push(entry)
+        due.sort((a, b) => a.at - b.at)
+        return () => {
+          due = due.filter((one) => one != entry)
+        }
+      },
+    }),
     authenticate: () => ({ by: COOK }),
     socketTimer: (fn, ms) => {
       due.push({ at: now + ms, fn })

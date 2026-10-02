@@ -172,6 +172,7 @@ export let wire = (opts: WireOpts): Wire => {
   let most = opts.most ?? 30_000
 
   let asks = new Map<string, Ask>() // what each subscription asked for
+  let refused = new Set<string>() // terminal until explicitly re-pointed
   let members = new Map<string, Set<Eid>>() // who is in each set
   let resetting = new Set<string>() // ids whose next frame is a reset
   let socket: Socket | null = null
@@ -214,7 +215,19 @@ export let wire = (opts: WireOpts): Wire => {
   let landed = (frame: Frame): unknown | Promise<unknown> => {
     // An unsubscribe can race a frame already in transit. It must not refill
     // the cache or recreate membership bookkeeping after its last owner left.
+    if (frame.refused) {
+      if (asks.has(frame.id)) {
+        refused.add(frame.id)
+        return opts.land(frame)
+      }
+      // A malformed or relay request may have no subscription id at all.
+      let error = new Error(frame.refused.message)
+      error.name = frame.refused.error
+      opts.report(error)
+      return
+    }
     if (!asks.has(frame.id)) return
+    refused.delete(frame.id)
     let held = members.get(frame.id) ?? new Set<Eid>()
     members.set(frame.id, held)
     let gone = [...(frame.gone ?? [])]
@@ -253,6 +266,7 @@ export let wire = (opts: WireOpts): Wire => {
       let said = opts.again?.() ?? []
       if (said.length) s.send(JSON.stringify({ relay: said }))
       for (let [id, query] of asks) {
+        if (refused.has(id)) continue
         resetting.add(id) // its answer will be the whole set, as it now stands
         s.send(
           JSON.stringify({ subscribe: query, id, acks: true, frames: true }),
@@ -319,7 +333,9 @@ export let wire = (opts: WireOpts): Wire => {
       socket = null
       waiting = []
       inbox = []
-      for (let id of asks.keys()) opts.pending?.(id)
+      for (let id of asks.keys()) {
+        if (!refused.has(id)) opts.pending?.(id)
+      }
       retry()
     })
   }
@@ -329,6 +345,7 @@ export let wire = (opts: WireOpts): Wire => {
     subscribe: (query, id) => {
       if (closed) throw new Error('wire is closed')
       let key = id ?? `s${++n}`
+      refused.delete(key)
       asks.set(key, query)
       members.set(key, new Set())
       resetting.add(key)
@@ -339,6 +356,7 @@ export let wire = (opts: WireOpts): Wire => {
     },
     unsubscribe: (id) => {
       asks.delete(id)
+      refused.delete(id)
       members.delete(id)
       resetting.delete(id)
       send({ unsubscribe: id })
@@ -356,6 +374,7 @@ export let wire = (opts: WireOpts): Wire => {
       socket = null
       for (let id of asks.keys()) opts.pending?.(id)
       asks.clear()
+      refused.clear()
       members.clear()
       resetting.clear()
       s?.close()

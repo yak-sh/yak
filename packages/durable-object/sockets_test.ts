@@ -92,6 +92,22 @@ test('a subscription is answered, and a commit pushes to the socket', () => {
   assertEquals((last.bundles as Bundle[])[0].entity.eid, 'p1')
 })
 
+test('hibernating sockets refuse oversized and malformed messages without retiring', () => {
+  let ctx = hibernation()
+  let [g, live] = instance(store(), ctx)
+  let ws = wire()
+  ctx.live.push(ws)
+  live.message(ws, ask('good', '.kind=product'))
+  ws.sent.length = 0
+  live.message(ws, ask('large', '.product.price=' + '1'.repeat(65536)))
+  live.message(ws, '{"id":"broken","subscribe":')
+  assertEquals(ws.sent.map((f) => f.id), ['large', 'broken'])
+  assert(ws.sent.every((f) => f.refused))
+  assertEquals(ws.closed, [])
+  g.apply([{ entity: { eid: 'p1' }, product: { price: 3 } }])
+  assertEquals(ws.sent.at(-1)!.id, 'good')
+})
+
 test('a woken object serves the socket it inherited', () => {
   let storage = store()
   let ctx = hibernation()

@@ -197,6 +197,11 @@ socket.send(
 ← { frames: [{ id, … }, …], ack: "<token>" }
 ```
 
+Incoming messages are limited to 64 KiB of UTF-8 text. Oversized or malformed
+messages receive one `refused` frame without closing the socket or disturbing
+other subscriptions. A refusal names the request's top-level `id` when it can be
+recovered; otherwise its `id` is empty. ACKs go through the same admission.
+
 Peer relays wait up to 16 ms so movements arriving together share a frame.
 Waiting relays keep the newest property values, with a clear retained before a
 later partial value. A membership or durable-data frame sends preceding relays

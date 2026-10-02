@@ -302,6 +302,63 @@ test('a subscription refused by the server is reported, not applied', async () =
   c.wire.close()
 })
 
+test('an oversized subscribe refuses once, never reopens, and does not erase painted rows', async () => {
+  let srv = server()
+  srv.graph.apply([{ entity: { eid: 'r1' }, recipe: { serves: 2 } }])
+  let c = client(srv)
+  try {
+    c.wire.subscribe('.recipe', 'good')
+    await c.idle()
+    assert((await c.graph.get(['r1'])).length)
+    c.wire.subscribe('.doc.title=' + 'x'.repeat(65536), 'large')
+    await c.idle()
+    c.pass(8000)
+    await c.idle()
+    assertEquals(srv.sockets.length, 1)
+    assertEquals(c.socket()?.readyState, 1)
+    assertEquals(c.trouble.length, 1)
+    assertEquals(c.wire.refusal('large')?.error, 'Refused')
+    assert((await c.graph.get(['r1'])).length)
+
+    // A genuine later loss reopens healthy asks, not the terminal refusal.
+    srv.sockets[0].close()
+    c.fire()
+    await c.idle()
+    assertEquals(srv.sockets.length, 2)
+    assertEquals(c.trouble.length, 1)
+    assertEquals(
+      c.socket()?.sent.filter((m) => (m as { id?: string }).id == 'large'),
+      [],
+    )
+
+    // Explicitly correcting the request is allowed on the same id.
+    c.wire.subscribe('.recipe', 'large')
+    await c.idle()
+    assertEquals(c.wire.refusal('large'), undefined)
+    assert(c.wire.ready('large'))
+  } finally {
+    c.wire.close()
+  }
+})
+
+test('a malformed uncorrelated socket request is reported without reconnecting', async () => {
+  let srv = server()
+  let c = client(srv)
+  try {
+    c.wire.subscribe('.recipe', 'good')
+    await c.idle()
+    srv.sockets[0].emit('message', '{')
+    await c.idle()
+    assertEquals(c.trouble.length, 1)
+    assertEquals((c.trouble[0].error as Error).name, 'SyntaxError')
+    c.pass(8000)
+    assertEquals(srv.sockets.length, 1)
+    assertEquals(c.socket()?.readyState, 1)
+  } finally {
+    c.wire.close()
+  }
+})
+
 test('an unreachable server reverts nothing: the batch may have landed', async () => {
   let srv = server()
   let c = client(srv)
