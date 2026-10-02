@@ -169,7 +169,7 @@ let held = (v: unknown): unknown =>
  * other components), and whether it is a value the component stores — what a
  * {@link Index.keyed} index files. */
 export type Read = {
-  read: (b: Bundle) => unknown
+  read: (b: Bundle, among: Index) => unknown
   tag: Tag
   bound: boolean
   stored: boolean
@@ -227,7 +227,7 @@ export let statusOf = (
  * serves both sides. A registration also works as a plain read override for a
  * stored property, the way a `derived` entry does.
  */
-export type Computed = Record<string, (b: Bundle) => unknown>
+export type Computed = Record<string, (b: Bundle, among: Index) => unknown>
 
 /**
  * How to read `comp.prop` off an entity, or `null` when there is nothing to
@@ -264,7 +264,7 @@ export let reader = (
   let own = computed[`${name}.${prop}`]
   if (own) {
     return {
-      read: (b) => held(own(b)),
+      read: (b, among) => held(own(b, among)),
       tag: tagOf(def),
       bound: false,
       stored: false,

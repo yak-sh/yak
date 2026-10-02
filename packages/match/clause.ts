@@ -151,7 +151,7 @@ let scalar = (
   ctx: Ctx,
   hop: Hop,
   p: Pred,
-): { hit: (b?: Bundle) => boolean; needs: Need[] } => {
+): { hit: (b: Bundle | undefined, among: Index) => boolean; needs: Need[] } => {
   let read = reader(ctx.v, hop.comp, hop.prop, ctx.computed)
   if (!read) {
     throw new Unsupported(
@@ -188,7 +188,7 @@ let scalar = (
     let range = read.stored && band(op, value, read.tag)
     if (range) needs.push({ comp: hop.comp, prop: hop.prop, range })
   }
-  return { hit: (b) => hit(b ? read.read(b) : null), needs }
+  return { hit: (b, among) => hit(b ? read.read(b, among) : null), needs }
 }
 
 // A single-hop predicate: a direct property, or a test for the component itself
@@ -222,7 +222,7 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Arm => {
     }
   }
   let { hit, needs } = scalar(ctx, hop, p)
-  return arm((b) => hit(b), needs)
+  return arm((b, among) => hit(b, among), needs)
 }
 
 let isRef = (v: Vocab, hop: Hop) =>
@@ -275,7 +275,8 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Arm => {
   let rooted = op == EXISTS || ['<', '<=', '>', '>='].includes(op) ||
     ((op == '' || op == '~') && flat(p.value) != '')
   return arm(
-    (b, among) => (!rooted || wears(b, root.comp)) && hit(reach(b, among)),
+    (b, among) =>
+      (!rooted || wears(b, root.comp)) && hit(reach(b, among), among),
     rooted ? wearing(root.comp) : [],
     false,
   )

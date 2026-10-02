@@ -46,11 +46,11 @@ type Slot = {
 // derives it, else what the bundle holds.
 let reader = (comp: string, prop: string, opts: MatchOpts) => {
   let computed = opts.computed?.[`${comp}.${prop}`]
-  return (b: Bundle | undefined): unknown =>
+  return (b: Bundle | undefined, x: Index): unknown =>
     !b
       ? null
       : computed
-      ? computed(b)
+      ? computed(b, x)
       : (b[comp] as Record<string, unknown> | undefined)?.[prop] ?? null
 }
 
@@ -73,10 +73,10 @@ let slot = (v: Vocab, bind: Bind, opts: MatchOpts): Slot => {
     read: (b, x) => {
       let at: Bundle | undefined = b
       for (let r of reads.slice(0, -1)) {
-        let eid = r(at)
+        let eid = r(at, x)
         at = typeof eid == 'string' ? x.of(eid) : undefined
       }
-      return reads[reads.length - 1](at)
+      return reads[reads.length - 1](at, x)
     },
   }
 }

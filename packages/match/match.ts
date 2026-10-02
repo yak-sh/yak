@@ -214,7 +214,7 @@ let field = (ctx: Ctx, path: string): Field => {
   return {
     read: (b, among) => {
       let t = reach(b, among)
-      return t ? read.read(t) : null
+      return t ? read.read(t, among) : null
     },
     tag: read.tag,
   }

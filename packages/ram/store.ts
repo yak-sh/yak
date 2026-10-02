@@ -371,6 +371,21 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     return out
   }
 
+  // Reads carry the computed values a server would send, without storing
+  // them. Compute against the whole index before cutting requested components.
+  let computed = (b: Bundle): Bundle => {
+    let out = b
+    for (let [path, read] of Object.entries(base.computed ?? {})) {
+      let [name, prop] = path.split('.')
+      if (!b[name]) continue
+      out = {
+        ...out,
+        [name]: { ...out[name] as Comp, [prop]: read(b, view()) },
+      }
+    }
+    return out
+  }
+
   let read = (
     query: Query,
     opts: ReadOpts = {},
@@ -380,7 +395,9 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       now: opts.now ?? base.now,
       computed: base.computed,
     })(view())
-    return comps ? found.map(only(new Set(comps))) : found
+    return comps
+      ? found.map(computed).map(only(new Set(comps)))
+      : found.map(computed)
   }
 
   // The raw-rows path: one `{ eid }` per match, or an aggregate's rows in the
@@ -511,7 +528,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     let out: Bundle[] = []
     for (let eid of eids) {
       let rec = rows.get(eid)
-      if (rec) out.push(cut(rec))
+      if (rec) out.push(cut(computed(rec)))
     }
     return out
   }
