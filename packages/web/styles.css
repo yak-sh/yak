@@ -358,6 +358,83 @@ html {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.Inbox_Search {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--gap);
+}
+.Inbox_Tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap);
+  padding-block: var(--half-gap);
+}
+.Inbox_Heading {
+  font-size: 16px;
+  margin: var(--gap) 0 var(--half-gap);
+}
+.Inbox_Heading small,
+.Inbox_Reason,
+.Inbox_Empty {
+  color: var(--dim);
+  font-weight: normal;
+}
+.Inbox_Thread {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  border-bottom: 1px solid var(--border);
+}
+.Inbox_Open {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--half-gap);
+  padding: var(--gap) var(--half-gap);
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.Inbox_Open:hover {
+  background: var(--soft);
+}
+.Inbox_Open:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.Inbox_Title {
+  flex: 1;
+}
+.Inbox_Thread-unread .Inbox_Title {
+  font-weight: 600;
+}
+.Inbox_Reason {
+  font-size: 12px;
+}
+.Inbox_Preview {
+  flex-basis: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dim);
+}
+.Inbox_Detail {
+  grid-column: 1 / -1;
+  padding: var(--gap);
+  background: var(--card);
+}
+.Inbox_Empty {
+  font-size: 13px;
+  margin-block: var(--half-gap);
+}
 .MemoryType {
   flex: none;
   color: var(--accent);

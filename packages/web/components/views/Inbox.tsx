@@ -8,6 +8,7 @@ import { Dot } from '../Dot.tsx'
 import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
 import { ListFrame } from '../ListFrame.tsx'
+import { PersonInbox } from './PersonInbox.tsx'
 
 // Embedded thread list; the shared policy supplies membership and ordering.
 let doorOf = (r: InboxRow) =>
@@ -78,7 +79,10 @@ let Line = ({ r }: { r: InboxRow }) => {
   )
 }
 
-export let Inbox = ({ e, limit }: { e: Ent; limit?: number }) => {
+export let Inbox = (props: { e: Ent; limit?: number }) =>
+  props.e.person ? <PersonInbox {...props} /> : <EmbeddedInbox {...props} />
+
+let EmbeddedInbox = ({ e, limit }: { e: Ent; limit?: number }) => {
   // The shared thread policy supplies both ordering and membership.
   let items = useInbox(e.eid)
   if (!items.length) {

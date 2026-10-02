@@ -23,7 +23,7 @@ test('a knock names and opens its target', () => {
   cache.value = {
     person: {
       entity: { eid: 'person', num: 1 },
-      person: { eid: 'person' },
+      project: { eid: 'person' },
     },
     knock: {
       entity: { eid: 'knock', num: 2 },
@@ -81,7 +81,7 @@ test('reading an inbox item keeps the order', () => {
   cache.value = {
     person: {
       entity: { eid: 'person', num: 1 },
-      person: { eid: 'person' },
+      project: { eid: 'person' },
     },
     older: {
       entity: { eid: 'older', num: 2 },
@@ -123,7 +123,7 @@ test('a limited inbox keeps the whole count and bounds its rows', () => {
   cache.value = {
     person: {
       entity: { eid: 'person', num: 1 },
-      person: { eid: 'person' },
+      project: { eid: 'person' },
     },
     ...Object.fromEntries(
       Array.from({ length: 10 }, (_, i) => [`comment-${i}`, {
