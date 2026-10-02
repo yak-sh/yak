@@ -7,8 +7,8 @@
 //
 // A writer is the change's principal, and everyone signed out is one writer:
 // nobody. The store cannot tell one anonymous visitor from another, so they
-// share one pace, which errs the safe way; a component that should hear each
-// of them apart asks a `floor` of `person` too.
+// share one pace. A component that must give each writer a pace of their own
+// also asks a `floor` of `person`, which refuses visitors outright.
 //
 // What a writer wrote, and when, is read off the stamps the graph already
 // keeps: a row's `created` says who made it, and its `updated` who changed it
