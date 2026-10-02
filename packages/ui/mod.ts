@@ -42,6 +42,7 @@ export { Edit } from './Edit.ts'
 export { Gallery } from './Gallery.ts'
 export { Head } from './Head.ts'
 export { Index } from './Index.ts'
+export { Inbox } from './Inbox.ts'
 export { Notes } from './Notes.ts'
 export { Overlay } from './Overlay.ts'
 export {

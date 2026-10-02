@@ -32,11 +32,13 @@ and Recent. Each row shows its newest words and attention reason; expand it to
 answer a decision or reply within the conversation's branches. Archive hides it
 until new activity. Search filters said or received words and can include
 archived threads. Reply, decision and search drafts stay shared across web and
-terminal. The TUI opens on the same Inbox: j/k read, Enter expands a row or uses
-a button, Enter or i on a field types, Enter submits, Shift+Enter adds a reply
-line, and Esc keeps the draft. l follows an entity link and h returns home.
-`TASKS_HOST` points the TUI at its server; `TASKS_TUI_STATE` can name a separate
-file for its browsing position when probing another graph.
+terminal. Expansion and search switches live in the page graph; the UI kit
+provides the inbox's visual parts for both doors. The TUI opens on the same
+Inbox: j/k read, Enter expands a row or uses a button, Enter or i on a field
+types, Enter submits, Shift+Enter adds a reply line, and Esc keeps the draft. l
+follows an entity link and h returns home. `TASKS_HOST` points the TUI at its
+server; `TASKS_TUI_STATE` can name a separate file for its browsing position
+when probing another graph.
 
 With @yaks/canvas installed, canvas entities remain reachable by their ids.
 Without it, canvas views, actions and screen subscriptions are omitted; stored

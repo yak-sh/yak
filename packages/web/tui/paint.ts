@@ -40,15 +40,6 @@ let own = (c: Colors): Sheet => ({
   TFilter_Label: { fg: c.dim, bold: true },
   TKeys_Key: { fg: c.accent },
   TKeys_Hint: { fg: c.dim, dim: true },
-  Inbox_Heading: { bold: true, gap: true },
-  Inbox_Open: { block: true },
-  Inbox_Title: { bold: true },
-  Inbox_Reason: { fg: c.dim },
-  Inbox_Preview: { fg: c.dim, ellipsis: true },
-  Inbox_Detail: { indent: 2 },
-  Inbox_Empty: { fg: c.dim },
-  Tabs_Tab: { block: true },
-
   // the domain views, under the class names the web styles
   Entry_Speaker: { fg: c.dim, bold: true, block: true },
   'Entry-user': { fg: c.who, indent: 2 },

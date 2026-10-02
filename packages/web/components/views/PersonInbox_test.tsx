@@ -3,9 +3,11 @@ import '../../testing.ts'
 import { assertEquals } from '@std/assert'
 import { threads } from '@yaks/inbox'
 import { act } from 'preact/test-utils'
-import { cache, rows } from '../../live.ts'
+import { cache, ent, rows } from '../../live.ts'
 import { mount } from '../mount.ts'
-import { InboxThreads } from './PersonInbox.tsx'
+import { drafts } from '../drafts.ts'
+import { commentPlace } from '../Comments.tsx'
+import { InboxThreads, PersonInbox } from './PersonInbox.tsx'
 
 test('person inbox groups policy threads, shows newest words and answers in place', async () => {
   let ask = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
@@ -115,5 +117,88 @@ test('inbox search controls pass direction and archive choices to the policy rea
     assertEquals(search, { all: true })
   } finally {
     seen.free()
+  }
+})
+
+test('an expanded ask shows its full body and resumes its page state and precious draft after remount', async () => {
+  let eid = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+  let body = 'Please provide the key. '.repeat(20) +
+    'Use the scratch account only.'
+  cache.value = {
+    [eid]: {
+      entity: { eid, num: 5 },
+      task: { eid },
+      doc: { eid, title: 'Provide a key', body },
+      filed: { eid, assignee: 'person' },
+    },
+  }
+  let node = () => (
+    <InboxThreads
+      threads={threads(rows(), { actor: 'person', operator: true })}
+      ready
+      search={{}}
+      onSearch={() => {}}
+    />
+  )
+  let seen = mount(node())
+  try {
+    await act(() =>
+      (seen.root.querySelector('.Inbox_Open') as HTMLButtonElement).click()
+    )
+    assertEquals(
+      seen.root.querySelector('.Inbox_Detail')?.textContent?.includes(
+        'Use the scratch account only.',
+      ),
+      true,
+    )
+    drafts.type(commentPlace(eid), 'Precious unsent words')
+    seen.free()
+    seen = mount(node())
+    assertEquals(
+      seen.root.querySelector('.Inbox_Open')?.getAttribute('aria-expanded'),
+      'true',
+    )
+    assertEquals(
+      (seen.root.querySelector('.Comments_New') as HTMLTextAreaElement).value,
+      'Precious unsent words',
+    )
+    assertEquals(
+      seen.root.querySelector('.Inbox_Detail')?.textContent?.includes(
+        'Use the scratch account only.',
+      ),
+      true,
+    )
+  } finally {
+    seen.free()
+    cache.value = {}
+  }
+})
+
+test('inbox direction and archive switches resume from the page graph after remount', async () => {
+  let eid = 'ffffffff-ffff-4fff-8fff-ffffffffffff'
+  cache.value = {
+    [eid]: {
+      entity: { eid, num: 6 },
+      person: { eid },
+      doc: { eid, title: 'Owner' },
+    },
+  }
+  let node = () => <PersonInbox e={ent(eid)} />
+  let seen = mount(node())
+  try {
+    let button = (text: string) =>
+      [...seen.root.querySelectorAll('button')].find((b) =>
+        b.textContent == text
+      ) as HTMLButtonElement
+    await act(() => button('Received').click())
+    await act(() => button('Include archived').click())
+    seen.free()
+    seen = mount(node())
+    assertEquals(button('Received').getAttribute('aria-pressed'), 'true')
+    assertEquals(button('Hide archived').getAttribute('aria-pressed'), 'true')
+    assertEquals(button('Both').getAttribute('aria-pressed'), 'false')
+  } finally {
+    seen.free()
+    cache.value = {}
   }
 })

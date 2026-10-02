@@ -123,6 +123,9 @@ lost (M-59093).
 
 ## Check it
 
+- Re-read the task’s comments before landing a screen slice, and address review
+  feedback before reporting completion.
+
 - **Style guide:** `/ui?theme=everforest|rosepine&scheme=light|dark` in a
   browser, and `yak ui` in a terminal (`t` switches theme). Look at both themes,
   light and dark, at phone width, and in the terminal.

@@ -18,7 +18,10 @@ test('Ledger changes shape, not theme or tree, with four covered parts and kit f
   assert(html.includes('id="Button" data-skin="skin"'))
   assert(html.includes('id="Dot" data-skin="kit"'))
   assertEquals((html.match(/data-skin="skin"/g) ?? []).length, 4)
-  assertEquals((html.match(/class="Catalog_Entry"/g) ?? []).length, 35)
   let back = await page('everforest', 'dark', 'base')
+  assertEquals(
+    (html.match(/class="Catalog_Entry"/g) ?? []).length,
+    (back.match(/class="Catalog_Entry"/g) ?? []).length,
+  )
   assert(!back.includes('border-width: 1px 1px 3px'))
 })

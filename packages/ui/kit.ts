@@ -21,6 +21,7 @@ import * as gallery from './Gallery.ts'
 import * as head from './Head.ts'
 import * as id from './Id.ts'
 import * as index from './Index.ts'
+import * as inbox from './Inbox.ts'
 import * as menu from './Menu.ts'
 import * as notes from './Notes.ts'
 import * as overlay from './Overlay.ts'
@@ -72,6 +73,7 @@ let modules = {
     Timeline: timeline,
     Turns: turns,
     Notes: notes,
+    Inbox: inbox,
   },
   Page: {
     Head: head,

@@ -1,9 +1,7 @@
 // Comments on an entity: reply branches, shared notes and durable composers.
 import { useModel, useRepoUrl } from './subscriptions.ts'
-import { useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks'
-import { signal } from '@preact/signals'
-import { derivedEid } from '@yaks/graph'
-import { front } from './fields.tsx'
+import { useRef, useState } from 'preact/hooks'
+import { usePage } from './page.ts'
 import { drafts } from './drafts.ts'
 import { type Branch, branches } from '../comments.ts'
 import { commands, orderIn, suggest } from '../commands.ts'
@@ -287,29 +285,12 @@ export let commentPlace = (eid: string, entry = false, replyTo?: string) =>
 // Opening a reply is page state; the words themselves remain synced drafts.
 export let Reply = ({ c }: { c: Ent }) => {
   let target = c.comment!.target
-  let at = derivedEid(`commentBox|${c.eid}`)
-  let box = useMemo(() => {
-    let watch = front.watch(`.commentBox .entity.eid=${at}`)
-    let rows = signal(watch.value)
-    let off = watch.subscribe((now) => rows.value = now)
-    return {
-      rows,
-      free: () => {
-        off()
-        watch.close()
-      },
-    }
-  }, [at])
-  useLayoutEffect(() => box.free, [box])
-  let row = box.rows.value[0]?.commentBox
-  let open = row && typeof row == 'object' && 'open' in row
+  let box = usePage<{ open: boolean }>('commentBox', c.eid)
+  let row = box.value
+  let open = row && 'open' in row
     ? !!row.open
     : !!drafts.text(commentPlace(target, false, c.eid))
-  let set = (on: boolean) =>
-    front.mutate([{
-      entity: { eid: at },
-      commentBox: { open: on },
-    }])
+  let set = (open: boolean) => box.set({ open })
   return open
     ? (
       <>
