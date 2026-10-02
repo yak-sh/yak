@@ -6,12 +6,14 @@ export let listing = async (
   cred: Credential,
   fetcher: typeof fetch = fetch,
   refresh?: (stale: Credential) => Credential | Promise<Credential>,
+  headers: Record<string, string> = {},
 ): Promise<Listed[]> => {
   let url = new URL(cred.base.replace(/\/$/, '') + '/models')
   if (cred.base == CODEX) url.searchParams.set('client_version', '0.157.1')
   let res = await fetcher(url, {
     headers: {
-      authorization: `Bearer ${cred.token}`,
+      ...headers,
+      ...cred.token ? { authorization: `Bearer ${cred.token}` } : {},
       ...cred.account ? { 'chatgpt-account-id': cred.account } : {},
     },
   })

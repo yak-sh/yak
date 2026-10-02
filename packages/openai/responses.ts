@@ -206,7 +206,8 @@ export let items = (done: Frame[]): Item[] => {
  */
 export let responses = (opts: Options): Model =>
   Object.assign(ask(opts), {
-    list: async () => listing(await opts.credential(), opts.fetch),
+    list: async () =>
+      listing(await opts.credential(), opts.fetch, opts.refresh, opts.headers),
     vocab: openaiDoc,
     mark: (reply: Reply) => ({ [OPENAI_COMP]: { response_id: reply.id } }),
     anchor: (comps: Record<string, unknown>) => {

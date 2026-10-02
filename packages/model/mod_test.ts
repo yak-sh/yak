@@ -8,7 +8,7 @@ import { kernelDoc, kernelKeywords, spineDoc } from '@yaks/kernel'
 import { nameKeywords } from '@yaks/names'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
-import { modelDoc, models } from './mod.ts'
+import { billed, modelDoc, models } from './mod.ts'
 
 let using = {
   $defs: {
@@ -74,4 +74,22 @@ test('a new name on a staged builder exists pending, never offered', () => {
   assertEquals(row.model, { name: 'new-release', offered: false })
   assertEquals(!!row.pending, true)
   assertEquals(((g.get([E]) as Bundle[])[0].using as Comp).model, eid)
+})
+
+test('reported cost beats row pricing and unknown cost stays unknown', () => {
+  let reply = {
+    id: 'r',
+    model: 'release',
+    items: [],
+    usage: { input_tokens: 1000, output_tokens: 100 },
+  }
+  assertEquals(billed(reply, { input: 1, output: 2 }), {
+    dollars: 0.0012,
+    reported: false,
+  })
+  assertEquals(billed({ ...reply, cost: 0.25 }, { input: 1, output: 2 }), {
+    dollars: 0.25,
+    reported: true,
+  })
+  assertEquals(billed(reply), undefined)
 })

@@ -30,6 +30,7 @@ import { mailedTo } from './post.ts'
 import { reporting } from './wake.ts'
 import { refuse } from './tool.ts'
 import {
+  billed,
   type Listed,
   type Model,
   ModelError,
@@ -887,6 +888,7 @@ export let accounted = (
   bind: Host & Partial<Pick<Env, 'STORE'>>,
   spaceOf: (dir: Directory) => Promise<Space | null>,
   model: Model,
+  price?: (name: string) => Promise<Price | undefined>,
 ): Model =>
   Object.assign(async (req: Parameters<Model>[0]) => {
     let ns = bind.STORE
@@ -898,9 +900,10 @@ export let accounted = (
     let no = await refusedSpend(dir, space, 'models', bind)
     if (no) throw new ModelError(LIMIT, no)
     let reply = await model(req)
-    if (reply.cost == null || !Number.isFinite(reply.cost) || reply.cost < 0) {
+    let cost = billed(reply, await price?.(req.model))
+    if (!cost || !Number.isFinite(cost.dollars) || cost.dollars < 0) {
       throw new Error('Hosted provider returned no valid request cost')
     }
-    await countedSpend({ STORE: ns }, space, reply.cost, 0)
+    await countedSpend({ STORE: ns }, space, cost.dollars, 0)
     return reply
   }, model)

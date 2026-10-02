@@ -16,6 +16,7 @@ import type { VocabDoc } from '@yaks/vocab'
 import { music, said, workersAi } from '@yaks/workers-ai'
 import { artifactStore, objectBlobs } from '@yaks/blob'
 import { resolve } from '@yaks/connections'
+import { gateway as openai } from '@yaks/openai'
 import { responses as openrouter } from '@yaks/openrouter'
 import { appStore, type Directory, directoryOf } from './directory.ts'
 import { ctxOf } from './connections.ts'
@@ -180,9 +181,22 @@ let asking: Effect = (on, at) => {
     (req: Parameters<Model>[0]) => music(req.model) ? audio(req) : text(req),
     { info: (name: string) => text.info!(name) },
   )
+  let gateway = openai({
+    base: at.env.OPENAI_API,
+    gateway: at.env.AI_GATEWAY,
+    account: at.env.CF_ACCOUNT,
+    ai: at.env.AI,
+    key: at.env.OPENAI_API_KEY,
+    token: at.env.AI_GATEWAY_TOKEN,
+    fetch: at.env.MODEL_FETCH,
+  })
   let lent = {
     [PROVIDER]: served,
     [OPENROUTER]: accounted(at.env, payer(at.app), connected(at)),
+    openai: accounted(at.env, payer(at.app), gateway, async (name) => {
+      let [row] = await at.graph.get([identityEid('model', [name])])
+      return row?.price as Price | undefined
+    }),
   }
   let run = running(at.graph, {
     holder: at.app,

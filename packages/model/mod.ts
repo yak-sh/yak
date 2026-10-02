@@ -357,3 +357,11 @@ export let confirmed = (
     serves: { name },
   }]
 }
+
+/** Reported dollars win; otherwise usage is weighed at the model row's price. */
+export let billed = (reply: Reply, price?: Price) =>
+  reply.cost != null
+    ? { dollars: reply.cost, reported: true }
+    : price && reply.usage
+    ? { dollars: weigh(price, reply.usage), reported: false }
+    : undefined

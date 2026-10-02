@@ -62,3 +62,5 @@ export type { MediaStore } from './media.ts'
 export { jsonFrames } from './sse.ts'
 
 export { listing } from './list.ts'
+
+export { endpoint, type Gateway, gateway } from './gateway.ts'
