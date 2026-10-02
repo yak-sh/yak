@@ -457,7 +457,7 @@ test('interruption expansion rehearses marks without losing old state evidence',
     line = crypto.randomUUID()
   await s.apply([
     { entity: { eid: session }, session: {} },
-    { entity: { eid: model }, model: { name: 'history' } },
+    { entity: { eid: model }, model: {} },
     {
       entity: { eid: ask },
       entry: { session },
