@@ -230,7 +230,7 @@ export let answerSchema: { type: 'object'; [key: string]: unknown } = {
 // bundles are nested under `result` — the shape {@link answerSchema}
 // publishes.
 //
-// Bundles carrying an `error` or an `exception` component are the tool's
+// Bundles carrying a `refusal` or an `exception` component are the tool's
 // refusal, and come back as an error rather than a success that reads like an
 // apology. A refusal from a tool that declared its own output schema carries
 // no structured content: a client checks whatever it is sent against that

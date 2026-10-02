@@ -272,7 +272,7 @@ them back); the platform's own rows about the app (`exception`, `refusal` and
 declined — name each diagnostic separately, such as `.exception` or `.refusal`,
 and asking for the stamps is _not_ asking for these); and `person` rows, which
 the store mints for whoever writes to it and `query('.person&?doc')` lists by
-name. Asking for `.entry` also admits transcript `refusal` and legacy `error`
+name. Asking for `.entry` also admits transcript `refusal`
 rows, but not exceptions.
 
 ## subscribe in practice

@@ -166,7 +166,7 @@ release it happened on and not the one before.
 
 An exception has no `doc` component, and a listing leaves `exception`, `refusal`
 and `error` rows out unless the filter names that diagnostic. Asking for
-`.entry` also admits transcript `refusal` and legacy `error` rows, but not
+`.entry` also admits transcript `refusal` rows, but not
 exceptions. `.doc` is the person's own rows and never the platform's crashes.
 Asking for the stamps is not asking for these: `.created` alone does not drag
 them in. To query exceptions rather than use `app_errors`, name `.exception`.

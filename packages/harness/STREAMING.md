@@ -45,7 +45,7 @@ timer-based checkpoint while the provider is silent.
 Success patches the original ask to `completed` and updates the same response
 entries; it does not append duplicate final messages. Operational interruption
 (abort or transport/provider error) preserves received/checkpointed text and
-marks the attempt `interrupted`. An `error{code: "interrupted"}` entry records
+marks the attempt `interrupted`. Its `interrupted{code}` mark records
 that outcome; a newer input can continue it. A worker restart instead adds a
 local recovery instruction and continues the session on its own. It preserves
 partial output and marks the prior attempt `interrupted`; repeated restarts do

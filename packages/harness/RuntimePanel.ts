@@ -22,7 +22,7 @@ export let runtimeVocab = loadVocab([
   doc,
   pick(toolsDoc, ['refusal']),
   pick(sessionDoc, ['dispatch']),
-  pick(kernelDoc, ['admitted', 'waiting']),
+  pick(kernelDoc, ['admitted', 'waiting', 'interrupted', 'failed']),
 ])
 let label = (match: string, text: string, color: string): Renderer => ({
   view: 'Runtime',
@@ -31,8 +31,8 @@ let label = (match: string, text: string, color: string): Renderer => ({
 })
 export let runtimeViews = define([
   label('.session&.dispatch.status=queued', 'queued', 'Key'),
-  label('.session&.attempt.state=inflight', 'generating', 'Key'),
-  label('.session&.error.code=interrupted', 'interrupted', 'Muted'),
+  label('.session&.attempt.by&!interrupted', 'generating', 'Key'),
+  label('.session&.interrupted', 'interrupted', 'Muted'),
   label('.session.status=running&.call', 'waiting for tool', 'Key'),
   label('.session.status=running', 'running', 'Key'),
   label('.session.status=pending', 'pending', 'Key'),

@@ -399,7 +399,11 @@ let ended = async (g: Graph, session: string, o: Opts): Promise<void> => {
     entry: { session },
     stop: {},
     ...(code === 0 ? {} : {
-      error: { code: 'exit' },
+      failed: {
+        reason: code == null
+          ? 'Provider exit was not observed'
+          : `Provider exited ${code}`,
+      },
       content: {
         body: code == null
           ? 'the provider ended, and nobody saw how'

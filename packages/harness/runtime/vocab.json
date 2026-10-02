@@ -12,7 +12,7 @@
     "attempt": {
       "component": true,
       "properties": {
-        "state": {
+        "by": {
           "type": "string"
         }
       }
@@ -25,14 +25,6 @@
       "component": true,
       "extends": true,
       "properties": {}
-    },
-    "error": {
-      "component": true,
-      "properties": {
-        "code": {
-          "type": "string"
-        }
-      }
     }
   }
 }

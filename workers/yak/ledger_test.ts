@@ -55,9 +55,9 @@ let app = () => {
   return graph({ vocab, storage: ram(vocab) })
 }
 
-test('the invocation ledger keeps refusals and legacy errors out of caller data', async () => {
+test('the invocation ledger keeps refusals out of caller data', async () => {
   let host = app(), door = ledger(host)
-  for (let failure of ['refusal', 'error']) {
+  for (let failure of ['refusal']) {
     await door.apply([{
       entity: { eid: failure },
       [failure]: { code: 'invalid' },

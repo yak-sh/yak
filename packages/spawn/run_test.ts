@@ -99,7 +99,7 @@ test('a run that stopped talking is still over, and says so once', async () => {
     let said = await entries(g)
     let last = said.at(-1)!
     assertEquals(comp(last, 'stop'), {})
-    assertEquals(comp(last, 'error').code, 'exit')
+    assertEquals(comp(last, 'failed').reason, 'Provider exited 3')
     assertEquals(comp(last, 'content').body, 'the provider exited 3')
     // And it is written once, however often the tail is run again.
     await follow(g, 'S1', claude.read, { dir })

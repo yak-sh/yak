@@ -10,12 +10,10 @@ import { doorOf } from './door.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { dispatchMove, dispatchRule } from './mover.ts'
-import { type Rehearsal, type Rule, RULES, type Standing } from './mover.ts'
+import { type Rehearsal, type Rule, type Standing } from './mover.ts'
 import { state } from './testing.ts'
 
 let NAME = 'ada/notes'
-let refusals = RULES.filter((r) => r.mark.startsWith('yak/store/refusal'))
-  .map((r): Rule => ({ ...r, live: undefined }))
 
 // An app whose rows say a word two ways, the way a rename leaves them.
 let WORDS = JSON.stringify({
@@ -320,131 +318,4 @@ test('source reads do not move or count sources, and rehearsal rolls back', asyn
   assertEquals(await count(s, '.was'), 0)
   assertEquals(await count(s, '.now.word=source'), 52)
   assertEquals(await s.query(`.entity.eid=${source}`), before)
-})
-
-test('refusal rules rehearse unchanged and convert only answers when enabled', async () => {
-  let s = await store(0, ...refusals)
-  let source = crypto.randomUUID()
-  let native = crypto.randomUUID()
-  let imported = crypto.randomUUID()
-  let retained = crypto.randomUUID()
-  await s.apply([
-    {
-      entity: { eid: source },
-      call: { to: crypto.randomUUID() },
-      execution: { state: 'failed', by: 'runner' },
-      imported: { source: 'fixture.jsonl', line: 11 },
-    },
-    {
-      entity: { eid: native },
-      error: { code: 'Refused' },
-      refusal: { code: 'Refused' },
-      output: { source },
-      content: { body: 'refused' },
-    },
-    {
-      entity: { eid: imported },
-      result: { call: source, ms: 17 },
-      imported: { source: 'fixture.jsonl', line: 12 },
-      content: { body: 'historical failed tool result' },
-    },
-    {
-      entity: { eid: retained },
-      error: { code: 'transport' },
-      content: { body: 'connection lost' },
-    },
-  ])
-  let before = await s.query('*')
-  let report = await s.rehearse()
-  assertEquals(
-    report.map((r) => [r.rows, r.moved, r.batches, r.failed, r.unspoken]),
-    [[2, 2, 1, undefined, undefined], [1, 1, 1, undefined, undefined]],
-  )
-  assertEquals(await s.query('*'), before)
-  await s.alarm()
-  assertEquals(await s.query('*'), before)
-  assertEquals((await s.moves()).map((r) => r.live), [false, false])
-  let sourceBefore = await s.query(`.entity.eid=${source}`)
-  let retainedBefore = await s.query(`.entity.eid=${retained}`)
-  let [nativeBefore] = await s.query(`.entity.eid=${native}&.content&.output`)
-  let [importedBefore] = await s.query(
-    `.entity.eid=${imported}&.content&.result&.imported`,
-  )
-  s.wake(...refusals.map((r) => ({ ...r, live: 'apps' as const })))
-  await s.alarm()
-  assertEquals(await count(s, '.error'), 1)
-  assertEquals(await count(s, '.refusal.code=Refused'), 1)
-  assertEquals(await count(s, '.refusal.code=is_error'), 1)
-  assertEquals(await s.query(`.entity.eid=${source}`), sourceBefore)
-  assertEquals(await s.query(`.entity.eid=${retained}`), retainedBefore)
-  let [nativeAfter] = await s.query(`.entity.eid=${native}&.content&.output`)
-  let [importedAfter] = await s.query(
-    `.entity.eid=${imported}&.content&.result&.imported`,
-  )
-  assertEquals(
-    [nativeAfter.content, nativeAfter.output],
-    [nativeBefore.content, nativeBefore.output],
-  )
-  assertEquals(
-    [importedAfter.content, importedAfter.result, importedAfter.imported],
-    [importedBefore.content, importedBefore.result, importedBefore.imported],
-  )
-})
-
-test('refusal rehearsal and enabled batches preserve retry-pending provider errors', async () => {
-  let s = await store(0, ...refusals)
-  let session = crypto.randomUUID()
-  let ask = crypto.randomUUID()
-  let notice = crypto.randomUUID()
-  let pending = crypto.randomUUID()
-  let completed = crypto.randomUUID()
-  let refused = crypto.randomUUID()
-  await s.apply([
-    { entity: { eid: session }, session: {} },
-    {
-      entity: { eid: ask },
-      entry: { session, seq: 1 },
-      ask: { to: crypto.randomUUID(), through: crypto.randomUUID() },
-      attempt: {},
-      interrupted: { code: 'transport' },
-    },
-    {
-      entity: { eid: notice },
-      entry: { session, seq: 2 },
-      notice: {},
-    },
-    {
-      entity: { eid: pending },
-      entry: { session, seq: 3 },
-      error: { code: 'http_429' },
-      content: { body: 'rate limited; effects pool retries' },
-    },
-    {
-      entity: { eid: completed },
-      entry: { session, seq: 4 },
-      ask: { to: crypto.randomUUID(), through: crypto.randomUUID() },
-      attempt: {},
-    },
-    {
-      entity: { eid: refused },
-      entry: { session, seq: 5 },
-      error: { code: 'http_401' },
-      content: { body: 'credential refused' },
-    },
-  ])
-  let before = await s.query('*')
-  let [report] = await s.rehearse()
-  assertEquals([report.rows, report.moved, report.failed], [2, 2, undefined])
-  assertEquals(await s.query('*'), before)
-  let pendingBefore = await s.query(`.entity.eid=${pending}`)
-  let askBefore = await s.query(`.entity.eid=${ask}`)
-  let completedBefore = await s.query(`.entity.eid=${completed}`)
-  s.wake(...refusals.map((r) => ({ ...r, live: 'apps' as const })))
-  await s.alarm()
-  assertEquals(await count(s, '.error.code=http_429'), 1)
-  assertEquals(await count(s, '.refusal.code=http_429'), 0)
-  assertEquals(await count(s, '.refusal.code=http_401'), 1)
-  assertEquals(await s.query(`.entity.eid=${pending}`), pendingBefore)
-  assertEquals(await s.query(`.entity.eid=${ask}`), askBefore)
-  assertEquals(await s.query(`.entity.eid=${completed}`), completedBefore)
 })

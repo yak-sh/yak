@@ -74,9 +74,8 @@ these components:
 - `content{body}` stores text. `output{source, id?, value?}` identifies what
   produced output, can preserve provider-specific output metadata, and carries
   the output as data where its producer declared a shape for it.
-- `refusal{code}` records a deliberate no. Legacy `error{code}` remains readable
-  during migration and still records interruptions and check verdicts.
-  `exception` records an unexpected failure and can carry diagnostic fields
+- `refusal{code}` records a deliberate no. `exception` records an unexpected
+  failure and can carry diagnostic fields
   supplied by the graph's stamping rules.
 
 The call is written before its tool runs, so the request remains recorded if
@@ -297,7 +296,7 @@ package removes its checks.
 check. `about` is the claim that holds when nothing is found ("no transcript has
 stalled"): the body reads `<about> — nothing to report`, or
 `<n> finding(s) against: <about>` above the findings. It always includes
-readable `content.body` and `output.source`. If there are findings, `error.code`
+readable `content.body` and `output.source`. If there are findings, `finding.level`
 contains the most severe level: `fail` for a measured invariant violation, or
 `warn` for a leak or an outcome the check could not determine. A check with no
 findings still returns a response. `ailing(answer)` is true only when that
@@ -336,7 +335,7 @@ The former log fields map to graph data as follows:
 | Caller      | `created.by` on the call                                                                    |
 | Duration    | `result.ms`                                                                                 |
 | Outcome     | `execution.state`                                                                           |
-| Failure     | A `refusal` (legacy `error`) or `exception` bundle whose `output.source` refers to the call |
+| Failure     | A `refusal` or `exception` bundle whose `output.source` refers to the call |
 | Time        | `created.at`                                                                                |
 
 For example:

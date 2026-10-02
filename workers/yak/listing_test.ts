@@ -55,16 +55,19 @@ test("the kernel's own rows are not the person's", () => {
   ])
 })
 
-test('a session query and an eid include its error entry', () => {
+test('a session query and an eid include its refusal entry', () => {
   let error = {
     kind: 'entry',
     entity: { eid: 'failure' },
     entry: { session: 'heal', seq: 3 },
-    error: { code: 'http_400' },
+    refusal: { code: 'http_400' },
     content: { body: 'OpenRouter speech request failed (400)' },
   }
   let body = JSON.stringify([error])
-  assertEquals(asking('.entry.session=heal', ['error']), '.entry.session=heal')
+  assertEquals(
+    asking('.entry.session=heal', ['refusal']),
+    '.entry.session=heal',
+  )
   assertEquals(rows(listing(body, '.entry.session=heal&*')), [error])
   assertEquals(rows(listing(body, '.entity.eid=failure&*')), [error])
   assertEquals(rows(listing(body, '.content')), [])

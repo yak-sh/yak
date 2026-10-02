@@ -226,7 +226,7 @@ let checkup = async (
   ) as Bundle[]
   return {
     body: String((said.content as Comp).body),
-    level: (said.error as Comp | undefined)?.code,
+    level: (said.finding as Comp | undefined)?.level,
   }
 }
 
@@ -390,7 +390,7 @@ test('session check leaves an incomplete imported log for inspection', async () 
       locked(s),
     ) as Bundle[]
     assertEquals(answer.length, 1)
-    assertEquals(comp(answer[0], 'error').code, 'warn')
+    assertEquals(comp(answer[0], 'finding').level, 'warn')
   } finally {
     await Deno.remove(path)
   }

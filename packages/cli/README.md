@@ -369,7 +369,7 @@ step, and it leaves the pool, claiming no new run. `close()` does the same,
 closes the duty thread, waits for every effect the host started to finish, for
 as long as each takes, and says in the log which ones it is waiting on
 ([`drain.ts`](./drain.ts)); then it ends every call its runner is still running
-as `error{code: 'interrupted'}`, releases leases, records the process exit, and
+as `interrupted{code}`, releases leases, records the process exit, and
 closes SQLite. What a run left owed is the next worker's. Plugin timers and
 loops should listen to `host.stopping` or the signal passed to `service`.
 

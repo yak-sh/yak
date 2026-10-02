@@ -32,7 +32,8 @@ export let runtimeRows = async (
       ...b,
       ...attempt ? { attempt: attempt.attempt } : {},
       ...waiting ? { call: call.call } : {},
-      ...tail?.error ? { error: tail.error } : {},
+      ...tail?.interrupted ? { interrupted: tail.interrupted } : {},
+      ...tail?.failed ? { failed: tail.failed } : {},
       ...tail?.refusal ? { refusal: tail.refusal } : {},
       ...(attempt ?? tail)?.created
         ? { updated: (attempt ?? tail)!.created }
@@ -91,7 +92,12 @@ export let runtimeAction = async (
   let [tail] = await a.h.g.read(
     '.entry.session=' + session + '&!notice&.order=-entry.seq&.limit=1&*',
   )
-  let interrupted = (tail?.error as Comp | undefined)?.code == 'interrupted'
+  let [ask] = await a.h.g.read(
+    '.entry.session=' + session +
+      '&.ask&.order=-entry.seq&.limit=1&*',
+  )
+  let interrupted = ask?.interrupted != null && !tail?.refusal &&
+    !tail?.exception
   if ((row.session as Comp).status != 'settled' && !interrupted) {
     throw new Error(
       'Continue requires idle or interrupted work; other failures and stopped work are not replayed',

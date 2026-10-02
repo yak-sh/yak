@@ -1149,7 +1149,7 @@ let outcome = async (g: Graph) => {
   let [ask, error] = (await transcript(g, ids.s)).slice(-2)
   return [
     (ask.attempt as Comp | undefined)?.state,
-    ((error.refusal ?? error.error ?? ask.interrupted) as Comp).code,
+    ((error.refusal ?? ask.interrupted) as Comp).code,
     textOf(error),
   ]
 }
@@ -1235,7 +1235,7 @@ test('a summary the provider keeps failing ends the transcript, never loops', as
     assertEquals(seen.calls, count)
     assertEquals(
       (await kinds(g, ids.s)).slice(-(count + 1)),
-      ['input', ...Array(count).fill(error().retry ? 'error' : 'refusal')],
+      ['input', ...Array(count).fill(error().retry ? 'ask' : 'refusal')],
     )
     assertEquals((await outcome(g))[1], error().code)
   }
@@ -1831,7 +1831,7 @@ test('a failed compaction records reported failure usage and never invents count
         : undefined,
     )
     assertEquals((ask.attempt as Comp).state, 'completed')
-    assertEquals((ask.error as Comp).code, 'refused')
+    assertEquals((ask.refusal as Comp).code, 'refused')
   }
 })
 
@@ -1861,7 +1861,7 @@ test('empty compaction replies retain billed usage without runnable orphan sessi
   let own = await transcript(g, conversation)
   assertEquals(statusOf(own), 'settled')
   let ask = own.find((b) => b.ask)!
-  assertEquals((ask.error as Comp).code, 'compaction')
+  assertEquals(ask.failed != null, true)
   assertEquals(ask.usage, { input_tokens: 1234, output_tokens: 0 })
   assertEquals((ask.attempt as Comp).state, 'completed')
   assertEquals(own.some((b) => b.output && textOf(b) == 'Empty summary'), true)

@@ -16,7 +16,7 @@
 //   entry{session, seq}      one line; the component beside it is its kind
 //     + content{body}        its prose, when it has any. Alone, an input: an
 //                            instruction (the first one is the request).
-//                            Beside a result, refusal, error or exception, theirs
+//                            Beside a result, refusal or exception, theirs
 //     + output{source}       what produced the prose beside it: the ask, for
 //                            what a model said
 //     + using{provider, model, effort, instructions}
@@ -29,7 +29,7 @@
 //     + result{call}         what a tool answered
 //     + stop                 the runner performs nothing after this
 //     + refusal{code}        a deliberate no, never tracked
-//     + error{code}          legacy/interruption/check outcomes
+//     + finding{level}       measured check results
 //     + exception            unexpected: a defect report, not a stop
 //
 // An ask and a call share no properties on purpose: one is the runner reaching

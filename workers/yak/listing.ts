@@ -83,7 +83,7 @@ export let asking = (line: string, words: string[] = PLATFORM) => {
   if (!ask || line.includes('id=')) return line
   let screen = words.filter((k) =>
     !names(line, k) &&
-    !((k == 'error' || k == 'refusal') && names(line, 'entry'))
+    !(k == 'refusal' && names(line, 'entry'))
   ).map((k) => `!${k}`)
   return line.slice(0, line.length - ask.length) + conjoin(ask, ...screen)
 }

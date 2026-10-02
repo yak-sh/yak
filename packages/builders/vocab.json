@@ -373,11 +373,13 @@
       "effect": true,
       "created": [
         "attempt",
-        "error",
-        "refusal"
+        "refusal",
+        "interrupted",
+        "failed",
+        "completed"
       ],
       "changed": [
-        "attempt.state"
+        "attempt.by"
       ],
       "description": "adapt a model session's reply to a builder tool output once its ask completes"
     },

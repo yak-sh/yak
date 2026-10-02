@@ -46,7 +46,7 @@ test('runtime cancellation preserves partial text, waits for new input, and resu
     await entered.promise
     let rows = await a.runtime(id)
     assertEquals(rows.length, 1)
-    assertEquals(rows[0].attempt, { state: 'inflight' })
+    assertEquals((rows[0].attempt as Comp).by != null, true)
     assertMatch(await a.control(id, 'interrupt'), 'Cancellation requested')
     await a.idle(id)
     let entries = await a.transcript(id)
@@ -54,9 +54,7 @@ test('runtime cancellation preserves partial text, waits for new input, and resu
       entries.some((b) => (b.content as { body?: string })?.body == 'partial'),
     )
     assert(
-      entries.some((b) =>
-        (b.error as { code?: string })?.code == 'interrupted'
-      ),
+      entries.some((b) => b.interrupted != null),
     )
     assert(!entries.some((b) => b.exception))
     assertEquals(calls, 1)
@@ -117,7 +115,6 @@ test('runtime projects refusals without making failed work resumable', async () 
   try {
     for (
       let [failure, code] of [
-        ['error', 'limit'],
         ['refusal', 'limit'],
         ['refusal', 'interrupted'],
       ]
@@ -182,7 +179,7 @@ test('runtime panel reads only while visible; navigation and feedback stay local
         {
           entity: { eid: 'one' },
           session: { id: 'one', status: 'running' },
-          attempt: { state: 'inflight' },
+          attempt: { by: 's1' },
         },
         {
           entity: { eid: 'two' },

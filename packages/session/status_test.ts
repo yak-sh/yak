@@ -100,36 +100,6 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
     }),
     said(4, 'e2'),
   ], 'settled'],
-  ['completed provider refusal is terminal', [
-    request(1),
-    entry(2, { ask: { through: 'e1' }, attempt: {} }),
-    entry(3, {
-      error: { code: 'http_400' },
-      content: { body: 'OpenRouter speech request failed (400)' },
-    }),
-  ], 'failed'],
-  ['new input during a refused ask still needs an answer', [
-    request(1),
-    entry(2, { ask: { through: 'e1' }, attempt: {} }),
-    input(3),
-    entry(4, { error: { code: 'http_400' } }),
-  ], 'pending'],
-  ['a later error after a new input keeps its retry allowance', [
-    request(1),
-    entry(2, { ask: { through: 'e1' }, attempt: {} }),
-    said(3, 'e2'),
-    input(4),
-    entry(5, { error: { code: 'no_model' } }),
-  ], 'pending'],
-  ['three refused asks exhaust the retry bound', [
-    request(1),
-    entry(2, { ask: { through: 'e1' }, attempt: {} }),
-    entry(3, { error: { code: 'exhausted' } }),
-    entry(4, { ask: { through: 'e1' }, attempt: {} }),
-    entry(5, { error: { code: 'exhausted' } }),
-    entry(6, { ask: { through: 'e1' }, attempt: {} }),
-    entry(7, { error: { code: 'exhausted' } }),
-  ], 'failed'],
   ['a failure the provider may yet answer is pending: the pool asks again', [
     request(1),
     entry(2, {
@@ -204,7 +174,7 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
     }),
     said(3, 'e2'),
     entry(4, {
-      error: { code: 'interrupted' },
+      notice: {},
       content: { body: 'Response interrupted.' },
     }),
   ], 'failed'],
@@ -219,7 +189,7 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
     input(3),
     said(4, 'e2'),
     entry(5, {
-      error: { code: 'interrupted' },
+      notice: {},
       content: { body: 'Response interrupted.' },
     }),
   ], 'pending'],
@@ -329,20 +299,13 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
     }),
     entry(4, { exception: {} }),
   ], 'failed'],
-  ['one error', [input(1), entry(2, { error: { code: 'x' } })], 'pending'],
-  ['three errors', [
-    input(1),
-    entry(2, { error: { code: 'x' } }),
-    entry(3, { error: { code: 'x' } }),
-    entry(4, { error: { code: 'x' } }),
-  ], 'failed'],
   ['a request refused at its limit', [
     request(1),
-    entry(2, { error: { code: 'limit' } }),
+    entry(2, { refusal: { code: 'limit' } }),
   ], 'failed'],
   ['new input after a limit', [
     request(1),
-    entry(2, { error: { code: 'limit' } }),
+    entry(2, { refusal: { code: 'limit' } }),
     input(3),
   ], 'pending'],
 ]
@@ -381,8 +344,8 @@ test('kindOf: prose alone is an input, prose with an output is one', () => {
     'result',
   )
   assertEquals(
-    kindOf(entry(4, { error: { code: 'x' }, content: { body: 'x' } })),
-    'error',
+    kindOf(entry(4, { refusal: { code: 'x' }, content: { body: 'x' } })),
+    'refusal',
   )
   assertEquals(
     kindOf(entry(5, { refusal: { code: 'x' }, content: { body: 'no' } })),

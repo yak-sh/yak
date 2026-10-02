@@ -27,8 +27,8 @@
 // process that wrote it seals it. `apply()` waits for its effect hooks, so
 // whoever wrote the value gets their answer once it is sealed and never sees
 // the mark; only another reader in between does. A seal that fails says so on
-// the secret, in @yaks/tools' words: `error` for a failure the vault expects
-// and the seal tries again, `exception` for one somebody has to fix.
+// the secret: `provisional{note}` while a seal is being retried,
+// `exception` for a failure somebody has to fix.
 //
 // Nothing touches the vault inside the transaction. A vault may answer later
 // (D1 on yaks.app) and a transaction may not wait for it (a Durable Object's
@@ -238,9 +238,9 @@ let told = (e: unknown) => e instanceof Error ? e.message : String(e)
  * component — is dropped from the vault.
  *
  * A seal can fail two ways. One the vault calls {@link retryable} is expected:
- * the entity gets an `error` (@yaks/tools) saying so, and the seal is tried
+ * the provisional mark says it is trying again, and the seal is tried
  * again here, while the value is still in memory and the writer is still
- * waiting; a later success removes the `error` with the mark. Anything else —
+ * waiting; a later success removes the mark and its message. Anything else —
  * or a retryable failure that outlasts every try, so one failure can be both —
  * is a defect somebody has to fix: the mark comes off, an `exception` goes on
  * with what went wrong in `content` beside it, and the failure is rethrown for
@@ -274,8 +274,8 @@ let sealing = (vault: Vault, write: Write): Hook => {
         mark({
           entity: { eid },
           [PROVISIONAL]: null,
-          ...b?.error || b?.exception
-            ? { error: null, exception: null, content: null }
+          ...b?.exception || b?.provisional
+            ? { exception: null, content: null }
             : {},
         }))
     let attempt = (n: number): unknown =>
@@ -284,7 +284,7 @@ let sealing = (vault: Vault, write: Write): Hook => {
           ? after(
             mark({
               entity: { eid },
-              error: { code: 'transient' },
+              [PROVISIONAL]: { note: 'Saving the key, trying again' },
               content: { body: `saving the key, trying again: ${told(err)}` },
             }),
             () => pause(n).then(() => attempt(n + 1)),

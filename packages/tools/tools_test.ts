@@ -557,13 +557,13 @@ test('a tool that ANSWERS a fault has not failed', async () => {
     // A listing of what broke: entities wearing the very words a failure
     // wears. The runner's own `execution` is what says whether the call
     // failed, so a host reads that and not the shape of the answer.
-    run: (_, g) => g.read('.error&*'),
+    run: (_, g) => g.read('.finding&*'),
   }])
   await r.ensure()
-  await g.apply([{ entity: { eid: 'b1' }, error: { code: 'broke' } }])
+  await g.apply([{ entity: { eid: 'b1' }, finding: { level: 'fail' } }])
   let asked = called('example_echo')
   let landed = await r.call(asked)
-  assertEquals(landed.some((b) => b.error), true)
+  assertEquals(landed.some((b) => b.finding), true)
   assertEquals(faulted(landed, asked.entity.eid), false)
 })
 

@@ -6,7 +6,7 @@
 //
 // A check returns an ordinary tool answer — text on `content{body}`, with
 // `output{source}` naming the call it came from — plus one extra component:
-// `error{code}` when it found something, `fail` for a measured violation of a
+// `finding{level}` when it found something, `fail` for a measured violation of a
 // contract the package keeps, `warn` for a leak or for a verdict it could not
 // establish. Reporting faults is not itself a failure (`faulted` in
 // ./runner.ts reads the call's own `execution.state`), so a check that finds a
@@ -51,7 +51,7 @@ let worst = (found: Finding[]): Level | undefined =>
 /**
  * What a check returns: one bundle, however much it found. `about` is the
  * claim that holds when nothing is found ("no transcript has stalled"); the
- * text leads with it either way, and `error{code}` carries the level for a
+ * text leads with it either way, and `finding{level}` carries the level for a
  * caller that has to act on it.
  *
  * One bundle rather than one per finding, deliberately: the runner writes what
@@ -66,7 +66,7 @@ export let checked = (
   let level = worst(found)
   return [{
     entity: { eid: '$check' },
-    ...level ? { error: { code: level } } : {},
+    ...level ? { finding: { level } } : {},
     content: {
       // `about` is what holds when the check finds nothing, so a check that
       // found something says it against that claim rather than under it.
@@ -84,4 +84,4 @@ let said = (f: Finding): string => `- ${f.level}: ${f.text}`
 /** Whether a check's answer reports a measured violation — what the CLI turns
  * into an exit code, and what a scheduled sweep looks for. */
 export let ailing = (answer: Bundle[]): boolean =>
-  answer.some((b) => (b.error as Comp | undefined)?.code == 'fail')
+  answer.some((b) => (b.finding as Comp | undefined)?.level == 'fail')

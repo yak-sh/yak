@@ -179,13 +179,13 @@ test('the writer waits for the seal; a reader in between sees the mark', async (
   assertEquals(await reveal(base, 'A'), 'one')
 })
 
-test('a failure the vault calls retryable is an error, tried again until it seals', async () => {
+test('a failure the vault calls retryable is provisional, tried again until it seals', async () => {
   using time = new FakeTime()
   let { g, vault, reported } = setup(failing(transient()))
   let writing = g.apply([sealed('A', 'one')])
   await time.runMicrotasks()
   let said = (await whole(g, 'A'))!
-  assertEquals(said.error, { code: 'transient' })
+  assertEquals(said.provisional, { note: 'Saving the key, trying again' })
   assert(String((said.content as Record<string, string>).body).includes('lost'))
   await time.tickAsync(2_000)
   await writing
@@ -217,7 +217,7 @@ test('any other failure is an exception, reported, and the value is gone', async
   assertEquals(await reveal(vault, 'A'), 'one')
 })
 
-test('a retryable failure that outlasts every try is both', async () => {
+test('a retryable failure that outlasts every try is reported', async () => {
   using time = new FakeTime()
   let { g, reported } = setup(failing(...[1, 2, 3, 4, 5].map(transient)))
   let writing = g.apply([sealed('A', 'one')])
@@ -225,7 +225,7 @@ test('a retryable failure that outlasts every try is both', async () => {
   await writing
   let said = (await whole(g, 'A'))!
   assertEquals(said.provisional, undefined)
-  assertEquals([said.error, said.exception], [{ code: 'transient' }, {}])
+  assertEquals([said.error, said.exception], [undefined, {}])
   assertEquals(reported.length, 1)
 })
 

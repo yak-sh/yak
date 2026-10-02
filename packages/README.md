@@ -318,7 +318,7 @@ grouped approximately by function, **not** by dependency order.
   it, a `bug{fault, hits, last}` keyed by the fault, and counts recurrences on
   that task while it is open. A new bug starts a @yaks/spawn session holding its
   claim, marked `fixer{bug}`, unless it is off, muted by `nofix`, at the fixer
-  cap or cooling down. `refusal` and legacy `error` never file.
+  cap or cooling down. `refusal` never files.
 - **[@yaks/context](./context)** — Build instruction entries with source ids and
   snapshot hashes so a transcript can record what a model was given.
   `promptEntry()` itself performs no writes; `outputView()` stores projection
@@ -583,7 +583,7 @@ A check belongs to the package whose invariant it is — `@yaks/mail` checks for
 letter that arrived with no sender, `@yaks/session` for a lock whose holder has
 exited, `@yaks/sqlite` for the database file's own keys. It returns bundles like
 any other tool: its message in `content{body}`, `output{source}` naming the call
-it came from, and `error{code}` set to `fail` (a violation it measured) or
+it came from, and `finding{level}` set to `fail` (a violation it measured) or
 `warn` (a possible problem, or something it could not verify). A check that
 finds nothing still returns a result, and one that cannot run reports that
 rather than passing silently. `packages/cli/checks_test.ts` shows the whole idea

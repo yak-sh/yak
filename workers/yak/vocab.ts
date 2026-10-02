@@ -188,9 +188,7 @@ let markDocs: VocabDoc[] = [
  * graph.ts) is its only writer.
  *
  * @yaks/tools declares `exception` too, with these same properties; the
- * platform's is also a kind that sorts before `doc`, and @yaks/tools' `error`
- * beside it means another thing than the platform's ({@link kernelDoc}), so
- * both stay here until that is settled.
+ * platform's is also a kind that sorts before `doc`.
  */
 export let exceptionDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true },
@@ -496,15 +494,14 @@ export const classificationDoc: VocabDoc = sealed(
  * wait: a `call` wearing a `wake` is work asked for later (D-37562), and the
  * store that will run it is the store that has to hold it.
  *
- * `error` and `exception` are left out: both vocabularies spell them, the
- * platform's are the ones a break page reads, and the one property @yaks/tools
- * adds (`error.code`) is declared on the platform's above.
+ * `exception` is left out: the platform's is the one a break page reads.
+ * The tracked `error{at, message, code}` remains in the kernel vocabulary.
  */
 let invocationDoc: VocabDoc = {
   title: 'invocation',
   $defs: Object.fromEntries(
     Object.entries(toolsDoc.$defs ?? {}).filter(
-      ([name]) => name != 'error' && name != 'exception',
+      ([name]) => name != 'exception',
     ),
   ),
 }

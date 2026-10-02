@@ -122,7 +122,9 @@ let asked = (
   entity: { eid },
   entry: { session, seq },
   ask: { to: ids.model },
-  attempt: { state },
+  attempt: { by: state == 'inflight' ? session : null },
+  interrupted: state == 'interrupted' ? {} : null,
+  completed: state == 'completed' ? {} : null,
 })
 let replied = (
   session: string,
@@ -753,7 +755,7 @@ test('refusal bookkeeping does not wake an immediate builder', async () => {
   assertEquals((await calls(g, await runOf(g, ['a']))).length, 1)
 })
 
-for (let failure of ['error', 'refusal']) {
+for (let failure of ['interrupted', 'refusal']) {
   test(`a model turn ${failure} failed for good leaves its key retryable without another call`, async () => {
     let { g, runner } = await shop()
     await g.apply([source('a'), {
@@ -770,9 +772,13 @@ for (let failure of ['error', 'refusal']) {
       [kind]: { code },
     })
     // A request the runner asks again is not the end of the turn.
-    await g.apply([failed(2, 'connection', 'error')])
+    await g.apply([{
+      ...failed(2, 'connection', 'interrupted'),
+      ask: { through: session.entity.eid },
+      attempt: {},
+    }])
     assert(comp(await one(g, build), 'build')?.key)
-    await g.apply([failed(3, 'limit')])
+    await g.apply([{ ...failed(3, 'limit'), failed: { reason: 'At limit' } }])
     assertEquals(comp(await one(g, build), 'build')?.key, null)
     assertEquals((await calls(g, build)).length, 1)
   })

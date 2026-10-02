@@ -19,15 +19,6 @@
 //   stop          → stopped   nothing may be done
 //   exception     → failed    the runner could not continue past it
 //   refusal       → failed    a deliberate no, until new input
-//   model error   → failed after one completed provider attempt
-//   model error, its ask interrupted → pending   the provider may yet answer:
-//                   the pool asks again after its backoff (./react.ts)
-//   other error   → failed once the last RETRIES entries are all errors,
-//                   else pending (the runner retries)
-//   error `limit` → failed    a ceiling refused it, and asking again would
-//                   meet the same ceiling; new input asks afresh
-//   nothing       → empty
-//
 // `pending` is the runner's to answer (./run.ts), and it answers only a
 // transcript that asked it: one carrying a `using` (its request) or an `ask`
 // (a turn it took). One with neither is run outside the graph — a harness's
@@ -40,7 +31,7 @@
 //
 // Prose is `content{body}`; alone it is an input, and an `output{source}`
 // beside it records what produced it — the ask, for what a model returned. A
-// result, refusal, error or exception carries its prose the same way and is its own
+// result, refusal or exception carries its prose the same way and is its own
 // kind.
 
 import type { Bundle, Comp } from '@yaks/graph'
@@ -73,7 +64,6 @@ import {
   ASK,
   CALL,
   CONTENT,
-  ERROR,
   EXCEPTION,
   OUTPUT,
   REFUSAL,
@@ -98,7 +88,6 @@ export type Kind =
   | 'result'
   | 'stop'
   | 'refusal'
-  | 'error'
   | 'interrupted'
   | 'exception'
 
@@ -111,7 +100,7 @@ export type TranscriptStatus =
   | 'stopped'
   | 'failed'
 
-/** How many consecutive errors the runner retries through before it leaves a
+/** How many consecutive interrupted requests the runner retries through before it leaves a
  * transcript `failed`. */
 export let RETRIES = 3
 
@@ -124,7 +113,6 @@ let KINDS: [string, Kind][] = [
   [STOP_ENTRY, 'stop'],
   [EXCEPTION, 'exception'],
   [REFUSAL, 'refusal'],
-  [ERROR, 'error'],
   [ASK, 'ask'],
   [CALL, 'call'],
   [RESULT, 'result'],
@@ -235,30 +223,6 @@ export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
       ? 'failed'
       : 'pending'
   }
-  let prior = all.at(-2)
-  let code = (newest.error as Comp | undefined)?.code
-  if (
-    kind == 'error' && prior?.ask &&
-    attemptState(prior) == 'completed'
-  ) return afterAsk()
-  // A failure the provider may yet answer keeps the provider's code beside an
-  // interrupted ask; one cut off here says `interrupted`.
-  if (
-    kind == 'error' && prior?.ask && code != null && code != 'interrupted' &&
-    attemptState(prior) == 'interrupted'
-  ) return 'pending'
-  if (kind == 'error' && code == 'interrupted') {
-    return afterAsk()
-  }
-  if (kind == 'error' && code == LIMIT) return 'failed'
-  if (kind == 'error') {
-    // failed once the last RETRIES entries are all errors
-    let tail = all.filter((b) => !(b.ask && attemptState(b) == 'completed'))
-      .slice(-RETRIES)
-    return tail.length == RETRIES && tail.every((b) => kindOf(b) == 'error')
-      ? 'failed'
-      : 'pending'
-  }
   if (openCalls(all).length) return 'running'
   if (
     kind == 'ask' && attemptState(newest) == 'completed'
@@ -366,41 +330,6 @@ export let sessionStatus = {
     let n = col('entity', 'n')
     let wears = (comp: string, also?: Expr) => has(comp, n, also)
     let mine = (e: string) => eq(col('session', e), owner)
-    let lastDifferent = fn(
-      'coalesce',
-      sub(select({
-        cols: [col('seq', 'e3')],
-        from: table('entry', 'e3'),
-        where: and(
-          mine('e3'),
-          lacks('notice', col('entity', 'e3')),
-          lacks('error', col('entity', 'e3')),
-          not(and(
-            has(ASK, col('entity', 'e3')),
-            has(
-              'attempt',
-              col('entity', 'e3'),
-              eq(state('attempt', 'k'), lit('completed')),
-            ),
-          )),
-        ),
-        order: [desc(col('seq', 'e3'))],
-        limit: lit(1),
-      })),
-      lit(0),
-    )
-    let allErrors = ge(
-      sub(select({
-        cols: [count()],
-        from: table('entry', 'e2'),
-        where: and(
-          mine('e2'),
-          gt(col('seq', 'e2'), lastDifferent),
-          has('error', col('entity', 'e2')),
-        ),
-      })),
-      lit(RETRIES),
-    )
     // Start at this transcript's indexed entries. These checks also run when
     // one session is read by eid, so scanning every call in the store for each
     // such read multiplies the cost of an unrelated transcript.
@@ -464,7 +393,6 @@ export let sessionStatus = {
             'output',
             'notice',
             'result',
-            'error',
             'refusal',
             'exception',
             'ask',
@@ -583,36 +511,6 @@ export let sessionStatus = {
           has('interrupted', ask),
           iff(ge(interruptions, lit(RETRIES)), lit('failed'), lit('pending')),
         ],
-        [
-          and(
-            wears(ERROR),
-            has(ASK, prior),
-            has(
-              'attempt',
-              prior,
-              eq(state('attempt', 'k'), lit('completed')),
-            ),
-          ),
-          iff(input(asked), lit('pending'), lit('failed')),
-        ],
-        [
-          and(
-            wears(ERROR, not(eq(col('code', 'k'), lit('interrupted')))),
-            has(ASK, prior),
-            has(
-              'attempt',
-              prior,
-              eq(state('attempt', 'k'), lit('interrupted')),
-            ),
-          ),
-          lit('pending'),
-        ],
-        [
-          wears(ERROR, eq(col('code', 'k'), lit('interrupted'))),
-          iff(input(asked), lit('pending'), lit('failed')),
-        ],
-        [wears(ERROR, eq(col('code', 'k'), lit(LIMIT))), lit('failed')],
-        [wears(ERROR), iff(allErrors, lit('failed'), lit('pending'))],
         [open, lit('running')],
         [and(wears(ASK), settled), lit('settled')],
         [or(wears(ASK), wears(CALL)), lit('running')],

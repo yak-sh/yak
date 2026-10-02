@@ -213,7 +213,7 @@ its text in `content.body`, and the value in that shape in `output.value`, which
 is what `structuredContent` carries. `graph_schema` is that tool, and its output
 schema is the vocab meta-schema.
 
-A recorded failure carries a `refusal`, legacy `error` or `exception` component
+A recorded failure carries a `refusal` or `exception` component
 and sets `isError`. Errors caught before a recorded answer is available can
 return only error text and `isError`, without `structuredContent`.
 

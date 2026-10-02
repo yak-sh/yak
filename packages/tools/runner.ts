@@ -228,7 +228,7 @@ export type Runner = {
    * does with `redrive` set, for the calls a crash left claimed */
   drive: (opts?: { redrive?: boolean }) => Promise<Bundle[]>
   /** end every call this runner claimed and is still running, as
-   * `error{code: 'interrupted'}` saying `why`: what a process that is ending
+   * `interrupted{code}` saying `why`: what a process that is ending
    * before its tools returned writes, so no claim of its own is left to lapse
    * and run again somewhere it was never asked. Given a `holder`, the calls
    * that holder claimed and never answered instead, read from the graph: what
@@ -316,7 +316,7 @@ let hitLine = (b: Bundle, hit: Comp): string => {
 }
 
 // What a tool's text answer carries: the spine every row has (@yaks/kernel),
-// its words, the call it answers, and a fault's `refusal`, legacy `error` or `exception`. An
+// its words, the call it answers, and a fault's `refusal` or `exception`. An
 // entity carrying more (a transcript entry, a comment, a memory, a row a tool
 // made) is data, and its words alone would drop which one it is and who wrote
 // it.
@@ -327,7 +327,6 @@ let SPOKEN = new Set([
   'content',
   'output',
   'refusal',
-  'error',
   'exception',
 ])
 

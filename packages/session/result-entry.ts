@@ -8,7 +8,7 @@ import { type Bundle, type Comp, type Hook } from '@yaks/graph'
 export const resultEntries: Hook = (bundles, tx) => {
   const source = (b: Bundle) => {
     if (b.result) return (b.result as Comp).call
-    if (b.refusal || b.error || b.exception) {
+    if (b.refusal || b.interrupted || b.exception) {
       return (b.output as Comp | undefined)?.source
     }
   }

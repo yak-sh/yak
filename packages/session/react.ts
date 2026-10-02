@@ -57,7 +57,6 @@ import {
   CALL,
   CONTENT,
   ENTRY,
-  ERROR,
   EXCEPTION,
   FORK,
   OUTPUT,
@@ -387,7 +386,7 @@ let failing = (
   e: ModelError,
   code = e.code,
 ): Record<string, Comp> => ({
-  [code == 'interrupted' || passing(e) ? ERROR : REFUSAL]: { code },
+  [REFUSAL]: { code },
   ...e.response && g.vocab.comp(RESPONSE) ? { [RESPONSE]: e.response } : {},
 })
 
@@ -1023,7 +1022,16 @@ export let react = async (
       if (!(e instanceof ModelError)) deps.report?.(e, session, 'compaction')
       return append([
         e instanceof ModelError
-          ? line(failing(g, e), e.message)
+          ? line(
+            passing(e)
+              ? {
+                [ASK]: { to: modelEid, through: newest.entity.eid },
+                attempt: {},
+                interrupted: { code: e.code },
+              }
+              : { ...failing(g, e), [OUTPUT]: { source: newest.entity.eid } },
+            e.message,
+          )
           : line({ [EXCEPTION]: {} }, String(e)),
       ])
     }

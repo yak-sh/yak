@@ -81,12 +81,7 @@ JSON object. The components beside `entry` determine its type:
 | `answer{question, …}` with `output`   | a model's answer to one question   |
 | `stop`                                | no further transcript work         |
 | `refusal{code}`                       | an expected failure                |
-| `error{code}`                         | a legacy expected failure          |
 | `exception`                           | an unexpected failure              |
-
-During the expand phase, transcript readers accept both `refusal{code}` and
-legacy `error{code}`. New expected failures use `refusal`; `error` remains
-available until stored entries have migrated.
 
 `entry.seq` is assigned transactionally when omitted. `appendEntry()` is the
 usual way to append text.
@@ -244,19 +239,12 @@ console.log(await transcript(g, 'session'))
 Replace the local function with `responses({ credential })` from `@yaks/openai`
 to use that provider; also load its `openaiDoc` vocabulary.
 
-A model request that fails is recorded at once as an `error{code}` entry in the
-provider's words, with `response{body, headers}` (@yaks/model) beside it: what
-the provider sent. One that may pass (a `ModelError` carrying `retry`, or a lost
-connection) leaves its ask `interrupted` and the transcript `pending`, and
-`session_run` throws it, so the @yaks/effects pool asks again after its backoff,
-no sooner than the wait the provider named: eight tries, waiting 1, 2, 4 … 64
-seconds. A reply between failures gives the run its tries back
-(`Attempt.progressed()`). A failure that cannot pass (a spent allowance, a
-prompt too long) completes its ask under the provider's code. One that may pass
-but is not asked again (its last try, text already shown, an audio request, a
-step outside the pool) stands as an `error{code: interrupted}` line in the
-provider's words, which a person can continue from. Either leaves the transcript
-`failed` until new input.
+A provider refusal is recorded as `refusal{code}` with its
+`response{body, headers}` beside it. A retryable request wears
+`interrupted{code}` and `provisional{note}` while the effects pool still owes
+another try. The pool gives it eight tries with backoff, resetting the tries
+when a reply makes progress. A request not retried wears `failed{reason}`;
+new input permits recovery without replaying completed tool operations.
 
 An entry wearing `questions{asked}` (typed questions in Jev's terms, by name;
 @yaks/model `Questions`) asks them with the next turn: the runner sends them as

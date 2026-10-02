@@ -83,7 +83,7 @@ export let changing = (o: Options): Handler => async (event, tx, write) => {
   if (
     changed?.build || changed?.call || changed?.result ||
     changed?.execution ||
-    changed?.error || changed?.refusal ||
+    changed?.interrupted || changed?.failed || changed?.refusal ||
     comp(changed, 'output')?.value != null
   ) {
     return
@@ -136,7 +136,7 @@ export let modeling = (): Handler => async (event, tx, write) => {
     if (result) await write([result])
     return
   }
-  if ((said.error || said.refusal) && said.entry) {
+  if ((said.interrupted || said.failed || said.refusal) && said.entry) {
     let [session] = await tx.get([str(comp(said, 'entry'), 'session')])
     let call = str(comp(session, 'session'), 'source')
     // Only a turn that failed for good ends the call: a tool's refusal is

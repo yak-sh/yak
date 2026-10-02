@@ -11,7 +11,7 @@
  *
  * - `content{body}` — prose. Alone it is an input, an instruction from a
  *   person or a system; with an `output{source}` beside it (the ask it answers)
- *   it is what a model returned. A `result`, `refusal`, `error` or `exception` carries its
+ *   it is what a model returned. A `result`, `refusal` or `exception` carries its
  *   prose the same way.
  * - `ask{to, through}` — the runner asked a model, from the prefix ending at
  *   `through`. What the provider keeps about it is the provider's own component
@@ -20,7 +20,7 @@
  *   `result{call}` is what the tool returned.
  * - `using{provider, model, effort}` — set or switched on an input, recorded
  *   as served on an ask.
- * - `stop`, `refusal{code}`, `error{code}`, `exception` — a stop marker; a
+ * - `stop`, `refusal{code}`, `exception` — a stop marker; a
  *   deliberate no; a legacy/interruption/check outcome; a defect report.
  *
  * `fork{from}` on a session continues another transcript from one of its

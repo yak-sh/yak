@@ -764,9 +764,10 @@
       "created": [
         "stop",
         "refusal",
-        "error",
         "exception",
-        "exit"
+        "exit",
+        "interrupted",
+        "failed"
       ],
       "sweep": ".claim",
       "description": "release claims held by a transcript that stopped or failed; a worker also finds claims left by runs that ended while no worker was serving effects"

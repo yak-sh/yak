@@ -15,6 +15,7 @@ import { modelDoc } from '@yaks/model'
 import { docDoc } from '@yaks/doc'
 import { personaDoc } from '@yaks/persona'
 import { projectDoc } from '@yaks/project'
+import { kernelDoc } from '@yaks/kernel/vocab'
 import { taskDoc } from '@yaks/task'
 import { sessionDoc, sessions } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
@@ -26,6 +27,7 @@ import type { Adapter } from './adapters.ts'
 /** Every component a managed session uses, and what this package declares. */
 export let host: Vocab = loadVocab(
   [
+    kernelDoc,
     sessionDoc,
     toolsDoc,
     modelDoc,

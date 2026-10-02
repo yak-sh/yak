@@ -101,13 +101,11 @@ export let compactAsk = async (
         entity: { eid: ask },
         using,
         attempt: { by: null },
-        ...e instanceof ModelError && e.retry
-          ? { interrupted: { code: e.code } }
-          : {},
+        completed: {},
         ...usage ? { usage } : {},
         ...e instanceof ModelError
           ? {
-            error: { code: e.code },
+            refusal: { code: e.code },
             ...e.response && g.vocab.comp('response')
               ? { response: e.response }
               : {},
@@ -131,7 +129,8 @@ export let compactAsk = async (
       entity: { eid: ask },
       using,
       attempt: { by: null },
-      ...empty ? { error: { code: empty.code } } : {},
+      completed: {},
+      ...empty ? { failed: { reason: empty.message }, exception: {} } : {},
       ...served.model.mark?.(compacted),
       ...compacted.usage ? { usage: compacted.usage } : {},
       ...compacted.cost == null ? {} : {

@@ -1,13 +1,14 @@
 // A small SQLite graph exercises the binding tree and the same tool runner
 // that handles a builder's call in a host.
 
-import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
+import { loadVocab, pick, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Graph, graph, identityEid, type Tool } from '@yaks/graph'
 import { type Effects, effects } from '@yaks/effects'
 import { docDoc, docs } from '@yaks/doc'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import { keyDoc, keyKeywords, keys } from '@yaks/key'
 import { artifactDoc } from '@yaks/blob/vocab'
+import { kernelDoc } from '@yaks/kernel/vocab'
 import { modelDoc } from '@yaks/model'
 import { wakeDoc } from '@yaks/wake'
 import { sessionDerived, sessionDoc, sessions } from '@yaks/session'
@@ -68,6 +69,7 @@ export let workshop = (more: VocabDoc[] = []): Vocab =>
     artifactDoc,
     modelDoc,
     wakeDoc,
+    pick(kernelDoc, ['completed', 'interrupted', 'failed']),
     sessionDoc,
     toolsDoc,
     builderDoc,

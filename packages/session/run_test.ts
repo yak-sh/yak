@@ -534,9 +534,11 @@ test('retryable errors keep a claim until the transcript fails', async () => {
   ])
   for (let i of [1, 2, 3]) {
     await p.g.apply([{
-      entity: { eid: `error-${i}` },
+      entity: { eid: `ask-${i}` },
       entry: { session: 's1' },
-      error: {},
+      ask: { through: 'input' },
+      attempt: {},
+      interrupted: { code: 'transport' },
     }])
     await p.fx.idle()
     assertEquals((await p.g.get(['work']))[0].claim != null, i < 3)

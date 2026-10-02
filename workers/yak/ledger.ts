@@ -28,10 +28,7 @@
 //
 // It speaks the invocation and the stamps on it, since nothing else is ever
 // written here, so its vocabulary is loaded once per isolate and not once per
-// door. Two words the platform and @yaks/tools both spell — `error` and
-// `exception` — are declared as the union of both meanings, so a refusal's
-// `code` and a break row's `message` both land instead of one of them refusing
-// the other.
+// door. The platform diagnostic fields on `exception` remain intact.
 
 import {
   type ApplyOpts,
@@ -53,14 +50,13 @@ let INVOCATION = [
   'execution',
   'content',
   'output',
-  'error',
   'refusal',
   'exception',
   'tool',
 ]
 
-/** The two words both vocabularies claim. */
-let SHARED = ['error', 'exception']
+/** The diagnostic word the ledger widens. */
+let SHARED = ['exception']
 
 // A document without the words the ledger declares itself.
 let without = (doc: VocabDoc, names: string[]): VocabDoc => ({
@@ -80,14 +76,8 @@ let told = (props: Record<string, PropSchema>): PropSchema => ({
   properties: props,
 })
 
-// `error` and `exception` as both vocabularies mean them: what @yaks/tools
-// writes about a refused call, and what a break row in an app carries.
+// The diagnostic fields returned by an app stay intact in the ledger.
 let both: Record<string, PropSchema> = {
-  error: told({
-    code: { type: 'string' },
-    at: { type: 'string', format: 'date-time' },
-    message: { type: 'string' },
-  }),
   exception: told({
     at: { type: 'string', format: 'date-time' },
     message: { type: 'string' },
@@ -98,7 +88,7 @@ let both: Record<string, PropSchema> = {
 }
 
 // The ledger's whole vocabulary: @yaks/tools' own words and rules, with the
-// two both vocabularies spell widened to mean both things, over the core
+// diagnostic fields kept intact, over the core
 // stamps — a call's `created{by, via}` is who asked, and the tool runs as them
 // (@yaks/graph `who`).
 let VOCAB = loadVocab([spineDoc, {

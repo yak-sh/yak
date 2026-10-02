@@ -137,7 +137,7 @@ export let worded = (row: Row): Tool => {
 
 /**
  * A refusal: the caller asked for something this tool will not do, and the
- * sentence says why. The runner records it as `error{code}` and reports
+ * sentence says why. The runner records it as `refusal{code}` and reports
  * nothing (@yaks/tools `CallError`); anything else a tool throws is a defect,
  * mailed as an incident. The codes are few on purpose: `arguments` (what was
  * passed is malformed), `access` (not this caller's to do), `missing` (no such

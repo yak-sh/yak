@@ -35,12 +35,6 @@
 import { type Bundle, type Comp, type Row, token } from '@yaks/graph'
 import { isPromise } from '@yaks/fp'
 import { conjoin } from '@yaks/query'
-import {
-  refusalFind,
-  refusalPatch,
-  refusalPrior,
-  refusalSource,
-} from '@yaks/tools/refusals'
 import { Unknown } from '@yaks/vocab'
 import { GIT_STORE, PLATFORM_STORE } from './door.ts'
 /** A rule's name: where its stamp is kept in a store's memory, and the
@@ -106,23 +100,7 @@ export let dispatchRule: Rule = {
 
 /** Every rule a release carries. A rule leaves in the release after the sweep
  * reports every store done with it, with the old words it moved out of. */
-export let RULES: Rule[] = [
-  ...refusalFind.map((find, i): Rule => ({
-    mark: i == 0 ? 'yak/store/refusal/1' : 'yak/store/refusal-imported/1',
-    live: 'all',
-    find,
-    move: (row, read) => {
-      let line = refusalSource(row)
-      let prior = refusalPrior(row)
-      let patch = refusalPatch(
-        row,
-        line && read ? read(line)[0] : undefined,
-        prior && read ? read(prior)[0] ?? null : undefined,
-      )
-      return patch ? [patch] : []
-    },
-  })),
-]
+export let RULES: Rule[] = []
 
 /** How far one rule got in one store. `after` is the last row it moved past;
  * `unspoken` is a word the rule reads that this store does not declare, so
