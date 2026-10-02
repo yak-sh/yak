@@ -51,6 +51,7 @@ export type Binding = {
     options?: {
       extraHeaders?: Record<string, string>
       gateway?: { id: string }
+      returnRawResponse?: boolean
     },
   ): Promise<unknown>
 }
@@ -319,6 +320,24 @@ export let failure = (e: unknown): unknown =>
     ? new ModelError('limit', message(e))
     : detailed(e)
 
+// workerd's _parseError drops the upstream body when internalCode exists.
+// Music asks for the raw response so provider validation survives reporting.
+let decoded = async (out: unknown): Promise<unknown> => {
+  if (!(out instanceof Response)) return out
+  if (out.ok) {
+    return out.headers.get('content-type')?.includes('application/json')
+      ? out.json()
+      : out.body
+  }
+  let body = await out.text()
+  let e = new Error(`Workers AI HTTP ${out.status}: ${body}`)
+  try {
+    let name = at(JSON.parse(body), 'name')
+    if (typeof name == 'string') e.name = name
+  } catch { /* A non-JSON upstream body is still the failure's evidence. */ }
+  throw failure(e)
+}
+
 /**
  * A model over the binding, failing as {@link failure} says. Music output
  * needs artifact storage and returns its measured/priced dollar cost.
@@ -334,19 +353,26 @@ export let workersAi = (
     }
     let sent = music(req.model) ? musicInput(req) : input(req)
     let out = said(
-      await ai.run(
-        req.model,
-        sent,
-        routing(
+      await decoded(
+        await ai.run(
           req.model,
-          req.conversation
-            ? { extraHeaders: { 'x-session-affinity': req.conversation } }
-            : undefined,
-          options.gateway,
-        ),
-      ).catch((e) => {
-        throw failure(e)
-      }),
+          sent,
+          routing(
+            req.model,
+            music(req.model) || req.conversation
+              ? {
+                ...music(req.model) ? { returnRawResponse: true } : {},
+                ...req.conversation
+                  ? { extraHeaders: { 'x-session-affinity': req.conversation } }
+                  : {},
+              }
+              : undefined,
+            options.gateway,
+          ),
+        ).catch((e) => {
+          throw failure(e)
+        }),
+      ),
     )
     req.signal?.throwIfAborted()
     let id = str(at(out, 'id')) || crypto.randomUUID()
