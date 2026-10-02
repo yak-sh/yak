@@ -9,6 +9,7 @@ import { glyph, glyphText } from './glyphs.ts'
 import type { Page } from './panel.ts'
 import type { Frame, Sheet } from './play.ts'
 import { canLearn, DISCIPLINES, SKILLS } from './skills.ts'
+import { skillDetail } from './skill-detail.ts'
 import { tipped } from './tip.ts'
 import { split } from './ui/split.ts'
 
@@ -90,7 +91,7 @@ export let board = (panel: Page, acts: Learning) => {
       glyph(k.icon)
     }</i><div><b>${esc(k.name)}</b><span>${
       esc(k.says)
-    } ${what}.</span></div>${act}</div>`
+    } ${what}.</span></div>${act}</div>${skillDetail(s, picked)}`
   }
 
   let draw = (s: Sheet, f: Frame) => {

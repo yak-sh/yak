@@ -110,6 +110,18 @@ export let secs = (ms: number): string => `${+(ms / 1000).toFixed(1)} s`
  * ```
  */
 export let does = (a: Ability, d: Doer): string => {
+  let effects = abilityStats(a, d)
+  let when = [
+    effect(a.effects, 'renew') && 'after a killing blow',
+    effect(a.effects, 'refund') && 'if it misses',
+  ].filter(Boolean)
+  let intro = (a.description?.trim() || a.name).replace(/[.!?]+$/, '')
+  return `${intro}.${effects.length ? ` ${effects.join(' · ')}.` : ''}` +
+    (when.length ? ` Ready again at once ${when.join(', or ')}.` : '')
+}
+
+/** Named effect lines, shared by ability descriptions and skill previews. */
+export let abilityStats = (a: Ability, d: Doer): string[] => {
   let damage = effect(a.effects, 'damage')
   let bleed = effect(a.effects, 'bleed')
   let stun = effect(a.effects, 'stun')
@@ -117,12 +129,7 @@ export let does = (a: Ability, d: Doer): string => {
   let guard = effect(a.effects, 'guard')
   let ward = effect(a.effects, 'ward')
   let heal = effect(a.effects, 'heal')
-  let when = [
-    effect(a.effects, 'renew') && 'after a killing blow',
-    effect(a.effects, 'refund') && 'if it misses',
-  ]
-    .filter(Boolean)
-  let effects = [
+  return [
     damage?.hits && damage.hits > 1 ? `${damage.hits} hits` : '',
     damage
       ? `${Math.round(d.blow * damage.scale)} Damage${
@@ -153,9 +160,6 @@ export let does = (a: Ability, d: Doer): string => {
         : 'Always a great blow'
       : '',
   ].filter(Boolean)
-  let intro = (a.description?.trim() || a.name).replace(/[.!?]+$/, '')
-  return `${intro}.${effects.length ? ` ${effects.join(' · ')}.` : ''}` +
-    (when.length ? ` Ready again at once ${when.join(', or ')}.` : '')
 }
 
 /** How an ability's blow went, as far as its cooldown cares: it felled what
