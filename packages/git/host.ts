@@ -350,9 +350,46 @@ export let createWorktree = async (
  * else, or a removal that did not succeed. */
 export type Held = 'dirty' | 'unlanded' | 'failed'
 
+// Linux's ptrace checks can hide even a same-user cwd (a capability-bearing
+// manager or a non-dumpable PAM helper). Ask the user manager for a privileged
+// readlink child. Its only operation reads this link: no shell, no signal
+// to the observed PID, and no filesystem mutation. A box without this existing
+// sudo permission refuses collection rather than guessing the hidden cwd.
+let processCwd = async (pid: string): Promise<string> => {
+  let path = `/proc/${pid}/cwd`
+  try {
+    return await Deno.realPath(path)
+  } catch (error) {
+    if (!(error instanceof Deno.errors.PermissionDenied)) throw error
+    let read = await new Deno.Command('systemd-run', {
+      args: [
+        '--user',
+        '--quiet',
+        '--wait',
+        '--pipe',
+        '--collect',
+        '/usr/bin/sudo',
+        '-n',
+        '/usr/bin/readlink',
+        '-e',
+        path,
+      ],
+      stdout: 'piped',
+      stderr: 'null',
+    }).output()
+    let cwd = new TextDecoder().decode(read.stdout).trimEnd()
+    if (!read.success || !cwd.startsWith('/')) {
+      // A process may have exited while the helper was starting.
+      await Deno.stat(`/proc/${pid}`)
+      throw error
+    }
+    return cwd
+  }
+}
+
 /** Canonical directories occupied by this user's live local processes,
  * including agents outside the graph. Other users' sessions are protected by
- * their graph homes. Unreadable cwd links are left to the graph home check. */
+ * their graph homes. An unreadable same-user cwd refuses collection. */
 export let processCwds = async (): Promise<Set<string>> => {
   if (Deno.build.os != 'linux') {
     throw new Error(
@@ -365,12 +402,8 @@ export let processCwds = async (): Promise<Set<string>> => {
     try {
       // Linux restricts other users' cwd links even when procfs is readable.
       if ((await Deno.stat(`/proc/${entry.name}`)).uid != Deno.uid()) continue
-      paths.add(await Deno.realPath(`/proc/${entry.name}/cwd`))
+      paths.add(await processCwd(entry.name))
     } catch (error) {
-      // Capability-bearing daemons (systemd, the reverse proxy) can share
-      // our uid while Linux denies their cwd. Session homes remain the
-      // authority for their worktrees; this scan also covers outside agents.
-      if (error instanceof Deno.errors.PermissionDenied) continue
       // A process may exit between listing it and reading its cwd. ESRCH can
       // arrive as a plain Error; every other failure keeps the worktrees.
       if (

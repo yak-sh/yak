@@ -102,3 +102,52 @@ test(
     }
   },
 )
+
+test('a default scratch run leaves another dead run directory alone', async () => {
+  let path = '/tmp/tasks-run-' +
+    (1_000_000_000 + Math.floor(Math.random() * 1_000_000_000))
+  Deno.mkdirSync(path)
+  try {
+    Deno.writeTextFileSync(path + '/work', 'another session')
+    assertEquals(
+      await scratch(['true'], { PATH: Deno.env.get('PATH') ?? '' }),
+      0,
+    )
+    assertEquals(Deno.readTextFileSync(path + '/work'), 'another session')
+  } finally {
+    Deno.removeSync(path, { recursive: true })
+  }
+})
+
+test('scratch lends every machine state directory inside its own run', async () => {
+  let dir = Deno.makeTempDirSync()
+  let out = dir + '/env.json'
+  try {
+    let code =
+      'Deno.writeTextFileSync(Deno.args[0], JSON.stringify(Deno.env.toObject()))'
+    assertEquals(
+      await scratch([Deno.execPath(), 'eval', code, out], {
+        ...Deno.env.toObject(),
+        TMPDIR: dir,
+        PROCESS_DIR: '/live/processes',
+        HARNESS_WORKTREE_DIR: '/live/worktrees',
+        HARNESS_DB: '/live/yak.db',
+      }),
+      0,
+    )
+    let env = JSON.parse(Deno.readTextFileSync(out))
+    for (
+      let name of [
+        'TASKS_HOME',
+        'PROCESS_DIR',
+        'HARNESS_HOME',
+        'HARNESS_WORKTREE_DIR',
+        'HARNESS_DB',
+      ]
+    ) {
+      assertEquals(env[name].startsWith(env.TMPDIR + '/'), true)
+    }
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})

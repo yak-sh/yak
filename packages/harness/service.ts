@@ -28,13 +28,20 @@ export let maintaining = async (
   } while (!signal.aborted)
 }
 
+/** Foreign graphs never maintain this machine; compare canonical database paths. */
+export let live = async (path: string): Promise<boolean> => {
+  if (path == ':memory:') return false
+  let canonical = (p: string) => Deno.realPath(p).catch(() => p)
+  return await canonical(path) == await canonical(dbPath())
+}
+
 export let service = async (
   host: Host,
   options: Options = {},
   signal: AbortSignal = AbortSignal.abort(),
 ): Promise<void> => {
   // A probe or another graph must never sweep the live root.
-  if (dbOf(host.config) != dbPath()) return
+  if (!await live(dbOf(host.config))) return
   let detach = diagnostics().attach(host.graph)
   let sentry = sentryReporter({
     token: async () => await reveal(host.vault, 'sentry'),

@@ -13,8 +13,9 @@
 // those checkouts die with the run.
 //
 // Three doors close the directory: normal exit, an accepted signal, and the
-// next run's stale sweep (a SIGKILLed run cannot clean up after itself, so its
-// successor does it by pid). Afterwards the run reports any new `tasks-*`
+// next run's stale sweep inside an explicitly owned base (a SIGKILLed run
+// cannot clean up after itself). Shared /tmp is never swept. Afterwards the
+// run reports any new `tasks-*`
 // entry that appeared in the base directory: that is a spawn site writing to a
 // hard-coded `/tmp` instead of TMPDIR, and it is how /tmp filled to 0 bytes
 // free on this box three times (T-20558).
@@ -103,14 +104,24 @@ export let scratch = async (
   let mine = ours(env)
   // One read of the base serves both: a shared /tmp holds thousands of entries.
   let before = tasksEntries(base)
-  sweep(base, running, before)
+  // A dead PID proves no process owns it, not that this run owns its files.
+  // The default /tmp is shared with other sessions.
+  if (mine) sweep(base, running, before)
   let dir = `${base}/tasks-run-${Deno.pid}`
   Deno.mkdirSync(dir, { recursive: true })
 
   let child = new Deno.Command(argv[0], {
     args: argv.slice(1),
     clearEnv: true,
-    env: { ...env, TMPDIR: dir, HARNESS_HOME: `${dir}/harness` },
+    env: {
+      ...env,
+      TMPDIR: dir,
+      TASKS_HOME: `${dir}/tasks`,
+      PROCESS_DIR: `${dir}/processes`,
+      HARNESS_HOME: `${dir}/harness`,
+      HARNESS_WORKTREE_DIR: `${dir}/harness/worktrees`,
+      HARNESS_DB: `${dir}/harness/yak.db`,
+    },
     stdin: 'inherit',
     stdout: 'inherit',
     stderr: 'inherit',

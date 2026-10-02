@@ -166,3 +166,28 @@ test('a worktree linked by a relative path is live, and just touched', async () 
     await f.free()
   }
 })
+
+test('an opaque local process directory still protects its worktree', async () => {
+  let dir = await Deno.makeTempDir()
+  let child = new Deno.Command('python3', {
+    // PR_SET_DUMPABLE=0 hides cwd even from another process with the same uid.
+    args: [
+      '-c',
+      'import ctypes,sys; ctypes.CDLL(None).prctl(4,0); print("ready",flush=True); sys.stdin.read()',
+    ],
+    cwd: dir,
+    stdin: 'piped',
+    stdout: 'piped',
+    stderr: 'null',
+  }).spawn()
+  try {
+    let ready = child.stdout.getReader()
+    await ready.read()
+    ready.releaseLock()
+    assert(inUse(await Deno.realPath(dir), await processCwds()))
+  } finally {
+    await child.stdin.close()
+    await child.status
+    await Deno.remove(dir, { recursive: true })
+  }
+})

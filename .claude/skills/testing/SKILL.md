@@ -73,6 +73,10 @@ same proof, stronger.
 - `deno task check` (fmt, lint, types, publish, browser and workers checks) is
   separate from tests; run the parts your change touches.
 - Piping a run eats its exit code: read `${pipestatus[1]}` before acting.
+- Before running machine-effect tests, audit their runner as well as fixtures.
+  Use an owned `TMPDIR` and isolate `PROCESS_DIR`, `HARNESS_HOME`, and
+  `HARNESS_WORKTREE_DIR`; a dead PID alone does not authorize deleting another
+  session's scratch in shared `/tmp`.
 - A run sets `TASKS_TEST_RUN`, and a run started inside one refuses. Git in a
   run sees no global config and never prompts (`GIT` in bin/test.ts).
 
