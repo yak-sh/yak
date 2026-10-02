@@ -28,6 +28,7 @@
 //     in this life (rules.ts `hpOf`), and one that a fight says is held
 //     neither moves nor bites (`heldOf`). A fall is a `slain` row, one per
 //     player who helped, and the loot it leaves is each player's own.
+import { landing, type Point } from './aim.ts'
 import { abilitiesOf, again, BLEEDS, WARD, type Went } from './abilities.ts'
 import { effect } from './ability-effects.ts'
 import { type Slot, SLOTS } from './arms.ts'
@@ -504,6 +505,7 @@ export let game = (
   // The creature my blow was aimed at as I swung, and what my next blow or
   // ability would take, as last worked out.
   let aimed = ''
+  let castPoint: Point | undefined
   let aimWas = ''
   let askedAt = -1e9
   // The ability asked for, by its slot, and when.
@@ -1388,7 +1390,7 @@ export let game = (
         let target = a ? aimFor(aim, k, a) : null
         if (!a || (ready.get(id) ?? 0) > now) {
           // Nothing in that slot, or not ready: the bar shows which.
-        } else if (!target && aims(a)) {
+        } else if (!target && aims(a) && !intent.point) {
           if (now - said > 2000) {
             said = now
             events.push({
@@ -1405,10 +1407,24 @@ export let game = (
           guardUntil = -1e9
           askedAt = -1e9
           aimed = target?.eid ?? ''
+          castPoint = !target && intent.point
+            ? landing(
+              body,
+              intent.point,
+              effect(a.effects, 'dash')?.metres ??
+                k.reach + (a.shape == 'one' ? a.far ?? 0 : 0),
+            )
+            : undefined
           ready.set(id, now + a.cool)
           fought.swing++
           hand = handOf(k, fought.swing)
           if (target) face(target)
+          else if (castPoint) {
+            body.yaw = Math.atan2(
+              castPoint.x - body.x,
+              castPoint.z - body.z,
+            )
+          }
           let dashEffect = effect(a.effects, 'dash')
           if (target && dashEffect) {
             let gap = sizeOf(target.beast) * 0.5 + 0.9
@@ -1430,6 +1446,12 @@ export let game = (
                 left: Math.max(0, target.near - gap),
               }
             }
+          }
+          if (!target && castPoint && dashEffect) {
+            let ang = body.yaw
+            dash = { x: Math.sin(ang), z: Math.cos(ang),
+              left: Math.min(dashEffect.metres, Math.hypot(
+                castPoint.x - body.x, castPoint.z - body.z)) }
           }
           let guardEffect = effect(a.effects, 'guard')
           let wardEffect = effect(a.effects, 'ward')
@@ -1468,6 +1490,7 @@ export let game = (
         hand = handOf(k, fought.swing)
         let target = aimFor(aim, k)
         aimed = target?.eid ?? ''
+        castPoint = undefined
         if (target) face(target)
       }
       if (!struck && !dash && now - swingAt >= k.pace * LAND) {
@@ -1475,7 +1498,7 @@ export let game = (
         let a = formOf(doing, s.learned)
         let target = mobs.find((m) => m.eid == aimed) ?? null
         let taken = a
-          ? takenBy(a, mobs, body, k, target)
+          ? takenBy(a, mobs, body, k, target, castPoint)
           : [landOf(mobs, body, k, aimed)].flatMap((m) => m ? [m] : [])
         // An ability that took nothing it was aimed at, stopped short by the
         // world or with its foe gone, went wide.
@@ -1490,11 +1513,15 @@ export let game = (
         if (lead) fought.foe = lead.eid
         // A shot flies at the creature it was aimed at, or straight on at
         // nothing, and what it takes, it takes when it gets there.
-        let to = lead ? at(lead.body, sizeOf(lead.beast) * 0.6) : at({
-          x: body.x + Math.sin(body.yaw) * k.reach,
-          y: body.y,
-          z: body.z + Math.cos(body.yaw) * k.reach,
-        })
+        let to = lead
+          ? at(lead.body, sizeOf(lead.beast) * 0.6)
+          : castPoint
+          ? at(castPoint, 0.2)
+          : at({
+            x: body.x + Math.sin(body.yaw) * k.reach,
+            y: body.y,
+            z: body.z + Math.cos(body.yaw) * k.reach,
+          })
         let flies = !a || a.shape == 'one' || a.shape == 'burst'
           ? k.shot
           : undefined

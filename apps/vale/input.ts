@@ -3,7 +3,11 @@
 // (`read`) and gets one answer: which way to move or turn, what was pressed
 // since the last frame, and how far the view was dragged.
 
+import { cursor, type Point } from './aim.ts'
+
 export type Intent = {
+  /** World point beneath the mouse, filled by the stage before simulation. */
+  point?: Point
   /** right and forward axes, at most 1 long */
   move: [number, number]
   /** turn in radians/second; the camera and hero turn together */
@@ -197,6 +201,7 @@ export let listen = (
   let orbit: [number, number] = [0, 0]
   let looked = false
   let zoom = 0
+  let pointer: [number, number] | null = null
   let swapped = false
   let strafe = false
   let hideCursor = true
@@ -281,6 +286,7 @@ export let listen = (
 
   stage.addEventListener('contextmenu', (e) => e.preventDefault())
   stage.addEventListener('pointerdown', (e) => {
+    pointer = [e.clientX, e.clientY]
     if (!document.pointerLockElement) stage.setPointerCapture(e.pointerId)
     if (e.pointerType == 'mouse') {
       mouse.down(e.button)
@@ -331,6 +337,7 @@ export let listen = (
   })
   stage.addEventListener('pointermove', (e) => {
     if (e.pointerType == 'mouse' && locked()) return
+    pointer = [e.clientX, e.clientY]
     if (stick?.id == e.pointerId) {
       let dx = e.clientX - stick.x, dy = e.clientY - stick.y
       let d = Math.hypot(dx, dy)
@@ -411,12 +418,17 @@ export let listen = (
         localStorage.setItem('mossvale.drag.swap', swapped ? '1' : '0')
       } catch { /* this page keeps its setting */ }
     },
+    pointer: (): [number, number] => pointer
+      ? cursor(...pointer, innerWidth, innerHeight, locked()) : [0, 0],
     hidesCursor: () => hideCursor,
     hideCursor: () => {
       hideCursor = !hideCursor
       if (!hideCursor) unlock()
       try {
-        localStorage.setItem('mossvale.drag.hideCursor', hideCursor ? '1' : '0')
+        localStorage.setItem(
+          'mossvale.drag.hideCursor',
+          hideCursor ? '1' : '0',
+        )
       } catch { /* this page keeps its setting */ }
     },
     strafes: () => strafe,

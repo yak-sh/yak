@@ -23,6 +23,7 @@ import { FIGURES, sizeOf } from './figure.ts'
 import { pendingSpawns } from './spawn.ts'
 import { aim, bearing, type Cam, depth, moveLook, steer } from './cam.ts'
 import { cast } from './cast.ts'
+import { groundRay } from './aim.ts'
 import { chatbox } from './chatbox.ts'
 import { companion } from './companion.ts'
 import { companionView } from './companion-view.ts'
@@ -294,6 +295,7 @@ let cam: Cam = {
   lift: 0,
 }
 let target = new THREE.Vector3()
+let mouseRay = new THREE.Raycaster()
 // Where the hero stands, as the camera follows them.
 let feet = new THREE.Vector3()
 
@@ -970,6 +972,13 @@ let loop = (t: number) => {
   depth(camera, w.fog)
   if (playing && net.hero) {
     let i = hands.read()
+    camera.updateMatrixWorld()
+    mouseRay.setFromCamera(new THREE.Vector2(...hands.pointer()), camera)
+    i.point = groundRay(
+      mouseRay.ray.origin,
+      mouseRay.ray.direction,
+      (x, z) => groundAt(v, x, z),
+    )
     if (i.mic) void voice.toggle()
     if (h.talking) {
       Object.assign(i, {
