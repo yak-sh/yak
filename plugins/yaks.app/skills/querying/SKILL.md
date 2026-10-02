@@ -137,9 +137,11 @@ to — the only name an entity has here — and `kind` is what the entity is, th
 first component it has, one of your own included.
 
 Three kinds of row are left out of a listing unless the filter names them: the
-platform's stamps (`.created`, `.updated`), the platform's own error rows
-(`.exception`, `.error`), and the `person` rows the store keeps so a byline has
-a name (`.person`). What comes back is what your app saved.
+platform's stamps (`.created`, `.updated`), the platform's own diagnostic rows
+(`.exception`, `.refusal`, `.error`), and the `person` rows the store keeps so a
+byline has a name (`.person`). What comes back is what your app saved. Asking
+for `.entry` also admits transcript `refusal` and legacy `error` rows, but not
+exceptions; naming `.exception` does not opt in the other diagnostics.
 
 `subscribe(filter, cb)` returns the same rows by the same rule, so a page swaps
 one for the other and nothing else changes.

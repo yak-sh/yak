@@ -6,7 +6,12 @@ import { loadVocab } from '@yaks/vocab'
 import { mem } from '../sqlite/testing.ts'
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
-import { refusalFind, refusalPatch, refusalSource } from './refusals.ts'
+import {
+  refusalFind,
+  refusalPatch,
+  refusalPrior,
+  refusalSource,
+} from './refusals.ts'
 
 let row = (code: string, body = ''): Bundle => ({
   entity: { eid: 'answer' },
@@ -108,6 +113,58 @@ test('own provider refusal codes migrate without touching request state', () => 
       patch(code),
     )
   }
+})
+
+test('provider-code transcript errors after interrupted asks retain retry status evidence', () => {
+  let prior: Bundle = {
+    entity: { eid: 'ask' },
+    entry: { session: 'session', seq: 3 },
+    ask: { to: 'model', through: 'input' },
+    attempt: { state: 'interrupted' },
+  }
+  for (let code of ['http_429', 'http_401', 'usage_limit_reached', 'unknown']) {
+    let answer = { ...row(code), entry: { session: 'session', seq: 5 } }
+    let before = structuredClone(answer)
+    let priorBefore = structuredClone(prior)
+    assertEquals(
+      refusalPrior(answer),
+      '.entry.session=session&.entry.seq<5&!notice&.order=-entry.seq&.limit=1' +
+        '&?ask&?attempt',
+    )
+    assertThrows(() => refusalPatch(answer), Error, `code=${code}`)
+    assertEquals(refusalPatch(answer, undefined, prior), undefined)
+    assertEquals(answer, before)
+    assertEquals(prior, priorBefore)
+    for (let invalid of [
+      { ...prior, entry: { session: 'other', seq: 3 } },
+      { ...prior, entry: { session: 'session', seq: 5 } },
+      { ...prior, notice: {} },
+      { ...prior, entry: { session: 'session', seq: 1.5 } },
+      { ...prior, entry: { session: 'session', seq: Number.MAX_SAFE_INTEGER + 1 } },
+    ]) assertThrows(() => refusalPatch(answer, undefined, invalid))
+  }
+  let answer = { ...row('http_429'), entry: { session: 'session', seq: 5 } }
+  assertEquals(refusalPatch(answer, undefined, null), patch('http_429'))
+  assertEquals(
+    refusalPatch(answer, undefined, {
+      ...prior,
+      attempt: { state: 'completed' },
+    }),
+    patch('http_429'),
+  )
+  assertEquals(
+    refusalPatch(answer, undefined, { ...prior, ask: null }),
+    patch('http_429'),
+  )
+  for (let entry of [
+    { session: 'session&*', seq: 5 },
+    { session: 'session', seq: NaN },
+    { session: 'session', seq: Infinity },
+    { session: 'session', seq: 1.5 },
+    { session: 'session', seq: Number.MAX_SAFE_INTEGER + 1 },
+    { session: 'session', seq: 0 },
+  ]) assertThrows(() => refusalPrior({ ...row('http_429'), entry }))
+  assertThrows(() => refusalPrior({ ...row('http_429'), entry: 'invalid' }))
 })
 
 test('interrupted retry wrappers recover explicit refusal codes', () => {
@@ -457,4 +514,67 @@ test('native SQL projected nullable errors retain failures and migrate tool refu
   assertEquals(after.error, undefined)
   assertEquals(after.refusal, { code: 'Refused' })
   assertEquals(after.output, answer.output)
+})
+
+test('bounded predecessor reads retain retrying errors in RAM and SQL without skipping prose', async () => {
+  let vocab = loadVocab([{
+    $defs: {
+      error: { component: true, properties: { code: { type: 'string' } } },
+      refusal: { component: true, properties: { code: { type: 'string' } } },
+      entry: {
+        component: true,
+        properties: { session: { type: 'string' }, seq: { type: 'number' } },
+      },
+      ask: { component: true, properties: { to: { type: 'string' } } },
+      attempt: { component: true, properties: { state: { type: 'string' } } },
+      notice: { component: true, properties: {} },
+      content: { component: true, properties: { body: { type: 'string' } } },
+    },
+  }])
+  for (let sql of [false, true]) {
+    let db = sql ? storage(mem(), vocab) : undefined
+    db?.install()
+    let g = graph({ vocab, ...(db ? { storage: db } : {}) })
+    await g.apply([
+      {
+        entity: { eid: 'ask' },
+        entry: { session: 'session', seq: 1 },
+        ask: {},
+        attempt: { state: 'interrupted' },
+      },
+      {
+        entity: { eid: 'notice' },
+        entry: { session: 'session', seq: 2 },
+        notice: {},
+      },
+      {
+        entity: { eid: 'pending' },
+        entry: { session: 'session', seq: 3 },
+        error: { code: 'http_429' },
+      },
+      {
+        entity: { eid: 'prose' },
+        entry: { session: 'session', seq: 4 },
+        content: { body: 'intervening input' },
+      },
+      {
+        entity: { eid: 'refused' },
+        entry: { session: 'session', seq: 5 },
+        error: { code: 'http_401' },
+      },
+    ])
+    let [pending] = await g.read('.eid=pending&*')
+    let [prior] = await g.read(refusalPrior(pending)!)
+    assertEquals(prior.entity.eid, 'ask')
+    assertEquals(refusalPatch(pending, undefined, prior), undefined)
+    let [refused] = await g.read('.eid=refused&*')
+    let [prose] = await g.read(refusalPrior(refused)!)
+    assertEquals(prose.entity.eid, 'prose')
+    assertEquals(refusalPatch(refused, undefined, prose), {
+      entity: { eid: 'refused' },
+      error: null,
+      refusal: { code: 'http_401' },
+    })
+    assertEquals((await g.read('.eid=pending&*'))[0], pending)
+  }
 })

@@ -80,7 +80,7 @@ let lost = (code: string) =>
 
 /** A bounded source read for the row-only mover callback. Only native tool
  * refusals and imported failed results need call evidence; provider request
- * lines and genuine interruptions do not cause another read. */
+ * lines use the separate bounded predecessor read below. */
 export let refusalSource = (row: Bundle): string | undefined => {
   let code = text(row, 'error', 'code')
   let id = code != undefined && tools.has(code)
@@ -92,6 +92,38 @@ export let refusalSource = (row: Bundle): string | undefined => {
   // References are eids, not query expressions. Refuse unsafe interpolation.
   if (!/^[\w:-]+$/.test(id)) unsafe(row, code ?? 'is_error')
   return `.eid=${id}&.fields=call.to,execution.state,imported.source`
+}
+
+/** The preceding non-notice entry is status evidence, not a source call.
+ * An interrupted ask keeps its following provider-code error retry-pending.
+ * No attempt or interruption marker is rewritten by this migration. */
+export let refusalPrior = (row: Bundle): string | undefined => {
+  if (!comp(row, 'error') || row.entry == null) return undefined
+  if (!comp(row, 'entry')) unsafe(row, text(row, 'error', 'code') ?? 'unknown')
+  let session = text(row, 'entry', 'session')
+  let seq = comp(row, 'entry')?.seq
+  if (
+    !session || !/^[\w:-]+$/.test(session) || typeof seq != 'number' ||
+    !Number.isSafeInteger(seq) || seq <= 0
+  ) unsafe(row, text(row, 'error', 'code') ?? 'unknown')
+  return `.entry.session=${session}&.entry.seq<${seq}&!notice` +
+    '&.order=-entry.seq&.limit=1&?ask&?attempt'
+}
+
+let retryPending = (row: Bundle, prior: Bundle | null | undefined) => {
+  if (!refusalPrior(row)) return false
+  let code = text(row, 'error', 'code') ?? 'unknown'
+  // undefined means the bounded read was not performed; null means no prior.
+  if (prior === undefined) unsafe(row, code)
+  if (prior === null) return false
+  let seq = comp(prior, 'entry')?.seq
+  if (
+    text(prior, 'entry', 'session') != text(row, 'entry', 'session') ||
+    typeof seq != 'number' || !Number.isSafeInteger(seq) || seq <= 0 ||
+    seq >= (comp(row, 'entry')!.seq as number) || prior.notice
+  ) unsafe(row, code)
+  return code != 'interrupted' && !!comp(prior, 'ask') &&
+    text(prior, 'attempt', 'state') == 'interrupted'
 }
 
 let call = (
@@ -156,13 +188,16 @@ let interrupted = (row: Bundle, body: string): string | undefined => {
 }
 
 /** Convert one audited historical answer, without mutating it or its source.
- * A supplied source must be the exact referenced call. Execution, attempt,
+ * A supplied source must be the exact referenced call. For transcript errors,
+ * prior must be the bounded preceding non-notice entry (or null if absent).
+ * Execution, attempt,
  * content, output.value and external raw errors are never copied into patches.
  * Unknown codes, payload-bearing error components, mismatched sources and
  * conflicting refusals fail with eid/code only. Existing $was guards survive. */
 export let refusalPatch = (
   row: Bundle,
   source?: Bundle,
+  prior?: Bundle | null,
 ): Bundle | undefined => {
   let error = comp(row, 'error')
   let code = text(row, 'error', 'code')
@@ -189,6 +224,7 @@ export let refusalPatch = (
       Object.keys(error).some((key) => key != 'code' && error[key] != null)
     ) unsafe(row, code)
     if (retained.has(code)) return undefined
+    if (retryPending(row, prior)) return undefined
     if (tools.has(code)) {
       let id = text(row, 'output', 'source')
       if (id) call(row, source, id, code)

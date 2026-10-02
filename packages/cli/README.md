@@ -250,7 +250,7 @@ call, and `cwd` is its working directory. A locally opened graph uses the
 directory where the user ran `yak`; a remote call uses the server process's
 directory.
 
-A tool that declines a call throws `CallError`. The runner records the error,
+A tool that declines a call throws `CallError`. The runner records the refusal,
 and `yak` returns exit code `1`.
 
 Factories can retain `host.storage`, `host.graph`, `host.handler`,

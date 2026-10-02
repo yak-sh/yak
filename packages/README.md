@@ -318,7 +318,7 @@ grouped approximately by function, **not** by dependency order.
   it, a `bug{fault, hits, last}` keyed by the fault, and counts recurrences on
   that task while it is open. A new bug starts a @yaks/spawn session holding its
   claim, marked `fixer{bug}`, unless it is off, muted by `nofix`, at the fixer
-  cap or cooling down. `error` never files.
+  cap or cooling down. `refusal` and legacy `error` never file.
 - **[@yaks/context](./context)** — Build instruction entries with source ids and
   snapshot hashes so a transcript can record what a model was given.
   `promptEntry()` itself performs no writes; `outputView()` stores projection

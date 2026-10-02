@@ -539,11 +539,11 @@ These are the names, all of them:
     cites comment commit compat completed connection contains content cost created
     delegates deliver delivered deploy dispatch doc edge effect email entity entry
     error exception execution favorite fee feedback file filed fired former
-    gallery gitobj grant home hook hostname image installed integration
+    gallery gitobj grant home hook hostname image imported installed integration
     integration_install invite inviting key lease lines mail mail_post member memory
     meter model notice notified opened openrouter order output output_of parent person plan price product
     project provider provisional published quarantined questions quote reads
-    recalled ref referenced report repository representation requires restored
+    recalled ref referenced refusal report repository representation requires restored
     result retired
     revision rtc satisfies screenshot secret seeded serves session session_run sfu
     signed_in signin space spend staged stop stripe supersedes supervises sweep switched task

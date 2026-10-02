@@ -132,7 +132,7 @@ key. The entry's text is the sound prompt; this model does not use
 The reply is an `entry` with `attachment.artifact` pointing to an `artifact`
 row. That row carries the media type and size. A page can play the bytes at
 `./api/blob/<artifact-id>`; the platform keeps them in the app's blob store. If
-the app has no OpenRouter connection, the transcript receives an error with
+the app has no OpenRouter connection, the transcript receives a refusal with
 `code: 'connection'`.
 
 ## Build from stored rows
@@ -252,11 +252,12 @@ OpenRouter bills that account for generated audio at its published rate; it does
 not spend the yaks.app account budget.
 
 A call that starts under the budget finishes even if it crosses it. The next one
-is refused: the transcript gets an `error { code: 'limit' }` entry whose
+is refused: the transcript gets a `refusal { code: 'limit' }` entry whose
 `content.body` says which ceiling it met, and it rests there (`failed`) until a
-new entry asks again — on the 1st, or once the account's budget grows. An
-`error` row is the platform's, so a listing leaves it out unless the filter
-names it: subscribe with `&?error` to show the sentence.
+new entry asks again — on the 1st, or once the account's budget grows. A
+`refusal` row is the platform's, so a listing leaves it out unless the filter
+names `refusal` or asks for transcript `entry` rows. Subscribe with `&?refusal`
+to show the sentence.
 
 A model's own rate is shared by every app on the platform. A turn that meets it
 is asked again; after three failures in a row the transcript rests as `failed`

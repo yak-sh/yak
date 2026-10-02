@@ -35,7 +35,12 @@
 import { type Bundle, type Comp, type Row, token } from '@yaks/graph'
 import { isPromise } from '@yaks/fp'
 import { conjoin } from '@yaks/query'
-import { refusalFind, refusalPatch, refusalSource } from '@yaks/tools/refusals'
+import {
+  refusalFind,
+  refusalPatch,
+  refusalPrior,
+  refusalSource,
+} from '@yaks/tools/refusals'
 import { Unknown } from '@yaks/vocab'
 import { GIT_STORE, PLATFORM_STORE } from './door.ts'
 
@@ -107,7 +112,12 @@ export let RULES: Rule[] = refusalFind.map((find, i) => ({
   find,
   move: (row, read) => {
     let line = refusalSource(row)
-    let patch = refusalPatch(row, line && read ? read(line)[0] : undefined)
+    let prior = refusalPrior(row)
+    let patch = refusalPatch(
+      row,
+      line && read ? read(line)[0] : undefined,
+      prior && read ? read(prior)[0] ?? null : undefined,
+    )
     return patch ? [patch] : []
   },
 }))

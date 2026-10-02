@@ -387,3 +387,59 @@ test('refusal rules rehearse unchanged and convert only answers when enabled', a
     [importedBefore.content, importedBefore.result, importedBefore.imported],
   )
 })
+
+test('refusal rehearsal and enabled batches preserve retry-pending provider errors', async () => {
+  let s = await store(0, ...RULES)
+  let session = crypto.randomUUID()
+  let ask = crypto.randomUUID()
+  let notice = crypto.randomUUID()
+  let pending = crypto.randomUUID()
+  let completed = crypto.randomUUID()
+  let refused = crypto.randomUUID()
+  await s.apply([
+    {
+      entity: { eid: ask },
+      entry: { session, seq: 1 },
+      ask: { to: crypto.randomUUID(), through: crypto.randomUUID() },
+      attempt: { state: 'interrupted' },
+    },
+    {
+      entity: { eid: notice },
+      entry: { session, seq: 2 },
+      notice: {},
+    },
+    {
+      entity: { eid: pending },
+      entry: { session, seq: 3 },
+      error: { code: 'http_429' },
+      content: { body: 'rate limited; effects pool retries' },
+    },
+    {
+      entity: { eid: completed },
+      entry: { session, seq: 4 },
+      ask: { to: crypto.randomUUID(), through: crypto.randomUUID() },
+      attempt: { state: 'completed' },
+    },
+    {
+      entity: { eid: refused },
+      entry: { session, seq: 5 },
+      error: { code: 'http_401' },
+      content: { body: 'credential refused' },
+    },
+  ])
+  let before = await s.query('*')
+  let [report] = await s.rehearse()
+  assertEquals([report.rows, report.moved, report.failed], [2, 2, undefined])
+  assertEquals(await s.query('*'), before)
+  let pendingBefore = await s.query(`.eid=${pending}`)
+  let askBefore = await s.query(`.eid=${ask}`)
+  let completedBefore = await s.query(`.eid=${completed}`)
+  s.wake(...RULES.map((r) => ({ ...r, live: 'apps' as const })))
+  await s.alarm()
+  assertEquals(await count(s, '.error.code=http_429'), 1)
+  assertEquals(await count(s, '.refusal.code=http_429'), 0)
+  assertEquals(await count(s, '.refusal.code=http_401'), 1)
+  assertEquals(await s.query(`.eid=${pending}`), pendingBefore)
+  assertEquals(await s.query(`.eid=${ask}`), askBefore)
+  assertEquals(await s.query(`.eid=${completed}`), completedBefore)
+})

@@ -207,7 +207,7 @@ test('a hosted builder cannot spend beyond the account budget', async () => {
   }, { label: 'builder session' })
   let session = opened.entity.eid
   await until(async () => {
-    let rows = await v.read(`.entry.session=${session}&.error&*`)
+    let rows = await v.read(`.entry.session=${session}&.refusal&*`)
     return rows.length ? rows : null
   }, { label: 'budget refusal' })
   assertEquals((await v.read('.built&*')).length, 0)

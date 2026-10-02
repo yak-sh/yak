@@ -7,8 +7,9 @@ it and starts an agent to fix it.
 deno add jsr:@yaks/heal
 ```
 
-An `exception` (@yaks/tools) on any entity is the trigger. `error` is a failure
-the code expected and handled, and never files anything.
+An `exception` (@yaks/tools) on any entity is the trigger. `refusal` is a
+deliberate no and never files anything. Legacy `error` outcomes also never file
+anything.
 
 ## Stored data
 

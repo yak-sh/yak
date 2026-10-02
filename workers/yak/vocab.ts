@@ -412,6 +412,7 @@ let sealed = (doc: VocabDoc, names: string[]): VocabDoc => ({
 let transcriptDoc: VocabDoc = pick(sessionDoc, [
   'session',
   'entry',
+  'imported',
   'ask',
   'using',
   'notice',
