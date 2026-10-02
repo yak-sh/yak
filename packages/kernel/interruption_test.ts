@@ -2,7 +2,7 @@
 
 import { test } from '@yaks/testing'
 import { equal } from '@yaks/testing'
-import { comp, graph } from '@yaks/graph'
+import { type Comp, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from './vocab.ts'
@@ -18,7 +18,7 @@ test('interruption records its writer and removal permits a retry', async () => 
     $actor: { by: 'writer', via: 'writer' },
   }])
   let [row] = await g.get(['request'])
-  let mark = comp(row, 'interrupted')
+  let mark = row.interrupted as Comp
   equal(mark?.code, 'restart')
   equal(mark?.by, 'writer')
   equal(mark?.via, 'writer')
