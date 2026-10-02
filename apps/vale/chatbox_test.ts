@@ -251,11 +251,12 @@ test('chat shortcuts focus a line without taking another field’s keys', async 
   let h = setup()
   try {
     await h.ready()
-    h.type('old draft')
     assertEquals(h.press(h.document.body, '/').defaultPrevented, true)
     assertEquals(h.form.hidden, false)
     assertEquals(h.focused, true)
     assertEquals(h.input.value, '/')
+    assertEquals(h.input.selectionStart, 1)
+    assertEquals(h.input.selectionEnd, 1)
 
     h.type('/help')
     assertEquals(h.press(h.input, '/').defaultPrevented, false)

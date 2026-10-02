@@ -296,8 +296,9 @@ export let completion = (front: Front, opts: Opts): Controller => {
       el.addEventListener(event, selected)
     }
     let off = live(id).subscribe((r) => {
-      if (r && el.value != r.text) {
-        el.value = r.text
+      if (!r) return
+      if (el.value != r.text) el.value = r.text
+      if (el.selectionStart != r.caret || el.selectionEnd != r.caret) {
         el.setSelectionRange(r.caret, r.caret)
       }
     })
