@@ -2,22 +2,12 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { resolve } from '@yaks/render'
-import { loadVocab, pick } from '@yaks/vocab'
-import { kernelDoc } from '@yaks/kernel/vocab'
-import { sessionDoc } from '@yaks/session/vocab'
-import doc from './runtime/vocab.json' with { type: 'json' }
-import { runtimeRow, runtimeViews } from './RuntimePanel.ts'
-
-let vocabulary = loadVocab([
-  doc,
-  pick(sessionDoc, ['dispatch']),
-  pick(kernelDoc, ['admitted', 'waiting']),
-])
+import { runtimeRow, runtimeViews, runtimeVocab } from './RuntimePanel.ts'
 type Node = { props: Record<string, unknown> | null; children: unknown[] }
 
 let status = (bundle: Bundle) => {
   let row = runtimeRow(bundle)
-  let renderer = resolve(runtimeViews, row, 'Runtime', vocabulary)!
+  let renderer = resolve(runtimeViews, row, 'Runtime', runtimeVocab)!
   let node = renderer.render<Node>(
     row,
     (_tag, props, ...children) => ({ props, children }),

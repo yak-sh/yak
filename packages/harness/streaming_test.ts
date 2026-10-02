@@ -531,7 +531,7 @@ test('invalid provider history records a healable exception, not an operational 
   }
 })
 
-test('a compaction refusal keeps the provider detail in its error entry', async () => {
+test('a compaction refusal keeps the provider detail in its refusal entry', async () => {
   let { CODEX, responses } = await import('@yaks/openai')
   let h = await harness()
   try {
@@ -569,10 +569,10 @@ test('a compaction refusal keeps the provider detail in its error entry', async 
       tools: [],
       compactModel: { model, name: 'gpt-6-sol' },
     })
-    let error = step.added.find((b) => b.error)!
-    assertEquals((error.error as Comp).code, 'http_400')
+    let refusal = step.added.find((b) => b.refusal)!
+    assertEquals((refusal.refusal as Comp).code, 'http_400')
     assertEquals(
-      (error.content as Comp).body,
+      (refusal.content as Comp).body,
       'responses: HTTP 400 — Unsupported parameter: max_output_tokens',
     )
   } finally {

@@ -18,7 +18,7 @@ import type { Frontend } from './frontend.ts'
 import type { UIAgent } from './panels.ts'
 import { sessionLine } from './panels.ts'
 
-let vocabulary = loadVocab([
+export let runtimeVocab = loadVocab([
   doc,
   pick(toolsDoc, ['refusal']),
   pick(sessionDoc, ['dispatch']),
@@ -168,7 +168,7 @@ export let RuntimePanel = ({ ui, agent, session, subscribe }: {
             fill: '1',
             class: i == index ? 'Session_Selected' : '',
           },
-          render(runtimeViews, runtimeRow(b), 'Runtime', vocabulary),
+          render(runtimeViews, runtimeRow(b), 'Runtime', runtimeVocab),
           ' ',
           elapsed(
             (b.updated as Comp | undefined)?.at ??
