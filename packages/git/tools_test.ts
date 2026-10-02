@@ -84,7 +84,7 @@ test('a citation nobody has checked is a warning naming the place it points', as
   let said = body(answer)
   assert(said.includes('src/db.ts:open'), said)
   assert(said.includes('never checked'), said)
-  assertEquals((answer[0].error as Bundle)?.code, 'warn')
+  assertEquals((answer[0].finding as Bundle)?.level, 'warn')
 })
 
 test('a citation of an entity reports changed content without a checkout', async () => {
@@ -99,7 +99,7 @@ test('a citation of an entity reports changed content without a checkout', async
   ]
   let answer = await tools.cites_check!(...asked({}, bundles, ''))
   assert(body(answer).includes('cited content changed'), body(answer))
-  assertEquals((answer[0].error as Bundle)?.code, 'fail')
+  assertEquals((answer[0].finding as Bundle)?.level, 'fail')
 })
 
 test('a citation of a removed entity is a failed check', async () => {
@@ -108,7 +108,7 @@ test('a citation of a removed entity is a failed check', async () => {
     cite('doc-1', 'gone', { verified: {}, cites: { hash: 'old' } }),
   ], ''))
   assert(body(answer).includes('cited entity is gone'), body(answer))
-  assertEquals((answer[0].error as Bundle)?.code, 'fail')
+  assertEquals((answer[0].finding as Bundle)?.level, 'fail')
 })
 
 test('a line range reads as a range, and a citation with no place named is the whole file', async () => {
@@ -146,7 +146,7 @@ test('check is scoped by the entity citing, and by the file cited', async () => 
 test('a check with nothing to report still answers, and reports no fault', async () => {
   let answer = await tools.cites_check!(...asked({}, [doc('doc-1', 1)]))
   assert(body(answer).includes('nothing to report'), body(answer))
-  assertEquals(answer[0].error, undefined)
+  assertEquals(answer[0].finding, undefined)
 })
 
 test('verify refuses an id that cites nothing, before it asks git anything', async () => {
@@ -232,7 +232,7 @@ test(
     ]
     let answer = await tools.cites_check!(...asked({}, bundles, cwd))
     assert(body(answer).includes('moved by'), body(answer))
-    assertEquals((answer[0].error as Bundle)?.code, 'fail')
+    assertEquals((answer[0].finding as Bundle)?.level, 'fail')
     await Deno.remove(cwd, { recursive: true })
   },
 )

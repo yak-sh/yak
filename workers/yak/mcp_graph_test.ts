@@ -130,25 +130,31 @@ test('a read with no app composes every app the caller can reach', async () => {
         recipe: { serves: 4 },
       }],
     })
-    await agent.tool('graph_apply', {
-      app: 'recipes',
-      entities: [{
-        entity: { eid: '$pancakes' },
-        doc: { title: 'Pancakes' },
-        recipe: { serves: 2 },
-      }],
-    })
-    await agent.tool('graph_apply', {
-      app: 'lending',
-      entities: [
-        { entity: { eid: cake }, loan: { to: 'Maya' } },
-        {
-          entity: { eid: '$zester' },
-          doc: { title: 'Lemon zester' },
-          loan: { to: 'Bo' },
-        },
-      ],
-    })
+    let pancakes = minted(
+      await agent.tool('graph_apply', {
+        app: 'recipes',
+        entities: [{
+          entity: { eid: '$pancakes' },
+          doc: { title: 'Pancakes' },
+          recipe: { serves: 2 },
+        }],
+      }),
+      '$pancakes',
+    )
+    let zester = minted(
+      await agent.tool('graph_apply', {
+        app: 'lending',
+        entities: [
+          { entity: { eid: cake }, loan: { to: 'Maya' } },
+          {
+            entity: { eid: '$zester' },
+            doc: { title: 'Lemon zester' },
+            loan: { to: 'Bo' },
+          },
+        ],
+      }),
+      '$zester',
+    )
 
     // `id=` with no app answers everything known about it, in one bundle,
     // saying which app holds which component.
@@ -227,11 +233,11 @@ test('a read with no app composes every app the caller can reach', async () => {
       [true, true],
     )
     // `.doc` is a platform word both stores speak, so the answer is both
-    // apps' rows — and the cake is one row, not two. The person row each
-    // store mints for its writer wears a title too (graph.ts `#vouching`), and
-    // is the platform's bookkeeping, never a row in the person's own list.
+    // apps' rows — and the cake is one row, not two. Scope the fixtures by
+    // identity because each store also carries its schema's titled entities.
     assertEquals(
-      (await rows('.doc')).map((r) => r.doc!.title),
+      (await rows(`.doc&.entity.eid=${cake},${pancakes},${zester}`))
+        .map((r) => r.doc!.title),
       ['Lemon cake', 'Pancakes', 'Lemon zester'],
     )
     // `*` is the debugging form: every component, wherever it lives.
@@ -248,9 +254,14 @@ test('a read with no app composes every app the caller can reach', async () => {
     // Search with no app merges the ranked hits of every app.
     let found = JSON.parse(
       await agent.tool('search', { text: 'lemon' }),
-    ) as { doc: { title: string }; recipe?: { serves: number } }[]
+    ) as {
+      entity: { eid: string }
+      doc: { title: string }
+      recipe?: { serves: number }
+    }[]
     assertEquals(
-      found.map((r) => r.doc.title).sort(),
+      found.filter((r) => [cake, pancakes, zester].includes(r.entity.eid))
+        .map((r) => r.doc.title).sort(),
       ['Lemon cake', 'Lemon zester'],
     )
     // And a hit carries the app's own components, not a doc and a rank
@@ -364,10 +375,11 @@ test('a write with no app routes each component to its own app', async () => {
       }],
     })
     let cake = minted(said, '$cake')
-    assertEquals((await rows('.doc', 'recipes')).map((r) => r.entity.eid), [
-      cake,
-    ])
-    assertEquals((await rows('.doc', 'lending')).length, 0)
+    assertEquals(
+      (await rows(`.doc&id=${cake}`, 'recipes')).map((r) => r.entity.eid),
+      [cake],
+    )
+    assertEquals((await rows(`.doc&id=${cake}`, 'lending')).length, 0)
 
     // A rehearsal answers what the kept write would have, name resolved, and
     // keeps none of it: not in the app's store, not anywhere.
@@ -383,9 +395,12 @@ test('a write with no app routes each component to its own app', async () => {
       '$pie',
     )
     assert(pie != '$pie')
-    assertEquals((await rows('.doc', 'recipes')).map((r) => r.entity.eid), [
-      cake,
-    ])
+    assertEquals(
+      (await rows(`.doc&id=${cake},${pie}`, 'recipes')).map((r) =>
+        r.entity.eid
+      ),
+      [cake],
+    )
 
     // One bundle wearing two apps' words: the loan is the lending app's row,
     // the retitle lands where the title already lives, and the call is one.

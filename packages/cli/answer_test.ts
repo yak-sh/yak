@@ -10,7 +10,7 @@ import { views as taskViews } from '@yaks/task/views'
 import { toolsDoc } from '@yaks/tools'
 import { views as toolViews } from '@yaks/tools/views'
 import { loadVocab } from '@yaks/vocab'
-import { define, resolve } from '@yaks/render'
+import { define, type Renderer, resolve } from '@yaks/render'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { printed, referenced, registry, show, terminal } from './answer.ts'
@@ -274,15 +274,15 @@ test('a link in a list reads as the sentence it states', () => {
   )
 })
 
-test('actual answer registries report loaded metadata without drawing a renderer', async () => {
+test('answer registries report loaded metadata without drawing a renderer', async () => {
   let seen: import('@yaks/code/anatomy').AnatomyObservation[] = []
   let loads = 0, ran = 0
-  let part = {
+  let part: Renderer = {
     view: 'Tile',
     match: true as const,
-    render: () => {
+    render: (_bundle, h) => {
       ran++
-      return null
+      return h('span', {})
     },
   }
   let held = {
