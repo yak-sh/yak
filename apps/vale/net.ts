@@ -372,7 +372,9 @@ export let connect = (
     partyOf: async (eid: string): Promise<string> => {
       let { by } = await about(eid)
       if (!by) return ''
-      let rows = await once(`.party_step.player=${JSON.stringify(eid)}&*`)
+      let rows = await once(
+        `.party_step.player=${JSON.stringify(eid)}&?created&*`,
+      )
       return groupOf(rows, eid, by)
     },
     /** Whether the hero this tab remembers is still in the store. */
