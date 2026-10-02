@@ -2,14 +2,14 @@
 // alarm after boot, a rehearsal that moves nothing, and a failing batch that
 // leaves the store serving until fixed code arrives.
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
-import { type Bundle, type Comp, identityEid, Stale, token } from '@yaks/graph'
+import { assert, assertEquals, assertRejects } from '@std/assert'
+import { type Bundle, type Comp, Stale, token } from '@yaks/graph'
 import { pick } from '@yaks/vocab'
 import { kernelDoc } from '@yaks/kernel/vocab'
 import { doorOf } from './door.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
-import { dispatchMove, dispatchRule, step } from './mover.ts'
+import { dispatchMove, dispatchRule } from './mover.ts'
 import { type Rehearsal, type Rule, RULES, type Standing } from './mover.ts'
 import { state } from './testing.ts'
 
