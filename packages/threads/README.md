@@ -85,6 +85,30 @@ effect accounting run there once. Local-only components are available too: this
 is access to that graph, not its server sync tier. There is no optimistic
 replica or raw storage write door.
 
+A connected pair gives another thread access without copying data:
+
+```ts
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { remote, serve } from '@yaks/threads'
+
+let vocab = loadVocab([])
+let owner = graph({ storage: ram(vocab), vocab })
+let { port1, port2 } = new MessageChannel()
+let serving = serve(port1, owner)
+let client = remote(port2, vocab)
+try {
+  await client.apply([{ entity: { eid: 'thread' } }])
+  await owner.get(['thread']) // the write landed in the owning graph
+} finally {
+  client.close()
+  serving.close()
+  port1.close()
+  port2.close()
+}
+```
+
 Graph refusals retain their `Stale` and `Refused` types and details across the
 port, so two threads claiming one run settle at the owning graph's transaction.
 Both ends must load compatible vocabulary. These ports are for trusted code;

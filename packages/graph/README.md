@@ -246,9 +246,8 @@ entity's bundle, whose arguments `argsOf(call)` reads and whose caller
 and `outside`. A consumer using it can work with a local graph or one owned by
 another thread without reaching its storage. `outside` is a `ReadTx`: detached
 reads of whole committed bundles and binding queries for post-commit handlers.
-Writes still go through `apply()` with `WriteOpts` data options; activity
-parents, trace callbacks and deferred effects remain controls on the local
-`Graph`.
+Writes still go through `apply()` with `WriteOpts` data options; trace callbacks
+and deferred effects remain controls on the local `Graph`.
 
 - [@yaks/vocab](../vocab/README.md) loads component schemas.
 - [@yaks/ram](../ram/README.md), [@yaks/sqlite](../sqlite/README.md),
