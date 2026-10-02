@@ -158,10 +158,10 @@ a builder, since model turns spend the owner's account budget.
 
 A builder written with `staged: {}` builds nothing by itself, so a new prompt
 can be tried on a few rows first. `builder_build` builds it now: `only` names
-the rows to build for, `limit` takes the first few, and a `template` or `model`
-tried in place of its own builds a shadow variant that nothing else selects.
-Remove the mark (`staged: null`) to build the rest; a row already built with the
-same prompt is not asked again.
+the rows to build for, `limit` takes the first few, and a `template`, `provider`
+or `model` tried in place of its own builds a shadow variant that nothing else
+selects. Remove the mark (`staged: null`) to build the rest; a row already built
+with the same prompt is not asked again.
 
 ## One call, answered at once
 
@@ -186,6 +186,15 @@ said. An app's worker asks the same way through a binding:
 "AI" }` in its `wrangler.jsonc` gives it
 `env.AI.run(model, input)` (see [Code](/docs/code)), which asks as the app
 itself.
+
+To keep calls from the same conversation on the same cache-capable model worker,
+add a stable `session_id` beside `model` and `input`, or send the
+`x-session-affinity` header (the header takes precedence). An app's worker can
+use `env.AI.run(model, input, {extraHeaders: {'x-session-affinity': session}})`.
+Existing calls with only `model` and `input` keep working. Affinity is a routing
+hint, not a promise of a cache hit or support on every model. Transcripts send
+their session id automatically; keep instructions and tools stable where their
+meaning has not changed.
 
 The same people may call it as may ask for a turn (below), and the same account
 budget pays. A refusal comes in the envelope every door answers with: `429` past
