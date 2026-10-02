@@ -14,6 +14,7 @@
 // and, in a browser, the overlay the list floats in, clear of every clipping
 // card. The terminal binds the same fields with the list in the flow.
 import { client } from '@yaks/client'
+import doc from '../front.json' with { type: 'json' }
 import { filters, type Float } from '@yaks/filter'
 import { docs as filterDocs } from '@yaks/filter/vocab'
 import { docs as inspectDocs } from '@yaks/inspect/front'
@@ -29,7 +30,7 @@ import { drafts } from './drafts.ts'
 
 /** The page's own graph. */
 export let front = client(
-  loadVocab([...filterDocs, ...uxDocs, ...inspectDocs]),
+  loadVocab([...filterDocs, ...uxDocs, ...inspectDocs, doc]),
   [],
   { vault: false, wireVault: false },
 )

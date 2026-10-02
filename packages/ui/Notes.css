@@ -33,3 +33,11 @@
 .Notes_When {
   color: var(--dim);
 }
+
+.Notes_Children {
+  --branch: var(--border2);
+  margin-left: var(--gap);
+  padding-left: var(--half-gap);
+  border-left: 1px solid var(--branch);
+  min-width: 0;
+}

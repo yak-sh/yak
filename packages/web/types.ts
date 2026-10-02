@@ -992,6 +992,7 @@ export type Hook = {
 export type Comment = {
   eid: string
   target: string
+  reply_to?: string | null
 }
 
 // A commit: a git revision landed FOR its target (M-31946 §7) — the

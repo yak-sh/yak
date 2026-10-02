@@ -1,12 +1,18 @@
+// Comments on an entity: reply branches, shared notes and durable composers.
 import { useModel, useRepoUrl } from './subscriptions.ts'
-import { useRef, useState } from 'preact/hooks'
+import { useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks'
+import { signal } from '@preact/signals'
+import { derivedEid } from '@yaks/graph'
+import { front } from './fields.tsx'
+import { drafts } from './drafts.ts'
+import { type Branch, branches } from '../comments.ts'
 import { commands, orderIn, suggest } from '../commands.ts'
 import { slotsOf } from '../verb.ts'
 import { ent, pending, uuid } from '../live.ts'
 import { bundlesOf } from '../wire.ts'
 import { useCommentsOn, useCommitsOn } from './useQuery.ts'
 import { subject } from '../client.ts'
-import { block } from '@yaks/ui'
+import { block, Button, Notes } from '@yaks/ui'
 import { ago } from './Stamp.tsx'
 import { pretty } from '../time.ts'
 import { useDraft } from './drafts.ts'
@@ -68,7 +74,7 @@ export let byline = (c: Ent) => {
 // One comment, anywhere it renders — the rail here, the session thread
 // inline. The stamp names actor and instrument directly; the actor leads
 // and the instrument dims behind a "via" — both still links.
-export let Note = ({ c }: { c: Ent }) => {
+export let Note = ({ c, reply = true }: { c: Ent; reply?: boolean }) => {
   let repo = useRepoUrl(c)
   let actor = c.created?.by ? ent(String(c.created.by)) : undefined
   let instrument = c.created?.via ? ent(String(c.created.via)) : undefined
@@ -105,6 +111,7 @@ export let Note = ({ c }: { c: Ent }) => {
       {pending(c)
         ? <Body>…</Body>
         : <Markdown as={Body} text={c.doc?.body ?? ''} repo={repo} />}
+      {reply && c.comment && <Reply c={c} />}
     </Item>
   )
 }
@@ -134,6 +141,7 @@ export let composerChanges = (
   entry: boolean,
   id = uuid(),
   using?: { provider: string; model?: string; effort?: string },
+  replyTo?: string,
 ): Change[] =>
   entry && !orderIn(body.split('\n')[0])
     ? [
@@ -143,19 +151,26 @@ export let composerChanges = (
     ]
     : [
       { eid: id, name: 'doc', comp: { title: '', body } },
-      { eid: id, name: 'comment', $num: true, comp: { target: eid } },
+      {
+        eid: id,
+        name: 'comment',
+        $num: true,
+        comp: { target: eid, ...(replyTo ? { reply_to: replyTo } : {}) },
+      },
     ]
 
 export let Composer = (
-  { eid, entry = false, using }: {
+  { eid, entry = false, using, replyTo, onPost }: {
     eid: string
     entry?: boolean
+    replyTo?: string
+    onPost?: () => void
     using?: { provider: string; model?: string; effort?: string }
   },
 ) => {
   let box = useRef<HTMLTextAreaElement>(null)
   let model = useModel(ent(eid)).name
-  let dkey = `${eid}.${entry ? 'input' : 'comment'}`
+  let dkey = commentPlace(eid, entry, replyTo)
   // The typed line, mirrored for the hints (the DOM textarea stays the
   // owner, exactly as the palette does it) and which hint is picked.
   let [line, setLine] = useState('')
@@ -189,10 +204,11 @@ export let Composer = (
   let post = () => {
     let body = box.current!.value.trim()
     if (!body) return
-    spend(bundlesOf(composerChanges(eid, body, entry, uuid(), using)))
+    spend(bundlesOf(composerChanges(eid, body, entry, uuid(), using, replyTo)))
     box.current!.value = ''
     setLine('')
     setPick(0)
+    onPost?.()
   }
 
   let key = (e: KeyboardEvent) => {
@@ -249,7 +265,7 @@ export let Composer = (
           setLine(el.value)
           setPick(0)
         }}
-        placeholder={prompt(ent(eid), entry, model)}
+        placeholder={replyTo ? 'reply…' : prompt(ent(eid), entry, model)}
         onKeyDown={key}
       />
       <Send
@@ -264,17 +280,72 @@ export let Composer = (
   )
 }
 
-// The comment rail under any entity: everything said about it, oldest
-// first, plus the composer. (A session doesn't use this — its view
-// weaves the heard comments into the thread and pins its own composer.)
+// Reply drafts name the answered comment, never the view or browser tab.
+export let commentPlace = (eid: string, entry = false, replyTo?: string) =>
+  `${eid}.${replyTo ? `reply:${replyTo}` : entry ? 'input' : 'comment'}`
+
+// Opening a reply is page state; the words themselves remain synced drafts.
+export let Reply = ({ c }: { c: Ent }) => {
+  let target = c.comment!.target
+  let at = derivedEid(`commentBox|${c.eid}`)
+  let box = useMemo(() => {
+    let watch = front.watch(`.commentBox .entity.eid=${at}`)
+    let rows = signal(watch.value)
+    let off = watch.subscribe((now) => rows.value = now)
+    return {
+      rows,
+      free: () => {
+        off()
+        watch.close()
+      },
+    }
+  }, [at])
+  useLayoutEffect(() => box.free, [box])
+  let row = box.rows.value[0]?.commentBox
+  let open = row && typeof row == 'object' && 'open' in row
+    ? !!row.open
+    : !!drafts.text(commentPlace(target, false, c.eid))
+  let set = (on: boolean) =>
+    front.mutate([{
+      entity: { eid: at },
+      commentBox: { open: on },
+    }])
+  return open
+    ? (
+      <>
+        <Composer eid={target} replyTo={c.eid} onPost={() => set(false)} />
+        <Button type='button' mod='quiet' onClick={() => set(false)}>
+          close reply (draft kept)
+        </Button>
+      </>
+    )
+    : <Button type='button' mod='quiet' onClick={() => set(true)}>reply</Button>
+}
+
+export let Branches = ({ rows }: { rows: Ent[] }) => (
+  <>
+    {branches(rows).map((node) => <Twig key={node.row.eid} node={node} />)}
+  </>
+)
+
+export let Twig = ({ node }: { node: Branch }) =>
+  <>
+    {node.row.commit ? <Landed c={node.row} /> : <Note c={node.row} />}
+    {!!node.children.length && (
+      <Notes.Children>
+        {node.children.map((child) => (
+          <Twig key={child.row.eid} node={child} />
+        ))}
+      </Notes.Children>
+    )}
+  </>
+
+// One composer at the root starts a branch; each note offers a direct reply.
 export let Comments = ({ eid }: { eid: string }) => {
   let said = useCommentsOn(eid), landed = useCommitsOn(eid)
-  let rows = [...said, ...landed].sort((a, b) => a.num - b.num)
   return (
     <Frame>
-      {rows.map((c) =>
-        c.commit ? <Landed key={c.eid} c={c} /> : <Note key={c.eid} c={c} />
-      )}
+      <Branches rows={[...said, ...landed]} />
       <Composer eid={eid} />
     </Frame>
   )

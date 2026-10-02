@@ -15,29 +15,33 @@ import { Field } from './Field.ts'
 import { Say } from './Say.ts'
 
 /** Notes. */
-export let Notes: Part & Record<'Item' | 'Text' | 'Who' | 'When', Part> = block(
-  'div',
-  'Notes',
-  {
-    Item: 'div',
-    Text: 'span',
-    Who: 'span',
-    When: 'span',
-  },
-)
+export let Notes:
+  & Part
+  & Record<'Item' | 'Text' | 'Who' | 'When' | 'Children', Part> = block(
+    'div',
+    'Notes',
+    {
+      Item: 'div',
+      Text: 'span',
+      Who: 'span',
+      When: 'span',
+      Children: 'div',
+    },
+  )
 
 /** What it is, in a line. */
 export let description = 'Notes left on something: who left each, and when.'
 
 /** A note is a line of its own; when is dim, and so is a done one. */
 export let sheet = (c: Colors): Sheet => ({
+  Notes_Children: { block: true, indent: 2 },
   Notes_Item: { block: true, spaced: true },
   'Notes_Item-done': { fg: c.dim },
   Notes_Who: { fg: c.who },
   Notes_When: { fg: c.dim },
 })
 
-let { Item, Text, Who, When } = Notes
+let { Item, Text, Who, When, Children } = Notes
 
 /** Two notes, one seen to, and the line a third is typed on. */
 export let specimens = (): Specimen[] => [
@@ -59,6 +63,20 @@ export let specimens = (): Specimen[] => [
         h(Text, {}, 'owner is never set'),
         h(Who, {}, 'S-45466'),
         h(When, {}, 'yesterday'),
+      ),
+    ),
+  ],
+  [
+    'Notes, Children: a reply branch',
+    h(
+      Notes,
+      {},
+      h(Item, {}, 'Which option?'),
+      h(
+        Children,
+        {},
+        h(Item, {}, 'The first'),
+        h(Children, {}, h(Item, {}, 'Agreed')),
       ),
     ),
   ],

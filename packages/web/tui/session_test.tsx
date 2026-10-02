@@ -18,6 +18,8 @@ import { onMarkdown } from '../components/Markdown.tsx'
 import '../components/Entity.tsx'
 import { EntryBody, type EntryLine } from '../components/views/Entry.tsx'
 import { pane } from './paint.ts'
+import { Branches } from '../components/Comments.tsx'
+import { cache, ent } from '../live.ts'
 
 // The same injection tui/main.tsx makes at boot: the one markdown door paints
 // through Md instead of the HTML the fake DOM can't honor.
@@ -77,4 +79,44 @@ test('terminal prose says which words are a person and which are a model', () =>
   assertStringIncludes(plain, 'model\n')
   assertEquals(plain.indexOf('person') < plain.indexOf('human words'), true)
   assertEquals(plain.indexOf('model\n') < plain.indexOf('model words'), true)
+})
+
+test('comment replies paint as nested branches in the terminal', () => {
+  cache.value = {
+    ask: {
+      entity: { eid: 'ask', num: 1 },
+      comment: { eid: 'ask', target: 'task' },
+      doc: { eid: 'ask', title: '', body: 'Choose one' },
+    },
+    other: {
+      entity: { eid: 'other', num: 2 },
+      comment: { eid: 'other', target: 'task' },
+      doc: { eid: 'other', title: '', body: 'Separate update' },
+    },
+    answer: {
+      entity: { eid: 'answer', num: 3 },
+      comment: { eid: 'answer', target: 'task', reply_to: 'ask' },
+      doc: { eid: 'answer', title: '', body: 'First one' },
+    },
+  }
+  let root = new TElement('root')
+  try {
+    render(
+      <Branches rows={['ask', 'other', 'answer'].map(ent)} />,
+      root as unknown as Parameters<typeof render>[1],
+    )
+    let { lines, status } = pane(root)
+    let plain = [...lines, status].map((line) =>
+      line.map((s) => s.text).join('')
+    )
+    assertEquals(plain.some((line) => line.startsWith('  First one')), true)
+    let out = plain.join('\n')
+    assertEquals(
+      out.indexOf('First one') < out.indexOf('Separate update'),
+      true,
+    )
+  } finally {
+    render(null, root as unknown as Parameters<typeof render>[1])
+    cache.value = {}
+  }
 })

@@ -22,7 +22,8 @@ import { block } from '@yaks/ui'
 import { ago, Stamp } from '../Stamp.tsx'
 import { pretty } from '../../time.ts'
 import { Dot } from '../Dot.tsx'
-import { Note } from '../Comments.tsx'
+import { Twig } from '../Comments.tsx'
+import { branches } from '../../comments.ts'
 import { Entity, resolve } from '../Entity.tsx'
 import { mdMentions, type Mention } from '../../md.ts'
 import { useCommentsOn, useQueryResult, useReferences } from '../useQuery.ts'
@@ -583,7 +584,9 @@ export let Session = ({ e }: { e: Ent }) => {
   })
   let heard = (c: Ent) => c.created?.via == e.eid || cited.has(c.eid)
   let heardCs = cs.filter(heard)
-  let thread = weave(rows, heardCs)
+  let trees = branches(cs)
+  let nodes = new Map(trees.map((node) => [node.row.eid, node]))
+  let thread = weave(rows, trees.map((node) => node.row).filter(heard))
   // Windowed from the tail on the web; the whole thread in the TUI.
   let { frame, start, older } = useTranscript(
     thread.length,
@@ -596,7 +599,7 @@ export let Session = ({ e }: { e: Ent }) => {
     () => setTake((n) => n + WINDOW),
   )
   let windowed = start > 0 ? thread.slice(start) : thread
-  let unsent = cs.filter((c) => !heard(c))
+  let unsent = trees.filter((node) => !heard(node.row))
   // The mention scan (mdMentions over the whole thread) is a per-render scan we
   // can't pay — a 14M-log session stalled first paint on it. Parse once,
   // memoized on the cheap content signature; resolve+dedup stays per render so a
@@ -694,14 +697,14 @@ export let Session = ({ e }: { e: Ent }) => {
           {windowed.map((x) =>
             logLine(x)
               ? <Row key={x.seq} x={x} repo={repo} />
-              : <Note key={x.eid} c={x} />
+              : <Twig key={x.eid} node={nodes.get(x.eid)!} />
           )}
           {showActivity && <Think>✳ {activity}</Think>}
         </Log>
         <SessionDiagnostics exit={e.exit?.code} open={status == 'failed'} />
         {unsent.length > 0 && (
           <Unsent>
-            {unsent.map((c) => <Note key={c.eid} c={c} />)}
+            {unsent.map((node) => <Twig key={node.row.eid} node={node} />)}
           </Unsent>
         )}
       </Panel>

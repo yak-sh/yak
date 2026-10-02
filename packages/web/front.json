@@ -1,0 +1,20 @@
+{
+  "$vocabulary": { "https://yak.sh/vocab/core": true },
+  "title": "web front",
+  "description": "The web door's own state in the page graph, never synced.",
+  "$defs": {
+    "commentBox": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "a reply composer open on a comment; its words are a synced draft, not page state",
+      "properties": {
+        "open": {
+          "type": "boolean",
+          "description": "the reply composer is open"
+        }
+      }
+    }
+  }
+}
