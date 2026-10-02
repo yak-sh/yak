@@ -364,20 +364,8 @@ export let scanned = (
       } else put(name, argv[++i])
       continue
     }
-    if (!literal && eq > 0) {
-      let name = word.slice(0, eq)
-      if (forward && !props[name]) {
-        spare.push(word)
-        continue
-      }
-      if (!props[name]) {
-        throw new Usage(
-          `Unknown argument: ${name} — ${commandOf(tool)} takes ${
-            listed(Object.keys(props))
-          }`,
-        )
-      }
-      put(name, word.slice(eq + 1))
+    if (!literal && eq > 0 && Object.hasOwn(props, word.slice(0, eq))) {
+      put(word.slice(0, eq), word.slice(eq + 1))
       continue
     }
     while (at < positional.length && given.has(positional[at])) at++

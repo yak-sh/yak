@@ -168,7 +168,7 @@ test('unknown options stay refused without a declared object rest', async () => 
     ]
   ) {
     for (
-      let words of [['--unknown=1'], ['--unknown', '1'], ['unknown=1']]
+      let words of [['--unknown=1'], ['--unknown', '1']]
     ) {
       await assertRejects(
         () => argsFor(grammar, words),
@@ -207,6 +207,40 @@ test('a trailing text input takes remaining words around either flag form', asyn
   }
   assertEquals(await argsFor(grammar, ['a large polar bear']), {
     text: 'a large polar bear',
+  })
+})
+
+test('equals words are positional unless their name is declared', async () => {
+  for (
+    let [name, field, word] of [
+      ['graph_query', 'query', '.task.status=open'],
+      ['task_list', 'query', '.filed.project=P-19'],
+      ['task_new', 'title', 'Fix x=y'],
+    ]
+  ) {
+    let grammar = {
+      name,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          [field]: { type: 'string' },
+          limit: { type: 'number' },
+        },
+      },
+      positional: [field],
+    }
+    assertEquals(await argsFor(grammar, [word, 'limit=5']), {
+      [field]: word,
+      limit: 5,
+    })
+  }
+  let grammar = {
+    name: 'task_new',
+    inputSchema: { type: 'object', properties: { title: { type: 'string' } } },
+    positional: ['title...'],
+  }
+  assertEquals(await argsFor(grammar, ['x=y', 'and', 'z=w']), {
+    title: 'x=y and z=w',
   })
 })
 
