@@ -23,3 +23,5 @@ export * from './rule.ts'
 export * from './time.ts'
 export * from './teach.ts'
 export * from './complete.ts'
+
+export * from './map.ts'

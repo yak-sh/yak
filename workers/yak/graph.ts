@@ -1,6 +1,8 @@
 import { choices } from '@yaks/builders'
 import { recovering } from './models.ts'
 import { archetypes } from '@yaks/archetype'
+import { described as describedLenses, lenses, packageEid } from '@yaks/lens'
+import { declaredLenses, lensDocAt, lensRule, spoken } from './lenses.ts'
 // The Store Durable Object, built out of the packages (T-33810, D-33490): one
 // app's graph, and nothing of the fleet's. It is composition, not code —
 //
@@ -656,6 +658,7 @@ export class Store {
   // this incarnation: those wait for the next one, which fixed code arrives
   // as.
   #rules: Rule[]
+  #lensMove: Rule | null = null
   #halted = new Set<Mark>()
   // Why this object's schema would not stand, when it would not. The rows are
   // as they were: the boot ran in one transaction and it unwound.
@@ -819,6 +822,9 @@ export class Store {
     // object is an app, and wakes with the core plus whatever its `vocab.json`
     // declared.
     let name = this.#get('name') ?? ''
+    let declaration = meant(this.#get('vocab'))
+    this.#lensMove = lensRule(name, declaration)
+    if (this.#lensMove) this.#sowing = null
     if (name == 'yourname/vale.f52dc2' && !this.#profile) {
       this.#profile = profile((summary) =>
         console.log(
@@ -927,6 +933,13 @@ export class Store {
       // store that cannot name its app has no access question to ask and the
       // kernel's own gate in front of it is the whole rule.
       plugins: [
+        ...(declaredLenses(declaration)
+          ? [
+            lenses((error) =>
+              defect(error, { request: 'lens normalize', store: name })
+            ),
+          ]
+          : []),
         ...(vault ? [secrets(vault, (b) => this.#trust(b, null))] : []),
         ...(vocab.comp('archetype') ? [archetypes()] : []),
         // Before every check, because it is about the shape a value arrived in.
@@ -1088,7 +1101,12 @@ export class Store {
       () => this.#get('app'),
       (v) => void (v.person && this.#vouched.set(v.person, v)),
     )
-    this.#route = api({ graph: g, subs, authenticate: this.#auth })
+    this.#route = api({
+      graph: g,
+      subs,
+      authenticate: this.#auth,
+      ...(declaredLenses(declaration) ? { read: spoken } : {}),
+    })
     // The registry is fresh, and the sockets are not: they belong to the
     // runtime and outlive every incarnation of this object, so whatever they
     // are watching is re-opened against the new one. Without this a deploy
@@ -1825,6 +1843,19 @@ export class Store {
   // resumes one they paused, and the stamp means a store that already holds
   // them asks its storage once rather than its graph three times.
   #sow = async (): Promise<void> => {
+    if (this.#lensMove) {
+      let doc = lensDocAt(this.#name() ?? '', meant(this.#get('vocab')))
+      let rows = await describedLenses(this.#graph, [doc])
+      if (rows.length) {
+        await this.#trust([
+          {
+            entity: { eid: packageEid(doc.package!) },
+            _package: { name: doc.package! },
+          },
+          ...rows,
+        ], null)
+      }
+    }
     // First, the rows the platform ships (the directory's built
     // integrations, an app's model catalogue), brought up to date before this
     // object answers anything: written as the kernel, their one writer, and
@@ -1892,12 +1923,15 @@ export class Store {
   // The rules live here that are not done, less the ones this incarnation
   // saw fail. No rules is no read at all.
   #owing = (): Rule[] =>
-    this.#rules.length
-      ? this.#rules.filter((r) =>
+    this.#moves().length
+      ? this.#moves().filter((r) =>
         runs(r, this.#get('name') ?? '') && !this.#halted.has(r.mark) &&
         !this.#stamp(r)?.done
       )
       : []
+
+  #moves = (): Rule[] =>
+    this.#lensMove ? [...this.#rules, this.#lensMove] : this.#rules
 
   // The store as a rule reaches it. The patch is the kernel's own write, and
   // its effects wait in `held` for the caller: run once the batch commits,
@@ -2445,6 +2479,8 @@ export class Store {
       }
       let kernel = request.headers.get('x-yak-kernel') == '1'
       let who = kernel ? null : await this.#auth(request)
+      let speaks = spoken(request).speaks
+      if (speaks) body = body.map((b: Bundle) => ({ ...b, $speaks: speaks }))
       let out
       this.#landing = seq
       try {
@@ -2677,12 +2713,12 @@ export class Store {
       if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
       let store = this.#get('name') ?? ''
       if (new URL(request.url).searchParams.get('rehearse') == '1') {
-        let rules = rehearse(this.#mover([]), this.#rules, SIZE)
+        let rules = rehearse(this.#mover([]), this.#moves(), SIZE)
         this.#kv.clear()
         return Response.json({ store, rules })
       }
       if (this.#owing().length) await this.#arming(new Date().toISOString())
-      let rules: Standing[] = this.#rules.map((r) => ({
+      let rules: Standing[] = this.#moves().map((r) => ({
         mark: r.mark,
         live: runs(r, store),
         ...this.#stamp(r),
@@ -2709,7 +2745,7 @@ export class Store {
     if (path == '/recover' && request.method == 'POST') {
       if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
       try {
-        let { call } = await request.json()
+        let { call } = await request.json() as { call?: unknown }
         if (typeof call != 'string') return json({ error: 'BadRequest' }, 400)
         return Response.json(await recovering(this.#stored(this.#graph), call))
       } catch (e) {
@@ -2748,7 +2784,7 @@ export class Store {
       } catch (e) {
         return refuse(e, request)
       }
-      return this.#live.accept(request)
+      return this.#live.accept(request, spoken(request))
     }
     // A batch is applied here, whoever sent it; a dry run is @yaks/api's.
     if (
@@ -2779,7 +2815,7 @@ export class Store {
     let agg = aggOf(line)
     if (agg && !live) {
       await this.#auth(request)
-      return await this.#counted(line, agg)
+      return await this.#counted(line, agg, spoken(request))
     }
     return await this.#kinded(await this.#route(request), line)
   }, { route: () => '/query' })
@@ -2847,8 +2883,11 @@ export class Store {
   // One aggregate, as every door on this platform says it: a count is a
   // number, a distinct is the values, a tally is how many rows each.
   // @yaks/sql answers all three as one value→n shape, so this is the reading.
-  async #counted(line: string, agg: Agg): Promise<Response> {
-    let rows = await this.#graph.rows(line) as { value: string; n: number }[]
+  async #counted(line: string, agg: Agg, opts = {}): Promise<Response> {
+    let rows = await this.#graph.rows(line, opts) as {
+      value: string
+      n: number
+    }[]
     if (agg == 'count') return Response.json({ count: rows[0]?.n ?? 0 })
     let said = rows.map((r) => [String(r.value ?? ''), r.n] as const)
     return Response.json(
@@ -2940,18 +2979,20 @@ export class Store {
       return held
     }
     return {
-      snapshot: (query) => subs.snapshot(asking(query, words)),
-      open: (sink, id, query) =>
+      snapshot: (query, opts) => subs.snapshot(asking(query, words), opts),
+      open: (sink, id, query, opts) =>
         subs.open(
           by(sink),
           id,
           query === true ? query : asking(query, words),
+          opts,
         ),
       restore: (openings) =>
-        subs.restore(openings.map(({ sink, id, query }) => ({
+        subs.restore(openings.map(({ sink, id, query, opts }) => ({
           sink: by(sink),
           id,
           query: query === true ? query : asking(query, words),
+          opts,
         }))),
       close: (sink, id) => subs.close(by(sink), id),
       drop: (sink) => subs.drop(by(sink)),

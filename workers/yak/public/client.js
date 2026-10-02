@@ -78,10 +78,25 @@ let refused = (r, body) => {
 }
 
 let door = (base) => async (path, init) => {
+  let version = pageVersion()
+  if (version != null) {
+    let headers = new Headers(init?.headers)
+    headers.set('x-yak-version', version)
+    init = { ...init, headers }
+  }
   let r = await fetch(new URL(path, base), init)
   let body = await r.text()
   if (!r.ok) throw refused(r, body)
   return body ? JSON.parse(body) : null
+}
+
+// The injected release tag belongs to the page that is still running, even
+// after the app's serving pointer has moved.
+let pageVersion = () => {
+  let value = globalThis.document?.querySelector(
+    'script[src$="api/release.js"][data-version]',
+  )?.dataset.version
+  return value != null && /^[0-9]+$/.test(value) ? value : null
 }
 
 // The address a store's doors hang off. Every app in a space shares one
@@ -194,6 +209,8 @@ export let store = (base) => {
   let open = () => {
     if (sock) return sock
     let url = new URL('ws', base)
+    let version = pageVersion()
+    if (version != null) url.searchParams.set('version', version)
     url.protocol = url.protocol == 'https:' ? 'wss:' : 'ws:'
     let s = sock = new WebSocket(url)
     // Every subscription is (re)declared on open, so a reconnect needs no

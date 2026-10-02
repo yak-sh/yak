@@ -1,0 +1,28 @@
+{
+  "$defs": {
+    "_lens": {
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "identity": ["package", "step"],
+      "description": "One forward step in a package's vocabulary; steps 0 through n-1 speak version n.",
+      "properties": {
+        "package": {
+          "type": "string",
+          "ref": "_package",
+          "death": "cascade",
+          "description": "The package whose vocabulary changes."
+        },
+        "step": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The zero-based forward step."
+        },
+        "ops": {
+          "type": "array",
+          "description": "The operations in this step, in order."
+        }
+      }
+    }
+  }
+}

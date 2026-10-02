@@ -35,7 +35,13 @@ import type {
   Tool,
   Tx,
 } from '@yaks/graph'
-import { aggregate, argsOf, composed as perEntity, detached } from '@yaks/graph'
+import {
+  addressing,
+  aggregate,
+  argsOf,
+  composed as perEntity,
+  detached,
+} from '@yaks/graph'
 import { parse } from '@yaks/query'
 import { addressed, wordish } from '@yaks/alias'
 import { barred, openly } from './anon.ts'
@@ -559,6 +565,11 @@ export let reaching = async (
     plugins,
     use: (p) => (plugins.push(p), self),
     install: () => {},
+    rewrites: () => false,
+    // Each reached store owns its answer hooks; this composition addresses
+    // queries but does not reinterpret bundles already answered by a store.
+    ask: (q) => addressing(vocab)(q, self.address),
+    answer: (bundles) => bundles,
     read: (q) => storage.read(q),
     rows: (q) => storage.rows(q),
     get: (eids, comps) => storage.get(eids, comps),

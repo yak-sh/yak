@@ -97,6 +97,9 @@ import { read } from '@yaks/yaml'
 import { vocabOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import { sweepDoc } from './wake.ts'
+import { docs as lensDocs } from '@yaks/lens/vocab'
+import { metaDoc } from '@yaks/vocab'
+import { declaredLenses, lensPaths, retainedLenses } from './lenses.ts'
 
 // The property shapes these documents are written out of. A `ref` names another
 // entity and says what happens to this row when that one dies; `owned` is
@@ -638,6 +641,7 @@ export let platformDoc: VocabDoc = {
         slug: text,
         space: ref('cascade'),
         version: num,
+        lenses: platformWords.$defs!.app.properties!.lenses,
         declaration: owned(text),
         source: owned(text),
         draft: owned(text),
@@ -1136,7 +1140,9 @@ export let metaKeywords: Keywords[] = [idKeywords, ...appKeywords]
  * somebody calls, not a word a row wears. */
 export let componentsOf = (docs: VocabDoc[]): string[] =>
   docs.flatMap((d) =>
-    Object.entries(d.$defs ?? {}).filter(([, e]) => e?.tool !== true)
+    Object.entries(d.$defs ?? {}).filter(([, e]) =>
+      e?.tool !== true && e?.lens !== true
+    )
       .map(([name]) => name)
   )
 
@@ -1253,18 +1259,30 @@ export let grew = (
   kept: string[]
   retyped: string[]
 } => {
+  next = retainedLenses(was, next)
+  let sources = declaredLenses(next) ? new Set(lensPaths(next)) : null
   let mine = was.$defs ?? {}
   let theirs = next.$defs ?? {}
   let delta = changed(was, next)
-  let dropped = delta.dropped.filter((n) => !n.includes('.') && !rows(n))
+  let dropped = delta.dropped.filter((n) =>
+    !n.includes('.') && !rows(n) && !sources?.has(n) &&
+    ![...sources ?? []].some((p) => p.startsWith(`${n}.`))
+  )
   let defs: Record<string, PropSchema> = { ...mine }
   let added: string[] = []
   let retyped: string[] = []
   for (let name of dropped) delete defs[name]
   for (let [name, schema] of Object.entries(theirs)) {
+    if (schema.lens === true) {
+      defs[name] = schema
+      continue
+    }
     let props: Record<string, PropSchema> = { ...mine[name]?.properties }
     for (let prop of Object.keys(props)) {
-      if (!delta.dropped.includes(`${name}.${prop}`) || rows(name, prop)) {
+      if (
+        sources?.has(`${name}.${prop}`) ||
+        !delta.dropped.includes(`${name}.${prop}`) || rows(name, prop)
+      ) {
         continue
       }
       delete props[prop]
@@ -1368,18 +1386,19 @@ export let livesIn = (uses: Record<string, string>) =>
  * wears for its title — so it is a kind sorting before `doc` unless the
  * manifest says otherwise, which is also what earns it its two tools
  * (kinds.ts). */
-let mine = (schema: PropSchema): PropSchema => ({
-  // `component: true` is the marker @yaks/vocab wants on a component, and it
-  // is put on here rather than asked of the person: an app manifest's $defs
-  // entries are its components, save the ones marked `tool: true`, and a store
-  // that accepted one before the marker existed reads back the same way
-  // (T-37551).
-  component: true,
-  type: 'object',
-  kind: true,
-  before: ['doc'],
-  ...schema,
-})
+let mine = (schema: PropSchema): PropSchema =>
+  schema.lens === true ? schema : ({
+    // `component: true` is the marker @yaks/vocab wants on a component, and it
+    // is put on here rather than asked of the person: an app manifest's $defs
+    // entries are its components, save the ones marked `tool: true`, and a store
+    // that accepted one before the marker existed reads back the same way
+    // (T-37551).
+    component: true,
+    type: 'object',
+    kind: true,
+    before: ['doc'],
+    ...schema,
+  })
 
 /**
  * The manifest words that open a spend to the app's visitors, each with what
@@ -1573,7 +1592,11 @@ export let appVocab = (source: unknown = {}): Vocab => {
     appVocabs.set(key, held)
     return held
   }
-  let v = loadVocab([...beneath(doc), doc], appKeywords)
+  let v = loadVocab([
+    ...beneath(doc),
+    ...(declaredLenses(doc) ? [pick(metaDoc, ['_package']), ...lensDocs] : []),
+    doc,
+  ], appKeywords)
   appVocabs.set(key, v)
   if (appVocabs.size > 64) appVocabs.delete(appVocabs.keys().next().value!)
   return v

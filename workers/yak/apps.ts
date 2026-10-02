@@ -106,6 +106,8 @@ import { written } from './reach.ts'
 import { borrowed, queried, sources, vocabulary } from './page-graph.ts'
 import { pageSocket } from './page-socket.ts'
 import { releaseStatus } from './release-status.ts'
+import { pageSpeaks } from './lenses.ts'
+import { appDoc } from './vocab.ts'
 import { type Bundle, Stale, token } from '@yaks/graph'
 import { edits, mode, reads, writes } from '@yaks/member'
 import type { Door } from './door.ts'
@@ -1310,6 +1312,28 @@ let api = async (
     return new Response(null, { status: 204 })
   }
   let headers = vouched(who)
+  if (app.lenses && ['/apply', '/query', '/ws'].includes(path)) {
+    try {
+      Object.assign(
+        headers,
+        await pageSpeaks(
+          req,
+          dir,
+          r2Objects(env.BLOBS),
+          space,
+          app,
+          appDoc,
+        ),
+      )
+    } catch (e) {
+      caught(e, {
+        request: 'page vocabulary',
+        space: space.slug,
+        app: app.slug,
+      })
+      return json(400, 'refused', e instanceof Error ? e.message : String(e))
+    }
+  }
   // Signed out, the way through is to sign in (SAYS); signed in, it is the
   // owner's to grant, so the sentence says so.
   let refused = (what = 'not_a_writer') =>
@@ -1465,7 +1489,9 @@ let api = async (
         ? url.searchParams.get('q')
         : lined(url.search.slice(1))
       if (line == null) throw new Error('/query needs a query: ?q=…')
-      return Response.json(await queried(env, space, app, who, line, live))
+      return Response.json(
+        await queried(env, space, app, who, line, live, headers),
+      )
     } catch (e) {
       caught(e, { request: 'GET /api/query', space: space.slug, app: app.slug })
       return json(400, 'refused', e instanceof Error ? e.message : String(e))

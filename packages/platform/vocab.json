@@ -30,6 +30,11 @@
           "type": "string",
           "stamped": true
         },
+        "lenses": {
+          "type": "object",
+          "stamped": true,
+          "description": "the newest lens step count per package eid declared in the app's store, kept across code rollbacks so current pages use the current vocabulary path"
+        },
         "source": {
           "type": "string",
           "stamped": true

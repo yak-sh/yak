@@ -126,6 +126,7 @@ let VOUCH = [
   'x-yak-access',
   'x-yak-mail',
   'x-yak-release',
+  'x-yak-speaks',
   'x-yak-base-release',
   'x-yak-person',
   'x-yak-role',

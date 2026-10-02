@@ -14,6 +14,7 @@ import {
   aggregate,
   type Bundle,
   type Graph,
+  type ReadOpts,
   reduced,
   Refused,
 } from '@yaks/graph'
@@ -245,6 +246,7 @@ export let ask = async (
   graph: Graph,
   request: Request,
   activity: object = graph,
+  opts?: ReadOpts,
 ): Promise<Response> => {
   let q = request.method == 'GET'
     ? new URL(request.url).searchParams.get('q')
@@ -255,7 +257,7 @@ export let ask = async (
   // again to answer.
   let ast = parse(q)
   let cause = peek(activity) ? parent(activity, request) : undefined
-  let options = cause ? { parent: cause } : undefined
+  let options = cause ? { ...opts, parent: cause } : opts
   let op = aggregate(ast)
   return op
     ? json(reduced(op, await graph.rows(ast, options)))

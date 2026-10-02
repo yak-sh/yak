@@ -186,13 +186,24 @@ bundles. A hook can transform a change or refuse it by throwing. Plugins are
 registered per graph instance. See `Plugin`, `Hook`, and `Rule` in the exported
 API for their context and return types.
 
+Read plugins have `ask(ctx, ast)` before storage and `answer(ctx, bundles)`
+after projection. Core addressing runs before `ask`. A plugin can declare
+`reads(opts)` to restrict these hooks to callers that need a translation;
+`ReadOpts.speaks` carries package versions. `g.ask` and `g.answer` expose the
+same phases to transports. `g.rewrites(opts)` lets a transport retain its
+ordinary path when no hook applies. Subscription membership uses the storage
+vocabulary, then applies `answer` to initial and subsequent frames, including
+coverage and restored socket subscriptions. Internal reads of already translated
+queries pass `native: true` to skip plugin hooks while retaining core
+addressing.
+
 The write pipeline separates the work done before anything is written, the
 writes themselves, and the observers that run after the commit. In particular:
 
 - `normalize` can rewrite incoming data.
-- `prepare` finishes idempotent external work after admission and minting, before
-  opening the transaction. Prepared content can remain after a refusal or dry
-  run; graph preconditions still check current data inside the transaction.
+- `prepare` finishes idempotent external work after admission and minting,
+  before opening the transaction. Prepared content can remain after a refusal or
+  dry run; graph preconditions still check current data inside the transaction.
 - Admission and preconditions validate it against the vocabulary and the current
   state before any write is accepted. Admission refuses a component or property
   the vocabulary does not declare, naming it, and casts a string property's

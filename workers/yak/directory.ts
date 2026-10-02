@@ -181,6 +181,7 @@ export type App = {
   slug: string
   space: string
   version: number | null
+  lenses?: Record<string, number>
   // A borrowed property can move this while the app's own files stay put.
   declaration?: string | null
   source?: string | null
@@ -326,6 +327,7 @@ type Row = {
     slug: string
     space: Id
     version: number | null
+    lenses?: Record<string, number> | null
     declaration?: string | null
     source?: string | null
     draft?: string | null
@@ -731,6 +733,7 @@ export let appOf = (r: Row): App => ({
   slug: r.app!.slug,
   space: idOf(r.app!.space),
   version: r.app!.version,
+  ...(r.app!.lenses ? { lenses: r.app!.lenses } : {}),
   declaration: r.app!.declaration ?? null,
   source: r.app!.source ?? null,
   draft: r.app!.draft ?? null,

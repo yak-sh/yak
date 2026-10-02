@@ -259,6 +259,11 @@ grouped approximately by function, **not** by dependency order.
   interfaces typing at once lose nothing; `desk()` is an interface's side, typed
   into at once and kept across a reload.
 
+- **[@yaks/lens](./lens)** — reversible JSON document operations, including
+  bundle patches. Private `_lens{package, step, ops}` rows compile vocabulary
+  changes into writes, old read views, queries, and rows still to move; the
+  graph plugin translates at generic read and write boundaries.
+
 - **[@yaks/tools](./tools)** — Run functions that accept and return bundles,
   recording the tool declaration, `call`, claimed `execution`, and `result`.
   Direct callers invoke the runner; configured effects execute queued or
@@ -369,9 +374,10 @@ grouped approximately by function, **not** by dependency order.
   supplied transport. Incoming messages become bundles; subjects and bodies use
   @yaks/doc. Failed delivery cannot roll back the original graph transaction.
 
-- **[@yaks/inbox](./inbox)** — Pure thread and attention policy: group facts into
-  Needs you, Replies, Updates and Recent lanes, with unread state and said/received
-  search. Builds read queries and atomic opened/archive bundles; performs no I/O.
+- **[@yaks/inbox](./inbox)** — Pure thread and attention policy: group facts
+  into Needs you, Replies, Updates and Recent lanes, with unread state and
+  said/received search. Builds read queries and atomic opened/archive bundles;
+  performs no I/O.
 
 - **[@yaks/memory](./memory)** — what a person said, kept in their own words: a
   `memory` component on a `doc` whose body is what they said plus a few lines of

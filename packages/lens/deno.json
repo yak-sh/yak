@@ -1,0 +1,17 @@
+{
+  "name": "@yaks/lens",
+  "version": "0.2.10",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./rules": "./rules.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Compiles reversible JSON document changes, with graph bundle, query, and migration adapters.",
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "./browser.json"
+    ]
+  }
+}

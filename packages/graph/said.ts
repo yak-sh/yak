@@ -20,6 +20,7 @@
 import {
   bare,
   type Clause,
+  map,
   parse,
   type Query as Ast,
   type Value,
@@ -65,21 +66,19 @@ let value = (v: Value, f: Says): Value =>
 
 /** One clause with every id that names an entity mapped through `f`. */
 let mapped = (vocab: Vocab, c: Clause, f: Says): Clause =>
-  c.kind == 'and' || c.kind == 'or'
-    ? { ...c, clauses: c.clauses.map((k) => mapped(vocab, k, f)) }
-    : c.kind == 'refs'
-    ? (c.op == '=' && c.value ? { ...c, value: f(c.value) } : c)
-    : c.kind == 'walk'
-    ? { ...c, target: f(c.target) }
-    : c.kind == 'near'
-    ? (c.value ? { ...c, value: f(c.value) } : c)
-    : c.kind == 'pred'
-    ? {
-      ...c,
-      ...(c.where ? { where: mapped(vocab, c.where, f) } : {}),
-      ...(c.value && refs(vocab, c) ? { value: value(c.value, f) } : {}),
-    }
-    : c
+  map(
+    c,
+    (c) =>
+      c.kind == 'refs'
+        ? (c.op == '=' && c.value ? { ...c, value: f(c.value) } : c)
+        : c.kind == 'walk'
+        ? { ...c, target: f(c.target) }
+        : c.kind == 'near'
+        ? (c.value ? { ...c, value: f(c.value) } : c)
+        : c.kind == 'pred' && c.value && refs(vocab, c)
+        ? { ...c, value: value(c.value, f) }
+        : c,
+  )
 
 /**
  * The read side of name resolution: a query in, the same query with every id

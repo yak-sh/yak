@@ -7,7 +7,7 @@
 // sees it. `upgrade` is the only step no web standard covers, so a runtime
 // other than Deno supplies its own.
 
-import type { Graph } from '@yaks/graph'
+import type { Graph, ReadOpts } from '@yaks/graph'
 import { Refused } from '@yaks/graph'
 import { type Authenticate } from './actor.ts'
 import { ask, write } from './doors.ts'
@@ -50,6 +50,10 @@ export let routed = (route: Route, method: string, path: string): boolean =>
 export type Options = {
   /** the graph this API reads and writes */
   graph: Graph
+  /** Caller read context, passed to queries and held by the socket. */
+  read?: (
+    request: Request,
+  ) => ReadOpts | undefined | Promise<ReadOpts | undefined>
   /** Runtime activity stays keyed by the composed graph, not a read overlay. */
   activity?: object
   /** who is writing (default: nobody — writes are stored unattributed) */
@@ -95,6 +99,9 @@ export let api = (opts: Options): Handler => {
   let door: Handler = async (request) => {
     let path = new URL(request.url).pathname
     let who = await authenticate(request)
+    let readOpts = opts.read && (path == '/query' || path == '/ws')
+      ? await opts.read(request)
+      : undefined
     if (path == '/apply') {
       return request.method == 'POST'
         ? await write(graph, request, who, opts.activity ?? graph)
@@ -108,9 +115,9 @@ export let api = (opts: Options): Handler => {
       if (request.method == 'GET' && url.searchParams.get('live') == '1') {
         let q = url.searchParams.get('q')
         if (q == null) throw new Refused('/query needs a query: ?q=…')
-        return json(await subs.snapshot(q))
+        return json(await subs.snapshot(q, readOpts))
       }
-      return await ask(graph, request, opts.activity ?? graph)
+      return await ask(graph, request, opts.activity ?? graph, readOpts)
     }
     // What a client must load to read and write this graph as it does:
     // the documents and the keyword sets they are written with, for
@@ -128,7 +135,7 @@ export let api = (opts: Options): Handler => {
         return no('/ws is a WebSocket endpoint', 405)
       }
       let { socket, response } = upgrade(request)
-      attach(subs, socket, opts.socketTimer, opts.socketNow)
+      attach(subs, socket, opts.socketTimer, opts.socketNow, readOpts)
       return response
     }
     return no(`no route for ${path}`, 404)

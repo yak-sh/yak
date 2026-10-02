@@ -85,6 +85,7 @@ import {
   url,
 } from './directory.ts'
 import * as dirPart from './directory.ts'
+import { latestSpeaks } from './lenses.ts'
 import { sandboxed, sandboxing } from './installed.ts'
 import {
   listCommands,
@@ -1163,7 +1164,12 @@ let published = async (
   // everybody and moves only when the platform is released (stream.ts).
   toolsTook('tools')
   let script = kept?.script ?? `app-${app.eid}-r-${crypto.randomUUID()}`
-  let stagedApp = { ...app, source: release, script }
+  let stagedApp = {
+    ...app,
+    source: release,
+    script,
+    lenses: latestSpeaks(dirPart.storeName(space, app), manifest, app.lenses),
+  }
   let deployed = kept
     ? { ready: true, worker: kept.worker, lines: [] }
     : await c.time(

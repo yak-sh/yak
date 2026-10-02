@@ -67,6 +67,11 @@ let b = and(
 // a deep-equals b
 ```
 
+`map(ast, f)` visits every clause, including nested boolean groups and reverse
+association conditions, children before parents. A mapper returning each clause
+unchanged retains the tree's identity. Interpreters share this walk when they
+rewrite addressing or property paths.
+
 The exported builders are:
 
 | group         | exports                                                                             |

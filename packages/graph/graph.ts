@@ -47,6 +47,7 @@
 // wrote inside the transaction is never left believing its rows are still
 // there.
 
+import { and, parse, want } from '@yaks/query'
 import { rulesIn, type Vocab } from '@yaks/vocab'
 import {
   type Context,
@@ -197,6 +198,12 @@ export type Graph = {
   use: (plugin: Plugin) => Graph
   /** make the storage ready for this graph's vocabulary */
   install: () => void | Promise<void>
+  /** Whether this caller needs plugin query or answer rewrites. */
+  rewrites: (opts?: ReadOpts) => boolean
+  /** Run core addressing and plugin query rewrites; unchanged text stays text. */
+  ask: (query: Query, opts?: ReadOpts) => Query | Promise<Query>
+  /** Run plugin answer rewrites, also used by subscription transports. */
+  answer: (bundles: Bundle[], opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
   /** a query → the matching entities, each carrying the components the query
    * names (`*` for every one, ./projection.ts) */
   read: (query: Query, opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
@@ -243,6 +250,9 @@ let failed = (err: unknown, at: { phase: Phase; plugin: string }) =>
 export let graph = (opts: Options): Graph => {
   let { storage, vocab } = opts
   let plugins = [...(opts.plugins ?? [])]
+  let askHooks = plugins.filter((p) => p.ask)
+  let answerHooks = plugins.filter((p) => p.answer)
+  const emptyReadOpts: ReadOpts = {}
   let report = opts.report ?? failed
   let mint = opts.mint ?? (() => fresh() as Eid)
 
@@ -853,28 +863,128 @@ export let graph = (opts: Options): Graph => {
     })
   }
 
-  let read = (
+  let ask = (query: Query, readOpts?: ReadOpts): Query | Promise<Query> =>
+    after(aim(query, address), (q) => {
+      if (readOpts?.native || !askHooks.length) return q
+      let hooks = askHooks.filter((p) =>
+        !p.reads || p.reads(readOpts ?? emptyReadOpts)
+      )
+      if (!hooks.length) return q
+      let ast = typeof q == 'string' ? parse(q) : q
+      let ctx = { opts: readOpts ?? emptyReadOpts, tx: detached(storage) }
+      return after(
+        each(hooks, ast, (at, p) => p.ask!(ctx, at)),
+        (out) => out === ast ? q : out,
+      )
+    })
+
+  let answer = (bundles: Bundle[], readOpts?: ReadOpts) => {
+    if (readOpts?.native || !answerHooks.length) return bundles
+    let hooks = answerHooks.filter((p) =>
+      !p.reads || p.reads(readOpts ?? emptyReadOpts)
+    )
+    if (!hooks.length) return bundles
+    let ctx = { opts: readOpts ?? emptyReadOpts, tx: detached(storage) }
+    return each(hooks, bundles, (at, p) => p.answer!(ctx, at))
+  }
+
+  let rewrites = (readOpts?: ReadOpts) =>
+    !readOpts?.native && (
+      askHooks.some((p) => !p.reads || p.reads(readOpts ?? emptyReadOpts)) ||
+      answerHooks.some((p) => !p.reads || p.reads(readOpts ?? emptyReadOpts))
+    )
+
+  let get = (eids: Eid[], comps?: string[], readOpts?: ReadOpts) => {
+    if (
+      readOpts?.native || !askHooks.length && !answerHooks.length ||
+      !rewrites(readOpts)
+    ) {
+      return storage.get(eids, comps)
+    }
+    if (!comps?.length) {
+      return after(storage.get(eids, comps), (out) => answer(out, readOpts))
+    }
+    return after(ask(and(...comps.map(want)), readOpts), (q) => {
+      let names = named(vocab, q, true)
+      return after(
+        storage.get(eids, names ? [...names] : undefined),
+        (out) => answer(out, readOpts),
+      )
+    })
+  }
+
+  let readStored = (q: Query, readOpts?: ReadOpts, nested = false) => {
+    let p = projection(vocab, q)
+    if (p) {
+      return after(
+        storage.rows(p.query, readOpts),
+        (rows) => flat(p.fold(rows)),
+      )
+    }
+    let names = named(vocab, q, nested)
+    return after(
+      storage.read(q, readOpts, names ? [...names] : undefined),
+      (rows) => rows.map(only(names)),
+    )
+  }
+
+  let readPlain = (query: Query, readOpts?: ReadOpts) =>
+    after(
+      aim(query, address),
+      (q) => readStored(q, readOpts, !!readOpts?.native),
+    )
+
+  let readTranslated = (
     query: Query,
     readOpts?: ReadOpts,
   ): Bundle[] | Promise<Bundle[]> => {
+    if (!rewrites(readOpts)) return readPlain(query, readOpts)
     return after(
-      aim(query, address),
-      (q) => {
-        let p = projection(vocab, q)
-        if (p) {
-          return after(
-            storage.rows(p.query, readOpts),
-            (rows) => flat(p.fold(rows)),
-          )
-        }
-        let want = named(vocab, q)
-        return after(
-          storage.read(q, readOpts, want ? [...want] : undefined),
-          (rows) => rows.map(only(want)),
-        )
-      },
+      ask(query, readOpts),
+      (q) =>
+        after(
+          readStored(q, readOpts, q !== query),
+          (rows) => answer(rows, readOpts),
+        ),
     )
   }
+  let read = askHooks.length || answerHooks.length ? readTranslated : readPlain
+
+  let rowsPlain = (query: Query, readOpts?: ReadOpts) =>
+    after(aim(query, address), (q) => storage.rows(q, readOpts))
+
+  let rowsTranslated = (
+    query: Query,
+    readOpts?: ReadOpts,
+  ): Row[] | Promise<Row[]> => {
+    if (!rewrites(readOpts)) return rowsPlain(query, readOpts)
+    return after(ask(query, readOpts), (q) => {
+      if (q === query) return storage.rows(q, readOpts)
+      let before = typeof query == 'string' ? parse(query) : query
+      let rewritten = typeof q == 'string' ? parse(q) : q
+      let old = before.clauses.find((c) => c.kind == 'fields')
+      let current = rewritten.clauses.find((c) => c.kind == 'fields')
+      if (!old || !current) return storage.rows(q, readOpts)
+      let columns = current.fields.map((f, i) => [
+        f.path.join('.'),
+        old.fields[i]?.path.join('.') ?? f.path.join('.'),
+      ])
+      return after(storage.rows(q, readOpts), rename)
+      function rename(rows: Row[]): Row[] {
+        return rows.map((row) => {
+          let out = { ...row }
+          for (let [from, to] of columns) {
+            if (from != to && Object.hasOwn(row, from)) {
+              delete out[from]
+              out[to] = row[from]
+            }
+          }
+          return out
+        })
+      }
+    })
+  }
+  let rows = askHooks.length || answerHooks.length ? rowsTranslated : rowsPlain
 
   let g: Graph = {
     vocab,
@@ -882,8 +992,17 @@ export let graph = (opts: Options): Graph => {
     storage,
     plugins,
     address,
+    rewrites,
+    ask,
+    answer,
     use: (plugin) => {
       plugins.push(plugin)
+      if (plugin.ask) askHooks.push(plugin)
+      if (plugin.answer) answerHooks.push(plugin)
+      if (plugin.ask || plugin.answer) {
+        read = readTranslated
+        rows = rowsTranslated
+      }
       return g
     },
     install: () => storage.install(),
@@ -908,7 +1027,7 @@ export let graph = (opts: Options): Graph => {
     rows: (query, readOpts) => {
       let c = peek(g)
       if (!c) {
-        return after(aim(query, address), (q) => storage.rows(q, readOpts))
+        return rows(query, readOpts)
       }
       return during(
         c.begin({
@@ -917,14 +1036,14 @@ export let graph = (opts: Options): Graph => {
           package: '@yaks/graph',
           parent: readOpts?.parent,
         }),
-        () => after(aim(query, address), (q) => storage.rows(q, readOpts)),
+        () => rows(query, readOpts),
         'ok',
         (out) => ({ rows: out.length }),
       )
     },
     get: (eids, comps, readOpts) => {
       let c = peek(g)
-      if (!c) return storage.get(eids, comps)
+      if (!c) return get(eids, comps, readOpts)
       return during(
         c.begin({
           kind: 'get',
@@ -932,7 +1051,7 @@ export let graph = (opts: Options): Graph => {
           package: '@yaks/graph',
           parent: readOpts?.parent,
         }),
-        () => storage.get(eids, comps),
+        () => get(eids, comps, readOpts),
         'ok',
         (out) => ({ input: eids.length, rows: out.length }),
       )

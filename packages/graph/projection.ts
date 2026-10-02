@@ -27,7 +27,7 @@
 // tables. `only` keeps the answer true for an adapter that cannot narrow its
 // read.
 
-import { type And, type Fields, parse } from '@yaks/query'
+import { type And, type Clause, type Fields, map, parse } from '@yaks/query'
 import type { Hop, Vocab } from '@yaks/vocab'
 import { after } from '@yaks/fp'
 import { type Bundle, type Comp, type Eid, reserved } from './bundle.ts'
@@ -219,8 +219,13 @@ export let flat = ({ found, reached }: Projected): Bundle[] =>
  * carry, and a word the vocabulary does not know asks for nothing. A lone word
  * asked for as present (`.module`) or requested (`?module`) is the component.
  */
-export let named = (vocab: Vocab, query: Query): Set<string> | null => {
-  let { clauses } = typeof query == 'string' ? parse(query) : query
+export let named = (
+  vocab: Vocab,
+  query: Query,
+  nested = false,
+): Set<string> | null => {
+  let ast = typeof query == 'string' ? parse(query) : query
+  let { clauses } = ast
   let fields = clauses.find((c): c is Fields => c.kind == 'fields')
   if (fields) {
     return new Set(fields.fields.flatMap((f) => {
@@ -234,7 +239,12 @@ export let named = (vocab: Vocab, query: Query): Set<string> | null => {
   }
   if (clauses.some((c) => c.kind == 'every')) return null
   let want = new Set<string>()
-  for (let c of clauses) {
+  let candidates: Clause[] = clauses
+  if (nested) {
+    candidates = []
+    map(ast, (c) => (candidates.push(c), c))
+  }
+  for (let c of candidates) {
     if (c.kind != 'pred' || !c.path.length) continue
     let absent = c.op == '=' &&
       (c.value == null || (c.value.kind == 'scalar' && !c.value.raw))

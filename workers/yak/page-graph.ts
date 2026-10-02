@@ -49,13 +49,16 @@ export let reading = async (
   { uses, reach }: Awaited<ReturnType<typeof sources>>,
   line: string,
   live = false,
+  headers: Record<string, string> = {},
 ): Promise<unknown> => {
   let asked = asking(line)
   let names = [...split(line).parts.keys()]
   if (names.some((name) => uses[name])) return read(env, reach, asked, live)
   let { space, app, who } = reach[0]
   let store = appStore(env.STORE, space, app, env)
-  let rows = await metaOf(store, vouched(who)).query(asked, { live })
+  let rows = await metaOf(store, { ...vouched(who), ...headers }).query(asked, {
+    live,
+  })
   return Array.isArray(rows) ? listed(rows as Row[], asked) : rows
 }
 
@@ -66,7 +69,8 @@ export let queried = async (
   who: Who,
   line: string,
   live = false,
-) => reading(env, await sources(env, space, app, who), line, live)
+  headers: Record<string, string> = {},
+) => reading(env, await sources(env, space, app, who), line, live, headers)
 
 // The local graph uses the store's core documents plus only the borrowed
 // words declared by this app. A home may speak other words; those are not

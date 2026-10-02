@@ -22,6 +22,13 @@ export type Query = string | Ast
 /** Options passed with a read, such as a fixed `now` for relative time
  * expressions. */
 export type ReadOpts = {
+  /** Answering applied patches rather than complete read snapshots. */
+  patch?: boolean
+  /** Vocabulary versions spoken by the caller, keyed by package eid. */
+  speaks?: Record<string, number>
+  /** Read the storage vocabulary directly, for already rewritten queries and
+   * subscription membership; skip ask/answer hooks. */
+  native?: boolean
   now?: number
   durable?: boolean
   /** A graph-local runtime activity parent; storage adapters need not use it. */

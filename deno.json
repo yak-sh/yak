@@ -153,6 +153,7 @@
     "./packages/member",
     "./packages/doc",
     "./packages/draft",
+    "./packages/lens",
     "./packages/key",
     "./packages/git",
     "./packages/code",

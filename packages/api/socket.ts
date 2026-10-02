@@ -11,7 +11,7 @@
 
 import { fault, refusal } from './refuse.ts'
 import { isPromise } from '@yaks/fp'
-import { type Bundle, coalescer } from '@yaks/graph'
+import { type Bundle, coalescer, type ReadOpts } from '@yaks/graph'
 import { admission } from './admission.ts'
 import type { Frame, Sink, Subs } from './subs.ts'
 
@@ -271,6 +271,7 @@ export let receive = (
   data: unknown,
   now?: () => number,
   input: Incoming = decode(data),
+  opts?: ReadOpts,
 ): void | 'close' => {
   let id = ''
   let fail = (err: unknown) => {
@@ -289,7 +290,7 @@ export let receive = (
     id = 'id' in msg && msg.id != null ? String(msg.id) : ''
     let subscribe = 'subscribe' in msg ? msg.subscribe : undefined
     if (typeof subscribe == 'string' || subscribe === true) {
-      subs.open(to, id, subscribe)
+      subs.open(to, id, subscribe, opts)
       return
     }
     if ('unsubscribe' in msg && msg.unsubscribe != null) {
@@ -320,6 +321,7 @@ export let attach = (
   socket: Socket,
   timer?: (fn: () => void, ms: number) => void,
   now?: () => number,
+  opts?: ReadOpts,
 ): Sink => {
   let q = queue(socket, timer, () => socket.readyState == OPEN)
   let to = q.send
@@ -343,7 +345,7 @@ export let attach = (
       msg?.acks === true &&
       (typeof msg.subscribe == 'string' || msg.subscribe === true)
     ) q.enable(msg.frames === true)
-    if (receive(subs, to, e.data, now, input) == 'close') {
+    if (receive(subs, to, e.data, now, input, opts) == 'close') {
       drop()
       socket.close?.(1008, 'relay flood')
     }

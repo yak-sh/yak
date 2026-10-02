@@ -14,7 +14,8 @@
 // decided.
 
 import type { Bundle, Eid } from './bundle.ts'
-import type { Tx } from './storage.ts'
+import type { Query as Ast } from '@yaks/query'
+import type { ReadOpts, Tx } from './storage.ts'
 import type { Ask } from './gather.ts'
 import type { Resource, Rule } from './rules.ts'
 import type { Declared } from './declared.ts'
@@ -228,6 +229,9 @@ export type Tool<R = Bundle[]> = {
   run: (call: Bundle, graph: Graph) => R | Promise<R>
 }
 
+/** A read hook's caller options and committed storage, outside a transaction. */
+export type ReadContext = { opts: ReadOpts; tx: Tx }
+
 /**
  * A plugin: a self-contained contribution to a graph. It brings a component
  * vocabulary (its domain) and hooks on the phases it cares about. This is the
@@ -235,6 +239,13 @@ export type Tool<R = Bundle[]> = {
  * family gets privileged access; it is all plugins.
  */
 export type Plugin = {
+  /** Whether this caller needs the read hooks; false keeps the ordinary read path. */
+  reads?: (opts: ReadOpts) => boolean
+  /** Rewrite a parsed query after core addressing and before storage. */
+  ask?: (ctx: ReadContext, query: Ast) => Ast | Promise<Ast>
+  /** Rewrite outgoing bundles after storage and projection. */
+  answer?: (ctx: ReadContext, bundles: Bundle[]) => Bundle[] | Promise<Bundle[]>
+
   /** Transaction-local write tracking. Receives a lookup for the gathered
    * pre-write state (undefined means it was not gathered, null means the
    * entity does not exist). It wraps every phase's writes; `flush` runs before

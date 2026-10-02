@@ -1,0 +1,190 @@
+{
+  "package": "lens-pilot",
+  "$defs": {
+    "graph_query": {
+      "tool": true,
+      "noun": "graph",
+      "verb": "query",
+      "title": "Query entities",
+      "description": "Find stored records (entities) by filtering on their named groups of fields (components) and their properties. Returns bundles: JSON objects with entity: {eid} and the record\u2019s component objects. A bundle carries the components the query names, by a filter on one ('.recipe', '.doc.title~=cake') or by asking for one without filtering on it ('?doc'), and no other: name each component you will read, or add * for all of them. A query that names no component ('.entity.eid=T-12', a bare search word) answers whole. graph_show returns one entity whole. A query string selects the records: '.task.status=open&.filed.priority<3'. It is made of filters written as .component.property=value, joined with &, with lists (a,b), ranges (1..9), != for not equal, ~= for text containing a value, < or > comparisons, '.component' for present and '!component' for absent. A property is always named with its component. Directives go in the same string: .order=, .limit=, and .refs=<id> for everything that references an entity. filters, if passed, each narrow the whole of q. Documentation: https://yaks.app/docs/querying.",
+      "input": {
+        "q": {
+          "type": "string",
+          "description": "query filters, e.g. .task.status=open&.filed.priority<3; graph_schema lists the valid components and properties"
+        },
+        "filters": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "extra filters, each narrowing the whole of q"
+        },
+        "limit": {
+          "type": "number",
+          "description": "return at most this many entities"
+        }
+      },
+      "required": [
+        "q"
+      ],
+      "options": {
+        "positional": [
+          "q"
+        ],
+        "short": {
+          "n": "limit"
+        }
+      },
+      "readOnly": true
+    },
+    "graph_show": {
+      "tool": true,
+      "noun": "graph",
+      "verb": "show",
+      "title": "Show entities",
+      "description": "Read one or more stored records (entities) by their unique string id (eid), each returned whole as its own bundle: a JSON object with entity: {eid} and every named group of fields (component) it has. Only the entities asked for come back; what references one is a query of its own, graph_query with .refs=<id>, and a relationship is an edge entity found the same way. This is lookup by identity, not search: pass eids, or the names entities are addressed by where this store keeps names (an eid wins over a name spelled the same way).",
+      "input": {
+        "ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "ref": "entity",
+          "description": "the eids or names of the entities to read"
+        }
+      },
+      "required": [
+        "ids"
+      ],
+      "options": {
+        "rest": "ids"
+      },
+      "readOnly": true
+    },
+    "builder_build": {
+      "tool": true,
+      "noun": "builder",
+      "verb": "build",
+      "title": "Build now",
+      "description": "Build bindings with new or changed inputs, independent of floor and staged. Current outputs are untouched unless --rebuild redoes every selected binding, or --outdated redoes bindings under an older definition. Both combine with --only and --limit. Alternate provider, model, template or native input creates a shadow variant.",
+      "input": {
+        "builder": {
+          "type": "string",
+          "ref": "builder",
+          "description": "id of the builder to build"
+        },
+        "provider": {
+          "type": "string",
+          "ref": "provider",
+          "description": "the provider to ask instead of the configured one"
+        },
+        "model": {
+          "type": "string",
+          "ref": "model",
+          "description": "the model to build with instead of the configured one"
+        },
+        "template": {
+          "type": "string",
+          "description": "alternate content.body template for a shadow variant"
+        },
+        "input": {
+          "type": "object",
+          "description": "native request fields merged into using.input for a shadow variant; --input @input.json reads an object"
+        },
+        "only": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "ref": "entity"
+          },
+          "description": "build only the bindings whose outer entities these name, and leave the other builds as they are"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "build only the first n bindings, and leave the other builds as they are"
+        },
+        "rebuild": {
+          "type": "boolean",
+          "description": "redo every selected binding, even with unchanged inputs and definition"
+        },
+        "outdated": {
+          "type": "boolean",
+          "description": "redo selected bindings only when their definition is older; otherwise build only missing or changed inputs"
+        }
+      },
+      "required": [
+        "builder"
+      ],
+      "options": {
+        "positional": [
+          "builder"
+        ],
+        "rest": "only",
+        "short": {
+          "m": "model",
+          "p": "provider"
+        }
+      },
+      "idempotent": false
+    },
+    "session_spawn": {
+      "tool": true,
+      "noun": "session",
+      "verb": "spawn",
+      "title": "Start an agent on a task",
+      "description": "Start an agent on a task. Creates a session record for the run, an initial log entry naming the provider (agent runner), model and reasoning effort, and a claim reserving the task for that session; committing that starts the agent, so a task another session already holds refuses the whole request. With wait, returns how the run ended (its brief or final output, and its exit code when recorded) instead of the session id. Returns text in content.body. A wait timeout reports that the run is still running and does not kill it.",
+      "input": {
+        "task": {
+          "type": "string",
+          "ref": "task",
+          "description": "the task to hand to the agent, which the session claims; pass its id or registered name"
+        },
+        "provider": {
+          "type": "string",
+          "ref": "provider",
+          "description": "id or registered name of the provider (agent runner); it must use command-line transport"
+        },
+        "model": {
+          "type": "string",
+          "ref": "model",
+          "description": "id or registered name of the model the run uses; optional"
+        },
+        "persona": {
+          "type": "string",
+          "ref": "persona",
+          "description": "the persona to carry, by id or name (default: the checkout's persona)"
+        },
+        "effort": {
+          "type": "string",
+          "description": "the reasoning effort, where the model accepts such a setting"
+        },
+        "instruction": {
+          "type": "string",
+          "description": "what to tell the agent (default: the task\u2019s id and title; it holds the claim and reads the rest itself)"
+        },
+        "wait": {
+          "type": "boolean",
+          "description": "block until the run is over and return how it ended"
+        },
+        "timeout": {
+          "type": "string",
+          "description": "how long to wait: 45m, 2h, or bare seconds (default 30m)"
+        }
+      },
+      "required": [
+        "task",
+        "provider"
+      ],
+      "options": {
+        "positional": [
+          "task"
+        ],
+        "short": {
+          "p": "provider",
+          "m": "model"
+        }
+      }
+    }
+  }
+}

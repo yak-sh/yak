@@ -6,6 +6,7 @@
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { test, until } from '@yaks/testing'
+import { map as queryMap } from '@yaks/query'
 import { subscriptions } from '@yaks/api'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { loadVocab, type Vocab } from '@yaks/vocab'
@@ -561,4 +562,68 @@ test('accept answers the upgrade, and refuses a plain request', () => {
   assertEquals(ctx.live.length, 1, "the server half is the runtime's to hold")
   assertEquals(ctx.live[0], made[1])
   delete (globalThis as Record<string, unknown>).WebSocketPair
+})
+
+test('a caller view survives socket acceptance and hibernation', () => {
+  let storage = store(), ctx = hibernation(), made = pair()
+  let create = () => {
+    let g = graph({ storage, vocab: shop })
+    g.use({
+      name: 'old-reader',
+      reads: (opts) => opts.speaks?.shop == 0,
+      ask: (_ctx, ast) =>
+        queryMap(
+          ast,
+          (c) =>
+            c.kind == 'pred' && c.path.join('.') == 'product.cost'
+              ? { ...c, path: ['product', 'price'] }
+              : c,
+        ),
+      answer: (_ctx, rows) =>
+        rows.map((b) => {
+          if (!b.product) return b
+          let { price, ...product } = b.product as Record<string, unknown>
+          return { ...b, product: { ...product, cost: price } }
+        }),
+    })
+    return [g, sockets(subscriptions(g), ctx)] as const
+  }
+  let [g, first] = create()
+  g.apply([{ entity: { eid: 'p1' }, product: { price: 3 } }])
+  ;(globalThis as Record<string, unknown>).WebSocketPair = function () {
+    return made
+  }
+  try {
+    first.accept(
+      new Request('https://shop.example/ws', {
+        headers: { upgrade: 'websocket' },
+      }),
+      { speaks: { shop: 0 } },
+    )
+  } finally {
+    delete (globalThis as Record<string, unknown>).WebSocketPair
+  }
+  first.message(made[1], ask('p', '.product.cost<5'))
+  assertEquals(
+    (made[1].sent.at(-1)!.bundles?.[0].product as Record<string, unknown>).cost,
+    3,
+  )
+  assert(
+    !Object.hasOwn(made[1].sent.at(-1)!.bundles![0].product as object, 'price'),
+  )
+  made[1].sent.length = 0
+  let [wokenGraph, woken] = create()
+  woken.wake()
+  assertEquals(made[1].sent[0].reset, true)
+  assertEquals(
+    (made[1].sent[0].bundles?.[0].product as Record<string, unknown>).cost,
+    3,
+  )
+  wokenGraph.apply([{ entity: { eid: 'p1' }, product: { price: 4 } }])
+  assertEquals(
+    (made[1].sent.at(-1)!.bundles?.[0].product as Record<string, unknown>).cost,
+    4,
+  )
+  wokenGraph.apply([{ entity: { eid: 'p1' }, product: { price: 8 } }])
+  assertEquals(made[1].sent.at(-1)!.gone, ['p1'])
 })

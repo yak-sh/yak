@@ -2,9 +2,10 @@
 // Subscriptions over a bookshop: what a subscriber is told when the graph
 // moves under it, and — just as much the point — what it is never told.
 
-import { test } from '@yaks/testing'
+import { equal, test, until } from '@yaks/testing'
+import { map as queryMap } from '@yaks/query'
 import { assert, assertEquals } from '@std/assert'
-import { type Graph, graph } from '@yaks/graph'
+import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { col, count, eq, lit, select, sub, table } from '@yaks/sql'
 import { storage } from '@yaks/sqlite'
@@ -850,4 +851,161 @@ test('explicit dependency invalidation refreshes a query on unrelated writes', a
   }])
   assertEquals(e.take().map(ids), [['book']])
   subs.drop(e.to)
+})
+
+// A generic reader translation: the storage speaks price, an older caller cost.
+let costView = (g: Graph, async = false) => {
+  g.use({
+    name: 'cost-reader',
+    ask: (ctx, ast) =>
+      queryMap(ast, (c) =>
+        c.kind == 'pred' &&
+          c.path.join('.') == 'book.cost'
+          ? {
+            ...c,
+            path: ['book', 'price'],
+            ...(ctx.opts.speaks?.shop == 1
+              ? { value: { kind: 'scalar' as const, raw: '10' } }
+              : {}),
+          }
+          : c.kind == 'fields'
+          ? {
+            ...c,
+            fields: c.fields.map((f) =>
+              f.path.join('.') == 'book.cost'
+                ? { ...f, path: ['book', 'price'] }
+                : f
+            ),
+          }
+          : c),
+    answer: (ctx, bundles) => {
+      let out = bundles.map((b) => {
+        if (ctx.opts.speaks?.shop != 0 || !b.book) return b
+        let { price, ...book } = b.book as Record<string, unknown>
+        return {
+          ...b,
+          book: { ...book, ...price !== undefined ? { cost: price } : {} },
+        }
+      })
+      return async ? Promise.resolve(out) : out
+    },
+  })
+  return g
+}
+
+for (let async of [false, true]) {
+  test(`subscriptions answer caller views on opening, refresh, raw feed and restore (${async})`, async () => {
+    let g = costView(shop(), async), subs = subscriptions(g)
+    let old = { speaks: { shop: 0 } },
+      prior = ear(),
+      current = ear(),
+      raw = ear()
+    await subs.open(prior.to, 'old', '.book.cost<20&.order=book.price', old)
+    await subs.open(current.to, 'new', '.book.price<20&.order=book.price')
+    await subs.open(raw.to, 'raw', true, old)
+    prior.take()
+    current.take()
+    raw.take()
+    await g.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+    await until(
+      () =>
+        prior.take().some((f) =>
+          f.bundles?.some((b) => comp(b, 'book').cost == 12)
+        ),
+      { label: 'old reader' },
+    )
+    await until(
+      () =>
+        current.take().some((f) =>
+          f.bundles?.some((b) => comp(b, 'book').price == 12)
+        ),
+      { label: 'current reader' },
+    )
+    await until(
+      () =>
+        raw.take().some((f) =>
+          f.bundles?.some((b) => comp(b, 'book').cost == 12)
+        ),
+      { label: 'raw reader' },
+    )
+    equal(
+      (await subs.snapshot('.book.cost<20', old) as Bundle[]).map((b) =>
+        comp(b, 'book')
+      ),
+      [{ cost: 12 }],
+    )
+    let restored = ear()
+    await subs.restore([{
+      sink: restored.to,
+      id: 'restored',
+      query: '.book.cost<20',
+      opts: old,
+    }])
+    await until(
+      () =>
+        restored.take().some((f) =>
+          f.bundles?.some((b) => comp(b, 'book').cost == 12)
+        ),
+      { label: 'restored reader' },
+    )
+    await g.apply([{ entity: { eid: 'b1' }, book: { price: 30 } }])
+    await until(() => restored.take().some((f) => f.gone?.includes('b1')), {
+      label: 'restored departure',
+    })
+  })
+}
+
+test('caller projections translate coverage as well as field values', () => {
+  let g = costView(shop()), subs = subscriptions(g), e = ear()
+  g.apply([{ entity: { eid: 'b1' }, book: { price: 12, status: 'draft' } }])
+  subs.open(e.to, 'cost', '.book&.fields=book.cost', { speaks: { shop: 0 } })
+  let [f] = e.take()
+  equal(f.bundles?.map((b) => comp(b, 'book')), [{ cost: 12 }])
+  equal(f.coverage, { b1: { book: ['cost'] } })
+})
+
+test('refresh caches separate the same query spoken by different callers', () => {
+  let g = costView(shop()),
+    subs = subscriptions(g),
+    old = ear(),
+    current = ear()
+  let query = '.book.cost<20&.order=book.price'
+  subs.open(old.to, 'old', query, { speaks: { shop: 0 } })
+  subs.open(current.to, 'current', query, { speaks: { shop: 1 } })
+  old.take()
+  current.take()
+  g.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+  equal(old.take().map(ids), [['b1']])
+  equal(current.take(), [])
+})
+
+test('raw feeds preserve clears while snapshot readers can supply defaults', () => {
+  let g = shop()
+  g.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+  g.use({
+    name: 'price-default',
+    answer: (ctx, bundles) =>
+      bundles.map((b) =>
+        b.book
+          ? {
+            ...b,
+            book: {
+              cost: (b.book as Record<string, unknown>).price ??
+                (ctx.opts.patch ? null : 0),
+            },
+          }
+          : b
+      ),
+  })
+  let subs = subscriptions(g), snapshots = ear(), patches = ear()
+  subs.open(snapshots.to, 'snapshots', '.book')
+  subs.open(patches.to, 'patches', true)
+  snapshots.take()
+  patches.take()
+  g.apply([{ entity: { eid: 'b1' }, book: { price: null } }])
+  equal(patches.take().map((f) => comp(f.bundles![0], 'book').cost), [null])
+  equal(snapshots.take().map((f) => comp(f.bundles![0], 'book').cost), [0])
+  equal((subs.snapshot('.book') as Bundle[]).map((b) => comp(b, 'book').cost), [
+    0,
+  ])
 })

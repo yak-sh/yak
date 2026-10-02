@@ -34,7 +34,7 @@
 // never lands on code that cannot read what it moved.
 import { type Bundle, type Comp, type Row, token } from '@yaks/graph'
 import { isPromise } from '@yaks/fp'
-import { conjoin } from '@yaks/query'
+import { and, conjoin, parse, type Query } from '@yaks/query'
 import { Unknown } from '@yaks/vocab'
 import { GIT_STORE, PLATFORM_STORE } from './door.ts'
 /** A rule's name: where its stamp is kept in a store's memory, and the
@@ -44,7 +44,7 @@ export type Mark = `yak/store/${string}`
 export type Rule = {
   mark: Mark
   /** The rows still in the old shape, naming what `move` reads. */
-  find: string
+  find: string | Query
   /** One candidate's patch. `read` looks up evidence synchronously without
    * adding reached rows to the candidate page or cursor. */
   move: (row: Bundle, read?: (line: string) => Bundle[]) => Bundle[]
@@ -132,8 +132,8 @@ export type Rehearsal = {
  * transaction, and a transaction cannot wait. `apply` holds its effects for
  * the caller, which runs them once the batch commits, or drops them. */
 export type Moving = {
-  read: (line: string) => Bundle[] | Promise<Bundle[]>
-  rows: (line: string) => Row[] | Promise<Row[]>
+  read: (line: string | Query) => Bundle[] | Promise<Bundle[]>
+  rows: (line: string | Query) => Row[] | Promise<Row[]>
   apply: (patch: Bundle[]) => Bundle[] | Promise<Bundle[]>
   tx: <T>(body: () => T) => T
 }
@@ -161,8 +161,12 @@ let sync = <T>(v: T | Promise<T>): T => {
 }
 
 // The next page of a rule's rows, newest first, past the cursor.
+let joined = (query: string | Query, line: string) =>
+  typeof query == 'string'
+    ? conjoin(query, line)
+    : and(...query.clauses, ...parse(line).clauses)
 let page = (rule: Rule, n: number, after?: string) =>
-  conjoin(rule.find, `.limit=${n}`, after ? `.after=${after}` : '')
+  joined(rule.find, conjoin(`.limit=${n}`, after ? `.after=${after}` : ''))
 
 /** One batch: the rows past the stamp's cursor, moved, and the stamp that
  * says so. A page shorter than a batch is the last one. */
@@ -207,7 +211,7 @@ export let rehearse = (
     let r: Rehearsal = { mark: rule.mark, rows: 0, moved: 0, batches: 0 }
     let back = Symbol('rehearsal')
     try {
-      let [counted] = sync(m.rows(conjoin(rule.find, '.count')))
+      let [counted] = sync(m.rows(joined(rule.find, '.count')))
       r.rows = Number(counted?.n ?? 0)
       m.tx(() => {
         let s: Stamp | null = null

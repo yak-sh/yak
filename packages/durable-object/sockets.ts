@@ -30,6 +30,7 @@ import {
   type Sink,
   type Subs,
 } from '@yaks/api'
+import type { ReadOpts } from '@yaks/graph'
 import type { DurableStorage } from './sql.ts'
 import { holds, MissingSubscriptions } from './holds.ts'
 
@@ -70,7 +71,7 @@ export type Hibernation = {
 /** The plumbing an object wires its handlers to. */
 export type Sockets = {
   /** answer a `/ws` request: accept the socket for hibernation, return the 101 */
-  accept(request: Request): Response
+  accept(request: Request, opts?: ReadOpts): Response
   /** a frame arrived — the object's `webSocketMessage` */
   message(
     ws: Wire,
@@ -98,6 +99,7 @@ declare let WebSocketPair: { new (): { 0: unknown; 1: Wire } }
 // attachment at 2KB, and the application may be storing fields of its own
 // there, so the subscriptions live under one key and the rest is left alone.
 type Held = {
+  read?: ReadOpts
   subs?: Record<string, Ask>
   subref?: string
   relay?: string[]
@@ -374,14 +376,15 @@ export let sockets = (
     // know what it is saying before a close can stop saying it.
     subs.relayed(send, relayOf(ws))
     for (let [id, ask] of Object.entries(asks(ws))) {
-      if (openings) openings.push({ sink: send, id, query: ask })
-      else subs.open(send, id, ask)
+      if (openings) {
+        openings.push({ sink: send, id, query: ask, opts: held?.read })
+      } else subs.open(send, id, ask, held?.read)
     }
     return send
   }
 
   return {
-    accept: (request) => {
+    accept: (request, opts) => {
       if ((request.headers.get('upgrade') ?? '').toLowerCase() != 'websocket') {
         return json(
           { error: 'NotAllowed', message: 'this is a WebSocket endpoint' },
@@ -392,6 +395,7 @@ export let sockets = (
       // Accepted for hibernation: the runtime holds this socket while the
       // object is evicted and wakes the object with the next frame, so an idle
       // client costs nothing.
+      if (opts) pair[1].serializeAttachment({ read: opts })
       ctx.acceptWebSocket(pair[1])
       // The 101 carries the other end; `webSocket` is the runtime's own
       // ResponseInit field, which no standard declares.
@@ -415,7 +419,16 @@ export let sockets = (
         if (ask) sender.forget(ask.id)
         if (ask?.acks) sender.enable(ask.frames)
         let was = subs.relaying(to).join('\n')
-        if (receive(subs, to, data, undefined, input) == 'close') {
+        if (
+          receive(
+            subs,
+            to,
+            data,
+            undefined,
+            input,
+            (ws.deserializeAttachment() as Held | null)?.read,
+          ) == 'close'
+        ) {
           drop(ws)
           ws.close?.(1008, 'relay flood')
           return
