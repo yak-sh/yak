@@ -9,7 +9,7 @@ import { configPath, read } from '../packages/cli/config.ts'
 import { words } from '../packages/cli/host.ts'
 import { open } from '../packages/sqlite/db.ts'
 import { storage } from '@yaks/sqlite'
-import { type Bundle, type Comp, comps, graph } from '@yaks/graph'
+import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { token } from '../packages/graph/guard.ts'
 import { parse } from '@yaks/query'
 import {
@@ -24,7 +24,6 @@ import {
   gt,
   join,
   op,
-  
   type Row,
   select,
   type Stmt,
@@ -241,25 +240,20 @@ let main = async () => {
             }),
           )
           if (!rows.length) return digest
-          digest = token([digest, rows.map((row) => canonical(
-          name == 'journal_tx' ? { host: null, ...row } : row))])
-        cursor = Number(rows.at(-1)!.id)
+          digest = token([
+            digest,
+            rows.map((row) =>
+              canonical(
+                name == 'journal_tx' ? { host: null, ...row } : row,
+              )
+            ),
+          ])
+          cursor = Number(rows.at(-1)!.id)
         }
       }
       let journalLimits = Object.fromEntries(
         journalTables.map((name) => [name, high(name)]),
       )
-      let historicalJournal = Object.fromEntries(
-        Object.entries(journalLimits)
-          .map(([name, last]) => [name, journalDigest(name, last)]),
-      )
-      let preserveHistory = () => {
-        for (let [name, last] of Object.entries(journalLimits)) {
-          if (journalDigest(name, last) != historicalJournal[name]) {
-            fail('Historical journal changed')
-          }
-        }
-      }
       let admission: Stmt[] = []
       let tableInfo = (name: string) =>
         sql.query({
@@ -323,21 +317,24 @@ let main = async () => {
           fail(`Physical object type collision: ${stmt.name}`)
         }
         if (stmt.t != 'create table') continue
-      let cols = tableInfo(stmt.name)
-      for (let column of stmt.cols) {
-        let held = cols.find((row) => row.name == column.name)
-        if (!held) {
-          if (!allowedColumn(stmt.name, column)) {
-            fail(`Missing unrelated physical column: ${stmt.name}.${column.name}`)
+        let cols = tableInfo(stmt.name)
+        for (let column of stmt.cols) {
+          let held = cols.find((row) => row.name == column.name)
+          if (!held) {
+            if (!allowedColumn(stmt.name, column)) {
+              fail(
+                `Missing unrelated physical column: ${stmt.name}.${column.name}`,
+              )
+            }
+            admission.push({ t: 'alter table', table: stmt.name, add: column })
+          } else if (
+            Number(held.hidden) || Number(held.pk) != Number(!!column.pk)
+          ) {
+            fail(`Incompatible physical column: ${stmt.name}.${column.name}`)
           }
-          admission.push({ t: 'alter table', table: stmt.name, add: column })
-        } else if (String(held.type).toLowerCase() != column.type ||
-          Number(held.hidden) || Number(held.pk) != Number(!!column.pk)) {
-          fail(`Incompatible physical column: ${stmt.name}.${column.name}`)
         }
       }
-    }
-    // Additional ordinary indexes/views remain untouched. Unknown triggers or
+      // Additional ordinary indexes/views remain untouched. Unknown triggers or
       // unique indexes on tables this repair writes are not safe to infer away.
       let written = new Set([
         'entity',
@@ -350,12 +347,34 @@ let main = async () => {
         'journal_field',
         'blob_text',
       ])
-      for (let row of schemaBefore) {
-        if (
-          row.type == 'trigger' && written.has(String(row.tbl_name))
-        ) {
-          fail(`Unproved write-affecting trigger: ${row.name}`)
+      let scratch = open(':memory:')
+      try {
+        for (let stmt of requirements) {
+          if (stmt.t != 'create table' && stmt.t != 'create trigger') continue
+          scratch.query(stmt)
         }
+        let known = new Map(
+          objects(scratch).map((row) => [String(row.name), row]),
+        )
+        let tokens = (sql: unknown) =>
+          String(sql).match(
+            /'(?:[^']|'')*'|"(?:[^"]|"")*"|[\w$]+|[^\s\w]/g,
+          )?.map((part) =>
+            part.startsWith("'")
+              ? part
+              : part.replace(/^"|"$/g, '').toLowerCase()
+          )
+        for (let row of schemaBefore) {
+          if (row.type != 'trigger' || !written.has(String(row.tbl_name))) {
+            continue
+          }
+          let expected = known.get(String(row.name))
+          if (!expected || !same(tokens(row.sql), tokens(expected.sql))) {
+            fail(`Unproved write-affecting trigger: ${row.name}`)
+          }
+        }
+      } finally {
+        scratch.close()
       }
       for (let name of written) {
         if (!byName.has(name)) continue
@@ -396,7 +415,7 @@ let main = async () => {
       let schemaDigest = token(canonical({ schema: schemaBefore, admission }))
       report('schema-plan', {
         digest: schemaDigest,
-        before: schemaSummary(schemaBefore),
+        beforeObjects: schemaBefore.length,
         additive: admission,
         otherChanges: 0,
       })
@@ -405,6 +424,20 @@ let main = async () => {
       }
       if (options.verifyZero && admission.length) {
         fail('--verify-zero forbids every schema admission')
+      }
+      let historicalJournal = Object.fromEntries(
+        Object.entries(journalLimits)
+          .map((
+            [name, last],
+          ) => [name, options.plan ? '' : journalDigest(name, last)]),
+      )
+      let preserveHistory = () => {
+        if (options.plan) return
+        for (let [name, last] of Object.entries(journalLimits)) {
+          if (journalDigest(name, last) != historicalJournal[name]) {
+            fail('Historical journal changed')
+          }
+        }
       }
       let schemaInstalled: Row[] = []
       unit(sql, () => {
@@ -442,10 +475,9 @@ let main = async () => {
             fail(`Unexpected created schema object: ${row.name}`)
           }
         }
-  
       })
       report('postinstall', {
-        after: schemaSummary(schemaInstalled),
+        afterObjects: schemaInstalled.length,
         added: schemaSummary(
           schemaInstalled.filter((row) => !byName.has(String(row.name))),
         ),
@@ -569,6 +601,7 @@ let main = async () => {
               }
             }
           }
+          report('scan', { candidates: seen.size, patches: patches.length })
         }
         return {
           patches,
@@ -755,17 +788,22 @@ let main = async () => {
           fail(`Unsafe physical error removal: eid=${patch.entity.eid}`)
         }
       }
-      for (let offset = 0; offset < planned.patches.length; offset += options.batch) {
-      let patches = planned.patches.slice(offset, offset + options.batch)
-      let held = physical(patches.map((patch) => patch.entity.eid))
-      for (let patch of patches) {
-        let row = held.get(patch.entity.eid) ?? fail('Missing physical candidate')
-        descriptor(row)
-        removal(patch, row)
-        expectedMembership(patch, row)
+      for (
+        let offset = 0;
+        offset < planned.patches.length;
+        offset += options.batch
+      ) {
+        let patches = planned.patches.slice(offset, offset + options.batch)
+        let held = physical(patches.map((patch) => patch.entity.eid))
+        for (let patch of patches) {
+          let row = held.get(patch.entity.eid) ??
+            fail('Missing physical candidate')
+          descriptor(row)
+          removal(patch, row)
+          expectedMembership(patch, row)
+        }
       }
-    }
-    if (options.plan) {
+      if (options.plan) {
         report('plan-complete', {
           patches: planned.patches.length,
           graphChanges: 0,
@@ -805,7 +843,7 @@ let main = async () => {
               fail(`Candidate changed: eid=${row.entity.eid}`)
             }
           }
-            let cursor = high('journal_tx')
+          let cursor = high('journal_tx')
           let changeCursor = high('journal_change')
           let fieldCursor = high('journal_field')
           let transactions = size('journal_tx')
@@ -818,15 +856,28 @@ let main = async () => {
           ) {
             fail('Missing or concurrent journal transaction')
           }
-          let changes = sql.query(select({ from: table('journal_change'),
-          where: gt(col('id'), val(changeCursor)) }))
-        let fields = sql.query(select({ from: table('journal_field'),
-          where: gt(col('id'), val(fieldCursor)) }))
-        if (!changes.length || fields.some((field) => !changes.some((change) =>
-          field.change == change.id)) || changes.some((change) => change.tx != cursor + 1)) {
-          fail('Unexpected appended journal ownership')
-        }
-        let physicalAfter = physical(ids)
+          let changes = sql.query(
+            select({
+              from: table('journal_change'),
+              where: gt(col('id'), val(changeCursor)),
+            }),
+          )
+          let fields = sql.query(
+            select({
+              from: table('journal_field'),
+              where: gt(col('id'), val(fieldCursor)),
+            }),
+          )
+          if (
+            !changes.length || fields.some((field) =>
+              !changes.some((change) =>
+                field.change == change.id
+              )
+            ) || changes.some((change) => change.tx != cursor + 1)
+          ) {
+            fail('Unexpected appended journal ownership')
+          }
+          let physicalAfter = physical(ids)
           for (let patch of patches) {
             let pre = physicalBefore.get(patch.entity.eid) ??
               fail('Missing physical preimage')
@@ -918,7 +969,7 @@ let main = async () => {
             }
             // These use the installed component predicates/indexes, not snapshots.
             let found = await g.read(
-              parse(`.eid=${row.entity.eid}&.refusal&!error`),
+              parse(`.entity.eid=${row.entity.eid}&.refusal&!error`),
             )
             if (found.length != 1) {
               fail(`Indexed lookup failed: eid=${row.entity.eid}`)
@@ -926,6 +977,9 @@ let main = async () => {
             checked++
           }
         })
+        if (!options.live) {
+          sql.query({ t: 'pragma', name: 'wal_checkpoint', arg: 'truncate' })
+        }
         report('batch', {
           batches,
           checked,
