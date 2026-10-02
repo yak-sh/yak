@@ -224,10 +224,12 @@ export let respelled = (text: string): string | null => {
 
 /** The stored shapes this code reads, each named by the pass that moved stores
  * into it, read per commit by `yak admin deploys`: a rollback across one would
- * serve rows the build before it cannot read. Every pass ran on every store and
- * was deleted, so only its name is left here. The shape it made is the one
- * this code reads, and code without the name is code from before it. */
+ * serve rows the build before it cannot read. One-time passes leave their names
+ * after their rules are deleted. A retained capability such as app lenses also
+ * names the first shape its rules can produce, even though only declaring apps
+ * move. Code without the name is code from before it could read that shape. */
 export let BOUNDARIES = [
+  'yak/store/lens/1',
   'yak/store/interruption-contract/1',
   'yak/store/interruption-contract/2',
   'yak/store/interruption-contract/3',

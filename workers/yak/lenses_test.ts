@@ -129,7 +129,7 @@ test('the app lens mover rehearses, consumes its source, and is idempotent', asy
     'Seed cake',
   )
   let rule = lensRule(name, next)!
-  store = new Store(ctx, {}, [{ ...rule, live: 'apps' }])
+  store = new Store(ctx)
   await store.alarm()
   assertEquals(await meta.query('.recipe.title'), [])
   let [moved] = await meta.query('.recipe ?doc')
@@ -287,7 +287,7 @@ test('a later step gets its own mover stamp after the first step finished', asyn
     KERNEL,
   )
   await declare(next)
-  store = new Store(ctx, {}, [{ ...lensRule(name, next)!, live: 'apps' }])
+  store = new Store(ctx)
   await store.alarm()
   let twice = {
     $defs: {
@@ -302,7 +302,7 @@ test('a later step gets its own mover stamp after the first step finished', asyn
   }
   let deployed = await declare(twice)
   assert(deployed.ok, await deployed.text())
-  store = new Store(ctx, {}, [{ ...lensRule(name, twice)!, live: 'apps' }])
+  store = new Store(ctx)
   await store.alarm()
   assertEquals(
     ((await meta.query('.recipe ?heading'))[0].heading as Comp).text,

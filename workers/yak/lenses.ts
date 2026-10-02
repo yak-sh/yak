@@ -154,6 +154,7 @@ export let lensRule = (name: string, doc: VocabDoc): Rule | null => {
   )
   return {
     mark: `${LENS_MARK}/${Object.values(latest)[0]}` as Mark,
+    live: 'apps',
     find: lens.find(),
     move: (row: Bundle) => {
       if (
