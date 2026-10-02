@@ -632,3 +632,46 @@ test('only the exact platform spent-credit failure becomes a limit refusal', () 
     })
   )
 })
+
+test('native type defects remain failures without rewriting their evidence', () => {
+  let answer = row(
+    'interrupted',
+    'Response interrupted: TypeError: Invalid response body',
+  )
+  let before = structuredClone(answer)
+  assertEquals(refusalPatch(answer), undefined)
+  assertEquals(answer, before)
+  assertThrows(() => refusalPatch(row('interrupted', 'TypeError: invalid')))
+})
+
+test('the historical allowance sentence is a refusal only as a whole', () => {
+  let body = 'probe-demo is on the free tier, which is $0.20 of model use ' +
+    "a month, shared by the free spaces its owner has, and this month's " +
+    'is spent — models answer again on the 1st, and a connected agent can ' +
+    'keep building. The Plus plan allows more. Compare paid plans in ' +
+    'settings: https://yaks.app/manage/billing?space=probe-demo'
+  let answer = {
+    ...row('limit', body),
+    entry: { session: 'session', seq: 2 },
+  }
+  assertEquals(refusalPatch(answer, undefined, null), patch('limit'))
+  for (
+    let changed of [
+      body + ' unknown',
+      body.replace('space=probe-demo', 'space=other'),
+      body.replace('https://yaks.app', 'https://elsewhere.example'),
+      body.replace('of model use', 'of unrelated use'),
+    ]
+  ) {
+    assertThrows(() =>
+      refusalPatch(
+        {
+          ...answer,
+          content: { body: changed },
+        },
+        undefined,
+        null,
+      )
+    )
+  }
+})

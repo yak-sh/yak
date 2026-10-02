@@ -141,6 +141,9 @@ let call = (
 // These prefixes are actual historical wrappers, not substring searches. A
 // 504 HTML body can contain 401 and an access-related 503 is still a failure.
 let interrupted = (row: Bundle, body: string): string | undefined => {
+  // Native JavaScript defects are failures, not model refusals. The runner
+  // wrote this exact wrapper; retaining it never discards provider evidence.
+  if (/^Response interrupted: TypeError: .+/.test(body)) return undefined
   let message = body.replace(/^Response interrupted: ModelError: /, '')
   let attempts = /^Model request failed after [1-9]\d* attempts \(([\w]+)\): /
     .exec(message)
@@ -187,6 +190,12 @@ let interrupted = (row: Bundle, body: string): string | undefined => {
   }
   unsafe(row, 'interrupted')
 }
+
+// meter.ts at 2ea1d2cb3 wrote this allowance answer before account budgets.
+// Match the whole sentence and its own repeated slug, never a budget keyword.
+let allowance = (body: string) =>
+  /^([a-z0-9-]+) is on the (free|plus) tier, which is \$\d+\.\d{2} of model use a month(, shared by the free spaces its owner has)?, and this month's is spent — models answer again on the 1st, and a connected agent can keep building\. (The Plus plan allows more\. Compare paid plans in settings|Manage usage and plan settings): https:\/\/yaks\.(app|fyi)\/manage\/billing\?space=\1$/
+    .test(body)
 
 /** Convert one audited historical answer, without mutating it or its source.
  * A supplied source must be the exact referenced call. For transcript errors,
@@ -247,7 +256,10 @@ export let refusalPatch = (
     } else if (providers.has(code) || httpRefusal(code)) {
       refused = code
     } else if (code == 'limit') {
-      if (!row.entry || body != '2021: Insufficient AI Gateway credits') {
+      if (
+        !row.entry ||
+        (body != '2021: Insufficient AI Gateway credits' && !allowance(body))
+      ) {
         unsafe(row, code)
       }
       refused = code
