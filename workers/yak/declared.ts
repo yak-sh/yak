@@ -58,7 +58,7 @@ export let at = (space: Space, app: App) => `${space.slug}/${app.slug}`
 // Every space's apps at once, and each directory read once per request
 // (directory.ts `directory`, T-34986): the door asks for this from four places
 // while it assembles itself, and asked in turn each was its own walk.
-export let reachable = async (ctx: Ctx) => {
+export let reachable = async (ctx: Pick<Ctx, 'dir' | 'person'>) => {
   let spaces = await ctx.dir.spaces(ctx.person)
   // A space in the trash is out of reach whole (erase.ts, T-34431): every
   // app in it leaves every list at once, and none is asked about, which is
@@ -83,7 +83,7 @@ let whoIn = async (ctx: Ctx, space: Space): Promise<Who> => ({
 
 // The apps a call means: all the caller can reach, or the one it named —
 // `recipes`, or `yourname/recipes` where two spaces spell one slug.
-let picked = (all: { space: Space; app: App }[], said: string) => {
+export let picked = (all: { space: Space; app: App }[], said: string) => {
   if (!said) return all
   let [one, two] = said.split('/')
   return all.filter((r) =>

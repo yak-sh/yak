@@ -105,6 +105,7 @@ import { isTestAddress } from './lib/bots.ts'
 import { refuse } from './tool.ts'
 import { url as hostUrl } from './host.ts'
 import { source, within } from './rate.ts'
+import * as appAddress from './app-address.ts'
 
 type Rpc = {
   jsonrpc: '2.0'
@@ -572,6 +573,7 @@ let answered = async (
 ): Promise<Response> => {
   let url = new URL(req.url)
   if (url.pathname == CANARY && req.method == 'POST') return canary(req, env)
+  if (url.pathname == '/api/app') return appAddress.fetch(req, env)
   if (url.pathname != '/mcp') {
     return json(404, { error: { code: 'not_found' } })
   }
