@@ -24,15 +24,7 @@ import {
   tally,
   val,
 } from '@yaks/sql'
-import {
-  backfill,
-  fit,
-  indexed,
-  mend,
-  retired,
-  standing,
-  tabled,
-} from '@yaks/sqlite'
+import { backfill, fit, indexed, mend, retired, tabled } from '@yaks/sqlite'
 import type { Index, Vocab } from '@yaks/vocab'
 
 /** The five type words the short manifest used, and the JSON Schema each
@@ -236,6 +228,8 @@ export let respelled = (text: string): string | null => {
  * was deleted, so only its name is left here. The shape it made is the one
  * this code reads, and code without the name is code from before it. */
 export let BOUNDARIES = [
+  'yak/store/refusal/1',
+  'yak/store/refusal-imported/1',
   'yak/store/packages/1',
   'yak/store/home/2',
   'yak/store/former/3',

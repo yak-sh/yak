@@ -109,6 +109,7 @@ export let dispatchRule: Rule = {
 export let RULES: Rule[] = [
   ...refusalFind.map((find, i): Rule => ({
     mark: i == 0 ? 'yak/store/refusal/1' : 'yak/store/refusal-imported/1',
+    live: 'apps',
     find,
     move: (row, read) => {
       let line = refusalSource(row)
@@ -122,8 +123,6 @@ export let RULES: Rule[] = [
     },
   })),
 ]
-
-let str = (v: unknown) => v == null ? '' : String(v)
 
 /** How far one rule got in one store. `after` is the last row it moved past;
  * `unspoken` is a word the rule reads that this store does not declare, so

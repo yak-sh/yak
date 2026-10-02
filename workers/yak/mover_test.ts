@@ -15,6 +15,7 @@ import { state } from './testing.ts'
 
 let NAME = 'ada/notes'
 let refusals = RULES.filter((r) => r.mark.startsWith('yak/store/refusal'))
+  .map((r): Rule => ({ ...r, live: undefined }))
 
 // An app whose rows say a word two ways, the way a rename leaves them.
 let WORDS = JSON.stringify({
