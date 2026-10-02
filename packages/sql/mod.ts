@@ -157,3 +157,5 @@ export let compile = (
   vocab: Vocab,
   opts: BindOpts = {},
 ): Compiled => render(bind(ast, vocab, opts))
+
+export { field } from './sqlite.ts'

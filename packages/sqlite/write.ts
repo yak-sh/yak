@@ -42,6 +42,7 @@
 // or points at (so a reference may name a target created in the same batch, in
 // any order), numbers each new one, and reports the entities it minted.
 
+import { field } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Comp, Entity } from '@yaks/graph'
 import { comps, Refused, TOMBSTONE } from '@yaks/graph'
@@ -262,7 +263,7 @@ export let upsertSql = (
   return {
     t: 'insert',
     into: comp,
-    cols: ['entity', ...cols],
+    cols: ['entity', ...cols.map(field)],
     q: select({
       cols: [col('id', 'e'), ...cols.map((c) => slot(v, comp, c, patch[c]))],
       from: table('entity', 'e'),
@@ -270,7 +271,9 @@ export let upsertSql = (
     }),
     upsert: absent ? undefined : [{
       on: [col('entity')],
-      set: Object.fromEntries(cols.map((c) => [c, col(c, 'excluded')])),
+      set: Object.fromEntries(
+        cols.map((c) => [field(c), col(field(c), 'excluded')]),
+      ),
     }],
   }
 }
@@ -329,7 +332,7 @@ let patchOne = (
         t: 'update',
         table: name,
         set: Object.fromEntries(
-          cols.map((c) => [c, slot(v, name, c, comp[c])]),
+          cols.map((c) => [field(c), slot(v, name, c, comp[c])]),
         ),
         where: eq(col('entity'), owner(eid)),
       },

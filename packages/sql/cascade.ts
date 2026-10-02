@@ -34,6 +34,7 @@
 // backend that cannot compile this (a map, a browser cache) is walked
 // instead.
 
+import { field } from './sqlite.ts'
 import type { Vocab } from '@yaks/vocab'
 import { type Arm, ARMS, arms, cut } from './compound.ts'
 import { each, type Frag, type Raw, raw } from './ast.ts'
@@ -77,7 +78,9 @@ let closure = (eids: string[], group: Arm[], d: Dialect): Frag => {
       ` where "entity"."eid" in (${set.sql})\n` +
       group.map(([comp, props]) => {
         let own = d.ownerKey(comp)
-        let hits = props.map((p) => `"${comp}"."${p}" = ${W}."id"`).join(' or ')
+        let hits = props.map((p) => `"${comp}"."${field(p)}" = ${W}."id"`).join(
+          ' or ',
+        )
         return `  union select ${own}, min(${W}."depth" + 1, ${DEEP})` +
           ` from ${d.table(comp)}, ${W} where (${hits}) and ${alive(own)}\n`
       }).join('') + `)\n`,
@@ -156,7 +159,7 @@ export let looseSql = (
         return `select ? as comp, ? as prop, ${E}."eid" as eid,` +
           ` ${E}."id" as ord` +
           ` from ${d.table(comp)} join "entity" ${E} on ${E}."id" = ${own}` +
-          ` where "${comp}"."${prop}" in (select "id" from ${W})` +
+          ` where "${comp}"."${field(prop)}" in (select "id" from ${W})` +
           ` and ${own} not in (select "id" from ${W}) and ${alive(own)}`
       }).join('\n union all ') + ` order by "ord"`,
       [...open.params, ...group.flat()],

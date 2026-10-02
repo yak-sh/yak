@@ -32,6 +32,7 @@
 // indistinguishable from a row that was never there. So the overlay keeps a
 // list of what it removed, and `gone` names it.
 
+import { field } from './sqlite.ts'
 import type { Vocab } from '@yaks/vocab'
 import { type And, present } from '@yaks/query'
 import {
@@ -106,7 +107,7 @@ let prefixed = (pre: string, at: At): Dialect => {
     refEq: refEqAt(from('entity')),
     ownerKey: own,
     joinOn: (comp, base) => `${q(pre + comp)}."entity" = ${own(base)}`,
-    refCol: (comp, prop) => `${q(pre + comp)}.${q(prop)}`,
+    refCol: (comp, prop) => `${q(pre + comp)}.${q(field(prop))}`,
     presence: (comp) => ({
       sql: `${q(pre + comp)}."entity" is not null`,
       params: [],
@@ -124,8 +125,8 @@ let prefixed = (pre: string, at: At): Dialect => {
       return c.category == 'ref'
         ? `(select __re.eid from ${from('entity')} __re where __re.id = ${
           q(pre + comp)
-        }.${q(prop)})`
-        : `${q(pre + comp)}.${q(prop)}`
+        }.${q(field(prop))})`
+        : `${q(pre + comp)}.${q(field(prop))}`
     },
   }
 }

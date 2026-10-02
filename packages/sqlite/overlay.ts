@@ -48,6 +48,7 @@
 // compiled rule against the same overlay. Nothing here assumes a server — but
 // nothing here builds that either.
 
+import { field } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import { type Bundle, comps, dead, type Eid } from '@yaks/graph'
 import {
@@ -224,7 +225,7 @@ export let overlay = (
     out: number[],
     rows: Param[][],
   ) => {
-    let names = [key, ...cols]
+    let names = [key, ...cols.map(field)]
     let q: Query = select({
       cols: names.map((c) => col(c)),
       from: table(from),
@@ -253,7 +254,9 @@ export let overlay = (
     if (owners.length) {
       // A JSON value is read as its text, to ride in the rows' JSON array.
       let read = cols.map((c) =>
-        isJsonb(vocab, comp, c) ? as(jsonOut(col(c)), c) : col(c)
+        isJsonb(vocab, comp, c)
+          ? as(jsonOut(col(field(c))), c)
+          : as(col(field(c)), c)
       )
       for (
         let row of driver.query(select({

@@ -14,6 +14,7 @@
 // the binder answers a clause about a component the spine never wears
 // outright, instead of joining its table (./bind.ts `worn`).
 
+import { field } from './sqlite.ts'
 import type { Vocab } from '@yaks/vocab'
 import { col, sub } from './ast.ts'
 import { type Backings, eidAt } from './derived.ts'
@@ -69,7 +70,7 @@ export let backedDialect = (
   let refRead = (comp: string, prop: string): string | null => {
     let target = v.prop(comp, prop)?.ref
     return target && computed(v, target)
-      ? inline(eidAt(backingOf(backed, target).tag, col(prop, comp)))
+      ? inline(eidAt(backingOf(backed, target).tag, col(field(prop), comp)))
       : null
   }
   let base: Dialect = {

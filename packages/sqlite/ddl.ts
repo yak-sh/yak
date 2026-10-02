@@ -37,6 +37,7 @@
 // the engine, except a `keep` reference, which outlives the row it points at
 // and stays key-free.
 
+import { field } from '@yaks/sql'
 import type { Index, Prop, Vocab } from '@yaks/vocab'
 import {
   among,
@@ -184,7 +185,7 @@ let fallback = (c: Prop): Expr | undefined => {
 let closed = (c: Prop): Expr | undefined =>
   c.category == 'enum'
     ? among(
-      col(c.prop),
+      col(field(c.prop)),
       [...c.values!, ...Object.keys(c.aliases ?? {})].map(lit),
     )
     : undefined
@@ -194,7 +195,7 @@ let closed = (c: Prop): Expr | undefined =>
 // `keep` reference, which must survive its target's tombstone and so carries
 // none. `required` becomes NOT NULL; `default` and `enum` are emitted as above.
 let column = (c: Prop): Column => ({
-  name: c.prop,
+  name: field(c.prop),
   type: c.affinity || undefined,
   notNull: c.required,
   default: fallback(c),
@@ -249,7 +250,7 @@ let indexDdl = (comp: string, i: Index): CreateIndex => ({
   t: 'create index',
   name: `${comp}_${i.props.join('_')}`,
   on: comp,
-  cols: i.props.map((p) => col(p)),
+  cols: i.props.map((p) => col(field(p))),
   unique: i.unique,
   ifNot: true,
   where: i.present ? and(...i.present.map((p) => notNull(col(p)))) : undefined,
@@ -534,7 +535,7 @@ export let refit = (
   Object.fromEntries(
     comps(vocab, was).flatMap((comp) => {
       let t = was[comp]
-      let said = new Set(stored(vocab, comp).map((c) => c.prop))
+      let said = new Set(stored(vocab, comp).map((c) => field(c.prop)))
       let extra = t.cols
         .filter((r) => r.name != 'entity' && !said.has(String(r.name)))
         .map((r) => ({
@@ -605,7 +606,7 @@ export let grown = (vocab: Vocab, was: Standing): Stmt[] => [
   ...comps(vocab, was).flatMap((comp) => {
     let has = new Set(was[comp].cols.map((r) => String(r.name)))
     return stored(vocab, comp)
-      .filter((c) => !has.has(c.prop))
+      .filter((c) => !has.has(field(c.prop)))
       .map((c) => ({
         t: 'alter table' as const,
         table: comp,

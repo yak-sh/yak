@@ -11,6 +11,7 @@
 // `rows()` returns and reads back every component each entity has.
 // `screened()` is the statement alone, for a search beside the graph to run.
 
+import { field } from '@yaks/sql'
 import { type And, parse } from '@yaks/query'
 import type { Prop, Vocab } from '@yaks/vocab'
 import {
@@ -156,15 +157,15 @@ let projection = (
       for (let d of over.deps ?? []) deps.add(d)
       sel.push(as(over.expr(own('entity')), c.prop))
     } else if (tag) {
-      sel.push(as(eidAt(tag, own(c.prop)), c.prop))
+      sel.push(as(eidAt(tag, own(field(c.prop))), c.prop))
     } else if (c.category == 'ref') {
       let a = `r_${c.prop.replaceAll(/[^A-Za-z0-9]/g, '_')}`
-      joins.push(left(table('entity', a), eq(col('id', a), own(c.prop))))
+      joins.push(left(table('entity', a), eq(col('id', a), own(field(c.prop)))))
       sel.push(as(col('eid', a), c.prop))
     } else if (c.scalar == 'jsonb') {
-      sel.push(as(jsonOut(own(c.prop)), c.prop))
+      sel.push(as(jsonOut(own(field(c.prop))), c.prop))
     } else {
-      sel.push(as(own(c.prop), c.prop))
+      sel.push(as(own(field(c.prop)), c.prop))
     }
   }
   for (let d of deps) {

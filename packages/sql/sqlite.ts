@@ -93,6 +93,10 @@ export type Dialect = {
   among: (colExpr: string, vals: (string | number)[]) => Frag
 }
 
+// Component owners use `entity`; a property with that name keeps a distinct
+// physical column. The wire and vocabulary always keep the person's name.
+export let field = (prop: string): string => prop == 'entity' ? '$entity' : prop
+
 let q = (name: string) => `"${name}"`
 
 let table = (comp: string): string => q(comp)
@@ -112,8 +116,10 @@ let col = (comp: string, prop: string, v: Vocab): string | null => {
   let c = v.prop(comp, prop)
   if (!c) return null
   return c.category == 'ref'
-    ? `(select __re.eid from entity __re where __re.id = "${comp}"."${prop}")`
-    : `"${comp}"."${prop}"`
+    ? `(select __re.eid from entity __re where __re.id = "${comp}"."${
+      field(prop)
+    }")`
+    : `"${comp}"."${field(prop)}"`
 }
 
 /**
@@ -302,7 +308,7 @@ let all = (parts: Frag[]): Frag =>
   }
 
 export let sqlite: Dialect = {
-  refCol: (comp, prop) => `${q(comp)}.${q(prop)}`,
+  refCol: (comp, prop) => `${q(comp)}.${q(field(prop))}`,
   among,
   name: 'sqlite',
   spine: '"entity"',
