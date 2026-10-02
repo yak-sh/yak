@@ -1,6 +1,12 @@
 // The gather plate's E cannot be stolen by another hero or a villager.
 import { equal, test } from '@yaks/testing'
-import { friendlyKey, interaction, nearby, workTarget } from './interact.ts'
+import {
+  friendlyKey,
+  interaction,
+  nearby,
+  prompted,
+  workTarget,
+} from './interact.ts'
 import type { Frame } from './play.ts'
 import type { Job } from './work.ts'
 
