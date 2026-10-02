@@ -2,6 +2,7 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
+import { ModelError } from '@yaks/model'
 import { CODEX, OPENAI } from '@yaks/openai'
 import { graph, identityEid } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -87,6 +88,37 @@ test('model catalog errors do not repeat a credential', async () => {
     Error,
   )
   assertEquals(error.message.includes('private-token'), false)
+})
+
+test('model catalog retries a dropped connection and classifies an outage', async () => {
+  for (let failures of [1, 3]) {
+    let calls = 0
+    let pauses: number[] = []
+    let list = () =>
+      modelCatalog(
+        { token: 'private-token', base: OPENAI },
+        () => {
+          if (++calls <= failures) throw new TypeError('tls handshake eof')
+          return Promise.resolve(Response.json({ data: [{ id: 'gpt-6-sol' }] }))
+        },
+        undefined,
+        {},
+        {
+          pause: (ms) => {
+            pauses.push(ms)
+            return Promise.resolve()
+          },
+        },
+      )
+    if (failures == 1) {
+      assertEquals(await list(), [{ name: 'gpt-6-sol' }])
+    } else {
+      let error = await assertRejects(list, ModelError, 'tls handshake eof')
+      assertEquals([error.code, error.retry], ['transport', { after: 0 }])
+    }
+    assertEquals(calls, failures == 1 ? 2 : 3)
+    assertEquals(pauses, failures == 1 ? [1000] : [1000, 4000])
+  }
 })
 
 test('a catalog gives a model row its window, unless the row has its own', async () => {
