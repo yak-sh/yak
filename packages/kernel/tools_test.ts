@@ -30,3 +30,13 @@ test('a comment is a doc aimed at an entity', async () => {
   assertEquals(comp(said, 'doc').body, 'looks right')
   assert(said.entity.eid.startsWith('$'), said.entity.eid)
 })
+
+test('a reply keeps the thread target and points at the answered comment', async () => {
+  let [said] = await tools.comment_new!(
+    ...asked({ target: 'seven', body: 'yes', reply_to: 'question' }),
+  ) as Bundle[]
+  assertEquals(comp(said, 'comment'), {
+    target: 'seven',
+    reply_to: 'question',
+  })
+})

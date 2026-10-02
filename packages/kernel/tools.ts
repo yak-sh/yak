@@ -3,7 +3,7 @@
 // register them.
 //
 // There is one, and it is the one people call all day: a comment. A comment has
-// no table of its own — it is `doc{body}` aimed by `comment{target}` — so the
+// no table of its own — it is `doc{body}` aimed by `comment{target, reply_to}` — so the
 // tool returns one new entity carrying both components, and the tool runner
 // commits it signed as whoever called it.
 
@@ -20,7 +20,10 @@ export let runs = (): Runs => ({
     return [{
       entity: { eid: '$comment' },
       doc: { body: String(args.body) },
-      comment: { target: String(args.target) },
+      comment: {
+        target: String(args.target),
+        ...(args.reply_to ? { reply_to: String(args.reply_to) } : {}),
+      },
     }]
   },
 })
