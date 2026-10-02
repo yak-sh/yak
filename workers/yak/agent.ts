@@ -562,6 +562,7 @@ export let reaching = async (
     vocab,
     worn: () => false,
     storage,
+    outside: detached(storage),
     plugins,
     use: (p) => (plugins.push(p), self),
     install: () => {},

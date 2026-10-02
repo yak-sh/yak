@@ -14,9 +14,9 @@ import {
   type Bundle,
   type Comp,
   type Eid,
+  type ReadTx,
   Refused,
   token,
-  type Tx,
 } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { and, eq, present } from '@yaks/query'
@@ -183,7 +183,7 @@ export let spent = (call: Bundle, value: unknown): Bundle[] => {
  * answer whose binding vanished while it was asked is kept, not current, so a
  * binding that returns under the same key has it without asking again. */
 export let answer = async (
-  tx: Tx,
+  tx: ReadTx,
   call: Bundle,
   value: unknown,
   vocab: Vocab,
@@ -233,7 +233,7 @@ export let answer = async (
 /** Write one call's takes. Supply leaves other slot choices alone; a full
  * answer clears choices for slots it omits without deleting old takes. */
 export let outputs = async (
-  tx: Tx,
+  tx: ReadTx,
   run: Bundle,
   call: Bundle,
   value: unknown,

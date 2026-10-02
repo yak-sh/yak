@@ -121,6 +121,10 @@ export type Tx = {
   revive: (eids: Eid[]) => void | Promise<void>
 }
 
+/** Reads against committed data outside a write transaction. Writes go
+ * through the graph's `apply()` so its admission, rules and effects run. */
+export type ReadTx = Pick<Tx, 'read' | 'get' | 'whole' | 'about' | 'bindings'>
+
 /**
  * A storage adapter. `@yaks/sqlite` implements this over an embedded database;
  * an in-memory map, a Durable Object and a remote SQL service implement the

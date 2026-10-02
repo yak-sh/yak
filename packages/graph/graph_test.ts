@@ -14,6 +14,8 @@ import { Stale, token } from './guard.ts'
 import { Refused } from './admit.ts'
 import { books, comp, isDead, memory, slow } from './testing.ts'
 import { loadVocab } from '@yaks/vocab'
+import { ram } from '@yaks/ram'
+import { match } from './join.ts'
 
 let g = (plugins: Plugin[] = []) =>
   graph({ storage: memory(), vocab: books, plugins })
@@ -27,6 +29,25 @@ let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
 
 let at = (out: Bundle[], eid: string, name: string) =>
   comp(out.find((b) => b.entity.eid == eid && b[name] !== undefined), name)
+
+test('outside reads whole committed state and evaluates bindings after each write', async () => {
+  let one = graph({ storage: ram(books), vocab: books })
+  let tx = one.outside
+  one.apply([{
+    entity: { eid: 'b1' },
+    book: { pages: 7 },
+    doc: { title: 'Seven' },
+  }])
+  let [found] = await tx.read('.book.pages=7')
+  assertEquals(found.doc, { title: 'Seven' })
+  assertEquals(at(await tx.get(['b1'], ['book']), 'b1', 'book').pages, 7)
+  one.apply([{ entity: { eid: 'b1' }, book: { pages: 8 } }], { check: true })
+  assertEquals(at(await tx.get(['b1']), 'b1', 'book').pages, 7)
+  one.apply([{ entity: { eid: 'b1' }, book: { pages: 9 } }])
+  assertEquals(at(await tx.get(['b1']), 'b1', 'book').pages, 9)
+  let [rows] = await tx.bindings!([match('.book.pages=$pages')], [], ['book'])
+  assertEquals(rows.map((r) => r.vars), [{ pages: 9 }])
+})
 
 test('a traced dry run reports phases and leaves the graph unchanged', () => {
   let one = g()

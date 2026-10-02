@@ -7,8 +7,8 @@ import {
   identityEid,
   match,
   reads,
+  type ReadTx,
   token,
-  type Tx,
 } from '@yaks/graph'
 import { and, type Clause, eq, list } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
@@ -53,7 +53,7 @@ export let inputs = (bindings: Binding[]): string[] =>
   [...new Set(bindings.flatMap(ids))].map((eid) => `entity:${eid}`)
 
 export let sync = async (
-  tx: Tx,
+  tx: ReadTx,
   builder: string,
   sources: string[],
 ): Promise<Bundle[]> => {
@@ -85,7 +85,7 @@ export let sync = async (
 }
 
 export let candidates = async (
-  tx: Tx,
+  tx: ReadTx,
   eid: string,
   touched: string[],
 ): Promise<Bundle[]> => {

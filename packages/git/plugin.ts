@@ -16,7 +16,7 @@
 // step there directly: {@link minting} is the step, and the plugin is that step
 // plus the phase it is hooked on.
 
-import type { Bundle, Plugin, Tx } from '@yaks/graph'
+import type { Bundle, Plugin, ReadTx } from '@yaks/graph'
 import { refDoc } from './comp.ts'
 import { commitOnto, type Landing, type Repo } from './refs.ts'
 
@@ -35,7 +35,7 @@ export type Releases = {
    * Everything the application knows and this package cannot — the manifest,
    * the author, the clock, the stores — is read here.
    */
-  of: (b: Bundle, tx: Tx) => Promise<Released | null> | Released | null
+  of: (b: Bundle, tx: ReadTx) => Promise<Released | null> | Released | null
 }
 
 /**
@@ -44,7 +44,7 @@ export type Releases = {
  * {@link commits} is the same step wrapped as a graph plugin.
  */
 export let minting =
-  (r: Releases) => async (bundles: Bundle[], tx: Tx): Promise<void> => {
+  (r: Releases) => async (bundles: Bundle[], tx: ReadTx): Promise<void> => {
     for (let b of bundles) {
       if (!b[r.comp]) continue
       let landing = await r.of(b, tx)

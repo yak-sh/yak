@@ -59,7 +59,7 @@ import {
 } from '@yaks/trace'
 import { after, each, isPromise } from '@yaks/fp'
 import { type Actor, type Bundle, comps, type Eid } from './bundle.ts'
-import type { Row, Storage, Tx } from './storage.ts'
+import type { ReadTx, Row, Storage, Tx } from './storage.ts'
 import { detached, type Query, type ReadOpts } from './storage.ts'
 import type { Hook, Phase, Plugin, Tracker, WriteHook } from './plugin.ts'
 import { type Derive, isAlias, resolve, substitute } from './alias.ts'
@@ -192,6 +192,9 @@ export type Graph = {
   worn: (comp: string, prop: string) => boolean
   /** the adapter that stores the data */
   storage: Storage
+  /** Detached reads of committed state, with whole component bundles and
+   * binding queries, as post-commit handlers receive. */
+  outside: ReadTx
   /** the plugins registered on this graph, in order */
   plugins: Plugin[]
   /** register another plugin (its hooks join the ones already there) */
@@ -234,6 +237,13 @@ export type Graph = {
    * entity, plus everything the pipeline generated */
   apply: (bundles: Bundle[], opts?: ApplyOpts) => Bundle[] | Promise<Bundle[]>
 }
+
+/** A graph's data interface, whether its storage is local or another thread
+ * owns it. Every write uses the owning graph's `apply()` pipeline. */
+export type Access = Pick<
+  Graph,
+  'vocab' | 'read' | 'rows' | 'get' | 'apply' | 'outside'
+>
 
 // One step of the pipeline: the bundles in, the bundles the next step sees
 // out.
@@ -990,6 +1000,7 @@ export let graph = (opts: Options): Graph => {
     vocab,
     worn: (comp, prop) => storage.worn?.(comp, prop) ?? false,
     storage,
+    outside: detached(storage),
     plugins,
     address,
     rewrites,

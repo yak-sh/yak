@@ -68,10 +68,10 @@
 // lending one effect its code (a terminal running its own transcripts) works
 // that one, and says nothing about the rest.
 
-import type { Bundle, Comp, Eid, Graph, HookContext, Tx } from '@yaks/graph'
+import type { Access, Bundle, Comp, Eid, HookContext, Tx } from '@yaks/graph'
 import { after } from '@yaks/fp'
 import { outcome, parent, peek, type Span, unlink } from '@yaks/trace'
-import { derivedEid, detached, Stale, token } from '@yaks/graph'
+import { derivedEid, Stale, token } from '@yaks/graph'
 import { and, eq } from '@yaks/query'
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
@@ -204,7 +204,7 @@ export type Pool = {
    * one, pass after pass until nothing is left to start, giving way to the
    * host between them — and none at all where a process that stays up is
    * already working it. */
-  work: (g: Graph, signal?: AbortSignal) => Promise<void>
+  work: (g: Access, signal?: AbortSignal) => Promise<void>
   /** Look again now, rather than at the next pass: what a thread beside this
    * one says after it wrote runs down (./registry.ts `nudge`). */
   wake: () => void
@@ -226,7 +226,7 @@ export type Run = { eid: Eid; handler: string; target: Eid; since: number }
  * lease other than `except`'s, still standing, held by a process not known
  * to be gone. */
 export let working = async (
-  g: Graph,
+  g: Access,
   o: {
     /** the asking process, whose own presence does not count */
     except?: Eid
@@ -290,7 +290,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   // Whether this process works the pool, and the graph it works it on: until
   // then, what it commits is written down for somebody else.
   let member = false
-  let graph: Graph | undefined
+  let graph: Access | undefined
   let running = new Map<Eid, Held>()
   let loop: { done: Promise<void>; signal: AbortSignal } | undefined
 
@@ -307,7 +307,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   // are still the ones read — the graph's own precondition, riding on the
   // write like any other (@yaks/graph `$was`).
   let swap = async (
-    g: Graph,
+    g: Access,
     eid: Eid,
     was: Comp,
     patch: Comp,
@@ -332,7 +332,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
 
   // One claimed run: the event rebuilt from what the target holds now, the
   // handler, and the outcome written back under the same claim.
-  let start = (g: Graph, eid: Eid, row: Comp, cause?: string) => {
+  let start = (g: Access, eid: Eid, row: Comp, cause?: string) => {
     let s = handled(String(row.handler))
     let c = peek(g)
     let span: Span | undefined
@@ -393,7 +393,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       }
     }
     let go = async () => {
-      let tx = detached(g.storage)
+      let tx = g.outside
       let kind = String(row.kind) as Kind
       let name = String(row.comp ?? '')
       let [found] = await tx.get([String(row.target)])
@@ -454,7 +454,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
 
   // One pass over what is owed: every row this process can run that nobody
   // holds and whose backoff is up, claimed and started. Returns the runs.
-  let pass = async (g: Graph): Promise<Promise<void>[]> => {
+  let pass = async (g: Access): Promise<Promise<void>[]> => {
     let now = clock()
     let started: Promise<void>[] = []
     // Asked once a pass per owner: a process that ended without letting go
@@ -503,7 +503,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   }
 
   // The claims this process is running, pushed out before they lapse.
-  let renew = async (g: Graph) => {
+  let renew = async (g: Access) => {
     let now = clock()
     for (let [eid, held] of running) {
       if (held.expiry - now > hold / 2) continue
@@ -523,7 +523,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   // the second finds its precondition moved, reads again, and has nothing
   // left to owe.
   let swept = async (
-    g: Graph,
+    g: Access,
     s: Slot,
     query: string,
     tries = 3,
@@ -566,7 +566,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       return swept(g, s, query, tries - 1)
     }
   }
-  let sweep = async (g: Graph) => {
+  let sweep = async (g: Access) => {
     let seen = new Set<string>()
     for (let s of ctx.slots()) {
       let query = s.effect?.sweep
@@ -590,7 +590,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
 
   // The worker that stays up: present, a pass, the claims renewed, a wait.
   // Its presence lease goes with it, so nobody waits out its expiry.
-  let stay = async (g: Graph, signal: AbortSignal) => {
+  let stay = async (g: Access, signal: AbortSignal) => {
     let seat = `${POOL}/${me}`
     let present = !!opts.owner && !!g.vocab.comp(LEASE) &&
       ctx.slots().every((s) => !s.effect || !!s.run)
@@ -628,7 +628,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   // for, its target this process. Owed here, when a process starts working
   // the effects, and never by a commit, so a command passing through, which
   // never joins, owes none.
-  let begin = async (g: Graph) => {
+  let begin = async (g: Access) => {
     let at = stamp(clock())
     let rows: Bundle[] = ctx.slots()
       .filter((s) => s.kind == 'started' && s.run)
@@ -658,7 +658,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   // it owes its start-up work, and what the declared sweeps select is owed a
   // run — how a worker coming up finds what nobody wrote down.
   let joined = false
-  let join = async (g: Graph) => {
+  let join = async (g: Access) => {
     member = true
     if (joined) return
     joined = true

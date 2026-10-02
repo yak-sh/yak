@@ -236,11 +236,17 @@ tools, and transient text. `@yaks/graph/vocab` exports tool declarations as
 `tier` to attach implementations to tool declarations. These are sub-module
 exports.
 
-This package exports the `Bundle`, `Storage`/`Tx`, plugin, rule, and tool
-interfaces plus the graph implementation. It does not choose a database or
+This package exports the `Bundle`, `Storage`/`Tx`/`ReadTx`, plugin, rule, and
+tool interfaces plus the graph implementation. It does not choose a database or
 install domain components for you. A tool is `run(call, graph)`: the call
 entity's bundle, whose arguments `argsOf(call)` reads and whose caller
 `who(call)` reads, and the graph it runs on.
+
+`Access` is the graph's data interface: `vocab`, `read`, `rows`, `get`, `apply`
+and `outside`. A consumer using it can work with a local graph or one owned by
+another thread without reaching its storage. `outside` is a `ReadTx`: detached
+reads of whole committed bundles and binding queries for post-commit handlers.
+Writes still go through `apply()`.
 
 - [@yaks/vocab](../vocab/README.md) loads component schemas.
 - [@yaks/ram](../ram/README.md), [@yaks/sqlite](../sqlite/README.md),

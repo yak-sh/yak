@@ -8,8 +8,8 @@ import {
   type Eid,
   match,
   reads,
+  type ReadTx,
   token,
-  type Tx,
 } from '@yaks/graph'
 import { held, keyed } from '@yaks/key'
 import type { Vocab } from '@yaks/vocab'
@@ -82,7 +82,7 @@ export let outputOf = (build: Eid, slot: string, call: Eid): string =>
 
 /** The build a builder made for an outer tuple, found by its key. */
 export let buildFor = async (
-  g: Pick<Tx, 'get'>,
+  g: Pick<ReadTx, 'get'>,
   builder: Eid,
   entities: (Eid | null)[],
   variant = 'main',
@@ -93,7 +93,7 @@ export let buildFor = async (
 
 /** One call's take in a slot; omitted call means the chosen take. */
 export let outputFor = async (
-  g: Pick<Tx, 'get' | 'read'>,
+  g: Pick<ReadTx, 'get' | 'read'>,
   build: Eid,
   slot = 'main',
   call?: Eid,
@@ -153,7 +153,7 @@ let prune = (
 
 /** Read the complete binding tree and the content of every entity it names. */
 export let selected = async (
-  tx: Tx,
+  tx: ReadTx,
   builder: Bundle,
   vocab: Vocab,
 ): Promise<{ binding: Binding; rows: Map<Eid, Bundle> }[]> => {
@@ -247,7 +247,7 @@ export let start = (
  * `limit`) builds some bindings and leaves every other build as it is, never
  * stale, since a binding it skipped has not vanished. */
 export let reconcile = async (
-  tx: Tx,
+  tx: ReadTx,
   builder: Bundle,
   o: Options,
   at: string = (o.now ?? clock)(),

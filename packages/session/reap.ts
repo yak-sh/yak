@@ -18,7 +18,7 @@
 // one. It is idempotent by construction — a freed lock is gone, so the next
 // start-up finds nothing to do.
 
-import type { Bundle, Comp, Eid, Storage, Tx } from '@yaks/graph'
+import type { Bundle, Comp, Eid, ReadTx, Storage } from '@yaks/graph'
 import { after } from '@yaks/fp'
 import { detached, TOMBSTONE } from '@yaks/graph'
 import { CLAIM, SESSION } from './comp.ts'
@@ -28,7 +28,7 @@ import { CLAIM, SESSION } from './comp.ts'
  * is not a session in this graph. Reads only — hand the result to `apply()` if
  * you want the release journaled and its effects fired.
  */
-export let staleLeases = (tx: Tx): Bundle[] | Promise<Bundle[]> =>
+export let staleLeases = (tx: ReadTx): Bundle[] | Promise<Bundle[]> =>
   after(tx.read(`.${CLAIM}.session`), (locked) => {
     if (!locked.length) return []
     let holder = (b: Bundle) => String((b[CLAIM] as Comp).session)

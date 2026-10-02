@@ -21,7 +21,7 @@
 // this plugin's options and built in ./host.ts. This module composes the
 // capture and knows nothing about processes.
 
-import type { Bundle, Comp, Entity, Tx } from '@yaks/graph'
+import type { Bundle, Comp, Entity, ReadTx } from '@yaks/graph'
 import { after } from '@yaks/fp'
 import type { Handler } from '@yaks/effects'
 import { address, type Blobs, encode } from '@yaks/blob'
@@ -52,7 +52,7 @@ let clock = () => new Date().toISOString()
 // The whole page as it stands after the commit: the handler reads it back from
 // storage rather than from the change that triggered it, so it sees the address
 // however the transaction that wrote it was shaped.
-let whole = (tx: Tx, entity: Entity) =>
+let whole = (tx: ReadTx, entity: Entity) =>
   after(tx.get([entity.eid]), (found) => found[0])
 
 let comp = (b: Bundle | undefined, name: string): Comp | undefined =>

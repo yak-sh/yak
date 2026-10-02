@@ -113,8 +113,12 @@ g.apply([{ entity: { eid: 'p1' }, $delete: true }])
 
 `effects()` returns a graph plugin with registration methods. Code can be
 registered before or after graph construction. Every handler receives
-`(event, tx, write)`: the event, a detached transaction interface for reading
-committed state, and a callback for new graph writes when configured.
+`(event, tx, write)`: the event, a `ReadTx` interface for reading committed
+state, and a callback for new graph writes when configured. The read interface
+has no raw storage writes; every handler write goes through `write` and the
+graph's admission, rules and effects. The pool accepts the graph's `Access`
+interface, including `outside` for these detached reads, so the graph may be
+owned by another thread.
 
 ## Or a pattern — any query over what committed
 

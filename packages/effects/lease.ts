@@ -30,10 +30,10 @@
 
 import { after } from '@yaks/fp'
 import {
+  type Access,
   type Bundle,
   derivedEid,
   type Eid,
-  type Graph,
   Stale,
   token,
 } from '@yaks/graph'
@@ -78,14 +78,14 @@ export type HoldOpts = {
   gone?: (holder: Eid) => boolean | Promise<boolean>
 }
 
-let leaseOf = (g: Graph, eid: Eid): Promise<Lease | undefined> =>
+let leaseOf = (g: Access, eid: Eid): Promise<Lease | undefined> =>
   Promise.resolve(g.get([eid]))
     .then(([row]) => row?.[LEASE] as Lease | undefined)
 
 /** Whether this graph contends at all: a component its vocabulary does not
  * declare cannot be stored on anything in it, so there is one process and the
  * duty is its own. */
-let contested = (g: Graph): boolean => !!g.vocab.comp(LEASE)
+let contested = (g: Access): boolean => !!g.vocab.comp(LEASE)
 
 /**
  * Take a lease, or find out somebody else holds it. Returns whether it is now
@@ -98,7 +98,7 @@ let contested = (g: Graph): boolean => !!g.vocab.comp(LEASE)
  * ```
  */
 export let take = async (
-  g: Graph,
+  g: Access,
   name: string,
   o: HoldOpts,
 ): Promise<boolean> => {
@@ -145,7 +145,7 @@ export let take = async (
  * waiting for the expiry.
  */
 export let drop = async (
-  g: Graph,
+  g: Access,
   name: string,
   o: { holder: Eid },
 ): Promise<void> => {
@@ -173,7 +173,7 @@ export let drop = async (
  * should not have to wait out an expiry nobody is using.
  */
 export let released = (
-  g: Graph,
+  g: Access,
   holder: Eid,
 ): Bundle[] | Promise<Bundle[]> =>
   !contested(g) ? [] : after(
@@ -186,7 +186,7 @@ export let released = (
   )
 
 /** Who holds a lease right now, if anybody — the read a check makes. */
-export let held = (g: Graph, name: string): Promise<Lease | undefined> =>
+export let held = (g: Access, name: string): Promise<Lease | undefined> =>
   contested(g) ? leaseOf(g, leaseEid(name)) : Promise.resolve(undefined)
 
 /** Wait, unless we are done waiting: a sleep the signal cuts short, so a pass
@@ -243,7 +243,7 @@ export type HoldingOpts = HoldOpts & {
  * ```
  */
 export let holding = async <T = void>(
-  g: Graph,
+  g: Access,
   name: string,
   o: HoldingOpts,
   work: (signal: AbortSignal) => T | Promise<T>,

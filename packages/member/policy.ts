@@ -33,7 +33,7 @@
 // synchronous storage (a Map, an embedded database) none of them returns a
 // promise.
 
-import type { Bundle, Comp, Eid, Storage, Tx } from '@yaks/graph'
+import type { Bundle, Comp, Eid, ReadTx, Storage } from '@yaks/graph'
 import { after } from '@yaks/fp'
 import { detached } from '@yaks/graph'
 import { and, eq, or } from '@yaks/query'
@@ -72,7 +72,7 @@ let of = (b: Bundle | undefined, name: string): Comp | undefined =>
 /** The app's access mode, read through a transaction: its `access` and
  * nothing else, since this runs on every request and a whole read of an
  * entity can ask every table the vocabulary has. */
-export let modeOn = (tx: Tx, app: Eid): Mode | Promise<Mode> =>
+export let modeOn = (tx: ReadTx, app: Eid): Mode | Promise<Mode> =>
   after(tx.get([app], [ACCESS]), ([b]) => mode(of(b, ACCESS)?.mode))
 
 /**
@@ -89,7 +89,7 @@ export let modeOn = (tx: Tx, app: Eid): Mode | Promise<Mode> =>
  * memberships and grants, which is a handful, and a handful in one response
  * beats two round trips.
  */
-let filed = (tx: Tx, who: Eid): Bundle[] | Promise<Bundle[]> =>
+let filed = (tx: ReadTx, who: Eid): Bundle[] | Promise<Bundle[]> =>
   tx.about ? tx.about([who], [GRANT, MEMBER]) : tx.read(
     and(or(eq(`${GRANT}.person`, who), eq(`${MEMBER}.person`, who))),
   )
@@ -100,7 +100,7 @@ let filed = (tx: Tx, who: Eid): Bundle[] | Promise<Bundle[]> =>
  * which is not a refusal, only the answer that the app's mode decides.
  */
 export let levelOn = (
-  tx: Tx,
+  tx: ReadTx,
   who: Viewer,
   app: Eid,
   where: Where = {},
@@ -128,7 +128,7 @@ export let levelOn = (
 
 /** May they read it? The mode is not `private`, or they hold something. */
 export let readsOn = (
-  tx: Tx,
+  tx: ReadTx,
   who: Viewer,
   app: Eid,
   where: Where = {},
@@ -143,7 +143,7 @@ export let readsOn = (
 
 /** May they write it? The mode is `open`, or they hold owner or editor. */
 export let writesOn = (
-  tx: Tx,
+  tx: ReadTx,
   who: Viewer,
   app: Eid,
   where: Where = {},

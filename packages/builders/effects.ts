@@ -7,7 +7,7 @@
 // `builder build` builds it until the mark comes off, and `builder_open`
 // answers that removal.
 
-import { type Bundle, type Comp, Stale, token, type Tx } from '@yaks/graph'
+import { type Bundle, type Comp, type ReadTx, Stale, token } from '@yaks/graph'
 import type { Handler, Handlers } from '@yaks/effects'
 import type { Vocab } from '@yaks/vocab'
 import { and, eq } from '@yaks/query'
@@ -25,7 +25,7 @@ let comp = (b: Bundle | undefined, name: string): Comp | undefined =>
 
 let settle = async (
   eid: string,
-  tx: Tx,
+  tx: ReadTx,
   write: Parameters<Handler>[2],
   o: Options,
   scheduled: boolean,

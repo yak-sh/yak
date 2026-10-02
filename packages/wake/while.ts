@@ -22,9 +22,9 @@ import {
   type Bundle,
   type Hook,
   type Query,
+  type ReadTx,
   Stale,
   token,
-  type Tx,
 } from '@yaks/graph'
 import { and, limit, parse } from '@yaks/query'
 import { WAKE, type Wake } from './comp.ts'
@@ -147,7 +147,7 @@ export let rouse = async (
 
 // One `while` entry, refused unless it is a query this graph can answer and a
 // cadence `every` can read.
-let entry = (tx: Tx, e: unknown, i: number): unknown => {
+let entry = (tx: ReadTx, e: unknown, i: number): unknown => {
   let { match, every } = (e ?? {}) as { match?: unknown; every?: unknown }
   if (typeof match != 'string' || typeof every != 'string') {
     throw new TypeError(

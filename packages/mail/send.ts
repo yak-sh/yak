@@ -23,7 +23,7 @@
 // reads are @yaks/doc's `doc{title, body}`. So the composition works from the
 // whole entity, which is what the effect reads anyway.
 
-import type { Bundle, Comp, Entity, Tx } from '@yaks/graph'
+import type { Bundle, Comp, Entity, ReadTx } from '@yaks/graph'
 import { after } from '@yaks/fp'
 import type { Handler } from '@yaks/effects'
 import { BODY, DOC, TITLE } from '@yaks/doc'
@@ -81,7 +81,7 @@ let clock = () => new Date().toISOString()
  * rather than from the patch, so it sees `mail` and `deliver` together however
  * the transaction that wrote them was shaped. */
 export let letterOf = (
-  tx: Tx,
+  tx: ReadTx,
   entity: Entity,
 ): Bundle | undefined | Promise<Bundle | undefined> =>
   after(tx.get([entity.eid]), (found) => found[0])
@@ -102,14 +102,14 @@ export let owed = (letter: Bundle | undefined): boolean =>
 
 /** The address an entity is reachable at: its own `email.address`. */
 export let addressOf = (
-  tx: Tx,
+  tx: ReadTx,
   eid: string,
 ): string | Promise<string> =>
   after(tx.get([eid]), (found) => str(comp(found[0], EMAIL), 'address'))
 
 // The Message-ID a reply threads on: the answered letter's own, whether it
 // arrived with it or our transport gave it one when it left.
-let threadOf = (tx: Tx, eid: string): string | Promise<string> =>
+let threadOf = (tx: ReadTx, eid: string): string | Promise<string> =>
   after(tx.get([eid]), (found) => str(comp(found[0], MAIL), 'message_id'))
 
 /**

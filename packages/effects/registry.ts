@@ -42,15 +42,15 @@
 // reads, never by a rule each handler has to remember.
 
 import type {
+  Access,
   Bundle,
   Comp,
   Eid,
-  Graph,
   Hook,
   HookContext,
   Match,
   Plugin,
-  Tx,
+  ReadTx,
 } from '@yaks/graph'
 import { after, each, isPromise, over } from '@yaks/fp'
 import { during, link, peek, unlink } from '@yaks/trace'
@@ -90,7 +90,7 @@ export type { Description, Policy, Registration } from './registration.ts'
  * awaited when it is a promise. */
 export type Handler = (
   event: Event,
-  tx: Tx,
+  tx: ReadTx,
   write: Write,
   attempt?: Attempt,
 ) => unknown
@@ -206,7 +206,7 @@ export type Effects = Plugin & {
    * keeps working until it aborts; an aborted one is one pass, taken only
    * where no process that stays up is working the pool. Does nothing where
    * the vocabulary keeps no `effect` rows. */
-  work: (g: Graph, signal?: AbortSignal) => Promise<void>
+  work: (g: Access, signal?: AbortSignal) => Promise<void>
   /** Look at the pool again now, rather than at the next pass. */
   wake: () => void
   /** Settles once every run this process started has, and a worker whose
@@ -422,7 +422,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
   let hits = (
     s: Slot,
     bundles: Bundle[],
-    tx: Tx,
+    tx: ReadTx,
   ): Event[] | Promise<Event[]> => {
     let plan = s.plan!
     let touched = new Set<Eid>(bundles.map((b) => b.entity.eid))
@@ -478,7 +478,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
   // pattern this storage cannot answer is reported, never a failed batch.
   let matched = (
     bundles: Bundle[],
-    tx: Tx,
+    tx: ReadTx,
     which: (s: Slot) => boolean,
   ): [Slot, Event][] | Promise<[Slot, Event][]> => {
     let chosen = slots.filter(which)
@@ -546,7 +546,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
   let fire = (
     s: Slot,
     event: Event,
-    tx: Tx,
+    tx: ReadTx,
     write: Write,
     gen: number,
     context?: HookContext,

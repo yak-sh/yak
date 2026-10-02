@@ -53,8 +53,8 @@ import {
   identityEid,
   minted,
   type Plugin,
+  type ReadTx,
   Refused,
-  type Tx,
 } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
 import { edgeEid } from '@yaks/edge'
@@ -88,7 +88,7 @@ export let RESPONSE = 'response'
  * A name both a provider and a model hold is refused rather than guessed.
  */
 export let addressed = (
-  tx: Tx,
+  tx: ReadTx,
   ids: string[],
 ): Map<string, Eid> | Promise<Map<string, Eid>> => {
   let ask = [...new Set(ids)].filter((id) =>

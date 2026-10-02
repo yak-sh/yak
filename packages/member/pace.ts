@@ -16,7 +16,7 @@
 // no write of it, so a retry of the same line is not refused for its own
 // first landing.
 
-import type { Bundle, Comp, Eid, Tx } from '@yaks/graph'
+import type { Bundle, Comp, Eid, ReadTx } from '@yaks/graph'
 import { after, each } from '@yaks/fp'
 import { dead } from '@yaks/graph'
 import { absent, and, eq, ge, or, present } from '@yaks/query'
@@ -116,7 +116,7 @@ let writes = (b: Bundle, comp: string, row: Bundle | undefined) => {
  */
 export let pacing = (
   paces: Paces,
-  tx: Tx,
+  tx: ReadTx,
   who: Eid | null,
   bundles: Bundle[],
   now: number = Date.now(),

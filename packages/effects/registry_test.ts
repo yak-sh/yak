@@ -6,7 +6,7 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import type { Bundle, Storage, Tx } from '@yaks/graph'
+import type { Bundle, Storage } from '@yaks/graph'
 import { isPromise } from '@yaks/fp'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -147,10 +147,15 @@ test('a rejecting handler is reported, and the batch still returns', async () =>
 })
 
 test("a handler's write-back commits and is visible", () => {
-  let { fx, g, apply } = fixture()
-  fx.changed('post', 'published', (e, tx: Tx) => {
-    tx.patch([{ entity: { eid: 's1' }, subscriber: { email: e.entity.eid } }])
-  })
+  let fx = effects(blog, { write: (b) => g.apply(b) })
+  let g = blogGraph([fx])
+  let apply = (b: Bundle[]) => sync(g.apply(b))
+  fx.changed(
+    'post',
+    'published',
+    (e, _tx, write) =>
+      write([{ entity: { eid: 's1' }, subscriber: { email: e.entity.eid } }]),
+  )
   apply([post('p1')])
   apply([post('p1', { published: true })])
   let [sub] = g.read('.subscriber') as Bundle[]
