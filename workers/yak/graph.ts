@@ -1,3 +1,4 @@
+import { ids } from '@yaks/id/rules'
 import { choices } from '@yaks/builders'
 import { recovering } from './models.ts'
 import { archetypes } from '@yaks/archetype'
@@ -948,6 +949,7 @@ export class Store {
         // The carrier and the one kind of it every store speaks: a name, which
         // is how anything addresses a row it wrote last week without having
         // kept the eid. The carrier goes first — the name rides it (T-34390).
+        ids(vocab),
         keys(vocab),
         choices(),
         aliases(),

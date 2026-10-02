@@ -100,3 +100,36 @@ test('app vocab speaks the shared docs+keywords wire; census is a normal query',
   assertEquals(tally.status, 200)
   assertEquals(typeof await tally.json(), 'object')
 })
+
+test('unnumbered app entity links resolve short handles through the store wire', async () => {
+  using p = platform({ ASSETS: assets })
+  let { env } = p
+  await seeded(env, 'private')
+  let cookie = await as(ADA)
+  let eid = 'dcabf321-8170-4c7f-87fb-2c419bcdf532'
+  let written = await apps.fetch(
+    visit('/cookbook/api/apply', {
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify([{
+        entity: { eid },
+        doc: { title: 'Linked app document' },
+      }]),
+    }),
+    env,
+  )
+  assertEquals(written.status, 200)
+  let ask = (q: string) =>
+    apps.fetch(
+      visit('/cookbook/api/query?q=' + encodeURIComponent(q), {
+        headers: { cookie },
+      }),
+      env,
+    )
+  let short = await ask('.entity.eid=#dcabf32181&*')
+  assertEquals(short.status, 200)
+  assertEquals((await short.json())[0].entity.eid, eid)
+  let numbered = await ask('.entity.eid=T-1&*')
+  assertEquals(numbered.status, 200)
+  assertEquals(await numbered.json(), [])
+})

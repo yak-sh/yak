@@ -105,3 +105,19 @@ test('a handle two entities share, or one with a letter, names nothing', async (
   assertEquals(await at('T#47e9678bdf1'), { 'T#47e9678bdf1': null })
   assertEquals(await at('#deadbeef00'), { '#deadbeef00': null })
 })
+
+test('handles resolve without numbered vocabulary, and numbers do not ask for absent columns', async () => {
+  let plain = loadVocab([{
+    $defs: { doc: { component: true, properties: {} } },
+  }])
+  let before = asked.length
+  let resolve = (tokens: string[]) => ids(plain).address!(tx, tokens)
+  assertEquals(Object.fromEntries(await resolve(['#c0ffee01'])), {
+    '#c0ffee01': 'c0ffee0123456789',
+  })
+  assertEquals(Object.fromEntries(await resolve(['T-7'])), {})
+  assertEquals(
+    asked.slice(before).some((q) => q.startsWith('.entity.num')),
+    false,
+  )
+})

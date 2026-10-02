@@ -70,8 +70,11 @@ export let ids = (vocab: Vocab): Plugin => {
       let lettered: string[] = []
       for (let id of said) {
         let p = parse(id)
-        if (p) want.set(p.num, [...want.get(p.num) ?? [], id])
-        else if (SHORT.test(id)) handles.push(id)
+        if (p) {
+          if (vocab.prop('entity', 'num')) {
+            want.set(p.num, [...want.get(p.num) ?? [], id])
+          }
+        } else if (SHORT.test(id)) handles.push(id)
         else if (LETTERED.test(id)) lettered.push(id)
       }
       let at = new Map<string, Eid | null>()
