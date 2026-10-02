@@ -14,20 +14,42 @@ export let listed = (r: Row): Listed => ({
   ...r.name ? { label: r.name } : {},
   ...r.context_length ? { context: r.context_length } : {},
   ...r.architecture?.output_modalities
-    ? { modalities: r.architecture.output_modalities } : {},
-  ...r.pricing?.prompt != null && r.pricing.completion != null ? {
-    price: {
-      input: Number(r.pricing.prompt) * 1e6,
-      output: Number(r.pricing.completion) * 1e6,
-      ...r.pricing.input_cache_read != null
-        ? { cached: Number(r.pricing.input_cache_read) * 1e6 } : {},
-    },
-  } : {},
+    ? {
+      modalities: r.architecture.output_modalities.map((m) =>
+        m == 'speech' ? 'audio' : m
+      ),
+    }
+    : {},
+  ...r.pricing?.prompt != null && r.pricing.completion != null
+    ? {
+      price: {
+        input: Number(r.pricing.prompt) * 1e6,
+        output: Number(r.pricing.completion) * 1e6,
+        ...r.pricing.input_cache_read != null
+          ? { cached: Number(r.pricing.input_cache_read) * 1e6 }
+          : {},
+      },
+    }
+    : {},
 })
 
-export let listing = async (fetcher: typeof fetch = fetch): Promise<Listed[]> => {
+export let listing = async (
+  fetcher: typeof fetch = fetch,
+): Promise<Listed[]> => {
   let res = await fetcher('https://openrouter.ai/api/v1/models')
   if (!res.ok) throw new Error(`OpenRouter models says ${res.status}`)
   let body: { data: Row[] } = await res.json()
   return body.data.map(listed)
+}
+
+/** Speech is a provider endpoint capability, not a list kept in code. */
+export let speechModels = async (
+  fetcher: typeof fetch = fetch,
+): Promise<string[]> => {
+  let res = await fetcher(
+    'https://openrouter.ai/api/v1/models?output_modalities=speech',
+  )
+  if (!res.ok) throw new Error(`OpenRouter models says ${res.status}`)
+  let body: { data: Row[] } = await res.json()
+  return body.data.map((r) => r.id)
 }

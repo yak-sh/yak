@@ -116,7 +116,12 @@ export type Ask = {
 }
 
 /** What a model answered: its words, the tools it wants run, what it spent. */
-export type Answer = { text: string; calls: Call[]; usage: Usage; cost?: number }
+export type Answer = {
+  text: string
+  calls: Call[]
+  usage: Usage
+  cost?: number
+}
 
 /** A model, whichever provider it is behind, and its price in the catalogue
  * (models.ts). One with no price is never asked: what it spent could not be
@@ -633,11 +638,15 @@ export let build = async (
     rounds++
     if (answer.cost == null && !price) price = (await modelInfo(model.id)).price
     // Estimates charge the budget, never masquerade as reported usage.
-    dollars += answer.cost ?? (price ? weigh(price, {
-      input_tokens: answer.usage.input ?? guess({ system, lines, fns }),
-      output_tokens: answer.usage.output ?? guess(answer.text),
-      cached_tokens: answer.usage.cached,
-    }) : (() => { throw new Error(unpriced(model.id)) })())
+    dollars += answer.cost ?? (price
+      ? weigh(price, {
+        input_tokens: answer.usage.input ?? guess({ system, lines, fns }),
+        output_tokens: answer.usage.output ?? guess(answer.text),
+        cached_tokens: answer.usage.cached,
+      })
+      : (() => {
+        throw new Error(unpriced(model.id))
+      })())
     usage.input = sum(usage.input, answer.usage.input)
     usage.output = sum(usage.output, answer.usage.output)
     usage.cached = sum(usage.cached, answer.usage.cached)

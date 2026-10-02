@@ -65,7 +65,10 @@ test('a name a provider and a model both hold is refused', () => {
 
 test('a new name on a staged builder exists pending, never offered', () => {
   let g = shelf()
-  g.apply([{ entity: { eid: E }, using: { provider: 'codex', model: 'new-release' } }])
+  g.apply([{
+    entity: { eid: E },
+    using: { provider: 'codex', model: 'new-release' },
+  }])
   let eid = identityEid('model', ['new-release'])
   let [row] = g.get([eid]) as Bundle[]
   assertEquals(row.model, { name: 'new-release', offered: false })

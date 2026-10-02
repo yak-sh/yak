@@ -29,7 +29,13 @@ import type { Plugin } from './plugin.ts'
 import { mailedTo } from './post.ts'
 import { reporting } from './wake.ts'
 import { refuse } from './tool.ts'
-import { type Model, ModelError, weigh } from '@yaks/model'
+import {
+  type Listed,
+  type Model,
+  ModelError,
+  type Price,
+  weigh,
+} from '@yaks/model'
 import { LIMIT } from '@yaks/session/status'
 import {
   type Binding,
@@ -827,6 +833,10 @@ export let metering = (
 export let metered = (
   bind: { AI?: Binding; STORE?: Namespace; MODEL_FETCH?: typeof fetch } & Host,
   spaceOf: (dir: Directory) => Promise<Space | null>,
+  rows?: {
+    price(name: string): Promise<Price | undefined>
+    answered(name: string, info: Listed): Promise<void>
+  },
 ): Binding => ({
   run: async (model, input, options) => {
     let ns = bind.STORE
@@ -848,15 +858,24 @@ export let metered = (
       }
       throw said
     })
-    let price = (await modelInfo(model, bind.MODEL_FETCH)).price
+    let held = await rows?.price(model)
+    let info = held
+      ? { name: model, price: held }
+      : await modelInfo(model, bind.MODEL_FETCH)
+    let price = info.price
+    await rows?.answered(model, info)
     let n = usageOf(answer)
     let cost = music(model)
       ? (await pricedAudio(model, input, said(answer))).cost
-      : price ? weigh(price, {
+      : price
+      ? weigh(price, {
         input_tokens: n.input_tokens ?? guess(input),
         output_tokens: n.output_tokens ?? guess(answer),
         cached_tokens: n.cached_tokens,
-      }) : (() => { throw new Error(`No price reported for ${model}`) })()
+      })
+      : (() => {
+        throw new Error(`No price reported for ${model}`)
+      })()
     await countedSpend({ STORE: ns }, space, cost, 0)
     return answer
   },

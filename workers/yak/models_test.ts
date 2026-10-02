@@ -62,9 +62,17 @@ let vale = async (
     },
     gateway: () => ({ getUrl: () => Promise.resolve('') }),
   })
-  let p = platform('a probe secret', { AI, MODEL_FETCH: async () =>
-    new Response('Context Window | 100,000 tokens\nUnit Pricing | $0.15 per M input tokens, $0.5 per M output tokens, $0.03 per M cached input tokens'),
-    ...env } as Partial<Env>)
+  let p = platform(
+    'a probe secret',
+    {
+      AI,
+      MODEL_FETCH: async () =>
+        new Response(
+          'Context Window | 100,000 tokens\nUnit Pricing | $0.15 per M input tokens, $0.5 per M output tokens, $0.03 per M cached input tokens',
+        ),
+      ...env,
+    } as Partial<Env>,
+  )
   let dir = directory({ fetch: (r) => dirPart.fetch(r, p.env) }, true)
   await dir.apply({
     entities: [
@@ -191,6 +199,15 @@ test('a connected OpenRouter model puts generated audio in the app store', async
   globalThis.fetch =
     (async (input: string | URL | Request, init?: RequestInit) => {
       let sent = new Request(input, init)
+      if (sent.url.includes('/models')) {
+        return Response.json({
+          data: [{
+            id: SEED,
+            name: 'Seed',
+            architecture: { output_modalities: ['speech'] },
+          }],
+        })
+      }
       calls++
       if (sent.url.includes('/generation?')) {
         assertEquals(sent.headers.get('authorization'), 'Bearer ' + key)
@@ -313,9 +330,12 @@ let asking = (
     entity: { eid: crypto.randomUUID() },
     entry: { session },
     content: { body: 'a stranger comes to the forge' },
-    using: { model, provider: identityEid('provider', [
-      model.startsWith('@cf/') || model == JEV ? 'workers-ai' : 'openrouter',
-    ]) },
+    using: {
+      model,
+      provider: identityEid('provider', [
+        model.startsWith('@cf/') || model == JEV ? 'workers-ai' : 'openrouter',
+      ]),
+    },
   },
 ]
 
@@ -489,10 +509,16 @@ test('./api/ai/run answers what the model said, and the space pays for it', asyn
     said: { response: 'Welcome.', usage },
   })
   assertEquals(v.asked, [{ model: FLASH, input, options: undefined }])
-  let cost = weigh({ input: 0.15, cached: 0.03, output: 0.5 }, { input_tokens: 2_000, output_tokens: 50 })
+  let cost = weigh({ input: 0.15, cached: 0.03, output: 0.5 }, {
+    input_tokens: 2_000,
+    output_tokens: 50,
+  })
   assertAlmostEquals((await v.spent()).meter!.models, cost)
   // A release not previously requested goes straight to its provider.
-  assertEquals((await v.run({ model: '@cf/example/new-release', input })).status, 200)
+  assertEquals(
+    (await v.run({ model: '@cf/example/new-release', input })).status,
+    200,
+  )
   assertEquals(v.asked.length, 2)
 })
 

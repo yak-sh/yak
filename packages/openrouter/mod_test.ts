@@ -46,6 +46,7 @@ const events = [
 test('OpenRouter shares Responses transport but not credentials, anchors or native tools', async () => {
   const seen: Record<string, unknown>[] = []
   const model = responses({
+    speech: [],
     key: () => 'test-key',
     fetch: (url, init) => {
       assertEquals(url, 'https://openrouter.ai/api/v1/responses')
@@ -105,6 +106,7 @@ test('OpenRouter propagates cancellation without replaying streaming calls', asy
   let calls = 0
   const controller = new AbortController()
   const model = responses({
+    speech: [],
     key: () => 'test',
     fetch: (_url, init) =>
       new Promise((_resolve, reject) => {
@@ -132,6 +134,7 @@ test('OpenRouter propagates cancellation without replaying streaming calls', asy
 test('vision input uses Responses image parts and HTTP 400 fails without retry', async () => {
   let seen: Record<string, unknown>[] = []
   const model = responses({
+    speech: [],
     key: () => 'private-key',
     fetch: (_url, init) => {
       seen.push(JSON.parse(String(init?.body)))
@@ -172,6 +175,7 @@ test('streamed OpenRouter audio becomes one blob artifact with no encoded bytes 
   let encoded = btoa(String.fromCharCode(...bytes))
   let seen: Record<string, unknown> = {}
   let model = responses({
+    speech: [],
     key: () => 'test-key',
     media: { store: artifactStore(memoryBlobs()) },
     fetch: (url, init) => {
@@ -227,6 +231,7 @@ test('OpenRouter image output shares the artifact path', async () => {
   let png =
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aG7cAAAAASUVORK5CYII='
   let model = responses({
+    speech: [],
     key: () => 'test',
     media: { store: artifactStore(memoryBlobs()) },
     fetch: (_url, init) => {
@@ -312,6 +317,7 @@ test('a speech model uses the audio door and stores its bytes as an artifact', a
 
 test('media connection faults are bounded without exposing credentials', async () => {
   let model = responses({
+    speech: [],
     key: () => 'private-test-key',
     media: { store: artifactStore(memoryBlobs()) },
     fetch: () => Promise.reject(new Error('private-test-key')),
@@ -334,6 +340,7 @@ test('media connection faults are bounded without exposing credentials', async (
 test('media HTTP failures tell the session which ones can retry', async () => {
   for (let status of [400, 503]) {
     let model = responses({
+      speech: [],
       key: () => 'fake',
       media: { store: artifactStore(memoryBlobs()) },
       fetch: () =>
@@ -360,6 +367,7 @@ test('media HTTP failures tell the session which ones can retry', async () => {
 test('audio with no inline bill queries its generation without regenerating', async () => {
   let posts = 0, reads = 0
   let model = responses({
+    speech: [],
     key: () => 'fixture-key',
     media: { store: artifactStore(memoryBlobs()) },
     fetch: (url, init) => {

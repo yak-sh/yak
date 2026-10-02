@@ -1,4 +1,4 @@
-import { listing, type Listing } from './list.ts'
+import { type Listing, listing, modelInfo } from './list.ts'
 export { listed, listing, modelInfo, pagePrice } from './list.ts'
 /**
  * @yaks/workers-ai implements @yaks/model's {@link Model} over Cloudflare
@@ -296,70 +296,73 @@ export let workersAi = (
   ai: Binding,
   options: { media?: MediaStore; fetch?: typeof fetch } = {},
 ): Model =>
-Object.assign(async (req: Request) => {
-  req.signal?.throwIfAborted()
-  if (music(req.model) && !options.media) {
-    throw new ModelError('media_storage', 'Music requires artifact storage')
-  }
-  let sent = music(req.model) ? musicInput(req) : input(req)
-  let out = said(
-    await ai.run(
-      req.model,
-      sent,
-      req.conversation
-        ? { extraHeaders: { 'x-session-affinity': req.conversation } }
-        : undefined,
-    ).catch((e) => {
-      throw failure(e)
-    }),
-  )
-  req.signal?.throwIfAborted()
-  let id = str(at(out, 'id')) || crypto.randomUUID()
-  if (music(req.model)) {
-    let audio = await pricedAudio(req.model, sent, out, {
-      fetch: options.fetch,
-      signal: req.signal,
-      maxBytes: options.media?.maxBytes,
-    })
-    let artifact = await generatedBytes(
-      audio.bytes,
-      audio.mediaType,
-      id + ':audio',
-      options.media,
-    )
-    return {
-      id,
-      model: req.model,
-      items: [],
-      artifacts: [artifact],
-      cost: audio.cost,
-      costReported: false,
+  Object.assign(async (req: Request) => {
+    req.signal?.throwIfAborted()
+    if (music(req.model) && !options.media) {
+      throw new ModelError('media_storage', 'Music requires artifact storage')
     }
-  }
-  let u = usageOf(out)
-  let counted = Object.keys(u).length ? { usage: u } : {}
-  if (req.questions) {
+    let sent = music(req.model) ? musicInput(req) : input(req)
+    let out = said(
+      await ai.run(
+        req.model,
+        sent,
+        req.conversation
+          ? { extraHeaders: { 'x-session-affinity': req.conversation } }
+          : undefined,
+      ).catch((e) => {
+        throw failure(e)
+      }),
+    )
+    req.signal?.throwIfAborted()
+    let id = str(at(out, 'id')) || crypto.randomUUID()
+    if (music(req.model)) {
+      let audio = await pricedAudio(req.model, sent, out, {
+        fetch: options.fetch,
+        signal: req.signal,
+        maxBytes: options.media?.maxBytes,
+      })
+      let artifact = await generatedBytes(
+        audio.bytes,
+        audio.mediaType,
+        id + ':audio',
+        options.media,
+      )
+      return {
+        id,
+        model: req.model,
+        items: [],
+        artifacts: [artifact],
+        cost: audio.cost,
+        costReported: false,
+      }
+    }
+    let u = usageOf(out)
+    let counted = Object.keys(u).length ? { usage: u } : {}
+    if (req.questions) {
+      return {
+        id,
+        model: req.model,
+        items: [],
+        answers: answers(out, req.model),
+        ...counted,
+      }
+    }
+    // Some models in the catalog answer the binding's own shape and some
+    // answer OpenAI's; both are read, so a change of model is a change of id.
+    let chat = at(out, 'choices', 0, 'message')
+    let text = String(at(out, 'response') ?? at(chat, 'content') ?? '')
+    if (text) req.onText?.({ index: 0, text })
+    let words: Item[] = text ? [{ kind: 'assistant', text }] : []
     return {
       id,
       model: req.model,
-      items: [],
-      answers: answers(out, req.model),
+      items: [
+        ...words,
+        ...calls(at(out, 'tool_calls') ?? at(chat, 'tool_calls'), id),
+      ],
       ...counted,
     }
-  }
-  // Some models in the catalog answer the binding's own shape and some
-  // answer OpenAI's; both are read, so a change of model is a change of id.
-  let chat = at(out, 'choices', 0, 'message')
-  let text = String(at(out, 'response') ?? at(chat, 'content') ?? '')
-  if (text) req.onText?.({ index: 0, text })
-  let words: Item[] = text ? [{ kind: 'assistant', text }] : []
-  return {
-    id,
-    model: req.model,
-    items: [
-      ...words,
-      ...calls(at(out, 'tool_calls') ?? at(chat, 'tool_calls'), id),
-    ],
-    ...counted,
-  }
-}, { list: () => listing(ai) })
+  }, {
+    list: () => listing(ai),
+    info: (name: string) => modelInfo(name, options.fetch),
+  })

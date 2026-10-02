@@ -10,7 +10,7 @@ import {
 } from '@yaks/session'
 import { worded } from '@yaks/tools'
 import { edits, mode, writes } from '@yaks/member'
-import { type Model, ModelError, type Price } from '@yaks/model'
+import { confirmed, type Model, ModelError, type Price } from '@yaks/model'
 
 import type { VocabDoc } from '@yaks/vocab'
 import { music, said, workersAi } from '@yaks/workers-ai'
@@ -48,7 +48,8 @@ export let planting: Install = async (read, at) => {
     held.some((b) => (b.provider as Comp).name == name) ? [] : [{
       entity: { eid: identityEid('provider', [name]) },
       provider: { name, transport: 'http', offered: true },
-    }])
+    }]
+  )
 }
 
 // Who asked for the turn a tool call belongs to: the author of the newest
@@ -153,8 +154,21 @@ let connected = (at: Stored) =>
  */
 let asking: Effect = (on, at) => {
   if (at.meta || !at.app) return
-<<<<<<< HEAD
-  let text = workersAi(metered(at.env, payer(at.app)))
+  let text = workersAi(
+    metered(at.env, payer(at.app), {
+      price: async (name) => {
+        let [row] = await at.graph.get([identityEid('model', [name])])
+        return row?.price as Price | undefined
+      },
+      answered: async (name, info) => {
+        await at.graph.apply(
+          confirmed(identityEid('provider', [PROVIDER]), name, info),
+          { trusted: true },
+        )
+      },
+    }),
+    { fetch: at.env.MODEL_FETCH },
+  )
   let audio = accounted(
     at.env,
     payer(at.app),
@@ -162,15 +176,14 @@ let asking: Effect = (on, at) => {
       media: mediaStore(at),
     }),
   )
-  let served: Model = (req) => music(req.model) ? audio(req) : text(req)
+  let served: Model = Object.assign(
+    (req: Parameters<Model>[0]) => music(req.model) ? audio(req) : text(req),
+    { info: (name: string) => text.info!(name) },
+  )
   let lent = {
     [PROVIDER]: served,
     [OPENROUTER]: accounted(at.env, payer(at.app), connected(at)),
   }
-=======
-  let served = workersAi(metered(at.env, payer(at.app)), { media: mediaStore(at) })
-  let lent = { [PROVIDER]: served, [OPENROUTER]: connected(at) }
->>>>>>> 10d14b290 (Discover requested models from provider answers (T-63093, work in progress))
   let run = running(at.graph, {
     holder: at.app,
     model: served,

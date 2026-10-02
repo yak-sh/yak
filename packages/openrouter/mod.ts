@@ -1,4 +1,4 @@
-import { listing } from './list.ts'
+import { listing, speechModels } from './list.ts'
 export { listed, listing } from './list.ts'
 /** OpenRouter's stateless OpenResponses adapter. */
 import type { Model, Reply, Request } from '@yaks/model'
@@ -33,8 +33,14 @@ export let responses = (options: Options): Model => {
       web: false,
       shape: (body) => responseBody(req, body),
     })
-  let model: Model = (request) =>
-    options.speech?.includes(request.model)
+  let speechNames: Promise<string[]> | undefined
+  let models: ReturnType<typeof listing> | undefined
+  let model: Model = async (request) => {
+    await options.key()
+    let audio = request.modalities?.includes('audio')
+    let names = options.speech ??
+      (audio ? await (speechNames ??= speechModels(options.fetch)) : [])
+    return names.includes(request.model)
       ? speech(request, options)
       : request.modalities?.some((m) => m == 'audio' || m == 'image')
       ? chat(request, options)
@@ -45,10 +51,13 @@ export let responses = (options: Options): Model => {
         tools: tools(request.tools),
         anchor: undefined,
       })
+  }
   return Object.assign(
     model,
     {
-      list: () => listing(options.fetch),
+      list: () => models ??= listing(options.fetch),
+      info: async (name: string) =>
+        (await (models ??= listing(options.fetch))).find((m) => m.name == name),
       vocab: openrouterDoc,
       mark: (reply: Reply) => ({ openrouter: { response_id: reply.id } }),
     },

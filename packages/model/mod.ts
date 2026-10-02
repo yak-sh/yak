@@ -45,11 +45,11 @@
 
 import { after } from '@yaks/fp'
 import {
-  dead,
   type Bundle,
   type Comp,
-  type Hook,
+  dead,
   type Eid,
+  type Hook,
   identityEid,
   minted,
   type Plugin,
@@ -257,6 +257,7 @@ export type Mark = Record<string, Record<string, unknown>>
  */
 export type Model = ((req: Request) => Promise<Reply>) & {
   list?: () => Promise<Listed[]>
+  info?: (name: string) => Promise<Listed | undefined>
   mark?: (reply: Reply) => Mark
   anchor?: (comps: Record<string, unknown>) => string | undefined
   vocab?: VocabDoc
@@ -309,21 +310,31 @@ export let requesting: Hook = (bundles, tx) => {
   let out: Bundle[] = bundles.map((b) => {
     let using = b.using as Comp | undefined
     let name = using?.model
-    if (typeof name != 'string' || minted(name) || name.startsWith('$')) return b
+    if (typeof name != 'string' || minted(name) || name.startsWith('$')) {
+      return b
+    }
     let eid = identityEid(MODEL, [name])
     names.set(eid, name)
     return { ...b, using: { ...using, model: eid } }
   })
   for (let b of out) {
     let name = (b.model as Comp | undefined)?.name
-    if (typeof name == 'string') names.set(identityEid(MODEL, [name]), name)
+    if (typeof name == 'string' && b.pending !== null) {
+      names.set(identityEid(MODEL, [name]), name)
+    }
   }
   return after(tx.get([...names.keys()], [MODEL, 'pending']), (rows) => {
     let held = new Map(rows.map((b) => [b.entity.eid, b]))
-    return [...out, ...[...names].flatMap(([eid, name]): Bundle[] =>
-      held.get(eid)?.model ? [] : [{
-        entity: { eid }, model: { name, offered: false }, pending: {},
-      }])]
+    return [
+      ...out,
+      ...[...names].flatMap(([eid, name]): Bundle[] =>
+        held.get(eid)?.model ? [] : [{
+          entity: { eid },
+          model: { name, offered: false },
+          pending: {},
+        }]
+      ),
+    ]
   })
 }
 
@@ -336,10 +347,13 @@ export let confirmed = (
   let eid = identityEid(MODEL, [name])
   let { price, ...model } = listing ?? { name }
   return [{
-    entity: { eid }, model: { ...model, name, offered: true }, pending: null,
+    entity: { eid },
+    model: { ...model, name, offered: true },
+    pending: null,
     ...price ? { price } : {},
   }, {
     entity: { eid: edgeEid(provider, 'serves', eid) },
-    edge: { from: provider, to: eid }, serves: { name },
+    edge: { from: provider, to: eid },
+    serves: { name },
   }]
 }

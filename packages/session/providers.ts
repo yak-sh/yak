@@ -83,8 +83,12 @@ async (using, model) => {
   if (using?.provider && !all.some((o) => o.provider == using.provider)) {
     let [row] = await g.get([String(using.provider)])
     let provider = String((row?.provider as Comp | undefined)?.name ?? '')
-    all.push({ provider: String(using.provider), model: model.entity.eid,
-      name: String((model.model as Comp).name), serve: implementations[provider] })
+    all.push({
+      provider: String(using.provider),
+      model: model.entity.eid,
+      name: String((model.model as Comp).name),
+      serve: implementations[provider],
+    })
   }
   let found = override && using?.provider == null
     ? {
@@ -102,11 +106,27 @@ async (using, model) => {
   }
   let serve = found.serve!
   let wrapped: Model = Object.assign(async (req: Parameters<Model>[0]) => {
-    let reply = await serve(req)
-    if (found.provider && (model.pending || !(model.model as Comp).offered)) {
-      let listing = (await serve.list?.())?.find((m) => m.name == found.name)
-      await g.apply(confirmed(found.provider, String((model.model as Comp).name),
-        listing), { trusted: true })
+    let listing = model.pending || !model.price
+      ? serve.info
+        ? await serve.info(found.name)
+        : (await serve.list?.())?.find((m) => m.name == found.name)
+      : undefined
+    let modalities = listing?.modalities?.filter(
+      (m): m is 'text' | 'image' | 'audio' =>
+        m == 'text' || m == 'image' || m == 'audio',
+    )
+    let reply = await serve({
+      ...req,
+      ...!req.modalities && modalities?.length ? { modalities } : {},
+    })
+    if (
+      found.provider &&
+      (model.pending || !all.some((o) => o.provider == found.provider))
+    ) {
+      await g.apply(
+        confirmed(found.provider, String((model.model as Comp).name), listing),
+        { trusted: true },
+      )
     }
     return reply
   }, serve)
