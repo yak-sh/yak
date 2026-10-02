@@ -3,14 +3,14 @@
 // leaves the store serving until fixed code arrives.
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
-import { type Bundle, type Comp, Stale, token } from '@yaks/graph'
+import { type Bundle, type Comp, identityEid, Stale, token } from '@yaks/graph'
 import { pick } from '@yaks/vocab'
 import { kernelDoc } from '@yaks/kernel/vocab'
 import { doorOf } from './door.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import type { Rehearsal, Rule, Standing } from './mover.ts'
-import { dispatchMove, dispatchRule, step } from './mover.ts'
+import { dispatchMove, dispatchRule, lunaRule, step } from './mover.ts'
 import { state } from './testing.ts'
 
 let NAME = 'ada/notes'
@@ -286,4 +286,24 @@ test('dispatch conversion refuses changes to the old state, envelope or marks', 
   let [converted] = await s.query('.entity.eid=old-writer&*')
   assertEquals(converted.admitted, undefined)
   assertEquals((converted.dispatch as Comp).state ?? null, null)
+})
+
+test('creature model migration requests a pending provider model', async () => {
+  let s = await store(0)
+  let builder = 'b0f8dc99-66d9-4b79-9248-d47fbc7cffac'
+  await s.apply([{
+    entity: { eid: builder },
+    builder: { query: '' },
+    doc: { title: 'Vale creature builder' },
+    using: { model: 'old-creature-model' },
+    staged: {},
+  }])
+  s.wake(lunaRule)
+  let [proof] = await s.rehearse()
+  assertEquals(proof.moved, 1)
+  let [old] = await s.query(`.entity.eid=${builder}&*`)
+  assertEquals(
+    (old.using as Comp).model,
+    identityEid('model', ['old-creature-model']),
+  )
 })
