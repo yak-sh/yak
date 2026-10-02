@@ -99,6 +99,7 @@ export type Kind =
   | 'stop'
   | 'refusal'
   | 'error'
+  | 'interrupted'
   | 'exception'
 
 /** What a transcript is doing. */
@@ -127,6 +128,7 @@ let KINDS: [string, Kind][] = [
   [ASK, 'ask'],
   [CALL, 'call'],
   [RESULT, 'result'],
+  ['interrupted', 'interrupted'],
 ]
 
 let content = (b: Bundle) => b[CONTENT] as Comp | undefined
@@ -200,6 +202,9 @@ export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
   if (kind == 'stop') return 'stopped'
   if (abandoned(all)) return 'running'
   if (kind == 'exception') return 'failed'
+  if (kind == 'interrupted' && newest.failed && !newest.ask && !newest.call) {
+    return 'failed'
+  }
   if (all.some((b) => attemptState(b) == 'inflight')) {
     return 'running'
   }
@@ -557,6 +562,15 @@ export let sessionStatus = {
         [wears(STOP_ENTRY), lit('stopped')],
         [abandoned, lit('running')],
         [wears(EXCEPTION), lit('failed')],
+        [
+          and(
+            wears('interrupted'),
+            wears('failed'),
+            not(wears(ASK)),
+            not(wears(CALL)),
+          ),
+          lit('failed'),
+        ],
         [inflight, lit('running')],
         [queued, lit('queued')],
         [wears(REFUSAL), iff(input(refusedAsk), lit('pending'), lit('failed'))],

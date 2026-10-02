@@ -144,6 +144,23 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
       content: { body: 'responses: failed — unknown' },
     }),
   ], 'pending'],
+  ['orphan historical interruption stays failed until fresh input', [
+    request(1),
+    entry(2, {
+      interrupted: { code: 'transport' },
+      failed: { reason: 'No recorded request' },
+      content: { body: 'cut' },
+    }),
+  ], 'failed'],
+  ['fresh input resumes orphan historical interruption', [
+    request(1),
+    entry(2, {
+      interrupted: { code: 'transport' },
+      failed: { reason: 'No recorded request' },
+      content: { body: 'cut' },
+    }),
+    input(3),
+  ], 'pending'],
   ['three generic interruptions exhaust retries', [
     request(1),
     entry(2, { ask: { through: 'e1' }, attempt: {}, interrupted: {} }),
@@ -154,13 +171,21 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
     request(1),
     entry(2, { ask: { through: 'e1' }, attempt: {}, interrupted: {} }),
     entry(3, { ask: { through: 'e1' }, attempt: {}, interrupted: {} }),
-    entry(4, { ask: { through: 'e1' }, attempt: {}, interrupted: {},
-      provisional: { note: 'Retry owed' } }),
+    entry(4, {
+      ask: { through: 'e1' },
+      attempt: {},
+      interrupted: {},
+      provisional: { note: 'Retry owed' },
+    }),
   ], 'pending'],
   ['fresh input resumes a terminal interruption', [
     request(1),
-    entry(2, { ask: { through: 'e1' }, attempt: {}, interrupted: {},
-      failed: { reason: 'No retry' } }),
+    entry(2, {
+      ask: { through: 'e1' },
+      attempt: {},
+      interrupted: {},
+      failed: { reason: 'No retry' },
+    }),
     input(3),
   ], 'pending'],
   ['a completed response resets the interruption bound', [
