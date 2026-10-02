@@ -124,6 +124,7 @@ export let RULES: Rule[] = [
   })),
   ...interruptionContractFind.map((find, i): Rule => ({
     mark: `yak/store/interruption-contract/${i + 1}`,
+    live: 'apps',
     find,
     move: (row) => interruptionContract(row),
   })),
