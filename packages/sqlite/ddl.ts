@@ -709,13 +709,23 @@ export let SAMPLE = 400
  */
 export let analyzed = (driver: Driver): void => {
   if (!driver.file) return
+  atOnce(driver, () => {
+    driver.query({ t: 'pragma', name: 'analysis_limit', value: SAMPLE })
+    driver.query({ t: 'pragma', name: 'optimize', value: 0x10002 })
+  })
+}
+
+/** `body` now or not at all: run with no busy timeout, so where another
+ * connection holds the lock it needs, it answers `undefined` at once instead
+ * of waiting the timeout out. For work that can as well happen on a later
+ * call, which a caller should not wait a minute behind a writer for. */
+export let atOnce = <R>(driver: Driver, body: () => R): R | undefined => {
   let wait = driver.query({ t: 'pragma', name: 'busy_timeout' })[0]?.timeout
   let set = (value: number) =>
     driver.query({ t: 'pragma', name: 'busy_timeout', value })
   set(0)
   try {
-    driver.query({ t: 'pragma', name: 'analysis_limit', value: SAMPLE })
-    driver.query({ t: 'pragma', name: 'optimize', value: 0x10002 })
+    return body()
   } catch (e) {
     if (!busy(e)) throw e
   } finally {

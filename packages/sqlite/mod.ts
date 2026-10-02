@@ -64,6 +64,7 @@ import { after } from '@yaks/fp'
 import type { Query } from './read.ts'
 import {
   analyzed,
+  atOnce,
   FIT,
   fit,
   grown,
@@ -457,20 +458,24 @@ export let storage = (
   // long as both ran. So a store mends instead. Where one of its own objects
   // moved, it raises what is missing (tables, then columns, then the rest) and
   // drops, rebuilds and re-marks nothing; a change that moved none of them
-  // costs one read.
+  // costs one read. A mend never waits on another writer: the read that asked
+  // goes on, and the next read mends.
   let mend = () => {
     let { raised, made } = plan(vocab, base.derived)
     let [seen, now] = look(made)
     if (now != own) {
-      ;[seen, now] = unit(driver, () => {
-        let table = (s: Make) => s.t == 'create table'
-        for (let stmt of raised.filter(table)) driver.query(stmt)
-        for (let stmt of grown(vocab, standing(driver, vocab))) {
-          driver.query(stmt)
-        }
-        for (let stmt of raised) if (!table(stmt)) driver.query(stmt)
-        return [changed(), shape(driver, made)] as const
-      })
+      let mended = atOnce(driver, () =>
+        unit(driver, () => {
+          let table = (s: Make) => s.t == 'create table'
+          for (let stmt of raised.filter(table)) driver.query(stmt)
+          for (let stmt of grown(vocab, standing(driver, vocab))) {
+            driver.query(stmt)
+          }
+          for (let stmt of raised) if (!table(stmt)) driver.query(stmt)
+          return [changed(), shape(driver, made)] as const
+        }))
+      if (!mended) return
+      ;[seen, now] = mended
     }
     ;[version, own] = [seen, now]
   }

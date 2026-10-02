@@ -841,6 +841,29 @@ test('two vocabularies open on one file leave its schema at rest', () => {
   }
 })
 
+test('a read goes on while a writer holds the lock its mend needs', () => {
+  let dir = Deno.makeTempDirSync({ prefix: 'yak-schema-mend-' })
+  let a = open(`${dir}/graph.db`), b = open(`${dir}/graph.db`)
+  let sku = () => objects(a, { type: 'index', name: 'product_sku' }).length
+  try {
+    let s = storage(a, shop)
+    s.get(['x'])
+    b.query({ t: 'drop', kind: 'index', name: 'product_sku' })
+    b.query({ t: 'begin', mode: 'immediate' })
+    let started = Date.now()
+    assertEquals(s.get(['x']), [])
+    assert(Date.now() - started < 1000)
+    assertEquals(sku(), 0)
+    b.query({ t: 'rollback' })
+    s.get(['x'])
+    assertEquals(sku(), 1)
+  } finally {
+    a.close()
+    b.close()
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
 test('an open store repairs a column removed by a historical installer', () => {
   let dir = Deno.makeTempDirSync({ prefix: 'yak-schema-repair-' })
   let a = open(`${dir}/graph.db`), b = open(`${dir}/graph.db`)
