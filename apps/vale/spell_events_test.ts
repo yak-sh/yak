@@ -109,6 +109,29 @@ test('Shadowstep carries its route to the visual effect', () => {
   assert(Math.hypot(cast.from[0] - cast.at[0], cast.from[2] - cast.at[2]) > 2)
 })
 
+test('targetless ranged attacks keep the mouse landing point through windup', () => {
+  for (
+    let [item, distance, reach, kind] of [
+      ['staff1', 4, 10, 'bolt'],
+      ['bow1', 30, 13, 'arrow'],
+    ] as const
+  ) {
+    let { frame, home } = encounter(item, 100)
+    let [x, homeZ] = home.home
+    let z = homeZ - 100
+    frame(10000, {
+      strike: true,
+      point: { x: x + distance, y: 0, z },
+    })
+    let shot = frame(10600, {
+      point: { x: x - distance, y: 0, z },
+    }).find((e) => e.type == 'shot')
+    assert(shot && shot.type == 'shot')
+    assertEquals(shot.kind, kind)
+    assertEquals(shot.to, [x + Math.min(distance, reach), 0.2, z])
+  }
+})
+
 test('bleed and stun effects need no implicit weapon blow', () => {
   let events = (effects: unknown[]) => {
     useAbilities(

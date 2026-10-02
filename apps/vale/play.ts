@@ -51,7 +51,6 @@ import {
   within,
 } from './areas.ts'
 import { type Slot, SLOTS } from './arms.ts'
-import { BEASTS } from './beasts.ts'
 import { FIGURES, sizeOf } from './figure.ts'
 import { fighter, foeOf } from './danger.ts'
 import { heed } from './gaze.ts'
@@ -1446,6 +1445,8 @@ export let game = (
           Math.atan2(m.body.x - body.x, m.body.z - body.z),
           1.9,
         )
+      let facePoint = (point: Point) =>
+        body.yaw = Math.atan2(point.x - body.x, point.z - body.z)
       // How an ability's blow went: ready again at once, if its row says so
       // for how it went (abilities.ts `again`).
       let went = (id: string, how: Went) => {
@@ -1512,12 +1513,7 @@ export let game = (
           fought.swing++
           hand = handOf(k, fought.swing)
           if (target) face(target)
-          else if (castPoint) {
-            body.yaw = Math.atan2(
-              castPoint.x - body.x,
-              castPoint.z - body.z,
-            )
-          }
+          else if (castPoint) facePoint(castPoint)
           let dashEffect = effect(a.effects, 'dash')
           if (target && dashEffect) {
             let gap = sizeOf(target.beast) * 0.5 + 0.9
@@ -1625,8 +1621,11 @@ export let game = (
         hand = handOf(k, fought.swing)
         let target = aimFor(aim, k)
         aimed = target?.eid ?? ''
-        castPoint = undefined
+        castPoint = !target && k.shot && intent.point
+          ? castLanding(body, intent.point, k.reach)
+          : undefined
         if (target) face(target)
+        else if (castPoint) facePoint(castPoint)
       }
       if (!struck && !dash && now - swingAt >= k.pace * LAND) {
         struck = true
