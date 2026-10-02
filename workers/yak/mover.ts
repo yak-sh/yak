@@ -109,7 +109,7 @@ export let dispatchRule: Rule = {
 export let RULES: Rule[] = [
   ...refusalFind.map((find, i): Rule => ({
     mark: i == 0 ? 'yak/store/refusal/1' : 'yak/store/refusal-imported/1',
-    live: 'apps',
+    live: 'all',
     find,
     move: (row, read) => {
       let line = refusalSource(row)
