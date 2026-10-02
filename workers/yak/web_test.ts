@@ -47,7 +47,8 @@ test('app web is member-only even for open apps; mounts the store and signed-in 
   assertEquals(page.status, 200)
   let html = await page.text()
   assert(html.includes('"api":"/cookbook/api"'))
-  assert(html.includes('src="/cookbook/_web/web/app.js"'))
+  assert(html.includes('crossorigin="use-credentials"'))
+  assert(html.includes('src="/cookbook/_web/web/app.js?v='))
   assertEquals(await (await get('/cookbook/_web/owner', cookie)).json(), {
     owner: ADA,
   })
