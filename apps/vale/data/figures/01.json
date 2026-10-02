@@ -8,16 +8,16 @@
     },
     "doc": {
       "title": "Vale figure builder",
-      "body": "Builds one jointed look for each current main creature-kind look brief. Staged for a live pilot."
+      "body": "Builds one jointed look for each current main creature-kind look brief."
     },
     "builder": {
       "query": "$kind .beast_design, .built.slot=kind, .built.current=true, .built.build.build.variant=main, .doc.body=$look",
       "to": "5663fa91-2d32-8dd0-82d1-95402b2e82c4",
       "immediate": true
     },
-    "staged": {},
     "using": {
       "provider": "6df4837a-8f9e-8da1-8148-b64fa9f4c32c",
+      "model": "openai/gpt-6-luna",
       "tools": []
     },
     "content": {
