@@ -1047,6 +1047,8 @@ export let game = (
         let eid = h.eid
         let e = c.ent(eid)
         let home = { x: h.home[0], z: h.home[1] }
+        let shelter = !h.spawned
+        let safe = (x: number, z: number) => shelter && sheltered(v, x, z)
         let f = fallOf(falls.get(eid) ?? [], h.respawn ?? Infinity, now)
         let life = f.fell
         let hpNow = f.down ? 0 : hpOf(eid, beast.hp, life, all)
@@ -1069,7 +1071,7 @@ export let game = (
           ? { ...held }
           : fallen && last.has(eid)
           ? last.get(eid)!
-          : rest(v, h.home, h.roam, h.seed, now)
+          : rest(v, h.home, h.roam, h.seed, now, shelter)
         // Who moves it: of the players near its home whose pages play, the
         // first by eid.
         let owner = ''
@@ -1088,13 +1090,13 @@ export let game = (
           let hn = hunter(eid, life, all)
           let hs = hn ? spots.get(hn) : undefined
           if (
-            hn && hs?.prey && !sheltered(v, hs.x, hs.z) &&
+            hn && hs?.prey && !safe(hs.x, hs.z) &&
             dist(hs, home) < h.roam + LEASH
           ) quarry = hn
           else if (beast.aggro) {
             let best = beast.aggro * (hu.player ? 1.8 : 1)
             for (let [w, sp] of spots) {
-              if (!sp.prey || sheltered(v, sp.x, sp.z)) continue
+              if (!sp.prey || safe(sp.x, sp.z)) continue
               if (dist(sp, home) > h.roam + LEASH) continue
               let d = dist(sp, mb)
               if (d < best) [best, quarry] = [d, w]
@@ -1121,7 +1123,7 @@ export let game = (
                 { x: dx / d, z: dz / d, jump: false },
                 dt,
                 k / Math.max(dt, 1e-3),
-                (x, z) => sheltered(v, x, z),
+                safe,
                 false,
               )
               knocked = true
@@ -1129,8 +1131,10 @@ export let game = (
           }
           if (stuck && !moving) say(eid, h.level, mb, change)
           if (!stuck && (quarry || moving || knocked)) {
-            let next = prowl(v, mb, beast, h.home, h.roam, h.seed, now, dt, qs)
-            let back = rest(v, h.home, h.roam, h.seed, now)
+            let next = prowl(
+              v, mb, beast, h.home, h.roam, h.seed, now, dt, qs, shelter,
+            )
+            let back = rest(v, h.home, h.roam, h.seed, now, shelter)
             if (!quarry && !knocked && dist(next, back) < 0.3) {
               if (p || hu.player) hush(eid, change)
               mb = back
@@ -1169,7 +1173,7 @@ export let game = (
           if (
             hu.player == me && damage && !down && hp > 0 &&
             !fallen && near && !stuck &&
-            !sheltered(v, body.x, body.z)
+            !safe(body.x, body.z)
           ) {
             if (rolling) {
               riposte = now

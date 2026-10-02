@@ -146,6 +146,7 @@ export let homeOf = (row: Bundle): Home | null => {
     home: [x, z],
     roam: typeof roam == 'number' ? roam : ROAM,
     seed: hashOf(eid),
+    spawned: true,
     lvl: typeof lvl == 'number' ? lvl : 1,
   }
 }

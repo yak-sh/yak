@@ -221,7 +221,7 @@ export let walk = (
 /** Where a creature is when nothing is after it: where its wandering puts it
  * at time `t` (ms), stood clear of any wall, facing the way it is going.
  * Every page puts it in the same place, so a wandering creature needs no
- * position of its own.
+ * position of its own. Explicit spawns may wander within shelter.
  *
  * ```ts
  * import { assert, assertEquals } from '@std/assert'
@@ -239,8 +239,9 @@ export let rest = (
   roam: number,
   seed: number,
   t: number,
+  shelter = true,
 ): Body => {
-  let clearRoam = openRoam(v, home, roam)
+  let clearRoam = !shelter || openRoam(v, home, roam)
   let clear = ([x, z]: [number, number]): [number, number] => {
     for (let w of wallsNear(v, x, z)) {
       let dx = x - w.x, dz = z - w.z, d = Math.hypot(dx, dz)
@@ -258,7 +259,8 @@ export let rest = (
       clear(wander(home, roam, seed, time)),
       RADIUS * 2,
     )
-    return clearRoam && Math.hypot(to[0] - home[0], to[1] - home[1]) <=
+    return !shelter || clearRoam &&
+        Math.hypot(to[0] - home[0], to[1] - home[1]) <=
         roam + 4
       ? to
       : beforeShelter(v, home, to)
@@ -330,7 +332,7 @@ let beforeShelter = (v: Vale, from: [number, number], to: [number, number]) => {
 
 /** A creature's next step: toward its quarry when it has one, stopping at
  * the edge of its reach, and otherwise back to its wandering. It never comes
- * into a village. */
+ * into village shelter unless explicitly placed there. */
 export let prowl = (
   v: Vale,
   b: Body,
@@ -341,8 +343,9 @@ export let prowl = (
   t: number,
   dt: number,
   quarry: { x: number; z: number } | null,
+  shelter = true,
 ): Body => {
-  let back = rest(v, home, roam, seed, t)
+  let back = rest(v, home, roam, seed, t, shelter)
   let [gx, gz] = quarry ? [quarry.x, quarry.z] : [back.x, back.z]
   let dx = gx - b.x, dz = gz - b.z
   let d = Math.hypot(dx, dz)
@@ -356,7 +359,9 @@ export let prowl = (
   let push = d > stop
     ? { x: dx / d, z: dz / d, jump: false }
     : { x: 0, z: 0, jump: false }
-  let n = walk(v, b, push, dt, speed, (x, z) => sheltered(v, x, z), false)
+  let n = walk(
+    v, b, push, dt, speed, (x, z) => shelter && sheltered(v, x, z), false,
+  )
   if (quarry && d <= stop) n.yaw = turn(b.yaw, Math.atan2(dx, dz), dt * 10)
   return n
 }

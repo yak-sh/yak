@@ -91,6 +91,8 @@ export type Home = {
   /** the level it fights at, where its land does not decide it: a spawned
    * creature fights at its spawner's (spawn.ts) */
   lvl?: number
+  /** placed explicitly, even inside village shelter (spawn.ts) */
+  spawned?: boolean
 }
 
 let listed = new Map<string, Home[]>()
