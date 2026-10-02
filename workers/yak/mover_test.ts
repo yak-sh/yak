@@ -338,6 +338,7 @@ test('refusal rules rehearse unchanged and convert only answers when enabled', a
     {
       entity: { eid: native },
       error: { code: 'Refused' },
+      refusal: { code: 'Refused' },
       output: { source },
       content: { body: 'refused' },
     },
