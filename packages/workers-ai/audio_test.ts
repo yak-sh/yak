@@ -241,3 +241,36 @@ test('ElevenLabs takes caller duration without parsing it from the prompt', () =
   assertEquals(sent.music_length_ms, 180000)
   assertEquals(sent.force_instrumental, false)
 })
+
+test('native binding fetch preserves the version-3 envelope and raw refusal', async () => {
+  let input = musicInput(ask('elevenlabs/music-v2'))
+  let model = workersAi({
+    run: () => {
+      throw new Error('parsed run must not be reached')
+    },
+    fetch: (url, init) => {
+      assertEquals(url, 'https://workers-binding.ai/ai-gateway/run?version=3')
+      assertEquals(init?.method, 'POST')
+      assertEquals(init?.headers, {
+        'x-session-affinity': 'pilot',
+        'content-type': 'application/json',
+        'cf-consn-sdk-version': '2.0.0',
+        'cf-consn-model-id': 'elevenlabs/music-v2',
+      })
+      assertEquals(JSON.parse(String(init?.body)), {
+        inputs: input,
+        options: { returnRawResponse: true, gateway: { id: 'default' } },
+      })
+      return Promise.resolve(Response.json({
+        internalCode: 7003,
+        name: 'AiGatewayError',
+        description: 'User Input Error',
+        errors: [{ message: 'upstream model rejected body' }],
+      }, { status: 400 }))
+    },
+  }, { media: { store: artifactStore(memoryBlobs()) } })
+  let error = await assertRejects(() =>
+    model({ ...ask('elevenlabs/music-v2'), conversation: 'pilot' })
+  )
+  assertEquals(error.message.includes('upstream model rejected body'), true)
+})

@@ -44,6 +44,8 @@ export { audioPrice, audioSeconds, music, pricedAudio } from './audio.ts'
 
 /** The part of the `AI` binding this package calls. */
 export type Binding = {
+  /** The binding fetch door returns upstream status/body without parsing. */
+  fetch?: typeof fetch
   models?: (params?: { per_page?: number; page?: number }) => Promise<Listing[]>
   run(
     model: string,
@@ -338,6 +340,30 @@ let decoded = async (out: unknown): Promise<unknown> => {
   throw failure(e)
 }
 
+// Same version-3 envelope as workerd's ai-api.ts #generateFetch. Binding
+// fetch keeps the raw response even where run ignores returnRawResponse.
+// https://github.com/cloudflare/workerd/blob/main/src/cloudflare/internal/ai-api.ts
+let raw = (
+  ai: Binding,
+  model: string,
+  input: unknown,
+  options: Parameters<Binding['run']>[2],
+) => {
+  if (!ai.fetch) return ai.run(model, input, options)
+  let { extraHeaders, ...sent } = options ?? {}
+  let route = sent.gateway?.id ? 'ai-gateway/run' : 'run'
+  return ai.fetch(`https://workers-binding.ai/${route}?version=3`, {
+    method: 'POST',
+    headers: {
+      ...extraHeaders,
+      'content-type': 'application/json',
+      'cf-consn-sdk-version': '2.0.0',
+      'cf-consn-model-id': model,
+    },
+    body: JSON.stringify({ inputs: input, options: sent }),
+  })
+}
+
 /**
  * A model over the binding, failing as {@link failure} says. Music output
  * needs artifact storage and returns its measured/priced dollar cost.
@@ -354,7 +380,7 @@ export let workersAi = (
     let sent = music(req.model) ? musicInput(req) : input(req)
     let out = said(
       await decoded(
-        await ai.run(
+        await (music(req.model) ? raw.bind(null, ai) : ai.run.bind(ai))(
           req.model,
           sent,
           routing(
