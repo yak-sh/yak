@@ -34,6 +34,7 @@ render(
         Panes.Top,
         {},
         h(Button, { href: './' }, 'Back to the Vale'),
+        h(Button, { href: 'music-takes.html' }, 'Recordings'),
         choices('theme', ['vale', 'everforest', 'rosepine']),
         choices('skin', ['vale', 'base']),
         choices('scheme', ['light', 'dark']),

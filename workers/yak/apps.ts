@@ -1486,6 +1486,23 @@ let api = async (
     }
     return store('/ws', req, headers)
   }
+  if (path == "/choose") {
+    if (req.method != "POST") return json(405, "method_not_allowed");
+    // An open visitor can edit game rows, not pick the account's generated
+    // media. This is the same editor-only door the connector offers.
+    if (!who.person || !["owner", "editor"].includes(who.role ?? "")) {
+      return refused();
+    }
+    let body = await req.json() as { output?: unknown };
+    if (typeof body.output != "string") return json(400, "output_required");
+    return store("/choose", {
+      method: "POST",
+      body: JSON.stringify({
+        output: body.output,
+        by: who.person,
+      }),
+    }, KERNEL);
+  }
   if (path == '/apply') {
     if (req.method != 'POST') return json(405, 'method_not_allowed')
     if (!mayPost) return refused()
