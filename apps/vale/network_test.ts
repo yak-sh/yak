@@ -30,7 +30,6 @@ let idle: Intent = {
   drink: false,
   talk: false,
   gather: false,
-  walk: false,
   snap: false,
   mic: false,
   orbit: [0, 0],
@@ -38,9 +37,8 @@ let idle: Intent = {
   zoom: 0,
 }
 
-test('peer relays leave my hero in place and several creatures chasing', async () => {
+let peers = () => {
   seedDesigns()
-  using time = new FakeTime()
   let vocab = loadVocab([words, core])
   let store = graph({ storage: ram(vocab), vocab })
   let heroes = ['a-hero', 'b-hero', 'c-hero']
@@ -96,34 +94,115 @@ test('peer relays leave my hero in place and several creatures chasing', async (
     net.choose(eid)
     return { page, net, play: game(net), eid }
   })
-  try {
-    await time.tickAsync(0)
-    await Promise.all(pages.map((p) => p.net.settle()))
+  return {
+    pages,
+    heroes,
+    mobs,
+    [Symbol.dispose]: () => {
+      for (let p of pages) p.page.close()
+    },
+  }
+}
+
+let stand = (
+  p: ReturnType<typeof peers>['pages'][number],
+  x: number,
+  z: number,
+) =>
+  p.net.move([{
+    entity: { eid: p.eid },
+    position: { level: 'mossvale', x, y: 5, z, at: Date.now() },
+    motion: { yaw: 0, gait: 'idle', vx: 0, vz: 0, vy: 0 },
+  }])
+
+test('peer relays leave my hero in place and several creatures chasing', async () => {
+  using time = new FakeTime()
+  using group = peers()
+  let { pages, heroes, mobs } = group
+  await time.tickAsync(0)
+  await Promise.all(pages.map((p) => p.net.settle()))
+  for (let p of pages) {
+    stand(p, 64, 68)
+  }
+  await time.tickAsync(200)
+  let v = flat(5)
+  for (let step = 0; step < 240; step++) {
     for (let p of pages) {
-      p.net.move([{
-        entity: { eid: p.eid },
-        position: { level: 'mossvale', x: 64, y: 5, z: 68, at: Date.now() },
-        motion: { yaw: 0, gait: 'idle', vx: 0, vz: 0, vy: 0 },
-      }])
+      let f = p.play.frame(v, idle, 0, 0.016)!
+      equal([f.body.x, f.body.z], [64, 68])
+      if (step > 20) equal(f.others.length, 2)
     }
-    await time.tickAsync(200)
-    let v = flat(5)
-    for (let step = 0; step < 240; step++) {
-      for (let p of pages) {
-        let f = p.play.frame(v, idle, 0, 0.016)!
-        equal([f.body.x, f.body.z], [64, 68])
-        if (step > 20) equal(f.others.length, 2)
-      }
-      await time.tickAsync(16)
+    await time.tickAsync(16)
+  }
+  for (let p of pages) {
+    for (let eid of mobs) {
+      assert(
+        heroes.includes(String(comp(p.page.client.ent(eid), 'hunt').player)),
+      )
     }
+  }
+})
+
+test('an elected peer keeps chasing a retreating hero until the home leash', async () => {
+  using time = new FakeTime()
+  using group = peers()
+  let { pages, mobs } = group
+  let [owner, runner, witness] = pages
+  await time.tickAsync(0)
+  await Promise.all(pages.map((p) => p.net.settle()))
+  // Only the runner is inside the authored five-metre wake radius. The
+  // first hero owns the creatures from across the clearing.
+  stand(owner, 44, 64)
+  stand(runner, 64, 68)
+  stand(witness, 44, 70)
+  await time.tickAsync(200)
+  let v = flat(5)
+  let step = async (moving = false) => {
+    let frames = pages.map((p) =>
+      p.play.frame(
+        v,
+        {
+          ...idle,
+          move: moving && p == runner ? [0, 1] : [0, 0],
+        },
+        Math.PI,
+        0.016,
+      )!
+    )
+    await time.tickAsync(16)
+    return frames
+  }
+  let hunts = () => {
     for (let p of pages) {
       for (let eid of mobs) {
-        assert(
-          heroes.includes(String(comp(p.page.client.ent(eid), 'hunt').player)),
-        )
+        equal(comp(p.page.client.ent(eid), 'hunt').player, runner.eid)
       }
     }
-  } finally {
-    for (let p of pages) p.page.close()
+  }
+  for (let i = 0; i < 20; i++) await step()
+  hunts()
+  let frames = await step(true)
+  for (let i = 0; i < 180; i++) frames = await step(true)
+  assert(
+    frames[1].body.z > 80,
+    'the hero retreated well beyond the wake radius',
+  )
+  hunts()
+  // A second hero walking closer must not steal an undamaged creature's
+  // quarry. The runner stops and the creatures catch up.
+  stand(witness, 64, 64)
+  witness.play = game(witness.net)
+  for (let i = 0; i < 240; i++) frames = await step()
+  hunts()
+  for (let eid of mobs) {
+    assert(Number(comp(owner.page.client.ent(eid), 'position').z) > 76)
+  }
+  // Going beyond the existing home leash ends the pursuit on every page.
+  for (let i = 0; i < 200; i++) frames = await step(true)
+  assert(frames[1].body.z > 90)
+  for (let p of pages) {
+    for (let eid of mobs) {
+      assert(comp(p.page.client.ent(eid), 'hunt').player != runner.eid)
+    }
   }
 })

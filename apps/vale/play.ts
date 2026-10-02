@@ -1150,22 +1150,22 @@ export let game = (
         // Peers show the individual blow from its sender's combat events.
         if (!fallen && hpNow < wasHp) hitAt.set(eid, now)
         if (owner == me && !fallen) {
-          // Whom it is after: whoever is hurting it most, while they stay
-          // near its home; else, if it is the kind that minds, whoever comes
-          // close. Never someone fainted, or whose page sleeps and so takes
-          // no bites.
+          // Damage draws it first; otherwise keep its quarry until they
+          // leave the home leash. The aggro radius wakes a hunt, not ends
+          // one. Never hunt someone sheltered, fainted or asleep.
           let quarry = ''
+          let prey = (who: string) => {
+            let sp = spots.get(who)
+            return sp?.prey && !safe(sp.x, sp.z) &&
+              dist(sp, home) < h.roam + LEASH
+          }
           let hn = hunter(eid, life, all)
-          let hs = hn ? spots.get(hn) : undefined
-          if (
-            hn && hs?.prey && !safe(hs.x, hs.z) &&
-            dist(hs, home) < h.roam + LEASH
-          ) quarry = hn
+          if (hn && prey(hn)) quarry = hn
+          else if (hu.player && prey(hu.player)) quarry = hu.player
           else if (beast.aggro) {
-            let best = beast.aggro * (hu.player ? 1.8 : 1)
+            let best = beast.aggro
             for (let [w, sp] of spots) {
-              if (!sp.prey || safe(sp.x, sp.z)) continue
-              if (dist(sp, home) > h.roam + LEASH) continue
+              if (!prey(w)) continue
               let d = dist(sp, mb)
               if (d < best) [best, quarry] = [d, w]
             }
