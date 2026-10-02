@@ -127,6 +127,13 @@ Group two bugs only when they are one change in one place.
 - Read before relaying: `git merge-base --is-ancestor <sha> main`, and the live
   check it claims where you can run it yourself. Its report is a pointer, not
   the truth (M-37958).
+- Read its diff stat (`git show --stat <sha>`), not only its words. A report
+  names what it is proud of ("shipped tiles", "a cache"), and the shape of the
+  change hides inside it: generated or binary files committed, data stored on
+  the server, a new dependency, a new place something lives. Compare that
+  shape with what Jeff asked for; one he never asked for goes back to him
+  before you call it done. Shipped tiles were 400 PNGs served from yaks.app,
+  where he had asked for the page to chart each region once.
 - File what it found as tasks, one thing each, and send follow-ups to the agent
   that holds the context rather than a new one.
 - Tell the owner what changed for him, in plain words, and only what he needs to act
