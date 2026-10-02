@@ -450,7 +450,7 @@ test('refusal rehearsal and enabled batches preserve retry-pending provider erro
 test('take mover rehearses and converts without calls or lost served outputs', async () => {
   let { takeRule } = await import('./mover.ts')
   let { keyEid, keyed } = await import('@yaks/key')
-  let g = await store(0, takeRule)
+  let g = await store(0, { ...takeRule, live: undefined })
   let builder = crypto.randomUUID(), run = crypto.randomUUID()
   let call = crypto.randomUUID(), output = crypto.randomUUID()
   let { toolEid } = await import('@yaks/tools')
