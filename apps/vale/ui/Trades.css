@@ -1,6 +1,5 @@
-/* The Trades tab (trades.ts `ledger`): the gathering trades, then the making
-   ones, each a row: its glyph, its name and its level over a bar of the xp
-   toward its next level (Bar.css). */
+/* Trade progress stays on the left; catalog-backed guides and station
+   previews occupy the selected trade's detail pane. */
 .Trades {
   display: grid;
   align-content: start;
@@ -38,13 +37,35 @@
   }
 
   & > b {
-    overflow: hidden;
+    overflow-wrap: anywhere;
     color: var(--ink);
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   & > .Bar {
     grid-column: 2 / -1;
   }
+}
+
+.Trades_Guide {
+  display: grid;
+  gap: var(--gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  & > li {
+    display: grid;
+    gap: 0.3rem;
+    padding-block: var(--half-gap);
+    border-bottom: 1px solid var(--edge);
+    overflow-wrap: anywhere;
+  }
+
+  & small {
+    color: var(--faint);
+  }
+}
+
+.Trades_Preview :where(h4, p) {
+  margin: 0;
 }
