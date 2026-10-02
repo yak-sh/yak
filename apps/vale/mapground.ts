@@ -14,7 +14,7 @@ let canvasOf = (px: Uint8ClampedArray<ArrayBuffer>, size: number) => {
 
 let imageOf = async (path: string) => {
   let image = new Image()
-  image.src = new URL(path, document.baseURI).href
+  image.src = new URL(path, import.meta.url).href
   await image.decode()
   return image
 }
