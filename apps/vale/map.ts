@@ -1,13 +1,13 @@
 // A map of the world, north up: it opens near the hero and zooms out to a
-// broad view that can pan through generated country. Nearby ground is charted
-// off the page's thread (chart.ts); at
-// world scale, the land palette gives an immediate overview. Over it,
+// broad view that can pan through generated country. Ground tiles are decoded
+// or charted once per cell, then composited at every scale (mapground.ts). Over it,
 // who is where, written only while it is open: the hero's arrow, the other
 // players, the people with a quest, the nodes to gather (work.ts), coloured
 // by their trade and hollow while spent, where each road leaves the map and
 // the region it leads to, and a ring where each quest tracked goes next
 // (journal.ts). M or the compass opens its panel.
-import { charted, chartVersion, fogged } from './grown.ts'
+import { chartVersion, fogged } from './grown.ts'
+import { groundTiles } from './mapground.ts'
 import { Top } from './features.ts'
 import { glyph } from './glyphs.ts'
 import { paletteOf } from './ground.ts'
@@ -112,7 +112,7 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
   })
 
   // The view is a square of world metres. The ground may lag a drag or zoom;
-  // its last chart is transformed until the next one has been painted.
+  // its last composition is transformed until the next one has been painted.
   let box = view([0, 0], WORLD[2])
   let aim = box
   let frameWas = performance.now()
@@ -124,20 +124,6 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
   let openWas = false
   let levelWas = ''
   let hero: Spot = [0, 0]
-  let cache = new Map<string, ImageData>()
-  let keep = (id: string, image: ImageData) => {
-    cache.delete(id)
-    cache.set(id, image)
-    if (cache.size <= 8) return
-    let oldest = cache.keys().next().value!
-    if (oldest == home?.join(',')) {
-      let pinned = cache.get(oldest)!
-      cache.delete(oldest)
-      cache.set(oldest, pinned)
-      oldest = cache.keys().next().value!
-    }
-    cache.delete(oldest)
-  }
   let was = ''
   let fogWas = ''
   let fogCtx = fog.getContext('2d')!
@@ -197,7 +183,8 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
           continue
         }
         let colors = paletteOf(lv).tops
-        let color = Object.values(lv.look?.ground ?? {})[0] ?? colors[Top.grass]
+        let color = Object.values(lv.look?.ground ?? {})[0] ??
+          colors[Top.grass]
         ctx.fillStyle = `#${color.toString(16).padStart(6, '0')}`
         ctx.fillRect(u * 320, v * 320, side, side)
         ctx.strokeStyle = 'rgba(35, 40, 32, 0.3)'
@@ -247,7 +234,6 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
   let draw = () => {
     if (version != chartVersion) {
       version = chartVersion
-      cache.clear()
       shown = ''
     }
     let id = key()
@@ -255,24 +241,21 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
     shown = id
     drawn = box
     canvas.style.transform = ''
-    let image = cache.get(id)
-    if (image) {
-      keep(id, image)
-      ctx.putImageData(image, 0, 0)
-      return
-    }
     overview()
-    // The broad chart takes seconds even off-thread. At world scale, the
-    // overview is the useful detail: discovered places and the roads to them.
-    if (box[2] == WORLD[2]) return
-    let m = box[2] / 320
+    let asked = box
     let askedAt = version
-    charted(...box, m).then((px) => {
-      if (askedAt != chartVersion) return
-      let image = new ImageData(px, 320, 320)
-      keep(id, image)
-      if (shown != id) return
-      ctx.putImageData(image, 0, 0)
+    groundTiles(asked, version).then((tiles) => {
+      if (askedAt != chartVersion || shown != id) return
+      for (let { image, box: tile } of tiles) {
+        let side = tile[2] / asked[2] * 320
+        ctx.drawImage(
+          image,
+          (tile[0] - asked[0]) / asked[2] * 320,
+          (tile[1] - asked[1]) / asked[2] * 320,
+          side,
+          side,
+        )
+      }
       moveImages()
     }).catch(reportError)
   }

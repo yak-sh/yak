@@ -48,52 +48,78 @@ export let chart = (
   let v = vale(m), N = Math.round(size / m), C = CHUNK / m
   let i0 = Math.round(x0 / m), k0 = Math.round(z0 / m)
   let px = new Uint8ClampedArray(N * N * 4)
-  // Column (i, k) of the chart: its patch, and its index there.
-  let col = (i: number, k: number) => {
-    let gi = i0 + i, gk = k0 + k
-    let ci = Math.floor(gi / C), ck = Math.floor(gk / C)
-    let p = patchOf(v, ci, ck)
-    let di = gi - ci * C, dk = gk - ck * C
-    return { p, j: di + dk * C, h: p.layers[0][di + 1 + (dk + 1) * p.n] * m }
-  }
   let put = (at: number, rgb: number[], k = 1) => {
     px[at * 4] = rgb[0] * k
     px[at * 4 + 1] = rgb[1] * k
     px[at * 4 + 2] = rgb[2] * k
     px[at * 4 + 3] = 255
   }
-  let hs = new Float32Array((N + 2) * (N + 2))
-  for (let k = -1; k <= N; k++) {
-    for (let i = -1; i <= N; i++) hs[i + 1 + (k + 1) * (N + 2)] = col(i, k).h
+  // Decode each region's colours once. No arrays or palette lookups in the
+  // column loop, where a region can appear tens of thousands of times.
+  let palettes = new Map<string, {
+    tops: Record<number, number[]>
+    deep: number[]
+    shallow: number[]
+  }>()
+  let colours = (id: string) => {
+    let got = palettes.get(id)
+    if (got) return got
+    let pal = paletteOf(levelOf(id)!)
+    got = {
+      tops: Object.fromEntries(
+        Object.entries(pal.tops).map(([top, hex]) => [top, bytes(hex)]),
+      ),
+      deep: bytes(pal.water[0]),
+      shallow: bytes(pal.water[1]),
+    }
+    palettes.set(id, got)
+    return got
   }
-  let H = (i: number, k: number) => hs[i + 1 + (k + 1) * (N + 2)]
   let regions: string[] = []
-  for (let k = 0; k < N; k++) {
-    for (let i = 0; i < N; i++) {
-      let { p, j } = col(i, k), h = H(i, k), at = i + k * N
-      let id = p.regions[p.region[j]]
-      let pal = paletteOf(levelOf(id)!)
-      regions[at] = id
-      if (h <= WATER) {
-        let [deep, shallow] = pal.water.map(bytes)
-        let d = clamp((WATER - h) / DEPTH, 0, 1)
-        put(at, shallow.map((c, n) => c + (deep[n] - c) * d))
-        continue
+  // Paint one chunk at a time. Its halo already holds the neighbouring
+  // heights for lighting, so a chart needs neither a second height pass nor
+  // repeated patch lookups that evict and regrow its own chunks.
+  for (let ck = Math.floor(k0 / C); ck * C < k0 + N; ck++) {
+    for (let ci = Math.floor(i0 / C); ci * C < i0 + N; ci++) {
+      let p = patchOf(v, ci, ck), pals = p.regions.map(colours)
+      let heights = p.layers[0], n = p.n
+      let west = Math.max(0, i0 - ci * C)
+      let east = Math.min(C, i0 + N - ci * C)
+      let north = Math.max(0, k0 - ck * C)
+      let south = Math.min(C, k0 + N - ck * C)
+      for (let dk = north; dk < south; dk++) {
+        for (let di = west; di < east; di++) {
+          let j = di + dk * C, hj = di + 1 + (dk + 1) * n
+          let at = ci * C + di - i0 + (ck * C + dk - k0) * N
+          let h = Math.fround(heights[hj] * m), pal = pals[p.region[j]]
+          let out = at * 4
+          regions[at] = p.regions[p.region[j]]
+          if (h <= WATER) {
+            let d = clamp((WATER - h) / DEPTH, 0, 1)
+            for (let c = 0; c < 3; c++) {
+              px[out + c] = pal.shallow[c] + (pal.deep[c] - pal.shallow[c]) * d
+            }
+          } else {
+            // Lit from the north-west: brighter where the ground rises to
+            // the south-east. Round heights just as the former height
+            // buffer did, including voxel sizes that are not binary exact.
+            let rise = (
+              Math.fround(heights[hj + 1] * m) -
+              Math.fround(heights[hj - 1] * m) +
+              Math.fround(heights[hj + n] * m) -
+              Math.fround(heights[hj - n] * m)
+            ) / (2 * m)
+            let own = pal.tops[p.top[j]]
+            let next = pals[p.other[j]].tops[p.top[j]]
+            let s = 0.5 + p.share[j] / 510
+            let light = clamp(1 + rise * 0.25, 0.72, 1.18)
+            for (let c = 0; c < 3; c++) {
+              px[out + c] = (own[c] * s + next[c] * (1 - s)) * light
+            }
+          }
+          px[out + 3] = 255
+        }
       }
-      // Lit from the north-west: brighter where the ground rises to the
-      // south-east.
-      let rise = (H(i + 1, k) - H(i - 1, k) + H(i, k + 1) - H(i, k - 1)) /
-        (2 * m)
-      let own = bytes(pal.tops[p.top[j]])
-      let s = 0.5 + p.share[j] / 510
-      let next = bytes(
-        paletteOf(levelOf(p.regions[p.other[j]])!).tops[p.top[j]],
-      )
-      put(
-        at,
-        own.map((c, n) => c * s + next[n] * (1 - s)),
-        clamp(1 + rise * 0.25, 0.72, 1.18),
-      )
     }
   }
   // Where a region meets the next, a line.

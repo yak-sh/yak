@@ -5,6 +5,7 @@
 // Where the workers cannot start or fail, the page grows and paints itself,
 // and the reason is reported.
 import { chart } from './chart.ts'
+import { chartKey } from './chartkey.ts'
 import { veil } from './mapfog.ts'
 import { type Chunk, chunk } from './chunks.ts'
 import type { Answer, Ask } from './grow.ts'
@@ -32,6 +33,11 @@ let themes: Bundle[] = []
 let buildingDesigns: Bundle[] | null = null
 // The map's pixels depend on both sets of designs.
 export let chartVersion = 0
+let chartAddress: Promise<string> | undefined
+
+/** Content address of the designs installed in this page and its workers. */
+export let chartDesignKey = () =>
+  chartAddress ??= chartKey(themes, buildingDesigns ?? [])
 
 /** Give each world Worker the same building plans the page is using. */
 export let useBuildingDesigns = (rows: Bundle[]): {
@@ -39,6 +45,7 @@ export let useBuildingDesigns = (rows: Bundle[]): {
   kinds: Set<string>
 } => {
   chartVersion++
+  chartAddress = undefined
   buildingDesigns = rows
   let impact = installBuildingDesigns(rows)
   for (let hand of pool) hand.w.postMessage({ buildingDesigns: rows })
@@ -91,6 +98,7 @@ let hands = () =>
 /** Keep the page and each growth worker on the store's region designs. */
 export let useThemeRows = (rows: Bundle[]): Affects => {
   chartVersion++
+  chartAddress = undefined
   themes = rows
   let affects = installThemeDesigns(rows)
   for (let hand of pool) hand.w.postMessage({ themes: rows })

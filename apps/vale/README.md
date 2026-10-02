@@ -10,11 +10,11 @@ kept by the host.
 
 ## Deployment
 
-Vale ships source files and `package.json`; it has no local build or generated
-runtime files to stage. The platform compiler compiles `main.ts` and its module
-worker at deploy. Toolkit dependencies marked `platform` come from the current
-source packages shipped with that compiler, not an older registry release.
-Preact, signals, Three.js and marked are ordinary npm dependencies.
+Vale ships source files, `package.json`, and the map's PNG tiles under `tiles/`.
+The platform compiler compiles `main.ts` and its module worker at deploy.
+Toolkit dependencies marked `platform` come from the current source packages
+shipped with that compiler, not an older registry release. Preact, signals,
+Three.js and marked are ordinary npm dependencies.
 
 The grammar, completion, drafts, network client, Markdown and voice packages
 join the same compiled page runtime. The creature-build subscription uses server
@@ -23,6 +23,23 @@ the complete build graph nor a local rule for it.
 
 `ui/Choices.css` is a tracked port of the shared UI part's stylesheet. It is
 loaded by `ui/components.css`; deployment does not copy or generate CSS.
+
+Map ground is painted once per 256-metre cell, then averaged into four image
+sizes. The shipped atlas covers the authored world, including its frontier
+holes. Its content address includes the theme and building designs: changed
+store designs and further frontier cells are charted once per page and kept.
+Panning and zooming composite these images; players, nodes, quests and fog
+remain overlays. Regenerate tracked images after changing terrain or seed
+designs, before landing and deploying:
+
+```sh
+deno run -A bin/vale-chart.ts
+deno run -A bin/vale-map-time.ts --before=<baseline-sha>
+```
+
+The timing command uses a native headless canvas, reporting detailed first
+paint, pan and zoom time, and chart calls and milliseconds per pan. It creates
+no probe files.
 
 Deploy only from the main checkout after the release's commits have landed:
 
