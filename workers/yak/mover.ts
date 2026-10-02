@@ -111,7 +111,7 @@ export let dispatchRule: Rule = {
  * reports every store done with it, with the old words it moved out of. */
 export let takeRule: Rule = {
   mark: 'yak/store/builder-takes/18',
-  live: 'apps',
+  live: 'all',
   find: '.built&.built.call&.built.slot&.built.build&!built.inputs&*',
   move: (row, read) => {
     if (!read) throw new Error('take conversion needs its build and call')
