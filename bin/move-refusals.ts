@@ -219,38 +219,13 @@ let main = async () => {
             from: table(name),
           }))[0]?.n ?? 0,
         )
-      // Bounded full physical history once before admission and once after repair.
-      // Journal writes are append-only (log.ts); known triggers are validated above
-      // and each batch independently checks its appended records before commit.
-      let journalDigest = (name: string, last: number) => {
-        let digest = token(null)
-        let cursor = 0
-        if (!last) return digest
-        for (;;) {
-          let rows = sql.query(
-            select({
-              from: table(name),
-              where: op(
-                'and',
-                gt(col('id'), val(cursor)),
-                op('<=', col('id'), val(last)),
-              ),
-              order: [col('id')],
-              limit: val(1000),
-            }),
-          )
-          if (!rows.length) return digest
-          digest = token([
-            digest,
-            rows.map((row) =>
-              canonical(
-                name == 'journal_tx' ? { host: null, ...row } : row,
-              )
-            ),
-          ])
-          cursor = Number(rows.at(-1)!.id)
-        }
-      }
+      let tail = (name: string, last: number) =>
+        sql.query(select({
+          from: table(name),
+          where: op('<=', col('id'), val(last)),
+          order: [{ t: 'desc', x: col('id') }],
+          limit: val(32),
+        }))
       let journalLimits = Object.fromEntries(
         journalTables.map((name) => [name, high(name)]),
       )
@@ -425,17 +400,17 @@ let main = async () => {
       if (options.verifyZero && admission.length) {
         fail('--verify-zero forbids every schema admission')
       }
-      let historicalJournal = Object.fromEntries(
-        Object.entries(journalLimits)
-          .map((
-            [name, last],
-          ) => [name, options.plan ? '' : journalDigest(name, last)]),
+      let historical = Object.fromEntries(
+        journalTables.map((name) => [name, tail(name, journalLimits[name])]),
       )
       let preserveHistory = () => {
-        if (options.plan) return
-        for (let [name, last] of Object.entries(journalLimits)) {
-          if (journalDigest(name, last) != historicalJournal[name]) {
-            fail('Historical journal changed')
+        for (let name of journalTables) {
+          let rows = tail(name, journalLimits[name])
+          // host is the only allowed historical nullable journal addition.
+          let normalize = (row: Row) =>
+            name == 'journal_tx' ? { host: null, ...row } : row
+          if (!same(historical[name].map(normalize), rows.map(normalize))) {
+            fail('Historical journal tail changed')
           }
         }
       }
