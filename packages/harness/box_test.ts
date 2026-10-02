@@ -4,13 +4,14 @@
 // second.
 
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertMatch } from '@std/assert'
+import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
 import { type Comp, graph } from '@yaks/graph'
 import { modelDoc } from '@yaks/model'
 import { EXIT, processDoc, processes } from '@yaks/process'
 import { ram } from '@yaks/ram'
 import { sessionDoc } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
+import { CallError } from '@yaks/tools'
 import { loadVocab } from '@yaks/vocab'
 import { type Opts } from '@yaks/process'
 import { boxMachine } from './box.ts'
@@ -52,6 +53,29 @@ test('a short command answers inline, with its output and its code', async () =>
   let g = tracked()
   let said = await named(g).shell.run({ command: 'echo hi; exit 2' })
   assertMatch(said, /^process \S+ exited 2\nhi$/)
+})
+
+test('shell refuses NUL input without recording a launch receipt', async () => {
+  let g = tracked()
+  let o = opts()
+  let m = boxMachine(g, o)
+  let shell = machineTools(m).find((t) => t.name == 'shell')!
+  let ctx = {
+    session: crypto.randomUUID(),
+    call: { entity: { eid: crypto.randomUUID() } },
+    entries: [],
+  }
+  try {
+    let error = await assertRejects(
+      () => shell.run({ command: 'printf "a\0b"' }, ctx),
+      CallError,
+    )
+    assertEquals(error.code, 'arguments')
+    assertEquals(await m.receipt!(ctx.call.entity.eid), undefined)
+    assertEquals(await g.read('.process&*'), [])
+  } finally {
+    await Deno.remove(o.dir!, { recursive: true })
+  }
 })
 
 test('a command tail keeps a line wider than a read block whole', async () => {

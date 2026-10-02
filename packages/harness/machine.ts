@@ -14,6 +14,7 @@
 // Worker alike, and every effect is one of the machine's five verbs.
 
 import type { Tool, ToolContext } from '@yaks/session'
+import { CallError } from '@yaks/tools'
 
 /** A process as the machine holds it: `exit` is absent while it runs, and its
  * code is null when the machine could not learn it. */
@@ -213,8 +214,17 @@ export let machineTools = (m: Machine, o: MachineOpts = {}): Tool[] => {
       // outlived it is reported as running even if it exits a moment later.
       let end = Date.now() + ms
       let cwd = args.cwd == null ? await here(ctx) : String(args.cwd)
+      let command = String(args.command ?? '')
+      // OS arguments cannot carry NUL; refuse before a machine records a
+      // launch receipt or hands the input to its process runtime.
+      if (command.includes('\0')) {
+        throw new CallError(
+          'arguments',
+          'shell command cannot contain NUL bytes',
+        )
+      }
       let id = await m.start(
-        String(args.command ?? ''),
+        command,
         cwd,
         ctx?.call.entity.eid,
         ctx?.session,
