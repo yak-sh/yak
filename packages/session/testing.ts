@@ -11,6 +11,8 @@ import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import type { Bundle } from '@yaks/graph'
 import { type Graph, graph, type Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
+import { executionComputed } from '@yaks/tools'
+import { attemptComputed } from './attempt.ts'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { modelDoc } from '@yaks/model/vocab'
 import { sessionDoc } from './comp.ts'
@@ -78,7 +80,10 @@ export let ids = {
 /** A store holding two people, two runs and two pages, with nothing locked
  * yet. */
 export let store = (): Storage => {
-  let s = ram(pages, { number: true })
+  let s = ram(pages, {
+    number: true,
+    computed: { ...executionComputed, ...attemptComputed },
+  })
   let { ada, bo, run1, run2, p1, p2 } = ids
   graph({ storage: s, vocab: pages }).apply([
     { entity: { eid: ada }, person: { name: 'Ada' } },

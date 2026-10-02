@@ -98,6 +98,7 @@ import {
   spec,
   type Tasks,
 } from './task-context.ts'
+import { attemptState } from './attempt.ts'
 import type { Attempt } from '@yaks/effects'
 
 /** The caller, supplied by react rather than by model arguments, and a
@@ -136,6 +137,7 @@ export type Served = { model: Model; name: string; provider?: Eid }
 /** What `react` is handed beside the graph. */
 export type Deps = {
   /** Experimental durable request admission with transient text. */
+  owner?: Eid
   streaming?: boolean
   /** Minimum interval between durable stream checkpoints; zero disables. */
   checkpointMs?: number
@@ -330,7 +332,7 @@ export let project = (
 export let lines = (entries: Bundle[], asking?: Bundle): Bundle[] =>
   entries.filter((b) =>
     b == asking ||
-    !(QUESTIONS in b || ANSWER in b) &&
+    !(b.notice && b.output && !b.checkpoint) && !(QUESTIONS in b || ANSWER in b) &&
       ['input', 'output', 'call', 'result'].includes(kindOf(b) ?? '')
   )
 
@@ -606,19 +608,18 @@ export let react = async (
       return await append([{
         ...patch,
         entity: attempt.entity,
-        $was: { attempt: { state: token('inflight') } },
+        $was: { attempt: { by: token(comp(attempt, 'attempt')?.by) } },
       }, ...added])
     } catch (e) {
       if (
         e instanceof Stale && e.eid == attempt.entity.eid &&
-        e.comp == 'attempt' && e.prop == 'state'
+        e.comp == 'attempt' && e.prop == 'by'
       ) {
         // The commit may have succeeded before append's status read failed.
         // A completed ask still owes its newly saved calls a turn.
         if (
-          (patch.attempt as Comp)?.state == 'completed' &&
-          comp((await g.get([attempt.entity.eid], ['attempt']))[0], 'attempt')
-              ?.state == 'completed'
+          attemptState(patch) == 'completed' &&
+          attemptState((await g.get([attempt.entity.eid]))[0]) == 'completed'
         ) {
           return { ...await current(), did: 'asked' }
         }
@@ -627,16 +628,25 @@ export let react = async (
       throw e
     }
   }
-  const unfinished = entries.find((b) =>
-    (b.attempt as Comp | undefined)?.state == 'inflight'
-  )
+  const unfinished = entries.find((b) => attemptState(b) == 'inflight')
   if (unfinished) {
     // The request may have reached the provider. Its partial output stays in
     // the transcript, but only a completed ask can be used as an anchor.
     // Continue from that history after the former worker has gone.
     let recovered = await finish(
       unfinished,
-      { entity: unfinished.entity, attempt: { state: 'interrupted' } },
+      {
+        entity: unfinished.entity,
+        attempt: { by: null },
+        interrupted: { code: 'restart' },
+        ...!deps.streaming
+          ? {
+            failed: {
+              reason: 'Unfinished dispatched request; inspect before retry',
+            },
+          }
+          : {},
+      },
       [
         deps.streaming
           ? line(
@@ -646,7 +656,7 @@ export let react = async (
               'Inspect the state before repeating any action that may have completed.',
           )
           : line(
-            { [ERROR]: { code: 'interrupted' } },
+            { notice: {}, [OUTPUT]: { source: unfinished.entity.eid } },
             'The previous model request was interrupted. It may have ' +
               'completed at the provider; inspect it before asking again.',
           ),
@@ -736,6 +746,7 @@ export let react = async (
     const run = runner(g, {
       tools: [...toolEntities.values()].map(served),
       otherwise: unserved,
+      owner: deps.owner ?? session,
       report: (error) => deps.report?.(error, session, 'tool'),
     })
     let older = open.filter((b) => comp(b, CALL)?.source != asked?.entity.eid)
@@ -837,9 +848,7 @@ export let react = async (
   // Only completed responses can supply provider continuation state. A partial
   // response remains ordinary visible history after the last completed anchor.
   asked = newestAsk(
-    entries.filter((b) =>
-      !b.attempt || (b.attempt as Comp).state == 'completed'
-    ),
+    entries.filter((b) => attemptState(b) == 'completed'),
   )
   let checkpoint = entries.filter((b) => b.checkpoint).at(-1)
   const sameModel = asked &&
@@ -1023,7 +1032,7 @@ export let react = async (
         },
       }
       : {},
-    attempt: { state: 'inflight' },
+    attempt: { by: deps.owner ?? session },
   })
   const stream = new Map<
     string,
@@ -1042,7 +1051,12 @@ export let react = async (
   }
   // Graceful stop closes admission, not a request already admitted below.
   if (deps.stopping?.aborted) return nothing
-  ;[ask] = await g.apply([ask], { trusted: true })
+  let pending = entries.filter((b) => b.provisional && b.ask).map((b) => ({
+    entity: b.entity,
+    provisional: null,
+  }))
+  ;[ask] = (await g.apply([ask, ...pending], { trusted: true }))
+    .filter((b) => b.entity.eid == ask.entity.eid)
   if (deps.streaming) {
     req.onText = ({ index, id, text }) => {
       if (!accepting) return
@@ -1059,7 +1073,7 @@ export let react = async (
           let landed = await g.apply([
             {
               entity: ask.entity,
-              $was: { attempt: { state: token('inflight') } },
+              $was: { attempt: { by: token(comp(ask, 'attempt')?.by) } },
             },
             line({
               [CONTENT]: { body: '' },
@@ -1113,7 +1127,7 @@ export let react = async (
       comp(checkpoint, 'checkpoint')?.overflow &&
       !entries.some((b) =>
         b.ask && seqOf(b) > seqOf(checkpoint!) &&
-        comp(b, 'attempt')?.state == 'completed'
+        attemptState(b) == 'completed'
       )
     if (overflow) {
       let enforced = ceiling(text)
@@ -1155,10 +1169,11 @@ export let react = async (
             let through = forced.chunk.at(-1)!
             let step = await finish(ask, {
               entity: ask.entity,
-              attempt: { state: 'interrupted' },
+              attempt: { by: null },
+              interrupted: { code: 'superseded' },
             }, [
               line({
-                [ERROR]: { code: (e as ModelError).code },
+                notice: {}, [OUTPUT]: { source: ask.entity.eid },
                 ...(e as ModelError).response && g.vocab.comp(RESPONSE)
                   ? { [RESPONSE]: (e as ModelError).response! }
                   : {},
@@ -1197,20 +1212,41 @@ export let react = async (
       ask,
       {
         entity: ask.entity,
-        attempt: { state: refused ? 'completed' : 'interrupted' },
+        attempt: { by: null },
+        ...retried
+          ? { provisional: { note: 'Provider retry still owed' } }
+          : {},
+        ...!refused && !retried ? { failed: { reason: String(e) } } : {},
+        ...refused ? {} : {
+          interrupted: {
+            code: e instanceof ModelError ? e.code : 'transport',
+          },
+        },
       },
       [
         refused || retried
           ? line({
-            ...failing(g, e as ModelError),
+            ...refused ? failing(g, e as ModelError) : {
+              notice: {},
+              ...e instanceof ModelError && e.response && g.vocab.comp(RESPONSE)
+                ? { [RESPONSE]: e.response }
+                : {},
+            },
             [OUTPUT]: { source: ask.entity.eid },
           }, (e as ModelError).message)
-          : defect && deps.streaming
-          ? line({ [EXCEPTION]: {} }, String(e))
+          : defect
+          ? line(
+            { [EXCEPTION]: {}, [OUTPUT]: { source: ask.entity.eid } },
+            String(e),
+          )
           : line(
-            e instanceof ModelError
-              ? failing(g, e, 'interrupted')
-              : { [ERROR]: { code: 'interrupted' } },
+            {
+              notice: {},
+              [OUTPUT]: { source: ask.entity.eid },
+              ...e instanceof ModelError && e.response && g.vocab.comp(RESPONSE)
+                ? { [RESPONSE]: e.response }
+                : {},
+            },
             'Response interrupted: ' + String(e),
           ),
       ],
@@ -1238,7 +1274,7 @@ export let react = async (
     ...reply.cost == null
       ? {}
       : { cost: { dollars: reply.cost, reported: reply.costReported ?? true } },
-    attempt: { state: 'completed' },
+    attempt: { by: null },
   }
   let added: Bundle[] = [finalAsk]
   let textIndex = 0
@@ -1328,7 +1364,11 @@ export let react = async (
     ) {
       let omitted = await finish(
         ask,
-        { entity: ask.entity, attempt: { state: 'interrupted' } },
+        {
+          entity: ask.entity,
+          attempt: { by: null },
+          interrupted: { code: 'superseded' },
+        },
         [
           line(
             { [EXCEPTION]: {} },

@@ -16,3 +16,5 @@ export const description: string = manifest.description
 
 /** Every document this plugin declares. */
 export const docs: VocabDoc[] = [toolsDoc]
+
+export { executionDerived as derived } from './state.ts'

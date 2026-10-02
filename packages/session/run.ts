@@ -279,7 +279,7 @@ let step = async (g: Graph, session: Eid, r: Runner): Promise<Step> => {
   let tick = r.streaming ? setInterval(look, r.look ?? 1000) : undefined
   if (r.streaming) looking(g).set(session, look)
   try {
-    return await react(g, session, { ...r, signal })
+    return await react(g, session, { ...r, owner: r.holder, signal })
   } finally {
     clearInterval(tick)
     if (looking(g).get(session) == look) looking(g).delete(session)

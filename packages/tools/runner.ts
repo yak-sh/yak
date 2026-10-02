@@ -79,6 +79,7 @@ import { effectsIn } from '@yaks/vocab'
 import { CallError, parsed, resolved, validated } from './args.ts'
 import { toolsDoc } from './vocab.ts'
 import { valueIn } from './value.ts'
+import { executionState, Interrupted } from './state.ts'
 import { persist } from './persist.ts'
 
 // What each call is doing right now in this process, keyed per graph, not per
@@ -424,11 +425,12 @@ let owned = (call: Eid) => (b: Bundle): boolean =>
  * queries for broken rows (or failed calls) returns entities carrying `error`,
  * `exception` and `execution`, and reporting faults is not itself a fault.
  */
-export let faulted = (landed: Bundle[], call: Eid): boolean =>
-  landed.some((b) =>
-    b.entity.eid == call &&
-    (b.execution as Comp | undefined)?.state == 'failed'
+export let faulted = (landed: Bundle[], call: Eid): boolean => {
+  let row = landed.find((b) => b.entity.eid == call)
+  return !!row && ['failed', 'interrupted'].includes(
+    executionState(row, landed) ?? '',
   )
+}
 
 /**
  * What a call answered, for display: the tool's own bundles, without the
@@ -542,10 +544,8 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   }
 
   // The claim this runner writes.
-  let claim = (): Comp => ({
-    state: 'running',
-    ...(opts.owner ? { by: opts.owner } : {}),
-  })
+  let owner = opts.owner ?? mint()
+  let claim = (): Comp => ({ by: owner })
   // The tool a call names, as this runner has it. A call naming a tool this
   // runner does not have is left alone: another runner may have that tool,
   // and failing the call here would be this runner's verdict on somebody
@@ -580,7 +580,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         await g.apply([call, {
           entity: { eid: id },
           execution: claim(),
-          $was: { execution: { state: null } },
+          $was: { execution: { by: null } },
         }])
       } catch (error) {
         if (error instanceof Stale) return perform(id, {})
@@ -616,6 +616,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     }
     let held = await recalled(id)
     if (held.length) return held
+    if (call.interrupted) return []
     // A live process's claim is not this runner's to take, redrive or not,
     // its own owner's included: a claim this runner is not running is running
     // in another runner under the same name. A lapsed one is taken here and now,
@@ -636,7 +637,9 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         entity: call.entity,
         execution: claim(),
         $was: {
-          execution: { state: redrive ? token('running') : null },
+          execution: {
+            by: redrive ? token((call.execution as Comp)?.by) : null,
+          },
           call: { to: token(c.to), args: token(c.args) },
         },
       }])
@@ -644,7 +647,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       if (error instanceof Stale) return []
       throw error
     }
-    return execute(call, tool)
+    return execute({ ...call, execution: claim() }, tool)
   }
 
   // What ends a claimed call: the result the rule names, worded from what it
@@ -665,11 +668,17 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         !!call.wake,
       ),
       content: { body: worded(said) },
+      $was: { result: { call: null } },
     },
     {
       entity: call.entity,
-      execution: { state },
-      $was: { execution: { state: before == null ? null : token(before) } },
+      execution: { by: (call.execution as Comp)?.by ?? null },
+      ...(state == 'interrupted' ? { interrupted: { code: 'transport' } } : {}),
+      $was: {
+        execution: {
+          by: before == null ? null : token((call.execution as Comp)?.by),
+        },
+      },
     },
   ]
 
@@ -689,6 +698,14 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     // 500 (a `Refused` write, an `Unknown` name) with its name. Anything else
     // is a defect, passed to `report` as well as recorded.
     let faulted = async (error: unknown): Promise<Bundle[]> => {
+      if (error instanceof Interrupted) {
+        return [{
+          entity: { eid: '$fault' },
+          content: { body: String(error) },
+          output: { source: id },
+          ...(g.vocab.comp('notice') ? { notice: {} } : {}),
+        }]
+      }
       let code = error instanceof CallError
         ? error.code
         : status(error) < 500
@@ -712,11 +729,13 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     let land = async (
       made: Bundle[],
       state: string,
-      keeps = !tool.readOnly || state == 'failed',
+      keeps = !tool.readOnly || state == 'failed' || state == 'interrupted',
+      code?: string,
     ): Promise<Bundle[]> => {
       let change = [
         ...(keeps ? made : []),
         ...ending(call, started, state, made),
+        ...code ? [{ entity: call.entity, interrupted: { code } }] : [],
       ]
       let landed = await persist(
         () => g.apply(change),
@@ -754,7 +773,11 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       // This catches both the tool's own throw and a rejection of what it
       // returned: a transaction the graph refuses is this call's failure,
       // rather than a call left claimed with nothing recorded about it.
-      answered = await land(await faulted(error), 'failed')
+      answered = await land(
+        await faulted(error),
+        error instanceof Interrupted ? 'interrupted' : 'failed',
+        undefined, error instanceof Interrupted ? error.code : undefined,
+      )
     } finally {
       held.delete(id)
     }
@@ -823,14 +846,14 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     let prior = await recalled(id)
     if (prior.length) return prior
     let execution = call.execution as Comp | undefined
-    if (execution && (execution.state != 'running' || execution.by != null)) {
+    if (execution && (call.interrupted || execution.by != null)) {
       throw new UnfinishedCall(id)
     }
     let fault: Bundle = {
       entity: { eid: '$fault' },
       content: { body: why },
       output: { source: id },
-      error: { code: 'interrupted' },
+      ...(g.vocab.comp('notice') ? { notice: {} } : {}),
     }
     let said = execution && answer ? answer : [fault]
     try {
@@ -839,7 +862,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         ...ending(
           call,
           undefined,
-          execution && answer ? 'done' : 'failed',
+          execution && answer ? 'done' : 'interrupted',
           said,
           execution ? 'running' : null,
         ),
@@ -897,13 +920,13 @@ export let runner = (g: Graph, opts: Opts): Runner => {
           entity: { eid: '$fault' },
           content: { body: why },
           output: { source: id },
-          error: { code: 'interrupted' },
+          ...(g.vocab.comp('notice') ? { notice: {} } : {}),
         }
         try {
           out.push(
             ...await g.apply([
               fault,
-              ...ending(call, started, 'failed', [fault]),
+              ...ending(call, started, 'interrupted', [fault]),
             ]),
           )
         } catch (error) {

@@ -1968,12 +1968,14 @@ export class Store {
       await this.#trust([
         ...inflight.map((b) => ({
           entity: b.entity,
-          attempt: { state: 'interrupted' },
+          attempt: { by: null },
+          interrupted: { code: 'restart' },
+          failed: { reason: 'Unfinished dispatched request; inspect before retry' },
         })),
         {
           entity: { eid: crypto.randomUUID() },
           entry: { session },
-          error: { code: 'interrupted' },
+          notice: {},
           content: {
             body: 'The previous model request may have completed at the ' +
               'provider. Inspect it before asking again.',

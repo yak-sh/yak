@@ -98,3 +98,13 @@ export let executionDerived = (vocab: Vocab): Derived => {
 export let executionComputed: Computed = {
   'execution.state': (call, among) => executionState(call, among.list),
 }
+
+/** Work cut off deliberately, not a refusal or a defect. */
+export class Interrupted extends Error {
+  code: string
+  constructor(message: string, code = 'aborted') {
+    super(message)
+    this.name = 'Interrupted'
+    this.code = code
+  }
+}

@@ -116,7 +116,7 @@ let call = (to: string, id: unknown, args: unknown): Comps => ({
 let result = (id: unknown, body: string, failed: boolean): Comps => ({
   result: { call: String(id ?? '') },
   content: { body: scrub(body) },
-  execution: { state: failed ? 'failed' : 'done' },
+  execution: {},
   ...(failed ? { refusal: { code: 'is_error' } } : {}),
 })
 

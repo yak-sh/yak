@@ -28,7 +28,7 @@
     },
     "attempt": {
       "component": true,
-      "description": "Provider request lifecycle. Unfinished dispatched attempts are ambiguous on restart, never automatically replayed.",
+      "description": "A provider request held while in flight; its state is computed from the holder and interruption mark. An unfinished dispatched request is ambiguous on restart.",
       "properties": {
         "state": {
           "type": "string",
@@ -37,7 +37,8 @@
             "completed",
             "interrupted"
           ],
-          "index": true
+          "index": true,
+          "computed": true
         },
         "by": {
           "type": "string",

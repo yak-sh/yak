@@ -33,7 +33,7 @@ let shapes: [string, Bundle[], boolean][] = [
   ['asking the runner for a model turn', [
     entry('s', 1, { content: { body: 'hi' }, using: {} }),
   ], true],
-  ['a turn the runner is taking', [entry('s', 1, { ask: {} })], true],
+  ['a turn the runner is taking', [entry('s', 1, { ask: {}, attempt: { by: 's' } })], true],
 ]
 
 test('the session cap counts the transcripts the runner is running', async () => {

@@ -7,6 +7,10 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { graph, identityEid } from '@yaks/graph'
+import { attemptComputed } from './attempt.ts'
+import { executionComputed } from '@yaks/tools'
+import { effectDoc } from '@yaks/effects'
+import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { effects } from '@yaks/effects'
@@ -44,6 +48,8 @@ let fakeDoc: VocabDoc = {
   },
 }
 let vocab = loadVocab([
+  kernelDoc,
+  { $defs: { provisional: effectDoc.$defs!.provisional } },
   sessionDoc,
   toolsDoc,
   modelDoc,
@@ -51,7 +57,7 @@ let vocab = loadVocab([
   contextDoc,
   taskDoc,
   docDoc,
-])
+], [kernelKeywords])
 
 let ids = {
   s: 'sess',
@@ -110,7 +116,13 @@ let seed = (g: Graph) =>
   ])
 
 let world = (): Graph => {
-  let g = graph({ storage: ram(vocab), vocab, plugins: [sessions()] })
+  let g = graph({
+    storage: ram(vocab, {
+      computed: { ...attemptComputed, ...executionComputed },
+    }),
+    vocab,
+    plugins: [sessions()],
+  })
   seed(g)
   return g
 }
@@ -249,7 +261,7 @@ test('an interrupted tool call gets a result and the model continues without rep
     entity: { eid: 'old-call' },
     entry: { session: ids.s },
     call: { to: ids.t, id: 'tool-1', args: { text: 'hi' }, source: 'old-ask' },
-    execution: { state: 'running' },
+    execution: {},
   }], { trusted: true })
   let runs = 0
   let { model, asked } = scripted([says('next', 'done')])
@@ -270,7 +282,7 @@ test('an interrupted tool call gets a result and the model continues without rep
   assertEquals(entries.filter((b) => b.result).length, 1)
   assertEquals(
     (entries.find((b) => b.entity.eid == 'old-call')!.execution as Comp).state,
-    'failed',
+    'interrupted',
   )
   assertEquals(asked.length, 1)
   assertEquals(
@@ -291,7 +303,7 @@ test('a legacy unfinished-call exception recovers without replay', async () => {
     entity: { eid: 'old-call' },
     entry: { session: ids.s },
     call: { to: ids.t, id: 'tool-1', args: { text: 'hi' }, source: 'old-ask' },
-    execution: { state: 'running' },
+    execution: {},
   }, {
     entity: { eid: 'old-exception' },
     entry: { session: ids.s },
@@ -1118,7 +1130,7 @@ test('a retryable audio failure never resends an ambiguous request', async () =>
   }
   assertEquals(await rest(g, ids.s, { model, tools: [], mint }), 'failed')
   assertEquals(calls, 1)
-  assertEquals(await kinds(g, ids.s), ['input', 'ask', 'error'])
+  assertEquals(await kinds(g, ids.s), ['input', 'ask', 'output'])
 })
 
 // A failing model, counting its calls.
@@ -1137,7 +1149,7 @@ let outcome = async (g: Graph) => {
   let [ask, error] = (await transcript(g, ids.s)).slice(-2)
   return [
     (ask.attempt as Comp | undefined)?.state,
-    ((error.refusal ?? error.error) as Comp).code,
+    ((error.refusal ?? error.error ?? ask.interrupted) as Comp).code,
     textOf(error),
   ]
 }
@@ -1162,7 +1174,7 @@ test('outside the pool, a failure that may pass stands at once as an interruptio
       assertEquals(seen.calls, 1)
       assertEquals(await outcome(g), [
         'interrupted',
-        'interrupted',
+        error().code,
         'Response interrupted: ' + String(error()),
       ])
       let line = (await transcript(g, ids.s)).at(-1)!
@@ -1305,7 +1317,13 @@ test('a fork must name an entry, a using a model', () => {
 
 test('as `session_run`, the steps run themselves until the transcript settles', async () => {
   let fx = effects(vocab)
-  let g = graph({ storage: ram(vocab), vocab, plugins: [sessions(), fx] })
+  let g = graph({
+    storage: ram(vocab, {
+      computed: { ...attemptComputed, ...executionComputed },
+    }),
+    vocab,
+    plugins: [sessions(), fx],
+  })
   let { model, asked } = scripted([calls(['c1', 'hi']), says('r2', 'done')])
   let steps: string[] = []
   fx.handle(running(g, {
@@ -1486,8 +1504,11 @@ test('recovery leaves an interrupted nonstream request for inspection', async ()
   let entries = await transcript(g, ids.s)
   assertEquals(calls, 1)
   assertEquals(statusOf(entries), 'failed')
-  assertEquals(entries.filter((b) => b.output).length, 0)
-  assertEquals((entries.at(-1)?.error as Comp).code, 'interrupted')
+  assertEquals(entries.filter((b) => b.output && !b.notice).length, 0)
+  assertEquals(
+    (entries.find((b) => b.ask)!.interrupted as Comp).code,
+    'restart',
+  )
 })
 
 test('unstarted older calls get results without replay or provider dispatch', async () => {
@@ -1523,14 +1544,14 @@ test('unstarted older calls get results without replay or provider dispatch', as
   let step = await react(g, ids.s, deps)
   assertEquals(step.did, 'ran')
   assertEquals(step.added.filter((b) => b.result).length, 2)
-  assertEquals(step.added.filter((b) => b.error).length, 2)
+  assertEquals(step.added.filter((b) => b.interrupted).length, 2)
   assertEquals(runs, 0)
   assertEquals(asked.length, 1)
   let entries = await transcript(g, ids.s)
   assertEquals(entries.filter((b) => b.result).length, 2)
   assertEquals(
     entries.filter((b) => b.call).map((b) => (b.execution as Comp).state),
-    ['failed', 'failed'],
+    ['interrupted', 'interrupted'],
   )
   let resumed = await react(g, ids.s, deps)
   assertEquals(resumed.did, 'asked')
@@ -1552,7 +1573,7 @@ test('a claimed older call still fails for manual inspection', async () => {
     (b.call as Comp | undefined)?.id == 'claimed'
   )!
   await g.apply([
-    { entity: call.entity, execution: { state: 'running', by: ids.s } },
+    { entity: call.entity, execution: { by: ids.s } },
     {
       entity: { eid: 'new-ask' },
       entry: { session: ids.s },
@@ -1854,7 +1875,11 @@ for (let committed of [false, true]) {
     let apply = g.apply, read = g.read
     let failed = false, saves = 0, landed = false
     g.apply = (batch, opts) => {
-      if (batch.some((b) => (b.attempt as Comp)?.state == 'completed')) {
+      if (
+        batch.some((b) =>
+          b.attempt && (b.attempt as Comp).by === null && !b.interrupted
+        )
+      ) {
         saves++
         if (!committed && !failed) {
           failed = true

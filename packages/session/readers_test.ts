@@ -88,14 +88,14 @@ test('claude: a tool call and its result, a credential scrubbed from both', () =
   assertEquals(entries(claude, result(false)), [{
     result: { call: 'toolu_1' },
     content: { body: 'token=[redacted]' },
-    execution: { state: 'done' },
+    execution: {},
   }])
   assertEquals(
     entries(claude, result(true)),
     [{
       result: { call: 'toolu_1' },
       content: { body: 'token=[redacted]' },
-      execution: { state: 'failed' },
+      execution: {},
       refusal: { code: 'is_error' },
     }],
   )
@@ -183,7 +183,7 @@ test('codex: what it said, what it ran, and the turn it closed', () => {
         {
           result: { call: 'item_1' },
           content: { body: 'a\nb' },
-          execution: { state: 'failed' },
+          execution: {},
           refusal: { code: 'is_error' },
         },
       ],
@@ -234,13 +234,13 @@ test('codex: imported tool outcomes mark refusals and leave external errors alon
   assertEquals(entries(codex, event('failed'))[1], {
     result: { call: 'mcp_1' },
     content: { body: 'token=[redacted]' },
-    execution: { state: 'failed' },
+    execution: {},
     refusal: { code: 'is_error' },
   })
   assertEquals(entries(codex, event('completed'))[1], {
     result: { call: 'mcp_1' },
     content: { body: 'token=[redacted]' },
-    execution: { state: 'done' },
+    execution: {},
   })
   assertEquals(error, { message: 'token=ghp_0123456789abcdef' })
 })

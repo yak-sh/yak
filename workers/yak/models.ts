@@ -176,7 +176,9 @@ export let recovering = async (at: Stored, call: string) => {
   let patches: Bundle[] = [{
     entity: ask.entity,
     cost: { dollars: reply.cost, reported: reply.costReported ?? true },
-    attempt: { state: 'completed' },
+    attempt: { by: null },
+    interrupted: null,
+    failed: null,
   }]
   for (let artifact of reply.artifacts ?? []) {
     let eid = artifact.address

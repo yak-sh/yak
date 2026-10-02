@@ -17,6 +17,8 @@ import {
 } from '@yaks/graph'
 import { effects } from '@yaks/effects'
 import { ram } from '@yaks/ram'
+import { kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { executionComputed } from './state.ts'
 import { loadVocab } from '@yaks/vocab'
 import {
   answerOf,
@@ -50,26 +52,20 @@ let echo: Tool = {
 }
 
 let words = (extra: Record<string, unknown> = {}) =>
-  loadVocab([callDoc, toolDoc, {
+  loadVocab([callDoc, toolDoc, kernelDoc, {
     $defs: {
       person: { component: true, properties: {} },
       // What a runner's owner is: a process, and its ending (@yaks/process).
       process: { component: true, properties: { pid: { type: 'integer' } } },
       exit: { component: true, properties: { code: { type: 'integer' } } },
-      created: {
-        component: true,
-        properties: {
-          by: { type: 'string', ref: 'entity', death: 'keep' },
-          at: { type: 'string', format: 'date-time', stamped: true },
-        },
-      },
+
       ...extra,
     },
-  }])
+  }], [kernelKeywords])
 
 let world = (tools: Tool[] = [echo], owner?: string) => {
   let vocab = words()
-  let g = graph({ vocab, storage: ram(vocab) })
+  let g = graph({ vocab, storage: ram(vocab, { computed: executionComputed }) })
   return { g, r: runner(g, { tools, owner, report: () => {} }) }
 }
 
@@ -79,7 +75,11 @@ let world = (tools: Tool[] = [echo], owner?: string) => {
 let watched = (tools: Tool[] = [echo], extra = {}) => {
   let vocab = words(extra)
   let fx = effects(vocab, { report: () => {} })
-  let g = graph({ vocab, storage: ram(vocab), plugins: [fx] })
+  let g = graph({
+    vocab,
+    storage: ram(vocab, { computed: executionComputed }),
+    plugins: [fx],
+  })
   let r = runner(g, { tools, report: () => {} })
   for (let rule of r.rules) fx.on(rule.plan, (e) => r.due(e.entity.eid))
   return { g, r, fx }
@@ -105,7 +105,10 @@ test('a call is the transcript: the ask, the answer, the result beside it', asyn
   assertEquals(body(answer.find((b) => b.output)), 'hi 2')
   assertEquals(body(result), 'hi 2')
   assertEquals(typeof (result.result as Comp).ms, 'number')
-  assertEquals((await g.read('.execution&*'))[0].execution, { state: 'done' })
+  assertEquals(
+    ((await g.read('.execution&*'))[0].execution as Comp).state,
+    'done',
+  )
   // The result is the rule's own entity, so answering again is the same one.
   let again = await r.run((await g.read('.call&*'))[0].entity.eid)
   assertEquals(again.find((b) => b.result)!.entity.eid, result.entity.eid)
@@ -113,7 +116,7 @@ test('a call is the transcript: the ask, the answer, the result beside it', asyn
 
 test('a direct tool reply carries what its caller is owed beside its data', async () => {
   let vocab = words()
-  let g = graph({ vocab, storage: ram(vocab) })
+  let g = graph({ vocab, storage: ram(vocab, { computed: executionComputed }) })
   let data: Tool = {
     ...echo,
     run: () => [{ entity: { eid: 'datum' }, person: {} }],
@@ -170,7 +173,7 @@ test('a rehearsal keeps its answer in the call graph', async () => {
 
 test('a reply is told what the call wrote: the write, never a read or a rehearsal', async () => {
   let vocab = words()
-  let g = graph({ vocab, storage: ram(vocab) })
+  let g = graph({ vocab, storage: ram(vocab, { computed: executionComputed }) })
   let make: Tool = {
     ...echo,
     inputSchema: { type: 'object', properties: { check: {} } },
@@ -198,7 +201,7 @@ test('a reply is told what the call wrote: the write, never a read or a rehearsa
 
 test('a refused tool still carries what its caller is owed', async () => {
   let vocab = words()
-  let g = graph({ vocab, storage: ram(vocab) })
+  let g = graph({ vocab, storage: ram(vocab, { computed: executionComputed }) })
   let refused: Tool = {
     ...echo,
     run: () => {
@@ -267,7 +270,7 @@ test('a claim with no answer is unfinished, and the boot pass re-drives it', asy
   let [call] = await g.apply([{
     entity: { eid: 'c1' },
     call: { to: toolEid('example_echo'), args: { value: 'late' } },
-    execution: { state: 'running' },
+    execution: {},
   }])
   await assertRejects(() => r.run(call.entity.eid), UnfinishedCall)
   assertEquals(
@@ -291,9 +294,12 @@ test('interrupting an unstarted call answers it once without running the tool', 
   let again = await r.interruptCall('unstarted', 'superseded before execution')
   assertEquals(runs, 0)
   assertEquals(first.filter((b) => b.result).length, 1)
-  assertEquals(first.filter((b) => b.error).length, 1)
+  assertEquals(first.filter((b) => b.interrupted).length, 1)
   assertEquals((await g.read('.result&*')).length, 1)
-  assertEquals((await g.read('.execution&*'))[0].execution, { state: 'failed' })
+  assertEquals(
+    ((await g.read('.execution&*'))[0].execution as Comp).state,
+    'interrupted',
+  )
   assertEquals(
     again.find((b) => b.result)?.entity.eid,
     first.find((b) => b.result)?.entity.eid,
@@ -311,11 +317,11 @@ test('a call a live process holds is left alone, redrive and all', async () => {
   await g.apply([{
     entity: { eid: 'theirs' },
     call: { to: toolEid('example_echo'), args: { value: 'elsewhere' } },
-    execution: { state: 'running', by: 'host2' },
+    execution: { by: 'host2' },
   }, {
     entity: { eid: 'mine' },
     call: { to: toolEid('example_echo'), args: { value: 'here' } },
-    execution: { state: 'running', by: 'host1' },
+    execution: { by: 'host1' },
   }])
   assertEquals(await r.run('theirs'), [])
   assertEquals(await r.run('mine'), [])
@@ -329,7 +335,7 @@ test('a call is held from the moment it is written, by whoever asked it', async 
   // finding the call the moment it commits. The tool reads, so its answer is
   // never written down: only the runner that asked has it.
   let vocab = words()
-  let storage = ram(vocab)
+  let storage = ram(vocab, { computed: executionComputed })
   let fx = effects(vocab, { report: () => {} })
   let here = graph({ vocab, storage, plugins: [fx] })
   let there = graph({ vocab, storage })
@@ -363,12 +369,12 @@ test('a claim whose holder has exited is free, and runs once', async () => {
     {
       entity: { eid: 'orphan' },
       call: { to: toolEid('example_echo'), args: { value: 'again' } },
-      execution: { state: 'running', by: 'crashed' },
+      execution: { by: 'crashed' },
     },
     {
       entity: { eid: 'theirs' },
       call: { to: toolEid('example_echo'), args: { value: 'elsewhere' } },
-      execution: { state: 'running', by: 'alive' },
+      execution: { by: 'alive' },
     },
   ])
   // An ordinary drive — no boot pass, no redrive — takes the lapsed claim.
@@ -395,9 +401,9 @@ test('an interrupted call is answered as interrupted, and no sweep runs it again
   let asked = r.call(called('example_wait', { value: 'forever' }))
   await r.call(called('example_echo', { value: 'done' }))
   let [ended] = (await r.interrupt('the process was stopped'))
-    .filter((b) => b.error)
-  assertEquals((ended.error as Comp).code, 'interrupted')
-  assertEquals((await g.read('.execution.state=failed&*')).length, 1)
+    .filter((b) => b.interrupted)
+  assertEquals((ended.interrupted as Comp).code, 'transport')
+  assertEquals((await g.read('.execution.state=interrupted&*')).length, 1)
   // Its holder exiting now leaves nothing lapsed to take.
   await g.apply([{ entity: { eid: 'host1' }, process: { pid: 1 }, exit: {} }])
   assertEquals(await runner(g, { tools: [stuck], owner: 'host2' }).drive(), [])
@@ -411,12 +417,12 @@ test('a holder that died is interrupted for, from what the graph says it held', 
   await g.apply([{
     entity: { eid: 'orphan' },
     call: { to: toolEid('example_echo'), args: { value: 'lost' } },
-    execution: { state: 'running', by: 'dead' },
+    execution: { by: 'dead' },
   }])
   let said = await r.interrupt('its process died', 'dead')
-  assertEquals(said.filter((b) => b.error).length, 1)
+  assertEquals(said.filter((b) => b.interrupted).length, 1)
   assertEquals((await g.read('.execution&*'))[0].execution, {
-    state: 'failed',
+    state: 'interrupted',
     by: 'dead',
   })
 })
@@ -437,7 +443,10 @@ test('a defect is an exception entity, a result, and a failed execution', async 
   )
   assertEquals(body(fault), 'Error: no')
   assertEquals(answer.find((b) => b.result)!.result !== undefined, true)
-  assertEquals((await g.read('.execution&*'))[0].execution, { state: 'failed' })
+  assertEquals(
+    ((await g.read('.execution&*'))[0].execution as Comp).state,
+    'failed',
+  )
 })
 
 for (let readOnly of [false, true]) {
@@ -486,16 +495,17 @@ for (let readOnly of [false, true]) {
     assertEquals(body(answer.find((b) => b.output)), 'precious 2')
     assertEquals(answer.some((b) => b.exception || b.error), false)
     assertEquals((answer.find((b) => b.result)!.result as Comp).ms, 7)
-    assertEquals((await g.get([call.entity.eid]))[0].execution, {
-      state: 'done',
-    })
+    assertEquals(
+      ((await g.get([call.entity.eid]))[0].execution as Comp).state,
+      'done',
+    )
   })
 }
 
 test('a defect is reported with its tool; a refusal is not', async () => {
   let said: [unknown, string | undefined][] = []
   let vocab = words()
-  let g = graph({ vocab, storage: ram(vocab) })
+  let g = graph({ vocab, storage: ram(vocab, { computed: executionComputed }) })
   let throwing = (verb: string, e: Error): Tool => ({
     ...echo,
     verb,
@@ -532,7 +542,10 @@ test('a batch the graph refuses is the call failing, not a call left claimed', a
   await r.ensure()
   let answer = await r.call(called('example_echo', { value: 'x' }))
   assertEquals(answer.some((b) => b.exception || b.refusal), true)
-  assertEquals((await g.read('.execution&*'))[0].execution, { state: 'failed' })
+  assertEquals(
+    ((await g.read('.execution&*'))[0].execution as Comp).state,
+    'failed',
+  )
   assertEquals((await g.read('.result&*')).length, 1)
 })
 
@@ -614,7 +627,7 @@ test('a reading tool answers entities and writes none of them', async () => {
 
 test('an answer too long to send whole is refused, not crashed on', async () => {
   let vocab = words()
-  let g = graph({ vocab, storage: ram(vocab) })
+  let g = graph({ vocab, storage: ram(vocab, { computed: executionComputed }) })
   let many: Tool = {
     ...echo,
     readOnly: true,
@@ -632,7 +645,10 @@ test('an answer too long to send whole is refused, not crashed on', async () => 
   assertEquals((error.refusal as Comp).code, 'too_large')
   assertEquals(body(error).includes('\n'), false)
   assertEquals(answer.some((b) => b.entity.eid == 'e0'), false)
-  assertEquals((await g.read('.execution&*'))[0].execution, { state: 'failed' })
+  assertEquals(
+    ((await g.read('.execution&*'))[0].execution as Comp).state,
+    'failed',
+  )
 })
 
 test('an answer is worded whole within its budget, and counted past it', () => {
@@ -702,7 +718,7 @@ let named = (tools: Tool[]) => {
   let vocab = words()
   let g = graph({
     vocab,
-    storage: ram(vocab),
+    storage: ram(vocab, { computed: executionComputed }),
     plugins: [{
       name: 'names',
       address: (_, ids, kind) =>
@@ -780,13 +796,20 @@ test('a call somebody else wrote is run because an effect matched it', async () 
     call: { to: toolEid('example_echo'), args: { value: 'elsewhere' } },
   }])
   assertEquals(body((await g.read('.result&*'))[0]), 'elsewhere 2')
-  assertEquals((await g.read('.execution&*'))[0].execution, { state: 'done' })
+  assertEquals(
+    ((await g.read('.execution&*'))[0].execution as Comp).state,
+    'done',
+  )
 })
 
 test('a call its caller runs owes the pool nothing; one nobody runs does', async () => {
   let vocab = words()
   let fx = effects(vocab, { report: () => {} })
-  let g = graph({ vocab, storage: ram(vocab), plugins: [fx] })
+  let g = graph({
+    vocab,
+    storage: ram(vocab, { computed: executionComputed }),
+    plugins: [fx],
+  })
   let r = runner(g, { tools: [echo], report: () => {} })
   let owed: string[] = []
   for (let rule of r.rules) {
@@ -815,7 +838,7 @@ test('a call for a tool this runner has no word for is left alone', async () => 
 
 test('a call this runner does not take is left alone', async () => {
   let vocab = words()
-  let g = graph({ vocab, storage: ram(vocab) })
+  let g = graph({ vocab, storage: ram(vocab, { computed: executionComputed }) })
   let r = runner(g, {
     tools: [echo],
     takes: (call) => call.entity.eid != 'theirs',

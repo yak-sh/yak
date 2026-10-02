@@ -46,3 +46,10 @@ export {
 } from './runner.ts'
 export { valueIn } from './value.ts'
 export { display } from './display.ts'
+
+export {
+  executionComputed,
+  executionDerived,
+  executionState,
+  Interrupted,
+} from './state.ts'

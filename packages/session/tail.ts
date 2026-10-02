@@ -177,7 +177,7 @@ export let imported = (
         entity: { eid: callOf(session, String(call.id)) },
         ...at,
         call: { ...asked, ...(name ? { to: toolEid(name) } : {}) },
-        execution: { state: 'running', by: session },
+        execution: { by: session },
         ...rest,
       })
       return

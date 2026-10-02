@@ -29,7 +29,7 @@ let vocab = loadVocab([
   toolsDoc,
   modelDoc,
   effectDoc,
-  pick(kernelDoc, ['admitted', 'waiting']),
+  pick(kernelDoc, ['admitted', 'waiting', 'interrupted', 'failed']),
 ])
 let P = identityEid('provider', ['fake'])
 let M = identityEid('model', ['fake-recovery'])

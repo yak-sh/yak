@@ -81,6 +81,8 @@ import {
   STOP_ENTRY,
   USING,
 } from './native.ts'
+import { attemptDerived, attemptState } from './attempt.ts'
+import { executionDerived } from '@yaks/tools'
 import { sessionCost } from './cost.ts'
 import { COST } from '@yaks/model'
 import type { Derived } from '@yaks/sql'
@@ -171,7 +173,7 @@ export let openCalls = (entries: Bundle[]): Bundle[] => {
 let abandoned = (entries: Bundle[]): boolean =>
   openCalls(entries).some((b) => {
     let execution = b.execution as Comp | undefined
-    return execution?.state == 'running' && execution.by == null
+    return !!execution && execution.by == null && !b.interrupted
   })
 
 /** A transcript the runner answers: one that asked it, by a request or a turn
@@ -198,7 +200,7 @@ export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
   if (kind == 'stop') return 'stopped'
   if (abandoned(all)) return 'running'
   if (kind == 'exception') return 'failed'
-  if (all.some((b) => (b.attempt as Comp | undefined)?.state == 'inflight')) {
+  if (all.some((b) => attemptState(b) == 'inflight')) {
     return 'running'
   }
   let afterAsk = (ask = newestAsk(all)) => {
@@ -211,17 +213,34 @@ export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
     let ask = all.find((b) => b.entity.eid == source && kindOf(b) == 'ask')
     return ask ? afterAsk(ask) : 'failed'
   }
+  let interrupted = newestAsk(all)
+  if (interrupted?.interrupted) {
+    if (
+      interrupted.failed &&
+      !all.some((b) => kindOf(b) == 'input' && seqOf(b) > seqOf(interrupted))
+    ) return 'failed'
+    if (
+      all.some((b) => kindOf(b) == 'input' && seqOf(b) > seqOf(interrupted))
+    ) {
+      return 'pending'
+    }
+    if (interrupted.provisional) return 'pending'
+    let turns = all.filter((b) => b.ask || kindOf(b) == 'input').slice(-RETRIES)
+    return turns.length == RETRIES && turns.every((b) => b.ask && b.interrupted)
+      ? 'failed'
+      : 'pending'
+  }
   let prior = all.at(-2)
   let code = (newest.error as Comp | undefined)?.code
   if (
     kind == 'error' && prior?.ask &&
-    (prior.attempt as Comp | undefined)?.state == 'completed'
+    attemptState(prior) == 'completed'
   ) return afterAsk()
   // A failure the provider may yet answer keeps the provider's code beside an
   // interrupted ask; one cut off here says `interrupted`.
   if (
     kind == 'error' && prior?.ask && code != null && code != 'interrupted' &&
-    (prior.attempt as Comp | undefined)?.state == 'interrupted'
+    attemptState(prior) == 'interrupted'
   ) return 'pending'
   if (kind == 'error' && code == 'interrupted') {
     return afterAsk()
@@ -229,16 +248,15 @@ export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
   if (kind == 'error' && code == LIMIT) return 'failed'
   if (kind == 'error') {
     // failed once the last RETRIES entries are all errors
-    let tail = all.filter((b) =>
-      !(b.ask && (b.attempt as Comp | undefined)?.state == 'completed')
-    ).slice(-RETRIES)
+    let tail = all.filter((b) => !(b.ask && attemptState(b) == 'completed'))
+      .slice(-RETRIES)
     return tail.length == RETRIES && tail.every((b) => kindOf(b) == 'error')
       ? 'failed'
       : 'pending'
   }
   if (openCalls(all).length) return 'running'
   if (
-    kind == 'ask' && (newest.attempt as Comp | undefined)?.state == 'completed'
+    kind == 'ask' && attemptState(newest) == 'completed'
   ) return 'settled'
   if (kind == 'ask' || kind == 'call') return 'running'
   // Inputs can be admitted while a provider request is in flight. Its reply
@@ -320,14 +338,23 @@ export let sessionStatus = {
     'failed',
   ],
   deps: ['session'],
-  expr: (owner: Expr, dispatch = dispatchStatus): Expr => {
+  expr: (
+    owner: Expr,
+    dispatch = dispatchStatus,
+    states: Derived = {},
+    declared: (name: string) => boolean = () => true,
+  ): Expr => {
+    let state = (name: string, alias: string) =>
+      states[`${name}.state`]?.expr(col('entity', alias)) ?? col('state', alias)
     // Whether the entity `of` wears `comp` (and `also` holds of that row, `k`).
     let has = (comp: string, of: Expr, also?: Expr) =>
-      exists(select({
-        cols: [lit(1)],
-        from: table(comp, 'k'),
-        where: and(eq(col('entity', 'k'), of), ...(also ? [also] : [])),
-      }))
+      declared(comp)
+        ? exists(select({
+          cols: [lit(1)],
+          from: table(comp, 'k'),
+          where: and(eq(col('entity', 'k'), of), ...(also ? [also] : [])),
+        }))
+        : lit(false)
     let lacks = (comp: string, of: Expr) => not(has(comp, of))
     // The newest entry is the row the verdict below reads, `n`, so each
     // branch looks at it without finding it again.
@@ -348,7 +375,7 @@ export let sessionStatus = {
             has(
               'attempt',
               col('entity', 'e3'),
-              eq(col('state', 'k'), lit('completed')),
+              eq(state('attempt', 'k'), lit('completed')),
             ),
           )),
         ),
@@ -392,15 +419,15 @@ export let sessionStatus = {
     let inflight = entries(has(
       'attempt',
       col('entity', 'e'),
-      eq(col('state', 'k'), lit('inflight')),
+      eq(state('attempt', 'k'), lit('inflight')),
     ))
     let open = calls(unanswered)
     let abandoned = calls(and(
+      lacks('interrupted', col('entity', 'c')),
       has(
         'execution',
         col('entity', 'c'),
         and(
-          eq(col('state', 'k'), lit('running')),
           isNull(col('by', 'k')),
         ),
       ),
@@ -470,7 +497,7 @@ export let sessionStatus = {
       from: table('attempt', 'a'),
       where: and(
         eq(col('entity', 'a'), n),
-        eq(col('state', 'a'), lit('completed')),
+        eq(state('attempt', 'a'), lit('completed')),
       ),
     }))
     let asked = sub(select({
@@ -503,6 +530,27 @@ export let sessionStatus = {
         has(ASK, col('entity', 'r')),
       ),
     }))
+    let interruptions = sub(select({
+      cols: [fn('count', lit(1))],
+      from: from(
+        select({
+          cols: [col('entity', 'a'), col('seq', 'a')],
+          from: table('entry', 'a'),
+          where: and(
+            mine('a'),
+            lacks('notice', col('entity', 'a')),
+            has(ASK, col('entity', 'a')),
+          ),
+          order: [desc(col('seq', 'a'))],
+          limit: lit(RETRIES),
+        }),
+        'recent',
+      ),
+      where: and(
+        has('interrupted', col('entity', 'recent')),
+        not(input(col('seq', 'recent'))),
+      ),
+    }))
     // What the newest entry, `n`, says the transcript is doing.
     let verdict = when(
       [
@@ -513,13 +561,22 @@ export let sessionStatus = {
         [queued, lit('queued')],
         [wears(REFUSAL), iff(input(refusedAsk), lit('pending'), lit('failed'))],
         [
+          and(has('interrupted', ask), has('failed', ask), not(input(asked))),
+          lit('failed'),
+        ],
+        [and(has('interrupted', ask), has('provisional', ask)), lit('pending')],
+        [
+          has('interrupted', ask),
+          iff(ge(interruptions, lit(RETRIES)), lit('failed'), lit('pending')),
+        ],
+        [
           and(
             wears(ERROR),
             has(ASK, prior),
             has(
               'attempt',
               prior,
-              eq(col('state', 'k'), lit('completed')),
+              eq(state('attempt', 'k'), lit('completed')),
             ),
           ),
           iff(input(asked), lit('pending'), lit('failed')),
@@ -531,7 +588,7 @@ export let sessionStatus = {
             has(
               'attempt',
               prior,
-              eq(col('state', 'k'), lit('interrupted')),
+              eq(state('attempt', 'k'), lit('interrupted')),
             ),
           ),
           lit('pending'),
@@ -587,10 +644,18 @@ export let sessionDerived = (vocab: Vocab): Derived => {
     deps: ['dispatch', ...marks],
     expr: (owner: Expr) => dispatchStatus.expr(owner, marks),
   }
+  let states = { ...attemptDerived(vocab), ...executionDerived(vocab) }
   return {
+    ...states,
     'session.status': {
       ...sessionStatus,
-      expr: (owner) => sessionStatus.expr(owner, dispatch),
+      expr: (owner) =>
+        sessionStatus.expr(
+          owner,
+          dispatch,
+          states,
+          (name) => !!vocab.comp(name),
+        ),
     },
     'dispatch.status': dispatch,
     ...vocab.prop(COST, 'dollars') ? { 'session.cost': sessionCost } : {},

@@ -20,7 +20,7 @@ import { mem } from '../sqlite/testing.ts'
 import { effectDoc, effects, LEASE, leaseEid } from '@yaks/effects'
 import { loadVocab, pick, type VocabDoc } from '@yaks/vocab'
 import { taskDoc } from '@yaks/task/vocab'
-import { kernelDoc } from '@yaks/kernel/vocab'
+import { kernelDoc, kernelKeywords } from '@yaks/kernel/vocab'
 import { processDoc } from '@yaks/process'
 import {
   type Model,
@@ -46,13 +46,19 @@ let worker: VocabDoc = {
   },
 }
 let vocab = loadVocab([
+  {
+    $defs: {
+      interrupted: kernelDoc.$defs!.interrupted,
+      failed: kernelDoc.$defs!.failed,
+    },
+  },
   sessionDoc,
   toolsDoc,
   modelDoc,
   effectDoc,
   processDoc,
   worker,
-])
+], [kernelKeywords])
 
 let P = identityEid('provider', ['fake'])
 let CLI = identityEid('provider', ['claude'])
@@ -429,7 +435,7 @@ test('a withdrawn streamed request is aborted', async () => {
   await run
   let entries = await transcript(p.g, 's1')
   let last = entries.findLast((b) => !b.notice)!
-  assertEquals((last.error as Comp | undefined)?.code, 'interrupted')
+  assertEquals((last.interrupted as Comp | undefined)?.code, 'transport')
 })
 
 // An app's store has tasks and no claims: a task finishing there owes a run
@@ -569,7 +575,7 @@ test('a request the provider failed is asked again once the wait it named is up'
   assertEquals(
     [
       (asked.attempt as Comp).state,
-      (error.error as Comp).code,
+      (asked.interrupted as Comp).code,
       (error.response as Comp).body,
     ],
     ['interrupted', 'rate_limit_exceeded', failed.body],
@@ -596,10 +602,14 @@ test('failures in a row wait longer each time, and the last one stands', async (
   assertEquals([asks(), await status()], [8, 'failed'])
   let [asked, error] = await last(2)
   assertEquals(
-    [(asked.attempt as Comp).state, (error.error as Comp).code, textOf(error)],
+    [
+      (asked.attempt as Comp).state,
+      (asked.interrupted as Comp).code,
+      textOf(error),
+    ],
     [
       'interrupted',
-      'interrupted',
+      'unknown',
       'Response interrupted: ModelError: responses: failed — unknown',
     ],
   )

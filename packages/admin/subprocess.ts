@@ -1,10 +1,10 @@
-import { CallError } from '@yaks/tools'
+import { Interrupted } from '@yaks/tools'
 
 /** How long an interrupted command has to stop before its group is killed. */
 export let GRACE = 5_000
 
 let interrupted = () =>
-  new CallError('interrupted', 'the platform operation was interrupted')
+  new Interrupted('the platform operation was interrupted', 'signal')
 
 let SIGNALS = ['SIGTERM', 'SIGINT', 'SIGHUP']
 

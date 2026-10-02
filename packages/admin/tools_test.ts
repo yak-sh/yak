@@ -13,7 +13,7 @@ import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { toolsIn } from '@yaks/vocab/tools'
 import { vaultOf } from '@yaks/cli'
 import { secretEid } from '@yaks/secrets'
-import { CallError } from '@yaks/tools'
+import { CallError, Interrupted } from '@yaks/tools'
 import { ADMIN } from '../../workers/yak/lib/bots.ts'
 import { Refused, sessionName } from './accounts.ts'
 import { ended, runs } from './tools.ts'
@@ -147,13 +147,13 @@ test('an agent names a platform operation with --admin', async () => {
   assertStringIncludes(heard.join('\n'), `ADMIN ACCOUNT — ${ADMIN}`)
 })
 
-test('an interrupted platform operation is a call error, not a defect', () => {
+test('an interrupted platform operation is cut off, not refused', () => {
   let error = assertThrows(
     () => ended('errors', 130),
-    CallError,
+    Interrupted,
     'was interrupted',
   )
-  assertEquals(error.code, 'interrupted')
+  assertEquals(error.code, 'signal')
   assertThrows(() => ended('errors', 1), Error, 'ended with status 1')
   assertEquals(ended('errors', 0), [])
 })

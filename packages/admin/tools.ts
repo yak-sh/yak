@@ -47,7 +47,7 @@ import {
   sealed,
   unsealed,
 } from '@yaks/secrets'
-import { CallError } from '@yaks/tools'
+import { CallError, Interrupted } from '@yaks/tools'
 import { ADMIN, BOT, isTestAddress } from '../../workers/yak/lib/bots.ts'
 import {
   type Account,
@@ -254,7 +254,7 @@ let platform = (a: Args): void => {
 // expected failure of this invocation; another nonzero status is a defect.
 export let ended = (verb: string, code: number): Bundle[] => {
   if (code == 130) {
-    throw new CallError('interrupted', `the ${verb} operation was interrupted`)
+    throw new Interrupted(`the ${verb} operation was interrupted`, 'signal')
   }
   if (code) throw new Error(`${verb} ended with status ${code}`)
   return []

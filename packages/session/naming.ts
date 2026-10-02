@@ -16,6 +16,8 @@
 // in a rule's match).
 
 import type { Bundle, Comp, Hook } from '@yaks/graph'
+import { attemptState } from './attempt.ts'
+
 import { after, over } from '@yaks/fp'
 import { MODEL, PROVIDER } from '@yaks/model'
 import { ENTRY, FORK, USING } from './native.ts'
@@ -85,7 +87,7 @@ export const naming: Hook = (bundles, tx, err) =>
           (entries) => {
             if (
               entries.some((v) =>
-                (v.attempt as Comp | undefined)?.state == 'inflight' &&
+                attemptState(v) == 'inflight' &&
                 Number((v.entry as Comp)?.seq) <= Number(entry.seq)
               )
             ) {

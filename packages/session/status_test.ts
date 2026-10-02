@@ -10,6 +10,8 @@ import { storage } from '@yaks/sqlite'
 import { storage as held } from '@yaks/durable-object'
 import { mem } from '../sqlite/testing.ts'
 import { durable } from '../durable-object/testing.ts'
+import { effectDoc } from '@yaks/effects'
+import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { modelDoc } from '@yaks/model'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { toolEid } from '@yaks/tools'
@@ -22,7 +24,9 @@ import {
   usingBefore,
 } from './status.ts'
 
-let vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
+let vocab = loadVocab([sessionDoc, toolsDoc, modelDoc, kernelDoc, effectDoc], [
+  kernelKeywords,
+])
 let M = identityEid('model', ['fake'])
 let T = toolEid('echo')
 
@@ -47,7 +51,7 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
   ], 'failed'],
   ['a deliberate refusal after a completed ask is terminal', [
     request(1),
-    entry(2, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),
+    entry(2, { ask: { through: 'e1' }, attempt: {} }),
     entry(3, {
       refusal: { code: 'http_400' },
       output: { source: 'e2' },
@@ -56,7 +60,7 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
   ], 'failed'],
   ['new input during a deliberately refused ask still needs an answer', [
     request(1),
-    entry(2, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),
+    entry(2, { ask: { through: 'e1' }, attempt: {} }),
     input(3),
     entry(4, {
       refusal: { code: 'http_400' },
@@ -66,7 +70,7 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
   ], 'pending'],
   ['an unassociated compaction refusal is terminal after fresh input', [
     request(1),
-    entry(2, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),
+    entry(2, { ask: { through: 'e1' }, attempt: {} }),
     said(3, 'e2'),
     input(4),
     entry(5, {
@@ -76,9 +80,9 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
   ], 'failed'],
   ['a refusal only follows the ask its output names', [
     request(1),
-    entry(2, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),
+    entry(2, { ask: { through: 'e1' }, attempt: {} }),
     input(3),
-    entry(4, { ask: { through: 'e3' }, attempt: { state: 'completed' } }),
+    entry(4, { ask: { through: 'e3' }, attempt: {} }),
     entry(5, { refusal: { code: 'http_400' }, output: { source: 'e2' } }),
   ], 'pending'],
   ['new input after a deliberate refusal allows recovery', [
@@ -88,7 +92,7 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
   ], 'pending'],
   ['refusal prose does not count as fresh input after an ask', [
     request(1),
-    entry(2, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),
+    entry(2, { ask: { through: 'e1' }, attempt: {} }),
     entry(3, {
       refusal: { code: 'http_400' },
       output: { source: 'e2' },
@@ -98,7 +102,7 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
   ], 'settled'],
   ['completed provider refusal is terminal', [
     request(1),
-    entry(2, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),
+    entry(2, { ask: { through: 'e1' }, attempt: {} }),
     entry(3, {
       error: { code: 'http_400' },
       content: { body: 'OpenRouter speech request failed (400)' },
@@ -106,37 +110,73 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
   ], 'failed'],
   ['new input during a refused ask still needs an answer', [
     request(1),
-    entry(2, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),
+    entry(2, { ask: { through: 'e1' }, attempt: {} }),
     input(3),
     entry(4, { error: { code: 'http_400' } }),
   ], 'pending'],
   ['a later error after a new input keeps its retry allowance', [
     request(1),
-    entry(2, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),
+    entry(2, { ask: { through: 'e1' }, attempt: {} }),
     said(3, 'e2'),
     input(4),
     entry(5, { error: { code: 'no_model' } }),
   ], 'pending'],
   ['three refused asks exhaust the retry bound', [
     request(1),
-    entry(2, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),
+    entry(2, { ask: { through: 'e1' }, attempt: {} }),
     entry(3, { error: { code: 'exhausted' } }),
-    entry(4, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),
+    entry(4, { ask: { through: 'e1' }, attempt: {} }),
     entry(5, { error: { code: 'exhausted' } }),
-    entry(6, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),
+    entry(6, { ask: { through: 'e1' }, attempt: {} }),
     entry(7, { error: { code: 'exhausted' } }),
   ], 'failed'],
   ['a failure the provider may yet answer is pending: the pool asks again', [
     request(1),
-    entry(2, { ask: { through: 'e1' }, attempt: { state: 'interrupted' } }),
+    entry(2, {
+      ask: { through: 'e1' },
+      attempt: {},
+      interrupted: { code: 'transport' },
+      provisional: { note: 'Retry owed' },
+    }),
     entry(3, {
-      error: { code: 'unknown' },
+      notice: {},
+      output: { source: 'e2' },
       content: { body: 'responses: failed — unknown' },
     }),
   ], 'pending'],
+  ['three generic interruptions exhaust retries', [
+    request(1),
+    entry(2, { ask: { through: 'e1' }, attempt: {}, interrupted: {} }),
+    entry(3, { ask: { through: 'e1' }, attempt: {}, interrupted: {} }),
+    entry(4, { ask: { through: 'e1' }, attempt: {}, interrupted: {} }),
+  ], 'failed'],
+  ['three pooled interruptions are still owed', [
+    request(1),
+    entry(2, { ask: { through: 'e1' }, attempt: {}, interrupted: {} }),
+    entry(3, { ask: { through: 'e1' }, attempt: {}, interrupted: {} }),
+    entry(4, { ask: { through: 'e1' }, attempt: {}, interrupted: {},
+      provisional: { note: 'Retry owed' } }),
+  ], 'pending'],
+  ['fresh input resumes a terminal interruption', [
+    request(1),
+    entry(2, { ask: { through: 'e1' }, attempt: {}, interrupted: {},
+      failed: { reason: 'No retry' } }),
+    input(3),
+  ], 'pending'],
+  ['a completed response resets the interruption bound', [
+    request(1),
+    entry(2, { ask: { through: 'e1' }, attempt: {}, interrupted: {} }),
+    entry(3, { ask: { through: 'e1' }, attempt: {} }),
+    entry(4, { ask: { through: 'e1' }, attempt: {}, interrupted: {} }),
+  ], 'pending'],
   ['interrupted response is failed until new input', [
     input(1),
-    entry(2, { ask: { through: 'e1' }, attempt: { state: 'interrupted' } }),
+    entry(2, {
+      ask: { through: 'e1' },
+      attempt: {},
+      interrupted: { code: 'transport' },
+      failed: { reason: 'No retry' },
+    }),
     said(3, 'e2'),
     entry(4, {
       error: { code: 'interrupted' },
@@ -145,7 +185,12 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
   ], 'failed'],
   ['input during interrupted response remains pending', [
     input(1),
-    entry(2, { ask: { through: 'e1' }, attempt: { state: 'interrupted' } }),
+    entry(2, {
+      ask: { through: 'e1' },
+      attempt: {},
+      interrupted: { code: 'transport' },
+      failed: { reason: 'No retry' },
+    }),
     input(3),
     said(4, 'e2'),
     entry(5, {
@@ -158,9 +203,10 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
     (code): [string, Bundle[], TranscriptStatus][] => {
       let rejected = [
         input(1),
-        entry(2, { ask: { through: 'e1' }, attempt: { state: 'interrupted' } }),
+        entry(2, { ask: { through: 'e1' }, attempt: {} }),
         entry(3, {
-          error: { code: 'interrupted' },
+          refusal: { code: `http_${code}` },
+          output: { source: 'e2' },
           content: { body: `Response interrupted: ModelError: ${code}` },
         }),
       ]
@@ -174,7 +220,7 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
         [`successful response after ${code} clears failure`, [
           ...rejected,
           input(4),
-          entry(5, { ask: { through: 'e4' }, attempt: { state: 'completed' } }),
+          entry(5, { ask: { through: 'e4' }, attempt: {} }),
           said(6, 'e5'),
         ], 'settled'],
       ]
@@ -202,7 +248,11 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
   ['an input nobody here answers', [input(1)], 'running'],
   ['a harness turn answered', [input(1), said(2, S)], 'settled'],
   ['a harness turn asked again', [input(1), said(2, S), input(3)], 'running'],
-  ['an ask open', [input(1), entry(2, { ask: { to: M } })], 'running'],
+  [
+    'an ask open',
+    [input(1), entry(2, { ask: { to: M }, attempt: { by: S } })],
+    'running',
+  ],
   ['a tool call open', [
     input(1),
     entry(2, { ask: { to: M } }),
@@ -241,7 +291,7 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
     entry(2, { ask: { to: M } }),
     entry(3, {
       call: { to: T, id: 'c1', source: 'e2' },
-      execution: { state: 'running' },
+      execution: {},
     }),
     entry(4, { exception: {} }),
   ], 'running'],
@@ -250,7 +300,7 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
     entry(2, { ask: { to: M } }),
     entry(3, {
       call: { to: T, id: 'c1', source: 'e2' },
-      execution: { state: 'running', by: S },
+      execution: { by: S },
     }),
     entry(4, { exception: {} }),
   ], 'failed'],
@@ -407,13 +457,13 @@ test('one transcript stays settled beside other transcripts with open work', () 
     {
       entity: { eid: 'flight-attempt' },
       entry: { session: 'flight', seq: 1 },
-      attempt: { state: 'inflight' },
+      attempt: { by: S },
     },
     {
       entity: { eid: 'abandoned-call' },
       entry: { session: 'abandoned', seq: 1 },
       call: { to: T },
-      execution: { state: 'running' },
+      execution: {},
     },
   ], { trusted: true })
   let [read] = g.get([S]) as Bundle[]
