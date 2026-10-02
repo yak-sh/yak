@@ -1,4 +1,4 @@
-// An owner's /spawn puts a creature ahead of their connected hero, and the row
+// A signed-in person's /spawn puts a creature ahead of their connected hero, and the row
 // it writes is a creature the page fights at that hero's level, counted from
 // their falls and quests.
 import { test } from '@yaks/testing'
@@ -92,10 +92,10 @@ let kills: Bundle[] = Array.from({ length: 40 }, (_, i) => ({
   },
 }))
 
-test('/spawn puts the named creature in front of the asking hero, at their level', async () => {
+test('/spawn lets a nonowner person spawn in front of their connected hero, at their level', async () => {
   let { wrote, ask, queries } = store(playing)
   let lvl = heroLevel(kills, [])
-  let said = await ask('owner', 'beast:boar')
+  let said = await ask('person', 'beast:boar')
   assertEquals(said.status, 200)
   assertEquals(queries.some((q) => q.includes('.created.by="person"')), true)
   assertEquals(
@@ -112,11 +112,11 @@ test('/spawn puts the named creature in front of the asking hero, at their level
   assertEquals(fighter(home.beast, home.lvl!)?.lvl, lvl)
 })
 
-test('/spawn refuses an editor and an absent hero', async () => {
+test('/spawn refuses an unsigned caller and an absent hero', async () => {
   let { wrote, ask } = store(playing)
-  assertEquals((await ask('editor', 'beast:boar')).status, 403)
+  assertEquals((await ask('visitor', 'beast:boar', undefined, '')).status, 403)
   let away = store([])
-  assertEquals((await away.ask('owner', 'beast:boar')).status, 404)
+  assertEquals((await away.ask('person', 'beast:boar')).status, 404)
   assertEquals([...wrote, ...away.wrote], [])
 })
 

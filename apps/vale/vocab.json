@@ -1845,8 +1845,8 @@
     },
     "spawn": {
       "tool": true,
-      "floor": "owner",
-      "description": "Spawn an existing creature or describe a new one. With no --at, it appears three metres in front of your connected hero, facing where you face. --at accepts a land, a hero’s current name or eid, or a villager. It fights at your hero’s level and does not return once slain.",
+      "floor": "person",
+      "description": "Any signed-in person may spawn an existing creature or describe a new one, spending from the app owner’s budget. With no --at, it appears three metres in front of your connected hero, facing where you face. --at accepts a land, a hero’s current name or eid, or a villager. It fights at your hero’s level and does not return once slain.",
       "input": {
         "beast": {
           "type": "string",

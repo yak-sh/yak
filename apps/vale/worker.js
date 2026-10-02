@@ -337,11 +337,6 @@ let teleport = async (req, env, v, themes) => {
 
 // Spawn at an existing command target, or ahead of the caller's own hero.
 let spawn = async (req, env, v, themes) => {
-  if (req.headers.get('x-yak-role') != 'owner') {
-    return new Response('Only the app owner can spawn a creature.', {
-      status: 403,
-    })
-  }
   let args = await req.json().catch(() => null)
   let { beast: word, at: target } = args ?? {}
   if (
