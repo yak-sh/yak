@@ -5,7 +5,7 @@ import { regionOf } from './regions.ts'
 
 export let FOG_SIZE = 160
 
-/** RGBA veil: unvisited ground remains visible through ninety percent shade. */
+/** RGBA veil: unvisited ground is fully hidden. */
 export let veil = (
   [x, z, side]: Box,
   visited: ReadonlySet<string>,
@@ -21,7 +21,7 @@ export let veil = (
       px[at + 2] = 31
       px[at + 3] = visited.has(regionOf(x + (i + 0.5) * m, z + (k + 0.5) * m))
         ? 0
-        : 230
+        : 255
     }
   }
   return px

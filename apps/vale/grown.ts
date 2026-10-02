@@ -2,10 +2,13 @@
 // and talking to the store: every worker (grow.ts) grows and meshes the chunks
 // the page asks for, one per core the page can spare, each ask going to the
 // worker with the fewest waiting, and paints the map's chart when asked.
-// Where the workers cannot start or fail, the page grows and paints itself,
-// and the reason is reported.
-import { chart } from './chart.ts'
-import { chartKey } from './chartkey.ts'
+// If workers fail, gameplay can grow locally and reports the reason. Missing
+// map ground always stays off the page thread.
+import { chartPatch, chartRegions } from './chart.ts'
+import { chartbook } from './chartbook.ts'
+import { coverage } from './chartcover.ts'
+import type { Spot } from './levels.ts'
+import type { Box } from './mapview.ts'
 import { veil } from './mapfog.ts'
 import { type Chunk, chunk } from './chunks.ts'
 import type { Answer, Ask } from './grow.ts'
@@ -14,6 +17,8 @@ import type { Bundle } from './net.ts'
 import { model } from './props.ts'
 import {
   type Affects,
+  CHUNK,
+  chunkKey,
   installBuildingDesigns,
   installThemeDesigns,
   vale,
@@ -33,11 +38,24 @@ let themes: Bundle[] = []
 let buildingDesigns: Bundle[] | null = null
 // The map's pixels depend on both sets of designs.
 export let chartVersion = 0
-let chartAddress: Promise<string> | undefined
+let charts = chartbook<Uint8ClampedArray<ArrayBuffer>>()
+export let groundCoverage = coverage()
 
-/** Content address of the designs installed in this page and its workers. */
-export let chartDesignKey = () =>
-  chartAddress ??= chartKey(themes, buildingDesigns ?? [])
+let loadGround = (cell: Spot) => {
+  let v = vale(), p = v.patches.get(chunkKey(...cell))
+  if (p) groundCoverage.keep(cell, chartRegions(p))
+  return p
+    ? Promise.resolve(chartPatch(p, v.plant(...cell)))
+    : charted(cell[0] * CHUNK, cell[1] * CHUNK, CHUNK, 1)
+}
+
+/** Fixed-detail pixels for a chunk, grown off-thread only when not kept. */
+export let groundCharts = (cell: Spot) =>
+  charts.keep(cell, () => loadGround(cell))
+
+/** Completed explored charts are read synchronously inside the page cache. */
+export let groundView = (box: Box, visible: (cell: Spot) => boolean) =>
+  charts.read(box, visible, loadGround)
 
 /** Give each world Worker the same building plans the page is using. */
 export let useBuildingDesigns = (rows: Bundle[]): {
@@ -45,7 +63,8 @@ export let useBuildingDesigns = (rows: Bundle[]): {
   kinds: Set<string>
 } => {
   chartVersion++
-  chartAddress = undefined
+  charts.clear()
+  groundCoverage.clear()
   buildingDesigns = rows
   let impact = installBuildingDesigns(rows)
   for (let hand of pool) hand.w.postMessage({ buildingDesigns: rows })
@@ -98,7 +117,8 @@ let hands = () =>
 /** Keep the page and each growth worker on the store's region designs. */
 export let useThemeRows = (rows: Bundle[]): Affects => {
   chartVersion++
-  chartAddress = undefined
+  charts.clear()
+  groundCoverage.clear()
   themes = rows
   let affects = installThemeDesigns(rows)
   for (let hand of pool) hand.w.postMessage({ themes: rows })
@@ -123,13 +143,22 @@ export let meshed = async (
   ck: number,
   small: boolean,
 ): Promise<Chunk> => {
+  let version = chartVersion
+  let drawn: Chunk
   try {
     let a = await ask({ voxel, ci, ck, small })
-    return a.drawn ?? chunk(vale(voxel), ci, ck, small)
+    drawn = a.drawn ?? chunk(vale(voxel), ci, ck, small)
   } catch (e) {
     broke(e)
-    return chunk(vale(voxel), ci, ck, small)
+    drawn = chunk(vale(voxel), ci, ck, small)
   }
+  if (version == chartVersion) {
+    charts.keep([ci, ck], () => {
+      groundCoverage.keep([ci, ck], chartRegions(drawn.patch))
+      return chartPatch(drawn.patch, drawn.stood?.map(({ prop }) => prop) ?? [])
+    }).catch(reportError)
+  }
+  return drawn
 }
 
 /** A model meshed off the page, sent once for each visible shape. */
@@ -156,13 +185,9 @@ export let charted = async (
   size: number,
   m: number,
 ): Promise<Uint8ClampedArray<ArrayBuffer>> => {
-  try {
-    let a = await ask({ chart: [x, z, size], m })
-    return a.px ?? chart(x, z, size, m)
-  } catch (e) {
-    broke(e)
-    return chart(x, z, size, m)
-  }
+  let a = await ask({ chart: [x, z, size], m })
+  if (!a.px) throw new Error('grow.ts: a chart reply has no pixels')
+  return a.px
 }
 
 /** The irregular region veil, sampled by the world's worker. */

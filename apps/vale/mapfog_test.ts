@@ -19,7 +19,7 @@ test('visiting one land uncovers its irregular ground only', () => {
       let x = box[0] + (i + 0.5) * box[2] / size
       let z = box[1] + (k + 0.5) * box[2] / size
       let clear = regionOf(x, z) == 'mossvale'
-      assertEquals(at(i, k), clear ? 0 : 230)
+      assertEquals(at(i, k), clear ? 0 : 255)
       seen ||= clear
       dim ||= !clear
       if (

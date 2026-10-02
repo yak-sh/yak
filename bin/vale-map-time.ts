@@ -1,93 +1,78 @@
-// Headless ground-paint timings, including native Canvas work and PNG decoding.
+// Native headless canvas timings; no browser or server. The baseline uses its
+// own tracked painter, images and seeds, with its scratch removed on exit.
 // deno run -A bin/vale-map-time.ts --before=<commit>
-import {
-  type Canvas,
-  createCanvas,
-  type Image,
-  ImageData,
-  loadImage,
-} from 'npm:@napi-rs/canvas@0.1.80'
-import { chart } from '../apps/vale/chart.ts'
-import { atlas, pyramid, TILE_SIZES } from '../apps/vale/maptiles.ts'
+import { createCanvas, ImageData } from 'npm:@napi-rs/canvas@0.1.80'
+import { chart, chartPatch, chartRegions } from '../apps/vale/chart.ts'
+import { chartbook } from '../apps/vale/chartbook.ts'
+import { chartsheet } from '../apps/vale/chartsheet.ts'
+import { SIZE } from '../apps/vale/levels.ts'
+import { coverage } from '../apps/vale/chartcover.ts'
 import { type Box, pan, view, zoom } from '../apps/vale/mapview.ts'
 import { arriveOf } from '../apps/vale/ways.ts'
-import { seed } from './vale-chart.ts'
+import { CHUNK, patchOf, vale } from '../apps/vale/terrain.ts'
+import { seedThemes } from '../apps/vale/themes_fixture.ts'
+import { seedBuildings } from '../apps/vale/buildings_fixture.ts'
 
 let option = (name: string) =>
   Deno.args.find((arg) => arg.startsWith(`--${name}=`))?.split('=')[1]
-let before = option('before') ?? 'main'
 let sample = option('sample')
-let app = new URL('../apps/vale/', import.meta.url)
 
 if (sample) {
-  seed()
-  let box = view(arriveOf('mossvale'))
+  seedThemes()
+  seedBuildings()
+  let box = view(arriveOf('mossvale')), known = new Set(['mossvale'])
   let canvas = createCanvas(320, 320), ctx = canvas.getContext('2d')
-  let calls = 0, chartMs = 0
-  let paint: (box: Box) => Promise<void>
-  if (sample == 'before') {
-    let output = await new Deno.Command('git', {
-      args: ['show', `${before}:apps/vale/chart.ts`],
-      stdout: 'piped',
-      stderr: 'piped',
-    }).output()
-    if (!output.success) {
-      throw new Error(new TextDecoder().decode(output.stderr))
+  let pixels = chartbook<Uint8ClampedArray<ArrayBuffer>>()
+  let compose = chartsheet(() => {
+    let image = createCanvas(SIZE, SIZE), ctx = image.getContext('2d')
+    return {
+      image,
+      put: (px: Uint8ClampedArray<ArrayBuffer>, x: number, z: number) =>
+        ctx.putImageData(new ImageData(px, CHUNK, CHUNK), x, z),
     }
-    let source = new TextDecoder().decode(output.stdout).replace(
-      /(['"])(\.\/[^'"]+)\1/g,
-      (_, quote, path) => `${quote}${new URL(path, app).href}${quote}`,
+  })
+  let explored = coverage(), calls = 0, chartMs = 0, growthChartMs = 0
+  let paintCell = (ci: number, ck: number, grown = false) => {
+    let v = vale(1), p = grown ? patchOf(v, ci, ck) : null
+    let props = p ? v.plant(ci, ck) : []
+    if (p) explored.keep([ci, ck], chartRegions(p))
+    let start = performance.now()
+    let px = p ? chartPatch(p, props) : chart(ci * CHUNK, ck * CHUNK, CHUNK, 1)
+    let elapsed = performance.now() - start
+    if (grown) growthChartMs += elapsed
+    else {
+      calls++
+      chartMs += elapsed
+    }
+    return px
+  }
+  // A hero who has traversed the nearby region has already grown its ground.
+  // Keep the wider rectangle so the timed pan and zoom revisit that ground.
+  if (sample == 'grown') {
+    await pixels.read(
+      zoom(box, 2),
+      (cell) => explored(cell, known),
+      (cell) => Promise.resolve(paintCell(...cell, true)),
     )
-    let old = (await import(
-      `data:application/typescript;base64,${btoa(source)}`
-    )).chart as typeof chart
-    paint = (box) => {
-      let start = performance.now()
-      let px = old(...box, box[2] / 320)
-      chartMs += performance.now() - start
-      calls++
-      ctx.putImageData(new ImageData(px, 320, 320), 0, 0)
-      return Promise.resolve()
-    }
-  } else {
-    let manifest: { cells: Record<string, string[]> } | undefined
-    let tiles = atlas<Canvas | Image>(async (cell) => {
-      let paths = manifest!.cells[cell.join(',')]
-      if (paths) {
-        return await Promise.all(
-          paths.map(async (path) =>
-            await loadImage(await Deno.readFile(new URL(path, app)))
-          ),
-        )
-      }
-      let start = performance.now()
-      let pixels = pyramid(chart(cell[0] * 256, cell[1] * 256, 256, 1))
-      chartMs += performance.now() - start
-      calls++
-      return pixels.map((px, i) => {
-        let size = TILE_SIZES[i], image = createCanvas(size, size)
-        image.getContext('2d').putImageData(new ImageData(px, size, size), 0, 0)
-        return image
-      })
-    })
-    paint = async (box) => {
-      manifest ??= JSON.parse(
-        await Deno.readTextFile(
-          new URL('tiles/manifest.json', app),
-        ),
+  }
+  let paint = async (box: Box) => {
+    let charts = compose(
+      await pixels.read(
+        box,
+        (cell) => explored(cell, known),
+        (cell) => Promise.resolve(paintCell(...cell)),
+      ),
+    )
+    ctx.clearRect(0, 0, 320, 320)
+    for (let { image, box: cell } of charts) {
+      let scale = 320 / box[2]
+      ctx.drawImage(
+        image,
+        (cell[0] - box[0]) * scale,
+        (cell[1] - box[1]) * scale,
+        cell[2] * scale,
+        cell[2] * scale,
       )
-      let ground = await tiles(box, 0)
-      ctx.clearRect(0, 0, 320, 320)
-      for (let tile of ground) {
-        let scale = 320 / box[2]
-        ctx.drawImage(
-          tile.image,
-          (tile.box[0] - box[0]) * scale,
-          (tile.box[1] - box[1]) * scale,
-          tile.box[2] * scale,
-          tile.box[2] * scale,
-        )
-      }
     }
   }
   let time = async (next: Box) => {
@@ -101,53 +86,93 @@ if (sample) {
       chartCalls: calls - previousCalls,
     }
   }
-  let first = await time(box)
-  let pans = []
-  for (let i = 0; i < 12; i++) pans.push(await time(pan(box, i * 0.002, 0.002)))
+  let first = await time(box), pans = []
+  for (let i = 0; i < 12; i++) {
+    pans.push(await time(pan(box, i * 0.002, 0.002)))
+  }
   let zoomed = await time(zoom(box, 2))
   let mean = (key: keyof typeof first) =>
     pans.reduce((sum, pan) => sum + pan[key], 0) / pans.length
-  console.log(JSON.stringify({
-    box,
-    first,
-    pan: {
-      paintMs: mean('paintMs'),
-      chartMs: mean('chartMs'),
-      chartCalls: mean('chartCalls'),
-    },
-    zoom: zoomed,
-  }))
+  console.log(
+    JSON.stringify({
+      box,
+      growthChartMs,
+      first,
+      pan: {
+        paintMs: mean('paintMs'),
+        chartMs: mean('chartMs'),
+        chartCalls: mean('chartCalls'),
+      },
+      zoom: zoomed,
+    }),
+  )
 } else {
-  let results: Record<string, unknown> = {
-    baseline: before,
-    backend: '@napi-rs/canvas',
-  }
-  for (let mode of ['before', 'after']) {
-    let samples = []
-    for (let i = 0; i < 5; i++) {
-      let result = await new Deno.Command(Deno.execPath(), {
-        args: [
-          'run',
-          '-A',
-          '--no-lock',
-          new URL(import.meta.url).pathname,
-          `--before=${before}`,
-          `--sample=${mode}`,
-        ],
-        stdout: 'piped',
-        stderr: 'inherit',
-      }).output()
-      if (!result.success) throw new Error(`${mode} measurement failed`)
-      samples.push(JSON.parse(new TextDecoder().decode(result.stdout)))
+  let before = option('before') ?? 'main'
+  let scratch = await Deno.makeTempDir({ prefix: 'vale-map-time-' })
+  try {
+    let archive = await new Deno.Command('git', {
+      args: [
+        'archive',
+        before,
+        'apps/vale',
+        'bin/vale-map-time.ts',
+        'bin/vale-chart.ts',
+      ],
+      stdout: 'piped',
+      stderr: 'inherit',
+    }).output()
+    if (!archive.success) throw new Error('baseline archive failed')
+    let tar = new Deno.Command('tar', {
+      args: ['-x', '-C', scratch],
+      stdin: 'piped',
+    }).spawn()
+    let writer = tar.stdin.getWriter()
+    await writer.write(archive.stdout)
+    await writer.close()
+    if (!(await tar.status).success) throw new Error('baseline extract failed')
+    let results: Record<string, unknown> = {
+      baseline: before,
+      backend: '@napi-rs/canvas',
     }
-    let median = (values: number[]) => values.sort((a, b) => a - b)[2]
-    results[mode] = Object.fromEntries(['first', 'pan', 'zoom'].map((step) => [
-      step,
-      Object.fromEntries(['paintMs', 'chartMs', 'chartCalls'].map((key) => [
-        key,
-        median(samples.map((sample) => sample[step][key])),
-      ])),
-    ]))
+    for (let mode of ['before', 'grown', 'reload']) {
+      let samples = []
+      for (let i = 0; i < 5; i++) {
+        let result = await new Deno.Command(Deno.execPath(), {
+          args: [
+            'run',
+            '-A',
+            '--no-lock',
+            `--config=${new URL('../deno.json', import.meta.url).pathname}`,
+            mode == 'before'
+              ? `${scratch}/bin/vale-map-time.ts`
+              : new URL(import.meta.url).pathname,
+            `--sample=${mode == 'before' ? 'after' : mode}`,
+          ],
+          stdout: 'piped',
+          stderr: 'inherit',
+        }).output()
+        if (!result.success) throw new Error(`${mode} measurement failed`)
+        samples.push(JSON.parse(new TextDecoder().decode(result.stdout)))
+      }
+      let median = (values: number[]) => values.sort((a, b) => a - b)[2]
+      results[mode] = Object.fromEntries(
+        ['first', 'pan', 'zoom'].map((
+          step,
+        ) => [
+          step,
+          Object.fromEntries(
+            ['paintMs', 'chartMs', 'chartCalls'].map((
+              key,
+            ) => [
+              key,
+              median(samples.map((s) => s[step][key])),
+            ]),
+          ),
+        ]),
+      )
+    }
+    console.log(JSON.stringify(results, null, 2))
+  } finally {
+    await Deno.remove(scratch, { recursive: true })
   }
-  console.log(JSON.stringify(results, null, 2))
 }

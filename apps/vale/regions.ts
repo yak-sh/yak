@@ -317,6 +317,43 @@ let SWING = 60
 // sites' distances: about half that either side of the border.
 let EDGE = 24
 
+/** Regions that may own a point in a square, including warped boundaries. */
+export let regionCandidates = (
+  x: number,
+  z: number,
+  side: number,
+): Set<string> => {
+  let ids = new Set<string>(), margin = WARP / 2
+  let x0 = x - margin, z0 = z - margin
+  let x1 = x + side + margin, z1 = z + side + margin
+  let gx0 = cellOf(x0), gz0 = cellOf(z0)
+  let gx1 = cellOf(x1), gz1 = cellOf(z1)
+  // Sites shared by every neighbourhood guarantee a nearest-site distance
+  // throughout the warped square. Sites farther from the whole square cannot
+  // win anywhere in it, even if they lie in a neighbouring lattice cell.
+  let nearest = Infinity
+  for (let gz = gz1 - 1; gz <= gz0 + 1; gz++) {
+    for (let gx = gx1 - 1; gx <= gx0 + 1; gx++) {
+      for (let site of sitesIn(gx, gz)) {
+        let dx = Math.max(Math.abs(site.x - x0), Math.abs(site.x - x1))
+        let dz = Math.max(Math.abs(site.z - z0), Math.abs(site.z - z1))
+        nearest = Math.min(nearest, dx * dx + dz * dz)
+      }
+    }
+  }
+  for (let gz = gz0; gz <= gz1; gz++) {
+    for (let gx = gx0; gx <= gx1; gx++) {
+      let sites = around(gx, gz)
+      for (let j = 0; j < sites.levels.length; j++) {
+        let dx = Math.max(x0 - sites.xs[j], 0, sites.xs[j] - x1)
+        let dz = Math.max(z0 - sites.zs[j], 0, sites.zs[j] - z1)
+        if (dx * dx + dz * dz <= nearest) ids.add(sites.levels[j])
+      }
+    }
+  }
+  return ids
+}
+
 /** The region a point lies in (`a`), the nearest other (`b`), and how much
  * of the point is `a`'s: 1 well inside it, falling to 0.5 at the border. */
 export type Blend = { a: string; b: string; t: number }

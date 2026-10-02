@@ -1,35 +1,17 @@
 // A map of the world, north up: it opens near the hero and zooms out to a
-// broad view that can pan through generated country. Ground tiles are decoded
-// or charted once per cell, then composited at every scale (mapground.ts). Over it,
+// broad view that can pan through explored country. Grown chunks are charted
+// once and composited at every scale (mapground.ts). Over them,
 // who is where, written only while it is open: the hero's arrow, the other
 // players, the people with a quest, the nodes to gather (work.ts), coloured
 // by their trade and hollow while spent, where each road leaves the map and
 // the region it leads to, and a ring where each quest tracked goes next
 // (journal.ts). M or the compass opens its panel.
 import { chartVersion, fogged } from './grown.ts'
-import { groundTiles } from './mapground.ts'
-import { Top } from './features.ts'
+import { groundImages } from './mapground.ts'
 import { glyph } from './glyphs.ts'
-import { paletteOf } from './ground.ts'
 import type { Mark } from './journal.ts'
-import {
-  levelAt,
-  levelOf,
-  LEVELS,
-  type Side,
-  SIZE,
-  type Spot,
-} from './levels.ts'
-import {
-  type Box,
-  pan,
-  pinch,
-  place,
-  reopen,
-  view,
-  WORLD,
-  zoom,
-} from './mapview.ts'
+import { levelOf, type Side, SIZE, type Spot } from './levels.ts'
+import { type Box, pan, pinch, reopen, view, WORLD, zoom } from './mapview.ts'
 import type { Panel } from './panel.ts'
 import type { Frame } from './play.ts'
 import { clamp } from './rand.ts'
@@ -119,6 +101,7 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
   let home: Box | null = null
   let drawn = box
   let fogDrawn = box
+  let explored = new Set<string>()
   let shown = ''
   let version = chartVersion
   let openWas = false
@@ -167,86 +150,23 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
     was = ''
     moveImages()
   }
-  let overview = () => {
-    ctx.fillStyle = '#30382d'
-    ctx.fillRect(0, 0, 320, 320)
-    let gx0 = Math.floor(box[0] / SIZE), gz0 = Math.floor(box[1] / SIZE)
-    let gx1 = Math.floor((box[0] + box[2]) / SIZE)
-    let gz1 = Math.floor((box[1] + box[2]) / SIZE)
-    for (let gz = gz0; gz <= gz1; gz++) {
-      for (let gx = gx0; gx <= gx1; gx++) {
-        let lv = levelAt(gx, gz)
-        let [ox, oz] = [gx * SIZE, gz * SIZE]
-        let [u, v] = place(box, [ox, oz])
-        let side = SIZE / box[2] * 320
-        if (u > 1 || v > 1 || u + side / 320 < 0 || v + side / 320 < 0) {
-          continue
-        }
-        let colors = paletteOf(lv).tops
-        let color = Object.values(lv.look?.ground ?? {})[0] ??
-          colors[Top.grass]
-        ctx.fillStyle = `#${color.toString(16).padStart(6, '0')}`
-        ctx.fillRect(u * 320, v * 320, side, side)
-        ctx.strokeStyle = 'rgba(35, 40, 32, 0.3)'
-        ctx.strokeRect(u * 320, v * 320, side, side)
-      }
-    }
-    let roads = new Set<string>()
-    ctx.strokeStyle = '#c1a371'
-    ctx.lineWidth = box[2] == WORLD[2] ? 1.5 : 2
-    for (let lv of Object.values(LEVELS)) {
-      for (let r of roadsOf(lv.id)) {
-        let id = `${r.from}/${r.to}`
-        if (roads.has(id)) continue
-        roads.add(id)
-        let path: Spot[] = [
-          arriveOf(r.from),
-          ...Array.from(r.c.xs, (x, i): Spot => [x, r.c.zs[i]]),
-          arriveOf(r.to),
-        ]
-        ctx.beginPath()
-        for (let [i, p] of path.entries()) {
-          let [u, v] = place(box, p)
-          if (i) ctx.lineTo(u * 320, v * 320)
-          else ctx.moveTo(u * 320, v * 320)
-        }
-        ctx.stroke()
-      }
-    }
-    // At this scale a line between arrivals is enough to show the paths in
-    // generated country, without building every detailed road for the map.
-    for (let gz = gz0; gz <= gz1; gz++) {
-      for (let gx = gx0; gx <= gx1; gx++) {
-        let a = levelAt(gx, gz)
-        for (let [dx, dz] of [[1, 0], [0, 1]]) {
-          let b = levelAt(gx + dx, gz + dz)
-          if (LEVELS[a.id] && LEVELS[b.id]) continue
-          let [u, v] = place(box, arriveOf(a.id))
-          let [w, q] = place(box, arriveOf(b.id))
-          ctx.beginPath()
-          ctx.moveTo(u * 320, v * 320)
-          ctx.lineTo(w * 320, q * 320)
-          ctx.stroke()
-        }
-      }
-    }
-  }
   let draw = () => {
     if (version != chartVersion) {
       version = chartVersion
       shown = ''
     }
-    let id = key()
+    let id = `${key()}/${[...explored].sort().join(',')}`
     if (shown == id) return
     shown = id
     drawn = box
     canvas.style.transform = ''
-    overview()
+    ctx.fillStyle = '#22231f'
+    ctx.fillRect(0, 0, 320, 320)
     let asked = box
     let askedAt = version
-    groundTiles(asked, version).then((tiles) => {
+    groundImages(asked, explored).then((charts) => {
       if (askedAt != chartVersion || shown != id) return
-      for (let { image, box: tile } of tiles) {
+      for (let { image, box: tile } of charts) {
         let side = tile[2] / asked[2] * 320
         ctx.drawImage(
           image,
@@ -384,6 +304,7 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
         openWas = false
         return
       }
+      explored = new Set(regions)
       advance()
       hero = [f.body.x, f.body.z]
       if (!openWas) {
