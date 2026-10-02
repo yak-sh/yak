@@ -74,7 +74,11 @@ else. Treat the brief as the part of the work you do yourself.
    restates the code (M-39441).
 8. **The loop**: claim the task under its session, land with `yak land`, one
    line with the sha on the task, close it, release the claim, restart `yak`
-   when it changed the server.
+   when it changed the server. One writer per task: before starting an agent on
+   a task, `yak graph show` it for a live claim, and give a running session's
+   task to that session. A second agent in the same task finds the first's
+   process and kills it as a stray writer, which is how five Codex runs on
+   T-63462 died of SIGTERM beside a native session already working it.
 9. **What comes back**: "report in a few lines", plus whatever you need for
    the owner: numbers, decisions only he can make, follow-ups it filed.
 10. **Spending**: a run that spends money or a subscription starts as a pilot
