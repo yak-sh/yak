@@ -384,7 +384,7 @@ let failing = (
   e: ModelError,
   code = e.code,
 ): Record<string, Comp> => ({
-  [ERROR]: { code },
+  [code == 'interrupted' || passing(e) ? ERROR : REFUSAL]: { code },
   ...e.response && g.vocab.comp(RESPONSE) ? { [RESPONSE]: e.response } : {},
 })
 
