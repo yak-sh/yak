@@ -9,11 +9,16 @@ export let fireLevel = (voice: boolean) => voice ? 0.22 : 1
 export let bus = (
   name: string,
   fallback: number,
-  storage?: Pick<Storage, 'getItem' | 'setItem'>,
+  { storage, boost = 1 }: {
+    storage?: Pick<Storage, 'getItem' | 'setItem'>
+    boost?: number
+  } = {},
 ) => {
   let key = `mossvale.${name}.level`
   let level = fallback
   let gain: GainNode | null = null
+  // Hearing compresses amplitude: spread audible changes across the slider.
+  let amplitude = () => boost * level ** 3
   try {
     let saved = (storage ?? localStorage).getItem(key)
     if (saved != null) level = clamp(Number(saved), fallback)
@@ -32,13 +37,13 @@ export let bus = (
         let at = gain.context.currentTime
         gain.gain.cancelScheduledValues(at)
         gain.gain.setValueAtTime(gain.gain.value, at)
-        gain.gain.linearRampToValueAtTime(level, at + 0.02)
+        gain.gain.linearRampToValueAtTime(amplitude(), at + 0.02)
       }
     },
     into: (ctx: AudioContext, out: AudioNode) => {
       if (!gain || gain.context != ctx) {
         gain?.disconnect()
-        gain = new GainNode(ctx, { gain: level })
+        gain = new GainNode(ctx, { gain: amplitude() })
         gain.connect(out)
       }
       return gain

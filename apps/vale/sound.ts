@@ -73,9 +73,9 @@ let ctx: AudioContext | null = null
 // The last stop before the speakers: all three buses play into it.
 let out: AudioNode | null = null
 let levels = {
-  music: bus('music', 0.7),
+  music: bus('music', 0.6),
   effects: bus('effects', 1),
-  voice: bus('voice', 1),
+  voice: bus('voice', 1, { boost: 2 }),
 }
 type Channel = 'effects' | 'voice'
 let destination: Record<Channel, AudioNode | null> = {
