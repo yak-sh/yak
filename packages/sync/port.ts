@@ -12,7 +12,7 @@ type Packet = {
   id?: number
   method?: string
   value?: unknown
-  error?: string
+  error?: unknown
   frame?: Frame
   closed?: boolean
 }
@@ -36,6 +36,10 @@ export let portLink = (port: Port, opts: {
   receive?: (method: string, value: unknown) => unknown | Promise<unknown>
   frame?: (frame: Frame) => void
   report?: (error: unknown) => void
+  /** Encode a request failure as a structured-cloneable value. */
+  encodeError?: (error: unknown) => unknown
+  /** Restore a received failure, such as a domain-specific Error subclass. */
+  decodeError?: (value: unknown) => Error
   timeout?: number
   /** Maximum outstanding requests before a further one is rejected. */
   maxPending?: number
@@ -78,7 +82,9 @@ export let portLink = (port: Port, opts: {
           opts.report?.(error)
           return send({
             id: packet.id,
-            error: error instanceof Error
+            error: opts.encodeError
+              ? opts.encodeError(error)
+              : error instanceof Error
               ? error.stack ?? error.message
               : String(error),
           })
@@ -90,8 +96,19 @@ export let portLink = (port: Port, opts: {
     if (!pending) return
     held.delete(packet.id!)
     clearTimeout(pending.timer)
-    if (packet.error) pending.reject(new Error(packet.error))
-    else pending.resolve(packet.value)
+    if ('error' in packet) {
+      try {
+        pending.reject(
+          opts.decodeError
+            ? opts.decodeError(packet.error)
+            : new Error(String(packet.error)),
+        )
+      } catch (error) {
+        pending.reject(
+          error instanceof Error ? error : new Error(String(error)),
+        )
+      }
+    } else pending.resolve(packet.value)
   }
   let close = (reason = new Error('Message link closed'), notify = true) => {
     if (closed) return

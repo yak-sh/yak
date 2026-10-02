@@ -359,6 +359,13 @@ terminating the caller-owned port. `stats` counts sent messages, received
 messages, and subscription frames. Frame streams do not implement credit-based
 backpressure.
 
+Request failures arrive as ordinary `Error` objects by default. Supply
+`encodeError(error)` on the receiving end and `decodeError(value)` on the asking
+end to preserve domain-specific error classes and their data. The encoded value
+must support structured cloning; the decoder returns an `Error`, including a
+subclass when callers distinguish failures by type. A decoder that throws
+rejects the request with its own failure.
+
 ### Request deadlines
 
 Override the timeout per request when an operation can take longer:

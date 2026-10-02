@@ -31,6 +31,60 @@ test('MessagePort requests, frames, failures and pending shutdown', async () => 
   }
 })
 
+test('MessagePort codecs restore typed failures and their data', async () => {
+  class Conflict extends Error {
+    constructor(public current: unknown) {
+      super('changed since it was read')
+    }
+  }
+  let { port1, port2 } = new MessageChannel()
+  let a = portLink(port1, {
+    decodeError: (value) => new Conflict(value),
+  })
+  let b = portLink(port2, {
+    receive: (_method, value) => {
+      throw new Conflict(value)
+    },
+    encodeError: (error) => (error as Conflict).current,
+  })
+  try {
+    for (let current of [{ count: 2 }, null, false, 0, '', undefined]) {
+      let error = await assertRejects(
+        () => a.request('write', current),
+        Conflict,
+      )
+      assertEquals(error.current, current)
+    }
+  } finally {
+    a.close()
+    b.close()
+    port1.close()
+    port2.close()
+  }
+})
+
+test('MessagePort rejects failures its decoder cannot restore', async () => {
+  let { port1, port2 } = new MessageChannel()
+  let a = portLink(port1, {
+    decodeError: () => {
+      throw new TypeError('invalid failure')
+    },
+  })
+  let b = portLink(port2, {
+    receive: () => {
+      throw new Error('rejected')
+    },
+  })
+  try {
+    await assertRejects(() => a.request('write'), TypeError, 'invalid failure')
+  } finally {
+    a.close()
+    b.close()
+    port1.close()
+    port2.close()
+  }
+})
+
 test('MessagePort request limits and timeout bound abandoned operations', async () => {
   let { port1, port2 } = new MessageChannel()
   let a = portLink(port1, { maxPending: 1, timeout: 10 })
