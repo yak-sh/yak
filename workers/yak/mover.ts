@@ -128,9 +128,7 @@ export let takeRule: Rule = {
 }
 
 export let RULES: Rule[] = [
-<<<<<<< HEAD
   takeRule,
-=======
   ...interruptionFind.map((find, i): Rule => ({
     mark: `yak/store/interruption/${i + 1}`,
     find,
@@ -139,7 +137,6 @@ export let RULES: Rule[] = [
       return interruptionMove(row, read)
     },
   })),
->>>>>>> e6e31f632 (Expand interruption marks and rehearse historical lifecycle evidence)
   ...refusalFind.map((find, i): Rule => ({
     mark: i == 0 ? 'yak/store/refusal/1' : 'yak/store/refusal-imported/1',
     live: 'all',
