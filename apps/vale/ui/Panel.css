@@ -176,7 +176,7 @@
 }
 
 @container panel (width < 42rem) {
-  .Panel_Tab:not([aria-selected='true']) > :is(span, kbd) {
+  .Panel_Tab:not([aria-selected='true']) > :is(.Panel_TabLabel, kbd) {
     display: none;
   }
 }

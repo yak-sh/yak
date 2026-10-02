@@ -69,6 +69,14 @@ test('panel and tabs keep native nodes, drafts, listeners and scroll across grap
       tabs.skills.mark(true)
       equal(state.marked('book/skills'), true)
       let buttons = glass.querySelectorAll<HTMLButtonElement>('.Panel_Tab')
+      equal(buttons[1].getAttribute('aria-label'), 'Skills')
+      equal(buttons[1].querySelector('.Panel_TabLabel')?.textContent, 'Skills')
+      equal(
+        buttons[1].querySelector('.Glyph')?.parentElement?.getAttribute(
+          'aria-hidden',
+        ),
+        'true',
+      )
       ok(buttons[1].classList.contains('Panel_Tab-new'))
       buttons[1].click()
       equal(state.pane, 'skills')

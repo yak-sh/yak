@@ -133,11 +133,12 @@ export let panels = (
                         onClick: leaf.page.show,
                       },
                       h('span', {
+                        'aria-hidden': 'true',
                         dangerouslySetInnerHTML: {
                           __html: glyph(leaf.spec!.icon),
                         },
                       }),
-                      h('span', {}, leaf.spec!.title),
+                      h('span', { class: 'Panel_TabLabel' }, leaf.spec!.title),
                       h('kbd', { class: 'Key' }, cap(leaf.spec!.keys[0])),
                     )
                   ),
