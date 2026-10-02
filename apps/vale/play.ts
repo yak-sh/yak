@@ -28,7 +28,7 @@
 //     in this life (rules.ts `hpOf`), and one that a fight says is held
 //     neither moves nor bites (`heldOf`). A fall is a `slain` row, one per
 //     player who helped, and the loot it leaves is each player's own.
-import { landing, type Point } from './aim.ts'
+import { landing as castLanding, type Point } from './aim.ts'
 import { abilitiesOf, again, BLEEDS, WARD, type Went } from './abilities.ts'
 import { effect } from './ability-effects.ts'
 import { type Slot, SLOTS } from './arms.ts'
@@ -1408,7 +1408,7 @@ export let game = (
           askedAt = -1e9
           aimed = target?.eid ?? ''
           castPoint = !target && intent.point
-            ? landing(
+            ? castLanding(
               body,
               intent.point,
               effect(a.effects, 'dash')?.metres ??
