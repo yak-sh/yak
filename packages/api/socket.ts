@@ -256,7 +256,7 @@ export let receive = (
       let verdict = gate(subs, to, now)(msg.relay)
       if (verdict == 'close') return 'close'
       if (verdict == 'skip') return
-      let out = subs.relay(to, msg.relay)
+      let out = (subs.enqueue ?? subs.relay)(to, msg.relay)
       if (isPromise(out)) out.catch(fail)
       return
     }

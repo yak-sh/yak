@@ -142,6 +142,9 @@ export type Subs = {
    * components update their membership against the value now held.
    */
   relay: (sink: Sink, bundles: Bundle[]) => void | Promise<void>
+  /** Socket inputs share one short fan-out batch across writers. Held values
+   * and ownership change immediately; the returned promise follows delivery. */
+  enqueue?: (sink: Sink, bundles: Bundle[]) => void | Promise<void>
   /** The vocabulary's cadence for a peer component, if it declares one. */
   pace?: (comp: string) => number | null
   /** The keys one sink's relayed values are held under — small enough to
@@ -799,6 +802,7 @@ export let subscriptions = (graph: Graph, opts: {
   // commit that arrives meanwhile: when their turn comes they are one pass.
   let waiting: { txs: Bundle[][]; done: Promise<void> } | undefined
   let commit = (applied: Bundle[]): void | Promise<void> => {
+    flushPeers()
     if (waiting) {
       waiting.txs.push(applied)
       return waiting.done
@@ -875,6 +879,7 @@ export let subscriptions = (graph: Graph, opts: {
   let peers: Relay<Sink> = relaying(
     graph.vocab,
     (b) => {
+      flushPeers()
       let out = ordered(() => peerChange(b))
       if (isPromise(out)) out.catch((err) => fault(err, 'peer expiry'))
     },
@@ -1015,11 +1020,11 @@ export let subscriptions = (graph: Graph, opts: {
     )
   }
 
-  let peerChange = (bundles: Bundle[], except?: Sink) => {
+  let peerChange = (bundles: Bundle[], except?: Sink, casted = false) => {
     if (!bundles.length) return
     // Old members hear the patch that moved a row out; new members receive
     // its full held value in the membership frame below.
-    cast(bundles, except)
+    if (!casted) cast(bundles, except)
     let touched = [...new Set(bundles.map((b) => b.entity.eid))]
     let values = peers.values(touched)
     let active = new Set(values.map((b) => b.entity.eid))
@@ -1042,12 +1047,7 @@ export let subscriptions = (graph: Graph, opts: {
     let batchLinks = new Map<string, Bundle[] | Promise<Bundle[]>>()
     let batchSources = new Map<string, Bundle[] | Promise<Bundle[]>>()
     return after(durableRows(touched), (rows) => {
-      let routing = route(
-        overlay(rows, values),
-        touched,
-        peerNet,
-        true,
-      )
+      let routing = route(overlay(rows, values), touched, peerNet, true)
       release()
       return after(
         over(
@@ -1149,11 +1149,96 @@ export let subscriptions = (graph: Graph, opts: {
     },
   })
 
+  let bare = (bundles: Bundle[]) =>
+    admit(bundles, graph.vocab).map((b) => {
+      let out: Bundle = { entity: { eid: b.entity.eid } }
+      for (let [name, patch] of comps(b)) out[name] = patch
+      return out
+    })
+  let batch: {
+    writes: Map<string, { sink: Sink; row: Bundle }>
+    done: Promise<void>
+    resolve: () => void
+    reject: (err: unknown) => void
+    cancel: () => void
+  } | undefined
+  let flushPeers = () => {
+    let next = batch
+    if (!next) return
+    batch = undefined
+    next.cancel()
+    let run = () => {
+      let writes = new Map<Sink, Bundle[]>()
+      for (let { sink, row } of next.writes.values()) {
+        let rows = writes.get(sink) ?? []
+        rows.push(row)
+        writes.set(sink, rows)
+      }
+      for (let [sink, rows] of writes) cast(coalesced(rows), sink)
+      return peerChange(
+        coalesced([...next.writes.values()].map((w) => w.row)),
+        undefined,
+        true,
+      )
+    }
+    try {
+      let out = ordered(run)
+      if (isPromise(out)) out.then(next.resolve, next.reject)
+      else next.resolve()
+    } catch (err) {
+      next.reject(err)
+    }
+  }
+  let enqueue = (sink: Sink, bundles: Bundle[]) => {
+    let accepted = bare(bundles)
+    let stage = () => {
+      let rows = peers.write(sink, accepted)
+      if (!rows.length) return
+      if (!batch) {
+        let resolve!: () => void, reject!: (err: unknown) => void
+        let done = new Promise<void>((yes, no) => {
+          resolve = yes
+          reject = no
+        })
+        let cancel = (opts.timer ?? ((fn, ms) => {
+          let t = setTimeout(fn, ms)
+          return () => clearTimeout(t)
+        }))(flushPeers, 16)
+        batch = { writes: new Map(), done, resolve, reject, cancel }
+      }
+      for (let row of rows) {
+        for (let [comp, patch] of comps(row)) {
+          let key = JSON.stringify([row.entity.eid, comp])
+          let was = batch.writes.get(key)?.row[comp]
+          let previous = was && typeof was == 'object' ? was : {}
+          batch.writes.set(key, {
+            sink,
+            row: {
+              entity: row.entity,
+              [comp]: patch == null ? null : { ...previous, ...patch },
+            },
+          })
+        }
+      }
+      return batch.done
+    }
+    // The fan-out promise must not lock the registry while its batch is
+    // gathering more inputs. Flush orders delivery after storage work.
+    return stage()
+  }
   return {
-    snapshot: (query) => ordered(() => snapshot(query)),
-    open: (sink, id, query) => ordered(() => open(sink, id, query)),
-    restore: (openings) =>
-      ordered(() => {
+    snapshot: (query) => {
+      flushPeers()
+      return ordered(() => snapshot(query))
+    },
+    enqueue,
+    open: (sink, id, query) => {
+      flushPeers()
+      return ordered(() => open(sink, id, query))
+    },
+    restore: (openings) => {
+      flushPeers()
+      return ordered(() => {
         let rows = new Map<string, Answer>()
         let answers = new Map<string, Reduced | Promise<Reduced>>()
         return after(
@@ -1163,15 +1248,19 @@ export let subscriptions = (graph: Graph, opts: {
           ),
           () => {},
         )
-      }),
-    close: (sink, id) =>
-      ordered(() => {
+      })
+    },
+    close: (sink, id) => {
+      flushPeers()
+      return ordered(() => {
         pending.get(sink)?.delete(id)
         forget(held.get(sink)?.get(id))
         held.get(sink)?.delete(id)
-      }),
-    drop: (sink) =>
-      ordered(() => {
+      })
+    },
+    drop: (sink) => {
+      flushPeers()
+      return ordered(() => {
         pending.delete(sink)
         for (let sub of held.get(sink)?.values() ?? []) forget(sub)
         held.delete(sink)
@@ -1179,27 +1268,25 @@ export let subscriptions = (graph: Graph, opts: {
         // connection goes.
         let off = peers.drop(sink)
         if (off.length) return peerChange(off)
-      }),
+      })
+    },
     commit,
     relay: (sink, bundles) => {
+      flushPeers()
       // Admit before queueing, so even a patch superseded while waiting still
       // gets the same refusal as one sent without a backlog.
-      let bare = admit(bundles, graph.vocab).map((b) => {
-        let out: Bundle = { entity: { eid: b.entity.eid } }
-        for (let [name, patch] of comps(b)) out[name] = patch
-        return out
-      })
+      let accepted = bare(bundles)
       let waiting = relays.get(sink)
       if (waiting) {
-        waiting.bundles = coalesced([...waiting.bundles, ...bare])
+        waiting.bundles = coalesced([...waiting.bundles, ...accepted])
         return waiting.done
       }
       let run = (batch: Bundle[]) => {
         let out = peers.write(sink, batch)
         return peerChange(out, sink)
       }
-      if (!pendingWork) return ordered(() => run(bare))
-      let next = { bundles: bare, done: Promise.resolve() }
+      if (!pendingWork) return ordered(() => run(accepted))
+      let next = { bundles: accepted, done: Promise.resolve() }
       relays.set(sink, next)
       next.done = ordered(() => {
         relays.delete(sink)

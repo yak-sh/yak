@@ -291,6 +291,7 @@ test('an idle area subscriber hears a mover after hibernation', async () => {
   send(first, moving, {
     relay: [{ entity: { eid: 'mover' }, position: { x: 2 } }],
   })
+  await until(() => idle.sent.at(-1)?.bundles?.[0]?.entity.eid == 'mover')
   let joined = idle.sent.at(-1)!
   assertEquals(joined.bundles?.[0].entity.eid, 'mover')
 

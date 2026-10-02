@@ -20,6 +20,12 @@ let ear = () => {
   return { to, take: () => heard.splice(0, heard.length) }
 }
 
+let queued = (
+  subs: ReturnType<typeof subscriptions>,
+  sink: Sink,
+  bundles: Bundle[],
+) => (subs.enqueue ?? subs.relay)(sink, bundles)
+
 // The relay bundles one sink has heard, flattened.
 let relayed = (frames: Frame[]) => frames.flatMap((f) => f.relay ?? [])
 
@@ -811,4 +817,144 @@ test('async peer reads keep successive membership moves in order', async () => {
       ['b1'],
     ],
   )
+})
+
+test('socket peers share a fanout and never echo an older owner value', async () => {
+  let clock = stopped(), graph = shop()
+  graph.apply([
+    { entity: { eid: 'p1' }, doc: { title: 'One' } },
+    { entity: { eid: 'p2' }, doc: { title: 'Two' } },
+    { entity: { eid: 'l1' }, book: { author: 'p1' } },
+    { entity: { eid: 'l2' }, book: { author: 'p2' } },
+  ])
+  let calls = 0
+  let spy: Graph = {
+    ...graph,
+    get: (ids) => (calls++, graph.get(ids)),
+    read: (q, opts) => (calls++, graph.read(q, opts)),
+  }
+  let subs = subscriptions(spy, { timer: clock.timer })
+  let one = ear(), two = ear(), watcher = ear()
+  for (let e of [one, two, watcher]) {
+    subs.open(e.to, 'positions', '.browsing&*')
+    subs.open(e.to, 'looks', '.book.author.browsing.x<10&*')
+    e.take()
+  }
+  let a = queued(subs, one.to, [{ entity: { eid: 'p1' }, browsing: { x: 2 } }])
+  let b = queued(subs, two.to, [{ entity: { eid: 'p2' }, browsing: { x: 3 } }])
+  assertEquals(watcher.take(), [])
+  calls = 0
+  clock.tick(16)
+  await Promise.all([a, b])
+  assertEquals(calls, 3) // one durable gather, one backlink read and gather
+  assertEquals(
+    watcher.take().flatMap((f) => f.bundles ?? [])
+      .map((b) => b.entity.eid).sort(),
+    ['l1', 'l2', 'p1', 'p2'],
+  )
+  one.take()
+  two.take()
+  let c = queued(subs, one.to, [{ entity: { eid: 'p1' }, browsing: { x: 4 } }])
+  let d = queued(subs, two.to, [{ entity: { eid: 'p1' }, browsing: { x: 5 } }])
+  clock.tick(16)
+  await Promise.all([c, d])
+  assertEquals(relayed(watcher.take()), [
+    { entity: { eid: 'p1' }, browsing: { x: 5 } },
+  ])
+  assertEquals(relayed(two.take()), []) // newest owner never hears stale x=4
+  assertEquals(relayed(one.take()), [
+    { entity: { eid: 'p1' }, browsing: { x: 5 } },
+  ])
+  subs.drop(one.to)
+  assertEquals(subs.snapshot('.browsing&*').map((b) => b.entity.eid).sort(), [
+    'p1',
+    'p2',
+  ])
+  subs.drop(two.to)
+  assertEquals(subs.snapshot('.browsing&*'), [])
+})
+
+test('batched membership re-enters and clears on expiry or pending drop', async () => {
+  let clock = stopped(), subs = subscriptions(shop(), { timer: clock.timer })
+  let writer = ear(), watcher = ear()
+  subs.open(watcher.to, 'near', '.browsing.x<10&*')
+  watcher.take()
+  let move = async (x: number) => {
+    let done = queued(subs, writer.to, [{
+      entity: { eid: 'p' },
+      browsing: { x },
+    }])
+    clock.tick(16)
+    await done
+  }
+  await move(1)
+  assertEquals(
+    watcher.take().flatMap((f) => f.bundles ?? [])
+      .map((b) => b.entity.eid),
+    ['p'],
+  )
+  await move(20)
+  assertEquals(watcher.take().at(-1)?.gone, ['p'])
+  await move(2)
+  assertEquals(watcher.take().at(-1)?.bundles?.[0].entity.eid, 'p')
+  queued(subs, writer.to, [{ entity: { eid: 'p' }, browsing: { x: 3 } }])
+  await subs.drop(writer.to)
+  clock.tick(16)
+  assertEquals(subs.snapshot('.browsing&*'), [])
+  assertEquals(watcher.take().at(-1)?.gone, ['p'])
+  await move(4)
+  watcher.take()
+  await subs.drop(writer.to)
+  subs.open(watcher.to, 'typing', '.typing&*')
+  watcher.take()
+  let expiring = queued(subs, writer.to, [{
+    entity: { eid: 'p' },
+    typing: { who: 'Ada' },
+  }])
+  clock.tick(16)
+  await expiring
+  watcher.take()
+  clock.tick(10_000)
+  assertEquals(subs.snapshot('.typing&*'), [])
+  assertEquals(watcher.take().at(-1)?.gone, ['p'])
+})
+
+test('pending peer values appear in initial and restored watches', async () => {
+  let clock = stopped(), subs = subscriptions(shop(), { timer: clock.timer })
+  let watcher = ear(), writer = ear()
+  queued(subs, writer.to, [{ entity: { eid: 'p' }, browsing: { x: 1 } }])
+  subs.restore([{ sink: watcher.to, id: 'peer', query: '.browsing&*' }])
+  assertEquals(watcher.take().at(-1)?.relay?.[0].browsing, { x: 1 })
+  await subs.drop(writer.to)
+  clock.tick(16)
+  subs.open(watcher.to, 'peer', '.browsing&*')
+  assertEquals(watcher.take().at(-1)?.bundles, [])
+})
+
+test('a durable reference edit orders after pending peer membership', async () => {
+  let clock = stopped(), graph = shop()
+  graph.apply([
+    { entity: { eid: 'p' }, doc: { title: 'Author' } },
+    { entity: { eid: 'look' }, book: { author: 'p', price: 1 } },
+  ])
+  let subs = subscriptions(graph, { timer: clock.timer })
+  let writer = ear(), watcher = ear()
+  subs.open(watcher.to, 'looks', '.book.author.browsing.x<10&*')
+  watcher.take()
+  let done = queued(subs, writer.to, [
+    { entity: { eid: 'p' }, browsing: { x: 1 } },
+  ])
+  graph.apply([{ entity: { eid: 'look' }, book: { price: 2 } }])
+  await done
+  clock.tick(16)
+  let rows = watcher.take().flatMap((f) => f.bundles ?? [])
+  assertEquals(rows.at(-1)?.book, { author: 'p', price: 2 })
+  graph.apply([{ entity: { eid: 'look' }, book: { author: null } }])
+  assertEquals(watcher.take().at(-1)?.gone, ['look'])
+  let clearing = queued(subs, writer.to, [
+    { entity: { eid: 'p' }, browsing: null },
+  ])
+  clock.tick(16)
+  await clearing
+  assertEquals(subs.snapshot('.browsing&*'), [])
 })
