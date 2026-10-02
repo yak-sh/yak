@@ -58,3 +58,42 @@ test('a creature cries with its own sound row', () => {
     )
   }
 })
+
+let creatureScene = (bite = -1, down = false) => {
+  let body = { x: 0, y: 5, z: 0, vy: 0, yaw: 0, speed: 0, gait: 'idle' }
+  return {
+    body,
+    others: [],
+    mobs: [{
+      eid: 'wolf',
+      beast: beastOf('beast:wolf')!.eid,
+      body,
+      down,
+      bite,
+    }],
+  }
+}
+
+test('wandering creatures call rarely instead of filling the soundscape', () => {
+  let hear = noises(), scene = creatureScene()
+  assertEquals(hear(scene, 'hero', 1 / 60, () => 0.0005), [])
+  let cries = hear(scene, 'hero', 1 / 60, () => 0)
+  assertEquals(cries.map((n) => n.type), ['cry'])
+  assertEquals(hear(scene, 'hero', 1, () => 0), [])
+  assertEquals(hear(scene, 'hero', 7, () => 0).length, 1)
+  assertEquals(hear(creatureScene(-1, true), 'hero', 120, () => 0), [])
+})
+
+test('repeated bites leave a pause between cries and creatures keep separate voices', () => {
+  let hear = noises()
+  let cries = (bite: number, dt: number) =>
+    hear(creatureScene(bite), 'hero', dt, () => 1)
+  assertEquals(cries(0.1, 0.1).length, 1)
+  assertEquals(cries(-1, 1), [])
+  assertEquals(cries(0.1, 1), [])
+  assertEquals(cries(-1, 6), [])
+  assertEquals(cries(0.1, 0.1).length, 1)
+  let scene = creatureScene(0.1)
+  scene.mobs[0].eid = 'another-wolf'
+  assertEquals(hear(scene, 'hero', 0.1, () => 1).length, 1)
+})

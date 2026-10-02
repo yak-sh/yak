@@ -327,7 +327,7 @@ let noisy = (n: Noise) =>
       ? voiced(
         n.sfx,
         voices.cry(n.gait, n.size, n.loud),
-        n.loud ? 0.32 : 0.2,
+        n.loud ? 0.1 : 0.06,
       )
       : n.type == 'swing'
       ? sampled('swing', voices.whiff, 0.25)

@@ -252,20 +252,21 @@ let CRIES: Record<string, (k: number, low: number) => Voice> = {
   drift: (k) =>
     voice(
       0.5,
-      0.04 * k,
-      (o) => tone(o, vary(900), 0.45, 'sine', 0.04 * k, 1500),
+      0.012 * k,
+      (o) => tone(o, vary(900), 0.45, 'sine', 0.012 * k, 1500),
     ),
-  slide: (k) => voice(0.6, 0.06 * k, (o) => hiss(o, 0.55, 5200, 0.06 * k, 1.2)),
+  slide: (k) =>
+    voice(0.6, 0.018 * k, (o) => hiss(o, 0.55, 5200, 0.018 * k, 1.2)),
   hover: (k, low) =>
-    voice(0.4, 0.03 * k, (o) => {
+    voice(0.4, 0.009 * k, (o) => {
       let f = vary(240 * low)
-      tone(o, f, 0.35, 'sawtooth', 0.03 * k, f * 0.9, 0, 1800)
+      tone(o, f, 0.35, 'sawtooth', 0.009 * k, f * 0.9, 0, 1800)
     }),
   _: (k, low) =>
-    voice(0.5, 0.08 * k, (o) => {
+    voice(0.5, 0.024 * k, (o) => {
       let f = vary(150 * low), dur = 0.45 * k
-      tone(o, f, dur, 'sawtooth', 0.08 * k, f * 0.6, 0, 700)
-      tone(o, f * 1.02, dur * 0.9, 'square', 0.03 * k, f * 0.55, 0, 500)
+      tone(o, f, dur, 'sawtooth', 0.024 * k, f * 0.6, 0, 700)
+      tone(o, f * 1.02, dur * 0.9, 'square', 0.009 * k, f * 0.55, 0, 500)
     }),
 }
 export let cry = (gait: string, size: number, loud: boolean) =>

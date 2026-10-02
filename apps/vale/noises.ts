@@ -42,7 +42,9 @@ export type Scene = {
 // makes no steps.
 let STRIDE: Record<string, number> = { hero: 1, walk: 0.6, hop: 1 }
 // A creature that is up calls about this often, in seconds.
-let CALL = 18
+let CALL = 120
+// Leave a pause between cries, including repeated bites.
+let PAUSE = 8
 // Further than this in a frame is not a walk: a rise by the fire, a road.
 let LEAP = 4
 // How high above its feet a hero is heard, in metres; a creature is heard
@@ -105,6 +107,7 @@ export let noises = () => {
   let swung = new Map<string, number>()
   let rolled = new Set<string>()
   let bit = new Map<string, number>()
+  let called = new Map<string, number>()
   return (f: Scene, me: string, dt: number, rand = Math.random): Noise[] => {
     let out: Noise[] = []
     let was = walked
@@ -139,7 +142,7 @@ export let noises = () => {
       if (!rolled.has(o.eid)) out.push({ type: 'roll', of: o.eid })
       rolls.add(o.eid)
     }
-    let bites = new Map<string, number>()
+    let bites = new Map<string, number>(), calls = new Map<string, number>()
     for (let m of f.mobs) {
       let beast = BEASTS[m.beast], fig = FIGURES[m.beast]
       if (!beast || !fig || m.down) continue
@@ -154,11 +157,20 @@ export let noises = () => {
         size,
         loud,
       })
-      if (m.bite >= 0 && (b < 0 || m.bite < b)) out.push(cry(true))
-      else if (m.bite < 0 && rand() < dt / CALL) out.push(cry(false))
+      let wait = Math.max(0, (called.get(m.eid) ?? 0) - dt)
+      if (!wait) {
+        if (m.bite >= 0 && (b < 0 || m.bite < b)) {
+          out.push(cry(true))
+          wait = PAUSE
+        } else if (m.bite < 0 && rand() < dt / CALL) {
+          out.push(cry(false))
+          wait = PAUSE
+        }
+      }
+      calls.set(m.eid, wait)
       bites.set(m.eid, m.bite)
     }
-    ;[swung, rolled, bit] = [swings, rolls, bites]
+    ;[swung, rolled, bit, called] = [swings, rolls, bites, calls]
     return out
   }
 }
