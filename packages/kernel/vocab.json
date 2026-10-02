@@ -605,6 +605,37 @@
         }
       },
       "description": "Awaiting its first successful answer or confirmation."
+    },
+    "interrupted": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it was found broken"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "who found it broken — kept as history when that entity is deleted"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "what the write came in through — the session or client that made it"
+        },
+        "code": {
+          "type": "string",
+          "description": "why the work was interrupted: transport, restart, superseded or a signal"
+        }
+      },
+      "description": "A request or call was cut off before it finished. Removing the mark allows a deliberate retry; its code records why it was interrupted."
     }
   }
 }
