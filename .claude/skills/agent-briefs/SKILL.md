@@ -95,6 +95,15 @@ Land with `yak land`, one-line sha comment on T-123, close it. Report in a few
 lines: <what you need back>.
 ```
 
+## A bug the owner hits while playing
+
+He expects it fixed and deployed while he plays (M-63541). Each one he reports
+gets its own session at once: one bug, one session, `--effort medium`, a brief
+of a few lines (the task as the spec, ship now, the tests it could break, land,
+deploy, check errors). Adding it to a session already at work queues it behind
+everything that session holds, which is how a one-line fix comes to take hours.
+Group two bugs only when they are one change in one place.
+
 ## A running agent
 
 - **An addition that keeps its purpose**: SendMessage it, with the owner's words
