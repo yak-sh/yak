@@ -6,6 +6,7 @@ import {
   validateToolInput,
   validateToolOutput,
 } from './tools.ts'
+import { meta } from './testing.ts'
 
 const draft7 = 'http://json-schema.org/draft-07/schema#'
 test('tool schemas preserve draft-07 tuple semantics beside 2020 schemas', () => {
@@ -141,6 +142,20 @@ test('a vocabulary carries tool declarations beside its components', async () =>
   )
 })
 
+test('a rest option names one of the tool inputs', () => {
+  let tool = {
+    description: 'Keep words together.',
+    inputSchema: { type: 'object', properties: { body: { type: 'string' } } },
+    options: { rest: 'body' },
+  }
+  assertEquals(toolDefinition(tool).options, { rest: 'body' })
+  assertThrows(
+    () => toolDefinition({ ...tool, options: { rest: 'missing' } }),
+    Error,
+    'Option references unknown property: missing',
+  )
+})
+
 test('a tool may be one word: a noun alone, or a verb alone', () => {
   // Either word alone is a whole declaration — `history` is a noun nobody
   // needs a verb for, `land` a verb nobody needs a noun for.
@@ -158,5 +173,32 @@ test('a tool may be one word: a noun alone, or a verb alone', () => {
     () => toolDefinition({ noun: 'Two Words', description: 'No.' }),
     Error,
     'Invalid tool arguments',
+  )
+})
+
+test('a tool can forward raw arguments to a later schema', () => {
+  let doc = {
+    $defs: {
+      call: {
+        tool: true,
+        description: 'Run a command whose schema is fetched later.',
+        input: { args: { type: 'array', items: { type: 'string' } } },
+        options: { forward: 'args' },
+      },
+    },
+  }
+  assertEquals(meta().check(doc), true)
+  let [tool] = toolsIn(doc)
+  let args = ['--count', '4', '@body.txt', '--', '--literal']
+  assertEquals(validateToolInput(tool, { args }), { args })
+  assertThrows(() => validateToolInput(tool, { args: ['--count', 4] }))
+  assertThrows(() =>
+    toolDefinition({ ...tool, options: { forward: 'missing' } })
+  )
+  assertThrows(() =>
+    toolDefinition({
+      ...tool,
+      inputSchema: { type: 'object', properties: { args: { type: 'object' } } },
+    })
   )
 })

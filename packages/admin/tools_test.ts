@@ -11,7 +11,7 @@ import {
 } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { toolsIn } from '@yaks/vocab/tools'
-import { vaultOf } from '@yaks/cli'
+import { argsFor, vaultOf } from '@yaks/cli'
 import { secretEid } from '@yaks/secrets'
 import { CallError, Interrupted } from '@yaks/tools'
 import { ADMIN } from '../../workers/yak/lib/bots.ts'
@@ -383,6 +383,66 @@ test('a throwaway signs in with the code from the graph', async () => {
       .filter((line) => line.includes('current'))
     assertEquals(current.length, 1)
     assertStringIncludes(current[0], 'keep@bot.yak.sh')
+  } finally {
+    Deno.removeSync(at.dir, { recursive: true })
+  }
+})
+
+test('admin tool forwards words to the fetched schema as the selected account', async () => {
+  let at = box()
+  kept(at, 'cook@bot.yak.sh', 'cook.session')
+  let requests: { method: string; params?: unknown }[] = []
+  let tool = toolsIn(adminDoc).find((t) => t.name == 'admin_tool')!
+  try {
+    await answering((_url, init) => {
+      assertEquals(
+        new Headers(init?.headers).get('cookie'),
+        'yak_session=cook.session',
+      )
+      let request = JSON.parse(String(init?.body))
+      requests.push({
+        method: request.method,
+        ...(request.params ? { params: request.params } : {}),
+      })
+      let result = request.method == 'tools/list'
+        ? {
+          tools: [{
+            name: 'count',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                n: { type: 'number' },
+                enabled: { type: 'boolean' },
+              },
+              required: ['name'],
+            },
+            _meta: { 'yak.sh/command': { options: { positional: ['name'] } } },
+          }],
+        }
+        : { content: [{ type: 'text', text: 'counted' }] }
+      return Response.json({ jsonrpc: '2.0', id: request.id, result })
+    }, async () => {
+      let args = await argsFor(tool, [
+        'count',
+        'matt',
+        '--n=4',
+        '--enabled',
+        '--as',
+        'cook',
+      ])
+      assertEquals(body(await ask('admin_tool', args, { at })), 'counted')
+    })
+    assertEquals(requests, [
+      { method: 'tools/list', params: {} },
+      {
+        method: 'tools/call',
+        params: {
+          name: 'count',
+          arguments: { name: 'matt', n: 4, enabled: true },
+        },
+      },
+    ])
   } finally {
     Deno.removeSync(at.dir, { recursive: true })
   }

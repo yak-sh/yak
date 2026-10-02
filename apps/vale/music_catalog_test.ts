@@ -104,9 +104,11 @@ test('song subscription projects the current main audio and its qualified riders
         entity: { eid: `${variant}-output` },
         built: {
           build: `${variant}-build`,
+          slot: 'main',
           key: 'current',
           artifact: 'clip',
         },
+        chosen: {},
       },
     ]),
   ], { trusted: true })

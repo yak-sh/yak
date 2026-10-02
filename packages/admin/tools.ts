@@ -48,6 +48,7 @@ import {
   unsealed,
 } from '@yaks/secrets'
 import { CallError, Interrupted } from '@yaks/tools'
+import { toolCall } from '@yaks/cli'
 import { ADMIN, BOT, isTestAddress } from '../../workers/yak/lib/bots.ts'
 import {
   type Account,
@@ -555,10 +556,19 @@ export let runs = (
 
     admin_tool: verb(async (call, vault, keep) => {
       let at = acting(vault, argsOf(call), keep, host.state)
-      let answer = await rpc(at.session)('tools/call', {
-        name: String(argsOf(call).name),
-        arguments: (argsOf(call).args ?? {}) as Record<string, unknown>,
-      })
+      let a = argsOf(call)
+      let answer = await toolCall(
+        rpc(at.session),
+        String(a.name),
+        (a.args ?? []) as string[],
+        {
+          app: word(a, 'app'),
+          reads: {
+            file: Deno.readTextFile,
+            stdin: () => new Response(Deno.stdin.readable).text(),
+          },
+        },
+      )
       return [said(call, saidBy(answer))]
     }),
 

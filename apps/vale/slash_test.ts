@@ -29,6 +29,7 @@ let tools: Tools = {
   mood: {
     input: { state: { type: 'string', enum: ['bold', 'busy', 'calm'] } },
     required: ['state'],
+    options: { positional: ['state'], rest: 'state' },
   },
   think: { input: {}, model: true },
 }
@@ -262,13 +263,18 @@ test('slash completion uses caret/token ranges and rejects invalid prefixes', as
   assertEquals((await suggestions('/spawn b', 8, {})).cands, [])
 })
 
-test('slash descriptions take the rest of the line for any trailing text input', async () => {
+test('slash descriptions take the rest declared by the command', async () => {
   let tools: Tools = {
     summon: {
       input: { text: { type: 'string' }, at: { type: 'string' } },
       required: ['text'],
+      options: { positional: ['text'], rest: 'text' },
     },
-    note: { input: { text: { type: 'string' } }, required: ['text'] },
+    note: {
+      input: { text: { type: 'string' } },
+      required: ['text'],
+      options: { positional: ['text'], rest: 'text' },
+    },
   }
   for (let flag of ['--at square', '--at=square']) {
     assertEquals(await parse('/summon a large polar bear ' + flag, tools), {
@@ -298,4 +304,37 @@ test('spawn takes one unquoted description and at remains flag-only', async () =
       },
     })
   }
+})
+
+test('slash positionals and short flags come only from declared options', async () => {
+  let tools: Tools = {
+    flag: {
+      input: { text: { type: 'string' } },
+      required: ['text'],
+    },
+    say: {
+      input: {
+        at: { type: 'string' },
+        text: { type: 'string' },
+      },
+      required: ['at', 'text'],
+      options: { positional: ['text'], rest: 'text', short: { a: 'at' } },
+    },
+  }
+  assertEquals(await parse('/flag remember these words', tools), {
+    error: 'flag takes --text, not remember',
+  })
+  assertEquals(await parse('/flag --text "remember these words"', tools), {
+    command: { name: 'flag', args: { text: 'remember these words' } },
+  })
+  assertEquals(await parse('/say remember these words -a square', tools), {
+    command: {
+      name: 'say',
+      args: { text: 'remember these words', at: 'square' },
+    },
+  })
+  assertEquals((await slashComplete(tools, '/flag rem', 9, {})).cands, [])
+  let answer = await parse('/help flag', tools)
+  if (!answer || !('help' in answer)) throw new Error('help missing')
+  assertStringIncludes(answer.help, 'Usage: `/flag --text <string>`')
 })

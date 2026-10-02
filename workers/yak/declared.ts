@@ -185,6 +185,8 @@ export type Command = {
   readOnly: boolean
   /** its arguments, as JSON Schema — what `command` fills `args` with */
   input: unknown
+  /** command-line grammar, only where the app explicitly declared it */
+  options?: ToolDef['options']
   /** the page a host draws its answer in, where it named one */
   view?: string
 }
@@ -232,6 +234,7 @@ export let listCommands = async (
         // the destructive default rather than a promise this side cannot keep.
         readOnly: tool.query != null || tool.readOnly === true,
         input: schemaOf(tool),
+        ...(tool.options ? { options: tool.options } : {}),
         // The page this command's answer draws itself in, where it named one
         // (T-32687). It is still a `ui://` resource of this door's — the
         // resource list is a caller's own and no directory snapshots it — so

@@ -31,8 +31,29 @@ export type Grammar = {
     positional?: readonly string[]
     short?: Readonly<Record<string, string>>
     rest?: string
+    forward?: string
   }
 }
+
+/** An app's vocabulary declaration, in the same grammar as package tools.
+ * Positionals, trailing words and short flags come only from its options. */
+export let appGrammar = (
+  name: string,
+  tool: {
+    input?: Record<string, Prop>
+    required?: string[]
+    options?: Grammar['options']
+  },
+): Grammar => ({
+  name,
+  inputSchema: {
+    type: 'object',
+    properties: tool.input ?? {},
+    required: tool.required ?? [],
+    additionalProperties: false,
+  },
+  options: tool.options,
+})
 
 /** The command line was wrong — nothing ran, and the exit code is 2. */
 export class Usage extends Error {}
@@ -137,51 +158,6 @@ export let valueOf = (name: string, raw: string, p?: Prop): unknown => {
   return raw
 }
 
-/**
- * `key=value`, `--key=value` and `--key value` arguments as an object —
- * the arguments of something whose
- * schema this program does not have, such as an app's own command. Each value
- * is parsed as JSON where it parses as JSON, so a number stays a number and a
- * list stays a list, and is used as given otherwise; `@path` and `-` expand
- * first, the same three forms every value here accepts.
- *
- * ```ts
- * import { pairsIn } from '@yaks/cli'
- *
- * let reads = { file: Deno.readTextFileSync, stdin: () => '' }
- * await pairsIn(['serves=4', 'title=Lemon cake'], reads)
- * // { serves: 4, title: 'Lemon cake' }
- * ```
- */
-export let pairsIn = async (
-  words: string[],
-  reads?: Reads,
-): Promise<Record<string, unknown>> => {
-  let out: Record<string, unknown> = {}
-  for (let i = 0; i < words.length; i++) {
-    let word = words[i]
-    let eq = word.indexOf('=')
-    let flag = word.startsWith('--')
-    let name = flag ? word.slice(2, eq < 0 ? undefined : eq) : word.slice(0, eq)
-    if (!name || !flag && eq <= 0) {
-      throw new Usage(
-        `not an argument: ${word} — want key=value or --key value`,
-      )
-    }
-    let value = eq >= 0 ? word.slice(eq + 1) : words[++i]
-    if (value == undefined || eq < 0 && value.startsWith('--')) {
-      throw new Usage(`${word} needs a value`)
-    }
-    let raw = await inflate(value, reads)
-    try {
-      out[name] = JSON.parse(raw)
-    } catch {
-      out[name] = raw
-    }
-  }
-  return out
-}
-
 let listed = (names: string[]): string =>
   names.length ? names.map((n) => `--${n}`).join(', ') : '(no arguments)'
 
@@ -204,6 +180,7 @@ export let argsFor = async (
 ): Promise<Record<string, unknown>> => {
   let props = ((tool.inputSchema ?? {}) as Schema).properties ?? {}
   let rest = tool.options?.rest
+  let forward = tool.options?.forward
   let { pairs, spare } = scanned(tool, argv)
   let out: Record<string, unknown> = {}
   for (let [name, raw] of pairs) {
@@ -216,21 +193,15 @@ export let argsFor = async (
       : value
   }
 
-  // The bare words nothing claimed, where the tool asked for them: an app's
-  // own arguments as pairs (bare or long options), or a plain list, which joins what its
-  // own option gathered (`--only a b` is both a and b).
-  if (rest && spare.length) {
+  // Forwarded words keep their spelling until the receiving schema parses
+  // them. In particular, a file value must expand exactly once, at that door.
+  if (forward) out[forward] = spare
+  else if (rest && spare.length) {
     let had = out[rest]
-    out[rest] =
-      props[rest]?.type != undefined && typeOf(props[rest]) == 'string'
-        ? [had, ...await Promise.all(spare.map((w) => inflate(w, reads)))]
-          .filter((w) => w != undefined).join(' ')
-        : typeOf(props[rest]) == 'array'
-        ? [
-          ...Array.isArray(had) ? had : [],
-          ...await Promise.all(spare.map((w) => inflate(w, reads))),
-        ]
-        : await pairsIn(spare, reads)
+    let values = await Promise.all(spare.map((w) => inflate(w, reads)))
+    out[rest] = typeOf(props[rest]) == 'array'
+      ? [...Array.isArray(had) ? had : [], ...values]
+      : [had, ...values].filter((w) => w != undefined).join(' ')
   }
 
   if (!tool.inputSchema) {
@@ -310,7 +281,7 @@ export let scanned = (
 } => {
   let props = ((tool.inputSchema ?? {}) as Schema).properties ?? {}
   let rest = tool.options?.rest
-  let objectRest = rest && typeOf(props[rest]) == 'object'
+  let forward = tool.options?.forward
   let positional = tool.options?.positional ?? []
   let shorts = tool.options?.short ?? {}
   let pairs: [string, string | true][] = [], spare: string[] = []
@@ -337,26 +308,19 @@ export let scanned = (
     let word = argv[i]
     if (!literal && word == '--') {
       literal = true
+      if (forward) spare.push(word)
       continue
     }
     let eq = word.indexOf('=')
     let flag = eq > 0 ? word.slice(0, eq) : word
     let name = flag.startsWith('--') ? flag.slice(2) : shorts[flag.slice(1)]
     if (!literal && (flag.startsWith('--') || flag.startsWith('-') && name)) {
-      let p = props[name]
-      if (!p && objectRest && flag.startsWith('--') && name) {
-        // Declared options always win; only an object rest can carry names
-        // whose schema belongs to the app rather than this command line.
+      let p = forward &&
+          (name == forward || positional.includes(name) && given.has(name))
+        ? undefined
+        : props[name]
+      if (!p && forward) {
         spare.push(word)
-        if (eq > 0) continue
-        let next = argv[i + 1]
-        if (next == undefined || next.startsWith('--')) {
-          if (!partial || next != undefined) {
-            throw new Usage(`${flag} needs a value`)
-          }
-          awaiting = name
-          pending = name
-        } else spare.push(argv[++i])
         continue
       }
       if (!p) {
@@ -390,7 +354,7 @@ export let scanned = (
     }
     while (at < positional.length && given.has(positional[at])) at++
     if (at < positional.length) put(positional[at++], word)
-    else if (tool.options?.rest) spare.push(word)
+    else if (rest || forward) spare.push(word)
     else {throw new Usage(
         `${commandOf(tool)} takes ${listed(Object.keys(props))}, not ${word}`,
       )}

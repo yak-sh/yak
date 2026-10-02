@@ -27,10 +27,10 @@
  */
 
 export {
+  appGrammar,
   argsFor,
   type Grammar,
   inflate,
-  pairsIn,
   type Reads,
   type Said,
   saidIn,
@@ -86,4 +86,4 @@ export {
 export { type Config, configPath, read } from './config.ts'
 export { fileVault, vaultOf } from './vault.ts'
 export { listed, printed, rosterOf } from './platform.ts'
-export { appStray, appTools } from './commands.ts'
+export { appStray, appTools, toolCall } from './commands.ts'

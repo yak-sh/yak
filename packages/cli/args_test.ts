@@ -1,11 +1,10 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import {
+  appGrammar,
   argsFor,
-  pairsIn,
   type Reads,
   saidIn,
-  scanned,
   Usage,
   valueOf,
 } from './args.ts'
@@ -155,60 +154,6 @@ test('both flag forms parse the same typed arguments including false', async () 
   }
 })
 
-test('schema-less pairs accept legacy and both long option forms with JSON values', async () => {
-  for (let form of ['legacy', 'equals', 'space']) {
-    let words = [
-      ['title', 'two words'],
-      ['count', '-2'],
-      ['enabled', 'false'],
-      ['meta', '{"x":1}'],
-      ['tags', '["cake"]'],
-      ['empty', ''],
-      ['nil', 'null'],
-      ['literal', 'a=b'],
-    ].flatMap(([key, value]) =>
-      form == 'space'
-        ? [`--${key}`, value]
-        : [`${form == 'equals' ? '--' : ''}${key}=${value}`]
-    )
-    assertEquals(await pairsIn(words), {
-      title: 'two words',
-      count: -2,
-      enabled: false,
-      meta: { x: 1 },
-      tags: ['cake'],
-      empty: '',
-      nil: null,
-      literal: 'a=b',
-    })
-  }
-  assertEquals(await pairsIn(['--text=--literal', 'old=1', '--old', '2']), {
-    text: '--literal',
-    old: 2,
-  })
-})
-
-test('schema-less pair values inflate before JSON parsing in every form', async () => {
-  let reads: Reads = { file: () => '{"file":true}', stdin: () => '[1,2]' }
-  for (let value of ['@data.json', '-', '@-']) {
-    let expected = value.startsWith('@data') ? { file: true } : [1, 2]
-    for (
-      let words of [[`data=${value}`], [`--data=${value}`], ['--data', value]]
-    ) {
-      assertEquals(await pairsIn(words, reads), { data: expected })
-    }
-  }
-})
-
-test('schema-less flags require an explicit value rather than becoming booleans', async () => {
-  for (let words of [['--enabled'], ['--enabled', '--next=1']]) {
-    await assertRejects(() => pairsIn(words), Usage, '--enabled needs a value')
-  }
-  for (let word of ['bare', '=value', '--=value', '--']) {
-    await assertRejects(() => pairsIn([word]), Usage, 'not an argument')
-  }
-})
-
 test('unknown options stay refused without a declared object rest', async () => {
   for (
     let grammar of [
@@ -233,22 +178,6 @@ test('unknown options stay refused without a declared object rest', async () => 
       app: 'r',
       files: ['--literal=1', '--other', '2'],
     },
-  )
-})
-
-test('object rest completion can await an unknown flag without swallowing declared options', () => {
-  let grammar = { ...tool, options: { rest: 'meta' } }
-  let pending = scanned(grammar, ['--extra'], true)
-  assertEquals(pending.pending, 'extra')
-  assertEquals(pending.awaiting, 'extra')
-  assertEquals(scanned(grammar, ['--extra', 'false', '--app', 'r']).spare, [
-    '--extra',
-    'false',
-  ])
-  assertThrows(
-    () => scanned(grammar, ['--extra', '--app=r']),
-    Usage,
-    'needs a value',
   )
 })
 
@@ -286,16 +215,79 @@ test('trailing text inflates each remaining word before joining', async () => {
   })
 })
 
-test('a description-only rest input keeps schema-less tool arguments as pairs', async () => {
-  let grammar = {
-    name: 'admin_tool',
+test('an app uses only the positional rest and short options it declared', async () => {
+  let declaration = {
+    input: {
+      person: { type: 'string' },
+      text: { type: 'string' },
+      limit: { type: 'number' },
+    },
+    required: ['person', 'text'],
+  }
+  let declared = appGrammar('tell', {
+    ...declaration,
+    options: {
+      positional: ['person', 'text'],
+      rest: 'text',
+      short: { n: 'limit' },
+    },
+  })
+  assertEquals(await argsFor(declared, ['matt', 'hello', '-n', '2', 'there']), {
+    person: 'matt',
+    text: 'hello there',
+    limit: 2,
+  })
+  let flags = appGrammar('tell', declaration)
+  assertEquals(await argsFor(flags, ['--person=matt', '--text', 'hello']), {
+    person: 'matt',
+    text: 'hello',
+  })
+  for (let words of [['matt', 'hello'], ['person=matt', 'text=hello']]) {
+    await assertRejects(() => argsFor(flags, words), Usage)
+  }
+  await assertRejects(() => argsFor(flags, ['--person=matt']), Usage)
+})
+
+test('a forwarding grammar keeps remote words intact while taking its selector', async () => {
+  let forwarded = {
+    name: 'command',
     inputSchema: {
       type: 'object',
-      properties: { args: { description: 'The tool arguments.' } },
+      required: ['name'],
+      properties: {
+        name: { type: 'string' },
+        app: { type: 'string' },
+        args: { type: 'array', items: { type: 'string' } },
+      },
     },
-    options: { rest: 'args' },
+    options: { positional: ['name'], forward: 'args' },
   }
-  assertEquals(await argsFor(grammar, ['app=vale', 'space=yourname']), {
-    args: { app: 'vale', space: 'yourname' },
-  })
+  let words = [
+    'add',
+    '--text',
+    '@letter',
+    '-n',
+    '2',
+    '--enabled',
+    '--',
+    '--app',
+    '-',
+  ]
+  for (let selector of [['--app=recipes'], ['--app', 'recipes']]) {
+    let expanded = 0
+    assertEquals(
+      await argsFor(forwarded, ['add', ...selector, ...words.slice(1)], {
+        file: () => {
+          expanded++
+          return 'file'
+        },
+        stdin: () => {
+          expanded++
+          return 'stdin'
+        },
+      }),
+      { name: 'add', app: 'recipes', args: words.slice(1) },
+    )
+    assertEquals(expanded, 0)
+  }
 })

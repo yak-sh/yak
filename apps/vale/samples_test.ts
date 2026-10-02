@@ -129,7 +129,13 @@ test('the sound query projects current main outputs through qualified references
       },
       {
         entity: { eid: `${variant}-output` },
-        built: { build: `${variant}-build`, key: 'current', artifact: 'clip' },
+        built: {
+          build: `${variant}-build`,
+          slot: 'main',
+          key: 'current',
+          artifact: 'clip',
+        },
+        chosen: {},
       },
     ]),
     {

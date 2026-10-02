@@ -139,7 +139,7 @@ inputs are unchanged is not asked again.
 In an app's store (workers/yak/builders.ts) the same door is the connector's
 `builder_build` tool, which takes `only`, `limit`, `template` and `model` and
 reaches the store's `/build` as the caller, after checking they may write the
-app: `yak admin tool builder_build space=<space> app=<app> builder=<id> …`.
+app: `yak admin tool builder_build --space <space> --app <app> --builder <id> …`.
 
 ## Chaining
 

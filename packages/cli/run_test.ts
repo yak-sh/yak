@@ -36,9 +36,38 @@ let ran = (tools: Command[], argv: string[], opts: Opts = {}) => {
     reads,
     out: (l) => printed.push(l),
     note: (l) => printed.push(l),
-    ask: (_method, params) => {
+    env: () => undefined,
+    ask: (method, params) => {
+      if (method == 'tools/list') return Promise.resolve({ tools: [] })
       asked.push(params as typeof asked[number])
-      return Promise.resolve({ content: [{ type: 'text', text: 'done' }] })
+      let result = { content: [{ type: 'text', text: 'done' }] }
+      if ((params as { name: string }).name == 'commands') {
+        return Promise.resolve({
+          ...result,
+          structuredContent: {
+            result: [{
+              entity: { eid: '$commands' },
+              output: {
+                value: {
+                  commands: [{
+                    name: 'add_recipe',
+                    at: 'recipes',
+                    input: {
+                      type: 'object',
+                      required: ['title'],
+                      properties: {
+                        title: { type: 'string' },
+                        serves: { type: 'integer' },
+                      },
+                    },
+                  }],
+                },
+              },
+            }],
+          },
+        })
+      }
+      return Promise.resolve(result)
     },
     ...opts,
   })
@@ -109,7 +138,7 @@ test('one usage draws every tool, one column throughout', async () => {
   assertEquals(page.match(/^ {2}both\b/gm)?.length, 1)
   assert(page.includes('one’s both'), page)
   assert(
-    page.includes('  command <name> [key=value ...] [--app <string>]  '),
+    page.includes('  command <name> [arguments ...] [--app <string>]  '),
     page,
   )
 })
@@ -159,17 +188,16 @@ test('`yak command` builds the command call, with the app it was given', async (
       'add_recipe',
       '--app',
       'recipes',
-      'title=Lemon cake',
-      'serves=4',
+      '--title=Lemon cake',
+      '--serves=4',
     ]),
     0,
   )
-  assertEquals(asked, [{
+  assertEquals(asked, [{ name: 'commands', arguments: { app: 'recipes' } }, {
     name: 'command',
     arguments: {
       name: 'add_recipe',
       app: 'recipes',
-      // JSON where it parses as JSON, the word itself otherwise.
       args: { title: 'Lemon cake', serves: 4 },
     },
   }])
@@ -183,11 +211,11 @@ test('`yak <app> <command>` is the same call, the app named by the word', async 
       'yaks.test',
       'recipes',
       'add_recipe',
-      'title=@page.md',
+      '--title=@page.md',
     ], { stray: appStray }),
     0,
   )
-  assertEquals(asked, [{
+  assertEquals(asked, [{ name: 'commands', arguments: { app: 'recipes' } }, {
     name: 'command',
     // @path is that file, the same syntax every value here takes.
     arguments: { name: 'add_recipe', app: 'recipes', args: { title: 'FILE' } },
@@ -267,10 +295,10 @@ test('a word the graph found at home lacks is the host’s, run as the host’s'
   assertEquals(aimedAt.includes(undefined), false)
 })
 
-test('an argument that is not key=value is a usage error, not a round trip', async () => {
+test('an undeclared positional is refused after fetching the app schema', async () => {
   assertEquals(await ran(appTools, ['command', 'add_recipe', 'lemon']), 2)
-  assert(printed.join('\n').includes('key=value'), printed.join('\n'))
-  assertEquals(asked, [])
+  assert(printed.join('\n').includes('not lemon'), printed.join('\n'))
+  assertEquals(asked, [{ name: 'commands', arguments: {} }])
 })
 
 test('an invalid argument shows the command’s usage with its error', async () => {

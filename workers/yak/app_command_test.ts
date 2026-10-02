@@ -5,6 +5,7 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { parseTools } from '@yaks/tools/declared'
 import * as apps from './apps.ts'
 import { appStore } from './directory.ts'
+import { listCommands } from './declared.ts'
 import type { Dispatch } from './door.ts'
 import { ADA, ADA_OWNS, as, platform, seeded, visit } from './serving-probe.ts'
 
@@ -16,6 +17,7 @@ let words = {
       description: 'Keep a note',
       input: { title: { type: 'string' } },
       required: ['title'],
+      options: { rest: 'title', short: { t: 'title' } },
       apply: { entity: { eid: '$note' }, doc: { title: '$title' } },
     },
     owner_word: {
@@ -104,7 +106,15 @@ test('a page invokes declared commands as its owner; the command door refuses an
     description: 'Keep a note',
     input: { title: { type: 'string' } },
     required: ['title'],
+    options: { rest: 'title', short: { t: 'title' } },
   })
+  let offered = await listCommands({ env, dir, person: ADA })
+  assertEquals(
+    offered.find((c) => c.name == 'note')?.options,
+    ownerTools.note.options,
+  )
+  assertEquals(offered.find((c) => c.name == 'notes')?.options, undefined)
+  assertEquals(ownerTools.notes.options, undefined)
   assertEquals(
     ownerTools.owner_word?.description,
     'Ask the app owner for a word',

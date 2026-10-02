@@ -11,7 +11,7 @@
 //
 //   yak app_list
 //   yak app_files --app recipes --path index.html --content @index.html
-//   yak recipes add_recipe title='Lemon cake' serves=4
+//   yak recipes add_recipe --title 'Lemon cake' --serves 4
 //   cat bundles.ndjson | yak apply
 //
 //   yak --config yak.json task list   # opens that graph, runs the tool, exits

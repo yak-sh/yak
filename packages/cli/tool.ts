@@ -41,6 +41,8 @@ export type Spelling = {
   positional?: readonly string[]
   short?: Readonly<Record<string, string>>
   rest?: string
+  /** Keep unmatched words verbatim for a schema fetched by the command. */
+  forward?: string
 }
 
 /** A tool as an MCP server lists it. */

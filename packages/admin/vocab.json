@@ -385,12 +385,17 @@
       "noun": "admin",
       "verb": "tool",
       "title": "Call a yaks.app tool as this account",
-      "description": "Call one yaks.app connector tool as the signed-in account rather than as the bearer `yak login` keeps, which is what a probe needs. Its own arguments follow as key=value.\n\n  yak admin tool app_list\n  yak admin tool app_new slug=notes title='Notes'",
+      "description": "Call a yaks.app connector tool or an app's own command as the selected account. Connector tools take precedence; --app selects the app when several share a command name. Its declared options supply positionals; its schema supplies --flags.\n\n  yak admin tool where matt --owner\n  yak admin tool app_list --admin\n  yak admin tool app_new --slug notes --title Notes",
       "input": {
         "name": { "type": "string", "description": "the tool to call" },
         "args": {
-          "type": "object",
-          "description": "its own arguments, as key=value"
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "its own arguments, as positionals and --flags"
+        },
+        "app": {
+          "type": "string",
+          "description": "which app, when several share a command name"
         },
         "as": { "type": "string", "description": "act as this account" },
         "admin": {
@@ -400,7 +405,7 @@
         "owner": { "type": "boolean", "description": "as the owner" }
       },
       "required": ["name"],
-      "options": { "positional": ["name"], "rest": "args" },
+      "options": { "positional": ["name"], "forward": "args" },
       "openWorld": true
     },
     "admin_push": {

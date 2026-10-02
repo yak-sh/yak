@@ -436,6 +436,10 @@
             },
             "rest": {
               "type": "string"
+            },
+            "forward": {
+              "type": "string",
+              "description": "An array-of-string input receiving unmatched arguments without expansion or conversion, including the -- delimiter."
             }
           }
         },

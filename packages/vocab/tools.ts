@@ -117,6 +117,9 @@ export type ToolDefinition = {
   options?: {
     positional?: readonly string[]
     short?: Readonly<Record<string, string>>
+    rest?: string
+    /** unmatched words, preserved for another schema to parse */
+    forward?: string
   }
   readOnly?: boolean
   destructive?: boolean
@@ -181,6 +184,12 @@ export const toolDefinitionSchema: Record<string, unknown> = {
           additionalProperties: { type: 'string' },
         },
         rest: { type: 'string' },
+        forward: {
+          type: 'string',
+          description:
+            'An array-of-string input receiving unmatched arguments ' +
+            'without expansion or conversion, including the -- delimiter.',
+        },
       },
     },
     readOnly: { type: 'boolean' },
@@ -206,10 +215,19 @@ export const toolDefinition = (value: unknown): ToolDefinition => {
     const field of [
       ...candidate.options?.positional ?? [],
       ...Object.values(candidate.options?.short ?? {}),
+      ...candidate.options?.rest ? [candidate.options.rest] : [],
+      ...candidate.options?.forward ? [candidate.options.forward] : [],
     ]
   ) {
     if (!props || !Object.hasOwn(props, field)) {
       throw new Error(`Option references unknown property: ${field}`)
+    }
+  }
+  let forward = candidate.options?.forward
+  if (forward) {
+    let prop = props![forward] as { type?: string; items?: { type?: string } }
+    if (prop.type != 'array' || prop.items?.type != 'string') {
+      throw new Error(`Forward option wants an array of strings: ${forward}`)
     }
   }
   return candidate

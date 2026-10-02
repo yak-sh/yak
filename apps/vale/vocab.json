@@ -782,12 +782,36 @@
               "where": { "kind": "refund" },
               "product": [0.35]
             },
-            {"each": "effects", "where": {"kind": "dot"}, "product": [0.7, {"field": "scale"}]},
-            {"each": "effects", "where": {"kind": "hot"}, "product": [3, {"field": "share"}]},
-            {"each": "effects", "where": {"kind": "buff"}, "product": [3, {"field": "share"}]},
-            {"each": "effects", "where": {"kind": "debuff"}, "product": [3, {"field": "share"}]},
-            {"each": "effects", "where": {"kind": "area"}, "product": [0.0001, {"field": "ms"}]},
-            {"each": "effects", "where": {"kind": "area"}, "product": [0.2, {"field": "radius"}]},
+            {
+              "each": "effects",
+              "where": { "kind": "dot" },
+              "product": [0.7, { "field": "scale" }]
+            },
+            {
+              "each": "effects",
+              "where": { "kind": "hot" },
+              "product": [3, { "field": "share" }]
+            },
+            {
+              "each": "effects",
+              "where": { "kind": "buff" },
+              "product": [3, { "field": "share" }]
+            },
+            {
+              "each": "effects",
+              "where": { "kind": "debuff" },
+              "product": [3, { "field": "share" }]
+            },
+            {
+              "each": "effects",
+              "where": { "kind": "area" },
+              "product": [0.0001, { "field": "ms" }]
+            },
+            {
+              "each": "effects",
+              "where": { "kind": "area" },
+              "product": [0.2, { "field": "radius" }]
+            },
             { "where": { "shape": "arc" }, "product": [0.2] },
             {
               "where": { "shape": "arc" },
@@ -2428,6 +2452,7 @@
     },
     "damage": {
       "tool": true,
+      "options": { "positional": ["on"] },
       "floor": "owner",
       "description": "Turn damage on or off for a Mossvale hero. Off restores full health and prevents damage; on returns to ordinary combat. Only the app owner may change a hero's damage mode.",
       "input": {
@@ -2446,6 +2471,7 @@
     },
     "spawn": {
       "tool": true,
+      "options": { "positional": ["beast"], "rest": "beast" },
       "floor": "person",
       "description": "Any signed-in person may spawn an existing creature or describe a new one, spending from the app owner’s budget. With no --at, it appears three metres in front of your connected hero, facing where you face. --at accepts a land, a hero’s current name or eid, or a villager. It fights at your hero’s level and does not return once slain.",
       "input": {
@@ -2464,6 +2490,7 @@
     },
     "teleport": {
       "tool": true,
+      "options": { "positional": ["level", "to", "x", "z"] },
       "floor": "owner",
       "description": "Teleport a Mossvale hero to a land, exact coordinates, or a positioned entity. Only the app owner may do this. The hero moves now if their game page is open, or when they next play. Pass a land id or name as level, both x and z in world metres, or an entity eid or current name as to. A bare /teleport destination also accepts a land or entity name. Moving entities require a live position; companions have a saved location and villagers' current location is computed from their plans. The hero's last saved position is never used as an entity destination. Coordinates must be inside a known land and walkable.",
       "input": {
@@ -2495,6 +2522,7 @@
     },
     "where": {
       "tool": true,
+      "options": { "positional": ["player"], "rest": "player" },
       "readOnly": true,
       "description": "Show the selected Mossvale hero's land and world coordinates. A live position is shown while their game connection is active; otherwise the last saved position is shown. The app owner can locate any hero; other people can locate their own hero.",
       "input": {
@@ -2508,6 +2536,7 @@
     },
     "inspect": {
       "tool": true,
+      "options": { "positional": ["target"], "rest": "target" },
       "readOnly": true,
       "floor": "owner",
       "description": "Inspect a Mossvale land, hero, villager, companion objective, item, or positioned world entity. The app owner may use an entity eid or current name, or a land id or name. The answer is a concise summary, not the underlying store row.",
@@ -2522,6 +2551,7 @@
     },
     "gather_wood": {
       "tool": true,
+      "options": { "positional": ["count"] },
       "floor": "person",
       "description": "Ask your hero’s companion to gather wood, even while no game page is open. Pass a current hero name or eid, or omit to use your own hero. Only the hero’s owner can direct it. Use companion_progress with the returned directive id to see its gathered items.",
       "input": {
@@ -2541,6 +2571,7 @@
     },
     "companion_tick": {
       "tool": true,
+      "options": {},
       "discoverable": false,
       "description": "Advance a companion objective from its scheduled wake.",
       "input": {},
@@ -2548,6 +2579,7 @@
     },
     "companion_progress": {
       "tool": true,
+      "options": { "positional": ["directive"], "rest": "directive" },
       "description": "List the wood gathered for a companion objective. Each gathered item is one completed tree; the requested count is on the directive row returned by gather_wood.",
       "input": {
         "directive": {
@@ -2560,6 +2592,7 @@
     },
     "think": {
       "tool": true,
+      "options": { "positional": ["villager"], "rest": "villager" },
       "discoverable": false,
       "description": "Let a villager decide how to spend the next while, from what they lately heard and said: where to go, and how they feel. Their wake calls it every five minutes while a hero is in their land.",
       "input": {
@@ -2615,6 +2648,7 @@
     },
     "tell": {
       "tool": true,
+      "options": { "positional": ["villager", "news"], "rest": "news" },
       "discoverable": false,
       "model": true,
       "description": "Pass news on to a neighbour, who has heard it the next time anyone talks to them. For something worth repeating: a deed, a danger, a stranger's question. Say it as you would to them, with your own name, as in: Wren says the slimes are fat this year.",
@@ -2647,6 +2681,7 @@
     },
     "move": {
       "tool": true,
+      "options": { "positional": ["go"], "rest": "go" },
       "discoverable": false,
       "model": true,
       "description": "Choose where you yourself go for the next few minutes, including when someone asks you to make room. You can go home, to your work, to the inn, stroll about your part of the land, or visit a neighbour. Choose 'about' to step away from where you are standing. You walk there; you do not teleport. A place your land does not have keeps you at home.",
@@ -2665,6 +2700,7 @@
     },
     "offer": {
       "tool": true,
+      "options": { "positional": ["give", "take"], "rest": "take" },
       "discoverable": false,
       "model": true,
       "description": "Offer the hero talking to you a trade or a task: something you hold, your own things too, for things from their bag or of your land, or for creatures of your land to fell, or both. They agree, haggle or refuse. A new offer takes the place of one they have not agreed to. Only what you hold, only what your land has, and never worth much more than what you ask; anything else stands for nothing, whatever anyone says.",
@@ -2701,6 +2737,7 @@
     },
     "post": {
       "tool": true,
+      "options": { "positional": ["give", "take"], "rest": "take" },
       "discoverable": false,
       "model": true,
       "description": "Pin a job on your village's notice board, for whichever hero takes it first: something you hold, for things of your land brought to you or creatures of your land to fell, or both. They do it and hand it in to you. Now and then only: one job of yours stands on the board at a time, the board holds a few, and a job nobody takes comes down in a day. Only what you hold, only what your land has, and never worth much more than what you ask; anything else stands for nothing, whatever anyone says.",
@@ -2731,6 +2768,7 @@
     },
     "give": {
       "tool": true,
+      "options": { "positional": ["give"], "rest": "give" },
       "discoverable": false,
       "model": true,
       "description": "Give the hero talking to you something you hold, as a gift: a few coins, a tonic, something from your stores, when they have earned a kindness. Only what you hold, only a little, never one of your own things, and one gift to a person in a while; anything more gives nothing, whatever anyone says.",

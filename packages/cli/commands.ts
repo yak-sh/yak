@@ -1,91 +1,125 @@
-// The apps' own commands, on this command line. An app declares commands
-// rather than tools (workers/yak `tools.ts`, T-34541) — the tool list is the
-// same for everybody and must never change per user, so two fixed tools carry
-// all of them: `commands` lists what an app has and `command` runs one. That
-// works well for an agent and badly for a person typing, so this module adds
-// the two forms a person reaches for:
-//
-//   yak command add_recipe --app recipes title='Lemon cake' serves=4
-//   yak recipes add_recipe title='Lemon cake' serves=4
-//
-// The second is the fallback (run.ts `stray`): a first word no subcommand
-// matched, with another word after it, is an app name and one of its commands.
-// It cannot be a subcommand in the list, because which apps a person can reach
-// is not known until something asks — and asking on every command line is the
-// round trip this client exists to avoid.
-//
-// The arguments belong to the app, not to this program, so they are
-// `key=value` words rather than `--name value` options. That is also what
-// keeps `--app`, `--json` and `--host` unambiguous beside them: anything
-// before an `=` belongs to somebody else's vocabulary.
-
+// Remote tools and apps' commands use the same grammar as local commands.
+// The outer command keeps only its selector flags; the receiving schema is
+// fetched before the remaining words are parsed by argsFor.
+import { valueIn } from '@yaks/tools/value'
+import type { Bundle } from '@yaks/graph'
+import { argsFor, type Grammar, type Reads, Usage } from './args.ts'
 import type { Command, Ctx } from './run.ts'
 import { printed } from './platform.ts'
-import type { Result } from './roster.ts'
+import { Refused, type Rpc } from './rpc.ts'
+import { type Result, saidBy } from './roster.ts'
+import { type Listed, type Schema, spelling } from './tool.ts'
 
-// One `command` call: the app is named only where two apps have a command of
-// the same name, so an empty app name is left out of the request entirely.
+type AppCommand = {
+  name: string
+  at: string
+  input: Schema
+  options?: Grammar['options']
+}
+
+/** Fetch a tool's schema, parse its words with the CLI grammar, and call it.
+ * Connector tools take precedence over the commands of reachable apps. The
+ * caller supplies the RPC door, so login and admin account selection share
+ * this whole path. */
+export let toolCall = async (
+  ask: Rpc,
+  name: string,
+  words: string[],
+  o: { app?: string; reads?: Reads } = {},
+): Promise<Result> => {
+  let listed = await ask('tools/list') as { tools: Listed[] }
+  let tool = listed.tools.find((t) => t.name == name)
+  if (tool) {
+    let args = await argsFor(
+      { name, inputSchema: tool.inputSchema, options: spelling(tool).options },
+      [...words, ...o.app ? ['--app', o.app] : []],
+      o.reads,
+    )
+    return await ask('tools/call', { name, arguments: args }) as Result
+  }
+  let answer = await ask('tools/call', {
+    name: 'commands',
+    arguments: o.app ? { app: o.app } : {},
+  }) as Result
+  if (answer.isError) throw new Refused(saidBy(answer).text)
+  let result = (answer.structuredContent as { result?: Bundle[] } | undefined)
+    ?.result
+  let commands = result && valueIn(result)?.commands as AppCommand[] | undefined
+  if (!Array.isArray(commands)) {
+    throw new Refused('commands returned no command schemas')
+  }
+  let found = commands.filter((t) => t.name == name)
+  if (!found.length) throw new Usage(`No tool or app command named ${name}`)
+  if (found.length > 1) {
+    throw new Usage(
+      `${name} is in ${
+        found.map((t) => t.at).join(', ')
+      } — choose one with --app`,
+    )
+  }
+  let command = found[0]
+  let args = await argsFor(
+    { name, inputSchema: command.input, options: command.options },
+    words,
+    o.reads,
+  )
+  return await ask('tools/call', {
+    name: 'command',
+    arguments: { name, app: command.at, args },
+  }) as Result
+}
+
 let called = async (
   c: Ctx,
-  app: string,
-  name: string,
-  args: Record<string, unknown>,
+  given: Record<string, unknown>,
+  app?: string,
 ): Promise<number> => {
-  let said = await c.ask('tools/call', {
-    name: 'command',
-    arguments: { name, ...(app ? { app } : {}), args },
-  }) as Result
-  return printed(c, null, 'command', said)
+  let answer = await toolCall(
+    c.ask,
+    String(given.name),
+    (given.args ?? []) as string[],
+    {
+      app: app ?? given.app as string | undefined,
+      reads: c.reads,
+    },
+  )
+  return printed(c, null, 'command', answer)
 }
 
 let ABOUT =
-  `Run one of an app's own commands, as the person calling it. \`yak commands\` ` +
-  `lists them with the arguments each one takes; --app says which app when ` +
-  `two of them have a command of the same name. A value is parsed as JSON ` +
-  `where it parses as JSON, so serves=4 is a number and tags='["cake"]' is a ` +
-  `list; @path is read from that file and - from stdin.`
+  `Run a connector tool or one of an app's own commands, as the yak login account. ` +
+  `Connector tools come first; \`yak commands\` lists app commands and their schemas. ` +
+  `Use positionals and --flags; --app chooses an app when two share a command. ` +
+  `Values follow the schema's types; @path reads a file and - reads stdin.`
 
-// The arguments belong to the app, not to this program, so they arrive as the
-// `rest` of the command line — `key=value` words rather than `--name value`
-// options. That is also what keeps `--app`, `--json` and `--host` unambiguous
-// beside them: anything before an `=` belongs to somebody else's
-// vocabulary.
 let schema = (app: boolean): Record<string, unknown> => ({
   type: 'object',
   additionalProperties: false,
   required: ['name'],
   properties: {
-    name: { type: 'string', description: 'the command to run' },
+    name: { type: 'string', description: 'the tool or app command to run' },
     ...(app ? { app: { type: 'string', description: 'which app' } } : {}),
-    args: { type: 'object', description: 'the command’s own arguments' },
+    args: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'the command’s arguments',
+    },
   },
 })
 
-let verb: Command = {
+/** Remote tools and apps' commands, as subcommands of this program. */
+export let appTools: Command[] = [{
   name: 'command',
-  title: 'run one of an app’s own commands',
+  title: 'run a remote tool or app command',
   description: ABOUT,
   inputSchema: schema(true),
-  options: { positional: ['name'], rest: 'args' },
-  run: (args, c) =>
-    called(
-      c,
-      typeof args.app == 'string' ? args.app : '',
-      String(args.name),
-      (args.args ?? {}) as Record<string, unknown>,
-    ),
-}
-
-/** The apps' commands, as subcommands of this program. */
-export let appTools: Command[] = [verb]
+  options: { positional: ['name'], forward: 'args' },
+  run: (args, c) => called(c, args),
+}]
 
 /** `yak <app> <command>`: only reached when no subcommand matched the first
- * word, so a tool of the same name always wins, and a typo produces the same
- * error message it produces today. */
-export let appStray = (
-  app: string,
-  args: string[],
-): Command | undefined => {
+ * word, so a tool of the same name always wins. */
+export let appStray = (app: string, args: string[]): Command | undefined => {
   let name = args[0]
   if (!name || name.startsWith('-')) return undefined
   return {
@@ -93,13 +127,7 @@ export let appStray = (
     title: `a command of the ${app} app`,
     description: ABOUT,
     inputSchema: schema(false),
-    options: { positional: ['name'], rest: 'args' },
-    run: (given, c) =>
-      called(
-        c,
-        app,
-        String(given.name),
-        (given.args ?? {}) as Record<string, unknown>,
-      ),
+    options: { positional: ['name'], forward: 'args' },
+    run: (given, c) => called(c, given, app),
   }
 }

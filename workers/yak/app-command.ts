@@ -71,6 +71,7 @@ export let commandsIn = async (
         description: tool.description,
         input: tool.input,
         required: tool.required,
+        ...(tool.options ? { options: tool.options } : {}),
         model: tool.model,
       }]),
   )

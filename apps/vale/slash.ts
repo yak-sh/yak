@@ -2,6 +2,7 @@
 // door. That door owns the access rule and runs the command after this parses it.
 
 import {
+  appGrammar,
   argsFor,
   commandFor,
   type Grammar,
@@ -14,6 +15,7 @@ type Tool = {
   description?: string
   input?: Record<string, Arg>
   required?: string[]
+  options?: Grammar['options']
   model?: boolean
 }
 export type Tools = Record<string, Tool>
@@ -32,12 +34,19 @@ let shape = (arg: Arg) =>
 
 let usage = (name: string, tool: Tool) => {
   let required = new Set(tool.required ?? [])
-  let args = Object.entries(tool.input ?? {})
-    .map(([key, arg]) =>
-      required.has(key)
-        ? `<${key}:${shape(arg)}>`
-        : `[--${key} <${shape(arg)}>]`
-    )
+  let positional = new Set(tool.options?.positional ?? [])
+  let input = tool.input ?? {}
+  let names = [
+    ...(tool.options?.positional ?? []),
+    ...Object.keys(input).filter((key) => !positional.has(key)),
+  ]
+  let args = names.map((key) => {
+    let value = `<${key}:${shape(input[key])}${
+      tool.options?.rest == key ? '...' : ''
+    }>`
+    if (!positional.has(key)) value = `--${key} <${shape(input[key])}>`
+    return required.has(key) ? value : `[${value}]`
+  })
   return `/${name}${args.length ? ` ${args.join(' ')}` : ''}`
 }
 
@@ -71,30 +80,11 @@ let help = (name: string | undefined, tools: Tools) => {
   }
 }
 
-/** The caller's listing, with hero selection available as an optional flag. */
+/** The caller's listing, parsed exactly as each command declares it. */
 export let grammars = (tools: Tools): Grammar[] =>
-  Object.entries(tools).filter(([, t]) => seen(t)).map(([name, t]) => {
-    let input = t.input ?? {}
-    let required = (t.required ?? []).filter((key) => key != 'player')
-    let positional = required.length
-      ? required
-      : Object.keys(input).filter((key) => key != 'player')
-    if (!positional.length && input.player) positional = ['player']
-    let last = positional.at(-1)
-    return {
-      name,
-      inputSchema: {
-        type: 'object',
-        properties: input,
-        required,
-        additionalProperties: false,
-      },
-      options: {
-        positional,
-        ...(last && input[last].type == 'string' ? { rest: last } : {}),
-      },
-    }
-  })
+  Object.entries(tools).filter(([, tool]) => seen(tool)).map(([name, tool]) =>
+    appGrammar(name, tool)
+  )
 
 /** A declared app command, a usage error, or null for ordinary chat. */
 export let slash = async (

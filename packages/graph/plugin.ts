@@ -21,6 +21,7 @@ import type { Declared } from './declared.ts'
 import type { Derive } from './alias.ts'
 import type { Graph } from './graph.ts'
 import type { VocabDoc } from '@yaks/vocab'
+import type { ToolDefinition } from '@yaks/vocab/tools'
 
 /**
  * The phases of `apply()`, in order:
@@ -179,14 +180,7 @@ export type Tool<R = Bundle[]> = {
   inputSchema?: Record<string, unknown>
   /** Optional CLI presentation; ordinary long options use the property names
    * from the schema. */
-  options?: {
-    positional?: readonly string[]
-    short?: Readonly<Record<string, string>>
-    /** the property that collects the arguments left over after the
-     * positionals are filled: `key=value` pairs for an object, the arguments
-     * themselves for an array */
-    rest?: string
-  }
+  options?: ToolDefinition['options']
   /** a short human-readable title */
   title?: string
   /** what it does and when to use it — the agent reads this */

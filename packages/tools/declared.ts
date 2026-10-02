@@ -57,6 +57,7 @@
 // (workers/yak/declared.ts). So a tool can do exactly what the person
 // calling it could do on the page, and never more.
 import { argsOf, type Bundle, type Graph, type Tool } from '@yaks/graph'
+import { type ToolDefinition, toolDefinition } from '@yaks/vocab/tools'
 import { CallError } from './args.ts'
 import type { Floor } from './access.ts'
 export { mayCall } from './access.ts'
@@ -77,6 +78,8 @@ export type ToolDef = {
   revision?: string
   input: Record<string, Arg>
   required?: string[]
+  /** The declared command-line grammar; absent means flags only. */
+  options?: Omit<NonNullable<ToolDefinition['options']>, 'forward'>
   /** Least caller authority for page and connector commands. */
   floor?: Floor
   /** Internal commands remain callable by scheduled graph work. */
@@ -116,6 +119,7 @@ let KEYS = [
   'revision',
   'input',
   'required',
+  'options',
   'apply',
   'query',
   'worker',
@@ -273,6 +277,21 @@ export let parseTools = (
         }
       }
     }
+    let options: ToolDef['options']
+    if (entry.options != null) {
+      try {
+        if (object(entry.options) && 'forward' in entry.options) {
+          throw new Error('app commands declare positional, rest, and short')
+        }
+        options = toolDefinition({
+          description: String(entry.description ?? ''),
+          inputSchema: { type: 'object', properties: input },
+          options: entry.options,
+        }).options
+      } catch (error) {
+        wrong.push(`${name}.options: ${(error as Error).message}`)
+      }
+    }
     if (
       HOLE.test(
         JSON.stringify(entry.apply ?? entry.query ?? entry.worker ?? ''),
@@ -381,6 +400,7 @@ export let parseTools = (
         : {}),
       input,
       ...(required.length ? { required } : {}),
+      ...(options ? { options } : {}),
       ...(entry.apply != null ? { apply: entry.apply } : {}),
       ...(typeof entry.query == 'string' ? { query: entry.query } : {}),
       ...(typeof entry.worker == 'string' ? { worker: entry.worker } : {}),
@@ -643,6 +663,7 @@ export let commands = (
     description: def.description,
     revision: def.revision,
     inputSchema: schemaOf(def),
+    ...(def.options ? { options: def.options } : {}),
     readOnly: def.query != null || def.readOnly === true,
     run: (call: Bundle, graph: Graph) =>
       invoke(def, argsOf(call), {

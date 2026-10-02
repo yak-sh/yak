@@ -64,6 +64,36 @@ test('a tool entry: a sentence, its arguments, and one act', () => {
   assertEquals(parseTools('{}'), {})
 })
 
+test('a command keeps its declared grammar and never derives one', () => {
+  let options = { positional: ['who'], rest: 'body', short: { m: 'miles' } }
+  let tool = parsed({
+    log_run: {
+      ...club.log_run,
+      input: { ...club.log_run.input, body: TEXT },
+      options,
+    },
+  }).log_run
+  assertEquals(tool.options, options)
+  assertEquals(commands({ log_run: tool })[0].options, options)
+  assertEquals(parsed(club).log_run.options, undefined)
+  assertEquals(commands(parsed(club))[0].options, undefined)
+  for (
+    let bad of [
+      { positional: ['missing'] },
+      { rest: 'missing' },
+      { short: { m: 'missing' } },
+      { short: { many: 'miles' } },
+      { forward: 'miles' },
+    ]
+  ) {
+    assertStringIncludes(
+      assertThrows(() => parsed({ log_run: { ...club.log_run, options: bad } }))
+        .message,
+      'log_run.options:',
+    )
+  }
+})
+
 test('a worker command takes its typed arguments to one local path', () => {
   let [tool] = Object.values(parsed({
     tick: {
