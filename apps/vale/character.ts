@@ -1,12 +1,5 @@
-// The hero themselves, drawn into their panel's Character tab: their
-// likeness (portrait.ts), their name and level with the xp to the next, how
-// they fight in what they wear and the abilities it gives them, and the name
-// and colours they were made with, to change (make.ts). What is picked shows
-// on the likeness at once; keeping it writes a look row (net.ts `restyle`),
-// and everyone near sees it. H or a tap on the hero's frame on the glass
-// opens it. What changes with the hero is written again only when it
-// changed, and the picking only as the tab opens, so a name being written is
-// never written over.
+// Character stats and a live portrait stay beside the appearance editor.
+// Mount once so frames and panel navigation preserve the canvas and draft.
 import { ABILITIES } from './abilities.ts'
 import { LINES, numbers, said } from './compare.ts'
 import type { Dress } from './figures.ts'
@@ -15,7 +8,6 @@ import { fields, type Look, lookOf, picks } from './make.ts'
 import type { Page } from './panel.ts'
 import type { Sheet } from './play.ts'
 import { need } from './rules.ts'
-import { split } from './ui/split.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
@@ -34,41 +26,17 @@ let same = (a: Look, b: Look) =>
 /** The Character tab, drawn into its tab (panel.ts). */
 export let character = (tab: Page, acts: Acts) => {
   let box = tab.body
-  let panes = split(box)
-  // Mount both sections once: navigation must not replace the canvas or draft.
-  panes.render(
-    `<button class=Split_Row type=button data-select=overview>Overview</button>` +
-      `<button class=Split_Row type=button data-select=appearance>Appearance</button>`,
-    `<section data-section=overview><div class=Character>` +
-      `<div class=Character_Top><canvas class=Character_Face></canvas><div class=Character_Who></div></div></div></section>` +
-      `<section data-section=appearance hidden><div class=Character>` +
-      `<h3 class=Pack_Head>Your look</h3><form class=Make></form></div></section>`,
-    'overview',
-  )
-  panes.list.addEventListener('click', (e) => {
-    let row = (e.target as HTMLElement).closest<HTMLElement>('[data-select]')
-    if (!row) return
-    let picked = row.dataset.select
-    for (
-      let section of panes.detail.querySelectorAll<HTMLElement>(
-        '[data-section]',
-      )
-    ) {
-      section.hidden = section.dataset.section != picked
-    }
-    for (
-      let choice of panes.list.querySelectorAll<HTMLElement>('[data-select]')
-    ) {
-      let on = choice.dataset.select == picked
-      choice.classList.toggle('Split_Row-on', on)
-      choice.setAttribute('aria-pressed', String(on))
-    }
-    box.querySelector('.Split')!.classList.add('Split-picked')
-  })
+  box.innerHTML = `<div class=Character_Panes>` +
+    `<section class=Character aria-label=Character>` +
+    `<div class=Character_Top><canvas class=Character_Face></canvas>` +
+    `<div class=Character_Who></div></div></section>` +
+    `<section class=Character aria-label=Appearance>` +
+    `<h3 class=Pack_Head>Your look</h3><form class=Make></form>` +
+    `</section></div>`;
   let face = box.querySelector<HTMLCanvasElement>('.Character_Face')!
   let who = box.querySelector<HTMLElement>('.Character_Who')!
   let form = box.querySelector<HTMLFormElement>('.Make')!
-  // The look being picked, and the one kept, while the tab is open.
+  // Keep the unfinished look even while another panel is open.
   let picking: Look = { name: '', tint: '', hair: '', skin: '' }
   let kept: Look | null = null
   let changed = () => {
@@ -88,15 +56,9 @@ export let character = (tab: Page, acts: Acts) => {
   let was: unknown[] = []
   let drawn = ''
   return {
-    /** show this frame's sheet and the look kept, when the tab is open;
-     * what was picked is let go once it folds away */
+    /** Show this frame without replacing the appearance draft. */
     show: (s: Sheet, look: Look) => {
-      if (!tab.open) {
-        kept = null
-        was = []
-        drawn = ''
-        return
-      }
+      if (!tab.open) return
       if (!kept) {
         Object.assign(picking, lookOf(look))
         form.innerHTML = fields(picking) +
@@ -107,8 +69,7 @@ export let character = (tab: Page, acts: Acts) => {
       let dress: Dress = Object.fromEntries(
         Object.entries(s.worn).map(([slot, h]) => [slot, h?.kind]),
       )
-      // A hidden overview has no layout width; leave its canvas intact until
-      // it is visible again, then paint any changes made in Appearance.
+      // Wait for layout, and repaint only when the look, gear or size changes.
       let width = face.clientWidth
       if (width) {
         let pic = JSON.stringify([picking, dress, width])

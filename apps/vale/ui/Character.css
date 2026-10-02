@@ -1,3 +1,21 @@
+/* Stats and appearance are permanent neighbors, stacked on narrow panels. */
+.Character_Panes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 1.5rem;
+}
+
+.Character {
+  min-width: 0;
+}
+
+@container panel (width < 34rem) {
+  .Character_Panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* The Character tab (character.ts): the hero's likeness beside their name,
    their level and the xp to the next, and the numbers they fight by (Pack.css
    `Pack_Nums`); under them, their look to change (Make.css). The likeness is
@@ -39,6 +57,7 @@
 
 .Character_Level {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: var(--gap);
 
