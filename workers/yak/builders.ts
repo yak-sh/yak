@@ -7,7 +7,7 @@
 // reconciles the builder as them, so what it asks a model spends the space's
 // budget like the builder's other calls. It is how a staged builder is tried
 // on a few rows before its mark comes off.
-import { choose, preserve, type Supply, supply, takes } from '@yaks/builders'
+import { choose, preserve, type Supply, supply } from '@yaks/builders'
 import { watches } from '@yaks/builders/effects'
 import { modelTool } from '@yaks/builders/model'
 import { type Ask, build } from '@yaks/builders/tools'

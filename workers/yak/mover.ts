@@ -41,7 +41,12 @@ import {
   refusalPrior,
   refusalSource,
 } from '@yaks/tools/refusals'
-import { interruptionFind, interruptionMove } from '@yaks/tools/interruptions'
+import {
+  interruptionContract,
+  interruptionContractFind,
+  interruptionFind,
+  interruptionMove,
+} from '@yaks/tools/interruptions'
 import { Unknown } from '@yaks/vocab'
 import { GIT_STORE, PLATFORM_STORE } from './door.ts'
 /** A rule's name: where its stamp is kept in a store's memory, and the
@@ -116,6 +121,11 @@ export let RULES: Rule[] = [
       if (!read) throw new Error('Interruption mover needs evidence reader')
       return interruptionMove(row, read)
     },
+  })),
+  ...interruptionContractFind.map((find, i): Rule => ({
+    mark: `yak/store/interruption-contract/${i + 1}`,
+    find,
+    move: (row) => interruptionContract(row),
   })),
   ...refusalFind.map((find, i): Rule => ({
     mark: i == 0 ? 'yak/store/refusal/1' : 'yak/store/refusal-imported/1',

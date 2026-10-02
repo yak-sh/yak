@@ -165,10 +165,18 @@ export let interruptionContract = (row: Bundle): Bundle[] => {
     ]
   }
   if (text(row, 'attempt', 'state') != undefined) {
-    return [patch(row, { attempt: { state: null } })]
+    return [{
+      entity: row.entity,
+      attempt: { state: null },
+      $was: { attempt: { by: token(comp(row, 'attempt').by) } },
+    }]
   }
   if (text(row, 'execution', 'state') != undefined) {
-    return [patch(row, { execution: { state: null } })]
+    return [{
+      entity: row.entity,
+      execution: { state: null },
+      $was: { execution: { by: token(comp(row, 'execution').by) } },
+    }]
   }
   return []
 }

@@ -488,3 +488,52 @@ test('interruption expansion rehearses marks without losing old state evidence',
     'interrupted',
   )
 })
+
+test('interruption contract reads stored state rather than computed outcomes', async () => {
+  let rules = RULES.filter((r) =>
+    r.mark.startsWith('yak/store/interruption-contract/')
+  )
+  let s = await store(0, ...rules)
+  let call = crypto.randomUUID(),
+    ask = crypto.randomUUID(),
+    session = crypto.randomUUID(),
+    line = crypto.randomUUID()
+  await s.apply([
+    { entity: { eid: session }, session: {} },
+    {
+      entity: { eid: ask },
+      entry: { session },
+      ask: {},
+      attempt: { state: 'interrupted' },
+      interrupted: { code: 'restart' },
+    },
+    {
+      entity: { eid: call },
+      call: {},
+      execution: { state: 'failed', by: 'owner' },
+      interrupted: { code: 'signal' },
+    },
+    {
+      entity: { eid: line },
+      entry: { session },
+      output: { source: ask },
+      error: { code: 'interrupted' },
+      interrupted: { code: 'restart' },
+      content: { body: 'cut' },
+    },
+  ])
+  let before = await s.query('*')
+  let rehearsal = await s.rehearse()
+  assertEquals(rehearsal.map((r) => [r.rows, r.moved, r.failed]), [
+    [1, 1, undefined],
+    [1, 1, undefined],
+    [1, 1, undefined],
+  ])
+  assertEquals(await s.query('*'), before)
+  s.wake(...rules.map((r) => ({ ...r, live: 'apps' as const })))
+  await s.alarm()
+  assertEquals(await count(s, '.error'), 0)
+  assertEquals(await count(s, '.attempt.state=interrupted'), 1)
+  assertEquals(await count(s, '.execution.state=interrupted'), 1)
+  assertEquals((await s.moves()).every((r) => !!r.done && !r.failed), true)
+})
