@@ -263,7 +263,12 @@ export let App = () => {
             : e
             ? <Entity eid={e.eid} view={view} />
             : url.pathname == '/' && !vocab.comp('subscription')
-            ? <SearchPage query='' />
+            ? (
+              <>
+                <h1>Browse</h1>
+                <QueryList eid='app-browse' query='.doc' />
+              </>
+            )
             : url.pathname == '/'
             ? (
               <LostFrame>

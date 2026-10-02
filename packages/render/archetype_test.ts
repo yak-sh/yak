@@ -87,3 +87,28 @@ test('value-only selection does not request a lazy archetype descriptor', () => 
   }
   assertStrictEquals(resolve(reg, b, 'Tile', vocab), value)
 })
+
+test('registrations using undeclared host words do not break archetype selection', () => {
+  let app = loadVocab([{
+    $defs: {
+      doc: { component: true, properties: { title: { type: 'string' } } },
+      session: { component: true, properties: { persona: { type: 'string' } } },
+    },
+  }])
+  let reg = define([
+    r('box persona', '.doc .persona'),
+    r('document', '.doc'),
+    r('any', true),
+  ], {
+    archetypes: () => ['doc'],
+  })
+  let b = {
+    entity: { eid: 'app-doc', archetype: 'shape' },
+    doc: { title: 'App words' },
+  }
+  assertEquals(resolve(reg, b, undefined, app)?.view, 'Tile')
+  assertEquals(
+    (resolve(reg, b, undefined, app) as ReturnType<typeof r>).name,
+    'document',
+  )
+})

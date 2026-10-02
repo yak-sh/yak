@@ -1,3 +1,4 @@
+import { Unknown } from '@yaks/vocab'
 /**
  * @yaks/render selects which renderer draws a bundle, and lists the actions a
  * bundle offers. A view name is tried from the right (Board.List.Tile →
@@ -123,10 +124,19 @@ let matches = (
   bundle: Bundle,
   vocab: Vocab,
   archetypes?: ArchetypeLookup,
-) =>
-  match === true ||
-  (archetypeMatch(match, bundle, vocab, archetypes) ??
-    predicate(match, vocab)(bundle))
+): boolean => {
+  if (match === true) return true
+  try {
+    return archetypeMatch(match, bundle, vocab, archetypes) ??
+      predicate(match, vocab)(bundle)
+  } catch (error) {
+    // Registrations travel between hosts. A host not speaking a view's words
+    // cannot select it; even a bare absent component may be a property name
+    // here. Query doors still refuse such a question, but selection skips it.
+    if (error instanceof Unknown) return false
+    throw error
+  }
+}
 
 let best = <R extends Registration>(
   pool: readonly R[],
