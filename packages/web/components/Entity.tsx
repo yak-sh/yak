@@ -1,3 +1,4 @@
+import { views as secretViews } from '@yaks/secrets/views'
 // The curated views and verbs, with the app's quarantine, failure and memo
 // boundaries.
 // @yaks/render selects them; @yaks/preact mounts the selected component.
@@ -124,6 +125,7 @@ define([
     match: parse('.board'),
     Render: (props) => <BoardList {...props} />,
   },
+  ...secretViews.renderers,
   { view: 'Tile', match: parse('.memory'), Render: MemoryTile },
   // TaskTile walks back through Entity for its Meta row; defer the binding
   // for the same reason as Canvas above.
