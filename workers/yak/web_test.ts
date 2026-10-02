@@ -9,7 +9,7 @@ let assets = {
     Promise.resolve(
       new URL(req.url).pathname == '/_web/index.html'
         ? new Response(
-          '<html><head></head><body><script src="/web/app.js"></script></body></html>',
+          '<html><head><link rel="manifest" href="/web/manifest.webmanifest"></head><body><script src="/web/app.js"></script></body></html>',
           { headers: { 'content-type': 'text/html' } },
         )
         : new Response('asset', {
