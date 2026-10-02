@@ -32,6 +32,7 @@ test('OpenRouter provider uses UUIDs and is selected per session/ask, including 
   const a = local({
     cwd: repo(),
     h,
+    name: 'gpt-6-astra',
     providers: { openai: fake('openai'), openrouter: fake('openrouter') },
   })
   try {
@@ -59,7 +60,8 @@ test('OpenRouter provider uses UUIDs and is selected per session/ask, including 
       using: { provider: P('openai'), model: M('vendor/model') },
     }])
     await a.idle(s)
-    assertEquals(seen.length, 2)
+    // The explicit provider is asked even before it has confirmed an offering.
+    assertEquals(seen.at(-1)?.[0], 'openai')
   } finally {
     await a.close()
   }
@@ -91,6 +93,7 @@ test('fork and spawn selecting an existing model are served by a provider that s
   const a = local({
     cwd: repo(),
     h,
+    name: 'gpt-6-astra',
     providers: {
       openai: (req) => {
         seen.push('openai')
@@ -178,6 +181,7 @@ test('a model two providers serve is asked by the named one, by its name for it'
   const a = local({
     cwd: repo(),
     h,
+    name: 'gpt-6-astra',
     providers: { openai: fake('openai'), openrouter: fake('openrouter') },
   })
   const ask = async (using: Comp) => {

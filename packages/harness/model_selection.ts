@@ -84,3 +84,11 @@ export const modelSelection = async (
     : choices.find((c) => (c.edge as Comp).to == using.model)?.entity.eid
   return { choices, current }
 }
+
+/** A provider's default is a graph reference, never a release in code. */
+export let defaultUsing = async (g: Graph, provider: string): Promise<Comp> => {
+  let [row] = await g.read(`.provider.name=${provider}&?using`)
+  let using = row?.using as Comp | undefined
+  if (!using?.model) throw new Error(`Choose a model for ${provider}`)
+  return { provider: row.entity.eid, ...using }
+}

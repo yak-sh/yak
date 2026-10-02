@@ -176,18 +176,6 @@ export type Built = {
   refused?: string
 }
 
-/** The free build's model: GLM on Workers AI, which needs no key of ours.
- * $0.15/M in, $0.50/M out, a million tokens of context, and it lists function
- * calling. It wants Workers Paid, which this account has;
- * `@cf/qwen/qwen3.8-27b` is the fallback where a plan has no frontier model. */
-export let FREE = '@cf/zai-org/glm-5.3-flash'
-
-/** The paid build's model: the same family, at full size — $1.40/M in,
- * $4.40/M out on the same binding, so a Plus space builds on a bigger model
- * and the platform still buys nothing. Terra (`gpt-5.6-terra`) is one
- * BUILDER_MODEL_PAID away, once there is a gateway to reach it through. */
-export let PAID = '@cf/zai-org/glm-5.3'
-
 /** Nobody is built for: the loop writes as the person calling it, and there
  * is no such person. */
 export let anonymous = (env: Host = {}) =>
@@ -196,15 +184,9 @@ export let anonymous = (env: Host = {}) =>
 
 export let ANON = anonymous()
 
-/** A model that is not Workers AI's, with no way to reach it. Nobody meets
- * this by default — both tiers run on the binding — only a platform whose
- * BUILDER_MODEL_PAID names an OpenAI model with no gateway set. Named in a
- * sentence, because the person reading it did nothing wrong. */
+/** A gateway is required to reach a provider outside Workers AI. */
 export let NO_KEY =
-  "That model is OpenAI's and this platform has no AI Gateway to reach it " +
-  'through: set AI_GATEWAY, and either OPENAI_API_KEY or AI_GATEWAY_TOKEN ' +
-  'to pay for it. Every build here runs on Workers AI unless ' +
-  'BUILDER_MODEL_PAID says otherwise. Nothing was built.'
+  'This model needs an AI Gateway: set AI_GATEWAY and a provider credential.'
 
 /** Every model of this one, everywhere, is busy: the account's per-model rate
  * (20 a minute on the frontier ones). It is a wait, not a failure. */
@@ -484,8 +466,8 @@ export let openai = (env: Env, id: string): Model => ({
 /** Which model this space builds on: its tier picks, config overrides. */
 export let idOf = (env: Env, space: Space): string =>
   space.tier == 'plus'
-    ? env.BUILDER_MODEL_PAID ?? PAID
-    : env.BUILDER_MODEL_FREE ?? FREE
+    ? env.BUILDER_MODEL_PAID ?? ''
+    : env.BUILDER_MODEL_FREE ?? ''
 
 /** The provider an id names: a Workers AI model is always `@cf/…`. */
 export let modelOf = (env: Env, id: string): Model =>
@@ -636,7 +618,9 @@ export let build = async (
       )
     }
     rounds++
-    if (answer.cost == null && !price) price = (await modelInfo(model.id)).price
+    if (answer.cost == null && !price) {
+      price = (await modelInfo(model.id, env.MODEL_FETCH)).price
+    }
     // Estimates charge the budget, never masquerade as reported usage.
     dollars += answer.cost ?? (price
       ? weigh(price, {

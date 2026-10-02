@@ -1,0 +1,4 @@
+{
+  "model": "@cf/qwen/qwen3-embedding-0.6b",
+  "dimensions": 1024
+}

@@ -75,6 +75,19 @@ export let harness = async (
   let host = await compose(at(db, lease), ['graph'])
   let g = host.graph
   await g.apply(await install(g.read), { trusted: true })
+  await g.apply([
+    { entity: { eid: '$model' }, model: { name: 'gpt-6-astra' } },
+    {
+      entity: { eid: '$provider' },
+      provider: { name: 'openai' },
+      using: { model: '$model' },
+    },
+    {
+      entity: { eid: '$serves' },
+      edge: { from: '$provider', to: '$model' },
+      serves: { name: 'gpt-6-astra' },
+    },
+  ], { trusted: true })
   return { ...hosted(host, () => host.close()), sql: host.sql }
 }
 

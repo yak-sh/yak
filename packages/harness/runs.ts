@@ -27,8 +27,8 @@ import { MODEL, PROVIDER } from '@yaks/model'
 import { parse } from '@yaks/query'
 import { instructionFiles } from '@yaks/context/host'
 import { transcript, usingBefore } from '@yaks/session'
-import { ASTRA, begin, seed, through } from './agent.ts'
-import { selectedUsing } from './model_selection.ts'
+import { begin, seed, through } from './agent.ts'
+import { defaultUsing, selectedUsing } from './model_selection.ts'
 import { openaiCredential } from './openai_auth.ts'
 import { hosted } from './store.ts'
 import { homeAt, owing } from './workspace.ts'
@@ -114,7 +114,11 @@ export let runs = (host?: Host): Runs => ({
       throw new Refused('session new needs a prompt without --tui')
     }
     let provider = word(args, 'provider') ?? 'openai'
-    let model = word(args, 'model') ?? ASTRA
+    let selected = word(args, 'model')
+      ? undefined
+      : await defaultUsing(graph, provider)
+    let [row] = selected ? await graph.get([String(selected.model)]) : []
+    let model = word(args, 'model') ?? String((row?.model as Comp)?.name)
     await graph.apply(seed({ provider, model }), { trusted: true })
     let cwd = Deno.cwd()
     let effort = word(args, 'effort')
@@ -154,7 +158,8 @@ export let runs = (host?: Host): Runs => ({
       provider ??= model
         ? 'openai'
         : String((p?.provider as Comp | undefined)?.name ?? 'openai')
-      model ??= String((m?.model as Comp | undefined)?.name ?? ASTRA)
+      model ??= String((m?.model as Comp | undefined)?.name ?? '')
+      if (!model) throw new Refused('Choose a model')
       await graph.apply(seed({ provider, model }), { trusted: true })
       using = {
         ...prior,

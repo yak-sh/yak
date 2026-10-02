@@ -22,7 +22,6 @@ import {
   NO_KEY,
   openai,
   roster,
-  unpriced,
 } from './builder.ts'
 import { directory, type Space } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -41,7 +40,15 @@ let nobody: Who = { person: null, role: null }
 // A space with Ada in it, written the way `space_new` writes one — and no app,
 // because the app is what the builder is here to make.
 let seeded = async (vars: Partial<Env> = {}) => {
-  let { env } = platform(SECRET, vars)
+  let { env } = platform(SECRET, {
+    BUILDER_MODEL_FREE: '@cf/test/free',
+    MODEL_FETCH: () =>
+      Promise.resolve(
+        new Response('$0.15 per M input tokens, $0.5 per M output tokens'),
+      ),
+    BUILDER_MODEL_PAID: '@cf/test/paid',
+    ...vars,
+  })
   let dir = dirOf(env)
   await dir.apply({
     entities: [
@@ -321,6 +328,8 @@ test('an OpenAI model with no gateway to reach it says so', async () => {
 
 test('the tier picks the model, and the id picks the provider', async () => {
   let { env, space } = await seeded()
+  env.BUILDER_MODEL_FREE = '@cf/test/free'
+  env.BUILDER_MODEL_PAID = '@cf/test/paid'
   // Both tiers are Workers AI today — nothing is bought to build here — and
   // the paid one is the bigger model of the same family.
   assertStringIncludes(idOf(env, free(space)), '@cf/')

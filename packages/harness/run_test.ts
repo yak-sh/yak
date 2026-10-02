@@ -23,12 +23,18 @@ let echo: Model = (req) =>
   })
 
 let started = async (model: Model = echo) =>
-  local({ cwd: repo(), h: await harness(), model, tools: [] })
+  local({
+    name: 'gpt-6-astra',
+    cwd: repo(),
+    h: await harness(),
+    model,
+    tools: [],
+  })
 
 test('the seed is the same rows however many times it is applied', async () => {
   let h = await harness()
-  h.g.apply(seed(), { trusted: true })
-  h.g.apply(seed(), { trusted: true })
+  h.g.apply(seed({ model: 'gpt-6-astra' }), { trusted: true })
+  h.g.apply(seed({ model: 'gpt-6-astra' }), { trusted: true })
   assertEquals((await h.g.read('.provider&*')).length, 1)
   assertEquals((await h.g.read('.serves&*')).length, 1)
   let models = await h.g.read('.model&*')
@@ -186,7 +192,13 @@ test('the agent reads bare and filed open work, including claims and blocked fac
 test('resume wakes what a restart left owed a turn', async () => {
   let h = await harness()
   // A transcript with an input nobody answered — what a killed harness leaves.
-  let quiet = local({ cwd: repo(), h, model: echo, tools: [] })
+  let quiet = local({
+    name: 'gpt-6-astra',
+    cwd: repo(),
+    h,
+    model: echo,
+    tools: [],
+  })
   let s = await quiet.start('ping')
   await quiet.idle(s)
   // Straight through storage, so no effect observes it — the entry a harness
@@ -349,7 +361,7 @@ test('session titles use local assignment, not inherited parent context', async 
       stop: {},
     },
   ])
-  let a = local({ cwd: repo(), h, model: echo, tools: [] })
+  let a = local({ name: 'gpt-6-astra', cwd: repo(), h, model: echo, tools: [] })
   try {
     assertEquals(
       ((await a.sessions()).find((b) => b.entity.eid == 'worker')

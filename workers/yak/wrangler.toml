@@ -111,6 +111,8 @@ queue = "yak-builds"
 # app's worker is uploaded into — the same tag as `account_id` above, which the
 # runtime is never handed. Not a secret: it is in this file.
 [vars]
+BUILDER_MODEL_FREE = '@cf/zai-org/glm-5.3-flash'
+BUILDER_MODEL_PAID = '@cf/zai-org/glm-5.3'
 CF_ACCOUNT = "0f9613dfd3f0451df0bd0f12a1372ea3"
 APEX = "yaks.app"
 # The REST APIs and app service bindings must name the same resources as the

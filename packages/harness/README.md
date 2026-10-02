@@ -117,12 +117,13 @@ process supervisor's files (unless `PROCESS_DIR` is set). Keep `HOME` unchanged
 so Deno reuses its module cache. If a probe must move `HOME`, export the
 invoking `DENO_DIR` before moving it.
 
-The model is `gpt-6-astra` unless `--model` names another, reached with
-`$OPENAI_API_KEY` or the OpenAI connection. `yak auth` lists model providers and
-MCP servers; pass a title or alias to sign in. It prints an authorization link
-and reads the complete return URL with terminal echo disabled. The return URL is
-never a command argument or transcript entry. `yak model list` lists names from
-the OpenAI endpoint reached by that credential.
+Name a model with `--model`, or set `using.model` on its provider row. It is
+reached with `$OPENAI_API_KEY` or the OpenAI connection. `yak auth` lists model
+providers and MCP servers; pass a title or alias to sign in. It prints an
+authorization link and reads the complete return URL with terminal echo
+disabled. The return URL is never a command argument or transcript entry.
+`yak model list` lists names from the OpenAI endpoint reached by that
+credential.
 
 ```ts
 import { compose } from '@yaks/cli/host'
@@ -142,7 +143,12 @@ let more = ['openrouter', 'process', 'context', 'connections', 'mcp-client']
 let plugins = [...words, ...work, ...more, 'git', 'harness']
   .map((p) => `@yaks/${p}`)
 let host = await compose({ db: ':memory:', plugins }, ['graph'])
-let a = local({ h: hosted(host, () => host.close()), model, tools: [] })
+let a = local({
+  name: 'example-model',
+  h: hosted(host, () => host.close()),
+  model,
+  tools: [],
+})
 try {
   let s = await a.start('reply with the word pong')
   await a.idle(s)

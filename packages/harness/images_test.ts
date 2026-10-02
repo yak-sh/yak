@@ -145,6 +145,7 @@ test('a model row sends OpenRouter audio to the graph as an artifact', async () 
   let data = btoa(String.fromCharCode(...bytes))
   let model = router({
     key: () => 'test',
+    speech: [],
     media: { store: artifactStore(h.artifacts) },
     fetch: (_url, init) => {
       let request = JSON.parse(String(init?.body))
@@ -153,6 +154,7 @@ test('a model row sends OpenRouter audio to the graph as an artifact', async () 
         new Response(
           'data: ' + JSON.stringify({
             id: 'song-1',
+            usage: { cost: 0 },
             choices: [{
               delta: { audio: { data, transcript: 'Forest theme' } },
             }],

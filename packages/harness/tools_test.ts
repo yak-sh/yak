@@ -117,6 +117,7 @@ test('a transcript naming a plugin’s tool is offered it alone, and it runs', a
   let offered: string[][] = []
   let worktrees = Deno.makeTempDirSync({ prefix: 'yaks-named-' })
   let a = local({
+    name: 'gpt-6-astra',
     cwd: repo(),
     h: await harness(),
     tools: [],

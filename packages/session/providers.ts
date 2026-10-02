@@ -108,8 +108,14 @@ async (using, model) => {
   let wrapped: Model = Object.assign(async (req: Parameters<Model>[0]) => {
     let listing = model.pending || !model.price
       ? serve.info
-        ? await serve.info(found.name)
-        : (await serve.list?.())?.find((m) => m.name == found.name)
+        ? await serve.info(found.name).catch((e) => {
+          if (e instanceof ModelError) throw e
+          return undefined
+        })
+        : (await serve.list?.().catch((e) => {
+          if (e instanceof ModelError) throw e
+          return []
+        }))?.find((m) => m.name == found.name)
       : undefined
     let modalities = listing?.modalities?.filter(
       (m): m is 'text' | 'image' | 'audio' =>

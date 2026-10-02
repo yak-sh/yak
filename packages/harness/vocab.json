@@ -53,7 +53,7 @@
         },
         "model": {
           "type": "string",
-          "description": "the model to ask, by name (default gpt-6-astra)"
+          "description": "the model to ask, by name (otherwise the provider row's using.model)"
         },
         "provider": {
           "type": "string",
@@ -92,7 +92,7 @@
         },
         "model": {
           "type": "string",
-          "description": "the model to ask, by name (default gpt-6-astra)"
+          "description": "the model to ask, by name (otherwise the provider row's using.model)"
         },
         "provider": {
           "type": "string",

@@ -46,6 +46,13 @@ Three things, and no transport:
   vocabulary. `Tool` here is the provider-neutral TypeScript type for a callable
   tool description.
 
+A new `using.model` name creates a `model{name, offered: false}` row with
+`pending{}`. The selected provider is asked without an offering allow-list. Its
+first successful answer removes `pending`, marks the model offered, and records
+the provider's `serves{name}` edge. A refused name stays pending. Provider
+adapters expose `list()` and `info(name)` from their own listings. The rows a
+past request names are kept.
+
 What a request cost is two more components. `price{input, output, cached}` on a
 model's row is what it costs, in dollars per million tokens;
 `weigh(price,

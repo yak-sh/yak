@@ -53,7 +53,7 @@ export type Opts = ChildLimits & NotHarness & {
   h: Harness
   /** what serves an ask (default: @yaks/openai over the found credential) */
   model?: Model
-  /** the model to ask for by name (default `gpt-6-astra`) */
+  /** the model to ask for by name (otherwise the provider row's using.model) */
   name?: string
   /** Default provider for new sessions; model selection remains graph data. */
   provider?: string

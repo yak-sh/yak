@@ -62,6 +62,7 @@ import {
 import { outputView, promptEntry, type Snapshot } from '@yaks/context'
 import { render } from '@yaks/text'
 import {
+  defaultUsing,
   type ModelSelection,
   modelSelection,
   modelUsing,
@@ -71,9 +72,6 @@ import { type EntrySource, entrySource, type SourceRequest } from './detail.ts'
 import { inheritedInstructions } from './legacy_instructions.ts'
 import { type RuntimeAction, runtimeAction, runtimeRows } from './runtime.ts'
 
-/** The model the harness uses when nothing names another. */
-export let ASTRA = 'gpt-6-astra'
-
 let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
 
 /** The provider, model and tool rows a transcript is served from, as one
@@ -82,18 +80,19 @@ let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
 export let seed = (
   o: { provider?: string; model?: string; tools?: Tool[] } = {},
 ): Bundle[] => {
-  let model = o.model ?? ASTRA
+  let model = o.model
   return [
     {
       entity: { eid: '$provider' },
       [PROVIDER]: { name: o.provider ?? 'openai' },
     },
-    { entity: { eid: '$model' }, [MODEL]: { name: model } },
-    {
-      entity: { eid: '$serves' },
-      edge: { from: '$provider', to: '$model' },
-      serves: { name: model },
-    },
+    ...model
+      ? [{ entity: { eid: '$model' }, [MODEL]: { name: model } }, {
+        entity: { eid: '$serves' },
+        edge: { from: '$provider', to: '$model' },
+        serves: { name: model },
+      }]
+      : [],
     ...(o.tools ?? []).map((t, i) => ({
       entity: { eid: `$tool${i}` },
       [TOOL]: { name: t.name, description: t.description },
@@ -129,7 +128,7 @@ export type Opts<H extends Host = Host> = ChildLimits & {
   model?: Model
   /** implementations keyed by `provider.name` */
   providers?: Record<string, Model>
-  /** the model to ask for by name (default `gpt-6-astra`) */
+  /** the model to ask for by name (the provider row's `using.model`) */
   name?: string
   /** Default provider for new sessions; model selection remains graph data. */
   provider?: string
@@ -319,10 +318,7 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
   let h = opts.h
   let report = reporter(opts)
   const provider = opts.provider ?? 'openai'
-  if (provider !== 'openai' && !opts.name) {
-    throw new Error('Choose an explicit model name for a non-default provider')
-  }
-  let name = opts.name ?? ASTRA
+  let name = opts.name ?? ''
   const implementations = served(opts)
   let model = opts.model ?? implementations[provider]
   if (!model) throw new Error('Nothing serves provider ' + provider)
@@ -343,6 +339,13 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
     childProperties,
     prepareChild,
   } = opts
+  let compact = implementations.openai
+    ? {
+      model: implementations.openai,
+      name: opts.provider == 'openrouter' ? '' : name,
+      provider: identityEid(PROVIDER, ['openai']),
+    }
+    : undefined
   return {
     holder: h.me,
     gone: h.gone,
@@ -353,19 +356,16 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
     prepareChild,
     model,
     resolveModel: providerResolver(h.g, implementations, opts.model),
-    // Compaction is a text task, even when this transcript selects a media
-    // model. Never resolve it through the transcript's `using` record.
-    compactModel: implementations.openai
-      ? {
-        model: implementations.openai,
-        name: ASTRA,
-        provider: identityEid(PROVIDER, ['openai']),
-      }
-      : undefined,
+    compactModel: compact,
     answers: answers(h.g, implementations, opts.model),
     tools,
     named: opts.named,
     toolSnapshot: async (phase, session) => {
+      if (compact && !compact.name) {
+        let using = await defaultUsing(h.g, 'openai')
+        let [row] = await h.g.get([String(using.model)])
+        compact.name = String((row?.model as Comp).name)
+      }
       await (seeded ??= h.g.apply(seed({ provider, model: name, tools }), {
         trusted: true,
       }))
@@ -420,7 +420,7 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
   let h = opts.h
   let report = reporter(opts)
   const provider = opts.provider ?? 'openai'
-  let name = opts.name ?? ASTRA
+  let name = opts.name ?? ''
   const implementations = served(opts)
   let tools = opts.tools ?? []
   // The runner, taking every run this graph's commits owe it, until the agent
@@ -436,10 +436,10 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
 
   let using = {
     provider: identityEid(PROVIDER, [provider]),
-    model: identityEid(MODEL, [name]),
+    ...name ? { model: identityEid(MODEL, [name]) } : {},
   }
   let names: Record<string, string> = {
-    [using.model]: name,
+    ...using.model ? { [using.model]: name } : {},
     ...Object.fromEntries(tools.map((t) => [toolEid(t.name), t.name])),
   }
   // Lifecycle bookkeeping only; all application state remains in the graph.
@@ -480,7 +480,9 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
     h,
     tools,
     names,
-    model: using.model,
+    get model() {
+      return String(using.model ?? '')
+    },
     admitted,
     personas: async () =>
       (await h.g.read('.persona')).sort((a, b) =>
@@ -488,7 +490,12 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
           String((b.doc as Comp | undefined)?.title ?? ''),
         )
       ),
-    models: (session) => modelSelection(h.g, session, using),
+    models: async (session) =>
+      modelSelection(
+        h.g,
+        session,
+        using.model ? using : await defaultUsing(h.g, provider),
+      ),
     selectModel: async (session, model) => {
       const [owner] = await h.g.get([session])
       if (!owner?.session) throw new Error('Unknown session')
@@ -509,7 +516,10 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
       admit(h.g, undefined, opts, async () => {
         const chosen = o.model
           ? await modelUsing(h.g, o.model, implementations)
-          : {}
+          : using.model
+          ? {}
+          : await defaultUsing(h.g, provider)
+        if (!using.model && chosen.model) using.model = String(chosen.model)
         return begin(h.g, prompt, {
           ...await opts.opening?.(o.persona),
           ...o.persona ? { persona: o.persona } : {},

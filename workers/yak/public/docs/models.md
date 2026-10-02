@@ -42,7 +42,7 @@ an entry that names a model with `using` asks for a turn:
       },
     ])
 
-`using.model` is the model's name (the list below), and `using.instructions` is
+`using.model` is any model name its selected provider serves, and `using.instructions` is
 what a conversational model is told before the transcript. Every entry that asks
 for a turn carries its own `using`, so each turn names its model and its
 instructions; an entry without one is part of the transcript the next turn

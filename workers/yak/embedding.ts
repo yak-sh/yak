@@ -16,6 +16,8 @@
 // ~95%. Where the binding is absent (a test, a probe), nothing is embedded
 // and `.near` ranks over whatever is already stored.
 
+import configured from './embedding.json' with { type: 'json' }
+
 import {
   type Ai,
   type Embedder,
@@ -32,10 +34,10 @@ import type { Vocab } from '@yaks/vocab'
 /** The model every store's vectors are made by. Changing it, or cutting its
  * width, is a new vector space, and each store's sweep re-embeds its text
  * once, in slices behind its own traffic (graph.ts `#embedding`). */
-export let MODEL = '@cf/qwen/qwen3-embedding-0.6b'
+export let MODEL = configured.model
 
 /** The width Workers AI answers it at, every coordinate kept. */
-export let DIM = 1024
+export let DIM = configured.dimensions
 
 /** That space, as the name each stored vector carries. */
 export let SPACE = space({ model: MODEL })
