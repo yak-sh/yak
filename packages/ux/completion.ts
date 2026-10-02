@@ -297,8 +297,11 @@ export let completion = (front: Front, opts: Opts): Controller => {
     }
     let off = live(id).subscribe((r) => {
       if (!r) return
-      if (el.value != r.text) el.value = r.text
-      if (el.selectionStart != r.caret || el.selectionEnd != r.caret) {
+      let changed = el.value != r.text
+      if (changed) el.value = r.text
+      // Selection reports its start as the caret; preserve the selected range
+      // when that report comes back through the graph.
+      if (changed || el.selectionStart != r.caret) {
         el.setSelectionRange(r.caret, r.caret)
       }
     })

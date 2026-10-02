@@ -247,6 +247,40 @@ let setup = (
   }
 }
 
+test('chat select-all survives completion and replaces the whole draft', async () => {
+  let h = setup()
+  try {
+    await tick()
+    h.press(h.document.body, 'Enter')
+    h.type('A line to replace')
+    await tick()
+    for (let modifier of ['metaKey', 'ctrlKey']) {
+      h.input.setSelectionRange(h.input.value.length, h.input.value.length)
+      h.event(h.input, 'select')
+      await tick()
+      let key = h.press(h.input, 'a', { [modifier]: true })
+      assertEquals(key.defaultPrevented, false)
+      // The browser's select-all default action precedes select and keyup.
+      h.input.setSelectionRange(0, h.input.value.length)
+      h.event(h.input, 'select')
+      h.event(h.input, 'keyup', { key: 'a', [modifier]: true })
+      await tick()
+      assertEquals(h.input.selectionStart, 0)
+      assertEquals(h.input.selectionEnd, h.input.value.length)
+    }
+    let text = h.input.value
+    h.type(
+      text.slice(0, h.input.selectionStart!) + 'Replacement' +
+        text.slice(h.input.selectionEnd!),
+    )
+    await tick()
+    assertEquals(h.input.value, 'Replacement')
+    assertEquals(await h.savedDraft(), 'Replacement')
+  } finally {
+    await h.close()
+  }
+})
+
 test('chat shortcuts focus a line without taking another field’s keys', async () => {
   let h = setup()
   try {
