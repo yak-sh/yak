@@ -1,3 +1,4 @@
+import { vocab } from '../../types.ts'
 import { type Ent } from '../../types.ts'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { unmime } from '../../rfc2047.ts'
@@ -94,10 +95,19 @@ export let QueryList = (
   try {
     let preds = parseQuery(query)
     bound = windowOf(preds).limit ?? Infinity
-    if (!orderOf(preds)) line += '&.order=-entity.num'
-    line += '&.limit=' + Math.min(bound, Math.max(size, limit)) +
-      '&.edges.peers=task.status,doc.title&.edges.limit=' +
-      Math.max(size, limit) * 4
+    if (!orderOf(preds)) {
+      if (vocab.prop('entity', 'num')) line += '&.order=-entity.num'
+      else if (vocab.prop('created', 'at')) line += '&.order=-created.at'
+    }
+    line += '&.limit=' + Math.min(bound, Math.max(size, limit))
+    let peers = ['task.status', 'doc.title'].filter((field) => {
+      let [comp, prop] = field.split('.')
+      return !!vocab.prop(comp, prop)
+    })
+    if (vocab.comp('edge')) {
+      line += '&.edges.peers=' + peers.join(',') + '&.edges.limit=' +
+        Math.max(size, limit) * 4
+    }
   } catch { /* the addressed query reports its refusal */ }
   let page = usePage(query, line, !!query.trim() && size > 0)
   let boardRead = page.subscription

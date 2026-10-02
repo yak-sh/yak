@@ -1,3 +1,4 @@
+import { pagePath, storageKey } from '../hosting.ts'
 import { vocab } from '../types.ts'
 import { signal } from '@preact/signals'
 import { useEffect, useState } from 'preact/hooks'
@@ -13,14 +14,19 @@ import { Icon } from './icons.tsx'
 import { CARD_DATA, cardData } from './drag.ts'
 
 let narrow = () => globalThis.matchMedia?.('(max-width: 700px)').matches
-let remembered = globalThis.localStorage?.getItem('tasks-navigation')
+let remembered = globalThis.localStorage?.getItem(
+  storageKey('tasks-navigation'),
+)
 export let navigationOpen = signal(
   remembered ? remembered == 'open' : !narrow(),
 )
 
 export let toggleNavigation = (open = !navigationOpen.value) => {
   navigationOpen.value = open
-  globalThis.localStorage?.setItem('tasks-navigation', open ? 'open' : 'shut')
+  globalThis.localStorage?.setItem(
+    storageKey('tasks-navigation'),
+    open ? 'open' : 'shut',
+  )
 }
 
 export let navigationKey = (
@@ -146,7 +152,7 @@ export let Navigation = () => {
             <>
               <Title>Sessions</Title>
               <All
-                href={allSessionsPath}
+                href={pagePath(allSessionsPath)}
                 onClick={(ev: MouseEvent) => {
                   follow(allSessionsPath)(ev)
                   if (ev.defaultPrevented) closeMobile()

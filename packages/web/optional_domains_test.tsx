@@ -1,5 +1,6 @@
+import { QueryList } from './components/views/List.tsx'
 import { test } from '@yaks/testing'
-import { tick } from './testing.ts'
+import { tick, until } from './testing.ts'
 import { assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { learn, vocab } from './types.ts'
@@ -35,7 +36,7 @@ test('a document-only vocabulary browses without task, session or box-only reads
   cache.value = {
     document: {
       entity: { eid: 'document', num: 1 },
-      doc: { title: 'App document', body: 'Its own words' },
+      doc: { eid: 'document', title: 'App document', body: 'Its own words' },
     },
   }
   let wire = host(() => ({ bundles: [] }))
@@ -87,7 +88,10 @@ test('legacy freeze is not offered or scheduled without a host door', () => {
     assertEquals(spec.changes.map((c) => c.name), ['web'])
     assertEquals(scheduled, 0)
     let seen = mount(h(Web, {
-      e: { eid: spec.target, web: { url: 'https://example.com/a' } },
+      e: {
+        eid: spec.target,
+        web: { eid: spec.target, url: 'https://example.com/a' },
+      },
     }))
     try {
       assertEquals(
@@ -121,5 +125,46 @@ test('hosted transcript chrome omits box-only processes and projections', () => 
     assertEquals(query.recent.includes('.session'), true)
   } finally {
     learn(docs)
+  }
+})
+
+test('an unnumbered app browses a generic list without box ordering or projections', async () => {
+  let appDocs = minimal().map((doc) => ({
+    ...doc,
+    $defs: Object.fromEntries(
+      Object.entries(doc.$defs ?? {}).map((
+        [name, def],
+      ) => [
+        name,
+        name == 'entity'
+          ? {
+            ...def,
+            properties: Object.fromEntries(
+              Object.entries(def.properties ?? {}).filter(([key]) =>
+                key != 'num'
+              ),
+            ),
+          }
+          : def,
+      ]),
+    ),
+  }))
+  learn(appDocs)
+  let priorHost = config.host
+  config.host = 'app-list.test'
+  let wire = host(() => ({ bundles: [] }))
+  let seen = mount(h(QueryList, { eid: 'app-docs', query: '.doc' }))
+  try {
+    await until(() => wire.asked().some((q) => q.subscribe.startsWith('.doc')))
+    let asks = wire.asked().map((q) => q.subscribe).join('\n')
+    assertEquals(asks.includes('entity.num'), false)
+    assertEquals(asks.includes('task.status'), false)
+    assertEquals(asks.includes('created.at'), true)
+  } finally {
+    seen.free()
+    wire.free()
+    config.host = priorHost
+    learn(docs)
+    cache.value = {}
   }
 })
