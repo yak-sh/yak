@@ -17,7 +17,7 @@ import { FIGURE_BUILDS, FIGURE_ROWS, useFigures } from './figure.ts'
 import { type Client, client, type ClientOpts, type Watch } from '@yaks/client'
 import { comp, num, str } from './bundle.ts'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
-import { areaOf, looksOf, REACH } from './area.ts'
+import { areaOf, looksOf, placeOf, REACH } from './area.ts'
 import { writer } from './chat.ts'
 import { watchDesigns } from './design-watch.ts'
 import { SPAWN_KINDS, useSpawnKinds } from './spawn.ts'
@@ -156,7 +156,15 @@ export let connect = (
   let nearby: Watch
   let pending: { area: typeof area; watch: Watch; off: () => void } | null =
     null
+  let fightLevel = ''
+  let fightWatch: Watch | null = null
   let follow = (x: number, z: number) => {
+    let level = placeOf(x, z).level
+    if (level != fightLevel) {
+      fightWatch?.close()
+      fightLevel = level
+      fightWatch = c.watch(`.fight.level=${JSON.stringify(level)}&*`)
+    }
     let next = areaOf(x, z, REACH)
     if (next.key == (pending?.area.key ?? area.key)) {
       syncLooks()
@@ -326,6 +334,7 @@ export let connect = (
     /** Keep the world rows and moving players near this point. */
     follow,
     players: () => rows('player'),
+    fights: () => fightWatch?.value ?? [],
     /** the eid of the hero this tab plays, once there is one */
     get hero() {
       return hero
@@ -471,6 +480,7 @@ export let connect = (
   return {
     client: c,
     close: () => {
+      fightWatch?.close()
       removeEventListener('pagehide', flush)
       c.close()
     },

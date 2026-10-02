@@ -164,6 +164,16 @@ export let abilityStats = (a: Ability, d: Doer): string[] => {
           Math.round(e.share * 100)
         }% ${e.stat} for ${secs(e.ms)}`
     ),
+    ...a.effects.filter((e) => e.kind == 'area').map((e) =>
+      `${e.radius} m ground area for ${secs(e.ms)}: ${
+        abilityStats({
+          ...a,
+          far: undefined,
+          arc: undefined,
+          effects: e.effects,
+        }, d).join(', ')
+      } per pulse`
+    ),
     damage?.sure
       ? damage.hits && damage.hits > 1
         ? 'Final hit is a great blow'

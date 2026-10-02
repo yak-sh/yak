@@ -1,7 +1,10 @@
 // An ability's effects are plain data shared by combat, descriptions and
 // skill forms. The Store keeps their allowed shapes in the app vocabulary.
 
+import type { AreaEffect } from './areas.ts'
+
 export type Effect =
+  | AreaEffect
   | { kind: 'damage'; scale: number; hits?: number; sure?: boolean }
   | { kind: 'bleed'; scale: number }
   | { kind: 'stun'; ms: number }

@@ -40,6 +40,15 @@ import {
   lasting,
   type Status,
 } from './status.ts'
+import {
+  type Area,
+  areas,
+  following,
+  planted,
+  pulse,
+  received,
+  within,
+} from './areas.ts'
 import { type Slot, SLOTS } from './arms.ts'
 import { BEASTS } from './beasts.ts'
 import { FIGURES, sizeOf } from './figure.ts'
@@ -224,6 +233,7 @@ export type Mob = {
   /** held still by someone's blow: it neither moves nor bites */
   held: boolean
   statuses: Status[]
+  owner: string
   /** seconds from a fall until it is up again; never, without */
   respawn?: number
 }
@@ -321,6 +331,7 @@ export type Frame = {
   /** how much of a ward is left, 0 to 1 */
   ward: number
   statuses: Status[]
+  areas: Area[]
   /** how far through a dodge, 0 to 1, or -1 */
   roll: number
   events: Event[]
@@ -425,6 +436,9 @@ let fight = (b: Bundle | undefined) => {
     serial: num(f.serial),
     events: pulses(f.events),
     statuses: carries(f.statuses),
+    areas: areas(f.areas),
+    ticks: rec(f.ticks),
+    level: str(f.level),
   }
 }
 let hunt = (b: Bundle | undefined) => {
@@ -880,6 +894,8 @@ export let game = (
         ...mine,
         dealt: mine.dealt.map((d) => ({ ...d })),
         statuses: mine.statuses.map((s) => ({ ...s })),
+        areas: mine.areas.map((a) => ({ ...a })),
+        ticks: { ...mine.ticks },
       }
       if (lvlWas && s.lvl > lvlWas) {
         events.push({ type: 'level', lvl: s.lvl })
@@ -947,7 +963,10 @@ export let game = (
             dt,
             SPEED * (1 + s.kit.speed) * factor(
               [
-                ...net.players().flatMap((p) =>
+                ...mine.statuses,
+                ...(net.fights?.() ?? net.players()).filter((p) =>
+                  p.entity.eid != me
+                ).flatMap((p) =>
                   carries(comp(c.ent(p.entity.eid), 'fight').statuses)
                 ),
               ],
@@ -1015,7 +1034,15 @@ export let game = (
       // The others within sight, as relayed.
       let others: Other[] = []
       let theirs: Dealing[] = []
-      let peerStatuses: Status[] = []
+      let otherFights = (net.fights?.() ?? net.players()).filter((b) =>
+        b.entity.eid != me
+      )
+        .map((b) => ({ ...fight(c.ent(b.entity.eid)), by: b.entity.eid }))
+      theirs.push(
+        ...otherFights.flatMap((f) => f.dealt.map((d) => ({ ...d, by: f.by }))),
+      )
+      let peerStatuses: Status[] = otherFights.flatMap((f) => f.statuses)
+      let ground = [...fought.areas, ...otherFights.flatMap((f) => f.areas)]
       let spots = new Map<
         string,
         { x: number; z: number; prey: boolean; awake: boolean }
@@ -1031,7 +1058,6 @@ export let game = (
         let pl = net.who(eid)
         if (!pl) continue
         let f = fight(e)
-        peerStatuses.push(...f.statuses)
         let t = vitals(e) ?? { hp: 1, max: 1, lvl: 1 }
         if (m.gait != 'roll') rolls.delete(eid)
         else if (!rolls.has(eid)) rolls.set(eid, now)
@@ -1050,7 +1076,7 @@ export let game = (
           swing: f.swing,
           roll: Math.min(1, rolled),
         })
-        theirs.push(...f.dealt.map((d) => ({ ...d, by: eid })))
+
         let next = replay(f.events, f.serial, seen.get(eid) ?? 0, now)
         seen.set(eid, next.seen)
         heard.push(...next.events)
@@ -1305,6 +1331,7 @@ export let game = (
           reach: beast.reach + LUNGE,
           near: dist(mb, body),
           held: stuck,
+          owner,
           statuses: statuses.filter((st) =>
             st.target == eid && st.life == life && st.until > now
           ),
@@ -1529,6 +1556,25 @@ export let game = (
           let guardEffect = effect(a.effects, 'guard')
           let wardEffect = effect(a.effects, 'ward')
           let healEffect = effect(a.effects, 'heal')
+          let groundEffect = effect(a.effects, 'area')
+          if (groundEffect) {
+            let center = a.shape == 'burst'
+              ? target?.body ?? intent.point ?? body
+              : body
+            fought.areas.push(
+              planted(
+                groundEffect,
+                me,
+                regionOf(body.x, body.z),
+                a.name,
+                { x: center.x, y: body.y, z: center.z },
+                now,
+                blowOf(s.lvl, s.kit, s.kit.dmg),
+                s.max,
+                a.element,
+              ),
+            )
+          }
           for (let e of a.effects.filter(lasting)) {
             if (e.kind == 'hot' || e.kind == 'buff') {
               fought.statuses.push(
@@ -1714,6 +1760,75 @@ export let game = (
         return false
       })
 
+      ground = [...fought.areas, ...otherFights.flatMap((f) => f.areas)]
+      for (let area of ground) {
+        if (now > area.until) continue
+        let due = pulse(area, now)
+        for (
+          let m of mobs.filter((m) =>
+            m.owner == me && !m.down && within(area, m.body)
+          )
+        ) {
+          let life =
+            fallOf(falls.get(m.eid) ?? [], m.respawn ?? Infinity, now).fell
+          let key = `${area.id}:${m.eid}:${life}`
+          let tick = received(area, now)
+          if (
+            tick <= area.start ||
+            Math.max(
+                num(fought.ticks[key]),
+                ...otherFights.map((f) => num(f.ticks[key])),
+              ) >= tick
+          ) continue
+          fought.ticks[key] = tick
+          for (let e of area.effects) {
+            if (e.kind == 'damage') land(m, area.blow * e.scale, false, 0)
+            if (e.kind == 'dot' || e.kind == 'debuff') {
+              fought.statuses.push(applied(
+                e,
+                m.eid,
+                life,
+                area.name,
+                now,
+                area.blow,
+                area.max,
+              ))
+            }
+          }
+        }
+        // Only the recipient writes its health, including allied areas.
+        if (
+          !down && within(area, body) && received(area, now) > area.start &&
+          num(fought.ticks[area.id]) < received(area, now)
+        ) {
+          fought.ticks[area.id] = received(area, now)
+          for (let e of area.effects) {
+            if (e.kind == 'heal') {
+              let n = Math.min(s.max - hp, area.max * e.share)
+              hp += n
+              if (n) events.push({ type: 'heal', n, at: at(body, 2) })
+            }
+            if (e.kind == 'hot' || e.kind == 'buff') {
+              fought.statuses.push(applied(
+                e,
+                me,
+                0,
+                area.name,
+                now,
+                area.blow,
+                s.max,
+              ))
+            }
+          }
+        }
+        if (area.source == me && due) area.next = following(area, now)
+      }
+      fought.areas = fought.areas.filter((a) => a.until > now)
+      ground = ground.filter((a) => a.until > now)
+      fought.ticks = Object.fromEntries(
+        Object.entries(fought.ticks)
+          .filter(([id]) => ground.some((a) => id.startsWith(a.id))),
+      )
       statuses = [...peerStatuses, ...fought.statuses]
       for (let st of fought.statuses) {
         let tick = elapsed(st, now)
@@ -1935,6 +2050,7 @@ export let game = (
       if (!same(vitalsNow, comp(row, 'vitals'))) {
         change.push({ entity: { eid: me }, vitals: vitalsNow })
       }
+      fought.level = level
       let next = publish(events, fought.events, fought.serial, now)
       fought.events = next.events
       fought.serial = next.serial
@@ -1979,6 +2095,7 @@ export let game = (
         guard: now < guardUntil,
         ward: now < ward.until ? ward.left / ward.of : 0,
         statuses: statuses.filter((st) => st.target == me && st.until > now),
+        areas: ground,
         roll: rolling ? (now - rollAt) / ROLL : -1,
         events: [...heard, ...events],
         now,

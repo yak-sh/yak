@@ -1,4 +1,3 @@
-import { labels } from './status.ts'
 // Who is on stage: a figure for every player and creature the frame knows,
 // the people who give quests, loot on the ground, the plates over heads and
 // over signposts, and under each creature on my trail a red ring round the
@@ -13,6 +12,7 @@ import { labels } from './status.ts'
 // A figure is made when someone arrives and dropped when they go; each frame
 // moves it to where the frame says it is, smoothing what arrives in steps (a
 // peer's position comes when their page sends it, not on this page's beat).
+import { labels } from './status.ts'
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { ABILITIES } from './abilities.ts'
@@ -183,6 +183,7 @@ export let cast = (
     { item: Thing | undefined; geo: THREE.BufferGeometry }
   >()
   let loot = new Map<string, THREE.Mesh>()
+  let grounds = new Map<string, THREE.Mesh>()
   let glowing = new THREE.MeshBasicMaterial({
     vertexColors: true,
     transparent: true,
@@ -481,6 +482,45 @@ export let cast = (
       let t = performance.now() / 1000
       let now = performance.now()
       for (let a of actors.values()) a.seen = false
+      let heldAreas = new Set(f.areas.map((a) => a.id))
+      for (let [id, mesh] of grounds) {
+        if (heldAreas.has(id)) continue
+        mesh.removeFromParent()
+        mesh.geometry.dispose()
+        if (mesh.material instanceof THREE.Material) mesh.material.dispose()
+        grounds.delete(id)
+      }
+      for (let area of f.areas) {
+        let mesh = grounds.get(area.id)
+        if (!mesh) {
+          let material = new THREE.MeshBasicMaterial({
+            color: area.element == 'fire'
+              ? 0xe69875
+              : area.element == 'life'
+              ? 0xa7c080
+              : 0x7fbbb3,
+            transparent: true,
+            opacity: .35,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+          })
+          mesh = new THREE.Mesh(
+            new THREE.RingGeometry(0.05, area.radius, 48),
+            material,
+          )
+          mesh.rotation.x = -Math.PI / 2
+          grounds.set(area.id, mesh)
+          scene.add(mesh)
+        }
+        mesh.position.set(area.x, area.y + .08, area.z)
+        plates.plate(
+          `area:${area.id}`,
+          new THREE.Vector3(area.x, area.y + .3, area.z),
+          `<small>${esc(area.name)} ${
+            Math.ceil((area.until - f.now) / 1000)
+          }s</small>`,
+        )
+      }
 
       // Me, in what I wear, facing the node I work at.
       let dress = dressOf(f.sheet)

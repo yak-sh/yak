@@ -66,7 +66,7 @@
           "type": "array",
           "validate": true,
           "minItems": 1,
-          "maxItems": 13,
+          "maxItems": 14,
           "items": {
             "oneOf": [
               {
@@ -341,6 +341,196 @@
                   "stat"
                 ],
                 "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "area"
+                  },
+                  "ms": {
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 30000
+                  },
+                  "radius": {
+                    "type": "number",
+                    "minimum": 0.5,
+                    "maximum": 12
+                  },
+                  "effects": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 4,
+                    "items": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "const": "damage"
+                            },
+                            "scale": {
+                              "type": "number",
+                              "minimum": 0.01,
+                              "maximum": 1
+                            },
+                            "hits": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 10
+                            },
+                            "sure": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "scale"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "const": "heal"
+                            },
+                            "share": {
+                              "type": "number",
+                              "maximum": 0.3,
+                              "minimum": 0.01
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "share"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "const": "dot"
+                            },
+                            "ms": {
+                              "type": "integer",
+                              "minimum": 1000,
+                              "maximum": 30000
+                            },
+                            "scale": {
+                              "type": "number",
+                              "minimum": 0.01,
+                              "maximum": 1
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "ms",
+                            "scale"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "const": "hot"
+                            },
+                            "ms": {
+                              "type": "integer",
+                              "minimum": 1000,
+                              "maximum": 30000
+                            },
+                            "share": {
+                              "type": "number",
+                              "minimum": 0.01,
+                              "maximum": 0.3
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "ms",
+                            "share"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "const": "buff"
+                            },
+                            "ms": {
+                              "type": "integer",
+                              "minimum": 1000,
+                              "maximum": 30000
+                            },
+                            "share": {
+                              "type": "number",
+                              "minimum": 0.01,
+                              "maximum": 0.3
+                            },
+                            "stat": {
+                              "enum": [
+                                "damage",
+                                "armor",
+                                "speed"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "ms",
+                            "share",
+                            "stat"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "const": "debuff"
+                            },
+                            "ms": {
+                              "type": "integer",
+                              "minimum": 1000,
+                              "maximum": 30000
+                            },
+                            "share": {
+                              "type": "number",
+                              "minimum": 0.01,
+                              "maximum": 0.3
+                            },
+                            "stat": {
+                              "enum": [
+                                "damage",
+                                "armor",
+                                "speed"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "ms",
+                            "share",
+                            "stat"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "kind",
+                  "ms",
+                  "radius",
+                  "effects"
+                ],
+                "additionalProperties": false
               }
             ]
           },
@@ -487,6 +677,17 @@
               },
               "minContains": 0,
               "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "kind": {
+                    "const": "area"
+                  }
+                }
+              },
+              "minContains": 0,
+              "maxContains": 1
             }
           ]
         },
@@ -585,6 +786,8 @@
             {"each": "effects", "where": {"kind": "hot"}, "product": [3, {"field": "share"}]},
             {"each": "effects", "where": {"kind": "buff"}, "product": [3, {"field": "share"}]},
             {"each": "effects", "where": {"kind": "debuff"}, "product": [3, {"field": "share"}]},
+            {"each": "effects", "where": {"kind": "area"}, "product": [0.0001, {"field": "ms"}]},
+            {"each": "effects", "where": {"kind": "area"}, "product": [0.2, {"field": "radius"}]},
             { "where": { "shape": "arc" }, "product": [0.2] },
             {
               "where": { "shape": "arc" },
@@ -1596,6 +1799,72 @@
               }
             }
           }
+        },
+        "level": {
+          "type": "string",
+          "description": "The land containing the caster; every page in that land watches lasting effects and ground areas."
+        },
+        "areas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              },
+              "level": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              },
+              "z": {
+                "type": "number"
+              },
+              "radius": {
+                "type": "number"
+              },
+              "start": { "type": "number" },
+              "until": {
+                "type": "number"
+              },
+              "next": {
+                "type": "number"
+              },
+              "blow": {
+                "type": "number"
+              },
+              "max": {
+                "type": "number"
+              },
+              "element": {
+                "type": "string"
+              },
+              "effects": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "description": "Ground areas left by this hero, with their fixed positions, lifetime, next pulse and authored effects."
+        },
+        "ticks": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "The last friendly-area pulse this hero received, by area id, preventing repeat healing between frames."
         },
         "swing": {
           "type": "number",
