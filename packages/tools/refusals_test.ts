@@ -685,3 +685,23 @@ test('store recovery warnings keep their interruption evidence', () => {
   assertEquals(answer, before)
   assertThrows(() => refusalPatch(row('interrupted', body + '?')))
 })
+
+test('known model capability refusals require their exact native answer', () => {
+  for (
+    let [code, body] of [
+      ['questions', 'typesafe/jev answers no typed questions'],
+      ['connection', 'Connect OpenRouter to this app before asking its models'],
+    ]
+  ) {
+    let answer = { ...row(code, body), entry: { session: 'session', seq: 2 } }
+    assertEquals(refusalPatch(answer, undefined, null), patch(code))
+    assertThrows(() => refusalPatch(row(code, body)))
+    assertThrows(() =>
+      refusalPatch(
+        { ...answer, content: { body: body + '?' } },
+        undefined,
+        null,
+      )
+    )
+  }
+})

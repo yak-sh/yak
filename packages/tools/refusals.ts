@@ -255,6 +255,14 @@ export let refusalPatch = (
         unsafe(row, code)
       }
       refused = code
+    } else if (code == 'questions' || code == 'connection') {
+      let known = code == 'connection'
+        ? body == 'Connect OpenRouter to this app before asking its models'
+        : body == 'typesafe/jev answers no typed questions'
+      if (!row.entry || text(row, 'output', 'source') || !known) {
+        unsafe(row, code)
+      }
+      refused = code
     } else if (providers.has(code) || httpRefusal(code)) {
       refused = code
     } else if (code == 'limit') {
