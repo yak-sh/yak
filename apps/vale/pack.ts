@@ -4,7 +4,7 @@
 // to try. Each piece of gear is its own, framed and named in its rarity's
 // colour (rarity.ts); everything else is a stack of its kind. A piece's tip
 // sets it beside what is worn in its place (compare.ts `versus`). Tap a thing
-// to see, at the sheet's foot, its own stats, the abilities it gives, and
+// to see, below the worn slots in the right pane, its stats, abilities, and
 // what wearing it would change, then wear it, take it off, or take
 // it from the rack; a second dagger, for a hero who knows how, shows what it
 // would change in the other hand. B or the tray's bag opens it. It is written
@@ -292,13 +292,12 @@ export let pack = (panel: Page, acts: Acts) => {
       : ''
     panes.render(
       `<div class=Pack>` +
-        `<div class=Pack_Worn>${worn}</div>` +
         `<h3 class=Pack_Head>In your bag</h3>` +
         `<div class=Pack_Grid>${
           bag || '<span class=Pack_Hint>Your bag is empty.</span>'
         }</div>${rack}` +
         `</div>`,
-      card(s, f),
+      `<div class=Pack_Worn>${worn}</div>${card(s, f)}`,
       picked ? `${picked.from}:${picked.key}` : null,
     )
   }

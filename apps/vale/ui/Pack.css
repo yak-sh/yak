@@ -1,10 +1,5 @@
-/* The pack (pack.ts): what is worn, six slots in a grid; the numbers they
-   make; the bag, and by a fire the rack; and at the sheet's foot the thing
-   picked, what it rolled, and what it would change. A piece finer than
-   common is framed and tinted in its rarity's colour (Rarity.css), and a
-   legendary glows. The skill board and a station's crafting are packs too.
-   The card for the thing picked is last, so nothing moves when it changes,
-   and stays at the foot of the sheet while the rest scrolls. */
+/* The bag and rack scroll in the left pane; worn slots head the right pane,
+   above the selected item and its comparison. Rarity frames each piece. */
 .Pack {
   display: flex;
   flex-direction: column;
