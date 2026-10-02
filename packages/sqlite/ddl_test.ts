@@ -804,6 +804,39 @@ test('install inspects columns after acquiring the write lock', () => {
   }
 })
 
+// A long-lived process and the commands started after a land that added a
+// component: each reads on, and neither installs over the other again.
+test('two vocabularies open on one file leave its schema at rest', () => {
+  let dir = Deno.makeTempDirSync({ prefix: 'yak-schema-rest-' })
+  let a = open(`${dir}/graph.db`), b = open(`${dir}/graph.db`)
+  let words = (...more: string[]) =>
+    loadVocab({
+      $defs: Object.fromEntries([
+        ['entity', { component: true, wire: false, properties: {} }],
+        ['doc', { component: true, properties: { title: { type: 'string' } } }],
+        ...more.map((c) => [c, { component: true, properties: {} }]),
+      ]),
+    })
+  let version = () =>
+    a.query({ t: 'pragma', name: 'schema_version' })[0].schema_version
+  try {
+    let older = storage(a, words()), newer = storage(b, words('refusal'))
+    older.get(['x'])
+    newer.get(['x'])
+    older.get(['x'])
+    let was = version()
+    for (let i = 0; i < 3; i++) {
+      newer.get(['x'])
+      older.get(['x'])
+    }
+    assertEquals(version(), was)
+  } finally {
+    a.close()
+    b.close()
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
 test('an open store repairs a column removed by a historical installer', () => {
   let dir = Deno.makeTempDirSync({ prefix: 'yak-schema-repair-' })
   let a = open(`${dir}/graph.db`), b = open(`${dir}/graph.db`)

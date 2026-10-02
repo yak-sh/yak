@@ -257,11 +257,19 @@ export type Opts = BindOpts & {
 }
 
 // What `install()` runs, known once per vocabulary and read overrides: the
-// fingerprint of its statements, and the objects they create. Over a current
-// file the rendering and the hashing were most of what an install cost, and
-// neither moves while a process holds the same vocabulary: a Vocab is a value
-// nobody mutates once it is loaded, so the object itself is the key.
-type Plan = { print: string; made: string[] }
+// fingerprint of its statements, the statements that create an object where
+// it is missing, and the objects they create. Over a current file the
+// rendering and the hashing were most of what an install cost, and none of it
+// moves while a process holds the same vocabulary: a Vocab is a value nobody
+// mutates once it is loaded, so the object itself is the key.
+type Make = Extract<
+  Stmt,
+  { t: 'create table' | 'create index' | 'create view' | 'create trigger' }
+>
+type Plan = { print: string; raised: Make[]; made: string[] }
+let makes = (s: Stmt): s is Make =>
+  s.t == 'create table' || s.t == 'create index' || s.t == 'create view' ||
+  s.t == 'create trigger'
 let plans = new WeakMap<Vocab, WeakMap<Derived, Plan>>()
 let NONE: Derived = {}
 let plan = (vocab: Vocab, derived: Derived = NONE): Plan => {
@@ -270,17 +278,14 @@ let plan = (vocab: Vocab, derived: Derived = NONE): Plan => {
   let known = by.get(derived)
   if (known) return known
   let stmts = [...tabled(vocab, derived), ...indexed(vocab)]
+  let raised = stmts.filter(makes)
   let fresh = {
     // The fitting's revision rides beside them (ddl.ts `FIT`): what fitting
     // changes is read off the file, so a fitting that learns something new
     // installs again over a file whose statements are as they were.
     print: sha256([FIT, ...stmts.map((s) => render(s).sql)].join(';\n')),
-    made: stmts.flatMap((s) =>
-      s.t == 'create table' || s.t == 'create index' ||
-        s.t == 'create view' || s.t == 'create trigger'
-        ? [s.name]
-        : []
-    ),
+    raised,
+    made: raised.map((s) => s.name),
   }
   by.set(derived, fresh)
   return fresh
@@ -374,9 +379,14 @@ export let storage = (
       },
     }
   }
-  let ready = false, version: unknown
+  // The file's schema version as this store last looked, and how its own
+  // objects stood then, all of them in place (physical.ts `shape`).
+  let ready = false, version: unknown, own: string | undefined
   let changed = () =>
     driver.query({ t: 'pragma', name: 'schema_version' })[0]?.schema_version
+  // Both, read in one snapshot.
+  let look = (made: string[]) =>
+    unit(driver, () => [changed(), shape(driver, made)] as const, 'read')
   let install = () => {
     let { print, made } = plan(vocab, base.derived)
     let mark = (strays: string[]) =>
@@ -432,11 +442,38 @@ export let storage = (
       }
     }
     analyzed(driver)
-    version = driver.file ? changed() : undefined
+    if (driver.file) [version, own] = look(made)
     ready = true
   }
+  // Another connection changed the schema after this store installed: a peer
+  // installing its own vocabulary (code that landed while this process ran,
+  // or code it outlived), or now and then an installer that dropped something
+  // this vocabulary made. Installing again would undo the peer's install, and
+  // the peer's next read would undo this one: two vocabularies on one file
+  // would take turns at the write lock on every read of every process, for as
+  // long as both ran. So a store mends instead. Where one of its own objects
+  // moved, it raises what is missing (tables, then columns, then the rest) and
+  // drops, rebuilds and re-marks nothing; a change that moved none of them
+  // costs one read.
+  let mend = () => {
+    let { raised, made } = plan(vocab, base.derived)
+    let [seen, now] = look(made)
+    if (now != own) {
+      ;[seen, now] = unit(driver, () => {
+        let table = (s: Make) => s.t == 'create table'
+        for (let stmt of raised.filter(table)) driver.query(stmt)
+        for (let stmt of grown(vocab, standing(driver, vocab))) {
+          driver.query(stmt)
+        }
+        for (let stmt of raised) if (!table(stmt)) driver.query(stmt)
+        return [changed(), shape(driver, made)] as const
+      })
+    }
+    ;[version, own] = [seen, now]
+  }
   let ensure = () => {
-    if (!ready || (driver.file && version != changed())) install()
+    if (!ready) install()
+    else if (driver.file && version != changed()) mend()
   }
   return {
     worn: worn(vocab, base.derived),
