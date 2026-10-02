@@ -18,7 +18,8 @@ export { ValeCompass } from './kit/ValeCompass.ts'
 
 export let kit: Kit = {
   ValeRecording: {
-    ...recording, Component: recording.ValeRecording,
+    ...recording,
+    Component: recording.ValeRecording,
     css: new URL('./kit/ValeRecording.css', import.meta.url),
   },
   ValeMeter: {

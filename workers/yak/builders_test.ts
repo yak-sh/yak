@@ -380,44 +380,44 @@ test('builder_supply in an app store is current without any model spending', asy
   assertEquals(v.asked, [])
 })
 
-test("hosted choose switches takes without a model turn and preserves earlier artifacts", async () => {
-  let v = await app();
-  let artifact = crypto.randomUUID();
-  await v.send("/apply", [
-    { entity: { eid: SOURCE }, doc: { title: "Source" } },
+test('hosted choose switches takes without a model turn and preserves earlier artifacts', async () => {
+  let v = await app()
+  let artifact = crypto.randomUUID()
+  await v.send('/apply', [
+    { entity: { eid: SOURCE }, doc: { title: 'Source' } },
     {
       entity: { eid: artifact },
-      artifact: { address: "audio", media_type: "audio/wav", size: 4 },
+      artifact: { address: 'audio', media_type: 'audio/wav', size: 4 },
     },
     {
       entity: { eid: BUILDER },
       staged: {},
-      builder: { query: ".doc.title=Source", to: toolEid("builder_model") },
+      builder: { query: '.doc.title=Source', to: toolEid('builder_model') },
     },
-  ]);
-  let one = await v.kernel("/supply", {
+  ])
+  let one = await v.kernel('/supply', {
     builder: BUILDER,
     for: SOURCE,
     artifact,
-    slot: "song",
+    slot: 'song',
     by: ADA,
-  });
-  let first = (await one.json()).output;
-  let two = await v.kernel("/supply", {
+  })
+  let first = (await one.json()).output
+  let two = await v.kernel('/supply', {
     builder: BUILDER,
     for: SOURCE,
     artifact,
-    slot: "song",
+    slot: 'song',
     by: ADA,
-  });
-  let second = (await two.json()).output;
-  assert(first != second);
-  assertEquals((await v.read(".built.current=true"))[0].entity.eid, second);
-  let calls = await v.read(".call.source.build&*");
-  let choice = await v.kernel("/choose", { output: first, by: ADA });
-  assertEquals(choice.status, 200);
-  assertEquals((await v.read(".built.current=true"))[0].entity.eid, first);
-  assertEquals((await v.read(".built")).length, 2);
-  assertEquals((await v.read(".call.source.build")).length, calls.length);
-  assertEquals(v.asked.length, 0);
-});
+  })
+  let second = (await two.json()).output
+  assert(first != second)
+  assertEquals((await v.read('.built.current=true'))[0].entity.eid, second)
+  let calls = await v.read('.call.source.build&*')
+  let choice = await v.kernel('/choose', { output: first, by: ADA })
+  assertEquals(choice.status, 200)
+  assertEquals((await v.read('.built.current=true'))[0].entity.eid, first)
+  assertEquals((await v.read('.built')).length, 2)
+  assertEquals((await v.read('.call.source.build')).length, calls.length)
+  assertEquals(v.asked.length, 0)
+})

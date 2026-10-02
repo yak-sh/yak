@@ -1708,42 +1708,42 @@ test('photo and file uploads enforce space R2 limits from actual bytes', async (
   }
 })
 
-test("an open visitor cannot choose generated media, and the editor browser can", async () => {
-  let { platform, seeded, as, ADA, visit } = await import("./serving-probe.ts");
-  let p = platform();
-  let { dir, space, app } = await seeded(p.env, "open");
-  let { appStore } = await import("./directory.ts");
-  let store = appStore(p.env.STORE, space, app, p.env);
-  let { KERNEL, metaOf } = await import("./meta.ts");
-  let run = crypto.randomUUID(), call = crypto.randomUUID();
-  let first = crypto.randomUUID(), second = crypto.randomUUID();
+test('an open visitor cannot choose generated media, and the editor browser can', async () => {
+  let { platform, seeded, as, ADA, visit } = await import('./serving-probe.ts')
+  let p = platform()
+  let { dir, space, app } = await seeded(p.env, 'open')
+  let { appStore } = await import('./directory.ts')
+  let store = appStore(p.env.STORE, space, app, p.env)
+  let { KERNEL, metaOf } = await import('./meta.ts')
+  let run = crypto.randomUUID(), call = crypto.randomUUID()
+  let first = crypto.randomUUID(), second = crypto.randomUUID()
   await metaOf(store).apply([
-    { entity: { eid: run }, build: { key: "take", call } },
+    { entity: { eid: run }, build: { key: 'take', call } },
     { entity: { eid: call }, call: { source: run, args: {} } },
     {
       entity: { eid: first },
-      built: { build: run, slot: "song", key: "first", call, inputs: "i" },
+      built: { build: run, slot: 'song', key: 'first', call, inputs: 'i' },
     },
     {
       entity: { eid: second },
-      built: { build: run, slot: "song", key: "take", call, inputs: "i" },
+      built: { build: run, slot: 'song', key: 'take', call, inputs: 'i' },
       chosen: {},
     },
-  ], KERNEL);
+  ], KERNEL)
   let send = (cookie?: string) =>
     apps.fetch(
-      visit("/cookbook/api/choose", {
-        method: "POST",
+      visit('/cookbook/api/choose', {
+        method: 'POST',
         headers: {
-          "content-type": "application/json",
+          'content-type': 'application/json',
           ...cookie ? { cookie } : {},
         },
         body: JSON.stringify({ output: first, by: ADA }),
       }),
       p.env,
-    );
-  assertEquals((await send()).status, 401);
-  assertEquals((await send(await as(ADA))).status, 200);
-  let chosen = await metaOf(store).query(".built.current=true", KERNEL);
-  assertEquals(chosen[0].entity.eid, first);
-});
+    )
+  assertEquals((await send()).status, 401)
+  assertEquals((await send(await as(ADA))).status, 200)
+  let chosen = await metaOf(store).query('.built.current=true', KERNEL)
+  assertEquals(chosen[0].entity.eid, first)
+})

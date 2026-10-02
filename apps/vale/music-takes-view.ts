@@ -1,36 +1,36 @@
 // The song-take editor is controlled by graph rows and emits the output id to
 // choose. No player or choice state belongs in this rendering.
-import { h } from "preact";
-import { Button, Head, Panes, Rows, Tile } from "@yaks/ui";
-import { ValeRecording } from "./ui-kit.ts";
-import type { Song } from "./music_takes.ts";
+import { h } from 'preact'
+import { Button, Head, Panes, Rows, Tile } from '@yaks/ui'
+import { ValeRecording } from './ui-kit.ts'
+import type { Song } from './music_takes.ts'
 
 export let Takes = ({ songs, editor, busy, message, choose }: {
-  songs: Song[];
-  editor: boolean;
-  busy: string | null;
-  message: string;
-  choose: (id: string) => void;
+  songs: Song[]
+  editor: boolean
+  busy: string | null
+  message: string
+  choose: (id: string) => void
 }) =>
   h(
     Panes,
     {},
     h(
       Panes.Pane,
-      { mod: "main" },
+      { mod: 'main' },
       h(
         Panes.Top,
         {},
         h(
           Head,
           {},
-          h(Head.Title, {}, "Mossvale recordings"),
+          h(Head.Title, {}, 'Mossvale recordings'),
           h(
             Head.Sub,
             {},
-            message || "Listen to each take and choose what the land plays.",
+            message || 'Listen to each take and choose what the land plays.',
           ),
-          h(Button, { href: "./" }, "Back to the Vale"),
+          h(Button, { href: './' }, 'Back to the Vale'),
         ),
       ),
       h(
@@ -38,14 +38,14 @@ export let Takes = ({ songs, editor, busy, message, choose }: {
         {},
         !editor &&
           h(
-            "p",
+            'p',
             {},
-            "Only an app editor can choose recordings. Listening is open to everyone.",
+            'Only an app editor can choose recordings. Listening is open to everyone.',
           ),
-        !songs.length && h("p", {}, "No recordings yet."),
+        !songs.length && h('p', {}, 'No recordings yet.'),
         songs.map((song) =>
           h(
-            "section",
+            'section',
             { key: song.id },
             h(Head, {}, h(Head.Title, {}, `${song.land} · ${song.theme}`)),
             h(
@@ -59,18 +59,18 @@ export let Takes = ({ songs, editor, busy, message, choose }: {
                     Tile,
                     {},
                     h(Tile.Title, {}, `Take ${song.takes.length - i}`),
-                    h(Tile.Note, {}, take.chosen ? "In use" : "Retained"),
+                    h(Tile.Note, {}, take.chosen ? 'In use' : 'Retained'),
                     h(
                       Tile.Note,
                       {},
-                      take.at ? new Date(take.at).toLocaleString() : "",
+                      take.at ? new Date(take.at).toLocaleString() : '',
                     ),
                   ),
                   h(ValeRecording, {
                     controls: true,
-                    preload: "none",
+                    preload: 'none',
                     src: `api/blob/${take.sha}`,
-                    "aria-label": `${song.land} ${song.theme} take ${
+                    'aria-label': `${song.land} ${song.theme} take ${
                       song.takes.length - i
                     }`,
                   }),
@@ -81,10 +81,10 @@ export let Takes = ({ songs, editor, busy, message, choose }: {
                       onClick: () => choose(take.id),
                     },
                     busy == take.id
-                      ? "Choosing…"
+                      ? 'Choosing…'
                       : take.chosen
-                      ? "In use"
-                      : "Use this take",
+                      ? 'In use'
+                      : 'Use this take',
                   ),
                 )
               ),
@@ -93,4 +93,4 @@ export let Takes = ({ songs, editor, busy, message, choose }: {
         ),
       ),
     ),
-  );
+  )
