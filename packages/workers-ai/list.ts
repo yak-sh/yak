@@ -51,6 +51,13 @@ export let modelInfo = async (
   let res = await fetcher(
     `https://developers.cloudflare.com/workers-ai/models/${slug}/index.md`,
   )
+  if (res.status == 404) {
+    let path = name.replace(/^@cf\//, '').split('/').map(encodeURIComponent)
+      .join('/')
+    res = await fetcher(
+      `https://developers.cloudflare.com/ai/models/${path}/index.md`,
+    )
+  }
   if (!res.ok) throw new Error(`Workers AI model page says ${res.status}`)
   let body = await res.text()
   let context = body.match(/Context Window[^\n]*?([\d,]+) tokens/i)
