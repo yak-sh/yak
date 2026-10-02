@@ -152,7 +152,7 @@ export type Shown = {
   available: { app: string; title: string }[]
   /** why it is not finished yet: the note on its `provisional` mark */
   saving: string
-  /** why its key could not be saved: the text beside its `error` or
+  /** why its key could not be saved: the text beside its
    * `exception` */
   failed: string
 }
@@ -532,7 +532,7 @@ export let connecting = async (
     await connect(c, eid, { key })
     await rebound(env, apps)
     let [now] = await c.graph.read(`.entity.eid=${eid}&.${CONNECTION}&*`)
-    return now?.error || now?.exception
+    return now?.exception
       ? no(String(comp(now, 'content').body ?? 'The key could not be saved.'))
       : { say: 'Saved. The key is kept safe and never shown again.', no: false }
   } catch (e) {
@@ -666,7 +666,7 @@ let own: Answer = async ({ env, req, path, space, app, who, refuse }) => {
     if (!keyed(i)) return signingIn(req, env, c, space, who, eid, back)
     await connect(c, eid, { key })
     let [now] = await c.graph.read(`.entity.eid=${eid}&.${CONNECTION}&*`)
-    return now?.error || now?.exception
+    return now?.exception
       ? page(
         no(String(comp(now, 'content').body ?? 'The key could not be saved.')),
       )
@@ -944,7 +944,7 @@ let CONNECTIONS: Row[] = [
  * Connections, as what they contribute (plugin.ts): the words the directory
  * keeps them in — the connection and its integration, the secret its
  * credential is, the mark it wears while that is saved, and the text a
- * failure is said in beside `error` — the built integrations it installs
+ * failure is said in beside `exception` — the built integrations it installs
  * there, the two tools, the two doors, and the Connect button at an app's
  * address.
  */
