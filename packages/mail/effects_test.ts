@@ -9,23 +9,12 @@ import { ram } from '@yaks/ram'
 import { effectDoc, effects as registry, type Handlers } from '@yaks/effects'
 import { docs } from '@yaks/doc'
 import { loadVocab } from '@yaks/vocab'
-import { effects, post } from './effects.ts'
+import { effects } from './effects.ts'
 import type { Transport } from './options.ts'
 import { mailbox } from './plugin.ts'
 import { club, noon } from './testing.ts'
 import { type Sender, sending } from './send.ts'
 import { stash } from './stash.ts'
-
-let quietly = async <T>(body: () => T): Promise<[Awaited<T>, unknown[]]> => {
-  let warned: unknown[] = []
-  let warn = console.warn
-  console.warn = (...said: unknown[]) => warned.push(said[1])
-  try {
-    return [await body(), warned]
-  } finally {
-    console.warn = warn
-  }
-}
 
 let unarmed = { via: 'cloudflare', account: 'a' } as Transport
 
@@ -34,7 +23,12 @@ let pooled = loadVocab([...club.docs, effectDoc])
 
 // A process over `storage`, working the pool with the code it was given.
 let proc = async (storage: Storage, handlers: Handlers) => {
-  let fx = registry(pooled, { write: (b) => g.apply(b, { trusted: true }) })
+  let reports: unknown[] = []
+  let fx = registry(pooled, {
+    write: (b) => g.apply(b, { trusted: true }),
+    report: (error) => reports.push(error),
+    tries: 1,
+  })
   fx.handle(handlers)
   let g = graph({
     storage,
@@ -42,7 +36,7 @@ let proc = async (storage: Storage, handlers: Handlers) => {
     plugins: [fx, docs(), mailbox({ domain: 'books.example' })],
   })
   await fx.work(g)
-  return Object.assign(g, { fx, storage })
+  return Object.assign(g, { fx, storage, reports })
 }
 
 // The process that wrote the letter, with whatever code the test gives it.
@@ -74,56 +68,54 @@ let read = async (g: { read: (q: string) => unknown }, eid: string) =>
   ((await g.read(`.entity.eid=${eid}`)) as Bundle[])[0]
 
 test('a transport that is named and complete sends', async () => {
-  let [code, warned] = await quietly(() =>
-    effects(null, { sender: { via: 'stash' } })
-  )
+  let code = effects(null, { sender: { via: 'stash' } })
   let g = await rig(code)
   await g.apply([ana, letter('e-one')])
   await g.fx.idle()
   assert((await read(g, 'e-one')).delivered)
-  assertEquals(warned, [])
+  assertEquals(g.reports, [])
 })
 
-test('no sender named is no code, and nothing said about it', async () => {
-  let [code, warned] = await quietly(() => effects(null, {}))
-  assertEquals(code, {})
-  assertEquals(warned, [])
+test('missing credentials leave every owed letter visibly waiting and report failures', async () => {
+  let g = await rig(effects(null, { sender: unarmed }))
+  await g.apply([ana, {
+    entity: { eid: 'e-in' },
+    mail: { from: 'bea@out.example', to: 'hello@books.example' },
+  }])
+  await g.fx.idle()
+  assertEquals(g.reports, [])
+  await g.apply([letter('e-one'), letter('e-two')])
+  await g.fx.idle()
+  assertEquals(g.reports.length, 2)
+  assert(g.reports.every((e) => String(e).includes('waiting for credentials')))
+  for (let eid of ['e-one', 'e-two']) {
+    let kept = await read(g, eid)
+    assert(
+      String((kept.deliver as Comp).waiting).includes(
+        'waiting for credentials',
+      ),
+    )
+    assertEquals((kept.deliver as Comp).tried, undefined)
+    assertEquals(kept.delivered, undefined)
+    assertEquals(kept.bounced, undefined)
+  }
 })
 
-test('credentials that have not arrived say nothing until a letter is owed', async () => {
-  let said = post(unarmed)
-  assertEquals(said.sender, undefined)
-  assert(said.waiting?.startsWith('waiting for credentials'), `${said.waiting}`)
-  let [code, warned] = await quietly(() => effects(null, { sender: unarmed }))
-  assertEquals(warned, [])
-  let g = await rig(code)
-  let [, arrived] = await quietly(async () => {
-    await g.apply([ana, {
-      entity: { eid: 'e-in' },
-      mail: { from: 'bea@out.example', to: 'hello@books.example' },
-    }])
-    await g.fx.idle()
+test('no configured sender leaves an outbound letter waiting rather than silently done', async () => {
+  let g = await rig(effects(null))
+  await g.apply([ana, letter('e-one')])
+  await g.fx.idle()
+  assertEquals((await read(g, 'e-one')).deliver, {
+    to: 'p-ana',
+    waiting: 'waiting for a configured sender',
   })
-  assertEquals(arrived, [])
-  let [, owed] = await quietly(async () => {
-    await g.apply([letter('e-one')])
-    await g.apply([letter('e-two')])
-    await g.fx.idle()
-  })
-  assertEquals(owed.length, 1)
-  assert(String(owed[0]).includes('waiting for credentials'), `${owed[0]}`)
-  let kept = await read(g, 'e-one')
-  assertEquals(kept.deliver, { to: 'p-ana' })
-  assertEquals(kept.delivered, undefined)
+  assertEquals(g.reports.length, 1)
 })
 
-test('a letter written with no sender goes with the first process that has one, once', async () => {
-  let [code] = await quietly(() => effects(null, { sender: unarmed }))
-  let g = await rig(code)
-  await quietly(async () => {
-    await g.apply([ana, letter('e-one')])
-    await g.fx.idle()
-  })
+test('the ordinary startup sweep sends a waiting letter once and clears the reason', async () => {
+  let g = await rig(effects(null, { sender: unarmed }))
+  await g.apply([ana, letter('e-one')])
+  await g.fx.idle()
   let box = stash()
   await sweep(g, box)
   assertEquals(box.sent.map((m) => m.subject), ['Potluck Friday'])
@@ -131,8 +123,74 @@ test('a letter written with no sender goes with the first process that has one, 
   assertEquals(sent.delivered, { at: noon() })
   assertEquals((sent.mail as Comp).message_id, 'stash-1')
   assertEquals((sent.deliver as Comp).tried, noon())
+  assert((sent.deliver as Comp).waiting == null)
   await sweep(g, box)
   assertEquals(box.sent.length, 1)
+})
+
+test('one running handler re-reads its sender after configuration arrives', async () => {
+  let options: { sender: Transport } = { sender: unarmed }
+  let code = effects(null, options)
+  let g = await rig(code)
+  await g.apply([ana, letter('e-one')])
+  await g.fx.idle()
+  options.sender = { via: 'stash' }
+  // Use the same factory result in another process: the startup sweep is
+  // ordinary recovery, not a hand-written transport send.
+  let next = await proc(g.storage, code)
+  await next.fx.idle()
+  let sent = await read(g, 'e-one')
+  assert(!!sent.delivered)
+  assert((sent.deliver as Comp).waiting == null)
+  assertEquals(next.reports, [])
+})
+
+test('an unresolved recipient bounces visibly and is also reported', async () => {
+  let g = await rig(effects(null, { sender: { via: 'stash' } }))
+  await g.apply([{
+    entity: ana.entity,
+    person: ana.person,
+  }, letter('e-one')])
+  await g.fx.idle()
+  let row = await read(g, 'e-one')
+  assert(String((row.bounced as Comp).reason).includes('no address on file'))
+  assertEquals((row.deliver as Comp).tried, undefined)
+  assertEquals(g.reports.length, 1)
+})
+
+test('a transport rejection records a bounce and reaches the effect reporter without a resend', async () => {
+  let calls = 0
+  let error = new Error('mail provider unavailable')
+  let g = await rig({
+    mail_post: sending({
+      sender: {
+        send: () => {
+          calls++
+          return Promise.reject(error)
+        },
+      },
+    }),
+  })
+  await g.apply([ana, letter('e-one')])
+  await g.fx.idle()
+  assertEquals(
+    (await read(g, 'e-one')).bounced &&
+      ((await read(g, 'e-one')).bounced as Comp).reason,
+    error.message,
+  )
+  assertEquals(g.reports, [error])
+  let next = await proc(g.storage, {
+    mail_post: sending({
+      sender: {
+        send: () => {
+          calls++
+          return Promise.resolve({})
+        },
+      },
+    }),
+  })
+  await next.fx.idle()
+  assertEquals(calls, 1)
 })
 
 test('a letter handed over and never settled is not handed over again', async () => {

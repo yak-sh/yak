@@ -115,3 +115,14 @@ and `mechanism` for now. No legacy exception rows are cleared.
 Heal temporarily projects tracker-owned `bug` declarations and reexports fault
 grouping until T-59079 turns it into a tracker subscriber. Do not load that
 transitional heal vocabulary in a tracker store.
+
+## Sentry on the box
+
+`@yaks/tracker/sentry` is the shared Sentry ingest transport for box host
+failures and harness disk alerts. It accepts the existing ingest DSN, or
+discovers one with the existing read token; it holds no credentials in the graph
+or logs. The CLI reporter keeps its durable tracker spool and also sends caught
+failures through this transport, tagged with their handler and target. It
+resolves `SENTRY_DSN` or `sentry` from the host vault when used, so a credential
+arriving after startup is not cached as missing. A reporting failure is retained
+in the spool without recursively reporting to Sentry.

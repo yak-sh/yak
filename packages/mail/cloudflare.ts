@@ -43,7 +43,9 @@ export let payload = (m: Message): Payload => ({
   reply_to: m.from,
   subject: m.subject,
   text: m.text,
-  html: m.html,
+  // The builder requires nonempty text or HTML. A subject-only letter has
+  // an empty visible body, not an invalid request (T-64121's real probe).
+  html: m.html || (m.text ? '' : '<div></div>'),
   ...(m.replyTo
     ? {
       headers: {

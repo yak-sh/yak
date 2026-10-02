@@ -1,10 +1,11 @@
+import { sentryReporter } from '@yaks/tracker/sentry'
 // A leased host service, so cleanup keeps running between restarts and only
 // one worker over this graph maintains the machine's worktree root.
 import { sleep } from '@yaks/effects'
 import { dbOf, type Host } from '@yaks/cli/host'
 import { reveal } from '@yaks/secrets'
 import { diagnostics } from './diagnostics.ts'
-import { diskEvent, diskMonitor, failureEvent, sentryReporter } from './disk.ts'
+import { diskEvent, diskMonitor, failureEvent } from './disk.ts'
 import { tidy } from './maintenance.ts'
 import { dbPath, worktrees } from './paths.ts'
 

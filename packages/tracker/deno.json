@@ -5,6 +5,7 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./report": "./report.ts",
+    "./sentry": "./sentry.ts",
     "./page": "./page.js",
     "./effects": "./effects.ts",
     "./tools": "./tools.ts",

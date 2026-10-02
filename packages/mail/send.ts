@@ -187,7 +187,12 @@ export let sending =
       let deliver = comp(letter, DELIVER)!
       let settle = (out: Comp, name: string) =>
         write([{ entity: event.entity, [name]: { at: now(), ...out } }])
-      let fail = (reason: string) => settle({ reason }, BOUNCED)
+      let fail = async (reason: string, error: unknown = new Error(reason)) => {
+        await settle({ reason }, BOUNCED)
+        // The outcome answers the owner; throwing also reaches the host's
+        // reporter. A later attempt sees the bounce and cannot resend.
+        throw error
+      }
       let recipient = deliver.to == null ? '' : String(deliver.to)
       if (!recipient) return fail('deliver.to names nobody')
       return after(addressOf(tx, recipient), (to) => {
@@ -201,12 +206,16 @@ export let sending =
           return write([{
             entity: event.entity,
             [MAIL]: { to },
+            [DELIVER]: { waiting: null },
             [DELIVERED]: { at: now() },
           }])
         }
         let answered = mail.reply_to == null ? '' : String(mail.reply_to)
         let tried = () =>
-          write([{ entity: event.entity, [DELIVER]: { tried: now() } }])
+          write([{
+            entity: event.entity,
+            [DELIVER]: { tried: now(), waiting: null },
+          }])
         return after(
           answered ? threadOf(tx, answered) : '',
           (replyTo) =>
@@ -228,7 +237,7 @@ export let sending =
                   [DELIVERED]: { at: now() },
                 }]),
               (err) =>
-                fail(String((err as Error)?.message ?? err).slice(0, 240)),
+                fail(String((err as Error)?.message ?? err).slice(0, 240), err),
             ),
         )
       })

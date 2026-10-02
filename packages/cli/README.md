@@ -369,9 +369,9 @@ step, and it leaves the pool, claiming no new run. `close()` does the same,
 closes the duty thread, waits for every effect the host started to finish, for
 as long as each takes, and says in the log which ones it is waiting on
 ([`drain.ts`](./drain.ts)); then it ends every call its runner is still running
-as `interrupted{code}`, releases leases, records the process exit, and
-closes SQLite. What a run left owed is the next worker's. Plugin timers and
-loops should listen to `host.stopping` or the signal passed to `service`.
+as `interrupted{code}`, releases leases, records the process exit, and closes
+SQLite. What a run left owed is the next worker's. Plugin timers and loops
+should listen to `host.stopping` or the signal passed to `service`.
 
 An interrupt winds a command down (`@yaks/process/wind`, wired in
 [`yak.ts`](./yak.ts)): a SIGTERM, SIGINT or SIGHUP, or Ctrl-C in a terminal app.
@@ -509,7 +509,11 @@ possible. A graph tool with the same command name takes precedence.
 ### Reporting outside the watched graph
 
 `tracker: {spool: "tracker-spool"}` names the file spool relative to the config
-file. Hosts report unexpected tool, effect, request and duty failures there
-without opening a tracker database. The separate @yaks/tracker role imports it
-using its own config and database; the task graph keeps no tracker error rows.
-Console telemetry remains enabled.
+file. Hosts report unexpected tool, effect, request and duty failures there and
+to Sentry through `@yaks/tracker/sentry`, resolving the existing `SENTRY_DSN` or
+`sentry` credential in the host vault at use time. Sentry failure is retained in
+the spool without recursion. The Sentry event carries the handler and target,
+not the letter or tool arguments. Reports go to the spool without opening a
+tracker database. The separate @yaks/tracker role imports it using its own
+config and database; the task graph keeps no tracker error rows. Console
+telemetry remains enabled.

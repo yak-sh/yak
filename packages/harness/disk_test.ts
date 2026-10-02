@@ -1,3 +1,4 @@
+import { sentryReporter } from '@yaks/tracker/sentry'
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import {
@@ -6,7 +7,6 @@ import {
   diskEvent,
   diskMonitor,
   failureEvent,
-  sentryReporter,
 } from './disk.ts'
 
 test('disk space reads POSIX df available KiB, including a full disk', () => {

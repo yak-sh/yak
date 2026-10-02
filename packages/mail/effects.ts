@@ -7,16 +7,10 @@
 // fact about the graph, so the config names it beside the plugin (./options.ts)
 // and the factory builds it here.
 //
-// A server that names no sender gives it no code, so its runs are settled with
-// nothing sent, which is exactly what a graph that only receives mail wants.
-//
-// A transport that is named but has not been given its credentials is a
-// process that cannot send, and missing config never stops it from starting.
-// Its handler sends nothing and leaves the letter owed; it says why once, and
-// only when it meets a letter it could not send, so a command that never
-// touches mail stays quiet. The letter is kept in the graph, not in the
-// sender: `mail_post` declares a sweep over the letters still owed, so the
-// first process that has the token sends them when it starts.
+// An outbound request must never settle silently. A missing sender leaves a
+// visible waiting reason without marking the letter tried, and throws through
+// the effect pool's reporting door. The startup sweep can still recover it.
+// Read transport options on every attempt: secrets can arrive after startup.
 
 import type { Handler, Handlers } from '@yaks/effects'
 import { after } from '@yaks/fp'
@@ -45,17 +39,14 @@ export let post = (said: Transport): { sender?: Sender; waiting?: string } => {
   }
 }
 
-/** The handler of a process that cannot send: it leaves every letter owed and
- * says why, once, the first time it meets one. */
-export let waiting = (reason: string): Handler => {
-  let said = false
-  return (event, tx) =>
-    after(letterOf(tx, event.entity), (letter) => {
-      if (said || !owed(letter)) return
-      said = true
-      console.warn('@yaks/mail —', reason)
-    })
-}
+/** Leave unsent letters recoverable, but make the failure visible to both the
+ * owner and the host's effect reporter (the box forwards reports to Sentry). */
+export let waiting = (reason: string): Handler => (event, tx, write) =>
+  after(letterOf(tx, event.entity), async (letter) => {
+    if (!owed(letter)) return
+    await write([{ entity: event.entity, deliver: { waiting: reason } }])
+    throw new Error(`@yaks/mail — ${reason}`)
+  })
 
 /** The outbound half: `mail_post`, wherever a sender was named. Where the
  * sender cannot be built, nothing is sent and the letters wait in the graph
@@ -64,8 +55,7 @@ export let effects = (
   host: { vocab: Vocab } | null,
   options: Options = {},
 ): Handlers => {
-  if (!options.sender) return {}
-  let { sender, waiting: reason } = post(options.sender)
+  let kept: Sender | undefined
   return {
     ...(options.inbox
       ? {
@@ -73,13 +63,21 @@ export let effects = (
           queue(tx, host!.vocab, options.inbox!, write),
       }
       : {}),
-    mail_post: sender
-      ? sending({
-        sender,
-        // Where the domain belongs to this graph, a letter to it never
-        // reaches the transport at all — it is already where it is going.
-        ...(options.local && options.domain ? { local: options.domain } : {}),
-      })
-      : waiting(reason!),
+    mail_post: (event, tx, write, attempt) => {
+      let said = options.sender
+      let { sender, waiting: reason } = said?.via == 'stash'
+        ? { sender: kept ??= stash() }
+        : said
+        ? post(said)
+        : { waiting: 'waiting for a configured sender' }
+      let run = sender
+        ? sending({
+          sender,
+          // Local addresses are already where they are going.
+          ...(options.local && options.domain ? { local: options.domain } : {}),
+        })
+        : waiting(reason!)
+      return run(event, tx, write, attempt)
+    },
   }
 }

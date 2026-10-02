@@ -288,10 +288,15 @@ A plugin entry in a `yak serve` configuration can be:
 
 The CLI host resolves `{ "secret": "NAME" }` through
 [@yaks/secrets](../secrets); direct TypeScript calls receive strings. No sender
-configuration means no sending handler. Missing Cloudflare credentials or an
-unsupported transport registers a handler that sends nothing: it warns once,
-when it meets a message it cannot send, and leaves that message for the first
-process with a sender. `mail check` reports the configuration problem too.
+configuration leaves outbound requests waiting too. Missing Cloudflare
+credentials or an unsupported transport writes `deliver.waiting` on every owed
+letter and throws through the host's effect reporter (on the box, the tracker
+forwards it to Sentry), never marking the letter tried. The sender is read on
+each attempt, so credentials that arrive after startup can be used without
+rebuilding the handler. The ordinary startup sweep recovers unsent letters;
+successful delivery clears the waiting reason. A transport rejection records
+`bounced.reason` and is also reported, without ever sending that letter twice.
+`mail check` reports the configuration problem too.
 
 ## Pulling from an edge
 

@@ -72,3 +72,30 @@ test('cloudflare: a refusal rejects with what the API said', async () => {
     'HTTP 504',
   )
 })
+
+test('a subject-only letter has an empty visible HTML body accepted by the builder schema', async () => {
+  let sender = cloudflare({
+    account: 'a',
+    token: 't',
+    fetch: (_url, init) => {
+      let body = JSON.parse(String(init?.body))
+      // At least one content representation must be nonempty; this is the
+      // provider validation that rejected the first real subject-only probe.
+      if (!body.text && !body.html) {
+        return Promise.resolve(
+          Response.json({ success: false }, { status: 400 }),
+        )
+      }
+      assertEquals(body.text, '')
+      assertEquals(body.html.replace(/<[^>]*>/g, ''), '')
+      assertEquals(body.subject, 'yak mail test')
+      return Promise.resolve(
+        Response.json({ success: true, result: { message_id: '<empty@x>' } }),
+      )
+    },
+  })
+  assertEquals(
+    await sender.send({ ...m, subject: 'yak mail test', text: '', html: '' }),
+    { id: 'empty@x' },
+  )
+})

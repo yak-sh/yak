@@ -80,6 +80,11 @@
           "death": "keep",
           "description": "the recipient — their address is looked up when the letter goes out"
         },
+        "waiting": {
+          "type": "string",
+          "stamped": true,
+          "description": "why an outbound letter cannot reach a sender yet; cleared before it is handed over"
+        },
         "tried": {
           "type": "string",
           "format": "date-time",
