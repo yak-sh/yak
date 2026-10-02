@@ -15,6 +15,9 @@ nowhere beside it:
   and synced to every device they play on (M-59093); never `localStorage`.
 - What a person sees is @yaks/ui parts in Preact, never `innerHTML`.
 
+Moving code's state in means modelling it fresh, not copying its shape: the
+vocabulary skill's "Moving state that code keeps into the graph" says how.
+
 When the graph or a package cannot do what the game needs (large binary
 values, a worker sharing the page's graph, a write that must be fast), that is
 platform work: file it and fix it in the package that owns it, never around it

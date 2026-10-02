@@ -8,7 +8,9 @@ description: >
   that something happened or how two things relate, or review a design that
   proposes components, even when the request never says "vocabulary" or
   "component": "add a field", "track whether X happened", "store Y on the
-  entity", "link X to Y", "keep a list of". Moving rows already stored into the
+  entity", "link X to Y", "keep a list of", and whenever you move state that
+  code keeps outside the graph (a Map, an array, localStorage, IndexedDB, a
+  cache, a module's variables) into it. Moving rows already stored into the
   new shape is `data-migration`; how a read or write of them behaves is
   `graph-reads-and-writes`.
 ---
@@ -209,6 +211,42 @@ for good, on an eid every interface derives the same way. A person's input is
 never given a short lifetime (M-59093). Before writing a constraint into a
 component, ask whether it came from the owner or from the code.
 
+## Moving state that code keeps into the graph
+
+Code that keeps state outside the graph (a module's Map or array,
+localStorage, IndexedDB, a cache, an object's fields) pulls you to transcribe
+it: the same keys, the same nesting, poured into a component, often with a
+prefix to tell it apart. `page_seen{level, x, z, yaw}` beside the store's own
+`seen{level, x, z, yaw, at, teleport}`, or a `settings{json}` holding whatever
+localStorage held. That keeps the old model and gives it a second home. The
+code in front of you was shaped by the tool it used (a key-value store, a Map
+keyed by a string), not by what the data means, and from the inside copying it
+feels like moving it.
+
+Model it as if the code did not exist:
+
+- Find the entity each value is an aspect of (a person, their hero, a land, a
+  chunk, the page) and put it there, in a word that already exists where one
+  does (`seen`, `look`, `draft`).
+- Ask who writes it and who reads it. Readers query or subscribe; nothing keeps
+  its own copy or index of what the graph holds.
+- What can be derived is computed (a query, a rule, a `computed` property), not
+  stored beside its source.
+- The code that kept the copy in step (a handler updating a Map, a save on
+  change) becomes a rule, an effect or a subscription (M-39551).
+- The page's own state is a UX component (CamelCase, `sync: none`) on an entity
+  the page names; a person's settings and drafts are theirs, synced (M-59093).
+
+When the graph cannot say what the model needs, that is the finding, never a
+reason to mint around it. The page_seen run needed a guest's spot kept on the
+page, but `sync` is set per component, not per entity, so the ordinary `seen`
+cannot sit on a page-only entity. That is a platform gap: file it and fix it in
+the package that owns it (M-41238).
+
+Post the model on the task before building (each component `comp{prop, …}`,
+the entity it sits on, who writes and reads it, what replaces the code), so it
+can be spot-checked.
+
 ## Configuration that varies is rows
 
 What differs by deployment or changes without a release is data, not code: a
@@ -270,6 +308,8 @@ Decide these per component, on purpose:
   twice; relations are refs or edges, never lists of eids; nothing derivable is
   stored; nothing is keyed on a name.
 - No stored state; lifecycles are marks plus `status`.
+- Nothing transcribes a structure old code kept, and no prefixed copy of an
+  existing word (`page_seen`) stands beside it.
 - A missing value reads as the safe side, and every constraint traces to the owner.
 - Its description says what it is in a sentence a stranger can use.
 - Stored rows on the box and on the platform are migrated with the
