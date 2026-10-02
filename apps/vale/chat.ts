@@ -33,6 +33,9 @@ export let MAX = 160
 /** How long words float over a speaker's head, in ms. */
 export let BUBBLE = 5000
 
+/** How long conversation stays in the panel, in ms. */
+export let RECENT = 10 * 60 * 1000
+
 /** How near, in metres, a speaker is heard: their words float over their
  * head for whoever is this close. */
 export let EARSHOT = 22
@@ -140,8 +143,8 @@ export let heard = (
     .sort((a, b) => a.at - b.at || (a.eid < b.eid ? -1 : 1))
     .filter((l) => owner(l.player) == l.by)
 
-/** Keep every observed line while a chat log is open, even after a newer
- * store window has displaced it. A closed log needs only the newest `limit`.
+/** Keep recent observed lines while a chat log is open, even after a newer
+ * store window has displaced them. A closed log needs only the newest `limit`.
  * A stamped row replaces the earlier version of the same line.
  *
  * ```ts
@@ -150,15 +153,21 @@ export let heard = (
  * let line = (eid: string, at: number) =>
  *   ({ eid, at, player: 'hero', by: 'person', text: eid })
  * let old = [line('a', 1), line('b', 2)]
- * assertEquals(history(old, [line('c', 3)], 2).map((l) => l.eid), ['b', 'c'])
- * assertEquals(history(old, [line('c', 3)], Infinity).map((l) => l.eid),
+ * assertEquals(history(old, [line('c', 3)], 2, 4).map((l) => l.eid), ['b', 'c'])
+ * assertEquals(history(old, [line('c', 3)], Infinity, 4).map((l) => l.eid),
  *   ['a', 'b', 'c'])
- * assertEquals(history(old, [line('a', 4)], Infinity).map((l) => l.at),
+ * assertEquals(history(old, [line('a', 4)], Infinity, 4).map((l) => l.at),
  *   [2, 4])
  * ```
  */
-export let history = (old: Line[], arrived: Line[], limit: number): Line[] =>
+export let history = (
+  old: Line[],
+  arrived: Line[],
+  limit: number,
+  now = Date.now(),
+): Line[] =>
   [...new Map([...old, ...arrived].map((l) => [l.eid, l])).values()]
+    .filter((l) => now - l.at < RECENT)
     .sort((a, b) => a.at - b.at || a.eid.localeCompare(b.eid))
     .slice(-limit)
 

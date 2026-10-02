@@ -464,8 +464,9 @@ export let chatbox = (
           ...folk.lines(),
         ],
         open ? Infinity : ASKED,
+        now,
       )
-      let shown = history(past, mine, Infinity)
+      let shown = history(past, mine, Infinity, now)
       notices = notices.filter((n) => now < fades(n) + FADE)
       draw(
         open ? shown : shown.slice(-6).filter((l) => now < fades(l) + FADE),
