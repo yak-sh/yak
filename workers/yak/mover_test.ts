@@ -9,11 +9,18 @@ import { kernelDoc } from '@yaks/kernel/vocab'
 import { doorOf } from './door.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
-import { dispatchMove, dispatchRule, step } from './mover.ts'
+import {
+  creaturePrompt,
+  dispatchMove,
+  dispatchRule,
+  figurePrompt,
+  step,
+} from './mover.ts'
 import { type Rehearsal, type Rule, RULES, type Standing } from './mover.ts'
 import { state } from './testing.ts'
 
 let NAME = 'ada/notes'
+let refusals = RULES.filter((r) => r.mark.startsWith('yak/store/refusal'))
 
 // An app whose rows say a word two ways, the way a rename leaves them.
 let WORDS = JSON.stringify({
@@ -320,7 +327,7 @@ test('source reads do not move or count sources, and rehearsal rolls back', asyn
 })
 
 test('refusal rules rehearse unchanged and convert only answers when enabled', async () => {
-  let s = await store(0, ...RULES)
+  let s = await store(0, ...refusals)
   let source = crypto.randomUUID()
   let native = crypto.randomUUID()
   let imported = crypto.randomUUID()
@@ -366,7 +373,7 @@ test('refusal rules rehearse unchanged and convert only answers when enabled', a
   let [importedBefore] = await s.query(
     `.eid=${imported}&.content&.result&.imported`,
   )
-  s.wake(...RULES.map((r) => ({ ...r, live: 'apps' as const })))
+  s.wake(...refusals.map((r) => ({ ...r, live: 'apps' as const })))
   await s.alarm()
   assertEquals(await count(s, '.error'), 1)
   assertEquals(await count(s, '.refusal.code=Refused'), 1)
@@ -388,7 +395,7 @@ test('refusal rules rehearse unchanged and convert only answers when enabled', a
 })
 
 test('refusal rehearsal and enabled batches preserve retry-pending provider errors', async () => {
-  let s = await store(0, ...RULES)
+  let s = await store(0, ...refusals)
   let session = crypto.randomUUID()
   let ask = crypto.randomUUID()
   let notice = crypto.randomUUID()
@@ -433,7 +440,7 @@ test('refusal rehearsal and enabled batches preserve retry-pending provider erro
   let pendingBefore = await s.query(`.eid=${pending}`)
   let askBefore = await s.query(`.eid=${ask}`)
   let completedBefore = await s.query(`.eid=${completed}`)
-  s.wake(...RULES.map((r) => ({ ...r, live: 'apps' as const })))
+  s.wake(...refusals.map((r) => ({ ...r, live: 'apps' as const })))
   await s.alarm()
   assertEquals(await count(s, '.error.code=http_429'), 1)
   assertEquals(await count(s, '.refusal.code=http_429'), 0)
@@ -442,3 +449,61 @@ test('refusal rehearsal and enabled batches preserve retry-pending provider erro
   assertEquals(await s.query(`.eid=${ask}`), askBefore)
   assertEquals(await s.query(`.eid=${completed}`), completedBefore)
 })
+
+test(
+  'Vale prompt rules select exact stale builders and preserve their settings',
+  async () => {
+    for (let rule of [creaturePrompt, figurePrompt]) {
+      let patch = rule.move({ entity: { eid: 'unused' } })[0]
+      let body = (patch.content as Comp).body
+      let eid = /\.entity.eid=([^&]+)/.exec(rule.find)![1]
+      let s = await store(0, rule)
+      let other = crypto.randomUUID()
+      await s.apply([
+        {
+          entity: { eid },
+          builder: { query: '' },
+          content: { body: 'old prompt' },
+          using: { effort: 'low' },
+          staged: {},
+        },
+        {
+          entity: { eid: other },
+          builder: { query: '' },
+          content: { body: 'old prompt' },
+        },
+      ])
+      let before = await s.query('.builder&*')
+      let [report] = await s.rehearse()
+      assertEquals([report.rows, report.moved, report.failed], [
+        1,
+        1,
+        undefined,
+      ])
+      assertEquals(await s.query('.builder&*'), before)
+      await s.alarm()
+      assertEquals(await s.query('.builder&*'), before)
+      s.wake({ ...rule, live: 'apps' })
+      await s.alarm()
+      let [after] = await s.query(`.entity.eid=${eid}&*`)
+      assertEquals(after.content, { body })
+      let prior = before.find((row) => row.entity.eid == eid)!
+      assertEquals(after.using, prior.using)
+      assertEquals(after.staged, prior.staged)
+      assertEquals((await s.query(`.entity.eid=${other}&*`))[0].content, {
+        body: 'old prompt',
+      })
+      assertEquals(rule.move(after), [])
+      assertEquals((await s.moves())[0].done != null, true)
+      await s.alarm()
+      assertEquals(rule.move((await s.query(rule.find))[0]), [])
+      await s.apply([{
+        entity: { eid },
+        builder: null,
+        content: { body: 'old prompt' },
+      }])
+      assertEquals(await s.query(rule.find), [])
+    }
+  },
+  { tags: ['vale-prompt'] },
+)
