@@ -171,7 +171,14 @@ export let RELATIONS: string[] = relationDocs.flatMap((d) =>
  * opened, archived, quarantined or verified it — and an image's size. */
 let markDocs: VocabDoc[] = [
   marksDoc,
-  pick(kernelWords, ['image', 'quarantined', 'verified', 'pending']),
+  pick(kernelWords, [
+    'image',
+    'quarantined',
+    'verified',
+    'pending',
+    'interrupted',
+    'failed',
+  ]),
 ]
 
 /**
@@ -549,6 +556,7 @@ export let coreDocs: VocabDoc[] = storeDocs([
   ...markDocs,
   kernelDoc,
   ...givenDocs,
+  pick(effectDoc, ['provisional']),
   appsDoc,
   mailDoc,
   invocationDoc,

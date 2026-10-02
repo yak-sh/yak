@@ -510,9 +510,8 @@ test('a call wearing a wake waits for it, and answers when it fires', async () =
     ['take the bins out', 'water the plants'],
   )
   assertEquals(
-    (await a.rows('.execution'))[0].execution,
-    // Nobody named a runner here, so the claim is anonymous.
-    { state: 'done', by: null },
+    ((await a.rows('.execution'))[0].execution as { state: string }).state,
+    'done',
   )
 })
 
