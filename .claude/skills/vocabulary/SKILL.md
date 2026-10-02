@@ -216,9 +216,10 @@ component, ask whether it came from the owner or from the code.
 Code that keeps state outside the graph (a module's Map or array,
 localStorage, IndexedDB, a cache, an object's fields) pulls you to transcribe
 it: the same keys, the same nesting, poured into a component, often with a
-prefix to tell it apart. `page_seen{level, x, z, yaw}` beside the store's own
-`seen{level, x, z, yaw, at, teleport}`, or a `settings{json}` holding whatever
-localStorage held. That keeps the old model and gives it a second home. The
+prefix to tell it apart: a `page_seen{level, x, z, yaw}` minted beside the
+store's own `seen{level, x, z, yaw, at, teleport}`, or a `settings{json}` that
+would hold whatever localStorage held. That keeps the old model and gives it a
+second home. The
 code in front of you was shaped by the tool it used (a key-value store, a Map
 keyed by a string), not by what the data means, and from the inside copying it
 feels like moving it.
@@ -238,10 +239,11 @@ Model it as if the code did not exist:
   the page names; a person's settings and drafts are theirs, synced (M-59093).
 
 When the graph cannot say what the model needs, that is the finding, never a
-reason to mint around it. The page_seen run needed a guest's spot kept on the
-page, but `sync` is set per component, not per entity, so the ordinary `seen`
-cannot sit on a page-only entity. That is a platform gap: file it and fix it in
-the package that owns it (M-41238).
+reason to mint around it. For instance, `sync` is declared per component
+(packages/client/README.md), so a word cannot stay on the page for some
+entities and sync for others; a model that needs that has found a platform
+gap. File it and fix it in the package that owns it (M-41238), and say in the
+model which gap it hit.
 
 Post the model on the task before building (each component `comp{prop, …}`,
 the entity it sits on, who writes and reads it, what replaces the code), so it
