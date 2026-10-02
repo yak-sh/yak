@@ -2,7 +2,7 @@
 // commits, where a data boundary is, and which version a rollback may land on.
 import { test, until } from '@yaks/testing'
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
-import { CallError } from '@yaks/tools'
+import { CallError, Interrupted } from '@yaks/tools'
 import { Refused } from './accounts.ts'
 import {
   boundaries,
@@ -241,8 +241,8 @@ test('stopping a platform command interrupts its whole process group', async () 
     })
     let started = Date.now()
     stopping.abort()
-    let error = await assertRejects(() => ran, CallError, 'was interrupted')
-    assertEquals(error.code, 'interrupted')
+    let error = await assertRejects(() => ran, Interrupted, 'was interrupted')
+    assertEquals(error.code, 'signal')
     assert(Date.now() - started < 2_000, 'the child process group stayed alive')
   } finally {
     Deno.removeSync(dir, { recursive: true })
@@ -273,10 +273,10 @@ test('a platform command interrupted directly is not a defect', async () => {
         ['eval', "Deno.kill(Deno.pid, 'SIGTERM')"],
         new AbortController().signal,
       ),
-    CallError,
+    Interrupted,
     'was interrupted',
   )
-  assertEquals(error.code, 'interrupted')
+  assertEquals(error.code, 'signal')
 })
 
 test('deployment history never overlaps Wrangler OAuth refreshes', async () => {

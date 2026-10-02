@@ -607,6 +607,8 @@ export let react = async (
     try {
       return await append([{
         ...patch,
+        ...g.vocab.comp('provisional') && !patch.provisional
+          ? { provisional: null } : {},
         entity: attempt.entity,
         $was: { attempt: { by: token(comp(attempt, 'attempt')?.by) } },
       }, ...added])
