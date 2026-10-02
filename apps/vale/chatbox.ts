@@ -357,7 +357,7 @@ export let chatbox = (
     })
     rows.push(...notices.map((n) => ({
       eid: n.eid,
-      name: 'Mossvale',
+      name: 'Only you',
       tint: '#dff5c8',
       text: n.text,
       markdown: n.markdown,
@@ -435,6 +435,7 @@ export let chatbox = (
     },
     /** who is looking: a person signed in speaks, a guest is asked to */
     me: (who: Me) => {
+      if (who.person != me?.person) notices = []
       me = who
       person.value = who.person || undefined
       opener.classList.toggle('Orb-off', !speaks())

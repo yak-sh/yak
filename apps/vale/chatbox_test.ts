@@ -1,5 +1,9 @@
 // Exercise chat's DOM boundary with the real local graphs and command grammar.
-import { assertEquals, assertStringIncludes } from '@std/assert'
+import {
+  assertEquals,
+  assertObjectMatch,
+  assertStringIncludes,
+} from '@std/assert'
 import { client, type Saved, stash } from '@yaks/client'
 import { draftEid, type Stash } from '@yaks/draft'
 import { test, tick, until } from '@yaks/testing'
@@ -137,6 +141,8 @@ let setup = (
   let store = memory()
   let vault = stash()
   let calls: Command[] = []
+  let writes: unknown[] = []
+  let plates: unknown[] = []
   let listings = 0
   let glass = document.createElement('div')
   let opener = document.createElement('button')
@@ -150,17 +156,22 @@ let setup = (
       return listing()
     },
     who: () => null,
+    keep: (row: unknown) => writes.push(row),
   } as unknown as Net
   let folk = {
     near: () => null,
     lines: () => [],
     who: () => null,
+    to: () => null,
   } as unknown as Village
+  let marks = {
+    plate: (...args: unknown[]) => plates.push(args),
+  } as unknown as ReturnType<typeof overlay>
   let chat = chatbox(
     glass,
     opener,
     net,
-    {} as ReturnType<typeof overlay>,
+    marks,
     folk,
     (cmd) => {
       calls.push(cmd)
@@ -210,6 +221,11 @@ let setup = (
     glass,
     opener,
     world,
+    net,
+    folk,
+    marks,
+    writes,
+    plates,
     store,
     savedDraft: async () =>
       (await vault.load()).find((row) =>
@@ -558,6 +574,62 @@ test('chat close drops an in-flight submission and completion result', async () 
     assertEquals(h.choices().length, 0)
   } finally {
     listed.resolve(tools)
+    await h.close()
+  }
+})
+
+test('command replies belong only to their caller, while speech goes to the shared chat', async () => {
+  let h = setup()
+  let glass = h.document.createElement('div')
+  let peer = chatbox(
+    glass,
+    h.document.createElement('button'),
+    h.net,
+    h.marks,
+    h.folk,
+    undefined,
+    { vault: stash(), stash: memory(), pace: 0 },
+  )
+  let frame = {
+    level: 'test-level',
+    body: { x: 0, z: 0 },
+    others: [],
+    givers: [],
+  } as unknown as Frame
+  try {
+    await h.ready()
+    h.draw()
+    peer.tick(frame, () => null)
+    h.press(h.document.body, 'Enter')
+    h.type('/where')
+    h.event(h.form, 'submit')
+    await until(() => h.draw().includes('Done.'), { label: 'private reply' })
+    peer.tick(frame, () => null)
+    assertEquals(glass.querySelector('.Chat_Log')!.textContent, '')
+    assertEquals(h.writes, [])
+    assertEquals(h.plates, [])
+
+    h.chat.me({
+      person: 'another-player',
+      name: 'Another player',
+      role: null,
+      reads: true,
+      writes: true,
+      signIn: null,
+    })
+    assertEquals(h.draw(), '')
+
+    h.chat.converse()
+    h.type('Hello everyone')
+    h.event(h.form, 'submit')
+    await until(() => h.draw().includes('Hello everyone'), { label: 'speech' })
+    assertEquals(h.writes.length, 1)
+    assertObjectMatch(h.writes[0] as Record<string, unknown>, {
+      chat: { level: 'test-level', player: 'hero' },
+      doc: { body: 'Hello everyone' },
+    })
+  } finally {
+    peer.close()
     await h.close()
   }
 })
