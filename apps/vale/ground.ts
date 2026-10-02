@@ -355,11 +355,10 @@ export let groundChunk = (p: Patch, o: Out, roof = o) => {
           axis,
           sign,
         ]
-        if (
-          h != NONE && nh < h &&
-          !(R(i, k) != NONE && F(i + si, k + sk) != NONE && !B(i, k))
-        ) {
+        if (h != NONE && nh < h) {
           let from = nh == NONE ? F(i + si, k + sk) : nh
+          // A cave clips the wall at its ceiling; it still has exposed rock
+          // above the neighbouring surface, even when both columns have caves.
           if (R(i, k) != NONE) from = Math.max(from, R(i, k))
           side(i, k, face, from, h)
         }
