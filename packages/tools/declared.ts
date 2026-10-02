@@ -57,7 +57,11 @@
 // (workers/yak/declared.ts). So a tool can do exactly what the person
 // calling it could do on the page, and never more.
 import { argsOf, type Bundle, type Graph, type Tool } from '@yaks/graph'
-import { type ToolDefinition, toolDefinition } from '@yaks/vocab/tools'
+import {
+  publicToolSchema,
+  type ToolDefinition,
+  toolDefinition,
+} from '@yaks/vocab/tools'
 import { CallError } from './args.ts'
 import type { Floor } from './access.ts'
 export { mayCall } from './access.ts'
@@ -79,7 +83,7 @@ export type ToolDef = {
   input: Record<string, Arg>
   required?: string[]
   /** The declared command-line grammar; absent means flags only. */
-  options?: Omit<NonNullable<ToolDefinition['options']>, 'forward'>
+  positional?: ToolDefinition['positional']
   /** Least caller authority for page and connector commands. */
   floor?: Floor
   /** Internal commands remain callable by scheduled graph work. */
@@ -119,7 +123,7 @@ let KEYS = [
   'revision',
   'input',
   'required',
-  'options',
+  'positional',
   'apply',
   'query',
   'worker',
@@ -277,20 +281,17 @@ export let parseTools = (
         }
       }
     }
-    let options: ToolDef['options']
-    if (entry.options != null) {
-      try {
-        if (object(entry.options) && 'forward' in entry.options) {
-          throw new Error('app commands declare positional, rest, and short')
-        }
-        options = toolDefinition({
-          description: String(entry.description ?? ''),
-          inputSchema: { type: 'object', properties: input },
-          options: entry.options,
-        }).options
-      } catch (error) {
-        wrong.push(`${name}.options: ${(error as Error).message}`)
-      }
+    let positional: ToolDef['positional']
+    try {
+      positional = toolDefinition({
+        description: String(entry.description ?? ''),
+        inputSchema: { type: 'object', properties: input },
+        ...(entry.positional !== undefined
+          ? { positional: entry.positional }
+          : {}),
+      }).positional
+    } catch (error) {
+      wrong.push(`${name}.grammar: ${(error as Error).message}`)
     }
     if (
       HOLE.test(
@@ -400,7 +401,7 @@ export let parseTools = (
         : {}),
       input,
       ...(required.length ? { required } : {}),
-      ...(options ? { options } : {}),
+      ...(positional ? { positional } : {}),
       ...(entry.apply != null ? { apply: entry.apply } : {}),
       ...(typeof entry.query == 'string' ? { query: entry.query } : {}),
       ...(typeof entry.worker == 'string' ? { worker: entry.worker } : {}),
@@ -444,11 +445,15 @@ let needed = (tool: ToolDef) => tool.required ?? []
 // the model and what a store's runner checks a call against (@yaks/tools).
 export let schemaOf = (
   tool: ToolDef,
-): { type: 'object'; properties: Record<string, Arg>; required: string[] } => ({
-  type: 'object' as const,
-  properties: tool.input,
-  required: needed(tool),
-})
+  options: { short?: boolean } = {},
+): { type: 'object'; properties: Record<string, Arg>; required: string[] } => {
+  let schema = {
+    type: 'object' as const,
+    properties: tool.input,
+    required: needed(tool),
+  }
+  return (options.short ? schema : publicToolSchema(schema)) as typeof schema
+}
 
 // One argument, as its schema's type says to read it. A model sends what it
 // sends — a number as a string, `"true"` for a flag — so the type it was
@@ -662,8 +667,8 @@ export let commands = (
     name,
     description: def.description,
     revision: def.revision,
-    inputSchema: schemaOf(def),
-    ...(def.options ? { options: def.options } : {}),
+    inputSchema: schemaOf(def, { short: true }),
+    ...(def.positional ? { positional: def.positional } : {}),
     readOnly: def.query != null || def.readOnly === true,
     run: (call: Bundle, graph: Graph) =>
       invoke(def, argsOf(call), {

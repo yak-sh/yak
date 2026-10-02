@@ -59,7 +59,7 @@ export async function slashCompletion(
         },
         additionalProperties: false,
       },
-      options: { positional: ['command'] },
+      positional: ['command'],
     },
   ]
   let offered = await complete(tools, prefix, lookup)

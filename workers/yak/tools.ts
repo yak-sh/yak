@@ -42,7 +42,8 @@ import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { staged } from './release.ts'
 import { isTestAddress } from './lib/bots.ts'
 import { fullFiles } from './usage.ts'
-import { parseTools, TOOLS_EXAMPLE, viewsOf } from '@yaks/tools/declared'
+import { TOOLS_EXAMPLE, viewsOf } from '@yaks/tools/declared'
+import { appTools } from './tool-grammar.ts'
 import type { Bundle } from '@yaks/graph'
 import { VERSION } from './seo.ts'
 import {
@@ -1136,7 +1137,7 @@ let published = async (
   // and no tool of its own still has a verb for putting one in and one for
   // finding it again, which is how the next agent discovers the app at all.
   let checked = withKinds(
-    parseTools(sent, words, vocabFile),
+    appTools(sent, words, vocabFile),
     manifest,
     `${space.slug}/${app.slug}`,
   )

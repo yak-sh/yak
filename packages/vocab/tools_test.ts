@@ -1,6 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import {
+  publicToolSchema,
   toolDefinition,
   toolsIn,
   validateToolInput,
@@ -106,7 +107,7 @@ test('a vocabulary carries tool declarations beside its components', async () =>
         description: 'List sessions.',
         input: { scope: { type: 'string' }, limit: { type: 'integer' } },
         required: ['scope'],
-        options: { positional: ['scope'] },
+        positional: ['scope'],
         readOnly: true,
         surfaces: ['cli'],
       },
@@ -146,13 +147,13 @@ test('a rest option names one of the tool inputs', () => {
   let tool = {
     description: 'Keep words together.',
     inputSchema: { type: 'object', properties: { body: { type: 'string' } } },
-    options: { rest: 'body' },
+    positional: ['body...'],
   }
-  assertEquals(toolDefinition(tool).options, { rest: 'body' })
+  assertEquals(toolDefinition(tool).positional, ['body...'])
   assertThrows(
-    () => toolDefinition({ ...tool, options: { rest: 'missing' } }),
+    () => toolDefinition({ ...tool, positional: ['missing...'] }),
     Error,
-    'Option references unknown property: missing',
+    'Positional references unknown property: missing',
   )
 })
 
@@ -183,7 +184,7 @@ test('a tool can forward raw arguments to a later schema', () => {
         tool: true,
         description: 'Run a command whose schema is fetched later.',
         input: { args: { type: 'array', items: { type: 'string' } } },
-        options: { forward: 'args' },
+        forward: 'args',
       },
     },
   }
@@ -192,13 +193,73 @@ test('a tool can forward raw arguments to a later schema', () => {
   let args = ['--count', '4', '@body.txt', '--', '--literal']
   assertEquals(validateToolInput(tool, { args }), { args })
   assertThrows(() => validateToolInput(tool, { args: ['--count', 4] }))
-  assertThrows(() =>
-    toolDefinition({ ...tool, options: { forward: 'missing' } })
-  )
+  assertThrows(() => toolDefinition({ ...tool, forward: 'missing' }))
   assertThrows(() =>
     toolDefinition({
       ...tool,
       inputSchema: { type: 'object', properties: { args: { type: 'object' } } },
     })
+  )
+})
+
+test('grammar validates rest order, named inputs and unique short flags', () => {
+  let tool = {
+    description: 'Write a note.',
+    positional: ['title', 'body...'],
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        body: { type: 'string', short: 'b' },
+        count: { type: 'number', short: 'n' },
+      },
+    },
+  }
+  assertEquals(toolDefinition(tool).positional, ['title', 'body...'])
+  for (
+    let positional of [['body...', 'title'], ['title', 'title...'], [
+      'count...',
+    ]]
+  ) {
+    assertThrows(() => toolDefinition({ ...tool, positional }))
+  }
+  for (let short of ['bb', 'b', 1]) {
+    assertThrows(() =>
+      toolDefinition({
+        ...tool,
+        inputSchema: {
+          ...tool.inputSchema,
+          properties: {
+            ...tool.inputSchema.properties,
+            count: { type: 'number', short },
+          },
+        },
+      })
+    )
+  }
+  assertThrows(() => toolDefinition({ ...tool, options: {} }))
+})
+
+test('published input schemas omit short flags without changing declarations', () => {
+  let schema = {
+    type: 'object',
+    properties: {
+      count: { type: 'integer', short: 'n', minimum: 1 },
+      data: { type: 'object', properties: { short: { type: 'string' } } },
+      blocked: false,
+    },
+  }
+  let published = publicToolSchema(schema)
+  assertEquals(published, {
+    type: 'object',
+    properties: {
+      count: { type: 'integer', minimum: 1 },
+      data: schema.properties.data,
+      blocked: false,
+    },
+  })
+  assertEquals(schema.properties.count.short, 'n')
+  assertThrows(() =>
+    validateToolInput({ inputSchema: published }, { count: 0 })
   )
 })

@@ -27,22 +27,19 @@ export type Grammar = {
   noun?: string
   verb?: string
   inputSchema?: Schema | Record<string, unknown>
-  options?: {
-    positional?: readonly string[]
-    short?: Readonly<Record<string, string>>
-    rest?: string
-    forward?: string
-  }
+  positional?: readonly string[]
+  /** Words retained verbatim for another schema to parse. */
+  forward?: string
 }
 
 /** An app's vocabulary declaration, in the same grammar as package tools.
- * Positionals, trailing words and short flags come only from its options. */
+ * Positionals and short flags come only from its declaration. */
 export let appGrammar = (
   name: string,
   tool: {
     input?: Record<string, Prop>
     required?: string[]
-    options?: Grammar['options']
+    positional?: Grammar['positional']
   },
 ): Grammar => ({
   name,
@@ -52,7 +49,7 @@ export let appGrammar = (
     required: tool.required ?? [],
     additionalProperties: false,
   },
-  options: tool.options,
+  positional: tool.positional,
 })
 
 /** The command line was wrong — nothing ran, and the exit code is 2. */
@@ -161,11 +158,16 @@ export let valueOf = (name: string, raw: string, p?: Prop): unknown => {
 let listed = (names: string[]): string =>
   names.length ? names.map((n) => `--${n}`).join(', ') : '(no arguments)'
 
+let restOf = (tool: Grammar): string | undefined => {
+  let last = tool.positional?.at(-1)
+  return last?.endsWith('...') ? last.slice(0, -3) : undefined
+}
+
 /**
  * The arguments a tool was given, parsed through its own input schema — the
- * one grammar there is. The bare words fill `options.positional` in order and
- * then `options.rest`; `--name value`, `--name=value` and a declared short
- * `-n` name a property, a boolean one is a flag, a repeated one builds its
+ * one grammar there is. The bare words fill `positional` in order; a final
+ * name suffixed `...` takes the remaining words; `--name value`, `--name=value`
+ * and a declared short `-n` name a property, a boolean one is a flag, a repeated one builds its
  * list, and `--` ends the options. Every value expands (`@path`, `-`) before
  * its type is consulted, and the whole object is then validated against the
  * schema, which is also what fills in its defaults.
@@ -179,8 +181,8 @@ export let argsFor = async (
   reads?: Reads,
 ): Promise<Record<string, unknown>> => {
   let props = ((tool.inputSchema ?? {}) as Schema).properties ?? {}
-  let rest = tool.options?.rest
-  let forward = tool.options?.forward
+  let rest = restOf(tool)
+  let forward = tool.forward
   let { pairs, spare } = scanned(tool, argv)
   let out: Record<string, unknown> = {}
   for (let [name, raw] of pairs) {
@@ -200,7 +202,10 @@ export let argsFor = async (
     let had = out[rest]
     let values = await Promise.all(spare.map((w) => inflate(w, reads)))
     out[rest] = typeOf(props[rest]) == 'array'
-      ? [...Array.isArray(had) ? had : [], ...values]
+      ? [
+        ...Array.isArray(had) ? had : [],
+        ...values.flatMap((v) => valueOf(rest, v, props[rest])),
+      ]
       : [had, ...values].filter((w) => w != undefined).join(' ')
   }
 
@@ -280,10 +285,14 @@ export let scanned = (
   awaiting: string | undefined
 } => {
   let props = ((tool.inputSchema ?? {}) as Schema).properties ?? {}
-  let rest = tool.options?.rest
-  let forward = tool.options?.forward
-  let positional = tool.options?.positional ?? []
-  let shorts = tool.options?.short ?? {}
+  let rest = restOf(tool)
+  let forward = tool.forward
+  let positional = (tool.positional ?? []).filter((n) => !n.endsWith('...'))
+  let shorts = Object.fromEntries(
+    Object.entries(props).flatMap(([name, p]) =>
+      p.short ? [[p.short, name]] : []
+    ),
+  )
   let pairs: [string, string | true][] = [], spare: string[] = []
   let given = new Set<string>(),
     at = 0,
@@ -291,7 +300,10 @@ export let scanned = (
     awaiting: string | undefined,
     pending: string | undefined
   let put = (name: string, raw: string | true) => {
-    if (partial && raw !== true && !raw.startsWith('@') && raw != '-') {
+    if (
+      partial && name != rest && raw !== true && !raw.startsWith('@') &&
+      raw != '-'
+    ) {
       let value = valueOf(name, raw, props[name])
       try {
         validateToolInput({
@@ -354,10 +366,28 @@ export let scanned = (
     }
     while (at < positional.length && given.has(positional[at])) at++
     if (at < positional.length) put(positional[at++], word)
+    else if (rest && !given.has(rest)) put(rest, word)
     else if (rest || forward) spare.push(word)
     else {throw new Usage(
         `${commandOf(tool)} takes ${listed(Object.keys(props))}, not ${word}`,
       )}
+  }
+  if (partial && rest && given.has(rest)) {
+    let raw = pairs.filter(([name]) => name == rest).at(-1)?.[1]
+    let words = [raw, ...spare].filter((w): w is string => typeof w == 'string')
+    if (!words.some((w) => w.startsWith('@') || w == '-')) {
+      let prop = props[rest]
+      let value = typeOf(prop) == 'array'
+        ? words.flatMap((w) => valueOf(rest, w, prop))
+        : words.join(' ')
+      try {
+        validateToolInput({
+          inputSchema: { type: 'object', properties: { [rest]: prop } },
+        }, { [rest]: value })
+      } catch (e) {
+        throw new Usage((e as Error).message)
+      }
+    }
   }
   while (at < positional.length && given.has(positional[at])) at++
   return {

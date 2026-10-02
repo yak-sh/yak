@@ -28,6 +28,7 @@ import { type Schema, type Tool, toolName } from '@yaks/graph'
 import type { Guide } from '@yaks/graph'
 import { type Search, tier } from '@yaks/graph/tools'
 import type { Vocab } from '@yaks/vocab'
+import { publicToolSchema } from '@yaks/vocab/tools'
 import { type BundleOpts, bundleSchema, type Depth } from './schema.ts'
 
 export type { Depth, Search }
@@ -70,10 +71,12 @@ export let shapeOf = (tool: Tool): Record<string, z.ZodTypeAny> =>
 export let inputSchemaOf = (
   tool: Tool,
 ): { type: 'object'; [key: string]: unknown } =>
-  (tool.inputSchema ?? zodToJsonSchema(z.object(shapeOf(tool)), {
-    target: 'jsonSchema7',
-    $refStrategy: 'none',
-  })) as { type: 'object'; [key: string]: unknown }
+  publicToolSchema(
+    tool.inputSchema ?? zodToJsonSchema(z.object(shapeOf(tool)), {
+      target: 'jsonSchema7',
+      $refStrategy: 'none',
+    }),
+  ) as { type: 'object'; [key: string]: unknown }
 
 /** What the generic tier needs in order to describe itself. */
 export type CoreOpts = {

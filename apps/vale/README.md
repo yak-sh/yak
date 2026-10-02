@@ -2,11 +2,14 @@
 
 Vale's chat slash commands use the shared browser-safe `@yaks/cli/grammar` for
 parsing (`argsFor`) and completion (`complete`). Command arguments accept both
-`--name=value` and `--name value`. `slash.ts` adapts the command listing into
-grammar descriptors, `slash-completion.ts` supplies chat replacement ranges, and
-`command-lookup.ts` supplies entity lookup. The completion UI uses
-`@yaks/ux/completion`, the same behavior reused by filter fields, with drafts
-kept by the host.
+`--name=value` and `--name value`. Commands declare `positional` beside `input`;
+a final `...` suffix takes the remaining words, and `short` on an input property
+declares its single-letter flag. `/spawn a large polar bear --at mossvale` fills
+`beast` with the description and `at` with the land. `slash.ts` adapts the
+command listing into grammar descriptors, `slash-completion.ts` supplies chat
+replacement ranges, and `command-lookup.ts` supplies entity lookup. The
+completion UI uses `@yaks/ux/completion`, the same behavior reused by filter
+fields, with drafts kept by the host.
 
 ## Deployment
 
@@ -65,11 +68,11 @@ yak admin apply yourname/vale @/tmp/vale-ability-update/update.json --admin --ch
 yak admin apply yourname/vale @/tmp/vale-ability-update/update.json --admin
 ```
 
-Then reread the rows and generate legacy scalar cleanup separately; `effects`
-is guarded and never changed by cleanup. A row without effects is untouched.
-The Store retains removed scalar properties until their stored values are
-cleared, so the cleanup is admitted by its retained schema. The next deploy
-drops those empty properties.
+Then reread the rows and generate legacy scalar cleanup separately; `effects` is
+guarded and never changed by cleanup. A row without effects is untouched. The
+Store retains removed scalar properties until their stored values are cleared,
+so the cleanup is admitted by its retained schema. The next deploy drops those
+empty properties.
 
 ```sh
 yak admin query yourname/vale '.ability_design' --admin --json > /tmp/vale-ability-update/live.json

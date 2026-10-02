@@ -417,7 +417,7 @@ test('admin tool forwards words to the fetched schema as the selected account', 
               },
               required: ['name'],
             },
-            _meta: { 'yak.sh/command': { options: { positional: ['name'] } } },
+            _meta: { 'yak.sh/command': { positional: ['name'] } },
           }],
         }
         : { content: [{ type: 'text', text: 'counted' }] }

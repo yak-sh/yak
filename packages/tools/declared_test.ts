@@ -65,32 +65,34 @@ test('a tool entry: a sentence, its arguments, and one act', () => {
 })
 
 test('a command keeps its declared grammar and never derives one', () => {
-  let options = { positional: ['who'], rest: 'body', short: { m: 'miles' } }
+  let positional = ['who', 'body...']
   let tool = parsed({
     log_run: {
       ...club.log_run,
-      input: { ...club.log_run.input, body: TEXT },
-      options,
+      input: {
+        ...club.log_run.input,
+        miles: { ...NUMBER, short: 'm' },
+        body: TEXT,
+      },
+      positional,
     },
   }).log_run
-  assertEquals(tool.options, options)
-  assertEquals(commands({ log_run: tool })[0].options, options)
-  assertEquals(parsed(club).log_run.options, undefined)
-  assertEquals(commands(parsed(club))[0].options, undefined)
+  assertEquals(tool.positional, positional)
+  assertEquals(commands({ log_run: tool })[0].positional, positional)
+  assertEquals(parsed(club).log_run.positional, undefined)
+  assertEquals(commands(parsed(club))[0].positional, undefined)
+  assertEquals(schemaOf(tool).properties.miles, NUMBER)
+  assertEquals(schemaOf(tool, { short: true }).properties.miles.short, 'm')
   for (
     let bad of [
       { positional: ['missing'] },
-      { rest: 'missing' },
-      { short: { m: 'missing' } },
-      { short: { many: 'miles' } },
+      { positional: ['who...', 'miles'] },
+      { input: { ...club.log_run.input, miles: { ...NUMBER, short: 'many' } } },
+      { options: { positional: ['who'] } },
       { forward: 'miles' },
     ]
   ) {
-    assertStringIncludes(
-      assertThrows(() => parsed({ log_run: { ...club.log_run, options: bad } }))
-        .message,
-      'log_run.options:',
-    )
+    assertThrows(() => parsed({ log_run: { ...club.log_run, ...bad } }))
   }
 })
 

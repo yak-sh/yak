@@ -28,14 +28,14 @@
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "who archived it \u2014 kept as history when that entity is deleted"
+          "description": "who archived it — kept as history when that entity is deleted"
         },
         "via": {
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "what the write was made through \u2014 the session or client it came in on"
+          "description": "what the write was made through — the session or client it came in on"
         }
       },
       "description": "Hidden from ordinary listings, without stopping execution or deleting history."
@@ -55,14 +55,14 @@
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "who found it broken \u2014 kept as history when that entity is deleted"
+          "description": "who found it broken — kept as history when that entity is deleted"
         },
         "via": {
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "what the write came in through \u2014 the session or client that made it"
+          "description": "what the write came in through — the session or client that made it"
         },
         "code": {
           "type": "string",
@@ -123,14 +123,14 @@
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "who finished it \u2014 kept as history when that entity is deleted"
+          "description": "who finished it — kept as history when that entity is deleted"
         },
         "via": {
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "what the write came in through \u2014 the session or client that made it"
+          "description": "what the write came in through — the session or client that made it"
         }
       },
       "description": "The work this entity records was finished: a task done. Who finished it is kept across later writes of the mark. Removing the mark reopens the work."
@@ -234,14 +234,14 @@
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "who gave up on it \u2014 kept as history when that entity is deleted"
+          "description": "who gave up on it — kept as history when that entity is deleted"
         },
         "via": {
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "what the write came in through \u2014 the session or client that made it"
+          "description": "what the write came in through — the session or client that made it"
         },
         "reason": {
           "type": "string",
@@ -381,7 +381,7 @@
           "description": "the digest of what was there, so a claim about it can still be checked"
         }
       },
-      "description": "one property of one entity, replaced \u2014 the hash proves what was there without keeping it"
+      "description": "one property of one entity, replaced — the hash proves what was there without keeping it"
     },
     "references": {
       "component": true,
@@ -406,14 +406,14 @@
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "who resolved it \u2014 kept as history when that entity is deleted"
+          "description": "who resolved it — kept as history when that entity is deleted"
         },
         "via": {
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "what the write was made through \u2014 the session or client it came in on, or the deploy that resolved it"
+          "description": "what the write was made through — the session or client it came in on, or the deploy that resolved it"
         }
       },
       "description": "The problem this entity records has stopped happening: a bug a deploy fixed, a comment thread that was settled, a conflict between two sessions that is over. It is not `completed`, which says a piece of work was finished; a problem can stop with no task done. Removing the mark says the problem is back."
@@ -524,12 +524,10 @@
         "target",
         "body"
       ],
-      "options": {
-        "positional": [
-          "target",
-          "body"
-        ]
-      }
+      "positional": [
+        "target",
+        "body"
+      ]
     },
     "admitted": {
       "component": true,
@@ -551,14 +549,14 @@
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "who wrote the mark \u2014 kept as history when that entity is deleted"
+          "description": "who wrote the mark — kept as history when that entity is deleted"
         },
         "via": {
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "what the write came in through \u2014 the session or client that made it"
+          "description": "what the write came in through — the session or client that made it"
         }
       },
       "description": "A child holds a place under the concurrency bound. Removing the mark gives up that place."
@@ -583,14 +581,14 @@
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "who wrote the mark \u2014 kept as history when that entity is deleted"
+          "description": "who wrote the mark — kept as history when that entity is deleted"
         },
         "via": {
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "what the write came in through \u2014 the session or client that made it"
+          "description": "what the write came in through — the session or client that made it"
         }
       },
       "description": "A child has stepped aside while it waits for its own children. Removing the mark queues it again."
@@ -617,7 +615,7 @@
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "what the write was made through \u2014 the session or client it came in on"
+          "description": "what the write was made through — the session or client it came in on"
         }
       },
       "description": "Awaiting its first successful answer or confirmation."
@@ -637,14 +635,14 @@
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "who found it broken \u2014 kept as history when that entity is deleted"
+          "description": "who found it broken — kept as history when that entity is deleted"
         },
         "via": {
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "what the write came in through \u2014 the session or client that made it"
+          "description": "what the write came in through — the session or client that made it"
         },
         "code": {
           "type": "string",

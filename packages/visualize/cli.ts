@@ -131,7 +131,7 @@ export let commands = [{
       },
     },
   },
-  options: { positional: ['what'] },
+  positional: ['what'],
   run: async (
     args: Record<string, unknown>,
     host: Pick<Host, 'config'>,

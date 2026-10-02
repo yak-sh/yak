@@ -41,7 +41,7 @@ import {
 /** A graph tool's arguments as JSON Schema, the way a model declaration takes
  * them. */
 export let parametersOf = (tool: GraphTool): Record<string, unknown> => {
-  if (tool.inputSchema) return tool.inputSchema
+  if (tool.inputSchema) return inputSchemaOf(tool)
   let { $schema: _, ...json } = inputSchemaOf(tool)
   return json
 }

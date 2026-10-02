@@ -229,15 +229,15 @@ rendering role, which needs no graph open.
 `@yaks/mail`, as `compose` reads it:
 
 ```ts
-import { docs } from "@yaks/mail/vocab";
-import { rules } from "@yaks/mail/rules";
-import { runs } from "@yaks/mail/tools";
+import { docs } from '@yaks/mail/vocab'
+import { rules } from '@yaks/mail/rules'
+import { runs } from '@yaks/mail/tools'
 
 // Its options are its entry in yak.json.
-let options = { domain: "books.example" };
-docs; // [mailDoc]
-rules({}, options); // [mailbox({ domain: 'books.example' })]
-Object.keys(runs({}, options)); // the tools it runs, by name
+let options = { domain: 'books.example' }
+docs // [mailDoc]
+rules({}, options) // [mailbox({ domain: 'books.example' })]
+Object.keys(runs({}, options)) // the tools it runs, by name
 ```
 
 ### A tool that acts on the machine
@@ -335,8 +335,8 @@ process over a graph runs it at a time, and a process takes only the leases of
 the roles it serves.
 
 ```ts ignore
-await host.duties(); // Run until the host shuts down.
-await host.duties(AbortSignal.abort()); // Run one pass, then release leases.
+await host.duties() // Run until the host shuts down.
+await host.duties(AbortSignal.abort()) // Run one pass, then release leases.
 ```
 
 `yak serve` serves web without a duty thread in its process. It checks live
@@ -386,25 +386,25 @@ exits.
 
 Import `@yaks/cli/grammar` for command parsing and completion in a browser or
 another host that does not need the CLI runtime. Both functions read the same
-`Grammar` descriptors: command names, `inputSchema`, and optional
-`options{positional, short, rest}`. A browser caller does not need a separate
-argument parser.
+`Grammar` descriptors: command names, `inputSchema`, optional `positional`, and
+`short` on input properties. A final positional suffixed `...` takes every
+remaining bare word. A browser caller does not need a separate argument parser.
 
 ```ts
-import { argsFor, complete, type Grammar } from "@yaks/cli/grammar";
+import { argsFor, complete, type Grammar } from '@yaks/cli/grammar'
 
 let greet: Grammar = {
-  name: "greet",
+  name: 'greet',
   inputSchema: {
-    type: "object",
-    properties: { name: { type: "string", enum: ["Ada", "Lin"] } },
-    required: ["name"],
+    type: 'object',
+    properties: { name: { type: 'string', enum: ['Ada', 'Lin'] } },
+    required: ['name'],
   },
-};
+}
 
-await argsFor(greet, ["--name=Ada"]); // { name: 'Ada' }
-await argsFor(greet, ["--name", "Ada"]); // { name: 'Ada' }
-await complete([greet], "greet --name A"); // ['Ada']
+await argsFor(greet, ['--name=Ada']) // { name: 'Ada' }
+await argsFor(greet, ['--name', 'Ada']) // { name: 'Ada' }
+await complete([greet], 'greet --name A') // ['Ada']
 ```
 
 `argsFor(tool, argv, reads?)` returns a promise of the typed, validated argument
@@ -504,11 +504,12 @@ The package exports eight entry points:
 
 Application commands use `yak command <name> [arguments] --app <app>`, or the
 short form `yak <app> <name> [arguments]`, as the `yak login` account. The
-command's `vocab.json` declares its positionals, rest argument and short flags
-in `options{positional, rest, short}`; without those declarations it takes only
-`--flags`. Its input schema decides each value's type; `@path` reads a file and
-`-` reads stdin. `--app` selects an app when several share a command name. A
-graph tool with the same command name takes precedence.
+command's `vocab.json` declares `positional` beside `input`, with a final `...`
+suffix for every remaining bare word, and `short` on the input property it
+shortens. Without `positional`, it takes only `--flags`. Its input schema
+decides each value's type; `@path` reads a file and `-` reads stdin. `--app`
+selects an app when several share a command name. A graph tool with the same
+command name takes precedence.
 
 `yak admin tool <name> [arguments]` uses the same grammar, acting as the account
 selected with `--as <account>`, `--owner` or `--admin`. It looks for a connector

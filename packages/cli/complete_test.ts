@@ -22,7 +22,7 @@ let tools: Grammar[] = [
         words: { type: 'string', search: true },
       },
     },
-    options: { positional: ['scope'] },
+    positional: ['scope'],
   },
   { noun: 'session', verb: 'show' },
   { name: 'apply' },
@@ -97,7 +97,7 @@ test('offered entity words round-trip through the grammar in both flag forms', a
       },
       required: ['beast'],
     },
-    options: { positional: ['beast'] },
+    positional: ['beast'],
   }
   for (
     let prefix of ['spawn b', 'spawn --beast b', 'spawn --beast=b', 'spawn "b']

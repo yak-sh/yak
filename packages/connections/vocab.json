@@ -44,7 +44,9 @@
         },
         "scopes": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "what a connection asks for when nothing narrower was needed"
         },
         "params": {
@@ -53,17 +55,26 @@
         },
         "auth": {
           "type": "string",
-          "enum": ["basic", "post"],
+          "enum": [
+            "basic",
+            "post"
+          ],
           "description": "how the client authenticates at the token endpoint (default basic)"
         },
         "refresh_encoding": {
           "type": "string",
-          "enum": ["form", "json"],
+          "enum": [
+            "form",
+            "json"
+          ],
           "description": "how the token endpoint receives refresh grants (default form)"
         },
         "answers": {
           "type": "string",
-          "enum": ["tokens", "key"],
+          "enum": [
+            "tokens",
+            "key"
+          ],
           "description": "what the token endpoint answers: tokens (the default), or an API key, as OpenRouter's PKCE exchange does"
         },
         "resource": {
@@ -84,11 +95,16 @@
         },
         "hosts": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "the API hosts a connection's credential may be sent to, and no others"
         },
         "signature": {
-          "type": ["string", "object"],
+          "type": [
+            "string",
+            "object"
+          ],
           "description": "how the service signs the webhooks it sends (@yaks/hook's Scheme)"
         },
         "testing": {
@@ -106,7 +122,9 @@
       "component": true,
       "type": "object",
       "kind": true,
-      "before": ["secret"],
+      "before": [
+        "secret"
+      ],
       "prefix": "C",
       "description": "one link between a space or a person and an outside service, through an integration. The entity is also the secret its credential is kept as: the graph holds the handle, the vault the key or the tokens",
       "properties": {
@@ -126,12 +144,18 @@
         },
         "scopes": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "what it was granted, or what the app that needs it asked for"
         },
         "status": {
           "type": "string",
-          "enum": ["needed", "connected", "broken"],
+          "enum": [
+            "needed",
+            "connected",
+            "broken"
+          ],
           "description": "needed: no credential yet; connected: one is kept; broken: the service refused it"
         }
       }
@@ -184,12 +208,16 @@
         },
         "scopes": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "what the app asks for; omit for the integration's own"
         },
         "hosts": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "for a custom key only: the hosts it may be sent to"
         },
         "each": {
@@ -205,8 +233,14 @@
           "description": "hand the app's code the key itself rather than a sentinel, for a key it must sign with; only for a pasted key"
         }
       },
-      "required": ["app", "owner", "integration"],
-      "options": { "positional": ["integration"] }
+      "required": [
+        "app",
+        "owner",
+        "integration"
+      ],
+      "positional": [
+        "integration"
+      ]
     },
     "connection_list": {
       "tool": true,
@@ -221,9 +255,13 @@
           "description": "the space or person, by id or name"
         }
       },
-      "required": ["owner"],
-      "options": { "positional": ["owner"] },
-      "readOnly": true
+      "required": [
+        "owner"
+      ],
+      "readOnly": true,
+      "positional": [
+        "owner"
+      ]
     },
     "integration_install": {
       "effect": true,

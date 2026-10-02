@@ -35,27 +35,23 @@
         },
         "body": {
           "type": "string",
-          "description": "the proposal itself, as markdown"
+          "description": "the proposal itself, as markdown",
+          "short": "b"
         },
         "project": {
           "type": "string",
           "ref": "project",
-          "description": "the project to file it under; pass its id or registered name"
+          "description": "the project to file it under; pass its id or registered name",
+          "short": "p"
         }
       },
       "required": [
         "title"
       ],
-      "options": {
-        "positional": [
-          "title",
-          "body"
-        ],
-        "short": {
-          "p": "project",
-          "b": "body"
-        }
-      }
+      "positional": [
+        "title",
+        "body"
+      ]
     },
     "design_decide": {
       "tool": true,
@@ -82,13 +78,11 @@
       "required": [
         "design"
       ],
-      "options": {
-        "positional": [
-          "design",
-          "verdict"
-        ]
-      },
-      "idempotent": true
+      "idempotent": true,
+      "positional": [
+        "design",
+        "verdict"
+      ]
     },
     "review": {
       "component": true,

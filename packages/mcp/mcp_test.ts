@@ -717,3 +717,43 @@ test('a tool lists its title in its annotations as well', async () => {
     await client.close()
   }
 })
+
+test('tool listings publish schemas and preserve old and new command grammar', async () => {
+  let client = await connect({
+    tools: [{
+      name: 'note_write',
+      noun: 'note',
+      verb: 'write',
+      description: 'Write a note.',
+      positional: ['title', 'body...'],
+      inputSchema: {
+        type: 'object',
+        properties: {
+          title: { type: 'string' },
+          body: { type: 'string', short: 'b' },
+        },
+      },
+      run: () => [],
+    }],
+  })
+  try {
+    let tool = (await client.listTools()).tools.find((t) =>
+      t.name == 'note_write'
+    )!
+    assertEquals(tool.inputSchema.properties, {
+      title: { type: 'string' },
+      body: { type: 'string' },
+    })
+    let grammar = {
+      noun: 'note',
+      verb: 'write',
+      positional: ['title', 'body...'],
+      input: { body: { short: 'b' } },
+      options: { positional: ['title'], rest: 'body', short: { b: 'body' } },
+    }
+    assertEquals(tool._meta?.['yak.sh/command'], grammar)
+    assertEquals(tool._meta?.['yaks.sh/command'], grammar)
+  } finally {
+    await client.close()
+  }
+})

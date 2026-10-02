@@ -15,9 +15,9 @@ let words = {
     note: {
       tool: true,
       description: 'Keep a note',
-      input: { title: { type: 'string' } },
+      input: { title: { type: 'string', short: 't' } },
       required: ['title'],
-      options: { rest: 'title', short: { t: 'title' } },
+      positional: ['title...'],
       apply: { entity: { eid: '$note' }, doc: { title: '$title' } },
     },
     owner_word: {
@@ -104,17 +104,18 @@ test('a page invokes declared commands as its owner; the command door refuses an
   let ownerTools = await commands(await as(ADA))
   assertEquals(ownerTools.note, {
     description: 'Keep a note',
-    input: { title: { type: 'string' } },
+    input: { title: { type: 'string', short: 't' } },
     required: ['title'],
-    options: { rest: 'title', short: { t: 'title' } },
+    positional: ['title...'],
+    options: { positional: [], rest: 'title', short: { t: 'title' } },
   })
   let offered = await listCommands({ env, dir, person: ADA })
   assertEquals(
-    offered.find((c) => c.name == 'note')?.options,
-    ownerTools.note.options,
+    offered.find((c) => c.name == 'note')?.positional,
+    ownerTools.note.positional,
   )
-  assertEquals(offered.find((c) => c.name == 'notes')?.options, undefined)
-  assertEquals(ownerTools.notes.options, undefined)
+  assertEquals(offered.find((c) => c.name == 'notes')?.positional, undefined)
+  assertEquals(ownerTools.notes.positional, undefined)
   assertEquals(
     ownerTools.owner_word?.description,
     'Ask the app owner for a word',

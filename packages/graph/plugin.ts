@@ -180,7 +180,8 @@ export type Tool<R = Bundle[]> = {
   inputSchema?: Record<string, unknown>
   /** Optional CLI presentation; ordinary long options use the property names
    * from the schema. */
-  options?: ToolDefinition['options']
+  positional?: ToolDefinition['positional']
+  forward?: ToolDefinition['forward']
   /** a short human-readable title */
   title?: string
   /** what it does and when to use it — the agent reads this */

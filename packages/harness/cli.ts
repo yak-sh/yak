@@ -19,7 +19,7 @@ let authorizeCommand: CliCommand = {
       name: { type: 'string', description: 'connection title or alias' },
     },
   },
-  options: { positional: ['name'] },
+  positional: ['name'],
   run: async (args, host, context) => {
     let name = typeof args.name == 'string' ? args.name : undefined
     let result = await authorizeCLI(authorize(hosted(host)), name)

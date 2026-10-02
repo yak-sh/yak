@@ -35,6 +35,7 @@ import { acting, based } from './apps.ts'
 import { commandAt, toolsOf } from './app-command.ts'
 export { toolsOf } from './app-command.ts'
 import { mayCall, schemaOf, type ToolDef } from '@yaks/tools/declared'
+import { legacyOptions } from '@yaks/vocab/tools'
 import { type Ctx, type Out, uiMeta, VIEW_MIME } from './tools.ts'
 import { refuse } from './tool.ts'
 import type { Who } from './session.ts'
@@ -186,7 +187,9 @@ export type Command = {
   /** its arguments, as JSON Schema — what `command` fills `args` with */
   input: unknown
   /** command-line grammar, only where the app explicitly declared it */
-  options?: ToolDef['options']
+  positional?: ToolDef['positional']
+  /** Spelling kept for previously published readers. */
+  options?: ReturnType<typeof legacyOptions>
   /** the page a host draws its answer in, where it named one */
   view?: string
 }
@@ -221,6 +224,11 @@ export let listCommands = async (
         tool.discoverable === false ||
         !mayCall(tool.floor, who.person, who.role)
       ) continue
+      let input = schemaOf(tool, { short: true })
+      let options = legacyOptions({
+        positional: tool.positional,
+        inputSchema: input,
+      })
       out.push({
         at: at(space, app),
         name,
@@ -233,8 +241,9 @@ export let listCommands = async (
         // a template carrying nulls can drop a component — so a writer takes
         // the destructive default rather than a promise this side cannot keep.
         readOnly: tool.query != null || tool.readOnly === true,
-        input: schemaOf(tool),
-        ...(tool.options ? { options: tool.options } : {}),
+        input,
+        ...(Object.keys(options).length ? { options } : {}),
+        ...(tool.positional ? { positional: tool.positional } : {}),
         // The page this command's answer draws itself in, where it named one
         // (T-32687). It is still a `ui://` resource of this door's — the
         // resource list is a caller's own and no directory snapshots it — so

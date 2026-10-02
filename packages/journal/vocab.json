@@ -86,21 +86,17 @@
         },
         "limit": {
           "type": "number",
-          "description": "return at most this many transactions, counting back from the newest"
+          "description": "return at most this many transactions, counting back from the newest",
+          "short": "n"
         }
       },
       "required": [
         "entity"
       ],
-      "options": {
-        "positional": [
-          "entity"
-        ],
-        "short": {
-          "n": "limit"
-        }
-      },
-      "readOnly": true
+      "readOnly": true,
+      "positional": [
+        "entity"
+      ]
     }
   }
 }

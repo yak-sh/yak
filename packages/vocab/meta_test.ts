@@ -44,7 +44,15 @@ test('a marked component is a component, an unmarked entry is nobody’s', () =>
 
 test('a tool declaration is checked as a tool', () => {
   assertEquals(ok(TOOL), [])
-  assertEquals(ok({ ...TOOL, readOnly: true, options: { rest: 'words' } }), [])
+  assertEquals(
+    ok({ ...TOOL, input: { scope: { type: 'string', short: 's' } } }),
+    [],
+  )
+  assert(ok({ ...TOOL, options: {} }).length)
+  assert(
+    ok({ ...TOOL, input: { scope: { type: 'string', short: 'many' } } }).length,
+  )
+  assertEquals(ok({ ...TOOL, readOnly: true, positional: ['scope...'] }), [])
   // A noun and a verb are two words a line says in either order; either one
   // alone is the whole word, and the entry's own name is the tool's.
   assertEquals(ok({ ...TOOL, verb: undefined }), [])

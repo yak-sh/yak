@@ -2,6 +2,7 @@
 // command and a page's /api/command supply the same caller-scoped store acts.
 import { invoke, mayCall, type ToolDef, type Tools } from '@yaks/tools/declared'
 import { CallError, display } from '@yaks/tools'
+import { legacyOptions } from '@yaks/vocab/tools'
 import { type Bundle } from '@yaks/graph'
 import {
   type App,
@@ -14,6 +15,7 @@ import { commandWorker, workerBreak } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { recall } from './lib/hops.ts'
 import type { Who } from './session.ts'
+import { readTools } from './tool-grammar.ts'
 
 type Acts = {
   apply: (
@@ -43,7 +45,7 @@ export let toolsOf = async (
   // Commands arrive with a release, as words do (reach.ts `vocabAt`).
   if (releaseOf(app) == '0') return {}
   let name = storeName(space, app)
-  return JSON.parse(
+  return readTools(
     await recall(name, '/tools', () => {
       return appStore(env.STORE, space, app).consume('/tools', async (r) => {
         if (r.ok) return await r.text()
@@ -67,13 +69,20 @@ export let commandsIn = async (
       .filter(([, tool]) =>
         tool.discoverable !== false && mayCall(tool.floor, who.person, who.role)
       )
-      .map(([name, tool]) => [name, {
-        description: tool.description,
-        input: tool.input,
-        required: tool.required,
-        ...(tool.options ? { options: tool.options } : {}),
-        model: tool.model,
-      }]),
+      .map(([name, tool]) => {
+        let options = legacyOptions({
+          positional: tool.positional,
+          inputSchema: { properties: tool.input },
+        })
+        return [name, {
+          description: tool.description,
+          input: tool.input,
+          required: tool.required,
+          ...(tool.positional ? { positional: tool.positional } : {}),
+          ...(Object.keys(options).length ? { options } : {}),
+          model: tool.model,
+        }]
+      }),
   )
 
 export let commandAt = async (

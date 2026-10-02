@@ -11,6 +11,7 @@
  * enough to decide how the argument on the command line becomes a value. */
 export type Prop = {
   type?: string | string[]
+  short?: string
   description?: string
   enum?: unknown[]
   items?: Prop
@@ -39,10 +40,8 @@ export type Schema = {
  * fill which properties, and which single letters it accepts. */
 export type Spelling = {
   positional?: readonly string[]
-  short?: Readonly<Record<string, string>>
-  rest?: string
-  /** Keep unmatched words verbatim for a schema fetched by the command. */
   forward?: string
+  input?: Record<string, { short?: string }>
 }
 
 /** A tool as an MCP server lists it. */
@@ -70,11 +69,57 @@ export let COMMAND = 'yak.sh/command'
  */
 export let spelling = (
   t: Listed,
-): { noun?: string; verb?: string; options?: Spelling } => {
-  let said = t._meta?.[COMMAND]
-  return said && typeof said == 'object'
-    ? said as { noun?: string; verb?: string; options?: Spelling }
-    : {}
+): {
+  noun?: string
+  verb?: string
+  positional?: readonly string[]
+  forward?: string
+  inputSchema?: Schema
+} => {
+  let said = t._meta?.[COMMAND] as
+    | (Spelling & {
+      noun?: string
+      verb?: string
+      // Listings from a server running the previous vocabulary format.
+      options?: {
+        positional?: readonly string[]
+        rest?: string
+        forward?: string
+        short?: Record<string, string>
+      }
+    })
+    | undefined
+  let positional = said?.positional
+  if (!positional && said?.options) {
+    let { positional: names = [], rest } = said.options
+    positional = [
+      ...names.filter((n) => n != rest),
+      ...rest ? [rest + '...'] : [],
+    ]
+  }
+  let inputSchema = t.inputSchema
+  let hints = said?.input ?? Object.fromEntries(
+    Object.entries(said?.options?.short ?? {}).map((
+      [short, name],
+    ) => [name, { short }]),
+  )
+  if (inputSchema?.properties && Object.keys(hints).length) {
+    inputSchema = {
+      ...inputSchema,
+      properties: Object.fromEntries(
+        Object.entries(inputSchema.properties).map((
+          [name, p],
+        ) => [name, { ...p, ...hints[name] }]),
+      ),
+    }
+  }
+  return {
+    noun: said?.noun,
+    verb: said?.verb,
+    positional,
+    forward: said?.forward ?? said?.options?.forward,
+    inputSchema,
+  }
 }
 
 /** The short label a listing shows beside a tool's name: its title, or the

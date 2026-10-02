@@ -27,7 +27,7 @@
 // is asked last and only when nothing else matched.
 
 import type { Tool, ToolId } from '@yaks/graph'
-import { commandFor, argsFor, type Grammar, type Reads, Usage } from './args.ts'
+import { argsFor, commandFor, type Grammar, type Reads, Usage } from './args.ts'
 import { lineOf, safe, sketch, toolHelp } from './show.ts'
 import { commandOf, titleOf } from './tool.ts'
 import { timed } from '@yaks/api'
@@ -527,7 +527,7 @@ export let helpTool = (opts: Opts = {}): Command => ({
     additionalProperties: false,
     properties: { words: { type: 'array', items: { type: 'string' } } },
   },
-  options: { rest: 'words' },
+  positional: ['words...'],
   readOnly: true,
   run: async (args, c) => {
     let words = (args.words ?? []) as string[]

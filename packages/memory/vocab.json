@@ -135,11 +135,9 @@
         "name",
         "body"
       ],
-      "options": {
-        "positional": [
-          "name"
-        ]
-      }
+      "positional": [
+        "name"
+      ]
     },
     "topic_find": {
       "tool": true,
@@ -159,18 +157,14 @@
         },
         "limit": {
           "type": "number",
-          "description": "return at most this many (default 12)"
+          "description": "return at most this many (default 12)",
+          "short": "n"
         }
       },
-      "options": {
-        "positional": [
-          "said"
-        ],
-        "short": {
-          "n": "limit"
-        }
-      },
-      "readOnly": true
+      "readOnly": true,
+      "positional": [
+        "said"
+      ]
     },
     "memory_save": {
       "tool": true,
@@ -194,12 +188,14 @@
         },
         "context": {
           "type": "string",
-          "description": "what was being discussed, in two lines; never a restatement of what was said"
+          "description": "what was being discussed, in two lines; never a restatement of what was said",
+          "short": "c"
         },
         "scope": {
           "type": "string",
           "ref": "project",
-          "description": "project id or name; omit on creation for a memory that applies everywhere, or on a patch to keep the current scope"
+          "description": "project id or name; omit on creation for a memory that applies everywhere, or on a patch to keep the current scope",
+          "short": "s"
         },
         "feedback": {
           "type": "string",
@@ -219,15 +215,9 @@
           "description": "the string at $was.doc.body on the memory returned by memory_recall; required when replacing existing words"
         }
       },
-      "options": {
-        "positional": [
-          "said"
-        ],
-        "short": {
-          "s": "scope",
-          "c": "context"
-        }
-      }
+      "positional": [
+        "said"
+      ]
     },
     "memory_recall": {
       "tool": true,
@@ -255,7 +245,8 @@
         "scope": {
           "type": "string",
           "ref": "project",
-          "description": "project id or registered name; return only memories filed under it"
+          "description": "project id or registered name; return only memories filed under it",
+          "short": "s"
         },
         "feedback": {
           "type": "boolean",
@@ -263,19 +254,14 @@
         },
         "limit": {
           "type": "number",
-          "description": "return at most this many (default 8)"
+          "description": "return at most this many (default 8)",
+          "short": "n"
         }
       },
-      "options": {
-        "positional": [
-          "said"
-        ],
-        "short": {
-          "n": "limit",
-          "s": "scope"
-        }
-      },
-      "readOnly": true
+      "readOnly": true,
+      "positional": [
+        "said"
+      ]
     },
     "memory_source": {
       "tool": true,
@@ -298,12 +284,10 @@
         "said",
         "by"
       ],
-      "options": {
-        "positional": [
-          "said"
-        ]
-      },
-      "readOnly": true
+      "readOnly": true,
+      "positional": [
+        "said"
+      ]
     },
     "memory_around": {
       "tool": true,
@@ -319,26 +303,22 @@
         },
         "before": {
           "type": "number",
-          "description": "how many entries ahead of it (default 3)"
+          "description": "how many entries ahead of it (default 3)",
+          "short": "B"
         },
         "after": {
           "type": "number",
-          "description": "how many entries behind it (default 3)"
+          "description": "how many entries behind it (default 3)",
+          "short": "A"
         }
       },
       "required": [
         "id"
       ],
-      "options": {
-        "positional": [
-          "id"
-        ],
-        "short": {
-          "B": "before",
-          "A": "after"
-        }
-      },
-      "readOnly": true
+      "readOnly": true,
+      "positional": [
+        "id"
+      ]
     },
     "memory_target": {
       "tool": true,
@@ -356,12 +336,10 @@
       "required": [
         "id"
       ],
-      "options": {
-        "positional": [
-          "id"
-        ]
-      },
-      "readOnly": true
+      "readOnly": true,
+      "positional": [
+        "id"
+      ]
     },
     "memory_thread": {
       "tool": true,
@@ -379,12 +357,10 @@
       "required": [
         "id"
       ],
-      "options": {
-        "positional": [
-          "id"
-        ]
-      },
-      "readOnly": true
+      "readOnly": true,
+      "positional": [
+        "id"
+      ]
     },
     "memory_session": {
       "tool": true,
@@ -402,12 +378,10 @@
       "required": [
         "id"
       ],
-      "options": {
-        "positional": [
-          "id"
-        ]
-      },
-      "readOnly": true
+      "readOnly": true,
+      "positional": [
+        "id"
+      ]
     }
   }
 }

@@ -47,15 +47,14 @@ export let sketch = (t: Grammar): string => {
   let schema = (t.inputSchema ?? {}) as Schema
   let props = schema.properties ?? {}
   let need = new Set(schema.required ?? [])
-  let positional = t.options?.positional ?? []
-  let rest = t.options?.rest
-  let forward = t.options?.forward
+  let positional = t.positional ?? []
+  let names = positional.map((n) => n.replace(/\.\.\.$/, ''))
+  let forward = t.forward
   let named = Object.keys(props).filter(
-    (n) => !positional.includes(n) && n != rest && n != forward,
+    (n) => !names.includes(n) && n != forward,
   )
   return [
-    ...positional.map((n) => need.has(n) ? `<${n}>` : `[${n}]`),
-    ...(rest ? ['[word ...]'] : []),
+    ...positional.map((n, i) => need.has(names[i]) ? `<${n}>` : `[${n}]`),
     ...(forward ? ['[arguments ...]'] : []),
     ...named.map((n) => slot(n, props[n], need.has(n))),
   ].join(' ')

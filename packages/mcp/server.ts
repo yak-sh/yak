@@ -1,4 +1,5 @@
 import { mint, type NamedTool, namedTool, offered, toolName } from '@yaks/graph'
+import { legacyOptions } from '@yaks/vocab/tools'
 import { fromJsonSchema, ProtocolError } from '@modelcontextprotocol/server'
 // The server: a graph, its tools, and the MCP protocol implementation that
 // lists and calls them. Everything transport-specific lives in ./mount.ts and
@@ -295,7 +296,7 @@ export let COMMAND = 'yak.sh/command'
 // a release carries the CLI that reads COMMAND. T-37984 drops it.
 let LEGACY_COMMAND = 'yaks.sh/command'
 
-// A tool's `noun`, `verb` and `options` — the parts a CLI needs to build a
+// A tool's `noun`, `verb` and positional inputs — the parts a CLI needs to build a
 // command out of it. MCP gives a tool one flat `name` and nowhere to put any
 // of them, so they are sent in `_meta`, which is what `_meta` is for, and a
 // CLI reassembles `yak task new 'ship it'` from the same declaration the
@@ -304,10 +305,24 @@ let LEGACY_COMMAND = 'yaks.sh/command'
 // command; a tool that declared neither sends nothing here and is listed under
 // its own name.
 let spelling = (tool: NamedTool): Record<string, unknown> | undefined => {
+  let props = tool.inputSchema?.properties as
+    | Record<string, { short?: string }>
+    | undefined
+  let input = Object.fromEntries(
+    Object.entries(props ?? {}).filter(([, p]) =>
+      p && typeof p == 'object' && p.short
+    )
+      .map(([name, p]) => [name, { short: p.short }]),
+  )
+  // Older published CLIs read options; keep their spelling at this boundary.
+  let options = legacyOptions(tool)
   let said = {
     ...(tool.noun ? { noun: tool.noun } : {}),
     ...(tool.verb ? { verb: tool.verb } : {}),
-    ...(tool.options ? { options: tool.options } : {}),
+    ...(tool.positional ? { positional: tool.positional } : {}),
+    ...(tool.forward ? { forward: tool.forward } : {}),
+    ...(Object.keys(input).length ? { input } : {}),
+    ...(Object.keys(options).length ? { options } : {}),
   }
   return Object.keys(said).length
     ? { [COMMAND]: said, [LEGACY_COMMAND]: said }

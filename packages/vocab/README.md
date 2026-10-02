@@ -265,10 +265,10 @@ into checking the whole structure. A query filter on one is refused for now.
 An app can set `validate: true` on a property to have the hosted Store check its
 complete JSON Schema, including nested items and numeric bounds, before each
 write. The Store also checks the component's `required` list for these rows.
-`v.check` remains a lightweight type check for other graphs.
-An opted-in array may also declare `tree: {key: 'name', parent: 'parent'}`:
-nodes have unique string keys, and any parent must appear earlier in the array.
-This bounds ancestry and refuses missing parents or cycles before installation.
+`v.check` remains a lightweight type check for other graphs. An opted-in array
+may also declare `tree: {key: 'name', parent: 'parent'}`: nodes have unique
+string keys, and any parent must appear earlier in the array. This bounds
+ancestry and refuses missing parents or cycles before installation.
 
 A component can declare a numeric `constraints` entry with `name`, `value`,
 `maximum` and `message`. `value` is a finite weighted sum:
@@ -484,9 +484,10 @@ const definition = toolDefinition({
   inputSchema: {
     type: 'object',
     additionalProperties: false,
-    properties: { limit: { type: 'integer', minimum: 1, default: 20 } },
+    properties: {
+      limit: { type: 'integer', minimum: 1, default: 20, short: 'n' },
+    },
   },
-  options: { short: { n: 'limit' } },
 })
 const tool: Tool = { ...definition, run: () => [] }
 ```
@@ -508,10 +509,11 @@ either order (`session list`, `list session`) and sent to the server as
 `session_list`; one word alone is the whole command and the whole transport
 name, so `"noun": "history"` is `yak history T-5` on the command line and
 `history` over `/mcp`. The entry's own name is the tool's name either way, so a
-tool that already has a name (`land`) may declare neither. `options.positional`
-orders input property names; `options.short` maps single letter flags to
-property names. Long options derive from property names. Handlers are functions
-that receive the graph's `Tool` context. The legacy `input` declaration remains
+tool that already has a name (`land`) may declare neither. `positional` beside
+`input` orders input property names; a final name suffixed `...` takes all
+remaining bare words. `short` on an input property declares its single-letter
+flag. Long options derive from property names. Handlers are functions that
+receive the graph's `Tool` context. The legacy `input` declaration remains
 supported by existing adapters, but cannot be combined with `inputSchema` on the
 same tool. `outputSchema` optionally declares the result schema; tools without
 it have no result validation through this helper.

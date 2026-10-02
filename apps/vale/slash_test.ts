@@ -29,7 +29,7 @@ let tools: Tools = {
   mood: {
     input: { state: { type: 'string', enum: ['bold', 'busy', 'calm'] } },
     required: ['state'],
-    options: { positional: ['state'], rest: 'state' },
+    positional: ['state...'],
   },
   think: { input: {}, model: true },
 }
@@ -268,12 +268,12 @@ test('slash descriptions take the rest declared by the command', async () => {
     summon: {
       input: { text: { type: 'string' }, at: { type: 'string' } },
       required: ['text'],
-      options: { positional: ['text'], rest: 'text' },
+      positional: ['text...'],
     },
     note: {
       input: { text: { type: 'string' } },
       required: ['text'],
-      options: { positional: ['text'], rest: 'text' },
+      positional: ['text...'],
     },
   }
   for (let flag of ['--at square', '--at=square']) {
@@ -306,7 +306,7 @@ test('spawn takes one unquoted description and at remains flag-only', async () =
   }
 })
 
-test('slash positionals and short flags come only from declared options', async () => {
+test('slash positionals and short flags come only from the declaration', async () => {
   let tools: Tools = {
     flag: {
       input: { text: { type: 'string' } },
@@ -314,11 +314,11 @@ test('slash positionals and short flags come only from declared options', async 
     },
     say: {
       input: {
-        at: { type: 'string' },
+        at: { type: 'string', short: 'a' },
         text: { type: 'string' },
       },
       required: ['at', 'text'],
-      options: { positional: ['text'], rest: 'text', short: { a: 'at' } },
+      positional: ['text...'],
     },
   }
   assertEquals(await parse('/flag remember these words', tools), {

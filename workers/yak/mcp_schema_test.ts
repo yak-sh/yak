@@ -45,6 +45,7 @@ test('an app declares its own commands, and command runs them', async () => {
               description: 'Log a run for the club leaderboard',
               input: { who: txt, miles: num },
               required: ['who', 'miles'],
+              options: { positional: ['who', 'miles'], short: { m: 'miles' } },
               apply: {
                 entity: { eid: '$run' },
                 jog: { who: '$who', miles: '$miles' },
@@ -93,6 +94,11 @@ test('an app declares its own commands, and command runs them', async () => {
     assertStringIncludes(log.description, `${space}.yaks.app/runs/`)
     // Its arguments, as the JSON Schema `command` fills `args` by.
     assertEquals(argsIn(log), { all: ['who', 'miles'], need: ['who', 'miles'] })
+    assertEquals(log.positional, ['who', 'miles'])
+    assertEquals(
+      (log.input as { properties: { miles: unknown } }).properties.miles,
+      { ...num, short: 'm' },
+    )
     assert(!log.readOnly, 'logging a run is a write')
 
     // The app's own MCP App view (T-32687): the command names the page, the

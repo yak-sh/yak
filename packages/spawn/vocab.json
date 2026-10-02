@@ -16,12 +16,14 @@
         "provider": {
           "type": "string",
           "ref": "provider",
-          "description": "id or registered name of the provider (agent runner); it must use command-line transport"
+          "description": "id or registered name of the provider (agent runner); it must use command-line transport",
+          "short": "p"
         },
         "model": {
           "type": "string",
           "ref": "model",
-          "description": "id or registered name of the model the run uses; optional"
+          "description": "id or registered name of the model the run uses; optional",
+          "short": "m"
         },
         "persona": {
           "type": "string",
@@ -49,15 +51,9 @@
         "task",
         "provider"
       ],
-      "options": {
-        "positional": [
-          "task"
-        ],
-        "short": {
-          "p": "provider",
-          "m": "model"
-        }
-      }
+      "positional": [
+        "task"
+      ]
     },
     "session_stop": {
       "tool": true,
@@ -72,11 +68,13 @@
           "description": "the managed session to stop; pass its id or registered name"
         }
       },
-      "required": ["session"],
-      "options": {
-        "positional": ["session"]
-      },
-      "idempotent": true
+      "required": [
+        "session"
+      ],
+      "idempotent": true,
+      "positional": [
+        "session"
+      ]
     },
     "session_wait": {
       "tool": true,
@@ -98,13 +96,11 @@
       "required": [
         "session"
       ],
-      "options": {
-        "positional": [
-          "session"
-        ]
-      },
       "readOnly": true,
-      "idempotent": true
+      "idempotent": true,
+      "positional": [
+        "session"
+      ]
     },
     "session_peek": {
       "tool": true,
@@ -120,31 +116,31 @@
         },
         "lines": {
           "type": "number",
-          "description": "how many entries to return, newest last (default 40)"
+          "description": "how many entries to return, newest last (default 40)",
+          "short": "n"
         }
       },
       "required": [
         "session"
       ],
-      "options": {
-        "positional": [
-          "session"
-        ],
-        "short": {
-          "n": "lines"
-        }
-      },
       "readOnly": true,
-      "idempotent": true
+      "idempotent": true,
+      "positional": [
+        "session"
+      ]
     },
     "spawn_start": {
       "effect": true,
-      "created": ["using"],
+      "created": [
+        "using"
+      ],
       "description": "start the run a session asks for: a `using` written on an entry names the provider, the model and the effort"
     },
     "spawn_stop": {
       "effect": true,
-      "created": ["stop"],
+      "created": [
+        "stop"
+      ],
       "description": "kill the run a `stop` on the session running it names"
     }
   }

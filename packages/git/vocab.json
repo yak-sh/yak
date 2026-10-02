@@ -217,7 +217,10 @@
       "component": true,
       "type": "object",
       "kind": true,
-      "identity": ["path", "repository"],
+      "identity": [
+        "path",
+        "repository"
+      ],
       "properties": {
         "path": {
           "type": "string",
@@ -289,12 +292,10 @@
           "description": "only citations of this file path, as Git spells it"
         }
       },
-      "options": {
-        "positional": [
-          "of"
-        ]
-      },
-      "readOnly": true
+      "readOnly": true,
+      "positional": [
+        "of"
+      ]
     },
     "cites_verify": {
       "tool": true,
@@ -314,11 +315,9 @@
           "description": "a record, meaning every citation it makes"
         }
       },
-      "options": {
-        "positional": [
-          "cite"
-        ]
-      }
+      "positional": [
+        "cite"
+      ]
     },
     "land": {
       "tool": true,

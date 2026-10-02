@@ -92,7 +92,7 @@ test('a repeated option builds the list its property asked for', async () => {
     files: ['a', 'b'],
   })
   // Where the list also takes the bare words, they join it.
-  let listing = { ...tool, options: { positional: ['app'], rest: 'files' } }
+  let listing = { ...tool, positional: ['app', 'files...'] }
   assertEquals(
     await argsFor(listing, ['r', '--files', 'a', 'b', 'c'], reads),
     { app: 'r', files: ['a', 'b', 'c'] },
@@ -158,9 +158,9 @@ test('unknown options stay refused without a declared object rest', async () => 
   for (
     let grammar of [
       tool,
-      { ...tool, options: { rest: 'files' } },
-      { ...tool, options: { rest: 'path' } },
-      { name: 'empty', options: { rest: 'args' } },
+      { ...tool, positional: ['files...'] },
+      { ...tool, positional: ['path...'] },
+      { name: 'empty', positional: ['args...'] },
     ]
   ) {
     for (let words of [['--unknown=1'], ['--unknown', '1']]) {
@@ -171,7 +171,7 @@ test('unknown options stay refused without a declared object rest', async () => 
       )
     }
   }
-  let listing = { ...tool, options: { positional: ['app'], rest: 'files' } }
+  let listing = { ...tool, positional: ['app', 'files...'] }
   assertEquals(
     await argsFor(listing, ['r', '--', '--literal=1', '--other', '2']),
     {
@@ -191,7 +191,7 @@ test('a trailing text input takes remaining words around either flag form', asyn
         at: { type: 'string' },
       },
     },
-    options: { positional: ['text'], rest: 'text' },
+    positional: ['text...'],
   }
   for (let flags of [['--at', 'square'], ['--at=square']]) {
     assertEquals(
@@ -208,29 +208,25 @@ test('trailing text inflates each remaining word before joining', async () => {
   let grammar = {
     name: 'note',
     inputSchema: { type: 'object', properties: { text: { type: 'string' } } },
-    options: { positional: ['text'], rest: 'text' },
+    positional: ['text...'],
   }
   assertEquals(await argsFor(grammar, ['begin', '@letter', '-', '@-'], reads), {
     text: 'begin <letter> from stdin from stdin',
   })
 })
 
-test('an app uses only the positional rest and short options it declared', async () => {
+test('an app uses only its declared positionals and property shorts', async () => {
   let declaration = {
     input: {
       person: { type: 'string' },
       text: { type: 'string' },
-      limit: { type: 'number' },
+      limit: { type: 'number', short: 'n' },
     },
     required: ['person', 'text'],
   }
   let declared = appGrammar('tell', {
     ...declaration,
-    options: {
-      positional: ['person', 'text'],
-      rest: 'text',
-      short: { n: 'limit' },
-    },
+    positional: ['person', 'text...'],
   })
   assertEquals(await argsFor(declared, ['matt', 'hello', '-n', '2', 'there']), {
     person: 'matt',
@@ -260,7 +256,8 @@ test('a forwarding grammar keeps remote words intact while taking its selector',
         args: { type: 'array', items: { type: 'string' } },
       },
     },
-    options: { positional: ['name'], forward: 'args' },
+    positional: ['name'],
+    forward: 'args',
   }
   let words = [
     'add',
@@ -290,4 +287,15 @@ test('a forwarding grammar keeps remote words intact while taking its selector',
     )
     assertEquals(expanded, 0)
   }
+})
+
+test('rest array words follow the declared item type', async () => {
+  let grammar = appGrammar('total', {
+    positional: ['values...'],
+    input: { values: { type: 'array', items: { type: 'integer' } } },
+  })
+  assertEquals(await argsFor(grammar, ['1', '2', '--values=3', '4']), {
+    values: [1, 3, 2, 4],
+  })
+  await assertRejects(() => argsFor(grammar, ['1', 'nope']), Usage)
 })

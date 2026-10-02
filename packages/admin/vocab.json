@@ -11,12 +11,18 @@
       "title": "Show the yaks.app account this box acts as",
       "description": "The yaks.app account this box acts as, the kind it is (test, owner or admin), the person its session names, when that session expires, and every space it can reach with its role in each.",
       "input": {
-        "as": { "type": "string", "description": "act as this account" },
+        "as": {
+          "type": "string",
+          "description": "act as this account"
+        },
         "admin": {
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as the owner" }
+        "owner": {
+          "type": "boolean",
+          "description": "as the owner"
+        }
       },
       "readOnly": true,
       "openWorld": true
@@ -42,32 +48,51 @@
           "description": "the local part of the address"
         }
       },
-      "options": { "positional": ["name"] },
-      "openWorld": true
+      "openWorld": true,
+      "positional": [
+        "name"
+      ]
     },
     "admin_login": {
       "tool": true,
-      "surfaces": ["cli"],
+      "surfaces": [
+        "cli"
+      ],
       "noun": "admin",
       "verb": "login",
       "title": "Sign in as a yaks.app account",
       "description": "Sign this box in as the yaks.app account at an address. A @bot.yak.sh code is read from the letter in this graph; anyone else’s is typed, or given with --code. Signing in as anybody but a test account is a named act: --owner for the owner’s, --admin for admin@bot.yak.sh.\n\n  yak admin login you@example.com --owner\n  yak admin login admin@bot.yak.sh --admin",
       "input": {
-        "address": { "type": "string", "description": "the account’s address" },
-        "code": { "type": "string", "description": "the six-digit code" },
+        "address": {
+          "type": "string",
+          "description": "the account’s address"
+        },
+        "code": {
+          "type": "string",
+          "description": "the six-digit code"
+        },
         "admin": {
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as the owner" }
+        "owner": {
+          "type": "boolean",
+          "description": "as the owner"
+        }
       },
-      "required": ["address"],
-      "options": { "positional": ["address"] },
-      "openWorld": true
+      "required": [
+        "address"
+      ],
+      "openWorld": true,
+      "positional": [
+        "address"
+      ]
     },
     "admin_accept": {
       "tool": true,
-      "surfaces": ["cli"],
+      "surfaces": [
+        "cli"
+      ],
       "noun": "admin",
       "verb": "accept",
       "title": "Accept an invitation addressed to this account",
@@ -77,16 +102,26 @@
           "type": "string",
           "description": "the invitation letter’s id"
         },
-        "as": { "type": "string", "description": "act as this account" },
+        "as": {
+          "type": "string",
+          "description": "act as this account"
+        },
         "admin": {
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as the owner" }
+        "owner": {
+          "type": "boolean",
+          "description": "as the owner"
+        }
       },
-      "required": ["letter"],
-      "options": { "positional": ["letter"] },
-      "openWorld": true
+      "required": [
+        "letter"
+      ],
+      "openWorld": true,
+      "positional": [
+        "letter"
+      ]
     },
     "admin_use": {
       "tool": true,
@@ -100,8 +135,12 @@
           "description": "the account, by address or local part"
         }
       },
-      "required": ["account"],
-      "options": { "positional": ["account"] }
+      "required": [
+        "account"
+      ],
+      "positional": [
+        "account"
+      ]
     },
     "admin_logout": {
       "tool": true,
@@ -115,9 +154,13 @@
           "description": "the account, by address or local part"
         }
       },
-      "required": ["account"],
-      "options": { "positional": ["account"] },
-      "destructive": true
+      "required": [
+        "account"
+      ],
+      "destructive": true,
+      "positional": [
+        "account"
+      ]
     },
     "admin_link": {
       "tool": true,
@@ -126,17 +169,26 @@
       "title": "Make a standing sign-in link",
       "description": "One URL that signs its holder in as this account until it expires, or --revoke to take one back by its id.\n\n  yak admin throwaway reviewer && yak admin link --days=90 --as=reviewer\n  yak admin link --revoke=3f2a --as=reviewer",
       "input": {
-        "days": { "type": "number", "description": "how long it stands" },
+        "days": {
+          "type": "number",
+          "description": "how long it stands"
+        },
         "revoke": {
           "type": "string",
           "description": "a link id to revoke instead"
         },
-        "as": { "type": "string", "description": "act as this account" },
+        "as": {
+          "type": "string",
+          "description": "act as this account"
+        },
         "admin": {
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as the owner" }
+        "owner": {
+          "type": "boolean",
+          "description": "as the owner"
+        }
       },
       "openWorld": true
     },
@@ -151,15 +203,23 @@
           "type": "string",
           "description": "the new rate, in whole basis points"
         },
-        "as": { "type": "string", "description": "act as this account" },
+        "as": {
+          "type": "string",
+          "description": "act as this account"
+        },
         "admin": {
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as the owner" }
+        "owner": {
+          "type": "boolean",
+          "description": "as the owner"
+        }
       },
-      "options": { "positional": ["bps"] },
-      "openWorld": true
+      "openWorld": true,
+      "positional": [
+        "bps"
+      ]
     },
     "admin_move": {
       "tool": true,
@@ -180,15 +240,23 @@
           "type": "string",
           "description": "stores a minute, 0 for each as soon as the last answers (5 for a wake, 0 for a rehearsal)"
         },
-        "as": { "type": "string", "description": "act as this account" },
+        "as": {
+          "type": "string",
+          "description": "act as this account"
+        },
         "admin": {
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as the owner" }
+        "owner": {
+          "type": "boolean",
+          "description": "as the owner"
+        }
       },
-      "options": { "positional": ["where"] },
-      "openWorld": true
+      "openWorld": true,
+      "positional": [
+        "where"
+      ]
     },
     "admin_tunnel": {
       "tool": true,
@@ -197,10 +265,18 @@
       "title": "A space's tunnel to a machine",
       "description": "The tunnel a space has to a machine, whose server the space's apps reach through the tunnel's gateway (a vpc_services door in their config), at the paths its @yaks/tunnel config opens. With no act, what the tunnel is. connect makes a tunnel, its service to the port given, and the gateway; rotate puts the gateway again, and gives the tunnel a new token where the platform made it; adopt records a tunnel and service made elsewhere with a gateway in front, and is the platform's act. A token answered is kept in this graph's vault as TUNNEL_TOKEN without printing it, where @yaks/tunnel's service reads it. disconnect removes the tunnel.\n\n  yak admin tunnel yak --admin\n  yak admin tunnel yak adopt --tunnel <id> --service <id> --admin\n  yak admin tunnel ada connect --port 5173",
       "input": {
-        "space": { "type": "string", "description": "the space’s slug" },
+        "space": {
+          "type": "string",
+          "description": "the space’s slug"
+        },
         "act": {
           "type": "string",
-          "enum": ["connect", "rotate", "disconnect", "adopt"],
+          "enum": [
+            "connect",
+            "rotate",
+            "disconnect",
+            "adopt"
+          ],
           "description": "what to change; nothing reads the tunnel"
         },
         "port": {
@@ -215,16 +291,27 @@
           "type": "string",
           "description": "adopt: the VPC Service’s id"
         },
-        "as": { "type": "string", "description": "act as this account" },
+        "as": {
+          "type": "string",
+          "description": "act as this account"
+        },
         "admin": {
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as the owner" }
+        "owner": {
+          "type": "boolean",
+          "description": "as the owner"
+        }
       },
-      "required": ["space"],
-      "options": { "positional": ["space", "act"] },
-      "openWorld": true
+      "required": [
+        "space"
+      ],
+      "openWorld": true,
+      "positional": [
+        "space",
+        "act"
+      ]
     },
     "admin_delete": {
       "tool": true,
@@ -233,22 +320,37 @@
       "title": "Close a space for good",
       "description": "Close a space: its apps, their data, and its address. What would go is listed first, the same list the confirmation letter carries to a person whose agent asked.",
       "input": {
-        "space": { "type": "string", "description": "the space’s slug" },
-        "as": { "type": "string", "description": "act as this account" },
+        "space": {
+          "type": "string",
+          "description": "the space’s slug"
+        },
+        "as": {
+          "type": "string",
+          "description": "act as this account"
+        },
         "admin": {
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as the owner" }
+        "owner": {
+          "type": "boolean",
+          "description": "as the owner"
+        }
       },
-      "required": ["space"],
-      "options": { "positional": ["space"] },
+      "required": [
+        "space"
+      ],
       "destructive": true,
-      "openWorld": true
+      "openWorld": true,
+      "positional": [
+        "space"
+      ]
     },
     "admin_query": {
       "tool": true,
-      "surfaces": ["cli"],
+      "surfaces": [
+        "cli"
+      ],
       "noun": "admin",
       "verb": "query",
       "title": "Query an app’s store",
@@ -260,20 +362,33 @@
         },
         "filters": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "dot-params"
         },
-        "as": { "type": "string", "description": "act as this account" },
+        "as": {
+          "type": "string",
+          "description": "act as this account"
+        },
         "admin": {
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as the owner" }
+        "owner": {
+          "type": "boolean",
+          "description": "as the owner"
+        }
       },
-      "required": ["where"],
-      "options": { "positional": ["where"], "rest": "filters" },
+      "required": [
+        "where"
+      ],
       "readOnly": true,
-      "openWorld": true
+      "openWorld": true,
+      "positional": [
+        "where",
+        "filters..."
+      ]
     },
     "admin_apply": {
       "tool": true,
@@ -317,41 +432,67 @@
         "where",
         "change"
       ],
-      "options": {
-        "positional": [
-          "where",
-          "change"
-        ]
-      },
       "destructive": true,
-      "openWorld": true
+      "openWorld": true,
+      "positional": [
+        "where",
+        "change"
+      ]
     },
     "admin_upload": {
       "tool": true,
-      "surfaces": ["cli"],
+      "surfaces": [
+        "cli"
+      ],
       "noun": "admin",
       "verb": "upload",
       "title": "Upload a local file to an app's blob store",
       "description": "Send one local file through an app's /api/blob door. It writes the content and attachment rows and returns the content-addressed URL. Name the account explicitly; its app role must allow writes. The file name defaults to the local basename and mime defaults to application/octet-stream.\n\n  yak admin upload yourname/vale /tmp/theme.mp3 --mime audio/mpeg --name mossvale-theme.mp3 --admin",
       "input": {
-        "where": { "type": "string", "description": "space/app" },
-        "path": { "type": "string", "description": "local file path" },
-        "mime": { "type": "string", "description": "content type" },
-        "name": { "type": "string", "description": "attachment name" },
-        "as": { "type": "string", "description": "act as this account" },
+        "where": {
+          "type": "string",
+          "description": "space/app"
+        },
+        "path": {
+          "type": "string",
+          "description": "local file path"
+        },
+        "mime": {
+          "type": "string",
+          "description": "content type"
+        },
+        "name": {
+          "type": "string",
+          "description": "attachment name"
+        },
+        "as": {
+          "type": "string",
+          "description": "act as this account"
+        },
         "admin": {
           "type": "boolean",
           "description": "as the platform's admin"
         },
-        "owner": { "type": "boolean", "description": "as the owner" }
+        "owner": {
+          "type": "boolean",
+          "description": "as the owner"
+        }
       },
-      "required": ["where", "path"],
-      "options": { "positional": ["where", "path"] },
-      "openWorld": true
+      "required": [
+        "where",
+        "path"
+      ],
+      "openWorld": true,
+      "positional": [
+        "where",
+        "path"
+      ]
     },
     "admin_client": {
       "tool": true,
-      "surfaces": ["cli"],
+      "surfaces": [
+        "cli"
+      ],
       "noun": "admin",
       "verb": "client",
       "title": "Keep an OAuth client",
@@ -369,48 +510,79 @@
           "type": "string",
           "description": "an op:// reference to the client secret, for a confidential client"
         },
-        "as": { "type": "string", "description": "act as this account" },
+        "as": {
+          "type": "string",
+          "description": "act as this account"
+        },
         "admin": {
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as the owner" }
+        "owner": {
+          "type": "boolean",
+          "description": "as the owner"
+        }
       },
-      "required": ["name", "id"],
-      "options": { "positional": ["name", "id", "secret"] },
-      "openWorld": true
+      "required": [
+        "name",
+        "id"
+      ],
+      "openWorld": true,
+      "positional": [
+        "name",
+        "id",
+        "secret"
+      ]
     },
     "admin_tool": {
       "tool": true,
       "noun": "admin",
       "verb": "tool",
       "title": "Call a yaks.app tool as this account",
-      "description": "Call a yaks.app connector tool or an app's own command as the selected account. Connector tools take precedence; --app selects the app when several share a command name. Its declared options supply positionals; its schema supplies --flags.\n\n  yak admin tool where matt --owner\n  yak admin tool app_list --admin\n  yak admin tool app_new --slug notes --title Notes",
+      "description": "Call a yaks.app connector tool or an app's own command as the selected account. Connector tools take precedence; --app selects the app when several share a command name. Its declared positional names take bare words; its schema supplies --flags.\n\n  yak admin tool where matt --owner\n  yak admin tool app_list --admin\n  yak admin tool app_new --slug notes --title Notes",
       "input": {
-        "name": { "type": "string", "description": "the tool to call" },
+        "name": {
+          "type": "string",
+          "description": "the tool to call"
+        },
         "args": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "its own arguments, as positionals and --flags"
         },
         "app": {
           "type": "string",
           "description": "which app, when several share a command name"
         },
-        "as": { "type": "string", "description": "act as this account" },
+        "as": {
+          "type": "string",
+          "description": "act as this account"
+        },
         "admin": {
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as the owner" }
+        "owner": {
+          "type": "boolean",
+          "description": "as the owner"
+        }
       },
-      "required": ["name"],
-      "options": { "positional": ["name"], "forward": "args" },
-      "openWorld": true
+      "required": [
+        "name"
+      ],
+      "openWorld": true,
+      "positional": [
+        "name"
+      ],
+      "forward": "args"
     },
     "admin_push": {
       "tool": true,
-      "surfaces": ["cli"],
+      "surfaces": [
+        "cli"
+      ],
       "noun": "admin",
       "verb": "push",
       "title": "Push a directory to a yaks.app app",
@@ -432,16 +604,26 @@
           "type": "string",
           "description": "the title a new app is created with; the slug unless named"
         },
-        "as": { "type": "string", "description": "act as this account" },
+        "as": {
+          "type": "string",
+          "description": "act as this account"
+        },
         "admin": {
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as the owner" }
+        "owner": {
+          "type": "boolean",
+          "description": "as the owner"
+        }
       },
-      "required": ["dir"],
-      "options": { "positional": ["dir"] },
-      "openWorld": true
+      "required": [
+        "dir"
+      ],
+      "openWorld": true,
+      "positional": [
+        "dir"
+      ]
     },
     "admin_deploys": {
       "tool": true,
@@ -454,7 +636,10 @@
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as the owner" }
+        "owner": {
+          "type": "boolean",
+          "description": "as the owner"
+        }
       },
       "readOnly": true,
       "openWorld": true
@@ -474,14 +659,19 @@
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as the owner" }
+        "owner": {
+          "type": "boolean",
+          "description": "as the owner"
+        }
       },
       "readOnly": true,
       "openWorld": true
     },
     "admin_tail": {
       "tool": true,
-      "surfaces": ["cli"],
+      "surfaces": [
+        "cli"
+      ],
       "noun": "admin",
       "verb": "tail",
       "title": "Follow yaks.app live events",
@@ -491,7 +681,10 @@
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as the owner" }
+        "owner": {
+          "type": "boolean",
+          "description": "as the owner"
+        }
       },
       "readOnly": true,
       "openWorld": true
@@ -511,11 +704,16 @@
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as the owner" }
+        "owner": {
+          "type": "boolean",
+          "description": "as the owner"
+        }
       },
-      "options": { "positional": ["version"] },
       "destructive": true,
-      "openWorld": true
+      "openWorld": true,
+      "positional": [
+        "version"
+      ]
     },
     "admin_revert": {
       "tool": true,
@@ -524,16 +722,24 @@
       "title": "Revert a main commit and wait for it to deploy",
       "description": "Revert a main commit in a fresh worktree, run deno task check, land and push main, and wait up to 20m for Workers Builds to serve the revert. A failed worktree is kept. --admin or --owner is required.",
       "input": {
-        "sha": { "type": "string", "description": "the main commit to revert" },
+        "sha": {
+          "type": "string",
+          "description": "the main commit to revert"
+        },
         "admin": {
           "type": "boolean",
           "description": "as the platform’s admin"
         },
-        "owner": { "type": "boolean", "description": "as the owner" }
+        "owner": {
+          "type": "boolean",
+          "description": "as the owner"
+        }
       },
-      "options": { "positional": ["sha"] },
       "destructive": true,
-      "openWorld": true
+      "openWorld": true,
+      "positional": [
+        "sha"
+      ]
     }
   }
 }

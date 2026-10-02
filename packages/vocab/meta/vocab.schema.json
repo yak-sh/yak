@@ -414,35 +414,15 @@
             "type": "string"
           }
         },
-        "options": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "positional": {
-              "type": "array",
-              "uniqueItems": true,
-              "items": {
-                "type": "string"
-              }
-            },
-            "short": {
-              "type": "object",
-              "propertyNames": {
-                "pattern": "^[a-zA-Z]$"
-              },
-              "additionalProperties": {
-                "type": "string"
-              }
-            },
-            "rest": {
-              "type": "string"
-            },
-            "forward": {
-              "type": "string",
-              "description": "An array-of-string input receiving unmatched arguments without expansion or conversion, including the -- delimiter."
-            }
+        "positional": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*(\\.\\.\\.)?$"
           }
         },
+        "forward": { "type": "string" },
         "readOnly": {
           "type": "boolean"
         },
@@ -614,6 +594,7 @@
     "arg": {
       "type": "object",
       "properties": {
+        "short": { "type": "string", "pattern": "^[a-zA-Z]$" },
         "type": {
           "enum": [
             "string",

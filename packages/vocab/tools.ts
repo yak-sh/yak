@@ -114,13 +114,10 @@ export type ToolDefinition = {
   title?: string
   inputSchema?: Record<string, unknown>
   outputSchema?: Record<string, unknown>
-  options?: {
-    positional?: readonly string[]
-    short?: Readonly<Record<string, string>>
-    rest?: string
-    /** unmatched words, preserved for another schema to parse */
-    forward?: string
-  }
+  /** Input names in order; a final name ending in ... receives the rest. */
+  positional?: readonly string[]
+  /** Unmatched words preserved for another schema to parse. */
+  forward?: string
   readOnly?: boolean
   destructive?: boolean
   idempotent?: boolean
@@ -169,29 +166,12 @@ export const toolDefinitionSchema: Record<string, unknown> = {
     description: { type: 'string' },
     inputSchema: { type: 'object' },
     outputSchema: { type: 'object' },
-    options: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        positional: {
-          type: 'array',
-          uniqueItems: true,
-          items: { type: 'string' },
-        },
-        short: {
-          type: 'object',
-          propertyNames: { pattern: '^[a-zA-Z]$' },
-          additionalProperties: { type: 'string' },
-        },
-        rest: { type: 'string' },
-        forward: {
-          type: 'string',
-          description:
-            'An array-of-string input receiving unmatched arguments ' +
-            'without expansion or conversion, including the -- delimiter.',
-        },
-      },
+    positional: {
+      type: 'array',
+      uniqueItems: true,
+      items: { type: 'string', pattern: '^[a-z][a-z0-9_]*(\\.\\.\\.)?$' },
     },
+    forward: { type: 'string' },
     readOnly: { type: 'boolean' },
     destructive: { type: 'boolean' },
     idempotent: { type: 'boolean' },
@@ -211,21 +191,44 @@ export const toolDefinition = (value: unknown): ToolDefinition => {
   const props = candidate.inputSchema?.properties as
     | Record<string, unknown>
     | undefined
-  for (
-    const field of [
-      ...candidate.options?.positional ?? [],
-      ...Object.values(candidate.options?.short ?? {}),
-      ...candidate.options?.rest ? [candidate.options.rest] : [],
-      ...candidate.options?.forward ? [candidate.options.forward] : [],
-    ]
-  ) {
+  const positional = candidate.positional ?? []
+  let named = new Set<string>()
+  for (let [i, value] of positional.entries()) {
+    let rest = value.endsWith('...')
+    let field = rest ? value.slice(0, -3) : value
+    if (rest && i != positional.length - 1) {
+      throw new Error('Only the final positional input may receive the rest')
+    }
+    if (named.has(field)) {
+      throw new Error(`Duplicate positional input: ${field}`)
+    }
+    named.add(field)
     if (!props || !Object.hasOwn(props, field)) {
-      throw new Error(`Option references unknown property: ${field}`)
+      throw new Error(`Positional references unknown property: ${field}`)
+    }
+    let prop = props[field] as { type?: string; items?: { type?: string } }
+    if (rest && prop.type != 'string' && prop.type != 'array') {
+      throw new Error(`Rest positional wants a string or array: ${field}`)
     }
   }
-  let forward = candidate.options?.forward
+  let shorts = new Set<string>()
+  for (let [field, schema] of Object.entries(props ?? {})) {
+    let short = schema && typeof schema == 'object'
+      ? (schema as { short?: unknown }).short
+      : undefined
+    if (short === undefined) continue
+    if (typeof short != 'string' || !/^[a-zA-Z]$/.test(short)) {
+      throw new Error(`Short flag wants one letter: ${field}`)
+    }
+    if (shorts.has(short)) throw new Error(`Duplicate short flag: ${short}`)
+    shorts.add(short)
+  }
+  let forward = candidate.forward
   if (forward) {
-    let prop = props![forward] as { type?: string; items?: { type?: string } }
+    if (!props || !Object.hasOwn(props, forward)) {
+      throw new Error(`Forward references unknown property: ${forward}`)
+    }
+    let prop = props[forward] as { type?: string; items?: { type?: string } }
     if (prop.type != 'array' || prop.items?.type != 'string') {
       throw new Error(`Forward option wants an array of strings: ${forward}`)
     }
@@ -248,7 +251,8 @@ let inputOf = (entry: PropSchema): Record<string, unknown> => ({
 // The keywords in a declaration that belong to the tool, not to the schema.
 let HINTS = [
   'title',
-  'options',
+  'positional',
+  'forward',
   'readOnly',
   'destructive',
   'idempotent',
@@ -303,7 +307,7 @@ let checked = new WeakMap<object, ToolDefinition[]>()
 
 /** The tool declarations one or more vocab documents carry, checked: every
  * entry {@link toolsSaid} read, put through {@link toolDefinition} — the
- * meta-schema, the dialect of each argument schema, and the options naming
+ * meta-schema, the dialect of each argument schema, and the positional inputs naming
  * properties that exist. The same input answers the same definitions. */
 export let toolsIn = (input: VocabDoc | VocabDoc[]): ToolDefinition[] => {
   let kept = checked.get(input)
@@ -311,4 +315,57 @@ export let toolsIn = (input: VocabDoc | VocabDoc[]): ToolDefinition[] => {
   let defs = toolsSaid(input).map((said) => toolDefinition(said))
   checked.set(input, defs)
   return defs
+}
+
+/** The schema a transport publishes, with command-line hints removed. */
+export let publicToolSchema = (
+  schema: Record<string, unknown>,
+): Record<string, unknown> => {
+  let props = schema.properties as Record<string, unknown> | undefined
+  if (!props) return schema
+  return {
+    ...schema,
+    properties: Object.fromEntries(
+      Object.entries(props).map(([name, prop]) => {
+        if (!prop || typeof prop != 'object' || Array.isArray(prop)) {
+          return [name, prop]
+        }
+        let { short: _short, ...published } = prop as Record<string, unknown>
+        return [name, published]
+      }),
+    ),
+  }
+}
+
+/** Grammar for published readers that still use the former options shape. */
+export let legacyOptions = (
+  tool: Pick<ToolDefinition, 'positional' | 'forward' | 'inputSchema'>,
+): {
+  positional?: readonly string[]
+  rest?: string
+  short?: Record<string, string>
+  forward?: string
+} => {
+  let positional = tool.positional ?? []
+  let last = positional.at(-1)
+  let rest = last?.endsWith('...') ? last.slice(0, -3) : undefined
+  let props = tool.inputSchema?.properties as
+    | Record<string, unknown>
+    | undefined
+  let short = Object.fromEntries(
+    Object.entries(props ?? {}).flatMap(([name, prop]) => {
+      let alias = prop && typeof prop == 'object'
+        ? (prop as { short?: string }).short
+        : undefined
+      return alias ? [[alias, name]] : []
+    }),
+  )
+  return {
+    ...(positional.length
+      ? { positional: positional.filter((p) => !p.endsWith('...')) }
+      : {}),
+    ...(rest ? { rest } : {}),
+    ...(Object.keys(short).length ? { short } : {}),
+    ...(tool.forward ? { forward: tool.forward } : {}),
+  }
 }

@@ -275,12 +275,14 @@
         "provider": {
           "type": "string",
           "ref": "provider",
-          "description": "the provider to ask instead of the configured one"
+          "description": "the provider to ask instead of the configured one",
+          "short": "p"
         },
         "model": {
           "type": "string",
           "ref": "model",
-          "description": "the model to build with instead of the configured one"
+          "description": "the model to build with instead of the configured one",
+          "short": "m"
         },
         "template": {
           "type": "string",
@@ -315,17 +317,11 @@
       "required": [
         "builder"
       ],
-      "options": {
-        "positional": [
-          "builder"
-        ],
-        "rest": "only",
-        "short": {
-          "m": "model",
-          "p": "provider"
-        }
-      },
-      "idempotent": false
+      "idempotent": false,
+      "positional": [
+        "builder",
+        "only..."
+      ]
     },
     "builder_open": {
       "effect": true,
@@ -433,15 +429,13 @@
         "slot",
         "artifact"
       ],
-      "options": {
-        "positional": [
-          "builder",
-          "for",
-          "slot",
-          "artifact"
-        ]
-      },
-      "idempotent": true
+      "idempotent": true,
+      "positional": [
+        "builder",
+        "for",
+        "slot",
+        "artifact"
+      ]
     },
     "chosen": {
       "component": true,
@@ -487,12 +481,10 @@
       "required": [
         "output"
       ],
-      "options": {
-        "positional": [
-          "output"
-        ]
-      },
-      "idempotent": true
+      "idempotent": true,
+      "positional": [
+        "output"
+      ]
     }
   }
 }

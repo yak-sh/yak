@@ -25,7 +25,7 @@ export let commands: CliCommand[] = [{
       },
     },
   },
-  options: { positional: ['what'] },
+  positional: ['what'],
   // What it runs is imported when it runs: every command line lists this one.
   run: async (args, host, context) => {
     let { PORT } = await import('@yaks/api/tools')

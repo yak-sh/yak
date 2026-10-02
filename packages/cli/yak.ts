@@ -254,7 +254,7 @@ export let own: Command[] = [
         },
       },
     },
-    options: { positional: ['name'] },
+    positional: ['name'],
     run: init,
   },
   {
@@ -268,7 +268,7 @@ export let own: Command[] = [
       required: ['token'],
       properties: { token: { type: 'string' } },
     },
-    options: { positional: ['token'] },
+    positional: ['token'],
     run: (args, c) => {
       c.out(
         `bearer token for ${c.host} saved in ${
@@ -305,7 +305,7 @@ export let own: Command[] = [
         },
       },
     },
-    options: { positional: ['file'] },
+    positional: ['file'],
     destructive: true,
     run: applied,
   },

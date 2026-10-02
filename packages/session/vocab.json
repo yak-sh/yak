@@ -523,12 +523,10 @@
       "required": [
         "target"
       ],
-      "options": {
-        "positional": [
-          "target"
-        ]
-      },
-      "idempotent": true
+      "idempotent": true,
+      "positional": [
+        "target"
+      ]
     },
     "claim_release": {
       "tool": true,
@@ -546,12 +544,10 @@
       "required": [
         "target"
       ],
-      "options": {
-        "positional": [
-          "target"
-        ]
-      },
-      "idempotent": true
+      "idempotent": true,
+      "positional": [
+        "target"
+      ]
     },
     "session_context": {
       "tool": true,
@@ -574,12 +570,10 @@
           "description": "id or name of the persistent identity this session acts as, retained when the agent clears its conversation"
         }
       },
-      "options": {
-        "positional": [
-          "session"
-        ]
-      },
-      "idempotent": true
+      "idempotent": true,
+      "positional": [
+        "session"
+      ]
     },
     "session_wrap": {
       "tool": true,
@@ -598,18 +592,14 @@
         },
         "brief": {
           "type": "string",
-          "description": "what this session did, in its own words"
+          "description": "what this session did, in its own words",
+          "short": "b"
         }
       },
-      "options": {
-        "positional": [
-          "session"
-        ],
-        "short": {
-          "b": "brief"
-        }
-      },
-      "idempotent": true
+      "idempotent": true,
+      "positional": [
+        "session"
+      ]
     },
     "session_listen": {
       "tool": true,
@@ -655,12 +645,10 @@
       "required": [
         "text"
       ],
-      "options": {
-        "positional": [
-          "text"
-        ]
-      },
-      "idempotent": true
+      "idempotent": true,
+      "positional": [
+        "text"
+      ]
     },
     "hooks_install": {
       "tool": true,
@@ -682,12 +670,10 @@
           "description": "remove the entries instead of writing them"
         }
       },
-      "options": {
-        "positional": [
-          "path"
-        ]
-      },
-      "idempotent": true
+      "idempotent": true,
+      "positional": [
+        "path"
+      ]
     },
     "claim_check": {
       "tool": true,

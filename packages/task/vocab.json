@@ -114,12 +114,14 @@
         },
         "body": {
           "type": "string",
-          "description": "what is being asked for, plus pointers to the details, as markdown"
+          "description": "what is being asked for, plus pointers to the details, as markdown",
+          "short": "b"
         },
         "project": {
           "type": "string",
           "ref": "project",
-          "description": "the project to file it under; pass its id or registered name"
+          "description": "the project to file it under; pass its id or registered name",
+          "short": "p"
         },
         "priority": {
           "type": "number",
@@ -138,16 +140,10 @@
       "required": [
         "title"
       ],
-      "options": {
-        "positional": [
-          "title",
-          "body"
-        ],
-        "short": {
-          "p": "project",
-          "b": "body"
-        }
-      }
+      "positional": [
+        "title",
+        "body"
+      ]
     },
     "task_list": {
       "tool": true,
@@ -162,18 +158,14 @@
         },
         "limit": {
           "type": "number",
-          "description": "return at most this many"
+          "description": "return at most this many",
+          "short": "n"
         }
       },
-      "options": {
-        "positional": [
-          "query"
-        ],
-        "short": {
-          "n": "limit"
-        }
-      },
-      "readOnly": true
+      "readOnly": true,
+      "positional": [
+        "query"
+      ]
     },
     "task_update": {
       "tool": true,
@@ -194,7 +186,8 @@
             "done",
             "cancelled"
           ],
-          "description": "the new status: open, done or cancelled"
+          "description": "the new status: open, done or cancelled",
+          "short": "s"
         },
         "title": {
           "type": "string",
@@ -207,7 +200,8 @@
         "project": {
           "type": "string",
           "ref": "project",
-          "description": "the project to file it under; pass its id or registered name"
+          "description": "the project to file it under; pass its id or registered name",
+          "short": "p"
         },
         "priority": {
           "type": "number",
@@ -226,17 +220,11 @@
       "required": [
         "task"
       ],
-      "options": {
-        "positional": [
-          "task",
-          "status"
-        ],
-        "short": {
-          "p": "project",
-          "s": "status"
-        }
-      },
-      "idempotent": true
+      "idempotent": true,
+      "positional": [
+        "task",
+        "status"
+      ]
     },
     "decision": {
       "component": true,
@@ -340,11 +328,9 @@
         "choices",
         "recommended"
       ],
-      "options": {
-        "positional": [
-          "question"
-        ]
-      }
+      "positional": [
+        "question"
+      ]
     },
     "decision_answer": {
       "tool": true,
@@ -368,12 +354,10 @@
         "decision",
         "choice"
       ],
-      "options": {
-        "positional": [
-          "decision",
-          "choice"
-        ]
-      }
+      "positional": [
+        "decision",
+        "choice"
+      ]
     },
     "decision_answered": {
       "rule": true,

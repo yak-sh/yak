@@ -110,7 +110,7 @@
         "kind": {
           "type": "string",
           "stamped": true,
-          "description": "The served entity\u2019s kind, read where it happened."
+          "description": "The served entity’s kind, read where it happened."
         }
       }
     },
@@ -143,7 +143,7 @@
     "exception": {
       "component": true,
       "type": "object",
-      "description": "The tracker\u2019s thrown-value detail; legacy stack belongs to tools until T-59080.",
+      "description": "The tracker’s thrown-value detail; legacy stack belongs to tools until T-59080.",
       "properties": {
         "frames": {
           "type": "array",
@@ -267,12 +267,10 @@
           "type": "number"
         }
       },
-      "options": {
-        "positional": [
-          "query"
-        ]
-      },
-      "readOnly": true
+      "readOnly": true,
+      "positional": [
+        "query"
+      ]
     },
     "bug_show": {
       "tool": true,
@@ -286,13 +284,11 @@
           "ref": "bug"
         }
       },
-      "options": {
-        "positional": [
-          "bug"
-        ]
-      },
       "readOnly": true,
       "required": [
+        "bug"
+      ],
+      "positional": [
         "bug"
       ]
     },
@@ -308,13 +304,11 @@
           "ref": "bug"
         }
       },
-      "options": {
-        "positional": [
-          "bug"
-        ]
-      },
       "idempotent": true,
       "required": [
+        "bug"
+      ],
+      "positional": [
         "bug"
       ]
     },
@@ -330,13 +324,11 @@
           "ref": "bug"
         }
       },
-      "options": {
-        "positional": [
-          "bug"
-        ]
-      },
       "idempotent": true,
       "required": [
+        "bug"
+      ],
+      "positional": [
         "bug"
       ]
     },

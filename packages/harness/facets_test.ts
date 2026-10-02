@@ -208,10 +208,10 @@ test('JSON Schema tool uses identical metadata and constraints through MCP and p
         required: ['scope'],
         properties: {
           scope: { type: 'string' },
-          limit: { type: 'integer', minimum: 1, default: 2 },
+          limit: { type: 'integer', minimum: 1, default: 2, short: 'n' },
         },
       },
-      options: { positional: ['scope'], short: { n: 'limit' } },
+      positional: ['scope'],
     }),
     run: (call: Bundle) => [{
       entity: { eid: '$said' },
@@ -225,8 +225,15 @@ test('JSON Schema tool uses identical metadata and constraints through MCP and p
     const listed = (await c.listTools()).tools.find((
       t: { name: string; inputSchema: unknown },
     ) => t.name === 'example_list')!
-    assertEquals(listed.inputSchema, tool.inputSchema)
-    assertEquals(parametersOf(tool), tool.inputSchema)
+    const published = {
+      ...tool.inputSchema,
+      properties: {
+        scope: { type: 'string' },
+        limit: { type: 'integer', minimum: 1, default: 2 },
+      },
+    }
+    assertEquals(listed.inputSchema, published)
+    assertEquals(parametersOf(tool), published)
     const args = await argsFor(tool, ['root', '-n', '3'], reads)
     const response = await c.callTool({ name: 'example_list', arguments: args })
     assertEquals(response.isError, undefined)

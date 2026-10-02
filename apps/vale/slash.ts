@@ -15,7 +15,7 @@ type Tool = {
   description?: string
   input?: Record<string, Arg>
   required?: string[]
-  options?: Grammar['options']
+  positional?: Grammar['positional']
   model?: boolean
 }
 export type Tools = Record<string, Tool>
@@ -34,15 +34,19 @@ let shape = (arg: Arg) =>
 
 let usage = (name: string, tool: Tool) => {
   let required = new Set(tool.required ?? [])
-  let positional = new Set(tool.options?.positional ?? [])
+  let positions = (tool.positional ?? []).map((key) => ({
+    key: key.replace(/\.\.\.$/, ''),
+    rest: key.endsWith('...'),
+  }))
+  let positional = new Set(positions.map(({ key }) => key))
   let input = tool.input ?? {}
   let names = [
-    ...(tool.options?.positional ?? []),
+    ...positions.map(({ key }) => key),
     ...Object.keys(input).filter((key) => !positional.has(key)),
   ]
   let args = names.map((key) => {
     let value = `<${key}:${shape(input[key])}${
-      tool.options?.rest == key ? '...' : ''
+      positions.find((p) => p.key == key)?.rest ? '...' : ''
     }>`
     if (!positional.has(key)) value = `--${key} <${shape(input[key])}>`
     return required.has(key) ? value : `[${value}]`

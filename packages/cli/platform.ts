@@ -149,9 +149,6 @@ let toolOf = (roster: Roster, t: Listed): Command => ({
     ? { title: t.title ?? t.annotations?.title }
     : {}),
   description: t.description ?? '',
-  ...(t.inputSchema
-    ? { inputSchema: t.inputSchema as Record<string, unknown> }
-    : {}),
   run: async (args, c) =>
     printed(
       c,

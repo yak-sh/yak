@@ -14,7 +14,7 @@ type AppCommand = {
   name: string
   at: string
   input: Schema
-  options?: Grammar['options']
+  positional?: Grammar['positional']
 }
 
 /** Fetch a tool's schema, parse its words with the CLI grammar, and call it.
@@ -31,7 +31,7 @@ export let toolCall = async (
   let tool = listed.tools.find((t) => t.name == name)
   if (tool) {
     let args = await argsFor(
-      { name, inputSchema: tool.inputSchema, options: spelling(tool).options },
+      { name, ...spelling(tool) },
       [...words, ...o.app ? ['--app', o.app] : []],
       o.reads,
     )
@@ -59,7 +59,7 @@ export let toolCall = async (
   }
   let command = found[0]
   let args = await argsFor(
-    { name, inputSchema: command.input, options: command.options },
+    { name, inputSchema: command.input, positional: command.positional },
     words,
     o.reads,
   )
@@ -113,7 +113,8 @@ export let appTools: Command[] = [{
   title: 'run a remote tool or app command',
   description: ABOUT,
   inputSchema: schema(true),
-  options: { positional: ['name'], forward: 'args' },
+  positional: ['name'],
+  forward: 'args',
   run: (args, c) => called(c, args),
 }]
 
@@ -127,7 +128,8 @@ export let appStray = (app: string, args: string[]): Command | undefined => {
     title: `a command of the ${app} app`,
     description: ABOUT,
     inputSchema: schema(false),
-    options: { positional: ['name'], forward: 'args' },
+    positional: ['name'],
+    forward: 'args',
     run: (given, c) => called(c, given, app),
   }
 }

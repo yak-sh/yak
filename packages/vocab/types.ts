@@ -224,6 +224,9 @@ export type PropSchema = {
   noun?: string
   verb?: string
   input?: Record<string, PropSchema>
+  positional?: readonly string[]
+  forward?: string
+  short?: string
   // native
   format?: string
   enum?: readonly string[]

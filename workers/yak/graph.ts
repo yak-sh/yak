@@ -178,7 +178,8 @@ import { effectsIn, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Anatomy, anatomy } from '@yaks/code/anatomy'
 import { workerAnatomy } from './anatomy.ts'
 import { reconcile, type Runner, runner } from '@yaks/tools'
-import { commands, type Tools } from '@yaks/tools/declared'
+import { commands } from '@yaks/tools/declared'
+import { readTools } from './tool-grammar.ts'
 import { rouse, soonest, tick, type Ticked, wakes } from '@yaks/wake'
 import { type Alarm, arm, armed } from '@yaks/wake/cloudflare'
 import {
@@ -1545,7 +1546,7 @@ export class Store {
           ...(via ? { via } : {}),
         }),
       ),
-    commands: () => JSON.parse(this.#get('tools') || '{}'),
+    commands: () => readTools(this.#get('tools') || '{}'),
     broke: (what, error) => void this.#broke(what, error),
   })
 
@@ -1565,7 +1566,7 @@ export class Store {
   #runner = (g: Graph = this.#graph, capture = this.#anatomy): Runner => {
     let said = this.#get('tools') ?? '{}'
     if (this.#runs?.said != said || g != this.#graph) {
-      let declared: Tools = JSON.parse(said || '{}')
+      let declared = readTools(said)
       this.#runs = {
         said,
         run: runner(

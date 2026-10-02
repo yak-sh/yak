@@ -49,21 +49,17 @@
         },
         "limit": {
           "type": "number",
-          "description": "return at most this many entities"
+          "description": "return at most this many entities",
+          "short": "n"
         }
       },
       "required": [
         "q"
       ],
-      "options": {
-        "positional": [
-          "q"
-        ],
-        "short": {
-          "n": "limit"
-        }
-      },
-      "readOnly": true
+      "readOnly": true,
+      "positional": [
+        "q"
+      ]
     },
     "graph_show": {
       "tool": true,
@@ -84,10 +80,10 @@
       "required": [
         "ids"
       ],
-      "options": {
-        "rest": "ids"
-      },
-      "readOnly": true
+      "readOnly": true,
+      "positional": [
+        "ids..."
+      ]
     },
     "graph_schema": {
       "tool": true,
@@ -115,12 +111,10 @@
           "description": "a display category declared by the schema, such as task; returns its definition and associated components"
         }
       },
-      "options": {
-        "positional": [
-          "component"
-        ]
-      },
-      "readOnly": true
+      "readOnly": true,
+      "positional": [
+        "component"
+      ]
     },
     "search": {
       "tool": true,
@@ -135,21 +129,17 @@
         },
         "limit": {
           "type": "number",
-          "description": "return at most this many entities"
+          "description": "return at most this many entities",
+          "short": "n"
         }
       },
       "required": [
         "words"
       ],
-      "options": {
-        "positional": [
-          "words"
-        ],
-        "short": {
-          "n": "limit"
-        }
-      },
-      "readOnly": true
+      "readOnly": true,
+      "positional": [
+        "words"
+      ]
     }
   }
 }

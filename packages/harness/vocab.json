@@ -65,11 +65,9 @@
           "description": "the persona to carry, by id or name (default: the checkout's persona)"
         }
       },
-      "options": {
-        "positional": [
-          "prompt"
-        ]
-      }
+      "positional": [
+        "prompt"
+      ]
     },
     "session_send": {
       "tool": true,
@@ -103,12 +101,10 @@
         "session",
         "text"
       ],
-      "options": {
-        "positional": [
-          "session",
-          "text"
-        ]
-      }
+      "positional": [
+        "session",
+        "text"
+      ]
     },
     "model_list": {
       "tool": true,

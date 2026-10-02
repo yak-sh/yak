@@ -10,7 +10,7 @@ type App = {
   name: string
   at: string
   input: Schema
-  options?: Grammar['options']
+  positional?: Grammar['positional']
 }
 let done = { content: [{ type: 'text', text: 'done' }] }
 let door = (tools: Listed[] = [], commands: App[] = []) => {
@@ -45,14 +45,14 @@ let recipe: App = {
     required: ['title'],
     properties: {
       title: { type: 'string' },
-      serves: { type: 'integer' },
+      serves: { type: 'integer', short: 'n' },
       enabled: { type: 'boolean' },
       tags: { type: 'array', items: { type: 'string' } },
       meta: { type: 'object' },
       note: { type: 'string' },
     },
   },
-  options: { positional: ['title'], rest: 'title', short: { n: 'serves' } },
+  positional: ['title...'],
 }
 let discovery = (app?: string) => ({
   method: 'tools/call',
@@ -73,7 +73,7 @@ test('a connector schema is fetched first and its declared grammar wins over an 
       required: ['person'],
       properties: { person: { type: 'string' } },
     },
-    _meta: { [COMMAND]: { options: { positional: ['person'] } } },
+    _meta: { [COMMAND]: { positional: ['person'] } },
   }
   let { ask, calls } = door([where], [{ ...recipe, name: 'where' }])
   assertEquals(await toolCall(ask, 'where', ['matt']), done)
@@ -168,8 +168,8 @@ test('shared app command names require a selector before execution', async () =>
   ])
 })
 
-test('apps without options accept flags only and invalid inputs never execute', async () => {
-  let flags = { ...recipe, options: undefined }
+test('apps without positionals accept flags only and invalid inputs never execute', async () => {
+  let flags = { ...recipe, positional: undefined }
   for (
     let words of [['Cake'], ['title=Cake'], [], ['--title=Cake', '--unknown=1']]
   ) {
@@ -262,4 +262,38 @@ test('forwarded flags may share the outer positional and forward property names'
     calls.at(-1),
     executed('rename', { name: 'new', args: 'quoted' }),
   )
+})
+
+test('connector short hints stay beside the published schema and old listings still read', async () => {
+  let inputSchema: Schema = {
+    type: 'object',
+    properties: {
+      person: { type: 'string' },
+      limit: { type: 'integer' },
+    },
+  }
+  for (
+    let metadata of [
+      { positional: ['person...'], input: { limit: { short: 'n' } } },
+      {
+        options: {
+          positional: ['person'],
+          rest: 'person',
+          short: { n: 'limit' },
+        },
+      },
+    ]
+  ) {
+    let { ask, calls } = door([{
+      name: 'where',
+      inputSchema,
+      _meta: { [COMMAND]: metadata },
+    }])
+    await toolCall(ask, 'where', ['matt', 'smith', '-n', '2'])
+    assertEquals(
+      calls.at(-1),
+      executed('where', { person: 'matt smith', limit: 2 }),
+    )
+    assertEquals(inputSchema.properties?.limit, { type: 'integer' })
+  }
 })
