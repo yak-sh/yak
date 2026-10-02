@@ -228,6 +228,10 @@ export let respelled = (text: string): string | null => {
  * was deleted, so only its name is left here. The shape it made is the one
  * this code reads, and code without the name is code from before it. */
 export let BOUNDARIES = [
+  'yak/store/interruption/1',
+  'yak/store/interruption/2',
+  'yak/store/interruption/3',
+  'yak/store/interruption/4',
   'yak/store/builder-takes/18',
   'yak/store/refusal/1',
   'yak/store/refusal-imported/1',

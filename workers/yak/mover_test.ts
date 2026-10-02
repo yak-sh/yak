@@ -447,3 +447,44 @@ test('refusal rehearsal and enabled batches preserve retry-pending provider erro
   assertEquals(await s.query(`.entity.eid=${ask}`), askBefore)
   assertEquals(await s.query(`.entity.eid=${completed}`), completedBefore)
 })
+
+test('interruption expansion rehearses marks without losing old state evidence', async () => {
+  let rules = RULES.filter((r) => r.mark.startsWith('yak/store/interruption/'))
+  let s = await store(0, ...rules)
+  let session = crypto.randomUUID(),
+    model = crypto.randomUUID(),
+    ask = crypto.randomUUID(),
+    line = crypto.randomUUID()
+  await s.apply([
+    { entity: { eid: session }, session: {} },
+    { entity: { eid: model }, model: { name: 'history' } },
+    {
+      entity: { eid: ask },
+      entry: { session },
+      ask: { to: model },
+      attempt: { state: 'interrupted' },
+    },
+    {
+      entity: { eid: line },
+      entry: { session },
+      output: { source: ask },
+      error: { code: 'interrupted' },
+      content: { body: 'Response interrupted.' },
+    },
+  ])
+  let before = await s.query('*')
+  let rehearsal = await s.rehearse()
+  assertEquals(rehearsal.every((r) => !r.failed), true)
+  assertEquals(await s.query('*'), before)
+  s.wake(...rules.map((r) => ({ ...r, live: 'apps' as const })))
+  await s.alarm()
+  assertEquals(
+    (await s.query(`.entity.eid=${ask}`))[0].interrupted?.code,
+    'transport',
+  )
+  assertEquals((await s.query(`.entity.eid=${ask}`))[0].failed != null, true)
+  assertEquals(
+    (await s.query(`.entity.eid=${line}`))[0].error?.code,
+    'interrupted',
+  )
+})

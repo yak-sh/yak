@@ -110,6 +110,7 @@ export let dispatchRule: Rule = {
 export let RULES: Rule[] = [
   ...interruptionFind.map((find, i): Rule => ({
     mark: `yak/store/interruption/${i + 1}`,
+    live: 'apps',
     find,
     move: (row, read) => {
       if (!read) throw new Error('Interruption mover needs evidence reader')
