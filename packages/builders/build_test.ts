@@ -26,7 +26,7 @@ import {
 } from './build.ts'
 import { answer as answerWrites } from './answer.ts'
 import { key } from './key.ts'
-import { modelTool, render } from './model.ts'
+import { adapted, modelTool, render } from './model.ts'
 import { build, runs } from './tools.ts'
 import { builderDoc } from './vocab.ts'
 import { loadTools } from '@yaks/graph/tools'
@@ -1057,6 +1057,60 @@ test('model tool opens a session using content.body, then adapts its reply', asy
     comp(await one(g, await outOf(g, build)), 'doc')?.body,
     'From model',
   )
+})
+
+test('generated audio answers once instead of its companion prose', async () => {
+  let { g, runner, failed } = await shop()
+  await g.apply([source('a'), {
+    ...builder('$s .doc.title=Source', toolEid('builder_model')),
+    using: { model: ids.model },
+  }, {
+    entity: { eid: 'audio' },
+    artifact: { address: 'audio', media_type: 'audio/mpeg', size: 4260483 },
+  }])
+  let build = await runOf(g, ['a'])
+  await drive(g, runner, build)
+  let [session] = await rows(g, '.session')
+  let s = session.entity.eid
+  let prose = replied(
+    s,
+    3,
+    'music-ask',
+    '[[A0]]\n[[B1]]\n[[C2]]\n' +
+      '[[D3]]\n[[E4]]\n[[D5]]\n[[F6]]',
+    'prose',
+  )
+  let media = {
+    ...replied(s, 4, 'music-ask', 'Generated media: audio', 'media'),
+    attachment: { artifact: 'audio', call: 'original-paid-audio' },
+  }
+  await g.apply([
+    asked(s, 2, 'music-ask', 'inflight'),
+    prose,
+    media,
+  ])
+  assertEquals(await outputFor(g, build), undefined)
+  await g.apply([{
+    ...asked(s, 2, 'music-ask', 'completed'),
+    cost: { dollars: 0.08, reported: true },
+  }])
+  let [call] = await calls(g, build)
+  let answers = await rows(g, `.output.source=${call.entity.eid}`)
+  assertEquals(answers.length, 1)
+  let output = await one(g, await outOf(g, build))
+  assertEquals(comp(output, 'built')?.artifact, 'audio')
+  assertEquals(comp(output, 'built')?.call, call.entity.eid)
+  assert(current(comp(await one(g, build), 'build')!, comp(output, 'built')!))
+  assertEquals(comp(await one(g, build), 'build')?.cost, 0.08)
+  assertEquals((await rows(g, '.cost')).length, 1)
+  assertEquals(failed, [])
+  // Replaying the completed ask, in either reply order, names the same answer.
+  let again = await adapted(g, [media, prose])
+  assertEquals(again?.entity.eid, answers[0].entity.eid)
+  await g.apply([again!])
+  assertEquals((await rows(g, `.output.source=${call.entity.eid}`)).length, 1)
+  assertEquals(await outOf(g, build), output!.entity.eid)
+  assertEquals(comp(await one(g, build), 'build')?.cost, 0.08)
 })
 
 test('prose a model writes beside a tool call is not its answer', async () => {

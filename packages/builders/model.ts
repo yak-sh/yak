@@ -5,6 +5,7 @@ import {
   type Binding,
   type Bundle,
   type Comp,
+  derivedEid,
   type Eid,
   type Graph,
   type Tool,
@@ -159,11 +160,17 @@ export let modelTool = (desk: Desk = {}): Tool => ({
   },
 })
 
-/** Convert one transcript answer into the shared builder output value. */
+/** One completed ask answers once: generated media wins over companion prose. */
 export let adapted = async (
   tx: Pick<Tx, 'get' | 'read'>,
-  said: Bundle,
+  replies: Bundle[],
 ): Promise<Bundle | undefined> => {
+  let said = replies.find((row) => comp(row, 'attachment')?.artifact) ??
+    replies.find((row) => kindOf(row) == 'output')
+  if (!said) return
+  let ask = str(comp(said, 'output')?.source)
+  // A turn asking for tools is still working, even if it includes media.
+  if (ask && (await tx.read(`.call.source=${ask}&.limit=1`)).length) return
   let session = str(comp(said, 'entry')?.session)
   if (!session || !said.output) return
   let [transcript] = await tx.get([session])
@@ -188,8 +195,6 @@ export let adapted = async (
   } else if (kindOf(said) == 'output') {
     // Prose a model writes beside the tool calls it asks for is the model at
     // work; its answer is the output of an ask that asked for nothing more.
-    let ask = str(comp(said, 'output')?.source)
-    if (ask && (await tx.read(`.call.source=${ask}&.limit=1`)).length) return
     // Its outputs alone: what a model session spent is its entries', never
     // what its answer says (./cost.ts). A reply that is not the contract (JSON
     // cut short, prose) is still answered, as the text it said, so the build
@@ -205,7 +210,7 @@ export let adapted = async (
     }
   } else return
   return {
-    entity: { eid: crypto.randomUUID() },
+    entity: { eid: derivedEid(`builder_model|${call}|${ask}`) },
     output: { source: call, value },
   }
 }

@@ -121,11 +121,11 @@ export let modeling = (): Handler => async (event, tx, write) => {
   if (!said) return
   if (said.ask) {
     if (str(comp(said, 'attempt'), 'state') != 'completed') return
-    let replies = await tx.read(`.output.source=${said.entity.eid}&*`)
-    for (let reply of replies) {
-      let result = await adapted(tx, reply)
-      if (result) await write([result])
-    }
+    let replies = await tx.read(
+      `.output.source=${said.entity.eid}&.order=entry.seq&*`,
+    )
+    let result = await adapted(tx, replies)
+    if (result) await write([result])
     return
   }
   if (said.error && said.entry) {
