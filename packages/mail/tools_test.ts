@@ -88,11 +88,27 @@ test('the inbox is what is addressed to you and not archived', async () => {
       mail: { from: 'x@y.example', to: 'someone@elsewhere.example' },
     },
   ])
-  assertEquals(ids(await ask(g, 'inbox_list', { who: 'desk' })), ['a1'])
+  assertEquals(
+    ids(await ask(g, 'inbox_list', { who: 'desk', lane: 'Replies' })),
+    ['a1'],
+  )
   assertEquals(ids(await ask(g, 'inbox_list', { who: 'ana' })), ['a2'])
+  assertEquals(
+    ids(await ask(g, 'inbox_list', { who: 'desk', lane: 'Recent' })),
+    ['a2'],
+  )
+  let search = { who: 'desk', search: 'you are in' }
+  assertEquals(
+    ids(await ask(g, 'inbox_list', { ...search, direction: 'said' })),
+    ['a2'],
+  )
+  assertEquals(
+    ids(await ask(g, 'inbox_list', { ...search, direction: 'received' })),
+    [],
+  )
   // Whoever is asking, where the line names nobody.
   assertEquals(
-    ids(await ask(g, 'inbox_list', {}, { by: 'desk' })),
+    ids(await ask(g, 'inbox_list', { lane: 'Replies' }, { by: 'desk' })),
     ['a1'],
   )
   await assertRejects(() => ask(g, 'inbox_list'), Error, 'nobody is asking')
@@ -154,6 +170,41 @@ test('reading a letter marks it, and shows its thread', async () => {
     Error,
     'not a letter',
   )
+})
+
+test('mail reads and archives act on the shared root and refresh after a reply', async () => {
+  let { g } = await club()
+  let owner = { by: 'desk' }
+  let stamp = (minute: number) => `2026-10-02T12:0${minute}:00.000Z`
+  await g.apply([arrival('root')], { now: stamp(0) })
+  await g.apply([arrival('reply', { reply_to: 'root' })], { now: stamp(1) })
+  assertEquals(ids(await ask(g, 'inbox_list', { who: 'desk' })), ['root'])
+  await g.apply(await ask(g, 'mail_show', { letter: 'reply' }, owner), {
+    now: stamp(2),
+  })
+  let [root] = await g.get(['root'])
+  assertEquals(comp(root, 'opened').at, stamp(2))
+  await g.apply(await ask(g, 'inbox_archive', { item: 'reply' }, owner), {
+    now: stamp(3),
+  })
+  assertEquals(ids(await ask(g, 'inbox_list', { who: 'desk' })), [])
+  await g.apply([arrival('fresh', { reply_to: 'reply' })], { now: stamp(4) })
+  assertEquals(ids(await ask(g, 'inbox_list', { who: 'desk' })), ['root'])
+  await g.apply(await ask(g, 'mail_show', { letter: 'fresh' }, owner), {
+    now: stamp(5),
+  })
+  ;[root] = await g.get(['root'])
+  assertEquals(comp(root, 'opened').at, stamp(5))
+  await g.apply(
+    await ask(g, 'mail_reply', {
+      letter: 'fresh',
+      body: 'Thanks',
+    }, owner),
+    { now: stamp(6) },
+  )
+  assertEquals(ids(await ask(g, 'inbox_list', { who: 'desk' })), [])
+  ;[root] = await g.get(['root'])
+  assertEquals(comp(root, 'archived').at, stamp(6))
 })
 
 test('a reply to an arrival goes to its author, from the desk it came to', async () => {
@@ -271,7 +322,7 @@ let checkup = async (g: Graph, options: Options = {}) => {
   let [said] = await ask(g, 'mail_check', {}, null, options)
   return {
     body: String(comp(said, 'content').body),
-    level: comp(said, 'error').code,
+    level: comp(said, 'finding').level,
     source: comp(said, 'output').source,
   }
 }

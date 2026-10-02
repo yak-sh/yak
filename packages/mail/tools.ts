@@ -1,25 +1,29 @@
+import {
+  attention,
+  type Direction,
+  type Lane,
+  readerAt,
+  type Row as InboxRow,
+  threadOf as inboxThread,
+  threads,
+} from '@yaks/inbox'
+import {
+  candidates,
+  dependents,
+  discussion,
+  requirements,
+  words,
+} from '@yaks/inbox/queries'
 // What an agent may ask for here: the `@yaks/mail/tools` entry point — the
 // implementations behind the `tool: true` declarations in ./vocab.json. Five
 // commands a person runs all day, and one check.
 //
-// The inbox is A query, never a folder. A letter is addressed to somebody
-// three ways — the entity it was routed to (`mail.target`, ./arrive.ts), the
-// entity it was written to (`deliver.to`), and the address that entity has
-// (`mail.to`) — so the inbox is those three asked as one `or`, minus what has
-// been archived. Nothing is moved, copied, or marked on the way in, which is
-// why the same letter reads the same through every interface.
+// Inbox membership, lane ordering and search belong to @yaks/inbox.
+// This door owns graph reads and writes; the shared core sends nothing.
+// Archive is refreshed atomically and holds until qualifying new activity.
 //
-// Archiving is the one act that hides. Reading a letter marks it read and
-// leaves it in the list; only `inbox archive` takes it out, and `--all` shows
-// the hidden ones again. That asymmetry is the point (M-7048): no sweep,
-// subagent or second reader can drain somebody's inbox behind them, so a list
-// that is empty is a list they emptied. The one thing that archives on its own
-// is answering an arrival — a thread you have replied to is not waiting on
-// you, and without that every fresh session shows the same letter again and
-// replies again.
-//
-// Reading is the mark, so `mail show` writes: it stamps `opened` on the letter
-// it renders. That is what keeps it from being a duplicate of `graph_show`
+// Reading is the mark, so `mail show` refreshes `opened` on the letter
+// and the shared thread it renders. That is what keeps it from being a duplicate of `graph_show`
 // (@yaks/mcp's generic tier, which shows any entity at all) — this one marks
 // the letter read and gathers its thread, both of which are facts about mail
 // and about nothing else.
@@ -59,18 +63,7 @@ import {
 } from '@yaks/graph'
 import { BODY, DOC, TITLE } from '@yaks/doc'
 import { human } from '@yaks/id'
-import {
-  absent,
-  and,
-  type Clause,
-  eq,
-  every,
-  limit,
-  list,
-  or,
-  present,
-  type Query,
-} from '@yaks/query'
+import { absent, and, eq, every, list, parse, present } from '@yaks/query'
 import { checked, type Finding } from '@yaks/tools'
 import type { Runs } from '@yaks/graph/tools'
 import { wearer } from './arrive.ts'
@@ -93,6 +86,16 @@ let comp = (b: Bundle | undefined, name: string): Comp | undefined =>
   b?.[name] as Comp | undefined
 
 let prop = (c: Comp | undefined, k: string): string => str(c?.[k])
+
+let rows = (bundles: Bundle[]): InboxRow[] =>
+  bundles.map((b) => ({
+    eid: b.entity.eid,
+    comps: Object.fromEntries(
+      Object.entries(b).filter(([k, v]) =>
+        k != 'entity' && v && typeof v == 'object'
+      ),
+    ) as InboxRow['comps'],
+  }))
 
 // One entity whole, by eid. Everything here works from the letter as it
 // stands rather than from a patch, the way ./send.ts does.
@@ -122,32 +125,6 @@ export let reader = (call: Bundle): Eid => {
   if (!me) throw new Error('nobody is asking — say --who')
   return me
 }
-
-/**
- * Everything addressed to one reader: routed to them, written to them, or
- * delivered to the address they have. Three forms of one question, asked as
- * one — a letter matching any of them is in their inbox.
- */
-export let addressedTo = (who: Eid, address: string): Clause =>
-  or(
-    eq(`${MAIL}.target`, who),
-    eq(`${DELIVER}.to`, who),
-    ...(address ? [eq(`${MAIL}.to`, address)] : []),
-  )
-
-// Newest first, from the limit rather than from a clock property: `mail.at` is
-// written when a letter arrives, so ordering by it would sort a letter written
-// to you here — an invitation, a reply from the address beside you — to the
-// bottom. A limited result is newest-first by the order rows were written
-// (@yaks/sql bind.ts), which is the order they reached this graph.
-let inbox = (who: Eid, address: string, all: boolean, n: number): Query =>
-  and(
-    present(MAIL),
-    addressedTo(who, address),
-    ...(all ? [] : [absent(ARCHIVED)]),
-    every(),
-    limit(n),
-  )
 
 /** `Re:` derivation — shed however many `Re:`/`Fwd:` layers already piled up,
  * so a long thread does not grow a subject line. */
@@ -217,6 +194,24 @@ export let threadOf = async (
   )
 }
 
+// A mail tool is an effect boundary; thread identity remains shared policy.
+let inboxRoot = async (
+  graph: Graph,
+  call: Bundle,
+  letter: Bundle,
+  conversation?: Bundle[],
+): Promise<string> => {
+  let actor = who(call)?.by
+  if (!actor) return letter.entity.eid
+  let person = readerAt(rows(await graph.get([actor])), actor)
+  let all = rows(conversation ?? await threadOf(graph, letter))
+  let byId = new Map(all.map((r) => [r.eid, r]))
+  for (let r of all) {
+    if (r.comps.mail?.message_id) byId.set(str(r.comps.mail.message_id), r)
+  }
+  return inboxThread(rows([letter])[0], person, byId)
+}
+
 // One letter as a line: who it is from, what it is about, and whether it has
 // been read — `●` unread, `·` read, `×` archived, the way a mail client does.
 let line = (id: (b: Bundle) => string) => (b: Bundle): string => {
@@ -265,15 +260,41 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
   inbox_list: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)
     let who = reader(call)
-    let address = prop(comp(await one(graph, who), EMAIL), 'address')
+    let has = words(graph.vocab)
+    let read = async (query: string): Promise<Bundle[]> =>
+      query ? await graph.read(parse(query)) : []
+    let profile = await one(graph, who)
+    let standing = has('subscription')
+      ? await read(`.subscription.actor=${JSON.stringify(who)}&?subscription`)
+      : []
+    let person = readerAt(
+      rows([...(profile ? [profile] : []), ...standing]),
+      who,
+    )
+    let first = await read(candidates(person, has))
+    let conversation = await read(discussion(rows(first), has))
+    let edges = await read(requirements(rows([...first, ...conversation]), has))
+    let tasks = await read(dependents(rows(edges), has))
+    let bundles = [...first, ...conversation, ...edges, ...tasks]
+    let byId = new Map(bundles.map((b) => [b.entity.eid, b]))
+    let found = threads(rows(bundles), person, {
+      all: !!args.all,
+      text: str(args.search),
+      direction: args.direction as Direction | undefined,
+      lane: args.lane as Lane | undefined,
+    })
     let n = args.limit == null ? PAGE : Number(args.limit)
-    return await graph.read(inbox(who, address, !!args.all, n))
+    return found.slice(0, n)
+      .map((t) => byId.get(t.eid)!)
   },
 
-  inbox_archive: (call): Bundle[] => [{
-    entity: { eid: str(argsOf(call).item) },
-    [ARCHIVED]: {},
-  }],
+  inbox_archive: async (call, graph): Promise<Bundle[]> => {
+    let item = str(argsOf(call).item)
+    let letter = await one(graph, item)
+    return letter?.mail
+      ? attention(await inboxRoot(graph, call, letter), 'archived')
+      : attention(item, 'archived')
+  },
 
   // Reading is the mark, so this writes. The prose is the result; the `opened`
   // patch is what keeps a second call from reporting it as unread.
@@ -281,8 +302,11 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
     let args = argsOf(call)
     let letter = await letterIn(graph, args.letter)
     let thread = await threadOf(graph, letter)
+    let root = await inboxRoot(graph, call, letter, thread)
     return [
-      { entity: { eid: letter.entity.eid }, [OPENED]: {} },
+      ...[...new Set([root, letter.entity.eid])].flatMap((eid) =>
+        attention(eid, 'opened')
+      ),
       {
         entity: { eid: '$said' },
         content: { body: page(human(graph.vocab), letter, thread) },
@@ -331,8 +355,8 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
       // Answering an arrival archives it: a thread you have replied to is not
       // one waiting on you. Only an arrival — following up on your own letter
       // never put anything in the inbox, so there is nothing to hide.
-      ...(arrived && !letter[ARCHIVED]
-        ? [{ entity: { eid: letter.entity.eid }, [ARCHIVED]: {} }]
+      ...(arrived
+        ? attention(await inboxRoot(graph, call, letter), 'archived')
         : []),
     ]
   },

@@ -1,30 +1,57 @@
-// Exercise the real view hooks/transport: absence is a server answer, not an
-// empty RAM cache; counts share ownership and watch/mute keeps row policy.
-import { test } from '@yaks/testing'
+// Readiness, shared query ownership, thread counts and watch/mute over the wire.
+import { test, until } from '@yaks/testing'
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { parseHTML } from 'linkedom'
-import type { Frame } from '@yaks/sync'
+import type { Bundle } from '@yaks/graph'
 import { cache } from '../live.ts'
-import { host } from '../host_testing.ts'
+import { host, reader } from '../host_testing.ts'
 import { uuid } from '../types.ts'
 import { useInboxCount } from './useInbox.ts'
 
-test('inbox count waits for authority, shares holds, and switches to watch/mute rows', async () => {
+let at = (n: number) => `2026-10-02T12:00:0${n}.000Z`
+test('inbox counts wait for complete reads, share holds, deduplicate and respect watch/mute', async () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
     value: document,
     configurable: true,
   })
-  let root = document.querySelector('main')!,
-    actor = uuid(),
+  let root = document.querySelector('main')!
+  let actor = uuid(),
+    target = uuid(),
+    mine = uuid(),
     watched = uuid(),
-    instruction = uuid()
+    sub = uuid()
+  let data: Bundle[] = [
+    { entity: { eid: actor }, person: {}, email: { address: 'p@example.com' } },
+    {
+      entity: { eid: target },
+      task: {},
+      doc: { title: 'Thread' },
+      created: { at: at(1) },
+    },
+    {
+      entity: { eid: mine },
+      comment: { target },
+      doc: { body: 'What now?' },
+      created: { by: actor, at: at(2) },
+    },
+    ...[3, 4].map((n) => ({
+      entity: { eid: uuid() },
+      comment: { target, reply_to: mine },
+      doc: { body: 'Answer' },
+      created: { at: at(n) },
+    })),
+    { entity: { eid: watched }, task: {}, completed: { at: at(5) } },
+  ]
   cache.value = {}
-  let wire = host()
+  let answering = false
+  let wire = host((a) =>
+    answering ? { bundles: reader(data)(a.subscribe) } : undefined
+  )
   let View = () => <span>{useInboxCount(actor) ?? '?'}</span>
   let mount = (n: number) =>
     act(() =>
@@ -33,74 +60,61 @@ test('inbox count waits for authority, shares holds, and switches to watch/mute 
         root,
       )
     )
-  let say = (f: Frame) => act(() => wire.say(f))
-  let asks = () => wire.asked()
-  let gone = () =>
-    wire.sent.flatMap((m) => m.unsubscribe ? [m.unsubscribe] : [])
-  let standing = (mode: string) => ({
-    entity: { eid: instruction },
-    subscription: { actor, target: watched, mode },
-  })
+  let wait = (text: string) =>
+    until(async () => {
+      await act(() => Promise.resolve())
+      return root.textContent == text
+    })
   try {
     await mount(2)
     assertEquals(root.textContent, '??')
-    assertEquals(asks().length, 2) // profile + standing instructions only
-    let subscriptions = asks().find((a) =>
+    answering = true
+    for (let a of wire.asked()) {
+      await act(() =>
+        wire.say({ id: a.id, bundles: reader(data)(a.subscribe) })
+      )
+    }
+    await wait('11') // two answers, one thread
+    let seed = wire.asked().find((a) => a.subscribe.includes('.created.by='))!
+    await act(() =>
+      wire.say({ id: seed.id, refused: { error: 'read', message: 'denied' } })
+    )
+    assertEquals(root.textContent, '??')
+    await act(() =>
+      wire.say({
+        id: seed.id,
+        bundles: reader(data)(seed.subscribe),
+        reset: true,
+      })
+    )
+    await wait('11')
+    let subscriptions = wire.asked().find((a) =>
       a.subscribe.startsWith('.subscription.actor=')
     )!
-    let profile = asks().find((a) => a != subscriptions)!
-    await say({ id: subscriptions.id, bundles: [] })
-    assertEquals(asks().length, 2) // profile presence/email still unknown
-    await say({
-      id: profile.id,
-      bundles: [{ entity: { eid: actor }, project: {} }],
+    data.push({
+      entity: { eid: sub },
+      subscription: { actor, target: watched, mode: 'watch' },
     })
-    let counts = asks().filter((a) => a.subscribe.endsWith('.count'))
-    assertEquals(counts.length, 4)
-    assertEquals(root.textContent, '??')
-    for (let a of counts) await say({ id: a.id, count: 2 })
-    assertEquals(root.textContent, '88')
-    await say({
-      id: counts[0].id,
-      refused: { error: 'read', message: 'refused' },
-    })
-    assertEquals(root.textContent, '??')
-    await say({ id: counts[0].id, count: 0 })
-    assertEquals(root.textContent, '66')
-    // A new watch revokes the count shortcut, without a partial-cache policy
-    // decision or treating the candidate rows still in flight as a zero.
-    await say({ id: subscriptions.id, bundles: [standing('watch')] })
-    assertEquals(root.textContent, '??')
-    assertEquals(counts.every((a) => gone().includes(a.id)), true)
-    let candidates = asks().filter((a) =>
-      a.subscribe.includes('!archived') && !a.subscribe.endsWith('.count')
-    )
-    assertEquals(candidates.length > 0, true)
-    let item = uuid()
-    for (let a of candidates) {
-      await say({
-        id: a.id,
-        bundles: a.subscribe.startsWith('.comment.target=')
-          ? [{ entity: { eid: item }, comment: { target: watched } }]
-          : [],
+    await act(() =>
+      wire.say({
+        id: subscriptions.id,
+        bundles: reader(data)(subscriptions.subscribe),
       })
-    }
-    assertEquals(root.textContent, '11')
-    await say({ id: subscriptions.id, bundles: [standing('mute')] })
-    // Watch-derived queries change; deliver their authoritative empty sets.
-    for (let a of asks().slice(asks().indexOf(candidates.at(-1)!) + 1)) {
-      await say({ id: a.id, bundles: [] })
-    }
-    assertEquals(root.textContent, '00')
-    let n = gone().length
+    )
+    await wait('22')
+    data.at(-1)!.subscription = { actor, target: watched, mode: 'mute' }
+    await act(() =>
+      wire.say({
+        id: subscriptions.id,
+        bundles: reader(data)(subscriptions.subscribe),
+      })
+    )
+    await wait('11')
+    let asks = wire.asked().length
     await mount(1)
-    assertEquals(gone().length, n)
+    assertEquals(wire.asked().length, asks)
     await mount(0)
-    assertEquals(asks().length, gone().length)
-    await mount(1)
-    assertEquals(root.textContent, '?') // retained payload is not readiness
-    await mount(0)
-    assertEquals(asks().length, gone().length)
+    assertEquals(wire.sent.filter((m) => m.unsubscribe).length, asks)
   } finally {
     await act(() => render(null, root))
     wire.free()

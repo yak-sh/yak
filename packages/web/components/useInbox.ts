@@ -1,20 +1,23 @@
-// The browser inbox as ordinary subscribed queries. Each delivery arm is a
-// narrow query over the graph; the shared pure inbox predicate makes the final
-// policy decision, so adding transport does not create a second attention
-// policy. The hook owns every actor-keyed subscription for the view lifetime.
-import { useLayoutEffect, useState } from 'preact/hooks'
-import { useQueryResult } from './useQuery.ts'
-import { useEntity } from './subscriptions.ts'
-import { inboxItem, isUnread, readerAt, type Row, uniq } from '../client.ts'
+// Query ownership belongs to the mounted door; attention policy is pure.
 import {
-  dropAgg,
-  holdAgg,
-  inbox as seededInbox,
-  row,
-  subscriptionState,
-} from '../live.ts'
+  activityAt,
+  readerAt,
+  type Search,
+  type Thread,
+  threads,
+} from '@yaks/inbox'
+import {
+  candidates,
+  dependents,
+  discussion,
+  requirements,
+  words,
+} from '@yaks/inbox/queries'
+import { isUnread, type Row, uniq } from '../client.ts'
+import { inbox as seededInbox, row } from '../live.ts'
 import { kindOf, vocab } from '../types.ts'
-import { inboxCountQueries, inboxQueries } from '@yaks/inbox/queries'
+import { type QueryResult, useQueryResult } from './useQuery.ts'
+import { useEntity } from './subscriptions.ts'
 
 let rows = (eids: string[]): Row[] =>
   eids.flatMap((eid) => {
@@ -28,97 +31,79 @@ let rows = (eids: string[]): Row[] =>
       }]
       : []
   })
+let has = words(vocab)
 
-let useReader = (actor: string) => {
-  let fields = ['project.color', 'email.address'].filter((path) => {
-    let [comp, prop] = path.split('.')
-    return vocab.prop(comp, prop)
-  }).join(',')
+let authoritative = (r: QueryResult) =>
+  r.ready && r.subscription?.state.status != 'failed'
+
+/** Complete query-derived thread data for web, TUI and the inbox root screen. */
+export let useInboxThreads = (
+  actor: string,
+  search: Search = {},
+): { threads: Thread<Row>[]; ready: boolean } => {
+  let fields = ['project.color', 'email.address'].filter(has).join(',')
   let profile = useEntity(actor, fields || 'entity.eid')
   let subscriptions = useQueryResult(
-    vocab.comp('subscription') ? `.subscription.actor=${actor}` : '',
+    has('subscription') ? `.subscription.actor=${actor}` : '',
+  )
+  let who = readerAt([
+    ...(profile?.value ? rows([actor]) : []),
+    ...rows(subscriptions.eids),
+  ], actor)
+  let ready = profile?.ready === true && authoritative(subscriptions)
+  let seed = useQueryResult(candidates(who, has), ready, true)
+  let first = rows(seed.eids)
+  let conversation = useQueryResult(
+    discussion(first, has),
+    ready && authoritative(seed),
+    true,
+  )
+  let group = uniq([...first, ...rows(conversation.eids)])
+  let edges = useQueryResult(
+    requirements(group, has),
+    ready && authoritative(seed) && authoritative(conversation),
+    true,
+  )
+  let tasks = useQueryResult(
+    dependents(rows(edges.eids), has),
+    ready && authoritative(edges),
+    true,
   )
   return {
-    who: readerAt([
-      ...(profile?.value ? rows([actor]) : []),
-      ...rows(subscriptions.eids),
-    ], actor),
-    profile,
-    subscriptions,
+    threads: threads(
+      uniq([...group, ...rows(edges.eids), ...rows(tasks.eids)]),
+      who,
+      search,
+    ),
+    ready: ready && authoritative(seed) && authoritative(conversation) &&
+      authoritative(edges) &&
+      authoritative(tasks),
   }
 }
 
-let useItems = (
-  who: ReturnType<typeof readerAt>,
-  unreadOnly: boolean,
-  enabled = true,
-) => {
-  let queries = inboxQueries(who, unreadOnly, vocab)
-  let reads = [
-    useQueryResult(queries[0], enabled),
-    useQueryResult(queries[1], enabled),
-    useQueryResult(queries[2], enabled),
-    useQueryResult(queries[3], enabled),
-    useQueryResult(queries[4], enabled),
-    useQueryResult(queries[5], enabled),
-  ]
-  return {
-    items: uniq(rows(reads.flatMap((r) => r.eids))).filter(inboxItem(who)),
-    ready: reads.every((r) => r.ready),
-  }
-}
+export type InboxRow = Row & { inbox?: Thread<Row> }
 
-export let useInbox = (actor: string, unreadOnly = false): Row[] => {
-  // Tests and host integrations may plant an inbox without a socket.
+// Existing embedded list consumes roots; T-64033 consumes the full thread API.
+export let useInbox = (actor: string, unreadOnly = false): InboxRow[] => {
   let seeded = seededInbox(actor)
-  let { who } = useReader(actor)
-  let found = useItems(who, unreadOnly)
-  let items = seeded.length ? seeded : found.items
-  return unreadOnly ? items.filter(isUnread) : items
+  let found = useInboxThreads(actor)
+  if (seeded.length) {
+    return (unreadOnly ? seeded.filter(isUnread) : [...seeded]).sort((a, b) =>
+      activityAt(b).localeCompare(activityAt(a))
+    )
+  }
+  return found.threads.filter((t) => !unreadOnly || t.unread).map((t) => {
+    let comps = { ...t.row.comps }
+    if (t.unread) delete comps.opened
+    else comps.opened ??= {}
+    return { ...t.row, comps, inbox: t }
+  })
 }
 
-// Render reads do not dial. Identical badges share a counted hold, and the
-// last unmount releases it. A loading/refused reply is not a confident zero.
-let useCount = (line: string, enabled: boolean): number | undefined => {
-  let name = `inbox-count:${line}`
-  let [set, setValue] = useState<ReturnType<typeof holdAgg>>()
-  useLayoutEffect(() => {
-    if (!enabled || !line) return
-    setValue(holdAgg(name, line))
-    return () => dropAgg(name)
-  }, [name, line, enabled])
-  let state = enabled && line ? subscriptionState(name) : undefined
-  if (!enabled) return undefined
-  if (!line) return 0
-  return set?.line == line && set.live.value && state?.status == 'ready'
-    ? set.map.value[''] ?? 0
-    : undefined
-}
-
+/** Counts use the same threads, archive boundary and unread time as the list. */
 export let useInboxCount = (actor: string): number | undefined => {
   let seeded = seededInbox(actor)
-  let { who, profile, subscriptions } = useReader(actor)
-  // EMPTY must be a complete, addressed server answer, not an empty local
-  // cache while standing instructions are still in flight. With any watch or
-  // mute rows, keep the existing authoritative candidate reads + pure policy.
-  let ready = profile?.ready === true &&
-    subscriptions.subscription?.state.status == 'ready'
-  let counting = ready && subscriptions.eids.length == 0
-  let queries = inboxCountQueries(who, vocab)
-  let counts = [
-    useCount(queries[0], counting),
-    useCount(queries[1], counting),
-    useCount(queries[2], counting),
-    useCount(queries[3], counting),
-    useCount(queries[4], counting),
-  ]
-  let found = useItems(who, true, ready && !counting)
+  let found = useInboxThreads(actor)
   if (seeded.length) return seeded.filter(isUnread).length
-  if (!ready) return undefined
-  if (!counting) {
-    return found.ready ? found.items.filter(isUnread).length : undefined
-  }
-  return counts.every((n) => n !== undefined)
-    ? counts.reduce<number>((n, value) => n + value!, 0)
-    : undefined
+  return found.ready ? found.threads.filter((t) => t.unread).length : undefined
 }

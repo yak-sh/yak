@@ -14,12 +14,16 @@
         "from": {
           "type": "string",
           "description": "the address it came from",
-          "examples": ["ann@example.com"]
+          "examples": [
+            "ann@example.com"
+          ]
         },
         "to": {
           "type": "string",
           "description": "the address it is written to — absent when `deliver.to` names the recipient as an entity instead",
-          "examples": ["bob@example.com"]
+          "examples": [
+            "bob@example.com"
+          ]
         },
         "at": {
           "type": "string",
@@ -147,7 +151,7 @@
       "noun": "inbox",
       "verb": "list",
       "title": "List the inbox",
-      "description": "List mail messages addressed to one reader and not yet archived, newest first: routed to them, written to them, or delivered to an email address they have. `●` marks unread, `·` read, `×` archived. Archiving is the only thing that removes a message from the list, so an empty inbox is one the reader emptied. Returns the message records as bundles (JSON objects with entity ids and component fields), up to limit (50 by default). Omit who for the caller; all: true includes archived messages.",
+      "description": "List one row per inbox thread, classified as Needs you, Replies, Updates or Recent. Archive hides a thread until activity after archived.at. Search words you said or received; all includes archived threads. Defaults to the caller and 50 threads, blocking first then newest activity.",
       "input": {
         "who": {
           "type": "string",
@@ -160,7 +164,29 @@
         },
         "limit": {
           "type": "integer",
-          "description": "return at most this many messages (default 50)"
+          "description": "return at most this many threads (default 50)"
+        },
+        "lane": {
+          "type": "string",
+          "enum": [
+            "Needs you",
+            "Replies",
+            "Updates",
+            "Recent"
+          ],
+          "description": "return only this lane"
+        },
+        "search": {
+          "type": "string",
+          "description": "search thread words"
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "said",
+            "received"
+          ],
+          "description": "search words you said or received"
         }
       },
       "options": {
@@ -178,7 +204,7 @@
       "noun": "inbox",
       "verb": "archive",
       "title": "Archive an inbox item",
-      "description": "Remove one item from the inbox. Nothing is deleted and no history is lost: `inbox_list(all: true)` (CLI: `inbox list --all`) still shows it, and a later message on the same thread arrives as its own item. Returns the applied changes as bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
+      "description": "Hide a thread until activity after its archive timestamp. Repeated archive refreshes that timestamp. No history is deleted; inbox list --all includes hidden threads.",
       "input": {
         "item": {
           "type": "string",
@@ -307,7 +333,9 @@
     },
     "mail_post": {
       "effect": true,
-      "created": ["mail"],
+      "created": [
+        "mail"
+      ],
       "sweep": ".mail&.deliver&!delivered&!bounced&!deliver.tried",
       "description": "hand an outbound letter to the sender and record its outcome. The sweep replays the letters still owed, so one written while no sender could run is sent by the first process that can"
     }

@@ -5,5 +5,13 @@
       "esnext"
     ],
     "strict": true
+  },
+  "entries": [
+    ".",
+    "./queries"
+  ],
+  "imports": {
+    "@yaks/inbox": "./mod.ts",
+    "@yaks/inbox/queries": "./queries.ts"
   }
 }

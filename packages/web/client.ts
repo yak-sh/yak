@@ -1,13 +1,5 @@
-import { addrsOf, inboxItem, isUnread, type Reader, subsOf } from '@yaks/inbox'
-export {
-  aboutOf,
-  addressed,
-  inboxItem,
-  inInbox,
-  isUnread,
-  readerAt,
-  subsOf,
-} from '@yaks/inbox'
+import { addrsOf, type Reader, subsOf, threads } from '@yaks/inbox'
+export { aboutOf, addressed, isUnread, readerAt, subsOf } from '@yaks/inbox'
 export type { Reader } from '@yaks/inbox'
 // The headless client half — what the CLI and the MCP server share. Talks
 // to a running tasks server over HTTP (/query to read, /apply
@@ -1675,8 +1667,9 @@ export let contextDigest = (
   // the letter was ABOUT rather than who it was TO, which reported zero
   // while hundreds of letters addressed to the venture sat unread, and it
   // pointed at `task mail`, a door that has since been retired.
-  let unread = all.filter(inboxItem(readerFor(all, session, cwd, scope)))
-    .filter(isUnread)
+  let unread = threads(all, readerFor(all, session, cwd, scope)).filter((t) =>
+    t.unread
+  )
   // A session is an agent run: its claim, loaded context and entry trace ARE
   // its attention. Only the human preview reports exogenous inbox read-state.
   if (!session && unread.length) {

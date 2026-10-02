@@ -12,6 +12,7 @@ import { ram } from '@yaks/ram'
 import { type Effects, effects } from '@yaks/effects'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { docDoc, docs } from '@yaks/doc'
+import { kernelDoc } from '@yaks/kernel'
 import { mailDoc } from './comp.ts'
 import { mailbox } from './plugin.ts'
 import { type Stash, stash } from './stash.ts'
@@ -52,23 +53,10 @@ let doc: VocabDoc = {
         role: { type: 'string', enum: ['owner', 'member'], default: 'member' },
       },
     },
-    // The two components ./tools.ts writes and does not declare —
-    // @yaks/kernel's `opened` and `archived` — declared here for the same
-    // reason `member` is: a test needs the component, not the package.
-    opened: {
-      component: true,
-      type: 'object',
-      properties: {
-        at: { type: 'string', format: 'date-time', stamped: true },
-      },
-    },
-    archived: {
-      component: true,
-      type: 'object',
-      properties: {
-        at: { type: 'string', format: 'date-time', stamped: true },
-      },
-    },
+    // Use the kernel's declared marks so this fixture fills server timestamps
+    // with the same graph rules as every inbox door.
+    opened: kernelDoc.$defs!.opened,
+    archived: kernelDoc.$defs!.archived,
     // The text of a tool's result, and which call it came from (@yaks/tools) —
     // declared here so a handler's prose result can be applied.
     content: {

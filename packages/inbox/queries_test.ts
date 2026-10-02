@@ -1,11 +1,98 @@
-import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
+import { test } from '@yaks/testing'
+import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { loadVocab, type PropSchema } from '@yaks/vocab'
-import { inboxCountQueries, inboxQueries } from './queries.ts'
+import { loadVocab } from '@yaks/vocab'
+import { kernel, kernelDoc } from '@yaks/kernel'
+import { docDoc } from '@yaks/doc'
+import { taskDoc } from '@yaks/task'
+import { projectDoc } from '@yaks/project'
+import { edgeDoc, edgeKeywords } from '@yaks/edge'
+import { attention, type Row, threads } from './mod.ts'
+import {
+  candidates,
+  dependents,
+  discussion,
+  requirements,
+  words,
+} from './queries.ts'
 
-test('an inbox reads declared delivery facets and preserves read/archive policy', () => {
-  let component = (properties: Record<string, PropSchema>) => ({
+let at = (n: number) => `2026-10-02T12:00:0${n}.000Z`
+let rows = (bundles: Bundle[]): Row[] =>
+  bundles.map((b) => ({ eid: b.entity.eid, comps: b as Row['comps'] }))
+test('candidate reads include replies, archived roots and open dependents; repeated archive stamps anew', async () => {
+  let vocab = loadVocab([kernelDoc, docDoc, taskDoc, projectDoc, edgeDoc], [
+    edgeKeywords,
+  ])
+  let g = graph({ vocab, storage: ram(vocab), plugins: [kernel()] })
+  let has = (path: string) => {
+    let [name, prop] = path.split('.')
+    return path == 'entity.eid' ||
+      (!!vocab.comp(name) && (!prop || vocab.props(name).includes(prop)))
+  }
+  await g.apply([
+    { entity: { eid: 'person' }, doc: { title: 'Person' } },
+    { entity: { eid: 'thread' }, task: {}, doc: { title: 'Thread' } },
+    {
+      entity: { eid: 'decision' },
+      task: {},
+      filed: { assignee: 'person' },
+      decision: {
+        question: 'Ship?',
+        choices: [{ label: 'Yes', description: 'Ship' }, {
+          label: 'No',
+          description: 'Wait',
+        }],
+        recommended: 'Yes',
+      },
+    },
+    { entity: { eid: 'worker' }, task: {} },
+    {
+      entity: { eid: 'edge' },
+      edge: { from: 'worker', to: 'decision' },
+      requires: {},
+    },
+  ], { now: at(1) })
+  await g.apply([{
+    entity: { eid: 'mine' },
+    comment: { target: 'thread' },
+    doc: { body: 'SQLite?' },
+    $actor: { by: 'person' },
+  }], { now: at(2) })
+  let who = { actor: 'person', operator: true }
+  let read = async (q: string) => q ? rows(await g.read(q)) : []
+  let inbox = async () => {
+    let first = await read(candidates(who, has))
+    let chat = await read(discussion(first, has))
+    let edges = await read(requirements([...first, ...chat], has))
+    let tasks = await read(dependents(edges, has))
+    return threads([...first, ...chat, ...edges, ...tasks], who)
+  }
+  assertEquals((await inbox()).map((t) => [t.eid, t.lane, t.blocking]), [[
+    'decision',
+    'Needs you',
+    true,
+  ], ['thread', 'Recent', false]])
+  await g.apply(attention('thread', 'archived'), { now: at(3) })
+  assertEquals((await inbox()).map((t) => t.eid), ['decision'])
+  await g.apply([{
+    entity: { eid: 'reply' },
+    comment: { target: 'thread', reply_to: 'mine' },
+    doc: { body: 'Yes' },
+  }], { now: at(4) })
+  assertEquals((await inbox()).find((t) => t.eid == 'thread')?.lane, 'Replies')
+  await g.apply(attention('thread', 'archived'), { now: at(5) })
+  assertEquals((await inbox()).map((t) => t.eid), ['decision'])
+  assertEquals((await g.get(['thread']))[0].archived, { at: at(5) })
+  await g.apply([{ entity: { eid: 'worker' }, completed: {} }], { now: at(6) })
+  assertEquals(
+    (await inbox()).find((t) => t.eid == 'decision')?.blocking,
+    false,
+  )
+})
+
+test('sparse delivery vocabularies retain archived candidates without querying missing properties', async () => {
+  let component = (properties: Record<string, { type: string }>) => ({
     component: true,
     type: 'object',
     properties,
@@ -15,34 +102,34 @@ test('an inbox reads declared delivery facets and preserves read/archive policy'
     $defs: {
       entity: component({ eid: text }),
       comment: component({ target: text }),
-      doc: component({ title: text }),
-      created: component({ at: text }),
       opened: component({ at: text }),
       archived: component({ at: text }),
     },
   }])
-  let rows = [
-    { entity: { eid: 'new' }, comment: { target: 'owner' } },
-    {
-      entity: { eid: 'read' },
-      comment: { target: 'owner' },
-      opened: { at: 'today' },
-    },
-    {
-      entity: { eid: 'archived' },
-      comment: { target: 'owner' },
-      archived: { at: 'today' },
-    },
-    { entity: { eid: 'other' }, comment: { target: 'other' } },
-  ]
-  let who = { actor: 'owner', addrs: new Set(['owner@example.com']) }
   let store = ram(vocab)
-  store.tx((tx) => tx.patch(rows))
-  let read = (queries: string[]) =>
-    queries.filter(Boolean).flatMap((query) => store.rows(query))
-  let candidates = (unread: boolean) =>
-    read(inboxQueries(who, unread, vocab)).map((row) => row.eid)
-  assertEquals(candidates(false), ['new', 'read'])
-  assertEquals(candidates(true), ['new'])
-  assertEquals(read(inboxCountQueries(who, vocab)), [{ value: '', n: 1 }])
+  await store.tx((tx) =>
+    tx.patch([
+      { entity: { eid: 'new' }, comment: { target: 'owner' } },
+      {
+        entity: { eid: 'read' },
+        comment: { target: 'owner' },
+        opened: { at: 'today' },
+      },
+      {
+        entity: { eid: 'archived' },
+        comment: { target: 'owner' },
+        archived: { at: 'today' },
+      },
+      { entity: { eid: 'other' }, comment: { target: 'other' } },
+    ])
+  )
+  let who = {
+    actor: 'owner',
+    operator: true,
+    addrs: new Set(['owner@example.com']),
+  }
+  assertEquals(
+    store.rows(candidates(who, words(vocab))).map((r) => r.eid).sort(),
+    ['archived', 'new', 'read'],
+  )
 })
