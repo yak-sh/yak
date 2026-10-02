@@ -83,8 +83,12 @@ this package serves it.
   keys between the index and the top page, j and k walk the rows and links,
   Enter or l stacks what the walk is on, h returns to the page under the top
   one, a press on a strip returns to it, `/` types in the index's field, q
-  quits. It reads through the config's `yak serve`. Values paint as values;
-  editing is the page's.
+  quits. Without `--app` it reads through the config's `yak serve`, unchanged.
+  `yak inspect --app recipes` opens the login account's app store;
+  `yak inspect --app myspace/recipes '.recipe'` names its space explicitly when
+  a slug is shared. It uses the caller's `yak login` token on HTTP reads and the
+  live socket, with the app's own access rules and JSON refusals. Values paint
+  as values; editing is the page's.
 - **Elsewhere**: a page that registers these views (a card's Inspect tab) draws
   an entity's page in place, a row pressed opening that entity's own card.
 

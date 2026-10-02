@@ -14,11 +14,16 @@ export let commands: CliCommand[] = [{
   name: 'inspect',
   description: 'Open the inspector in this terminal: the map of every ' +
     'component, archetype and package, a query run on it, or an entity. ' +
-    'It reads through yak serve.',
+    'It reads through yak serve, or an app’s store with --app.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
     properties: {
+      app: {
+        type: 'string',
+        description:
+          'a yaks.app app: its slug, or <space>/<app>, as the yak login account',
+      },
       what: {
         type: 'string',
         description: 'an id to open (T-9), or a query to run on the map',
@@ -38,10 +43,18 @@ export let commands: CliCommand[] = [{
     let more = (await contributed(host.config.plugins ?? []))
       .flatMap((c) => c.views)
     try {
+      let connection = typeof args.app == 'string'
+        ? await (await import('./remote.ts')).remote(
+          args.app,
+          context.host,
+          context.state,
+        )
+        : { url, wire: {} }
       await open(
-        url,
+        connection.url,
         start(typeof args.what == 'string' ? args.what : ''),
         more,
+        connection.wire,
       )
       return 0
     } catch (e) {

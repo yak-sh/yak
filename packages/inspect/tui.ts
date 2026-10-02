@@ -46,6 +46,7 @@ import { INSPECT, me, put, STACK, stack } from './state.ts'
 import { HOME, pagePath, queryPath, stackOf } from './where.ts'
 import { composed } from './views.ts'
 import type { View } from './host.ts'
+import type { Connection } from './remote.ts'
 
 // What the walk is on wears the painter's own mark for a selected row, in
 // the theme's colours (@yaks/ui `sheet`).
@@ -123,16 +124,29 @@ export let open = async (
   url: string,
   href: string,
   more: View[] = [],
+  wire: Connection = {},
 ): Promise<void> => {
-  let answered = await fetch(`${url}/vocab`).catch(() => undefined)
+  let answered = await Promise.resolve(
+    (wire.fetch ?? fetch)(
+      new Request(`${url}/vocab`, {
+        headers: wire.headers,
+      }),
+    ),
+  ).catch(() => undefined)
   if (!answered?.ok) {
-    await answered?.body?.cancel()
-    throw new Error(`yak inspect reads through yak serve, and ${url} is not up`)
+    let error = await answered?.json().catch(() => undefined)
+    throw new Error(
+      error?.error?.message ??
+        (wire.headers
+          ? `yak inspect cannot reach ${url}`
+          : `yak inspect reads through yak serve, and ${url} is not up`),
+    )
   }
   let { docs, keywords } = await answered.json()
   let vocab = loadVocab(docs, keywords)
   let box = client(vocab, [], {
     url,
+    ...wire,
     signal,
     vault: false,
     wireVault: false,
