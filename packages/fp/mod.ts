@@ -334,3 +334,21 @@ export let bsearch = <T>(x: T) => (xs: readonly T[]): number => {
   }
   return lo
 }
+
+/// [1, 2, 3, 10].map(backoff) -> [1000, 2000, 4000, 300000]
+/** A bounded exponential wait, in milliseconds. */
+export let backoff = (attempts: number): number =>
+  Math.min(300_000, 1000 * 2 ** (attempts - 1))
+
+/** A timer cut short by a signal; a cancelled wait resolves without work. */
+export let sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
+  new Promise((wake) => {
+    let done = () => {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', done)
+      wake()
+    }
+    let timer = setTimeout(done, ms)
+    signal?.addEventListener('abort', done, { once: true })
+    if (signal?.aborted) done()
+  })

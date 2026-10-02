@@ -191,17 +191,8 @@ export let held = (g: Graph, name: string): Promise<Lease | undefined> =>
 
 /** Wait, unless we are done waiting: a sleep the signal cuts short, so a pass
  * between renewals releases the lease the moment it is asked to. */
-export let sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
-  new Promise((wake) => {
-    let done = () => {
-      clearTimeout(timer)
-      signal?.removeEventListener('abort', done)
-      wake()
-    }
-    let timer = setTimeout(done, ms)
-    signal?.addEventListener('abort', done, { once: true })
-    if (signal?.aborted) done()
-  })
+export { sleep } from '@yaks/fp'
+import { sleep } from '@yaks/fp'
 
 /** How a lease is held for a while: {@link HoldOpts}, plus what signals that
  * we are done, how often to retry while somebody else holds it, and where a

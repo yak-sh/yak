@@ -1,7 +1,7 @@
 // A completed answer waits for storage without running its tool again.
 // Only storage's explicit assurance that nothing committed permits a retry.
 
-import { backoff, sleep } from '@yaks/effects'
+import { backoff, sleep } from '@yaks/fp'
 
 let retryable = (e: unknown): boolean =>
   !!e && typeof e == 'object' && 'retryable' in e && e.retryable === true

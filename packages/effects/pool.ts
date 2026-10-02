@@ -105,8 +105,8 @@ export let TRIES = 3
  * [1, 2, 3, 10].map(backoff) // [1000, 2000, 4000, 300000]
  * ```
  */
-export let backoff = (attempts: number): number =>
-  Math.min(300_000, 1000 * 2 ** (attempts - 1))
+export { backoff } from '@yaks/fp'
+import { backoff } from '@yaks/fp'
 
 // A thrown error that asks to be tried again: it carries `retry`, with the
 // wait it asks for as `retry.after` in milliseconds, the shape a provider's
