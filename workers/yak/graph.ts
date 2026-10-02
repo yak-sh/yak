@@ -2544,6 +2544,9 @@ export class Store {
       }
       return Response.json({ version })
     }
+    if (path == '/api/vocab') {
+      return this.#route(new Request(new URL('/vocab', request.url), request))
+    }
     if (path == '/vocab') return this.#vocabDoor(request)
     if (path == '/seed') return this.#seedDoor(request)
     // Every word this store speaks, as the documents its vocabulary was loaded

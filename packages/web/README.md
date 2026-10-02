@@ -5,6 +5,26 @@ The web door: a person's threaded inbox, cards, boards and editing in a browser.
 its view, and every card on screen is live: an edit anywhere reaches the page
 over the socket.
 
+## An app store on yaks.app
+
+Open `https://<space>.yaks.app/<app>/_web` while signed in to that space. The
+app's members and owners can browse it; a visitor gets the app's JSON refusal
+even when the app itself is public or open. Editing still follows the app's own
+write permission. The Inbox person is the signed-in person, not the box's
+configured owner.
+
+The host declares a page mount and API prefix (`hosting.ts`); assets and copied
+entity addresses stay under that mount, while reads, writes and subscriptions
+use the app's existing `/api` doors. The vocabulary comes from `/api/vocab` in
+@yaks/api's `{docs, keywords}` envelope. A host without tasks or transcripts
+gets generic browsing instead of task/session queries and verbs; transcript
+chrome only asks for runtime columns the vocabulary actually declares. Box-only
+Inspect and the removed legacy freeze doors are not app operations.
+
+`assets.ts` builds the same browser module, page and stylesheet the routes facet
+serves into a static host's directory. workers/yak builds them during its normal
+deployment preparation; the Worker owns only access and mounting.
+
 ## Use
 
 List it in a `yak serve` config beside @yaks/api, whose doors the page reads and

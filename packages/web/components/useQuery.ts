@@ -152,7 +152,9 @@ export let useQuery = (query: string): Ent[] => useQueryEids(query).map(ent)
 // live.ts backlinks door reads locally from the rows a mounted view holds;
 // it never opens an unowned server subscription.
 export let useCommentsOn = (target: string): Ent[] =>
-  useQueryEids(`.comment.target=${target}`)
+  useQueryEids(
+    vocab.prop('comment', 'target') ? `.comment.target=${target}` : '',
+  )
     .map(ent)
     .sort((a, b) => a.num - b.num)
 
@@ -161,12 +163,10 @@ export let useCommentsOn = (target: string): Ent[] =>
 // without that plugin has none to ask for: the query would name a component
 // its vocabulary lacks. The vocabulary is loaded before this module runs
 // (types.ts), so the choice is made once.
-export let useCommitsOn: (target: string) => Ent[] = vocab.comp('commit')
-  ? (target) =>
-    useQueryEids(`.commit.target=${target}`)
-      .map(ent)
-      .sort((a, b) => a.num - b.num)
-  : () => []
+export let useCommitsOn = (target: string): Ent[] =>
+  useQueryEids(vocab.prop('commit', 'target') ? `.commit.target=${target}` : '')
+    .map(ent)
+    .sort((a, b) => a.num - b.num)
 
 // `via` — WHICH column points here — reads off each referrer's own row signal
 // (linksVia), so a retarget wakes the face without a membership change.
@@ -179,15 +179,17 @@ export let useBacklinks = (target: string): Backlink[] =>
 
 // EID-keyed lookups belong to the mounted view, never an unheld render read.
 export let useBoardsOver = (target: string): string[] =>
-  useQueryEids(`.board.query~=${target}`)
+  useQueryEids(vocab.prop('board', 'query') ? `.board.query~=${target}` : '')
 
 export let useChatFor = (
   actor: string | undefined,
   target: string,
 ): Ent | undefined =>
   useQueryResult(
-    actor ? `.chat.actor=${actor}&.chat.target=${target}` : '',
-    !!actor,
+    actor && vocab.prop('chat', 'actor') && vocab.prop('chat', 'target')
+      ? `.chat.actor=${actor}&.chat.target=${target}`
+      : '',
+    !!actor && !!vocab.prop('chat', 'actor') && !!vocab.prop('chat', 'target'),
   ).eids.map(ent)[0]
 
 // The far endpoints ride the citation answer as PEERS, cut to what a reference
@@ -210,14 +212,26 @@ export let REFERENCE_PEERS = [
   'spawn.persona',
   ...dotFields.map((f) => `${f.comp}.${f.prop}`),
 ]
-let REFERENCED = '.edges[referenced,entry.session]&.edges.peers=' +
-  REFERENCE_PEERS.join(',')
+let referenceQuery = () => {
+  let kinds = [
+    ...(vocab.comp('referenced') ? ['referenced'] : []),
+    ...(vocab.prop('entry', 'session') ? ['entry.session'] : []),
+  ]
+  if (!kinds.length) return undefined
+  let fields = REFERENCE_PEERS.filter((field) => {
+    let [comp, prop] = field.split('.')
+    return vocab.prop(comp, prop)
+  })
+  return `.edges[${kinds.join(',')}]` +
+    (fields.length ? `&.edges.peers=${fields.join(',')}` : '')
+}
 
 // Citations are a typed edge rider over one addressed entity. The server
 // projects entry endpoints to their Session through the indexed entry.session
 // column; this hook only owns the subscription and reads its scoped edge set.
 export let useReferences = (eid: string): References => {
-  useLayoutEffect(() => edgeSub(eid, REFERENCED), [eid])
+  let query = referenceQuery()
+  useLayoutEffect(() => query ? edgeSub(eid, query) : undefined, [eid, query])
   return references(eid)
 }
 

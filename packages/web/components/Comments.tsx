@@ -9,6 +9,7 @@ import { slotsOf } from '../verb.ts'
 import { ent, pending, uuid } from '../live.ts'
 import { bundlesOf } from '../wire.ts'
 import { useCommentsOn, useCommitsOn } from './useQuery.ts'
+import { vocab } from '../types.ts'
 import { subject } from '../client.ts'
 import { block, Button, Notes } from '@yaks/ui'
 import { ago } from './Stamp.tsx'
@@ -327,7 +328,7 @@ export let Comments = ({ eid }: { eid: string }) => {
   return (
     <Frame>
       <Branches rows={[...said, ...landed]} />
-      <Composer eid={eid} />
+      {vocab.comp('comment') && vocab.comp('doc') && <Composer eid={eid} />}
     </Frame>
   )
 }

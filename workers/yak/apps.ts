@@ -105,6 +105,7 @@ import { nameOf } from './signin.ts'
 import { written } from './reach.ts'
 import { borrowed, queried, sources, vocabulary } from './page-graph.ts'
 import { pageSocket } from './page-socket.ts'
+import { webAsset, webPage, webPath } from './web.ts'
 import { releaseStatus } from './release-status.ts'
 import { pageSpeaks } from './lenses.ts'
 import { appDoc } from './vocab.ts'
@@ -210,7 +211,8 @@ let json = (
 // human-facing HTML 404 belongs only to pages. The raw pathname is used
 // because `/api/query` is parsed as an app called `api`, while
 // `/<app>/api/query` carries `/api/query` as that app's path.
-let appApi = (pathname: string) => /^(?:\/[^/]+)?\/api\//.test(pathname)
+let appApi = (pathname: string) =>
+  /^(?:\/[^/]+)?\/(?:api\/|_web(?:\/|$))/.test(pathname)
 
 let nothingAt = (pathname: string, env: Env) =>
   appApi(pathname)
@@ -1472,6 +1474,23 @@ let api = async (
   }
   // The vocabulary a page's local graph loads: this store's words and the
   // borrowed words its own manifest uses, from their component homes.
+  if (path == '/vocab') {
+    if (req.method != 'GET') return json(405, 'method_not_allowed')
+    if (!mayRead) return refused('not_a_reader')
+    let wire = await store.consume(
+      '/api/vocab',
+      async (res) =>
+        res.ok
+          ? { keywords: (await res.json() as { keywords: unknown[] }).keywords }
+          : { failed: new Response(await res.text(), res) },
+      {},
+      headers,
+    )
+    if (wire.failed) return wire.failed
+    let docs = await vocabulary(env, space, app, who)
+    if (!docs.ok) return docs
+    return Response.json({ docs: await docs.json(), keywords: wire.keywords })
+  }
   if (path == '/vocab.json') {
     if (!mayRead) return refused('not_a_reader')
     return vocabulary(env, space, app, who)
@@ -2256,7 +2275,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     // `/<x>/api/…` named an app that is not here. That is a wrong address,
     // not one of the front page's own paths: a page asking a store there has
     // to hear a 404, never a page of HTML it cannot parse (C-32574 item 4).
-    if (r.app && r.path.startsWith('/api/')) {
+    if (r.app && (r.path.startsWith('/api/') || webPath(r.path))) {
       return nothingAt(url.pathname, env)
     }
     app = home
@@ -2331,7 +2350,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   //
   // Nor for a sandboxed page's own request: its token is its app's alone,
   // and the router would be acting as the person who holds it.
-  if (!front && !bearing(req) && !paper) {
+  if (!front && !bearing(req) && !paper && !webPath(path)) {
     let early = await firstly(env, dir, space, req, who, c)
     // The answer is the home app's, so it reports as the home app — and is
     // counted as the home app's page view — at the bare hostname, which is
@@ -2365,6 +2384,29 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   if (who.person && !who.role) {
     let held = await c.time('guest', () => dir.grant(app!, who.person!))
     if (held) who = { ...who, role: held.access, guest: true }
+  }
+  if (webPath(path)) {
+    if (req.method != 'GET' && req.method != 'HEAD') {
+      return json(405, 'method_not_allowed')
+    }
+    if (!who.person) {
+      return json(
+        401,
+        'not_a_reader',
+        SAYS.not_a_reader,
+        signInAt(req.url, env),
+      )
+    }
+    if (!who.role || who.guest) {
+      return json(403, 'not_a_reader', MEMBER.not_a_reader)
+    }
+    if (!reads(mode(app.access), who.role)) {
+      return json(403, 'not_a_reader', MEMBER.not_a_reader)
+    }
+    if (path.startsWith('/_web/web/')) {
+      return webAsset(req, env, path.slice('/_web/web/'.length))
+    }
+    return webPage(req, env, url.pathname.slice(0, -path.length), who.person)
   }
   // The `/api/` doors stay the kernel's, always, and keep their own refusals,
   // which speak.

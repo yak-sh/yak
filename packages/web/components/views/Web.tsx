@@ -1,5 +1,6 @@
 import { type Ent } from '../../types.ts'
 import { base } from '../../live.ts'
+import { door } from '../../hosting.ts'
 import { block, el } from '@yaks/ui'
 
 let Frame = el('iframe', 'Web')
@@ -27,14 +28,21 @@ export let Web = ({ e }: { e: Ent }) =>
     )
     : (
       <Wait>
-        {e.failed?.reason
-          ? <Error>{e.failed.reason}</Error>
-          : <Url>freezing {e.web!.url} …</Url>}
-        <Go
-          type='button'
-          onClick={() => fetch(`${base()}/freeze?eid=${e.eid}`).catch(() => {})}
-        >
-          ↻ retry
-        </Go>
+        {e.failed?.reason ? <Error>{e.failed.reason}</Error> : (
+          <Url>
+            {door('freeze') ? 'freezing ' : ''}
+            {e.web!.url}
+            {door('freeze') ? ' …' : ''}
+          </Url>
+        )}
+        {door('freeze') && (
+          <Go
+            type='button'
+            onClick={() =>
+              fetch(`${base()}/freeze?eid=${e.eid}`).catch(() => {})}
+          >
+            ↻ retry
+          </Go>
+        )}
       </Wait>
     )

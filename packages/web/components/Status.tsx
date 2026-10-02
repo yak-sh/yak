@@ -13,10 +13,10 @@ import {
   rows,
   uuid,
 } from '../live.ts'
-import { type Change, idOf } from '../types.ts'
+import { type Change, idOf, vocab } from '../types.ts'
+import { hostCommands } from '../host_commands.ts'
 import {
   type Command,
-  commands,
   type Ctx,
   ghost,
   run,
@@ -155,7 +155,7 @@ let local: Record<string, Command> = capable('canvas')
     },
   }
   : {}
-let all = { ...commands, ...local }
+let all = () => ({ ...hostCommands(vocab), ...local })
 
 // What the typist was looking at when the words were typed, EMITTED as a
 // `scene` notice on the task (D-13858): the url, the root entity, the camera,
@@ -215,8 +215,10 @@ let launch = async (intent: string | SpawnIntent) => {
 let exec = async (line: string) => {
   let launching = ''
   try {
+    let name = line.trim().match(/^\S+/)?.[0]
+    if (name && !all()[name]) throw new Error(`not a command here: ${name}`)
     let r = run(line, ctx(), local)
-    let changes = r.changes ?? []
+    let changes = (r.changes ?? []).filter((c) => vocab.comp(c.name))
     let task = spawnTask(r.spawn)
     if (task) changes = [...changes, ...scene(task)]
     if (changes.length) mutate(...changes)
@@ -375,9 +377,9 @@ export let Status = () => {
   }, [line])
 
   // The hints the line offers, and which is picked (0 = the best match).
-  let hints = mode.value == 'command' ? suggest(line, all) : []
+  let hints = mode.value == 'command' ? suggest(line, all()) : []
   let [, pre, verb, rest] = line.match(/^(\s*)(\S+)(.*)$/s) ?? []
-  let faded = ghost(line, all)
+  let faded = ghost(line, all())
   let put = (v: string) => {
     if (input.current) input.current.value = v
     fields.set(CMD, v)
@@ -438,7 +440,7 @@ export let Status = () => {
                       ? (
                         <>
                           {pre}
-                          <Verb mod={all[verb] && 'known'}>{verb}</Verb>
+                          <Verb mod={all()[verb] && 'known'}>{verb}</Verb>
                           {rest}
                         </>
                       )

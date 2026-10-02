@@ -1,3 +1,4 @@
+import { apiPath } from './hosting.ts'
 // The browser's vocabulary: what each component is, learned from the graph it
 // is looking at. A host serves the documents it composed (`/vocab`,
 // @yaks/api) and `learn()` reads the tables below out of them before
@@ -146,7 +147,8 @@ let typeOf = (v: Vocab, comp: string, prop: string): PropType => {
 
 /** Read the tables above out of a host's vocabulary documents, replacing
  * whatever was learned before. */
-export let learn = (docs: VocabDoc[]): Vocab => {
+export let learn = (docs: VocabDoc[], hostKeywords?: Keywords[]): Vocab => {
+  if (hostKeywords) keywords = hostKeywords
   let v = loadVocab(docs, keywords)
   let c: typeof comps = {}
   let st: typeof stamped = {}
@@ -1365,5 +1367,6 @@ export type Snapshot = {
 // A page learns its host's vocabulary here, at the bottom of the module, so
 // every module that imports this one evaluates with the tables full.
 if (globalThis.document && !('Deno' in globalThis)) {
-  learn((await (await fetch('/vocab')).json()).docs)
+  let wire = await (await fetch(apiPath('/vocab'))).json()
+  learn(wire.docs, wire.keywords)
 }

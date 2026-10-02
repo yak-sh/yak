@@ -1,3 +1,4 @@
+import { hosting, storageKey } from './hosting.ts'
 // The browser half: one graph cache, narrow render signals, one socket,
 // one identity, one camera. Boots are cold and subscription-shaped (T-21491):
 // ~3.4 MB for the root canvas, formerly ~3.4 GB; patches publish only the rows
@@ -34,7 +35,7 @@ import {
   vocab,
 } from './types.ts'
 import { moves, typeOf } from './edge.ts'
-import { sessionFields } from './tray_query.ts'
+import { sessionQueries } from './tray_query.ts'
 import { isUnread, type Row } from './client.ts'
 import {
   distinctValues,
@@ -882,7 +883,8 @@ export let serverHost = () => {
   if (config.host) return config.host
   throw new Error('live: no server host — set config.host (TASKS_HOST)')
 }
-export let base = () => `http${config.secure ? 's' : ''}://${serverHost()}`
+export let base = () =>
+  `http${config.secure ? 's' : ''}://${serverHost()}${hosting().api}`
 
 // The column sort, and the order `.order=filed.priority` asks the server
 // for, so a column's next page lands below the rows it already shows:
@@ -1324,7 +1326,7 @@ const REFUSAL_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 let readLedger = (): Refusal[] => {
   try {
     let rs: Refusal[] = JSON.parse(
-      globalThis.localStorage?.getItem(LEDGER) ?? '[]',
+      globalThis.localStorage?.getItem(storageKey(LEDGER)) ?? '[]',
     )
     let cutoff = Date.now() - REFUSAL_MAX_AGE_MS
     return rs.filter((r) => r.at >= cutoff)
@@ -1334,7 +1336,7 @@ let readLedger = (): Refusal[] => {
 }
 let writeLedger = (rs: Refusal[]) => {
   try {
-    globalThis.localStorage?.setItem(LEDGER, JSON.stringify(rs))
+    globalThis.localStorage?.setItem(storageKey(LEDGER), JSON.stringify(rs))
   } catch { /* no storage — the in-memory signal still shows this session's */ }
 }
 let refusalStore: RefusalStore = {
@@ -1633,7 +1635,7 @@ let heal = async (changes: Change[]) => {
 let post = async (changes: Change[], id: string) => {
   let res: Response
   try {
-    res = await fetch(`${base()}/web/apply`, {
+    res = await fetch(new URL(hosting().apply, base()).href, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(bundlesOf(changes)),
@@ -2431,7 +2433,8 @@ export let boot = async () => {
   booted = true
   ensureClient()
   if (config.host) {
-    owner.value = (await (await fetch(`${base()}/web/owner`)).json()).owner
+    owner.value =
+      (await (await fetch(new URL(hosting().owner, base()).href)).json()).owner
   }
   loadRefusals()
   await replayOutbox()
@@ -2838,7 +2841,7 @@ export let projects = (): Ent[] =>
 // above under a DIFFERENT projection, which makes it a different SUB with its
 // own member set: that is what "projection is part of sub identity" buys, and
 // the cache merges the two because the fuller one is a superset.
-export let sessionDetail = '.session&.fields=' + sessionFields.join(',')
+export let sessionDetail = sessionQueries(vocab).detail
 
 export let shelfFor = (client: string): string | undefined => {
   ensureClientRows(client)
@@ -3290,10 +3293,10 @@ export let myCursor = (client: string) => {
 // Who this browser is: a client entity, its uuid minted into localStorage on
 // first visit. The db rows appear when the camera first persists.
 export let clientId = () => {
-  let id = localStorage.getItem('tasks-client')
+  let id = localStorage.getItem(storageKey('tasks-client'))
   if (!id) {
     id = uuid()
-    localStorage.setItem('tasks-client', id)
+    localStorage.setItem(storageKey('tasks-client'), id)
   }
   return id
 }

@@ -11,7 +11,7 @@ import {
   usingOf,
 } from '../providers.ts'
 import { sessionFrames, type SpawnAsk, spawnPlan } from '../client.ts'
-import { type Change, idOf } from '../types.ts'
+import { type Change, idOf, vocab } from '../types.ts'
 import { block } from '@yaks/ui'
 import { menu, navigate, screenTarget } from './nav.tsx'
 import { usePlaceAt } from '@yaks/ui'
@@ -52,6 +52,7 @@ export let providers = signal<Provider[]>([])
 let read = async (q: string) =>
   await (await fetch(`${base()}/query?q=${encodeURIComponent(q)}`)).json()
 export let load = async () => {
+  if (!['provider', 'model', 'serves'].every((name) => vocab.comp(name))) return
   try {
     let found = await Promise.all(
       ['.provider', '.model', '.serves&?edge'].map(read),
@@ -67,6 +68,11 @@ export let load = async () => {
 export let spawnOf = async (
   ask: SpawnAsk & { task?: string; prompt?: string },
 ): Promise<{ session: string; changes: Change[] }> => {
+  if (
+    !['session', 'entry', 'content', 'using'].every((name) => vocab.comp(name))
+  ) {
+    throw new Error('this host does not run sessions')
+  }
   if (!providers.value.length) await load()
   let plan = spawnPlan(providers.value, ask, await liveBlocked())
   if (!plan.provider) throw new Error('no matching provider/model')

@@ -1,3 +1,4 @@
+import { storageKey } from './hosting.ts'
 // The browser's replica: a @yaks/client box on the host's own /ws (@yaks/api).
 // Each named subscription live.ts holds is a server-evaluated watch; @yaks/sync
 // owns the socket, its reconnect and the resubscribe after it, and lands every
@@ -147,7 +148,7 @@ export let liveClient = (opts: {
     retainUnownedProps: true,
     provenance: () => null,
     wireVault: opts.disk && globalThis.indexedDB
-      ? wireIdb({ name: 'tasks-client-wire' })
+      ? wireIdb({ name: storageKey('tasks-client-wire') })
       : false,
     // Local writes use echoed patches below, never sync's automatic POST.
     fetch: () => {

@@ -1,3 +1,5 @@
+import { door, pagePath } from '../hosting.ts'
+import { vocab } from '../types.ts'
 import { searchAt } from '../url.ts'
 import { entityPath } from '../url.ts'
 import { useEffect, useLayoutEffect } from 'preact/hooks'
@@ -27,11 +29,7 @@ import { Entity } from './Entity.tsx'
 import { tips } from '@yaks/ui'
 import { Keybindings } from './Keybindings.tsx'
 import { Navigation, NavigationToggle } from './Navigation.tsx'
-import {
-  allSessionsAt,
-  allSessionsKey,
-  allSessionsQuery,
-} from '../tray_query.ts'
+import { allSessionsAt, allSessionsKey, sessionQueries } from '../tray_query.ts'
 import { QueryList } from './views/List.tsx'
 
 tips() // mount the one delegated [data-tip] tooltip (idempotent)
@@ -149,7 +147,7 @@ export let App = () => {
   // partial cache an entity reached by direct URL is in no
   // defining set, so this is what loads it; a no-op under a whole-graph cache.
   let url = new URL(route.value, 'http://x')
-  let sessions = allSessionsAt(route.value)
+  let sessions = !!vocab.comp('session') && allSessionsAt(route.value)
   let search = searchAt(route.value)
   let t = sessions ? null : screenTarget()
   let rootEid = t?.eid
@@ -183,7 +181,9 @@ export let App = () => {
       <Main>
         <Bar>
           <NavigationToggle />
-          <Brand href='/'>Inbox</Brand>
+          <Brand href={pagePath('/')}>
+            {vocab.comp('subscription') ? 'Inbox' : 'Browse'}
+          </Brand>
           {sessions
             ? (
               <>
@@ -209,14 +209,16 @@ export let App = () => {
                       <TabFace view={v} eid={e.eid} />
                     </Tab>
                   ))}
-                  <Tab
-                    type='button'
-                    aria-label='Inspect'
-                    data-tip='Inspect'
-                    onClick={() => location.assign(queryPath())}
-                  >
-                    <Icon name='table' />
-                  </Tab>
+                  {door('inspect') && (
+                    <Tab
+                      type='button'
+                      aria-label='Inspect'
+                      data-tip='Inspect'
+                      onClick={() => location.assign(queryPath())}
+                    >
+                      <Icon name='table' />
+                    </Tab>
+                  )}
                   {
                     /* The root card's dropdown: the same menu a card's right-click
               serves, hung from the bar's far edge. Pointerdown must not
@@ -251,12 +253,17 @@ export let App = () => {
             )}
         </Bar>
         <Body>
-          {search != null
-            ? <SearchPage query={search} />
-            : sessions
-            ? <QueryList eid={allSessionsKey} query={allSessionsQuery} />
+          {search != null ? <SearchPage query={search} /> : sessions
+            ? (
+              <QueryList
+                eid={allSessionsKey}
+                query={sessionQueries(vocab).all}
+              />
+            )
             : e
             ? <Entity eid={e.eid} view={view} />
+            : url.pathname == '/' && !vocab.comp('subscription')
+            ? <SearchPage query='' />
             : url.pathname == '/'
             ? (
               <LostFrame>

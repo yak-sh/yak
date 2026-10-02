@@ -15,7 +15,7 @@ import {
   rows,
   shown,
 } from '../live.ts'
-import { type Ent, statusOf } from '../types.ts'
+import { type Ent, statusOf, vocab } from '../types.ts'
 import {
   type Action,
   define,
@@ -334,10 +334,13 @@ defineActions([
   },
   {
     match: and(),
-    acts: (e) => [{
-      label: favoriteLabel(e),
-      run: () => mutate(favoriteChange(e)),
-    }],
+    acts: (e) =>
+      vocab.comp('favorite')
+        ? [{
+          label: favoriteLabel(e),
+          run: () => mutate(favoriteChange(e)),
+        }]
+        : [],
   },
   {
     match: parse('.proposed'),
@@ -353,7 +356,10 @@ defineActions([
       // until it is claimed.
       let move = (label: string, status: string): Action => ({
         label,
-        run: () => mutate(...statusChanges(e.eid, status)),
+        run: () =>
+          mutate(
+            ...statusChanges(e.eid, status).filter((c) => vocab.comp(c.name)),
+          ),
       })
       // Cancelling wants a why: after the write, the cursor lands in the
       // entity's comment box — a nudge toward the convention, never a
@@ -361,7 +367,11 @@ defineActions([
       let cancel: Action = {
         label: 'cancel',
         run: () => {
-          mutate(...statusChanges(e.eid, 'cancelled'))
+          mutate(
+            ...statusChanges(e.eid, 'cancelled').filter((c) =>
+              vocab.comp(c.name)
+            ),
+          )
           if (typeof document != 'undefined') {
             setTimeout(() =>
               document.querySelector<HTMLElement>(
@@ -375,7 +385,10 @@ defineActions([
         ...(s != 'done' ? [move('done', 'done')] : []),
         ...(s != 'open' ? [move('reopen', 'open')] : []),
         ...(s != 'cancelled' ? [cancel] : []),
-        { label: 'run agent…', run: () => openRun(e.eid) },
+        ...(vocab.comp('claim') && vocab.comp('session') &&
+            vocab.comp('using') && vocab.comp('entry')
+          ? [{ label: 'run agent…', run: () => openRun(e.eid) }]
+          : []),
       ]
     },
   },
@@ -386,7 +399,7 @@ defineActions([
     // reddens the Dot, orthogonal to the status moves above.
     match: parse('.task'),
     acts: (e) =>
-      e.blocked
+      !vocab.comp('blocked') ? [] : e.blocked
         ? [{
           label: 'unblock',
           run: () => mutate({ eid: e.eid, name: 'blocked', comp: null }),
@@ -408,7 +421,7 @@ defineActions([
     // nobody for the instruction to belong to.
     match: and(),
     acts: (e) => {
-      if (!myActor()) return []
+      if (!myActor() || !vocab.comp('subscription')) return []
       let mode = myMode(e.eid)
       let set = (to: 'watch' | 'mute' | null) => () =>
         mutate(...subChanges(rows(), myActor()!, e.eid, to))
@@ -452,17 +465,21 @@ defineActions([
   },
   {
     match: and(),
-    acts: (e) => [
-      e.quarantined
-        ? {
-          label: 'unquarantine',
-          run: () => mutate({ eid: e.eid, name: 'quarantined', comp: null }),
-        }
-        : {
-          label: 'quarantine',
-          run: () => mutate({ eid: e.eid, name: 'quarantined', comp: {} }),
-        },
-    ],
+    acts: (e) =>
+      vocab.comp('quarantined')
+        ? [
+          e.quarantined
+            ? {
+              label: 'unquarantine',
+              run: () =>
+                mutate({ eid: e.eid, name: 'quarantined', comp: null }),
+            }
+            : {
+              label: 'quarantine',
+              run: () => mutate({ eid: e.eid, name: 'quarantined', comp: {} }),
+            },
+        ]
+        : [],
   },
   {
     match: and(),

@@ -2,8 +2,8 @@ import { vocab } from '../types.ts'
 import { signal } from '@preact/signals'
 import { useEffect, useState } from 'preact/hooks'
 import { favoritePin, navigationQuery, navigationView } from '../navigation.ts'
-import { cache, ent, mode, mutate, sessionDetail } from '../live.ts'
-import { allSessionsPath } from '../tray_query.ts'
+import { cache, ent, mode, mutate } from '../live.ts'
+import { allSessionsPath, sessionQueries } from '../tray_query.ts'
 import { useSessions } from './useSessions.ts'
 import { follow } from './nav.tsx'
 import { block } from '@yaks/ui'
@@ -59,11 +59,13 @@ export let NavigationToggle = () => (
 )
 
 export let Navigation = () => {
-  let favorites = useQuery(navigationQuery)
+  let favorites = useQuery(vocab.comp('favorite') ? navigationQuery : '')
   let { rows } = useSessions(navigationOpen.value)
   let sessions = rows.map(([eid]) => eid)
   useQueryResult(
-    sessions.length ? `${sessionDetail}&.entity.eid=${sessions.join(',')}` : '',
+    sessions.length
+      ? `${sessionQueries(vocab).detail}&.entity.eid=${sessions.join(',')}`
+      : '',
     navigationOpen.value && sessions.length > 0,
     true,
   )
@@ -94,6 +96,7 @@ export let Navigation = () => {
     if (!data || !cache.peek()[data.target]) return
     ev.preventDefault()
     ev.stopPropagation()
+    if (!vocab.comp('favorite')) return
     let change = favoritePin(ent(data.target))
     if (change) mutate(change)
   }

@@ -1,3 +1,4 @@
+import { scopedStorage } from '../hosting.ts'
 // What the person has typed in this page and not sent: their drafts
 // (@yaks/draft), kept in the graph and synced to every interface they use —
 // another tab, the terminal, another device — until each is sent or
@@ -63,7 +64,7 @@ let host: Client = {
 let stash = (): Stash | undefined => {
   if (!config.host) return undefined
   try {
-    return globalThis.localStorage
+    return scopedStorage(globalThis.localStorage)
   } catch {
     return undefined
   }

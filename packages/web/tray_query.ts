@@ -62,3 +62,35 @@ export let allSessionsAt = (at: string) => {
 export let allSessionsKey = 'all-sessions'
 export let allSessionsQuery = '.session&.order=-created.at&.fields=' +
   sessionFields.join(',')
+
+/** Session chrome over this host's declared transcript and runtime columns. */
+export let sessionQueries = (vocab: import('@yaks/vocab').Vocab) => {
+  if (!vocab.comp('session')) {
+    return { active: '', process: '', recent: '', detail: '', all: '' }
+  }
+  let offered = (fields: string[]) =>
+    fields.filter((field) => {
+      let [comp, prop] = field.split('.')
+      return vocab.prop(comp, prop)
+    })
+  let fields = offered(dotFields.map((f) => `${f.comp}.${f.prop}`))
+  let project = fields.length ? `&.fields=${fields.join(',')}` : ''
+  let order = vocab.prop('created', 'at') ? '&.order=-created.at' : ''
+  let personal = '.session' +
+    (vocab.prop('session', 'operator') ? '&.session.operator=true' : '') +
+    (vocab.prop('spawned', 'parent') ? '&!spawned.parent' : '') +
+    (vocab.prop('session', 'source') ? '&!session.source' : '')
+  let window = `${project}${order}&.limit=${sessionCap}`
+  let detail = '.session&.fields=' + offered(sessionFields).join(',')
+  return {
+    active: vocab.prop('session', 'status')
+      ? personal + '&.session.status=pending,running' + window
+      : '',
+    process: vocab.prop('process', 'pid') && vocab.comp('exit')
+      ? personal + '&.process.pid&!exit' + window
+      : '',
+    recent: personal + window,
+    detail,
+    all: detail + order,
+  }
+}

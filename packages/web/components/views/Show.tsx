@@ -2,7 +2,7 @@ import { Decision } from '../Decision.tsx'
 import { useReference, useRepoUrl, useRows } from '../subscriptions.ts'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { type ComponentChildren } from 'preact'
-import { type Ent, statusOf } from '../../types.ts'
+import { type Ent, statusOf, vocab } from '../../types.ts'
 import { statusChanges } from '../../client.ts'
 import { FLOOR, textOf } from '../../twin.ts'
 import {
@@ -137,7 +137,8 @@ export let Pip = ({ e }: { e: Ent }) => {
         prop='status'
         onChange={(b) =>
           mutate(
-            ...statusChanges(e.eid, String((b.task as Ent['task'])?.status)),
+            ...statusChanges(e.eid, String((b.task as Ent['task'])?.status))
+              .filter((c) => vocab.comp(c.name)),
           )}
         anchor={anchor}
         side='below'
@@ -427,7 +428,11 @@ export let Boards = ({ e }: { e: Ent }) => {
 // sub-projects. Open work only, board-ordered (status column, then rank): the
 // project page is a working view; the full history lives on its boards.
 export let Tasks = ({ e }: { e: Ent }) => {
-  let ids = useQueryEids(`.filed.project->${e.eid}&.task&.task.status=open,wip`)
+  let ids = useQueryEids(
+    vocab.prop('filed', 'project') && vocab.prop('task', 'status')
+      ? `.filed.project->${e.eid}&.task&.task.status=open,wip`
+      : '',
+  )
     .map(ent)
     .sort((a, b) =>
       statuses.findIndex((s) => s == statusOf(a)) -
@@ -578,7 +583,10 @@ export let Meta = (
   },
 ) => {
   let claimant = useReference(e.claim?.session)
-  useLayoutEffect(() => holdCommentCount(e.eid), [e.eid])
+  useLayoutEffect(
+    () => vocab.prop('comment', 'target') ? holdCommentCount(e.eid) : undefined,
+    [e.eid],
+  )
   let talk = commentCount(e.eid).value
   let edges = tallies(e)
   let hasEdges = edges.some(([, open, done]) => open > 0 || done > 0)

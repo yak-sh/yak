@@ -3,24 +3,21 @@ import { leaseEid } from '../../effects/lease.ts'
 import { ent } from '../live.ts'
 import { type RunnerLease, trayLive, traySessions } from '../sessions.ts'
 import { type Ent, vocab } from '../types.ts'
-import {
-  trayActiveQuery,
-  trayProcessQuery,
-  trayRecentQuery,
-} from '../tray_query.ts'
+import { sessionQueries } from '../tray_query.ts'
 import { useQueryResult } from './useQuery.ts'
 
 // Both surfaces own the same bounded subscriptions; the query layer shares
 // their wire reads. Leases are one projected batch over these candidates only.
 export let useSessions = (enabled = true) => {
-  let query = (line: string) => vocab.comp('session') ? line : ''
-  let active = useQueryResult(query(trayActiveQuery), enabled, true).eids
-  let process = useQueryResult(query(trayProcessQuery), enabled, true).eids
-  let recent = useQueryResult(query(trayRecentQuery), enabled, true).eids
+  let query = sessionQueries(vocab)
+  let active = useQueryResult(query.active, enabled, true).eids
+  let process = useQueryResult(query.process, enabled, true).eids
+  let recent = useQueryResult(query.recent, enabled, true).eids
   let ids = [...new Set([...active, ...process, ...recent])].sort()
   let leaseIds = new Set(
     useQueryResult(
-      ids.length
+      ids.length && vocab.prop('lease', 'holder') &&
+        vocab.prop('lease', 'until')
         ? `.entity.eid=${
           ids.map((id) => leaseEid(`@yaks/session/run/${id}`)).join(',')
         }` +

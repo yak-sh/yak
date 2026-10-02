@@ -1,3 +1,4 @@
+import { localPath, pagePath } from '../hosting.ts'
 import { addressId, entityPath, searchAt } from '../url.ts'
 import { signal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
@@ -21,7 +22,7 @@ import {
 } from '../live.ts'
 import { type Action, actionsFor, resolve } from './registry.ts'
 import { SHORT } from '@yaks/id'
-import { type Change, type Ent, IdError, idOf } from '../types.ts'
+import { type Change, type Ent, IdError, idOf, vocab } from '../types.ts'
 import { dragData } from './drag.ts'
 import { cursorEid } from '../edge.ts'
 import { allSessionsAt } from '../tray_query.ts'
@@ -37,13 +38,13 @@ export { peek, trail }
 let loc = () => (globalThis as { location?: Location }).location
 let his = () => (globalThis as { history?: History }).history
 let address = (l: Location) =>
-  l.pathname == '/' && SHORT.test(l.hash)
-    ? entityPath(l.hash) + l.search
-    : l.pathname + l.search
+  localPath(l.pathname) == '/' && SHORT.test(l.hash)
+    ? localPath(entityPath(l.hash)) + l.search
+    : localPath(l.pathname) + l.search
 
 export let route = signal(loc() ? address(loc()!) : '/')
-if (loc()?.pathname == '/' && SHORT.test(loc()!.hash)) {
-  his()?.replaceState(null, '', address(loc()!))
+if (loc() && localPath(loc()!.pathname) == '/' && SHORT.test(loc()!.hash)) {
+  his()?.replaceState(null, '', pagePath(address(loc()!)))
 }
 globalThis.addEventListener?.('popstate', () => {
   let was = screenTarget()?.eid
@@ -66,8 +67,10 @@ let arrive = (to: string) => {
 export let navigate = (to: string) => {
   let h = his()
   if (!h) return
-  h.pushState(null, '', to)
-  arrive(to)
+  let url = new URL(to, 'http://x')
+  let target = localPath(url.pathname) + url.search + url.hash
+  h.pushState(null, '', pagePath(target))
+  arrive(target)
 }
 
 // Whether a path is the app's own route shape — `/` or ONE extensionless
@@ -104,10 +107,10 @@ navApi?.addEventListener?.('navigate', (e) => {
   if (ev.navigationType != 'push' || ev.destination.sameDocument) return
   if (ev.formData != null) return
   let url = new URL(ev.destination.url)
-  if (!appRoute(url.pathname)) return
+  if (!appRoute(localPath(url.pathname))) return
   ev.intercept({
     handler: () => {
-      arrive(url.pathname + url.search)
+      arrive(localPath(url.pathname) + url.search)
       return Promise.resolve()
     },
   })
@@ -211,7 +214,7 @@ let openRef = (ev: MouseEvent) => {
 let menuRef = (ev: MouseEvent) => {
   let a = (ev.target as Element | null)?.closest?.('a[href]')
   let href = a?.getAttribute('href') ?? ''
-  let id = href.match(/^\/([^/?#]+)(?:\?[^#]*)?$/)?.[1]
+  let id = localPath(href).match(/^\/([^/?#]+)(?:\?[^#]*)?$/)?.[1]
   let eid = id && eidOf(decodeURIComponent(id))
   if (eid) menuAt(ent(eid))(ev)
 }
@@ -268,6 +271,7 @@ export let screenTarget = (at = route.value) => {
   if (allSessionsAt(at) || searchAt(at) != null) return null
   let url = new URL(at, 'http://x')
   let id = addressId(decodeURIComponent(url.pathname.slice(1)))
+  if (!id && !vocab.comp('subscription')) return null
   let view = url.searchParams.get('v') ?? undefined
   let eid = id ? routed(id) : owner.value
   if (!id) view = 'Inbox'
@@ -320,7 +324,7 @@ let grandfather = async (legacy: string) => {
   if (!eid || route.peek() != at) return
   let to = entityPath(idOf(ent(eid)))
   his()?.replaceState(null, '', to)
-  arrive(to)
+  arrive(localPath(to))
 }
 
 // The cursor: publish WHERE this client now looks into the

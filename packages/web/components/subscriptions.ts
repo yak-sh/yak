@@ -19,7 +19,7 @@ import {
   subscriptionState,
 } from '../live.ts'
 import { useQueryResult } from './useQuery.ts'
-import { type Ent } from '../types.ts'
+import { type Ent, vocab } from '../types.ts'
 
 export let useBoardSub = (e?: Ent): SubscriptionRead | undefined => {
   let q = String(e?.board?.query ?? '')
@@ -73,7 +73,13 @@ export let usePinTargets = (ps: { target: string }[]) =>
 // Ref columns are not edge peers. Ask for the small face, not its document,
 // transcript or incident edges; several visible chips share this query.
 export let useReference = (eid?: string | null) => {
-  let read = useEntity(eid, 'doc.title,client.user_agent,session.id')
+  let fields = ['doc.title', 'client.user_agent', 'session.id'].filter(
+    (field) => {
+      let [comp, prop] = field.split('.')
+      return vocab.prop(comp, prop)
+    },
+  ).join(',')
+  let read = useEntity(eid, fields || 'entity.eid')
   return {
     ...read,
     value: eid && read?.loaded(eid, 'doc', 'title') ? read.value : undefined,
@@ -84,7 +90,10 @@ export let useReference = (eid?: string | null) => {
 // starting choice itself; a spawned one's is on its first entry.
 export let useModel = (e: Ent): { name?: string; effort?: string } => {
   let latest = useQueryResult(
-    `.entry.session=${e.eid}&.using&!ask&.order=-entry.seq&.limit=1&.fields=using.model,using.effort`,
+    e.session && vocab.prop('entry', 'session') && vocab.comp('using') &&
+      vocab.comp('ask')
+      ? `.entry.session=${e.eid}&.using&!ask&.order=-entry.seq&.limit=1&.fields=using.model,using.effort`
+      : '',
     !!e.session,
     true,
   ).eids[0]
@@ -103,14 +112,20 @@ export let useModel = (e: Ent): { name?: string; effort?: string } => {
 let repoFields = 'repo.url,filed.project,comment.target,' +
   'session.actor,role.scope,memory.scope,entry.session'
 export let useRepoUrl = (e: Ent): string | undefined => {
-  let trace = repoTrace(ent(e.eid))
+  let fields = repoFields.split(',').filter((field) => {
+    let [comp, prop] = field.split('.')
+    return vocab.prop(comp, prop)
+  }).join(',')
+  let trace = vocab.prop('repo', 'url')
+    ? repoTrace(ent(e.eid))
+    : { eids: [], url: undefined }
   let held = useRef(new Map<string, () => void>())
   let key = trace.eids.toSorted().join(',')
   for (let eid of trace.eids) {
-    subscriptionState(routeName(eid, repoFields))
+    subscriptionState(routeName(eid, fields || 'entity.eid'))
   }
   useLayoutEffect(() => {
-    let want = new Set(key.split(','))
+    let want = new Set(key ? key.split(',') : [])
     for (let [eid, off] of held.current) {
       if (want.has(eid)) continue
       off()
@@ -118,7 +133,7 @@ export let useRepoUrl = (e: Ent): string | undefined => {
     }
     for (let eid of want) {
       if (held.current.has(eid)) continue
-      held.current.set(eid, routeSub(eid, repoFields))
+      held.current.set(eid, routeSub(eid, fields || 'entity.eid'))
     }
   }, [key])
   useEffect(() => () => {

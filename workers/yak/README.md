@@ -117,9 +117,9 @@ commit times and marks that estimate in its output.
 
 The incident commands, using this box’s Wrangler/GitHub login. An agent names
 the act with `--admin` and it is recorded as the platform’s admin person
-(`admin@bot.yak.sh`, seeded into the directory); the owner names it with `--owner`
-and it is his. Same commands, same credentials — the flag says whose act it is,
-and the banner on stderr says so out loud.
+(`admin@bot.yak.sh`, seeded into the directory); the owner names it with
+`--owner` and it is his. Same commands, same credentials — the flag says whose
+act it is, and the banner on stderr says so out loud.
 
 ```sh
 yak admin deploys --admin        # or --owner, when it is the owner
@@ -494,3 +494,14 @@ yaks.app, this directory, is under the Functional Source License, FSL-1.1-ALv2
 (`LICENSE.md`), from 2026-09-22 forward: each version becomes Apache-2.0 two
 years after its release. The rest of the repo is Apache-2.0 (the root
 `LICENSE`).
+
+### App-scoped graph web page
+
+`/<app>/_web` serves @yaks/web against that app's store. This reserved door
+requires a signed-in space member/owner (not a public visitor or an app-only
+guest); assets and identity use the same check. Refusals are the app API's JSON
+envelope. The page declares `/<app>/api` for its wire and uses the signed-in
+person as the Inbox target. `/<app>/api/vocab` answers the shared docs+keywords
+wire, including borrowed docs; the Store's internal `/vocab` remains the app's
+manifest. The ordinary `/api/query` serves archetype rows and tallies already.
+Deployment preparation builds the package assets into ignored `public/_web`.

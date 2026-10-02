@@ -1,15 +1,16 @@
+import { localPath, pagePath, webOrigin } from './hosting.ts'
 // Human-facing graph addresses. Transport stays local through TASKS_HOST;
 // anything handed to a person uses the board's stable public door.
 
 import { SHORT } from '@yaks/id'
 import { EID } from './types.ts'
 
-let origin = 'https://tasks.yak.sh'
+let origin = webOrigin
 
 // Encode the path segment: a literal # would start a browser fragment, which
 // is never sent to the server. /%23abcdef1234 survives copy, reload and new tab.
-export let entityPath = (id: string) => `/${encodeURIComponent(id)}`
-export let entityUrl = (id: string) => `${origin}${entityPath(id)}`
+export let entityPath = (id: string) => pagePath(`/${encodeURIComponent(id)}`)
+export let entityUrl = (id: string) => `${origin()}${entityPath(id)}`
 
 // A copied short handle may arrive as a bare path segment after a person
 // drops the # that a browser treats as a fragment. It still names that eid.
@@ -27,10 +28,10 @@ export let entityId = (raw: string): string | undefined => {
   } catch {
     return undefined
   }
-  if (u.origin != origin) return undefined
+  if (u.origin != origin()) return undefined
   let id: string
   try {
-    id = addressId(decodeURIComponent(u.pathname.slice(1))) ||
+    id = addressId(decodeURIComponent(localPath(u.pathname).slice(1))) ||
       (SHORT.test(u.hash) ? u.hash : '')
   } catch {
     return undefined

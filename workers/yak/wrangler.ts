@@ -117,6 +117,17 @@ export let aliased = (root = repo, to = TSCONFIG) => {
  */
 export let ready = async (root = dir, timeout = 600_000) => {
   aliased()
+  let web = await new Deno.Command('deno', {
+    args: [
+      'run',
+      '--no-lock',
+      '-A',
+      join(repo, 'packages/web/assets.ts'),
+      join(root, 'public/_web'),
+    ],
+    stdin: 'null',
+  }).spawn().status
+  if (!web.success) throw new Error('Web asset generation failed')
   let generated = await new Deno.Command('deno', {
     args: ['run', '--no-lock', '-A', join(repo, 'bin/compiler-packages.ts')],
     stdin: 'null',

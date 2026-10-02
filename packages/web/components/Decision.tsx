@@ -1,6 +1,6 @@
 import { DecisionForm } from '@yaks/task/views'
 import type { Bundle } from '@yaks/graph'
-import { type Ent } from '../types.ts'
+import { type Ent, vocab } from '../types.ts'
 import { apply } from '../live.ts'
 import { useQueryResult } from './useQuery.ts'
 import { drafts } from './drafts.ts'
@@ -11,7 +11,12 @@ import { viaName } from './Comments.tsx'
 /** The decision domain's form bound to this page's graph and drafts. */
 export let Decision = ({ e, caret }: { e: Ent; caret?: number }) => {
   let waiting = useQueryResult(
-    `.task !completed !cancelled .requires[<=1]->${e.eid}&.limit=1`,
+    e.decision &&
+      ['task', 'completed', 'cancelled', 'requires'].every((name) =>
+        vocab.comp(name)
+      )
+      ? `.task !completed !cancelled .requires[<=1]->${e.eid}&.limit=1`
+      : '',
     !!e.decision,
     true,
   )

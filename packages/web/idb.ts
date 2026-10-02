@@ -1,3 +1,4 @@
+import { hosting, storageKey } from './hosting.ts'
 // The durable outbox (T-21440): a tab's UNDELIVERED intent on disk. live.ts
 // parks every local write here under its stable delivery id the instant it is
 // sent, and unparks it the instant the server acks it — so a tab crash or a
@@ -32,7 +33,7 @@ export let open = (): Promise<IDBDatabase | null> => {
   return new Promise((resolve) => {
     let r: IDBOpenDBRequest
     try {
-      r = g.open(DB, 1)
+      r = g.open(storageKey(DB), 1)
     } catch {
       resolve(null) // Firefox private mode throws right here
       return
@@ -92,6 +93,7 @@ export let parkedWrites = async (): Promise<[string, Parked][]> => {
 // Drop the dead `tasks` database. Fire-and-forget: a delete waits for every
 // tab still holding it open, and nothing here depends on when it lands.
 export let forgetLegacy = () => {
+  if (hosting().storage) return
   try {
     ;(globalThis as { indexedDB?: IDBFactory }).indexedDB?.deleteDatabase(
       LEGACY,
