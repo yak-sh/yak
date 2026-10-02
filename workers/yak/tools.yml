@@ -382,7 +382,7 @@ builder_build:
     models page). It builds whether or not the builder is staged, which is
     how a staged builder is tried on a few rows before it builds everything:
     only names the rows whose builds to make (ids or aliases), and limit
-    takes the first few. A template, provider or model tried in place of the builder's
+    takes the first few. A template, provider, model or native input tried in place of the builder's
     own builds a shadow variant, whose outputs nothing else selects, so the
     builder's own outputs stay as they are. A build asks the model again only
     where what it hashes moved. Each model turn spends the space's model

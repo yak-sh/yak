@@ -94,6 +94,11 @@ let BUILDERS: Row[] = [{
       provider: str(
         "a provider to try instead of the builder's own, as a shadow variant",
       ),
+      input: {
+        type: 'object',
+        description: 'native request fields merged into using.input for a ' +
+          'shadow variant',
+      },
       model: str(
         "a model to try instead of the builder's own, as a shadow variant",
       ),
@@ -111,6 +116,7 @@ let BUILDERS: Row[] = [{
       ...args.template == null ? {} : { template: String(args.template) },
       ...args.provider == null ? {} : { provider: String(args.provider) },
       ...args.model == null ? {} : { model: String(args.model) },
+      ...args.input == null ? {} : { input: args.input as Ask['input'] },
       ...who.person ? { by: who.person } : {},
     }
     let r = await store('/build', {

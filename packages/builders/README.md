@@ -122,9 +122,10 @@ adapter. The tool runner records the call and result; builders does not execute
 models or code itself.
 
 `builder build <builder>` reconciles now, independent of `floor`. An alternate
-model, provider or template creates a shadow variant. A repeated key creates no
-call. A scheduled wake checks the builder again. A configured `rest` advances
-`floor` after a call starts.
+model, provider, template or native input creates a shadow variant. A repeated
+key creates no call. `--input @input.json` merges the object into `using.input`
+for that shadow run, without editing the builder. A scheduled wake checks the
+builder again. A configured `rest` advances `floor` after a call starts.
 
 `builder build <builder> --only <id…>` builds only the bindings whose outer
 entities are named (any id form, as in every write), and `--limit <n>` builds

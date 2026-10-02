@@ -227,7 +227,7 @@
       "noun": "builder",
       "verb": "build",
       "title": "Build now",
-      "description": "Reconcile a builder now, independent of its floor and of a `staged` mark. An alternate provider, model or template creates a shadow variant. `--only` and `--limit` build some bindings and leave the other builds as they are.\n\n  yak builder build <builder> --only <id> <id>\n  yak builder build <builder> --limit 3 --template @prompt.md",
+      "description": "Reconcile a builder now, independent of its floor and of a `staged` mark. An alternate provider, model, template or native input creates a shadow variant. `--only` and `--limit` build some bindings and leave the other builds as they are.\n\n  yak builder build <builder> --only <id> <id>\n  yak builder build <builder> --limit 3 --template @prompt.md",
       "input": {
         "builder": {
           "type": "string",
@@ -247,6 +247,10 @@
         "template": {
           "type": "string",
           "description": "alternate content.body template for a shadow variant"
+        },
+        "input": {
+          "type": "object",
+          "description": "native request fields merged into using.input for a shadow variant; --input @input.json reads an object"
         },
         "only": {
           "type": "array",

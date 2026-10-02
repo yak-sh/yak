@@ -118,10 +118,11 @@ Write the builder with `staged: {}`, then sample:
     yak builder build <builder> --limit 3          # the first three
     yak builder build <builder> --only <id> --template @prompt.md
     yak builder build <builder> --limit 3 --model <model>
+    yak builder build <builder> --only <id> --input @input.json
 
 `--only` takes any id form, as every reference argument does, and refuses a
 name in no binding. A partial run leaves every other build as it is. An
-alternate `--template`, `--model` or `--provider` builds a shadow variant
+alternate `--template`, `--model`, `--provider` or `--input` builds a shadow variant
 (`shadow:<hash>`) whose outputs no other builder selects; compare them with
 `.build&.build.variant!=main`. Tune the template between runs, then remove the
 mark (`staged: null`): the builder reconciles once, and a sampled binding whose

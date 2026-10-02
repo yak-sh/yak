@@ -11,7 +11,7 @@ import { workshop } from '../../packages/builders/testing.ts'
 import { builderModelTool, buildersPlugin, building } from './builders.ts'
 import type { Ctx } from './tool.ts'
 
-test('hosted provider and model override keeps supplied main outputs current', async () => {
+test('hosted provider, model and native input override keeps supplied main outputs current', async () => {
   let vocab = workshop()
   let g = graph({
     storage: ram(vocab),
@@ -64,6 +64,7 @@ test('hosted provider and model override keeps supplied main outputs current', a
       },
     },
   } as unknown as Ctx
+  let input = { lyrics: '[Verse]\nAh oh mm\n[Chorus]\nOo ah' }
   let tool = buildersPlugin.tools!.find((t) => t.name == 'builder_build')!
   let result = await tool.run(ctx, {
     space: 'fixture',
@@ -72,10 +73,12 @@ test('hosted provider and model override keeps supplied main outputs current', a
     only: [source],
     provider: 'workers-ai',
     model: 'minimax/music-2.6',
+    input,
   })
   assertEquals(sent.provider, 'workers-ai')
   assertEquals(sent.model, 'minimax/music-2.6')
   assertEquals(sent.by, person)
+  assertEquals(sent.input, input)
   let [shadowId] = result.value!.builds as string[]
   let [shadow] = await g.get([shadowId])
   assert(String((shadow.build as Comp).variant).startsWith('shadow:'))
@@ -83,7 +86,11 @@ test('hosted provider and model override keeps supplied main outputs current', a
   assertEquals(((call.call as Comp).args as Comp).using, {
     provider: 'workers-ai',
     model: 'minimax/music-2.6',
+    input,
   })
+  await g.apply(await builderModelTool.run(call, g), { trusted: true })
+  let [entry] = await g.read('.entry&?using')
+  assertEquals((entry.using as Comp).input, input)
   assertEquals(await g.get([builder, mainId, output]), before)
   assertEquals(current(before[1].build as Comp, before[2].built as Comp), true)
 })

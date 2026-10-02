@@ -37,6 +37,7 @@ export type Ask = {
   provider?: string
   model?: string
   template?: string
+  input?: Comp
   only?: string[]
   limit?: number
 }
@@ -61,16 +62,24 @@ export let build = async (
   if (definition.archived) {
     throw new CallError('refused', `${human(vocab)(definition)} is archived`)
   }
+  let base = definition.using as Comp | undefined
+  let native = base?.input as Comp | undefined
   let using = {
-    ...(definition.using as Comp | undefined),
+    ...base,
     ...ask.provider ? { provider: ask.provider } : {},
     ...ask.model ? { model: ask.model } : {},
+    ...ask.input == null ? {} : {
+      input: {
+        ...native,
+        ...ask.input,
+      },
+    },
   }
   let template = ask.template == null
     ? (definition.content as Comp | undefined)?.body
     : ask.template
   let alternate = ask.provider != null || ask.model != null ||
-    ask.template != null
+    ask.template != null || ask.input != null
   let variant = alternate
     ? `shadow:${sha256(JSON.stringify([using, template]))}`
     : 'main'
