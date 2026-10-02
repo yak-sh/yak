@@ -197,12 +197,14 @@ export let buildersPlugin: Plugin = {
     // A post-boot, no-call provenance pass. It keeps opaque attempt keys,
     // current outputs and staged builders intact while the store serves.
     let writes = []
-    for (let builder of await read('.builder&*')) {
-      writes.push(
-        ...await at.graph.storage.tx((tx) =>
-          preserve(tx, builder, at.graph.vocab)
-        ),
-      )
+    if (at.graph.vocab.comp('builder')) {
+      for (let builder of await read('.builder&*')) {
+        writes.push(
+          ...await at.graph.storage.tx((tx) =>
+            preserve(tx, builder, at.graph.vocab)
+          ),
+        )
+      }
     }
     if (at.meta || !at.app) return writes
     let row = toolRow(builderModelTool)
