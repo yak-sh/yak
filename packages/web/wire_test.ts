@@ -50,3 +50,30 @@ test('a line asks the host by .entity.eid and leaves riders and projections out'
     '.task&.limit=5',
   )
 })
+
+test('a removed component is replaced, and repeat attention gets a fresh server stamp', async () => {
+  let { graph } = await import('@yaks/graph')
+  let { ram } = await import('@yaks/ram')
+  let { loadVocab } = await import('@yaks/vocab')
+  let { kernelDoc } = await import('@yaks/kernel')
+  let { docDoc } = await import('@yaks/doc')
+  let vocab = loadVocab([kernelDoc, docDoc])
+  let g = graph({ vocab, storage: ram(vocab) })
+  await g.apply([{
+    entity: { eid: 'thread' },
+    doc: { title: 'Before', body: 'old' },
+    archived: {},
+  }], { now: '2026-10-02T12:00:00.000Z' })
+  await g.apply(
+    bundlesOf([
+      { eid: 'thread', name: 'doc', comp: null },
+      { eid: 'thread', name: 'doc', comp: { title: 'After' } },
+      { eid: 'thread', name: 'archived', comp: null },
+      { eid: 'thread', name: 'archived', comp: {} },
+    ]),
+    { now: '2026-10-02T13:00:00.000Z' },
+  )
+  let [thread] = await g.get(['thread'])
+  assertEquals(thread.doc, { title: 'After' })
+  assertEquals(thread.archived, { at: '2026-10-02T13:00:00.000Z' })
+})

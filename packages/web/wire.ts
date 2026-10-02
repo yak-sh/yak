@@ -3,25 +3,28 @@
 import type { Bundle } from '@yaks/graph'
 import type { Change } from './types.ts'
 
-/** A batch of changes as the bundles /apply takes, one per entity. The spine
- * is the host's to write, so only a death rides on it, and the `eid` a
- * component row carries in the cache is the bundle's, not the component's. */
+/** Changes as /apply bundles. Plain patches coalesce; removing then adding
+ * a component stays ordered, because it replaces the held component. */
 export let bundlesOf = (changes: Change[]): Bundle[] => {
-  let rows = new Map<string, Bundle>()
+  let rows = new Map<string, Bundle[]>()
   for (let { eid, name, comp } of changes) {
-    let row = rows.get(eid)
-    if (!row) rows.set(eid, row = { entity: { eid } })
+    let parts = rows.get(eid)
+    if (!parts) rows.set(eid, parts = [{ entity: { eid } }])
+    let row = parts.at(-1)!
     if (name == 'entity') {
-      if (comp === null) rows.set(eid, { entity: { eid }, tombstone: {} })
+      if (comp === null) rows.set(eid, [{ entity: { eid }, tombstone: {} }])
       continue
     }
     if (row.tombstone) continue
+    if (row[name] === null && comp !== null) {
+      parts.push(row = { entity: { eid } })
+    }
     let { eid: _, ...cols } = comp ?? {}
     row[name] = comp === null
       ? null
       : { ...(row[name] as Record<string, unknown> | null), ...cols }
   }
-  return [...rows.values()]
+  return [...rows.values()].flat()
 }
 
 /** Bundles as changes: the spine as the `entity` row, each component as its
