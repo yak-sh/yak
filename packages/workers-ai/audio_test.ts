@@ -4,6 +4,7 @@ import { assertAlmostEquals, assertEquals, assertRejects } from '@std/assert'
 import { artifactStore, memoryBlobs } from '@yaks/blob'
 import { ModelError } from '@yaks/model'
 import { audioPrice, audioSeconds, music, workersAi } from './mod.ts'
+import { musicInput } from './audio.ts'
 
 let mp3 = () => {
   let frame = new Uint8Array(576)
@@ -17,11 +18,14 @@ let ask = (model: string) => ({
   model,
   tools: [],
   instructions: 'Use oud and flute.',
-  items: [{ kind: 'user' as const, text: 'A quiet desert welcome.' }],
+  items: [{
+    kind: 'user' as const,
+    text: 'A full-length three-minute desert welcome with a wordless choir.',
+  }],
 })
 
 for (let name of ['elevenlabs/music-v2', 'minimax/music-2.6']) {
-  test(`${name} sends music input and stores audio at its tariff`, async () => {
+  test(`${name} preserves music direction and stores audio at its tariff`, async () => {
     let input: unknown, sent: string | undefined, downloads = 0
     let blobs = memoryBlobs()
     let model = workersAi({
@@ -49,14 +53,15 @@ for (let name of ['elevenlabs/music-v2', 'minimax/music-2.6']) {
       input,
       name == 'elevenlabs/music-v2'
         ? {
-          prompt: 'Use oud and flute.\n\nA quiet desert welcome.',
-          music_length_ms: 30000,
+          prompt: 'Use oud and flute.\n\n' +
+            'A full-length three-minute desert welcome with a wordless choir.',
           output_format: 'mp3_48000_192',
         }
         : {
-          prompt: 'Use oud and flute.\n\nA quiet desert welcome.',
+          prompt: 'Use oud and flute.\n\n' +
+            'A full-length three-minute desert welcome with a wordless choir.',
           lyrics_optimizer: false,
-          is_instrumental: true,
+          is_instrumental: false,
           format: 'mp3',
         },
     )
@@ -73,6 +78,33 @@ for (let name of ['elevenlabs/music-v2', 'minimax/music-2.6']) {
     assertEquals(await blobs.get(artifact.address), mp3())
   })
 }
+
+test('duration and voice words remain prompt directions, not parsed flags', () => {
+  for (let model of ['elevenlabs/music-v2', 'minimax/music-2.6']) {
+    for (
+      let text of [
+        'A 45-second instrumental interlude. No vocals.',
+        'A full-length five-minute song: instrumental opening, then a choir.',
+      ]
+    ) {
+      let req = { ...ask(model), items: [{ kind: 'user' as const, text }] }
+      assertEquals(
+        musicInput(req),
+        model == 'elevenlabs/music-v2'
+          ? {
+            prompt: `Use oud and flute.\n\n${text}`,
+            output_format: 'mp3_48000_192',
+          }
+          : {
+            prompt: `Use oud and flute.\n\n${text}`,
+            lyrics_optimizer: false,
+            is_instrumental: false,
+            format: 'mp3',
+          },
+      )
+    }
+  }
+})
 
 test('duration and request tariffs do not use JSON token estimates', () => {
   assertAlmostEquals(audioSeconds(mp3()), 30)

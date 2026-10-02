@@ -38,9 +38,10 @@ export let musicInput = (req: Request): Record<string, unknown> => {
       'MiniMax music prompts allow 2000 chars',
     )
   }
+  // Duration stays in the prompt; MiniMax requires the vocal-capable default.
   return req.model == 'elevenlabs/music-v2'
-    ? { prompt, music_length_ms: 30000, output_format: 'mp3_48000_192' }
-    : { prompt, lyrics_optimizer: false, is_instrumental: true, format: 'mp3' }
+    ? { prompt, output_format: 'mp3_48000_192' }
+    : { prompt, lyrics_optimizer: false, is_instrumental: false, format: 'mp3' }
 }
 
 // An ID3v2 tag's size is four syncsafe bytes; it is not an audio frame.
