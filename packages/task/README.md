@@ -22,13 +22,14 @@ The examples also use `@yaks/graph`, `@yaks/vocab`, `@yaks/ram`, `@yaks/kernel`,
 
 The package declares these stored components:
 
-| Component                        | Meaning                                                           |
-| -------------------------------- | ----------------------------------------------------------------- |
-| `task{}`                         | Identifies an entity as a task.                                   |
-| `cancelled{at, by, via, reason}` | Records cancellation and an optional reason.                      |
-| `blocked{on, since}`             | Describes an external obstacle; `since` is declared server-owned. |
-| `accept{body}`                   | Describes the conditions for completion.                          |
-| `requires{}`, `contains{}`       | Relation components on an `edge{from, to}` entity.                |
+| Component                                  | Meaning                                                           |
+| ------------------------------------------ | ----------------------------------------------------------------- |
+| `decision{question, choices, recommended}` | A task asking for a listed or custom answer.                      |
+| `task{}`                                   | Identifies an entity as a task.                                   |
+| `cancelled{at, by, via, reason}`           | Records cancellation and an optional reason.                      |
+| `blocked{on, since}`                       | Describes an external obstacle; `since` is declared server-owned. |
+| `accept{body}`                             | Describes the conditions for completion.                          |
+| `requires{}`, `contains{}`                 | Relation components on an `edge{from, to}` entity.                |
 
 `task.status` is computed from component presence; it is never stored. The first
 mark the task wears, in the order its `status` ladder declares, wins:
@@ -273,7 +274,12 @@ status filtering. The task package supplies no database or transport. Its UI is
 a portable [@yaks/render](../render) `Status` view in `@yaks/task/views`, which
 draws the status its marks give in a browser or a terminal alike, and a task's
 page in the inspector (@yaks/inspect): where it stands, what it asks, and the
-comments on it.
+comments on it. `DecisionForm` draws a question, choices, recommendation and
+answer controls using the shared UI parts. Its host supplies the graph write
+door, draft desk, reference names and the blocking classification. The web and
+TUI use the same `<eid>.decision.answer` draft place; choosing a listed answer
+keeps an unused custom draft. In the TUI, 1–4 choose, a types a custom answer,
+Enter sends it and Escape leaves its draft.
 
 ## Compatibility
 
@@ -282,10 +288,10 @@ and Cloudflare Workers with suitable storage and package resolution.
 
 ## Interface
 
-| Import path        | Exports                                                                                                                                                        |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/task`       | `taskDoc`, `tasks`, `settled`, `statusOf`, `gated`, `openDeps`, `done`; type `DepOpts`; constants `TASK`, `CANCELLED`, `BLOCKED`, `REQUIRES`, `CONTAINS`.      |
-| `@yaks/task/vocab` | `taskDoc` and `docs`.                                                                                                                                          |
-| `@yaks/task/rules` | `rules()`, returning the task graph plugin in an array.                                                                                                        |
-| `@yaks/task/tools` | `runs()`, status patches in `marked`, and the query-building helper `listing()`.                                                                               |
-| `@yaks/task/views` | `views`: the `Status` renderer, the status read with `statusOf` through the vocabulary the view was chosen by; `inspectViews`: a task's page in the inspector. |
+| Import path        | Exports                                                                                                                                                                                       |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/task`       | `taskDoc`, `tasks`, `settled`, `statusOf`, `gated`, `openDeps`, `done`, `answer`; types `Choice`, `Decision`, `DepOpts`; constants `TASK`, `CANCELLED`, `BLOCKED`, `REQUIRES`, `CONTAINS`.    |
+| `@yaks/task/vocab` | `taskDoc` and `docs`.                                                                                                                                                                         |
+| `@yaks/task/rules` | `rules()`, returning the task graph plugin in an array.                                                                                                                                       |
+| `@yaks/task/tools` | `runs()`, status patches in `marked`, and the query-building helper `listing()`.                                                                                                              |
+| `@yaks/task/views` | `DecisionForm`, `answerPlace`; `views`: the `Status` renderer, the status read with `statusOf` through the vocabulary the view was chosen by; `inspectViews`: a task's page in the inspector. |

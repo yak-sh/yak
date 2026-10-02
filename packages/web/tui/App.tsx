@@ -4,6 +4,9 @@
 // a nested list, the body reads as raw markdown); Dot, Id, Dependency and
 // Tile render through the very same components the browser uses, painted as
 // lines instead of CSS.
+import { answer, type Decision as Question } from '@yaks/task'
+import { answerPlace } from '@yaks/task/views'
+import { Decision } from '../components/Decision.tsx'
 import { signal } from '@preact/signals'
 import { parse } from '@yaks/query'
 import { edit as editLine, touch } from '@yaks/tui'
@@ -13,6 +16,7 @@ import { tuiKeys } from '../keybindings.ts'
 import { formatProp, propAt } from '../props.ts'
 import { type Ent, type Hit, idOf, statusOf, verdictName } from '../types.ts'
 import {
+  apply,
   applyLocal,
   boardTasks,
   byPriority,
@@ -246,11 +250,17 @@ let back = () => {
 // commits — vim leaves insert, it doesn't cancel. i on the board edits
 // the selected title; i (or Enter from the board) on a task, the body.
 let edit = signal<
-  { eid: string; prop: 'title' | 'body'; text: string; was: string } | null
+  | {
+    eid: string
+    prop: 'title' | 'body' | 'choice'
+    text: string
+    was: string
+  }
+  | null
 >(null)
 
 let show = (e: NonNullable<typeof edit.value>, caret: boolean) =>
-  applyLocal([{
+  e.prop != 'choice' && applyLocal([{
     eid: e.eid,
     name: 'doc',
     comp: { [e.prop]: caret ? e.text + '█' : e.text },
@@ -260,7 +270,18 @@ let show = (e: NonNullable<typeof edit.value>, caret: boolean) =>
 // same one a browser's Edit types into: starting types on from it, wherever
 // it was typed, each key keeps it, and ending sends it and spends it in one
 // change.
-let draftOf = (e: { eid: string; prop: string }) => place(e.eid, 'doc', e.prop)
+let draftOf = (e: { eid: string; prop: string }) =>
+  e.prop == 'choice' ? answerPlace(e.eid) : place(e.eid, 'doc', e.prop)
+
+let startAnswer = (eid: string) => {
+  edit.value = {
+    eid,
+    prop: 'choice',
+    text: drafts.text(answerPlace(eid)),
+    was: '',
+  }
+  mode.value = 'insert'
+}
 
 let startEdit = () => {
   let here = trail.value.at(-1)
@@ -284,6 +305,14 @@ let startEdit = () => {
 let typeEdit = (k: string) => {
   let e = edit.value
   if (!e) return
+  if (k == '\r' && e.prop == 'choice') {
+    if (e.text.trim()) {
+      drafts.spend(draftOf(e), answer(e.eid, e.text))
+      edit.value = null
+      mode.value = 'normal'
+    }
+    return
+  }
   if (k == '\x7f') e = { ...e, text: e.text.slice(0, -1) }
   else if (k == '\r' && e.prop == 'body') e = { ...e, text: e.text + '\n' }
   else if (k == '\r') return endEdit()
@@ -297,6 +326,11 @@ let typeEdit = (k: string) => {
 let endEdit = () => {
   let e = edit.value
   if (!e) {
+    mode.value = 'normal'
+    return
+  }
+  if (e.prop == 'choice') {
+    edit.value = null
     mode.value = 'normal'
     return
   }
@@ -399,6 +433,15 @@ let TuiTask = ({ e }: { e: Ent }) => (
           <Md text={e.doc.body} repo={repoUrl(e)} />
         </p>
       )}
+    <Decision
+      e={e}
+      caret={edit.value?.eid == e.eid && edit.value.prop == 'choice'
+        ? edit.value.text.length
+        : undefined}
+    />
+    {e.decision && !e.decided && !e.cancelled && (
+      <p>1–4 choose · a custom answer · Enter sends · Esc keeps draft</p>
+    )}
     {e.refs.map((r) => (
       <Entity key={r.child} eid={r.child} view='Dependency' type={r.type} />
     ))}
@@ -566,6 +609,16 @@ export let key = (k: string) => {
     if (k == '\x1b') endEdit()
     else typeEdit(k)
     return
+  }
+  let here = trail.value.at(-1)
+  let decision = here ? ent(here) : undefined
+  if (decision?.decision && !decision.decided && !decision.cancelled) {
+    if (k == 'a') return startAnswer(decision.eid)
+    if (/^[1-4]$/.test(k)) {
+      let choice = (decision.decision as Question).choices[Number(k) - 1]
+      if (choice) void apply(answer(decision.eid, choice.label)).catch(() => {})
+      return
+    }
   }
   if (k == ':') {
     msg.value = ''

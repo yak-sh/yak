@@ -4,7 +4,7 @@ import '../testing.ts' // learns the vocabulary
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { type Ent } from '../types.ts'
-import { config as liveConfig, mode } from '../live.ts'
+import { cache, config as liveConfig, ent, mode } from '../live.ts'
 import { extend, resolve } from '../components/registry.ts'
 import {
   fit,
@@ -19,6 +19,8 @@ import {
   TStatus,
 } from './App.tsx'
 import { TElement } from '@yaks/tui'
+import { drafts } from '../components/drafts.ts'
+import { answerPlace } from '@yaks/task/views'
 import { pane } from './paint.ts'
 
 extend(overrides)
@@ -174,4 +176,55 @@ test('the TUI keybinding card teaches its navigation keys', () => {
     'j / k browse',
   ])
   render(null, target)
+})
+
+test('the TUI reads a decision and answers by number or preserved custom draft', async () => {
+  let prior = liveConfig.host
+  liveConfig.host = ''
+  let e = task('')
+  let decision = {
+    question: 'Which route?',
+    choices: [
+      { label: 'Train', description: 'Arrive earlier' },
+      { label: 'Bus', description: 'Spend less' },
+    ],
+    recommended: 'Train',
+  }
+  let reset = () => {
+    cache.value = {
+      [eid]: {
+        entity: { eid, num: 1 },
+        task: { eid },
+        doc: { eid, title: 'Which route?', body: '' },
+        decision,
+      },
+    }
+    trail.value = [eid]
+    mode.value = 'normal'
+  }
+  try {
+    reset()
+    assertEquals(paint({ ...e, decision }).includes('recommended'), true)
+    assertEquals(paint({ ...e, decision }).includes('Spend less'), true)
+    key('2')
+    assertEquals(ent(eid).decided?.choice, 'Bus')
+    reset()
+    key('a')
+    for (let c of 'Walk') key(c)
+    key('\x1b')
+    assertEquals(mode.value, 'normal')
+    assertEquals(drafts.text(answerPlace(eid)), 'Walk')
+    assertEquals(ent(eid).decided, undefined)
+    key('a')
+    for (let c of ' together') key(c)
+    key('\r')
+    await Promise.resolve()
+    assertEquals(ent(eid).decided?.choice, 'Walk together')
+    assertEquals(drafts.text(answerPlace(eid)), '')
+  } finally {
+    liveConfig.host = prior
+    mode.value = 'normal'
+    trail.value = []
+    cache.value = {}
+  }
 })

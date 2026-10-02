@@ -34,3 +34,5 @@ export let views: Registry = define([
 ])
 
 export { inspectViews } from './inspect.ts'
+
+export { answerPlace, DecisionForm } from './DecisionForm.ts'

@@ -1133,7 +1133,10 @@ export type Stamp = Created
 
 // `decided` alone carries which way it went; absent verdict reads as
 // approved (what pre-verdict rows meant when stamped).
-export type Decided = Stamp & { verdict?: string | null }
+export type Decided = Stamp & {
+  verdict?: string | null
+  choice?: string | null
+}
 
 // A full-text search hit. snip marks matches with \x01…\x02 (renderers
 // highlight without trusting HTML); open is what to OPEN — the entity

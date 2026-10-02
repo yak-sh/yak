@@ -1,3 +1,4 @@
+import { Decision } from '../Decision.tsx'
 import { useReference, useRepoUrl, useRows } from '../subscriptions.ts'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { type ComponentChildren } from 'preact'
@@ -702,6 +703,7 @@ export let Show = ({ e }: { e: Ent }) => (
       </Heading>
       <Entity eid={e.eid} view='Meta' id />
       <Entity eid={e.eid} view='Mail' />
+      <Decision e={e} />
       <Entity eid={e.eid} view='Body' />
       {stack.map((v) => <Entity key={v} eid={e.eid} view={v} />)}
     </Main>
@@ -715,6 +717,7 @@ export let CardFull = ({ e }: { e: Ent }) => (
   <>
     <Entity eid={e.eid} view='Meta' />
     <Entity eid={e.eid} view='Mail' />
+    <Decision e={e} />
     <Entity eid={e.eid} view='Body' mod='bare' />
     {stack.map((v) => <Entity key={v} eid={e.eid} view={v} />)}
   </>

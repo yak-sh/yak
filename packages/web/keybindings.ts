@@ -23,6 +23,11 @@ export let tuiKeys: Keybinding[] = [
   { keys: ['h', 'Ctrl-D'], about: 'go back' },
   { keys: ['Tab', 'Shift-Tab'], about: 'change view' },
   { keys: ['i'], about: 'edit' },
+  { keys: ['1–4'], about: 'answer a decision with a listed choice' },
+  {
+    keys: ['a'],
+    about: 'write a custom decision answer; Enter sends, Esc keeps it',
+  },
   { keys: ['/'], about: 'search the graph' },
   { keys: ['f'], about: 'filter the board' },
   { keys: ['Esc'], about: 'finish editing or return to normal mode' },
