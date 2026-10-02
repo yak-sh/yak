@@ -285,3 +285,17 @@ test('trailing text inflates each remaining word before joining', async () => {
     text: 'begin <letter> from stdin from stdin',
   })
 })
+
+test('a description-only rest input keeps schema-less tool arguments as pairs', async () => {
+  let grammar = {
+    name: 'admin_tool',
+    inputSchema: {
+      type: 'object',
+      properties: { args: { description: 'The tool arguments.' } },
+    },
+    options: { rest: 'args' },
+  }
+  assertEquals(await argsFor(grammar, ['app=vale', 'space=yourname']), {
+    args: { app: 'vale', space: 'yourname' },
+  })
+})

@@ -221,15 +221,16 @@ export let argsFor = async (
   // own option gathered (`--only a b` is both a and b).
   if (rest && spare.length) {
     let had = out[rest]
-    out[rest] = typeOf(props[rest]) == 'string'
-      ? [had, ...await Promise.all(spare.map((w) => inflate(w, reads)))]
-        .filter((w) => w != undefined).join(' ')
-      : typeOf(props[rest]) == 'array'
-      ? [
-        ...Array.isArray(had) ? had : [],
-        ...await Promise.all(spare.map((w) => inflate(w, reads))),
-      ]
-      : await pairsIn(spare, reads)
+    out[rest] =
+      props[rest]?.type != undefined && typeOf(props[rest]) == 'string'
+        ? [had, ...await Promise.all(spare.map((w) => inflate(w, reads)))]
+          .filter((w) => w != undefined).join(' ')
+        : typeOf(props[rest]) == 'array'
+        ? [
+          ...Array.isArray(had) ? had : [],
+          ...await Promise.all(spare.map((w) => inflate(w, reads))),
+        ]
+        : await pairsIn(spare, reads)
   }
 
   if (!tool.inputSchema) {
@@ -402,6 +403,8 @@ export let scanned = (
     literal,
     pending,
     awaiting: awaiting ?? positional[at] ??
-      (rest && typeOf(props[rest]) == 'string' ? rest : undefined),
+      (rest && props[rest]?.type != undefined && typeOf(props[rest]) == 'string'
+        ? rest
+        : undefined),
   }
 }
