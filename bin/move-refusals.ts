@@ -282,6 +282,14 @@ let main = async () => {
         let existing = byName.get(stmt.name)
         let kind = stmt.t.slice('create '.length)
         if (!existing) {
+          // New unrelated words are dormant on an older copy. Classified
+          // bundles read their physical descriptor's tables, not every word.
+          // Never create these tables merely to rehearse this repair.
+          if (
+            !allowedObject(stmt) &&
+            ((stmt.t == 'create table' && spoken.vocab.comp(stmt.name)) ||
+              (stmt.t == 'create index' && !byName.has(stmt.on)))
+          ) continue
           if (!allowedObject(stmt)) {
             fail(`Missing unrelated physical object: ${stmt.name}`)
           }
