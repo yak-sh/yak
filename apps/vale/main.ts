@@ -56,7 +56,7 @@ import { anyLook, anyName, fields, picks } from './make.ts'
 import { portrait } from './portrait.ts'
 import { listen } from './input.ts'
 import { nodes } from './nodes.ts'
-import { interaction, workTarget } from './interact.ts'
+import { friendlyKey, interaction, workTarget } from './interact.ts'
 import { type Board, noticeboard, notices } from './notices.ts'
 import { papers } from './papers.ts'
 import { ITEMS, useItems } from './items.ts'
@@ -298,6 +298,7 @@ let cam: Cam = {
 }
 let target = new THREE.Vector3()
 let mouseRay = new THREE.Raycaster()
+let friendly = ''
 // Where the hero stands, as the camera follows them.
 let feet = new THREE.Vector3()
 
@@ -985,13 +986,45 @@ let loop = (t: number) => {
       mouseRay.setFromCamera(new THREE.Vector2(...i.pick), camera)
       let from = mouseRay.ray.origin, ray = mouseRay.ray.direction
       let ground = groundRay(from, ray, (x, z) => groundAt(v, x, z))
-      let far = Math.hypot(ground.x - from.x, ground.y - from.y, ground.z - from.z)
+      let far = Math.hypot(
+        ground.x - from.x,
+        ground.y - from.y,
+        ground.z - from.z,
+      )
       let marks = (last?.mobs ?? []).filter((m) => !m.down).map((m) => ({
-        eid: m.eid, radius: Math.max(0.4, sizeOf(m.beast) * 0.6),
+        eid: m.eid,
+        radius: Math.max(0.4, sizeOf(m.beast) * 0.6),
         body: { ...m.body, y: m.body.y + sizeOf(m.beast) * 0.5 },
       }))
-      i.target = pickRay(marks, from, ray, far)?.eid ?? ''
+      let friends = [
+        ...(last?.givers ?? []).map((g) => ({
+          eid: g.id,
+          radius: 0.7,
+          body: { x: g.x, y: g.y + 0.9, z: g.z },
+        })),
+        ...(last?.others ?? []).map((o) => ({
+          eid: o.eid,
+          radius: 0.7,
+          body: { ...o.body, y: o.body.y + 0.9 },
+        })),
+        ...(job?.benches ?? []).map((b) => ({
+          eid: friendlyKey(b.craft, b.at),
+          radius: 1,
+          body: { x: b.at[0], y: b.at[1] + 0.5, z: b.at[2] },
+        })),
+        ...(job?.nodes ?? []).filter((n) => !n.spent).map((n) => ({
+          eid: n.eid,
+          radius: 0.8,
+          body: { x: n.at[0], y: n.at[1] + 0.5, z: n.at[2] },
+        })),
+      ]
+      let picked = pickRay([...marks, ...friends], from, ray, far)
+      let foe = picked && marks.some((m) => m.eid == picked.eid)
+      i.target = foe && picked ? picked.eid : ''
+      friendly = picked && !foe ? picked.eid : ''
+      if (friendly) i.strike = false
     }
+    i.friendly = friendly
     if (i.mic) void voice.toggle()
     if (h.talking) {
       Object.assign(i, {
@@ -1019,9 +1052,19 @@ let loop = (t: number) => {
         i.strike || i.dodge || i.jump || i.ability > 0,
         natural,
       )
-      let target = interaction(f, job)
-      if (target != 'talk') f.talk = null
-      if (target != 'peer') f.peer = null
+      let interactionTarget = interaction(f, job)
+      if (interactionTarget != 'talk') f.talk = null
+      if (interactionTarget != 'peer') f.peer = null
+      let gaze = f.talk ?? f.peer?.body ??
+        (job.near
+          ? { x: job.near.at[0], y: job.near.at[1], z: job.near.at[2] }
+          : job.bench
+          ? { x: job.bench.at[0], y: job.bench.at[1], z: job.bench.at[2] }
+          : null)
+      if (gaze) {
+        f.point = gaze
+        if (f.friendly) f.aim = null
+      }
       let helping = helper.tick(v, f, dt, natural)
       helperView.show(helping, dt, now)
       let d = job.doing
@@ -1101,8 +1144,8 @@ let loop = (t: number) => {
       for (let e of f.events) react(e, target)
       for (let e of job.events) worked(e)
       for (let e of helping.events) worked(e)
-      if (i.talk && target == 'talk') talkTo()
-      else if (i.talk && target == 'peer') talkToPeer()
+      if (i.talk && interactionTarget == 'talk') talkTo()
+      else if (i.talk && interactionTarget == 'peer') talkToPeer()
       if (h.talking && (talkingPeer ? f.peer?.eid != talkingPeer : !f.talk)) {
         h.talk(null)
       }

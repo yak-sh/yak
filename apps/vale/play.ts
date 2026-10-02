@@ -28,6 +28,7 @@
 //     in this life (rules.ts `hpOf`), and one that a fight says is held
 //     neither moves nor bites (`heldOf`). A fall is a `slain` row, one per
 //     player who helped, and the loot it leaves is each player's own.
+import { nearby } from './interact.ts'
 import { landing as castLanding, type Point } from './aim.ts'
 import { abilitiesOf, again, BLEEDS, WARD, type Went } from './abilities.ts'
 import { effect } from './ability-effects.ts'
@@ -274,6 +275,7 @@ export type Frame = {
   body: Body
   /** Mouse terrain point for the hero's gaze when no creature is held. */
   point?: Point
+  friendly?: string
   vitals: Vitals
   down: boolean
   /** an admin request placed this hero during this frame */
@@ -1752,20 +1754,24 @@ export let game = (
           heed: h && { x: h.x, z: h.z, talk: h.near < TALK },
         }]
       })
-      let talk = down ? null : givers
-        .filter((g) => g.near < TALK)
-        .sort((a, b) => a.near - b.near)[0] ?? null
-      let peer = down ? null : others
-        .filter((o) =>
-          Math.hypot(
-            o.body.x - body.x,
-            o.body.z - body.z,
-          ) < TALK
-        )
-        .sort((a, b) =>
-          Math.hypot(a.body.x - body.x, a.body.z - body.z) -
-          Math.hypot(b.body.x - body.x, b.body.z - body.z)
-        )[0] ?? null
+      let talk = down ? null : nearby(
+        givers.filter((g) => g.near < TALK),
+        intent.point,
+        intent.friendly,
+        (g) => g.id,
+        (g) => g,
+        (g) => g.near,
+      )
+      let peer = down ? null : nearby(
+        others.filter((o) =>
+          Math.hypot(o.body.x - body.x, o.body.z - body.z) < TALK
+        ),
+        intent.point,
+        intent.friendly,
+        (o) => o.eid,
+        (o) => o.body,
+        (o) => Math.hypot(o.body.x - body.x, o.body.z - body.z),
+      )
 
       // Into another region: its name, as the hero comes into it.
       let level = regionOf(body.x, body.z)
@@ -1835,6 +1841,7 @@ export let game = (
         foe,
         aim,
         point: intent.point,
+        friendly: intent.friendly,
         rack: !down && inVillage(body.x, body.z),
         swing: now - swingAt < busy ? (now - swingAt) / busy : -1,
         hand,

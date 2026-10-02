@@ -11,6 +11,7 @@ export type Intent = {
   /** A click carries its press position, before steering can lock the cursor. */
   pick?: [number, number]
   target?: string
+  friendly?: string
   /** right and forward axes, at most 1 long */
   move: [number, number]
   /** turn in radians/second; the camera and hero turn together */
@@ -293,7 +294,12 @@ export let listen = (
   stage.addEventListener('pointerdown', (e) => {
     pointer = [e.clientX, e.clientY]
     if (e.button == 0) {
-      pressAt = cursor(...pointer, innerWidth, globalThis.innerHeight ?? innerWidth, locked())
+      pressAt = cursor(
+        ...pointer,
+        innerWidth,
+        globalThis.innerHeight ?? innerWidth,
+        locked(),
+      )
     }
     if (!document.pointerLockElement) stage.setPointerCapture(e.pointerId)
     if (e.pointerType == 'mouse') {
@@ -432,8 +438,8 @@ export let listen = (
         localStorage.setItem('mossvale.drag.swap', swapped ? '1' : '0')
       } catch { /* this page keeps its setting */ }
     },
-    pointer: (): [number, number] => pointer
-      ? cursor(...pointer, innerWidth, innerHeight, locked()) : [0, 0],
+    pointer: (): [number, number] =>
+      pointer ? cursor(...pointer, innerWidth, innerHeight, locked()) : [0, 0],
     hidesCursor: () => hideCursor,
     hideCursor: () => {
       hideCursor = !hideCursor

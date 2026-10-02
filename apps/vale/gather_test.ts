@@ -253,3 +253,27 @@ test('the E prompt gathers once beside a peer, instead of talking', () => {
 })
 
 import { interaction, workTarget } from './interact.ts'
+import type { Frame } from './play.ts'
+
+test('clicking a peer suppresses gathering and moving the aim selects the node', () => {
+  let rows: Bundle[] = []
+  let prop: Prop = { kind: 'rock', x: 12, z: 5, seed: 1, natural: true }
+  let natural: Natural[] = [{ prop, at: [12, 5, 5] }]
+  let toil = working({ hero: 'hero', mine: () => rows, gathered: () => rows,
+    keep: (...bundles) => rows.push(...bundles) })
+  let f: WorkFrame = { body: { x: 11, y: 5, z: 5 },
+    sheet: { bag: [], worn: {} }, down: false, now: 1000,
+    point: { x: 12, y: 5, z: 5 }, friendly: 'peer', talk: null,
+    peer: { eid: 'peer', body: { x: 11, y: 5, z: 6 } } as Frame['peer'] }
+  let choose = (job: Parameters<typeof interaction>[1]) =>
+    workTarget(interaction({ ...f, talk: f.talk ?? null, peer: f.peer ?? null }, job))
+  let first = toil.tick(flat(5, [], [prop]), f, choose, false, natural)
+  assertEquals(first.near, null)
+  assertEquals(first.doing, null)
+  assertEquals(interaction({ ...f, talk: null, peer: f.peer ?? null }, first), 'peer')
+  f.friendly = ''
+  let next = toil.tick(flat(5, [], [prop]), f, choose, false, natural)
+  assert(next.near)
+  assert(next.doing)
+  assertEquals(interaction({ ...f, talk: null, peer: f.peer ?? null }, next), 'node')
+})

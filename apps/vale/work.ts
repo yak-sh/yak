@@ -10,6 +10,7 @@
 // is upgraded, the `upgraded` row naming it, and the `used` rows. Each is xp
 // to its trade. The work stops when the hero walks off, strikes, rolls, jumps
 // or faints, or someone else gathers the node first.
+import { friendlyKey, interaction, nearby } from './interact.ts'
 import { isStation, madeXp, plan, recipes, spare, STATIONS } from './craft.ts'
 import { placeOf, REACH } from './area.ts'
 import {
@@ -81,6 +82,10 @@ export type WorkFrame = {
   sheet: Pick<Frame['sheet'], 'bag' | 'worn'>
   down: boolean
   now: number
+  point?: Frame['point']
+  friendly?: string
+  talk?: Frame['talk']
+  peer?: Frame['peer']
 }
 
 /** What happened at the work this frame, for the eyes and ears: a stroke
@@ -129,6 +134,7 @@ export type Job = {
   nodes: Seen[]
   near: Seen | null
   bench: Bench | null
+  benches?: Bench[]
   board: Reading | null
   doing: {
     trade: Trade
@@ -443,21 +449,35 @@ export let working = (
           }
         },
       )
-      let near = nodes
-        .filter((n) =>
-          !n.spent && n.near <= GATHER[n.lode.trade].reach &&
-          (!as || n.eid == as.target)
-        )
-        .sort((a, b) => a.near - b.near)[0] ?? null
-      let bench = (as ? [] : stationsNear(v, f.body.x, f.body.z, 12)).flatMap(
+      let near = nearby(
+        nodes
+          .filter((n) =>
+            !n.spent && n.near <= GATHER[n.lode.trade].reach &&
+            (!as || n.eid == as.target)
+          ),
+        f.point,
+        f.friendly,
+        (n) => n.eid,
+        (n) => ({ x: n.at[0], z: n.at[2] }),
+        (n) => n.near,
+      )
+      let benches = (as ? [] : stationsNear(v, f.body.x, f.body.z, 12)).flatMap(
         (s): Bench[] => {
           let d = Math.hypot(s.x - f.body.x, s.z - f.body.z)
           return d <= STATIONS[s.craft].reach && Math.abs(s.y - f.body.y) < 2
             ? [{ craft: s.craft, at: [s.x, s.y, s.z], near: d }]
             : []
         },
-      ).sort((a, b) => a.near - b.near)[0] ?? null
-      let board = (as ? [] : boardsNear(v, f.body.x, f.body.z, READ)).flatMap(
+      ).sort((a, b) => a.near - b.near)
+      let bench = nearby(
+        benches,
+        f.point,
+        f.friendly,
+        (b) => friendlyKey(b.craft, b.at),
+        (b) => ({ x: b.at[0], z: b.at[2] }),
+        (b) => b.near,
+      )
+      let board: Reading | null = (as ? [] : boardsNear(v, f.body.x, f.body.z, READ)).flatMap(
         (b): Reading[] =>
           Math.abs(b.at[1] - f.body.y) < 2
             ? [{
@@ -466,6 +486,17 @@ export let working = (
             }]
             : [],
       ).sort((a, b) => a.near - b.near)[0] ?? null
+
+      if (!as) {
+        let target = interaction({
+          ...f,
+          talk: f.talk ?? null,
+          peer: f.peer ?? null,
+        }, { near, bench, board })
+        if (target != 'node') near = null
+        if (target != 'bench') bench = null
+        if (target != 'board') board = null
+      }
 
       // Work stops when the hero does something else, or the node is gone.
       if (job) {
@@ -584,7 +615,7 @@ export let working = (
           }
         }
       }
-      return { nodes, near, bench, board, doing, trades: mine, events }
+      return { nodes, near, bench, benches, board, doing, trades: mine, events }
     },
   }
 }
