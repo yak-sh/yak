@@ -164,8 +164,12 @@ export let open = async (
         active: typing.value,
         placeholder: '/ to find, or a query',
       }),
-    Scroll: ({ id, on, children }) =>
-      h(Scroll, { id, grow: '1', follow: false, keyboard: on }, children),
+    Scroll: ({ id, on, top, onScroll, children }) =>
+      h(
+        Scroll,
+        { id, grow: '1', follow: false, keyboard: on, top, onScroll },
+        children,
+      ),
   })
 
   // The stack the terminal opens on; where each pane's walk is, the top
@@ -173,9 +177,12 @@ export let open = async (
   let panes = stackOf(href) ?? [HOME]
   front.mutate([{ entity: { eid: STACK }, Stack: { panes } }])
   let walk = signal<Record<Pane, number>>({ index: -1, page: -1 })
-  front.watch('.Stack').subscribe(() =>
-    walk.value = { ...walk.value, page: -1 }
-  )
+  let last = panes.join('\n')
+  front.watch('.Stack').subscribe((rows) => {
+    let next = panesOf(rows.find((b) => b.entity.eid == STACK)).join('\n')
+    if (next != last) walk.value = { ...walk.value, page: -1 }
+    last = next
+  })
   let back = () => {
     let b = stack(door.io)
     let n = panesOf(b).length

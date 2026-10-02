@@ -24,7 +24,7 @@ import {
 } from 'preact'
 import type { Filters } from '@yaks/filter'
 import { Panes, Rows, Stack as Look } from '@yaks/ui'
-import { panesOf, Stack } from '@yaks/ux'
+import { type PaneProps, panesOf, Stack } from '@yaks/ux'
 import type { Inspector } from './door.ts'
 import { HomePage } from './Home.ts'
 import { Index } from './Index.ts'
@@ -41,7 +41,13 @@ export type Chrome = {
   fields: Pick<Filters, 'text'>
   /** a pane's body, scrolling on its own; `on` while its pane has the keys */
   Scroll: FunctionComponent<
-    { id: string; on: boolean; children?: ComponentChildren }
+    {
+      id: string
+      on: boolean
+      top?: number
+      onScroll?: (top: number) => void
+      children?: ComponentChildren
+    }
   >
 }
 
@@ -66,11 +72,11 @@ export let frame = (
   let keys = () => me(io).pane ?? 'page'
 
   // The page a pane shows, on top of the stack.
-  let Page = ({ pane }: { pane: string }) => {
+  let Page = ({ pane, top, onScroll }: PaneProps) => {
     let where = at(pane)
     return h(
       Scroll,
-      { id: `inspect page ${pane}`, on: keys() == 'page' },
+      { id: `inspect page ${pane}`, on: keys() == 'page', top, onScroll },
       'id' in where
         ? h(Shown, { id: where.id })
         : where.query

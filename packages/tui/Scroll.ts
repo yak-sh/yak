@@ -53,10 +53,16 @@ export let Scroll = (
     scrollbar = false,
     keyboard = true,
     reveal,
+    top: controlled,
+    onScroll,
     children,
     ...rest
   }: {
     id: string
+    /** Controlled offset in rows; absent, the region keeps its own. */
+    top?: number
+    /** Reports keyboard, wheel and reveal changes to the controlled offset. */
+    onScroll?: (top: number) => void
     scrollbar?: boolean
     keyboard?: boolean
     /** Reveal a logical row when keyboard selection changes; left out, the
@@ -70,7 +76,13 @@ export let Scroll = (
   let v = useMetric(id)
   let max = Math.max(0, v.total - v.height)
   let shown = reveal ?? v.reveal
-  let [top, setTop] = useState(0)
+  let [local, setLocal] = useState(0)
+  let top = controlled ?? local
+  let setTop = (next: number) => {
+    if (next == live.current && next == top) return
+    setLocal(next)
+    onScroll?.(next)
+  }
   let [stick, setStick] = useState(follow)
   // A held page key arrives as several keys in one read, before any re-render:
   // the handler moves from this ref so each one starts where the last ended.
@@ -88,8 +100,8 @@ export let Scroll = (
   // A different id is a different transcript, without remounting the key
   // handler above the editor in the focus stack.
   useLayoutEffect(() => {
-    live.current = 0
-    setTop(0)
+    live.current = controlled ?? 0
+    if (controlled == null) setTop(0)
     setStick(follow)
   }, [id, follow])
   useLayoutEffect(() => {

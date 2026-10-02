@@ -53,7 +53,10 @@ export { Text, type TextProps } from './Text.ts'
 export {
   cut,
   LIMIT,
+  type PaneProps,
   panesOf,
+  scrolledPane,
+  scrollOf,
   Stack,
   stackAt,
   stacked,

@@ -34,6 +34,13 @@
             "type": "string"
           },
           "description": "the panes, bottom first, the top one last"
+        },
+        "scroll": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "vertical scroll offset per pane key, in host units (browser pixels or terminal rows)"
         }
       }
     },
