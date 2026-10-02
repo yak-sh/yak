@@ -304,7 +304,7 @@ export let connectionsOf = async (
     all.filter((b) => b[CONNECTION]).map(async (b): Promise<Shown> => {
       let c = comp(b, CONNECTION)
       let i = await known(read, String(c.integration))
-      let failed = !b[PROVISIONAL] && (b.error || b.exception)
+      let failed = !b[PROVISIONAL] && b.exception
       let to = links.filter((l) => comp(l, 'edge').to == b.entity.eid)
       return {
         eid: b.entity.eid,

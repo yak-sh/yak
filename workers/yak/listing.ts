@@ -101,7 +101,7 @@ export let listed = (rows: Row[], asked: string): Row[] => {
       kernel.length && !kernel.some((k) => names(asked, k)) &&
       !asked.includes('id=') &&
       !(row.entry && names(asked, 'entry') &&
-        kernel.every((k) => k == 'error' || k == 'refusal'))
+        kernel.every((k) => k == 'refusal'))
     ) continue
     let kept = Object.fromEntries(
       Object.entries(row).filter(([k]) => !hidden.includes(k)),
