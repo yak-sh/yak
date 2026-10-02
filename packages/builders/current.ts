@@ -14,6 +14,7 @@ import {
   isNull,
   join,
   lit,
+  ne,
   or,
   select,
   table,
@@ -33,6 +34,29 @@ export let builtCurrent: DerivedProp = {
         eq(col('entity', 'u'), owner),
         eq(col('key', 'b'), col('key', 'u')),
         or(isNull(col('stale', 'b')), eq(col('stale', 'b'), lit(false))),
+      ),
+    })),
+}
+
+/** A definition edit is discoverable without invalidating current outputs. */
+export let buildOutdated: DerivedProp = {
+  tag: 'bool',
+  expr: (owner) =>
+    exists(select({
+      cols: [lit(1)],
+      from: table('build', 'b'),
+      joins: [
+        join(
+          table('builder', 'd'),
+          eq(col('entity', 'd'), col('builder', 'b')),
+        ),
+      ],
+      where: and(
+        eq(col('entity', 'b'), owner),
+        or(
+          isNull(col('definition', 'b')),
+          ne(col('definition', 'b'), col('definition', 'd')),
+        ),
       ),
     })),
 }

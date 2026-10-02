@@ -13,10 +13,10 @@ deno add jsr:@yaks/builders
   the earliest scheduled reconciliation. `content.body` is an optional `$var`
   template; `using{provider,model,effort}` chooses model details. `doc.body` is
   documentation.
-- `build{builder,match,variant,for,key,call,stale}` is one instance per outer
-  entity-ID tuple and variant. `match` stores that tuple as JSON; `for` names
-  the entity it was built for, the first the tuple holds, as a reference a query
-  can follow: `.build.for=X` is X's builds, and
+- `build{builder,match,variant,for,key,inputs,definition,call,stale}` is one
+  instance per outer entity-ID tuple and variant. `match` stores that tuple as
+  JSON; `for` names the entity it was built for, the first the tuple holds, as a
+  reference a query can follow: `.build.for=X` is X's builds, and
   `.built.build.build.for=X&.built.current=true` what was built for X now.
   Nested bracket collections change the key but keep the build. A vanished
   binding marks its build stale and retains its outputs; a returning binding
@@ -36,9 +36,19 @@ deno add jsr:@yaks/builders
 
 A changed key writes a fresh `call{to,source,args}` with `source` set to the
 build and `args` containing the frozen binding tree, key, template and using.
-The key hashes the template, effective using, tool revision, and the content
-hash of every entity in the binding tree. The tool's registered `revision`
-changes the key when its implementation changes.
+`build.inputs` fingerprints every entity in the binding tree; only changing
+those inputs automatically starts another attempt. `build.key` is an opaque
+attempt key shared with its outputs: a deliberate reroll gets a fresh one, even
+with identical inputs. Definition edits never invalidate current outputs.
+
+`builder.definition` fingerprints the template, effective using, tool and its
+revision. `build.definition` and `built.definition` keep the fingerprint used by
+the attempt and output. `.build.outdated=true` finds attempts made under a
+different definition; `.built.build.build.outdated=true&.built.current=true`
+finds their current outputs. `build.stale` still means a vanished binding.
+Legacy attempt keys and output keys stay untouched; their input fingerprint is
+adopted at cutover without a call. A legacy definition whose historical tool
+revision was not recorded is unknown (null), and counts as outdated.
 
 Immediate builders keep `builder_dep{builder,source}` rows. A `component:name`
 source names a component their query reads, including nested collections; an
@@ -121,11 +131,20 @@ the tools its builder names. `builder.to` points at `modelToolEid()` for this
 adapter. The tool runner records the call and result; builders does not execute
 models or code itself.
 
-`builder build <builder>` reconciles now, independent of `floor`. An alternate
-model, provider, template or native input creates a shadow variant. A repeated
-key creates no call. `--input @input.json` merges the object into `using.input`
-for that shadow run, without editing the builder. A scheduled wake checks the
-builder again. A configured `rest` advances `floor` after a call starts.
+`builder build <builder>` reconciles now, independent of `floor`. Without a redo
+flag, a current output is never touched: only new bindings or changed inputs
+build. `--outdated` additionally redoes bindings made under an older (or
+unknown) definition. `--rebuild` redoes every selected binding, including
+unchanged ones. Both combine with `--only` and `--limit`:
+
+    yak builder build <builder> --outdated --limit 3
+    yak builder build <builder> --rebuild --only <id>
+
+An alternate model, provider, template or native input creates a shadow variant.
+Unchanged inputs create no call unless a redo flag selects them.
+`--input @input.json` merges the object into `using.input` for that shadow run,
+without editing the builder. A scheduled wake checks the builder again. A
+configured `rest` advances `floor` after a call starts.
 
 `builder build <builder> --only <id…>` builds only the bindings whose outer
 entities are named (any id form, as in every write), and `--limit <n>` builds
@@ -138,8 +157,8 @@ A builder carrying the `staged{at,by,via}` mark is being tried before it builds
 everything: creating it, editing it, a wake and a change to its inputs all leave
 it alone, and only `builder build` builds it, usually with `--only` or
 `--limit`. Removing the mark is the commit: the builder reconciles once, as when
-it was created, and a sampled binding whose key is unchanged is not asked again,
-so only the rest are. Nothing about staging enters a build's key.
+it was created, and a sampled binding whose inputs are unchanged is not asked
+again, so only the rest are. Nothing about staging enters a build's key.
 
 A builder carrying @yaks/kernel's `archived{at,by,via}` mark is put away, and no
 door builds it: `builder build` refuses, saying it is archived, and neither a
@@ -174,6 +193,6 @@ not archived ones. Build and output ids are found through their `build_of` and
 `builder_supply` takes the same arguments as named fields. Optional `args` keeps
 provenance (the original prompt, model, loudness audit) beside the frozen
 binding on the completed call. Other slots are left alone. Reconciliation asks
-nothing until the binding's inputs, template, model settings or tool revision
-change. The package's `supply(graph, vocab, ask, actor)` function serves hosted
-stores too; yaks.app exposes it through the editor-only `builder_supply` tool.
+nothing until the binding's own inputs change. The package's
+`supply(graph, vocab, ask, actor)` function serves hosted stores too; yaks.app
+exposes it through the editor-only `builder_supply` tool.

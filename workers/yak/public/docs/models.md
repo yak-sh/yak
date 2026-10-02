@@ -42,11 +42,11 @@ an entry that names a model with `using` asks for a turn:
       },
     ])
 
-`using.model` is any model name its selected provider serves, and `using.instructions` is
-what a conversational model is told before the transcript. Every entry that asks
-for a turn carries its own `using`, so each turn names its model and its
-instructions; an entry without one is part of the transcript the next turn
-reads, and asks for nothing.
+`using.model` is any model name its selected provider serves, and
+`using.instructions` is what a conversational model is told before the
+transcript. Every entry that asks for a turn carries its own `using`, so each
+turn names its model and its instructions; an entry without one is part of the
+transcript the next turn reads, and asks for nothing.
 
 Two more keep a turn cheap. `using.window` is how many of the transcript's
 newest lines the model reads, reaching back to the line that began the turn it
@@ -262,3 +262,12 @@ to show the sentence.
 A model's own rate is shared by every app on the platform. A turn that meets it
 is asked again; after three failures in a row the transcript rests as `failed`
 until a new entry asks.
+
+Builder definition edits do not regenerate existing outputs. `builder_build`
+without redo flags builds only new bindings or changed inputs. `outdated: true`
+redoes selected bindings made under an older definition; `rebuild: true` redoes
+every selected binding, including unchanged ones. Both accept `only` and
+`limit`. Try an alternate template or model as a shadow first.
+`.build.outdated=true` finds older definitions; `.built.current=true` keeps
+selecting their outputs until their inputs change or a redo is explicitly
+requested.

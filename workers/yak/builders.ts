@@ -7,7 +7,7 @@
 // reconciles the builder as them, so what it asks a model spends the space's
 // budget like the builder's other calls. It is how a staged builder is tried
 // on a few rows before its mark comes off.
-import { type Supply, supply } from '@yaks/builders'
+import { preserve, type Supply, supply } from '@yaks/builders'
 import { watches } from '@yaks/builders/effects'
 import { modelTool } from '@yaks/builders/model'
 import { type Ask, build } from '@yaks/builders/tools'
@@ -87,6 +87,11 @@ let BUILDERS: Row[] = [{
         description: 'build only the first n bindings, and leave the other ' +
           'builds as they are',
       },
+      rebuild: { type: 'boolean', description: 'redo every selected binding' },
+      outdated: {
+        type: 'boolean',
+        description: 'redo selected bindings built under an older definition',
+      },
       template: str(
         "a content.body template to try instead of the builder's own, as a " +
           'shadow variant',
@@ -109,6 +114,8 @@ let BUILDERS: Row[] = [{
     let { space, app, who, store } = await inApp(ctx, args, true)
     let ask: Ask & { by?: string } = {
       builder: text(args.builder, 'builder'),
+      rebuild: args.rebuild == true,
+      outdated: args.outdated == true,
       ...args.only == null
         ? {}
         : { only: (args.only as unknown[]).map(String) },
@@ -131,7 +138,9 @@ let BUILDERS: Row[] = [{
       text: builds.length
         ? `reconciled ${builds.length} build${builds.length == 1 ? '' : 's'} ` +
           `of ${ask.builder} in ${space.slug}/${app.slug}; each asks its ` +
-          `tool again only where its key moved:\n${builds.join('\n')}`
+          `tool only for changed inputs or explicitly requested redos:\n${
+            builds.join('\n')
+          }`
         : `${ask.builder} has no matching bindings in ${space.slug}/${app.slug}`,
       value: { builds },
     }
@@ -185,12 +194,22 @@ export let buildersPlugin: Plugin = {
   name: 'builders',
   tools: BUILDERS.map(worded),
   installs: [async (read, at) => {
-    if (at.meta || !at.app) return []
+    // A post-boot, no-call provenance pass. It keeps opaque attempt keys,
+    // current outputs and staged builders intact while the store serves.
+    let writes = []
+    for (let builder of await read('.builder&*')) {
+      writes.push(
+        ...await at.graph.storage.tx((tx) =>
+          preserve(tx, builder, at.graph.vocab)
+        ),
+      )
+    }
+    if (at.meta || !at.app) return writes
     let row = toolRow(builderModelTool)
     let [have] = await read(`.entity.eid=${row.entity.eid}&*`)
     return JSON.stringify(have?.tool ?? null) == JSON.stringify(row.tool)
-      ? []
-      : [row]
+      ? writes
+      : [...writes, row]
   }],
   // Handled wherever the vocabulary declares builders, app or not: an effect
   // row owed to a handler this store never registers stays pending for good,

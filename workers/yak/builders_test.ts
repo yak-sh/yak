@@ -1,21 +1,21 @@
 // A builder in an app's store opens its ordinary transcript, and the account
 // pays for the model turn that writes its output into that same store.
 import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
-import type { Bundle, Comp } from '@yaks/graph'
+import { type Bundle, type Comp, identityEid } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import { test, until } from '@yaks/testing'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { BUDGET, monthOf } from './meter.ts'
-import { CATALOGUE, priceOf } from './models.ts'
 import { weigh } from '@yaks/model'
 import { embeds, platform } from './testing.ts'
 
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let SOURCE = 'a0000000-0000-4000-8000-0000000000aa'
 let BUILDER = 'a0000000-0000-4000-8000-0000000000bb'
-let MODEL = CATALOGUE.find((r) => r.offered && r.output > 0)!.name
+let MODEL = '@cf/zai-org/glm-5.3-flash'
+let PRICE = { input: 0.15, output: 0.5 }
 
 let app = async (models = 0, access = 'private', chain = false) => {
   let asked: string[] = []
@@ -38,7 +38,13 @@ let app = async (models = 0, access = 'private', chain = false) => {
     },
     gateway: () => ({ getUrl: () => Promise.resolve('') }),
   })
-  let p = platform('a probe secret', { AI } as Partial<Env>)
+  let p = platform('a probe secret', {
+    AI,
+    MODEL_FETCH: async () =>
+      new Response(
+        '$0.15 per M input tokens, $0.5 per M output tokens',
+      ),
+  } as Partial<Env>)
   let dir = directory({ fetch: (r) => dirPart.fetch(r, p.env) }, true)
   await dir.apply({
     entities: [
@@ -119,7 +125,10 @@ let start = (v: Awaited<ReturnType<typeof app>>) =>
       entity: { eid: BUILDER },
       doc: { title: 'Villager', body: 'Builder documentation.' },
       content: { body: 'Make a villager from the source.' },
-      using: { model: MODEL },
+      using: {
+        model: MODEL,
+        provider: identityEid('provider', ['workers-ai']),
+      },
       builder: {
         query: '.doc.title=Source',
         to: toolEid('builder_model'),
@@ -145,9 +154,7 @@ test('a hosted builder writes named outputs and spends the account budget', asyn
   let call = String((built.built as Comp).call)
   assertEquals((await v.read(`.session.source=${call}&*`)).length, 1)
   assertEquals(v.asked.length, 1)
-  let price = priceOf(v.asked[0])
-  assert(price)
-  let cost = weigh(price, {
+  let cost = weigh(PRICE, {
     input_tokens: 1_000,
     output_tokens: 100,
   })
@@ -165,7 +172,10 @@ test('builder_build tries a staged builder on the rows it names, as the caller',
       {
         entity: { eid: BUILDER },
         content: { body: 'Make a villager from $body.' },
-        using: { model: MODEL },
+        using: {
+          model: MODEL,
+          provider: identityEid('provider', ['workers-ai']),
+        },
         builder: {
           query: '$s .doc.title=Source, doc.body=$body',
           to: toolEid('builder_model'),
@@ -220,7 +230,10 @@ test('an open app cannot let a visitor start a builder at its account expense', 
     {
       entity: { eid: BUILDER },
       content: { body: 'Make a villager.' },
-      using: { model: MODEL },
+      using: {
+        model: MODEL,
+        provider: identityEid('provider', ['workers-ai']),
+      },
       builder: { to: toolEid('builder_model') },
     },
   ], null)
@@ -236,7 +249,10 @@ test('a hosted generated row starts the next immediate builder', async () => {
     (await v.send('/apply', [{
       entity: { eid: next },
       content: { body: 'Build from the generated villager.' },
-      using: { model: MODEL },
+      using: {
+        model: MODEL,
+        provider: identityEid('provider', ['workers-ai']),
+      },
       builder: {
         query: '$v .villager, .doc.body=$description',
         to: toolEid('builder_model'),
@@ -262,7 +278,10 @@ test('shadow outputs do not start downstream immediate builders', async () => {
     (await v.send('/apply', [{
       entity: { eid: next },
       content: { body: 'Build from the generated villager.' },
-      using: { model: MODEL },
+      using: {
+        model: MODEL,
+        provider: identityEid('provider', ['workers-ai']),
+      },
       builder: {
         query: '$v .villager, .doc.body=$description',
         to: toolEid('builder_model'),
@@ -319,7 +338,10 @@ test('builder_supply in an app store is current without any model spending', asy
     }, {
       entity: { eid: BUILDER },
       content: { body: 'Make a villager from $body.' },
-      using: { model: MODEL },
+      using: {
+        model: MODEL,
+        provider: identityEid('provider', ['workers-ai']),
+      },
       builder: {
         query: '$s .doc.title=Source, doc.body=$body',
         to: toolEid('builder_model'),

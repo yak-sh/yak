@@ -1,4 +1,5 @@
-// A build key describes the definition, tool revision and whole binding tree.
+// Input fingerprints and definition fingerprints are independent. A run key
+// identifies one attempt; definition edits never invalidate an input fingerprint.
 // Nested collections change the key without changing the build's identity.
 
 import { type Binding, type Bundle, type Eid, sha256 } from '@yaks/graph'
@@ -30,12 +31,15 @@ let tree = (
   ),
 ]
 
-export let key = (
-  builder: Bundle,
-  tool: Bundle,
+export let inputKey = (
   binding: Binding,
   rows: Map<Eid, Bundle>,
   vocab: Vocab,
+): string => sha256(JSON.stringify(tree(binding, rows, vocab)))
+
+export let definitionKey = (
+  builder: Bundle,
+  tool: Bundle,
   template?: string,
   using?: Record<string, unknown>,
 ): string =>
@@ -44,5 +48,21 @@ export let key = (
     details(using ?? builder.using ?? {}),
     (builder.builder as { to?: string } | undefined)?.to,
     (tool.tool as { revision?: string }).revision ?? '',
-    tree(binding, rows, vocab),
+  ]))
+
+/** An attempt key. A nonce also distinguishes deliberate identical rerolls. */
+export let key = (
+  builder: Bundle,
+  tool: Bundle,
+  binding: Binding,
+  rows: Map<Eid, Bundle>,
+  vocab: Vocab,
+  template?: string,
+  using?: Record<string, unknown>,
+  nonce = '',
+): string =>
+  sha256(JSON.stringify([
+    definitionKey(builder, tool, template, using),
+    inputKey(binding, rows, vocab),
+    nonce,
   ]))

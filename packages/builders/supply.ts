@@ -110,7 +110,10 @@ export let supply = async (
     }, ...await outputs(tx, run, call, value, vocab, false))
     // Reconciliation also refreshed the immediate builder's dependencies.
     writes.push(
-      ...result.writes.filter((row) => row.builder_dep || row.$delete),
+      ...result.writes.filter((row) =>
+        row.builder_dep || row.$delete ||
+        row.entity.eid == builder && row.builder
+      ),
     )
     return { p, writes }
   })

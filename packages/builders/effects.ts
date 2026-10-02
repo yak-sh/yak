@@ -16,6 +16,7 @@ import { BUILD, clock, type Options, reconcile } from './build.ts'
 import { answer, spent } from './answer.ts'
 import { adapted } from './model.ts'
 import { candidates } from './deps.ts'
+import { preserve } from './preserve.ts'
 
 let str = (c: Comp | undefined, prop: string): string =>
   c?.[prop] == null ? '' : String(c[prop])
@@ -32,7 +33,14 @@ let settle = async (
 ) => {
   for (let attempt = 0; attempt < 3; attempt++) {
     let [builder] = await tx.get([eid])
-    if (!builder?.builder || builder.staged) return
+    if (!builder?.builder) return
+    let kept = await preserve(tx, builder, o.vocab)
+    if (kept.length) {
+      await write(kept)
+      let [fresh] = await tx.get([eid])
+      builder = fresh
+    }
+    if (builder.staged) return
     let { writes } = await reconcile(
       tx,
       builder,

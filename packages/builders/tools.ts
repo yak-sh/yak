@@ -22,6 +22,7 @@ import { held } from '@yaks/key'
 import { BUILD_OF, buildOf, clock, type Options, reconcile } from './build.ts'
 import { type Desk, modelTool } from './model.ts'
 import { type Supply, supply } from './supply.ts'
+import { preserve } from './preserve.ts'
 
 let str = (v: unknown): string => v == null ? '' : String(v)
 let said = (call: Bundle, body: string): Bundle => ({
@@ -40,6 +41,8 @@ export type Ask = {
   input?: Comp
   only?: string[]
   limit?: number
+  rebuild?: boolean
+  outdated?: boolean
 }
 
 /** Reconcile one builder now, writing as `actor`, and answer the builds it
@@ -62,6 +65,8 @@ export let build = async (
   if (definition.archived) {
     throw new CallError('refused', `${human(vocab)(definition)} is archived`)
   }
+  let kept = await graph.storage.tx((tx) => preserve(tx, definition, vocab))
+  if (kept.length) await graph.apply(signed(kept, actor), { trusted: true })
   let base = definition.using as Comp | undefined
   let native = base?.input as Comp | undefined
   let using = {
@@ -97,6 +102,8 @@ export let build = async (
         template: str(template),
         only,
         limit,
+        rebuild: ask.rebuild,
+        outdated: ask.outdated,
       },
       clock(),
       false,

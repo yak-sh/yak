@@ -14,7 +14,7 @@ import {
 import { held, keyed } from '@yaks/key'
 import type { Vocab } from '@yaks/vocab'
 import { next } from '@yaks/wake'
-import { key } from './key.ts'
+import { definitionKey, inputKey, key } from './key.ts'
 import { inputs, queried, sync } from './deps.ts'
 
 export let BUILDER = 'builder'
@@ -33,6 +33,8 @@ export type Options = {
   only?: Eid[]
   /** build only the first n bindings */
   limit?: number
+  rebuild?: boolean
+  outdated?: boolean
 }
 
 export type Plan = {
@@ -42,6 +44,8 @@ export type Plan = {
   variant: string
   binding: Binding
   key: string
+  inputs: string
+  definition: string
   to: Eid
   template: string
   using: Comp
@@ -199,6 +203,8 @@ export let start = (
         variant: p.variant,
         for: subject(p.binding),
         key: p.key,
+        inputs: p.inputs,
+        definition: p.definition,
         call,
         stale: false,
       },
@@ -218,6 +224,8 @@ export let start = (
         args: {
           binding: p.binding,
           key: p.key,
+          inputs: p.inputs,
+          definition: p.definition,
           template: p.template,
           using: p.using,
         },
@@ -282,7 +290,14 @@ export let reconcile = async (
     (await tx.get([...new Set(owners.values())])).map((b) => [b.entity.eid, b]),
   )
   let plans: Plan[] = []
+  let latest = definitionKey(builder, tool)
   let writes: Bundle[] = [...dep]
+  if (definition.definition != latest) {
+    writes.push({
+      entity: builder.entity,
+      builder: { definition: latest },
+    })
+  }
   for (let { binding, rows } of wanted) {
     let entities = binding.entities
     let match = JSON.stringify(entities)
@@ -294,6 +309,11 @@ export let reconcile = async (
       match,
       variant,
       binding,
+      inputs: inputKey(binding, rows, o.vocab),
+      definition: definitionKey(builder, tool, o.template, {
+        ...comp(builder, 'using'),
+        ...o.using,
+      }),
       key: key(builder, tool, binding, rows, o.vocab, o.template, {
         ...comp(builder, 'using'),
         ...o.using,
@@ -305,7 +325,8 @@ export let reconcile = async (
     plans.push(p)
     let before = comp(have.get(build), BUILD)
     left.delete(build)
-    let same = str(before, 'key') == p.key
+    let same = before?.key != null && before.inputs == p.inputs
+    if (same) p.key = String(before?.key)
     if (same && before?.stale) {
       writes.push({
         entity: { eid: build },
@@ -318,7 +339,21 @@ export let reconcile = async (
       let [call] = await tx.get([String(before.call)])
       failed = comp(call, 'execution')?.state == 'failed'
     }
-    if (!same || failed) writes.push(...start(p, before, o.eid))
+    let redo = o.rebuild || o.outdated && before?.definition != p.definition
+    if (!same || failed || redo) {
+      // Every attempt gets a distinct key, even when nothing changed.
+      p.key = key(
+        builder,
+        tool,
+        binding,
+        rows,
+        o.vocab,
+        o.template,
+        p.using,
+        (o.eid ?? mint)(),
+      )
+      writes.push(...start(p, before, o.eid))
+    }
   }
   for (let old of partial ? [] : left.values()) {
     let b = comp(old, BUILD)

@@ -27,6 +27,11 @@
         "immediate": {
           "type": "boolean",
           "description": "reconcile when selected graph inputs change"
+        },
+        "definition": {
+          "type": "string",
+          "stamped": true,
+          "description": "fingerprint of the current template, effective using, tool and its revision; definition edits never invalidate outputs"
         }
       },
       "description": "a query-to-tool transformation; content.body is its optional $var template and using chooses a model"
@@ -110,7 +115,7 @@
         "key": {
           "type": "string",
           "stamped": true,
-          "description": "current desired input key"
+          "description": "opaque attempt key shared with its outputs; inputs select work, and an explicit reroll gets a fresh key"
         },
         "call": {
           "type": "string",
@@ -134,6 +139,26 @@
             "cost.dollars"
           ],
           "description": "the dollars its calls spent, summed: each call's own `cost` and the entries of each session a call opened; absent where none records any"
+        },
+        "inputs": {
+          "type": "string",
+          "stamped": true,
+          "description": "fingerprint of the selected binding tree, independent of the builder definition"
+        },
+        "definition": {
+          "type": "string",
+          "stamped": true,
+          "description": "definition fingerprint used by the latest attempt; retained across definition edits"
+        },
+        "outdated": {
+          "type": "boolean",
+          "computed": true,
+          "reads": [
+            "build.builder",
+            "build.definition",
+            "builder.definition"
+          ],
+          "description": "the latest attempt used a different definition from the builder now; not a vanished binding and not a reason to build automatically"
         }
       },
       "description": "one stable instance of a builder for an outer query binding"
@@ -192,6 +217,11 @@
             "build.stale"
           ],
           "description": "its build still selects its binding and still wants the key it was made under; a downstream builder selects only current outputs"
+        },
+        "definition": {
+          "type": "string",
+          "stamped": true,
+          "description": "definition fingerprint used to produce this output"
         }
       },
       "description": "one named output; current when its key equals its non-stale build key"
@@ -227,7 +257,7 @@
       "noun": "builder",
       "verb": "build",
       "title": "Build now",
-      "description": "Reconcile a builder now, independent of its floor and of a `staged` mark. An alternate provider, model, template or native input creates a shadow variant. `--only` and `--limit` build some bindings and leave the other builds as they are.\n\n  yak builder build <builder> --only <id> <id>\n  yak builder build <builder> --limit 3 --template @prompt.md",
+      "description": "Build bindings with new or changed inputs, independent of floor and staged. Current outputs are untouched unless --rebuild redoes every selected binding, or --outdated redoes bindings under an older definition. Both combine with --only and --limit. Alternate provider, model, template or native input creates a shadow variant.",
       "input": {
         "builder": {
           "type": "string",
@@ -264,6 +294,14 @@
           "type": "integer",
           "minimum": 1,
           "description": "build only the first n bindings, and leave the other builds as they are"
+        },
+        "rebuild": {
+          "type": "boolean",
+          "description": "redo every selected binding, even with unchanged inputs and definition"
+        },
+        "outdated": {
+          "type": "boolean",
+          "description": "redo selected bindings only when their definition is older; otherwise build only missing or changed inputs"
         }
       },
       "required": [
@@ -279,7 +317,7 @@
           "p": "provider"
         }
       },
-      "idempotent": true
+      "idempotent": false
     },
     "builder_open": {
       "effect": true,
@@ -349,7 +387,7 @@
       "noun": "builder",
       "verb": "supply",
       "title": "Supply an existing artifact",
-      "description": "Answer one binding's slot with an existing artifact, spending nothing. The binding is current until its inputs, template, model settings or tool revision change. A staged builder accepts supply; an archived builder does not.",
+      "description": "Answer one binding's slot with an existing artifact, spending nothing. The binding is current until its own inputs change. A staged builder accepts supply; an archived builder does not.",
       "input": {
         "builder": {
           "type": "string",

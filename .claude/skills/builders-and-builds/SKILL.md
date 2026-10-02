@@ -59,20 +59,26 @@ is built without touching the builder.
 
 ## The key decides what rebuilds
 
-A build's key hashes the template, the effective `using`, `builder.to`, the
-tool's `revision`, and the content of every entity in the binding tree
-(packages/builders/key.ts). A changed key opens a new call; an unchanged key
-asks nothing. So:
+`build.inputs` hashes the content of every entity in the binding tree.
+A changed input starts another attempt; an unchanged input asks nothing.
+`build.key` is an opaque attempt key shared with its outputs, and an explicit
+reroll gets a fresh one. The definition has a separate fingerprint:
+`builder.definition`, kept on each attempt as `build.definition` and on each
+output as `built.definition` (packages/builders/key.ts).
 
-- **Bind only what a build depends on.** Everything bound is hashed: binding a
-  catalogue (all 173 item designs, say) rebuilds every build whenever any item
-  changes. Reference material goes to the model through tools offered with
-  `using.tools`, not through the binding (D-61649).
-- **Editing the template or `using` rebuilds every build.** That is the
-  meaning of a new prompt. Try it as a shadow or on a staged builder first.
-- The query's text, the variant's name, `staged` and `archived` never enter a
-  key. A query edit rebuilds only the bindings whose bound values changed, and
-  staging or a shadow never rebuilds a main build.
+- Bind only what a build depends on. Everything bound is hashed; a shared
+  catalogue edits every binding. Reference material goes through `using.tools`.
+- Editing the template, `using`, tool or tool revision never rebuilds current
+  outputs. New bindings and changed inputs use the current definition.
+- `.build.outdated=true` finds attempts under another definition; it is not
+  `build.stale`, which means the binding vanished. Legacy definitions whose
+  historical tool revision was not recorded are unknown and count as outdated.
+- The query text, variant name, staged and archived never enter input keys.
+
+`yak builder build <builder>` leaves current outputs untouched. `--outdated`
+redoes selected bindings under another definition; `--rebuild` redoes every
+selected binding, even unchanged ones. Both combine with `--only` and `--limit`.
+Try the new definition as a shadow before explicitly redoing existing work.
 
 ## Answers
 
@@ -100,8 +106,7 @@ becomes a `cites` edge). Every write lands as one change, or none of it does.
 Every builder reconciles when it is created, when its definition is edited
 (query, `to`, `immediate`, template, `using`), when `floor` is moved, when a
 wake fires on it (`wake{target}`), each time a process starts working the
-effects pool (`builder_open`'s sweep, which is how a new tool revision reaches
-every build after a deploy), and on `yak builder build`. The scheduled doors
+effects pool (`builder_open`'s sweep, which discovers new and changed bindings without redoing current outputs), and on `yak builder build`. The scheduled doors
 (creation, a wake, the sweep) wait until `floor` has passed; nothing fires
 because it passed.
 
@@ -126,7 +131,7 @@ alternate `--template`, `--model`, `--provider` or `--input` builds a shadow var
 (`shadow:<hash>`) whose outputs no other builder selects; compare them with
 `.build&.build.variant!=main`. Tune the template between runs, then remove the
 mark (`staged: null`): the builder reconciles once, and a sampled binding whose
-key is unchanged is not asked again.
+inputs are unchanged is not asked again.
 
 In an app's store (workers/yak/builders.ts) the same door is the connector's
 `builder_build` tool, which takes `only`, `limit`, `template` and `model` and
@@ -137,7 +142,7 @@ app: `yak admin tool builder_build space=<space> app=<app> builder=<id> …`.
 
 A downstream builder selects what an upstream one made with
 `.built.current=true`, so it never gathers an output its upstream dropped or is
-rebuilding. Shadows are never selected. A downstream build's key hashes the
+rebuilding. Shadows are never selected. A downstream build's input fingerprint hashes the
 upstream outputs it binds, so an upstream rebuild flows down by itself.
 
 ## Reading what was built
@@ -166,7 +171,7 @@ committing a staged builder, multiply a sample's cost by the rows it matches.
   whether it is stale; `.call.source=<build>&*` its calls, and the session a
   model call opened.
 - Rebuilding everything: something bound changed for every build (a shared
-  entity in the binding, the template, `using`, the tool's revision).
+  entity in the binding, not a definition edit: only bound input content or an explicit redo).
 - Never building: a future `floor`, `staged`, `archived`, a builder that is
   not `immediate` waiting for a door, or a missing tool.
 - `yak effect check` shows failed and overdue builder effects.

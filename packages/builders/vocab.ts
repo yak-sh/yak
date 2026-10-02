@@ -12,16 +12,17 @@ import type { Derived } from '@yaks/sql'
 import type { Vocab, VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
 import { buildCost } from './cost.ts'
-import { builtCurrent } from './current.ts'
+import { buildOutdated, builtCurrent } from './current.ts'
 import manifest from './deno.json' with { type: 'json' }
 
-export { buildCost, builtCurrent }
+export { buildCost, buildOutdated, builtCurrent }
 
 /** The properties builders computes rather than stores: `built.current`, and
  * `build.cost` where the vocabulary declares the `cost.dollars` it sums
  * (@yaks/model), which a store holding an app's own `cost` does not. */
 export let derived = (vocab: Vocab): Derived => ({
   'built.current': builtCurrent,
+  'build.outdated': buildOutdated,
   ...vocab.prop('cost', 'dollars') ? { 'build.cost': buildCost } : {},
 })
 

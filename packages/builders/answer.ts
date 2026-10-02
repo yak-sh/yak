@@ -287,6 +287,7 @@ export let outputs = async (
         build: source,
         slot: spec.slot,
         key: b.key,
+        definition: b.definition ?? null,
         call: call.entity.eid,
         artifact: spec.artifact ?? null,
       },

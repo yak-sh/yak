@@ -756,7 +756,7 @@ test('a code tool can return an artifact output without owning built rows', asyn
   )
 })
 
-test('tool revision and input content change a key once each', async () => {
+test('input content changes the attempt, a tool revision does not', async () => {
   let { g } = await shop({}, [], [code()])
   await g.apply([source('a'), builder()])
   let build = await runOf(g, ['a'])
@@ -767,7 +767,7 @@ test('tool revision and input content change a key once each', async () => {
   let second = comp(await one(g, build), 'build')?.key
   assertNotEquals(second, first)
   await g.apply([{ entity: { eid: toolEid('code') }, tool: { revision: '2' } }])
-  assertNotEquals(comp(await one(g, build), 'build')?.key, second)
+  assertEquals(comp(await one(g, build), 'build')?.key, second)
 })
 
 test('selected content, definition edits and removed matches reconcile', async () => {
@@ -948,7 +948,7 @@ test('a partial build makes the named bindings and leaves the others current', a
   for (let s of ['a', 'b', 'c']) await drive(g, runner, await runOf(g, [s]))
   await g.apply([{ entity: { eid: ids.builder }, staged: {} }])
   await g.apply([{ entity: { eid: ids.builder }, content: { body: 'Again' } }])
-  await ask({ only: ['a'] })
+  await ask({ only: ['a'], rebuild: true })
   await drive(g, runner, await runOf(g, ['a']))
   for (let s of ['a', 'b', 'c']) {
     assertEquals(await staleOf(g, s), false)
@@ -1355,4 +1355,83 @@ test('model builder instruction prefix is shared across bindings and appended on
     String(comp(none, 'using')?.instructions).startsWith('Answer with JSON:'),
   )
   assertEquals(using.instructions, 'Base instruction')
+})
+
+test('definition edits never spend; explicit outdated and rebuild select work', async () => {
+  let { g, runner, vocab } = await shop({}, [], [code()])
+  await g.apply([source('a'), source('b'), builder()])
+  let a = await runOf(g, ['a'])
+  let b = await runOf(g, ['b'])
+  for (let id of [a, b]) await drive(g, runner, id)
+  let old = await one(g, a)
+  let output = await one(g, await outOf(g, a))
+  await g.apply([{ entity: { eid: ids.builder }, content: { body: 'New $s' } }])
+  await build(g, vocab, { builder: ids.builder }, null)
+  assertEquals((await calls(g, a)).length, 1)
+  assertEquals((await calls(g, b)).length, 1)
+  assertEquals(await currentOf(g, 'a'), true)
+  assertEquals(comp(await one(g, a), 'build')?.key, comp(old, 'build')?.key)
+  assertEquals(
+    comp(await one(g, await outOf(g, a)), 'built')?.definition,
+    comp(output, 'built')?.definition,
+  )
+  assertEquals((await g.read('.build.outdated=true')).length, 2)
+  await g.apply([source('c')])
+  let c = await runOf(g, ['c'])
+  let [call] = await calls(g, c)
+  assertEquals((comp(call, 'call')?.args as Comp).template, 'New $s')
+  await build(g, vocab, {
+    builder: ids.builder,
+    outdated: true,
+    only: ['a', 'b'],
+    limit: 1,
+  }, null)
+  assertEquals((await calls(g, a)).length, 2)
+  assertEquals((await calls(g, b)).length, 1)
+  await drive(g, runner, a)
+  await build(
+    g,
+    vocab,
+    { builder: ids.builder, outdated: true, only: ['a'] },
+    null,
+  )
+  assertEquals((await calls(g, a)).length, 2)
+  let key = comp(await one(g, a), 'build')?.key
+  await build(
+    g,
+    vocab,
+    { builder: ids.builder, rebuild: true, only: ['a'] },
+    null,
+  )
+  assertEquals((await calls(g, a)).length, 3)
+  assertNotEquals(comp(await one(g, a), 'build')?.key, key)
+  await drive(g, runner, a)
+  await g.apply([source('a', 'edited')])
+  assertEquals((await calls(g, a)).length, 4)
+  assertEquals((await calls(g, b)).length, 1)
+})
+
+test('cutover preserves legacy opaque keys and all current outputs without a call', async () => {
+  let { g, runner, vocab } = await shop({}, [], [code()])
+  await g.apply([source('a'), builder()])
+  let id = await runOf(g, ['a'])
+  await drive(g, runner, id)
+  let out = await outOf(g, id)
+  await g.apply([
+    {
+      entity: { eid: id },
+      build: { key: 'legacy', inputs: null, definition: null },
+    },
+    { entity: { eid: out }, built: { key: 'legacy', definition: null } },
+  ], { trusted: true })
+  await g.apply([{
+    entity: { eid: ids.builder },
+    content: { body: 'Typo fixed' },
+  }])
+  await build(g, vocab, { builder: ids.builder }, null)
+  assertEquals(comp(await one(g, id), 'build')?.key, 'legacy')
+  assertEquals(await currentOf(g, 'a'), true)
+  assertEquals((await calls(g, id)).length, 1)
+  await g.apply([source('a', 'now changed')])
+  assertEquals((await calls(g, id)).length, 2)
 })
