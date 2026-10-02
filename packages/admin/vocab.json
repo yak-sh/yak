@@ -275,6 +275,57 @@
       "readOnly": true,
       "openWorld": true
     },
+    "admin_apply": {
+      "tool": true,
+      "surfaces": [
+        "cli"
+      ],
+      "noun": "admin",
+      "verb": "apply",
+      "title": "Apply bundles to an app’s store",
+      "description": "Create, patch or delete rows in an app’s store as this account, through the connector’s graph_apply: the store’s rules and journal hold, and the write is recorded as the account. The space’s owner and the platform’s admin write any app’s rows; --check rehearses the change and keeps nothing.\n\n  yak admin apply yourname/vale '[{\"entity\": {\"eid\": \"<eid>\"}, \"sfx\": {\"notes\": \"chime\"}}]' --admin\n  yak admin apply jeff/recipes @fix.json --check --owner",
+      "input": {
+        "where": {
+          "type": "string",
+          "description": "space/app, or yak/platform"
+        },
+        "change": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "the bundles, as JSON: inline, @file, or - for stdin"
+        },
+        "check": {
+          "type": "boolean",
+          "description": "rehearse: every check, then nothing kept"
+        },
+        "as": {
+          "type": "string",
+          "description": "act as this account"
+        },
+        "admin": {
+          "type": "boolean",
+          "description": "as the platform’s admin"
+        },
+        "owner": {
+          "type": "boolean",
+          "description": "as the owner"
+        }
+      },
+      "required": [
+        "where",
+        "change"
+      ],
+      "options": {
+        "positional": [
+          "where",
+          "change"
+        ]
+      },
+      "destructive": true,
+      "openWorld": true
+    },
     "admin_upload": {
       "tool": true,
       "surfaces": ["cli"],
@@ -337,7 +388,10 @@
       "description": "Call one yaks.app connector tool as the signed-in account rather than as the bearer `yak login` keeps, which is what a probe needs. Its own arguments follow as key=value.\n\n  yak admin tool app_list\n  yak admin tool app_new slug=notes title='Notes'",
       "input": {
         "name": { "type": "string", "description": "the tool to call" },
-        "args": { "description": "its own arguments, as key=value" },
+        "args": {
+          "type": "object",
+          "description": "its own arguments, as key=value"
+        },
         "as": { "type": "string", "description": "act as this account" },
         "admin": {
           "type": "boolean",

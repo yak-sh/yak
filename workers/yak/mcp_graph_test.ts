@@ -1352,3 +1352,55 @@ test('an app store answers eids and no numbers, and refuses $num', async () => {
     await k.stop()
   }
 })
+
+// The platform's admin, an owner of `yak`, reads and fixes any app's rows by
+// naming its space and app, as its owner would: through the store's own
+// apply, recorded as the admin (T-63550). Anybody else gets nothing new.
+test('the platform admin reads and patches an app it holds no seat in', async () => {
+  let k = await kernel()
+  try {
+    let theirs = connector(k, (await signIn(k)).cookie)
+    let space = `own${crypto.randomUUID().slice(0, 8)}`
+    let at = { space, app: 'sounds' }
+    await theirs.tool('space_new', { slug: space, title: space })
+    await theirs.tool('app_new', { space, slug: 'sounds', title: 'sounds' })
+    await theirs.tool('app_files', {
+      ...at,
+      files: [{
+        path: 'vocab.json',
+        content: vocabFile({ sfx: { notes: txt } }),
+      }],
+    })
+    await theirs.tool('app_deploy', at)
+    let bell = minted(
+      await theirs.tool('graph_apply', {
+        ...at,
+        change: [{ entity: { eid: '$bell' }, sfx: { notes: 'doorbell' } }],
+      }),
+      '$bell',
+    )
+    type Row = { sfx: { notes: string }; updated?: { by: unknown } }
+    let rows = async (agent: typeof theirs) =>
+      JSON.parse(
+        await agent.tool('graph_query', { ...at, q: '.sfx&?updated' }),
+      ) as Row[]
+    let patch = (agent: typeof theirs) =>
+      agent.tool('graph_apply', {
+        ...at,
+        change: [{ entity: { eid: bell }, sfx: { notes: 'chime' } }],
+      })
+
+    let admin = connector(k, k.owner.cookie)
+    assertEquals((await rows(admin)).map((r) => r.sfx.notes), ['doorbell'])
+    await patch(admin)
+    let [row] = await rows(theirs)
+    assertEquals(row.sfx.notes, 'chime')
+    assertStringIncludes(JSON.stringify(row.updated), k.owner.person)
+
+    let stranger = connector(k, (await signIn(k)).cookie)
+    await assertRejects(() => rows(stranger), Error, 'not a member')
+    await assertRejects(() => patch(stranger), Error, 'not a member')
+  } finally {
+    await k.stop()
+  }
+})

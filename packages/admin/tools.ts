@@ -7,6 +7,7 @@
 //   yak admin link                 a standing sign-in link for that account
 //   yak admin tool app_list        any connector tool, as that account
 //   yak admin query jeff/recipes .doc    an app's store, through the filter grammar
+//   yak admin apply jeff/recipes @fix.json    bundles into an app's store
 //   yak admin client google <id> <secret> --admin   keep an OAuth client, from 1Password
 //   yak admin tunnel ada           the tunnel a space has to a machine
 //   yak admin move --rehearse --admin   every store rehearses the store mover
@@ -82,6 +83,7 @@ import {
   setFee,
   setTunnel,
   spendCode,
+  storeApply,
   storeQuery,
   storesNow,
   storeUpload,
@@ -488,6 +490,18 @@ export let runs = (
         (argsOf(call).filters ?? []) as string[],
       )
       return [said(call, json(rows))]
+    }),
+
+    admin_apply: verb(async (call, vault, keep) => {
+      let a = argsOf(call)
+      let at = acting(vault, a, keep, host.state)
+      let applied = await storeApply(
+        at.session,
+        String(a.where),
+        a.change as Bundle[],
+        a.check === true,
+      )
+      return [said(call, json(applied))]
     }),
 
     admin_upload: verb(async (call, vault, keep) => {

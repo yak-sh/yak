@@ -32,10 +32,8 @@ export let zone = () => Deno.env.get('YAKS_ZONE') ?? PLATFORM
 
 export let apex = (path: string) => `https://${zone()}${path}`
 
-// Where an app's store answers. `<space>/<app>` names one app;
-// a bare `<space>` is the space's front page, whose api lives at the
-// hostname's own root (workers/yak/apps.ts `front`).
-export let storeUrl = (at: string, path: string, host = zone()) => {
+// A space, or a space and an app, as their slugs.
+let where = (at: string) => {
   let parts = at.split('/')
   if (parts.length > 2 || parts.some((part) => !SLUG.test(part))) {
     throw new CallError(
@@ -43,7 +41,14 @@ export let storeUrl = (at: string, path: string, host = zone()) => {
       `"${at}" is not a space or space/app — try jeff/recipes`,
     )
   }
-  let [space, app] = parts
+  return parts
+}
+
+// Where an app's store answers. `<space>/<app>` names one app;
+// a bare `<space>` is the space's front page, whose api lives at the
+// hostname's own root (workers/yak/apps.ts `front`).
+export let storeUrl = (at: string, path: string, host = zone()) => {
+  let [space, app] = where(at)
   return `https://${space}.${host}${app ? `/${app}` : ''}/api${path}`
 }
 
@@ -486,26 +491,37 @@ let refusedResponse = (r: Response, body: unknown) =>
       : `${r.status} ${shortBody(body) || r.statusText}`.trim(),
   }
 
+// The connector's graph tier over one app named `space/app`, its answer as
+// data. It is the door the space's owner and the platform's admin reach any
+// app's rows by (workers/yak/agent.ts `named`), and the platform's own store
+// too, which is deliberately not served as an app (apps.ts `kernels`). A
+// write through it is the store's ordinary apply, signed as this account.
+let graphed = async (
+  session: string,
+  tool: 'graph_query' | 'graph_apply',
+  args: Record<string, unknown>,
+): Promise<Bundle[]> => {
+  let answer = await rpc(session)('tools/call', { name: tool, arguments: args })
+  saidBy(answer)
+  let result = (answer.structuredContent as { result?: unknown } | undefined)
+    ?.result
+  if (!Array.isArray(result)) {
+    throw new Error(`${tool} answered without a structured result`)
+  }
+  return result
+}
+
 // The filter grammar over an app's store — the same line the page's own
-// client.js sends. `&` joins clauses even when both are in one CLI word.
+// client.js sends. `&` joins clauses even when both are in one CLI word. A
+// named app is asked through the graph tier; a bare space is its front page's
+// store door.
 export let storeQuery = async (
   session: string,
   at: string,
   filters: string[],
 ) => {
-  // The directory is deliberately not served as an app (apps.ts `kernels`):
-  // its owner's public door is the graph tier, where naming yak/platform
-  // carries the same account to the store without exposing a kernel URL.
-  if (at == PLATFORM_STORE) {
-    let answer = await rpc(session)('tools/call', {
-      name: 'graph_query',
-      arguments: { app: at, query: filters.join('&') },
-    })
-    saidBy(answer)
-    if (!answer.structuredContent || !('result' in answer.structuredContent)) {
-      throw new Error('graph_query answered without a structured result')
-    }
-    return answer.structuredContent.result
+  if (where(at).length == 2) {
+    return graphed(session, 'graph_query', { app: at, q: filters.join('&') })
   }
   let url = `${storeUrl(at, '/query')}?${filters.join('&')}`
   let r = await sent(url, session)
@@ -516,6 +532,25 @@ export let storeQuery = async (
   }
   if (!r.ok) throw new Error(`${at} refused the query: ${JSON.stringify(body)}`)
   return body
+}
+
+/** Bundles applied to the app `space/app` names, as this account: created,
+ * patched or deleted through the store's own rules and journal. `check`
+ * rehearses it and keeps nothing. Answers the change as applied. */
+export let storeApply = (
+  session: string,
+  at: string,
+  change: Bundle[],
+  check = false,
+) => {
+  if (where(at).length != 2) {
+    throw new CallError('where', `name an app as space/app, not "${at}"`)
+  }
+  return graphed(session, 'graph_apply', {
+    app: at,
+    change,
+    ...(check ? { check } : {}),
+  })
 }
 
 /** Put local bytes through an app's upload door, which writes their attachment. */
@@ -539,20 +574,11 @@ export let storeUpload = (
 // `registration`): its id and secret go to the platform's vault, and the store
 // holds the handle. The graph tier is the door, as for a query of it; it keeps
 // no call's text, and its write log skips a bundle that carries a secret.
-export let keepClient = async (
+export let keepClient = (
   session: string,
   name: string,
   client: Registered,
-) =>
-  saidBy(
-    await rpc(session)('tools/call', {
-      name: 'graph_apply',
-      arguments: {
-        app: PLATFORM_STORE,
-        change: [registration(name, client)],
-      },
-    }),
-  )
+) => storeApply(session, PLATFORM_STORE, [registration(name, client)])
 
 // An app's `/me` (workers/yak/apps.ts) is deliberately absent from this file.
 // It answers for ONE app's store, so asking it a question about the person —

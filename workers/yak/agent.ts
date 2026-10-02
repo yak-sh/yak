@@ -256,7 +256,9 @@ export let post = (ctx: Ctx): Plugin => ({
  *
  * Naming is also what reaches the platform's own store, which is in nobody's
  * ordinary reach on purpose (directory.ts `spaces`, apps.ts `kernels`) — its
- * owner's door to it is this tier, and this is how they open it.
+ * owner's door to it is this tier, and this is how they open it. The same
+ * door is how the platform's admin reaches any app's rows: named by space and
+ * app, they stand there as its owner (tool.ts `roleIn`).
  */
 export let named = (ctx: Ctx, said: string, write = false): Promise<Reach> => {
   // Naming an app is asking about a membership, so a caller with no identity
@@ -270,7 +272,7 @@ export let named = (ctx: Ctx, said: string, write = false): Promise<Reach> => {
     )
   }
   let [one, two] = said.split('/')
-  return inApp(ctx, two ? { space: one, app: two } : { app: one }, write)
+  return inApp(ctx, two ? { space: one, app: two } : { app: one }, write, true)
 }
 
 // The `.in=` rider: which app a read is scoped to. It is the platform's word,

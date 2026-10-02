@@ -93,7 +93,7 @@ test('admin query sends joined filters as the page reads them', async () => {
   }) as typeof fetch
   try {
     let session = 'a1b2c3'
-    let at = 'yourname/vale'
+    let at = 'yourname'
     let eid = '97d31ac6-ffce-46ef-b88f-f31868df02a6'
     await storeQuery(session, at, [`.entry.session=${eid}&?content`])
     await storeQuery(session, at, [`.entry.session=${eid}`, '?content'])
@@ -405,7 +405,7 @@ test("an app store's refusal keeps its code, rather than becoming a defect", asy
   })
   try {
     let error = await assertRejects(
-      () => storeQuery('someone.token', 'mom/recipe-box', ['.recipe']),
+      () => storeQuery('someone.token', 'mom', ['.recipe']),
       CallError,
       "this app is its owner's",
     )
@@ -451,7 +451,7 @@ test("a missing app's HTML 404 is a missing refusal, not a defect", async () => 
   })
   try {
     let error = await assertRejects(
-      () => storeQuery('someone.token', 'sbx37901/nosuchapp', ['.entity']),
+      () => storeQuery('someone.token', 'sbx37901', ['.entity']),
       CallError,
       '404 Nothing here yet. There are no apps at this address yet.',
     )

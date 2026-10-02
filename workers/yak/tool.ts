@@ -17,7 +17,7 @@ import { writes } from '@yaks/member'
 import { CallError } from '@yaks/tools'
 import { fill } from '@yaks/yaml'
 import { WORDS } from './content.ts'
-import { appStore, type Directory, type Space } from './directory.ts'
+import { appStore, type Directory, META, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import type { Spend } from './sandbox.ts'
 import type { Caller, Who } from './session.ts'
@@ -230,16 +230,34 @@ export let ownSpace = async (ctx: Ctx, app?: unknown) => {
   return owned[0] ?? await ctx.dir.own(ctx.person)
 }
 
+// The platform's admin: an owner of the meta space, the seat every platform
+// act answers to (sell.ts `fees`, tunnel.ts).
+let admin = async (ctx: Ctx): Promise<boolean> => {
+  let meta = await ctx.dir.space(META.space)
+  return !!meta && await ctx.dir.role(meta, ctx.person) == 'owner'
+}
+
+// The caller's role in a space: their seat's. Where the door says `over` —
+// the graph tier naming an app (agent.ts `named`) — the platform's admin
+// stands as an owner in every space, so any app's rows can be read and fixed
+// through the store's own rules and journal, recorded as the admin (T-63550).
+let roleIn = async (ctx: Ctx, space: Space, over: boolean) => {
+  let role = await ctx.dir.role(space, ctx.person)
+  return role != 'owner' && over && await admin(ctx) ? 'owner' : role
+}
+
 // The caller in the space: a member reads, an owner or editor writes.
-export let inSpace = async (ctx: Ctx, args: Args, write = false) => {
+export let inSpace = async (
+  ctx: Ctx,
+  args: Args,
+  write = false,
+  over = false,
+) => {
   let space = args.space == null
     ? await ownSpace(ctx, args.app)
     : await ctx.dir.space(text(args.space, 'space'))
   if (!space) throw refuse('missing', `no space ${args.space}`)
-  let who: Who = {
-    person: ctx.person,
-    role: await ctx.dir.role(space, ctx.person),
-  }
+  let who: Who = { person: ctx.person, role: await roleIn(ctx, space, over) }
   if (!who.role) throw refuse('access', `not a member of ${space.slug}`)
   if (write && !writes(who.role)) {
     throw refuse('access', `not a writer of ${space.slug}`)
@@ -258,8 +276,13 @@ export let seatIn = async (ctx: Ctx, slug: string) => {
   return [{ space, role }]
 }
 
-export let inApp = async (ctx: Ctx, args: Args, write = false) => {
-  let { space, who } = await inSpace(ctx, args, write)
+export let inApp = async (
+  ctx: Ctx,
+  args: Args,
+  write = false,
+  over = false,
+) => {
+  let { space, who } = await inSpace(ctx, args, write, over)
   let slug = text(args.app, 'app')
   let app = await ctx.dir.app(space, slug)
   if (!app) throw refuse('missing', `no app ${slug} in ${space.slug}`)

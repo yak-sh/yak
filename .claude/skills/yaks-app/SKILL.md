@@ -112,7 +112,12 @@ lives in `public/docs/components.md`, and a test checks it.
 
 ## Debugging an app
 
-- `yak admin query <space>/<app> <query> --admin` reads its store.
+- `yak admin query <space>/<app> <query> --admin` reads its store, and
+  `yak admin apply <space>/<app> <bundles> --admin` patches, adds or deletes
+  its rows through the store's own apply (`--check` rehearses). Both go
+  through the connector's graph tier (`graph_query` with `space` and `app`,
+  `graph_apply` likewise), where the platform's admin, an owner of `yak`,
+  stands as an owner in every space (tool.ts `roleIn`).
 - `yak admin errors --admin` lists errors by Sentry issue. Sentry runs out of
   events monthly, so an empty answer may mean blind, not healthy, until the
   platform's own tracker lands (D-45640).

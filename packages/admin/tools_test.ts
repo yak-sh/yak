@@ -235,14 +235,17 @@ test('whoami with no spaces still asks once', async () => {
   assertStringIncludes(said, 'spaces    (none)')
 })
 
-test('the platform store is queried through its graph-tier door', async () => {
+// A named app, the platform's own store among them, is read and written
+// through the connector's graph tier, where its owner and the platform's
+// admin reach any app's rows (workers/yak/agent.ts `named`).
+test("a named app's store is queried and applied through the graph tier", async () => {
   let at = box()
   kept(at, ADMIN, 'admin.token')
   let rows = [{
     entity: { eid: 'broke' },
     exception: { message: 'sift is not a function' },
   }]
-  let called: unknown
+  let called: { params: unknown }[] = []
   await answering(
     (url, init) => {
       if (!url.endsWith('/mcp')) {
@@ -250,7 +253,7 @@ test('the platform store is queried through its graph-tier door', async () => {
           status: 404,
         })
       }
-      called = JSON.parse(String(init?.body))
+      called.push(JSON.parse(String(init?.body)))
       return new Response(JSON.stringify({
         jsonrpc: '2.0',
         id: 1,
@@ -265,25 +268,34 @@ test('the platform store is queried through its graph-tier door', async () => {
     },
     async (hit) => {
       try {
-        let answer = await ask('admin_query', {
-          admin: true,
-          where: 'yak/platform',
-          filters: ['.exception'],
-        }, { at })
-        assertEquals(JSON.parse(body(answer)), rows)
-        assertEquals(hit, ['https://yaks.app/mcp'])
-        assertEquals(called, {
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'tools/call',
-          params: {
+        let change = [{ entity: { eid: 'broke' }, exception: null }]
+        let answers = [
+          await ask('admin_query', {
+            admin: true,
+            where: 'yak/platform',
+            filters: ['.exception'],
+          }, { at }),
+          await ask('admin_apply', {
+            admin: true,
+            where: 'yourname/vale',
+            change,
+            check: true,
+          }, { at }),
+        ]
+        for (let answer of answers) {
+          assertEquals(JSON.parse(body(answer)), rows)
+        }
+        assertEquals(hit, ['https://yaks.app/mcp', 'https://yaks.app/mcp'])
+        assertEquals(called.map((c) => c.params), [
+          {
             name: 'graph_query',
-            arguments: {
-              app: 'yak/platform',
-              query: '.exception',
-            },
+            arguments: { app: 'yak/platform', q: '.exception' },
           },
-        })
+          {
+            name: 'graph_apply',
+            arguments: { app: 'yourname/vale', change, check: true },
+          },
+        ])
       } finally {
         Deno.removeSync(at.dir, { recursive: true })
       }
