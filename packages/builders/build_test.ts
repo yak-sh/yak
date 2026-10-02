@@ -25,7 +25,7 @@ import {
   selected,
 } from './build.ts'
 import { answer as answerWrites } from './answer.ts'
-import { content, key } from './key.ts'
+import { key } from './key.ts'
 import { adapted, modelTool, render } from './model.ts'
 import { build, runs } from './tools.ts'
 import { builderDoc } from './vocab.ts'
@@ -1280,35 +1280,4 @@ test('late answers retain their takes without taking the current choice', async 
   assertEquals((await g.read('.built')).length, 2)
   let [playing] = await g.read('.built.current=true')
   assertEquals(comp(playing, 'built')?.call, latest.entity.eid)
-})
-
-test('take conversion preserves downstream input keys and served output ids without calls', async () => {
-  let { g, runner, vocab } = await shop({}, [], [code()])
-  await g.apply([source('a'), builder()])
-  let id = await runOf(g, ['a'])
-  await drive(g, runner, id)
-  let output = await outOf(g, id)
-  let [made] = await g.get([output])
-  let call = String(comp(made, 'built')?.call)
-  await g.apply([
-    { entity: made.entity, built: { inputs: null }, chosen: null },
-    unkeyed(OUTPUT_OF, outputOf(id, 'main', call)),
-    keyed(OUTPUT_OF, output, `${id}/main`),
-  ], { trusted: true })
-  let row = await one(g, output)
-  let hash = content(vocab)(row)
-  let before = (await g.read('.call')).length
-  let { takes } = await import('./takes.ts')
-  await g.apply(await g.storage.tx((tx) => takes(tx, builder())), {
-    trusted: true,
-  })
-  assertEquals(content(vocab)(await one(g, output)), hash)
-  assertEquals(await outOf(g, id), output)
-  assertEquals((await g.read('.built.current=true')).map((r) => r.entity.eid), [
-    output,
-  ])
-  assertEquals((await g.read('.call')).length, before)
-  assertEquals(await g.storage.tx((tx) => takes(tx, builder())), [])
-  let [old] = await g.get([keyEid(OUTPUT_OF, `${id}/main`)])
-  assertEquals(old?.key, undefined)
 })

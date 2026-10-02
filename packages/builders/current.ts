@@ -1,6 +1,5 @@
 // Current outputs are chosen takes of still-selected bindings. A pending
-// reroll keeps playing the chosen take. The legacy branch lasts only through
-// the hosted take conversion, so old stores keep serving during the mover.
+// replacement keeps playing the chosen take; history remains queryable.
 
 import type { DerivedProp } from '@yaks/sql'
 import {
@@ -12,7 +11,6 @@ import {
   join,
   lit,
   ne,
-  notNull,
   or,
   select,
   table,
@@ -30,17 +28,11 @@ export let builtCurrent: DerivedProp = {
       ],
       where: and(
         eq(col('entity', 'u'), owner),
-        or(
-          and(
-            notNull(col('inputs', 'u')),
-            exists(select({
-              cols: [lit(1)],
-              from: table('chosen', 'ch'),
-              where: eq(col('entity', 'ch'), owner),
-            })),
-          ),
-          and(isNull(col('inputs', 'u')), eq(col('key', 'b'), col('key', 'u'))),
-        ),
+        exists(select({
+          cols: [lit(1)],
+          from: table('chosen', 'ch'),
+          where: eq(col('entity', 'ch'), owner),
+        })),
         or(isNull(col('stale', 'b')), eq(col('stale', 'b'), lit(false))),
       ),
     })),

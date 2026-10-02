@@ -41,8 +41,6 @@ import {
   refusalPrior,
   refusalSource,
 } from '@yaks/tools/refusals'
-import { takePatch } from '@yaks/builders'
-import { keyEid } from '@yaks/key'
 import { interruptionFind, interruptionMove } from '@yaks/tools/interruptions'
 import { Unknown } from '@yaks/vocab'
 import { GIT_STORE, PLATFORM_STORE } from './door.ts'
@@ -109,26 +107,7 @@ export let dispatchRule: Rule = {
 
 /** Every rule a release carries. A rule leaves in the release after the sweep
  * reports every store done with it, with the old words it moved out of. */
-export let takeRule: Rule = {
-  mark: 'yak/store/builder-takes/18',
-  live: 'all',
-  find: '.built&.built.call&.built.slot&.built.build&!built.inputs&*',
-  move: (row, read) => {
-    if (!read) throw new Error('take conversion needs its build and call')
-    let made = row.built as Comp
-    return takePatch(
-      row,
-      read(`.entity.eid=${made.build}&*`)[0],
-      read(`.entity.eid=${made.call}&*`)[0],
-      read(
-        `.entity.eid=${keyEid('output_of', `${made.build}/${made.slot}`)}&*`,
-      )[0],
-    )
-  },
-}
-
 export let RULES: Rule[] = [
-  takeRule,
   ...interruptionFind.map((find, i): Rule => ({
     mark: `yak/store/interruption/${i + 1}`,
     find,
