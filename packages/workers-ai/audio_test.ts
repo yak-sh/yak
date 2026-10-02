@@ -17,6 +17,9 @@ let mp3 = () => {
 let ask = (model: string) => ({
   model,
   tools: [],
+  ...model == 'minimax/music-2.6'
+    ? { input: { lyrics: '[Chorus]\nOoh\nAh' } }
+    : {},
   instructions: 'Use oud and flute.',
   items: [{
     kind: 'user' as const,
@@ -67,6 +70,7 @@ for (let name of ['elevenlabs/music-v2', 'minimax/music-2.6']) {
         : {
           prompt: 'Use oud and flute.\n\n' +
             'A full-length three-minute desert welcome with a wordless choir.',
+          lyrics: '[Chorus]\nOoh\nAh',
           lyrics_optimizer: false,
           is_instrumental: false,
           format: 'mp3',
@@ -104,6 +108,7 @@ test('duration and voice words remain prompt directions, not parsed flags', () =
           }
           : {
             prompt: `Use oud and flute.\n\n${text}`,
+            lyrics: '[Chorus]\nOoh\nAh',
             lyrics_optimizer: false,
             is_instrumental: false,
             format: 'mp3',
@@ -198,4 +203,41 @@ test('music decodes a successful raw binding envelope and prices its bytes', asy
   let reply = await model(ask('elevenlabs/music-v2'))
   assertAlmostEquals(reply.cost!, 0.075)
   assertEquals(reply.artifacts?.[0].media_type, 'audio/mpeg')
+})
+
+test('MiniMax requires explicit vocal inputs before making a paid request', async () => {
+  let calls = 0
+  let model = workersAi({
+    run: () => {
+      calls++
+      throw new Error('not reached')
+    },
+  }, { media: { store: artifactStore(memoryBlobs()) } })
+  await assertRejects(
+    () => model({ ...ask('minimax/music-2.6'), input: undefined }),
+    ModelError,
+    'MiniMax vocals require input.lyrics',
+  )
+  assertEquals(calls, 0)
+  for (
+    let input of [
+      { lyrics: '[Chorus]\nOoh\nAh' },
+      { lyrics_optimizer: true },
+      { is_instrumental: true },
+    ]
+  ) {
+    let sent = musicInput({ ...ask('minimax/music-2.6'), input })
+    for (let [key, value] of Object.entries(input)) {
+      assertEquals(sent[key], value)
+    }
+  }
+})
+
+test('ElevenLabs takes caller duration without parsing it from the prompt', () => {
+  let sent = musicInput({
+    ...ask('elevenlabs/music-v2'),
+    input: { music_length_ms: 180000, force_instrumental: false },
+  })
+  assertEquals(sent.music_length_ms, 180000)
+  assertEquals(sent.force_instrumental, false)
 })

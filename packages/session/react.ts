@@ -896,6 +896,7 @@ export let react = async (
   let req: Request = {
     signal: deps.signal,
     model: spelled,
+    ...using?.input ? { input: using.input as Record<string, unknown> } : {},
     ...modalities ? { modalities } : {},
     ...questions ? { questions } : {},
     effort: effort == null ? undefined : String(effort),

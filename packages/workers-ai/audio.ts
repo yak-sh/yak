@@ -38,10 +38,35 @@ export let musicInput = (req: Request): Record<string, unknown> => {
       'MiniMax music prompts allow 2000 chars',
     )
   }
-  // Duration stays in the prompt; MiniMax requires the vocal-capable default.
-  return req.model == 'elevenlabs/music-v2'
-    ? { prompt, output_format: 'mp3_48000_192' }
-    : { prompt, lyrics_optimizer: false, is_instrumental: false, format: 'mp3' }
+  let native = req.input ?? {}
+  // The catalog's raw schema omits MiniMax's native conditional requirement:
+  // vocals need explicit lyrics or the caller's permission to generate them.
+  // https://platform.minimax.io/docs/api-reference/music-generation
+  let sent: Record<string, unknown> = req.model == 'elevenlabs/music-v2'
+    ? { output_format: 'mp3_48000_192', ...native, prompt }
+    : {
+      lyrics_optimizer: false,
+      is_instrumental: false,
+      format: 'mp3',
+      ...native,
+      prompt,
+    }
+  if (req.model == 'minimax/music-2.6') {
+    if (
+      sent.is_instrumental != true && sent.lyrics_optimizer != true &&
+      !(typeof sent.lyrics == 'string' && sent.lyrics.trim())
+    ) {
+      throw new ModelError(
+        'music_input',
+        'MiniMax vocals require input.lyrics or input.lyrics_optimizer:true; ' +
+          'use input.is_instrumental:true only for music without vocals',
+      )
+    }
+    if (typeof sent.lyrics == 'string' && sent.lyrics.length > 3500) {
+      throw new ModelError('music_input', 'MiniMax lyrics allow 3500 chars')
+    }
+  }
+  return sent
 }
 
 // An ID3v2 tag's size is four syncsafe bytes; it is not an audio frame.

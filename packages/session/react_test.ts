@@ -1869,3 +1869,14 @@ for (let committed of [false, true]) {
     assertEquals(entries.filter((b) => b.exception).length, 0)
   })
 }
+
+test('explicit native model input reaches the provider and the recorded ask', async () => {
+  let g = world()
+  let input = { lyrics: '[Chorus]\nOoh\nAh', is_instrumental: false }
+  await g.apply([{ entity: { eid: 'e1' }, using: { input } }])
+  let { model, asked } = scripted([says('r1', 'done')])
+  await rest(g, ids.s, { model, tools: [], mint })
+  assertEquals(asked[0].input, input)
+  let entries = await transcript(g, ids.s)
+  assertEquals((entries.find((e) => e.ask)?.using as Comp).input, input)
+})

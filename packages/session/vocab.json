@@ -473,6 +473,10 @@
         "effort": {
           "type": "string"
         },
+        "input": {
+          "type": "object",
+          "description": "explicit model-native inputs, such as lyrics or duration; validated by the provider, never inferred from the prompt"
+        },
         "instructions": {
           "type": "string",
           "description": "system instructions in force for this transcript"

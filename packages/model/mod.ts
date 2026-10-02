@@ -138,6 +138,9 @@ export type Request = {
   signal?: AbortSignal
   onText?: (delta: TextDelta) => void
   model: string
+  /** Explicit model-native inputs, such as lyrics or duration. A provider
+   * supporting native inputs validates them; never inferred from prose. */
+  input?: Record<string, unknown>
   /** Output modalities requested of a model that can generate media. */
   modalities?: ('text' | 'image' | 'audio')[]
   effort?: string
