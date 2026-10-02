@@ -7,7 +7,7 @@ import { installBuildingDesigns, refreshTerrain, vale } from './terrain.ts'
 import { placeOf, placeText } from './place.ts'
 import { creatureNamed, frontOf, heroLevel, spawnedAt } from './spawn.ts'
 import { useBeasts } from './beasts.ts'
-import { resolveTarget } from './target.ts'
+import { resolveHero, resolveTarget } from './target.ts'
 import { GIVERS } from './quests.ts'
 import { decided, where as villagerWhere } from './villagers.ts'
 import { eidOf } from './villager-id.ts'
@@ -20,7 +20,9 @@ let read = async (door, line, live = false) => {
     ? `live=1&q=${encodeURIComponent(line)}`
     : `q=${encodeURIComponent(line)}`
   let res = await door.fetch(`query?${search}`)
-  if (!res.ok) throw new Error(`store query ${res.status}: ${await res.text()}`)
+  if (!res.ok) {
+    throw new Error(`store query ${res.status}: ${await res.text()}`)
+  }
   return await res.json()
 }
 let query = (env, line) => read(env.APP, line)
@@ -33,7 +35,9 @@ let apply = async (env, rows) => {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ entities: rows }),
   })
-  if (!res.ok) throw new Error(`store apply ${res.status}: ${await res.text()}`)
+  if (!res.ok) {
+    throw new Error(`store apply ${res.status}: ${await res.text()}`)
+  }
   await res.body?.cancel()
 }
 
@@ -111,17 +115,72 @@ let tick = async (req, env, v, themes) => {
   return Response.json({ wrote: rows.length })
 }
 
+let heroOf = async (req, env, input) => {
+  try {
+    let hero = await resolveHero(
+      input,
+      (line) => read(env.STORE, line),
+      req.headers.get('x-yak-person'),
+      (line) => live(env, line),
+    )
+    return hero ??
+      new Response(
+        'No hero has that name or eid; omit it to use your own hero.',
+        { status: 404 },
+      )
+  } catch (e) {
+    return new Response(e.message, { status: 400 })
+  }
+}
+
+let save = (env, rows) =>
+  env.STORE.fetch('apply', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ entities: rows }),
+  })
+
+let damage = async (req, env) => {
+  if (req.headers.get('x-yak-role') != 'owner') {
+    return new Response('Only the app owner can change damage.', {
+      status: 403,
+    })
+  }
+  let args = await req.json().catch(() => null)
+  if (typeof args?.on != 'boolean') {
+    return new Response('Pass on=true or on=false.', { status: 400 })
+  }
+  let hero = await heroOf(req, env, args.player)
+  if (hero instanceof Response) return hero
+  return save(env, [{ entity: hero.entity, damageable: { on: args.on } }])
+}
+
+let gather = async (req, env) => {
+  let args = await req.json().catch(() => null)
+  let count = args?.count ?? 1
+  if (!Number.isInteger(count) || count < 1 || count > 10) {
+    return new Response('Pass a count from 1 to 10.', { status: 400 })
+  }
+  let hero = await heroOf(req, env, args?.player)
+  if (hero instanceof Response) return hero
+  let person = req.headers.get('x-yak-person')
+  if (!person || hero.created?.by != person) {
+    return new Response('You can only direct your own hero.', { status: 403 })
+  }
+  return save(env, [{
+    entity: { eid: crypto.randomUUID() },
+    directive: { player: hero.entity.eid, goal: 'wood', count },
+    session: {},
+    call: { to: 'eefb86f9-f686-84b2-a700-3bc81c73a701', args: {} },
+    wake: { while: [{ match: '.directive', every: '5s' }] },
+  }])
+}
+
 let where = async (req, env, themes) => {
   let args = await req.json().catch(() => null)
-  let player = args?.player
-  if (typeof player != 'string' || !player) {
-    return new Response('Pass a hero.', { status: 400 })
-  }
-  let [hero] = await read(
-    env.STORE,
-    `.entity.eid=${JSON.stringify(player)}&.player&?created&?seen`,
-  )
-  if (!hero) return new Response('No hero has that id.', { status: 404 })
+  let hero = await heroOf(req, env, args?.player)
+  if (hero instanceof Response) return hero
+  let player = hero.entity.eid
   let owner = req.headers.get('x-yak-role') == 'owner'
   let person = req.headers.get('x-yak-person')
   if (!owner && (!person || hero.created?.by != person)) {
@@ -146,7 +205,10 @@ let where = async (req, env, themes) => {
 }
 
 let targetPlace = async (env, v, eid) => {
-  let [moving] = await live(env, `.entity.eid=${JSON.stringify(eid)}&.position`)
+  let [moving] = await live(
+    env,
+    `.entity.eid=${JSON.stringify(eid)}&.position`,
+  )
   let placed = placeOf(moving, 'position')
   if (placed) return placed
   let [stored] = await read(
@@ -185,13 +247,21 @@ let inspect = async (req, env, v, themes) => {
     })
   }
   let args = await req.json().catch(() => null)
-  if (typeof args?.target != 'string' || !args.target.trim()) {
-    return new Response('Pass a land, name, or entity id.', { status: 400 })
-  }
   await themes(env)
   let to
   try {
-    to = await resolveTarget(args.target, (line) => read(env.STORE, line))
+    if (args?.target === undefined) {
+      let hero = await heroOf(req, env, undefined)
+      if (hero instanceof Response) return hero
+      to = { eid: hero.entity.eid }
+    } else {
+      if (typeof args.target != 'string' || !args.target.trim()) {
+        return new Response('Pass a land, name, or entity id.', {
+          status: 400,
+        })
+      }
+      to = await resolveTarget(args.target, (line) => read(env.STORE, line))
+    }
   } catch (e) {
     return new Response(e.message, { status: 400 })
   }
@@ -269,12 +339,10 @@ let teleport = async (req, env, v, themes) => {
     })
   }
   let args = await req.json().catch(() => null)
-  let player = args?.player
   let named = typeof args?.level == 'string'
   let point = args?.x !== undefined || args?.z !== undefined
   let toward = typeof args?.to == 'string'
   if (
-    typeof player != 'string' || !player ||
     Number(named) + Number(point) + Number(toward) != 1
   ) {
     return new Response(
@@ -312,24 +380,14 @@ let teleport = async (req, env, v, themes) => {
   } catch (e) {
     return new Response(e.message, { status: 400 })
   }
-  let found = await read(
-    env.STORE,
-    `.entity.eid=${JSON.stringify(player)}&.player`,
-  )
-  if (!found.length) {
-    return new Response('No hero has that id.', { status: 404 })
-  }
+  let hero = await heroOf(req, env, args?.player)
+  if (hero instanceof Response) return hero
+  let player = hero.entity.eid
   let request = crypto.randomUUID()
-  let saved = await env.STORE.fetch('apply', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      entities: [{
-        entity: { eid: request },
-        teleport_request: { player, ...at },
-      }],
-    }),
-  })
+  let saved = await save(env, [{
+    entity: { eid: request },
+    teleport_request: { player, ...at },
+  }])
   if (!saved.ok) return saved
   let { pending } = await saved.json()
   return Response.json({ request, player, ...at, pending: !!pending })
@@ -351,30 +409,21 @@ let spawn = async (req, env, v, themes) => {
   let person = req.headers.get('x-yak-person')
   if (!person) return new Response('Sign in to spawn.', { status: 403 })
   await themes(env)
-  let players = await read(
-    env.STORE,
-    `.player&.created.by=${JSON.stringify(person)}&.order=-created.at`,
+  let chosen = await heroOf(req, env, undefined)
+  if (chosen instanceof Response) return chosen
+  let player = chosen.entity.eid
+  let [hero] = await live(
+    env,
+    `.entity.eid=${JSON.stringify(player)}&.position&?motion`,
   )
-  let hero
-  // Use the connected hero, not an older character belonging to this person.
-  for (let player of players) {
-    let [current] = await live(
-      env,
-      `.entity.eid=${JSON.stringify(player.entity.eid)}&.position&?motion`,
-    )
-    if (placeOf(current, 'position')) {
-      hero = current
-      break
-    }
-  }
-  let player = hero?.entity.eid ?? players[0]?.entity.eid
-  if (!player) return new Response('You have no hero yet.', { status: 404 })
   let at
   try {
     if (target) {
       let to = await resolveTarget(target, (line) => read(env.STORE, line))
       if (!to) {
-        return new Response('No land or entity has that name.', { status: 404 })
+        return new Response('No land or entity has that name.', {
+          status: 404,
+        })
       }
       at = 'level' in to
         ? destinationOf(v, to)
@@ -411,11 +460,7 @@ let spawn = async (req, env, v, themes) => {
   let lvl = heroLevel(slain, journal)
   let row = spawnedAt(beast, at.x, at.z, lvl)
   if (!beast) row.doc = { body: word.trim() }
-  let saved = await env.STORE.fetch('apply', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ entities: [row] }),
-  })
+  let saved = await save(env, [row])
   if (!saved.ok) return saved
   await saved.body?.cancel()
   let name = beasts.find((b) => b.entity.eid == beast)?.beast_design?.name
@@ -451,6 +496,12 @@ export let workerOf = (v) => {
       let path = new URL(req.url).pathname
       if (req.method == 'POST' && path.endsWith('/companion/tick')) {
         return tick(req, env, v, themes)
+      }
+      if (req.method == 'POST' && path.endsWith('/damage')) {
+        return damage(req, env)
+      }
+      if (req.method == 'POST' && path.endsWith('/gather')) {
+        return gather(req, env)
       }
       if (req.method == 'POST' && path.endsWith('/teleport')) {
         return teleport(req, env, v, themes)

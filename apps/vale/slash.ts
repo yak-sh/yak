@@ -32,7 +32,7 @@ let shape = (arg: Arg) =>
 
 let usage = (name: string, tool: Tool) => {
   let required = new Set(tool.required ?? [])
-  let args = Object.entries(tool.input ?? {}).filter(([key]) => key != 'player')
+  let args = Object.entries(tool.input ?? {})
     .map(([key, arg]) =>
       required.has(key)
         ? `<${key}:${shape(arg)}>`
@@ -48,7 +48,6 @@ let help = (name: string | undefined, tools: Tools) => {
       return { error: `No available command /${name}.` }
     }
     let args = Object.entries(tool.input ?? {})
-      .filter(([key]) => key != 'player')
       .map(([key, arg]) =>
         `- \`${key}\`${tool.required?.includes(key) ? ' (required)' : ''}: ` +
         (arg.description ?? shape(arg))
@@ -72,15 +71,15 @@ let help = (name: string | undefined, tools: Tools) => {
   }
 }
 
-/** The caller's listing, adapted without declaring a second grammar. Player
- * is supplied by the door, not typed in chat. */
+/** The caller's listing, with hero selection available as an optional flag. */
 export let grammars = (tools: Tools): Grammar[] =>
   Object.entries(tools).filter(([, t]) => seen(t)).map(([name, t]) => {
-    let input = Object.fromEntries(
-      Object.entries(t.input ?? {}).filter(([key]) => key != 'player'),
-    )
+    let input = t.input ?? {}
     let required = (t.required ?? []).filter((key) => key != 'player')
-    let positional = required.length ? required : Object.keys(input)
+    let positional = required.length
+      ? required
+      : Object.keys(input).filter((key) => key != 'player')
+    if (!positional.length && input.player) positional = ['player']
     let last = positional.at(-1)
     return {
       name,

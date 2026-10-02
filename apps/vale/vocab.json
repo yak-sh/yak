@@ -1834,14 +1834,18 @@
       "floor": "owner",
       "description": "Turn damage on or off for a Mossvale hero. Off restores full health and prevents damage; on returns to ordinary combat. Only the app owner may change a hero's damage mode.",
       "input": {
-        "player": { "type": "string", "description": "The hero's eid." },
-        "on": { "type": "boolean" }
+        "player": {
+          "type": "string",
+          "description": "A hero's current name or eid. Omit to use your own hero."
+        },
+        "on": {
+          "type": "boolean"
+        }
       },
-      "required": ["player", "on"],
-      "apply": {
-        "entity": { "eid": "$player" },
-        "damageable": { "on": "$on" }
-      }
+      "required": [
+        "on"
+      ],
+      "worker": "/damage"
     },
     "spawn": {
       "tool": true,
@@ -1866,7 +1870,10 @@
       "floor": "owner",
       "description": "Teleport a Mossvale hero to a land, exact coordinates, or a positioned entity. Only the app owner may do this. The hero moves now if their game page is open, or when they next play. Pass a land id or name as level, both x and z in world metres, or an entity eid or current name as to. A bare /teleport destination also accepts a land or entity name. Moving entities require a live position; companions have a saved location and villagers' current location is computed from their plans. The hero's last saved position is never used as an entity destination. Coordinates must be inside a known land and walkable.",
       "input": {
-        "player": { "type": "string", "description": "The hero's eid." },
+        "player": {
+          "type": "string",
+          "description": "A hero's current name or eid. Omit to use your own hero."
+        },
         "level": {
           "type": "string",
           "ref": "theme_design",
@@ -1886,7 +1893,7 @@
           "description": "World metres south of Mossvale's origin."
         }
       },
-      "required": ["player"],
+      "required": [],
       "worker": "/teleport"
     },
     "where": {
@@ -1896,10 +1903,10 @@
       "input": {
         "player": {
           "type": "string",
-          "description": "The hero's eid. A game page supplies its selected hero."
+          "description": "A hero's current name or eid. Omit to use your own hero."
         }
       },
-      "required": ["player"],
+      "required": [],
       "worker": "/where"
     },
     "inspect": {
@@ -1910,20 +1917,20 @@
       "input": {
         "target": {
           "type": "string",
-          "description": "A land id or name, or an entity eid or current name. Quote names with spaces in a slash command."
+          "description": "A land id or name, or an entity eid or current name. Omit to inspect your own hero."
         }
       },
-      "required": ["target"],
+      "required": [],
       "worker": "/inspect"
     },
     "gather_wood": {
       "tool": true,
       "floor": "person",
-      "description": "Ask the companion of one of your Mossvale heroes to gather wood, even while no game page is open. First query player rows and choose a hero whose created.by is you; only that hero's owner can direct the companion. Use companion_progress with the returned directive id to see its gathered items.",
+      "description": "Ask your hero’s companion to gather wood, even while no game page is open. Pass a current hero name or eid, or omit to use your own hero. Only the hero’s owner can direct it. Use companion_progress with the returned directive id to see its gathered items.",
       "input": {
         "player": {
           "type": "string",
-          "description": "The eid of a hero you made."
+          "description": "A hero's current name or eid. Omit to use your own hero."
         },
         "count": {
           "type": "integer",
@@ -1932,19 +1939,8 @@
           "default": 1
         }
       },
-      "required": ["player"],
-      "apply": {
-        "entity": { "eid": "$objective" },
-        "directive": { "player": "$player", "goal": "wood", "count": "$count" },
-        "session": {},
-        "call": {
-          "to": "eefb86f9-f686-84b2-a700-3bc81c73a701",
-          "args": {}
-        },
-        "wake": {
-          "while": [{ "match": ".directive", "every": "5s" }]
-        }
-      }
+      "required": [],
+      "worker": "/gather"
     },
     "companion_tick": {
       "tool": true,

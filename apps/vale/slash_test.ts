@@ -48,6 +48,16 @@ test('slash adapts declared app commands and leaves chat alone', async () => {
       ['/damage --on', 'damage', { on: true }],
       ['/damage --on=false', 'damage', { on: false }],
       ['/where', 'where', {}],
+      ['/where matt', 'where', { player: 'matt' }],
+      ['/damage false --player yaks', 'damage', { on: false, player: 'yaks' }],
+      ['/teleport tombsands --player matt', 'teleport', {
+        level: 'tombsands',
+        player: 'matt',
+      }],
+      ['/gather_wood --player matt', 'gather_wood', {
+        player: 'matt',
+        count: 1,
+      }],
       ['/teleport tombsands', 'teleport', { level: 'tombsands' }],
       ['/teleport --to=01234567-89ab-cdef-0123-456789abcdef', 'teleport', {
         to: '01234567-89ab-cdef-0123-456789abcdef',
@@ -159,7 +169,7 @@ test('slash completion flags and enum/ref values roundtrip in both forms', async
   assertEquals(await suggestions('/teleport --'), {
     from: 10,
     to: 12,
-    cands: ['--level', '--to', '--x', '--z'].map((text) => ({
+    cands: ['--level', '--player', '--to', '--x', '--z'].map((text) => ({
       text,
       kind: 'flag',
     })),

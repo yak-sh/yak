@@ -34,6 +34,14 @@ export let resolveTarget = async (
   if (villager) return { eid: eidOf(villager.id) }
   if (eid(input.trim())) return { eid: input.trim().toLowerCase() }
 
+  return namedHero(input, query)
+}
+
+let namedHero = async (
+  input: string,
+  query: Query,
+): Promise<{ eid: string } | null> => {
+  let wanted = nameOf(input.trim())
   let named = (await query(`.look.name~=${JSON.stringify(input.trim())}`))
     .filter((b) => nameOf(String(look(b).name ?? '')) == wanted)
   let players = [...new Set(named.map((b) => String(look(b).player ?? '')))]
@@ -52,7 +60,49 @@ export let resolveTarget = async (
     nameOf(String(look(row).name ?? '')) == wanted
   )
   if (matches.length > 1) {
-    throw new Error(`Several heroes are named ${input.trim()}; use an eid.`)
+    throw new Error(
+      `Several heroes are named ${input.trim()}: ${
+        matches.map(([id, row]) => `${look(row).name} (${id})`).join(', ')
+      }; use an eid.`,
+    )
   }
   return matches.length ? { eid: matches[0][0] } : null
+}
+
+/** A named hero, or the caller's connected hero followed by their newest hero. */
+export let resolveHero = async (
+  input: unknown,
+  query: Query,
+  person: string | null,
+  live: Query,
+): Promise<Bundle | null> => {
+  if (input !== undefined) {
+    if (typeof input != 'string' || !input.trim()) {
+      throw Error('Pass a hero name or eid.')
+    }
+    let [hero] = await query(
+      `.entity.eid=${
+        JSON.stringify(
+          eid(input.trim()) ? input.trim().toLowerCase() : input.trim(),
+        )
+      }&.player&?created&?seen`,
+    )
+    if (hero) return hero
+    let target = await namedHero(input, query)
+    if (!target) return null
+    return (await query(
+      `.entity.eid=${JSON.stringify(target.eid)}&.player&?created&?seen`,
+    ))[0] ?? null
+  }
+  if (!person) return null
+  let heroes = await query(
+    `.player&.created.by=${JSON.stringify(person)}&.order=-created.at`,
+  )
+  for (let hero of heroes) {
+    let [current] = await live(
+      `.entity.eid=${JSON.stringify(hero.entity.eid)}&.position&?motion`,
+    )
+    if (current?.position) return hero
+  }
+  return heroes[0] ?? null
 }
