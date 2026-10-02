@@ -12,6 +12,12 @@ import { QUESTS } from './quests.ts'
 import { hashOf } from './rand.ts'
 import { entriesOf, killsOf, levelOf, xpOf } from './rules.ts'
 
+/** Three metres ahead, in the same yaw convention as play.ts. */
+export let frontOf = (at: { x: number; z: number }, yaw: number) => ({
+  x: at.x + Math.sin(yaw) * 3,
+  z: at.z + Math.cos(yaw) * 3,
+})
+
 /** How far a spawned creature wanders from where it was put, in metres. */
 export let ROAM = 6
 

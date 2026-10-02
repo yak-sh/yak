@@ -282,7 +282,7 @@ export let connect = (
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         name,
-        args: { ...(hero ? { player: hero } : {}), ...args },
+        args: { ...(hero && name != 'spawn' ? { player: hero } : {}), ...args },
       }),
     })
     let answer = await r.json().catch(() => ({}))

@@ -275,3 +275,17 @@ test('slash descriptions take the rest of the line for any trailing text input',
     command: { name: 'note', args: { text: 'remember these words' } },
   })
 })
+
+test('spawn takes one unquoted description and at remains flag-only', async () => {
+  for (let flag of ['', ' --at mossvale', ' --at=mossvale']) {
+    assertEquals(await slash('/spawn a large polar bear' + flag), {
+      command: {
+        name: 'spawn',
+        args: {
+          beast: 'a large polar bear',
+          ...(flag ? { at: 'mossvale' } : {}),
+        },
+      },
+    })
+  }
+})

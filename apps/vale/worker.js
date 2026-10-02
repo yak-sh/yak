@@ -5,7 +5,7 @@ import { LODES } from './gather.ts'
 import { destinationOf } from './teleport.ts'
 import { installBuildingDesigns, refreshTerrain, vale } from './terrain.ts'
 import { placeOf, placeText } from './place.ts'
-import { creatureNamed, heroLevel, spawnedAt } from './spawn.ts'
+import { creatureNamed, frontOf, heroLevel, spawnedAt } from './spawn.ts'
 import { useBeasts } from './beasts.ts'
 import { resolveTarget } from './target.ts'
 import { GIVERS } from './quests.ts'
@@ -335,47 +335,83 @@ let teleport = async (req, env, v, themes) => {
   return Response.json({ request, player, ...at, pending: !!pending })
 }
 
-// An owner's /spawn: the creature a word names, at the hero's feet, fighting
-// at the hero's level, counted from their falls and quests (spawn.ts). The
-// hero must be in the game, since only a connected page says where they
-// stand.
-let spawn = async (req, env, themes) => {
+// Spawn at an existing command target, or ahead of the caller's own hero.
+let spawn = async (req, env, v, themes) => {
   if (req.headers.get('x-yak-role') != 'owner') {
     return new Response('Only the app owner can spawn a creature.', {
       status: 403,
     })
   }
   let args = await req.json().catch(() => null)
-  let { player, beast: word } = args ?? {}
+  let { beast: word, at: target } = args ?? {}
   if (
-    typeof player != 'string' || !player || typeof word != 'string' ||
-    !word.trim()
+    typeof word != 'string' || !word.trim() ||
+    target !== undefined && (typeof target != 'string' || !target.trim())
   ) {
-    return new Response('Pass a hero and a creature.', { status: 400 })
+    return new Response(
+      'Pass a creature and optionally --at a land or entity.',
+      { status: 400 },
+    )
   }
+  let person = req.headers.get('x-yak-person')
+  if (!person) return new Response('Sign in to spawn.', { status: 403 })
   await themes(env)
+  let players = await read(
+    env.STORE,
+    `.player&.created.by=${JSON.stringify(person)}&.order=-created.at`,
+  )
+  let hero
+  // Use the connected hero, not an older character belonging to this person.
+  for (let player of players) {
+    let [current] = await live(
+      env,
+      `.entity.eid=${JSON.stringify(player.entity.eid)}&.position&?motion`,
+    )
+    if (placeOf(current, 'position')) {
+      hero = current
+      break
+    }
+  }
+  let player = hero?.entity.eid ?? players[0]?.entity.eid
+  if (!player) return new Response('You have no hero yet.', { status: 404 })
+  let at
+  try {
+    if (target) {
+      let to = await resolveTarget(target, (line) => read(env.STORE, line))
+      if (!to) {
+        return new Response('No land or entity has that name.', { status: 404 })
+      }
+      at = 'level' in to
+        ? destinationOf(v, to)
+        : await targetPlace(env, v, to.eid)
+    } else {
+      let current = placeOf(hero, 'position')
+      if (current) at = frontOf(current, hero.motion?.yaw ?? 0)
+    }
+  } catch (e) {
+    return new Response(e.message, { status: 400 })
+  }
+  if (!at) {
+    return new Response(
+      target
+        ? 'That entity has no usable position.'
+        : 'Your hero is not in the game.',
+      { status: 404 },
+    )
+  }
   let who = JSON.stringify(player)
-  let [beasts, keys, [hero], slain, journal] = await Promise.all([
+  let [beasts, keys, slain, journal] = await Promise.all([
     read(env.STORE, '.beast_design ?combat'),
     read(env.STORE, '.alias .key'),
-    live(env, `.entity.eid=${who}&.position`),
     read(env.STORE, `.slain.by=${who}`),
     read(env.STORE, `.journal.player=${who}`),
   ])
-  // A fall written before falls carried their level counts at its creature's.
   useBeasts(beasts)
   let beast
   try {
     beast = creatureNamed(word, beasts, keys)
   } catch (e) {
     return new Response(e.message, { status: 400 })
-  }
-  let at = placeOf(hero, 'position')
-  if (!at) {
-    return new Response(
-      'That hero is not in the game: /spawn puts a creature at their feet.',
-      { status: 404 },
-    )
   }
   let lvl = heroLevel(slain, journal)
   let row = spawnedAt(beast, at.x, at.z, lvl)
@@ -388,10 +424,11 @@ let spawn = async (req, env, themes) => {
   if (!saved.ok) return saved
   await saved.body?.cancel()
   let name = beasts.find((b) => b.entity.eid == beast)?.beast_design?.name
+  let spot = target ? `at ${target}` : 'in front of you'
   return new Response(
     beast
-      ? `${name ?? 'A creature'} stands at your feet, at level ${lvl}.`
-      : `A spot shimmers at your feet, awaiting ${word.trim()}, at level ${lvl}.`,
+      ? `${name ?? 'A creature'} stands ${spot}, at level ${lvl}.`
+      : `A spot shimmers ${spot}, awaiting ${word.trim()}, at level ${lvl}.`,
   )
 }
 
@@ -424,7 +461,7 @@ export let workerOf = (v) => {
         return teleport(req, env, v, themes)
       }
       if (req.method == 'POST' && path.endsWith('/spawn')) {
-        return spawn(req, env, themes)
+        return spawn(req, env, v, themes)
       }
       if (req.method == 'POST' && path.endsWith('/where')) {
         return where(req, env, themes)

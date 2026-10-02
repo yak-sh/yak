@@ -222,7 +222,8 @@ export let argsFor = async (
   if (rest && spare.length) {
     let had = out[rest]
     out[rest] = typeOf(props[rest]) == 'string'
-      ? [had, ...spare].filter((w) => w != undefined).join(' ')
+      ? [had, ...await Promise.all(spare.map((w) => inflate(w, reads)))]
+        .filter((w) => w != undefined).join(' ')
       : typeOf(props[rest]) == 'array'
       ? [
         ...Array.isArray(had) ? had : [],

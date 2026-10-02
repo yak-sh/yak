@@ -274,3 +274,14 @@ test('a trailing text input takes remaining words around either flag form', asyn
     text: 'a large polar bear',
   })
 })
+
+test('trailing text inflates each remaining word before joining', async () => {
+  let grammar = {
+    name: 'note',
+    inputSchema: { type: 'object', properties: { text: { type: 'string' } } },
+    options: { positional: ['text'], rest: 'text' },
+  }
+  assertEquals(await argsFor(grammar, ['begin', '@letter', '-', '@-'], reads), {
+    text: 'begin <letter> from stdin from stdin',
+  })
+})

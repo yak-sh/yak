@@ -1846,16 +1846,19 @@
     "spawn": {
       "tool": true,
       "floor": "owner",
-      "description": "Put a creature at a Mossvale hero's feet. Only the app owner may do this, and the hero has to be in the game. Name an existing creature by its name or alias, or describe a new one, such as a spider with a tophat. A description leaves a shimmering spot until the creature and its figure arrive. It wanders a few metres from that spot, fights at the hero's level, and does not come back once it falls.",
+      "description": "Spawn an existing creature or describe a new one. With no --at, it appears three metres in front of your connected hero, facing where you face. --at accepts a land, a hero’s current name or eid, or a villager. It fights at your hero’s level and does not return once slain.",
       "input": {
-        "player": { "type": "string", "description": "The hero's eid." },
         "beast": {
           "type": "string",
           "ref": "beast_design",
           "description": "An existing creature's name or alias, or a description to invent."
+        },
+        "at": {
+          "type": "string",
+          "description": "A land name, a current hero name or entity eid, or a villager name. Omit to spawn in front of your hero."
         }
       },
-      "required": ["player", "beast"],
+      "required": ["beast"],
       "worker": "/spawn"
     },
     "teleport": {

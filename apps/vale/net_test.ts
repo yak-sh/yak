@@ -4,6 +4,7 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { client } from '@yaks/client'
 import { connect, vocabulary } from './net.ts'
+import { seedDesigns } from './designs_fixture.ts'
 import words from './vocab.json' with { type: 'json' }
 import core from '../../packages/kernel/vocab.json' with { type: 'json' }
 
@@ -182,3 +183,35 @@ test('figures wait for current-main provenance and disappear when stale', async 
 
 import { FIGURE_BUILDS, FIGURE_ROWS, FIGURES, useFigures } from './figure.ts'
 import { rows as figureSeeds } from './figures_fixture.ts'
+
+test('spawn command sends no obsolete player input even with a selected hero', async () => {
+  seedDesigns()
+  let before = globalThis.fetch
+  let sent: unknown[] = []
+  let socket = pair().client
+  let page = connect(
+    new URL('https://example.test/vale/api/'),
+    loadVocab([words, core, builderDoc]),
+    {
+      connect: () => socket,
+      fetch: () => Response.json([]),
+      timer: () => {},
+    },
+  )
+  try {
+    let net = page.world()
+    net.choose('hero')
+    globalThis.fetch = (_url, init) => {
+      sent.push(JSON.parse(String(init?.body)))
+      return Promise.resolve(Response.json({ text: 'Done.' }))
+    }
+    await net.command('spawn', { beast: 'a large polar bear' })
+    assertEquals(sent, [{
+      name: 'spawn',
+      args: { beast: 'a large polar bear' },
+    }])
+  } finally {
+    globalThis.fetch = before
+    page.close()
+  }
+})
