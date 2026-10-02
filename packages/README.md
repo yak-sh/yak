@@ -369,6 +369,10 @@ grouped approximately by function, **not** by dependency order.
   supplied transport. Incoming messages become bundles; subjects and bodies use
   @yaks/doc. Failed delivery cannot roll back the original graph transaction.
 
+- **[@yaks/inbox](./inbox)** — Pure thread and attention policy: group facts into
+  Needs you, Replies, Updates and Recent lanes, with unread state and said/received
+  search. Builds read queries and atomic opened/archive bundles; performs no I/O.
+
 - **[@yaks/memory](./memory)** — what a person said, kept in their own words: a
   `memory` component on a `doc` whose body is what they said plus a few lines of
   context, the query that recalls them, and the text handed to an agent at the
