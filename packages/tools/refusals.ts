@@ -91,7 +91,7 @@ export let refusalSource = (row: Bundle): string | undefined => {
   if (id == undefined) return undefined
   // References are eids, not query expressions. Refuse unsafe interpolation.
   if (!/^[\w:-]+$/.test(id)) unsafe(row, code ?? 'is_error')
-  return `.eid=${id}&.fields=call.to,execution.state,imported.source`
+  return `.entity.eid=${id}&.fields=call.to,execution.state,imported.source`
 }
 
 /** The preceding non-notice entry is status evidence, not a source call.
@@ -122,7 +122,7 @@ let retryPending = (row: Bundle, prior: Bundle | null | undefined) => {
     typeof seq != 'number' || !Number.isSafeInteger(seq) || seq <= 0 ||
     seq >= (comp(row, 'entry')!.seq as number) || prior.notice
   ) unsafe(row, code)
-  return code != 'interrupted' && !!comp(prior, 'ask') &&
+  return !!comp(prior, 'ask') &&
     text(prior, 'attempt', 'state') == 'interrupted'
 }
 
@@ -173,6 +173,7 @@ let interrupted = (row: Bundle, body: string): string | undefined => {
     if (
       /^responses: transport failed(?: —|$)/.test(message) ||
       message == 'responses: error reading a body from connection' ||
+      message == 'error reading a body from connection' ||
       /^responses: failed — (server_error|service_unavailable)$/.test(message)
     ) {
       return undefined
@@ -223,6 +224,9 @@ export let refusalPatch = (
     if (
       Object.keys(error).some((key) => key != 'code' && error[key] != null)
     ) unsafe(row, code)
+    if (code == 'unknown' && body == 'responses: failed — unknown') {
+      return undefined
+    }
     if (retained.has(code)) return undefined
     if (retryPending(row, prior)) return undefined
     if (tools.has(code)) {
@@ -241,6 +245,11 @@ export let refusalPatch = (
       }
       refused = code
     } else if (providers.has(code) || httpRefusal(code)) {
+      refused = code
+    } else if (code == 'limit') {
+      if (!row.entry || body != '2021: Insufficient AI Gateway credits') {
+        unsafe(row, code)
+      }
       refused = code
     } else if (code == 'turn.failed') {
       if (

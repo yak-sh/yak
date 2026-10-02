@@ -260,6 +260,6 @@ test('stripping old imports removes refusals but keeps cost-bearing refusals', a
   let eids = await stale(g, { full: 0, now: Date.now() + DAY })
   assertEquals(eids, ['refused'])
   await strip(g, eids)
-  assertEquals((await g.read('.eid=refused&.refusal')).length, 0)
+  assertEquals((await g.read('.entity.eid=refused&.refusal')).length, 0)
   assertEquals((await g.get(['spent-refusal']))[0].refusal, { code: 'limit' })
 })

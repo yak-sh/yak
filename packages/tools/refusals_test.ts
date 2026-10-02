@@ -1,6 +1,8 @@
 // Historical examples are synthetic and secret-free. Tests exercise the pure
 // classifier, its read plan and SQL projection, not the one-time migration.
 import { type Bundle, graph } from '@yaks/graph'
+import { archetypeDoc, archetypes } from '@yaks/archetype'
+import { ram } from '@yaks/ram'
 import { storage } from '@yaks/sqlite'
 import { loadVocab } from '@yaks/vocab'
 import { mem } from '../sqlite/testing.ts'
@@ -122,7 +124,15 @@ test('provider-code transcript errors after interrupted asks retain retry status
     ask: { to: 'model', through: 'input' },
     attempt: { state: 'interrupted' },
   }
-  for (let code of ['http_429', 'http_401', 'usage_limit_reached', 'unknown']) {
+  for (
+    let code of [
+      'http_429',
+      'http_401',
+      'usage_limit_reached',
+      'unknown',
+      'interrupted',
+    ]
+  ) {
     let answer = { ...row(code), entry: { session: 'session', seq: 5 } }
     let before = structuredClone(answer)
     let priorBefore = structuredClone(prior)
@@ -135,13 +145,18 @@ test('provider-code transcript errors after interrupted asks retain retry status
     assertEquals(refusalPatch(answer, undefined, prior), undefined)
     assertEquals(answer, before)
     assertEquals(prior, priorBefore)
-    for (let invalid of [
-      { ...prior, entry: { session: 'other', seq: 3 } },
-      { ...prior, entry: { session: 'session', seq: 5 } },
-      { ...prior, notice: {} },
-      { ...prior, entry: { session: 'session', seq: 1.5 } },
-      { ...prior, entry: { session: 'session', seq: Number.MAX_SAFE_INTEGER + 1 } },
-    ]) assertThrows(() => refusalPatch(answer, undefined, invalid))
+    for (
+      let invalid of [
+        { ...prior, entry: { session: 'other', seq: 3 } },
+        { ...prior, entry: { session: 'session', seq: 5 } },
+        { ...prior, notice: {} },
+        { ...prior, entry: { session: 'session', seq: 1.5 } },
+        {
+          ...prior,
+          entry: { session: 'session', seq: Number.MAX_SAFE_INTEGER + 1 },
+        },
+      ]
+    ) assertThrows(() => refusalPatch(answer, undefined, invalid))
   }
   let answer = { ...row('http_429'), entry: { session: 'session', seq: 5 } }
   assertEquals(refusalPatch(answer, undefined, null), patch('http_429'))
@@ -156,14 +171,16 @@ test('provider-code transcript errors after interrupted asks retain retry status
     refusalPatch(answer, undefined, { ...prior, ask: null }),
     patch('http_429'),
   )
-  for (let entry of [
-    { session: 'session&*', seq: 5 },
-    { session: 'session', seq: NaN },
-    { session: 'session', seq: Infinity },
-    { session: 'session', seq: 1.5 },
-    { session: 'session', seq: Number.MAX_SAFE_INTEGER + 1 },
-    { session: 'session', seq: 0 },
-  ]) assertThrows(() => refusalPrior({ ...row('http_429'), entry }))
+  for (
+    let entry of [
+      { session: 'session&*', seq: 5 },
+      { session: 'session', seq: NaN },
+      { session: 'session', seq: Infinity },
+      { session: 'session', seq: 1.5 },
+      { session: 'session', seq: Number.MAX_SAFE_INTEGER + 1 },
+      { session: 'session', seq: 0 },
+    ]
+  ) assertThrows(() => refusalPrior({ ...row('http_429'), entry }))
   assertThrows(() => refusalPrior({ ...row('http_429'), entry: 'invalid' }))
 })
 
@@ -414,7 +431,7 @@ test('candidate queries never expand reached sources and source reads are bounde
     '.error&?content&?output&?result&?imported&?refusal&?entry',
     '.result&.imported&!error&!refusal&.result.call.execution.state=failed&?content&?output',
   ])
-  let query = '.eid=call&.fields=call.to,execution.state,imported.source'
+  let query = '.entity.eid=call&.fields=call.to,execution.state,imported.source'
   assertEquals(
     refusalSource({ ...row('Refused'), output: { source: 'call' } }),
     query,
@@ -475,7 +492,7 @@ test('nullable SQL error columns are absent, not raw payload', () => {
 })
 
 test('native SQL projected nullable errors retain failures and migrate tool refusals', async () => {
-  let vocab = loadVocab([{
+  let vocab = loadVocab([archetypeDoc, {
     $defs: {
       error: {
         component: true,
@@ -492,7 +509,7 @@ test('native SQL projected nullable errors retain failures and migrate tool refu
   }])
   let db = storage(mem(), vocab)
   db.install()
-  let g = graph({ vocab, storage: db })
+  let g = graph({ vocab, storage: db, plugins: [archetypes()] })
   await g.apply([
     { entity: { eid: 'transport' }, error: { code: 'transport' } },
     {
@@ -502,22 +519,22 @@ test('native SQL projected nullable errors retain failures and migrate tool refu
     },
     { entity: { eid: 'call' }, call: { to: 'tool' } },
   ])
-  let [failed] = await g.read('.eid=transport&*')
+  let [failed] = await g.read('.entity.eid=transport&*')
   assertEquals(failed.error, { code: 'transport', at: null, message: null })
   assertEquals(refusalPatch(failed), undefined)
-  let [answer] = await g.read('.eid=answer&*')
-  let [called] = await g.read('.eid=call&*')
+  let [answer] = await g.read('.entity.eid=answer&*')
+  let [called] = await g.read('.entity.eid=call&*')
   let moved = refusalPatch(answer, called)
   assertEquals(moved, patch('Refused'))
   await g.apply([moved!])
-  let [after] = await g.read('.eid=answer&*')
+  let [after] = await g.read('.entity.eid=answer&*')
   assertEquals(after.error, undefined)
   assertEquals(after.refusal, { code: 'Refused' })
   assertEquals(after.output, answer.output)
 })
 
 test('bounded predecessor reads retain retrying errors in RAM and SQL without skipping prose', async () => {
-  let vocab = loadVocab([{
+  let vocab = loadVocab([archetypeDoc, {
     $defs: {
       error: { component: true, properties: { code: { type: 'string' } } },
       refusal: { component: true, properties: { code: { type: 'string' } } },
@@ -534,7 +551,7 @@ test('bounded predecessor reads retain retrying errors in RAM and SQL without sk
   for (let sql of [false, true]) {
     let db = sql ? storage(mem(), vocab) : undefined
     db?.install()
-    let g = graph({ vocab, ...(db ? { storage: db } : {}) })
+    let g = graph({ vocab, storage: db ?? ram(vocab), plugins: [archetypes()] })
     await g.apply([
       {
         entity: { eid: 'ask' },
@@ -563,11 +580,11 @@ test('bounded predecessor reads retain retrying errors in RAM and SQL without sk
         error: { code: 'http_401' },
       },
     ])
-    let [pending] = await g.read('.eid=pending&*')
+    let [pending] = await g.read('.entity.eid=pending&*')
     let [prior] = await g.read(refusalPrior(pending)!)
     assertEquals(prior.entity.eid, 'ask')
     assertEquals(refusalPatch(pending, undefined, prior), undefined)
-    let [refused] = await g.read('.eid=refused&*')
+    let [refused] = await g.read('.entity.eid=refused&*')
     let [prose] = await g.read(refusalPrior(refused)!)
     assertEquals(prose.entity.eid, 'prose')
     assertEquals(refusalPatch(refused, undefined, prose), {
@@ -575,6 +592,43 @@ test('bounded predecessor reads retain retrying errors in RAM and SQL without sk
       error: null,
       refusal: { code: 'http_401' },
     })
-    assertEquals((await g.read('.eid=pending&*'))[0], pending)
+    assertEquals((await g.read('.entity.eid=pending&*'))[0], pending)
   }
+})
+
+test('exact historical transport wrappers remain failures, not refusals', () => {
+  for (
+    let [code, body] of [
+      [
+        'interrupted',
+        'Response interrupted: ModelError: error reading a body from connection',
+      ],
+      ['unknown', 'responses: failed — unknown'],
+    ]
+  ) {
+    assertEquals(refusalPatch(row(code, body)), undefined)
+    assertThrows(() => refusalPatch(row(code, body + ' unrecognized')))
+  }
+})
+
+test('only the exact platform spent-credit failure becomes a limit refusal', () => {
+  let body = '2021: Insufficient AI Gateway credits'
+  assertEquals(
+    refusalPatch(
+      {
+        ...row('limit', body),
+        entry: { session: 'session', seq: 2 },
+      },
+      undefined,
+      null,
+    ),
+    patch('limit'),
+  )
+  assertThrows(() => refusalPatch(row('limit', body)))
+  assertThrows(() =>
+    refusalPatch({
+      ...row('limit', body + ' unrecognized'),
+      entry: { session: 'session', seq: 2 },
+    })
+  )
 })
