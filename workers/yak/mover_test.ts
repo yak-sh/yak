@@ -479,12 +479,12 @@ test('interruption expansion rehearses marks without losing old state evidence',
   s.wake(...rules.map((r) => ({ ...r, live: 'apps' as const })))
   await s.alarm()
   assertEquals(
-    (await s.query(`.entity.eid=${ask}`))[0].interrupted?.code,
+    ((await s.query(`.entity.eid=${ask}`))[0].interrupted as Comp).code,
     'transport',
   )
   assertEquals((await s.query(`.entity.eid=${ask}`))[0].failed != null, true)
   assertEquals(
-    (await s.query(`.entity.eid=${line}`))[0].error?.code,
+    ((await s.query(`.entity.eid=${line}`))[0].error as Comp).code,
     'interrupted',
   )
 })
