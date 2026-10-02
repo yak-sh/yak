@@ -12,8 +12,8 @@ test('person inbox groups policy threads, shows newest words and answers in plac
   cache.value = {
     [ask]: {
       entity: { eid: ask, num: 2 },
-      task: {},
-      doc: { title: 'Choose route', body: '' },
+      task: { eid: ask },
+      doc: { eid: ask, title: 'Choose route', body: '' },
       decision: {
         question: 'Which route?',
         choices: [
@@ -23,23 +23,26 @@ test('person inbox groups policy threads, shows newest words and answers in plac
         recommended: 'Train',
       },
     },
-    dependent: { entity: { eid: 'dependent' }, task: {} },
+    dependent: {
+      entity: { eid: 'dependent', num: 3 },
+      task: { eid: 'dependent' },
+    },
     edge: {
-      entity: { eid: 'edge' },
+      entity: { eid: 'edge', num: 4 },
       edge: { from: 'dependent', to: ask },
       requires: {},
     },
     mine: {
-      entity: { eid: 'mine' },
-      comment: { target: ask },
-      doc: { body: 'What do you recommend?' },
-      created: { by: 'person', at: '2026-10-02T12:00:00Z' },
+      entity: { eid: 'mine', num: 5 },
+      comment: { eid: 'mine', target: ask },
+      doc: { eid: 'mine', title: '', body: 'What do you recommend?' },
+      created: { eid: 'mine', by: 'person', at: '2026-10-02T12:00:00Z' },
     },
     reply: {
-      entity: { eid: 'reply' },
-      comment: { target: ask, reply_to: 'mine' },
-      doc: { body: 'Take the train.' },
-      created: { at: '2026-10-02T13:00:00Z' },
+      entity: { eid: 'reply', num: 6 },
+      comment: { eid: 'reply', target: ask, reply_to: 'mine' },
+      doc: { eid: 'reply', title: '', body: 'Take the train.' },
+      created: { eid: 'reply', at: '2026-10-02T13:00:00Z' },
     },
   }
   let found = threads(rows(), { actor: 'person', operator: true })

@@ -2430,7 +2430,7 @@ export let boot = async () => {
   if (booted) return
   booted = true
   ensureClient()
-  if (!capable('canvas') && config.host) {
+  if (config.host) {
     owner.value = (await (await fetch(`${base()}/web/owner`)).json()).owner
   }
   loadRefusals()

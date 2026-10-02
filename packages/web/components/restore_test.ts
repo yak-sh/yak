@@ -1,34 +1,32 @@
-// A browsing context, faked whole for each test: nav.tsx reads location,
-// history and the two web stores as it goes. Everything a launch can be —
-// cold, warm, deep-linked, a second tab — is then one line.
+// Home is always the inbox, including devices with an old canvas position.
 import { test } from '@yaks/testing'
 import { faked, tick, until } from '../testing.ts'
 import { assertEquals } from '@std/assert'
-import { cache, census } from '../live.ts'
+import { cache, census, owner } from '../live.ts'
 import { navigate, restore, route, screenTarget } from './nav.tsx'
 import { allSessionsPath } from '../tray_query.ts'
 
 let place = { pathname: '/', search: '' }
-let entries: string[] = ['/']
+let entries: string[] = []
 let at = (url: string) => {
   let u = new URL(url, 'http://x')
   place.pathname = u.pathname
   place.search = u.search
 }
-let store = () => {
-  let m = new Map<string, string>()
-  return {
-    getItem: (k: string) => m.get(k) ?? null,
-    setItem: (k: string, v: string) => void m.set(k, v),
-    removeItem: (k: string) => void m.delete(k),
-    clear: () => m.clear(),
-  }
+let launch = (url: string) => {
+  entries = [url]
+  at(url)
+  route.value = url
+  restore()
 }
-let local = store()
-let session = store()
-
-let context = () =>
-  faked({
+let context = (
+  storage: unknown = {
+    getItem: () => '{"at":"/T-7?v=Md","home":"/?v=List"}',
+    setItem() {},
+  },
+) => {
+  let prior = owner.value
+  let held = faked({
     location: place,
     history: {
       pushState: (_s: unknown, _t: string, url: string) => {
@@ -40,204 +38,81 @@ let context = () =>
         at(url)
       },
     },
-    localStorage: local,
-    sessionStorage: session,
+    localStorage: storage,
+    sessionStorage: storage,
   })
-
-// The canvas the app opens on, and a task to walk into.
-let graph = () => {
+  owner.value = 'person'
   cache.value = {
+    person: { entity: { eid: 'person', num: 2 }, person: { eid: 'person' } },
     canvas: { entity: { eid: 'canvas', num: 1 }, canvas: { eid: 'canvas' } },
     task: {
       entity: { eid: 'task', num: 7 },
-      doc: { eid: 'task', title: 'a task' },
+      doc: { eid: 'task', title: 'Work' },
       task: { eid: 'task' },
     },
   }
-  census.value = ['canvas', 'task']
-}
-
-// A page LOAD: a fresh set of history entries, the module's own route
-// init, then the restore main.tsx runs once the cache is full. `cold` is
-// a new browsing context (an app launch, a new tab) — sessionStorage goes
-// with the old one.
-let launch = (url: string, cold = true) => {
-  if (cold) session.clear()
-  entries = [url]
-  at(url)
-  route.value = place.pathname + place.search
-  restore()
-}
-
-let back = () => {
-  entries.pop()
-  at(entries[entries.length - 1])
-  dispatchEvent(new Event('popstate'))
-}
-
-let here = () => place.pathname + place.search
-
-// A test's browsing context, from an empty device on the canvas, until the
-// test ends.
-let fresh = () => {
-  let held = context()
-  local.clear()
-  session.clear()
-  graph()
-  launch('/')
-  return held
-}
-
-test('a cold launch resumes the card and the view it was left in', () => {
-  using _ = fresh()
-  navigate('/?v=List')
-  navigate('/T-7?v=Md')
-
-  launch('/')
-  assertEquals(route.value, '/T-7?v=Md')
-  assertEquals(here(), '/T-7?v=Md') // the url says what the screen shows
-})
-
-test('back from a restored card reaches the canvas it was left on', () => {
-  using _ = fresh()
-  navigate('/?v=List')
-  navigate('/T-7')
-
-  launch('/')
-  assertEquals(entries, ['/?v=List', '/T-7']) // the canvas seeded beneath
-  back()
-  assertEquals(route.value, '/?v=List')
-  assertEquals(here(), '/?v=List')
-})
-
-test('the root canvas keeps its own view choice', () => {
-  using _ = fresh()
-  navigate('/?v=List')
-
-  launch('/')
-  assertEquals(route.value, '/?v=List')
-  assertEquals(entries, ['/?v=List']) // nothing to go back to: this IS home
-})
-
-test('All sessions resumes as a listing and keeps the canvas as home', () => {
-  using _ = fresh()
-  navigate('/?v=List')
-  navigate(allSessionsPath)
-  assertEquals(screenTarget(), null)
-
-  launch('/')
-  assertEquals(route.value, allSessionsPath)
-  assertEquals(entries, ['/?v=List', allSessionsPath])
-  back()
-  assertEquals(route.value, '/?v=List')
-})
-
-test('an explicit / in a live tab shows the canvas, never the card', () => {
-  using _ = fresh()
-  navigate('/T-7')
-
-  launch('/', false) // the brand is a native anchor — tapping home is a load
-  assertEquals(route.value, '/')
-  assertEquals(entries, ['/'])
-})
-
-test('going home once makes the canvas the next cold launch', () => {
-  using _ = fresh()
-  navigate('/T-7')
-  launch('/', false)
-
-  launch('/')
-  assertEquals(route.value, '/')
-})
-
-test('a deep link wins over the memory', () => {
-  using _ = fresh()
-  navigate('/T-7')
-
-  launch('/1') // the canvas by its own number, cold
-  assertEquals(route.value, '/1')
-  assertEquals(entries, ['/1'])
-})
-
-test('a remembered entity that has died falls back to the canvas', () => {
-  using _ = fresh()
-  navigate('/?v=List')
-  navigate('/T-7')
-  cache.value = {
-    canvas: { entity: { eid: 'canvas', num: 1 }, canvas: { eid: 'canvas' } },
+  census.value = ['person', 'canvas', 'task']
+  return {
+    [Symbol.dispose]() {
+      held[Symbol.dispose]()
+      owner.value = prior
+      cache.value = {}
+      census.value = []
+    },
   }
-  census.value = ['canvas']
+}
 
+test('home opens the inbox regardless of previous card, canvas view, listing or dead end', () => {
+  using _ = context()
+  for (let previous of ['/T-7?v=Md', '/?v=List', allSessionsPath, '/T-404']) {
+    launch(previous)
+    launch('/')
+    assertEquals(route.value, '/')
+    assertEquals(entries, ['/'])
+    assertEquals(screenTarget(), { eid: 'person', view: 'Inbox' })
+  }
+})
+
+test('deep links keep their entity view and browser back returns to the inbox', () => {
+  using _ = context()
+  launch('/T-7?v=Md')
+  assertEquals(screenTarget(), { eid: 'task', view: 'Md' })
   launch('/')
-  assertEquals(route.value, '/?v=List')
-  assertEquals(entries, ['/?v=List'])
+  navigate('/T-7')
+  assertEquals(entries, ['/', '/T-7'])
+  at('/')
+  dispatchEvent(new Event('popstate'))
+  assertEquals(screenTarget(), { eid: 'person', view: 'Inbox' })
 })
 
-test('a second tab is a cold launch and resumes where you were', () => {
-  using _ = fresh()
-  navigate('/?v=List')
-  navigate('/T-7')
-
-  launch('/') // sessionStorage belongs to the tab that closed
-  assertEquals(route.value, '/T-7')
-  back()
-  assertEquals(route.value, '/?v=List') // and the way back came with it
-})
-
-test('a device that refuses storage still opens the canvas', () => {
-  using _ = fresh()
-  navigate('/T-7')
+test('home opens the inbox on a device that refuses storage', () => {
   let no = () => {
     throw new Error('private mode')
   }
-  Object.defineProperty(globalThis, 'localStorage', {
-    value: { getItem: no, setItem: no, clear: () => {} },
-    configurable: true,
-  })
-  try {
-    launch('/')
-    assertEquals(route.value, '/')
-  } finally {
-    Object.defineProperty(globalThis, 'localStorage', {
-      value: local,
-      configurable: true,
-    })
-  }
-})
-
-test('a dead end is not a place you were', () => {
-  using _ = fresh()
-  navigate('/T-7')
-  navigate('/T-404')
-
+  using _ = context({ getItem: no, setItem: no })
   launch('/')
-  assertEquals(route.value, '/T-7')
+  assertEquals(screenTarget(), { eid: 'person', view: 'Inbox' })
 })
 
-test('a legacy ?task= link paints the canvas, then lands on its card', async () => {
-  using _ = fresh()
+test('a legacy task link resolves and replaces its address', async () => {
+  using _ = context()
   launch('/?task=T-7')
-  assertEquals(route.value, '/?task=T-7') // the canvas, before any answer
-
   await until(() => route.value == '/T-7')
-  assertEquals(entries, ['/T-7']) // replaced: the legacy address is gone
+  assertEquals(entries, ['/T-7'])
 })
 
-test('a legacy link that never resolves is not a place you were', () => {
-  using _ = fresh()
-  navigate('/T-7')
+test('an unresolved legacy link leaves home reachable', () => {
+  using _ = context()
   launch('/?task=gone')
-  assertEquals(route.value, '/?task=gone') // the canvas stays
-
+  assertEquals(route.value, '/?task=gone')
   launch('/')
-  assertEquals(route.value, '/T-7')
+  assertEquals(screenTarget(), { eid: 'person', view: 'Inbox' })
 })
 
 test('a legacy link never pulls back someone who moved on', async () => {
-  using _ = fresh()
+  using _ = context()
   launch('/?task=T-7')
-  navigate('/?v=List') // before the id resolves
-
+  navigate('/')
   await tick()
-  assertEquals(route.value, '/?v=List')
+  assertEquals(route.value, '/')
 })

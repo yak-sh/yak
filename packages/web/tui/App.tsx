@@ -27,6 +27,7 @@ import {
   gated,
   mode,
   mutate,
+  owner,
   pending,
   problem,
   queryEids,
@@ -69,6 +70,7 @@ import { drafts } from '../components/drafts.ts'
 import { hits } from '../components/hits.ts'
 import { group } from '../components/Search.tsx'
 import { editing, named } from './keys.ts'
+import { click, control, field } from './forms.ts'
 
 export let sel = signal({ col: 0, row: 0 })
 export let quit = signal(false)
@@ -159,10 +161,14 @@ export let guide = signal<number | null>(null)
 // different thing — a query cursor can be entered, a line can only be read.
 export let spot = () =>
   guide.value ??
-    (trail.value.length ? spots.value[trail.value.at(-1)!] ?? 0 : -1)
+    (trail.value.length
+      ? spots.value[trail.value.at(-1)!] ?? 0
+      : owner.value
+      ? spots.value[owner.value] ?? 0
+      : -1)
 
 let jump = (to: number) => {
-  let here = trail.value.at(-1)
+  let here = trail.value.at(-1) ?? owner.value
   to = Math.max(0, to)
   // Unmoved is no repaint: the painter calls back here after every paint.
   if (spot() == to) return
@@ -234,7 +240,7 @@ let step = (eid: string): boolean => {
 }
 
 let enter = (): boolean => {
-  let s = trail.value.length ? pointed() : selected()
+  let s = trail.value.length || owner.value ? pointed() : selected()
   return !!s && step(s)
 }
 
@@ -363,7 +369,7 @@ let yank = () => {
 // board reads as ONE list: j past the bottom of a column continues into
 // the next column's first row, k mirrors it back up.
 let vert = (d: number) => {
-  if (trail.value.length) return jump(spot() + d)
+  if (trail.value.length || owner.value) return jump(spot() + d)
   let p = boardEid()
   if (!p) return
   let e = ent(p)
@@ -382,26 +388,31 @@ let vert = (d: number) => {
 
 // The Board override: columns as a nested list, the selection inverted.
 // Each row is the same Tile the web's lists use.
-let TuiBoard = ({ e }: { e: Ent }) => (
-  <div class='TBoard'>
-    {statuses.map((s, ci) => (
-      <div class='TCol'>
-        <div class='TCol_Name'>
-          {`${s.toUpperCase()} (${rows(e, s).length})`}
-        </div>
-        {rows(e, s).map((k, ri) => (
-          <div
-            class={ci == sel.value.col && ri == sel.value.row
-              ? 'TRow TRow-on'
-              : 'TRow'}
-          >
-            <Entity eid={k.eid} view='Tile' />
+let TuiBoard = ({ e }: { e: Ent }) => {
+  useBoardSub(e)
+  pass = usePassOf(e.eid)
+  return (
+    <div class='TBoard'>
+      <TFilter board={e.eid} />
+      {statuses.map((s, ci) => (
+        <div class='TCol'>
+          <div class='TCol_Name'>
+            {`${s.toUpperCase()} (${rows(e, s).length})`}
           </div>
-        ))}
-      </div>
-    ))}
-  </div>
-)
+          {rows(e, s).map((k, ri) => (
+            <div
+              class={ci == sel.value.col && ri == sel.value.row
+                ? 'TRow TRow-on'
+                : 'TRow'}
+            >
+              <Entity eid={k.eid} view='Tile' />
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
 
 // The web Full renders its body as markdown through innerHTML, which the
 // fake DOM ignores — here the raw source IS the readable form (that's
@@ -574,7 +585,23 @@ export let navigationKey = (k: string) => {
 // Raw stdin, one key at a time. Normal mode is vim; : opens the command
 // line, which owns every key until Enter or Escape. Ctrl-d backs out of
 // the current entity from ANY mode; everything else is per-mode.
+let form: ReturnType<typeof field> | undefined
 export let key = (k: string) => {
+  if (form) {
+    if (k == '\x1b' || k == '\x04') {
+      form.close()
+      form = undefined
+      mode.value = 'normal'
+    } else {
+      form.key(k)
+      if (k == '\r') {
+        form.close()
+        form = undefined
+        mode.value = 'normal'
+      }
+    }
+    return
+  }
   if (help.value) {
     if (k == '?' || k == '\x1b' || k == 'q') help.value = false
     return
@@ -609,6 +636,17 @@ export let key = (k: string) => {
     if (k == '\x1b') endEdit()
     else typeEdit(k)
     return
+  }
+  if (k == '\r' || k == 'i') {
+    let node = control(root, spot())
+    if (node) {
+      if (k == '\r' && click(node)) return
+      if (node.localName == 'input' || node.localName == 'textarea') {
+        form = field(node)
+        mode.value = 'insert'
+        return
+      }
+    }
   }
   let here = trail.value.at(-1)
   let decision = here ? ent(here) : undefined
@@ -795,8 +833,8 @@ export let TStatus = () => {
               <span class='TStatus_Msg'>{msg.value || problem.value}</span>
             )}
             <span class='TStatus_Hint'>
-              j/k browse · l in · h out · ⇥ view · i edit · / search · f filter
-              · y yank · : cmd · q quit · ? keys
+              j/k browse · Enter use · l in · h out · ⇥ view · i edit · / search
+              · f filter · y yank · : cmd · q quit · ? keys
             </span>
           </>
         )}
@@ -804,28 +842,21 @@ export let TStatus = () => {
   )
 }
 
-// The screen: the board when the trail is empty, else the entered entity
-// through its first applicable view. The title doubles as the breadcrumb.
+// Home is the person's inbox. Boards remain reachable through navigation.
 export let App = () => {
-  let p = boardEid()
-  useBoardSub(p ? ent(p) : undefined)
-  // What the board's filter passes, for the rows the board paints and the
-  // ones j/k walk.
-  pass = usePassOf(p ?? '')
-  let s = selected()
   let here = trail.value.at(-1)
   // The entered entity is held for as long as it is on screen — it carries the
   // edges the refs list paints (T-22371), which used to ride the boot as the
   // graph's whole edge table.
-  useEntity(here)
+  useEntity(here ?? owner.value)
   // The trail persists across runs; entities don't have to. Drop any
   // entries the graph no longer knows (deleted while we were away).
-  if (here && !cache.value[here]) {
+  if (here && !cache.value[here] && !pending(ent(here))) {
     trail.value = trail.value.filter((eid) => cache.value[eid])
     here = trail.value.at(-1)
   }
   let crumbs = [
-    p ? ent(p).doc?.title ?? 'untitled' : 'no board',
+    'Inbox',
     // the view rides the breadcrumb when it isn't the one the pane would
     // paint anyway, the way `?v=` rides the URL — otherwise there is no
     // way to tell which of two look-alike panes you are on
@@ -848,17 +879,9 @@ export let App = () => {
         ? <TNavigation />
         : here
         ? <Entity eid={here} view={viewOf(here)} />
-        : p && (
-          <>
-            <TFilter board={p} />
-            <Entity eid={p} view='Board' />
-            {s && (
-              <div class='TDetail'>
-                <Entity eid={s} view='Full' />
-              </div>
-            )}
-          </>
-        )}
+        : owner.value
+        ? <Entity eid={owner.value} view='Inbox' />
+        : <div>Inbox needs a configured owner.</div>}
       <TStatus />
     </div>
   )

@@ -157,7 +157,7 @@ export let PersonInbox = ({ e, limit }: { e: Ent; limit?: number }) => {
   return (
     <>
       <Frame.Search
-        ref={input}
+        elRef={input}
         type='search'
         aria-label='Search inbox'
         placeholder='Search your threads…'

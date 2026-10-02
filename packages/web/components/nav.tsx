@@ -16,7 +16,6 @@ import {
   peek,
   resolveEid,
   resolvingId,
-  rootCanvas,
   serverEid,
   trail,
 } from '../live.ts'
@@ -29,7 +28,7 @@ import { allSessionsAt } from '../tray_query.ts'
 
 export { peek, trail }
 
-// The URL is the root card: `/` shows the root canvas, `/T-123` (or any
+// The URL is the root card: `/` shows the owner inbox, `/T-123` (or any
 // id form) shows that entity fullscreened, `?v=List` picks its view.
 // Navigation is therefore ordinary anchors — cmd/middle-click opens a
 // tab natively — plus pushState for the rare in-place root change.
@@ -50,7 +49,6 @@ globalThis.addEventListener?.('popstate', () => {
   let was = screenTarget()?.eid
   route.value = address(loc()!)
   track(was)
-  keep()
   mark()
 })
 
@@ -62,7 +60,6 @@ let arrive = (to: string) => {
   let was = screenTarget()?.eid
   route.value = to
   track(was)
-  keep()
   mark()
 }
 
@@ -263,7 +260,7 @@ export let linkProps = (e: Ent) => ({
     capable('canvas') && dragData(ev, e.eid, resolve(e).view),
 })
 
-// Resolve a route to {eid, view}: bare `/` means the root canvas; an
+// Resolve a route to {eid, view}: bare `/` means the owner inbox; an
 // id is T-num / bare num / eid, looked up in the live cache. The argument
 // is how a REMEMBERED route (below) is screened against the same resolver
 // the screen uses — a route naming a dead entity resolves to nothing.
@@ -272,9 +269,8 @@ export let screenTarget = (at = route.value) => {
   let url = new URL(at, 'http://x')
   let id = addressId(decodeURIComponent(url.pathname.slice(1)))
   let view = url.searchParams.get('v') ?? undefined
-  let canvas = capable('canvas')
-  let eid = id ? routed(id) : canvas ? rootCanvas() : owner.value
-  if (!id && !canvas) view = 'Inbox'
+  let eid = id ? routed(id) : owner.value
+  if (!id) view = 'Inbox'
   return eid ? { eid, view } : null
 }
 
@@ -293,85 +289,23 @@ let routed = (id: string) => {
 // Writing the trail (live.ts holds it, above the hot-swap boundary): both
 // route writers above call track() with where they WERE — landing somewhere
 // already on the trail (a crumb click, the back button) cuts back to it, so
-// the trail never loops and never holds the present. The root canvas never
+// the trail never loops and never holds the present. The owner inbox never
 // rides — the brand is that crumb.
 let track = (was?: string) => {
   let now = screenTarget()?.eid
   if (!now || now == was) return
   let i = trail.value.indexOf(now)
   if (i >= 0) trail.value = trail.value.slice(0, i)
-  else if (was && was != rootCanvas()) trail.value = [...trail.value, was]
+  else if (was && was != owner.value) trail.value = [...trail.value, was]
 }
 
-// WHERE THIS DEVICE WAS. `at` is the last route that named something;
-// `home` is the last one that named the root canvas — the canvas in the
-// view it was left in, which is what a restored card sits on top of.
-// Per device rather than in the graph on purpose: a phone and a desktop
-// want different last positions, and a graph row would cost a write per
-// navigation (broadcast to every other client) to buy a cross-device
-// continuity nobody asked for. Storage is read inside the functions —
-// the TUI imports this module and has no localStorage.
-type Where = { at: string; home: string }
-let WHERE = 'tasks-where'
-let WARM = 'tasks-warm'
-
-let kept = (): Where => {
-  try {
-    return { at: '/', home: '/', ...JSON.parse(localStorage.getItem(WHERE)!) }
-  } catch {
-    return { at: '/', home: '/' }
-  }
-}
-
-// Every landing writes it — both route writers above, plus boot. A route
-// that resolves to nothing (a 404) leaves the memory alone:
-// a dead end is not a place you were.
-let keep = () => {
-  let t = screenTarget()
-  let sessions = allSessionsAt(route.value)
-  if (!loc() || !t && !sessions) return
-  try {
-    let at = route.value
-    let home = t?.eid == rootCanvas() && !sessions ? at : kept().home
-    localStorage.setItem(WHERE, JSON.stringify({ at, home }))
-  } catch { /* private mode: the memory is a nicety, never a failure */ }
-}
-
-// A COLD launch at bare `/` resumes where the device left off; anything
-// else wins over the memory. A deep link carries a path or a query and
-// never reaches the restore, and a legacy link goes through its own door.
-// `/` itself is the subtle one — the brand is a native anchor, so tapping
-// home is a page LOAD at `/`, and bouncing that back to the card would make
-// the canvas unreachable. So a browsing context marks itself warm on its
-// first boot: the fresh tab (or app launch) restores, every later `/` in
-// that tab shows the canvas.
-//
-// main.tsx calls this once, after boot() has filled the cache and before
-// the first render — so a remembered entity that has since been DELETED
-// resolves to nothing here and falls back to the canvas, and the URL is
-// rewritten before anything paints. Back is a real history entry: home
-// goes under the card, so one gesture returns to the canvas.
+// Home always opens the inbox. An explicit entity URL stays put; old ?task=
+// links still resolve through their original door.
 export let restore = () => {
-  let l = loc(), h = his()
-  if (!l || !h) return
-  let warm = false
-  try {
-    warm = !!sessionStorage.getItem(WARM)
-    sessionStorage.setItem(WARM, '1')
-  } catch { /* no storage, no memory — kept() defaults to the canvas */ }
+  let l = loc()
+  if (!l || !his()) return
   let legacy = new URLSearchParams(l.search).get('task')
-  if (legacy) return void grandfather(legacy)
-  if (!capable('canvas') || warm || l.pathname != '/' || l.search) {
-    keep()
-    return
-  }
-  let w = kept()
-  let home = screenTarget(w.home) ? w.home : '/'
-  let at = screenTarget(w.at) || allSessionsAt(w.at) ? w.at : home
-  if (home != '/') h.replaceState(null, '', home)
-  if (at != home) h.pushState(null, '', at)
-  route.value = at
-  keep()
+  if (legacy) void grandfather(legacy)
 }
 
 // The grandfather door: tasks-v1 linked '?task=<alias>', and old guidance also
@@ -389,19 +323,19 @@ let grandfather = async (legacy: string) => {
   arrive(to)
 }
 
-// The cursor's twin of keep(): publish WHERE this client now looks into the
+// The cursor: publish WHERE this client now looks into the
 // GRAPH (T-12788), so the fleet can see it (ui_state reports every open tab).
 // UPDATE-ONLY: this write publishes position, and nothing reads it back to
 // drive navigation — a cursor read must never influence rendering.
 // One row per client, minted lazily beside the client
 // entity the way the camera mints on first pan. Written on navigation only,
-// never mid-gesture (the same gesture-end rule keep() uses), and IDEMPOTENT: a
+// never mid-gesture at navigation boundaries, and IDEMPOTENT: a
 // write naming where the cursor already points is skipped, so a re-render never
 // churns the row. Guarded for the TUI (no client, no localStorage) via loc/his.
 let mark = () => {
   if (!capable('canvas') || !loc() || !his()) return
   let t = screenTarget()
-  if (!t) return // chrome and dead ends are not places (keep()'s rule)
+  if (!t) return // chrome and dead ends are not places
   let client = clientId()
   let cur = myCursor(client)
   if (cur?.target == t.eid && (cur.view ?? null) == (t.view ?? null)) return
@@ -423,12 +357,12 @@ let mark = () => {
     comp: { eid, client, target: t.eid, view: t.view ?? null },
   })
   // Publishing the cursor is a nicety, never a failure — the graph twin of
-  // keep()'s guarded localStorage write. A cursor write must never break the
+  // guarded position write. A cursor write must never break the
   // navigation that triggered it, so a bad graph state swallows here rather
   // than throwing out of navigate().
   try {
     mutate(...batch)
-  } catch { /* the position is published best-effort, like keep() */ }
+  } catch { /* the position is published best-effort, like navigation */ }
 }
 
 // The cursor is UPDATE-ONLY: the client PUBLISHES where it looks

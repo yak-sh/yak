@@ -74,6 +74,31 @@ export class TElement extends TNode {
   onmousedown = null
   onmouseup = null
   onmousemove = null
+  oninput = null
+  onkeydown = null
+  onsubmit = null
+  selectionStart = 0
+  selectionEnd = 0
+  /** Forms share their value and selection with browser components. */
+  get value(): string {
+    return this.attr('value') ?? ''
+  }
+  set value(text: string) {
+    this.setAttribute('value', text)
+  }
+  get ownerDocument() {
+    return doc
+  }
+  focus() {
+    doc.activeElement = this
+  }
+  blur() {
+    if (doc.activeElement == this) doc.activeElement = null
+  }
+  setSelectionRange(start: number, end: number) {
+    this.selectionStart = start
+    this.selectionEnd = end
+  }
   /** Optional viewport layout owned by a virtual list, not DOM children. */
   viewport?: (
     width: number,
@@ -159,7 +184,7 @@ export let doc = {
   createElement: (t: string): TElement => new TElement(t),
   createElementNS: (_ns: string, t: string): TElement => new TElement(t),
   createTextNode: (d: string): TText => new TText(d),
-  activeElement: null,
+  activeElement: null as TElement | null,
 }
 
 /** Install that document, returning a fresh render root and the restore. */

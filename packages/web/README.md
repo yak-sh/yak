@@ -1,9 +1,9 @@
 # @yaks/web
 
-The web door: a graph's canvas, cards, boards and editing in a browser. `/` is
-the root canvas when `@yaks/canvas` is installed, and the configured owner's
-Inbox otherwise. `/T-9` opens T-9 fullscreen, `?v=` picks its view, and every
-card on screen is live: an edit anywhere reaches the page over the socket.
+The web door: a person's threaded inbox, cards, boards and editing in a browser.
+`/` is the configured owner's Inbox. `/T-9` opens T-9 fullscreen, `?v=` picks
+its view, and every card on screen is live: an edit anywhere reaches the page
+over the socket.
 
 ## Use
 
@@ -26,12 +26,22 @@ writes through. Add @yaks/canvas for the spatial canvas, tray and layouts.
 }
 ```
 
-With @yaks/canvas installed, a graph with no canvas yet makes its first when `/`
-is opened. Without it, set `person` to the owner's id: `/web/owner` resolves it
-for the Inbox at `/`. Canvas views, actions and screen subscriptions are
-omitted; stored canvas rows and parked edits remain in place for reinstalling
-the plugin. If the config names no `person`, home shows an empty Inbox naming
-the missing owner.
+Set `person` to the owner's id: `/web/owner` resolves it for the Inbox at `/`.
+It groups @yaks/inbox threads into Needs you (blocking first), Replies, Updates
+and Recent. Each row shows its newest words and attention reason; expand it to
+answer a decision or reply within the conversation's branches. Archive hides it
+until new activity. Search filters said or received words and can include
+archived threads. Reply, decision and search drafts stay shared across web and
+terminal. The TUI opens on the same Inbox: j/k read, Enter expands a row or uses
+a button, Enter or i on a field types, Enter submits, Shift+Enter adds a reply
+line, and Esc keeps the draft. l follows an entity link and h returns home.
+`TASKS_HOST` points the TUI at its server; `TASKS_TUI_STATE` can name a separate
+file for its browsing position when probing another graph.
+
+With @yaks/canvas installed, canvas entities remain reachable by their ids.
+Without it, canvas views, actions and screen subscriptions are omitted; stored
+canvas rows and parked edits remain in place for reinstalling the plugin. If the
+config names no `person`, home shows an empty Inbox naming the missing owner.
 
 The routes facet (`@yaks/web/routes`, routes.ts) answers:
 

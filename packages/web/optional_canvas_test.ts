@@ -63,7 +63,8 @@ test('without canvas, home reads the configured owner inbox and entity links sti
     assertEquals(screenTarget('/T-123'), { eid: 'task', view: undefined })
     let mounted = mount(h(Entity, { eid: 'owner', view: 'Inbox' }))
     try {
-      assertEquals(mounted.root.textContent, 'nothing addressed to Owner yet')
+      assertEquals(mounted.root.textContent?.includes('Needs you'), true)
+      assertEquals(mounted.root.textContent?.includes('Loading inbox…'), true)
     } finally {
       mounted.free()
     }

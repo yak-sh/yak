@@ -47,7 +47,8 @@ config.host = Deno.env.get('TASKS_HOST') ?? '127.0.0.1:5173'
 config.agreement = Deno.env.get('TASKS_SUBS_PROBE') == '1'
 // Hot reload is lossless the same way the web's is: the browsing state
 // lives outside the process. Restore before first render, save on change.
-let stateFile = `${Deno.env.get('HOME')}/.yak/tui.json`
+let stateFile = Deno.env.get('TASKS_TUI_STATE') ??
+  `${Deno.env.get('HOME')}/.yak/tui.json`
 try {
   let s = JSON.parse(Deno.readTextFileSync(stateFile))
   sel.value = s.sel ?? sel.value

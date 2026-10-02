@@ -4,6 +4,18 @@ import { install, onPaint, TElement, touch, TText } from './dom.ts'
 
 let tick = () => Promise.resolve()
 
+test('form fields retain values, focus and selection for shared editors', () => {
+  let el = new TElement('textarea')
+  el.value = 'precious draft'
+  assertEquals(el.attr('value'), 'precious draft')
+  el.focus()
+  el.setSelectionRange(2, 5)
+  assertEquals(el.ownerDocument.activeElement, el)
+  assertEquals([el.selectionStart, el.selectionEnd], [2, 5])
+  el.blur()
+  assertEquals(el.ownerDocument.activeElement, null)
+})
+
 test('a mutation dirties the tree and one paint answers many touches', async () => {
   let painted = 0
   onPaint(() => painted++)

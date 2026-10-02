@@ -1,16 +1,7 @@
 import { entityPath } from '../url.ts'
 import { useEffect, useLayoutEffect } from 'preact/hooks'
 import { idOf } from '../types.ts'
-import {
-  capable,
-  ent,
-  homeless,
-  makeHome,
-  mode,
-  routeSub,
-  row,
-  serverName,
-} from '../live.ts'
+import { ent, mode, routeSub, row, serverName } from '../live.ts'
 import { queryPath } from '@yaks/inspect'
 import { block, Id, Tabs } from '@yaks/ui'
 import { filterable, FilterInput } from './Filter.tsx'
@@ -161,9 +152,6 @@ export let App = () => {
   let t = sessions ? null : screenTarget()
   let rootEid = t?.eid
   useLayoutEffect(() => rootEid ? routeSub(rootEid) : undefined, [rootEid])
-  // A new graph at home opens on a canvas; a listing creates no entity.
-  let bare = !sessions && url.pathname == '/' && homeless()
-  useEffect(() => bare ? makeHome() : undefined, [bare])
   let goto = (t: string) => navigate(entityPath(idOf(ent(t))))
   let e = t ? ent(t.eid) : undefined
   let tabs = e ? applicable(e) : []
@@ -193,7 +181,7 @@ export let App = () => {
       <Main>
         <Bar>
           <NavigationToggle />
-          <Brand href='/'>Tasks</Brand>
+          <Brand href='/'>Inbox</Brand>
           {sessions
             ? (
               <>
@@ -265,7 +253,7 @@ export let App = () => {
             ? <QueryList eid={allSessionsKey} query={allSessionsQuery} />
             : e
             ? <Entity eid={e.eid} view={view} />
-            : url.pathname == '/' && !capable('canvas')
+            : url.pathname == '/'
             ? (
               <LostFrame>
                 <h1>Inbox</h1>
