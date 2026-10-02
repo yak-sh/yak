@@ -642,11 +642,51 @@ let main = async () => {
         added: planned.added,
         retained: planned.retained,
       })
-      let journal = () => ({
-        transactions: size('journal_tx'),
-        changes: size('journal_change'),
-        fields: size('journal_field'),
-      })
+      // A stopped server is not a stopped box: other CLI writers survive.
+      // Count this repair's journal host, never unrelated appended history.
+      let journal = () => {
+        let host = eq(col('host', 't'), val(journalHost))
+        let countRows = (stmt: Stmt) => Number(sql.query(stmt)[0]?.n ?? 0)
+        return {
+          transactions: countRows(
+            select({
+              cols: [as(count(), 'n')],
+              from: table('journal_tx', 't'),
+              where: host,
+            }),
+          ),
+          changes: countRows(
+            select({
+              cols: [as(count(), 'n')],
+              from: table('journal_change', 'c'),
+              joins: [
+                join(
+                  table('journal_tx', 't'),
+                  eq(col('tx', 'c'), col('id', 't')),
+                ),
+              ],
+              where: host,
+            }),
+          ),
+          fields: countRows(
+            select({
+              cols: [as(count(), 'n')],
+              from: table('journal_field', 'f'),
+              joins: [
+                join(
+                  table('journal_change', 'c'),
+                  eq(col('change', 'f'), col('id', 'c')),
+                ),
+                join(
+                  table('journal_tx', 't'),
+                  eq(col('tx', 'c'), col('id', 't')),
+                ),
+              ],
+              where: host,
+            }),
+          ),
+        }
+      }
       let journalBefore = journal()
       let indexedTally = async (name: string) =>
         Object.fromEntries(
@@ -1052,6 +1092,7 @@ let main = async () => {
         physicalCells,
         batches,
         journal: delta,
+        journalHost,
         elapsedMs: Math.round(performance.now() - started),
       })
       if (again.patches.length) fail('Migratable residuals remain')
