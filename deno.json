@@ -192,7 +192,8 @@
     "./packages/testing",
     "./packages/fp",
     "./packages/logic",
-    "./packages/tracker"
+    "./packages/tracker",
+    "./packages/inbox"
   ],
   "exclude": [
     "packages/workerd/conform.ts",

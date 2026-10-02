@@ -1,7 +1,7 @@
 // Browser inbox candidate reads. The shared inboxItem predicate still owns
 // policy; these server-side screens run BEFORE delivery. A badge needs
 // only unread policy columns, never letter bodies or delivery job payloads.
-import type { Reader } from './client.ts'
+import type { Reader } from './mod.ts'
 
 const POLICY =
   'comment.target,knock.target,deliver.to,mail.target,mail.to,mail.message_id,opened.at,archived.at'

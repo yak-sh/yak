@@ -14,7 +14,7 @@ import {
   subscriptionState,
 } from '../live.ts'
 import { kindOf } from '../types.ts'
-import { inboxCountQueries, inboxQueries } from '../inbox_queries.ts'
+import { inboxCountQueries, inboxQueries } from '@yaks/inbox/queries'
 
 let rows = (eids: string[]): Row[] =>
   eids.flatMap((eid) => {
