@@ -510,19 +510,23 @@ worktree still holds: `dirty` for uncommitted files, `unlanded` when its HEAD is
 on no branch but its own (a path that is not a checkout counts as that too), or
 nothing. `reclaim(path)` removes a worktree and the branch it was created on
 only when it holds nothing, and never with `--force`, so Git's own refusal
-stands behind that test; it returns what kept it, `failed` included. A worktree
-whose gitdir Git has lost (`lost(path)`) is deleted outright. `restore(g, row)`
-creates a worktree again at the path, branch and commit its row recorded, so run
-`discover` on it before taking it back. `linked(common)` names a repository's
-linked worktrees, and `idleFor(path)` says how long since Git last wrote one's
-HEAD, index or reflog.
+stands behind that test; it returns what kept it, `failed` included. Pass a full
+local branch ref as the second argument to `holds` or `reclaim` to require
+landing there: `reclaim(path, "refs/heads/main")`. This also keeps a worktree
+whose gitdir Git has lost (`lost(path)`), because neither its cleanliness nor
+its landing can be proved. Without a required landing, lost worktrees are
+deleted outright. `restore(g, row)` creates a worktree again at the path, branch
+and commit its row recorded, so run `discover` on it before taking it back.
+`linked(common)` names a repository's linked worktrees, and `idleFor(path)` says
+how long since Git last wrote one's HEAD, index or reflog.
 
 `@yaks/git/service` is the caller for every worktree nobody else takes back.
 Once an hour it runs `collect` on each repository the graph knows that is on
-this machine: every linked worktree Git has left alone for six hours and that
-holds nothing is reclaimed. A `managed` worktree is left to the harness, which
-takes those back when their session ends (@yaks/harness `worktrees.ts`). The
-`idle` and `every` options change the two durations.
+this machine: every linked worktree Git has left alone for six hours and that is
+clean and landed on main is reclaimed once no live graph session or local
+process uses it. A `managed` worktree is left to the harness, which takes those
+back when their session ends (@yaks/harness `worktrees.ts`). The `idle` and
+`every` options change the two durations.
 
 Identity and locking assume one filesystem and one shared graph, used by
 cooperating processes on that machine. A checkout moved on disk, or changed by

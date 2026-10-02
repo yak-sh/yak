@@ -21,14 +21,20 @@
 // `restore()` creates it again at that commit, on the same branch, at the same
 // path.
 //
-// Startup sweeps the whole root directory the same way, and also removes the
-// worktrees Git has already forgotten — a `.git` file naming a gitdir that no
-// longer exists — because the CI runner recreates its repository between jobs
-// and left 281 of those behind.
+// Scheduled sweeps take back every clean checkout landed on main. A checkout
+// whose Git metadata is missing stays: neither its cleanliness nor its landing
+// can be proved. Live graph homes and process directories protect resumed
+// sessions and agents that run outside the graph.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import type { Effects } from '@yaks/effects'
-import { discover, type Held, reclaim } from '@yaks/git/host'
+import {
+  discover,
+  type Held,
+  inUse,
+  processCwds,
+  reclaim,
+} from '@yaks/git/host'
 
 let row = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
   (await g.get([eid]))[0]
@@ -61,10 +67,18 @@ export let going = async (g: Graph): Promise<Bundle[]> => [
 
 /** Remove one worktree, bringing its row up to date first: where it is checked
  * out is all a resume needs to create it again, and only Git knows that. A path
- * Git has lost returns nothing and is deleted outright. */
-let take = async (g: Graph, path: string): Promise<Held | undefined> => {
+ * Git has lost stays because its work cannot be verified. */
+let take = async (
+  g: Graph,
+  path: string,
+  live: () => Promise<Set<string>>,
+): Promise<Held | undefined> => {
   await discover(g, path).catch(() => {})
-  return reclaim(path)
+  // Discovery can take time. A session may have resumed while it ran, so the
+  // current graph homes and local process directories are checked afterwards.
+  let real = await Deno.realPath(path)
+  if (inUse(real, await live()) || inUse(real, await processCwds())) return
+  return reclaim(path, 'refs/heads/main')
 }
 
 /** Remove the worktree this session was given, if the session is over and the
@@ -79,7 +93,7 @@ export let collect = async (
   if (!await Deno.stat(path).then(() => true, () => false)) return undefined
   let b = await row(g, session)
   if (!b?.session || !over(b)) return undefined
-  return take(g, path)
+  return take(g, path, async () => homes(g, await going(g), dir))
 }
 
 /** Register the effect handlers that remove a worktree the moment its session
@@ -130,16 +144,23 @@ export let homes = async (
   dir: string,
 ): Promise<Set<string>> => {
   let live = new Set(sessions.map((b) => cutFor(b.entity.eid, dir)))
+  for (let b of sessions) {
+    let cwd = (b.home as Comp | undefined)?.cwd
+    if (typeof cwd == 'string') live.add(cwd)
+  }
   let ids = sessions
     .map((b) => (b.home as Comp | undefined)?.worktree)
     .filter((eid): eid is string => typeof eid == 'string')
-  if (!ids.length) return live
   let rows = await g.get([...new Set(ids)])
   for (let b of rows) {
     let path = (b.worktree as Comp | undefined)?.path
     if (typeof path == 'string') live.add(path)
   }
-  return live
+  return new Set(
+    await Promise.all(
+      [...live].map((path) => Deno.realPath(path).catch(() => path)),
+    ),
+  )
 }
 
 /** Remove every worktree under the root directory, returning the ones kept and
@@ -159,8 +180,9 @@ export let sweep = async (
   let entries: Deno.DirEntry[] = []
   try {
     for await (let e of Deno.readDir(dir)) entries.push(e)
-  } catch {
-    return kept
+  } catch (error) {
+    if (error instanceof Deno.errors.NotFound) return kept
+    throw error
   }
   for (let e of entries) {
     if (!e.isDirectory) continue
@@ -171,7 +193,11 @@ export let sweep = async (
       () => 0,
     )
     if (cut > began) continue
-    let held = await take(g, path).catch(() => 'failed' as Held)
+    let held = await take(
+      g,
+      path,
+      async () => new Set([...live, ...await homes(g, await going(g), dir)]),
+    ).catch(() => 'failed' as Held)
     if (held) kept[path] = held
   }
   return kept

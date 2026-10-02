@@ -436,6 +436,15 @@ records the checkout's current branch and commit. If the session resumes, the
 harness recreates the checkout at the same path, branch, and commit before
 executing further work.
 
+The `@yaks/harness` service sweeps the live worktree root at startup and every
+five minutes. It keeps dirty worktrees, commits not on main, and homes used by
+unfinished sessions or live processes. An explicit resume awaits the same sweep.
+Each pass also checks available space on `/`: below 10 GiB it sends an alert to
+the existing production Sentry project, visible in `yak admin errors`. Repeated
+low readings stay quiet until space recovers; failed delivery retries on the
+next pass. Plugin options `every` (milliseconds) and `threshold` (bytes)
+configure the interval and free-space threshold.
+
 <a id="prompt-context-pilot"></a>
 
 ### Instruction files and prompt history

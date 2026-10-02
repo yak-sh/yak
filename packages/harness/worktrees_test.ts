@@ -1,6 +1,6 @@
-import { test } from '@yaks/testing'
+import { test, until as eventually } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { discover, restore } from '@yaks/git/host'
+import { discover, inUse, processCwds, restore } from '@yaks/git/host'
 import { swap } from '@yaks/session/admission'
 import { sessionCwd } from './workspace.ts'
 import {
@@ -78,13 +78,17 @@ test('a sweep takes back the root, keeps what is held, and skips a live home', a
   try {
     let gone = await f.cut('gone')
     await f.commit(gone, 'landed')
-    await git(f.repo, 'branch', 'parent', 'task-gone')
+    await git(f.repo, 'merge', '--ff-only', 'task-gone')
     let kept = await f.cut('kept')
     await f.commit(kept, 'unlanded')
+    // Another task branch containing the commit does not land it on main.
+    await git(f.repo, 'branch', 'parent', 'task-kept')
+    let dirty = await f.cut('dirty')
+    await Deno.writeTextFile(dirty + '/scratch', 'uncommitted')
     let live = await f.cut('live')
     await Deno.writeTextFile(f.root + '/not-a-directory', 'ignored')
     let held = await sweep(h.g, f.root, new Set([live]))
-    assertEquals(held, { [kept]: 'unlanded' })
+    assertEquals(held, { [kept]: 'unlanded', [dirty]: 'dirty' })
     assertEquals(await there(gone), false)
     assert(await there(kept))
     assert(await there(live))
@@ -97,11 +101,66 @@ test('a sweep takes back the root, keeps what is held, and skips a live home', a
       await git(
         f.repo,
         'rev-parse',
-        'parent',
+        'main',
       ),
     )
     assertEquals(await sweep(h.g, f.root + '/absent'), {})
   } finally {
+    h.close()
+    await f.free()
+  }
+})
+
+test('a sweep keeps an unrecorded local process and a session resumed during discovery', async () => {
+  let f = await fixture()
+  let h = await harness()
+  let child: Deno.ChildProcess | undefined
+  try {
+    let occupied = await f.cut('occupied')
+    await Deno.mkdir(occupied + '/subdir')
+    // Git ignores the empty directory, so this is still a clean checkout.
+    child = new Deno.Command('cat', {
+      cwd: occupied + '/subdir',
+      stdin: 'piped',
+      stdout: 'null',
+      stderr: 'null',
+    }).spawn()
+    await eventually(async () => inUse(occupied, await processCwds()))
+    let resumed = await f.cut('resumed')
+    let directory = await f.cut('directory')
+    await Deno.mkdir(directory + '/subdir')
+    await h.g.apply([{
+      entity: { eid: 'using-directory' },
+      session: {},
+      home: { cwd: directory + '/subdir' },
+    }])
+    let read = h.g.read
+    let discovery = h.g.apply
+    h.g.apply = async (...args) => {
+      let result = await discovery(...args)
+      if (
+        args[0].some((b) =>
+          (b.worktree as Record<string, unknown> | undefined)?.path == resumed
+        )
+      ) {
+        let [tree] = await read(`.worktree.path=${resumed}&*`)
+        await discovery([{
+          entity: { eid: 'resumed' },
+          session: {},
+          home: { worktree: tree.entity.eid },
+        }])
+      }
+      return result
+    }
+    assertEquals(await sweep(h.g, f.root), {})
+    assert(await there(occupied))
+    assert(await there(resumed))
+    assert(await there(directory))
+  } finally {
+    if (child) {
+      child.kill('SIGTERM')
+      await child.status
+    }
     h.close()
     await f.free()
   }
@@ -177,14 +236,14 @@ test('a collected checkout is cut again where it stood', async () => {
     let path = await f.cut('child-one')
     await f.commit(path, 'the work')
     let head = await git(path, 'rev-parse', 'HEAD')
-    await git(f.repo, 'branch', 'parent', 'task-child-one')
+    await git(f.repo, 'merge', '--ff-only', 'task-child-one')
     await h.g.apply([
       { entity: { eid: 'child:one' }, session: {} },
       said('child:one'),
     ])
     assertEquals(await collect(h.g, 'child:one', f.root), undefined)
     assertEquals(await there(path), false)
-    assertEquals(await f.branches(), 'main\nparent')
+    assertEquals(await f.branches(), 'main')
 
     let [row] = await h.g.read(`.worktree.path=${path}&*`)
     assertEquals(await restore(h.g, row), path)
@@ -310,7 +369,7 @@ test('a child that is over hands its checkout back, and gets it again on resume'
     let path = await f.cut('child-one')
     assertEquals(cutFor('child:one', f.root), path)
     await f.commit(path, 'the work')
-    await git(f.repo, 'branch', 'parent', 'task-child-one')
+    await git(f.repo, 'merge', '--ff-only', 'task-child-one')
     let home = (await discover(h.g, path)).entity.eid
     await h.g.apply([{
       entity: { eid: 'child:one' },
@@ -329,12 +388,12 @@ test('a child that is over hands its checkout back, and gets it again on resume'
     // The transcript ending is what hands it back.
     await h.g.apply([stopped('child:one')], { trusted: true })
     await until(async () => !await there(path))
-    await until(async () => await f.branches() == 'main\nparent')
+    await until(async () => await f.branches() == 'main')
 
     // Resumed, the session asks where it runs — and its work is there.
     assertEquals(await sessionCwd(h.g, 'child:one', f.repo), path)
     assertEquals(await Deno.readTextFile(path + '/work'), 'the work')
-    assertEquals(await f.branches(), 'main\nparent\ntask-child-one')
+    assertEquals(await f.branches(), 'main\ntask-child-one')
     assertEquals(failed, [])
   } finally {
     await collected()

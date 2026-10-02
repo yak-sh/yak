@@ -1,9 +1,9 @@
 // Collecting the worktrees agents leave behind, against a real repository: a
 // linked worktree goes once it holds nothing and Git has left it alone for
 // long enough, and nothing else does.
-import { test } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { discover } from './host.ts'
+import { discover, inUse, processCwds } from './host.ts'
 import { collect, IDLE, service } from './service.ts'
 import { fixture as graphed, git, template } from './testing.ts'
 
@@ -27,7 +27,24 @@ let fixture = async () => {
   return {
     repo,
     common: repo + '/.git',
-    g: graphed().g,
+    g: graphed({
+      docs: [{
+        $defs: {
+          session: {
+            component: true,
+            type: 'object',
+            properties: { status: { type: 'string' } },
+          },
+          home: {
+            component: true,
+            type: 'object',
+            properties: { worktree: { type: 'string', ref: 'worktree' } },
+          },
+          process: { component: true, type: 'object' },
+          exit: { component: true, type: 'object' },
+        },
+      }],
+    }).g,
     cut: async (name: string) => {
       let path = dir + '/' + name
       await git(repo, 'worktree', 'add', '-q', '-b', name, path)
@@ -49,6 +66,7 @@ test('an idle worktree that holds nothing is taken back', async () => {
     await Deno.writeTextFile(ahead + '/work', 'unlanded')
     await git(ahead, 'add', '.')
     await git(ahead, 'commit', '-qm', 'unlanded')
+    await git(f.repo, 'branch', 'another-task', 'ahead')
 
     // Freshly touched, nothing goes.
     assertEquals(await collect(f.g, f.common), {})
@@ -60,6 +78,65 @@ test('an idle worktree that holds nothing is taken back', async () => {
     })
     assertEquals(await there(landed), false)
     assert(await there(f.repo + '/file'))
+  } finally {
+    await f.free()
+  }
+})
+
+test('an idle checkout stays while a graph session or local process uses it', async () => {
+  let f = await fixture()
+  let child: Deno.ChildProcess | undefined
+  try {
+    let busy = await f.cut('busy')
+    let occupied = await f.cut('occupied')
+    let tree = await discover(f.g, busy)
+    await f.g.apply([{
+      entity: { eid: 'session' },
+      session: { status: 'running' },
+      home: { worktree: tree.entity.eid },
+    }])
+    child = new Deno.Command('cat', {
+      cwd: occupied,
+      stdin: 'piped',
+      stdout: 'null',
+      stderr: 'null',
+    }).spawn()
+    await until(async () => inUse(occupied, await processCwds()))
+    assertEquals(await collect(f.g, f.common, IDLE, later), {})
+    assert(await there(busy))
+    assert(await there(occupied))
+    await f.g.apply([{
+      entity: { eid: 'session' },
+      session: { status: 'settled' },
+    }])
+    assertEquals(await collect(f.g, f.common, IDLE, later), {})
+    assertEquals(await there(busy), false)
+    assert(await there(occupied))
+  } finally {
+    if (child) {
+      child.kill('SIGTERM')
+      await child.status
+    }
+    await f.free()
+  }
+})
+
+test('a settled transcript keeps its checkout until its process exits', async () => {
+  let f = await fixture()
+  try {
+    let path = await f.cut('draining')
+    let tree = await discover(f.g, path)
+    await f.g.apply([{
+      entity: { eid: 'draining' },
+      session: { status: 'settled' },
+      home: { worktree: tree.entity.eid },
+      process: {},
+    }])
+    await collect(f.g, f.common, IDLE, later)
+    assert(await there(path))
+    await f.g.apply([{ entity: { eid: 'draining' }, exit: {} }])
+    await collect(f.g, f.common, IDLE, later)
+    assertEquals(await there(path), false)
   } finally {
     await f.free()
   }

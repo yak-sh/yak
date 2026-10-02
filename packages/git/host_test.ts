@@ -3,7 +3,7 @@
 // checkouts cut from it.
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { holds, idleFor, lost, reclaim } from './host.ts'
+import { holds, idleFor, inUse, lost, processCwds, reclaim } from './host.ts'
 import { git, template } from './testing.ts'
 
 let there = (path: string) => Deno.stat(path).then(() => true, () => false)
@@ -84,6 +84,44 @@ test('dirty files and unlanded commits keep a checkout', async () => {
     assertEquals(await reclaim(ahead), undefined)
     assertEquals(await there(ahead), false)
     assertEquals(await f.branches(), 'main\nparent\ntask-dirty')
+  } finally {
+    await f.free()
+  }
+})
+
+test('a required landing branch keeps commits held only by another task', async () => {
+  let f = await fixture()
+  try {
+    let path = await f.cut('ahead')
+    await f.commit(path, 'unlanded')
+    await git(f.repo, 'branch', 'parent', 'task-ahead')
+    assertEquals(await holds(path, 'refs/heads/main'), 'unlanded')
+    assertEquals(await reclaim(path, 'refs/heads/main'), 'unlanded')
+    assert(await there(path))
+    await git(f.repo, 'merge', '--ff-only', 'task-ahead')
+    assertEquals(await reclaim(path, 'refs/heads/main'), undefined)
+    assertEquals(await there(path), false)
+    assertEquals(await f.branches(), 'main\nparent')
+  } finally {
+    await f.free()
+  }
+})
+
+test('local process directories protect a worktree and its descendants', async () => {
+  let cwd = await Deno.realPath(Deno.cwd())
+  assert(inUse(cwd, await processCwds()))
+  assert(inUse('/work/tree', new Set(['/work/tree/subdir'])))
+  assertEquals(inUse('/work/tree', new Set(['/work/tree-other'])), false)
+})
+
+test('a required landing keeps an orphan whose work can no longer be verified', async () => {
+  let f = await fixture()
+  try {
+    let path = await f.cut('orphan')
+    await Deno.writeTextFile(path + '/scratch', 'uncommitted')
+    await Deno.remove(f.repo + '/.git/worktrees', { recursive: true })
+    assertEquals(await reclaim(path, 'refs/heads/main'), 'unlanded')
+    assertEquals(await Deno.readTextFile(path + '/scratch'), 'uncommitted')
   } finally {
     await f.free()
   }

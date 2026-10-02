@@ -7,11 +7,10 @@
 // graph knows, once it holds nothing (`holds`) and Git has not touched it for
 // `idle`.
 //
-// Holding nothing is what makes it safe: a clean worktree whose commits are on
-// another branch loses nothing when it goes, and Git's own refusal stands
-// behind that test. The idle wait only spares an agent still standing in a
-// worktree it has just landed. A worktree the harness created (`managed`) is
-// left to the harness, which brings one back when its session resumes; one
+// A clean worktree whose commits are on main can go once no graph session or
+// local process uses it. Git's own refusal stands behind those checks. The
+// idle wait avoids taking back a checkout an agent has just landed. A worktree
+// the harness created (`managed`) is left to the harness, which brings one back when its session resumes; one
 // that has a row is brought up to date before it goes, as the harness does,
 // so the row records the commit it stood at.
 
@@ -21,7 +20,9 @@ import {
   discover,
   type Held,
   idleFor,
+  inUse,
   linked,
+  processCwds,
   reclaim,
   repositoryEid,
   worktreeEid,
@@ -53,6 +54,31 @@ export let collect = async (
 ): Promise<Record<string, Held>> => {
   let kept: Record<string, Held> = {}
   let repository = repositoryEid(common)
+  let live = async () => {
+    let paths = new Set<string>()
+    if (!g.vocab.comp('session') || !g.vocab.comp('home')) return paths
+    let sessions = (await g.read('.session&.home&*')).filter((b) =>
+      !['settled', 'stopped', 'failed'].includes(
+        String((b.session as Comp).status),
+      ) ||
+      Boolean(b.process && !b.exit)
+    )
+    for (let b of sessions) {
+      let cwd = (b.home as Comp).cwd
+      if (typeof cwd == 'string') paths.add(cwd)
+    }
+    let ids = sessions.map((b) => (b.home as Comp).worktree)
+      .filter((id): id is string => typeof id == 'string')
+    for (let row of await g.get([...new Set(ids)])) {
+      let path = (row.worktree as Comp | undefined)?.path
+      if (typeof path == 'string') paths.add(path)
+    }
+    return new Set(
+      await Promise.all(
+        [...paths].map((path) => Deno.realPath(path).catch(() => path)),
+      ),
+    )
+  }
   for (let path of await linked(common)) {
     if (await idleFor(path, now) < idle) continue
     let real = await Deno.realPath(path).catch(() => path)
@@ -60,7 +86,10 @@ export let collect = async (
     let tree = row?.worktree as Comp | undefined
     if (tree?.managed) continue
     if (tree) await discover(g, path).catch(() => {})
-    let held = await reclaim(path).catch(() => 'failed' as Held)
+    if (inUse(real, await live()) || inUse(real, await processCwds())) continue
+    let held = await reclaim(path, 'refs/heads/main').catch(() =>
+      'failed' as Held
+    )
     if (held) kept[path] = held
   }
   return kept

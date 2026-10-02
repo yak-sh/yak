@@ -31,7 +31,8 @@ import { configuredImages, type ImageOptions } from './images.ts'
 import { diagnostics, type FailureContext } from './diagnostics.ts'
 import { homeAt, owing, workspace } from './workspace.ts'
 import { dbPath, worktrees } from './paths.ts'
-import { collecting, going, homes, sweep } from './worktrees.ts'
+import { collecting } from './worktrees.ts'
+import { tidy } from './maintenance.ts'
 import { transcriptViews } from './transcript.ts'
 import type { Harness } from './store.ts'
 import { graphTools, harnessTools } from './tools.ts'
@@ -207,13 +208,12 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
     requestItems: (_, __, current) => skillItems(h.g, current, cwd),
     report,
     // What abnormal endings left in the worktree root, taken back by the same
-    // test one child's end applies — plus the checkouts Git itself has
-    // forgotten. Only the harness running over the graph in its own home
-    // sweeps: another graph (a test's, a probe's) is not this one, and its run
-    // must never reach the live root.
+    // test one child's end applies. Only the harness running over the graph
+    // in its own home sweeps: another graph (a test's, a probe's) is not this
+    // one, and its run must never reach the live root.
     resuming: async () => {
       if (h.path != dbPath(env)) return
-      sweep(h.g, root, await homes(h.g, await going(h.g), root)).catch(
+      await tidy(h.g, root).catch(
         (error) => report(error, { phase: 'worktree-sweep' }),
       )
     },

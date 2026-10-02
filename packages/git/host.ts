@@ -350,6 +350,44 @@ export let createWorktree = async (
  * else, or a removal that did not succeed. */
 export type Held = 'dirty' | 'unlanded' | 'failed'
 
+/** Canonical directories occupied by this user's live local processes,
+ * including agents outside the graph. Other users' sessions are protected by
+ * their graph homes. Unreadable cwd links are left to the graph home check. */
+export let processCwds = async (): Promise<Set<string>> => {
+  if (Deno.build.os != 'linux') {
+    throw new Error(
+      'Worktree collection requires a local process directory scan',
+    )
+  }
+  let paths = new Set([await Deno.realPath(Deno.cwd())])
+  for await (let entry of Deno.readDir('/proc')) {
+    if (!/^\d+$/.test(entry.name)) continue
+    try {
+      // Linux restricts other users' cwd links even when procfs is readable.
+      if ((await Deno.stat(`/proc/${entry.name}`)).uid != Deno.uid()) continue
+      paths.add(await Deno.realPath(`/proc/${entry.name}/cwd`))
+    } catch (error) {
+      // Capability-bearing daemons (systemd, the reverse proxy) can share
+      // our uid while Linux denies their cwd. Session homes remain the
+      // authority for their worktrees; this scan also covers outside agents.
+      if (error instanceof Deno.errors.PermissionDenied) continue
+      // A process may exit between listing it and reading its cwd. ESRCH can
+      // arrive as a plain Error; every other failure keeps the worktrees.
+      if (
+        !(error instanceof Deno.errors.NotFound) &&
+        !(error instanceof Error && /\(os error [23]\)/.test(error.message))
+      ) {
+        throw error
+      }
+    }
+  }
+  return paths
+}
+
+/** A process standing anywhere inside a worktree keeps the whole checkout. */
+export let inUse = (path: string, cwds: Set<string>): boolean =>
+  [...cwds].some((cwd) => cwd == path || cwd.startsWith(path + '/'))
+
 // A git command's output, or nothing when it failed or could not run at all —
 // a path that is not a checkout is an answer here, not an error.
 let quiet = (cwd: string, args: string[]): Promise<string | undefined> =>
@@ -426,11 +464,21 @@ let standing = async (path: string) => {
 // What a checkout holds, beside the branch it stands on.
 let holding = async (
   path: string,
+  landed?: string,
 ): Promise<{ held?: Held; branch?: string }> => {
   let at = await standing(path)
   if (at?.dirty) return { held: 'dirty' }
   if (!at?.head) return { held: 'unlanded' }
   let own = at.branch && `refs/heads/${at.branch}`
+  if (landed) {
+    let merged = own != landed && await quiet(path, [
+          'merge-base',
+          '--is-ancestor',
+          at.head,
+          landed,
+        ]) != null
+    return { held: merged ? undefined : 'unlanded', branch: at.branch }
+  }
   let elsewhere = (await quiet(path, [
     'for-each-ref',
     '--contains',
@@ -445,20 +493,28 @@ let holding = async (
  * working tree whose HEAD already exists on some other branch — the base it was
  * created from, a parent's branch, main. Its own branch never counts; that is
  * what "unlanded" means. A path that is not a worktree at all is reported as
- * `unlanded` — kept, never guessed at. */
-export let holds = async (path: string): Promise<Held | undefined> =>
-  (await holding(path)).held
+ * `unlanded` — kept, never guessed at. With `landed`, only that full local
+ * branch ref counts as a landing (for example `refs/heads/main`). */
+export let holds = async (
+  path: string,
+  landed?: string,
+): Promise<Held | undefined> => (await holding(path, landed)).held
 
 /** Remove one worktree — the directory and the branch it was created on —
  * unless it still holds something. Returns what kept it, or nothing. A worktree
  * Git has lost is deleted outright. Nothing here passes `--force`, so Git's own
  * refusal is a second guard behind `holds`. */
-export let reclaim = async (path: string): Promise<Held | undefined> => {
+export let reclaim = async (
+  path: string,
+  landed?: string,
+): Promise<Held | undefined> => {
   if (await lost(path)) {
+    // Without Git's index and HEAD, cleanliness and landing cannot be proved.
+    if (landed) return 'unlanded'
     return await Deno.remove(path, { recursive: true })
       .then(() => undefined, () => 'failed' as Held)
   }
-  let { held, branch } = await holding(path)
+  let { held, branch } = await holding(path, landed)
   if (held) return held
   let common = await quiet(path, [
     'rev-parse',
