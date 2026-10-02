@@ -76,7 +76,8 @@ export let refreshSprites = () => {
 /** A completed picture URL, or an empty string while its worker paints. */
 export let sprite = (kind: string): string => {
   let item = ITEMS[kind]
-  return item?.look.length ? start(kind, item).url ?? '' : ''
+  return typeof document != 'undefined' && item?.look.length
+    ? start(kind, item).url ?? '' : ''
 }
 
 /** A kind's picture as HTML, sized by the text around it (ui/Sprite.css). */

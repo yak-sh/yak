@@ -17,6 +17,7 @@
 // current numbers (`does`), including what a skill changed.
 import { comp, str } from './bundle.ts'
 import { type Effect, effect } from './ability-effects.ts'
+import { lasting } from './status.ts'
 import type { Glyph } from './glyphs.ts'
 import { ITEMS } from './items.ts'
 import type { Worn } from './gear.ts'
@@ -154,6 +155,15 @@ export let abilityStats = (a: Ability, d: Doer): string[] => {
       ? `Absorbs ${Math.round(d.max * ward.share)} Damage for ${secs(WARD)}`
       : '',
     heal ? `Restores ${Math.round(d.max * heal.share)} Health` : '',
+    ...a.effects.filter(lasting).map((e) =>
+      e.kind == 'dot'
+        ? `${Math.round(d.blow * e.scale)} Damage over ${secs(e.ms)}`
+        : e.kind == 'hot'
+        ? `${Math.round(d.max * e.share)} Healing over ${secs(e.ms)}`
+        : `${e.kind == 'buff' ? '+' : '-'}${
+          Math.round(e.share * 100)
+        }% ${e.stat} for ${secs(e.ms)}`
+    ),
     damage?.sure
       ? damage.hits && damage.hits > 1
         ? 'Final hit is a great blow'

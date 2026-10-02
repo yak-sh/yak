@@ -1,3 +1,4 @@
+import { labels } from './status.ts'
 // Who is on stage: a figure for every player and creature the frame knows,
 // the people who give quests, loot on the ground, the plates over heads and
 // over signposts, and under each creature on my trail a red ring round the
@@ -149,7 +150,9 @@ let beamOf = (r: Rarity, glow: THREE.Material) => {
 }
 
 /** A voice is marked only when its own audio samples arrive at this page. */
-type Meter = { talking?: boolean; points?: string; hint?: string | null } | null
+type Meter =
+  | { talking?: boolean; points?: string; hint?: string | null }
+  | null
 export let voicePlate = (meter: Meter) => {
   if (!meter) return ''
   let trace = meter.points
@@ -555,7 +558,8 @@ export let cast = (
         a.hp = o.vitals.hp
         // An ability takes its own time, and is posed its own way.
         let d = a.doing, ab = d ? ABILITIES[d.id] : undefined
-        let took = (ab && effect(ab.effects, 'guard')?.ms) || ab?.time || k.pace
+        let took = (ab && effect(ab.effects, 'guard')?.ms) || ab?.time ||
+          k.pace
         let since = now - (d && ab ? d.at : a.swingAt)
         if (d && since >= took) a.doing = null
         play(
@@ -578,7 +582,9 @@ export let cast = (
           head(a, 0.25),
           `<span><b>${esc(o.name)}</b> <em>${o.vitals.lvl}</em></span>${
             voicePlate(meter(o.eid))
-          }${life < 0.999 ? bar(life, 'Plate_Bar-friend') : ''}`,
+          }${life < 0.999 ? bar(life, 'Plate_Bar-friend') : ''}<small>${
+            labels(o.statuses, f.now)
+          }</small>`,
           'Plate Plate-friend',
         )
       }
@@ -649,7 +655,7 @@ export let cast = (
               skull(m.lvl, f.sheet.lvl) ? ' class=Plate_Danger' : ''
             }>${skull(m.lvl, f.sheet.lvl) ? '☠' : m.lvl}</em></span>${
               bar(m.hp / m.most, 'Plate_Bar-foe')
-            }`,
+            }<small>${labels(m.statuses, f.now)}</small>`,
             `Plate Plate-foe${b.combat?.boss ? ' Plate-boss' : ''}`,
           )
         }

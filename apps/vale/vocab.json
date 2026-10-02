@@ -66,140 +66,425 @@
           "type": "array",
           "validate": true,
           "minItems": 1,
-          "maxItems": 9,
+          "maxItems": 13,
           "items": {
             "oneOf": [
               {
                 "type": "object",
                 "properties": {
-                  "kind": { "const": "damage" },
-                  "scale": { "type": "number", "minimum": 0.01, "maximum": 10 },
-                  "hits": { "type": "integer", "minimum": 1, "maximum": 10 },
-                  "sure": { "type": "boolean" }
+                  "kind": {
+                    "const": "damage"
+                  },
+                  "scale": {
+                    "type": "number",
+                    "minimum": 0.01,
+                    "maximum": 10
+                  },
+                  "hits": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10
+                  },
+                  "sure": {
+                    "type": "boolean"
+                  }
                 },
-                "required": ["kind", "scale"],
+                "required": [
+                  "kind",
+                  "scale"
+                ],
                 "additionalProperties": false
               },
               {
                 "type": "object",
                 "properties": {
-                  "kind": { "const": "bleed" },
-                  "scale": { "type": "number", "minimum": 0.01, "maximum": 10 }
+                  "kind": {
+                    "const": "bleed"
+                  },
+                  "scale": {
+                    "type": "number",
+                    "minimum": 0.01,
+                    "maximum": 10
+                  }
                 },
-                "required": ["kind", "scale"],
+                "required": [
+                  "kind",
+                  "scale"
+                ],
                 "additionalProperties": false
               },
               {
                 "type": "object",
                 "properties": {
-                  "kind": { "const": "stun" },
-                  "ms": { "type": "number", "minimum": 1, "maximum": 10000 }
+                  "kind": {
+                    "const": "stun"
+                  },
+                  "ms": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 10000
+                  }
                 },
-                "required": ["kind", "ms"],
+                "required": [
+                  "kind",
+                  "ms"
+                ],
                 "additionalProperties": false
               },
               {
                 "type": "object",
                 "properties": {
-                  "kind": { "const": "dash" },
+                  "kind": {
+                    "const": "dash"
+                  },
                   "metres": {
                     "type": "number",
                     "minimum": 0.01,
                     "maximum": 12
                   },
-                  "behind": { "type": "boolean" }
+                  "behind": {
+                    "type": "boolean"
+                  }
                 },
-                "required": ["kind", "metres"],
+                "required": [
+                  "kind",
+                  "metres"
+                ],
                 "additionalProperties": false
               },
               {
                 "type": "object",
                 "properties": {
-                  "kind": { "const": "guard" },
-                  "ms": { "type": "number", "minimum": 1, "maximum": 10000 }
+                  "kind": {
+                    "const": "guard"
+                  },
+                  "ms": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 10000
+                  }
                 },
-                "required": ["kind", "ms"],
+                "required": [
+                  "kind",
+                  "ms"
+                ],
                 "additionalProperties": false
               },
               {
                 "type": "object",
                 "properties": {
-                  "kind": { "const": "ward" },
-                  "share": { "type": "number", "maximum": 1, "minimum": 0.01 }
+                  "kind": {
+                    "const": "ward"
+                  },
+                  "share": {
+                    "type": "number",
+                    "maximum": 1,
+                    "minimum": 0.01
+                  }
                 },
-                "required": ["kind", "share"],
+                "required": [
+                  "kind",
+                  "share"
+                ],
                 "additionalProperties": false
               },
               {
                 "type": "object",
                 "properties": {
-                  "kind": { "const": "heal" },
-                  "share": { "type": "number", "maximum": 1, "minimum": 0.01 }
+                  "kind": {
+                    "const": "heal"
+                  },
+                  "share": {
+                    "type": "number",
+                    "maximum": 1,
+                    "minimum": 0.01
+                  }
                 },
-                "required": ["kind", "share"],
+                "required": [
+                  "kind",
+                  "share"
+                ],
                 "additionalProperties": false
               },
               {
                 "type": "object",
                 "properties": {
-                  "kind": { "const": "renew" }
+                  "kind": {
+                    "const": "renew"
+                  }
                 },
-                "required": ["kind"],
+                "required": [
+                  "kind"
+                ],
                 "additionalProperties": false
               },
               {
                 "type": "object",
                 "properties": {
-                  "kind": { "const": "refund" }
+                  "kind": {
+                    "const": "refund"
+                  }
                 },
-                "required": ["kind"],
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "dot"
+                  },
+                  "ms": {
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 30000
+                  },
+                  "scale": {
+                    "type": "number",
+                    "minimum": 0.01,
+                    "maximum": 10
+                  }
+                },
+                "required": [
+                  "kind",
+                  "ms",
+                  "scale"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "hot"
+                  },
+                  "ms": {
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 30000
+                  },
+                  "share": {
+                    "type": "number",
+                    "minimum": 0.01,
+                    "maximum": 0.8
+                  }
+                },
+                "required": [
+                  "kind",
+                  "ms",
+                  "share"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "buff"
+                  },
+                  "ms": {
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 30000
+                  },
+                  "share": {
+                    "type": "number",
+                    "minimum": 0.01,
+                    "maximum": 0.8
+                  },
+                  "stat": {
+                    "enum": [
+                      "damage",
+                      "armor",
+                      "speed"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "ms",
+                  "share",
+                  "stat"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "debuff"
+                  },
+                  "ms": {
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 30000
+                  },
+                  "share": {
+                    "type": "number",
+                    "minimum": 0.01,
+                    "maximum": 0.8
+                  },
+                  "stat": {
+                    "enum": [
+                      "damage",
+                      "armor",
+                      "speed"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "ms",
+                  "share",
+                  "stat"
+                ],
                 "additionalProperties": false
               }
             ]
           },
           "allOf": [
             {
-              "contains": { "properties": { "kind": { "const": "damage" } } },
+              "contains": {
+                "properties": {
+                  "kind": {
+                    "const": "damage"
+                  }
+                }
+              },
               "minContains": 0,
               "maxContains": 1
             },
             {
-              "contains": { "properties": { "kind": { "const": "bleed" } } },
+              "contains": {
+                "properties": {
+                  "kind": {
+                    "const": "bleed"
+                  }
+                }
+              },
               "minContains": 0,
               "maxContains": 1
             },
             {
-              "contains": { "properties": { "kind": { "const": "stun" } } },
+              "contains": {
+                "properties": {
+                  "kind": {
+                    "const": "stun"
+                  }
+                }
+              },
               "minContains": 0,
               "maxContains": 1
             },
             {
-              "contains": { "properties": { "kind": { "const": "dash" } } },
+              "contains": {
+                "properties": {
+                  "kind": {
+                    "const": "dash"
+                  }
+                }
+              },
               "minContains": 0,
               "maxContains": 1
             },
             {
-              "contains": { "properties": { "kind": { "const": "guard" } } },
+              "contains": {
+                "properties": {
+                  "kind": {
+                    "const": "guard"
+                  }
+                }
+              },
               "minContains": 0,
               "maxContains": 1
             },
             {
-              "contains": { "properties": { "kind": { "const": "ward" } } },
+              "contains": {
+                "properties": {
+                  "kind": {
+                    "const": "ward"
+                  }
+                }
+              },
               "minContains": 0,
               "maxContains": 1
             },
             {
-              "contains": { "properties": { "kind": { "const": "heal" } } },
+              "contains": {
+                "properties": {
+                  "kind": {
+                    "const": "heal"
+                  }
+                }
+              },
               "minContains": 0,
               "maxContains": 1
             },
             {
-              "contains": { "properties": { "kind": { "const": "renew" } } },
+              "contains": {
+                "properties": {
+                  "kind": {
+                    "const": "renew"
+                  }
+                }
+              },
               "minContains": 0,
               "maxContains": 1
             },
             {
-              "contains": { "properties": { "kind": { "const": "refund" } } },
+              "contains": {
+                "properties": {
+                  "kind": {
+                    "const": "refund"
+                  }
+                }
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "kind": {
+                    "const": "dot"
+                  }
+                }
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "kind": {
+                    "const": "hot"
+                  }
+                }
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "kind": {
+                    "const": "buff"
+                  }
+                }
+              },
+              "minContains": 0,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "kind": {
+                    "const": "debuff"
+                  }
+                }
+              },
               "minContains": 0,
               "maxContains": 1
             }
@@ -296,6 +581,10 @@
               "where": { "kind": "refund" },
               "product": [0.35]
             },
+            {"each": "effects", "where": {"kind": "dot"}, "product": [0.7, {"field": "scale"}]},
+            {"each": "effects", "where": {"kind": "hot"}, "product": [3, {"field": "share"}]},
+            {"each": "effects", "where": {"kind": "buff"}, "product": [3, {"field": "share"}]},
+            {"each": "effects", "where": {"kind": "debuff"}, "product": [3, {"field": "share"}]},
             { "where": { "shape": "arc" }, "product": [0.2] },
             {
               "where": { "shape": "arc" },
@@ -1268,6 +1557,45 @@
             }
           },
           "description": "What they have dealt each creature they are hurting, one for each: the creature, which life of it (when it last fell, in ms), the damage dealt it in that life, and until when their blows hold it still, in ms (rules.ts `Dealt`)."
+        },
+        "statuses": {
+          "type": "array",
+          "description": "Lasting effects cast on heroes or creatures, with absolute expiry and the next tick due. Every nearby page sees these same carriers.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "target": {
+                "type": "string"
+              },
+              "life": {
+                "type": "number"
+              },
+              "name": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "until": {
+                "type": "number"
+              },
+              "next": {
+                "type": "number"
+              },
+              "amount": {
+                "type": "number"
+              },
+              "stat": {
+                "type": "string"
+              },
+              "share": {
+                "type": "number"
+              }
+            }
+          }
         },
         "swing": {
           "type": "number",

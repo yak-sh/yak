@@ -1,3 +1,4 @@
+import { labels } from './status.ts'
 // The glass over the game, in one layout where nothing overlaps at any size
 // (ui/Hud.css): the hero's vitals, the quest being followed and the foe at the
 // top left, the compass, who is here and the tray of buttons at the top
@@ -630,6 +631,7 @@ export let hud = (
             : `<span class=Badge>Level ${s.lvl}</span>`
         }</div>` +
           meter(hp / s.max, 'Bar-hp', `Health ${hp} / ${s.max}`) +
+          `<small>${labels(f.statuses, f.now)}</small>` +
           meter(
             capped ? 1 : (s.xp - from) / Math.max(1, to - from),
             'Bar-xp',

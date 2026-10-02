@@ -11,6 +11,20 @@ export type Effect =
   | { kind: 'heal'; share: number }
   | { kind: 'renew' }
   | { kind: 'refund' }
+  | { kind: 'dot'; scale: number; ms: number }
+  | { kind: 'hot'; share: number; ms: number }
+  | {
+    kind: 'buff'
+    stat: 'damage' | 'armor' | 'speed'
+    share: number
+    ms: number
+  }
+  | {
+    kind: 'debuff'
+    stat: 'damage' | 'armor' | 'speed'
+    share: number
+    ms: number
+  }
 
 export type Kind = Effect['kind']
 

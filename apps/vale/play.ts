@@ -32,6 +32,14 @@ import { nearby } from './interact.ts'
 import { landing as castLanding, type Point } from './aim.ts'
 import { abilitiesOf, again, BLEEDS, WARD, type Went } from './abilities.ts'
 import { effect } from './ability-effects.ts'
+import {
+  applied,
+  carries,
+  elapsed,
+  factor,
+  lasting,
+  type Status,
+} from './status.ts'
 import { type Slot, SLOTS } from './arms.ts'
 import { BEASTS } from './beasts.ts'
 import { FIGURES, sizeOf } from './figure.ts'
@@ -215,12 +223,14 @@ export type Mob = {
   near: number
   /** held still by someone's blow: it neither moves nor bites */
   held: boolean
+  statuses: Status[]
   /** seconds from a fall until it is up again; never, without */
   respawn?: number
 }
 
 /** Another player within sight, as this frame sees them. */
 export type Other = {
+  statuses: Status[]
   eid: string
   name: string
   look: { tint: string; hair: string; skin: string }
@@ -310,6 +320,7 @@ export type Frame = {
   guard: boolean
   /** how much of a ward is left, 0 to 1 */
   ward: number
+  statuses: Status[]
   /** how far through a dodge, 0 to 1, or -1 */
   roll: number
   events: Event[]
@@ -413,6 +424,7 @@ let fight = (b: Bundle | undefined) => {
     swing: num(f.swing),
     serial: num(f.serial),
     events: pulses(f.events),
+    statuses: carries(f.statuses),
   }
 }
 let hunt = (b: Bundle | undefined) => {
@@ -864,7 +876,11 @@ export let game = (
         down = false
       }
       let mine = fight(row)
-      let fought = { ...mine, dealt: mine.dealt.map((d) => ({ ...d })) }
+      let fought = {
+        ...mine,
+        dealt: mine.dealt.map((d) => ({ ...d })),
+        statuses: mine.statuses.map((s) => ({ ...s })),
+      }
       if (lvlWas && s.lvl > lvlWas) {
         events.push({ type: 'level', lvl: s.lvl })
         hp = s.max
@@ -929,7 +945,16 @@ export let game = (
             intent.move,
             look,
             dt,
-            SPEED * (1 + s.kit.speed),
+            SPEED * (1 + s.kit.speed) * factor(
+              [
+                ...net.players().flatMap((p) =>
+                  carries(comp(c.ent(p.entity.eid), 'fight').statuses)
+                ),
+              ],
+              me,
+              'speed',
+              now,
+            ),
             intent.jump,
             intent.look && !intent.turn,
             intent.faceMove,
@@ -990,6 +1015,7 @@ export let game = (
       // The others within sight, as relayed.
       let others: Other[] = []
       let theirs: Dealing[] = []
+      let peerStatuses: Status[] = []
       let spots = new Map<
         string,
         { x: number; z: number; prey: boolean; awake: boolean }
@@ -1005,11 +1031,13 @@ export let game = (
         let pl = net.who(eid)
         if (!pl) continue
         let f = fight(e)
+        peerStatuses.push(...f.statuses)
         let t = vitals(e) ?? { hp: 1, max: 1, lvl: 1 }
         if (m.gait != 'roll') rolls.delete(eid)
         else if (!rolls.has(eid)) rolls.set(eid, now)
         let rolled = rolls.has(eid) ? (now - rolls.get(eid)!) / ROLL : -1
         others.push({
+          statuses: f.statuses.filter((s) => s.target == eid && s.until > now),
           eid,
           name: pl.name,
           look: { tint: pl.tint, hair: pl.hair, skin: pl.skin },
@@ -1033,6 +1061,10 @@ export let game = (
           awake: now - p.at < ASLEEP,
         })
       }
+      for (let o of others) {
+        o.statuses = [...peerStatuses, ...fought.statuses]
+          .filter((s) => s.target == o.eid && s.until > now)
+      }
       let falls = fallsBy()
       // Everyone's dealings: the others', and mine as they stand.
       let dealing = (): Dealing[] => [
@@ -1040,6 +1072,7 @@ export let game = (
         ...fought.dealt.map((d) => ({ ...d, by: me })),
       ]
       let all = dealing()
+      let statuses = [...peerStatuses, ...fought.statuses]
 
       // The creatures living within sight: the dens', and those spawned.
       let homes = [
@@ -1062,7 +1095,9 @@ export let game = (
         let wasHp = hpWas.get(eid) ?? beast.hp
         hpWas.set(eid, hpNow)
         let fallen = f.down || hpNow <= 0
-        if (fallen && !sinking.has(eid)) sinking.set(eid, f.down ? f.fell : now)
+        if (fallen && !sinking.has(eid)) {
+          sinking.set(eid, f.down ? f.fell : now)
+        }
         if (!fallen) sinking.delete(eid)
         let up = wasDown.has(eid) && !fallen
         let stuck = !fallen && heldOf(eid, life, all, now)
@@ -1139,7 +1174,19 @@ export let game = (
           if (stuck && !moving) say(eid, h.level, mb, change)
           if (!stuck && (quarry || moving || knocked)) {
             let next = prowl(
-              v, mb, beast, h.home, h.roam, h.seed, now, dt, qs, shelter,
+              v,
+              mb,
+              {
+                ...beast,
+                speed: beast.speed * factor(statuses, eid, 'speed', now, life),
+              },
+              h.home,
+              h.roam,
+              h.seed,
+              now,
+              dt,
+              qs,
+              shelter,
             )
             let back = rest(v, h.home, h.roam, h.seed, now, shelter)
             if (!quarry && !knocked && dist(next, back) < 0.3) {
@@ -1188,7 +1235,11 @@ export let game = (
               let n = Math.min(s.max - hp, s.max * (s.kit.powers.dodge ?? 0))
               if (n >= 1) {
                 hp += Math.round(n)
-                events.push({ type: 'heal', n: Math.round(n), at: at(body, 2) })
+                events.push({
+                  type: 'heal',
+                  n: Math.round(n),
+                  at: at(body, 2),
+                })
               }
             } else if (now < guardUntil) {
               riposte = now
@@ -1198,8 +1249,8 @@ export let game = (
                 Math.round(beast.dmg * (0.85 + Math.random() * 0.3)),
                 beast.lvl,
                 s.lvl,
-                s.kit.armour,
-              )
+                s.kit.armour * factor(statuses, me, 'armor', now),
+              ) * factor(statuses, eid, 'damage', now, life)
               dmg = Math.min(dmg, hp + (now < ward.until ? ward.left : 0))
               let soak = now < ward.until ? Math.min(ward.left, dmg) : 0
               if (soak) {
@@ -1254,6 +1305,9 @@ export let game = (
           reach: beast.reach + LUNGE,
           near: dist(mb, body),
           held: stuck,
+          statuses: statuses.filter((st) =>
+            st.target == eid && st.life == life && st.until > now
+          ),
           ...h.respawn != null && { respawn: h.respawn },
         })
       }
@@ -1292,7 +1346,8 @@ export let game = (
         let find = s.kit.powers.find ?? 0
         lootOf(beast, m.eid, when, me, s.kit.family, find).forEach((l, i) => {
           let a = (i / 3) * Math.PI * 2 + Math.random()
-          let x = m.body.x + Math.cos(a) * 0.9, z = m.body.z + Math.sin(a) * 0.9
+          let x = m.body.x + Math.cos(a) * 0.9,
+            z = m.body.z + Math.sin(a) * 0.9
           change.push({
             entity: { eid: crypto.randomUUID() },
             drop: {
@@ -1320,6 +1375,7 @@ export let game = (
         if (!beast) return
         let life = fallOf(falls.get(m.eid) ?? [], m.respawn ?? Infinity, now)
           .fell
+        dmg /= factor(statuses, m.eid, 'armor', now, life)
         let d = fought.dealt.find((d) => d.foe == m.eid && d.life == life)
         if (!d) fought.dealt.push(d = { foe: m.eid, life, dmg: 0, held: 0 })
         d.dmg += dmg
@@ -1458,13 +1514,36 @@ export let game = (
           }
           if (!target && castPoint && dashEffect) {
             let ang = body.yaw
-            dash = { x: Math.sin(ang), z: Math.cos(ang),
-              left: Math.min(dashEffect.metres, Math.hypot(
-                castPoint.x - body.x, castPoint.z - body.z)) }
+            dash = {
+              x: Math.sin(ang),
+              z: Math.cos(ang),
+              left: Math.min(
+                dashEffect.metres,
+                Math.hypot(
+                  castPoint.x - body.x,
+                  castPoint.z - body.z,
+                ),
+              ),
+            }
           }
           let guardEffect = effect(a.effects, 'guard')
           let wardEffect = effect(a.effects, 'ward')
           let healEffect = effect(a.effects, 'heal')
+          for (let e of a.effects.filter(lasting)) {
+            if (e.kind == 'hot' || e.kind == 'buff') {
+              fought.statuses.push(
+                applied(
+                  e,
+                  me,
+                  0,
+                  a.name,
+                  now,
+                  blowOf(s.lvl, s.kit, s.kit.dmg),
+                  s.max,
+                ),
+              )
+            }
+          }
           if (guardEffect) guardUntil = now + guardEffect.ms
           if (wardEffect) {
             let n = Math.round(s.max * wardEffect.share)
@@ -1555,11 +1634,28 @@ export let game = (
         if (!taken.length && a?.shape != 'self') {
           events.push({ type: 'whiff', family: k.family })
         }
-        let might = blowOf(s.lvl, k, !a && hand == 'off' ? k.twin : k.dmg)
+        let might = blowOf(s.lvl, k, !a && hand == 'off' ? k.twin : k.dmg) *
+          factor(statuses, me, 'damage', now)
         let damage = a && effect(a.effects, 'damage')
         let stun = a && effect(a.effects, 'stun')
         let bleeding = a && effect(a.effects, 'bleed')
         for (let [j, m] of taken.entries()) {
+          for (let e of a?.effects.filter(lasting) ?? []) {
+            if (e.kind == 'dot' || e.kind == 'debuff') {
+              fought.statuses.push(
+                applied(
+                  e,
+                  m.eid,
+                  fallOf(falls.get(m.eid) ?? [], m.respawn ?? Infinity, now)
+                    .fell,
+                  a!.name,
+                  now + ms,
+                  might,
+                  s.max,
+                ),
+              )
+            }
+          }
           let hits = !a || damage
             ? (damage?.hits ?? 1) + +(Math.random() < (k.powers.echo ?? 0))
             : 0
@@ -1618,6 +1714,34 @@ export let game = (
         return false
       })
 
+      statuses = [...peerStatuses, ...fought.statuses]
+      for (let st of fought.statuses) {
+        let tick = elapsed(st, now)
+        st.next = tick.next
+        if (st.kind == 'dot' && tick.amount) {
+          let m = mobs.find((m) =>
+            m.eid == st.target && !m.down &&
+            (fallOf(falls.get(m.eid) ?? [], m.respawn ?? Infinity, now).fell) ==
+              st.life
+          )
+          if (m) land(m, tick.amount, false, 0)
+        }
+        if (st.kind == 'hot' && st.target == me && !down && tick.amount) {
+          let n = Math.min(s.max - hp, tick.amount)
+          hp += n
+          if (n) events.push({ type: 'heal', n, at: at(body, 2) })
+        }
+      }
+      fought.statuses = fought.statuses.filter((st) => st.until > now)
+      statuses = [...peerStatuses, ...fought.statuses]
+      for (let m of mobs) {
+        m.statuses = statuses.filter((st) =>
+          st.target == m.eid &&
+          st.life ==
+            (fallOf(falls.get(m.eid) ?? [], m.respawn ?? Infinity, now).fell) &&
+          st.until > now
+        )
+      }
       // Someone else's blow felled what I was hurting: my share.
       for (let d of fought.dealt) {
         let m = d.dmg > 0 && mobs.find((m) => m.eid == d.foe)
@@ -1854,6 +1978,7 @@ export let game = (
         ),
         guard: now < guardUntil,
         ward: now < ward.until ? ward.left / ward.of : 0,
+        statuses: statuses.filter((st) => st.target == me && st.until > now),
         roll: rolling ? (now - rollAt) / ROLL : -1,
         events: [...heard, ...events],
         now,

@@ -14,7 +14,7 @@ import { rows } from './beasts_fixture.ts'
 import { comp } from './bundle.ts'
 import { seedItems } from './items_fixture.ts'
 import { foeOf } from './danger.ts'
-import { dens, homesNear } from './homes.ts'
+import { dens, homesNear, homesOf } from './homes.ts'
 import { LEVELS } from './levels.ts'
 import { wares } from './stock.ts'
 import words from './vocab.json' with { type: 'json' }
@@ -78,7 +78,9 @@ test('a creature design added to the store inhabits its chosen land', async () =
   let eid = made.entity.eid
   assertEquals(beastId('beast:moonmoth'), eid)
   assert(dens(LEVELS.mossvale).some((den) => den.beast == eid))
-  assert(nearby())
+  let home = homesOf('mossvale').find((h) => h.beast == eid)!
+  assert(home)
+  assert(homesNear(...home.home, 90).some((h) => h.beast == eid))
   assert(wares('mossvale').has(eid))
   assert(wares('mossvale').has('ivory'))
 
