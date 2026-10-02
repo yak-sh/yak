@@ -494,7 +494,7 @@ export let cast = (
       mine.eye = focus(
         mine.eye,
         { x: mine.x, z: mine.z, yaw: mine.yaw },
-        f.aim?.body ?? null,
+        f.aim?.body ?? f.point ?? null,
         dt,
       )
       tumble(mine, f.roll)

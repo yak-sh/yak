@@ -272,6 +272,8 @@ export type Frame = {
   /** the level whose region the hero is in */
   level: string
   body: Body
+  /** Mouse terrain point for the hero's gaze when no creature is held. */
+  point?: Point
   vitals: Vitals
   down: boolean
   /** an admin request placed this hero during this frame */
@@ -1827,6 +1829,7 @@ export let game = (
         peer,
         foe,
         aim,
+        point: intent.point,
         rack: !down && inVillage(body.x, body.z),
         swing: now - swingAt < busy ? (now - swingAt) / busy : -1,
         hand,
