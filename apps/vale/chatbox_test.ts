@@ -373,6 +373,7 @@ test('chat slash choices use graph references and accept through native input', 
     })
     assertEquals(h.calls, [{ name: 'spawn', args: { beast: 'Bog Beast' } }])
 
+    h.press(h.document.body, 'Enter')
     h.type('/sp')
     await until(() => h.choices().length == 1, { label: 'escape choices' })
     assertEquals(h.press(h.input, 'Escape').defaultPrevented, true)
@@ -411,6 +412,7 @@ test('chat submits declared flag forms and retains drafts on schema errors', asy
       assertEquals(h.calls.at(-1), cmd)
       assertEquals(h.input.value, '')
     }
+    h.press(h.document.body, 'Enter')
     for (
       let [text, error] of [
         ['/teleport --x=nope --z=624', '--x wants a number, got nope'],
@@ -522,6 +524,35 @@ test('chat close drops an in-flight submission and completion result', async () 
     assertEquals(h.choices().length, 0)
   } finally {
     listed.resolve(tools)
+    await h.close()
+  }
+})
+
+test('chat commands close the input and return the keyboard to play', async () => {
+  let done = deferred<string>()
+  let h = setup({}, undefined, () => done.promise)
+  try {
+    await h.ready()
+    h.chat.converse()
+    h.type('/where')
+    h.event(h.form, 'submit')
+    await until(() => h.calls.length == 1, { label: 'command dispatched' })
+    assertEquals(h.form.hidden, true)
+    assertEquals(h.chat.typing, false)
+    assertEquals(h.input.value, '')
+    done.resolve('Here you are.')
+    await until(() => h.draw().includes('Here you are.'), {
+      label: 'command result in compact log',
+    })
+    assertEquals(h.form.hidden, true)
+    h.press(h.document.body, 'Enter')
+    h.type('/help')
+    h.event(h.form, 'submit')
+    await until(() => h.input.value == '', { label: 'help submitted' })
+    assertEquals(h.form.hidden, true)
+    assertEquals(h.chat.typing, false)
+  } finally {
+    done.resolve('Done.')
     await h.close()
   }
 })

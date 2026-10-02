@@ -310,8 +310,10 @@ export let chatbox = (
         spend(before, by)
         let n = notice(parsed.help)
         n.markdown = true
+        hide()
       } else {
         spend(before, by)
+        hide()
         void run(parsed.command)
       }
       return
