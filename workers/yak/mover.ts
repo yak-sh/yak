@@ -107,7 +107,7 @@ export let dispatchRule: Rule = {
 /** Every rule a release carries. A rule leaves in the release after the sweep
  * reports every store done with it, with the old words it moved out of. */
 export let RULES: Rule[] = [
-  ...refusalFind.map((find, i) => ({
+  ...refusalFind.map((find, i): Rule => ({
     mark: i == 0 ? 'yak/store/refusal/1' : 'yak/store/refusal-imported/1',
     find,
     move: (row, read) => {

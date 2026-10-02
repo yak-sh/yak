@@ -295,7 +295,7 @@ test('source reads do not move or count sources, and rehearsal rolls back', asyn
     live: undefined,
     move: (row, read) => {
       assert(read)
-      let [from] = read(`.eid=${source}&.now`)
+      let [from] = read(`.entity.eid=${source}&.now`)
       return [{
         entity: row.entity,
         was: null,
@@ -305,19 +305,19 @@ test('source reads do not move or count sources, and rehearsal rolls back', asyn
   })
   let s = await store(51, reading)
   await s.apply([{ entity: { eid: source }, now: { word: 'source' } }])
-  let before = await s.query(`.eid=${source}`)
+  let before = await s.query(`.entity.eid=${source}`)
   let [r] = await s.rehearse()
   assertEquals([r.rows, r.moved, r.batches, r.failed], [51, 51, 2, undefined])
   assertEquals(await count(s, '.was'), 51)
   assertEquals(await count(s, '.now'), 1)
-  assertEquals(await s.query(`.eid=${source}`), before)
+  assertEquals(await s.query(`.entity.eid=${source}`), before)
   s.wake({ ...reading, live: 'apps' })
   await s.alarm()
   let [said] = await s.moves()
   assertEquals([said.moved, !!said.done], [51, true])
   assertEquals(await count(s, '.was'), 0)
   assertEquals(await count(s, '.now.word=source'), 52)
-  assertEquals(await s.query(`.eid=${source}`), before)
+  assertEquals(await s.query(`.entity.eid=${source}`), before)
 })
 
 test('refusal rules rehearse unchanged and convert only answers when enabled', async () => {
@@ -361,22 +361,22 @@ test('refusal rules rehearse unchanged and convert only answers when enabled', a
   await s.alarm()
   assertEquals(await s.query('*'), before)
   assertEquals((await s.moves()).map((r) => r.live), [false, false])
-  let sourceBefore = await s.query(`.eid=${source}`)
-  let retainedBefore = await s.query(`.eid=${retained}`)
-  let [nativeBefore] = await s.query(`.eid=${native}&.content&.output`)
+  let sourceBefore = await s.query(`.entity.eid=${source}`)
+  let retainedBefore = await s.query(`.entity.eid=${retained}`)
+  let [nativeBefore] = await s.query(`.entity.eid=${native}&.content&.output`)
   let [importedBefore] = await s.query(
-    `.eid=${imported}&.content&.result&.imported`,
+    `.entity.eid=${imported}&.content&.result&.imported`,
   )
   s.wake(...refusals.map((r) => ({ ...r, live: 'apps' as const })))
   await s.alarm()
   assertEquals(await count(s, '.error'), 1)
   assertEquals(await count(s, '.refusal.code=Refused'), 1)
   assertEquals(await count(s, '.refusal.code=is_error'), 1)
-  assertEquals(await s.query(`.eid=${source}`), sourceBefore)
-  assertEquals(await s.query(`.eid=${retained}`), retainedBefore)
-  let [nativeAfter] = await s.query(`.eid=${native}&.content&.output`)
+  assertEquals(await s.query(`.entity.eid=${source}`), sourceBefore)
+  assertEquals(await s.query(`.entity.eid=${retained}`), retainedBefore)
+  let [nativeAfter] = await s.query(`.entity.eid=${native}&.content&.output`)
   let [importedAfter] = await s.query(
-    `.eid=${imported}&.content&.result&.imported`,
+    `.entity.eid=${imported}&.content&.result&.imported`,
   )
   assertEquals(
     [nativeAfter.content, nativeAfter.output],
@@ -397,6 +397,7 @@ test('refusal rehearsal and enabled batches preserve retry-pending provider erro
   let completed = crypto.randomUUID()
   let refused = crypto.randomUUID()
   await s.apply([
+    { entity: { eid: session }, session: {} },
     {
       entity: { eid: ask },
       entry: { session, seq: 1 },
@@ -431,15 +432,15 @@ test('refusal rehearsal and enabled batches preserve retry-pending provider erro
   let [report] = await s.rehearse()
   assertEquals([report.rows, report.moved, report.failed], [2, 2, undefined])
   assertEquals(await s.query('*'), before)
-  let pendingBefore = await s.query(`.eid=${pending}`)
-  let askBefore = await s.query(`.eid=${ask}`)
-  let completedBefore = await s.query(`.eid=${completed}`)
+  let pendingBefore = await s.query(`.entity.eid=${pending}`)
+  let askBefore = await s.query(`.entity.eid=${ask}`)
+  let completedBefore = await s.query(`.entity.eid=${completed}`)
   s.wake(...refusals.map((r) => ({ ...r, live: 'apps' as const })))
   await s.alarm()
   assertEquals(await count(s, '.error.code=http_429'), 1)
   assertEquals(await count(s, '.refusal.code=http_429'), 0)
   assertEquals(await count(s, '.refusal.code=http_401'), 1)
-  assertEquals(await s.query(`.eid=${pending}`), pendingBefore)
-  assertEquals(await s.query(`.eid=${ask}`), askBefore)
-  assertEquals(await s.query(`.eid=${completed}`), completedBefore)
+  assertEquals(await s.query(`.entity.eid=${pending}`), pendingBefore)
+  assertEquals(await s.query(`.entity.eid=${ask}`), askBefore)
+  assertEquals(await s.query(`.entity.eid=${completed}`), completedBefore)
 })
