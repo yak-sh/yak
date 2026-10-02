@@ -43,6 +43,7 @@ import {
   failure,
   music,
   pricedAudio,
+  routing,
   said,
   usageOf,
 } from '@yaks/workers-ai'
@@ -832,7 +833,12 @@ export let metering = (
  * can buy more.
  */
 export let metered = (
-  bind: { AI?: Binding; STORE?: Namespace; MODEL_FETCH?: typeof fetch } & Host,
+  bind: {
+    AI?: Binding
+    STORE?: Namespace
+    MODEL_FETCH?: typeof fetch
+    AI_GATEWAY?: string
+  } & Host,
   spaceOf: (dir: Directory) => Promise<Space | null>,
   rows?: {
     price(name: string): Promise<Price | undefined>
@@ -852,7 +858,11 @@ export let metered = (
     }
     let no = await refusedSpend(dir, space, 'models', bind)
     if (no) throw new ModelError(LIMIT, no)
-    let answer = await bind.AI.run(model, input, options).catch((e) => {
+    let answer = await bind.AI.run(
+      model,
+      input,
+      routing(model, options, bind.AI_GATEWAY),
+    ).catch((e) => {
       let said = failure(e)
       if (said instanceof ModelError && said.code == LIMIT) {
         defect(e, { request: `model ${model}`, space: space.slug })

@@ -168,13 +168,14 @@ let asking: Effect = (on, at) => {
         )
       },
     }),
-    { fetch: at.env.MODEL_FETCH },
+    { fetch: at.env.MODEL_FETCH, gateway: at.env.AI_GATEWAY },
   )
   let audio = accounted(
     at.env,
     payer(at.app),
     workersAi(at.env.AI!, {
       media: mediaStore(at),
+      gateway: at.env.AI_GATEWAY,
     }),
   )
   let served: Model = Object.assign(

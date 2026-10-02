@@ -95,10 +95,10 @@ reply carries `artifacts` with an audio call id and `cost` in dollars. Missing
 storage refuses before inference.
 
 `music(model)` distinguishes music request schemas from chat. ElevenLabs
-`elevenlabs/music-v2` gets a text prompt, a 30-second request and MP3 output.
-MiniMax `minimax/music-2.6` gets a text prompt and its required lyrics and
-instrumental flags. The model's own id is sent to `binding.run`; this package
-seeds no model rows or allowed-model catalogue.
+`elevenlabs/music-v2` gets a text prompt and MP3 output; duration stays in the
+prompt. MiniMax `minimax/music-2.6` gets a text prompt and its required lyrics
+and instrumental flags. The model's own id is sent to `binding.run`; this
+package seeds no model rows or allowed-model catalogue.
 
 Cloudflare's published tariffs are $0.0025 per output audio second for
 ElevenLabs, and $0.15 per track plus $0.01 when MiniMax generates lyrics.
@@ -108,3 +108,9 @@ bitrate; `audioPrice(model, input, seconds)` prices it.
 returns `{bytes, mediaType, cost}` for hosts metering a raw binding response.
 Audio is never priced as estimated text tokens. A host debits `Reply.cost`
 against its existing account budget; this adapter introduces no allowance.
+
+Partner model ids are routed with `gateway: {id: 'default'}` in binding options,
+as Cloudflare's AI Gateway binding reference requires. Native `@cf/` ids stay
+direct. `workersAi(binding, {gateway: 'name'})` selects a host's gateway, and
+`routing(model, options, gateway?)` gives raw binding callers the same routing
+while preserving affinity headers and an explicit gateway.

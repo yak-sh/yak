@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { type Item, ModelError, type Request } from '@yaks/model'
-import { type Binding, usageOf, workersAi } from './mod.ts'
+import { type Binding, routing, usageOf, workersAi } from './mod.ts'
 
 // A binding that answers `answer` (or throws it) and keeps what it was asked.
 let binding = (answer: unknown) => {
@@ -260,4 +260,31 @@ test('nested cached counts keep explicit zero distinct from unknown', () => {
     { input_tokens: 100, cached_tokens: 0 },
   )
   assertEquals(usageOf({}), {})
+})
+
+test('partner routing keeps host gateway and affinity without routing native ids', () => {
+  let headers = { extraHeaders: { 'x-session-affinity': 'pilot' } }
+  assertEquals(routing('minimax/music-2.6', headers, 'music'), {
+    ...headers,
+    gateway: { id: 'music' },
+  })
+  let explicit = { ...headers, gateway: { id: 'other' } }
+  assertEquals(routing('elevenlabs/music-v2', explicit, 'music'), explicit)
+  assertEquals(routing('@cf/x/y', headers, 'music'), headers)
+  assertEquals(routing('@cf/x/y'), undefined)
+})
+
+test('gateway validation details survive message/stack-only trackers', async () => {
+  let e = Object.assign(new Error('7003: User Input Error'), {
+    name: 'AiGatewayError',
+    errors: [{ code: 7003, message: 'Model execution failed: invalid input' }],
+  })
+  let failed = await assertRejects(() => binding(e).model(ask([])))
+  assertEquals(failed, e)
+  assertEquals(
+    e.message.includes('Model execution failed: invalid input'),
+    true,
+  )
+  assertEquals(e.stack?.includes('Model execution failed: invalid input'), true)
+  assertEquals(e.errors[0].code, 7003)
 })

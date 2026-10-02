@@ -48,9 +48,25 @@ export type Binding = {
   run(
     model: string,
     input: unknown,
-    options?: { extraHeaders?: Record<string, string> },
+    options?: {
+      extraHeaders?: Record<string, string>
+      gateway?: { id: string }
+    },
   ): Promise<unknown>
 }
+
+/** Partner ids need an explicit gateway; native @cf/ ids stay direct.
+ * https://developers.cloudflare.com/ai-gateway/usage/worker-binding-methods/
+ */
+export let routing = (
+  model: string,
+  options?: Parameters<Binding['run']>[2],
+  gateway = 'default',
+): Parameters<Binding['run']>[2] =>
+  model.startsWith('@') ? options : {
+    ...options,
+    gateway: options?.gateway ?? { id: gateway },
+  }
 
 // A call as a chat model is sent it: OpenAI's shape, which the catalog's
 // chat models validate (GLM refuses a flat `{name, arguments}`).
@@ -272,6 +288,21 @@ let input = (req: Request) =>
     ...req.effort ? { reasoning_effort: req.effort } : {},
   }
 
+// Gateway errors keep the useful validation reason outside Error.message.
+// Retain it on the same error, so host trackers storing message/stack see it.
+let detailed = (e: unknown): unknown => {
+  let errors = at(e, 'errors')
+  if (!(e instanceof Error) || !Array.isArray(errors) || !errors.length) {
+    return e
+  }
+  let detail = JSON.stringify(errors)
+  if (e.message.includes(detail)) return e
+  let stack = e.stack
+  e.message += `: ${detail}`
+  if (stack) e.stack = stack.replace(/^[^\n]*/, `${e.name}: ${e.message}`)
+  return e
+}
+
 /**
  * What the binding threw, said the way a model's failure is said here: a rate
  * limit is a {@link ModelError} coded `busy`, credits the account has spent
@@ -286,7 +317,7 @@ export let failure = (e: unknown): unknown =>
     ? new ModelError('busy', message(e))
     : spent(e)
     ? new ModelError('limit', message(e))
-    : e
+    : detailed(e)
 
 /**
  * A model over the binding, failing as {@link failure} says. Music output
@@ -294,7 +325,7 @@ export let failure = (e: unknown): unknown =>
  */
 export let workersAi = (
   ai: Binding,
-  options: { media?: MediaStore; fetch?: typeof fetch } = {},
+  options: { media?: MediaStore; fetch?: typeof fetch; gateway?: string } = {},
 ): Model =>
   Object.assign(async (req: Request) => {
     req.signal?.throwIfAborted()
@@ -306,9 +337,13 @@ export let workersAi = (
       await ai.run(
         req.model,
         sent,
-        req.conversation
-          ? { extraHeaders: { 'x-session-affinity': req.conversation } }
-          : undefined,
+        routing(
+          req.model,
+          req.conversation
+            ? { extraHeaders: { 'x-session-affinity': req.conversation } }
+            : undefined,
+          options.gateway,
+        ),
       ).catch((e) => {
         throw failure(e)
       }),

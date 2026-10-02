@@ -27,9 +27,11 @@ let ask = (model: string) => ({
 for (let name of ['elevenlabs/music-v2', 'minimax/music-2.6']) {
   test(`${name} preserves music direction and stores audio at its tariff`, async () => {
     let input: unknown, sent: string | undefined, downloads = 0
+    let options: unknown
     let blobs = memoryBlobs()
     let model = workersAi({
-      run: (name, body) => {
+      run: (name, body, opts) => {
+        options = opts
         input = body
         sent = name
         return Promise.resolve({
@@ -47,7 +49,11 @@ for (let name of ['elevenlabs/music-v2', 'minimax/music-2.6']) {
         return Promise.resolve(new Response(mp3()))
       },
     })
-    let reply = await model(ask(name))
+    let reply = await model({ ...ask(name), conversation: 'pilot' })
+    assertEquals(options, {
+      gateway: { id: 'default' },
+      extraHeaders: { 'x-session-affinity': 'pilot' },
+    })
     assertEquals(sent, name)
     assertEquals(
       input,

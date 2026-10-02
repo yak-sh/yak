@@ -17,7 +17,7 @@ import type { Env } from './env.ts'
 import { accounted, BUDGET, monthOf } from './meter.ts'
 import { identityEid } from '@yaks/graph'
 import { type Model, ModelError, weigh } from '@yaks/model'
-import { workersAi } from '@yaks/workers-ai'
+import { type Binding, workersAi } from '@yaks/workers-ai'
 import { artifactStore, memoryBlobs } from '@yaks/blob'
 import { assertRejects } from '@std/assert'
 
@@ -38,7 +38,7 @@ let SEED = 'bytedance-seed/seed-audio-1-0'
 type Asked = {
   model: string
   input: Record<string, unknown>
-  options?: { extraHeaders?: Record<string, string> }
+  options?: Parameters<Binding['run']>[2]
 }
 
 // A platform with one space, Ada's, holding one app, and Workers AI answering
@@ -630,4 +630,16 @@ test('accounting preserves provider continuation metadata and passes requests wh
     onText: (delta) => text += delta.text,
   })
   assertEquals(text, 'hello')
+})
+
+test('raw partner calls carry configured gateway and affinity through the meter', async () => {
+  let p = await vale(() => ({
+    response: 'ok',
+    usage: { prompt_tokens: 10, completion_tokens: 1 },
+  }), { env: { AI_GATEWAY: 'music' } })
+  await p.run({ model: 'typesafe/jev', input: {}, session_id: 'pilot' })
+  assertEquals(p.asked.at(-1)?.options, {
+    gateway: { id: 'music' },
+    extraHeaders: { 'x-session-affinity': 'pilot' },
+  })
 })
