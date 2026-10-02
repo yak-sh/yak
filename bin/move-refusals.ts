@@ -878,6 +878,13 @@ let main = async () => {
             fail('Unexpected appended journal ownership')
           }
           let physicalAfter = physical(ids)
+          let postRows = new Map(
+            (await g.get(ids)).map((row) => [row.entity.eid, row]),
+          )
+          let indexed = await g.read(
+            parse(`.entity.eid=${ids.join(',')}&.refusal&!error`),
+          )
+          if (indexed.length != ids.length) fail('Indexed batch lookup failed')
           for (let patch of patches) {
             let pre = physicalBefore.get(patch.entity.eid) ??
               fail('Missing physical preimage')
@@ -948,7 +955,7 @@ let main = async () => {
               fail('Unexpected physical refusal row')
             }
             physicalChecked++
-            let row = (await g.get([patch.entity.eid]))[0]
+            let row = postRows.get(patch.entity.eid)
             let original = old.get(patch.entity.eid)!
             if (!row || !same(preserved(original), preserved(row))) {
               fail(`Non-refusal data changed: eid=${patch.entity.eid}`)
@@ -966,13 +973,6 @@ let main = async () => {
               )
             ) {
               fail(`Refusal patch missing: eid=${patch.entity.eid}`)
-            }
-            // These use the installed component predicates/indexes, not snapshots.
-            let found = await g.read(
-              parse(`.entity.eid=${row.entity.eid}&.refusal&!error`),
-            )
-            if (found.length != 1) {
-              fail(`Indexed lookup failed: eid=${row.entity.eid}`)
             }
             checked++
           }
