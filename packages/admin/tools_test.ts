@@ -447,3 +447,36 @@ test('admin tool forwards words to the fetched schema as the selected account', 
     Deno.removeSync(at.dir, { recursive: true })
   }
 })
+
+test('admin tool refuses a name neither the connector nor an app declares', async () => {
+  let at = box()
+  kept(at, 'cook@bot.yak.sh', 'cook.session')
+  try {
+    await answering((_url, init) => {
+      let request = JSON.parse(String(init?.body))
+      let result = request.method == 'tools/list' ? { tools: [] } : {
+        content: [{ type: 'text', text: 'no commands' }],
+        structuredContent: {
+          result: [{
+            entity: { eid: '$commands' },
+            output: { value: { commands: [] } },
+          }],
+        },
+      }
+      return Response.json({ jsonrpc: '2.0', id: request.id, result })
+    }, async () => {
+      await assertRejects(
+        () =>
+          ask('admin_tool', {
+            name: 'space_list',
+            args: [],
+            as: 'cook',
+          }, { at }),
+        CallError,
+        'No tool or app command named space_list',
+      )
+    })
+  } finally {
+    Deno.removeSync(at.dir, { recursive: true })
+  }
+})

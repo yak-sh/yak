@@ -48,7 +48,7 @@ import {
   unsealed,
 } from '@yaks/secrets'
 import { CallError, Interrupted } from '@yaks/tools'
-import { toolCall } from '@yaks/cli'
+import { toolCall, Usage } from '@yaks/cli'
 import { ADMIN, BOT, isTestAddress } from '../../workers/yak/lib/bots.ts'
 import {
   type Account,
@@ -568,7 +568,10 @@ export let runs = (
             stdin: () => new Response(Deno.stdin.readable).text(),
           },
         },
-      )
+      ).catch((error) => {
+        if (!(error instanceof Usage)) throw error
+        throw new CallError('arguments', error.message)
+      })
       return [said(call, saidBy(answer))]
     }),
 
