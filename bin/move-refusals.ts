@@ -223,7 +223,7 @@ let main = async () => {
         sql.query(select({
           from: table(name),
           where: op('<=', col('id'), val(last)),
-          order: [{ t: 'desc', x: col('id') }],
+          order: [{ t: 'desc', e: col('id') }],
           limit: val(32),
         }))
       let journalLimits = Object.fromEntries(
