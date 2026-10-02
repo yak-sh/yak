@@ -47,6 +47,7 @@ import {
   matcher,
   type Query,
   rows as answer,
+  statusOf,
 } from '@yaks/match'
 import type { Vocab } from '@yaks/vocab'
 import { bindings } from './rules.ts'
@@ -375,6 +376,10 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   // them. Compute against the whole index before cutting requested components.
   let computed = (b: Bundle): Bundle => {
     let out = b
+    for (let [name, value] of comps(b)) {
+      if (!value || !vocab.comp(name)?.ladder) continue
+      out = { ...out, [name]: { ...value, status: statusOf(vocab, name, b) } }
+    }
     for (let [path, read] of Object.entries(base.computed ?? {})) {
       let [name, prop] = path.split('.')
       if (!b[name]) continue

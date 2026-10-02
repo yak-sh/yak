@@ -137,7 +137,7 @@ test('a transient, an empty message and an expected error file nothing', async (
   let g = await host({ provider: undefined })
   await fail(g, 'fetch timed out')
   await fail(g, '  ')
-  await g.apply([{ entity: { eid: 'e1' }, error: { code: 'nope' } }], {
+  await g.apply([{ entity: { eid: 'e1' }, refusal: { code: 'nope' } }], {
     trusted: true,
   })
   assertEquals((await bugs(g)).length, 0)

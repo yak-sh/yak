@@ -1,0 +1,344 @@
+{
+  "title": "tracker",
+  "$defs": {
+    "error": {
+      "component": true,
+      "type": "object",
+      "description": "One occurrence of a mistake, minted by the reporter so resends land once.",
+      "properties": {
+        "at": {
+          "type": "string",
+          "stamped": true,
+          "description": "When it was caught.",
+          "format": "date-time"
+        },
+        "level": {
+          "type": "string",
+          "stamped": true,
+          "description": "What it cost the caller.",
+          "enum": [
+            "fatal",
+            "error"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "stamped": true,
+          "description": "The failure sentence when nothing was thrown."
+        },
+        "fault": {
+          "type": "string",
+          "stamped": true,
+          "description": "An explicit group key, otherwise computed downstream."
+        },
+        "bug": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "The group written by the grouper."
+        },
+        "commit": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "The commit sha of the running code."
+        },
+        "version": {
+          "type": "number",
+          "stamped": true,
+          "description": "The app version that produced the error."
+        },
+        "environment": {
+          "type": "string",
+          "stamped": true,
+          "description": "Where the error happened.",
+          "enum": [
+            "production",
+            "staging"
+          ]
+        },
+        "tags": {
+          "type": "object",
+          "stamped": true,
+          "description": "Additional catch context; never request headers, cookies or bodies."
+        }
+      },
+      "embed": false
+    },
+    "during": {
+      "component": true,
+      "type": "object",
+      "description": "What an error happened among, by global eid.",
+      "properties": {
+        "entity": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "The call, effect, entry or process being run."
+        },
+        "app": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "The app."
+        },
+        "space": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "The space."
+        },
+        "process": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "The process when the entity does not already name it."
+        },
+        "request": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "The HTTP request."
+        },
+        "kind": {
+          "type": "string",
+          "stamped": true,
+          "description": "The served entity\u2019s kind, read where it happened."
+        }
+      }
+    },
+    "breadcrumbs": {
+      "component": true,
+      "type": "object",
+      "description": "The last twenty page navigations, API calls and console errors.",
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 20,
+          "stamped": true,
+          "items": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "exception": {
+      "component": true,
+      "type": "object",
+      "description": "The tracker\u2019s thrown-value detail; legacy stack belongs to tools until T-59080.",
+      "properties": {
+        "frames": {
+          "type": "array",
+          "stamped": true,
+          "items": {
+            "type": "object",
+            "properties": {
+              "file": {
+                "type": "string"
+              },
+              "line": {
+                "type": "number"
+              },
+              "column": {
+                "type": "number"
+              },
+              "function": {
+                "type": "string"
+              },
+              "app": {
+                "type": "boolean"
+              },
+              "module": {
+                "type": "string"
+              },
+              "symbol": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "mechanism": {
+          "type": "string",
+          "stamped": true,
+          "description": "The hook that caught the throw.",
+          "enum": [
+            "catch",
+            "wrapper",
+            "onerror",
+            "onunhandledrejection",
+            "console"
+          ]
+        }
+      },
+      "extends": true
+    },
+    "regressed": {
+      "component": true,
+      "type": "object",
+      "description": "A resolved bug returned in code that had not produced it before resolution.",
+      "properties": {
+        "at": {
+          "type": "string",
+          "stamped": true,
+          "description": "When the regression was grouped.",
+          "format": "date-time"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "Who hit the regression."
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "The session or client."
+        },
+        "error": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "The occurrence that brought the bug back."
+        }
+      }
+    },
+    "error_group": {
+      "effect": true,
+      "description": "Group each ungrouped occurrence, atomically counting and linking it.",
+      "created": [
+        "error"
+      ],
+      "active": ".error !error.bug",
+      "sweep": ".error !error.bug"
+    },
+    "bug_notify": {
+      "effect": true,
+      "description": "Notify new or regressed bugs, excluding archived or already notified ones.",
+      "created": [
+        "bug",
+        "regressed",
+        "fired",
+        "delivered"
+      ],
+      "active": ".bug !archived !resolved !notified|.mail .delivered",
+      "sweep": ".bug !archived !resolved !notified"
+    },
+    "error_trim": {
+      "effect": true,
+      "description": "Keep the newest hundred occurrences and the first of each commit or version.",
+      "changed": [
+        "error.bug"
+      ],
+      "active": ".error .error.bug"
+    },
+    "bug_list": {
+      "tool": true,
+      "noun": "bug",
+      "verb": "list",
+      "title": "List bugs",
+      "description": "List bugs, open by default. Returns entity bundles.",
+      "input": {
+        "query": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "number"
+        }
+      },
+      "options": {
+        "positional": [
+          "query"
+        ]
+      },
+      "readOnly": true
+    },
+    "bug_show": {
+      "tool": true,
+      "noun": "bug",
+      "verb": "show",
+      "title": "Show bugs",
+      "description": "Read a bug and its retained occurrences. Returns entity bundles.",
+      "input": {
+        "bug": {
+          "type": "string",
+          "ref": "bug"
+        }
+      },
+      "options": {
+        "positional": [
+          "bug"
+        ]
+      },
+      "readOnly": true,
+      "required": [
+        "bug"
+      ]
+    },
+    "bug_resolve": {
+      "tool": true,
+      "noun": "bug",
+      "verb": "resolve",
+      "title": "Resolve bugs",
+      "description": "Mark that the problem stopped happening. Returns entity bundles.",
+      "input": {
+        "bug": {
+          "type": "string",
+          "ref": "bug"
+        }
+      },
+      "options": {
+        "positional": [
+          "bug"
+        ]
+      },
+      "idempotent": true,
+      "required": [
+        "bug"
+      ]
+    },
+    "bug_archive": {
+      "tool": true,
+      "noun": "bug",
+      "verb": "archive",
+      "title": "Archive bugs",
+      "description": "Hide a bug without discarding occurrences. Returns entity bundles.",
+      "input": {
+        "bug": {
+          "type": "string",
+          "ref": "bug"
+        }
+      },
+      "options": {
+        "positional": [
+          "bug"
+        ]
+      },
+      "idempotent": true,
+      "required": [
+        "bug"
+      ]
+    }
+  }
+}

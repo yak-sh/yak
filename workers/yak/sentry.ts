@@ -33,8 +33,8 @@ import {
   type ErrorEvent,
   withScope,
 } from '@sentry/core'
-import { type Bundle, type Comp, status } from '@yaks/graph'
-import { CallError } from '@yaks/tools'
+import { type Bundle, type Comp } from '@yaks/graph'
+import { refused as refusal } from '@yaks/tracker/report'
 import { isTestAddress } from './lib/bots.ts'
 import { Pending } from './writes.ts'
 import type { Ctx } from './tools.ts'
@@ -75,11 +75,7 @@ export let options = () => ({
  * a door that answered a 4xx and said so in its `status` (meta.ts). A write
  * the store's log kept (writes.ts `Pending`) is neither: its failure was
  * reported where it happened. */
-export let refused = (e: unknown) => {
-  let said = (e as { status?: unknown } | null)?.status
-  return e instanceof CallError || e instanceof Pending || status(e) < 500 ||
-    (typeof said == 'number' && said >= 400 && said < 500)
-}
+export let refused = (e: unknown) => e instanceof Pending || refusal(e)
 
 /** A failure a catch answers on purpose — a fallback, a sentence, an error
  * response — sent to Sentry unless it was a refusal. What the caller is

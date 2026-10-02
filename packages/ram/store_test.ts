@@ -374,3 +374,24 @@ test('a replica keeps the computed values its server sent', () => {
   own.apply(sent)
   assertEquals(comp((own.get(['l1']) as Bundle[])[0], 'lamp'), { watts: 60 })
 })
+
+test('status ladders are materialized on get and read, never stored', () => {
+  let vocab = loadVocab([{
+    $defs: {
+      thing: {
+        component: true,
+        status: { resolved: 'resolved', default: 'open' },
+        properties: {},
+      },
+      resolved: { component: true, properties: {} },
+    },
+  }])
+  let s = ram(vocab)
+  s.tx((tx) => tx.patch([{ entity: { eid: 'one' }, thing: {} }]))
+  assertEquals(s.get(['one'])[0].thing, { status: 'open' })
+  assertEquals(s.read('.thing')[0].thing, { status: 'open' })
+  s.tx((tx) => tx.patch([{ entity: { eid: 'one' }, resolved: {} }]))
+  assertEquals(s.read('.thing.status=resolved')[0].thing, {
+    status: 'resolved',
+  })
+})

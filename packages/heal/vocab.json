@@ -5,29 +5,6 @@
   },
   "title": "heal",
   "$defs": {
-    "bug": {
-      "component": true,
-      "type": "object",
-      "description": "on a task filed for an unexpected failure: which fault it is, and how often it has been caught. One open task per fault, however often it recurs",
-      "properties": {
-        "fault": {
-          "type": "string",
-          "stamped": true,
-          "description": "what makes two failures the same one: the broken entity's kind, the message with its ids, paths and numbers taken out, and the top frame of the stack"
-        },
-        "hits": {
-          "type": "number",
-          "stamped": true,
-          "description": "how many times the fault was caught while this task was open"
-        },
-        "last": {
-          "type": "string",
-          "format": "date-time",
-          "stamped": true,
-          "description": "when it was last caught"
-        }
-      }
-    },
     "fixer": {
       "component": true,
       "type": "object",
@@ -38,7 +15,7 @@
           "ref": "bug",
           "death": "keep",
           "stamped": true,
-          "description": "the task it was started for — kept when that task is deleted, so the cooldown still counts the run"
+          "description": "the task it was started for \u2014 kept when that task is deleted, so the cooldown still counts the run"
         }
       }
     },
@@ -50,18 +27,24 @@
     },
     "exception_file": {
       "effect": true,
-      "created": ["exception"],
+      "created": [
+        "exception"
+      ],
       "description": "file an unexpected failure as a task, one per fault"
     },
     "bug_fix": {
       "effect": true,
-      "created": ["bug"],
+      "created": [
+        "bug"
+      ],
       "sweep": ".bug !completed !cancelled !claim",
       "description": "start a fixer on a new bug, behind the gates"
     },
     "fixer_exit": {
       "effect": true,
-      "created": ["exit"],
+      "created": [
+        "exit"
+      ],
       "description": "when a fixer exits, try the bugs the gates held back"
     }
   }

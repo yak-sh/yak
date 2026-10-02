@@ -60,7 +60,7 @@
     "output": {
       "component": true,
       "type": "object",
-      "description": "What produced the text beside it: the request, for a model’s own output, or the call whose failure is being reported. Only output carries it — text a person or a system wrote has none.",
+      "description": "What produced the text beside it: the request, for a model\u2019s own output, or the call whose failure is being reported. Only output carries it \u2014 text a person or a system wrote has none.",
       "properties": {
         "source": {
           "type": "string",
@@ -70,7 +70,7 @@
         },
         "id": {
           "type": "string",
-          "description": "the provider's id for this piece of output, as `call.id` is its id for the call — what a later revision of the same item is matched on"
+          "description": "the provider's id for this piece of output, as `call.id` is its id for the call \u2014 what a later revision of the same item is matched on"
         },
         "value": {
           "type": "object",
@@ -124,6 +124,16 @@
           "type": "number",
           "stamped": true,
           "description": "the build that threw it"
+        },
+        "type": {
+          "type": "string",
+          "stamped": true,
+          "description": "The thrown value\u2019s class."
+        },
+        "value": {
+          "type": "string",
+          "stamped": true,
+          "description": "The thrown value\u2019s message."
         }
       }
     },

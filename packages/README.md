@@ -39,6 +39,9 @@ grouped approximately by function, **not** by dependency order.
 
 ## Package index
 
+- **[@yaks/tracker](./tracker)** — Error capture, bug grouping, regression,
+  notification and retention, shared by box and hosted tracker stores.
+
 - **[@yaks/trace](./trace)** — Subscriber-only, bounded, value-free runtime
   activity and causal spans, keyed by the observed graph. Unsubscribed producers
   allocate nothing and read no clock.

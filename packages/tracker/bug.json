@@ -1,0 +1,69 @@
+{
+  "title": "tracker-bug",
+  "$defs": {
+    "bug": {
+      "component": true,
+      "type": "object",
+      "description": "A group of tracked errors with the same fault, scoped to an app.",
+      "properties": {
+        "app": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "The app, absent for platform and box bugs."
+        },
+        "fault": {
+          "type": "string",
+          "stamped": true,
+          "description": "The stable grouping key."
+        },
+        "title": {
+          "type": "string",
+          "stamped": true,
+          "description": "The first error\u2019s type and value, or message."
+        },
+        "culprit": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "The top in-app code symbol."
+        },
+        "spot": {
+          "type": "string",
+          "stamped": true,
+          "description": "The unresolved file, line and function."
+        },
+        "first": {
+          "type": "string",
+          "stamped": true,
+          "description": "The first occurrence.",
+          "format": "date-time"
+        },
+        "last": {
+          "type": "string",
+          "stamped": true,
+          "description": "The latest occurrence.",
+          "format": "date-time"
+        },
+        "hits": {
+          "type": "number",
+          "stamped": true,
+          "description": "Occurrences grouped, including those retained only in the count."
+        },
+        "people": {
+          "type": "number",
+          "description": "Distinct actors among retained occurrences.",
+          "computed": true
+        }
+      },
+      "kind": true,
+      "status": {
+        "archived": "archived",
+        "resolved": "resolved",
+        "default": "open"
+      }
+    }
+  }
+}

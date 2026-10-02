@@ -1,0 +1,21 @@
+{
+  "name": "@yaks/tracker",
+  "version": "0.2.10",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./report": "./report.ts",
+    "./page": "./page.js",
+    "./effects": "./effects.ts",
+    "./tools": "./tools.ts",
+    "./service": "./service.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Groups tracked errors into bugs, reports without interrupting callers, and retains and notifies their occurrences.",
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "./browser.json"
+    ]
+  }
+}

@@ -191,7 +191,8 @@
     "./packages/rtc",
     "./packages/testing",
     "./packages/fp",
-    "./packages/logic"
+    "./packages/logic",
+    "./packages/tracker"
   ],
   "exclude": [
     "packages/workerd/conform.ts",
