@@ -10,7 +10,7 @@
 // opens it, and so does a tap on the tracker.
 import { beastId, beastOf, BEASTS } from './beasts.ts'
 import type { View } from './deals.ts'
-import { type Glyph, glyph } from './glyphs.ts'
+import { type Glyph, glyph, glyphText } from './glyphs.ts'
 import { dens } from './homes.ts'
 import { ITEMS } from './items.ts'
 import { levelOf, type Spot } from './levels.ts'
@@ -353,9 +353,9 @@ export let journal = (panel: Page, acts: Acts) => {
 
   let summary = (t: Task) => {
     let step = next(t)
-    return `<button class=Split_Row type=button data-select="${esc(t.id)}"><b>${
+    return `<button class="Split_Row Journal_Row" type=button data-select="${esc(t.id)}"><span class=Journal_Label><b>${
       esc(t.title)
-    }</b>${t.pinned ? glyph('pin') : ''}<small>${
+    }</b>${t.pinned ? glyphText('pin') : ''}</span><small>${
       t.state == 'done' ? 'Done' : step ? esc(told(step, here)) : esc(t.from)
     }${
       step?.need ? ` · ${step.have ?? 0} / ${step.need}` : ''
