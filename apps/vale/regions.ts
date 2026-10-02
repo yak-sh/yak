@@ -459,6 +459,29 @@ export let boundariesIn = (x0: number, z0: number, x1: number, z1: number) => {
   }
 }
 
+// Compare squared distances, taking roots only for the two winning sites.
+let blending =
+  (sites: (gx: number, gz: number) => Around) =>
+  (x: number, z: number): Blend => {
+    let wx = x + (fbm(x / SWING, z / SWING, 71, 3) - 0.5) * WARP
+    let wz = z + (fbm(x / SWING, z / SWING, 79, 3) - 0.5) * WARP
+    let a = '', b = '', d1 = Infinity, d2 = Infinity
+    let { xs, zs, levels } = sites(cellOf(wx), cellOf(wz))
+    for (let j = 0; j < xs.length; j++) {
+      let dx = xs[j] - wx, dz = zs[j] - wz
+      let d = dx * dx + dz * dz, level = levels[j]
+      if (d < d1) {
+        if (level != a) d2 = d1, b = a
+        d1 = d, a = level
+      } else if (d < d2 && level != a) d2 = d, b = level
+    }
+    return {
+      a,
+      b,
+      t: 0.5 + 0.5 * smooth(0, EDGE, Math.sqrt(d2) - Math.sqrt(d1)),
+    }
+  }
+
 /** Which region (x, z) lies in, and how near its border.
  *
  * ```ts
@@ -474,21 +497,50 @@ export let boundariesIn = (x0: number, z0: number, x1: number, z1: number) => {
  * assert(levelOf(blend(5000, 64).a))
  * ```
  */
-export let blend = (x: number, z: number): Blend => {
-  let wx = x + (fbm(x / SWING, z / SWING, 71, 3) - 0.5) * WARP
-  let wz = z + (fbm(x / SWING, z / SWING, 79, 3) - 0.5) * WARP
-  let a = '', b = '', d1 = Infinity, d2 = Infinity
-  let { xs, zs, levels } = around(cellOf(wx), cellOf(wz))
-  for (let j = 0; j < xs.length; j++) {
-    let d = norm(xs[j] - wx, zs[j] - wz), level = levels[j]
-    if (d < d1) {
-      if (level != a) d2 = d1, b = a
-      d1 = d, a = level
-    } else if (d < d2 && level != a) d2 = d, b = level
+export let blend = blending(around)
+
+/** The same exact region blend throughout a box, searching only sites that
+ * can be among its two nearest regions, even after the noise warps it. */
+export let blendsIn = (x0: number, z0: number, x1: number, z1: number) => {
+  let margin = WARP / 2
+  let west = x0 - margin, north = z0 - margin
+  let east = x1 + margin, south = z1 + margin
+  let gx0 = cellOf(west), gz0 = cellOf(north)
+  let gx1 = cellOf(east), gz1 = cellOf(south)
+  // Sites common to every possible neighbourhood bound the two nearest
+  // regions from above everywhere in the warped box. Keep every site whose
+  // distance to the box could beat that bound, in the original tie order.
+  let far = new Map<string, number>()
+  for (let gz = gz1 - 1; gz <= gz0 + 1; gz++) {
+    for (let gx = gx1 - 1; gx <= gx0 + 1; gx++) {
+      for (let site of sitesIn(gx, gz)) {
+        let dx = Math.max(Math.abs(site.x - west), Math.abs(site.x - east))
+        let dz = Math.max(Math.abs(site.z - north), Math.abs(site.z - south))
+        let d = dx * dx + dz * dz
+        far.set(site.level, Math.min(far.get(site.level) ?? Infinity, d))
+      }
+    }
   }
-  // A site further out than the cells looked at is two cells off at least:
-  // look at every one when the two nearest found are further than that.
-  return { a, b, t: 0.5 + 0.5 * smooth(0, EDGE, d2 - d1) }
+  let bound = [...far.values()].sort((a, b) => a - b)[1] ?? Infinity
+  let kept = new Map<number, Around>()
+  for (let gz = gz0; gz <= gz1; gz++) {
+    for (let gx = gx0; gx <= gx1; gx++) {
+      let all = around(gx, gz), indices: number[] = []
+      for (let j = 0; j < all.xs.length; j++) {
+        let dx = Math.max(west - all.xs[j], 0, all.xs[j] - east)
+        let dz = Math.max(north - all.zs[j], 0, all.zs[j] - south)
+        if (dx * dx + dz * dz <= bound) indices.push(j)
+      }
+      kept.set(pairKey(gx, gz), {
+        xs: Float64Array.from(indices, (j) => all.xs[j]),
+        zs: Float64Array.from(indices, (j) => all.zs[j]),
+        levels: indices.map((j) => all.levels[j]),
+      })
+    }
+  }
+  let read = blending((gx, gz) => kept.get(pairKey(gx, gz))!)
+  return (x: number, z: number): Blend =>
+    x >= x0 && x <= x1 && z >= z0 && z <= z1 ? read(x, z) : blend(x, z)
 }
 
 /** The levels whose cells lie within `r` metres of (x, z), nearest first.

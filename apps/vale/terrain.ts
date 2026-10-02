@@ -43,6 +43,7 @@ import { clamp, fbm, hash, lerp, rand, smooth } from './rand.ts'
 import {
   type Blend,
   blend,
+  blendsIn,
   borderOf,
   boundariesIn,
   boundaryAt,
@@ -128,7 +129,13 @@ export type Prop = {
 
 /** Something a walker cannot pass: a circle at (x, z) of radius r, in metres,
  * up to height `top`. */
-export type Wall = { x: number; z: number; r: number; top: number; prop?: Prop }
+export type Wall = {
+  x: number
+  z: number
+  r: number
+  top: number
+  prop?: Prop
+}
 
 /** A chunk's ground as grown at one voxel size. Its layers are `n` columns
  * on a side, the chunk's own and one more all round, from the column
@@ -920,6 +927,15 @@ export let decor = (p: Patch): Prop[] => {
   return out
 }
 
+// Only a paved column needs the border's kind, rather than every column.
+let roadCover = (b: Blend, roads: Road[], x: number, z: number) => {
+  let border = borderOf(b)
+  return border.kind == 'river' && border.strength > 0.4 &&
+      toRoad(roads, x, z) < ROAD
+    ? Top.stone
+    : Top.path
+}
+
 // Chunk (ci, ck)'s ground, grown alone at the vale's voxel edge V. What tops
 // each column: snow up high, stone where it is steep, sand at the water, a
 // path where a road or a lane runs or a village gathers, and elsewhere
@@ -929,6 +945,7 @@ let growing = (v: Vale) => (ci: number, ck: number): Patch => {
   let V = v.voxel, C = Math.round(CHUNK / V), n = C + 2
   let x0 = ci * CHUNK, z0 = ck * CHUNK
   let a = area(v, x0, z0, x0 + CHUNK, z0 + CHUNK)
+  let blend = blendsIn(x0, z0, x0 + CHUNK, z0 + CHUNK)
   let mid = (j: number) => (j + 0.5) * V
   let i0 = ci * C - 1, k0 = ck * C - 1
   let h = new Int16Array(n * n)
@@ -968,7 +985,6 @@ let growing = (v: Vale) => (ci: number, ck: number): Patch => {
         dist(x, z, v.at) <
           4.75 + rand(gi, gk, 5 + levelOf(v.level)!.seed * 101) * 0.75
       )
-      let border = borderOf(b)
       top[j] = c * V >= 19
         ? Top.snow
         : slope >= 3
@@ -976,10 +992,7 @@ let growing = (v: Vale) => (ci: number, ck: number): Patch => {
         : c * V <= SHORE
         ? most?.shore ?? Top.sand
         : paved || toRoad(a.roads, x, z) < ROAD || toLane(a.lanes, x, z) < 0.85
-        ? border.kind == 'river' && border.strength > 0.4 &&
-            toRoad(a.roads, x, z) < ROAD
-          ? Top.stone
-          : Top.path
+        ? roadCover(b, a.roads, x, z)
         : cover(w, fbm(x / 3, z / 3, 11, 2), x, z)
     }
   }
@@ -1420,7 +1433,9 @@ export let adopt = (v: Vale, p: Patch) => {
   let k = chunkKey(p.ci, p.ck)
   v.patches.delete(k)
   v.patches.set(k, p)
-  if (v.patches.size > PATCHES) v.patches.delete(v.patches.keys().next().value!)
+  if (v.patches.size > PATCHES) {
+    v.patches.delete(v.patches.keys().next().value!)
+  }
 }
 
 /** Chunk (ci, ck)'s ground in a vale: as kept, or grown now and kept. */

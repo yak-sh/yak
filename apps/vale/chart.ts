@@ -4,7 +4,7 @@
 // what stands tall as a darker round, what is built in the colour of a roof,
 // and a faint line where one region meets the next. Pure, so a worker paints
 // the map's (grow.ts), and the page paints ground already grown.
-import { paletteOf } from './ground.ts'
+import { type Palette, paletteOf } from './ground.ts'
 import { levelOf } from './levels.ts'
 import { bulk, KINDS } from './props.ts'
 import { clamp } from './rand.ts'
@@ -26,6 +26,29 @@ let DEPTH = 2.5
 
 let bytes = (hex: number) => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255]
 
+type Colours = {
+  tops: Record<number, number[]>
+  deep: number[]
+  shallow: number[]
+}
+
+// A new theme makes a new palette. Reuse its decoded colours across chunks,
+// while letting the old colours go when that theme is replaced.
+let decoded = new WeakMap<Palette, Colours>()
+let coloursOf = (pal: Palette): Colours => {
+  let got = decoded.get(pal)
+  if (got) return got
+  got = {
+    tops: Object.fromEntries(
+      Object.entries(pal.tops).map(([top, hex]) => [top, bytes(hex)]),
+    ),
+    deep: bytes(pal.water[0]),
+    shallow: bytes(pal.water[1]),
+  }
+  decoded.set(pal, got)
+  return got
+}
+
 let painting = (
   x0: number,
   z0: number,
@@ -43,22 +66,11 @@ let painting = (
   }
   // Decode each region's colours once. No arrays or palette lookups in the
   // column loop, where a region can appear tens of thousands of times.
-  let palettes = new Map<string, {
-    tops: Record<number, number[]>
-    deep: number[]
-    shallow: number[]
-  }>()
+  let palettes = new Map<string, Colours>()
   let colours = (id: string) => {
     let got = palettes.get(id)
     if (got) return got
-    let pal = paletteOf(levelOf(id)!)
-    got = {
-      tops: Object.fromEntries(
-        Object.entries(pal.tops).map(([top, hex]) => [top, bytes(hex)]),
-      ),
-      deep: bytes(pal.water[0]),
-      shallow: bytes(pal.water[1]),
-    }
+    got = coloursOf(paletteOf(levelOf(id)!))
     palettes.set(id, got)
     return got
   }

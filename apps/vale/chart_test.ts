@@ -2,8 +2,9 @@ import { assertEquals, assertNotEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { chart, chartPatch, chartRegions } from './chart.ts'
 import { Top } from './features.ts'
+import { useThemes } from './levels.ts'
 import { adopt, CHUNK, flat, patchOf, vale } from './terrain.ts'
-import { seedThemes } from './themes_fixture.ts'
+import { rows, seedThemes } from './themes_fixture.ts'
 
 seedThemes()
 
@@ -39,6 +40,34 @@ test('the same flat cover and water paint alike at finer and coarser voxel edges
     pixel(chartPatch(ground(1, 8)), 8, 8),
     pixel(chartPatch(ground(1, 0)), 8, 8),
   )
+})
+
+test('updated theme colours repaint already-grown ground and water', () => {
+  let land = ground(1, 8), water = ground(1, 0)
+  let before = [chartPatch(land), chartPatch(water)]
+  let changed = rows.map((row) =>
+    row.theme_design.land == 'mossvale'
+      ? {
+        ...row,
+        theme_design: {
+          ...row.theme_design,
+          look: {
+            ground: { grass: 0x123456 },
+            water: [0x102030, 0x102030, 0x102030],
+          },
+        },
+      }
+      : row
+  )
+  try {
+    useThemes(changed)
+    assertEquals(pixel(chartPatch(land), 8, 8), [0x12, 0x34, 0x56, 255])
+    assertEquals(pixel(chartPatch(water), 8, 8), [0x10, 0x20, 0x30, 255])
+  } finally {
+    seedThemes()
+  }
+  assertEquals(chartPatch(land), before[0])
+  assertEquals(chartPatch(water), before[1])
 })
 
 test('map pixels sample cover at their centres at every grown detail', () => {
