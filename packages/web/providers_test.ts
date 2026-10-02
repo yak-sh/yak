@@ -170,3 +170,11 @@ test('usingOf names the provider and model entities, or refuses', () => {
   assertThrows(() => usingOf(t, { provider: 'fake' }))
   assertThrows(() => usingOf(t, { provider: 'codex-cli', model: 'old' }))
 })
+
+test('usingOf accepts the graph references a launch intent may carry', () => {
+  assertEquals(
+    usingOf(tableOf(rows), { provider: 'p1', model: 'm1', effort: 'low' }),
+    { provider: 'p1', model: 'm1', effort: 'low' },
+  )
+  assertThrows(() => usingOf(tableOf(rows), { provider: 'p2', model: 'm3' }))
+})

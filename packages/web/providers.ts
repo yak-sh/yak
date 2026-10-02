@@ -71,16 +71,20 @@ export let tableOf = (rows: Row[]): Provider[] => {
   return [...out.values()]
 }
 
-/** A pick as a session's `using`: the provider and model entities it names.
- * Refused when the table has no such provider, or that provider does not
- * serve the model, so nothing is written that the host would refuse. */
+/** A pick as a session's `using`: provider and model names or graph refs become
+ * the entities they name. Refused when the provider does not serve the model,
+ * so nothing is written that the host would refuse. */
 export let usingOf = (
   ps: Provider[],
   pick: { provider: string; model?: string; effort?: string },
 ): { provider: string; model?: string; effort?: string } => {
-  let p = ps.find((x) => x.name == pick.provider)
+  let p = ps.find((x) => x.name == pick.provider || x.eid == pick.provider)
   if (!p?.eid) throw new Error(`no provider: ${pick.provider}`)
-  let model = pick.model ? p.eids?.[pick.model] : undefined
+  let model = pick.model
+    ? Object.entries(p.eids ?? {}).find(([name, eid]) =>
+      name == pick.model || eid == pick.model
+    )?.[1]
+    : undefined
   if (pick.model && !model) {
     throw new Error(`${pick.provider} does not serve ${pick.model}`)
   }
