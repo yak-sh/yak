@@ -1,6 +1,6 @@
 import { test, until as eventually } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { discover, inUse, processCwds, restore } from '@yaks/git/host'
+import { discover, inUse, processCwds, reclaim, restore } from '@yaks/git/host'
 import { swap } from '@yaks/session/admission'
 import { sessionCwd } from './workspace.ts'
 import {
@@ -161,6 +161,29 @@ test('a sweep keeps an unrecorded local process and a session resumed during dis
       child.kill('SIGTERM')
       await child.status
     }
+    h.close()
+    await f.free()
+  }
+})
+
+test('a sweep accepts a checkout another sweep removed during discovery', async () => {
+  let f = await fixture()
+  let h = await harness()
+  try {
+    let path = await f.cut('raced')
+    let apply = h.g.apply
+    h.g.apply = async (...args) => {
+      let result = await apply(...args)
+      if (
+        args[0].some((b) =>
+          (b.worktree as Record<string, unknown> | undefined)?.path == path
+        )
+      ) await reclaim(path, 'refs/heads/main')
+      return result
+    }
+    assertEquals(await sweep(h.g, f.root), {})
+    assertEquals(await there(path), false)
+  } finally {
     h.close()
     await f.free()
   }

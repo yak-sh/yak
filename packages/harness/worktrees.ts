@@ -76,7 +76,12 @@ let take = async (
   await discover(g, path).catch(() => {})
   // Discovery can take time. A session may have resumed while it ran, so the
   // current graph homes and local process directories are checked afterwards.
-  let real = await Deno.realPath(path)
+  let real = await Deno.realPath(path).catch((error) => {
+    // Another sweep may have taken the same checkout while discovery ran.
+    if (error instanceof Deno.errors.NotFound) return undefined
+    throw error
+  })
+  if (!real) return
   if (inUse(real, await live()) || inUse(real, await processCwds())) return
   return reclaim(path, 'refs/heads/main')
 }
