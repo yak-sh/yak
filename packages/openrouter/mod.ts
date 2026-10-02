@@ -56,8 +56,12 @@ export let responses = (options: Options): Model => {
     model,
     {
       list: () => models ??= listing(options.fetch),
-      info: async (name: string) =>
-        (await (models ??= listing(options.fetch))).find((m) => m.name == name),
+      info: async (name: string) => {
+        await options.key()
+        return (await (models ??= listing(options.fetch))).find((m) =>
+          m.name == name
+        )
+      },
       vocab: openrouterDoc,
       mark: (reply: Reply) => ({ openrouter: { response_id: reply.id } }),
     },
