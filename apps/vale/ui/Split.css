@@ -30,11 +30,11 @@
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   padding: 0.75rem 1rem 1rem;
+  background: var(--paper);
 }
 
 .Split_Detail {
   border-left: 3px solid var(--rim);
-  background: var(--well);
 }
 
 .Split_Content {
