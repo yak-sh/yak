@@ -387,7 +387,7 @@
         },
         "operator": {
           "type": "boolean",
-          "description": "true when a person is driving this transcript rather than an agent"
+          "description": "true for a transcript opened and driven by a person; false for an agent or automated opening, even if a person later replies"
         },
         "ended": {
           "type": "boolean",

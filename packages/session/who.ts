@@ -40,6 +40,25 @@ import {
 } from '@yaks/graph'
 import { SESSION } from './comp.ts'
 
+/** Whether a request came from a person or their command, rather than an
+ * agent or automation. An agent may speak for an identity, so both the author
+ * and the instrument matter. A transcript's own stamp is not its parent. */
+export let humanCaller = async (
+  g: Pick<Graph, 'get'>,
+  actor: Actor | null,
+  self?: Eid,
+): Promise<boolean> => {
+  let ids = [
+    ...new Set(
+      [actor?.by, actor?.via].filter((id): id is Eid => !!id && id != self),
+    ),
+  ]
+  let callers = ids.length
+    ? await g.get(ids, ['session', 'effect', 'builder'])
+    : []
+  return !callers.some((b) => b.session || b.effect || b.builder)
+}
+
 // A uuid, whatever its version.
 let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 

@@ -136,6 +136,10 @@ test('a spawn lands the session, the request and the lease', async () => {
     effort: 'high',
   })
   assertEquals(comp(entry, 'entry')?.session, session.entity.eid)
+  assertEquals(comp(session, 'session')?.operator, false)
+  let source = String(comp(session, 'session')?.source)
+  let [request] = await g.get([source])
+  assertEquals(comp(request, 'call')?.to, toolEid('session_spawn'))
   assertStringIncludes(String(comp(entry, 'content')?.body), 'ship it')
   // And the lease: the board says who is doing it.
   let [held] = await g.read('.claim&*')

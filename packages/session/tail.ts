@@ -39,9 +39,11 @@ import {
   type Graph,
   status,
   TOMBSTONE,
+  who,
 } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import type { Comps, Reader, Said } from './readers.ts'
+import { humanCaller } from './who.ts'
 
 /** A log being read, and the session it is read into. */
 export type Tail = {
@@ -61,8 +63,10 @@ export type Tail = {
   /** whether the log's entity is written yet: its first write says whose log
    * it is, and which file */
   known: boolean
-  /** whether a person has typed into it */
+  /** whether a person drives it; false preserves an automatic opening */
   operator?: boolean
+  /** the operator mark already stored on the session */
+  operatorStored?: boolean
   /** the lines read so far */
   line: number
   /** the byte the next read starts at */
@@ -254,15 +258,29 @@ let after = (path: string, lines: number): number => {
 export let tail = async (
   g: Graph,
   path: string,
-  o: { session?: Eid; id?: string; operator?: boolean } = {},
+  o: { session?: Eid; id?: string } = {},
 ): Promise<Tail> => {
   let log = logOf(path)
   let [row] = await g.get([log])
   let held = row && row[TOMBSTONE] == null ? comp(row, 'log') : undefined
   let line = Number(held?.consumed ?? 0)
+  let [session] = o.session
+    ? await g.get([o.session], [
+      'session',
+      'spawned',
+      'created',
+    ])
+    : []
+  let operatorStored = comp(session, 'session')?.operator as boolean | undefined
+  let automatic = session && (
+    comp(session, 'session')?.source || comp(session, 'spawned')?.parent ||
+    !await humanCaller(g, who(session), session.entity.eid)
+  )
   return {
     path,
     ...o,
+    operator: automatic ? false : operatorStored,
+    operatorStored,
     log,
     own: await owns(g, { ...o, log }),
     known: !!held,
@@ -316,24 +334,27 @@ let parsed = (text: string): Record<string, unknown> | undefined => {
 // What reading to `line` writes beside the line's own entities: how far the
 // log is read, and, the first time, whose log it is and which file; the
 // session learns its first log, and that a person typed into it.
-let marks = (t: Tail, line: number, typed = false): Bundle[] => [
-  {
-    entity: { eid: t.log },
-    log: {
-      consumed: line,
-      ...(t.known ? {} : { session: t.session, source: t.path }),
-    },
-  },
-  ...(t.own && !t.known || typed && !t.operator
-    ? [{
-      entity: { eid: t.session! },
-      session: {
-        ...(t.own && !t.known ? { log: t.log } : {}),
-        ...(typed && !t.operator ? { operator: true } : {}),
+let marks = (t: Tail, line: number, typed = false): Bundle[] => {
+  let operator = typed && t.operator == null ? true : t.operator
+  return [
+    {
+      entity: { eid: t.log },
+      log: {
+        consumed: line,
+        ...(t.known ? {} : { session: t.session, source: t.path }),
       },
-    }]
-    : []),
-]
+    },
+    ...(t.own && !t.known || operator != t.operatorStored
+      ? [{
+        entity: { eid: t.session! },
+        session: {
+          ...(t.own && !t.known ? { log: t.log } : {}),
+          ...(operator != t.operatorStored ? { operator } : {}),
+        },
+      }]
+      : []),
+  ]
+}
 
 // Bundles for entities a list already names folded into those.
 let fold = (list: Bundle[], more: Bundle[]): Bundle[] =>
@@ -425,7 +446,8 @@ export let pull = async (
       })
       marked = line
       t.known = true
-      t.operator ||= person
+      if (person && t.operator == null) t.operator = true
+      t.operatorStored = t.operator
     } catch (e) {
       if (status(e) >= 500) throw e
       ;(o.report ?? console.error)(e)

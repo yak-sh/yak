@@ -9,7 +9,7 @@ import { idKeywords } from '@yaks/id'
 import { ids } from '@yaks/id/rules'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { sessionDoc } from './comp.ts'
-import { sessionFor, speaking } from './who.ts'
+import { humanCaller, sessionFor, speaking } from './who.ts'
 import { sessions } from './plugin.ts'
 
 let spine: VocabDoc = {
@@ -50,6 +50,13 @@ test('a run is reached by its eid, its human id, or its own name', async () => {
 test('a word no run answers to reaches nothing', async () => {
   assertEquals(await found('nothing-here'), undefined)
   assertEquals(await found(''), undefined)
+})
+
+test('caller identity distinguishes another agent from the transcript itself', async () => {
+  let g = store()
+  assertEquals(await humanCaller(g, { by: 'p1', via: 's1' }), false)
+  assertEquals(await humanCaller(g, { by: 'p1', via: 's1' }, 's1'), true)
+  assertEquals(await humanCaller(g, { by: 's2', via: 's1' }, 's1'), false)
 })
 
 test('an id that names no run is refused, never taken for a name', async () => {

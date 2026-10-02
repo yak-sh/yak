@@ -217,7 +217,11 @@ export let runs = (_host: Host, options: Options = {}): Runs => {
         signed([
           {
             entity: { eid: session },
-            [SESSION]: persona ? { persona } : {},
+            [SESSION]: {
+              source: call.entity.eid,
+              operator: false,
+              ...(persona ? { persona } : {}),
+            },
           },
           {
             entity: { eid: uuid() },

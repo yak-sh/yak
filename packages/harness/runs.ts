@@ -20,6 +20,7 @@ import {
   type Graph,
   identityEid,
   Refused,
+  who,
 } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import type { Host } from '@yaks/cli/host'
@@ -130,6 +131,7 @@ export let runs = (host?: Host): Runs => ({
       files: [...files, ...await owing(graph, home, files, persona)],
       ...persona ? { persona } : {},
       by: caller(call),
+      via: who(call)?.via,
       using: {
         provider: identityEid(PROVIDER, [provider]),
         model: identityEid(MODEL, [model]),

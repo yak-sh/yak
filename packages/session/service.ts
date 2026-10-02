@@ -176,7 +176,6 @@ let opened = async (g: Graph, f: Found): Promise<Tail | null> => {
   return tail(g, f.path, {
     ...(s ? { session: s.entity.eid } : {}),
     id: f.id,
-    operator: !!(s?.[SESSION] as { operator?: boolean } | undefined)?.operator,
   })
 }
 

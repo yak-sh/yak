@@ -151,6 +151,7 @@ test('a new bug starts one fixer holding it', async () => {
   assertEquals(more.length, 0)
   assertEquals(comp(fixer, 'fixer')?.bug, bug.entity.eid)
   assert(fixer.session)
+  assertEquals(comp(fixer, 'session')?.operator, false)
   assertEquals(comp(bug, 'claim')?.session, fixer.entity.eid)
   assertEquals(comp(bug, 'filed')?.priority, 1)
   let [ask] = await g.read(`.entry.session=${fixer.entity.eid}&*`)

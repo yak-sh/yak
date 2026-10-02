@@ -167,7 +167,11 @@ export let effects = (host: Host, options: Options = {}): Handlers => {
       // The @yaks/spawn request, and the claim that says who holds the work:
       // the session starts by reading what it holds.
       await g.apply([
-        { entity: { eid: session }, session: {}, fixer: { bug: eid } },
+        {
+          entity: { eid: session },
+          session: { operator: false },
+          fixer: { bug: eid },
+        },
         {
           entity: { eid: uuid() },
           entry: { session },

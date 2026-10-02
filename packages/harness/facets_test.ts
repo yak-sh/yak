@@ -108,9 +108,28 @@ test('session new opens an empty TUI session and requires input otherwise', asyn
     assertEquals(await h.g.read('.session&*'), [])
     let [session] = await start(call({ tui: true }), h.g)
     assert(session.session)
+    assertEquals((session.session as Record<string, unknown>).operator, true)
     let entries = await transcript(h.g, session.entity.eid)
     assert(entries.every((e) => !!e.prompt))
     assert((await selectedUsing(h.g, session.entity.eid))?.model)
+  } finally {
+    await h.close()
+  }
+})
+
+test('session new keeps an agent instrument when its caller speaks for a person', async () => {
+  let h = await harness()
+  try {
+    await h.g.apply([
+      { entity: { eid: 'typist' }, doc: {} },
+      { entity: { eid: 'launcher' }, session: { id: 'launcher' } },
+    ])
+    let [session] = await runs().session_new!({
+      entity: { eid: mint() },
+      call: { args: { tui: true } },
+      created: { by: 'typist', via: 'launcher' },
+    }, h.g)
+    assertEquals((session.session as Record<string, unknown>).operator, false)
   } finally {
     await h.close()
   }

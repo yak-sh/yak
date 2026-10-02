@@ -98,6 +98,38 @@ test('a transcript file becomes the session it names, at full depth', () =>
     assertEquals(c(tool, 'tool')?.name, 'Bash')
   }))
 
+test('human text preserves automatic openings across import and resume', async () => {
+  for (
+    let [session, extra, by, operator] of [
+      [{ operator: false }, {}, ids.ada, false],
+      [{ operator: true, source: ids.p1 }, {}, ids.ada, false],
+      [{ operator: true }, { spawned: { parent: ids.run2 } }, ids.ada, false],
+      [{ operator: true }, {}, ids.run2, false],
+      [{}, {}, ids.run2, false],
+      [{}, {}, ids.ada, true],
+      [{ operator: true }, {}, 'imported', true],
+    ] as const
+  ) {
+    await file(async (g, log, path) => {
+      await g.apply([{
+        entity: { eid: 'imported' },
+        session: { id: 'imported', ...session },
+        ...extra,
+        $actor: { by },
+      }])
+      log(typed('first human message'))
+      await pull(g, await tail(g, path, { session: 'imported' }), claude)
+      let [first] = await g.get(['imported'])
+      assertEquals(c(first, 'session')?.operator, operator)
+      log(typed('another human message'))
+      await pull(g, await tail(g, path, { session: 'imported' }), claude)
+      let [resumed] = await g.get(['imported'])
+      assertEquals(c(resumed, 'session')?.operator, operator)
+      assertEquals(await told(g, 'imported'), ['content', 'content'])
+    })
+  }
+})
+
 test('a tail reads on from where the transcript stands, and never twice', () =>
   file(async (g, log, path) => {
     log(typed('one'))

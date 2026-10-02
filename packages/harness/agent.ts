@@ -42,6 +42,7 @@ import {
   CONTENT,
   type Deps,
   ENTRY,
+  humanCaller,
   live,
   passing,
   providerResolver,
@@ -258,8 +259,9 @@ export let through = (session: Eid, by?: Eid) => ({
 export let begin = async (
   g: Graph,
   prompt: string | undefined,
-  o: Opening & { using: Comp; by?: Eid },
+  o: Opening & { using: Comp; by?: Eid; via?: Eid },
 ): Promise<Eid> => {
+  let operator = await humanCaller(g, { by: o.by, via: o.via })
   let session = crypto.randomUUID() as Eid
   let context = (o.files ?? []).map((f, i) => ({
     ...promptEntry(session, i + 1, f.body, f.source, 'shared', f.revision),
@@ -270,6 +272,7 @@ export let begin = async (
       entity: { eid: session },
       session: {
         id: session.slice(0, 8),
+        operator,
         ...o.persona ? { persona: o.persona } : {},
       },
       ...o.home ? { home: o.home } : {},
