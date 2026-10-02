@@ -702,7 +702,10 @@ test('a second length refusal fails visibly in the provider’s words', async ()
   assertEquals(summarizer.asked.length, 1)
   let entries = await transcript(g, ids.s)
   assertEquals(textOf(entries.at(-1)!), lengthError().message)
-  assertEquals((entries.at(-1)!.error as Comp).code, 'context_length_exceeded')
+  assertEquals(
+    (entries.at(-1)!.refusal as Comp).code,
+    'context_length_exceeded',
+  )
   assertEquals(
     (entries.at(-1)!.response as Comp).body,
     lengthError().response!.body,
@@ -1216,12 +1219,12 @@ test('a summary the provider keeps failing ends the transcript, never loops', as
       compactModel: { model: summarizer, name: 'fake-1' },
     }
     assertEquals(await rest(g, ids.s, deps), 'failed')
-    // Three runner steps, one ask each: outside the pool nothing asks again
-    // sooner, whether the failure may pass or is the provider's no.
-    assertEquals(seen.calls, 3)
+    // Passing failures use the retry bound; a provider refusal is final.
+    let count = error().retry ? 3 : 1
+    assertEquals(seen.calls, count)
     assertEquals(
-      (await kinds(g, ids.s)).slice(-4),
-      ['input', ...Array(3).fill(error().retry ? 'error' : 'refusal')],
+      (await kinds(g, ids.s)).slice(-(count + 1)),
+      ['input', ...Array(count).fill(error().retry ? 'error' : 'refusal')],
     )
     assertEquals((await outcome(g))[1], error().code)
   }

@@ -70,10 +70,11 @@ test('private receipt precedes failed delivery and reopened recovery never gener
     () =>
       model({
         ...req,
-        onMedia: async (receipt) => {
+        onMedia: (receipt) => {
           checkpoints++
           assertEquals(receipt.id, 'provider-original')
           assertEquals(receipt.cost, 0.45)
+          return Promise.resolve()
         },
       }),
     ModelError,
@@ -115,7 +116,7 @@ test('failed private persistence refuses download and storage errors hide creden
   let binding = { run: () => Promise.resolve({ id: 'p', audio: signed }) }
   let bad = workersAi(binding, {
     receipts: {
-      read: async () => undefined,
+      read: () => Promise.resolve(undefined),
       save: () => Promise.reject(new Error('vault offline')),
     },
     media: { store: artifactStore(memoryBlobs()) },

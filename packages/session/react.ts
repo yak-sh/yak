@@ -1157,7 +1157,12 @@ export let react = async (
               entity: ask.entity,
               attempt: { state: 'interrupted' },
             }, [
-              line(failing(g, e as ModelError), (e as ModelError).message),
+              // Compaction recovered this refusal. The interrupted ask now
+              // needs its one compacted retry rather than a final refusal.
+              line(
+                { [ERROR]: { code: (e as ModelError).code } },
+                (e as ModelError).message,
+              ),
               line({
                 checkpoint: {
                   through: through.entity.eid,

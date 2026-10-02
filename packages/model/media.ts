@@ -64,7 +64,7 @@ export let mediaReceipts = (records: {
       : undefined
   },
   save: async (receipt) => {
-    await records.update(receipt.call, async (record) => {
+    await records.update(receipt.call, (record) => {
       if (record.id && record.id != receipt.id) {
         throw new ModelError(
           'media_receipt',
@@ -72,6 +72,7 @@ export let mediaReceipts = (records: {
         )
       }
       Object.assign(record, receipt)
+      return Promise.resolve()
     })
     let saved = await records.read(receipt.call)
     if (JSON.stringify(saved) != JSON.stringify(receipt)) {

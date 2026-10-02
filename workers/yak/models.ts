@@ -1,5 +1,5 @@
 // Providers lent to each app store; model offerings come from successful answers.
-import type { Bundle, Comp, Eid } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
 import { derivedEid, identityEid } from '@yaks/graph'
 import {
   answers,
