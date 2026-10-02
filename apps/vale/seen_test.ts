@@ -1,7 +1,7 @@
 // A tab that returns after the land grows keeps its hero's saved world spot.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { recall, sighting } from './seen.ts'
+import { recall, seenOf, sighting } from './seen.ts'
 import type { Bundle, Net } from './net.ts'
 
 test('a tab carries its last seen hero into the larger land', () => {
@@ -79,4 +79,29 @@ test('later sightings keep a tab’s teleport acknowledgment', () => {
     'move',
     'move',
   ])
+})
+
+test('a hero returning on another device keeps their saved frontier land', () => {
+  let row: Bundle = {
+    entity: { eid: 'frontier-hero' },
+    seen: {
+      level: 'frontier_5_0',
+      x: 1408,
+      z: 128,
+      yaw: 1,
+      at: '2026-10-02T03:58:54.076Z',
+    },
+  }
+  let expected = {
+    level: 'frontier_5_0',
+    x: 1408,
+    z: 128,
+    yaw: 1,
+    at: Date.parse('2026-10-02T03:58:54.076Z'),
+  }
+  assertEquals(seenOf(row), expected)
+  assertEquals(recall(row.entity.eid, seenOf(row)), expected)
+  for (let level of ['atlantis', 'frontier_0_0', 'frontier_100000_0']) {
+    assertEquals(seenOf({ ...row, seen: { ...row.seen, level } }), null)
+  }
 })

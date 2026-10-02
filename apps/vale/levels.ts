@@ -214,13 +214,19 @@ export let levelAt = (gx: number, gz: number): Level => {
   return got
 }
 
+/** A land's cell, even before its terrain themes have loaded. */
+export let cellOf = (id: string): [number, number] | undefined => {
+  let cell = frontierCell(id)
+  return LEVELS[id]?.cell ??
+    (cell && frontierId(...cell) == id && !cells.has(cell.join(','))
+      ? cell
+      : undefined)
+}
+
 /** Resolve a land id without requiring an ever-growing table of regions. */
 export let levelOf = (id: string): Level | undefined => {
-  let cell = frontierCell(id)
-  return LEVELS[id] ??
-    (cell && frontierId(...cell) == id && !cells.has(cell.join(','))
-      ? levelAt(...cell)
-      : undefined)
+  let cell = cellOf(id)
+  return LEVELS[id] ?? (cell ? levelAt(...cell) : undefined)
 }
 
 /** Encounter distance from Mossvale, retaining authored roads' difficulty. */

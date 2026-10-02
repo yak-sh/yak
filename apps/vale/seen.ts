@@ -13,7 +13,7 @@
 // awake), and as the page is hidden. Where a hero is this moment, ten times a
 // second, is `position`, which nobody keeps.
 import { writer } from './chat.ts'
-import { LEVELS, SIZE } from './levels.ts'
+import { cellOf, SIZE } from './levels.ts'
 import type { Bundle, Me, Net } from './net.ts'
 import type { Frame } from './play.ts'
 
@@ -85,7 +85,7 @@ export let seenOf = (b: Bundle | undefined): Seen | null => {
   if (!s || typeof s != 'object') return null
   let { level, x, z, yaw, at, teleport } = s as Record<string, unknown>
   let t = Date.parse(String(at))
-  return typeof level == 'string' && Object.hasOwn(LEVELS, level) &&
+  return typeof level == 'string' && !!cellOf(level) &&
       typeof x == 'number' && typeof z == 'number' && t
     ? {
       level,
@@ -117,7 +117,7 @@ let OLD_KEY = 'mossvale.seen'
 let moved = (b: Bundle): Bundle | undefined => {
   let s = seenOf(b)
   if (!s) return
-  let [i, k] = LEVELS[s.level].cell, step = SIZE - 128
+  let [i, k] = cellOf(s.level)!, step = SIZE - 128
   return rowOf(b.entity.eid, {
     ...s,
     x: s.x + i * step + step / 2,
