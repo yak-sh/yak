@@ -4,7 +4,7 @@ import { assertAlmostEquals, assertEquals, assertRejects } from '@std/assert'
 import { artifactStore, memoryBlobs } from '@yaks/blob'
 import { ModelError } from '@yaks/model'
 import { audioPrice, audioSeconds, music, workersAi } from './mod.ts'
-import { musicInput } from './audio.ts'
+import { musicInput, pricedAudio } from './audio.ts'
 
 let mp3 = () => {
   let frame = new Uint8Array(576)
@@ -46,7 +46,7 @@ for (let name of ['elevenlabs/music-v2', 'minimax/music-2.6']) {
       media: { store: artifactStore(blobs) },
       fetch: (url, init) => {
         assertEquals(String(url), 'https://audio.example/song.mp3')
-        assertEquals(init?.redirect, 'error')
+        assertEquals(init?.redirect, 'manual')
         assertEquals(init?.headers, undefined)
         downloads++
         return Promise.resolve(new Response(mp3()))
@@ -273,4 +273,34 @@ test('native binding fetch preserves the version-3 envelope and raw refusal', as
     model({ ...ask('elevenlabs/music-v2'), conversation: 'pilot' })
   )
   assertEquals(error.message.includes('upstream model rejected body'), true)
+})
+
+test('music refuses every redirect without following its location', async () => {
+  for (let status = 300; status < 400; status++) {
+    let downloads = 0
+    await assertRejects(
+      () =>
+        pricedAudio('elevenlabs/music-v2', {}, {
+          audio: 'https://audio.example/song.mp3',
+        }, {
+          fetch: (url, init) => {
+            assertEquals(String(url), 'https://audio.example/song.mp3')
+            assertEquals(init?.redirect, 'manual')
+            assertEquals(init?.headers, undefined)
+            downloads++
+            return Promise.resolve(
+              new Response(null, {
+                status,
+                headers: {
+                  location: 'https://other.example/song.mp3?token=secret',
+                },
+              }),
+            )
+          },
+        }),
+      ModelError,
+      `Music download refused redirect (${status})`,
+    )
+    assertEquals(downloads, 1)
+  }
 })

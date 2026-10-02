@@ -152,8 +152,14 @@ export let pricedAudio = async (
   }
   let res = await (options.fetch ?? fetch)(url, {
     signal: options.signal,
-    redirect: 'error',
+    redirect: 'manual',
   })
+  if (res.status >= 300 && res.status < 400) {
+    throw new ModelError(
+      'media_response',
+      `Music download refused redirect (${res.status})`,
+    )
+  }
   if (!res.ok || !res.body) {
     throw new ModelError(
       'media_response',
