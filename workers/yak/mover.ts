@@ -109,9 +109,10 @@ export let dispatchRule: Rule = {
   move: dispatchMove,
 }
 
-// Temporary rehearsal-only writes; the mover stamp completes each once.
+// Temporary prompt writes; the mover stamp completes each once.
 export let creaturePrompt: Rule = {
   mark: 'yak/store/vale-creature-prompt/16',
+  live: 'apps',
   find: `.builder&.entity.eid=${creatures[0].entity.eid}&*`,
   move: (row) =>
     row.content?.body == creatures[0].content.body ? [] : [{
@@ -122,6 +123,7 @@ export let creaturePrompt: Rule = {
 
 export let figurePrompt: Rule = {
   mark: 'yak/store/vale-figure-prompt/17',
+  live: 'apps',
   find: `.builder&.entity.eid=${figures[0].entity.eid}&*`,
   move: (row) =>
     row.content?.body == figures[0].content.body ? [] : [{

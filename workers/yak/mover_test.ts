@@ -482,9 +482,6 @@ test(
       ])
       assertEquals(await s.query('.builder&*'), before)
       await s.alarm()
-      assertEquals(await s.query('.builder&*'), before)
-      s.wake({ ...rule, live: 'apps' })
-      await s.alarm()
       let [after] = await s.query(`.entity.eid=${eid}&*`)
       assertEquals(after.content, { body })
       let prior = before.find((row) => row.entity.eid == eid)!

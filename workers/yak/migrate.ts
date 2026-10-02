@@ -247,6 +247,8 @@ export let BOUNDARIES = [
   'yak/store/for/12',
   'yak/store/build_of/13',
   'yak/store/output_of/14',
+  'yak/store/vale-creature-prompt/16',
+  'yak/store/vale-figure-prompt/17',
 ]
 
 /** The schema's own catalogue, narrowed to one type of object. */
