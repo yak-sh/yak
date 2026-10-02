@@ -6,6 +6,8 @@ import { writer } from './chat.ts'
 import { seenOf } from './seen.ts'
 import type { Bundle } from './net.ts'
 import type { Body } from './sim.ts'
+import type { Vitals } from './play.ts'
+import { type Slot, SLOTS } from './arms.ts'
 
 export type Invite = { eid: string; from: string; to: string; group: string }
 export type Member = {
@@ -16,6 +18,9 @@ export type Member = {
   z: number
   online: boolean
   body: Body | null
+  vitals: Vitals | null
+  gear: Partial<Record<Slot, string>> | null
+  status: string
 }
 
 /** The newest choice that the hero's owner made, or no party. */
@@ -62,6 +67,7 @@ export let invitations = (
 
 export let memberOf = (b: Bundle, name: string, now: number): Member => {
   let p = comp(b, 'position'), m = comp(b, 'motion')
+  let v = comp(b, 'vitals'), g = comp(b, 'gear')
   let online = Number.isFinite(num(p.x, NaN)) &&
     Number.isFinite(num(p.z, NaN)) && now - num(p.at) < 15_000
   let seen = seenOf(b)
@@ -75,6 +81,20 @@ export let memberOf = (b: Bundle, name: string, now: number): Member => {
     x,
     z,
     online,
+    vitals: online && Number.isFinite(num(v.hp, NaN)) &&
+        num(v.max) > 0 && num(v.lvl) > 0
+      ? { hp: num(v.hp), max: num(v.max), lvl: num(v.lvl) }
+      : null,
+    gear: online && b.gear
+      ? Object.fromEntries(SLOTS.map((slot) => [slot, str(g[slot])]))
+      : null,
+    status: !online
+      ? 'Away'
+      : str(m.gait) == 'down'
+      ? 'Fainted'
+      : str(comp(b, 'fight').foe)
+      ? 'In combat'
+      : 'Adventuring',
     body: online
       ? {
         x,

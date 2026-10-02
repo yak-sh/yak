@@ -5,8 +5,38 @@ import type { Panel } from './panel.ts'
 import type { parties } from './party.ts'
 import type { Frame } from './play.ts'
 import { split } from './ui/split.ts'
+import { ITEMS } from './items.ts'
+import { type Slot, SLOTS } from './arms.ts'
+import type { Member } from './party-state.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+
+let slots: Record<Slot, string> = {
+  main: 'Main hand',
+  off: 'Off hand',
+  head: 'Head',
+  body: 'Body',
+  feet: 'Feet',
+  trinket: 'Trinket',
+}
+
+let details = (m: Member) => {
+  let stats = m.vitals
+    ? `<p><span class=Badge>Level ${m.vitals.lvl}</span></p><p>Health: ${m.vitals.hp} / ${m.vitals.max}</p><progress aria-label="Health" value="${m.vitals.hp}" max="${m.vitals.max}"></progress>`
+    : '<p class=Party_Empty>Live stats unavailable.</p>'
+  let gear = m.gear
+    ? `<div class=Pack_Nums>${
+      SLOTS.map((slot) => {
+        let kind = m.gear![slot] ?? ''
+        let name = kind ? ITEMS[kind]?.name ?? 'Unknown equipment' : 'Empty'
+        return `<span class=Pack_Num>${slots[slot]}: ${esc(name)}</span>`
+      }).join('')
+    }</div>`
+    : `<p class=Party_Empty>${
+      m.online ? 'Equipment unavailable.' : 'Equipment unavailable while away.'
+    }</p>`
+  return `${stats}<p>${esc(m.status)}</p><h3>Equipment</h3>${gear}`
+}
 
 export let partybox = (
   panel: Panel,
@@ -32,7 +62,9 @@ export let partybox = (
     let invites = party.invites, members = party.members
     let invite = invites.find((i) => `invite:${i.eid}` == picked)
     let member = members.find((m) => `member:${m.eid}` == picked)
-    if (!invite && !member && !(picked == 'party' && party.group)) picked = null
+    if (!invite && !member && !(picked == 'party' && party.group)) {
+      picked = null
+    }
     let location = (m: typeof members[number]) =>
       esc(party.location(m, [frame!.body.x, frame!.body.z]))
     let rows = `${invites.length ? '<h3>Invitations</h3>' : ''}${
@@ -48,8 +80,10 @@ export let partybox = (
         ? members.map((m) =>
           `<button class=Split_Row type=button data-select="member:${
             esc(m.eid)
-          }"><b>${esc(m.name)}</b><small>${
-            m.online ? 'Online' : 'Away'
+          }"><b>${esc(m.name)}</b><small>${m.online ? 'Online' : 'Away'}${
+            m.vitals
+              ? ` · Level ${m.vitals.lvl} · ${m.vitals.hp} / ${m.vitals.max} HP`
+              : ''
           }</small></button>`
         ).join('')
         : '<p class=Party_Empty>Talk to a nearby hero to invite them.</p>'
@@ -73,7 +107,9 @@ export let partybox = (
         member.online ? 'Online' : 'Away'
       }</small></div><span class="Party_Dot${
         member.online ? ' Party_Dot-on' : ''
-      }" title="${member.online ? 'Online' : 'Away'}"></span></div>`
+      }" title="${member.online ? 'Online' : 'Away'}"></span></div>${
+        details(member)
+      }`
       : picked == 'party'
       ? `<h3>Your party</h3><p>${members.length} members</p>`
       : '<p class=Party_Empty>Select an invitation or member to see details.</p>'
