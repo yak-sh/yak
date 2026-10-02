@@ -324,9 +324,7 @@ export let journal = (panel: Page, acts: Acts) => {
   let task = (t: Task, here: string) => {
     let tracked = t.state == 'taken' || t.pinned
     let pin: Glyph = t.pinned ? 'pin' : 'pinOff'
-    return `<article class="Journal_Task${
-      t.pinned ? ' Journal_Task-pinned' : ''
-    }"><header class=Journal_Top><b class=Journal_Title>${esc(t.title)}</b>${
+    return `<article class=Journal_Task><header class=Journal_Top><b class=Journal_Title>${esc(t.title)}</b>${
       tracked
         ? `<button class="Orb Orb-small Journal_Pin" data-pin="${
           esc(t.id)

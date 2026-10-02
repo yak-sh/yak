@@ -1,7 +1,5 @@
-/* The journal (journal.ts): each quest under way a card, its title and pin
-   over who asked it, its steps as a list with how far each has come, and
-   what the giver said; then the ones on offer and the ones done, as lines.
-   A pinned card wears the tracker's amber on its edge. */
+/* Quest summaries and the selected quest's text and steps. The split pane
+   supplies the detail surface; the quest does not draw a second card. */
 .Journal {
   display: grid;
   gap: 0.5rem;
@@ -48,17 +46,8 @@
 }
 
 .Journal_Task {
-  --edge: var(--rim);
   display: grid;
   gap: 0.35rem;
-  padding: 0.55rem 0.7rem 0.6rem;
-  border-radius: var(--radius-small);
-  background: var(--well);
-  box-shadow: inset 3px 0 0 var(--edge);
-}
-
-.Journal_Task-pinned {
-  --edge: var(--amber);
 }
 
 .Journal_Top {
