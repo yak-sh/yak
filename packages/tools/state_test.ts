@@ -88,3 +88,27 @@ for (let sql of [false, true]) {
     equal(await ids('.attempt.state=completed'), ['ask2', 'ask3'])
   })
 }
+
+test('interruption has priority over stored migration state and diagnostic codes', () => {
+  let ask: Bundle = {
+    entity: { eid: 'a' },
+    attempt: { state: 'completed' },
+    interrupted: { code: 'transport' },
+  }
+  equal(
+    attemptComputed['attempt.state'](ask, { list: [], of: () => undefined }),
+    'interrupted',
+  )
+  let call: Bundle = {
+    entity: { eid: 'c' },
+    execution: { state: 'done', by: 'owner' },
+    interrupted: { code: 'signal' },
+  }
+  equal(
+    executionComputed['execution.state'](call, {
+      list: [],
+      of: () => undefined,
+    }),
+    'interrupted',
+  )
+})

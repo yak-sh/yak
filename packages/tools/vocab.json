@@ -150,7 +150,7 @@
             "failed",
             "interrupted"
           ],
-          "computed": true
+          "description": "Migration-only stored state; readers derive its replacement and the contract release removes this column."
         },
         "by": {
           "type": "string",

@@ -11,9 +11,11 @@ import {
   eq,
   exists,
   type Expr,
+  fn,
   lit,
   notNull,
   select,
+  sub,
   table,
   when,
 } from '@yaks/sql'
@@ -23,6 +25,8 @@ export let attemptState = (ask: Bundle) =>
     ? 'interrupted'
     : (ask.attempt as Comp | undefined)?.by != null
     ? 'inflight'
+    : (ask.attempt as Comp | undefined)?.state == 'inflight'
+    ? 'inflight'
     : 'completed'
 
 export let attemptDerived = (vocab: Vocab): Derived => ({
@@ -31,26 +35,42 @@ export let attemptDerived = (vocab: Vocab): Derived => ({
     values: ['interrupted', 'inflight', 'completed'],
     deps: ['attempt'],
     expr: (owner: Expr) =>
-      when([
-        ...vocab.comp('interrupted')
-          ? [[
+      when(
+        [
+          ...vocab.comp('interrupted')
+            ? [[
+              exists(select({
+                cols: [lit(1)],
+                from: table('interrupted', 's'),
+                where: eq(col('entity', 's'), owner),
+              })),
+              lit('interrupted'),
+            ] as [Expr, Expr]]
+            : [],
+          [
             exists(select({
               cols: [lit(1)],
-              from: table('interrupted', 's'),
-              where: eq(col('entity', 's'), owner),
+              from: table('attempt', 's'),
+              where: and(
+                eq(col('entity', 's'), owner),
+                notNull(col('by', 's')),
+              ),
             })),
-            lit('interrupted'),
-          ] as [Expr, Expr]]
-          : [],
-        [
-          exists(select({
-            cols: [lit(1)],
-            from: table('attempt', 's'),
-            where: and(eq(col('entity', 's'), owner), notNull(col('by', 's'))),
-          })),
-          lit('inflight'),
+            lit('inflight'),
+          ],
         ],
-      ], lit('completed')),
+        vocab.prop('attempt', 'state')?.computed ? lit('completed') : fn(
+          'coalesce',
+          sub(
+            select({
+              cols: [col('state', 'old')],
+              from: table('attempt', 'old'),
+              where: eq(col('entity', 'old'), owner),
+            }),
+          ),
+          lit('completed'),
+        ),
+      ),
   },
 })
 

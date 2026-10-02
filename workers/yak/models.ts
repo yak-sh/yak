@@ -176,7 +176,7 @@ export let recovering = async (at: Stored, call: string) => {
   let patches: Bundle[] = [{
     entity: ask.entity,
     cost: { dollars: reply.cost, reported: reply.costReported ?? true },
-    attempt: { by: null },
+    attempt: { state: null, by: null },
     interrupted: null,
     failed: null,
   }]

@@ -332,7 +332,8 @@ export let project = (
 export let lines = (entries: Bundle[], asking?: Bundle): Bundle[] =>
   entries.filter((b) =>
     b == asking ||
-    !(b.notice && b.output && !b.checkpoint) && !(QUESTIONS in b || ANSWER in b) &&
+    !(b.notice && b.output && !b.checkpoint) &&
+      !(QUESTIONS in b || ANSWER in b) &&
       ['input', 'output', 'call', 'result'].includes(kindOf(b) ?? '')
   )
 
@@ -608,9 +609,12 @@ export let react = async (
       return await append([{
         ...patch,
         ...g.vocab.comp('provisional') && !patch.provisional
-          ? { provisional: null } : {},
+          ? { provisional: null }
+          : {},
         entity: attempt.entity,
-        $was: { attempt: { by: token(comp(attempt, 'attempt')?.by) } },
+        $was: {
+          attempt: { by: token(comp(attempt, 'attempt')?.by) },
+        },
       }, ...added])
     } catch (e) {
       if (
@@ -639,7 +643,7 @@ export let react = async (
       unfinished,
       {
         entity: unfinished.entity,
-        attempt: { by: null },
+        attempt: { state: null, by: null },
         interrupted: { code: 'restart' },
         ...!deps.streaming
           ? {
@@ -1034,7 +1038,7 @@ export let react = async (
         },
       }
       : {},
-    attempt: { by: deps.owner ?? session },
+    attempt: { state: null, by: deps.owner ?? session },
   })
   const stream = new Map<
     string,
@@ -1075,7 +1079,9 @@ export let react = async (
           let landed = await g.apply([
             {
               entity: ask.entity,
-              $was: { attempt: { by: token(comp(ask, 'attempt')?.by) } },
+              $was: {
+                attempt: { by: token(comp(ask, 'attempt')?.by) },
+              },
             },
             line({
               [CONTENT]: { body: '' },
@@ -1171,11 +1177,12 @@ export let react = async (
             let through = forced.chunk.at(-1)!
             let step = await finish(ask, {
               entity: ask.entity,
-              attempt: { by: null },
+              attempt: { state: null, by: null },
               interrupted: { code: 'superseded' },
             }, [
               line({
-                notice: {}, [OUTPUT]: { source: ask.entity.eid },
+                notice: {},
+                [OUTPUT]: { source: ask.entity.eid },
                 ...(e as ModelError).response && g.vocab.comp(RESPONSE)
                   ? { [RESPONSE]: (e as ModelError).response! }
                   : {},
@@ -1214,7 +1221,7 @@ export let react = async (
       ask,
       {
         entity: ask.entity,
-        attempt: { by: null },
+        attempt: { state: null, by: null },
         ...retried
           ? { provisional: { note: 'Provider retry still owed' } }
           : {},
@@ -1276,7 +1283,7 @@ export let react = async (
     ...reply.cost == null
       ? {}
       : { cost: { dollars: reply.cost, reported: reply.costReported ?? true } },
-    attempt: { by: null },
+    attempt: { state: null, by: null },
   }
   let added: Bundle[] = [finalAsk]
   let textIndex = 0
@@ -1368,7 +1375,7 @@ export let react = async (
         ask,
         {
           entity: ask.entity,
-          attempt: { by: null },
+          attempt: { state: null, by: null },
           interrupted: { code: 'superseded' },
         },
         [

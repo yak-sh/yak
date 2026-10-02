@@ -65,7 +65,6 @@ let failure = (row: Bundle, read: Reader): Bundle[] => {
   if (!from && !source) {
     return [
       patch(row, {
-        error: null,
         interrupted: { ...marks(row), code },
         ...code == 'interrupted'
           ? {
@@ -141,6 +140,35 @@ export let interruptionMove = (row: Bundle, read: Reader): Bundle[] => {
       entity: { eid: '$result' },
       result: { call: row.entity.eid },
     }]
+  }
+  return []
+}
+
+// Contract is admitted only after expansion; no state supplies evidence here.
+export let interruptionContractFind = [
+  '.error&.interrupted&*',
+  '.attempt.state&*',
+  '.execution.state&*',
+]
+export let interruptionContract = (row: Bundle): Bundle[] => {
+  if (row.error && row.interrupted) {
+    let code = text(row, 'error', 'code')
+    return [
+      patch(row, {
+        error: null,
+        ...code == 'exit'
+          ? { interrupted: null, stop: {} }
+          : row.output
+          ? { notice: {} }
+          : {},
+      }),
+    ]
+  }
+  if (text(row, 'attempt', 'state') != undefined) {
+    return [patch(row, { attempt: { state: null } })]
+  }
+  if (text(row, 'execution', 'state') != undefined) {
+    return [patch(row, { execution: { state: null } })]
   }
   return []
 }

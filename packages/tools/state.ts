@@ -15,6 +15,7 @@ import {
   notNull,
   or,
   select,
+  sub,
   table,
   when,
 } from '@yaks/sql'
@@ -35,6 +36,8 @@ export let executionState = (call: Bundle, answers: readonly Bundle[] = []) => {
     ? 'done'
     : component(call, 'execution')?.by != null
     ? 'running'
+    : typeof component(call, 'execution')?.state == 'string'
+    ? String(component(call, 'execution')?.state)
     : null
 }
 
@@ -67,30 +70,39 @@ export let executionDerived = (vocab: Vocab): Derived => {
       values: ['interrupted', 'failed', 'done', 'running'],
       deps: ['execution'],
       expr: (owner) =>
-        when([
-          [has('interrupted', owner), lit('interrupted')],
+        when(
           [
-            or(
-              named(owner, 'source', 'output'),
-              named(owner, 'call', 'result'),
-            ),
-            lit('failed'),
+            [has('interrupted', owner), lit('interrupted')],
+            [
+              or(
+                named(owner, 'source', 'output'),
+                named(owner, 'call', 'result'),
+              ),
+              lit('failed'),
+            ],
+            [has('result', owner, 'call'), lit('done')],
+            [
+              exists(
+                select({
+                  cols: [lit(1)],
+                  from: table('execution', 's'),
+                  where: and(
+                    eq(col('entity', 's'), owner),
+                    notNull(col('by', 's')),
+                  ),
+                }),
+              ),
+              lit('running'),
+            ],
           ],
-          [has('result', owner, 'call'), lit('done')],
-          [
-            exists(
-              select({
-                cols: [lit(1)],
-                from: table('execution', 's'),
-                where: and(
-                  eq(col('entity', 's'), owner),
-                  notNull(col('by', 's')),
-                ),
-              }),
-            ),
-            lit('running'),
-          ],
-        ]),
+          vocab.prop('execution', 'state')?.computed ? lit(null) : sub(
+            select({
+              cols: [col('state', 'old')],
+              from: table('execution', 'old'),
+              where: eq(col('entity', 'old'), owner),
+            }),
+          ),
+        ),
     },
   }
 }

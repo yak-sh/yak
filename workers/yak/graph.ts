@@ -1968,9 +1968,11 @@ export class Store {
       await this.#trust([
         ...inflight.map((b) => ({
           entity: b.entity,
-          attempt: { by: null },
+          attempt: { state: null, by: null },
           interrupted: { code: 'restart' },
-          failed: { reason: 'Unfinished dispatched request; inspect before retry' },
+          failed: {
+            reason: 'Unfinished dispatched request; inspect before retry',
+          },
         })),
         {
           entity: { eid: crypto.randomUUID() },

@@ -545,7 +545,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
 
   // The claim this runner writes.
   let owner = opts.owner ?? mint()
-  let claim = (): Comp => ({ by: owner })
+  let claim = (): Comp => ({ state: null, by: owner })
   // The tool a call names, as this runner has it. A call naming a tool this
   // runner does not have is left alone: another runner may have that tool,
   // and failing the call here would be this runner's verdict on somebody
@@ -672,7 +672,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     },
     {
       entity: call.entity,
-      execution: { by: (call.execution as Comp)?.by ?? null },
+      execution: { state: null, by: (call.execution as Comp)?.by ?? null },
       ...(state == 'interrupted' ? { interrupted: { code: 'transport' } } : {}),
       $was: {
         execution: {
@@ -776,7 +776,8 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       answered = await land(
         await faulted(error),
         error instanceof Interrupted ? 'interrupted' : 'failed',
-        undefined, error instanceof Interrupted ? error.code : undefined,
+        undefined,
+        error instanceof Interrupted ? error.code : undefined,
       )
     } finally {
       held.delete(id)
