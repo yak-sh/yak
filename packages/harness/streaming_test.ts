@@ -501,17 +501,19 @@ test('invalid provider history records a healable exception, not an operational 
     streaming: true,
     model: responses({
       credential: () => ({ token: 'test', base: 'https://provider.invalid' }),
-      fetch: () =>
+      fetch: (url) =>
         Promise.resolve(
-          new Response(
-            JSON.stringify({
-              error: {
-                type: 'invalid_request_error',
-                message: 'No tool output found for function call call_test',
-              },
-            }),
-            { status: 400 },
-          ),
+          new URL(String(url)).pathname.endsWith('/models')
+            ? Response.json({ data: [{ id: 'gpt-6-astra' }] })
+            : new Response(
+              JSON.stringify({
+                error: {
+                  type: 'invalid_request_error',
+                  message: 'No tool output found for function call call_test',
+                },
+              }),
+              { status: 400 },
+            ),
         ),
     }),
   })
