@@ -90,6 +90,10 @@ test('legacy freeze is not offered or scheduled without a host door', () => {
     let seen = mount(h(Web, {
       e: {
         eid: spec.target,
+        num: 0,
+        kind: 'web',
+        refs: [],
+        kids: [],
         web: { eid: spec.target, url: 'https://example.com/a' },
       },
     }))
