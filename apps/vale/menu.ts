@@ -84,7 +84,7 @@ export let menu = (panel: Page, o: Settings) => {
     ['keys', 'Keys', 'menu'],
   ]
   let rows = sections.map(([id, title, icon]) =>
-    `<button class="Split_Row Menu_Row" data-select=${id}>${
+    `<button class="Split_Row Menu_Row" type=button data-select=${id}>${
       glyph(icon)
     }<span>${title}</span></button>`
   ).join('')

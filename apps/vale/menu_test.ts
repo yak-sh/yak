@@ -6,7 +6,7 @@ import { parseHTML } from 'linkedom'
 import { menu, type Settings } from './menu.ts'
 import type { Panel } from './panel.ts'
 
-test('voxel slider shows a choice before applying it', () => {
+test('menu sections show icons and keep their rows while settings change', () => {
   let { document, window } = parseHTML('<html><body></body></html>')
   let element = globalThis.Element, inputElement = globalThis.HTMLInputElement
   Object.assign(globalThis, {
@@ -54,6 +54,12 @@ test('voxel slider shows a choice before applying it', () => {
       'Keys',
     ])
     assertEquals(rows.every((row) => row.querySelector('.Glyph') != null), true)
+    for (let row of rows) {
+      assertEquals(
+        row.querySelector('svg')!.getAttribute('aria-hidden'),
+        'true',
+      )
+    }
     rows[1].dispatchEvent(new window.Event('click', { bubbles: true }))
     assertEquals(
       document.querySelector<HTMLElement>('[data-section=audio]')!.hidden,
@@ -63,6 +69,7 @@ test('voxel slider shows a choice before applying it', () => {
       document.querySelector<HTMLElement>('[data-section=display]')!.hidden,
       false,
     )
+    assertEquals(document.querySelector('[data-select=audio]'), rows[0])
     let slider = document.querySelector<HTMLInputElement>('[data-voxel]')!
     let button = document.querySelector<HTMLButtonElement>('[data-do=voxel]')!
     let choice = document.querySelector('[data-voxel-choice]')!

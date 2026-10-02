@@ -48,13 +48,12 @@
 }
 
 .Split_Row {
-  display: block;
   width: 100%;
   margin: 0 0 0.4rem;
   padding: 0.65rem;
-  border: 2px solid var(--rim);
-  border-radius: 8px;
-  background: var(--well);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--ink);
   text-align: left;
   font: inherit;
@@ -67,8 +66,8 @@
 }
 
 .Split_Row-on {
-  outline: 2px solid var(--gold);
-  outline-offset: -4px;
+  background: var(--well);
+  box-shadow: inset 3px 0 0 var(--gold);
 }
 
 .Split_Back {
