@@ -1,5 +1,26 @@
 # Vale
 
+## Where state lives
+
+Mossvale exists to exercise yaks.app and the @yaks packages (M-41238). Its
+state lives in the page's graph, the @yaks/client graph `net.ts` keeps, and
+nowhere beside it:
+
+- What the store holds is read from that graph, never copied into a module's
+  own array or Map.
+- The page's own state (selection, open panels, what was generated for the
+  page) is page-only entities in the same graph (`sync: none`), the way
+  @yaks/ux keeps a component's state (M-39550).
+- What a person sets or types (settings, drafts) is theirs, kept in the store
+  and synced to every device they play on (M-59093); never `localStorage`.
+- What a person sees is @yaks/ui parts in Preact, never `innerHTML`.
+
+When the graph or a package cannot do what the game needs (large binary
+values, a worker sharing the page's graph, a write that must be fast), that is
+platform work: file it and fix it in the package that owns it, never around it
+in apps/vale. Code that predates this is being moved (the tasks under
+"Mossvale's state lives in the page's graph").
+
 Vale's chat slash commands use the shared browser-safe `@yaks/cli/grammar` for
 parsing (`argsFor`) and completion (`complete`). Command arguments accept both
 `--name=value` and `--name value`. Commands declare `positional` beside `input`;
