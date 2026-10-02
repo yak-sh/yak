@@ -1,7 +1,14 @@
 import { type Ent } from '../../types.ts'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { unmime } from '../../rfc2047.ts'
-import { boardPost, byWarmth, ent, pinned, subWindow } from '../../live.ts'
+import {
+  boardPost,
+  byWarmth,
+  capable,
+  ent,
+  pinned,
+  subWindow,
+} from '../../live.ts'
 import { orderOf, parseQuery, windowOf } from '../../query.ts'
 import { block } from '@yaks/ui'
 import { menuAt } from '../nav.tsx'
@@ -42,7 +49,7 @@ export let List = ({ e }: { e: Ent }) => {
         .map((p) => (
           <Row
             key={p.eid}
-            draggable
+            draggable={capable('canvas')}
             onDragStart={(ev: DragEvent) =>
               dragData(ev, p.target, p.view, p.w, p.eid)}
           >
@@ -144,7 +151,7 @@ export let QueryList = (
         // a feed row dragged onto a canvas spawns the entity as a card
         <Row
           key={t.eid}
-          draggable
+          draggable={capable('canvas')}
           onDragStart={(ev: DragEvent) => dragData(ev, t.eid, 'Full')}
         >
           <Entity eid={t.eid} view='List.Tile' />

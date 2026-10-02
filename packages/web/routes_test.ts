@@ -109,3 +109,15 @@ test('every address answers the one page, which loads the bundled app', async ()
   assertEquals(page.headers.get('content-type'), 'text/html; charset=utf-8')
   assertEquals((await page.text()).includes('src="/web/app.js"'), true)
 })
+
+test('the page learns the configured owner by the graph address interface', async () => {
+  let rs = routes({
+    vocab,
+    graph,
+    config: { db: ':memory:', plugins: [], person: 'lemon-cake' },
+  })
+  let owner = rs.find((r) => r.path == '/web/owner')!
+  let response = await owner.handle(new Request('http://x/web/owner'))
+  let [row] = await graph.read('.doc.title=x')
+  assertEquals(await response.json(), { owner: row.entity.eid })
+})

@@ -1,7 +1,7 @@
 import { entityPath } from '../url.ts'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { signal } from '@preact/signals'
-import { base, ent, mutate, toPlane, topZ, uuid } from '../live.ts'
+import { base, capable, ent, mutate, toPlane, topZ, uuid } from '../live.ts'
 import {
   catalog,
   type Pick,
@@ -96,6 +96,7 @@ export let openRun = (eid: string) => {
 // at, and the ask's point is where the session was asked for. Off a canvas
 // (or on the List door, which has no plane) there's nowhere to pin.
 let spot = (a: Ask) => {
+  if (!capable('canvas')) return null
   let t = screenTarget()
   let box = document.querySelector('.Canvas')?.getBoundingClientRect()
   if (!t || !box || !ent(t.eid).canvas) return null

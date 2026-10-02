@@ -1,14 +1,15 @@
 # @yaks/web
 
 The web door: a graph's canvas, cards, boards and editing in a browser. `/` is
-the root canvas, `/T-9` opens T-9 fullscreen, `?v=` picks its view, and every
+the root canvas when `@yaks/canvas` is installed, and the configured owner's
+Inbox otherwise. `/T-9` opens T-9 fullscreen, `?v=` picks its view, and every
 card on screen is live: an edit anywhere reaches the page over the socket.
 
 ## Use
 
 List it in a `yak serve` config beside @yaks/api, whose doors the page reads and
-writes through, and @yaks/canvas, whose canvas `/` opens. `yak init` writes a
-config that has both. The least one that serves the page:
+writes through. Add @yaks/canvas for the spatial canvas, tray and layouts.
+`yak init` writes a config that has both. The least one that serves the page:
 
 ```json
 {
@@ -25,7 +26,12 @@ config that has both. The least one that serves the page:
 }
 ```
 
-A graph with no canvas yet makes its first when `/` is opened.
+With @yaks/canvas installed, a graph with no canvas yet makes its first when `/`
+is opened. Without it, set `person` to the owner's id: `/web/owner` resolves it
+for the Inbox at `/`. Canvas views, actions and screen subscriptions are
+omitted; stored canvas rows and parked edits remain in place for reinstalling
+the plugin. If the config names no `person`, home shows an empty Inbox naming
+the missing owner.
 
 The routes facet (`@yaks/web/routes`, routes.ts) answers:
 

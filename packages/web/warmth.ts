@@ -1,6 +1,6 @@
 // The warmth of an entity: the recall-decay rank behind `.order=hot`, and the
 // retirement damper that sinks a dead venture beneath live work.
-import { type Comps, matchQuery, parseQuery } from './query.ts'
+import type { Comps } from './query.ts'
 
 // The warmth of an entity, on (0,1] — the rank behind '.order=hot'.
 // Recall aggregates (count, first_at, last_at) are the whole model:
@@ -39,16 +39,14 @@ export let hot = (c: Comps, now: number): number => {
 // is the same comps fetcher matchQuery's path preds ride, so every
 // caller already holds one.
 export let SUNK = 0.1
-// The far arm — a task whose PROJECT is archived — is a forward deref
-// (task → its project → that project's archived stamp), so it IS the traversal
-// grammar. `.archived.at` is the canonical presence spelling: the column is
-// not-null. The self arm (this row IS
-// an archived project) has no ref to deref, so it stays a direct test.
-let SUNK_PROJECT = parseQuery('.filed.project.archived.at')
+// The far arm follows the one project reference through the caller's reader.
+// No schema is needed to rank data: apps without tasks have no filed project.
 export let sunk = (
   c: Comps,
   ent?: (eid: string) => Comps | undefined,
-): boolean => (!!c.project && !!c.archived) || matchQuery(c, SUNK_PROJECT, ent)
+): boolean =>
+  (!!c.project && !!c.archived) ||
+  !!(c.filed?.project && ent?.(String(c.filed.project))?.archived?.at)
 export let warm = (
   c: Comps,
   now: number,

@@ -23,7 +23,7 @@ import { Float } from '@yaks/ui'
 import { h } from 'preact'
 import { short } from '@yaks/id'
 import { parseProp, propAt } from '../props.ts'
-import { cache, ent, findEid, mutate, problem, row } from '../live.ts'
+import { cache, capable, ent, findEid, mutate, problem, row } from '../live.ts'
 import { and, present } from '@yaks/query'
 import { type Ent, idOf, kindOf, statusOf, vocab } from '../types.ts'
 import { archetypeTables, rememberArchetype } from '../live_archetypes.ts'
@@ -36,12 +36,13 @@ import { rows } from './hits.ts'
 import { wells } from './wells.ts'
 
 export type Renderer = ComponentRenderer<Ent> & {
+  plugin?: string
   file?: { ext: string; mime: string; text: (e: Ent) => string }
 }
-export type Entry = Renderer | PortableRenderer
+export type Entry = (Renderer | PortableRenderer) & { plugin?: string }
 export type Render = Renderer['Render']
 export type Action = { label: string; run: () => void; mod?: string }
-export type Contributor = Contribution<Action, Ent>
+export type Contributor = Contribution<Action, Ent> & { plugin?: string }
 
 export { vocab }
 // The fleet adds its input language (P2, relative times and human ids);
@@ -88,12 +89,55 @@ export let bundle = (e: Ent): Bundle => {
 // Kept as the plugin's component-query builder; no predicate callbacks.
 export let has = (...names: string[]) => and(...names.map(present))
 
-export let define = (rs: Renderer[], views: string[]) => {
-  registry.renderers = rs
-  registry.views = views
+// Compose native contributions against the same plugin vocabulary as portable
+// facets. Cache each composition so renderer selection keeps its fast memo.
+let compositions = new WeakMap<
+  object,
+  { vocab: typeof vocab; entries: unknown[] }
+>()
+let installed = <T extends { plugin?: string }>(entries: T[]): T[] => {
+  let prior = compositions.get(entries)
+  if (prior?.vocab == vocab) return prior.entries as T[]
+  let selected = entries.filter((entry) =>
+    !entry.plugin || capable(entry.plugin)
+  )
+  compositions.set(entries, { vocab, entries: selected })
+  return selected
+}
+
+export let define = (rs: Entry[], views: string[]) => {
+  let tabs: string[] = [], selected: Entry[] | undefined
+  Object.defineProperty(registry, 'renderers', {
+    configurable: true,
+    set: (entries: Entry[]) => {
+      rs = entries
+    },
+    get: () => installed(rs),
+  })
+  Object.defineProperty(registry, 'views', {
+    configurable: true,
+    set: (names: string[]) => {
+      views = names
+      selected = undefined
+    },
+    get: () => {
+      let entries = installed(rs)
+      if (selected != entries) {
+        selected = entries
+        tabs = views.filter((view) => entries.some((r) => r.view == view))
+      }
+      return tabs
+    },
+  })
 }
 export let defineActions = (cs: Contributor[]) => {
-  registry.actions = cs
+  Object.defineProperty(registry, 'actions', {
+    configurable: true,
+    set: (entries: Contributor[]) => {
+      cs = entries
+    },
+    get: () => installed(cs),
+  })
 }
 export let extend = (rs: Entry[]) => overlay(registry, rs)
 export let applicable = (e: Ent) => offered(registry, bundle(e), vocab)

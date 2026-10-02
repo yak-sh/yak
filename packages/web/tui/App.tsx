@@ -184,7 +184,10 @@ let tabsFor = (eid: string) => applicable(ent(eid))
 // disagree: a project tabs Inbox first but paints Full, so seeding the
 // cycle with tabs[0] made the first ⇥ a visible no-op. Ask the registry
 // the same question <Entity> asks when it gets no view prop.
-let viewOf = (eid: string) => views.value[eid] ?? resolve(ent(eid)).view
+let viewOf = (eid: string) => {
+  let view = views.value[eid]
+  return view && tabsFor(eid).includes(view) ? view : resolve(ent(eid)).view
+}
 
 // ⇥ walks the row forward, ⇧⇥ back, both wrapping.
 let cycle = (d: number) => {
@@ -791,7 +794,7 @@ export let App = () => {
         : navigationOpen.value
         ? <TNavigation />
         : here
-        ? <Entity eid={here} view={views.value[here]} />
+        ? <Entity eid={here} view={viewOf(here)} />
         : p && (
           <>
             <TFilter board={p} />

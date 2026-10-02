@@ -3,7 +3,7 @@
 // cannot act on a hidden surface.
 import { signal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
-import { mode } from '../live.ts'
+import { capable, mode } from '../live.ts'
 import { webKeys } from '../keybindings.ts'
 import { block } from '@yaks/ui'
 
@@ -84,7 +84,9 @@ export let Keybindings = () => {
           </Close>
         </Head>
         <List>
-          {webKeys.map((binding) => (
+          {webKeys.filter((b) => !b.plugin || capable(b.plugin)).map((
+            binding,
+          ) => (
             <Row key={binding.keys.join('-')}>
               <Keys>
                 {binding.keys.flatMap((key, i) => [

@@ -61,7 +61,7 @@ let toolOf = (c: EntryRow['comps'], name: Names) =>
   name(text(c.call?.to)) || 'tool'
 
 let failure = (c: EntryRow['comps']) => {
-  let refusal = c.refusal ?? c.error
+  let refusal = c.refusal
   return c.exception
     ? text(c.exception.message) || text(c.content?.body) || 'exception'
     : refusal
@@ -77,7 +77,7 @@ let shown = (
   let c = row.comps
   let b = bundle(row)
   let kind = kindOf(b)
-  if (kind == 'exception' || kind == 'refusal' || kind == 'error') {
+  if (kind == 'exception' || kind == 'refusal') {
     return { kind: 'error', text: failure(c)! }
   }
   if (kind == 'stop') return { kind: 'sys', tag: 'stop' }

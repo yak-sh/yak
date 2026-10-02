@@ -102,7 +102,7 @@ learn([
   page,
   git,
   code,
-  canvas,
+  canvas.map((d) => ({ ...d, package: '@yaks/canvas' })),
   tmux,
   platform,
   member,

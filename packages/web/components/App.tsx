@@ -2,6 +2,7 @@ import { entityPath } from '../url.ts'
 import { useEffect, useLayoutEffect } from 'preact/hooks'
 import { idOf } from '../types.ts'
 import {
+  capable,
   ent,
   homeless,
   makeHome,
@@ -264,6 +265,13 @@ export let App = () => {
             ? <QueryList eid={allSessionsKey} query={allSessionsQuery} />
             : e
             ? <Entity eid={e.eid} view={view} />
+            : url.pathname == '/' && !capable('canvas')
+            ? (
+              <LostFrame>
+                <h1>Inbox</h1>
+                <p>No owner is named for this app.</p>
+              </LostFrame>
+            )
             : screenResolving()
             ? <Resolving />
             : <Lost />}

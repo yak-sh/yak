@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { signal } from '@preact/signals'
 import {
   camera,
+  capable,
   clientId,
   ent,
   mode,
@@ -141,17 +142,19 @@ let ctx = (): Ctx => ({ eid: screenTarget()?.eid, rows: rows() })
 
 // The web's own verbs — the camera is the one thing a terminal has no
 // answer for. Everything else is the shared list (commands.ts).
-let local: Record<string, Command> = {
-  zoom: {
-    args: [{ name: 'factor', kind: num, eg: '0.25–4', need: false }],
-    about: 'zoom the canvas',
-    run: (rest) => {
-      let z = Math.min(4, Math.max(0.25, Number(rest.trim()) || 1))
-      camera.value = { ...camera.value, zoom: z }
-      return { msg: `zoom ${z}` }
+let local: Record<string, Command> = capable('canvas')
+  ? {
+    zoom: {
+      args: [{ name: 'factor', kind: num, eg: '0.25–4', need: false }],
+      about: 'zoom the canvas',
+      run: (rest) => {
+        let z = Math.min(4, Math.max(0.25, Number(rest.trim()) || 1))
+        camera.value = { ...camera.value, zoom: z }
+        return { msg: `zoom ${z}` }
+      },
     },
-  },
-}
+  }
+  : {}
 let all = { ...commands, ...local }
 
 // What the typist was looking at when the words were typed, EMITTED as a
@@ -220,15 +223,17 @@ let exec = async (line: string) => {
     if (r.go) navigate(entityPath(idOf(ent(r.go))))
     if (r.card) {
       let root = screenTarget()
-      if (root && ent(root.eid).canvas) spawnHit(root.eid, r.card)
-      else navigate(entityPath(idOf(ent(r.card))))
+      if (capable('canvas') && root && ent(root.eid).canvas) {
+        spawnHit(root.eid, r.card)
+      } else navigate(entityPath(idOf(ent(r.card))))
     }
     if (r.spawn) {
       launching = line.trim().split(/\s/)[0]
       msg.value = r.msg ?? ''
       let session = await launch(r.spawn)
       if (task) msg.value = { task, session }
-      else shelve(session, 'Session')
+      else if (capable('canvas')) shelve(session, 'Session')
+      else navigate(entityPath(idOf(ent(session))))
     } else {
       msg.value = r.msg ?? ''
     }
@@ -494,14 +499,14 @@ export let Status = () => {
       </Left>
       <Right>
         <Sync />
-        <WhoAmI />
+        {capable('canvas') && <WhoAmI />}
         {mode.value == 'command'
           ? (
             <Close type='button' aria-label='exit command mode' onClick={close}>
               ×
             </Close>
           )
-          : <Tray />}
+          : capable('canvas') && <Tray />}
       </Right>
     </Frame>
   )

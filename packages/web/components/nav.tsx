@@ -6,11 +6,13 @@ import { copy } from '../clipboard.ts'
 import { usePlaceAt } from '@yaks/ui'
 import {
   cache,
+  capable,
   clientId,
   ent,
   findEid,
   mutate,
   myCursor,
+  owner,
   peek,
   resolveEid,
   resolvingId,
@@ -256,8 +258,9 @@ export let clickProps = (e: Ent) => {
 // dragging it onto the canvas makes a card.
 export let linkProps = (e: Ent) => ({
   ...clickProps(e),
-  draggable: true,
-  onDragStart: (ev: DragEvent) => dragData(ev, e.eid, resolve(e).view),
+  draggable: capable('canvas'),
+  onDragStart: (ev: DragEvent) =>
+    capable('canvas') && dragData(ev, e.eid, resolve(e).view),
 })
 
 // Resolve a route to {eid, view}: bare `/` means the root canvas; an
@@ -269,7 +272,9 @@ export let screenTarget = (at = route.value) => {
   let url = new URL(at, 'http://x')
   let id = addressId(decodeURIComponent(url.pathname.slice(1)))
   let view = url.searchParams.get('v') ?? undefined
-  let eid = id ? routed(id) : rootCanvas()
+  let canvas = capable('canvas')
+  let eid = id ? routed(id) : canvas ? rootCanvas() : owner.value
+  if (!id && !canvas) view = 'Inbox'
   return eid ? { eid, view } : null
 }
 
@@ -356,7 +361,7 @@ export let restore = () => {
   } catch { /* no storage, no memory — kept() defaults to the canvas */ }
   let legacy = new URLSearchParams(l.search).get('task')
   if (legacy) return void grandfather(legacy)
-  if (warm || l.pathname != '/' || l.search) {
+  if (!capable('canvas') || warm || l.pathname != '/' || l.search) {
     keep()
     return
   }
@@ -394,7 +399,7 @@ let grandfather = async (legacy: string) => {
 // write naming where the cursor already points is skipped, so a re-render never
 // churns the row. Guarded for the TUI (no client, no localStorage) via loc/his.
 let mark = () => {
-  if (!loc() || !his()) return
+  if (!capable('canvas') || !loc() || !his()) return
   let t = screenTarget()
   if (!t) return // chrome and dead ends are not places (keep()'s rule)
   let client = clientId()

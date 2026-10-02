@@ -1,7 +1,7 @@
 // The curated views and verbs, with the app's quarantine, failure and memo
 // boundaries.
 // @yaks/render selects them; @yaks/preact mounts the selected component.
-import { and, or, parse, present } from '@yaks/query'
+import { and, parse } from '@yaks/query'
 import { statusChanges, subChanges } from '../client.ts'
 import { useErrorBoundary } from 'preact/hooks'
 import {
@@ -108,11 +108,13 @@ define([
   // Canvas and List render child entities through this registry. Defer their
   // bindings until render so either module can be imported first.
   {
+    plugin: 'canvas',
     view: 'Canvas',
     match: parse('.canvas'),
     Render: ({ e }) => <Canvas eid={e.eid} />,
   },
   {
+    plugin: 'canvas',
     view: 'List',
     match: parse('.canvas'),
     Render: (props) => <List {...props} />,
@@ -145,12 +147,14 @@ define([
   // it sits after Board/List in the tabs list so it is a chosen tab.
   {
     view: 'Split',
-    match: and(or(present('board'), present('canvas'))),
+    match: parse('.board'),
     Render: Split,
   },
+  { plugin: 'canvas', view: 'Split', match: parse('.canvas'), Render: Split },
   // The tiling container (D-14718) — a layout's default face. Its leaves
   // walk back through Entity, so defer the binding like Canvas above.
   {
+    plugin: 'canvas',
     view: 'Layout',
     match: parse('.doc .layout'),
     Render: (props) => <Layout {...props} />,
@@ -317,6 +321,7 @@ export let decisionActions = (e: Ent): Action[] => {
 
 defineActions([
   {
+    plugin: 'canvas',
     // The Shelf is universal screen chrome: any entity may become the
     // bottom-right popover, not only the chats that choose it by default.
     match: and(),

@@ -101,26 +101,17 @@ test('what an entry is decides its row', () => {
     tag: 'ask',
     text: 'gpt-6',
   })
-  assertEquals(shown({ error: { code: 'rate_limited' } }), {
+  assertEquals(shown({ refusal: { code: 'rate_limited' } }), {
     kind: 'error',
     text: 'rate_limited',
   })
-  for (let mark of ['refusal', 'error']) {
-    assertEquals(
-      shown({
-        [mark]: { code: 'is_error' },
-        result: { call: 'c' },
-        content: { body: 'not permitted' },
-      }),
-      { kind: 'error', text: 'is_error: not permitted' },
-    )
-  }
   assertEquals(
     shown({
-      refusal: { code: 'rate_limited' },
-      error: { code: 'legacy' },
+      refusal: { code: 'is_error' },
+      result: { call: 'c' },
+      content: { body: 'not permitted' },
     }),
-    { kind: 'error', text: 'rate_limited' },
+    { kind: 'error', text: 'is_error: not permitted' },
   )
   assertEquals(shown({ exception: { message: 'boom' } }), {
     kind: 'error',
@@ -144,7 +135,10 @@ test('what an entry is decides its row', () => {
 test('the log says what a working transcript waits on', () => {
   let activity = (rows: EntryRow[]) => graphLog(rows, names).activity
   let input = row('input', 1, { content: { body: 'go' }, using: {} })
-  let ask = row('ask', 2, { ask: { to: 'gpt', through: 'input' } })
+  let ask = row('ask', 2, {
+    ask: { to: 'gpt', through: 'input' },
+    attempt: { by: 'worker' },
+  })
   let call = row('call', 3, { call: { to: 'query', source: 'ask' } })
   assertEquals(activity([input]), {
     kind: 'runner',

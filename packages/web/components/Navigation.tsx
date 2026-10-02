@@ -1,3 +1,4 @@
+import { vocab } from '../types.ts'
 import { signal } from '@preact/signals'
 import { useEffect, useState } from 'preact/hooks'
 import { favoritePin, navigationQuery, navigationView } from '../navigation.ts'
@@ -138,25 +139,29 @@ export let Navigation = () => {
               navigation.
             </Empty>
           )}
-          <Title>Sessions</Title>
-          <All
-            href={allSessionsPath}
-            onClick={(ev: MouseEvent) => {
-              follow(allSessionsPath)(ev)
-              if (ev.defaultPrevented) closeMobile()
-            }}
-          >
-            All sessions
-          </All>
-          {sessions.map((eid) => (
-            <Entity
-              key={eid}
-              eid={eid}
-              view='Navigation.List.Tile'
-              onOpen={closeMobile}
-            />
-          ))}
-          {!sessions.length && <Empty>No sessions yet.</Empty>}
+          {vocab.comp('session') && (
+            <>
+              <Title>Sessions</Title>
+              <All
+                href={allSessionsPath}
+                onClick={(ev: MouseEvent) => {
+                  follow(allSessionsPath)(ev)
+                  if (ev.defaultPrevented) closeMobile()
+                }}
+              >
+                All sessions
+              </All>
+              {sessions.map((eid) => (
+                <Entity
+                  key={eid}
+                  eid={eid}
+                  view='Navigation.List.Tile'
+                  onOpen={closeMobile}
+                />
+              ))}
+              {!sessions.length && <Empty>No sessions yet.</Empty>}
+            </>
+          )}
         </Items>
       </Frame>
     </>

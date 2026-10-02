@@ -563,6 +563,7 @@ let refreshServerSets = (eids: Set<string>) => {
 // useBacklinks — T-21489): the card's sub opens on mount, the last drop tears
 // it down, and an imperative read meanwhile reuses the held set.
 let serverSet = (preds: Pred[], line: string): ServerSet => {
+  ensureClient()
   let key = qkey(preds)
   let found = queryUses.get(key)
   if (!found) {
@@ -582,11 +583,12 @@ let serverSet = (preds: Pred[], line: string): ServerSet => {
     queryUses.set(key, found)
     querySignals.set(sub, found.ids)
     seedWake(found, found.ids.peek())
-    ownBoard(sub, line)
     if (config.host || replica.ready(sub) || replica.members(sub).length) {
       found.ids.value = replica.members(sub)
     }
   }
+  // A replaced replica must own a retained query before it can answer it.
+  if (!replica.has(found.sub)) ownBoard(found.sub, found.line)
   return found
 }
 
@@ -936,6 +938,7 @@ export let openDeps = (e: Ent) => {
 // viewer that names none holds no standing instructions, so the verbs
 // that need one simply aren't offered.
 export let myActor = () => {
+  if (!capable('canvas')) return owner.value
   let c = config.client ? row(config.client).value : undefined
   return String(c?.client?.actor ?? '') || undefined
 }
@@ -1501,6 +1504,8 @@ export let replayOutbox = async () => {
       outboxStore.unpark(id)
       continue
     }
+    // Keep the complete parked write for when all of its plugins return.
+    if (o.changes.some((c) => !vocab.comp(c.name))) continue
     if (outbox.has(id)) continue
     outbox.set(id, o)
     ensureClient()
@@ -2419,10 +2424,15 @@ export let restore = () => {
 // subscription and says loading until it answers. The writes a prior life
 // left undelivered, and the refusals it kept, come back first.
 let booted = false
+export let owner = signal<string | undefined>()
+
 export let boot = async () => {
   if (booted) return
   booted = true
   ensureClient()
+  if (!capable('canvas') && config.host) {
+    owner.value = (await (await fetch(`${base()}/web/owner`)).json()).owner
+  }
   loadRefusals()
   await replayOutbox()
   idb.forgetLegacy()
@@ -2855,14 +2865,19 @@ export let clientSubscription = (
   client: string,
   comp = 'fold',
 ): SubscriptionRead | undefined => {
+  if (!capable('canvas')) return undefined
   ensureClientRows(client)
   return querySubscription(screenOf(comp, client))
 }
 
-let clientSubs = new Set<string>()
+let clientSubs = new WeakMap<object, Set<string>>()
 export let ensureClientRows = (client: string) => {
-  if (!client || clientSubs.has(client)) return
-  clientSubs.add(client)
+  if (!capable('canvas') || !client) return
+  ensureClient()
+  let held = clientSubs.get(replica)
+  if (!held) clientSubs.set(replica, held = new Set())
+  if (held.has(client)) return
+  held.add(client)
   for (let comp of SCREEN) holdQuery(screenOf(comp, client))
 }
 
@@ -3087,6 +3102,7 @@ export let foldFor = (client: string, board: string): Folded | undefined => {
 // a canvas whose num hasn't landed yet can't be "first", or sorting the unknown
 // to the front would yank every tab sitting on `/` to it.
 export let rootCanvas = () => {
+  if (!capable('canvas')) return undefined
   canvasVersion.value
   return queryEids([has('canvas')]).value
     .map((eid) => [eid, paint.peek()[eid]] as const)
@@ -3103,7 +3119,7 @@ export let rootCanvas = () => {
 // canvas reaches the server's answer a moment after the local write, and a
 // second mint meanwhile would leave two.
 export let homeless = () =>
-  !rootCanvas() &&
+  capable('canvas') && !rootCanvas() &&
   querySubscription([has('canvas')])?.state.status == 'ready'
 let homeMade = false
 export let makeHome = () => {
@@ -3131,7 +3147,7 @@ export let makeHome = () => {
 // matters more now that a projected query rides a real SERVER sub (D-22567 §3):
 // the projected row is all a late-arriving pin has.
 let whole = (comp: string, volatile: string[] = []): Field[] =>
-  Object.keys(comps[comp]).map((prop) => ({
+  Object.keys(comps[comp] ?? {}).map((prop) => ({
     comp,
     prop,
     wake: !volatile.includes(prop),

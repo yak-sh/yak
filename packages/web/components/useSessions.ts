@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks'
 import { leaseEid } from '../../effects/lease.ts'
 import { ent } from '../live.ts'
 import { type RunnerLease, trayLive, traySessions } from '../sessions.ts'
-import type { Ent } from '../types.ts'
+import { type Ent, vocab } from '../types.ts'
 import {
   trayActiveQuery,
   trayProcessQuery,
@@ -13,9 +13,10 @@ import { useQueryResult } from './useQuery.ts'
 // Both surfaces own the same bounded subscriptions; the query layer shares
 // their wire reads. Leases are one projected batch over these candidates only.
 export let useSessions = (enabled = true) => {
-  let active = useQueryResult(trayActiveQuery, enabled, true).eids
-  let process = useQueryResult(trayProcessQuery, enabled, true).eids
-  let recent = useQueryResult(trayRecentQuery, enabled, true).eids
+  let query = (line: string) => vocab.comp('session') ? line : ''
+  let active = useQueryResult(query(trayActiveQuery), enabled, true).eids
+  let process = useQueryResult(query(trayProcessQuery), enabled, true).eids
+  let recent = useQueryResult(query(trayRecentQuery), enabled, true).eids
   let ids = [...new Set([...active, ...process, ...recent])].sort()
   let leaseIds = new Set(
     useQueryResult(

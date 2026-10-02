@@ -13,7 +13,7 @@ import {
   row,
   subscriptionState,
 } from '../live.ts'
-import { kindOf } from '../types.ts'
+import { kindOf, vocab } from '../types.ts'
 import { inboxCountQueries, inboxQueries } from '@yaks/inbox/queries'
 
 let rows = (eids: string[]): Row[] =>
@@ -30,8 +30,14 @@ let rows = (eids: string[]): Row[] =>
   })
 
 let useReader = (actor: string) => {
-  let profile = useEntity(actor, 'project.color,email.address')
-  let subscriptions = useQueryResult(`.subscription.actor=${actor}`)
+  let fields = ['project.color', 'email.address'].filter((path) => {
+    let [comp, prop] = path.split('.')
+    return vocab.prop(comp, prop)
+  }).join(',')
+  let profile = useEntity(actor, fields || 'entity.eid')
+  let subscriptions = useQueryResult(
+    vocab.comp('subscription') ? `.subscription.actor=${actor}` : '',
+  )
   return {
     who: readerAt([
       ...(profile?.value ? rows([actor]) : []),
@@ -47,7 +53,7 @@ let useItems = (
   unreadOnly: boolean,
   enabled = true,
 ) => {
-  let queries = inboxQueries(who, unreadOnly)
+  let queries = inboxQueries(who, unreadOnly, vocab)
   let reads = [
     useQueryResult(queries[0], enabled),
     useQueryResult(queries[1], enabled),
@@ -98,7 +104,7 @@ export let useInboxCount = (actor: string): number | undefined => {
   let ready = profile?.ready === true &&
     subscriptions.subscription?.state.status == 'ready'
   let counting = ready && subscriptions.eids.length == 0
-  let queries = inboxCountQueries(who)
+  let queries = inboxCountQueries(who, vocab)
   let counts = [
     useCount(queries[0], counting),
     useCount(queries[1], counting),

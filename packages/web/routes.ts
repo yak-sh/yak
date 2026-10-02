@@ -21,11 +21,14 @@ import { prefixOf } from '@yaks/id'
 import { everforest, kits, stylesheet } from '@yaks/ui'
 import type { Vocab } from '@yaks/vocab'
 import { type Body, bundle, kept } from '@yaks/cli/page'
+import { person } from '@yaks/cli/host'
+import type { Config } from '@yaks/cli/config'
 import { addressId } from './url.ts'
 
 /** What this facet reads off the host it is composing into: the vocabulary
  * its plugins loaded, and the graph a name is resolved in. */
 export type Hosting = {
+  config?: Config
   vocab: Vocab
   graph: Graph
   /** aborts as the host closes, ending the app's build if it is still going */
@@ -102,6 +105,17 @@ export let routes = (host: Hosting): Route[] => {
   return [
     { method: 'GET', path: '/*', handle: named },
     { method: 'GET', path: '/', handle: page },
+    {
+      method: 'GET',
+      path: '/web/owner',
+      handle: async () =>
+        Response.json({
+          owner: await person({
+            graph: host.graph,
+            config: host.config ?? { db: ':memory:', plugins: [] },
+          }),
+        }),
+    },
     { method: 'GET', path: '/%23*', handle: page },
     ...letters(host.vocab).flatMap((l): Route[] => [
       { method: 'GET', path: `/${l}-*`, handle: page },

@@ -6,7 +6,7 @@
 // binding under hot-swap re-evaluation. Native payloads and pointer geometry
 // belong with the interaction machinery, not the views that consume them.
 import { idOf } from '../types.ts'
-import { ent } from '../live.ts'
+import { capable, ent } from '../live.ts'
 import { resolve } from './registry.ts'
 
 export type Box = { x: number; y: number; w: number; h: number }
@@ -171,17 +171,19 @@ export let dragData = (
   if (!ev.dataTransfer || !(ev.currentTarget instanceof HTMLElement)) return
   let e = ent(eid)
   let box = ev.currentTarget.getBoundingClientRect()
-  ev.dataTransfer.setData(
-    CARD_DATA,
-    JSON.stringify({
-      target: eid,
-      view,
-      w,
-      ox: ev.clientX - box.left,
-      oy: ev.clientY - box.top,
-      ...(pin ? { pin } : {}),
-    }),
-  )
+  if (capable('canvas')) {
+    ev.dataTransfer.setData(
+      CARD_DATA,
+      JSON.stringify({
+        target: eid,
+        view,
+        w,
+        ox: ev.clientX - box.left,
+        oy: ev.clientY - box.top,
+        ...(pin ? { pin } : {}),
+      }),
+    )
+  }
   let f = resolve(e, view).file
   if (!f) return
   let text = f.text(e)

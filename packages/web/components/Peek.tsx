@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'preact/hooks'
-import { ent, type Peeked } from '../live.ts'
+import { capable, ent, type Peeked } from '../live.ts'
 import { block, Tabs } from '@yaks/ui'
 import { cardMenuAt, peek } from './nav.tsx'
 import { applicable, resolve } from './registry.ts'
@@ -149,7 +149,7 @@ let PeekCard = ({ p }: { p: Peeked }) => {
             <Tab
               type='button'
               mod={v == view && 'on'}
-              draggable
+              draggable={capable('canvas')}
               // a tab flies its OWN view: stop the head's dragstart from
               // overwriting the payload with the current one
               onDragStart={(ev: DragEvent) => {

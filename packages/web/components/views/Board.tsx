@@ -4,6 +4,7 @@ import {
   boardTally,
   byPriority,
   byWarmth,
+  capable,
   clientId,
   clientSubscription,
   ent,
@@ -244,6 +245,7 @@ export let Board = ({ e }: { e: Ent }) => {
   // board), so they persist, sync across this client's tabs, and agents
   // can see them. The TUI has no client identity; it just never folds.
   let me = (() => {
+    if (!capable('canvas')) return null
     try {
       return clientId()
     } catch {

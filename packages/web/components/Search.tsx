@@ -1,7 +1,7 @@
 import { entityPath } from '../url.ts'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { type Hit, idOf, kindOrder, plural, uuid } from '../types.ts'
-import { ent, mutate, searchOpen } from '../live.ts'
+import { capable, ent, mutate, searchOpen } from '../live.ts'
 import { navigate } from './nav.tsx'
 import { block } from '@yaks/ui'
 import { Icon } from './icons.tsx'
@@ -204,8 +204,10 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
           {!!q.trim() && (
             <Board
               type='button'
-              draggable
-              data-tip='save as board — or drag onto the canvas'
+              draggable={capable('canvas')}
+              data-tip={capable('canvas')
+                ? 'save as board — or drag onto the canvas'
+                : 'save as board'}
               onClick={board}
               onDragStart={(ev: DragEvent) => {
                 ev.dataTransfer?.setData(
