@@ -107,7 +107,9 @@ tmux capture-pane -p -t <task>
 - The web TUI (`deno task tui`, from your worktree) ignores `--config` and
   `$YAK_CONFIG`: it reads `TASKS_HOST` and otherwise connects to the live server
   on 5173 (packages/web/tui/main.tsx, T-59091). Always run it as
-  `TASKS_HOST=127.0.0.1:<port> deno task tui`.
+  `TASKS_HOST=127.0.0.1:<port> TASKS_TUI_STATE=$D/tui.json deno task tui`.
+  `TASKS_TUI_STATE` keeps the probe's browsing position in scratch instead of
+  writing the person's `~/.yak/tui.json`.
 
 ## yaks.app
 

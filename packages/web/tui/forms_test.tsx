@@ -5,9 +5,11 @@ import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { install } from '@yaks/tui'
 import { Ux } from '@yaks/ux'
-import { cache, config, owner, rows } from '../live.ts'
+import { cache, config, ent, owner, rows } from '../live.ts'
 import { commentPlace, Composer } from '../components/Comments.tsx'
 import { drafts } from '../components/drafts.ts'
+import { Decision } from '../components/Decision.tsx'
+import { answerPlace } from '@yaks/task/views'
 import { App, spot, spots, terminal, trail } from './App.tsx'
 import { click, control, field } from './forms.ts'
 import { pane } from './paint.ts'
@@ -107,6 +109,58 @@ test('terminal home paints the inbox and its line controls can be activated', as
     render(null, target)
     free()
     owner.value = undefined
+    cache.value = {}
+  }
+})
+
+test('terminal decision input submits its shared custom answer through the form', async () => {
+  let { root, free } = install()
+  let target = root as unknown as Parameters<typeof render>[1]
+  let eid = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+  let prior = config.host
+  config.host = ''
+  cache.value = {
+    [eid]: {
+      entity: { eid, num: 4 },
+      task: { eid },
+      doc: { eid, title: 'Route', body: '' },
+      decision: {
+        question: 'Which route?',
+        choices: [{ label: 'Train', description: 'Earlier' }, {
+          label: 'Bus',
+          description: 'Cheaper',
+        }],
+        recommended: 'Train',
+      },
+    },
+  }
+  drafts.type(answerPlace(eid), 'Walk')
+  try {
+    await act(() =>
+      render(
+        h(
+          Ux,
+          { host: terminal },
+          h('div', {}, h(Decision, { e: ent(eid) }), h('footer', {}, 'status')),
+        ),
+        target,
+      )
+    )
+    let line = pane(root).lines.findIndex((line) =>
+      line.some((s) => s.text.includes('Walk'))
+    )
+    let edit = field(control(root, line)!)
+    await act(() => {
+      for (let c of ' together') edit.key(c)
+    })
+    await act(() => edit.key('\r'))
+    edit.close()
+    assertEquals(ent(eid).decided?.choice, 'Walk together')
+    assertEquals(drafts.text(answerPlace(eid)), '')
+  } finally {
+    render(null, target)
+    free()
+    config.host = prior
     cache.value = {}
   }
 })

@@ -53,6 +53,9 @@ The routes facet (`@yaks/web/routes`, routes.ts) answers:
 | `/web/styles.css`                       | @yaks/ui's, then styles.css               |
 | `/web/manifest.webmanifest`, icons      | the files beside it                       |
 
+`POST /web/apply` signs the person's writes; `/apply` remains the generic API
+door.
+
 Any other one-segment path is a name an id may be written as (`/lemon-cake`):
 the page when it names an entity, and the page answered 404 when it names
 nothing. @yaks/api answers a path from the route naming it most closely, so
@@ -73,8 +76,10 @@ handlers.
   turns a query line into the host's grammar and bundles into the cache's
   changes.
 - **Writes.** A change is applied locally, kept in a durable outbox, and POSTed
-  to `/apply` (live.ts `post`). A refusal is recorded in the refusal ledger and
-  the rows it touched are read again; a network error or a 5xx is redelivered.
+  to `/web/apply` (live.ts `post`), attributed to the configured owner by the
+  web door using @yaks/api's admission and write handler. A refusal is recorded
+  in the refusal ledger and the rows it touched are read again; a network error
+  or a 5xx is redelivered.
 - **Rendering.** components/registry.ts selects renderers through @yaks/render
   and mounts them with @yaks/preact; Entity.tsx holds the curated list, and
   components/views holds the views. The TUI (tui/, `deno task tui`) mounts the

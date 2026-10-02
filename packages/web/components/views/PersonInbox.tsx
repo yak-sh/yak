@@ -7,6 +7,7 @@ import { apply, ent } from '../../live.ts'
 import { type Ent } from '../../types.ts'
 import { Branches, Composer } from '../Comments.tsx'
 import { Decision } from '../Decision.tsx'
+import { Dot } from '../Dot.tsx'
 import { Entity } from '../Entity.tsx'
 import { useDraft } from '../drafts.ts'
 import { linkProps } from '../nav.tsx'
@@ -32,10 +33,14 @@ export let markThread = (eid: string, mark: 'opened' | 'archived') =>
   void apply(attention(eid, mark)).catch(() => {})
 
 let preview = (r: Row) =>
-  String(
-    r.comps.content?.body ?? r.comps.doc?.body ?? r.comps.commit?.message ??
-      r.comps.decision?.question ?? r.comps.doc?.title ?? '',
-  ).replace(/\s+/g, ' ').trim().slice(0, 240)
+  [
+    r.comps.content?.body,
+    r.comps.doc?.body,
+    r.comps.commit?.message,
+    r.comps.decision?.question,
+    r.comps.doc?.title,
+  ].map((v) => String(v ?? '').replace(/\s+/g, ' ').trim())
+    .find(Boolean)?.slice(0, 240) ?? ''
 
 let Conversation = ({ thread: t }: { thread: Thread<Row> }) => {
   let e = ent(t.eid)
@@ -65,6 +70,7 @@ let ThreadRow = ({ thread: t }: { thread: Thread<Row> }) => {
           setOpen(!open)
         }}
       >
+        <Dot status={t.unread ? 'unread' : 'read'} />
         <Frame.Title>{e.doc?.title || 'Thread'}</Frame.Title>
         <Frame.Reason>
           {t.blocking ? 'blocking · ' : ''}
@@ -132,7 +138,7 @@ export let InboxThreads = (
         return (
           <Frame.Lane key={lane} aria-label={lane}>
             <Frame.Heading>
-              {lane} <small>{items.length}</small>
+              {lane} · {items.length}
             </Frame.Heading>
             {items.map((t) => <ThreadRow key={t.eid} thread={t} />)}
             {ready && !items.length && (

@@ -1,11 +1,11 @@
 import { test } from '@yaks/testing'
 import './testing.ts'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertRejects } from '@std/assert'
 import { type Route, routed } from '@yaks/api'
 import { handler } from '@yaks/api/routes'
 import { aliasDoc, aliases } from '@yaks/alias'
 import { docDoc } from '@yaks/doc'
-import { graph as open } from '@yaks/graph'
+import { type Comp, graph as open } from '@yaks/graph'
 import { human } from '@yaks/id'
 import { ids } from '@yaks/id/rules'
 import { idDoc } from '@yaks/id/vocab'
@@ -120,4 +120,48 @@ test('the page learns the configured owner by the graph address interface', asyn
   let response = await owner.handle(new Request('http://x/web/owner'))
   let [row] = await graph.read('.doc.title=x')
   assertEquals(await response.json(), { owner: row.entity.eid })
+})
+
+test('web and terminal writes are attributed to the configured owner through API admission', async () => {
+  let rs = routes({
+    vocab,
+    graph,
+    config: { db: ':memory:', plugins: [], person: 'lemon-cake' },
+    who: () => ({ by: 'server', via: 'terminal' }),
+  })
+  let post = rs.find((r) => r.path == '/web/apply')!
+  let [owner] = await graph.read('.doc.title=x')
+  let response = await post.handle(
+    new Request('http://x/web/apply', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify([{
+        entity: { eid: 'reply' },
+        doc: { body: 'My reply' },
+        comment: { target: owner.entity.eid },
+        $actor: { by: 'spoofed' },
+      }, {
+        entity: { eid: 'question' },
+        task: {},
+        decided: { choice: 'Train' },
+      }]),
+    }),
+  )
+  assertEquals(response.status, 200)
+  let [reply, decided] = await graph.get(['reply', 'question'])
+  assertEquals((reply.created as Comp)?.by, owner.entity.eid)
+  assertEquals((reply.created as Comp)?.via, 'terminal')
+  assertEquals((decided.decided as Comp)?.by, owner.entity.eid)
+  await assertRejects(
+    async () =>
+      await post.handle(
+        new Request('http://x/web/apply', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: '{}',
+        }),
+      ),
+    Error,
+    '/apply takes a JSON array of bundles',
+  )
 })

@@ -54,7 +54,7 @@ test('person inbox groups policy threads, shows newest words and answers in plac
       [...seen.root.querySelectorAll('.Inbox_Heading')].map((n) =>
         n.textContent
       ),
-      ['Needs you 1', 'Replies 0', 'Updates 0', 'Recent 0'],
+      ['Needs you · 1', 'Replies · 0', 'Updates · 0', 'Recent · 0'],
     )
     assertEquals(seen.root.querySelectorAll('[data-thread]').length, 1)
     assertEquals(

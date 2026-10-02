@@ -15,7 +15,7 @@
 // `bundle`), its stylesheet (@yaks/ui's in Everforest, then this package's
 // own), icons and manifest. The vocabulary is @yaks/api's `/vocab`.
 
-import type { Route } from '@yaks/api'
+import { type Authenticate, type Route, write } from '@yaks/api'
 import { dead, type Graph } from '@yaks/graph'
 import { prefixOf } from '@yaks/id'
 import { everforest, kits, stylesheet } from '@yaks/ui'
@@ -31,6 +31,7 @@ export type Hosting = {
   config?: Config
   vocab: Vocab
   graph: Graph
+  who?: Authenticate
   /** aborts as the host closes, ending the app's build if it is still going */
   stopping?: AbortSignal
 }
@@ -105,6 +106,24 @@ export let routes = (host: Hosting): Route[] => {
   return [
     { method: 'GET', path: '/*', handle: named },
     { method: 'GET', path: '/', handle: page },
+    {
+      method: 'POST',
+      path: '/web/apply',
+      handle: async (request) => {
+        let owner = await person({
+          graph: host.graph,
+          config: host.config ?? { db: ':memory:', plugins: [] },
+        })
+        let via = await host.who?.(request)
+        // This door is the configured person's keyboard, in both web and TUI.
+        // The API owns admission, stamps and writes; the page owns attribution.
+        return write(
+          host.graph,
+          request,
+          owner ? { by: owner, via: via?.via ?? via?.by } : via ?? null,
+        )
+      },
+    },
     {
       method: 'GET',
       path: '/web/owner',

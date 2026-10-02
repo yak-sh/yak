@@ -19,10 +19,12 @@ export let tuiKeys: Keybinding[] = [
   { keys: ['?'], about: 'show or close keybindings' },
   { keys: ['n'], about: 'open or close navigation' },
   { keys: ['j', 'k'], about: 'browse' },
-  { keys: ['l', 'Enter'], about: 'enter' },
+  { keys: ['l'], about: 'follow an entity link' },
+  { keys: ['Enter'], about: 'open a thread, use a button or type in a field' },
   { keys: ['h', 'Ctrl-D'], about: 'go back' },
   { keys: ['Tab', 'Shift-Tab'], about: 'change view' },
   { keys: ['i'], about: 'edit' },
+  { keys: ['Shift-Enter'], about: 'add a reply line while typing' },
   { keys: ['1–4'], about: 'answer a decision with a listed choice' },
   {
     keys: ['a'],

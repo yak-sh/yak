@@ -1625,7 +1625,7 @@ let heal = async (changes: Change[]) => {
   applyLocal([...back, ...changesOf(rows)])
 }
 
-// A write leaves as bundles on POST /apply (@yaks/api). The answer is the
+// A write leaves through the person's /web/apply door over @yaks/api. The answer is the
 // batch as applied, which lands like any patch. A refusal settles the write:
 // it is kept where the person can see it (refuse) and the rows it touched are
 // read back, so the optimistic edit heals. An unreachable or failing host
@@ -1633,7 +1633,7 @@ let heal = async (changes: Change[]) => {
 let post = async (changes: Change[], id: string) => {
   let res: Response
   try {
-    res = await fetch(`${base()}/apply`, {
+    res = await fetch(`${base()}/web/apply`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(bundlesOf(changes)),
