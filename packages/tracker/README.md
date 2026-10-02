@@ -44,13 +44,14 @@ segment per record and removes it only on acknowledgement. An incomplete tail
 stays on disk while complete records continue. Segments use independent names,
 so concurrent processes never share an append offset.
 
-`effects({graph}, options)` accepts an `enrich` function for downstream frame
-resolution, a space `notify` stream callback, or a platform/box mail `to`,
-`from` and global tracker `store` eid. New bugs and regressions share a letter
-per minute, scheduled by a graph wake; bugs become notified only after its
-`delivered` mark. Space replies own their own notified mark. Archived bugs still
-count but never notify. Retention keeps the newest hundred plus the first
-occurrence of each commit (or version without a commit).
+`effects({graph}, options)` accepts `code: {cwd, url, origins}` for box frame
+resolution through the fleet catalog, an `enrich` function for another host, a
+space `notify` stream callback, or a platform/box mail `to`, `from` and global
+tracker `store` eid. New bugs and regressions share a letter per minute,
+scheduled by a graph wake; bugs become notified only after its `delivered` mark.
+Space replies own their own notified mark. Archived bugs still count but never
+notify. Retention keeps the newest hundred plus the first occurrence of each
+commit (or version without a commit).
 
 ## The box role
 
@@ -72,8 +73,34 @@ before acknowledging them; a crash in between resends the same eids.
 Enable the unit with `systemctl --user enable --now yak-tracker.service`.
 Restart watched hosts through `yak restart` to load their reporting config;
 rolling web or task workers does not stop the tracker unit. No mail recipient is
-configured by default. Delivery and cross-store enrichment are configured
-separately; loading the mail vocabulary alone sends nothing.
+configured by default. The sample plugin options name the box checkout and fleet
+HTTP catalog; adjust `code.cwd`, `code.url` and served `code.origins` for
+another machine. No source records are copied into the tracker. Loading the mail
+vocabulary alone sends nothing.
+
+## Frames and code
+
+`stackFrames(stack)` parses Deno/V8 and Firefox/Safari stacks in top-first
+order, including causes. It bounds stacks and frames and removes URL query
+strings. `error_group` commits parsed text and counts the occurrence without
+contacting the code catalog. `error_frames` enriches it separately, so catalog
+downtime cannot stall intake or grouping. Catalog failures retry in the effect
+pool; starting the pool rechecks retained occurrences without recounting them.
+
+The box resolver accepts paths only under its repository's Git checkout roots,
+or HTTP module URLs at explicitly configured origins. It checks regular files in
+`error.commit`, never mutable checkout bytes. It asks the fleet's `/query` door
+for the derived file and exported-symbol eids. A module resolves only when its
+catalog blob matches that commit; a symbol resolves only by its exact export
+name in that module. No catalog record means no link. A known repository frame
+is in-app even while its catalog is missing or outdated; dependencies are not.
+Non-exported functions and anonymous arrows can resolve a module only.
+
+`bug.culprit` is the first in-app frame with a resolved symbol. Until one
+resolves, `bug.spot` keeps the top in-app frame, or the first text frame when
+none is known. Later enrichment fills the culprit and removes its text fallback.
+The canvas now serves `/web/app.js` as a bundle, so those frames, worker bundles
+and hosted app files remain text: v1 supplies no source-map guesses.
 
 ## Transition boundaries
 

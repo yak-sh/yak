@@ -4,6 +4,7 @@
 import { type Bundle, derivedEid, type Graph, token } from '@yaks/graph'
 import { absent, and, eq, every } from '@yaks/query'
 import { faultKey } from './fault.ts'
+import { enrichFrames } from './frames.ts'
 import { comp, type Frame, str, title } from './model.ts'
 
 export type Enrich = (row: Bundle) => Bundle | Promise<Bundle>
@@ -37,7 +38,7 @@ export let grouped = (
   let at = str(e.at)
   let frames = Array.isArray(x.frames) ? x.frames as Frame[] : []
   let culprit = frames.find((f) => f.app && f.symbol)?.symbol
-  let top = frames.find((f) => f.app)
+  let top = frames.find((f) => f.app) ?? frames[0]
   let back = !!bug && regresses(row, bug, before)
   return [
     {
@@ -58,7 +59,7 @@ export let grouped = (
             ...(app ? { app } : {}),
             title: title(row),
             first: at,
-            ...culprit ? { culprit } : top
+            ...culprit ? { culprit, spot: null } : top
               ? {
                 spot: `${top.file}${top.line ? `:${top.line}` : ''}${
                   top.function ? ` ${top.function}` : ''
@@ -93,7 +94,7 @@ export let group = async (
 ): Promise<void> => {
   let [row] = await g.get([eid])
   if (!row?.error || row.refusal || comp(row, 'error').bug) return
-  let full = enrich ? await enrich(row) : row
+  let full = await (enrich ?? enrichFrames())(row)
   let fault = str(comp(full, 'error').fault) || faultKey(
     str(comp(full, 'during').kind),
     title(full),
@@ -143,4 +144,42 @@ export let trim = async (g: Graph, bug: string, count = 100): Promise<void> => {
       { trusted: true },
     )
   }
+}
+
+/** Fill previously grouped occurrences without recounting them. Catalog outages
+ * retry in the pool; the original occurrence and text grouping already landed. */
+export let reframe = async (
+  g: Graph,
+  eid: string,
+  enrich: Enrich,
+): Promise<void> => {
+  let [row] = await g.get([eid])
+  if (!row?.error || !row.exception) return
+  let full = await enrich(row)
+  let frames = comp(full, 'exception').frames
+  if (!Array.isArray(frames)) return
+  let patch: Bundle[] = [{
+    entity: row.entity,
+    $was: {
+      error: { bug: token(comp(row, 'error').bug) },
+      exception: { frames: token(comp(row, 'exception').frames) },
+    },
+    exception: { frames },
+  }]
+  let bug = str(comp(row, 'error').bug)
+  let culprit = frames.find((f) => f.app && f.symbol)?.symbol
+  let top = frames.find((f) => f.app) ?? frames[0]
+  let [known] = bug ? await g.get([bug]) : []
+  if (known?.bug && !comp(known, 'bug').culprit && (culprit || top)) {
+    patch.push({
+      entity: { eid: bug },
+      $was: { bug: { culprit: token(comp(known, 'bug').culprit) } },
+      bug: culprit ? { culprit, spot: null } : {
+        spot: `${top.file}${top.line ? `:${top.line}` : ''}${
+          top.function ? ` ${top.function}` : ''
+        }`,
+      },
+    })
+  }
+  await g.apply(patch, { trusted: true })
 }

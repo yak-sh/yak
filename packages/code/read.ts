@@ -218,7 +218,8 @@ export type DocNode = {
 /**
  * The exports a module declares itself, from `deno doc --json` output: a
  * re-export belongs to the module that declares it, and an overloaded name
- * is one export at its first declaration.
+ * is one export at its first declaration. Deno locations are zero-based;
+ * symbol lines are one-based.
  */
 export let exportsOf = (
   nodes: Record<string, DocNode>,
@@ -234,7 +235,7 @@ export let exportsOf = (
     out.push({
       name: s.name,
       kind: d.kind,
-      line: d.location.line,
+      line: d.location.line + 1,
       doc: d.jsDoc?.doc?.trim() ?? '',
     })
   }

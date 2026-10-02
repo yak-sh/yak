@@ -113,13 +113,13 @@ test('exportsOf: own exports once each, never a re-export', () => {
         {
           name: 'f',
           declarations: [
-            decl(url, 'function', 3, ' Does f. '),
+            decl(url, 'function', 2, ' Does f. '),
             decl(url, 'function', 9),
           ],
         },
         { name: 'g', declarations: [decl('file:///r/b.ts', 'variable', 1)] },
         { name: 'h', declarations: [decl(url, 'reference', 5)] },
-        { name: 'T', declarations: [decl(url, 'typeAlias', 12)] },
+        { name: 'T', declarations: [decl(url, 'typeAlias', 11)] },
       ],
     },
   }

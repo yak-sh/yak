@@ -14,3 +14,5 @@ export {
   trim,
 } from './group.ts'
 export { type Crumb, type Frame, type Level } from './model.ts'
+
+export { enrichFrames, type Resolve, stackFrames } from './frames.ts'

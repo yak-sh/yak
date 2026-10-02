@@ -5,10 +5,13 @@ import { type Bundle, derivedEid, type Graph } from '@yaks/graph'
 import type { Handlers } from '@yaks/effects'
 import { and, eq, every } from '@yaks/query'
 import { comp, str } from './model.ts'
-import { type Enrich, group, trim } from './group.ts'
+import { type Enrich, group, reframe, trim } from './group.ts'
+import { enrichFrames } from './frames.ts'
+import { sourceFrames, type SourceOptions } from '@yaks/code/source'
 
 export type Options = {
   enrich?: Enrich
+  code?: SourceOptions
   /** Platform/box delivery target, resolved by the host to a person's eid. */
   to?: string
   from?: string
@@ -89,12 +92,17 @@ export let notify = async (
 export let effects = (
   host: { graph: Graph },
   options: Options = {},
-): Handlers => ({
-  error_group: (e) => group(host.graph, e.entity.eid, options.enrich),
-  bug_notify: (e) => notify(host.graph, e.entity.eid, options),
-  error_trim: async (e) => {
-    let [row] = await host.graph.get([e.entity.eid])
-    let bug = str(comp(row, 'error').bug)
-    if (bug) await trim(host.graph, bug, options.retain)
-  },
-})
+): Handlers => {
+  let enrich = options.enrich ??
+    enrichFrames(options.code ? sourceFrames(options.code) : undefined)
+  return {
+    error_group: (e) => group(host.graph, e.entity.eid),
+    error_frames: (e) => reframe(host.graph, e.entity.eid, enrich),
+    bug_notify: (e) => notify(host.graph, e.entity.eid, options),
+    error_trim: async (e) => {
+      let [row] = await host.graph.get([e.entity.eid])
+      let bug = str(comp(row, 'error').bug)
+      if (bug) await trim(host.graph, bug, options.retain)
+    },
+  }
+}

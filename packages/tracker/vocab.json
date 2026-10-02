@@ -339,6 +339,18 @@
       "required": [
         "bug"
       ]
+    },
+    "error_frames": {
+      "effect": true,
+      "description": "Resolve grouped stack frames through the code catalog without recounting occurrences; retry unresolved records when the pool starts.",
+      "changed": [
+        "error.bug"
+      ],
+      "active": ".error .exception .error.bug",
+      "sweep": ".error .exception .error.bug",
+      "created": [
+        "exception"
+      ]
     }
   }
 }

@@ -64,3 +64,26 @@ one.
 A citation of code (`cites`, [@yaks/git](../git)) points at a `symbol`, and
 `cites check` asks Git which commits touched that definition since the citation
 was verified.
+
+## Resolving runtime places
+
+`@yaks/code/frames` exports `resolveFrames(catalog, repository, blobs, places)`:
+a catalog with `get(eids)`, the repository eid, a path-to-blob map from the
+failing commit, and `{path, function, line}` places. It returns
+`{app, module,
+symbol}` only for catalog records whose file identity and blob
+agree. A symbol must name an exported definition of that same module, not an
+inferred class member or anonymous function. Unknown or stale records leave
+their eids absent.
+
+`@yaks/code/source` supplies the box boundary:
+`sourceFrames({cwd, url,
+origins})` reads regular-file blobs from Git at the
+reported commit and reads only requested records from the catalog's HTTP query
+door. File URLs must be under that repository's known checkout roots; browser
+module URLs must use an explicitly served origin. It reads no source path chosen
+by a frame, follows no symlink blob, and never substitutes HEAD for an unknown
+commit. Bundle URLs have no source module mapping without source maps and remain
+unresolved.
+
+Deno doc's zero-based locations become one-based `symbol.line` at ingestion.

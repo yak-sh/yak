@@ -1,6 +1,8 @@
 {
   "db": "tracker.db",
-  "tracker": { "spool": "tracker-spool" },
+  "tracker": {
+    "spool": "tracker-spool"
+  },
   "plugins": [
     "@yaks/kernel",
     "@yaks/doc",
@@ -10,6 +12,18 @@
     "@yaks/effects",
     "@yaks/mail",
     "@yaks/wake",
-    "@yaks/tracker"
+    {
+      "use": "@yaks/tracker",
+      "with": {
+        "code": {
+          "cwd": "/home/yaks/code/tasks",
+          "url": "http://127.0.0.1:5173",
+          "origins": [
+            "https://tasks.yak.sh",
+            "http://127.0.0.1:5173"
+          ]
+        }
+      }
+    }
   ]
 }

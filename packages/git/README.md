@@ -532,3 +532,12 @@ Identity and locking assume one filesystem and one shared graph, used by
 cooperating processes on that machine. A checkout moved on disk, or changed by
 Git outside this package, is noticed the next time discovery runs; there is no
 background reconciliation.
+
+## Reading a commit's source paths
+
+`@yaks/git/source` exports `treeAt(cwd, commit, paths)`, a map of regular-file
+paths to their Git blob ids. It accepts a full object id, verifies it as a
+commit, uses literal repository-relative paths and leaves unknown revisions,
+symlinks and submodules unresolved. It never reads the checkout's files.
+`rootsOf(common)` lists the repository's primary and linked checkout roots
+without pruning or changing Git state.
