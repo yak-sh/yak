@@ -805,10 +805,12 @@ test('install inspects columns after acquiring the write lock', () => {
 })
 
 // A long-lived process and the commands started after a land that added a
-// component: each reads on, and neither installs over the other again.
+// component: each reads on, neither installs over the other again, and one
+// more opening finds its objects in place and changes nothing.
 test('two vocabularies open on one file leave its schema at rest', () => {
   let dir = Deno.makeTempDirSync({ prefix: 'yak-schema-rest-' })
   let a = open(`${dir}/graph.db`), b = open(`${dir}/graph.db`)
+  let c = open(`${dir}/graph.db`)
   let words = (...more: string[]) =>
     loadVocab({
       $defs: Object.fromEntries([
@@ -829,10 +831,12 @@ test('two vocabularies open on one file leave its schema at rest', () => {
       newer.get(['x'])
       older.get(['x'])
     }
+    storage(c, words()).get(['x'])
     assertEquals(version(), was)
   } finally {
     a.close()
     b.close()
+    c.close()
     Deno.removeSync(dir, { recursive: true })
   }
 })

@@ -151,11 +151,13 @@ made from a template: the first one a process makes for a vocabulary is kept,
 and each later one is a copy of it, since copying a schema is a page copy and
 making one is hundreds of statements (@yaks/sql `Driver.template`).
 
-A store installs once. When another connection changes the file's schema
-afterwards (a process running another vocabulary installing its own), the store
-re-raises only what of its own went missing, and drops, rebuilds and re-marks
-nothing, so processes on two vocabularies share a file without undoing each
-other's installs.
+A store installs once, and an install over a file that already holds what it
+would make changes no schema (the doc view is made again only where the file's
+differs). When another connection changes the file's schema afterwards (a
+process running another vocabulary installing its own), the store re-raises only
+what of its own went missing, and drops, rebuilds and re-marks nothing, so
+processes on two vocabularies share a file without undoing each other's
+installs.
 
 A transaction provides `read`, `get(eids, comps?)`, `patch`, `remove`, `revive`,
 `doom`, and `bindings`. `get` retrieves entities including tombstones, whole or

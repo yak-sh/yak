@@ -69,6 +69,7 @@ import {
   grown,
   indexed,
   logged,
+  retabled,
   retired,
   standing,
   tabled,
@@ -412,7 +413,9 @@ export let storage = (
       let make = () =>
         unit(driver, () => {
           if (matches()) return
-          for (let stmt of tabled(vocab, base.derived)) driver.query(stmt)
+          for (let stmt of retabled(driver, vocab, base.derived)) {
+            driver.query(stmt)
+          }
           let unfit = fit(driver, vocab)
           for (let stmt of retired(driver, vocab)) driver.query(stmt)
           for (let stmt of indexed(vocab)) driver.query(stmt)

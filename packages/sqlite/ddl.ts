@@ -46,6 +46,7 @@ import {
   type Column,
   type CreateIndex,
   type CreateTable,
+  type CreateView,
   type Derived,
   type Driver,
   eq,
@@ -266,9 +267,9 @@ let docDdl = (v: Vocab, derived: Derived): Stmt[] => {
   // The view names its columns rather than selecting `*`, because `*` cannot
   // replace one with the expression that resolves it. `*` did have one virtue —
   // it followed a table that gained columns — so the view is dropped and
-  // recreated rather than left in place: it holds no rows, so recreating it
-  // costs nothing, and a view that lags its table is a read that fails at the
-  // engine.
+  // recreated whenever it says something else ({@link retabled}): it holds no
+  // rows, so recreating it costs nothing, and a view that lags its table is a
+  // read that fails at the engine.
   return [
     { t: 'drop', kind: 'view', name: 'doc_value', ifExists: true },
     {
@@ -308,10 +309,37 @@ export let schema = (vocab: Vocab, derived: Derived = {}): Stmt[] => [
 // The spine and one table per component, with the doc view. Everything an
 // index may need to already exist.
 export let tabled = (vocab: Vocab, derived: Derived = {}): Stmt[] => [
-  ...SPINE,
-  ...tables(vocab).map((name) => tableDdl(vocab, name)),
+  ...spine(vocab),
   ...docDdl(vocab, derived),
 ]
+
+let spine = (vocab: Vocab): Stmt[] => [
+  ...SPINE,
+  ...tables(vocab).map((name) => tableDdl(vocab, name)),
+]
+
+// Whether the file's view already says what `make` says. SQLite keeps a
+// view's statement from its name on, behind a `CREATE VIEW` of its own.
+let stands = (driver: Driver, make: CreateView): boolean => {
+  let [row] = objects(driver, { type: 'view', name: make.name })
+  let body = (sql: string) => sql.replace(/^create view /i, '')
+  return !!row &&
+    body(String(row.sql)) == body(render({ ...make, ifNot: false }).sql)
+}
+
+/** {@link tabled} for a file that may already hold them: the doc view is
+ * dropped and made again only where the file's says something else. Making an
+ * identical view again still changes the schema, and every other connection
+ * to the file reads a changed schema as another install to answer. */
+export let retabled = (
+  driver: Driver,
+  vocab: Vocab,
+  derived: Derived = {},
+): Stmt[] => {
+  let view = docDdl(vocab, derived)
+  let make = view.find((s): s is CreateView => s.t == 'create view')
+  return [...spine(vocab), ...make && stands(driver, make) ? [] : view]
+}
 
 // Declared and automatic reference indexes. Created last, after `grown()`: an
 // index may name a column its table only gained on this boot, and SQLite
