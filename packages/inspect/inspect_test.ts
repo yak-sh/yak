@@ -1,3 +1,8 @@
+import { mount as terminalMount } from '../tui/testing.ts'
+import { TElement } from '@yaks/tui'
+import { everforest, kits, sheet as uiSheet } from '@yaks/ui'
+import { Grid } from './grid.ts'
+import { linkOf, stops } from './tui.ts'
 import { test, tick, until } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { client } from '@yaks/client'
@@ -444,5 +449,81 @@ test('a terminal paints a page as values, with nothing to type in', () => {
   }
   for (let control of ['note', 'edit', '+ component', 'delete']) {
     assert(!painted.includes(control), control)
+  }
+})
+
+test('terminal clicks inside a pickable row follow the link, not the row', async () => {
+  using t = host({}, false)
+  let followed: string[] = []
+  let io = {
+    ...t.io,
+    go: (href: string) => {
+      followed.push(href)
+    },
+  }
+  let ui = await terminalMount(
+    () =>
+      h(
+        'div',
+        {
+          onClick: (e: { target: TElement }) => {
+            let href = linkOf(e.target)
+            if (href) io.go(href)
+          },
+        },
+        h(Grid, {
+          io,
+          id: 'probe',
+          rows: [T1],
+          local: true,
+          columns: [{
+            name: 'target',
+            cell: () =>
+              h('a', { href: pagePath('t2') }, h('span', {}, 'other')),
+          }, { name: 'title', cell: () => 'row body' }],
+        }),
+      ),
+    40,
+    5,
+    uiSheet({ kits, theme: everforest }),
+  )
+  try {
+    assert(ui.text().includes('other'))
+    await ui.send('\x1b[<0;2;2M\x1b[<0;2;2m')
+    assertEquals(followed, [pagePath('t2')])
+    await ui.send('\x1b[<0;10;2M\x1b[<0;10;2m')
+    assertEquals(followed, [pagePath('t2'), pagePath('t1')])
+  } finally {
+    ui.free()
+  }
+})
+
+test('terminal walk visits a row then each of its links before the next row', async () => {
+  let visited: string[] = []
+  let ui = await terminalMount(() =>
+    h(
+      'div',
+      {
+        ref: (root: TElement | null) => {
+          if (root) {
+            visited = stops(root).map((el) =>
+              el.attr('data-pick') ?? el.attr('href')!
+            )
+          }
+        },
+      },
+      h(
+        'div',
+        { 'data-pick': 'row1' },
+        h('a', { href: '/first' }, 'first'),
+        h('span', {}, h('a', { href: '/second' }, 'second')),
+      ),
+      h('div', { 'data-pick': 'row2' }, 'next'),
+    )
+  )
+  try {
+    assertEquals(visited, ['row1', '/first', '/second', 'row2'])
+  } finally {
+    ui.free()
   }
 })

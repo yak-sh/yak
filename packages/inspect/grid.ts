@@ -258,8 +258,10 @@ export let Grid = (p: GridProps): JSX.Element => {
               'data-pick': at,
               tabIndex: at ? -1 : undefined,
               onClick: at
-                ? (ev: { target: unknown }) =>
-                  own(ev.target) || io.go(io.link(at))
+                ? (ev: { target: unknown }) => {
+                  // Step aside without consuming the bubbled link click.
+                  if (!own(ev.target)) io.go(io.link(at))
+                }
                 : undefined,
             },
             columns.map((c) =>

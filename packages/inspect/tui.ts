@@ -8,7 +8,7 @@
  * is the page's.
  *
  * Keys: Tab moves between the index and the top page, the one with the keys
- * framed in the accent. j and k walk its rows and links; Enter (or l) stacks
+ * framed in the accent. j and k walk each row followed by its links; Enter (or l) stacks
  * what the walk is on; h or Backspace returns to the page under the top one;
  * a press on a strip returns to it; ↑ ↓ PgUp PgDn scroll; `/` types in the
  * index's field (Enter runs it as a query, Escape leaves it); q quits.
@@ -85,10 +85,12 @@ let paneOf = (el: TElement | null, pane: Pane): TElement | undefined => {
 }
 
 // What a walk stops on under `el`, in the order they paint: each row a press
-// picks, and each link that is not inside one.
-let stops = (el: TElement | undefined): TElement[] =>
-  !el ? [] : el.attr('data-pick') ? [el] : [
-    ...el.localName == 'a' && el.attr('href') ? [el] : [],
+// picks, then its links before the next row.
+export let stops = (el: TElement | undefined): TElement[] =>
+  !el ? [] : [
+    ...el.attr('data-pick') || el.localName == 'a' && el.attr('href')
+      ? [el]
+      : [],
     ...elements(el).flatMap(stops),
   ]
 
@@ -106,7 +108,7 @@ let mark = (all: TElement[], on?: TElement) => {
 }
 
 // The link a click landed in, if it landed in one.
-let linkOf = (el: TElement | null | undefined): string | undefined => {
+export let linkOf = (el: TElement | null | undefined): string | undefined => {
   for (let n = el; n; n = n.parentNode as TElement | null) {
     if (n.localName == 'a' && n.attr('href')) return n.attr('href')
   }
@@ -270,7 +272,7 @@ export let open = async (
         { class: 'Muted' },
         typing.value
           ? 'Enter runs the query · Escape leaves the field'
-          : `${pane()} · Tab panes · j k walk · Enter opens · h back · ` +
+          : `${pane()} · Tab panes · j k rows then links · Enter opens · h back · ` +
             '/ find · q quit',
       ),
     )
