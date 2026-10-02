@@ -3,6 +3,9 @@
 // only the lookup retries, never the paid generation.
 import { ModelError } from '@yaks/model'
 
+// Generation metadata for speech lands seconds after the bytes.
+let LAG = 20_000
+
 let obj = (value: unknown): Record<string, unknown> =>
   value != null && typeof value == 'object' && !Array.isArray(value)
     ? Object.fromEntries(Object.entries(value))
@@ -30,12 +33,12 @@ export let generationCost = async (
     signal?: AbortSignal
   },
 ): Promise<number> => {
-  let timeout = AbortSignal.timeout(10_000)
+  let deadline = Date.now() + LAG
   let signal = options.signal
-    ? AbortSignal.any([options.signal, timeout])
-    : timeout
+    ? AbortSignal.any([options.signal, AbortSignal.timeout(LAG)])
+    : AbortSignal.timeout(LAG)
   let headers = { authorization: 'Bearer ' + await options.key() }
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0;; attempt++) {
     signal.throwIfAborted()
     let response = await (options.fetch ?? fetch)(
       'https://openrouter.ai/api/v1/generation?id=' + encodeURIComponent(id),
@@ -47,11 +50,13 @@ export let generationCost = async (
     if (typeof cost == 'number' && Number.isFinite(cost) && cost >= 0) {
       return cost
     }
+    let wait = Math.min(250 * 2 ** attempt, 1500)
     if (
-      attempt < 3 && (response.ok || response.status == 404 ||
-        response.status == 429 || response.status >= 500)
+      Date.now() + wait < deadline &&
+      (response.ok || response.status == 404 || response.status == 429 ||
+        response.status >= 500)
     ) {
-      await pause(100 * 2 ** attempt, signal)
+      await pause(wait, signal)
       continue
     }
     throw new ModelError(
@@ -59,5 +64,4 @@ export let generationCost = async (
       `OpenRouter returned no cost for ${id} (${response.status})`,
     )
   }
-  throw new ModelError('cost_response', `OpenRouter returned no cost for ${id}`)
 }
