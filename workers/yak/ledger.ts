@@ -106,10 +106,12 @@ let VOCAB = loadVocab([spineDoc, {
 }], appKeywords)
 
 // Is this bundle the invocation's own? A bundle that says nothing at all — a
-// bare delete — is the caller's, since what it deletes is their data.
+// bare delete — is the caller's, since what it deletes is their data. An
+// app-addressed patch is theirs too, even when it only carries content.
 let mine = (b: Bundle): boolean => {
   let said = comps(b)
-  return said.length > 0 && said.every(([name]) => INVOCATION.includes(name))
+  return !('$app' in b) && said.length > 0 &&
+    said.every(([name]) => INVOCATION.includes(name))
 }
 
 /**
