@@ -104,7 +104,7 @@
     },
     "doc": {
       "title": "level",
-      "body": "Sound effect only: A hero gains a level: a short uplifting four-note bell flourish, clear and satisfying, about half a second. No speech, words, music, or other sounds."
+      "body": "Sound effect only: A hero gains a level: a short rising synth swell that lifts and resolves upward, warm and satisfying, about half a second. No bell, chime, ding or doorbell tone. No speech, words, music, or other sounds."
     },
     "sfx": {
       "name": "level",
