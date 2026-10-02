@@ -9,7 +9,8 @@
     "./routes": "./routes.ts",
     "./vocab": "./vocab.ts",
     "./value": "./value.ts",
-    "./views": "./views.ts"
+    "./views": "./views.ts",
+    "./interruptions": "./interruptions.ts"
   },
   "license": "Apache-2.0",
   "description": "Executes recorded graph tool invocations and stores results independently of sessions.",

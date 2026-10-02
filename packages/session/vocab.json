@@ -38,6 +38,12 @@
             "interrupted"
           ],
           "index": true
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the process or server holding the provider request"
         }
       }
     },
@@ -740,15 +746,26 @@
         "cancelled",
         "admitted"
       ],
-      "changed": ["dispatch.state"],
-      "removed": ["contains", "requires"],
+      "changed": [
+        "dispatch.state"
+      ],
+      "removed": [
+        "contains",
+        "requires"
+      ],
       "sweep": ".session.status=pending,running,queued (.entries.using|.entries.ask)|.dispatch.status=active,queued,waiting",
       "tries": 8,
       "description": "run a transcript until it has nothing more to do: a `using` on an entry asks for a turn, a cancel withdraws the request in flight, a stop ends it (and gives up a child's place), a child is admitted, or a task a transcript holds completes, is cancelled or loses a dependency. A model request the provider failed but may yet answer is asked again after the pool's backoff, eight tries in a row at most"
     },
     "session_release": {
       "effect": true,
-      "created": ["stop", "refusal", "error", "exception", "exit"],
+      "created": [
+        "stop",
+        "refusal",
+        "error",
+        "exception",
+        "exit"
+      ],
       "sweep": ".claim",
       "description": "release claims held by a transcript that stopped or failed; a worker also finds claims left by runs that ended while no worker was serving effects"
     }

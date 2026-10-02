@@ -43,6 +43,7 @@ import {
 } from '@yaks/tools/refusals'
 import { takePatch } from '@yaks/builders'
 import { keyEid } from '@yaks/key'
+import { interruptionFind, interruptionMove } from '@yaks/tools/interruptions'
 import { Unknown } from '@yaks/vocab'
 import { GIT_STORE, PLATFORM_STORE } from './door.ts'
 /** A rule's name: where its stamp is kept in a store's memory, and the
@@ -127,7 +128,18 @@ export let takeRule: Rule = {
 }
 
 export let RULES: Rule[] = [
+<<<<<<< HEAD
   takeRule,
+=======
+  ...interruptionFind.map((find, i): Rule => ({
+    mark: `yak/store/interruption/${i + 1}`,
+    find,
+    move: (row, read) => {
+      if (!read) throw new Error('Interruption mover needs evidence reader')
+      return interruptionMove(row, read)
+    },
+  })),
+>>>>>>> e6e31f632 (Expand interruption marks and rehearse historical lifecycle evidence)
   ...refusalFind.map((find, i): Rule => ({
     mark: i == 0 ? 'yak/store/refusal/1' : 'yak/store/refusal-imported/1',
     live: 'all',
