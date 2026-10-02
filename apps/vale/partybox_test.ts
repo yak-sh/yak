@@ -41,7 +41,7 @@ test('party details show live character stats and gear, then clear them when awa
     } as unknown as ReturnType<typeof parties>
     let body = document.querySelector('main')!
     let view = partybox(
-      { body, open: true, show() {}, close() {}, toggle() {} },
+      { body, open: true, show() {}, close() {}, toggle() {}, head() {} },
       party,
       () => {},
     )
