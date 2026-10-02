@@ -47,6 +47,12 @@ export let PLATFORM = [
   'model',
   'serves',
   'tool',
+  '_package',
+  '_comp',
+  '_prop',
+  '_extends',
+  '_before',
+  '_vocab',
 ]
 
 export type Row = Record<string, unknown>

@@ -14,6 +14,8 @@ import type { Handlers } from '@yaks/effects'
 import type { Graph } from '@yaks/graph'
 import { described } from './described.ts'
 
+export { described } from './described.ts'
+
 /** What the handler is given: the graph. */
 export type Host = { graph: Graph }
 

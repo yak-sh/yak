@@ -193,6 +193,11 @@ export let keep = (held: Held, k: string, v: string) =>
 export let unclassified = (held: Held, stamp: string) => {
   let d = db(held)
   d.query({ t: 'update', table: 'entity', set: { archetype: lit(null) } })
+  // A pre-archetype store predates the journal as well; remove its
+  // append-only references before deleting descriptor spine rows.
+  for (let name of ['journal_field', 'journal_change', 'journal_tx']) {
+    d.query({ t: 'drop', kind: 'table', name, ifExists: true })
+  }
   let descriptors = scan(d, 'archetype', undefined, ['entity'])
     .map((r) => val(Number(r.entity)))
   for (let name of ['retired', 'archetype']) {

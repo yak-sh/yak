@@ -2,6 +2,13 @@ import { ids } from '@yaks/id/rules'
 import { choices } from '@yaks/builders'
 import { recovering } from './models.ts'
 import { archetypes } from '@yaks/archetype'
+import {
+  backed as journalBacked,
+  ddl as journalDdl,
+  journal,
+  log,
+} from '@yaks/journal'
+import { described } from '@yaks/code/effects'
 import { described as describedLenses, lenses, packageEid } from '@yaks/lens'
 import { declaredLenses, lensDocAt, lensRule, spoken } from './lenses.ts'
 // The Store Durable Object, built out of the packages (T-33810, D-33490): one
@@ -353,6 +360,7 @@ let shapeOf = (name: string, declared: string | null): Shape => {
     ...schema(vocab, derived),
     ...ftsSchema(searchable, read),
     ...vectorSchema(),
+    ...(vocab.comp('_tx') ? journalDdl() : []),
   ]
   // With the revision of the fitting that brings standing tables to it
   // (@yaks/sqlite `FIT`), which reads what it changes off the tables: a store
@@ -808,6 +816,9 @@ export class Store {
     requestIds(this.#sql, vocab)
     lifecycleColumns(this.#sql, vocab)
     for (let stmt of blobSchema()) this.#sql.query(stmt)
+    if (vocab.comp('_tx')) {
+      for (let stmt of journalDdl()) this.#sql.query(stmt)
+    }
     let unfit = install(this.#sql, vocab, blobRead(vocab))
     for (let e of unfit) defect(e, { request: 'schema fit', store: name })
     if (held) rebuild(this.#sql)
@@ -815,6 +826,8 @@ export class Store {
   }
 
   #build() {
+    // A newly loaded declaration must refresh its described schema too.
+    this.#sowing = null
     let ctx = this.#ctx
     this.#people.clear()
     // Which words this object speaks is a question of which object it is
@@ -865,6 +878,7 @@ export class Store {
         // receives the same resolution, keeping hashes out of the index
         // (T-33978).
         derived,
+        ...(vocab.comp('_tx') ? { backed: journalBacked(vocab) } : {}),
       },
       observe,
       this.#measure,
@@ -934,6 +948,9 @@ export class Store {
       // store that cannot name its app has no access question to ask and the
       // kernel's own gate in front of it is the whole rule.
       plugins: [
+        ...(vocab.comp('_tx')
+          ? [journal(log({ rows: (s) => drive.query(s), derived }))]
+          : []),
         ...(declaredLenses(declaration)
           ? [
             lenses((error) =>
@@ -1845,6 +1862,15 @@ export class Store {
   // resumes one they paused, and the stamp means a store that already holds
   // them asks its storage once rather than its graph three times.
   #sow = async (): Promise<void> => {
+    // Schema pages are ordinary entities, made by the package that owns
+    // their identities. Describe after boot, in bounded writes, with the
+    // hash last so an interrupted pass resumes on the next request.
+    if (this.#vocab.comp('_vocab')) {
+      let rows = await described(this.#graph, this.#vocab.docs)
+      for (let at = 0; at < rows.length; at += 30) {
+        await this.#trust(rows.slice(at, at + 30), null)
+      }
+    }
     if (this.#lensMove) {
       let doc = lensDocAt(this.#name() ?? '', meant(this.#get('vocab')))
       let rows = await describedLenses(this.#graph, [doc])

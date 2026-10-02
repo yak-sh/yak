@@ -505,3 +505,20 @@ person as the Inbox target. `/<app>/api/vocab` answers the shared docs+keywords
 wire, including borrowed docs; the Store's internal `/vocab` remains the app's
 manifest. The ordinary `/api/query` serves archetype rows and tallies already.
 Deployment preparation builds the package assets into ignored `public/_web`.
+
+### Remote terminal inspector
+
+`yak inspect --app <slug>` (or `--app <space>/<slug>`) resolves the app at
+`GET /api/app?app=…`, then reads its ordinary `/<app>/api` wire using the
+caller's saved `yak login` bearer, including the socket handshake. Members and
+owners keep the app's own access; invalid credentials and cross-space narrowed
+grants are refused in the app's JSON envelope. No option keeps the local
+inspector unchanged.
+
+App stores compose @yaks/vocab's schema entities and @yaks/journal's computed
+`_tx`/`_change` backings. Component/property pages use ordinary queries; the
+schema description is refreshed after boot in bounded writes, with its hash
+last. Journal after-images commit inside the graph transaction, never for a
+rehearsal or refusal. History starts when this composition is installed: old
+changes are not invented or backfilled. Schema rows are excluded from ordinary
+page listings unless named explicitly, like other platform-owned rows.

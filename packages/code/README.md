@@ -87,3 +87,8 @@ commit. Bundle URLs have no source module mapping without source maps and remain
 unresolved.
 
 Deno doc's zero-based locations become one-based `symbol.line` at ingestion.
+
+A host that composes another runtime can reuse `described(graph, docs)` from
+`@yaks/code/effects`: it returns the schema patches and final hash without
+applying them. The host can commit them in bounded batches; writing the hash
+last makes an interrupted description retryable.

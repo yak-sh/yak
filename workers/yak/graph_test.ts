@@ -1035,10 +1035,12 @@ test('a woken object serves the same app, and the same sockets', async () => {
 test('a woken object rewrites nothing it already holds', async () => {
   let ctx = state()
   using _db = ctx.storage
-  await get(await cookbook(ctx), '/query?q=.model', owner)
+  let store = await cookbook(ctx)
+  await get(store, '/query?q=.model', owner)
+  let before = await (await get(store, '/query?q=._vocab&*', owner)).json()
   let woken = new Store(ctx)
-  let moved = await (await get(woken, '/query?q=.updated', owner)).json()
-  assertEquals(moved, [])
+  let after = await (await get(woken, '/query?q=._vocab&*', owner)).json()
+  assertEquals(after, before)
 })
 
 // A wake whose planting throws (`#sow`), here the runtime's alarm failing,
@@ -1510,4 +1512,75 @@ test('a Store anatomy supplier observes its own conditional composition without 
   assert(!directory.rules.some((r) => r.name == 'yak/weigh'))
   assert(directory.rules.some((r) => r.name == 'yak/rules'))
   assertEquals(app.comps.length, store.anatomy().comps.length)
+})
+
+test('app schema pages and journal history are backed by store rows through normal reads', async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  let store = await cookbook(ctx)
+  let query = async (line: string) =>
+    await (await get(
+      store,
+      `/query?q=${encodeURIComponent(line)}&live=1`,
+      owner,
+    )).json() as Bundle[]
+  let [schema] = await query('._comp.name=recipe&?doc')
+  assertEquals((schema.doc as Comp).title, 'recipe')
+  let props = await query(`._prop.comp=${schema.entity.eid}`)
+  assert(props.some((b) => (b._prop as Comp).name == 'serves'))
+  await post(store, '/apply', [{
+    entity: { eid: CAKE },
+    recipe: { serves: 2 },
+  }], owner)
+  await post(store, '/apply', [{
+    entity: { eid: CAKE },
+    recipe: { serves: 7 },
+  }], owner)
+  let history = await query(`._change.target=${CAKE}`)
+  let changes = history.filter((b) =>
+    (b._change as Comp).comp == schema.entity.eid
+  )
+  assertEquals(changes.map((b) => ((b._change as Comp).value as Comp).serves), [
+    2,
+    7,
+  ])
+  let tx = String((changes[0]._change as Comp).tx)
+  let [writer] = await query(`._tx&.entity.eid=${tx}`)
+  assertEquals((writer._tx as Comp).by, ADA)
+  let ws = wire()
+  ctx.live.push(ws)
+  store.webSocketMessage(
+    ws,
+    JSON.stringify({ subscribe: `._change.target=${CAKE}`, id: 'history' }),
+  )
+  assertEquals((ws.sent[0] as Frame).bundles?.length, history.length)
+  // Writes rejected by the app guard or check mode leave no journal row.
+  let count = history.length
+  await post(store, '/apply?check=1', [{
+    entity: { eid: CAKE },
+    recipe: { serves: 9 },
+  }], owner)
+  assertEquals((await query(`._change.target=${CAKE}`)).length, count)
+  let woken = new Store(ctx)
+  store = woken
+  assertEquals((await query(`._change.target=${CAKE}`)).length, count)
+  // The stored schema is refreshable at deploy; adding a property serves
+  // its page immediately, and a removed property no longer appears.
+  await post(
+    store,
+    '/vocab',
+    JSON.stringify({
+      $defs: {
+        recipe: {
+          component: true,
+          properties: { serves: { type: 'number' }, spice: { type: 'string' } },
+        },
+      },
+    }),
+    owner,
+  )
+  assertEquals(
+    (await query(`._prop.comp=${schema.entity.eid}&._prop.name=spice`)).length,
+    1,
+  )
 })

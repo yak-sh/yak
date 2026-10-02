@@ -99,6 +99,7 @@ import { PLUGINS } from './plugins.ts'
 import { sweepDoc } from './wake.ts'
 import { docs as lensDocs } from '@yaks/lens/vocab'
 import { metaDoc } from '@yaks/vocab'
+import { journalDoc } from '@yaks/journal/vocab'
 import { declaredLenses, lensPaths, retainedLenses } from './lenses.ts'
 
 // The property shapes these documents are written out of. A `ref` names another
@@ -1594,7 +1595,9 @@ export let appVocab = (source: unknown = {}): Vocab => {
   }
   let v = loadVocab([
     ...beneath(doc),
-    ...(declaredLenses(doc) ? [pick(metaDoc, ['_package']), ...lensDocs] : []),
+    metaDoc,
+    journalDoc,
+    ...(declaredLenses(doc) ? lensDocs : []),
     doc,
   ], appKeywords)
   appVocabs.set(key, v)

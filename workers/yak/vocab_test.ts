@@ -221,7 +221,10 @@ test('the loaded app vocabulary plants its component tables', () => {
   let vocab = appVocab(says({ recipe: { serves: num }, cooked: {} }))
   let sql = schema(vocab)
   let tables = tablesOf(sql)
-  assertEquals(vocab.all.filter((name) => tables.includes(name)), vocab.all)
+  assertEquals(
+    vocab.all.filter((name) => tables.includes(name)),
+    vocab.all.filter((name) => !vocab.comp(name)?.computed),
+  )
   // Search is installed by the app, not by the storage vocabulary.
   assert(!sql.some((s) => s.t == 'create virtual table'))
 })
