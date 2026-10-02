@@ -1157,12 +1157,12 @@ export let react = async (
               entity: ask.entity,
               attempt: { state: 'interrupted' },
             }, [
-              // Compaction recovered this refusal. The interrupted ask now
-              // needs its one compacted retry rather than a final refusal.
-              line(
-                { [ERROR]: { code: (e as ModelError).code } },
-                (e as ModelError).message,
-              ),
+              line({
+                [ERROR]: { code: (e as ModelError).code },
+                ...(e as ModelError).response && g.vocab.comp(RESPONSE)
+                  ? { [RESPONSE]: (e as ModelError).response! }
+                  : {},
+              }, (e as ModelError).message),
               line({
                 checkpoint: {
                   through: through.entity.eid,

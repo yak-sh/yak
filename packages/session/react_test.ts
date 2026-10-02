@@ -1,5 +1,4 @@
 import { test } from '@yaks/testing'
-import type { Comp } from '@yaks/graph'
 // The runner's step over a fake model, on @yaks/ram: an input is asked, a tool
 // call is run, the transcript settles; a stop is obeyed; a fork continues from
 // its anchor with only what followed; failed provider asks stop;
