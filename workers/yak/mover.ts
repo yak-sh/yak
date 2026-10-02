@@ -43,11 +43,6 @@ import {
 } from '@yaks/tools/refusals'
 import { Unknown } from '@yaks/vocab'
 import { GIT_STORE, PLATFORM_STORE } from './door.ts'
-import creatures from '../../apps/vale/data/creatures/01.json' with {
-  type: 'json',
-}
-import figures from '../../apps/vale/data/figures/01.json' with { type: 'json' }
-
 /** A rule's name: where its stamp is kept in a store's memory, and the
  * `BOUNDARIES` entry its live release adds. */
 export type Mark = `yak/store/${string}`
@@ -109,34 +104,9 @@ export let dispatchRule: Rule = {
   move: dispatchMove,
 }
 
-// Temporary prompt writes; the mover stamp completes each once.
-export let creaturePrompt: Rule = {
-  mark: 'yak/store/vale-creature-prompt/16',
-  live: 'apps',
-  find: `.builder&.entity.eid=${creatures[0].entity.eid}&*`,
-  move: (row) =>
-    row.content?.body == creatures[0].content.body ? [] : [{
-      entity: row.entity,
-      content: { body: creatures[0].content.body },
-    }],
-}
-
-export let figurePrompt: Rule = {
-  mark: 'yak/store/vale-figure-prompt/17',
-  live: 'apps',
-  find: `.builder&.entity.eid=${figures[0].entity.eid}&*`,
-  move: (row) =>
-    row.content?.body == figures[0].content.body ? [] : [{
-      entity: row.entity,
-      content: { body: figures[0].content.body },
-    }],
-}
-
 /** Every rule a release carries. A rule leaves in the release after the sweep
  * reports every store done with it, with the old words it moved out of. */
 export let RULES: Rule[] = [
-  creaturePrompt,
-  figurePrompt,
   ...refusalFind.map((find, i) => ({
     mark: i == 0 ? 'yak/store/refusal/1' : 'yak/store/refusal-imported/1',
     find,
