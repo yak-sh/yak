@@ -198,10 +198,15 @@ export let answer = async (
     key?: string
     supplied?: boolean
   }
-  if (!args?.binding || args.key != b.key) return []
+  if (!args?.binding || !args.key || (b.key != null && args.key != b.key)) {
+    return []
+  }
+  // A valid replay of the current call recovers a key cleared by a malformed
+  // companion reply. A call the build moved past can never restore its key.
+  let wanted = { ...run!, [BUILD]: { ...b, key: args.key } }
   return [{
     entity: run.entity,
-    [BUILD]: { call: call.entity.eid },
+    [BUILD]: { call: call.entity.eid, key: args.key },
     $was: {
       [BUILD]: {
         call: token(call.entity.eid),
@@ -209,7 +214,7 @@ export let answer = async (
         stale: token(b.stale ?? null),
       },
     },
-  }, ...await outputs(tx, run, call, value, vocab, !args.supplied)]
+  }, ...await outputs(tx, wanted, call, value, vocab, !args.supplied)]
 }
 
 /** Write an answer's slots using their output_of keys. A supplied slot leaves

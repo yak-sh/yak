@@ -1104,6 +1104,23 @@ test('generated audio answers once instead of its companion prose', async () => 
   assertEquals(comp(await one(g, build), 'build')?.cost, 0.08)
   assertEquals((await rows(g, '.cost')).length, 1)
   assertEquals(failed, [])
+  // A copied failed build can recover the same paid call without reconciling.
+  await g.apply([{ entity: { eid: build }, build: { key: null } }], {
+    trusted: true,
+  })
+  let repaired = await answerWrites(
+    g,
+    call,
+    comp(answers[0], 'output')?.value,
+    g.vocab,
+  )
+  await g.apply(repaired, { trusted: true })
+  assert(
+    current(
+      comp(await one(g, build), 'build')!,
+      comp(await one(g, output!.entity.eid), 'built')!,
+    ),
+  )
   // Replaying the completed ask, in either reply order, names the same answer.
   let again = await adapted(g, [media, prose])
   assertEquals(again?.entity.eid, answers[0].entity.eid)
