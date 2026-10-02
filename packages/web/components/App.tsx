@@ -34,6 +34,12 @@ import { Entity } from './Entity.tsx'
 import { tips } from '@yaks/ui'
 import { Keybindings } from './Keybindings.tsx'
 import { Navigation, NavigationToggle } from './Navigation.tsx'
+import {
+  allSessionsAt,
+  allSessionsKey,
+  allSessionsQuery,
+} from '../tray_query.ts'
+import { QueryList } from './views/List.tsx'
 
 tips() // mount the one delegated [data-tip] tooltip (idempotent)
 
@@ -149,47 +155,22 @@ export let App = () => {
   // Hold a route sub for the fullscreen root while it's this one — under a
   // partial cache an entity reached by direct URL is in no
   // defining set, so this is what loads it; a no-op under a whole-graph cache.
-  let rootEid = screenTarget()?.eid
+  let url = new URL(route.value, 'http://x')
+  let sessions = allSessionsAt(route.value)
+  let t = sessions ? null : screenTarget()
+  let rootEid = t?.eid
   useLayoutEffect(() => rootEid ? routeSub(rootEid) : undefined, [rootEid])
-  // `/` on a graph that has answered it holds no canvas makes the first, so a
-  // new graph opens on a canvas rather than a 404 (live.ts `makeHome`).
-  let bare = new URL(route.value, 'http://x').pathname == '/' && homeless()
+  // A new graph at home opens on a canvas; a listing creates no entity.
+  let bare = !sessions && url.pathname == '/' && homeless()
   useEffect(() => bare ? makeHome() : undefined, [bare])
   let goto = (t: string) => navigate(entityPath(idOf(ent(t))))
-
-  let t = screenTarget()
-  if (!t) {
-    return (
-      <Frame
-        onPointerDown={() => {
-          if (menu.value) menu.value = null
-        }}
-      >
-        <Navigation />
-        <Main>
-          <Bar>
-            <NavigationToggle />
-            <Brand href='/'>Tasks</Brand>
-          </Bar>
-          <Body>
-            {screenResolving() ? <Resolving /> : <Lost />}
-          </Body>
-          <Status />
-        </Main>
-        <Menu />
-        <Peek />
-        <Search open={goto} />
-        <Keybindings />
-      </Frame>
-    )
-  }
-  let e = ent(t.eid)
-  let tabs = applicable(e)
+  let e = t ? ent(t.eid) : undefined
+  let tabs = e ? applicable(e) : []
   // A coarse pointer with no explicit view defaults a Canvas to List: its
   // spatial face eagerly renders every pinned card and floods a phone (the
   // mobile door, views/List.tsx). Other roots keep their first face.
   let coarse = globalThis.matchMedia?.('(pointer: coarse)').matches
-  let view = t.view && tabs.includes(t.view)
+  let view = t?.view && tabs.includes(t.view)
     ? t.view
     : coarse && tabs[0] == 'Canvas' && tabs.includes('List')
     ? 'List'
@@ -212,61 +193,80 @@ export let App = () => {
         <Bar>
           <NavigationToggle />
           <Brand href='/'>Tasks</Brand>
-          <Crumbs />
-          <Entity eid={e.eid} view='Card.Title' />
-          {filterable.has(view) && <FilterInput eid={e.eid} />}
-          <Tabs>
-            {tabs.map((v) => (
-              <Tab
-                type='button'
-                key={v}
-                mod={v == view && 'on'}
-                aria-label={v}
-                data-tip={v}
-                onClick={() => v != view && show(v)}
-              >
-                <TabFace view={v} eid={e.eid} />
-              </Tab>
-            ))}
-            <Tab
-              type='button'
-              aria-label='Inspect'
-              data-tip='Inspect'
-              onClick={() => location.assign(queryPath())}
-            >
-              <Icon name='table' />
-            </Tab>
-            {
-              /* The root card's dropdown: the same menu a card's right-click
+          {sessions
+            ? (
+              <>
+                <span>All sessions</span>
+                <FilterInput eid={allSessionsKey} />
+              </>
+            )
+            : e && (
+              <>
+                <Crumbs />
+                <Entity eid={e.eid} view='Card.Title' />
+                {filterable.has(view ?? '') && <FilterInput eid={e.eid} />}
+                <Tabs>
+                  {tabs.map((v) => (
+                    <Tab
+                      type='button'
+                      key={v}
+                      mod={v == view && 'on'}
+                      aria-label={v}
+                      data-tip={v}
+                      onClick={() => v != view && show(v)}
+                    >
+                      <TabFace view={v} eid={e.eid} />
+                    </Tab>
+                  ))}
+                  <Tab
+                    type='button'
+                    aria-label='Inspect'
+                    data-tip='Inspect'
+                    onClick={() => location.assign(queryPath())}
+                  >
+                    <Icon name='table' />
+                  </Tab>
+                  {
+                    /* The root card's dropdown: the same menu a card's right-click
               serves, hung from the bar's far edge. Pointerdown must not
               bubble — the Frame's close-on-press would eat the toggle. */
-            }
-            <Tab
-              type='button'
-              aria-label='Menu'
-              data-tip='menu'
-              onPointerDown={(ev: Event) => ev.stopPropagation()}
-              onClick={(ev: MouseEvent & { currentTarget: HTMLElement }) => {
-                if (menu.value) {
-                  menu.value = null
-                  return
-                }
-                let r = ev.currentTarget.getBoundingClientRect()
-                menu.value = {
-                  x: r.right,
-                  y: r.bottom,
-                  href: entityPath(idOf(e)),
-                  eid: e.eid,
-                  align: 'right',
-                }
-              }}
-            >
-              <Icon name='ellipsis-vertical' />
-            </Tab>
-          </Tabs>
+                  }
+                  <Tab
+                    type='button'
+                    aria-label='Menu'
+                    data-tip='menu'
+                    onPointerDown={(ev: Event) => ev.stopPropagation()}
+                    onClick={(
+                      ev: MouseEvent & { currentTarget: HTMLElement },
+                    ) => {
+                      if (menu.value) {
+                        menu.value = null
+                        return
+                      }
+                      let r = ev.currentTarget.getBoundingClientRect()
+                      menu.value = {
+                        x: r.right,
+                        y: r.bottom,
+                        href: entityPath(idOf(e)),
+                        eid: e.eid,
+                        align: 'right',
+                      }
+                    }}
+                  >
+                    <Icon name='ellipsis-vertical' />
+                  </Tab>
+                </Tabs>
+              </>
+            )}
         </Bar>
         <Body>
-          <Entity eid={e.eid} view={view} />
+          {sessions
+            ? <QueryList eid={allSessionsKey} query={allSessionsQuery} />
+            : e
+            ? <Entity eid={e.eid} view={view} />
+            : screenResolving()
+            ? <Resolving />
+            : <Lost />}
         </Body>
         <Status />
       </Main>

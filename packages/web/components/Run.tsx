@@ -10,7 +10,7 @@ import {
   transport,
   usingOf,
 } from '../providers.ts'
-import { type SpawnAsk, spawnFrames, spawnPlan } from '../client.ts'
+import { sessionFrames, type SpawnAsk, spawnPlan } from '../client.ts'
 import { type Change, idOf } from '../types.ts'
 import { block } from '@yaks/ui'
 import { menu, navigate, screenTarget } from './nav.tsx'
@@ -75,7 +75,13 @@ export let spawnOf = async (
     [task && idOf(task), task?.doc?.title].filter(Boolean).join(' — ')
   let session = uuid()
   let using = usingOf(providers.value, { ...plan, provider: plan.provider })
-  return { session, changes: spawnFrames(session, body, using, ask.task) }
+  return {
+    session,
+    changes: sessionFrames(session, body, using, {
+      task: ask.task,
+      operator: false,
+    }),
+  }
 }
 
 export let run = signal<Ask | null>(null)

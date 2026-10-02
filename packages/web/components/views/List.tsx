@@ -59,12 +59,18 @@ export let List = ({ e }: { e: Ent }) => {
 // first. Either way the rows read in the order the server takes the window
 // in, so the page scrolling asks for next lands below the rows already shown.
 // Capped loudly — a "+N more" row, never silent truncation.
-let newest = (a: Ent, b: Ent) => b.num - a.num
-export let BoardList = ({ e }: { e: Ent }) => {
+export let BoardList = ({ e }: { e: Ent }) => (
+  <QueryList eid={e.eid} query={String(e.board?.query ?? '')} />
+)
+
+// Saved boards and built-in listings share filtering, paging and row faces.
+export let QueryList = (
+  { eid, query: saved }: { eid: string; query: string },
+) => {
   let root = useRef<HTMLDivElement>(null)
   let [size, setSize] = useState(0)
   let [limit, setLimit] = useState(0)
-  let query = filteredQuery(e.eid, String(e.board?.query ?? ''))
+  let query = filteredQuery(eid, saved)
   useLayoutEffect(() => {
     let node = root.current?.parentElement
     let measure = () =>
@@ -75,11 +81,13 @@ export let BoardList = ({ e }: { e: Ent }) => {
     observer.observe(node)
     return () => observer.disconnect()
   }, [])
-  useEffect(() => setLimit(0), [e.eid, query])
+  useEffect(() => setLimit(0), [eid, query])
   let line = query
   let bound = Infinity
   try {
-    bound = windowOf(parseQuery(query)).limit ?? Infinity
+    let preds = parseQuery(query)
+    bound = windowOf(preds).limit ?? Infinity
+    if (!orderOf(preds)) line += '&.order=-entity.num'
     line += '&.limit=' + Math.min(bound, Math.max(size, limit)) +
       '&.edges.peers=task.status,doc.title&.edges.limit=' +
       Math.max(size, limit) * 4
@@ -119,9 +127,9 @@ export let BoardList = ({ e }: { e: Ent }) => {
   let rows: Ent[]
   let hot = false
   try {
-    hot = orderOf(parseQuery(String(e.board?.query ?? ''))) == 'hot'
-    rows = boardPost(e, false, page.eids).map(ent)
-      .toSorted(hot ? byWarmth(Date.now()) : newest)
+    hot = orderOf(parseQuery(saved)) == 'hot'
+    rows = boardPost({ eid }, false, page.eids).map(ent)
+    if (hot) rows = rows.toSorted(byWarmth(Date.now()))
   } catch {
     return <ListFrame elRef={root} /> // a bad query already shows itself on the Board face
   }

@@ -105,16 +105,23 @@ export { applicable, extend, has, type Renderer, resolve } from './registry.ts'
 // an entry here, and — if it should appear as a card tab — a name in the
 // tabs list plus an icon in Card.tsx.
 define([
-  // Canvas is referenced lazily (a render closure) — Canvas.tsx imports
-  // this file back, and the cycle only stays sound if define() never
-  // reads the binding at module init.
+  // Canvas and List render child entities through this registry. Defer their
+  // bindings until render so either module can be imported first.
   {
     view: 'Canvas',
     match: parse('.canvas'),
     Render: ({ e }) => <Canvas eid={e.eid} />,
   },
-  { view: 'List', match: parse('.canvas'), Render: List },
-  { view: 'List', match: parse('.board'), Render: BoardList },
+  {
+    view: 'List',
+    match: parse('.canvas'),
+    Render: (props) => <List {...props} />,
+  },
+  {
+    view: 'List',
+    match: parse('.board'),
+    Render: (props) => <BoardList {...props} />,
+  },
   { view: 'Tile', match: parse('.memory'), Render: MemoryTile },
   // TaskTile walks back through Entity for its Meta row; defer the binding
   // for the same reason as Canvas above.
@@ -126,7 +133,7 @@ define([
   { view: 'Tile', match: parse('.doc .board'), Render: BoardTile },
   { view: 'Tray.List.Tile', match: parse('.session'), Render: SessionRow },
   { view: 'Tile', match: parse('.session'), Render: SessionRow },
-  { view: 'Tile', match: and(), Render: ListTile },
+  { view: 'Tile', match: and(), Render: (props) => <ListTile {...props} /> },
   { view: 'Wake', match: parse('.wake'), Render: Wake },
   { view: 'Session', match: parse('.session'), Render: Session },
   { view: 'Media', match: parse('.artifact'), Render: Media },

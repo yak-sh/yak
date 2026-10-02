@@ -8,7 +8,7 @@ import { cache, ent, useRoute } from '../live.ts'
 import { mount } from './mount.ts'
 import { chatChanges, chatPlan, ReferenceList, Starter } from './Chat.tsx'
 
-test('chatChanges spawns a taskless session and rebinds the chat', () => {
+test('a human chat opens a taskless session and rebinds the chat', () => {
   let got = chatChanges(
     'old',
     'next',
@@ -20,7 +20,7 @@ test('chatChanges spawns a taskless session and rebinds the chat', () => {
   let entry = got.find((c) => c.name == 'entry')!.eid
   assertEquals(got, [
     { eid: 'old', name: 'chat', comp: null },
-    { eid: 'next', name: 'session', comp: {} },
+    { eid: 'next', name: 'session', comp: { operator: true } },
     { eid: entry, name: 'entry', comp: { session: 'next' } },
     { eid: entry, name: 'content', comp: { body: 'What changed?' } },
     { eid: entry, name: 'using', comp: { provider: 'p', model: 'm' } },

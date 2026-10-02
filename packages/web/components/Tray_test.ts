@@ -12,7 +12,6 @@ import {
   trayKey,
   trayLive,
   trayOpen,
-  trayRecent,
   traySessions,
   trayShown,
 } from './Tray.tsx'
@@ -44,30 +43,6 @@ let run = (x: Partial<Ent> = {}, at?: string): Ent => ({
   refs: [],
   kids: [],
   ...x,
-})
-
-test('the tray keeps a newly started session visible', () => {
-  let now = Date.parse('2026-08-12T00:30:00-04:00')
-  assertEquals(trayRecent(run({}, '2026-08-12T00:20:00-04:00'), now), true)
-  assertEquals(trayRecent(run({}, '2026-08-11T12:00:00-04:00'), now), false)
-  assertEquals(trayRecent(run(), now), false)
-})
-
-test('old pending work is hidden without a runner; recent idle work remains visible', () => {
-  let now = Date.parse('2026-09-27T12:00:00Z')
-  let old = run(
-    { session: { eid: 'session', id: 'run', status: 'pending' } },
-    '2026-08-16T12:00:00Z',
-  )
-  let recent = run({
-    session: { eid: 'session', id: 'run', status: 'pending' },
-  }, '2026-09-27T11:00:00Z')
-  let current = { holder: 'runner', until: '2026-09-27T12:01:00Z' }
-  let expired = { holder: 'runner', until: '2026-09-27T11:59:00Z' }
-  assertEquals(trayShown('old', old, undefined, now), false)
-  assertEquals(trayShown('recent', recent, undefined, now), true)
-  assertEquals(trayShown('old', old, current, now), true)
-  assertEquals(trayShown('old', old, expired, now), false)
 })
 
 test('tray sessions put live work first, then recent work', () => {

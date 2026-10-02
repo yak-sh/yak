@@ -5,7 +5,8 @@ import { test } from '@yaks/testing'
 import { faked, tick, until } from '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { cache, census } from '../live.ts'
-import { navigate, restore, route } from './nav.tsx'
+import { navigate, restore, route, screenTarget } from './nav.tsx'
+import { allSessionsPath } from '../tray_query.ts'
 
 let place = { pathname: '/', search: '' }
 let entries: string[] = ['/']
@@ -116,6 +117,19 @@ test('the root canvas keeps its own view choice', () => {
   launch('/')
   assertEquals(route.value, '/?v=List')
   assertEquals(entries, ['/?v=List']) // nothing to go back to: this IS home
+})
+
+test('All sessions resumes as a listing and keeps the canvas as home', () => {
+  using _ = fresh()
+  navigate('/?v=List')
+  navigate(allSessionsPath)
+  assertEquals(screenTarget(), null)
+
+  launch('/')
+  assertEquals(route.value, allSessionsPath)
+  assertEquals(entries, ['/?v=List', allSessionsPath])
+  back()
+  assertEquals(route.value, '/?v=List')
 })
 
 test('an explicit / in a live tab shows the canvas, never the card', () => {

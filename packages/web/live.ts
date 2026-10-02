@@ -34,7 +34,7 @@ import {
   vocab,
 } from './types.ts'
 import { moves, typeOf } from './edge.ts'
-import { dotFields } from './tray_query.ts'
+import { sessionFields } from './tray_query.ts'
 import { isUnread, type Row } from './client.ts'
 import {
   distinctValues,
@@ -2690,7 +2690,7 @@ let CHROME = new Set([
 ])
 let chrome = (r: Comps) => [...CHROME].some((name) => r[name as keyof Comps])
 export let boardPost = (
-  e: Ent,
+  e: Pick<Ent, 'eid'>,
   tasks: boolean,
   eids: Iterable<string>,
 ): string[] =>
@@ -2828,13 +2828,7 @@ export let projects = (): Ent[] =>
 // above under a DIFFERENT projection, which makes it a different SUB with its
 // own member set: that is what "projection is part of sub identity" buys, and
 // the cache merges the two because the fuller one is a superset.
-export let sessionDetail = '.session&.fields=' + [
-  ...dotFields.map((f) => `${f.comp}.${f.prop}`),
-  'using.model',
-  'using.effort',
-  'doc.title',
-  'brief.text',
-].join(',')
+export let sessionDetail = '.session&.fields=' + sessionFields.join(',')
 
 export let shelfFor = (client: string): string | undefined => {
   ensureClientRows(client)

@@ -7,7 +7,7 @@
 // A new socket means a new replica, so installing one (and free()) starts the
 // page's box afresh.
 import type { Bundle } from '@yaks/graph'
-import { matcher } from '@yaks/match'
+import { matcher, type MatchOpts } from '@yaks/match'
 import type { Frame, Socket } from '@yaks/sync'
 import { cache, useSocket } from './live.ts'
 import { tick } from './testing.ts'
@@ -16,8 +16,9 @@ import { vocab } from './types.ts'
 /** The rows a server answers a line with, in the order it takes a window in:
  * @yaks/match reads the line over `rows`, and its parity tests hold it to
  * @yaks/sql. */
-export let reader = (rows: Bundle[]) => (line: string): Bundle[] =>
-  matcher(line, vocab)(rows)
+export let reader =
+  (rows: Bundle[], opts?: MatchOpts) => (line: string): Bundle[] =>
+    matcher(line, vocab, opts)(rows)
 
 export type Ask = { subscribe: string; id: string }
 type Heard = (e: Event & { data?: unknown }) => void

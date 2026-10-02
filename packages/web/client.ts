@@ -648,15 +648,16 @@ export let byBoard = (a: Row, b: Row) =>
 // the session, its first entry carrying the instruction and the `using` it
 // runs on, and the claim on the task it works. The host reads the entry and
 // starts the run; anything it cannot honor shows on the session itself.
-export let spawnFrames = (
+export let sessionFrames = (
   session: string,
   body: string,
   using: { provider: string; model?: string; effort?: string },
-  task?: string,
+  opening: { operator: boolean; task?: string },
 ): Change[] => {
+  let { operator, task } = opening
   let entry = uuid()
   return [
-    { eid: session, name: 'session', comp: {} },
+    { eid: session, name: 'session', comp: { operator } },
     { eid: entry, name: 'entry', comp: { session } },
     { eid: entry, name: 'content', comp: { body } },
     { eid: entry, name: 'using', comp: using },

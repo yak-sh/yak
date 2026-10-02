@@ -2,7 +2,7 @@
 // actor's selected graph-native Session. The binding is graph data on the
 // session, so a reload or another browser finds the same transcript.
 import { useLayoutEffect, useRef, useState } from 'preact/hooks'
-import { spawnFrames } from '../client.ts'
+import { sessionFrames } from '../client.ts'
 import { mutate, myActor, rowsSub, uuid } from '../live.ts'
 import { catalog, type Provider, usingOf } from '../providers.ts'
 import type { Change, Ent } from '../types.ts'
@@ -80,7 +80,7 @@ export let ReferenceList = (
     : null
 }
 
-// A chat is a taskless spawn (spawnFrames) whose first words are the ask,
+// A chat is opened by the person typing its first ask,
 // bound to this actor and document; a new one unbinds the old.
 export let chatChanges = (
   old: string | undefined,
@@ -91,7 +91,7 @@ export let chatChanges = (
   body: string,
 ): Change[] => [
   ...(old ? [{ eid: old, name: 'chat', comp: null } as Change] : []),
-  ...spawnFrames(session, body, using),
+  ...sessionFrames(session, body, using, { operator: true }),
   { eid: session, name: 'chat', comp: { actor, target } },
 ]
 

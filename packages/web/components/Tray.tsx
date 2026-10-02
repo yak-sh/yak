@@ -9,21 +9,21 @@ import {
   shelfFor,
 } from '../live.ts'
 import type { Ent } from '../types.ts'
-import { leaseEid } from '../../effects/lease.ts'
 import { block } from '@yaks/ui'
 import { dragData } from './drag.ts'
 import { Entity } from './Entity.tsx'
 import { SessionDot } from './session_status.tsx'
 import { Card, icons } from './Card.tsx'
-import { useEntity, usePinTargets } from './subscriptions.ts'
+import { usePinTargets } from './subscriptions.ts'
 import { Icon } from './icons.tsx'
 import { shelfHost, shelfOpen, shelve } from './shelf.ts'
 import { useQueryEids } from './useQuery.ts'
-import {
-  trayActiveQuery,
-  trayProcessQuery,
-  trayRecentQuery,
-} from '../tray_query.ts'
+import { allSessionsPath } from '../tray_query.ts'
+import { type RunnerLease, trayLive } from '../sessions.ts'
+import { useSessions } from './useSessions.ts'
+import { follow } from './nav.tsx'
+
+export { trayLive, traySessions } from '../sessions.ts'
 
 // The Tray is bottom-right screen chrome: live-session attention plus a
 // per-client Shelf. A shelved entity is a normal Card while open and one icon
@@ -51,14 +51,6 @@ export let trayKey = (
   return true
 }
 
-// A run stays worth showing for a while around its latest activity.
-let RECENT = 6 * 60 * 60 * 1000
-
-export let trayRecent = (e: Ent, now = Date.now()) => {
-  let at = e.created?.at
-  return !!at && now - Date.parse(at) < RECENT
-}
-
 // Dismissed rows — "seen", per browser. The ✕ on a settled row lands its
 // eid here; the session entity is history and never touched. A signal so
 // the strip and panel repaint on dismiss; localStorage so it sticks.
@@ -70,90 +62,12 @@ let dismiss = (eid: string) => {
   localStorage.setItem('tasks-tray-seen', JSON.stringify(seen.value))
 }
 
-// A transcript's status is history, not evidence that its runner is alive.
-// A lease is a separate entity; its deadline also has to be checked locally,
-// since expiration need not produce a graph write.
-type RunnerLease = { holder?: string; until?: string }
-let leases = signal<Record<string, RunnerLease>>({})
-
-export let trayLive = (e: Ent, lease?: RunnerLease, now = Date.now()) =>
-  (!!lease?.holder && !!lease.until && Date.parse(lease.until) > now) ||
-  (!!e.process?.pid && !e.exit)
-
-// Each candidate owns a narrow subscription, rather than subscribing to all
-// leases (or calling a hook in a variable-length loop).
-let LeaseWatch = ({ eid }: { eid: string }) => {
-  let lease = useEntity(
-    leaseEid(`@yaks/session/run/${eid}`),
-    'lease.holder,lease.until',
-  )?.value?.lease
-  let holder = lease?.holder
-  let until = lease?.until
-  // Do not keep a former candidate's lease in the tray after its watcher goes.
-  useEffect(() => () => {
-    if (eid in leases.value) {
-      let next = { ...leases.value }
-      delete next[eid]
-      leases.value = next
-    }
-  }, [eid])
-  useEffect(() => {
-    if (holder && until) {
-      leases.value = { ...leases.value, [eid]: { holder, until } }
-    } else if (eid in leases.value) {
-      let next = { ...leases.value }
-      delete next[eid]
-      leases.value = next
-    }
-    let delay = until ? Date.parse(until) - Date.now() : NaN
-    let timer = Number.isFinite(delay) && delay > 0
-      ? setTimeout(() => {
-        if (leases.value[eid]?.until == until) {
-          let next = { ...leases.value }
-          delete next[eid]
-          leases.value = next
-        }
-      }, Math.min(delay, 2147483647))
-      : undefined
-    return () => clearTimeout(timer)
-  }, [eid, holder, until])
-  return null
-}
-
 export let trayShown = (
   eid: string,
   e: Ent,
-  lease = leases.value[eid],
+  lease?: RunnerLease,
   now = Date.now(),
-) =>
-  trayLive(e, lease, now) || (trayRecent(e, now) && !seen.value.includes(eid))
-
-// Live sessions first, then recent sessions, each newest first.
-let started = (e: Ent) => Date.parse(e.created?.at ?? '') || 0
-
-export let traySessions = (
-  rows: [string, Ent][],
-  current: Record<string, RunnerLease> = leases.value,
-  now = Date.now(),
-) =>
-  rows.toSorted(([aid, a], [bid, b]) =>
-    Number(trayLive(b, current[bid], now)) -
-      Number(trayLive(a, current[aid], now)) || started(b) - started(a)
-  )
-
-let useLive = () => {
-  let active = useQueryEids(trayActiveQuery, true)
-  let process = useQueryEids(trayProcessQuery, true)
-  let recent = useQueryEids(trayRecentQuery, true)
-  let ids = [...new Set([...active, ...process, ...recent])]
-  return {
-    ids,
-    rows: traySessions(ids.flatMap((eid) => {
-      let e = ent(eid)
-      return e.session && trayShown(eid, e) ? [[eid, e] as [string, Ent]] : []
-    })),
-  }
-}
+) => trayLive(e, lease, now) || !seen.value.includes(eid)
 
 let Frame = block('div', 'Tray', {
   Strip: 'div',
@@ -169,6 +83,7 @@ let Frame = block('div', 'Tray', {
   Row: 'div',
   X: 'button',
   Hint: 'div',
+  All: 'a',
 })
 let {
   Strip,
@@ -184,6 +99,7 @@ let {
   Row,
   X,
   Hint,
+  All,
 } = Frame
 
 let over = (e: DragEvent) => {
@@ -208,7 +124,11 @@ let drop = (e: DragEvent) => {
 // it back when it closes. A
 // collapsed tray — the default — never asks for those columns at all.
 let SessionGroup = (
-  { label, ls }: { label: 'live' | 'recent'; ls: [string, Ent][] },
+  { label, ls, leases }: {
+    label: 'live' | 'recent'
+    ls: [string, Ent][]
+    leases: Record<string, RunnerLease>
+  },
 ) => (
   <Group>
     <Label>{label}</Label>
@@ -222,7 +142,7 @@ let SessionGroup = (
         onDragStart={(e: DragEvent) => dragData(e, eid, 'Session')}
       >
         <Entity eid={eid} view='Tray.List.Tile' />
-        {!trayLive(s, leases.value[eid]) && (
+        {!trayLive(s, leases[eid]) && (
           <X
             type='button'
             aria-label='dismiss'
@@ -239,19 +159,27 @@ let SessionGroup = (
   </Group>
 )
 
-export let SessionRows = ({ ls }: { ls: [string, Ent][] }) => {
+export let SessionRows = (
+  { ls, leases = {} }: {
+    ls: [string, Ent][]
+    leases?: Record<string, RunnerLease>
+  },
+) => {
   useQueryEids(
-    `.entity.eid=${ls.map(([eid]) => eid).join(',')}&` +
-      sessionDetail.split('&')[1] +
+    `${sessionDetail}&.entity.eid=${ls.map(([eid]) => eid).join(',')}` +
       '&.edges[worked]&.edges.peers=doc.title,task.status',
     true,
   )
-  let live = ls.filter(([eid, s]) => trayLive(s, leases.value[eid]))
-  let recent = ls.filter(([eid, s]) => !trayLive(s, leases.value[eid]))
+  let live = ls.filter(([eid, s]) => trayLive(s, leases[eid]))
+  let recent = ls.filter(([eid, s]) => !trayLive(s, leases[eid]))
   return (
     <>
-      {live.length > 0 && <SessionGroup label='live' ls={live} />}
-      {recent.length > 0 && <SessionGroup label='recent' ls={recent} />}
+      {live.length > 0 && (
+        <SessionGroup label='live' ls={live} leases={leases} />
+      )}
+      {recent.length > 0 && (
+        <SessionGroup label='recent' ls={recent} leases={leases} />
+      )}
     </>
   )
 }
@@ -273,7 +201,8 @@ export let Tray = () => {
     }
   }, [])
 
-  let { ids, rows: ls } = useLive()
+  let { rows, leases } = useSessions()
+  let ls = rows.filter(([eid, e]) => trayShown(eid, e, leases[eid]))
   let shelf = shelfFor(clientId())
   let ps = shelf ? pinned(shelf).toSorted((a, b) => b.z - a.z) : []
   // Shelved cards are painted as chips, not Cards, so the tray holds their
@@ -292,7 +221,6 @@ export let Tray = () => {
           />
         </Pop>
       )}
-      {ids.map((eid) => <LeaseWatch key={eid} eid={eid} />)}
       <Strip>
         <Live
           type='button'
@@ -304,6 +232,9 @@ export let Tray = () => {
           </Dots>
           <Chevron>{trayOpen.value ? '⌄' : '⌃'}</Chevron>
         </Live>
+        <All href={allSessionsPath} onClick={follow(allSessionsPath)}>
+          All sessions
+        </All>
         <Items>
           {ps.map((p) => (
             <Item
@@ -323,7 +254,7 @@ export let Tray = () => {
       </Strip>
       {trayOpen.value && (
         <Panel>
-          {ls.length > 0 && <SessionRows ls={ls} />}
+          {ls.length > 0 && <SessionRows ls={ls} leases={leases} />}
           {!ls.length && <Hint>no sessions</Hint>}
         </Panel>
       )}

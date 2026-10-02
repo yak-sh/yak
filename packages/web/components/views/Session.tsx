@@ -746,7 +746,8 @@ export let SessionRow = ({ e, slots, onOpen }: TileProps) => {
   ).eids[0]
   let last = latest ? ent(latest) : undefined
   let model = useModel(e).name
-  let title = excerpt(face.value?.doc?.title) || ask || brief || 'Session'
+  let title = excerpt(face.value?.doc?.title) || excerpt(e.doc?.title) || ask ||
+    brief || 'Session'
   let detail = face.value?.doc?.title ? brief || ask : ask && brief
   return (
     <RowLine>

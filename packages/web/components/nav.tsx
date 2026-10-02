@@ -23,6 +23,7 @@ import { SHORT } from '@yaks/id'
 import { type Change, type Ent, IdError, idOf } from '../types.ts'
 import { dragData } from './drag.ts'
 import { cursorEid } from '../edge.ts'
+import { allSessionsAt } from '../tray_query.ts'
 
 export { peek, trail }
 
@@ -264,6 +265,7 @@ export let linkProps = (e: Ent) => ({
 // is how a REMEMBERED route (below) is screened against the same resolver
 // the screen uses — a route naming a dead entity resolves to nothing.
 export let screenTarget = (at = route.value) => {
+  if (allSessionsAt(at)) return null
   let url = new URL(at, 'http://x')
   let id = addressId(decodeURIComponent(url.pathname.slice(1)))
   let view = url.searchParams.get('v') ?? undefined
@@ -321,10 +323,11 @@ let kept = (): Where => {
 // a dead end is not a place you were.
 let keep = () => {
   let t = screenTarget()
-  if (!loc() || !t) return
+  let sessions = allSessionsAt(route.value)
+  if (!loc() || !t && !sessions) return
   try {
     let at = route.value
-    let home = t.eid == rootCanvas() ? at : kept().home
+    let home = t?.eid == rootCanvas() && !sessions ? at : kept().home
     localStorage.setItem(WHERE, JSON.stringify({ at, home }))
   } catch { /* private mode: the memory is a nicety, never a failure */ }
 }
@@ -359,7 +362,7 @@ export let restore = () => {
   }
   let w = kept()
   let home = screenTarget(w.home) ? w.home : '/'
-  let at = screenTarget(w.at) ? w.at : home
+  let at = screenTarget(w.at) || allSessionsAt(w.at) ? w.at : home
   if (home != '/') h.replaceState(null, '', home)
   if (at != home) h.pushState(null, '', at)
   route.value = at

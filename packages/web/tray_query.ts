@@ -24,14 +24,41 @@ export let dotFields: Field[] = [
   return { comp, prop, wake: true }
 })
 
-// The strip includes status candidates of any age and recent sessions. The
-// status selects candidates only: the tray determines live from runner leases
+// The strip includes status candidates of any age and the newest personal
+// sessions. `operator` is creation provenance; children and sourced work stay
+// inside their session or in All sessions, even if a person later replies.
+export let sessionCap = 8
+export let personalSessions =
+  '.session.operator=true&!spawned.parent&!session.source'
+
+// Status selects candidates only: the tray determines live from runner leases
 // or an unexited process, never from this transcript status. Keep the
 // two selections separate: an OR materializes both arms before the
 // outer query, then evaluates status again for their combined projection.
 let fields = '&.fields=' +
   dotFields.map((f) => `${f.comp}.${f.prop}`).join(',')
-export let trayActiveQuery = '.session.status=pending,running' + fields
+let window = `&.order=-created.at&.limit=${sessionCap}`
+export let trayActiveQuery = personalSessions +
+  '&.session.status=pending,running' + fields + window
 // A process-backed runner may remain live even when transcript status is settled.
-export let trayProcessQuery = '.session&.process.pid' + fields
-export let trayRecentQuery = '.session&.created.at>=6-hours-ago' + fields
+export let trayProcessQuery = personalSessions +
+  '&.process.pid&!exit' + fields + window
+export let trayRecentQuery = personalSessions + fields + window
+
+export let sessionFields = [
+  ...dotFields.map((f) => `${f.comp}.${f.prop}`),
+  'using.model',
+  'using.effort',
+  'doc.title',
+  'brief.text',
+]
+
+// This is a view of the store, not a saved board or a new entity.
+export let allSessionsPath = '/?sessions'
+export let allSessionsAt = (at: string) => {
+  let url = new URL(at, 'http://x')
+  return url.pathname == '/' && url.searchParams.has('sessions')
+}
+export let allSessionsKey = 'all-sessions'
+export let allSessionsQuery = '.session&.order=-created.at&.fields=' +
+  sessionFields.join(',')

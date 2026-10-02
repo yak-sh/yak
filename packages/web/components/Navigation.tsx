@@ -2,7 +2,9 @@ import { signal } from '@preact/signals'
 import { useEffect, useState } from 'preact/hooks'
 import { favoritePin, navigationQuery, navigationView } from '../navigation.ts'
 import { cache, ent, mode, mutate, sessionDetail } from '../live.ts'
-import { trayActiveQuery } from '../tray_query.ts'
+import { allSessionsPath } from '../tray_query.ts'
+import { useSessions } from './useSessions.ts'
+import { follow } from './nav.tsx'
 import { block } from '@yaks/ui'
 import { useQuery, useQueryResult } from './useQuery.ts'
 import { Entity } from './Entity.tsx'
@@ -39,8 +41,9 @@ let Frame = block('aside', 'Navigation', {
   Title: 'span',
   Empty: 'p',
   Items: 'nav',
+  All: 'a',
 })
-let { Shade, Head, Title, Empty, Items } = Frame
+let { Shade, Head, Title, Empty, Items, All } = Frame
 
 export let NavigationToggle = () => (
   <button
@@ -56,14 +59,11 @@ export let NavigationToggle = () => (
 
 export let Navigation = () => {
   let favorites = useQuery(navigationQuery)
-  let active = useQueryResult(
-    `${trayActiveQuery}&.order=-created.at&.limit=12`,
-    navigationOpen.value,
-    true,
-  )
-  let recent = useQueryResult(
-    `${sessionDetail}&.order=-created.at&.limit=12`,
-    navigationOpen.value,
+  let { rows } = useSessions(navigationOpen.value)
+  let sessions = rows.map(([eid]) => eid)
+  useQueryResult(
+    sessions.length ? `${sessionDetail}&.entity.eid=${sessions.join(',')}` : '',
+    navigationOpen.value && sessions.length > 0,
     true,
   )
   let [over, setOver] = useState(false)
@@ -84,7 +84,6 @@ export let Navigation = () => {
     return () => removeEventListener('keydown', key)
   }, [])
   if (!navigationOpen.value) return null
-  let sessions = [...new Set([...recent.eids, ...active.eids])]
   let closeMobile = () => narrow() && toggleNavigation(false)
   let accepts = (ev: DragEvent) =>
     !!ev.dataTransfer && Array.from(ev.dataTransfer.types).includes(CARD_DATA)
@@ -140,6 +139,15 @@ export let Navigation = () => {
             </Empty>
           )}
           <Title>Sessions</Title>
+          <All
+            href={allSessionsPath}
+            onClick={(ev: MouseEvent) => {
+              follow(allSessionsPath)(ev)
+              if (ev.defaultPrevented) closeMobile()
+            }}
+          >
+            All sessions
+          </All>
           {sessions.map((eid) => (
             <Entity
               key={eid}

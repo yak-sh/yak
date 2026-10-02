@@ -138,6 +138,12 @@ html {
   color: var(--dim);
   font-size: 12px;
 }
+.Navigation_All,
+.Tray_All {
+  color: var(--link);
+  white-space: nowrap;
+  padding: var(--half-gap);
+}
 .Navigation_Shade {
   display: none;
 }
@@ -3642,7 +3648,6 @@ a[data-ref]:hover {
 .Debug_AddItem:hover {
   background: var(--soft);
 }
-
 
 .Debug_Linked {
   display: flex;
