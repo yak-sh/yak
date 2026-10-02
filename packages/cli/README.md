@@ -505,3 +505,11 @@ The package exports eight entry points:
 Application commands use `yak command <name> --app <app> key=value`, or the
 short form `yak <app> <name> key=value`. Values are parsed as JSON when
 possible. A graph tool with the same command name takes precedence.
+
+### Reporting outside the watched graph
+
+`tracker: {spool: "tracker-spool"}` names the file spool relative to the config
+file. Hosts report unexpected tool, effect, request and duty failures there
+without opening a tracker database. The separate @yaks/tracker role imports it
+using its own config and database; the task graph keeps no tracker error rows.
+Console telemetry remains enabled.

@@ -3,11 +3,14 @@
 
 import type { Bundle, Graph } from '@yaks/graph'
 import { sleep } from '@yaks/effects'
+import { files } from './file.ts'
+import { caught, spool } from './report.ts'
 
 export type Record = { rows: Bundle[]; ack: () => void | Promise<void> }
 export type Source = () => AsyncIterable<Record>
 export type Options = {
   source?: Source
+  spool?: string
   every?: number
   report?: (error: unknown) => void
 }
@@ -19,17 +22,24 @@ export let intake = async (g: Graph, source: Source): Promise<void> => {
   }
 }
 export let service = async (
-  host: { graph: Graph },
+  host: {
+    graph: Graph
+    config?: { tracker?: { spool: string } }
+  },
   options: Options = {},
   signal: AbortSignal = AbortSignal.abort(),
 ): Promise<void> => {
-  if (!options.source) return
+  let dir = options.spool ?? host.config?.tracker?.spool
+  let source = options.source ?? (dir ? files(dir).source : undefined)
+  if (!source) return
   do {
     try {
-      await intake(host.graph, options.source)
+      await intake(host.graph, source)
     } catch (error) {
       try {
-        ;(options.report ?? console.error)(error)
+        if (options.report) options.report(error)
+        else if (dir) await caught(error, { sink: spool(files(dir).append) })
+        else console.error(error)
       } catch { /* keep the spool */ }
       if (signal.aborted) throw error
     }

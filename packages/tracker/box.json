@@ -1,0 +1,15 @@
+{
+  "db": "tracker.db",
+  "tracker": { "spool": "tracker-spool" },
+  "plugins": [
+    "@yaks/kernel",
+    "@yaks/doc",
+    "@yaks/tools",
+    "@yaks/api",
+    "@yaks/process",
+    "@yaks/effects",
+    "@yaks/mail",
+    "@yaks/wake",
+    "@yaks/tracker"
+  ]
+}

@@ -1,0 +1,17 @@
+[Unit]
+Description=yak tracker (~/.yak/tracker.json)
+After=network-online.target
+
+[Service]
+WorkingDirectory=%h/.yak
+Environment=PATH=%h/.deno/bin:%h/.local/bin:%h/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+Environment=LANG=C.UTF-8 LC_ALL=C.UTF-8
+Environment=DENO_DIR=%h/.cache/deno
+ExecStart=%h/.deno/bin/yak work --config %h/.yak/tracker.json --roles effects,@yaks/tracker
+Restart=always
+RestartSec=2
+KillMode=process
+TimeoutStopSec=infinity
+
+[Install]
+WantedBy=default.target

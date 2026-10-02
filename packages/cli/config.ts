@@ -32,6 +32,8 @@ export type Config = {
   /** the SQLite file, or `:memory:` for a graph that lasts as long as the
    * process. Required — a host never guesses a database. */
   db?: string
+  /** Report to this durable spool without opening the tracker graph. */
+  tracker?: { spool: string; commit?: string }
   /** the plugin packages, by import specifier. A relative specifier is
    * resolved against the config file itself; `{use, with}` names one with
    * options. */
@@ -229,6 +231,14 @@ export let read = (path: string): Config => {
   let config = said as Config
   return {
     ...config,
+    ...config.tracker
+      ? {
+        tracker: {
+          ...config.tracker,
+          spool: new URL(config.tracker.spool, base).pathname,
+        },
+      }
+      : {},
     db: config.db && config.db != ':memory:'
       ? new URL(config.db, base).pathname
       : config.db,

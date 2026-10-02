@@ -39,8 +39,10 @@ fallback, or console, without reporting itself recursively.
 The queue sink takes a binding with `send`; the spool sink takes an append
 function; the post sink takes a URL and an optional fetch implementation. The
 box service takes a `source()` yielding `{rows, ack}` records. It calls `ack`
-only after graph admission. File opening, checkpoints, units and worker bindings
-are the host's, not this package's.
+only after graph admission. The `/file` adapter appends one fsynced JSONL
+segment per record and removes it only on acknowledgement. An incomplete tail
+stays on disk while complete records continue. Segments use independent names,
+so concurrent processes never share an append offset.
 
 `effects({graph}, options)` accepts an `enrich` function for downstream frame
 resolution, a space `notify` stream callback, or a platform/box mail `to`,
@@ -49,6 +51,29 @@ per minute, scheduled by a graph wake; bugs become notified only after its
 `delivered` mark. Space replies own their own notified mark. Archived bugs still
 count but never notify. Retention keeps the newest hundred plus the first
 occurrence of each commit (or version without a commit).
+
+## The box role
+
+Copy `box.json` to `~/.yak/tracker.json` and `yak-tracker.service` to the user
+systemd unit directory. The tracker uses `~/.yak/tracker.db`, never `yak.db`.
+Its command is
+`yak work --config ~/.yak/tracker.json --roles
+effects,@yaks/tracker`:
+composition opens graph, effects and this service only, with the standard leases
+and process wind-down. It imports no web routes.
+
+Add `"tracker": {"spool": "tracker-spool"}` to the watched graph's config.
+`compose()` connects tool, effect, request and duty failures to that spool
+without opening the tracker graph. The reporting process stamps its startup
+commit and global process eid. A tool preserves the failing call's `$actor`.
+Console telemetry remains alongside reporting. Intake commits the full bundles
+before acknowledging them; a crash in between resends the same eids.
+
+Enable the unit with `systemctl --user enable --now yak-tracker.service`.
+Restart watched hosts through `yak restart` to load their reporting config;
+rolling web or task workers does not stop the tracker unit. No mail recipient is
+configured by default. Delivery and cross-store enrichment are configured
+separately; loading the mail vocabulary alone sends nothing.
 
 ## Transition boundaries
 

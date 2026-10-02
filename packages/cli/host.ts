@@ -100,6 +100,8 @@ import {
   released,
 } from '@yaks/effects'
 import { type Local, peek, warm } from '@yaks/secrets'
+import { reporter, revision } from './report.ts'
+import { derived as callsDerived } from '@yaks/tools/vocab'
 import {
   artifactsAt,
   type Backend,
@@ -259,6 +261,8 @@ export type Host = {
    * or its callback fires into a closed store and the process is held open by
    * a timer nobody owns. The duties run under it too, so one abort
    * stops everything this process was doing on its own. */
+  /** HTTP failures keep their request bundle outside this graph. */
+  report?: (request: Bundle, error?: unknown) => void
   stopping: AbortSignal
 }
 
@@ -770,7 +774,11 @@ let spoken = (vocabs: Taken<'vocab'>): Words => {
   return {
     docs,
     vocab,
-    derived: Object.assign({}, ...vocabs.map(([v]) => v.derived?.(vocab))),
+    derived: Object.assign(
+      {},
+      callsDerived(vocab),
+      ...vocabs.map(([v]) => v.derived?.(vocab)),
+    ),
     backed: Object.assign({}, ...vocabs.map(([v]) => v.backed?.(vocab))),
     // The generic tier lists `search` only where a property is indexed, so its
     // declarations are read off the tier the graph would build. Read on asking,
@@ -826,6 +834,11 @@ export let compose = async (
     throw new Error('a host opens a graph — its roles include graph')
   }
   let path = dbOf(config)
+  let report = reporter(
+    config,
+    { by: selfEid(), via: selfEid() },
+    config.tracker ? await revision() : undefined,
+  )
   // Where this graph's secrets are kept (./vault.ts), and each secret an
   // option names read once now, so the option has it the first time a factory
   // looks. Only those: a secret code reads at the moment it is used (`reveal`)
@@ -942,6 +955,12 @@ export let compose = async (
       anatomy: observed.read,
       observe: observed.observe,
       config,
+      report: (request, error) => {
+        void report(error ?? 'HTTP request failed', {
+          request,
+          during: { request: request.entity.eid, process: selfEid() },
+        })
+      },
       ui: gather(dressed.map(([facet]) => facet)),
       roles,
       vocab,
@@ -1055,6 +1074,11 @@ export let compose = async (
       lease: config.lease,
       gone: host.gone,
       nudge: opts.thread?.nudge,
+      report: (error, job) =>
+        void report(error, {
+          during: { entity: job.event.entity.eid, process: host.me },
+          tags: { handler: job.handler },
+        }),
     })
     let rules = ruled.flatMap(([r, options, plugin]) => {
       let made = r.rules?.(host, options) ?? []
@@ -1229,7 +1253,12 @@ export let compose = async (
       // own, which is the accurate answer — a call arriving over HTTP acts on
       // the machine that received it.
       process: started({ roles: [...roles] })[PROCESS] as Comp,
-      report: (err) => console.error('tool failed —', err),
+      report: (error, call, tool) =>
+        report(error, {
+          actor: call.$actor ?? self ?? undefined,
+          during: { entity: call.entity.eid, kind: 'call', process: host.me },
+          tags: { tool },
+        }),
       ...replying ? { reply: replying } : {},
     })
     if (effecting) {
@@ -1287,7 +1316,10 @@ export let compose = async (
     // this host writes its ending: once, however many of its promises say so.
     let ending: Promise<void> | undefined
     let lose = (error: unknown) => {
-      console.error('the duty thread failed —', error)
+      void report(error, {
+        during: { process: host.me },
+        tags: { step: 'duty thread' },
+      })
       return ending ??= host.end(
         opts.thread!.me,
         'interrupted: its thread ended before it closed',
@@ -1301,7 +1333,12 @@ export let compose = async (
         ...(effecting && mine('effects')
           ? [
             fx.work(g!, until)
-              .catch((e) => console.error('effects failed —', e)),
+              .catch((error) =>
+                report(error, {
+                  during: { process: host.me },
+                  tags: { step: 'effects' },
+                })
+              ),
           ]
           : []),
         ...duties.filter((d) => mine(d.name)).map((d) =>
@@ -1310,8 +1347,18 @@ export let compose = async (
             hold,
             signal: until,
             gone: host.gone,
+            report: (error) =>
+              void report(error, {
+                during: { process: host.me },
+                tags: { role: d.name },
+              }),
           }, d.run)
-            .catch((e) => console.error(`duty failed — ${d.name}`, e))
+            .catch((error) =>
+              report(error, {
+                during: { process: host.me },
+                tags: { role: d.name },
+              })
+            )
         ),
       ]).then(() => {})
     }
@@ -1381,6 +1428,7 @@ export let compose = async (
       },
     }
   } catch (error) {
+    await report(error)
     sql.close()
     throw error
   }

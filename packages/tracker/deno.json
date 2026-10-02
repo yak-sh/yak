@@ -8,7 +8,8 @@
     "./page": "./page.js",
     "./effects": "./effects.ts",
     "./tools": "./tools.ts",
-    "./service": "./service.ts"
+    "./service": "./service.ts",
+    "./file": "./file.ts"
   },
   "license": "Apache-2.0",
   "description": "Groups tracked errors into bugs, reports without interrupting callers, and retains and notifies their occurrences.",
