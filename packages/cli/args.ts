@@ -15,24 +15,24 @@
 // schema is kept fresh (store.ts), so an undeclared `--nmae` is a typo worth
 // an error message here rather than a rejection one round trip away.
 
-import { validateToolInput } from '@yaks/vocab/tools'
-import { commandOf, type Prop, type Schema, typeOf } from './tool.ts'
+import { validateToolInput } from "@yaks/vocab/tools";
+import { commandOf, type Prop, type Schema, typeOf } from "./tool.ts";
 
 /** As much of a tool as a command line reads: what it is called, the schema
  * its arguments must satisfy, and how they are written on a command line. A
  * tool an MCP server listed (tool.ts `Listed`) and one this process runs
  * (@yaks/graph `Tool`) both carry this much. */
 export type Grammar = {
-  name?: string
-  noun?: string
-  verb?: string
-  inputSchema?: Schema | Record<string, unknown>
+  name?: string;
+  noun?: string;
+  verb?: string;
+  inputSchema?: Schema | Record<string, unknown>;
   options?: {
-    positional?: readonly string[]
-    short?: Readonly<Record<string, string>>
-    rest?: string
-  }
-}
+    positional?: readonly string[];
+    short?: Readonly<Record<string, string>>;
+    rest?: string;
+  };
+};
 
 /** The command line was wrong — nothing ran, and the exit code is 2. */
 export class Usage extends Error {}
@@ -40,16 +40,16 @@ export class Usage extends Error {}
 /** Where an expanded value is read from. A test passes two functions and
  * touches no disk. */
 export type Reads = {
-  file: (path: string) => string | Promise<string>
-  stdin: () => string | Promise<string>
-}
+  file: (path: string) => string | Promise<string>;
+  stdin: () => string | Promise<string>;
+};
 
 /** A parsed command line: options in the order they were given (a bare flag
  * is `true`), and the bare words that named no option. */
 export type Said = {
-  opts: [string, string | true][]
-  words: string[]
-}
+  opts: [string, string | true][];
+  words: string[];
+};
 
 /**
  * Split a command line into options and bare words. A `--name` whose next word
@@ -63,79 +63,79 @@ export type Said = {
  * ```
  */
 export let saidIn = (argv: string[]): Said => {
-  let opts: [string, string | true][] = []
-  let words: string[] = []
+  let opts: [string, string | true][] = [];
+  let words: string[] = [];
   for (let i = 0; i < argv.length; i++) {
-    let a = argv[i]
-    if (!a.startsWith('--')) {
-      words.push(a)
-      continue
+    let a = argv[i];
+    if (!a.startsWith("--")) {
+      words.push(a);
+      continue;
     }
-    let eq = a.indexOf('=')
+    let eq = a.indexOf("=");
     if (eq > 2) {
-      opts.push([a.slice(2, eq), a.slice(eq + 1)])
-      continue
+      opts.push([a.slice(2, eq), a.slice(eq + 1)]);
+      continue;
     }
-    let next = argv[i + 1]
-    if (next != undefined && !next.startsWith('--')) {
-      opts.push([a.slice(2), next]), i++
-    } else opts.push([a.slice(2), true])
+    let next = argv[i + 1];
+    if (next != undefined && !next.startsWith("--")) {
+      opts.push([a.slice(2), next]), i++;
+    } else opts.push([a.slice(2), true]);
   }
-  return { opts, words }
-}
+  return { opts, words };
+};
 
 /** `@path` reads that file, `-` and `@-` read stdin, anything else is used as
  * given. */
 export let inflate = async (word: string, reads?: Reads): Promise<string> => {
-  if (!reads) return word
-  if (word == '-' || word == '@-') return await reads.stdin()
-  return word.startsWith('@') ? await reads.file(word.slice(1)) : word
-}
+  if (!reads) return word;
+  if (word == "-" || word == "@-") return await reads.stdin();
+  return word.startsWith("@") ? await reads.file(word.slice(1)) : word;
+};
 
 let parsed = (name: string, raw: string, want: string): unknown => {
   try {
-    return JSON.parse(raw)
+    return JSON.parse(raw);
   } catch {
-    throw new Usage(`--${name} wants ${want}, and this is not JSON: ${raw}`)
+    throw new Usage(`--${name} wants ${want}, and this is not JSON: ${raw}`);
   }
-}
+};
 
 /** One expanded argument, converted to the type its property declares. A
  * string stays a string — JSON-looking or not — so a title that reads like a
  * number is still a title. */
 export let valueOf = (name: string, raw: string, p?: Prop): unknown => {
-  let want = typeOf(p)
-  if (want == 'boolean') {
-    if (raw == 'true' || raw == '1') return true
-    if (raw == 'false' || raw == '0') return false
-    throw new Usage(`--${name} wants true or false, got ${raw}`)
+  let want = typeOf(p);
+  if (want == "boolean") {
+    if (raw == "true" || raw == "1") return true;
+    if (raw == "false" || raw == "0") return false;
+    throw new Usage(`--${name} wants true or false, got ${raw}`);
   }
-  if (want == 'number' || want == 'integer') {
-    let n = Number(raw)
-    if (raw.trim() == '' || Number.isNaN(n)) {
-      throw new Usage(`--${name} wants a number, got ${raw}`)
+  if (want == "number" || want == "integer") {
+    let n = Number(raw);
+    if (raw.trim() == "" || Number.isNaN(n)) {
+      throw new Usage(`--${name} wants a number, got ${raw}`);
     }
-    return n
+    return n;
   }
-  if (want == 'object') {
-    let v = parsed(name, raw, 'an object')
-    if (!v || typeof v != 'object' || Array.isArray(v)) {
-      throw new Usage(`--${name} wants an object, got ${raw}`)
+  if (want == "object") {
+    let v = parsed(name, raw, "an object");
+    if (!v || typeof v != "object" || Array.isArray(v)) {
+      throw new Usage(`--${name} wants an object, got ${raw}`);
     }
-    return v
+    return v;
   }
-  if (want == 'array') {
+  if (want == "array") {
     // A whole array as JSON, or one item — repeat the option for more
     // (`--filters .a --filters .b`), which is how a list is typed without
     // getting brackets past a shell.
-    let v = raw.trimStart().startsWith('[')
-      ? parsed(name, raw, 'an array')
-      : null
-    if (Array.isArray(v)) return v
-    return [valueOf(name, raw, p?.items)]
+    let v = raw.trimStart().startsWith("[")
+      ? parsed(name, raw, "an array")
+      : null;
+    if (Array.isArray(v)) return v;
+    return [valueOf(name, raw, p?.items)];
   }
-  return raw
-}
+  return raw;
+};
 
 /**
  * `key=value`, `--key=value` and `--key value` arguments as an object —
@@ -157,33 +157,35 @@ export let pairsIn = async (
   words: string[],
   reads?: Reads,
 ): Promise<Record<string, unknown>> => {
-  let out: Record<string, unknown> = {}
+  let out: Record<string, unknown> = {};
   for (let i = 0; i < words.length; i++) {
-    let word = words[i]
-    let eq = word.indexOf('=')
-    let flag = word.startsWith('--')
-    let name = flag ? word.slice(2, eq < 0 ? undefined : eq) : word.slice(0, eq)
+    let word = words[i];
+    let eq = word.indexOf("=");
+    let flag = word.startsWith("--");
+    let name = flag
+      ? word.slice(2, eq < 0 ? undefined : eq)
+      : word.slice(0, eq);
     if (!name || !flag && eq <= 0) {
       throw new Usage(
         `not an argument: ${word} — want key=value or --key value`,
-      )
+      );
     }
-    let value = eq >= 0 ? word.slice(eq + 1) : words[++i]
-    if (value == undefined || eq < 0 && value.startsWith('--')) {
-      throw new Usage(`${word} needs a value`)
+    let value = eq >= 0 ? word.slice(eq + 1) : words[++i];
+    if (value == undefined || eq < 0 && value.startsWith("--")) {
+      throw new Usage(`${word} needs a value`);
     }
-    let raw = await inflate(value, reads)
+    let raw = await inflate(value, reads);
     try {
-      out[name] = JSON.parse(raw)
+      out[name] = JSON.parse(raw);
     } catch {
-      out[name] = raw
+      out[name] = raw;
     }
   }
-  return out
-}
+  return out;
+};
 
 let listed = (names: string[]): string =>
-  names.length ? names.map((n) => `--${n}`).join(', ') : '(no arguments)'
+  names.length ? names.map((n) => `--${n}`).join(", ") : "(no arguments)";
 
 /**
  * The arguments a tool was given, parsed through its own input schema — the
@@ -202,63 +204,65 @@ export let argsFor = async (
   argv: readonly string[],
   reads?: Reads,
 ): Promise<Record<string, unknown>> => {
-  let props = ((tool.inputSchema ?? {}) as Schema).properties ?? {}
-  let rest = tool.options?.rest
-  let { pairs, spare } = scanned(tool, argv)
-  let out: Record<string, unknown> = {}
+  let props = ((tool.inputSchema ?? {}) as Schema).properties ?? {};
+  let rest = tool.options?.rest;
+  let { pairs, spare } = scanned(tool, argv);
+  let out: Record<string, unknown> = {};
   for (let [name, raw] of pairs) {
     let value = raw === true
       ? true
-      : valueOf(name, await inflate(raw, reads), props[name])
-    let had = out[name]
+      : valueOf(name, await inflate(raw, reads), props[name]);
+    let had = out[name];
     out[name] = Array.isArray(had) && Array.isArray(value)
       ? [...had, ...value]
-      : value
+      : value;
   }
 
   // The bare words nothing claimed, where the tool asked for them: an app's
   // own arguments as pairs (bare or long options), or a plain list, which joins what its
   // own option gathered (`--only a b` is both a and b).
   if (rest && spare.length) {
-    let had = out[rest]
-    out[rest] = typeOf(props[rest]) == 'array'
+    let had = out[rest];
+    out[rest] = typeOf(props[rest]) == "string"
+      ? [had, ...spare].filter((w) => w != undefined).join(" ")
+      : typeOf(props[rest]) == "array"
       ? [
         ...Array.isArray(had) ? had : [],
         ...await Promise.all(spare.map((w) => inflate(w, reads))),
       ]
-      : await pairsIn(spare, reads)
+      : await pairsIn(spare, reads);
   }
 
   if (!tool.inputSchema) {
     if (Object.keys(out).length) {
-      throw new Usage(`${commandOf(tool)} takes no arguments`)
+      throw new Usage(`${commandOf(tool)} takes no arguments`);
     }
-    return out
+    return out;
   }
   try {
     return validateToolInput(
       { inputSchema: tool.inputSchema as Record<string, unknown> },
       out,
-    )
+    );
   } catch (e) {
-    throw new Usage((e as Error).message)
+    throw new Usage((e as Error).message);
   }
-}
+};
 
 export let commandFor = <T extends Grammar>(
   tools: readonly T[],
   argv: readonly string[],
 ): { verb: T; args: string[] } | undefined => {
-  let [word, next] = argv
-  if (!word) return undefined
+  let [word, next] = argv;
+  if (!word) return undefined;
   for (let t of tools) {
     if (t.noun && t.verb) {
       if (
         (t.noun == word && t.verb == next) || (t.verb == word && t.noun == next)
-      ) return { verb: t, args: argv.slice(2) }
-    } else if (commandOf(t) == word) return { verb: t, args: argv.slice(1) }
+      ) return { verb: t, args: argv.slice(2) };
+    } else if (commandOf(t) == word) return { verb: t, args: argv.slice(1) };
   }
-}
+};
 
 /** A typed line's words and their replacement ranges. Incomplete quotes are
  * allowed only while completing; parsing asks for a closed line. */
@@ -266,28 +270,28 @@ export let tokensIn = (
   line: string,
   partial = false,
 ): { value: string; from: number; to: number }[] => {
-  let words: { value: string; from: number; to: number }[] = []
-  let value = '', quote = '', from = -1
+  let words: { value: string; from: number; to: number }[] = [];
+  let value = "", quote = "", from = -1;
   for (let i = 0; i < line.length; i++) {
-    let c = line[i]
-    if (from < 0 && !/\s/.test(c)) from = i
-    if (c == '\\' && i + 1 < line.length) value += line[++i]
+    let c = line[i];
+    if (from < 0 && !/\s/.test(c)) from = i;
+    if (c == "\\" && i + 1 < line.length) value += line[++i];
     else if (quote) {
-      if (c == quote) quote = ''
-      else value += c
-    } else if (c == '"' || c == "'") quote = c
+      if (c == quote) quote = "";
+      else value += c;
+    } else if (c == '"' || c == "'") quote = c;
     else if (/\s/.test(c)) {
-      if (from >= 0) words.push({ value, from, to: i })
-      value = '', from = -1
-    } else value += c
+      if (from >= 0) words.push({ value, from, to: i });
+      value = "", from = -1;
+    } else value += c;
   }
-  if (quote && !partial) throw new Usage('Close the quoted argument.')
-  if (from >= 0) words.push({ value, from, to: line.length })
+  if (quote && !partial) throw new Usage("Close the quoted argument.");
+  if (from >= 0) words.push({ value, from, to: line.length });
   else if (partial) {
-    words.push({ value: '', from: line.length, to: line.length })
+    words.push({ value: "", from: line.length, to: line.length });
   }
-  return words
-}
+  return words;
+};
 
 /** The single argument walk used by parsing and completion. A partial walk
  * reports the property still awaiting a value, without requiring the schema's
@@ -297,107 +301,108 @@ export let scanned = (
   argv: readonly string[],
   partial = false,
 ): {
-  pairs: [string, string | true][]
-  spare: string[]
-  given: Set<string>
-  literal: boolean
-  pending: string | undefined
-  awaiting: string | undefined
+  pairs: [string, string | true][];
+  spare: string[];
+  given: Set<string>;
+  literal: boolean;
+  pending: string | undefined;
+  awaiting: string | undefined;
 } => {
-  let props = ((tool.inputSchema ?? {}) as Schema).properties ?? {}
-  let rest = tool.options?.rest
-  let objectRest = rest && typeOf(props[rest]) == 'object'
-  let positional = tool.options?.positional ?? []
-  let shorts = tool.options?.short ?? {}
-  let pairs: [string, string | true][] = [], spare: string[] = []
+  let props = ((tool.inputSchema ?? {}) as Schema).properties ?? {};
+  let rest = tool.options?.rest;
+  let objectRest = rest && typeOf(props[rest]) == "object";
+  let positional = tool.options?.positional ?? [];
+  let shorts = tool.options?.short ?? {};
+  let pairs: [string, string | true][] = [], spare: string[] = [];
   let given = new Set<string>(),
     at = 0,
     literal = false,
     awaiting: string | undefined,
-    pending: string | undefined
+    pending: string | undefined;
   let put = (name: string, raw: string | true) => {
-    if (partial && raw !== true && !raw.startsWith('@') && raw != '-') {
-      let value = valueOf(name, raw, props[name])
+    if (partial && raw !== true && !raw.startsWith("@") && raw != "-") {
+      let value = valueOf(name, raw, props[name]);
       try {
         validateToolInput({
-          inputSchema: { type: 'object', properties: { [name]: props[name] } },
-        }, { [name]: value })
+          inputSchema: { type: "object", properties: { [name]: props[name] } },
+        }, { [name]: value });
       } catch (e) {
-        throw new Usage((e as Error).message)
+        throw new Usage((e as Error).message);
       }
     }
-    pairs.push([name, raw])
-    given.add(name)
-  }
+    pairs.push([name, raw]);
+    given.add(name);
+  };
   for (let i = 0; i < argv.length; i++) {
-    let word = argv[i]
-    if (!literal && word == '--') {
-      literal = true
-      continue
+    let word = argv[i];
+    if (!literal && word == "--") {
+      literal = true;
+      continue;
     }
-    let eq = word.indexOf('=')
-    let flag = eq > 0 ? word.slice(0, eq) : word
-    let name = flag.startsWith('--') ? flag.slice(2) : shorts[flag.slice(1)]
-    if (!literal && (flag.startsWith('--') || flag.startsWith('-') && name)) {
-      let p = props[name]
-      if (!p && objectRest && flag.startsWith('--') && name) {
+    let eq = word.indexOf("=");
+    let flag = eq > 0 ? word.slice(0, eq) : word;
+    let name = flag.startsWith("--") ? flag.slice(2) : shorts[flag.slice(1)];
+    if (!literal && (flag.startsWith("--") || flag.startsWith("-") && name)) {
+      let p = props[name];
+      if (!p && objectRest && flag.startsWith("--") && name) {
         // Declared options always win; only an object rest can carry names
         // whose schema belongs to the app rather than this command line.
-        spare.push(word)
-        if (eq > 0) continue
-        let next = argv[i + 1]
-        if (next == undefined || next.startsWith('--')) {
+        spare.push(word);
+        if (eq > 0) continue;
+        let next = argv[i + 1];
+        if (next == undefined || next.startsWith("--")) {
           if (!partial || next != undefined) {
-            throw new Usage(`${flag} needs a value`)
+            throw new Usage(`${flag} needs a value`);
           }
-          awaiting = name
-          pending = name
-        } else spare.push(argv[++i])
-        continue
+          awaiting = name;
+          pending = name;
+        } else spare.push(argv[++i]);
+        continue;
       }
       if (!p) {
         throw new Usage(
           `Unknown option: ${flag} — ${commandOf(tool)} takes ${
             listed(Object.keys(props))
           }`,
-        )
+        );
       }
       if (eq > 0) {
-        put(name, word.slice(eq + 1))
-        continue
+        put(name, word.slice(eq + 1));
+        continue;
       }
-      let next = argv[i + 1]
+      let next = argv[i + 1];
       if (
-        typeOf(p) == 'boolean' &&
+        typeOf(p) == "boolean" &&
         (next == undefined ||
-          !['true', 'false', '1', '0', '-'].includes(next) &&
-            !next.startsWith('@'))
+          !["true", "false", "1", "0", "-"].includes(next) &&
+            !next.startsWith("@"))
       ) {
-        put(name, true)
-        if (partial && next == undefined) awaiting = name
-      } else if (next == undefined || next.startsWith('--')) {
+        put(name, true);
+        if (partial && next == undefined) awaiting = name;
+      } else if (next == undefined || next.startsWith("--")) {
         if (!partial || next != undefined) {
-          throw new Usage(`${flag} needs a value`)
+          throw new Usage(`${flag} needs a value`);
         }
-        awaiting = name
-        pending = name
-      } else put(name, argv[++i])
-      continue
+        awaiting = name;
+        pending = name;
+      } else put(name, argv[++i]);
+      continue;
     }
-    while (at < positional.length && given.has(positional[at])) at++
-    if (at < positional.length) put(positional[at++], word)
-    else if (tool.options?.rest) spare.push(word)
+    while (at < positional.length && given.has(positional[at])) at++;
+    if (at < positional.length) put(positional[at++], word);
+    else if (tool.options?.rest) spare.push(word);
     else {throw new Usage(
         `${commandOf(tool)} takes ${listed(Object.keys(props))}, not ${word}`,
-      )}
+      );}
   }
-  while (at < positional.length && given.has(positional[at])) at++
+  while (at < positional.length && given.has(positional[at])) at++;
   return {
     pairs,
     spare,
     given,
     literal,
     pending,
-    awaiting: awaiting ?? positional[at],
-  }
-}
+    awaiting: awaiting ?? positional[at] ??
+      (rest && typeOf(props[rest]) == "string" ? rest : undefined),
+  };
+};
