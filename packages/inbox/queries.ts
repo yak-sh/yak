@@ -49,6 +49,7 @@ let fields = [
   'decision',
   'filed',
   'mail',
+  'mail_notice',
   'notified',
   'knock',
   'deliver',
@@ -88,6 +89,7 @@ export let candidates = (who: Reader, has: Words = () => true): string => {
     'design',
     'bug',
     'mail',
+    'mail_notice',
     'comment',
     'entry',
   ].filter(has).map((name) => `.${name}`).join('|')

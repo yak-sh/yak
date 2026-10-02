@@ -114,7 +114,9 @@ export let threads = <R extends Row>(
   who: Reader,
   search: Search = {},
 ): Thread<R>[] => {
-  let records = new Map(all.map((r) => [r.eid, r]))
+  let records = new Map(
+    all.filter((r) => !r.comps.mail_notice).map((r) => [r.eid, r]),
+  )
   let byId = new Map(records)
   for (let r of records.values()) {
     for (let id of [r.comps.mail?.message_id, r.comps.notified?.message_id]) {

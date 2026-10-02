@@ -42,6 +42,20 @@ export type Options = {
   /** the edge this graph pulls arrivals from, where the edge cannot reach the
    * graph to post them; with none, nothing is pulled */
   pull?: Pull
+  /** Opt-in email door. No automatic inbox letters without it. */
+  inbox?: Inbox
+}
+
+/** Whose inbox reaches a mail client, and how its links return here. */
+export type Inbox = {
+  person: Eid
+  from: string
+  base: string
+  /** UTC hour for the single daily digest (default 9). */
+  hour?: number
+  /** Alerts and updates are never emailed unless explicitly requested. */
+  alerts?: boolean
+  updates?: boolean
 }
 
 /** A transport, as a config names one. */

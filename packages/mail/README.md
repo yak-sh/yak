@@ -485,3 +485,50 @@ creation. The graph's storage adapter and optional journal retain the data.
 The core uses standard JavaScript and Web APIs and runs on Deno, Node, browsers,
 and Cloudflare Workers. The Cloudflare sender uses `fetch`; its message types
 are checked against `@cloudflare/workers-types` in `conform.ts`.
+
+## Email is an inbox door
+
+Automatic inbox mail is opt-in in the mail plugin's `with.inbox` option:
+
+```json
+{
+  "person": "<person eid>",
+  "from": "inbox@example.com",
+  "base": "https://your-graph.example",
+  "hour": 9
+}
+```
+
+The person needs `email.address`; the mail plugin still needs its sender and
+inbound route or pull configuration. `hour` is UTC, default 9. After that hour,
+the mail service queues at most one digest per UTC day. A missed day is not
+replayed as a backlog of digests. Blocking decisions queue at once through
+`mail_inbox`; the service also catches work written while no worker ran. Alerts
+and updates are excluded unless `alerts: true` or `updates: true` is explicitly
+requested. Read, muted and archived threads do not cross this door.
+
+The door reads `@yaks/inbox`'s candidates, discussion, requirements and
+dependents; `./door` exports `inboxAt`, `planned`, `rendered` and `queue` for
+hosts supplying their own clocks and writes. It has no transport of its own.
+`mail_notice{activity, comment, thread, letter}` keeps the activity as rendered:
+on a thread letter it points to the shown comment, on a digest entry to its
+thread and digest letter. These snapshots deduplicate queued mail; they are not
+conversation or new inbox activity.
+
+Thread letters use the previous letter's Message-ID as In-Reply-To. A digest
+contains links and a separate reply address for each thread (or shown comment),
+so a reply can select a thread without guessing from a digest's subject. The
+sender's domain must route those id-shaped addresses to this graph's mail edge.
+A reply to the digest itself is kept as mail, not assigned to an arbitrary
+thread. Replies retain their envelope and also carry
+`comment{target, reply_to}`; a verified known recipient's reply to the letter or
+thread address reaches the same conversation as web and TUI. Unverified or
+unknown senders are kept as mail only, never attributed to the recipient.
+
+Decisions show numbered choices and the recommendation. A reply containing only
+a choice number (before quoted text) selects that choice; other words are a
+custom answer. Out-of-range numbers remain comments. Answers are attributed to
+the sender and complete the decision through the usual task/kernel rules. An
+already answered or cancelled decision keeps further replies as comments without
+changing its answer. No probe needs a real address: use the `stash` transport,
+which stores messages in memory.

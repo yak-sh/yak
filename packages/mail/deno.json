@@ -8,7 +8,8 @@
     "./tools": "./tools.ts",
     "./effects": "./effects.ts",
     "./routes": "./routes.ts",
-    "./service": "./service.ts"
+    "./service": "./service.ts",
+    "./door": "./door.ts"
   },
   "license": "Apache-2.0",
   "description": "Represents letters and their delivery outcomes as graph components, sends them through a sender the caller supplies, and converts arrivals to bundles.",

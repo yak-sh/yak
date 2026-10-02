@@ -28,6 +28,7 @@ import { type Bundle, type Eid, type Graph, Refused } from '@yaks/graph'
 import { and, type Clause, eq, limit } from '@yaks/query'
 import { canon, local as localOf } from './addr.ts'
 import { EMAIL, MAIL } from './comp.ts'
+import { replied } from './reply.ts'
 import {
   type Arrival,
   author,
@@ -109,6 +110,8 @@ export type Arrivals = {
   domain?: string
   /** where a letter addressed to nobody here lands — the triage entity */
   triage?: Eid
+  /** The opted-in person, for replies sent to a thread address. */
+  inbox?: { person: Eid }
 }
 
 /**
@@ -128,7 +131,7 @@ export type Arrivals = {
  * owner appearing to have written it.
  */
 export let arrived = (
-  { graph, domain, triage }: Arrivals,
+  { graph, domain, triage, inbox }: Arrivals,
 ): (m: Received, arrival?: Arrival) => Promise<Bundle[]> =>
 async (m, arrival = {}) => {
   let id = messageId(m)
@@ -144,5 +147,9 @@ async (m, arrival = {}) => {
     ...(target ? { target } : {}),
     ...(reply ? { reply } : {}),
   })
-  return batch.map((b) => ({ ...b, $actor: by ? { by } : {} }))
+  let letter = { ...batch[0], $actor: by ? { by } : {} }
+  let parent = reply
+    ? (await graph.read(`.entity.eid=${JSON.stringify(reply)}`))[0]
+    : undefined
+  return replied(graph, letter, parent, by, inbox?.person)
 }

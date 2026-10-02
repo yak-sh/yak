@@ -25,6 +25,8 @@ import type { Sender } from './send.ts'
 import { letterOf, owed, sending } from './send.ts'
 import { cloudflare } from './cloudflare.ts'
 import { stash } from './stash.ts'
+import { queue } from './door.ts'
+import type { Vocab } from '@yaks/vocab'
 
 /** A named transport, built — or the reason there is none. A `via` nothing
  * here implements will never become a sender, and one whose credentials have
@@ -58,10 +60,19 @@ export let waiting = (reason: string): Handler => {
 /** The outbound half: `mail_post`, wherever a sender was named. Where the
  * sender cannot be built, nothing is sent and the letters wait in the graph
  * rather than the server refusing to start. */
-export let effects = (_host: unknown, options: Options = {}): Handlers => {
+export let effects = (
+  host: { vocab: Vocab } | null,
+  options: Options = {},
+): Handlers => {
   if (!options.sender) return {}
   let { sender, waiting: reason } = post(options.sender)
   return {
+    ...(options.inbox
+      ? {
+        mail_inbox: (_event, tx, write) =>
+          queue(tx, host!.vocab, options.inbox!, write),
+      }
+      : {}),
     mail_post: sender
       ? sending({
         sender,

@@ -93,6 +93,7 @@ export let routes = (
           graph: host.graph,
           domain: options.domain,
           triage: options.triage,
+          inbox: options.inbox,
         })
         let batch = await receive({ from, to, headers: head(headers) }, {
           text,
