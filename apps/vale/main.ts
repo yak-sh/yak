@@ -56,6 +56,7 @@ import { anyLook, anyName, fields, picks } from './make.ts'
 import { portrait } from './portrait.ts'
 import { listen } from './input.ts'
 import { nodes } from './nodes.ts'
+import { interaction, workTarget } from './interact.ts'
 import { type Board, noticeboard, notices } from './notices.ts'
 import { papers } from './papers.ts'
 import { ITEMS, useItems } from './items.ts'
@@ -1003,10 +1004,13 @@ let loop = (t: number) => {
       job = toil.tick(
         v,
         f,
-        i.gather || (i.talk && (!f.talk && !f.peer || !!job?.bench)),
+        (near) => i.gather || (i.talk && workTarget(interaction(f, near))),
         i.strike || i.dodge || i.jump || i.ability > 0,
         natural,
       )
+      let target = interaction(f, job)
+      if (target != 'talk') f.talk = null
+      if (target != 'peer') f.peer = null
       let helping = helper.tick(v, f, dt, natural)
       helperView.show(helping, dt, now)
       let d = job.doing
@@ -1086,8 +1090,8 @@ let loop = (t: number) => {
       for (let e of f.events) react(e, target)
       for (let e of job.events) worked(e)
       for (let e of helping.events) worked(e)
-      if (i.talk && f.talk && !job.bench) talkTo()
-      else if (i.talk && f.peer && !job.bench) talkToPeer()
+      if (i.talk && target == 'talk') talkTo()
+      else if (i.talk && target == 'peer') talkToPeer()
       if (h.talking && (talkingPeer ? f.peer?.eid != talkingPeer : !f.talk)) {
         h.talk(null)
       }

@@ -403,7 +403,9 @@ export let working = (
     tick: (
       v: Vale,
       f: WorkFrame,
-      want: boolean,
+      want:
+        | boolean
+        | ((near: Pick<Job, 'near' | 'bench' | 'board'>) => boolean),
       stop: boolean,
       natural: Natural[] = [],
       as?: { target: string; directive: string },
@@ -483,7 +485,10 @@ export let working = (
       }
 
       // Asked to work: the nearest whole node, or the station or board there.
-      if (want && !job && !f.down && me) {
+      if (
+        (typeof want == 'function' ? want({ near, bench, board }) : want) &&
+        !job && !f.down && me
+      ) {
         if (!near && bench) {
           events.push({ type: 'station', craft: bench.craft })
         } else if (!near && board) {

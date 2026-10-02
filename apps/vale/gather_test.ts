@@ -218,3 +218,38 @@ test('a natural resource changes shape when spent and shines when rare', () => {
   assert(rare.pos.length > whole.pos.length)
   assert(finer.pos.length > whole.pos.length)
 })
+
+test('the E prompt gathers once beside a peer, instead of talking', () => {
+  let rows: Bundle[] = []
+  let prop: Prop = { kind: 'rock', x: 12, z: 5, seed: 1, natural: true }
+  let natural: Natural[] = [{ prop, at: [12, 5, 5] }]
+  let toil = working({
+    hero: 'hero',
+    mine: () => rows,
+    gathered: () => rows,
+    keep: (...bundles) => rows.push(...bundles),
+  })
+  let f: WorkFrame = {
+    body: { x: 11, y: 5, z: 5 },
+    sheet: { bag: [], worn: {} },
+    down: false,
+    now: 1000,
+  }
+  let choose = (job: Parameters<typeof interaction>[1]) =>
+    workTarget(
+      interaction(
+        { talk: null, peer: { eid: 'peer' } } as Parameters<
+          typeof interaction
+        >[0],
+        job,
+      ),
+    )
+  let first = toil.tick(flat(5, [], [prop]), f, choose, false, natural)
+  assert(first.doing)
+  f.now += effort(LODES.copper, 1) + 10000
+  toil.tick(flat(5, [], [prop]), f, false, false, natural)
+  toil.tick(flat(5, [], [prop]), f, choose, false, natural)
+  assertEquals(rows.filter((b) => b.gathered).length, 1)
+})
+
+import { interaction, workTarget } from './interact.ts'
