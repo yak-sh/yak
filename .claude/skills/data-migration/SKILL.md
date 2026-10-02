@@ -52,7 +52,9 @@ M-37965 recover on its own); this is how to follow them.
 2. **Prove it on a copy.** `sqlite3 ~/.yak/yak.db "VACUUM INTO '<scratch>/copy.db'"`
    (about three minutes on the live file), point a scratch config at the copy,
    run the script, compare counts before and after, and run it again to show
-   it changes nothing the second time.
+   it changes nothing the second time. Then delete the copy and its scratch
+   config: a copy is 6 to 9 GB on the disk the live graph writes to, and copies
+   left behind have filled it.
 3. **Back up.** `bin/backup` takes 8 to 20 minutes and holds a lock. If a run
    finished minutes ago, `git -C ~/.yak log -1` shows it and it will do.
 4. **Run it live.** Rewriting rows can run with `yak` up. Dropping a column or
