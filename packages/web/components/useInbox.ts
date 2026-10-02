@@ -7,6 +7,7 @@ import {
   threads,
 } from '@yaks/inbox'
 import {
+  boundedReads,
   candidates,
   dependents,
   discussion,
@@ -14,7 +15,17 @@ import {
   words,
 } from '@yaks/inbox/queries'
 import { isUnread, type Row, uniq } from '../client.ts'
-import { inbox as seededInbox, row } from '../live.ts'
+import {
+  dropQuery,
+  holdQuery,
+  inbox as seededInbox,
+  queryEids,
+  querySubscription,
+  row,
+} from '../live.ts'
+import { useLayoutEffect, useMemo } from 'preact/hooks'
+import { parseQuery, resolveRefs } from '../query.ts'
+import { findEid } from '../live.ts'
 import { kindOf, vocab } from '../types.ts'
 import { type QueryResult, useQueryResult } from './useQuery.ts'
 import { useEntity } from './subscriptions.ts'
@@ -36,6 +47,33 @@ let has = words(vocab)
 let authoritative = (r: QueryResult) =>
   r.ready && r.subscription?.state.status != 'failed'
 
+// The number of derived reads may change; one hook owns all their lifetimes.
+let useReads = (queries: string[], enabled: boolean) => {
+  let key = JSON.stringify(queries)
+  let reads = useMemo(() =>
+    queries.map((line) => ({
+      line,
+      preds: resolveRefs(parseQuery(line), findEid),
+    })), [key])
+  useLayoutEffect(() => {
+    if (!enabled) return
+    for (let { preds, line } of reads) holdQuery(preds, line)
+    return () => {
+      for (let { preds } of reads) dropQuery(preds)
+    }
+  }, [reads, enabled])
+  let eids = new Set<string>()
+  let ready = enabled
+  if (enabled) {
+    for (let { preds, line } of reads) {
+      let sub = querySubscription(preds, line)
+      ready &&= !sub || sub.state.status == 'ready'
+      for (let eid of queryEids(preds, line).value) eids.add(eid)
+    }
+  }
+  return { eids: [...eids], ready }
+}
+
 /** Complete query-derived thread data for web, TUI and the inbox root screen. */
 export let useInboxThreads = (
   actor: string,
@@ -53,21 +91,18 @@ export let useInboxThreads = (
   let ready = profile?.ready === true && authoritative(subscriptions)
   let seed = useQueryResult(candidates(who, has), ready, true)
   let first = rows(seed.eids)
-  let conversation = useQueryResult(
-    discussion(first, has),
+  let conversation = useReads(
+    boundedReads(first, (part) => discussion(part, has)),
     ready && authoritative(seed),
-    true,
   )
   let group = uniq([...first, ...rows(conversation.eids)])
-  let edges = useQueryResult(
-    requirements(group, has),
-    ready && authoritative(seed) && authoritative(conversation),
-    true,
+  let edges = useReads(
+    boundedReads(group, (part) => requirements(part, has)),
+    ready && authoritative(seed) && conversation.ready,
   )
-  let tasks = useQueryResult(
-    dependents(rows(edges.eids), has),
-    ready && authoritative(edges),
-    true,
+  let tasks = useReads(
+    boundedReads(rows(edges.eids), (part) => dependents(part, has)),
+    ready && edges.ready,
   )
   return {
     threads: threads(
@@ -75,9 +110,8 @@ export let useInboxThreads = (
       who,
       search,
     ),
-    ready: ready && authoritative(seed) && authoritative(conversation) &&
-      authoritative(edges) &&
-      authoritative(tasks),
+    ready: ready && authoritative(seed) && conversation.ready &&
+      edges.ready && tasks.ready,
   }
 }
 

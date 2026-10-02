@@ -154,3 +154,29 @@ export let dependents = (edges: Row[], has: Words = () => true): string =>
     select('entity.eid', edges.map((r) => String(r.comps.edge?.from ?? ''))),
     has,
   )
+
+/** Keep derived inbox reads below the socket's message budget without dropping
+ * threads. Each half asks the same query over a disjoint set of input rows;
+ * callers union the answers and wait for every half before claiming readiness.
+ */
+export let boundedReads = (
+  rows: Row[],
+  read: (rows: Row[]) => string,
+): string[] => {
+  let out = new Set<string>()
+  let split = (part: Row[]) => {
+    let query = read(part)
+    if (!query) return
+    // Leave room for the subscription envelope, including escaped query text.
+    if (new TextEncoder().encode(JSON.stringify(query)).length <= 48 * 1024) {
+      out.add(query)
+      return
+    }
+    if (part.length < 2) throw new RangeError('inbox row exceeds query budget')
+    let middle = Math.floor(part.length / 2)
+    split(part.slice(0, middle))
+    split(part.slice(middle))
+  }
+  split(rows)
+  return [...out]
+}

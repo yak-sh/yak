@@ -10,6 +10,7 @@ import { projectDoc } from '@yaks/project'
 import { edgeDoc, edgeKeywords } from '@yaks/edge'
 import { attention, type Row, threads } from './mod.ts'
 import {
+  boundedReads,
   candidates,
   dependents,
   discussion,
@@ -132,4 +133,23 @@ test('sparse delivery vocabularies retain archived candidates without querying m
     store.rows(candidates(who, words(vocab))).map((r) => r.eid).sort(),
     ['archived', 'new', 'read'],
   )
+})
+
+test('bounded inbox reads preserve every discussion member within the socket budget', () => {
+  let input = Array.from({ length: 2200 }, (_, i) => ({
+    eid: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+    comps: { task: {} },
+  }))
+  let reads = boundedReads(input, (part) => discussion(part))
+  assertEquals(reads.length > 1, true)
+  let members = new Set<string>()
+  for (let line of reads) {
+    assertEquals(
+      new TextEncoder().encode(JSON.stringify(line)).length <= 48 * 1024,
+      true,
+    )
+    for (let row of input) if (line.includes(row.eid)) members.add(row.eid)
+  }
+  assertEquals(members.size, input.length)
+  assertEquals(boundedReads([], (part) => discussion(part)), [])
 })

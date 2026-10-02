@@ -1,5 +1,6 @@
 // Readiness, shared query ownership, thread counts and watch/mute over the wire.
 import { test, until } from '@yaks/testing'
+import { decode } from '../../api/socket.ts'
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
@@ -121,5 +122,69 @@ test('inbox counts wait for complete reads, share holds, deduplicate and respect
     cache.value = {}
     if (prior) Object.defineProperty(globalThis, 'document', prior)
     else delete (globalThis as { document?: unknown }).document
+  }
+})
+
+test('a large inbox finishes every derived read on one socket instead of reconnecting', async () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let root = document.querySelector('main')!
+  let actor = uuid()
+  let data: Bundle[] = [{ entity: { eid: actor }, person: {} }]
+  for (let i = 0; i < 600; i++) {
+    let target = uuid(), mine = uuid()
+    data.push(
+      { entity: { eid: target }, task: {}, doc: { title: `Thread ${i}` } },
+      {
+        entity: { eid: mine },
+        comment: { target },
+        created: { by: actor, at: at(1) },
+      },
+      {
+        entity: { eid: uuid() },
+        comment: { target, reply_to: mine },
+        created: { at: at(2) },
+      },
+    )
+  }
+  cache.value = {}
+  let rejected = 0
+  let wire = host((a) => {
+    // The real API closes this socket, and sync resends all its asks on reopen.
+    if ('close' in decode(JSON.stringify({ ...a, acks: true, frames: true }))) {
+      rejected++
+      queueMicrotask(() => wire.drop())
+      return
+    }
+    return { bundles: reader(data)(a.subscribe) }
+  })
+  let View = () => <span>{useInboxCount(actor) ?? '?'}</span>
+  try {
+    await act(() => render(<View />, root))
+    await until(async () => {
+      await act(() => Promise.resolve())
+      return rejected > 0 || (root.textContent != '?' && root.textContent != '')
+    }, {
+      timeout: 10000,
+      label: 'all inbox batches ready without a socket rejection',
+    })
+    if (rejected) {
+      await until(() => wire.dials() > 1, {
+        label: 'sync reopens the rejected socket',
+      })
+    }
+    assertEquals(rejected, 0)
+    assertEquals(root.textContent, '600')
+    assertEquals(wire.dials(), 1)
+  } finally {
+    await act(() => render(null, root))
+    wire.free()
+    cache.value = {}
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else Reflect.deleteProperty(globalThis, 'document')
   }
 })
