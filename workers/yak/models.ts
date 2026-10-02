@@ -1,6 +1,6 @@
 // Providers lent to each app store; model offerings come from successful answers.
 import type { Bundle, Comp, Eid } from '@yaks/graph'
-import { identityEid } from '@yaks/graph'
+import { derivedEid, identityEid } from '@yaks/graph'
 import {
   answers,
   providerResolver,
@@ -10,7 +10,15 @@ import {
 } from '@yaks/session'
 import { worded } from '@yaks/tools'
 import { edits, mode, writes } from '@yaks/member'
-import { confirmed, type Model, ModelError, type Price } from '@yaks/model'
+import {
+  confirmed,
+  type MediaReceipt,
+  mediaReceipts,
+  type Model,
+  ModelError,
+  type Price,
+} from '@yaks/model'
+import { records } from '@yaks/secrets'
 
 import type { VocabDoc } from '@yaks/vocab'
 import { music, said, workersAi } from '@yaks/workers-ai'
@@ -20,9 +28,12 @@ import { gateway as openai } from '@yaks/openai'
 import { responses as openrouter } from '@yaks/openrouter'
 import { appStore, type Directory, directoryOf } from './directory.ts'
 import { ctxOf } from './connections.ts'
+import { vaultOf } from './vault.ts'
+import { KERNEL, meta } from './meta.ts'
+import { storeOf } from './door.ts'
 import { blobPrefix } from './blob-key.ts'
 import { filled, schemaOf } from '@yaks/tools/declared'
-import { accounted, metered } from './meter.ts'
+import { accounted, countedMedia, metered } from './meter.ts'
 import { outbound } from './outbound.ts'
 import { caught } from './sentry.ts'
 import {
@@ -112,6 +123,112 @@ let mediaStore = (at: Stored): import('@yaks/openai').MediaStore => ({
   },
 })
 
+// App-scoped records use the directory's existing secure vault.
+let receiptsFor = (at: Stored) =>
+  at.env.STORE
+    ? mediaReceipts(records<Partial<MediaReceipt>>(
+      {
+        apply: (change) => meta({ STORE: at.env.STORE! }).apply(change, KERNEL),
+      },
+      vaultOf(at.env),
+      'generated-media:' + at.app + ':',
+    ))
+    : undefined
+
+/** Recover or account media on its original ask, without generation.
+ * An attached recording needs no private receipt or additional download. */
+export let recovering = async (at: Stored, call: string) => {
+  let [ask] = await at.graph.get([call])
+  if (!ask?.ask || !ask.entry || !at.app || !at.env.STORE) {
+    throw new ModelError('media_missing', 'No original media ask in this app')
+  }
+  let found = await directoryOf(at.env.STORE).appAt(at.app)
+  if (!found) throw new ModelError('unbound', 'No account bound to this call')
+  let outputs = await at.graph.read(`.output.source=${call}&.attachment&*`)
+  let cost = ask.cost as { dollars?: number; reported?: boolean } | undefined
+  if (outputs.length && cost?.dollars != null) {
+    await countedMedia(
+      { STORE: at.env.STORE },
+      found.space,
+      call,
+      cost.dollars,
+      cost.reported ?? true,
+    )
+    return outputs
+  }
+  let model = workersAi(at.env.AI!, {
+    media: mediaStore(at),
+    fetch: at.env.MODEL_FETCH,
+    receipts: receiptsFor(at),
+  })
+  let reply = await model.recover!(call)
+  if (reply.cost == null) {
+    throw new ModelError('media_cost', 'No recording cost')
+  }
+  await countedMedia(
+    { STORE: at.env.STORE },
+    found.space,
+    call,
+    reply.cost,
+    reply.costReported ?? true,
+  )
+  let session = (ask.entry as Comp).session
+  let patches: Bundle[] = [{
+    entity: ask.entity,
+    cost: { dollars: reply.cost, reported: reply.costReported ?? true },
+    attempt: { state: 'completed' },
+  }]
+  for (let artifact of reply.artifacts ?? []) {
+    let eid = artifact.address
+    patches.push({
+      entity: { eid },
+      artifact: {
+        address: eid,
+        media_type: artifact.media_type,
+        size: artifact.size,
+      },
+    }, {
+      entity: {
+        eid: derivedEid('generated-media-output|' + call + '|' + artifact.call),
+      },
+      $was: { attachment: { artifact: null } },
+      entry: { session },
+      attachment: { artifact: eid, call: artifact.call },
+      output: { source: call },
+      content: { body: 'Recovered generated media: ' + eid },
+    })
+  }
+  return at.graph.apply(patches, { trusted: true })
+}
+
+// Only editors can ask; the body names one original ask, never a prompt or URL.
+export let recovery: Answer = async (
+  { path, req, who, env, app, json, refuse },
+) => {
+  if (path != '/ai/recover') return null
+  if (!writes(who.role)) return refuse()
+  if (!app.store) return json(503, 'unbound')
+  if (req.method != 'POST') return json(405, 'method_not_allowed')
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return json(400, 'bad_request')
+  }
+  if (
+    !body || typeof body != 'object' || Object.keys(body).length != 1 ||
+    !('call' in body) || typeof body.call != 'string'
+  ) {
+    return json(400, 'bad_request')
+  }
+  return storeOf(env.STORE, app.store).consume(
+    '/recover',
+    (r) => Promise.resolve(r),
+    { method: 'POST', body: JSON.stringify(body) },
+    KERNEL,
+  )
+}
+
 // A model calls out as the app whose store is running it. The sentinel comes
 // from that app's connected integration, and egress exchanges it only for the
 // integration's declared hosts. Nothing here reads or records the key.
@@ -176,6 +293,7 @@ let asking: Effect = (on, at) => {
     workersAi(at.env.AI!, {
       media: mediaStore(at),
       gateway: at.env.AI_GATEWAY,
+      receipts: receiptsFor(at),
     }),
   )
   let served: Model = Object.assign(
@@ -320,5 +438,5 @@ export let modelsPlugin: Plugin = {
   pages: [page('models')],
   installs: [planting],
   effects: [asking],
-  answers: [run],
+  answers: [run, recovery],
 }

@@ -14,7 +14,7 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
-import { accounted, BUDGET, monthOf } from './meter.ts'
+import { accounted, BUDGET, countedMedia, monthOf } from './meter.ts'
 import { identityEid } from '@yaks/graph'
 import { type Model, ModelError, weigh } from '@yaks/model'
 import { type Binding, workersAi } from '@yaks/workers-ai'
@@ -594,6 +594,7 @@ test('raw Workers AI audio debits its tariff once and refuses at the account lim
   let model = accounted(v.env, (dir) => dir.space('ada'), raw)
   let req = {
     model: 'minimax/music-2.6',
+    input: { is_instrumental: true },
     items: [{ kind: 'user' as const, text: 'A quiet tune' }],
     tools: [],
   }
@@ -642,4 +643,105 @@ test('raw partner calls carry configured gateway and affinity through the meter'
     gateway: { id: 'music' },
     extraHeaders: { 'x-session-affinity': 'pilot' },
   })
+})
+
+// Recovery accounts an already generated recording, including one attached
+// locally after a download failure. It never asks a provider to generate.
+test('original media debit is atomic once across concurrent and repeated recovery', async () => {
+  let v = await vale(() => {
+    throw new Error('No paid calls')
+  })
+  let space = (await v.dir.space('ada'))!
+  let call = crypto.randomUUID()
+  await Promise.all(
+    [1, 2, 3].map(() =>
+      countedMedia({ STORE: v.env.STORE }, space, call, 0.45, true)
+    ),
+  )
+  await countedMedia({ STORE: v.env.STORE }, space, call, 0.45, true)
+  assertAlmostEquals((await v.spent()).meter!.models, 0.45)
+  assertEquals(v.asked, [])
+})
+
+test('recovery door accounts an existing attachment without download or generation', async () => {
+  let v = await vale(() => {
+    throw new Error('No generation')
+  })
+  let session = crypto.randomUUID(), call = crypto.randomUUID()
+  let artifact = crypto.randomUUID()
+  assertEquals(
+    (await v.send('/apply', [
+      { entity: { eid: session }, session: {} },
+      {
+        entity: { eid: call },
+        entry: { session, seq: 1 },
+        ask: {},
+        cost: { dollars: 0.45, reported: true },
+        attempt: { state: 'completed' },
+      },
+      {
+        entity: { eid: artifact },
+        artifact: {
+          address: 'fixture-artifact',
+          media_type: 'audio/mpeg',
+          size: 576,
+        },
+      },
+      {
+        entity: { eid: crypto.randomUUID() },
+        entry: { session, seq: 2 },
+        attachment: { artifact },
+        output: { source: call },
+        content: { body: 'Fixture already recovered' },
+      },
+    ])).status,
+    200,
+  )
+  let post = (person: string | null = ADA) =>
+    apps.fetch(
+      visit('/vale/api/ai/recover', {
+        method: 'POST',
+        headers: person ? { cookie: '' } : {},
+        body: JSON.stringify({ call }),
+      }),
+      v.env,
+    )
+  // Anonymous callers cannot debit or recover another account's recordings.
+  assertEquals((await post(null)).status, 401)
+  let recover = async () =>
+    apps.fetch(
+      visit('/vale/api/ai/recover', {
+        method: 'POST',
+        headers: { cookie: await signedIn(ADA) },
+        body: JSON.stringify({ call }),
+      }),
+      v.env,
+    )
+  assertEquals((await recover()).status, 200)
+  assertEquals((await recover()).status, 200)
+  assertAlmostEquals((await v.spent()).meter!.models, 0.45)
+  assertEquals(v.asked, [])
+})
+
+test('accounted recovery preserves cost and never debits a second time', async () => {
+  let v = await vale(() => {
+    throw new Error('No generation')
+  })
+  let call = crypto.randomUUID()
+  let raw: Model = Object.assign(async () => {
+    throw new Error('No generation')
+  }, {
+    recover: async () => ({
+      id: 'same',
+      model: 'fixture',
+      items: [],
+      cost: 0.45,
+      costReported: true,
+    }),
+  })
+  let model = accounted(v.env, (dir) => dir.space('ada'), raw)
+  assertEquals((await model.recover!(call)).cost, 0.45)
+  await model.recover!(call)
+  assertAlmostEquals((await v.spent()).meter!.models, 0.45)
+  assertEquals(v.asked, [])
 })

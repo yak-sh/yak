@@ -33,13 +33,18 @@ export { listed, listing, modelInfo, pagePrice } from './list.ts'
 import {
   type Answer,
   type Item,
+  type MediaReceipt,
+  type MediaReceipts,
   type Model,
   ModelError,
+  receivedMedia,
+  recoveredMedia,
+  type Reply,
   type Request,
   type Usage,
 } from '@yaks/model'
 import { generatedBytes, type MediaStore } from '@yaks/openai'
-import { music, musicInput, pricedAudio } from './audio.ts'
+import { audioPrice, music, musicInput, pricedAudio } from './audio.ts'
 export { audioPrice, audioSeconds, music, pricedAudio } from './audio.ts'
 
 /** The part of the `AI` binding this package calls. */
@@ -370,59 +375,105 @@ let raw = (
  */
 export let workersAi = (
   ai: Binding,
-  options: { media?: MediaStore; fetch?: typeof fetch; gateway?: string } = {},
-): Model =>
-  Object.assign(async (req: Request) => {
+  options: {
+    media?: MediaStore
+    fetch?: typeof fetch
+    gateway?: string
+    receipts?: MediaReceipts
+  } = {},
+): Model => {
+  let deliver = async (receipt: MediaReceipt): Promise<Reply> => {
+    let audio = await pricedAudio(
+      receipt.model,
+      receipt.input,
+      receipt.response,
+      {
+        fetch: options.fetch,
+        maxBytes: options.media?.maxBytes,
+      },
+    )
+    let artifact
+    try {
+      artifact = await generatedBytes(
+        audio.bytes,
+        audio.mediaType,
+        receipt.id + ':audio',
+        options.media,
+      )
+    } catch {
+      throw new ModelError(
+        'media_storage',
+        'Music storage failed; recover the original call',
+      )
+    }
+    return {
+      id: receipt.id,
+      model: receipt.model,
+      items: [],
+      artifacts: [artifact],
+      cost: receipt.cost ?? audio.cost,
+      costReported: receipt.costReported ?? false,
+    }
+  }
+  return Object.assign(async (req: Request) => {
     req.signal?.throwIfAborted()
     if (music(req.model) && !options.media) {
       throw new ModelError('media_storage', 'Music requires artifact storage')
     }
+    if (
+      music(req.model) && req.call &&
+      await options.receipts?.read(req.call)
+    ) {
+      throw new ModelError(
+        'media_recovery',
+        'This call already generated media; use recovery instead',
+      )
+    }
     let sent = music(req.model) ? musicInput(req) : input(req)
-    let out = said(
-      await decoded(
-        await (music(req.model) ? raw.bind(null, ai) : ai.run.bind(ai))(
+    let response = await decoded(
+      await (music(req.model) ? raw.bind(null, ai) : ai.run.bind(ai))(
+        req.model,
+        sent,
+        routing(
           req.model,
-          sent,
-          routing(
-            req.model,
-            music(req.model) || req.conversation
-              ? {
-                ...music(req.model) ? { returnRawResponse: true } : {},
-                ...req.conversation
-                  ? { extraHeaders: { 'x-session-affinity': req.conversation } }
-                  : {},
-              }
-              : undefined,
-            options.gateway,
-          ),
-        ).catch((e) => {
-          throw failure(e)
-        }),
-      ),
+          music(req.model) || req.conversation
+            ? {
+              ...music(req.model) ? { returnRawResponse: true } : {},
+              ...req.conversation
+                ? { extraHeaders: { 'x-session-affinity': req.conversation } }
+                : {},
+            }
+            : undefined,
+          options.gateway,
+        ),
+      ).catch((e) => {
+        throw failure(e)
+      }),
     )
-    req.signal?.throwIfAborted()
+    let out = said(response)
     let id = str(at(out, 'id')) || crypto.randomUUID()
     if (music(req.model)) {
-      let audio = await pricedAudio(req.model, sent, out, {
-        fetch: options.fetch,
-        signal: req.signal,
-        maxBytes: options.media?.maxBytes,
-      })
-      let artifact = await generatedBytes(
-        audio.bytes,
-        audio.mediaType,
-        id + ':audio',
-        options.media,
-      )
-      return {
+      let reported = count(at(response, 'gatewayMetadata', 'cost')) ??
+        count(at(out, 'cost'))
+      let fixed = req.model == 'minimax/music-2.6'
+        ? audioPrice(req.model, sent, 0)
+        : undefined
+      let receipt: MediaReceipt = {
+        call: req.call ?? id,
         id,
         model: req.model,
-        items: [],
-        artifacts: [artifact],
-        cost: audio.cost,
-        costReported: false,
+        input: sent,
+        response: out,
+        cost: reported ?? fixed,
+        costReported: reported != null,
       }
+      await receivedMedia(req, receipt, options.receipts)
+      req.signal?.throwIfAborted()
+      let reply = await deliver(receipt)
+      await options.receipts?.save({ ...receipt, reply })
+      return reply
     }
+    req.signal?.throwIfAborted()
     let u = usageOf(out)
     let counted = Object.keys(u).length ? { usage: u } : {}
     if (req.questions) {
@@ -450,6 +501,8 @@ export let workersAi = (
       ...counted,
     }
   }, {
+    recover: (call: string) => recoveredMedia(call, options.receipts, deliver),
     list: () => listing(ai),
     info: (name: string) => modelInfo(name, options.fetch),
   })
+}

@@ -1089,6 +1089,14 @@ export let react = async (
   }
   let reply: Reply
   try {
+    req.call = ask.entity.eid
+    req.onMedia = async (receipt) => {
+      if (receipt.cost == null) return
+      await g.apply([{
+        entity: ask.entity,
+        cost: { dollars: receipt.cost, reported: receipt.costReported ?? true },
+      }], { trusted: true })
+    }
     reply = await providerModel(req)
     accepting = false
     await tail

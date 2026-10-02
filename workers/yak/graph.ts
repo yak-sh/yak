@@ -1,3 +1,4 @@
+import { recovering } from './models.ts'
 import { archetypes } from '@yaks/archetype'
 // The Store Durable Object, built out of the packages (T-33810, D-33490): one
 // app's graph, and nothing of the fleet's. It is composition, not code —
@@ -614,6 +615,7 @@ let routes = new Set([
   '/move',
   '/build',
   '/supply',
+  '/recover',
   '/ws',
   '/apply',
   '/query',
@@ -2688,6 +2690,16 @@ export class Store {
           this.#stored(this.#graph).graph,
           await request.json(),
         )
+      } catch (e) {
+        return refuse(e, request)
+      }
+    }
+    if (path == '/recover' && request.method == 'POST') {
+      if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
+      try {
+        let { call } = await request.json()
+        if (typeof call != 'string') return json({ error: 'BadRequest' }, 400)
+        return Response.json(await recovering(this.#stored(this.#graph), call))
       } catch (e) {
         return refuse(e, request)
       }

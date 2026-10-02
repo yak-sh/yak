@@ -103,8 +103,8 @@ refuses before inference. `Request.input.is_instrumental:true` means no vocals,
 never inferred from the prompt. Native parameters are carried from a
 transcript's `using{input}` to `Request.input`; ElevenLabs accepts explicit
 `music_length_ms` there. This adapter never invents lyrics or parses duration.
-The model's own id is sent to `binding.run`; this
-package seeds no model rows or allowed-model catalogue.
+The model's own id is sent to `binding.run`; this package seeds no model rows or
+allowed-model catalogue.
 
 Cloudflare's published tariffs are $0.0025 per output audio second for
 ElevenLabs, and $0.15 per track plus $0.01 when MiniMax generates lyrics.
@@ -120,3 +120,20 @@ as Cloudflare's AI Gateway binding reference requires. Native `@cf/` ids stay
 direct. `workersAi(binding, {gateway: 'name'})` selects a host's gateway, and
 `routing(model, options, gateway?)` gives raw binding callers the same routing
 while preserving affinity headers and an explicit gateway.
+
+## Recovering generated media
+
+A host supplies `receipts: MediaReceipts` backed by private secure storage. The
+adapter saves the provider response, original request ID and known cost before
+downloading or storing audio. Temporary URL credentials stay inside that private
+record, never in transcript text or delivery errors.
+
+`model.recover(originalAsk)` only downloads/stores that recording. It cannot
+request generation. A saved reply makes repeated recovery return the same
+artifact. `Request.call` attributes it to its original ask; `onMedia` records
+known cost before delivery. A failed receipt write stops delivery.
+
+On yaks.app an editor posts `{"call":"<original ask eid>"}` to
+`./api/ai/recover`. This also accounts an already attached recording, without
+reading its private receipt or downloading again. Original-call accounting and
+the account debit commit atomically once, so repeats never spend twice.

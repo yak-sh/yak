@@ -150,10 +150,18 @@ export let pricedAudio = async (
   if (!Number.isSafeInteger(max) || max < 1) {
     throw new ModelError('media_limit', 'Invalid music size limit')
   }
-  let res = await (options.fetch ?? fetch)(url, {
-    signal: options.signal,
-    redirect: 'manual',
-  })
+  let res: Response
+  try {
+    res = await (options.fetch ?? fetch)(url, {
+      signal: options.signal,
+      redirect: 'manual',
+    })
+  } catch {
+    throw new ModelError(
+      'media_download',
+      'Music download failed; recover the original call',
+    )
+  }
   if (res.status >= 300 && res.status < 400) {
     throw new ModelError(
       'media_response',
@@ -167,15 +175,23 @@ export let pricedAudio = async (
     )
   }
   let chunks: Uint8Array[] = [], size = 0
-  for await (let chunk of res.body) {
-    size += chunk.length
-    if (size > max) {
-      throw new ModelError(
-        'media_payload',
-        'Music exceeds configured size limit',
-      )
+  try {
+    for await (let chunk of res.body) {
+      size += chunk.length
+      if (size > max) {
+        throw new ModelError(
+          'media_payload',
+          'Music exceeds configured size limit',
+        )
+      }
+      chunks.push(chunk)
     }
-    chunks.push(chunk)
+  } catch (error) {
+    if (error instanceof ModelError) throw error
+    throw new ModelError(
+      'media_download',
+      'Music download failed; recover the original call',
+    )
   }
   let bytes = new Uint8Array(size), offset = 0
   for (let chunk of chunks) {

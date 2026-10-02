@@ -60,6 +60,14 @@ import type { VocabDoc } from '@yaks/vocab'
 import { edgeEid } from '@yaks/edge'
 import type { Artifact } from '@yaks/blob'
 import { modelDoc } from './vocab.ts'
+import type { MediaReceipt } from './media.ts'
+export {
+  type MediaReceipt,
+  type MediaReceipts,
+  mediaReceipts,
+  receivedMedia,
+  recoveredMedia,
+} from './media.ts'
 
 export { modelDoc }
 
@@ -134,6 +142,10 @@ export type Tool = {
  * Index identifies the final assistant item order in Reply.items. */
 export type TextDelta = { index: number; id?: string; text: string }
 export type Request = {
+  /** The original request entity, stable across delivery recovery. */
+  call?: string
+  /** A private receipt is already durable when this checkpoint runs. */
+  onMedia?: (receipt: MediaReceipt) => Promise<void>
   /** Optional cancellation of this request, not of independent tool processes. */
   signal?: AbortSignal
   onText?: (delta: TextDelta) => void
@@ -259,6 +271,8 @@ export type Mark = Record<string, Record<string, unknown>>
  * A plain function is a model that stores nothing.
  */
 export type Model = ((req: Request) => Promise<Reply>) & {
+  /** Download/store a saved recording only; never calls generation. */
+  recover?: (call: string) => Promise<Reply>
   list?: () => Promise<Listed[]>
   info?: (name: string) => Promise<Listed | undefined>
   mark?: (reply: Reply) => Mark
@@ -364,7 +378,7 @@ export let confirmed = (
 /** Reported dollars win; otherwise usage is weighed at the model row's price. */
 export let billed = (reply: Reply, price?: Price) =>
   reply.cost != null
-    ? { dollars: reply.cost, reported: true }
+    ? { dollars: reply.cost, reported: reply.costReported ?? true }
     : price && reply.usage
     ? { dollars: weigh(price, reply.usage), reported: false }
     : undefined

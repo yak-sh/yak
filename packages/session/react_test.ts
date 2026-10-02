@@ -1908,3 +1908,31 @@ test('explicit native model input reaches the provider and the recorded ask', as
   let entries = await transcript(g, ids.s)
   assertEquals((entries.find((e) => e.ask)?.using as Comp).input, input)
 })
+
+test('private media checkpoint records cost on the original ask before delivery fails', async () => {
+  let g = world()
+  let original = ''
+  let model: Model = async (req) => {
+    original = req.call!
+    await req.onMedia!({
+      call: original,
+      id: 'provider-recording',
+      model: req.model,
+      input: {},
+      response: {},
+      cost: 0.45,
+      costReported: true,
+    })
+    let [ask] = await g.get([original])
+    assertEquals(ask.cost, { dollars: 0.45, reported: true })
+    throw new ModelError(
+      'media_download',
+      'Delivery failed; recover original call',
+    )
+  }
+  await react(g, ids.s, { model, tools: [], mint })
+  let [ask] = await g.get([original])
+  assertEquals(ask.cost, { dollars: 0.45, reported: true })
+  let entries = await transcript(g, ids.s)
+  assertEquals(entries.filter((b) => b.cost).length, 1)
+})

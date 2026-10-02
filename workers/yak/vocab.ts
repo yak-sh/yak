@@ -1031,6 +1031,7 @@ export let platformDocs: VocabDoc[] = storeDocs([
   ...vocabOf(PLUGINS),
   hostingDoc,
   platformDoc,
+  pick(modelDoc, ['cost']),
 ])
 
 /**

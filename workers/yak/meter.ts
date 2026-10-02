@@ -50,6 +50,7 @@ import {
 import { guess } from './models.ts'
 import { modelInfo } from '@yaks/workers-ai'
 import { defect } from './sentry.ts'
+import { derivedEid, Stale } from '@yaks/graph'
 
 /** The hourly reading: `fired` on this tagged wake runs the existing meter. */
 export let meterPlugin: Plugin = {
@@ -764,6 +765,35 @@ export let countedSpend = async (
   await spending(env, space, { models: cost, seconds }, now)
 }
 
+/** The original media call and its spend commit together, once. A crash after
+ * commit is recognized by the ledger rather than charged a second time. */
+export let countedMedia = async (
+  env: { STORE: Namespace },
+  space: Pick<Space, 'eid'>,
+  call: string,
+  dollars: number,
+  reported = true,
+) => {
+  if (!Number.isFinite(dollars) || dollars < 0) {
+    throw new Error('Generated media returned no valid request cost')
+  }
+  let eid = derivedEid('generated-media-spend|' + call)
+  try {
+    await stamp(env, {
+      entities: [{
+        entity: { eid },
+        $was: { cost: { dollars: null } },
+        cost: { dollars, reported },
+      }, {
+        entity: { eid: space.eid },
+        spend: { month: monthOf(new Date()), models: dollars },
+      }],
+    })
+  } catch (error) {
+    if (!(error instanceof Stale) || error.eid != eid) throw error
+  }
+}
+
 /** The dollars an app's voices received, weighed at a lease's renewal
  * (rtc.ts), on the space's month. */
 export let countedRealtime = async (
@@ -900,20 +930,85 @@ export let accounted = (
   model: Model,
   price?: (name: string) => Promise<Price | undefined>,
 ): Model =>
-  Object.assign(async (req: Parameters<Model>[0]) => {
-    let ns = bind.STORE
-    let dir = ns ? directoryOf(ns) : null
-    let space = dir ? await spaceOf(dir) : null
-    if (!ns || !dir || !space) {
-      throw new ModelError('unbound', 'No account is bound to this model call')
-    }
-    let no = await refusedSpend(dir, space, 'models', bind)
-    if (no) throw new ModelError(LIMIT, no)
-    let reply = await model(req)
-    let cost = billed(reply, await price?.(req.model))
-    if (!cost || !Number.isFinite(cost.dollars) || cost.dollars < 0) {
-      throw new Error('Hosted provider returned no valid request cost')
-    }
-    await countedSpend({ STORE: ns }, space, cost.dollars, 0)
-    return reply
-  }, model)
+  Object.assign(
+    async (req: Parameters<Model>[0]) => {
+      let ns = bind.STORE
+      let dir = ns ? directoryOf(ns) : null
+      let space = dir ? await spaceOf(dir) : null
+      if (!ns || !dir || !space) {
+        throw new ModelError(
+          'unbound',
+          'No account is bound to this model call',
+        )
+      }
+      let no = await refusedSpend(dir, space, 'models', bind)
+      if (no) throw new ModelError(LIMIT, no)
+      let checkpoint = req.onMedia
+      let mediaCall: string | undefined
+      let reply = await model({
+        ...req,
+        onMedia: async (receipt) => {
+          mediaCall = receipt.call
+          if (receipt.cost != null) {
+            await countedMedia(
+              { STORE: ns },
+              space,
+              receipt.call,
+              receipt.cost,
+              receipt.costReported ?? true,
+            )
+          }
+          await checkpoint?.(receipt)
+        },
+      })
+      let cost = billed(reply, await price?.(req.model))
+      if (!cost || !Number.isFinite(cost.dollars) || cost.dollars < 0) {
+        throw new Error('Hosted provider returned no valid request cost')
+      }
+      if (mediaCall) {
+        await countedMedia(
+          { STORE: ns },
+          space,
+          mediaCall,
+          cost.dollars,
+          cost.reported,
+        )
+      } else await countedSpend({ STORE: ns }, space, cost.dollars, 0)
+      return reply
+    },
+    model,
+    {
+      recover: async (call: string) => {
+        if (!model.recover) {
+          throw new ModelError(
+            'media_missing',
+            'This provider has no media recovery',
+          )
+        }
+        let ns = bind.STORE
+        let space = ns ? await spaceOf(directoryOf(ns)) : null
+        if (!ns || !space) {
+          throw new ModelError(
+            'unbound',
+            'No account is bound to this model call',
+          )
+        }
+        // Delivery needs no allowance: the original generation already spent it.
+        let reply = await model.recover(call)
+        let cost = billed(reply, await price?.(reply.model))
+        if (!cost) {
+          throw new Error(
+            'Recovered provider returned no request cost',
+          )
+        }
+        await countedMedia(
+          { STORE: ns },
+          space,
+          call,
+          cost.dollars,
+          cost.reported,
+        )
+        return reply
+      },
+    },
+  )
