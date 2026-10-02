@@ -241,6 +241,11 @@ grouped approximately by function, **not** by dependency order.
   suitable storage isolation and lease configuration. This package provides
   mechanisms, not domain-specific actions.
 
+- **[@yaks/threads](./threads)** — Start a Deno or browser Worker for a graph's
+  roles, using its own connection or authoritative access over a MessagePort.
+  The ordinary effects pool and leased services run on the same graph, and
+  shutdown stops new work and drains what was started.
+
 - **[@yaks/journal](./journal)** — Record committed transactions as after-images
   in three append-oriented tables on the same database transaction/connection.
   APIs read entity history, produce limited inverse changes for undo, and

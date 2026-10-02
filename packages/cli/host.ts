@@ -24,7 +24,7 @@
  * rendering, which are its own (./run.ts, ./answer.ts), and reaches the graph
  * either through a server or by composing the graph role here itself
  * (local.ts). A host that stays up explicitly starts duty roles in a thread
- * of the same process (./thread.ts, ./worker.ts), a host of its own. A role
+ * of the same process (@yaks/threads), a host of its own. A role
  * this process does not serve costs it nothing: its facets
  * are never imported, so a command that opens the graph to read it never loads
  * a line of HTTP, and a process that serves no `web` never asks a plugin for a
@@ -91,14 +91,7 @@ import { open } from '@yaks/sqlite/db'
 // dependency of this one.
 import type { Authenticate, Filter, Handler, Route } from '@yaks/api'
 import { adopt, fields as searched, find, type Hit, search } from '@yaks/fts'
-import {
-  type Effects,
-  effects,
-  type Handlers,
-  HOLD,
-  holding,
-  released,
-} from '@yaks/effects'
+import { type Effects, effects, type Handlers, released } from '@yaks/effects'
 import { type Local, peek, warm } from '@yaks/secrets'
 import { reporter, revision } from './report.ts'
 import { derived as callsDerived } from '@yaks/tools/vocab'
@@ -117,6 +110,8 @@ import { understood } from './keywords.ts'
 import { vaultOf } from './vault.ts'
 import type { Command, Ctx } from './run.ts'
 import type { Anatomy, AnatomyObserver } from '@yaks/code/anatomy'
+import { roles as serveRoles, type Thread } from '@yaks/threads'
+export type { Thread } from '@yaks/threads'
 import { nativeAnatomy, secretNames } from './anatomy.ts'
 
 export {
@@ -225,7 +220,7 @@ export type Host = {
    * that will not write it itself: its calls ended as interrupted, saying
    * `why`, its leases released, its `exit` stamped with no code. What this
    * process writes for a thread of its own that it ended where it stood, or
-   * that failed (./thread.ts), and a thread for itself when it is about to be
+   * that failed (@yaks/threads), and a thread for itself when it is about to be
    * ended so (@yaks/harness), so nobody waits out what it held. */
   end: (holder: Eid, why: string) => Promise<void>
   /** {@link Host.end} for each process on this machine that ended without
@@ -536,24 +531,6 @@ export type Served = Host & {
    * Await it when the process is about to end, or that last write races the
    * exit and the row reads as still running forever. */
   close: (code?: number) => void | Promise<void>
-}
-
-/** Duties this process runs in a thread of its own (./thread.ts): started with
- * the host's own by {@link Host.duties}, told when this process has written
- * runs down for it, and finished before the host closes. Either of those
- * failing means the thread is gone without closing — ended where it stood, or
- * failed — and its ending is then this host's to write ({@link Host.end}). */
-export type Thread = {
-  /** the thread, as the entity it runs as: a host of its own, whose `process`
-   * row its leases and claims name */
-  me: Eid
-  /** the duties the thread took: one pass where `signal` has already
-   * aborted, else for as long as it has not */
-  duties: (signal: AbortSignal) => Promise<void>
-  /** this process wrote runs down: look at the pool now */
-  nudge: () => void
-  /** finish what it started, then close */
-  close: () => Promise<void>
 }
 
 /** How a host is composed, beyond its roles. */
@@ -1293,7 +1270,6 @@ export let compose = async (
     // (`running` holds only those served), leased under that name so exactly
     // one process runs it. One pass, then a wait, is the shape they share: do
     // what is overdue, then keep at it until this process ends.
-    let hold = config.lease ?? HOLD
     let duties: Duty[] = running.map(([mod, options, plugin]): Duty => {
       observed.binding(plugin, 'service')
       return {
@@ -1325,41 +1301,24 @@ export let compose = async (
         'interrupted: its thread ended before it closed',
       ).catch((e) => console.error('ending the duty thread failed —', e))
     }
+    let dutiesHost = serveRoles(g, {
+      me: selfEid(),
+      roles: [...effecting ? ['effects'] : [], ...duties.map((d) => d.name)],
+      fx,
+      services: Object.fromEntries(duties.map((d) => [d.name, d.run])),
+      hold: config.lease,
+      gone: host.gone,
+      report: (error, role) =>
+        report(error, {
+          during: { process: host.me },
+          tags: role == 'effects' ? { step: 'effects' } : { role },
+        }),
+    })
     doing = config.duties == false ? async () => {} : (signal, only) => {
       let until = signal ?? stopping.signal
-      let mine = (role: Role) => !only || only.includes(role)
       return Promise.all([
         ...(opts.thread ? [opts.thread.duties(until).catch(lose)] : []),
-        ...(effecting && mine('effects')
-          ? [
-            fx.work(g!, until)
-              .catch((error) =>
-                report(error, {
-                  during: { process: host.me },
-                  tags: { step: 'effects' },
-                })
-              ),
-          ]
-          : []),
-        ...duties.filter((d) => mine(d.name)).map((d) =>
-          holding(g!, d.name, {
-            holder: selfEid(),
-            hold,
-            signal: until,
-            gone: host.gone,
-            report: (error) =>
-              void report(error, {
-                during: { process: host.me },
-                tags: { role: d.name },
-              }),
-          }, d.run)
-            .catch((error) =>
-              report(error, {
-                during: { process: host.me },
-                tags: { role: d.name },
-              })
-            )
-        ),
+        dutiesHost.duties(until, only),
       ]).then(() => {})
     }
     // Its effects, drained once: begun by the first of `stop` and `close`,
@@ -1399,13 +1358,16 @@ export let compose = async (
       // lapse.
       stop: () => {
         stopping.abort()
+        dutiesHost.stop()
         void drained()
       },
       close: async (code?: number) => {
         stopping.abort()
+        dutiesHost.stop()
         await opts.thread?.close().catch(lose)
         await ending
         await drained()
+        await dutiesHost.close()
         let shut = () => {
           try {
             sql.close()

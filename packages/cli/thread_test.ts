@@ -3,7 +3,7 @@
 
 import { assertEquals } from '@std/assert'
 import { test, until } from '@yaks/testing'
-import { thread } from './thread.ts'
+import { thread } from '@yaks/threads'
 
 let clock = async (pass = false) => {
   let dir = await Deno.makeTempDir()
@@ -40,9 +40,9 @@ let clock = async (pass = false) => {
 
 test('live duties do not wait on a one-shot pass', async () => {
   let { config, dir, marker, plugin } = await clock()
-  let aside = thread()
+  let aside = thread<string>(new URL('./duties.ts', import.meta.url))
   let stop = new AbortController()
-  aside.plan({ config, roles: [plugin] })
+  aside.plan({ data: config, roles: [plugin] })
   let live = aside.duties(stop.signal)
   let failed: unknown
   let settled = false
@@ -69,8 +69,8 @@ test('live duties do not wait on a one-shot pass', async () => {
 
 test('an ended duty signal runs one pass', async () => {
   let { config, dir, marker, plugin } = await clock(true)
-  let aside = thread()
-  aside.plan({ config, roles: [plugin] })
+  let aside = thread<string>(new URL('./duties.ts', import.meta.url))
+  aside.plan({ data: config, roles: [plugin] })
   try {
     await aside.duties(AbortSignal.abort())
     assertEquals(await Deno.readTextFile(marker), 'pass')

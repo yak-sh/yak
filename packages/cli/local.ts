@@ -23,7 +23,7 @@
 // effects and the attribution are one set for both.
 //
 // The effect pool and the plugins' services are never this thread's. A host
-// that stays up explicitly starts them through `host.duties()` (./thread.ts),
+// that stays up explicitly starts them through `host.duties()` (@yaks/threads),
 // so a command passing through never claims work it cannot finish.
 //
 // This module is imported only by a command that named a config, because
@@ -51,7 +51,7 @@ import {
 } from './host.ts'
 import { external } from './external.ts'
 import { readThread } from './read_thread.ts'
-import { type Aside, thread } from './thread.ts'
+import { type Aside, thread } from '@yaks/threads'
 import { reconcile } from '@yaks/tools'
 
 // One graph per config path and set of roles, for the life of the process:
@@ -60,7 +60,7 @@ import { reconcile } from '@yaks/tools'
 // process for no reason.
 let hosts = new Map<string, Promise<Served>>()
 // The duty threads those graphs started, for a close that cannot wait on them.
-let asides = new Set<Aside>()
+let asides = new Set<Aside<string>>()
 
 /**
  * The roles a command's own thread serves: the graph, and whatever its tool
@@ -136,14 +136,14 @@ let open = async (
     }
     return withReader(host)
   }
-  let aside = thread()
+  let aside = thread<string>(new URL('./duties.ts', import.meta.url))
   asides.add(aside)
   let host = await compose(config, roles, facet, {
     thread: aside,
     reader,
   })
   try {
-    aside.plan({ config: path, roles: dutiesOf(host.vocab, config, roles) })
+    aside.plan({ data: path, roles: dutiesOf(host.vocab, config, roles) })
   } catch (error) {
     await host.close()
     await reader?.close()
@@ -211,7 +211,7 @@ export let stop = (): boolean => {
 }
 
 /** Stop waiting on what is winding down: every duty thread this process
- * started is ended where it stands (./thread.ts `end`), so a close waiting on
+ * started is ended where it stands (@yaks/threads `end`), so a close waiting on
  * one goes on to its last write. What a second interrupt does before it
  * closes (./yak.ts). */
 export let cut = (): void => asides.forEach((a) => a.end())

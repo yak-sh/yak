@@ -346,8 +346,10 @@ stdio. Service leases remain singleton; duplicate effect workers are allowed. A
 successfully started worker survives web shutdown. `yak work` composes the graph
 and duty roles directly and stays up until interrupted. Its `--ready` file
 announces that handlers and graph are assembled, not that an old service has
-surrendered its lease. Other command hosts can still use a duty thread
-([`thread.ts`](./thread.ts), [`worker.ts`](./worker.ts)).
+surrendered its lease. Other command hosts can still use a duty thread through
+[@yaks/threads](../threads/README.md); [`duties.ts`](./duties.ts) only opens the
+box graph for the roles it is handed. The same package works the pool and leased
+services for independent `yak work` processes.
 
 On the box, `yak.service` runs `serve --no-duties`, and independent `yak-work@`
 units run the pool and plugin services. **Use `yak restart`**, not raw systemctl

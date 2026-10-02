@@ -117,6 +117,10 @@ export type ApplyOpts = {
   ) => void
 }
 
+/** Data options for a write, also usable across a thread boundary.
+ * Trace callbacks and deferred effects belong to a local graph. */
+export type WriteOpts = Omit<ApplyOpts, 'trace' | 'deferEffects'>
+
 /**
  * How a dry run leaves a transaction that has done all its work. The phases
  * have run; the only thing left is the commit, which is exactly what a check
@@ -240,10 +244,12 @@ export type Graph = {
 
 /** A graph's data interface, whether its storage is local or another thread
  * owns it. Every write uses the owning graph's `apply()` pipeline. */
-export type Access = Pick<
-  Graph,
-  'vocab' | 'read' | 'rows' | 'get' | 'apply' | 'outside'
->
+export type Access =
+  & Pick<Graph, 'vocab' | 'read' | 'rows' | 'get' | 'outside'>
+  & {
+    /** Write data through the owning graph; local controls stay on Graph. */
+    apply: (bundles: Bundle[], opts?: WriteOpts) => Bundle[] | Promise<Bundle[]>
+  }
 
 // One step of the pipeline: the bundles in, the bundles the next step sees
 // out.

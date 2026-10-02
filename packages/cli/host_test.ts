@@ -1507,7 +1507,7 @@ test('host anatomy reads before graph readiness and tracks lazy alias runs once'
         assertThrows(() => host.graph)
         captured = true
         factories++
-        return [{ name: 'fixture', hooks: { commit: () => {} } }]
+        return [{ name: 'fixture', hooks: { commit: (batch) => batch } }]
       },
     },
     tools: {
@@ -1602,5 +1602,54 @@ test('host anatomy does not replay routes without a hosting handler', async () =
     assertEquals(calls, 0)
   } finally {
     await host.close()
+  }
+})
+
+test('closing waits for service cleanup even with a caller-owned duty signal', async () => {
+  let gate = Promise.withResolvers<void>()
+  let began = false, stopped = false, cleaned = false, closed = false
+  let signal = new AbortController()
+  let host = await compose(
+    { db: ':memory:', plugins: ['shop', 'clock'] },
+    only({
+      shop,
+      clock: {
+        service: {
+          service: async (h, _options, signal) => {
+            began = true
+            await new Promise<void>((done) =>
+              signal.aborted
+                ? done()
+                : signal.addEventListener('abort', () => done(), { once: true })
+            )
+            stopped = true
+            await gate.promise
+            await h.graph.apply([{
+              entity: { eid: 'cleanup' },
+              book: { title: 'finished' },
+            }])
+            cleaned = true
+          },
+        },
+      },
+    }),
+  )
+  let doing = host.duties(signal.signal)
+  try {
+    await until(() => began)
+    let closing = Promise.resolve(host.close()).then(() => {
+      closed = true
+    })
+    await until(() => stopped)
+    assertEquals(closed, false)
+    gate.resolve()
+    await closing
+    await doing
+    assertEquals(cleaned, true)
+  } finally {
+    signal.abort()
+    gate.resolve()
+    await doing
+    if (!closed) await host.close()
   }
 })
