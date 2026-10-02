@@ -8,8 +8,10 @@
 import { configPath, read } from '../packages/cli/config.ts'
 import { words } from '../packages/cli/host.ts'
 import { open } from '../packages/sqlite/db.ts'
-import { storage } from '@yaks/sqlite'
-import { type Bundle, type Comp, graph } from '@yaks/graph'
+import { get, read as selectRows, rows } from '../packages/sqlite/read.ts'
+import { patch as patchRows } from '../packages/sqlite/write.ts'
+import { bindings } from '../packages/sqlite/rules.ts'
+import { type Bundle, type Comp, graph, type Storage } from '@yaks/graph'
 import { token } from '../packages/graph/guard.ts'
 import { parse } from '@yaks/query'
 import {
@@ -191,12 +193,39 @@ let main = async () => {
             group: [col('code')],
           })).map((r) => [String(r.code), Number(r.n)]),
         )
-      let store = storage(sql, spoken.vocab, {
-        derived: spoken.derived,
-        backed: spoken.backed,
-        number: config.numbers ?? false,
-        adopt: config.adopt ?? false,
-      })
+      // The regular adapter's first read installs/refits the vocabulary.
+      // Use its existing read/patch primitives, never that lazy schema door.
+      let opts = { derived: spoken.derived, backed: spoken.backed }
+      let identity = (eids: string[], comps?: string[]) =>
+        get(sql, spoken.vocab, eids, opts, comps)
+      let tx: Storage['tx'] = (body) =>
+        unit(sql, () =>
+          body({
+            get: identity,
+            read: (query, o) =>
+              selectRows(sql, spoken.vocab, query, { ...opts, ...o }),
+            doom: () => fail('Entity deletion is outside this repair'),
+            bindings: (matches, batch, covers) =>
+              bindings(sql, spoken.vocab, matches, batch, covers, opts),
+            patch: (bundles) =>
+              patchRows(
+                sql,
+                spoken.vocab,
+                bundles,
+                config.numbers ?? false,
+                config.adopt ?? false,
+              ),
+            remove: () => fail('Entity deletion is outside this repair'),
+            revive: () => fail('Entity revival is outside this repair'),
+          }))
+      let store: Storage = {
+        install: () => fail('Schema installation is outside this repair'),
+        get: identity,
+        read: (query, o, comps) =>
+          selectRows(sql, spoken.vocab, query, { ...opts, ...o }, comps),
+        rows: (query, o) => rows(sql, spoken.vocab, query, { ...opts, ...o }),
+        tx,
+      }
       // Read the complete schema, but never reconcile it. Unrelated missing or
       // incompatible objects fail closed. Only the explicitly scoped admission
       // below can create objects/add columns, never drop/refit/backfill/schema-mark.
