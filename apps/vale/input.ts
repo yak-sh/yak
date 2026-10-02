@@ -8,6 +8,9 @@ import { cursor, type Point } from './aim.ts'
 export type Intent = {
   /** World point beneath the mouse, filled by the stage before simulation. */
   point?: Point
+  /** A click carries its press position, before steering can lock the cursor. */
+  pick?: [number, number]
+  target?: string
   /** right and forward axes, at most 1 long */
   move: [number, number]
   /** turn in radians/second; the camera and hero turn together */
@@ -202,6 +205,8 @@ export let listen = (
   let looked = false
   let zoom = 0
   let pointer: [number, number] | null = null
+  let click: [number, number] | undefined
+  let pressAt: [number, number] | undefined
   let swapped = false
   let strafe = false
   let hideCursor = true
@@ -287,6 +292,9 @@ export let listen = (
   stage.addEventListener('contextmenu', (e) => e.preventDefault())
   stage.addEventListener('pointerdown', (e) => {
     pointer = [e.clientX, e.clientY]
+    if (e.button == 0) {
+      pressAt = cursor(...pointer, innerWidth, globalThis.innerHeight ?? innerWidth, locked())
+    }
     if (!document.pointerLockElement) stage.setPointerCapture(e.pointerId)
     if (e.pointerType == 'mouse') {
       mouse.down(e.button)
@@ -321,7 +329,10 @@ export let listen = (
   })
   addEventListener('mouseup', (e) => {
     let action = mouse.up(e.button)
-    if (action) pressed.add(action)
+    if (action) {
+      pressed.add(action)
+      if (action == 'strike') click = pressAt
+    }
     if (!mouse.active()) {
       for (let [id, d] of drags) if (d.type == 'mouse') drags.delete(id)
       unlock()
@@ -375,7 +386,10 @@ export let listen = (
       if (e.type == 'pointercancel') mouse.cancel()
       else {
         let action = mouse.up(e.button)
-        if (action) pressed.add(action)
+        if (action) {
+          pressed.add(action)
+          if (action == 'strike') click = pressAt
+        }
       }
       if (!mouse.active()) unlock()
       return
@@ -447,6 +461,7 @@ export let listen = (
       )
       let out: Intent = {
         ...axes,
+        pick: click,
         jump: pressed.has('jump') || (!busy() && held.has('Space')),
         strike: pressed.has('strike'),
         ability: [1, 2, 3].find((n) => pressed.has(`ability${n}` as Action)) ??
@@ -463,6 +478,7 @@ export let listen = (
         zoom,
       }
       pressed.clear()
+      click = undefined
       orbit = [0, 0]
       looked = false
       zoom = 0

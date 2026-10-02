@@ -48,3 +48,21 @@ export let landing = (from: Point, to: Point, reach: number): Point => {
     z: from.z + (to.z - from.z) * k,
   }
 }
+
+/** First entity under a ray, before the terrain; independent of array order. */
+export let pickRay = <M extends { eid: string; body: Point; radius: number }>(
+  marks: M[], from: Point, ray: Point, far = Infinity,
+): M | null => {
+  let best: M | null = null, near = far
+  for (let m of marks) {
+    let x = m.body.x - from.x, y = m.body.y - from.y, z = m.body.z - from.z
+    let along = x * ray.x + y * ray.y + z * ray.z
+    let across = x * x + y * y + z * z - along * along
+    if (across > m.radius * m.radius) continue
+    let hit = along - Math.sqrt(m.radius * m.radius - across)
+    if (hit < 0 || hit >= near) continue
+    best = m
+    near = hit
+  }
+  return best
+}

@@ -509,6 +509,7 @@ export let game = (
   let aimed = ''
   let castPoint: Point | undefined
   let aimWas = ''
+  let chosen = ''
   let askedAt = -1e9
   // The ability asked for, by its slot, and when.
   let asked = { slot: 0, at: -1e9 }
@@ -1369,6 +1370,8 @@ export let game = (
       // shows it, and whatever I do now is aimed at it. It looks as far as a
       // blow reaches, or an ability on the bar that is ready or under way.
       let under = now - swingAt < busy ? doing : ''
+      if (intent.target != null) chosen = intent.target
+      if (chosen && !mobs.some((m) => m.eid == chosen && !m.down)) chosen = ''
       let aim = down ? null : aimOf(
         mobs,
         body,
@@ -1378,6 +1381,8 @@ export let game = (
           let a = formOf(id, s.learned)
           return a && (id == under || (ready.get(id) ?? 0) <= now) ? [a] : []
         }),
+        intent.point,
+        chosen,
       )
       aimWas = aim?.eid ?? ''
       if (intent.strike) askedAt = now

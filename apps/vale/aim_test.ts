@@ -5,8 +5,8 @@ import { ABILITIES } from './abilities.ts'
 import { HANDLES } from './arms.ts'
 import type { Kit } from './gear.ts'
 import { beastId } from './beasts.ts'
-import { cursor, groundRay, landing } from './aim.ts'
-import { takenBy } from './strike.ts'
+import { cursor, groundRay, landing, pickRay } from './aim.ts'
+import { aimOf, takenBy } from './strike.ts'
 
 seedDesigns()
 test('mouse ray meets terrain; pointer lock uses the centre', () => {
@@ -40,4 +40,21 @@ test('a cast with no selected target lands at the mouse', () => {
     ['mouse'],
   )
   equal(takenBy(ABILITIES.blaze, mobs, me, kit, null).length, 0)
+})
+
+test('mouse chooses a foe and a click keeps the explicitly chosen foe', () => {
+  let beast = beastId('beast:slime')!
+  let at = (eid: string, x: number, z: number) => ({
+    eid, beast, down: false, near: Math.hypot(x, z), body: { x, z },
+  })
+  let mobs = [at('near', 0, 2), at('mouse', 4, 2)]
+  let kit: Kit = { ...HANDLES.bow, family: 'bow' }
+  let point = { x: 4, y: 0, z: 2 }
+  equal(aimOf(mobs, { x: 0, z: 0, yaw: 0 }, kit, '', [], point)?.eid, 'mouse')
+  equal(aimOf(mobs, { x: 0, z: 0, yaw: 0 }, kit, '', [], point, 'near')?.eid, 'near')
+  equal(aimOf([{ ...mobs[0], down: true }, mobs[1]],
+    { x: 0, z: 0, yaw: 0 }, kit, '', [], point, 'near')?.eid, 'mouse')
+  let marks = mobs.map((m) => ({ ...m, body: { ...m.body, y: 1 }, radius: 0.5 }))
+  equal(pickRay(marks, { x: 4, y: 1, z: -5 }, { x: 0, y: 0, z: 1 })?.eid, 'mouse')
+  equal(pickRay(marks, { x: 4, y: 1, z: -5 }, { x: 0, y: 0, z: 1 }, 2), null)
 })

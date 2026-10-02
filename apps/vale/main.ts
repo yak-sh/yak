@@ -23,7 +23,7 @@ import { FIGURES, sizeOf } from './figure.ts'
 import { pendingSpawns } from './spawn.ts'
 import { aim, bearing, type Cam, depth, moveLook, steer } from './cam.ts'
 import { cast } from './cast.ts'
-import { groundRay } from './aim.ts'
+import { groundRay, pickRay } from './aim.ts'
 import { chatbox } from './chatbox.ts'
 import { companion } from './companion.ts'
 import { companionView } from './companion-view.ts'
@@ -981,6 +981,17 @@ let loop = (t: number) => {
       mouseRay.ray.direction,
       (x, z) => groundAt(v, x, z),
     )
+    if (i.pick) {
+      mouseRay.setFromCamera(new THREE.Vector2(...i.pick), camera)
+      let from = mouseRay.ray.origin, ray = mouseRay.ray.direction
+      let ground = groundRay(from, ray, (x, z) => groundAt(v, x, z))
+      let far = Math.hypot(ground.x - from.x, ground.y - from.y, ground.z - from.z)
+      let marks = (last?.mobs ?? []).filter((m) => !m.down).map((m) => ({
+        eid: m.eid, radius: Math.max(0.4, sizeOf(m.beast) * 0.6),
+        body: { ...m.body, y: m.body.y + sizeOf(m.beast) * 0.5 },
+      }))
+      i.target = pickRay(marks, from, ray, far)?.eid ?? ''
+    }
     if (i.mic) void voice.toggle()
     if (h.talking) {
       Object.assign(i, {
