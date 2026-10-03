@@ -135,6 +135,26 @@ export class Tracker {
       return json({ error: 'tracker temporarily unavailable' }, 503)
     }
   }
+  rpc = async (ticket: string, path: string, body?: unknown) => {
+    let request = new Request(`https://tracker.internal${path}`, {
+      method: body ? 'POST' : 'GET',
+      headers: { authorization: `Bearer ${ticket}` },
+      ...body ? { body: JSON.stringify(body) } : {},
+    })
+    let response = await this.fetch(request)
+    if (!response.ok) throw Error(`tracker RPC refused: ${response.status}`)
+    return await response.json()
+  }
+  bugs = (ticket: string, app: string) =>
+    this.rpc(ticket, `/bugs?app=${encodeURIComponent(app)}`)
+  resolve = (ticket: string, bug: string) =>
+    this.rpc(ticket, '/resolve', { bug })
+  archive = (ticket: string, bug: string) =>
+    this.rpc(ticket, '/archive', { bug })
+  deployed = (ticket: string, app: string, version?: number) =>
+    this.rpc(ticket, '/deployed', { app, version })
+  unseen = (ticket: string, app: string) =>
+    this.rpc(ticket, `/unseen?app=${encodeURIComponent(app)}`)
   monitor = async () => {
     try {
       let tracker = await this.boot()

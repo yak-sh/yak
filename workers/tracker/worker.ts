@@ -2,7 +2,8 @@
 // deliveries. It has no directory or yak binding; intake needs no auth lookup.
 
 import type { Bundle } from '@yaks/graph'
-import { caught, queue } from '@yaks/tracker/report'
+import { authorize } from './auth.ts'
+import { capture, caught, queue } from '@yaks/tracker/report'
 import { platform } from './core.ts'
 import { consume, type Message } from './queue.ts'
 import { json } from './door.ts'
@@ -31,6 +32,25 @@ export let worker = (env: Env) => ({
     let scope = scopeOf(request)
     if (!scope) return json({ error: 'tracker global scope required' }, 400)
     try {
+      if (
+        new URL(request.url).pathname == '/canary' && request.method == 'POST'
+      ) {
+        let access = await authorize(request, env.TRACKER_SECRET, scope)
+        if (scope != platform || !access?.admin) {
+          return json({ error: 'platform only' }, 403)
+        }
+        let hash = new URL(request.url).searchParams.get('hash')
+        if (!hash || !/^[0-9a-f]{64}$/.test(hash)) {
+          return json({ error: 'bundle hash required' }, 400)
+        }
+        if (!env.ERRORS) return json({ error: 'queue unavailable' }, 503)
+        let rows = capture(Error(`tracker deploy canary ${hash}`), {
+          sink: () => {},
+          fault: `tracker-canary|${hash}`,
+        })
+        await env.ERRORS.send(rows)
+        return json({ eid: rows[0].entity.eid })
+      }
       return await env.TRACKERS.getByName(scope).fetch(request)
     } catch (error) {
       await caught(error, { sink: env.ERRORS ? queue(env.ERRORS) : () => {} })

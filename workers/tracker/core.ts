@@ -75,13 +75,22 @@ export let store = (storage: Storage, config: Config) => {
     bugs: (app?: string) => read(app),
     unseen: (app?: string) => read(app, '.bug.status=open !notified'),
     mark,
-    deployed: async (app: string) => {
+    deployed: async (app: string, version?: number) => {
       let bugs = await g.read(
         and(eq('bug.app', app), absent('resolved'), every()),
       )
-      if (bugs.length) {
+      let old: Bundle[] = []
+      for (let bug of bugs) {
+        let [current] = version == null ? [] : await g.read(and(
+          eq('error.bug', bug.entity.eid),
+          eq('error.version', version),
+          limit(1),
+        ))
+        if (!current) old.push(bug)
+      }
+      if (old.length) {
         await g.apply(
-          bugs.map((bug) => ({
+          old.map((bug) => ({
             entity: bug.entity,
             resolved: {},
           })),

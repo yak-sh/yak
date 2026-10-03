@@ -43,7 +43,10 @@ async (request: Request): Promise<Response> => {
     if (typeof body.app != 'string') {
       return json({ error: 'app eid required' }, 400)
     }
-    await tracker.deployed(body.app)
+    await tracker.deployed(
+      body.app,
+      typeof body.version == 'number' ? body.version : undefined,
+    )
     return json({ ok: true })
   }
   return json({ error: 'tracker route not found' }, 404)
