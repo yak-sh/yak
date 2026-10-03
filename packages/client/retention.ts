@@ -597,6 +597,7 @@ export let retention = (
           graph,
           rows.filter((b) => role.has(b.entity.eid) && !pins.has(b.entity.eid)),
           {
+            mine,
             coverage: Object.fromEntries(
               rows.map((b) => [b.entity.eid, role.get(b.entity.eid)!]),
             ),

@@ -25,7 +25,7 @@
 
 import type { Bundle, Comp } from '@yaks/graph'
 import { comps, dead } from '@yaks/graph'
-import { durableOf, type Sync, syncOf, type Vocab } from '@yaks/vocab'
+import { durableOf, saveOf, type Sync, syncOf, type Vocab } from '@yaks/vocab'
 import { asked, before, ruled } from './mark.ts'
 
 export { durableOf, type Sync, syncOf }
@@ -36,11 +36,10 @@ export let outbound = (vocab: Vocab, comp: string): boolean =>
   syncOf(vocab, comp) != 'none'
 
 /** Whether the server keeps a component, so a row it answers is the whole
- * truth about it. A `sync: peers` component crosses the server without being
- * kept, so no row ever carries one, and a row that omits one says nothing
- * about it. */
+ * truth about its saved value. Peer components with a save interval also ride
+ * stored snapshots; their live values still arrive through the relay. */
 export let stored = (vocab: Vocab, comp: string): boolean =>
-  syncOf(vocab, comp) == 'server'
+  syncOf(vocab, comp) == 'server' || saveOf(vocab, comp) != null
 
 /**
  * Where a component's state has to be kept on this node, for the components no
@@ -108,15 +107,15 @@ export let outward = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
 
 /**
  * One committed list of bundles, reduced to what the peers should be told —
- * the `sync: peers` components, which the server passes on without storing.
+ * the `sync: peers` components, which the server relays and saves only when
+ * they declare a save interval.
  *
  * These are sent over the WebSocket, not to `POST /apply`. Their lifetime is
  * that socket's: `durable: connection` means the server clears them when the
  * connection closes, so the connection the value arrived on has to be the one
  * holding it. A second reason is traffic — a caret or a cursor moves faster
- * than a POST should — and a third is that there is nothing to check: a
- * relayed value has no stored previous value to compare against, and no
- * deletion to cascade, so neither mark is sent.
+ * than a POST should. The server admits saved values as the socket's vouched
+ * writer; the page sends no extra request or provenance claim.
  */
 export let relayed = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
   leaving(bundles, vocab, 'peers', false)

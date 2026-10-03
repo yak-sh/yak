@@ -38,6 +38,19 @@ let bare = (graph: Graph, b: Bundle): Bundle[] => {
   return comps(out).length ? [out] : []
 }
 
+// A saved peer snapshot can lag this node's own paced relay. It initializes
+// a reader, but cannot move a writer back behind what it is already saying.
+let incoming = (graph: Graph, bundles: Bundle[], mine: Mine) =>
+  bundles.map((b) => {
+    let out = { ...b }
+    for (let [name] of comps(b)) {
+      if (syncOf(graph.vocab, name) == 'peers' && mine(b.entity.eid, name)) {
+        delete out[name]
+      }
+    }
+    return out
+  })
+
 /**
  * Take these entities out of the local graph: their server-owned components are
  * dropped, their identity stays. This is what a subscription's `gone` list
@@ -68,7 +81,7 @@ export let land = (
     throw new Error('coverage/rider delivery requires a working-set replica')
   }
   const live = transient(graph)
-  let bundles = frame.bundles ?? []
+  let bundles = incoming(graph, frame.bundles ?? [], mine)
   let gone = frame.gone ?? []
   live.forget([...gone, ...frame.transientReset ?? []])
   return after(
@@ -107,6 +120,15 @@ export let hear = (
   let peer = (name: string) => syncOf(graph.vocab, name) == 'peers'
   let said: Bundle[] = []
   let seen = new Map<Eid, Set<string>>()
+  for (let b of frame.bundles ?? []) {
+    for (let [name, patch] of comps(b)) {
+      if (peer(name) && stored(graph.vocab, name) && patch != null) {
+        let names = seen.get(b.entity.eid) ?? new Set<string>()
+        names.add(name)
+        seen.set(b.entity.eid, names)
+      }
+    }
+  }
   for (let b of frame.relay ?? []) {
     let out: Bundle = { entity: { eid: b.entity.eid } }
     for (let [name, patch] of comps(b)) {
@@ -137,14 +159,16 @@ export let hear = (
 
 /** Replace the components the server stores with a query's whole rows,
  * including the properties it reports as absent. A raw feed carries patches
- * instead, and must use land(). `sync: none` components never come from the
- * server and `sync: peers` ones never ride a row, so a query snapshot never
- * removes either. */
+ * instead, and must use land(). Local components and unsaved peer components
+ * never ride a stored row, so a snapshot never removes them. Saved peer values
+ * initialize readers while this node's own live writes remain ahead of them. */
 export let snapshot = (
   graph: Graph,
   bundles: Bundle[],
   opts: {
     coverage?: Record<Eid, Coverage>
+    /** Peer values this node is writing itself, ahead of its saved snapshot. */
+    mine?: Mine
     /** Lets another owner of a property keep it when this snapshot omits it. */
     preserve?: (eid: Eid, name: string, prop?: string) => boolean
   } = {},
@@ -153,7 +177,8 @@ export let snapshot = (
     graph.get(bundles.map((b) => b.entity.eid)),
     (held) => {
       let previous = new Map(held.map((b) => [b.entity.eid, b]))
-      let patches = bundles.map((b) => {
+      let mine = opts.mine ?? none
+      let patches = incoming(graph, bundles, mine).map((b) => {
         if (dead(b)) return b
         let out: Bundle = { entity: b.entity }
         let scope = opts.coverage?.[b.entity.eid] ?? true
@@ -161,6 +186,9 @@ export let snapshot = (
           opts.preserve?.(b.entity.eid, name, prop) ?? false
         for (let [name, comp] of comps(previous.get(b.entity.eid) ?? out)) {
           if (!stored(graph.vocab, name)) continue
+          if (
+            syncOf(graph.vocab, name) == 'peers' && mine(b.entity.eid, name)
+          ) continue
           if (!covers(scope, name)) continue
           if (
             b[name] == null && (scope === true || scope[name] === true) &&
