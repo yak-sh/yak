@@ -1,39 +1,111 @@
 # @yaks/ui
 
-The UI components: named parts with semantic variants, for display only. A UI
-component has no state, knows no graph and no application, sets no outer layout
-(no margins, no widths of its own), and looks the same wherever it sits. What it
-means and what a press on it does belong to the domain component that uses it.
-The idea is https://yak.sh/composable-ui.md.
+Preact parts with semantic variants, CSS and terminal sheet entries. Use the
+same parts in a browser and [@yaks/tui](../tui/README.md), compose kits with
+themes and skins, and inspect their specimens in the style guide.
 
-Each component is three things: a Preact component, its CSS file, and its
-entries in a terminal sheet. So one tree paints in a browser, styled by CSS, and
-in a terminal through @yaks/tui, styled by the sheet, under the same
-`Block_Element-modifier` class names.
+## Parts and rendering
 
-## Parts
+A **part** is a Preact component with a named CSS class, such as `Dot`,
+rendering `<span class="Dot">` (`Part`). A **variant** is a `mod` value that
+adds a class to a part: `mod: 'ring'` adds `Dot-ring`. `block` attaches named
+parts using an underscore: `Menu.Item` renders `Menu_Item`.
 
-`el(tag, base)` makes a part; its `mod` prop adds variants:
+A **piece** carries a part's `Component`, CSS URL, terminal `sheet` function,
+`description` and `specimens` function (`Piece`). A **kit** names pieces
+(`Kit`); `kit` contains the base pieces, `groups` arranges them for the guide,
+and `kits` registers that kit as `base`. A **specimen** is a label and a Preact
+tree showing a part or variant (`Specimen`).
+
+Parts present what their caller supplies. The caller chooses variants, owns
+state and handles presses; parts do not read a
+[graph](../graph/README.md#data-model). Their class names let CSS and terminal
+[sheets](../tui/README.md#style) style the same tree.
 
 ```ts
-import { assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
-import { el } from '@yaks/ui'
+import { Dot, Tile } from '@yaks/ui'
+import { equal } from '@yaks/testing'
 
-let Dot = el('span', 'Dot')
-assertEquals(
-  renderToString(h(Dot, { mod: ['half', 'active'] })),
-  '<span class="Dot Dot-half Dot-active"></span>',
+const tree = h(
+  Tile,
+  { href: '/books/dune' },
+  h(Tile.Title, {}, 'Dune'),
+  h(Dot, { mod: ['half', 'active'] }),
+)
+equal(
+  renderToString(tree),
+  '<a href="/books/dune" class="Tile"><span class="Tile_Title">Dune</span><span class="Dot Dot-half Dot-active"></span></a>',
 )
 ```
 
-`block(tag, base, { Element: tag })` hangs a block's elements on it:
-`block('div', 'Menu', { Item: 'button' })` carries `Menu.Item`, a
-`button.Menu_Item`. A part given an `href` is a link, and links nest the way
-HTML allows: inside a link, the same href is not a second link, and another
-keeps its tag and says `role="link"` and `data-href`, for the application to
-follow (web's nav.tsx listens for it).
+## Exports
+
+| Import                   | Offers                                                                                                                                                                 |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/ui`               | Parts below; `el`, `block`, `Surround`, `Props`, `Part`; `relative`; browser placement; kits, themes, skins, composition helpers and their types; `Guide`, `Specimens` |
+| `@yaks/ui/ui`            | Base `kits`, `themes`, `skins` for a host's UI facet                                                                                                                   |
+| `@yaks/ui/contributions` | Browser-safe `gather` and `Contributions`                                                                                                                              |
+| `@yaks/ui/guide`         | `Guide`, `Specimens`, `Contents`, `Page`, `sections`, `stopsOf`, `stops`, `title`                                                                                      |
+| `@yaks/ui/routes`        | `page`, `routes`: the static browser guide at `/ui`                                                                                                                    |
+| `@yaks/ui/cli`           | `commands`: the terminal guide, `yak ui`                                                                                                                               |
+
+## Building parts
+
+`el(tag, base)` makes a part. Falsy `mod` values drop, `class` adds classes,
+`elRef` supplies the element's ref, and other props pass to the element.
+`block(tag, base, elements)` attaches parts by name.
+
+```ts
+import { h } from 'preact'
+import { renderToString } from 'preact-render-to-string'
+import { block, el } from '@yaks/ui'
+import { equal } from '@yaks/testing'
+
+const Mark = el('span', 'Mark')
+const Card = block('article', 'Card', { Title: 'h2' })
+equal(
+  renderToString(
+    h(
+      Card,
+      {},
+      h(
+        Card.Title,
+        {},
+        h(Mark, { mod: ['active', false], class: 'extra' }, 'Ready'),
+      ),
+    ),
+  ),
+  '<article class="Card"><h2 class="Card_Title"><span class="Mark Mark-active extra">Ready</span></h2></article>',
+)
+```
+
+An `href` makes a part an anchor. `Surround` carries the enclosing anchor's
+href: a nested part with the same href keeps its original tag, and a different
+href becomes `role="link"` with `data-href`. The application handles following
+`data-href`.
+
+```ts
+import { h } from 'preact'
+import { renderToString } from 'preact-render-to-string'
+import { Id, Tile } from '@yaks/ui'
+import { equal } from '@yaks/testing'
+
+equal(
+  renderToString(
+    h(
+      Tile,
+      { href: '/a' },
+      h(Id, { href: '/a' }, 'A'),
+      h(Id, { href: '/b' }, 'B'),
+    ),
+  ),
+  '<a href="/a" class="Tile"><span class="Id">A</span><span role="link" tabindex="0" data-href="/b" class="Id">B</span></a>',
+)
+```
+
+## Base kit
 
 | component  | parts                                                                                                           | variants                                                                                                                                   |
 | ---------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -65,145 +137,267 @@ follow (web's nav.tsx listens for it).
 | `Panes`    | `Pane`, `Top`, `Body`                                                                                           | `Pane-nav`, `Pane-main`, `Pane-on`                                                                                                         |
 | `Head`     | `Title`, `Id`, `Kind`, `Sub`, `Facts`                                                                           | `Sub-refused`                                                                                                                              |
 | `Inbox`    | `Tools`, `Search`, `Mode`, `Lane`, `Heading`, `Thread`, `Open`, `Title`, `Reason`, `Preview`, `Detail`, `Empty` | `Thread-unread`                                                                                                                            |
-| `Notes`    | `Item`, `Text`, `Who`, `When`                                                                                   | `Item-done`                                                                                                                                |
+| `Notes`    | `Item`, `Text`, `Who`, `When`, `Children`                                                                       | `Item-done`                                                                                                                                |
 | `Say`      | one line to send something on                                                                                   |                                                                                                                                            |
 | `Index`    | `Group`, `Head`, `Item`                                                                                         | `Head-on`, `Item-on`, `Item-hover`                                                                                                         |
 | `Catalog`  | `Group`, `Heading`, `Entry`, `Title`, `Sub`                                                                     |                                                                                                                                            |
 | `Gallery`  | `Figure`, `Caption`, `Stage`                                                                                    |                                                                                                                                            |
 
-A variant for a pseudo-class (`hover`) lets the style guide show that state.
+A `hover` variant lets specimens show a pseudo-class without a pointer. Every
+piece supplies specimens; use them to see the parts and their variants without
+inventing application behavior.
 
-## What floats
+```ts
+import { kit } from '@yaks/ui'
+import { renderToString } from 'preact-render-to-string'
+import { equal } from '@yaks/testing'
 
-A UX component (@yaks/ux) is handed the platform's primitives rather than
-building them, and this package holds the browser's (float.ts). `Float` is the
-popover: its children render into an `Overlay` fixed on document.body at the
-live rect of an anchor, so no clipping or scaled container cuts them off, and
-they read the same context as the tree they spring from. `place`, `placeAt` and
-`usePlaceAt` put a fixed element on a rect or a point, clamped to the viewport;
-`tips` floats a `Tip` for every `[data-tip]`. A terminal has nowhere to float,
-so a terminal's host hands down no `Float` and what would float stays in the
-flow.
-
-A `Table` is a grid, not an html table: its `cols` say what each column holds
-(`h(Table, { cols: [null, 'prose', 'num'] }, …)`, the variant its cells wear or
-nothing for text), each row is a subgrid of it so the cells line up, and a cell
-keeps to one line, cut with an ellipsis, as a table cell cannot. Its parts say
-`table`, `row`, `cell` and `columnheader` by their roles.
-
-A part's terminal entries say what its CSS says of its layout (@yaks/tui's
-`spaced`, `row`, `col`, `width`, `grow`, `grid`, `wrap`, `ellipsis`, `align`,
-`border`), never an attribute on the element: a part laid out by a CSS gap is
-`spaced`, so its runs stay apart in a terminal too, `Panes` are framed columns
-of the screen, and a `Table` is a `grid` whose cells cut with an `ellipsis`.
-
-## Themes
-
-A theme is a stylesheet of CSS custom properties and the same colours as values.
-Every colour names a role, never a hue, so a part says what a thing is and the
-theme says how it looks:
-
-- the ground and the ink: `--bg`, `--surface`, `--card`, `--border`,
-  `--border2`, `--text`, `--muted`, `--dim`;
-- `--accent`, selection and the primary action; `--link`, every link, whatever
-  part it is in (an anchor, a `Pager.Step`); `--heading`, a section's title;
-- the tones a state is said in, which are a `Dot`'s: `--info`, `--active`,
-  `--positive`, `--negative`, `--caution`, `--special`;
-- what a value is: `--number`, `--literal` (true, false, null), `--time`,
-  `--who`; and code's `--keyword`, `--string`, `--fn`, `--type`, `--attr`;
-- `--hue-0` to `--hue-5`, six colours that only tell things apart (a `Chip`'s).
-
-`Colors` (theme.ts) lists them. Each is a `light-dark()` pair, so the page's
-`color-scheme` picks the light scheme or the dark: the system's, unless the page
-sets one. A terminal paints the dark. Besides its colours a theme sets its type
-(`--font`, `--mono`), its spacing (`--gap`, `--radius`, `--measure`) and the
-shadow under a raised box (`--shadow`); the base derives `--half-gap`, `--soft`
-and the touch-target floor `--tap` from them. Every component's CSS reads the
-properties through `var()`, and every component's terminal entries are a
-function of the colours.
-
-`themes` (kit.ts) is every theme by name. Everforest (`everforest.css`,
-`everforest.ts`) is the first and the default. Rosé Pine (`rosepine.*`) shares
-nothing with it but the names: a serif, round corners, more room, and a palette
-with no green, so a part that leans on one theme's values shows in the other.
-
-```ts ignore
-import { everforest, kits, sheet, stylesheet } from '@yaks/ui'
-
-let css = await stylesheet({ kits, theme: everforest }) // the theme, then every part's CSS
-let dress = sheet({ kits, theme: everforest }) // what @yaks/tui's painter styles them with
+for (const piece of Object.values(kit)) {
+  const samples = piece.specimens()
+  equal(samples.length > 0, true)
+  for (const [label, tree] of samples) {
+    equal(label.length > 0, true)
+    equal(renderToString(tree).length > 0, true)
+  }
+}
 ```
 
-`sheet()` also colours @yaks/tui's own widgets (tables, scrollbars, panels, the
-text entry), the way the base stylesheet colours a browser's scrollbars.
+`Field` uses an input or, with `lines`, a textarea. `caret` supplies the
+terminal's `data-caret`; a browser uses its own caret. `Stamp` displays words
+supplied by its caller; `relative` can produce those words from a time.
 
-## The style guide
+```ts
+import { h } from 'preact'
+import { renderToString } from 'preact-render-to-string'
+import { Field, relative, Stamp } from '@yaks/ui'
+import { equal } from '@yaks/testing'
 
-`Guide` is every part in every variant, built of the kit's own parts: a
-`Catalog` of the kit's `groups` (kit.ts), each part an entry saying what it is
-(its module's `description`) over a `Gallery` of its specimens, a figure each.
-`Specimens` is one part's entry. Its places are `stops`: the whole guide, then
-each group and the parts in it, each also the id of its section.
+const now = Date.parse('2026-09-29T12:00:00Z')
+equal(
+  renderToString(h(Stamp, {}, relative('2026-09-29T11:55:00Z', now))),
+  '<span class="Stamp">5 minutes ago</span>',
+)
+equal(
+  renderToString(h(Field, { lines: true, caret: 0, placeholder: 'Notes' })),
+  '<textarea placeholder="Notes" data-caret="0" class="Field"></textarea>',
+)
+```
 
-The routes facet (`@yaks/ui/routes`) answers it at `/ui` as a static page with
-the stylesheet inline, in `Panes`: beside the guide, a nav of the theme and
-scheme switchers over `Contents`, an `Index` of the stops, each a link that
-jumps to its section. `/ui` takes the theme and the scheme it is seen in,
-`?theme=rosepine&scheme=light`. Web's terminal shows the guide on `:ui`.
+`Table` uses a CSS grid with subgrid rows and accessibility roles. `cols` names
+the column tracks; apply matching variants to cells. Text cuts short with an
+ellipsis, `num` sets right, and `prose` wraps. The table owns its `style` prop
+to carry those tracks. Sorting and selection belong to its caller.
 
-The cli facet (`@yaks/ui/cli`) holds it in a terminal as `yak ui`, painted
-through each part's terminal sheet and framed the same way: the theme switcher
-and the contents beside the page, which is the stop the walk is on (`Page`). j
-and k walk the contents and the page follows, ↑ ↓ PgUp PgDn scroll the page, t
-paints it all in the next theme, and q quits; a press on an entry or a theme
-picks it. It reads nothing from a graph.
+```ts
+import { h } from 'preact'
+import { renderToString } from 'preact-render-to-string'
+import { Table } from '@yaks/ui'
+import { equal } from '@yaks/testing'
 
-## Files
+const tree = h(
+  Table,
+  { cols: ['num'] },
+  h(
+    Table.Head,
+    {},
+    h(Table.Row, {}, h(Table.Heading, { mod: ['num', 'desc'] }, 'Pages')),
+  ),
+  h(Table.Body, {}, h(Table.Row, {}, h(Table.Cell, { mod: 'num' }, '412'))),
+)
+const html = renderToString(tree)
+equal(html.includes('role="table"'), true)
+equal(html.includes('Pages ↓'), true)
+equal(html.includes('class="Table_Cell Table_Cell-num">412'), true)
+```
 
-| file            | owns                                                                 |
-| --------------- | -------------------------------------------------------------------- |
-| `el.ts`         | `el`, `block`, and the link nesting                                  |
-| `kit.ts`        | the parts in their `groups`, `themes`, `stylesheet()` and `sheet()`  |
-| `theme.ts`      | the `Theme`, `Colors`, `Kit` and `Specimen` types                    |
-| `base.*`        | the document's defaults: prose, code, tables, syntax, scrollbars     |
-| `<Part>.ts/css` | one component: the part, what it is, its terminal entries, specimens |
-| `everforest.*`  | the first theme                                                      |
-| `rosepine.*`    | the second                                                           |
-| `guide.ts`      | the style guide, its stops and its contents                          |
-| `routes.ts`     | `/ui`                                                                |
-| `cli.ts`        | `yak ui`                                                             |
-| `tui.ts`        | the style guide in a terminal                                        |
-| `float.ts`      | what floats in a browser: `Float`, `place`, `tips`                   |
+## Themes and skins
 
-A new component is its module and its CSS file, and one line in its group in
-`kit.ts`.
+A **theme** supplies a CSS URL defining custom properties and the same colors as
+values for terminal sheets (`Theme`). `Colors` names color roles: background,
+ink, links, headings, states, stored values and code syntax; `hues` holds six
+colors for `Chip`. `themes` names `everforest` and `rosepine`; `everforest` is
+the default. Browser themes offer light and dark schemes selected by
+`color-scheme`; terminal colors use the dark scheme. Themes also set fonts,
+spacing, reading measure, radius and shadow.
 
-## Kits and skins from anywhere
+The CSS custom properties use the same names as `Colors`:
 
-`Kit` is a record of parts, each a `Piece` carrying
-`{Component, css, sheet,
-description, specimens}`. CSS addresses are URLs owned
-by their parts; a kit need not live in this package. A `Skin` is a partial
-record of part names and `{css, sheet?}` replacements. Unnamed parts use their
-kit rendering; a missing terminal replacement uses the kit's sheet.
+- Background and ink: `--bg`, `--surface`, `--card`, `--border`, `--border2`,
+  `--text`, `--muted`, `--dim`.
+- Selection and the primary action: `--accent`; links: `--link`; section titles:
+  `--heading`.
+- Dot tones: `--info`, `--active`, `--positive`, `--negative`, `--caution`,
+  `--special`.
+- Values: `--number`, `--literal` (true, false, null), `--time`, `--who`; code
+  syntax: `--keyword`, `--string`, `--fn`, `--type`, `--attr`.
+- Chip hues: `--hue-0` through `--hue-5`.
 
-A page passes `{kits, theme, skin?, ux?}` to `stylesheet`, `sheet` and
-`h(Guide, {composition})`. CSS order is the theme followed by one rendering per
-part in kit order. The guide shows external parts and controlled UX specimens,
-and marks each part's skin coverage. Duplicate part names are rejected rather
-than silently replacing another kit's part.
+Fonts use `--font` and `--mono`; spacing uses `--gap`, `--radius` and
+`--measure`; raised boxes use `--shadow`. The base CSS derives `--half-gap`,
+`--soft` and the touch target floor `--tap`.
 
-A plugin's browser-safe `./ui` facet exports `{kits, ux, themes, skins}` (each
-optional, keyed by contribution name). The web host gathers the facets of all
-installed plugins into `host.ui`; `/ui` shows that composition, with links for
-each theme, skin and light/dark scheme. `gather` is also available to another
-page host; duplicate contribution names are a composition error.
+A **skin** supplies CSS replacements by piece name and optional terminal sheet
+replacements (`Skin`). A missing replacement uses the kit's rendering. `ledger`
+replaces Button, Tabs, Head and Tile with printed labels and ruled records;
+other pieces retain the kit's rendering.
 
-## Ledger skin
+A **composition** supplies `{ kits, theme, skin?, ux? }` to render a page and
+its guide (`Composition`). `composition` is the base kits with `everforest`.
+`parts` flattens its kits and refuses duplicate piece names. `stylesheet` loads
+the theme, then one CSS rendering per piece in kit order; it resolves relative
+CSS `url()` and quoted `@import` addresses against each CSS URL. `sheet`
+combines the selected terminal entries, including the base entries for
+[@yaks/tui](../tui/README.md)'s widgets.
 
-The invented `ledger` skin paints Button, Tabs, Head and Tile as printed labels
-and ruled records, using only the selected theme's semantic tokens. Its four
-terminal replacements emphasize the same labels with bold and underline. All
-other parts retain their kit rendering. `/ui?skin=ledger` exposes coverage in
-the guide; browser skin links preserve theme and scheme, while `yak ui` uses `s`
-or the skin tabs to switch rendering without changing the tree.
+```ts
+import { composition, ledger, sheet, stylesheet } from '@yaks/ui'
+import { equal } from '@yaks/testing'
+
+const dressed = { ...composition, skin: ledger }
+const css = await stylesheet(dressed)
+equal(css.includes('.Button'), true)
+equal(sheet(dressed).Button.bold, true)
+equal(sheet(dressed).Field.fg, dressed.theme.colors.text)
+```
+
+## Contributions
+
+**Contributions** are named kits, UX specimens, themes and skins from a
+[plugin](../graph/README.md#data-model)'s browser-safe `./ui` facet
+(`Contributions`). `gather` combines facets and refuses duplicate contribution
+names. A kit's CSS URLs travel with its pieces, so pieces can live in another
+package. `ux` holds descriptions and specimens for controlled
+[@yaks/ux](../ux/README.md) components; the guide does not load their behavior.
+
+```ts
+import { h } from 'preact'
+import { gather } from '@yaks/ui/contributions'
+import { kits, skins, themes } from '@yaks/ui/ui'
+import { type Composition, parts } from '@yaks/ui'
+import { equal, throws } from '@yaks/testing'
+
+const extra = { ...kits.base.Dot, Component: () => h('span', {}, 'extra') }
+const all = gather([{ kits, themes, skins }, {
+  kits: { extra: { Extra: extra } },
+}])
+const c: Composition = { kits: all.kits!, theme: all.themes!.rosepine }
+equal(parts(c).Extra.Component, extra.Component)
+await throws(() => gather([{ kits }, { kits }]))
+await throws(() =>
+  parts({ ...c, kits: { first: kits.base, second: kits.base } })
+)
+```
+
+## Style guide
+
+`Guide` shows each piece's description and specimens, grouped by kit, and UX
+specimens. `Specimens` shows one entry and, when a skin is selected, whether it
+uses the skin or the kit. `Contents` links to each entry. A **stop** is the id
+of the whole guide, a group or an entry (`stopsOf`); `Page` renders one stop.
+
+```ts
+import { h } from 'preact'
+import { renderToString } from 'preact-render-to-string'
+import { composition, ledger, Specimens } from '@yaks/ui'
+import { Contents, Page, stopsOf } from '@yaks/ui/guide'
+import { equal } from '@yaks/testing'
+
+const c = { ...composition, skin: ledger }
+equal(stopsOf(c).includes('Button'), true)
+equal(
+  renderToString(h(Specimens, { name: 'Button', composition: c }))
+    .includes('data-skin="skin"'),
+  true,
+)
+equal(
+  renderToString(h(Page, { stop: 'Button', composition: c }))
+    .includes('skin rendering'),
+  true,
+)
+equal(
+  renderToString(
+    h(Contents, { composition: c, entry: (stop) => ({ href: `#${stop}` }) }),
+  ).includes('href="#Button"'),
+  true,
+)
+```
+
+`routes(host?)` serves `/ui` as static HTML with inline CSS, contents and theme,
+skin and scheme links. A host supplies gathered contributions as `host.ui`; the
+default shows the base kit. Query parameters select the rendering, for example
+`/ui?theme=rosepine&scheme=light&skin=ledger`.
+
+```ts
+import { routes } from '@yaks/ui/routes'
+import { equal } from '@yaks/testing'
+
+const [route] = routes()
+const response = await route.handle(
+  new Request(
+    'https://example.com/ui?theme=rosepine&scheme=light&skin=ledger',
+  ),
+)
+const html = await response.text()
+equal(response.headers.get('content-type'), 'text/html; charset=utf-8')
+equal(html.includes('color-scheme: light'), true)
+equal(html.includes('skin rendering'), true)
+```
+
+The CLI facet opens the base guide as `yak ui`: j and k walk its contents, ↑ ↓
+PgUp PgDn scroll, t changes theme, s changes skin, and q quits. Clicking
+contents, theme or skin entries selects them. This interactive command needs a
+terminal, so it is not run by this README's Deno examples.
+
+```sh
+yak ui
+```
+
+## Browser placement
+
+`Float` renders its children into an `Overlay` fixed on `document.body`,
+positioned on its anchor's live rectangle and carrying the originating tree's
+Preact context. This avoids clipping and scaling by ancestors. `place` places a
+fixed element above or below a rectangle, flipping and clamping to the viewport;
+`placeAt` positions it at a point, optionally aligned right. `usePlaceAt`
+repeats placement when the element resizes. `tips()` installs one delegated
+tooltip for `[data-tip]` per page.
+
+This example needs a browser DOM, viewport measurements and `ResizeObserver`, so
+the Deno example runner cannot run it. The supplied point is inside a viewport
+larger than the overlay.
+
+```ts ignore
+import { h, render } from 'preact'
+import { Float, placeAt, Tip, tips } from '@yaks/ui'
+import { equal } from '@yaks/testing'
+
+const anchor = document.createElement('button')
+anchor.textContent = 'Details'
+anchor.setAttribute('data-tip', 'Open details')
+document.body.append(anchor)
+const root = document.createElement('div')
+document.body.append(root)
+render(
+  h(
+    Float,
+    { anchor: { current: anchor }, side: 'below' },
+    h(Tip, {}, 'Details'),
+  ),
+  root,
+)
+equal(document.body.querySelector('.Overlay')?.textContent, 'Details')
+const overlay = document.body.querySelector<HTMLElement>('.Overlay')!
+placeAt(overlay, 100, 100)
+equal(overlay.style.left, '100px')
+tips()
+render(null, root)
+root.remove()
+anchor.remove()
+```
+
+## Limits
+
+Application meaning, state and press behavior belong to callers; reusable
+interaction components belong to [@yaks/ux](../ux/README.md). Terminal rendering
+belongs to [@yaks/tui](../tui/README.md). A terminal host supplies no `Float`;
+`Float` itself returns no rendered children when there is no browser body.
