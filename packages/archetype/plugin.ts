@@ -25,11 +25,51 @@ type Held = { set: Archetype; assigned?: string; dead: boolean }
  * Stamps, cascades and journal writes use the same tracker as ordinary patches.
  */
 export function archetypes(cache: Archetypes = new Archetypes()): Plugin {
+  // A previous write tells us which descriptors the next one may need, not
+  // whether they still exist or what they hold. Gather reads every hint anew;
+  // a changed shape simply asks for its unexpected descriptors afterwards.
+  let plans = new Map<string, { set: Archetype; reads: Set<string> }>()
+  let initial = (eid: string, set: Archetype) => {
+    let plan = plans.get(eid)
+    if (plan?.set.eid == set.eid) return
+    if (plans.size >= 2048 && !plans.has(eid)) {
+      plans.delete(plans.keys().next().value!)
+    }
+    plans.set(eid, { set, reads: new Set() })
+  }
+  let needed = (eid: string, set: Archetype) => {
+    let reads = plans.get(eid)?.reads
+    if (!reads) return
+    if (reads.size >= 16 && !reads.has(set.eid)) {
+      reads.delete(reads.values().next().value!)
+    }
+    reads.add(set.eid)
+  }
   return {
     name: '@yaks/archetype',
     admission: () => true,
     vocab: [archetypeDoc],
     derive: { archetype: (comp) => eidOf(tablesOf(comp.tables)) },
+    wants: (bundles) => {
+      let eids = new Set<string>()
+      let moved = new Map<string, Archetype>()
+      for (let b of bundles) {
+        let plan = plans.get(b.entity.eid)
+        if (!plan) continue
+        eids.add(plan.set.eid)
+        for (let eid of plan.reads) eids.add(eid)
+        let set = moved.get(b.entity.eid) ?? plan.set
+        set = dead(b) ? cache.intern(['tombstone']) : comps(b).reduce(
+          (set, [table, patch]) => cache.move(set, table, patch != null),
+          set,
+        )
+        moved.set(b.entity.eid, set)
+        eids.add(set.eid)
+      }
+      if (!eids.size) return []
+      eids.add(cache.intern(['archetype']).eid)
+      return [{ eids: [...eids], hint: true }]
+    },
     hooks: {
       // A returned bundle may be sent back as a patch. The pointer is derived,
       // never something a caller can use to misclassify an entity.
@@ -49,7 +89,7 @@ export function archetypes(cache: Archetypes = new Archetypes()): Plugin {
           }
         }),
     },
-    track: (tx, found) => tracking(tx, found, cache),
+    track: (tx, found) => tracking(tx, found, cache, initial, needed),
   }
 }
 
@@ -57,6 +97,8 @@ function tracking(
   tx: Tx,
   found: (eid: string) => Bundle | null | undefined,
   cache: Archetypes,
+  initial: (eid: string, set: Archetype) => void,
+  rememberRead: (eid: string, set: Archetype) => void,
 ): Tracker {
   let held = new Map<string, Held>()
   let dirty = new Set<string>()
@@ -85,7 +127,7 @@ function tracking(
         })),
       ]
       return after(ids.length ? tx.get(ids) : [], (defs) => {
-        for (let b of defs) descriptor(b)
+        for (let b of defs) if (b.archetype != null) descriptor(b)
         for (let i = 0; i < missing.length; i++) {
           let b = before[i]
           let assigned = b?.entity.archetype
@@ -101,6 +143,7 @@ function tracking(
             )
             : empty
           held.set(missing[i], { set, assigned, dead: b ? dead(b) : false })
+          initial(missing[i], set)
         }
       })
     })
@@ -186,6 +229,9 @@ function tracking(
       })
       dirty.clear()
       if (!assignments.length) return bundles
+      for (let b of assignments) {
+        rememberRead(b.entity.eid, cache.get(b.entity.archetype!)!)
+      }
       let needed = new Map(assignments.map((b) => {
         let a = cache.get(b.entity.archetype!)!
         return [a.eid, a]

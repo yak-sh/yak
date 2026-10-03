@@ -13,6 +13,7 @@ let fixture = (stamped = false) => {
         type: 'object',
         properties: { text: { type: 'string' } },
       },
+      other: { component: true, type: 'object', properties: {} },
       ...(stamped
         ? {
           created: {
@@ -25,7 +26,7 @@ let fixture = (stamped = false) => {
     },
   }])
   let storage = ram(vocab)
-  let writes = 0
+  let writes = 0, reads = 0
   let g = graph({
     vocab,
     storage: {
@@ -34,6 +35,10 @@ let fixture = (stamped = false) => {
         storage.tx((tx) =>
           body({
             ...tx,
+            get: (eids, comps) => {
+              reads++
+              return tx.get(eids, comps)
+            },
             patch: (bundles) => {
               writes++
               return tx.patch(bundles)
@@ -43,8 +48,56 @@ let fixture = (stamped = false) => {
     },
     plugins: [archetypes()],
   })
-  return { g, storage, writes: () => writes }
+  return { g, storage, writes: () => writes, reads: () => reads }
 }
+
+test('archetype admission gathers warmed descriptors with their owners', () => {
+  let { g, reads } = fixture()
+  g.apply([{ entity: { eid: 'a' }, note: { text: 'kept' } }])
+  let patch = [{ entity: { eid: 'a' }, note: { text: 'heard' } }]
+  g.admit(patch)
+  let before = reads()
+  g.admit(patch)
+  assertEquals(reads() - before, 1)
+  assertEquals((g.get(['a']) as Bundle[])[0].note, { text: 'kept' })
+})
+
+test('archetype read hints follow a foreign shape change and ignore old descriptors', () => {
+  let { g, storage } = fixture()
+  g.apply([{ entity: { eid: 'a' }, note: { text: 'kept' } }])
+  g.admit([{ entity: { eid: 'a' }, note: { text: 'heard' } }])
+  storage.tx((tx) =>
+    tx.patch([{
+      entity: { eid: eidOf(['other']), archetype: eidOf(['archetype']) },
+      archetype: { tables: '["other"]' },
+    }, {
+      entity: { eid: 'a', archetype: eidOf(['other']) },
+      note: null,
+      other: {},
+    }, {
+      entity: { eid: eidOf(['note']) },
+      archetype: { tables: '[]' },
+    }])
+  )
+  let patch = [{ entity: { eid: 'a' }, other: {} }]
+  g.admit(patch)
+  g.apply(patch, { check: true })
+  assertEquals((g.get(['a']) as Bundle[])[0].note, undefined)
+})
+
+test('a warmed descriptor hint sees a descriptor deleted by another writer', () => {
+  let { g, storage } = fixture()
+  g.apply([{ entity: { eid: 'a' }, note: { text: 'kept' } }])
+  let patch = [{ entity: { eid: 'a' }, note: { text: 'heard' } }]
+  g.admit(patch)
+  storage.tx((tx) => tx.remove([{ eid: eidOf(['note']) }]))
+  assertThrows(() => g.admit(patch), Refused, 'Missing archetype')
+  assertThrows(
+    () => g.apply(patch, { check: true }),
+    Refused,
+    'Missing archetype',
+  )
+})
 
 test('archetype admission checks creation and edits without storage writes', () => {
   let { g, writes } = fixture()
@@ -61,6 +114,7 @@ test('archetype admission checks creation and edits without storage writes', () 
 test('a cached table set cannot hide an invalid stored archetype', () => {
   let { g, storage } = fixture()
   g.apply([{ entity: { eid: 'a' }, note: { text: 'kept' } }])
+  g.admit([{ entity: { eid: 'a' }, note: { text: 'heard' } }])
   storage.tx((tx) =>
     tx.patch([{
       entity: { eid: eidOf(['note']) },
