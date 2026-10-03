@@ -1,9 +1,10 @@
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Frame } from '@yaks/api'
 import type { Bundle, Comp } from '@yaks/graph'
 import { versions } from '@yaks/lens'
 import type { Objects } from '@yaks/blob'
+import { driver } from '@yaks/durable-object'
 import type { App, Directory, Space } from './directory.ts'
 import { Store } from './graph.ts'
 import { doorOf } from './door.ts'
@@ -64,7 +65,7 @@ test('an app lens keeps old writes, reads and subscriptions through reload', asy
   let current = await meta.query('.recipe ?doc') as Bundle[]
   assertEquals(
     current.map((r) => [(r.recipe as Comp).title, (r.doc as Comp).title]),
-    [[null, 'Cake']],
+    [[undefined, 'Cake']],
   )
   let held = await metaOf(door, headers).query(
     '.recipe.title~=Cake',
@@ -134,16 +135,41 @@ test('the app lens mover rehearses, consumes its source, and is idempotent', asy
     ((await meta.query('.recipe.title'))[0].recipe as Comp).title,
     'Seed cake',
   )
+  let columns = () =>
+    driver(ctx.storage).query({
+      t: 'pragma',
+      name: 'table_info',
+      arg: 'recipe',
+    }).map((c) => c.name)
+  assert(columns().includes('title'))
   let rule = lensRule(name, next)!
   store = new Store(ctx)
   await store.alarm()
-  assertEquals(await meta.query('.recipe.title'), [])
+  await assertRejects(() => meta.query('.recipe.title'))
   let [moved] = await meta.query('.recipe ?doc')
   assertEquals([(moved.recipe as Comp).title, (moved.doc as Comp).title], [
-    null,
+    undefined,
     'Seed cake',
   ])
   assertEquals(rule.move(moved), [])
+  assert(!columns().includes('title'))
+  assertEquals(
+    ((await metaOf(door, headers).query('.recipe.title~=Seed'))[0]
+      .recipe as Comp).title,
+    'Seed cake',
+  )
+  assert((await declare(old)).ok)
+  assert(!columns().includes('title'))
+  store = new Store(ctx)
+  assert(!columns().includes('title'))
+  await meta.apply(
+    [{ entity: moved.entity, recipe: { title: 'Seed again' } }],
+    headers,
+  )
+  assertEquals(
+    ((await meta.query('.recipe ?doc'))[0].doc as Comp).title,
+    'Seed again',
+  )
   assertEquals(
     (await (await door('/move?rehearse=1', { method: 'POST' }, KERNEL)).json())
       .rules[0].moved,

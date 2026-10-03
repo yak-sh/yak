@@ -58,7 +58,7 @@ test('a kept page speaks its vocabulary on writes, queries and socket pushes', a
     assertEquals(oldView.recipe.title, 'Lemon cake')
     let [current] = await files.get('.recipe&?doc')
     assertEquals((current.doc as { title: string }).title, 'Lemon cake')
-    assertEquals((current.recipe as { title: null }).title, null)
+    assertEquals((current.recipe as { title?: null }).title, undefined)
 
     let seen: { recipe: { title: string } }[][] = []
     stop = live.subscribe(

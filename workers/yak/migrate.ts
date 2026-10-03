@@ -230,6 +230,7 @@ export let respelled = (text: string): string | null => {
  * move. Code without the name is code from before it could read that shape. */
 export let BOUNDARIES = [
   'yak/store/lens/1',
+  'yak/store/lens-contract/1',
   'yak/store/interruption-contract/1',
   'yak/store/interruption-contract/2',
   'yak/store/interruption-contract/3',

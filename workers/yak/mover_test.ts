@@ -12,6 +12,7 @@ import { KERNEL, metaOf } from './meta.ts'
 import { dispatchMove, dispatchRule } from './mover.ts'
 import { type Rehearsal, type Rule, type Standing } from './mover.ts'
 import { state } from './testing.ts'
+import { driver } from '@yaks/durable-object'
 
 let NAME = 'ada/notes'
 
@@ -54,6 +55,19 @@ let store = async (n: number, ...rules: Rule[]) => {
   }
   return {
     wake: (...rules: Rule[]) => o = new Store(ctx, {}, rules),
+    columns: (name: string) =>
+      driver(ctx.storage).query({ t: 'pragma', name: 'table_info', arg: name })
+        .map((c) => c.name),
+    failDrop: () => {
+      let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
+      ctx.storage.sql.exec = (sql, ...args) => {
+        if (/alter table.*drop column/i.test(sql)) {
+          throw new Error('contraction failed')
+        }
+        return exec(sql, ...args)
+      }
+      return () => ctx.storage.sql.exec = exec
+    },
     alarm: () => o.alarm(),
     query: (q: string) => meta.query(q),
     declare: (doc: unknown) => post('/vocab', JSON.stringify(doc)),
@@ -318,4 +332,58 @@ test('source reads do not move or count sources, and rehearsal rolls back', asyn
   assertEquals(await count(s, '.was'), 0)
   assertEquals(await count(s, '.now.word=source'), 52)
   assertEquals(await s.query(`.entity.eid=${source}`), before)
+})
+
+let contracting = () =>
+  rule({
+    find: '.was.word',
+    move: (
+      row,
+    ) => [{
+      entity: row.entity,
+      was: { word: null },
+      now: { word: (row.was as Comp).word },
+    }],
+    drop: ['was.word'],
+  })
+
+test('mover contraction waits for the last value and rehearsal restores the column', async () => {
+  let s = await store(300, contracting())
+  let [rehearsed] = await s.rehearse()
+  assertEquals([rehearsed.moved, rehearsed.failed], [300, undefined])
+  assert(s.columns('was').includes('word'))
+  assertEquals(await count(s, '.was.word'), 300)
+  await s.alarm()
+  assert(s.columns('was').includes('word'))
+  assertEquals(await count(s, '.was.word'), 50)
+  await s.alarm()
+  assert(!s.columns('was').includes('word'))
+  assertEquals(await count(s, '.now'), 300)
+  assertEquals(await count(s, '.was'), 300)
+  let [said] = await s.moves()
+  assertEquals([said.moved, !!said.done], [300, true])
+  s.wake(contracting())
+  await s.alarm()
+  assert(!s.columns('was').includes('word'))
+  assertEquals((await s.moves())[0].moved, 300)
+})
+
+test('a refused contraction unwinds its data batch and retries after wake', async () => {
+  let s = await store(1, contracting())
+  let restore = s.failDrop()
+  try {
+    let [rehearsed] = await s.rehearse()
+    assertEquals(rehearsed.failed, 'contraction failed')
+    await s.alarm()
+    assertEquals(await count(s, '.was.word'), 1)
+    assertEquals(await count(s, '.now'), 0)
+    assert(s.columns('was').includes('word'))
+    assertEquals((await s.moves())[0].failed, 'contraction failed')
+  } finally {
+    restore()
+  }
+  s.wake(contracting())
+  await s.alarm()
+  assertEquals(await count(s, '.now'), 1)
+  assert(!s.columns('was').includes('word'))
 })

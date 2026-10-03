@@ -50,6 +50,8 @@ export type Rule = {
   move: (row: Bundle, read?: (line: string) => Bundle[]) => Bundle[]
   /** Where it runs for real. Absent, it is only rehearsed. */
   live?: 'apps' | 'all'
+  /** Properties to shed once empty, in each batch's transaction. */
+  drop?: string[]
 }
 
 // This converter is rehearsed with an explicitly composed scratch vocabulary.
@@ -136,6 +138,7 @@ export type Moving = {
   rows: (line: string | Query) => Row[] | Promise<Row[]>
   apply: (patch: Bundle[]) => Bundle[] | Promise<Bundle[]>
   tx: <T>(body: () => T) => T
+  drop?: (paths: string[]) => void
 }
 
 /** Rows a batch takes. A store's one thread is held for the whole batch, and
@@ -182,11 +185,23 @@ export let step = (
     rows = sync(m.read(page(rule, n, was?.after)))
   } catch (e) {
     if (!(e instanceof Unknown)) throw e
-    return { moved: 0, at: now, done: now, unspoken: e.prop }
+    return {
+      ...was,
+      moved: was?.moved ?? 0,
+      at: now,
+      done: now,
+      unspoken: e.prop,
+    }
   }
   if (rows.length) {
     let read = (line: string) => sync(m.read(line))
     sync(m.apply(rows.flatMap((row) => rule.move(row, read))))
+  }
+  if (rule.drop?.length) {
+    if (!m.drop) {
+      throw new Error('a store mover must support property contraction')
+    }
+    m.drop(rule.drop)
   }
   return {
     moved: (was?.moved ?? 0) + rows.length,

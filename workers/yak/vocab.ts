@@ -1283,7 +1283,6 @@ export let grew = (
     let props: Record<string, PropSchema> = { ...mine[name]?.properties }
     for (let prop of Object.keys(props)) {
       if (
-        sources?.has(`${name}.${prop}`) ||
         !delta.dropped.includes(`${name}.${prop}`) || rows(name, prop)
       ) {
         continue

@@ -10,7 +10,13 @@ import {
   log,
 } from '@yaks/journal'
 import { described } from '@yaks/code/effects'
-import { described as describedLenses, lenses, packageEid } from '@yaks/lens'
+import {
+  compile,
+  described as describedLenses,
+  lenses,
+  lensesIn,
+  packageEid,
+} from '@yaks/lens'
 import { declaredLenses, lensDocAt, lensRule, spoken } from './lenses.ts'
 // The Store Durable Object, built out of the packages (T-33810, D-33490): one
 // app's graph, and nothing of the fleet's. It is composition, not code —
@@ -843,8 +849,6 @@ export class Store {
     // declared.
     let name = this.#get('name') ?? ''
     let declaration = meant(this.#get('vocab'))
-    this.#lensMove = lensRule(name, declaration)
-    if (this.#lensMove) this.#sowing = null
     if (name == 'yourname/vale.f52dc2' && !this.#profile) {
       this.#profile = profile((summary) =>
         console.log(
@@ -863,6 +867,10 @@ export class Store {
       name,
       this.#get('vocab'),
     )
+    this.#lensMove = lensRule(name, declaration, (path) => {
+      let [comp, prop] = path.split('.')
+      return !!vocab.prop(comp, prop)
+    })
     let drive = this.#sql = driver(ctx.storage, observe, this.#measure)
     let bytes = sqliteBlobs(drive)
     let store = storage(
@@ -1978,6 +1986,21 @@ export class Store {
         deferEffects: (run) => void held.push(run),
       }),
     tx: (body) => this.#ctx.storage.transactionSync(body),
+    drop: (paths) => {
+      let was = appDoc(this.#get('vocab') ?? '{}')
+      let defs = { ...was.$defs }
+      for (let path of paths) {
+        let [comp, prop] = path.split('.')
+        if (!defs[comp]?.properties?.[prop]) continue
+        let properties = { ...defs[comp].properties }
+        delete properties[prop]
+        defs[comp] = { ...defs[comp], properties }
+      }
+      this.#put(
+        'vocab',
+        this.#prepared(JSON.stringify({ ...was, $defs: defs })),
+      )
+    },
   })
 
   // A few batches, yielding the object between them, then the alarm again for
@@ -1991,6 +2014,7 @@ export class Store {
         let was = this.#stamp(rule)
         let now = new Date().toISOString()
         let s: Stamp
+        let vocabWas = this.#get('vocab')
         try {
           s = this.#ctx.storage.transactionSync(() => {
             let s = step(this.#mover(held), rule, was, SIZE, now)
@@ -2010,6 +2034,7 @@ export class Store {
           } catch { /* the stamp is a report; the defect already went */ }
           break
         }
+        if (this.#get('vocab') != vocabWas) this.#boot()
         for (let run of held) {
           try {
             await run()
@@ -2617,7 +2642,19 @@ export class Store {
     // from: the platform's and the app's own together, where `/vocab` is the
     // app's alone. A page's @yaks/client loads them, so it routes and admits
     // what this store does and never declares a word again (T-40511).
-    if (path == '/vocab.json') return Response.json(this.#vocab.docs)
+    if (path == '/vocab.json') {
+      let speaks = spoken(request).speaks
+      return Response.json(
+        speaks
+          ? compile(
+            lensesIn([
+              lensDocAt(this.#name() ?? '', meant(this.#get('vocab'))),
+            ]),
+            speaks,
+          ).schema(this.#vocab.docs)
+          : this.#vocab.docs,
+      )
+    }
     // The three slots beside the vocabulary: the words this app uses but does
     // not home (T-32728), the tools it declares (T-32685), and what the object
     // weighs. None is graph data — a declaration holds no rows and a byte count
