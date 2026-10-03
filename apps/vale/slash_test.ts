@@ -7,7 +7,9 @@ import { slash as parse, type Tools } from './slash.ts'
 import words from './vocab.json' with { type: 'json' }
 
 let all = Object.fromEntries(
-  Object.entries(words.$defs).filter(([, def]) => 'tool' in def && def.tool),
+  Object.entries(words.$defs).flatMap(([name, def]) =>
+    'tool' in def && def.tool ? [[name, def]] : []
+  ),
 )
 let slash = (text: string) => parse(text, all)
 

@@ -22,7 +22,9 @@ import words from './vocab.json' with { type: 'json' }
 seedDesigns()
 
 let tools: Tools = Object.fromEntries(
-  Object.entries(words.$defs).filter(([, def]) => 'tool' in def && def.tool),
+  Object.entries(words.$defs).flatMap(([name, def]) =>
+    'tool' in def && def.tool ? [[name, def]] : []
+  ),
 )
 let vocab = loadVocab([{
   $defs: {
