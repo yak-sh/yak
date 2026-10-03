@@ -2,7 +2,7 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import type { Bundle, Storage } from '@yaks/graph'
+import type { Actor, Bundle, Comp, Storage } from '@yaks/graph'
 import { isPromise } from '@yaks/fp'
 import { Denied } from './deny.ts'
 import { Paced } from './pace.ts'
@@ -163,10 +163,13 @@ test('an empty batch is nobody’s business', () => {
 // ---- an open thing: new rows, and your own ---------------------------------
 
 // One change by one principal, as the guarded graph takes it.
-let as = (s: Storage, who: string | null, b: Bundle, floors?: Floors) =>
+let as = (s: Storage, who: string | Actor | null, b: Bundle, floors?: Floors) =>
   sync(
     guarded(s, ids.list, floors).apply([
-      { ...b, ...(who ? { $actor: { by: who } } : {}) },
+      {
+        ...b,
+        ...(who ? { $actor: typeof who == 'string' ? { by: who } : who } : {}),
+      },
     ]),
   )
 
@@ -208,6 +211,77 @@ test('an anonymous row is nobody’s, and saying it again is no change', () => {
   as(s, null, { entity: { eid: 'anon' }, pick: { title: 'Hi' } })
   as(s, null, { entity: { eid: 'anon' }, pick: { title: 'Hi' } })
   denied(() => as(s, null, { entity: { eid: 'anon' }, pick: { title: 'Yo' } }))
+})
+
+test('a guest changes and deletes only rows made through its via', () => {
+  let s = opened()
+  let guest = { via: 'browser' }
+  as(s, guest, { entity: { eid: 'guest' }, pick: { title: 'One' } })
+  as(s, guest, { entity: { eid: 'guest' }, pick: { title: 'Two' } })
+  assertEquals(titleOf(s, 'guest'), 'Two')
+  let row = (s.read('.entity.eid=guest') as Bundle[])[0]
+  for (let name of ['created', 'updated']) {
+    let stamp = row[name] as Comp
+    assertEquals(stamp?.by, undefined)
+    assertEquals(stamp?.via, guest.via)
+  }
+  for (let other of [null, { via: 'other-browser' }, { by: 'browser' }]) {
+    denied(() =>
+      as(s, other, { entity: { eid: 'guest' }, pick: { title: 'x' } })
+    )
+    denied(() => as(s, other, { entity: { eid: 'guest' }, pick: null }))
+    denied(() => as(s, other, { entity: { eid: 'guest' }, $delete: true }))
+  }
+  as(s, guest, { entity: { eid: 'guest' }, pick: null })
+  assertEquals(titleOf(s, 'guest'), undefined)
+  as(s, guest, { entity: { eid: 'guest' }, $delete: true })
+  assertEquals(s.read('.entity.eid=guest'), [])
+})
+
+test('a signed-in row belongs to its by even when a guest has its via', () => {
+  let s = opened()
+  as(s, { by: ids.kim, via: 'browser' }, {
+    entity: { eid: 'signed' },
+    pick: { title: 'One' },
+  })
+  for (let other of [{ via: 'browser' }, { by: ids.mo, via: 'browser' }]) {
+    denied(() =>
+      as(s, other, { entity: { eid: 'signed' }, pick: { title: 'x' } })
+    )
+    denied(() => as(s, other, { entity: { eid: 'signed' }, $delete: true }))
+  }
+  as(s, { by: ids.kim, via: 'another-browser' }, {
+    entity: { eid: 'signed' },
+    pick: { title: 'Two' },
+  })
+  assertEquals(titleOf(s, 'signed'), 'Two')
+})
+
+test('a guest via supplies no person identity or permission', () => {
+  let s = opened()
+  let guest = { via: ids.dana }
+  denied(() =>
+    as(s, guest, {
+      entity: { eid: ids.dana },
+      person: { name: 'Someone else' },
+    })
+  )
+  denied(() =>
+    as(s, guest, {
+      entity: { eid: 'seat' },
+      member: { space: ids.club, person: ids.kim, role: 'owner' },
+    })
+  )
+  denied(() =>
+    as(s, guest, {
+      entity: { eid: 'chat' },
+      line: { text: 'Requires a person' },
+    })
+  )
+  setMode(s, ids.list, 'private')
+  denied(() =>
+    as(s, guest, { entity: { eid: 'private' }, pick: { title: 'x' } })
+  )
 })
 
 test('an editor changes anyone’s row on an open thing', () => {

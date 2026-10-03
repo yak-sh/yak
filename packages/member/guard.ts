@@ -29,9 +29,10 @@
 // everyone else's out of sight.
 //
 // A row is the principal's own when its `created.by` names them, or when it is
-// them. An anonymous principal owns nothing, so it only adds. A change that
-// changes nothing — every property it names already holds that value — is
-// nobody's business, which is what lets the same bytes be uploaded twice.
+// them. Without a `created.by`, a row belongs to the `created.via` that made
+// it. A caller with neither identity owns nothing, so it only adds. A change
+// that changes nothing — every property it names already holds that value —
+// is nobody's business, which lets the same bytes be uploaded twice.
 //
 // The principal is whatever `$actor` the changes carry. An HTTP layer replaces
 // that field with the identity it authenticated before calling `apply()`
@@ -41,7 +42,7 @@
 
 import type { Ask, Bundle, Comp, Eid, Hook, Tx } from '@yaks/graph'
 import { after } from '@yaks/fp'
-import { comps, dead } from '@yaks/graph'
+import { actorOf as writerOf, comps, dead } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { GOVERNED, GRANT, MEMBER } from './comp.ts'
 import { levelOn, modeOn, type Viewer, type Where } from './policy.ts'
@@ -102,10 +103,13 @@ let short = (
   }
 }
 
-// Theirs: they wrote it, or it is them.
-let mine = (row: Bundle, who: Viewer) =>
-  !!who &&
-  (row.entity.eid == who || (row.created as Comp | undefined)?.by == who)
+// Theirs: the person owns their entity and bylined rows; an unbylined row
+// belongs only to the instrument that made it.
+let mine = (row: Bundle, who: Viewer, via: Eid | undefined) => {
+  let created = row.created as Comp | undefined
+  return !!who && row.entity.eid == who ||
+    (created?.by ? created.by == who : !!via && created?.via == via)
+}
 
 // Nothing this bundle says differs from the row it names.
 let idle = (b: Bundle, row: Bundle) =>
@@ -116,12 +120,18 @@ let idle = (b: Bundle, row: Bundle) =>
   })
 
 // A principal the mode admits and no level does: new rows, and its own.
-let adding = (tx: Tx, who: Viewer, app: Eid, bundles: Bundle[]) =>
+let adding = (
+  tx: Tx,
+  who: Viewer,
+  app: Eid,
+  bundles: Bundle[],
+  via: Eid | undefined,
+) =>
   after(tx.get([...new Set(bundles.map((b) => b.entity.eid))]), (rows) => {
     let held = new Map(rows.map((r) => [r.entity.eid, r]))
     for (let b of bundles) {
       let row = held.get(b.entity.eid)
-      if (row && !mine(row, who) && !idle(b, row)) {
+      if (row && !mine(row, who, via) && !idle(b, row)) {
         throw new Denied(who, app, 'editor')
       }
     }
@@ -167,7 +177,9 @@ export let guarding = (where: Guard): Hook => {
             throw new Denied(who, where.app, floors[comp], 'write', comp)
           }
           return after(
-            writes(level) ? bundles : adding(tx, who, where.app, bundles),
+            writes(level)
+              ? bundles
+              : adding(tx, who, where.app, bundles, writerOf(bundles).via),
             (b) => pacing(paces, tx, who, b),
           )
         }),

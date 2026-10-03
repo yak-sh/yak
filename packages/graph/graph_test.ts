@@ -298,6 +298,120 @@ test('births are stamped created, later touches updated', () => {
   assertEquals(again.find((b) => b.created), undefined)
 })
 
+for (let async of [false, true]) {
+  test(`trusted metadata corrections preserve provenance (${async ? 'async' : 'sync'})`, async () => {
+    let vocab = loadVocab([...books.docs, {
+      $defs: Object.fromEntries(['created', 'updated'].map((name) => [name, {
+        component: true,
+        extends: true,
+        properties: {
+          via: { type: 'string', ref: 'entity', death: 'keep', stamped: true },
+        },
+      }])),
+    }])
+    let storage = memory()
+    let one = graph({ storage: async ? slow(storage) : storage, vocab })
+    let created = '2026-01-01T00:00:00.000Z'
+    let updated = '2026-01-02T00:00:00.000Z'
+    await one.apply(
+      ['birth', 'edit'].map((eid) => ({
+        entity: { eid },
+        doc: { title: eid },
+        $actor: { via: 'visitor' },
+      })),
+      { now: created },
+    )
+    await one.apply([{
+      entity: { eid: 'edit' },
+      doc: { title: 'revised' },
+      $actor: { via: 'visitor' },
+    }], { now: updated })
+    await one.apply([
+      { entity: { eid: 'birth' }, created: { by: 'ada' } },
+      {
+        entity: { eid: 'edit' },
+        created: { by: 'ada' },
+        updated: { by: 'ada' },
+      },
+    ], { trusted: true, stamp: false })
+    let rows = await one.get(['birth', 'edit'])
+    for (let row of rows) {
+      assertEquals(row.created, { at: created, by: 'ada', via: 'visitor' })
+    }
+    assertEquals(rows[0].updated, undefined)
+    assertEquals(rows[1].updated, { at: updated, by: 'ada', via: 'visitor' })
+    // The next ordinary write still records its writer and time.
+    let out = await one.apply([{
+      entity: { eid: 'birth' },
+      doc: { title: 'signed in' },
+      $actor: { by: 'ada', via: 'visitor' },
+    }], { now: updated })
+    assertEquals(at(out, 'birth', 'updated'), {
+      at: updated,
+      by: 'ada',
+      via: 'visitor',
+    })
+  })
+}
+
+test('an unstamped correction still derives, journals and observes committed data', () => {
+  let seen: string[] = []
+  let one = g([{
+    name: 'watcher',
+    rules: [{
+      name: 'shelf',
+      phase: 'stamp',
+      match: '.book, *book',
+      run: () => ({ book: { shelved: true } }),
+    }],
+    hooks: {
+      stamp: (b) => (seen.push('stamp'), b),
+      journal: (b) => (seen.push('journal'), b),
+      effect: (b, tx) => {
+        let [held] = tx.get(['b1']) as Bundle[]
+        assertEquals(held.book, { pages: 7, shelved: true })
+        seen.push('effect')
+        return b
+      },
+    },
+  }])
+  let out = sync(one.apply([{
+    entity: { eid: 'b1' },
+    book: { pages: 7 },
+    sold: {},
+  }], { trusted: true, stamp: false }))
+  assertEquals(seen, ['stamp', 'journal', 'effect'])
+  assertEquals(at(out, 'b1', 'book'), { pages: 7, shelved: true })
+  assertEquals(at(out, 'b1', 'sold'), {})
+  assertEquals(out[0].created, undefined)
+  assertEquals(out[0].updated, undefined)
+})
+
+test('unstamped corrections require trust and still validate and guard writes', () => {
+  let one = g()
+  let change = [{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }]
+  assertThrows(() => one.apply(change, { stamp: false }), Refused)
+  assertEquals(one.get(['b1']), [])
+  sync(one.apply(change))
+  assertThrows(
+    () =>
+      one.apply([{ entity: { eid: 'b1' }, undeclared: {} }], {
+        trusted: true,
+        stamp: false,
+      }),
+    Refused,
+  )
+  assertThrows(
+    () =>
+      one.apply([{
+        ...change[0],
+        $was: { doc: { title: token('Emma') } },
+      }], { trusted: true, stamp: false }),
+    Stale,
+  )
+  assertEquals((one.get(['b1']) as Bundle[])[0].updated, undefined)
+})
+
 test("a batch nobody signed is the graph's own, and a signed one is not", () => {
   let one = graph({
     storage: memory(),

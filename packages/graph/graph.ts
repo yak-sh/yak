@@ -93,6 +93,11 @@ export type ApplyOpts = {
   parent?: string
   /** the caller is trusted server code: server-owned properties are accepted */
   trusted?: boolean
+  /** Whether core provenance and mark rules run (default: true). Trusted
+   * server code may pass false to correct stored metadata without replacing
+   * existing provenance. Plugin rules and hooks, validation, journaling and effects
+   * still run. Refused unless `trusted` is true. */
+  stamp?: boolean
   /** the change copies rows another graph already admitted into this graph's
    * copy of them — a replica landing what its server sent. A copy holds only
    * the words it was loaded with, so a component this vocabulary does not
@@ -330,8 +335,8 @@ export let graph = (opts: Options): Graph => {
       ]),
     ])
   }
-  let ruled = (phase: Phase): Rule[] =>
-    [...stamping, ...plugins.flatMap((p) => p.rules ?? [])]
+  let ruled = (phase: Phase, stamp = true): Rule[] =>
+    [...(stamp ? stamping : []), ...plugins.flatMap((p) => p.rules ?? [])]
       .filter((r) => r.phase == phase)
 
   // The singletons a rule may bind with `#Name`: each plugin's, then this
@@ -392,6 +397,9 @@ export let graph = (opts: Options): Graph => {
     | Promise<
       Bundle[]
     > => {
+    if (o.stamp === false && !o.trusted) {
+      throw new Refused('only trusted writes may disable stamping')
+    }
     let current = tracing?.parent
     let st = state()
     let now = o.now ?? new Date().toISOString()
@@ -457,7 +465,7 @@ export let graph = (opts: Options): Graph => {
     ): Step =>
     (bundles) => {
       let steps: Step[] = core ? [core] : []
-      let rules = ruled(name)
+      let rules = ruled(name, o.stamp !== false)
       if (rules.length) {
         steps.push((b) =>
           fire(rules, {

@@ -126,16 +126,20 @@ it with the selected entities apart from the ones reached, and what each covers.
 
 `apply(change, { check: true })` runs the write phases and rolls back instead of
 committing; it returns the proposed patches, runs audit hooks, and skips
-effects. `apply(change, { replica: true })` lands rows another graph already
-admitted in a partial copy of it, leaving out the components this vocabulary
-does not declare instead of refusing them, and keeping the computed values it
-was sent, which it has no rule to derive. `g.rows(query)` returns
-adapter-specific rows for aggregates and other raw query results. `g.get(eids)`
-returns those entities whole, tombstones included, by eid rather than by query;
-`g.get(eids, comps)` returns each carrying only the components `comps` names,
-and the storage reads nothing else. A store over a shared file reads them
-without taking its write lock. `g.install()` makes the adapter ready for the
-vocabulary (its schema, where it has one).
+effects. Trusted server code may correct metadata with
+`apply(change, { trusted: true, stamp: false })`: core provenance and mark rules
+are skipped, preserving stored timestamps and attribution, while plugin rules
+and hooks, validation, journaling and effects still run. Disabling stamping is
+refused without `trusted: true`. `apply(change, { replica: true })` lands rows
+another graph already admitted in a partial copy of it, leaving out the
+components this vocabulary does not declare instead of refusing them, and
+keeping the computed values it was sent, which it has no rule to derive.
+`g.rows(query)` returns adapter-specific rows for aggregates and other raw query
+results. `g.get(eids)` returns those entities whole, tombstones included, by eid
+rather than by query; `g.get(eids, comps)` returns each carrying only the
+components `comps` names, and the storage reads nothing else. A store over a
+shared file reads them without taking its write lock. `g.install()` makes the
+adapter ready for the vocabulary (its schema, where it has one).
 
 Both methods work with synchronous and asynchronous adapters. Using `await` is
 safe either way; a synchronous adapter can also return values directly.

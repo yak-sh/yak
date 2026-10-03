@@ -72,6 +72,7 @@ let doc: VocabDoc = {
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },
         by: { type: 'string', ref: 'entity', death: 'keep', stamped: true },
+        via: { type: 'string', ref: 'entity', death: 'keep', stamped: true },
       },
     },
     updated: {
@@ -80,6 +81,7 @@ let doc: VocabDoc = {
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },
         by: { type: 'string', ref: 'entity', death: 'keep', stamped: true },
+        via: { type: 'string', ref: 'entity', death: 'keep', stamped: true },
       },
     },
   },

@@ -201,11 +201,15 @@ back.
 
 A principal that an `open` app admits and no level does (an anonymous caller, a
 viewer, a stranger signed in) may create entities, and may change or delete an
-existing entity only when its `created.by` names that principal, or when the
-entity is the principal itself. An anonymous caller owns nothing, so it only
-adds. A change that leaves every property it names as it was is admitted on any
-row, so a retried write of the same values is not refused. Owners and editors
-are not affected.
+existing entity when its `created.by` names that principal, or when the entity
+is the principal itself. A row without `created.by` belongs only to the caller
+whose `$actor.via` matches its `created.via`; a guest with only `via` may change
+and delete those rows. A matching `via` grants no permission on a row carrying
+someone else's `created.by`, and supplies no signed-in identity or permission
+level. A caller with neither `by` nor `via` owns nothing, so it only adds. A
+change that leaves every property it names as it was is admitted on any row, so
+a retried write of the same values is not refused. Owners and editors are not
+affected.
 
 Create the first owner membership before installing `members()`, as in the
 example. With the guard installed, writing the first owner membership requires
