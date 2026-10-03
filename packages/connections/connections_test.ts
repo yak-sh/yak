@@ -661,7 +661,12 @@ test('pick computes the own-address default then the oldest, and only explicit a
     })).sort((a, b) => a.created.at.localeCompare(b.created.at))
   }
   assertEquals((await pick(read, 'space', 'texts'))?.entity.eid, newer)
-  assertEquals((await pick(g.read, 'space', 'texts'))?.entity.eid, oldest)
+  let chronological = async (q: Parameters<typeof g.read>[0]) =>
+    String(q) == '.entity.eid=space&*' ? [] : await read(q)
+  assertEquals(
+    (await pick(chronological, 'space', 'texts'))?.entity.eid,
+    oldest,
+  )
   assertEquals(
     (await pick(g.read, 'space', 'texts', 'ann@two.example'))?.entity.eid,
     newer,

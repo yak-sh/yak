@@ -3,14 +3,16 @@
 
 import { Refused } from '@yaks/graph'
 import { OAuthError } from '@yaks/oauth'
-import type { MCPAuthAction, MCPAuthReply } from './mcp_auth.ts'
+import type { AuthAction, AuthReply } from './authorize.ts'
 
 export type Authorization = {
   run: (
-    action: MCPAuthAction,
+    action: AuthAction,
     name?: string,
-    callback?: string,
-  ) => Promise<MCPAuthReply>
+    callback?: string | { callback: string; session?: string },
+    as?: string,
+  ) => Promise<AuthReply>
+  returned?: (name: string) => boolean
   close: () => Promise<void>
 }
 
@@ -104,6 +106,7 @@ export let authorizeCLI = async (
   auth: Authorization,
   name?: string,
   io: AuthIO = authIO,
+  as?: string,
 ): Promise<string> => {
   try {
     if (!name) {
@@ -113,15 +116,19 @@ export let authorizeCLI = async (
         ...(listed.message ? [listed.message] : []),
       ].join('\n') || 'No connections to authorize.'
     }
-    let begun = await auth.run('begin', name)
+    let begun = await auth.run('begin', name, undefined, as)
     if (!begun.url) throw new Error('Authorization returned no link')
+    if (auth.returned?.(name)) {
+      let reply = await auth.run('complete', name, undefined, as)
+      return reply.message ?? 'Connected.'
+    }
     io.say(`Open ${begun.url}`)
     for (;;) {
       io.say('Paste the complete return URL and press Enter (input hidden):')
       let callback = await io.hidden()
       if (!callback) throw new Refused('Authorization cancelled')
       try {
-        let reply = await auth.run('complete', name, callback)
+        let reply = await auth.run('complete', name, callback, as)
         return reply.message ?? 'Connected.'
       } catch (error) {
         if (

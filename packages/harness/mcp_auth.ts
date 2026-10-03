@@ -25,7 +25,7 @@ export type MCPAuthReply = {
   message?: string
 }
 
-/** The token a server is called with: its sign-in (./signin.ts), if any. */
+/** The token a server is called with: its sign-in (@yaks/connections), if any. */
 export type Token = (s: Server) => Promise<string | undefined>
 
 export const authorizedMCP = (servers: Server[], token: Token) => {

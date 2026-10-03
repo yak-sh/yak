@@ -144,7 +144,7 @@ test('fork and spawn selecting an existing model are served by a provider that s
   }
 })
 
-test('worker authorization panel offers graph-configured OpenRouter without a model request', async () => {
+test('provider sign-ins are not MCP authorization targets', async () => {
   const { remote } = await import('./remote.ts')
   const dir = await Deno.makeTempDir()
   const path = dir + '/harness.db'
@@ -154,17 +154,7 @@ test('worker authorization panel offers graph-configured OpenRouter without a mo
   const r = await remote({ worker: worker(), config: at(path), cwd: repo() })
   try {
     const list = await r.agent.authorizeMCP!('list')
-    assert(list.servers?.includes('OpenRouter'))
-    const begun = await r.agent.authorizeMCP!(
-      'begin',
-      'OpenRouter',
-    )
-    assertEquals(new URL(begun.url!).origin, 'https://openrouter.ai')
-    assertEquals(
-      new URL(begun.url!).searchParams.get('code_challenge_method'),
-      'S256',
-    )
-    await r.agent.authorizeMCP!('cancel', 'OpenRouter')
+    assertEquals(list.servers, [])
   } finally {
     await r.close()
     await Deno.remove(dir, { recursive: true })

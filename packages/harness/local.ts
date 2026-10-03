@@ -14,14 +14,14 @@ import { responses as openrouter } from '@yaks/openrouter'
 import { responses } from '@yaks/openai'
 import { artifactStore } from '@yaks/blob'
 import type { Model } from '@yaks/model'
-import { type Bundle, identityEid } from '@yaks/graph'
+import { type Bundle } from '@yaks/graph'
 import type { ChildLimits, Step, Tool } from '@yaks/session'
 import { watchMigrations } from '@yaks/sqlite'
 import { instructionFiles } from '@yaks/context/host'
 import { render as tree } from '@yaks/preact'
 import type { VNode } from 'preact'
 import { type Agent, agent, type Opts as AgentOpts } from './agent.ts'
-import { authorize } from './authorize.ts'
+import { authorize } from './mcp_authorize.ts'
 import { openaiCredential } from './openai_auth.ts'
 import type { MCPAuthAction, MCPAuthReply } from './mcp_auth.ts'
 import { mcpTools } from './mcp.ts'
@@ -92,7 +92,6 @@ export type Opts = ChildLimits & NotHarness & {
   worktrees?: string
 }
 
-const OPENROUTER = identityEid('provider', ['openrouter'])
 const refuse = (message: string): never => {
   throw new Error(message)
 }
@@ -172,9 +171,11 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
       openrouter: openrouter({
         media: { store: artifactStore(h.artifacts) },
         key: async () =>
-          await auth.signin.key(OPENROUTER, 'openrouter') ?? refuse(
-            'OpenRouter is not connected. Press Esc then A to authorize OpenRouter.',
-          ),
+          (h.person
+            ? await auth.signin.key(h.person, 'openrouter')
+            : undefined) ?? refuse(
+              'OpenRouter is not connected. Run yak auth openrouter.',
+            ),
       }),
       ...opts.providers,
     },

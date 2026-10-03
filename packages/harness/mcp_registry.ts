@@ -1,5 +1,5 @@
 /** Graph-owned definitions; runtime handles are refreshed before discovery or
- * authorization. A server's sign-in is a connection it owns (./signin.ts),
+ * authorization. A server's sign-in is a connection it owns (@yaks/connections),
  * through an integration discovered from the server itself. */
 import type { Harness } from './store.ts'
 import { checkNamespaces, checkToolNames, type Server } from '@yaks/mcp-client'
@@ -17,7 +17,7 @@ import {
   type MCPAuthAction,
   type MCPAuthReply,
 } from './mcp_auth.ts'
-import { REDIRECT, type SignIns } from './signin.ts'
+import { REDIRECT, type SignIns } from '@yaks/connections'
 
 type Handle = ReturnType<typeof authorizedMCP>
 type Live = { signature: string; label: string; server: Server; handle: Handle }

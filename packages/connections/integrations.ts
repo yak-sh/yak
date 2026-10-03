@@ -19,6 +19,7 @@ import { type Bundle, type Eid, identityEid, type Query } from '@yaks/graph'
 import type { Scheme } from '@yaks/hook'
 import googleCalendar from './google-calendar.json' with { type: 'json' }
 import openrouter from './openrouter.json' with { type: 'json' }
+import openai from './openai.json' with { type: 'json' }
 
 export let INTEGRATION = 'integration'
 
@@ -77,6 +78,7 @@ export type Read = (query: Query) => Bundle[] | Promise<Bundle[]>
 // is.
 let SEEDS: Integration[] = [
   googleCalendar,
+  { ...openai, refresh_encoding: 'json' },
   { ...openrouter, answers: 'key' },
 ]
 

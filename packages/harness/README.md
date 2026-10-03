@@ -64,7 +64,7 @@ catalogue items are separate and count toward compaction budgets.
 | `@yaks/harness/tui`   | `views`: a lone session or entry, drawn as the terminal app                      |
 | `@yaks/harness/vocab` | `docs`, the harness's own words                                                  |
 | `@yaks/harness/tools` | `runs(host)`, the functions behind the tools `vocab.json` declares               |
-| `@yaks/harness/cli`   | `commands`, terminal controls such as `connection authorize`                     |
+| `@yaks/harness/cli`   | `commands`, the session terminal control                                         |
 
 ## Use
 
@@ -86,7 +86,6 @@ yak session list
 yak session peek <session>
 yak task list
 yak model list
-yak connection authorize
 yak auth openai
 ```
 
@@ -118,12 +117,12 @@ so Deno reuses its module cache. If a probe must move `HOME`, export the
 invoking `DENO_DIR` before moving it.
 
 Name a model with `--model`, or set `using.model` on its provider row. It is
-reached with `$OPENAI_API_KEY` or the OpenAI connection. `yak auth` lists model
-providers and MCP servers; pass a title or alias to sign in. It prints an
-authorization link and reads the complete return URL with terminal echo
-disabled. The return URL is never a command argument or transcript entry.
-`yak model list` lists names from the OpenAI endpoint reached by that
-credential.
+reached with `$OPENAI_API_KEY` or the OpenAI connection. `yak auth` belongs to
+[@yaks/connections](../connections). It lists integrations; pass a name or title
+to sign in. It prints an authorization link and reads the complete return URL
+with terminal echo disabled. The return URL is never a command argument or
+transcript entry. `yak model list` lists names from the OpenAI endpoint reached
+by that credential.
 
 ```ts
 import { compose } from '@yaks/cli/host'

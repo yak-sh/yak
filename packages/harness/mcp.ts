@@ -4,7 +4,7 @@ import { toolName } from '@yaks/graph'
 import type { Harness } from './store.ts'
 import { type Tool, type ToolContext, ToolError } from '@yaks/session'
 import { artifactStore } from '@yaks/blob'
-import type { SignIns } from './signin.ts'
+import type { SignIns } from '@yaks/connections'
 
 export const mcpTools = (
   h: Pick<Harness, 'g' | 'vault' | 'artifacts'>,

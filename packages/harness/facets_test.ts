@@ -75,7 +75,7 @@ test('connection authorization is a CLI command without a stored call', async ()
   let out: string[] = []
   await Deno.writeTextFile(path, JSON.stringify(at(':memory:')))
   try {
-    for (let words of [['connection', 'authorize'], ['auth']]) {
+    for (let words of [['auth']]) {
       let code = await cli([], {
         argv: ['--config', path, '--no-duties', ...words],
         more: localCommands,

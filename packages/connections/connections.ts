@@ -119,6 +119,8 @@ export type Resolved = { connection: Bundle; link: Bundle; sentinel: string }
 export type Given = { key: string } | {
   attempt: Attempt
   callback: string | URL
+  /** A website session obtained alongside a bot OAuth sign-in, kept only in the vault. */
+  session?: string
 }
 
 let comp = (b: Bundle | undefined, name: string): Comp =>
@@ -577,6 +579,7 @@ export let connect = async (
   }
   let tokens: Tokens = {}
   await (await signIn(c, b, tokens)).complete(given.attempt, given.callback)
+  if (given.session) Object.assign(tokens, { website_session: given.session })
   let i = await known(c.graph.read, String(comp(b, CONNECTION).integration))
   account = i
     ? await accountOf(i, tokens, c.fetch ?? fetch) ?? account

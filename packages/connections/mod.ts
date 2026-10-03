@@ -84,3 +84,13 @@ export {
   USES,
   using,
 } from './connections.ts'
+
+export {
+  type AuthAction,
+  type AuthOptions,
+  authorize,
+  type AuthReply,
+  type AuthTarget,
+  type Callback,
+} from './authorize.ts'
+export { REDIRECT, type SignIns, signins } from './signin.ts'

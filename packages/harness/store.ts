@@ -19,6 +19,8 @@ import type { Reply } from '@yaks/tools'
  * working it. */
 export type Harness = {
   path: string
+  /** The configured person whose default provider accounts serve native sessions. */
+  person?: Eid
   store: Store
   g: Graph
   fx: Effects
@@ -54,6 +56,7 @@ export let hosted = (
   let path = dbOf(host.config)
   return {
     path,
+    person: host.config.person,
     store: host.storage,
     g: host.graph,
     fx: host.fx,

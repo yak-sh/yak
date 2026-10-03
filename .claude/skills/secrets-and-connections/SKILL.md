@@ -129,7 +129,7 @@ and its `hosts` are the only hosts its credential may be sent to.
 
 - **A new service is data.** A built integration is a seed JSON
   (packages/connections/openrouter.json, google-calendar.json;
-  packages/harness/openai.json) that `install` writes into the graph; a custom
+  packages/connections/openai.json) that `install` writes into the graph; a custom
   one is made by `need` with its `hosts`. OAuth is implemented once
   (@yaks/oauth) and each provider is a row (M-39503): never a new OAuth client
   in code, and never a new environment variable per provider.
