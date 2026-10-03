@@ -104,8 +104,7 @@ test('OAuth names the account and opens admin doors without a website cookie', a
 
     // A pasted grant remains a connector/app credential, not an admin door.
     let grant = await connector(k, k.owner.cookie).answer('grant', {})
-    let held = /^yak login (\S+)/.exec(grant.text)?.[1]
-    ok(held)
+    let held = ok(/^yak login (\S+)/.exec(grant.text)?.[1])
     for (let path of ['/api/fee', '/api/move', tunnel]) {
       await status(path, { ...bearer(held), cookie: k.owner.cookie }, 403)
     }
