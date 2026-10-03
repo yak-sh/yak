@@ -215,6 +215,17 @@ let json = (
     { status },
   )
 
+// Store refusals retain their HTTP status through the page's error envelope.
+let rejection = (error: unknown) =>
+  json(
+    error instanceof Error && 'status' in error &&
+      typeof error.status == 'number'
+      ? error.status
+      : 400,
+    'refused',
+    error instanceof Error ? error.message : String(error),
+  )
+
 // An app's API is a machine door even when the address names no app. Keep
 // its missing answer in the same JSON envelope as every refusal below; the
 // human-facing HTML 404 belongs only to pages. The raw pathname is used
@@ -1045,7 +1056,7 @@ let took = async (
     await graph.apply(file.bundles, KERNEL)
   } catch (e) {
     caught(e, { request: 'POST /api/blob', space: space.slug, app: app.slug })
-    return json(400, 'refused', e instanceof Error ? e.message : String(e))
+    return rejection(e)
   }
   return Response.json({
     eid: file.sha,
@@ -1342,7 +1353,7 @@ let api = async (
         space: space.slug,
         app: app.slug,
       })
-      return json(400, 'refused', e instanceof Error ? e.message : String(e))
+      return rejection(e)
     }
   }
   // Signed out, the way through is to sign in (SAYS); signed in, it is the
@@ -1524,7 +1535,7 @@ let api = async (
       )
     } catch (e) {
       caught(e, { request: 'GET /api/query', space: space.slug, app: app.slug })
-      return json(400, 'refused', e instanceof Error ? e.message : String(e))
+      return rejection(e)
     }
   }
   // A page with only its own words listens straight to its store. A page that
@@ -1625,7 +1636,7 @@ let api = async (
         space: space.slug,
         app: app.slug,
       })
-      return json(400, 'refused', e instanceof Error ? e.message : String(e))
+      return rejection(e)
     }
   }
   // What a sandboxed page keeps in localStorage (installed.ts,

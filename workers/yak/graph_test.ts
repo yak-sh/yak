@@ -76,6 +76,7 @@ type Vouch = {
   app?: string
   access?: string
   person?: string
+  via?: string
   role?: string
   title?: string
   kernel?: boolean
@@ -86,6 +87,7 @@ let headers = (v: Vouch = {}): Record<string, string> => ({
   ...(v.app ? { 'x-yak-app': v.app } : {}),
   ...(v.access ? { 'x-yak-access': v.access } : {}),
   ...(v.person ? { 'x-yak-person': v.person } : {}),
+  ...(v.via ? { 'x-yak-via': v.via } : {}),
   ...(v.role ? { 'x-yak-role': v.role } : {}),
   ...(v.title ? { 'x-yak-title': v.title } : {}),
   ...(v.kernel ? { 'x-yak-kernel': '1' } : {}),
@@ -1198,9 +1200,9 @@ test('a visitor to an open app adds, and touches no price, order or row of the o
 // A component of the app's own may say who writes it and how often (T-40650):
 // a chat line only someone signed in says, each of them once a pace. The store
 // holds it at its own door, so every door in front of it does too.
-test('a line is said by someone signed in, once a pace each', async () => {
-  let own: Vouch = { ...owner, access: 'open' }
-  let open: Vouch = { app: APP, access: 'open' }
+test('a stored component holds its floor and a pace per entity and vouched instrument', async () => {
+  let own: Vouch = { ...owner, access: 'open', via: crypto.randomUUID() }
+  let open: Vouch = { app: APP, access: 'open', via: crypto.randomUUID() }
   let kim: Vouch = { ...open, person: 'f0000000-0000-4000-8000-000000000006' }
   let chat = (floor: string) =>
     JSON.stringify({
@@ -1213,16 +1215,22 @@ test('a line is said by someone signed in, once a pace each', async () => {
       },
     })
   let store = await cookbook(state(), chat('person'), own)
-  let said = async (v: Vouch) => {
-    let eid = crypto.randomUUID()
-    let r = await post(store, '/apply', [{ entity: { eid }, line: {} }], v)
+  let said = async (v: Vouch, eid: string, text: string) => {
+    let r = await post(
+      store,
+      '/apply',
+      [{ entity: { eid }, line: { text } }],
+      v,
+    )
     return [r.status, r.ok ? 'ok' : (await r.json()).error]
   }
-  assertEquals(await said(open), [403, 'Denied'])
-  assertEquals(await said(kim), [200, 'ok'])
-  assertEquals(await said(kim), [429, 'Paced'])
-  assertEquals(await said(own), [200, 'ok'])
-  assertEquals(await said(own), [429, 'Paced'])
+  let first = crypto.randomUUID(), second = crypto.randomUUID()
+  assertEquals(await said(open, first, 'Guest'), [403, 'Denied'])
+  assertEquals(await said(kim, first, 'First'), [200, 'ok'])
+  assertEquals(await said(kim, second, 'Second'), [200, 'ok'])
+  assertEquals(await said(kim, first, 'Too soon'), [429, 'Paced'])
+  assertEquals(await said(own, first, 'Owner edit'), [200, 'ok'])
+  assertEquals(await said(own, first, 'Owner again'), [429, 'Paced'])
   let r = await post(store, '/vocab', chat('admin'), own)
   assertStringIncludes((await r.json()).message, 'line is floored "admin"')
 })
