@@ -14,6 +14,7 @@ import {
   type Keywords,
   loadVocab,
   metaDoc,
+  saveOf,
   toBundles,
   type VocabDoc,
 } from './mod.ts'
@@ -103,6 +104,25 @@ test('a vocabulary loads back from its bundles as it was', () => {
     facts(load(fromBundles(bundlesOf(docs, plain)))),
     facts(load(docs)),
   )
+})
+
+test('a saved peer-relayed declaration survives a vocabulary bundle roundtrip', () => {
+  let doc: VocabDoc = {
+    $defs: {
+      position: {
+        component: true,
+        sync: 'peers',
+        durable: 'forever',
+        pace: '100ms',
+        save: '30s',
+        properties: { x: { type: 'number' } },
+      },
+    },
+  }
+  let back = load(fromBundles(toBundles(doc, plain)))
+  assertEquals(facts(back), facts(load([doc])))
+  assertEquals(back.def('position')?.save, '30s')
+  assertEquals(saveOf(back, 'position'), 30_000)
 })
 
 test('the rungs another package adds to a status ladder survive', () => {

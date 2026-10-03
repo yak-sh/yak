@@ -125,6 +125,9 @@ export type CompInfo = {
    * milliseconds; `null` takes every write as it is made (lifetime.ts
    * `paced`) */
   pace: number | null
+  /** how often the server stores a peer-relayed entity's latest value, in
+   * milliseconds; `null` means no saving */
+  save: number | null
   /** the text an entity carrying this component is found by, as `comp.prop`
    * names of another component's properties — the component's `search` list,
    * [] for most (@yaks/fts indexes it, @yaks/embedding embeds it) */
@@ -256,10 +259,11 @@ export type PropSchema = {
   /** Bounds over numeric expressions evaluated against the complete row. */
   constraints?: NumericConstraint[]
   // On a component: who is told about a write, how long the value lives, and
-  // how often a writer's value is taken (lifetime.ts).
+  // how often a writer's value is taken or a relayed value saved (lifetime.ts).
   sync?: string
   durable?: string
   pace?: string
+  save?: string
   // On a property, true = this text property is full-text indexed (@yaks/fts
   // reads it). On a component, the `comp.prop` names of the text its entities
   // are found by.

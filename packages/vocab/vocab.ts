@@ -26,7 +26,7 @@ import type {
   VocabDoc,
 } from './types.ts'
 import type { Keywords } from './keywords.ts'
-import { kept, paced, said, type Sync } from './lifetime.ts'
+import { kept, paced, said, saved, type Sync } from './lifetime.ts'
 import { kindOrder as deriveKindOrder } from './order.ts'
 import { appended, ladderOf, statusProp } from './status.ts'
 
@@ -562,6 +562,12 @@ export let durableOf = (v: Vocab, comp: string): string =>
 export let paceOf = (v: Vocab, comp: string): number | null =>
   v.comp(comp)?.pace ?? null
 
+/** How often the server stores a peer-relayed entity's latest value, in
+ * milliseconds — `null` for a component that declares no save interval, or
+ * that this vocabulary does not know. */
+export let saveOf = (v: Vocab, comp: string): number | null =>
+  v.comp(comp)?.save ?? null
+
 export let loadVocab = (
   input: VocabDoc | VocabDoc[],
   keywords: Keywords[] = [],
@@ -694,6 +700,7 @@ export let loadVocab = (
       sync: said(d.sync),
       durable: kept(d.durable),
       pace: paced(d.pace),
+      save: saved(d.save),
       search: lists[name],
       ...(ladders[name] ? { ladder: ladders[name] } : {}),
       keywords: carried(d, compWords),

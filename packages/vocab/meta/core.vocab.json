@@ -55,7 +55,7 @@
       ]
     },
     "sync": {
-      "description": "Who is told about a write to this component. \"server\" (the default) sends it to the server, which owns it and fans it out to subscribers; \"none\" keeps it on the writing node; \"peers\" sends it to the server, which relays it to subscribers without storing it.",
+      "description": "Who is told about a write to this component. \"server\" (the default) sends it to the server, which owns it and fans it out to subscribers; \"none\" keeps it on the writing node; \"peers\" sends it to the server, which relays it to subscribers and stores its latest value only when `save` is declared.",
       "enum": [
         "none",
         "server",
@@ -71,6 +71,12 @@
     "pace": {
       "description": "How often a writer's value of this component is taken, as a duration (\"100ms\", \"1s\"). Relayed (\"sync\": \"peers\"), the writer's own graph takes every write at once and the peers hear the latest value at most once a pace, the last one always, and a clear at once. Stored (\"sync\": \"server\"), a store takes one write of it from each writer at most once a pace and refuses the rest; everyone signed out counts as one writer. Absent, every write is taken as it is made.",
       "type": "string"
+    },
+    "save": {
+      "description": "How often the server stores each entity's latest peer-relayed value, as a positive duration (\"5s\", \"30s\"). Requires \"sync\": \"peers\" and \"durable\": \"forever\". Peers still hear values at their pace; the server stores at most once a save interval and saves the last value when the writer disconnects, applying as that writer. Absent, relayed values are not saved.",
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)?(ms|s|m|h|d)$",
+      "not": { "pattern": "^0+(\\.0+)?(ms|s|m|h|d)$" }
     },
     "computed": {
       "description": "true = derived, never stored. On a property: no column holds it, nobody writes it, a reader still sees it (a query-only rank, an aggregate, a status read off marks). On a component: no table holds it and nobody writes it; its entities are rows another package keeps, which the store reads through that package's backing (the journal's `_tx` and `_change`). Default false \u2014 what nobody declares so is stored.",

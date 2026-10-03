@@ -15,7 +15,7 @@
 
 import type { Composite, PropSchema, VocabDoc } from './types.ts'
 import { composite, jsonb, TYPES, typesOf } from './vocab.ts'
-import { lives, paced, SYNC, type Sync } from './lifetime.ts'
+import { kept, lives, paced, saved, SYNC, type Sync } from './lifetime.ts'
 import { constraintErrors } from './constraints.ts'
 
 let NAME = /^[a-z][a-z0-9_]{0,39}$/
@@ -139,11 +139,9 @@ let signed = (comp: string, s: PropSchema): string[] => {
 }
 
 // What a component declares about its own state, checked together. Each
-// keyword is legal on its own — the meta-schema already rejects an unknown
-// value — but two combinations are contradictions: a relay does not own durable
-// data, so a component cannot ask the server both to forward a value without
-// storing it and to keep it forever; and a pace is how often a value is taken
-// from a writer, so a component nobody is told about has nothing to pace.
+// keyword has its own shape, and combinations determine who takes and keeps
+// the value: a permanent peer-relayed value needs a save interval, while a
+// component nobody is told about has nothing to pace.
 let lived = (comp: string, s: PropSchema): string[] => {
   let errs: string[] = []
   if (s.sync != null && !SYNC.includes(s.sync as Sync)) {
@@ -156,9 +154,19 @@ let lived = (comp: string, s: PropSchema): string[] => {
       `${comp} is durable "${s.durable}" — say "forever", "connection", or a duration such as "5s" or "2m"`,
     )
   }
-  if (s.sync == 'peers' && s.durable == 'forever') {
+  if (s.sync == 'peers' && s.durable == 'forever' && s.save == null) {
     errs.push(
-      `${comp} syncs to peers and is durable forever — a relay hands a value on without owning it, so it has nowhere to keep one; say "connection" or a duration, or sync to the server`,
+      `${comp} syncs to peers and is durable forever — declare save so the server keeps its latest value, or say "connection" or a duration`,
+    )
+  }
+  if (s.save != null && !saved(s.save)) {
+    errs.push(
+      `${comp} saves "${s.save}" — say a positive duration such as "5s" or "30s"`,
+    )
+  }
+  if (s.save != null && (s.sync != 'peers' || kept(s.durable) != 'forever')) {
+    errs.push(
+      `${comp} declares save — saving requires sync "peers" and durable "forever"`,
     )
   }
   if (s.pace != null && !paced(s.pace)) {

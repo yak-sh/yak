@@ -79,3 +79,19 @@ test('a property declares its type, and a JSON one may declare its shape', () =>
   assert(prop({ enum: ['a'] }).length)
   assert(prop({ type: 'null' }).length)
 })
+
+test('the meta-schema admits save only for permanent peer-relayed values', () => {
+  let peers = { component: true, type: 'object', sync: 'peers', save: '30s' }
+  assertEquals(ok(peers), [])
+  assertEquals(ok({ ...peers, durable: 'forever', pace: '100ms' }), [])
+  assertEquals(ok({ ...peers, save: '0.005s' }), [])
+  for (let save of ['0s', '0.0ms', '-1s', 'forever', 'often']) {
+    assert(ok({ ...peers, save }).length)
+  }
+  for (let sync of [undefined, 'none', 'server']) {
+    assert(ok({ ...peers, sync }).length)
+  }
+  for (let durable of ['connection', '5s']) {
+    assert(ok({ ...peers, durable }).length)
+  }
+})

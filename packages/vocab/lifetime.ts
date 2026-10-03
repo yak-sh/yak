@@ -9,6 +9,8 @@
 //            relayed value at most once a pace (@yaks/sync pace.ts), and a
 //            store takes a stored one from each writer at most once a pace,
 //            refusing the rest (@yaks/member's guard)
+//   save     how often the server stores a relayed entity's latest value,
+//            keeping the last value when its writer disconnects
 //
 // `sync` and `durable` are independent. A cursor position is `sync: peers,
 // durable: connection` — everybody watching sees it, nobody stores it, and it
@@ -70,3 +72,10 @@ export let lives = (durable: string): boolean =>
  * none a clock can count, and every write is taken as it is made. */
 export let paced = (pace: unknown): number | null =>
   typeof pace == 'string' ? ms(pace) || null : null
+
+/** A `save` interval in milliseconds — `null` when no positive, finite
+ * duration is declared, so peer-relayed values are not saved. */
+export let saved = (save: unknown): number | null => {
+  let span = typeof save == 'string' ? ms(save) : null
+  return span != null && span > 0 && Number.isFinite(span) ? span : null
+}

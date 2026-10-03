@@ -291,6 +291,11 @@
           "type": "string",
           "pattern": "^[0-9]+(\\.[0-9]+)?(ms|s|m|h|d)$"
         },
+        "save": {
+          "type": "string",
+          "pattern": "^[0-9]+(\\.[0-9]+)?(ms|s|m|h|d)$",
+          "not": { "pattern": "^0+(\\.0+)?(ms|s|m|h|d)$" }
+        },
         "search": {
           "type": "array",
           "items": {
@@ -326,6 +331,18 @@
       "additionalProperties": false,
       "required": [
         "component"
+      ],
+      "allOf": [
+        {
+          "if": { "required": ["save"] },
+          "then": {
+            "required": ["sync"],
+            "properties": {
+              "sync": { "const": "peers" },
+              "durable": { "const": "forever" }
+            }
+          }
+        }
       ]
     },
     "score": {

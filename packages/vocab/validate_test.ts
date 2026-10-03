@@ -225,7 +225,7 @@ test('storable admits a literal or clock default and refuses the rest', () => {
   ])
 })
 
-test('a relay owns nothing, so it cannot keep a value forever', () => {
+test('a relay keeps a value forever only when the server saves it', () => {
   let one = (comp: PropSchema) => storable(doc({ presence: comp }))
   assertEquals(
     one({ type: 'object', sync: 'peers', durable: 'connection' }),
@@ -234,7 +234,7 @@ test('a relay owns nothing, so it cannot keep a value forever', () => {
   assertEquals(one({ type: 'object', sync: 'peers', durable: '5s' }), [])
   assertEquals(one({ type: 'object', sync: 'none', durable: '250ms' }), [])
   assertEquals(one({ type: 'object', sync: 'peers', durable: 'forever' }), [
-    'presence syncs to peers and is durable forever — a relay hands a value on without owning it, so it has nowhere to keep one; say "connection" or a duration, or sync to the server',
+    'presence syncs to peers and is durable forever — declare save so the server keeps its latest value, or say "connection" or a duration',
   ])
   assertEquals(one({ type: 'object', sync: 'everyone' }), [
     'presence syncs "everyone" — a component syncs to none, server, peers',
@@ -242,6 +242,33 @@ test('a relay owns nothing, so it cannot keep a value forever', () => {
   assertEquals(one({ type: 'object', sync: 'peers', durable: 'a while' }), [
     'presence is durable "a while" — say "forever", "connection", or a duration such as "5s" or "2m"',
   ])
+})
+
+test('save is a positive duration for a permanent peer-relayed component', () => {
+  let one = (comp: PropSchema) => storable(doc({ presence: comp }))
+  let peers = { type: 'object', sync: 'peers', durable: 'forever' }
+  assertEquals(one({ ...peers, pace: '100ms', save: '30s' }), [])
+  assertEquals(one({ type: 'object', sync: 'peers', save: '0.5s' }), [])
+  for (
+    let save of ['0s', '0.0ms', '-5s', 'soon', 'forever', '9'.repeat(400) + 's']
+  ) {
+    assertEquals(one({ ...peers, save }), [
+      `presence saves "${save}" — say a positive duration such as "5s" or "30s"`,
+    ])
+  }
+  for (
+    let comp of [
+      { type: 'object' },
+      { type: 'object', sync: 'server' },
+      { type: 'object', sync: 'none' },
+      { ...peers, durable: 'connection' },
+      { ...peers, durable: '5s' },
+    ]
+  ) {
+    assertEquals(one({ ...comp, save: '30s' }), [
+      'presence declares save — saving requires sync "peers" and durable "forever"',
+    ])
+  }
 })
 
 test('a pace is how often a value is taken, so what nobody takes has none', () => {

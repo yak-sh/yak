@@ -1,4 +1,4 @@
-// The two words a component says about its own state, read off a declaration.
+// What a component says about its own state, read off a declaration.
 
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
@@ -10,6 +10,8 @@ import {
   ms,
   paceOf,
   said,
+  saved,
+  saveOf,
   syncOf,
 } from './mod.ts'
 
@@ -20,6 +22,31 @@ test('a declaration answers with its word, or with the default', () => {
   assertEquals(said('sideways'), 'server')
   assertEquals(kept('5s'), '5s')
   assertEquals(kept(undefined), 'forever')
+})
+
+test('saved relay values expose their independent storage interval in milliseconds', () => {
+  let v = loadVocab({
+    $defs: {
+      position: {
+        component: true,
+        sync: 'peers',
+        durable: 'forever',
+        pace: '100ms',
+        save: '30s',
+        properties: { x: { type: 'number' } },
+      },
+      cursor: { component: true, sync: 'peers', durable: 'connection' },
+    },
+  })
+  assertEquals([paceOf(v, 'position'), saveOf(v, 'position')], [100, 30_000])
+  assertEquals(v.comp('position')?.save, 30_000)
+  assertEquals([saveOf(v, 'cursor'), saveOf(v, 'ghost')], [null, null])
+  assertEquals(saved('0.5s'), 500)
+  for (
+    let save of [undefined, 30, '0s', '-1s', 'forever', '9'.repeat(400) + 's']
+  ) {
+    assertEquals(saved(save), null)
+  }
 })
 
 test('a duration is milliseconds; a boundary is not a span', () => {
