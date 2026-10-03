@@ -168,7 +168,8 @@ in its attachment and restores them when needed.
 Call `wake()` before handling HTTP requests so a write that wakes the object
 also reaches existing subscribers. Restoring a subscription sends its current
 results. Forward `webSocketMessage` and `webSocketClose` to `message` and
-`close`; the adapter restores inherited sockets when processing frames as well.
+`close`, returning the latter's promise so final saves finish before the handler
+ends; the adapter restores inherited sockets when processing frames as well.
 Ordinary event-listener attachment through `@yaks/api` does not handle this
 hibernation lifecycle.
 
@@ -177,7 +178,12 @@ field, preserving other application fields. When queries exceed that limit, the
 adapter keeps them in the object's SQLite and holds their key in `subref`. The
 socket still holds its serial ACK and up to 16 temporary relay keys, so ACKs and
 relays do not write the subscription row. Closing the socket removes the row.
-The relay values themselves do not persist.
+The relay values themselves remain in memory. Components declaring `save` also
+keep a durable snapshot through the graph's `apply()`. Pass the handshake's
+authenticated writer and vocabulary versions as `accept`'s third argument; the
+attachment retains them across hibernation. Unsaved values keep a timer until
+their save is due; a quiet saved value leaves no timer. Legacy sockets reconnect
+before their first saved relay to obtain the writer's vouch.
 
 ## What the runtime is strict about
 

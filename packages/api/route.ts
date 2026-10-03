@@ -145,7 +145,10 @@ export let api = (opts: Options): Handler => {
         return no('/ws is a WebSocket endpoint', 405)
       }
       let { socket, response } = upgrade(request)
-      attach(subs, socket, opts.socketTimer, opts.socketNow, readOpts)
+      attach(subs, socket, opts.socketTimer, opts.socketNow, readOpts, {
+        actor: who,
+        speaks: readOpts?.speaks,
+      })
       return response
     }
     return no(`no route for ${path}`, 404)

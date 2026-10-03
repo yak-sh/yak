@@ -14,6 +14,7 @@ import { isPromise } from '@yaks/fp'
 import { type Bundle, coalescer, type ReadOpts } from '@yaks/graph'
 import { admission } from './admission.ts'
 import type { Frame, Sink, Subs } from './subs.ts'
+import type { PeerWriter } from './save.ts'
 
 /** The part of a WebSocket this package uses: the standard `WebSocket`
  * satisfies it, and so does a Cloudflare Worker's server-side half. */
@@ -260,8 +261,8 @@ export let sink = (
  * under its own id.
  *
  * A relay is the only write that crosses this connection, and it leaves the
- * invariant that matters standing: no durable write crosses it. Nothing in a
- * relay message is stored, and the connection it arrived on is what holds it
+ * connection it arrived on is what holds it. A component declaring `save`
+ * also stores periodic snapshots through the graph as this connection's writer
  * — which is precisely why it cannot go through `/apply`, a separate request
  * with no connection to name.
  */
@@ -272,6 +273,7 @@ export let receive = (
   now?: () => number,
   input: Incoming = decode(data),
   opts?: ReadOpts,
+  writer?: PeerWriter,
 ): void | 'close' => {
   let id = ''
   let fail = (err: unknown) => {
@@ -301,7 +303,7 @@ export let receive = (
       let verdict = gate(subs, to, now)(msg.relay)
       if (verdict == 'close') return 'close'
       if (verdict == 'skip') return
-      let out = (subs.enqueue ?? subs.relay)(to, msg.relay)
+      let out = (subs.enqueue ?? subs.relay)(to, msg.relay, writer)
       if (isPromise(out)) out.catch(fail)
       return
     }
@@ -322,6 +324,7 @@ export let attach = (
   timer?: (fn: () => void, ms: number) => void,
   now?: () => number,
   opts?: ReadOpts,
+  writer?: PeerWriter,
 ): Sink => {
   let q = queue(socket, timer, () => socket.readyState == OPEN)
   let to = q.send
@@ -345,7 +348,7 @@ export let attach = (
       msg?.acks === true &&
       (typeof msg.subscribe == 'string' || msg.subscribe === true)
     ) q.enable(msg.frames === true)
-    if (receive(subs, to, e.data, now, input, opts) == 'close') {
+    if (receive(subs, to, e.data, now, input, opts, writer) == 'close') {
       drop()
       socket.close?.(1008, 'relay flood')
     }

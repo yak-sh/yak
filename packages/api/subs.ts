@@ -60,12 +60,13 @@ import {
 } from '@yaks/graph'
 import { matcher, net, rows as matchRows } from '@yaks/match'
 import { type And, parse } from '@yaks/query'
-import { paceOf, syncOf } from '@yaks/vocab'
+import { paceOf, saveOf, syncOf } from '@yaks/vocab'
 import { published } from './publish.ts'
 import { cares, type Interest, interest } from './interest.ts'
 import { peerPlan } from './peer_query.ts'
 import { fault, type Refusal, refusal } from './refuse.ts'
 import { type Relay, relay as relaying, type Timer } from './relay.ts'
+import { type PeerWriter, saving } from './save.ts'
 
 /**
  * One push to one subscriber. `bundles` are whole entities that are now in
@@ -101,7 +102,7 @@ export type Frame = {
   gone?: Eid[]
   /**
    * `sync: peers` components being relayed: a cursor, a caret, a presence
-   * dot. Never stored, on either end. A value cleared by its writer — or by
+   * dot. Components declaring `save` also retain a stored snapshot. A value cleared by its writer — or by
    * that writer's connection closing, or by its own duration running out —
    * arrives as the component set to `null`.
    */
@@ -147,15 +148,26 @@ export type Subs = {
   /**
    * `sync: peers` components from one sink: forwarded to everyone else
    * watching those entities, and held under this sink until it closes
-   * (relay.ts). Nothing is stored or committed. Queries that read peer
+   * (relay.ts). Components declaring `save` also keep snapshots through apply.
+   * Queries that read peer
    * components update their membership against the value now held.
    */
-  relay: (sink: Sink, bundles: Bundle[]) => void | Promise<void>
+  relay: (
+    sink: Sink,
+    bundles: Bundle[],
+    writer?: PeerWriter,
+  ) => void | Promise<void>
   /** Socket inputs share one short fan-out batch across writers. Held values
    * and ownership change immediately; the returned promise follows delivery. */
-  enqueue?: (sink: Sink, bundles: Bundle[]) => void | Promise<void>
+  enqueue?: (
+    sink: Sink,
+    bundles: Bundle[],
+    writer?: PeerWriter,
+  ) => void | Promise<void>
   /** The vocabulary's cadence for a peer component, if it declares one. */
   pace?: (comp: string) => number | null
+  /** How often a peer component is saved, when it declares saving. */
+  save?: (comp: string) => number | null
   /** The keys one sink's relayed values are held under — small enough to
    * store somewhere that outlives this process's memory. */
   relaying: (sink: Sink) => string[]
@@ -441,6 +453,21 @@ export let subscriptions = (graph: Graph, opts: {
     }
     return out
   }
+  let saves = saving<Sink>(graph, (fn, ms) =>
+    (opts.timer ?? ((fn, ms) => {
+      let t = setTimeout(fn, ms)
+      return () => clearTimeout(t)
+    }))(() => {
+      let out = ordered(fn)
+      if (isPromise(out)) out.catch((err) => fault(err, 'peer saving'))
+    }, ms), (sink, err) => {
+    fault(err, 'peer saving')
+    sink({ id: '', refused: refusal(err) })
+  })
+  let saved = (bundles: Bundle[]) =>
+    bundles.some((b) =>
+      comps(b).some(([comp]) => saveOf(graph.vocab, comp) != null)
+    )
   let relays = new Map<Sink, { bundles: Bundle[]; done: Promise<void> }>()
   // A subscription let go of, by its sink closing it or by a new one under
   // its id: the network lets go of it too.
@@ -622,7 +649,41 @@ export let subscriptions = (graph: Graph, opts: {
     sub: Sub,
     bundles: Bundle[],
     { reached, covers }: Projected = answered([]),
+    initial = false,
   ): Partial<Frame> => {
+    // Current held values outrun saved snapshots. New replicas initialize
+    // from the saved value; subsequent updates carry the live one when held.
+    if (!initial) {
+      let latest = (b: Bundle) => {
+        let out = { ...b }
+        let held = peers.values([b.entity.eid])[0]
+        for (let [comp, patch] of held ? comps(held) : []) {
+          if (saveOf(graph.vocab, comp) != null) out[comp] = patch
+        }
+        return out
+      }
+      bundles = bundles.map((b) => sub.cut(latest(b)))
+      reached = reached.map((b) => {
+        let out = latest(b), coverage = covers.get(b.entity.eid)
+        if (!coverage) return b
+        return {
+          entity: out.entity,
+          ...Object.fromEntries(
+            Object.entries(coverage).flatMap(([comp, props]) => {
+              let value = out[comp] as Record<string, unknown> | undefined
+              return value
+                ? [[
+                  comp,
+                  Object.fromEntries(
+                    props.filter((p) => p in value).map((p) => [p, value[p]]),
+                  ),
+                ]]
+                : []
+            }),
+          ),
+        }
+      })
+    }
     let p = sub.plan
     if (!p) return { bundles }
     let own = { bundles, coverage: covering(bundles, () => p.own) }
@@ -719,7 +780,7 @@ export let subscriptions = (graph: Graph, opts: {
             let now = peers.snapshot(sink, (eid) => sub.members.has(eid))
             return sub.send({
               id,
-              ...framed(sub, bundles, answer),
+              ...framed(sub, bundles, answer, true),
               transientReset: bundles.map((b) => b.entity.eid),
               ...snapshots.length ? { transient: snapshots } : {},
               ...now.length ? { relay: now } : {},
@@ -910,14 +971,17 @@ export let subscriptions = (graph: Graph, opts: {
     return after(graph.get(touched, names, { native: true }), (now) => {
       let changed = new Map(now.map((b) => [b.entity.eid, b]))
       for (let eid of touched) {
-        if (peerRows.has(eid)) peerRows.set(eid, changed.get(eid) ?? null)
+        if (peerRows.has(eid)) {
+          let row = changed.get(eid)
+          peerRows.set(eid, row ? stored(row) : null)
+        }
       }
       if (!queries.length) return
       let touch = touches(applied, now)
       let routing = new Map([
         ...route(now, touched, durableNet),
         ...route(
-          overlay(now, peers.values(touched)),
+          overlay(now.map(stored), peers.values(touched)),
           touched,
           peerNet,
         ),
@@ -1013,7 +1077,7 @@ export let subscriptions = (graph: Graph, opts: {
         // already heard the patch from cast(); only new members need a
         // full stored bundle and the held relay from hail().
         if (joined || !joinsOnly) {
-          of(s).bundles.push(s.cut(stored(b)))
+          of(s).bundles.push(s.cut(s.peer ? stored(b) : b))
         }
       }
     }
@@ -1074,7 +1138,7 @@ export let subscriptions = (graph: Graph, opts: {
     let collect = () => ids.flatMap((eid) => peerRows.get(eid) ?? [])
     if (!missing.length) return collect()
     return after(graph.get(missing, undefined, { native: true }), (rows) => {
-      let found = new Map(rows.map((b) => [b.entity.eid, b]))
+      let found = new Map(rows.map((b) => [b.entity.eid, stored(b)]))
       for (let eid of missing) peerRows.set(eid, found.get(eid) ?? null)
       return collect()
     })
@@ -1085,13 +1149,20 @@ export let subscriptions = (graph: Graph, opts: {
     scoped?: Bundle[] | Promise<Bundle[]>,
   ): Bundle[] | Promise<Bundle[]> => {
     let candidates = scope
-      ? scoped ?? graph.get([...scope], undefined, { native: true })
+      ? scoped ??
+        after(
+          graph.get([...scope], undefined, { native: true }),
+          (rows) => rows.map(stored),
+        )
       : sub.candidates ??
         (sub.candidates = sub.durable
-          ? graph.read(sub.durable, {
-            durable: true,
-            native: !!sub.ast || graph.rewrites(),
-          })
+          ? after(
+            graph.read(sub.durable, {
+              durable: true,
+              native: !!sub.ast || graph.rewrites(),
+            }),
+            (rows) => rows.map(stored),
+          )
           : [])
     if (scope) {
       return after(candidates, (rows) => {
@@ -1376,7 +1447,7 @@ export let subscriptions = (graph: Graph, opts: {
       next.reject(err)
     }
   }
-  let enqueue = (sink: Sink, bundles: Bundle[]) => {
+  let enqueue = (sink: Sink, bundles: Bundle[], writer?: PeerWriter) => {
     let accepted = bare(bundles)
     let stage = () => {
       let rows = peers.write(sink, accepted)
@@ -1411,7 +1482,14 @@ export let subscriptions = (graph: Graph, opts: {
     }
     // The fan-out promise must not lock the registry while its batch is
     // gathering more inputs. Flush orders delivery after storage work.
-    return stage()
+    if (!saved(accepted)) return stage()
+    let delivery: void | Promise<void>
+    let out = ordered(() =>
+      after(saves.write(sink, accepted, writer), () => {
+        delivery = stage()
+      })
+    )
+    return after(out, () => delivery)
   }
   return {
     snapshot: (query, readOpts) => {
@@ -1471,16 +1549,26 @@ export let subscriptions = (graph: Graph, opts: {
         held.delete(sink)
         // Every value this connection was relaying stops being true when the
         // connection goes.
-        let off = peers.drop(sink)
-        if (off.length) return peerChange(off)
+        return after(saves.drop(sink), () => {
+          let off = peers.drop(sink)
+          if (off.length) return peerChange(off)
+        })
       })
     },
     commit,
-    relay: (sink, bundles) => {
+    relay: (sink, bundles, writer) => {
       flushPeers()
       // Admit before queueing, so even a patch superseded while waiting still
       // gets the same refusal as one sent without a backlog.
       let accepted = bare(bundles)
+      if (saved(accepted)) {
+        return ordered(() =>
+          after(saves.write(sink, accepted, writer), () => {
+            let out = peers.write(sink, accepted)
+            return peerChange(out, sink)
+          })
+        )
+      }
       let waiting = relays.get(sink)
       if (waiting) {
         waiting.bundles = coalesced([...waiting.bundles, ...accepted])
@@ -1502,5 +1590,6 @@ export let subscriptions = (graph: Graph, opts: {
     relaying: (sink) => peers.holds(sink),
     relayed: (sink, keys) => peers.adopt(sink, keys),
     pace: (comp) => peerComp(comp) ? paceOf(graph.vocab, comp) : null,
+    save: (comp) => saveOf(graph.vocab, comp),
   }
 }

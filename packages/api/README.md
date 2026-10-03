@@ -56,7 +56,9 @@ curl -G http://localhost:8000/query \
 `GET /query?live=1&q=…` answers the same filter against stored bundles and
 values currently held by connected peers. A relayed value disappears when its
 connection closes or its declared duration expires. The ordinary `/query`
-continues to read durable data only.
+continues to read durable data only, including the latest saved peer value. Live
+peer predicates use the values connected writers hold, so a saved value does not
+count as presence after its writer disconnects.
 
 The `/apply` result contains the patches and what the graph generated, including
 assigned entity numbers, timestamps, and cascading deletions where the graph is
@@ -258,14 +260,30 @@ nonpersistent property updates from the graph; their frame type is defined by
 
 Durable writes use HTTP `/apply`. Socket `relay` messages carry components
 marked `sync: peers`, such as cursor position or typing status. They are
-validated and forwarded to other subscribers watching those entities without
-entering storage. Raw subscribers receive all relays. An entity that joins a
-subscription's set arrives with the values peers are already relaying for it, as
-a subscription that opens does. The relay holds one value per entity and
-component, under the connection that last wrote it, and never sends a connection
-what it holds itself. Values clear when a writer clears them, the connection
-holding them closes, or the vocabulary's duration, such as `durable: "5s"`,
-expires; a clear is sent as a component set to `null`.
+validated and forwarded to other subscribers watching those entities. Without
+`save`, they stay outside storage. Raw subscribers receive all relays. An entity
+that joins a subscription's set arrives with the values peers are already
+relaying for it, as a subscription that opens does. The relay holds one value
+per entity and component, under the connection that last wrote it, and never
+sends a connection what it holds itself. Values clear when a writer clears them,
+the connection holding them closes, or the vocabulary's duration, such as
+`durable: "5s"`, expires; a clear is sent as a component set to `null`.
+
+A component with `sync: peers`, `durable: forever` and `save: "30s"` also stores
+its latest value. The first accepted write saves immediately; subsequent partial
+patches merge and save at most once an interval, with any pending last value
+saved when its writer disconnects. Explicit clears remove the saved component
+immediately. Quiet values leave no save timer running. The page sends the same
+relay messages, with no extra HTTP write.
+
+Saved inputs rehearse through `graph.apply(..., {check: true})` before changing
+the held value, and each save uses ordinary `apply()` as the socket's
+authenticated actor, carrying its vocabulary versions. Admission and ownership
+therefore apply to both the input and the eventual save; the rehearsal costs a
+read/check per input, without committing it. A refused input leaves an earlier
+accepted save intact. A refusal when saving is reported to the writer.
+`Subs.relay`, `Subs.enqueue`, `receive` and `attach` accept a final optional
+`PeerWriter` for hosts that wire sockets themselves.
 
 A query may select by a relayed component, such as
 `.player&.position.region=east`. The registry tests the held peer values beside

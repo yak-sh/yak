@@ -208,8 +208,9 @@ entity it points at. A value its writer cleared, or whose writer's connection
 closed, arrives as the component set to `null`. The first frame after a
 (re)subscribe carries every value the set holds, and a peer value it leaves out
 is cleared, except what this page is saying itself: the server never tells a
-connection its own values. A stored row never carries a `sync: peers` component,
-so a snapshot leaves them alone.
+connection its own values. A peer component declaring `save` also rides stored
+snapshots, restoring its last saved value on reload. This page's own newer
+movement wins over a saved snapshot while its relay is waiting for its pace.
 
 The server holds a relayed value under the connection that last said it, so the
 plugin keeps what this page is saying and says it again on every new connection,

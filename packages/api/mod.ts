@@ -49,7 +49,8 @@
  * No durable write crosses the socket: changes are applied with
  * `POST /apply`, and the socket is how every connected client learns about
  * them. A relayed value is the one exception: it is forwarded to the other
- * subscribers and never stored.
+ * subscribers; components declaring `save` also keep periodic snapshots and
+ * their last value on disconnect, as the authenticated writer.
  *
  * @module
  */
@@ -63,6 +64,7 @@ export {
   routed,
 } from './route.ts'
 export { type Authenticate, signed } from './actor.ts'
+export type { PeerWriter } from './save.ts'
 export { ask, CHUNK, pour, poured, write, type WriteContext } from './doors.ts'
 export { published } from './publish.ts'
 export {
