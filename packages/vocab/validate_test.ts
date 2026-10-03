@@ -334,3 +334,11 @@ test('a $defs entry says what it is, or it is no table', () => {
     ],
   )
 })
+
+test('expire needs a nonempty query and stored rows', () => {
+  assertEquals(storable(doc({ item: { expire: '.item' } })), [])
+  for (let expire of ['', ' ', '7d']) {
+    assert(storable(doc({ item: { expire } })).length)
+  }
+  assert(storable(doc({ item: { computed: true, expire: '.item' } })).length)
+})

@@ -169,6 +169,14 @@ let lived = (comp: string, s: PropSchema): string[] => {
       `${comp} declares save — saving requires sync "peers" and durable "forever"`,
     )
   }
+  if (s.expire != null && !saved(s.expire)) {
+    errs.push(`${comp} expires "${s.expire}" — say a nonempty query`)
+  }
+  if (s.expire != null && s.computed === true) {
+    errs.push(
+      `${comp} declares expire — a computed component has no rows to remove`,
+    )
+  }
   if (s.pace != null && !paced(s.pace)) {
     errs.push(
       `${comp} is paced "${s.pace}" — say a duration such as "100ms" or "1s"`,

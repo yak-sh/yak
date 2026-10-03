@@ -567,6 +567,10 @@ export let paceOf = (v: Vocab, comp: string): number | null =>
 export let saveOf = (v: Vocab, comp: string): string | null =>
   v.comp(comp)?.save ?? null
 
+/** Query selecting a component's rows for expiration; absent expires nothing. */
+export let expireOf = (v: Vocab, comp: string): string | null =>
+  v.comp(comp)?.expire ?? null
+
 export let loadVocab = (
   input: VocabDoc | VocabDoc[],
   keywords: Keywords[] = [],
@@ -700,6 +704,7 @@ export let loadVocab = (
       durable: kept(d.durable),
       pace: paced(d.pace),
       save: saved(d.save),
+      expire: saved(d.expire),
       search: lists[name],
       ...(ladders[name] ? { ladder: ladders[name] } : {}),
       keywords: carried(d, compWords),

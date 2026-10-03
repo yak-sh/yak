@@ -62,7 +62,7 @@ Call `storable` separately for the checks a storage adapter needs.
 
 | Export                    | Provides                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/vocab`             | `loadVocab`, `Vocab`, declaration and loaded metadata types; `storable`, `reserved`; routing errors and messages; `kindOrder`, `pick`, `cast`, `typesOf`, `jsonb`, `composite`; `syncOf`, `durableOf`, `paceOf`, `saveOf`, `ms`, `lives`, `said`, `kept`, `paced`, `saved`, `SYNC`; `rulesIn`, `effectsIn`; `same`, `changed`; `CORE_URI`, `coreVocabulary`, `metaSchema`, `extendMeta`, `Keywords`, `JsonSchema`; `metaDoc`, `toBundles`, `fromBundles`, `Ids`, `Bundle` |
+| `@yaks/vocab`             | `loadVocab`, `Vocab`, declaration and loaded metadata types; `storable`, `reserved`; routing errors and messages; `kindOrder`, `pick`, `cast`, `typesOf`, `jsonb`, `composite`; `syncOf`, `durableOf`, `paceOf`, `saveOf`, `expireOf`, `ms`, `lives`, `said`, `kept`, `paced`, `saved`, `SYNC`; `rulesIn`, `effectsIn`; `same`, `changed`; `CORE_URI`, `coreVocabulary`, `metaSchema`, `extendMeta`, `Keywords`, `JsonSchema`; `metaDoc`, `toBundles`, `fromBundles`, `Ids`, `Bundle` |
 | `@yaks/vocab/vocab`       | `docs`, containing `metaDoc`, and the package `description`                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `@yaks/vocab/tools`       | `ToolDefinition`, `Role`, `toolDefinition`, `toolDefinitionSchema`, `toolsSaid`, `toolsIn`, `validateToolInput`, `validateToolOutput`, `toolCheck`, `Check`, `errorsText`, `publicToolSchema`, `legacyOptions`                                                                                                                                                                                                                                                            |
 | `@yaks/vocab/constraints` | `Factor`, `Term`, `Score`, `NumericConstraint`, `numberOf`, `constraintErrors`                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -108,6 +108,7 @@ Use a JSON Schema validator with it for full document validation.
 | `identity`                            | property or component | Properties from which an eid is derived                                                                        |
 | `wire`                                | component             | `false` allows clients to read but not write it                                                                |
 | `sync`, `durable`, `pace`             | component             | Who receives writes, how long values live, how often a writer's values are taken                               |
+| `expire`                              | component             | The query selecting rows of this component to remove in a generic daily sweep                                 |
 | `save`                                | component             | The query allowing the server to store a permanent peer-relayed value                                          |
 | `validate`, `tree`                    | property              | Full JSON Schema checking and flat-tree checking by a schema plugin                                            |
 | `constraints`                         | component             | Numeric bounds over the complete component                                                                     |
@@ -541,6 +542,35 @@ matches that query. A pending last value remains eligible after the writer's
 connection ends; disconnect never overrides the query. That stored write goes
 through admission as the writer, with their `via`; the page sends nothing extra.
 A relay without `save` only hands values on.
+
+### Expiration
+
+**expire** is a component's query selecting its rows to remove. A component
+that declares none expires nothing. The [effects worker](../effects/README.md)
+sweeps every declaration in the composed vocabulary on startup and daily,
+removing matching components in batches through `apply()`. Other components on
+the entity remain; the graph deletes an entity left with only `created` and
+`updated` provenance stamps.
+
+```ts
+import { expireOf, loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+let v = loadVocab({ $defs: {
+  cache: {
+    component: true,
+    expire: '.cache.at<="7d ago"',
+    properties: { at: { type: 'string', format: 'date-time' } },
+  },
+} })
+equal(expireOf(v, 'cache'), '.cache.at<="7d ago"')
+equal(expireOf(v, 'undeclared'), null)
+```
+
+`expire` is a nonempty filter query, not a duration or an aggregate. The sweep
+checks its grammar and restricts matches to entities carrying the declaring
+component, including when the query has alternatives. Computed components have
+no rows to expire.
 
 This package does not store, expire, relay, pace or save values.
 

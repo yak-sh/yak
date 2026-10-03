@@ -79,6 +79,7 @@ import type { Report, Slot } from './registry.ts'
 import type { Event, Kind } from './trace.ts'
 import type { Write } from './write.ts'
 import { HOLD, LEASE, leaseEid, sleep, take } from './lease.ts'
+import { DAY, expireDaily } from './expire.ts'
 
 /**
  * This package's components, to load beside your own when effects should be
@@ -595,6 +596,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     let present = !!opts.owner && !!g.vocab.comp(LEASE) &&
       ctx.slots().every((s) => !s.effect || !!s.run)
     let until = 0
+    let expires = 0
     try {
       while (!signal.aborted) {
         try {
@@ -605,6 +607,10 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           }
           await pass(g)
           await renew(g)
+          if (clock() >= expires) {
+            await expireDaily(g, { owner: me, now: clock, signal })
+            expires = clock() + (g.vocab.comp(LEASE) ? HOLD : DAY)
+          }
         } catch (err) {
           if (signal.aborted) break
           ctx.report(err, {

@@ -4,6 +4,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import {
   durableOf,
+  expireOf,
   kept,
   lives,
   loadVocab,
@@ -117,4 +118,21 @@ test('a component that says nothing syncs to the server, forever', () => {
       null,
     ],
   )
+})
+
+test('expire is a query for any stored component; absent expires nothing', () => {
+  let query = '.run.state=done,failed .run.at<="7d ago"'
+  let v = loadVocab({
+    $defs: {
+      run: {
+        component: true,
+        expire: query,
+        properties: { state: { type: 'string' }, at: { type: 'string' } },
+      },
+      item: { component: true },
+    },
+  })
+  assertEquals(expireOf(v, 'run'), query)
+  assertEquals(expireOf(v, 'item'), null)
+  assertEquals(expireOf(v, 'ghost'), null)
 })

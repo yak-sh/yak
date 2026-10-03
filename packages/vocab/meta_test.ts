@@ -111,3 +111,10 @@ test('the meta-schema admits save only for permanent peer-relayed values', () =>
     assert(ok({ ...peers, durable }).length)
   }
 })
+
+test('expire admits a query for a stored component, never a duration or blank', () => {
+  assertEquals(ok({ component: true, expire: '.thing.at<="7d ago"' }), [])
+  for (let expire of ['', ' ', '7d', 7, true]) {
+    assert(ok({ component: true, expire } as PropSchema).length)
+  }
+})

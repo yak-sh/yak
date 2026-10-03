@@ -79,6 +79,15 @@
       "pattern": "\\S",
       "not": { "pattern": "^\\s*[+-]?[0-9]+(\\.[0-9]+)?(ms|s|m|h|d)\\s*$" }
     },
+    "expire": {
+      "description": "The query selecting rows of this component to remove in batches. A generic daily sweep evaluates every expire declaration in the composed vocabulary. It removes this component, not the whole entity; the graph deletes an entity left with only provenance stamps.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S",
+      "not": {
+        "pattern": "^\\s*[+-]?[0-9]+(\\.[0-9]+)?(ms|s|m|h|d)\\s*$"
+      }
+    },
     "computed": {
       "description": "true = derived, never stored. On a property: no column holds it, nobody writes it, a reader still sees it (a query-only rank, an aggregate, a status read off marks). On a component: no table holds it and nobody writes it; its entities are rows another package keeps, which the store reads through that package's backing (the journal's `_tx` and `_change`). Default false \u2014 what nobody declares so is stored.",
       "type": "boolean",

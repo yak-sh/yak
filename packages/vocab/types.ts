@@ -128,6 +128,8 @@ export type CompInfo = {
   /** the query a stored entity must match before saving its peer-relayed
    * value; `null` means no saving */
   save: string | null
+  /** Query selecting rows of this component to remove; null expires nothing. */
+  expire: string | null
   /** the text an entity carrying this component is found by, as `comp.prop`
    * names of another component's properties — the component's `search` list,
    * [] for most (@yaks/fts indexes it, @yaks/embedding embeds it) */
@@ -265,6 +267,7 @@ export type PropSchema = {
   durable?: string
   pace?: string
   save?: string
+  expire?: string
   // On a property, true = this text property is full-text indexed (@yaks/fts
   // reads it). On a component, the `comp.prop` names of the text its entities
   // are found by.

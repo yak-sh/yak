@@ -261,7 +261,12 @@ test('a pass on the way through leaves the pool to a process that stays', async 
   up.abort()
   await serving
   // Its presence goes with it, and the next pass through works the pool.
-  assertEquals(await rows(cli.g, '.lease'), [])
+  assertEquals(
+    (await rows(cli.g, '.lease')).filter((r) =>
+      r.name != '@yaks/effects/expire'
+    ),
+    [],
+  )
   await cli.fx.work(cli.g)
   await cli.fx.idle()
   assertEquals(cli.ran, ['created p2'])

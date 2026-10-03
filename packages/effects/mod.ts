@@ -84,3 +84,5 @@ export * from './registry.ts'
 export * from './pool.ts'
 export * from './lease.ts'
 export * from './provisional.ts'
+
+export * from './expire.ts'

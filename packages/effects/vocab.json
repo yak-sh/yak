@@ -6,6 +6,7 @@
   "$defs": {
     "effect": {
       "component": true,
+      "expire": ".effect.state=done,failed .effect.at<=\"7d ago\"",
       "type": "object",
       "description": "one run a commit owes, written in the commit's own transaction and claimed by whichever process runs it",
       "properties": {
