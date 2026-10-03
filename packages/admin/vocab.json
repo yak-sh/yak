@@ -398,13 +398,13 @@
       "noun": "admin",
       "verb": "apply",
       "title": "Apply bundles to an app’s store",
-      "description": "Create, patch or delete rows in an app’s store as this account, through the connector’s graph_apply: the store’s rules and journal hold, and the write is recorded as the account. The space’s owner and the platform’s admin write any app’s rows; --check rehearses the change and keeps nothing.\n\n  yak admin apply yourname/vale '[{\"entity\": {\"eid\": \"<eid>\"}, \"sfx\": {\"notes\": \"chime\"}}]' --admin\n  yak admin apply jeff/recipes @fix.json --check --owner",
+      "description": "Create, patch or delete rows in an app’s store as this account, through the connector’s graph_apply: the store’s rules and journal hold, and the write is recorded as the account. The space’s owner and the platform’s admin write any app’s rows; --check rehearses the batch and keeps nothing.\n\n  yak admin apply yourname/vale '[{\"entity\": {\"eid\": \"<eid>\"}, \"sfx\": {\"notes\": \"chime\"}}]' --admin\n  yak admin apply jeff/recipes @fix.json --check --owner",
       "input": {
         "where": {
           "type": "string",
           "description": "space/app, or yak/platform"
         },
-        "change": {
+        "bundles": {
           "type": "array",
           "items": {
             "type": "object"
@@ -430,13 +430,13 @@
       },
       "required": [
         "where",
-        "change"
+        "bundles"
       ],
       "destructive": true,
       "openWorld": true,
       "positional": [
         "where",
-        "change"
+        "bundles"
       ]
     },
     "admin_upload": {

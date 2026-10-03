@@ -10,7 +10,7 @@
 // one it came from is who wrote it. A sender nobody here knows resolves to
 // nobody — never to whatever a routing fallback would have picked — and the
 // letter says so with an empty `$actor`. Saying nothing is not the same: a
-// change that names no writer is signed by the graph's owner (@yaks/graph
+// batch that names no writer is signed by the graph's owner (@yaks/graph
 // `Options.actor`), and a stranger's letter would join the journal as the
 // words of whoever runs the mailbox.
 //
@@ -141,13 +141,13 @@ async (m, arrival = {}) => {
   let reply = arrival.reply ??
     (answers ? await known(graph, answers.replace(/[<>]/g, '').trim()) : null)
   let by = await routed(graph, author(m), domain)
-  let batch = inbound(m, {
+  let bundles = inbound(m, {
     ...arrival,
     verified: arrival.verified ?? verdict(m.headers) ?? undefined,
     ...(target ? { target } : {}),
     ...(reply ? { reply } : {}),
   })
-  let letter = { ...batch[0], $actor: by ? { by } : {} }
+  let letter = { ...bundles[0], $actor: by ? { by } : {} }
   let parent = reply
     ? (await graph.read(`.entity.eid=${JSON.stringify(reply)}`))[0]
     : undefined

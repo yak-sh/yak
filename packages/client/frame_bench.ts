@@ -8,7 +8,7 @@
 // The world: a 200 × 200 floor of blocks in 16 × 16 chunks, two thousand
 // creatures with health, eight thousand items (most on the ground, some
 // carried), eight players. A frame: the local player steps, the other seven
-// arrive from the network as one change, the simulation moves two hundred
+// arrive from the network as one batch, the simulation moves two hundred
 // creatures and hurts twenty, and the frame asks what is near the player, what
 // is lying at its feet, and what it carries. Forty watches stay open, the ones
 // a game's screen keeps: every player's inventory, the roster, the living
@@ -186,7 +186,7 @@ Deno.bench(
 Deno.bench('part: one patch (the local player steps)', () => {
   c.mutate([move(me, 0.1)])
 })
-Deno.bench('part: a 200-bundle change (the simulation)', () => {
+Deno.bench('part: a 200-bundle batch (the simulation)', () => {
   tick++
   c.mutate(busy().map((eid) => move(eid, 0.05)))
 })

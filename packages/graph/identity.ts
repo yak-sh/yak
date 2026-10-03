@@ -128,10 +128,10 @@ export let identities = (vocab: Vocab): Record<string, Derive> => {
 /**
  * The other half: an id and the value it was derived from must agree.
  *
- * Run over the change the mint phase has just assigned ids to, it refuses two
+ * Run over the batch the mint phase has just assigned ids to, it refuses two
  * things nothing downstream could make true — a bundle that writes an identity
  * value onto an entity other than the one that value identifies (renaming
- * creates a new entity, it does not patch), and a bundle this change just
+ * creates a new entity, it does not patch), and a bundle this batch just
  * created that writes an identity component without the values that would have
  * identified it.
  *
@@ -143,7 +143,7 @@ export let identified = (bundles: Bundle[], vocab: Vocab): Bundle[] => {
   for (let b of bundles) {
     for (let [name, props, values] of stating(b, vocab)) {
       if (!values) {
-        // Only for an entity this change created: an id the caller supplied
+        // Only for an entity this batch created: an id the caller supplied
         // names an existing entity being patched, and a patch may write
         // whatever it likes.
         if (!b.$alias) continue

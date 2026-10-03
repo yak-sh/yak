@@ -242,8 +242,8 @@ export let core = (opts: CoreOpts): Tool[] => {
       // graph's vocabulary, and a declaration is written before there is a
       // graph.
       let input = zodInput(said)
-      let about = said.properties?.change?.description
-      input.change = about ? writes.describe(about) : writes
+      let about = said.properties?.bundles?.description
+      input.bundles = about ? writes.describe(about) : writes
       return {
         ...t,
         // The declaration's JSON Schema is dropped: a tool declares its

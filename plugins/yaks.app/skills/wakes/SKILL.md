@@ -82,7 +82,7 @@ The `match` is a filter with two extra marks:
 Everything else — `.plant`, `.wake`, `.fired` — reads the way it reads in any
 query. The rule runs inside the transaction the firing is part of, so the row
 comes back out of `apply` already carrying what the rule wrote, and a page
-watching that row sees one change and not two.
+watching that row sees one batch and not two.
 
 A rule can watch anything, not only a firing. `.invoice, .paid, +!receipt` is
 the same shape about a different moment.

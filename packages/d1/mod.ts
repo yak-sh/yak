@@ -6,7 +6,7 @@
  * is async end to end: every read and every write returns a promise. It
  * composes the yaks query → vocabulary → SQL stack over a D1 binding to
  * implement {@link https://jsr.io/@yaks/graph | @yaks/graph}'s `Storage`
- * interface — a query in, whole bundles out; a change patched into rows.
+ * interface — a query in, whole bundles out; bundles patched into rows.
  *
  * ```ts
  * import { graph } from '@yaks/graph'

@@ -536,11 +536,11 @@ export let storeQuery = async (
 
 /** Bundles applied to the app `space/app` names, as this account: created,
  * patched or deleted through the store's own rules and journal. `check`
- * rehearses it and keeps nothing. Answers the change as applied. */
+ * rehearses it and keeps nothing. Answers the batch as applied. */
 export let storeApply = (
   session: string,
   at: string,
-  change: Bundle[],
+  bundles: Bundle[],
   check = false,
 ) => {
   if (where(at).length != 2) {
@@ -548,7 +548,7 @@ export let storeApply = (
   }
   return graphed(session, 'graph_apply', {
     app: at,
-    change,
+    bundles,
     ...(check ? { check } : {}),
   })
 }

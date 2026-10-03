@@ -15,7 +15,7 @@ let fixture = () => {
   return {
     g,
     j,
-    apply: (change: Bundle[]) => sync(g.apply(change)),
+    apply: (bundles: Bundle[]) => sync(g.apply(bundles)),
     back: (seq: number, by?: string) =>
       sync(undo(g, j)(seq, by ? { by } : undefined)),
     page: (eid: string) =>

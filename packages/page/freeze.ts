@@ -50,7 +50,7 @@ export type Capture = Keep & { archive: Archive }
 let clock = () => new Date().toISOString()
 
 // The whole page as it stands after the commit: the handler reads it back from
-// storage rather than from the change that triggered it, so it sees the address
+// storage rather than from the batch that triggered it, so it sees the address
 // however the transaction that wrote it was shaped.
 let whole = (tx: ReadTx, entity: Entity) =>
   after(tx.get([entity.eid]), (found) => found[0])
@@ -60,7 +60,7 @@ let comp = (b: Bundle | undefined, name: string): Comp | undefined =>
 
 /**
  * Store one page's bytes: scrub the document of every external reference, write
- * it under its own SHA-256, and return the changes that stamp the page with
+ * it under its own SHA-256, and return the bundles that stamp the page with
  * where it went and when.
  *
  * It is given the page as it stands, because the archive's `<title>` names the

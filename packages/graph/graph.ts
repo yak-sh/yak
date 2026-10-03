@@ -9,7 +9,7 @@
 //
 // One run, in order:
 //
-//   normalize   core     every id the change names, as the eid it names
+//   normalize   core     every id the batch names, as the eid it names
 //               hooks    pure, before the transaction opens
 //   admit       core     refuse undeclared components and properties, drop the
 //                        server-owned ones, check the values
@@ -17,12 +17,12 @@
 //                        references to it
 //   prepare     hooks    idempotent external work before taking the write lock
 //   ───────────────────  the transaction opens
-//   gather      core     every read this change is going to need, in one call
+//   gather      core     every read this batch is going to need, in one call
 //   precondition core    the `$was` check   (a lease check is a hook here)
-//   rules       rules    the declarative half, over the change as an overlay
+//   rules       rules    the declarative half, over the batch as an overlay
 //   mutate      core     the patches are written
 //   cascade     core     deletions spread; the entities they take join the
-//                        change
+//                        batch
 //   stamp       core     created / updated
 //   journal     hooks    the record of what happened
 //   commit      hooks    the last chance to act inside the transaction
@@ -30,7 +30,7 @@
 //   effect      rules/hooks post-commit observers, each isolated
 //   audit       hooks    after a rollback, with the error that caused it
 //
-// `apply()` returns the change as applied plus everything it generated —
+// `apply()` returns the batch as applied plus everything it generated —
 // entities the cascade deleted, entities created with their assigned number,
 // stamps — so a client that applies the return value to its cache ends up
 // exactly where the graph is. It returns one bundle per entity
@@ -41,7 +41,7 @@
 // inside the pipeline, and what a dry run's {@link Checked} carries.
 //
 // `check: true` runs that whole list and then refuses the commit, so a caller
-// spreading one change over several graphs can ask them all "would you accept
+// spreading one batch over several graphs can ask them all "would you accept
 // this?" before any of them keeps it. That rollback is a rollback like any
 // other — the audit hooks see it, carrying a `Checked` error — so a hook that
 // wrote inside the transaction is never left believing its rows are still
@@ -98,18 +98,18 @@ export type ApplyOpts = {
    * existing provenance. Plugin rules and hooks, validation, journaling and effects
    * still run. Refused unless `trusted` is true. */
   stamp?: boolean
-  /** the change copies rows another graph already admitted into this graph's
+  /** the batch copies rows another graph already admitted into this graph's
    * copy of them — a replica landing what its server sent. A copy holds only
    * the words it was loaded with, so a component this vocabulary does not
    * declare is left out; every other write is refused for naming one. It
    * holds the values its server computed as the server sent them, since it
    * has no rule to derive them itself. */
   replica?: boolean
-  /** the timestamp every stamp in this change uses, ISO-8601 (default: now) */
+  /** the timestamp every stamp in this batch uses, ISO-8601 (default: now) */
   now?: string
   /** a dry run: every phase runs and the transaction is rolled back instead of
    * committed, so nothing is written and no effect observes it. The return
-   * value is the change the phases produced, composed like any other — a
+   * value is the batch the phases produced, composed like any other — a
    * refusal still throws, which is the whole point of asking. The audit hooks
    * see the rollback (see {@link Checked}). */
   check?: boolean
@@ -130,7 +130,7 @@ export type WriteOpts = Omit<ApplyOpts, 'trace' | 'deferEffects'>
  * How a dry run leaves a transaction that has done all its work. The phases
  * have run; the only thing left is the commit, which is exactly what a check
  * must not do — so the transaction body throws this, the adapter rolls back,
- * and `apply()` catches it and returns the change instead.
+ * and `apply()` catches it and returns the batch instead.
  *
  * It reaches the `audit` hooks, which is the whole reason it is an exported
  * class a hook can check for: a hook that wrote inside the transaction — or
@@ -139,7 +139,7 @@ export type WriteOpts = Omit<ApplyOpts, 'trace' | 'deferEffects'>
  * should ignore it: nothing was refused, and a dry run is not an incident.
  */
 export class Checked extends Error {
-  /** the change as the phases produced it, uncomposed — one patch per phase,
+  /** the batch as the phases produced it, uncomposed — one patch per phase,
    * with the `$` keys still on it. `apply()` composes it (./compose.ts) before
    * returning. */
   bundles: Bundle[]
@@ -158,11 +158,11 @@ export type Options = {
   vocab: Vocab
   /** the plugins whose hooks run in `apply()` */
   plugins?: Plugin[]
-  /** whose graph this is: the actor used to sign a change that names none.
+  /** whose graph this is: the actor used to sign a batch that names none.
    * The program's own writes — its rules, its effects, the pass it makes at
    * startup, a bulk import — arrive with nothing to attribute them to, and are
    * stored attributed to this actor rather than to nobody. An HTTP or MCP
-   * server that authenticated somebody overrides this before the change ever
+   * server that authenticated somebody overrides this before the batch ever
    * reaches `apply()` (`signed`). */
   actor?: Actor
   /** Per-entity provenance policy; the core keeps the stamp mechanism. */
@@ -186,7 +186,7 @@ export type Options = {
    * words of their own (default: that nothing this vocabulary was loaded from
    * declares it; @yaks/vocab `unknownComps`) */
   teach?: string
-  /** which declared rules run on a change (default: every one but a page's
+  /** which declared rules run on a batch (default: every one but a page's
    * own, ./declared.ts `own`). A page decides for itself, since it holds only
    * part of the graph (@yaks/client). */
   runs?: (rule: Ready, o: ApplyOpts) => boolean
@@ -290,8 +290,8 @@ export let graph = (opts: Options): Graph => {
   let derives = (): Record<string, Derive> =>
     Object.assign({}, declared, ...plugins.map((p) => p.derive ?? {}))
 
-  // Every read this change is going to need: the core's own — every entity the
-  // change names or references, which is what the `$was` check, `mutate` and
+  // Every read this batch is going to need: the core's own — every entity the
+  // batch names or references, which is what the `$was` check, `mutate` and
   // storage's own number assignment all need — plus whatever each plugin
   // declares.
   let asking = (bundles: Bundle[]): Ask[] => [
@@ -318,7 +318,7 @@ export let graph = (opts: Options): Graph => {
   let stamping = [...provenance(opts.provenance), ...marks(vocab)]
   // The declared rules, read once per apply: a plugin registered since the
   // last apply is included, and a rule that will not parse throws before the
-  // change opens a transaction.
+  // batch opens a transaction.
   //
   // Most of them come from the graph's own vocabulary, because that is where
   // an app's `vocab.json` ends up — so an app that ships a `rule: true` entry
@@ -348,7 +348,7 @@ export let graph = (opts: Options): Graph => {
       {
         Vocab: () => vocab,
         Now: () => stands({ at: now() }),
-        // A copy, so a rule cannot mutate the change's own `$actor`.
+        // A copy, so a rule cannot mutate the batch's own `$actor`.
         Actor: (tick) => {
           let who = actorOf(tick.bundles)
           return stands({ ...who }, who.by)
@@ -356,12 +356,12 @@ export let graph = (opts: Options): Graph => {
       },
     ])
 
-  // A change that names no writer is this graph's own — nobody authenticated
+  // A batch that names no writer is this graph's own — nobody authenticated
   // it because there was no request: a rule's effect, a startup pass, a bulk
   // import by the process that holds the file. It is attributed to the calling
   // program rather than to nobody, so every write has an author and the
   // journal has a name to record. A server that authenticated somebody
-  // overrides this (`signed`) before the change gets here.
+  // overrides this (`signed`) before the batch gets here.
   let owned = (bundles: Bundle[]): Bundle[] =>
     opts.actor && !bundles.some((b) => b.$actor)
       ? signed(bundles, opts.actor)
@@ -455,7 +455,7 @@ export let graph = (opts: Options): Graph => {
     // A phase: the core's own work first (it is what the rules and hooks
     // extend), then the rules evaluated together, then each hook, each seeing
     // what the one before it returned. `of` is how a rule sees what the graph
-    // already holds, beyond this change; a phase with nothing gathered leaves
+    // already holds, beyond this batch; a phase with nothing gathered leaves
     // it out.
     let phase = (
       name: Phase,
@@ -628,7 +628,7 @@ export let graph = (opts: Options): Graph => {
       let run = (tx: Tx) =>
         // Every read the phases before the write will make, taken as one call.
         // It is handed to those phases alone — a snapshot of the graph as the
-        // change found it is exactly what a precondition needs, and exactly
+        // batch found it is exactly what a precondition needs, and exactly
         // what a phase reading after the write must not have. `mutate` is one
         // of them: it reads which entities are already deleted before it
         // writes anything, and a patch made through the gathered transaction
@@ -644,7 +644,7 @@ export let graph = (opts: Options): Graph => {
           }
           let flush: Step = (b) => each(trackers, b, (out, t) => t.flush(out))
           let held = holding(tx, vocab, snap)
-          // What the graph holds for one entity, with every patch this change
+          // What the graph holds for one entity, with every patch this batch
           // has made already folded in — what a rule is evaluated against
           // (./rules.ts).
           let holds = (eid: Eid) => snap.got.get(eid) ?? undefined
@@ -653,8 +653,8 @@ export let graph = (opts: Options): Graph => {
             each(
               [
                 phase('precondition', held, (b) => guard(b, held, vocab)),
-                // The declared rules, before any row of the change is
-                // written: what they produce joins the change, and `mutate`
+                // The declared rules, before any row of the batch is
+                // written: what they produce joins the batch, and `mutate`
                 // writes it like anything else.
                 phase(
                   'rules',
@@ -716,7 +716,7 @@ export let graph = (opts: Options): Graph => {
                   births(b, st), holds),
                 flush,
                 phase('journal', tx),
-                // What was heard and never written joins the change again.
+                // What was heard and never written joins the batch again.
                 (b: Bundle[]) =>
                   st.heard.length ? rejoin(b, st.heard) : b,
                 phase('commit', tx),
@@ -777,7 +777,7 @@ export let graph = (opts: Options): Graph => {
     // `apply()` passes through, the commit and a dry run's rollback alike.
     return each(
       [
-        // Every id the change names — a bundle's own, a reference's —
+        // Every id the batch names — a bundle's own, a reference's —
         // resolved the way a read and a tool's arguments resolve theirs, so a
         // name or a `T-7` lands on the entity it names and one that names
         // nothing is refused before anything is minted under it.

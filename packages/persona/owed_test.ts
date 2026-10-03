@@ -11,7 +11,7 @@ import { voice } from './voice.ts'
 import { wear } from './worn.ts'
 import { owed, projection } from './owed.ts'
 
-let then = (g: Graph, ...batch: Bundle[]): Graph => (g.apply(batch), g)
+let then = (g: Graph, ...bundles: Bundle[]): Graph => (g.apply(bundles), g)
 
 // What the persona files write at the checkout a person keeps.
 let agentsMd = async (g: Graph) => (await personaFiles(g)).files[0].text

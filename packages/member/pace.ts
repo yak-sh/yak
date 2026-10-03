@@ -118,11 +118,11 @@ let writes = (patch: Comp | null, held: Comp | undefined) =>
   (!held || Object.entries(patch).some(([p, v]) => !same(v, held[p])))
 
 /**
- * Refuse changes sooner than the component's pace permits their via on that
+ * Refuse writes sooner than the component's pace permits their via on that
  * entity. Append the accepted clocks as server-owned patches for the graph to
- * persist with the change. Distinct entities, components and vias hold
+ * persist with the batch. Distinct entities, components and vias hold
  * independent clocks; all writers with no via share one on each component.
- * `now` is the moment the change is taken, in ms.
+ * `now` is the moment the batch is taken, in ms.
  */
 export let pacing = (
   paces: Paces,
@@ -138,12 +138,12 @@ export let pacing = (
     // A transaction writes one resulting value per component. Deletion wins,
     // and the graph swallows a patch that raced a tombstone; neither may gain
     // a clock patch that would bring a deleted entity back.
-    let changes = composed(bundles.filter((b) => {
+    let patches = composed(bundles.filter((b) => {
       let row = held.get(b.entity.eid)
       return !row || !dead(row) || !raced(b)
     }))
-    let patches: Bundle[] = []
-    for (let b of changes) {
+    let added: Bundle[] = []
+    for (let b of patches) {
       if (dead(b)) continue
       let eid = b.entity.eid
       let row = held.get(eid)
@@ -161,7 +161,7 @@ export let pacing = (
         next.push({ comp, via, at: now })
       }
       if (next) {
-        patches.push({
+        added.push({
           entity: b.entity,
           _pace: { writes: next },
           $actor: writer(eid),
@@ -169,6 +169,6 @@ export let pacing = (
         })
       }
     }
-    return patches.length ? [...bundles, ...patches] : bundles
+    return added.length ? [...bundles, ...added] : bundles
   })
 }

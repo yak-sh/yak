@@ -130,7 +130,7 @@ export type Watch = (v: Visit) => void
 /** A directory row a plugin seeds once, wearing the tags its rules match. */
 export type Wake = Bundle & { wake: Schedule }
 
-/** The change that brings the rows a plugin ships up to date in a store,
+/** The bundles that bring the rows a plugin ships up to date in a store,
  * given a read of it and which store it is: nothing where they already match
  * (@yaks/connections `install`), and nothing in a store they are not for. */
 export type Install = (

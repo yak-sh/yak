@@ -254,7 +254,7 @@ let syncRepository = async (
     }
     let reads = decisions.filter((d) => d.act == 'read' && !blocked.has(d.path))
     let pending = new Map<string, Agreed | null>()
-    let changes: Bundle[] = []
+    let bundles: Bundle[] = []
     let removedSkills = new Set<string>()
     let renamed = new Set<string>()
     let readPaths = new Set(reads.map((d) => d.path.slice(root.length + 1)))
@@ -280,13 +280,13 @@ let syncRepository = async (
           if (skill) renamed.add(skill.entity.eid)
         }
         let eid = skill?.entity.eid ?? crypto.randomUUID()
-        changes.push(guarded(skill, { entity: { eid }, ...parsed }))
+        bundles.push(guarded(skill, { entity: { eid }, ...parsed }))
         let fid = fileId(path, repository)
-        changes.push(guarded(file, {
+        bundles.push(guarded(file, {
           entity: { eid: fid },
           file: { path, repository },
         }))
-        changes.push(guarded(before.get(linkId(eid, fid)), {
+        bundles.push(guarded(before.get(linkId(eid, fid)), {
           entity: { eid: linkId(eid, fid) },
           edge: { from: eid, to: fid },
           references: {},
@@ -296,7 +296,7 @@ let syncRepository = async (
           hash: await blobOf(renderSkill(parsed)),
         })
       } else if (text != undefined) {
-        changes.push(guarded(file, {
+        bundles.push(guarded(file, {
           entity: { eid: fileId(path, repository) },
           file: { path, repository },
           content: { body: text },
@@ -307,7 +307,7 @@ let syncRepository = async (
         })
       } else {
         if (file) {
-          changes.push(guarded(file, {
+          bundles.push(guarded(file, {
             entity: file.entity,
             file: null,
             content: null,
@@ -319,7 +319,7 @@ let syncRepository = async (
             str(b, 'edge', 'to') == file?.entity.eid
           )
         ) {
-          changes.push(
+          bundles.push(
             guarded(edge, {
               entity: edge.entity,
               edge: null,
@@ -332,7 +332,7 @@ let syncRepository = async (
     }
     for (let eid of removedSkills) {
       if (!renamed.has(eid)) {
-        changes.push(guarded(before.get(eid), {
+        bundles.push(guarded(before.get(eid), {
           entity: { eid },
           skill: null,
           doc: null,
@@ -340,9 +340,9 @@ let syncRepository = async (
         }))
       }
     }
-    if (changes.length) {
+    if (bundles.length) {
       try {
-        await g.apply(changes)
+        await g.apply(bundles)
         out.read = reads.map((d) => d.path)
       } catch (e) {
         if (!(e instanceof Refused || e instanceof Stale)) throw e

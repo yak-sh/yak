@@ -98,13 +98,13 @@ test('a command line goes through the published schema and answers', async () =>
   let apply = tools.find((t) => t.name == 'graph_apply')!
   let query = tools.find((t) => t.name == 'graph_query')!
 
-  // The schema says `change` is an array, so the word on the line parses.
+  // The schema says `bundles` is an array, so the word on the line parses.
   let args = await argsFor(
     apply,
-    ['--change', '[{"entity":{"eid":"b1"},"book":{"price":12}}]'],
+    ['--bundles', '[{"entity":{"eid":"b1"},"book":{"price":12}}]'],
     reads,
   )
-  assertEquals((args.change as unknown[]).length, 1)
+  assertEquals((args.bundles as unknown[]).length, 1)
   let wrote = await ask('tools/call', { name: 'graph_apply', arguments: args })
   assertEquals(wrote.isError, undefined)
 
@@ -122,7 +122,7 @@ test('a tool that refused says so, and the words are what is printed', async () 
   await initialize(ask)
   let said = await ask('tools/call', {
     name: 'graph_apply',
-    arguments: { change: [{ book: {} }] },
+    arguments: { bundles: [{ book: {} }] },
   })
   assertEquals(said.isError, true)
   assert(saidBy(said).text.includes('"entity"'))

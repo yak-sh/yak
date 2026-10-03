@@ -225,8 +225,8 @@ export let parties = (net: Net) => {
       try {
         if (!(await net.about(to)).by) return false
         let id = group || hero
-        let change: Bundle[] = group ? [] : [step(id)]
-        change.push({
+        let bundles: Bundle[] = group ? [] : [step(id)]
+        bundles.push({
           entity: { eid: crypto.randomUUID() },
           party_invite: {
             from: hero,
@@ -235,7 +235,7 @@ export let parties = (net: Net) => {
             at: new Date(net.now()).toISOString(),
           },
         })
-        await net.client.mutate(change)
+        await net.client.mutate(bundles)
         return true
       } catch {
         return false

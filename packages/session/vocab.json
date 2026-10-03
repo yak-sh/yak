@@ -507,7 +507,7 @@
       "noun": "claim",
       "verb": "take",
       "title": "Claim an entity",
-      "description": "Reserve a stored record (entity) for an agent work session so another session cannot claim it. This reservation is a claim or lease: writing one over another session’s claim fails the whole batch, so release first. The same session claiming again is a no-op refresh. Returns the applied changes as bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
+      "description": "Reserve a stored record (entity) for an agent work session so another session cannot claim it. This reservation is a claim or lease: writing one over another session’s claim fails the whole batch, so release first. The same session claiming again is a no-op refresh. Returns the applied bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
       "input": {
         "target": {
           "type": "string",
@@ -533,7 +533,7 @@
       "noun": "claim",
       "verb": "release",
       "title": "Release a claim",
-      "description": "Remove the reservation (claim) held by an agent work session on a stored record (entity). Deliberately unguarded: releasing is how a claim is handed over, and a dead session’s claims are released by whichever process notices first. Returns the applied changes as bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
+      "description": "Remove the reservation (claim) held by an agent work session on a stored record (entity). Deliberately unguarded: releasing is how a claim is handed over, and a dead session’s claims are released by whichever process notices first. Returns the applied bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
       "input": {
         "target": {
           "type": "string",

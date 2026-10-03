@@ -7,7 +7,7 @@
 // to argue about: the graph stamps what reached it, and what reaches it is
 // what this handler decided.
 //
-// An unauthenticated request writes with no actor at all — the changes are
+// An unauthenticated request writes with no actor at all — the bundles are
 // stored unattributed rather than attributed to a guess. An application that
 // would rather refuse throws `Unauthorized` from its `authenticate`.
 

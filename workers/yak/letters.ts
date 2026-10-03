@@ -188,7 +188,7 @@ let sending = (ctx: Ctx): Tool => ({
     // written in.
     let address = parts(to) ? canon(apex(ctx.env))(to) : null
     let held = address ? await known(ctx, mine, address) : to
-    let batch: Bundle[] = [
+    let bundles: Bundle[] = [
       ...(held ? [] : [{
         entity: { eid: '$to' },
         email: { address },
@@ -206,7 +206,7 @@ let sending = (ctx: Ctx): Tool => ({
       ctx.env,
       [mine],
       mine,
-      batch,
+      bundles,
       await titling(ctx.dir, ctx.person),
     )
     let eid = out.aliases['$letter']

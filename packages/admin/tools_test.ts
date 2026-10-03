@@ -268,7 +268,7 @@ test("a named app's store is queried and applied through the graph tier", async 
     },
     async (hit) => {
       try {
-        let change = [{ entity: { eid: 'broke' }, exception: null }]
+        let bundles = [{ entity: { eid: 'broke' }, exception: null }]
         let answers = [
           await ask('admin_query', {
             admin: true,
@@ -278,7 +278,7 @@ test("a named app's store is queried and applied through the graph tier", async 
           await ask('admin_apply', {
             admin: true,
             where: 'yourname/vale',
-            change,
+            bundles,
             check: true,
           }, { at }),
         ]
@@ -293,7 +293,7 @@ test("a named app's store is queried and applied through the graph tier", async 
           },
           {
             name: 'graph_apply',
-            arguments: { app: 'yourname/vale', change, check: true },
+            arguments: { app: 'yourname/vale', bundles, check: true },
           },
         ])
       } finally {

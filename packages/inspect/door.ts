@@ -47,7 +47,7 @@ export let inspector = (
     can: (b, view) => !!resolve(registry, b, view, host.vocab),
     ask: useAnswers,
     state: (eid) => (turn.value, front.ent(eid)),
-    set: (change) => void front.mutate(change),
+    set: (bundles) => void front.mutate(bundles),
   }
   let Door: FunctionComponent<DoorProps> = ({ e, view, ctx = {} }) => {
     let r = resolve(registry, e, view, host.vocab)

@@ -3,7 +3,7 @@
 // A person types the id they can remember — `T-37584`, `jeff` — while the
 // store keys rows by eid, and every entry point owes them that translation:
 // `addressed()` (tool.ts) does it for a tool's arguments, and @yaks/alias's
-// normalize hook does it for a change's reference properties. Reads did not, so
+// normalize hook does it for a batch's reference properties. Reads did not, so
 // `.decided.by=jeff` matched nothing while `.decided.by=<eid>` matched.
 //
 // A query names an entity in exactly five places: the entity's own eid

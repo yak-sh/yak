@@ -587,7 +587,7 @@ export let game = (
   // Where a mover this page moves is (its hero, the creatures it owns),
   // written when it differs from what the graph holds.
   let sampled = new Map<string, { x: number; z: number; at: number }>()
-  let say = (eid: string, level: string, body: Body, change: Bundle[]) => {
+  let say = (eid: string, level: string, body: Body, bundles: Bundle[]) => {
     let now = net.now(), prior = sampled.get(eid)
     let dt = prior ? Math.max((now - prior.at) / 1000, 1e-3) : 1
     let jump = prior && Math.hypot(body.x - prior.x, body.z - prior.z) > 10
@@ -598,12 +598,12 @@ export let game = (
     if (
       !same(p.position, comp(e, 'position')) ||
       !same(p.motion, comp(e, 'motion'))
-    ) change.push({ entity: { eid }, ...p })
+    ) bundles.push({ entity: { eid }, ...p })
   }
   // A creature back on its wandering: nothing to say about where it is.
-  let hush = (eid: string, change: Bundle[]) => {
+  let hush = (eid: string, bundles: Bundle[]) => {
     sampled.delete(eid)
-    change.push({ entity: { eid }, position: null, motion: null, hunt: null })
+    bundles.push({ entity: { eid }, position: null, motion: null, hunt: null })
   }
 
   // The sheet, worked out again only when one of its rows changed.
@@ -860,7 +860,7 @@ export let game = (
       let now = net.now()
       let events: Event[] = []
       let heard: Event[] = []
-      let change: Bundle[] = []
+      let bundles: Bundle[] = []
       let s = sheetOf()
       let row = c.ent(me)
       let teleported: string | null = null
@@ -1197,7 +1197,7 @@ export let game = (
               knocked = true
             }
           }
-          if (stuck && !moving) say(eid, h.level, mb, change)
+          if (stuck && !moving) say(eid, h.level, mb, bundles)
           if (!stuck && (quarry || moving || knocked)) {
             let next = prowl(
               v,
@@ -1216,11 +1216,11 @@ export let game = (
             )
             let back = rest(v, h.home, h.roam, h.seed, now, shelter)
             if (!quarry && !knocked && dist(next, back) < 0.3) {
-              if (p || hu.player) hush(eid, change)
+              if (p || hu.player) hush(eid, bundles)
               mb = back
             } else {
               mb = next
-              say(eid, h.level, mb, change)
+              say(eid, h.level, mb, bundles)
             }
           }
           // Near enough to bite: it winds up, and says when the bite lands.
@@ -1233,14 +1233,14 @@ export let game = (
             now - hu.bite > BITE - WINDUP
           ) bite = now + WINDUP
           if (quarry != hu.player || bite != hu.bite) {
-            change.push({
+            bundles.push({
               entity: { eid },
               hunt: quarry ? { player: quarry, bite } : null,
             })
           }
         }
         // Up again after a fall: back to its wandering, from home.
-        if (owner == me && up && (p || hu.player)) hush(eid, change)
+        if (owner == me && up && (p || hu.player)) hush(eid, bundles)
         // A bite, once it lands: the one aimed at me is mine to take, unless
         // I rolled through it, blocked it, or stepped out of its reach, or it
         // was held. Rolling through one or blocking it leaves the creature
@@ -1375,7 +1375,7 @@ export let game = (
           let a = (i / 3) * Math.PI * 2 + Math.random()
           let x = m.body.x + Math.cos(a) * 0.9,
             z = m.body.z + Math.sin(a) * 0.9
-          change.push({
+          bundles.push({
             entity: { eid: crypto.randomUUID() },
             drop: {
               kind: l.kind,
@@ -1931,9 +1931,9 @@ export let game = (
         }
         let dd = dist(drop, body)
         let gone = { entity: { eid: drop.eid }, drop: null, position: null }
-        if (now - drop.at > DROP_LIFE) change.push(gone)
+        if (now - drop.at > DROP_LIFE) bundles.push(gone)
         else if (!down && dd < PICK && now - drop.at > 350) {
-          change.push(gone)
+          bundles.push(gone)
           events.push({
             type: 'loot',
             item: drop.kind,
@@ -1948,7 +1948,7 @@ export let game = (
             drop.x += (body.x - drop.x) * k
             drop.z += (body.z - drop.z) * k
             drop.y = Math.max(groundAt(v, drop.x, drop.z), drop.y)
-            change.push({
+            bundles.push({
               entity: { eid: drop.eid },
               position: {
                 level: regionOf(drop.x, drop.z),
@@ -2045,27 +2045,27 @@ export let game = (
         SLOTS.map((sl) => [sl, s.worn[sl]?.kind ?? '']),
       )
       if (!same(gearNow, comp(row, 'gear'))) {
-        change.push({ entity: { eid: me }, gear: gearNow })
+        bundles.push({ entity: { eid: me }, gear: gearNow })
       }
 
       // What I am, for the others.
-      say(me, level, { ...body, gait: down ? 'down' : body.gait }, change)
+      say(me, level, { ...body, gait: down ? 'down' : body.gait }, bundles)
       let vitalsNow = {
         hp: Math.max(0, Math.round(hp)),
         max: s.max,
         lvl: s.lvl,
       }
       if (!same(vitalsNow, comp(row, 'vitals'))) {
-        change.push({ entity: { eid: me }, vitals: vitalsNow })
+        bundles.push({ entity: { eid: me }, vitals: vitalsNow })
       }
       fought.level = level
       let next = publish(events, fought.events, fought.serial, now)
       fought.events = next.events
       fought.serial = next.serial
       if (JSON.stringify(fought) != JSON.stringify(mine)) {
-        change.push({ entity: { eid: me }, fight: fought })
+        bundles.push({ entity: { eid: me }, fight: fought })
       }
-      net.move(change)
+      net.move(bundles)
       net.tick()
 
       let foe =

@@ -17,10 +17,10 @@
 //
 // The bundle that writes a value, or carries a handle a value is waiting
 // behind, is marked `provisional` (@yaks/effects) with a note saying the key is
-// being saved. The change commits with the handle and the mark.
+// being saved. The batch commits with the handle and the mark.
 //
 // The other half is the same plugin's `effect` hook (`sealing` below). After
-// the change commits it seals each waiting value into the vault under the
+// the batch commits it seals each waiting value into the vault under the
 // secret's entity id and removes the mark; a deleted secret is dropped from the
 // vault the same way. It is not an effect another process could run: the value
 // is in this process's memory and nowhere else, which is the point, so the
@@ -32,7 +32,7 @@
 //
 // Nothing touches the vault inside the transaction. A vault may answer later
 // (D1 on yaks.app) and a transaction may not wait for it (a Durable Object's
-// commits the moment its body returns). A value a refused change took, or one a
+// commits the moment its body returns). A value a refused batch took, or one a
 // call carried that never ran, is let go after a while rather than kept for the
 // life of the process.
 

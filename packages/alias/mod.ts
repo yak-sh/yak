@@ -3,7 +3,7 @@
  * the `alias` kind of key from {@link https://jsr.io/@yaks/key | @yaks/key},
  * for a {@link https://jsr.io/@yaks/graph | @yaks/graph}.
  *
- * A `$alias` lives only for the list of changes it appears in. This is the
+ * A `$alias` lives only for the batch it appears in. This is the
  * other kind of name — one that is stored and outlives the write:
  *
  * ```ts

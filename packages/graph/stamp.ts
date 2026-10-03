@@ -9,18 +9,18 @@
 // is no list of marks here either; any component whose vocabulary declares that
 // trio server-owned is a mark, and gets filled in.
 //
-// The actor travels in the change, as the `$actor` key. That is deliberate:
+// The actor travels in the batch, as the `$actor` key. That is deliberate:
 // whatever received the write — an HTTP handler that authenticated a session, a
 // CLI that knows who is at the keyboard, a test that states it outright — is
 // the only thing that can know who is writing, and it is that code's job to
 // trust or replace what a client claimed. `apply()` stamps whatever reaches it.
 //
-// It travels on each bundle, because one change can carry more than one
+// It travels on each bundle, because one batch can carry more than one
 // writer's work and still have to land whole: a session a person begins holds
 // the person's words beside the instructions the harness put in front of the
 // model. Each entity is stamped with the writer its own bundle names, and an
 // entity whose bundles name none — a caller's unsigned patch, or one a phase
-// added — with the change's writer, the first one it names (`writers`).
+// added — with the batch's writer, the first one it names (`writers`).
 //
 // The properties come from the vocabulary, not from this file: a graph whose
 // `created` declares only `at` gets only `at`, and a graph with no `created`
@@ -33,7 +33,7 @@ import type { State } from './state.ts'
 import type { Bound, Patch, Rule } from './rules.ts'
 
 /**
- * Sign a whole change as one actor's. Whatever `$actor` the bundles already
+ * Sign a whole batch as one actor's. Whatever `$actor` the bundles already
  * carried is removed: who is writing is decided by the code that received the
  * request, never by the client — @yaks/api's `/apply` handler, or @yaks/tools'
  * runner applying what a tool returned.
@@ -47,22 +47,22 @@ import type { Bound, Patch, Rule } from './rules.ts'
  * // [{ entity: { eid: 'b1' }, $actor: { by: 'm1' } }]
  * ```
  */
-export let signed = (change: Bundle[], who: Actor | null): Bundle[] =>
-  change.map((b) => {
+export let signed = (bundles: Bundle[], who: Actor | null): Bundle[] =>
+  bundles.map((b) => {
     let out: Bundle = { ...b }
     delete out.$actor
     if (who && (who.by || who.via)) out.$actor = { ...who }
     return out
   })
 
-/** The change's writer: the first `$actor` in it. It writes whatever entity
+/** The batch's writer: the first `$actor` in it. It writes whatever entity
  * names no writer of its own (`writers`). */
 export let actorOf = (bundles: Bundle[]): Actor =>
   bundles.find((b) => b.$actor)?.$actor ?? {}
 
 /**
- * Who writes each entity a change names: the `$actor` the first of its bundles
- * to name one says, and otherwise the change's writer.
+ * Who writes each entity a batch names: the `$actor` the first of its bundles
+ * to name one says, and otherwise the batch's writer.
  *
  * ```ts
  * import { writers } from '@yaks/graph'
@@ -82,12 +82,12 @@ export let writers = (bundles: Bundle[]): (eid: Eid) => Actor => {
   for (let b of bundles) {
     if (b.$actor && !named.has(b.entity.eid)) named.set(b.entity.eid, b.$actor)
   }
-  let change = actorOf(bundles)
-  return (eid) => named.get(eid) ?? change
+  let actor = actorOf(bundles)
+  return (eid) => named.get(eid) ?? actor
 }
 
 // The writer a rule stamps an entity with: the one its own bundles named
-// (rules.ts `fire` keeps it on the entity it hands a rule), else the change's.
+// (rules.ts `fire` keeps it on the entity it hands a rule), else the batch's.
 let writer = (b: Bound): Actor => b.$actor ?? b.Actor
 
 // The stamp for one entity, narrowed to the properties this vocabulary declares
@@ -214,15 +214,15 @@ let wear = (
 }
 
 /**
- * Add the identities storage created to the change, so a client that generated
+ * Add the identities storage created to the batch, so a client that generated
  * an eid learns the `num` assigned to it. Each entity is added by reference,
  * not copied — an adapter whose numbers the database picks (@yaks/d1) fills
  * the `num` in when its statements run, which happens after this phase and
  * before the caller sees the return value.
  *
  * An entity comes into being when it first carries a component, so only an
- * identity this change gives one joins it. A spine storage minted because a
- * reference named it is a pointer to nothing: it stays out of the change, so
+ * identity this batch gives one joins it. A spine storage minted because a
+ * reference named it is a pointer to nothing: it stays out of the batch, so
  * nothing stamps it `created` and no client hears of an entity.
  */
 export let births = (bundles: Bundle[], st: State): Bundle[] => {

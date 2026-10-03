@@ -499,9 +499,9 @@ let seed = async (store: Meta) => {
     store.query(`.space.slug=${META.space}`),
     store.query(`.person&.email.address=${ADMIN}`),
   ])
-  let batch: Bundle[] = []
+  let bundles: Bundle[] = []
   if (!space) {
-    batch.push({
+    bundles.push({
       entity: { eid: '$space' },
       doc: { title: META.space },
       space: { slug: META.space },
@@ -517,7 +517,7 @@ let seed = async (store: Meta) => {
     })
   }
   if (!admin) {
-    batch.push({
+    bundles.push({
       entity: { eid: '$admin' },
       person: {},
       email: { address: ADMIN },
@@ -530,7 +530,7 @@ let seed = async (store: Meta) => {
       `.member.space=${space.entity.eid}&.member.person=${admin.entity.eid}`,
     )).length
   if (!seat) {
-    batch.push({
+    bundles.push({
       entity: { eid: '$seat' },
       // Owner: the gate on every platform act is a seat in `yak` and the role
       // it names — the fee is set by an owner of it (sell.ts `fees`), and the
@@ -542,7 +542,7 @@ let seed = async (store: Meta) => {
       },
     })
   }
-  if (batch.length) await store.apply(batch)
+  if (bundles.length) await store.apply(bundles)
 }
 
 let notFound = () => new Response('not found', { status: 404 })

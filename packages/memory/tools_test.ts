@@ -78,8 +78,8 @@ let fresh = () => graph({ storage: ram(vocab), vocab, plugins: [] })
 // Writes as somebody, at a moment, so who said what, and in which order, is
 // the test's to state.
 let tick = 0
-let write = (g: G, change: Bundle[], who: Actor = {}) =>
-  g.apply(signed(change, who), {
+let write = (g: G, bundles: Bundle[], who: Actor = {}) =>
+  g.apply(signed(bundles, who), {
     now: new Date(Date.UTC(2026, 8, 1, 0, 0, tick++)).toISOString(),
   })
 

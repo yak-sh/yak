@@ -9,7 +9,7 @@
 // straight to the vault, and nothing that reads the graph — an agent, a sync, a
 // backup — ever holds more than the handle. Being one entity is what makes its
 // end one: deleting a connection, or the space or person it belongs to, drops
-// its credential from the vault once the change commits.
+// its credential from the vault once the batch commits.
 //
 // The secret's name is `connection:` and a random id, and the entity's id is
 // derived from that name (@yaks/secrets `secretEid`), so a refreshed token
@@ -17,7 +17,7 @@
 // also why a disconnect deletes the connection rather than clearing it: the
 // name is the entity's identity, and a secret component removed would take the
 // name with it. Every app that used it is linked to a new, needed connection
-// in the same change, so the space still shows what those apps need.
+// in the same batch, so the space still shows what those apps need.
 //
 // Either order: an app says what it needs (`need`), which makes a connection
 // with no credential and a `uses` link from the app; or a person connects

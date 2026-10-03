@@ -18,7 +18,7 @@ let fixture = () => {
     g,
     j,
     tools: runs({ sql, derived }),
-    apply: (change: Bundle[]) => sync(g.apply(change)),
+    apply: (bundles: Bundle[]) => sync(g.apply(bundles)),
   }
 }
 

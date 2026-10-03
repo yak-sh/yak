@@ -124,7 +124,7 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
   )
   let repository = repositoryEid(common)
   let eid = worktreeEid(repository, path)
-  let changes: Bundle[] = [{
+  let bundles: Bundle[] = [{
     entity: { eid: repository },
     repository: { common },
   }]
@@ -133,7 +133,7 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
     let [name, oid, target] = line.split('\t')
     let id = refEid(repository, name)
     found.add(id)
-    changes.push({
+    bundles.push({
       entity: { eid: id },
       ref: {
         app: repository,
@@ -149,7 +149,7 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
   if (branch && !found.has(refEid(repository, branch))) {
     let id = refEid(repository, branch)
     found.add(id)
-    changes.push({
+    bundles.push({
       entity: { eid: id },
       ref: {
         app: repository,
@@ -162,7 +162,7 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
   }
   for (let old of await g.read('.ref.app=' + repository)) {
     if (!found.has(old.entity.eid)) {
-      changes.push({
+      bundles.push({
         entity: old.entity,
         ref: { present: false, oid: null, target: null },
       })
@@ -180,12 +180,12 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
       managed: Boolean((old?.worktree as Comp | undefined)?.managed),
     },
   }
-  changes.push(tree)
+  bundles.push(tree)
   // Write only the rows whose values actually changed, so that discovering an
   // unchanged checkout updates no timestamps and notifies nobody.
-  let previous = await g.get(changes.map((b) => b.entity.eid))
+  let previous = await g.get(bundles.map((b) => b.entity.eid))
   let byId = new Map(previous.map((b) => [b.entity.eid, b]))
-  let changed = changes.filter((b) =>
+  let changed = bundles.filter((b) =>
     Object.entries(b).some(([k, v]) =>
       k != 'entity' &&
       Object.entries(v as Comp).some(([prop, value]) =>

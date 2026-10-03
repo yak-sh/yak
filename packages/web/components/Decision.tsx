@@ -22,7 +22,7 @@ export let Decision = ({ e, caret }: { e: Ent; caret?: number }) => {
   )
   let who = useReference(e.decided?.by)
   // apply reports refusals in the page; the button has no promise consumer.
-  let send = (change: Bundle[]) => void apply(change).catch(() => {})
+  let send = (bundles: Bundle[]) => void apply(bundles).catch(() => {})
   return (
     <DecisionForm
       e={bundle(e)}

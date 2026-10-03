@@ -87,7 +87,7 @@ Try the new definition as a shadow before explicitly redoing existing work.
 
 A tool answers `{"outputs": [...], "cost": 0.01}`; each output is
 `{slot, inputs, components, artifact?}`, citing only selected inputs (each
-becomes a `cites` edge). Every write lands as one change, or none of it does.
+becomes a `cites` edge). Every write lands as one batch, or none of it does.
 
 - A reference property may name a sibling output of the same answer as
   `"$<slot>"`: a creature's `sounds{cry: "$cry"}` becomes the eid of the `sfx`

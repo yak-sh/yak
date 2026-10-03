@@ -247,7 +247,7 @@ let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
 
 // An old caller is answered, never corrected (C-32607 item 2). The generic
 // tier's argument names changed when those tools became @yaks/mcp's (T-33812)
-// — `entities` is now `change`, `filter` and `query` are `q`, `text` is
+// — `entities` and `change` are `bundles`, `filter` and `query` are `q`, `text` is
 // `words` — and a connector configured against the old names is somebody's,
 // already installed. So the argument names are translated here, as the request
 // arrives, and the tool sees one shape.
@@ -260,7 +260,7 @@ let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
 // `scoped` tells us whether this caller has a reach for an app to be narrowed
 // out of.
 let SAID: Record<string, Record<string, string>> = {
-  graph_apply: { entities: 'change' },
+  graph_apply: { entities: 'bundles', change: 'bundles' },
   graph_query: { filter: 'q', query: 'q' },
   search: { text: 'words' },
 }
@@ -279,9 +279,9 @@ let heard = (
   // out. An old caller keeps its silence, and the alias it never asked for is
   // one this code invents.
   if (
-    name == 'graph_apply' && 'entities' in args && Array.isArray(out.change)
+    name == 'graph_apply' && 'entities' in args && Array.isArray(out.bundles)
   ) {
-    out.change = out.change.map((b, i) =>
+    out.bundles = out.bundles.map((b, i) =>
       b && typeof b == 'object' && !('entity' in b) && !('id' in b)
         ? { entity: { eid: `$b${i}` }, ...b }
         : b
@@ -294,8 +294,8 @@ let heard = (
   let { app, space, ...rest } = out
   if (typeof app != 'string') return rest
   let at = typeof space == 'string' ? `${space}/${app}` : app
-  if (name == 'graph_apply' && Array.isArray(rest.change)) {
-    rest.change = rest.change.map((b) =>
+  if (name == 'graph_apply' && Array.isArray(rest.bundles)) {
+    rest.bundles = rest.bundles.map((b) =>
       b && typeof b == 'object' && !('$app' in b) ? { ...b, $app: at } : b
     )
   }

@@ -3,7 +3,7 @@
 // page (apps.ts `/api/query`) and by the socket that keeps answering it
 // (graph.ts `/ws`) is the same question, and the doors answered it differently
 // — the tools hid the platform's stamps, the page's door returned them
-// (C-32574 item 5), and the live door sent raw changes, so a page's rows
+// (C-32574 item 5), and the live door sent raw batches, so a page's rows
 // changed shape the moment they moved (C-32624 item 2). The rule lives here
 // and every door reads it.
 //

@@ -100,7 +100,7 @@ out of both doc fields.
 Write a reference, not a value:
 
 ```sh
-yak graph apply --change '[{"entity":{"eid":"$s"},"secret":{"name":"NAME","value":"op://<vault>/<item>/<field>"},"doc":{"title":"Service access","body":"Used by the service integration to authenticate outgoing requests."}}]'
+yak graph apply --bundles '[{"entity":{"eid":"$s"},"secret":{"name":"NAME","value":"op://<vault>/<item>/<field>"},"doc":{"title":"Service access","body":"Used by the service integration to authenticate outgoing requests."}}]'
 ```
 
 The plugin also strips a value out of `graph_apply`'s own call record, so the

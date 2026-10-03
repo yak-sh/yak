@@ -107,15 +107,17 @@ let bundled = (one: unknown, n: number): Bundle => {
 }
 
 /** A page's batch, either way it was sent: the documented `{entities: […]}`
- * envelope, or the bare array the Store itself takes. */
+ * envelope, `{bundles: […]}`, or the bare array the Store itself takes.
+ * Published callers sending `{change: […]}` are translated at this door. */
 export let batched = (body: unknown): Bundle[] => {
+  let sent = body as { bundles?: unknown; entities?: unknown; change?: unknown }
   let held = Array.isArray(body)
     ? body
-    : (body as { entities?: unknown })?.entities
+    : sent?.bundles ?? sent?.entities ?? sent?.change
   if (!Array.isArray(held)) {
     throw refuse(
       'arguments',
-      '/apply takes {"entities": [ … ]} — a list of bundles',
+      '/apply takes {"bundles": [ … ]} — a list of bundles',
     )
   }
   return held.map(bundled)

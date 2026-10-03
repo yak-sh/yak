@@ -506,7 +506,7 @@ export type Source = {
 let none: Source = { lookup: () => [], query: () => [] }
 
 /** A write's answer as a person reads it: each entity it changed as that
- * entity now stands, where it still does. The answer itself is the change as
+ * entity now stands, where it still does. The answer itself is the batch as
  * applied — what `--json` prints — and names only what moved, so drawn as it
  * is, `task update T-3 done` would be an entity with a `completed` mark and no
  * title. One that no longer stands (a deletion's tombstone) is drawn as the

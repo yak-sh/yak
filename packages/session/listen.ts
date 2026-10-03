@@ -146,7 +146,7 @@ export let pending = async (
 }
 
 /** Mark an item only if nobody has delivered it meanwhile. The optional
- * entry makes a native session's input and the mark one committed change. */
+ * entry makes a native session's input and the mark one committed batch. */
 export let deliver = async (
   graph: Pick<Graph, 'apply'>,
   actor: Actor | null,

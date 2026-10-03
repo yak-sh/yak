@@ -236,7 +236,7 @@ for (
     await queue(g, g.vocab, inbox, (b) => g.apply(b), at(10))
     let [letter] = await g.read('.mail_notice&.mail&*')
     await g.apply([{ entity: letter.entity, mail: { message_id: 'sent@box' } }])
-    let batch = await arrived({ graph: g, ...options })({
+    let bundles = await arrived({ graph: g, ...options })({
       from,
       to: inbox.from,
       headers: new Headers({
@@ -244,9 +244,9 @@ for (
         'In-Reply-To': '<sent@box>',
       }),
     }, { text: '2', verified })
-    await g.apply(batch)
-    assertEquals(batch.length, 1)
-    assertEquals(batch[0].comment, undefined)
+    await g.apply(bundles)
+    assertEquals(bundles.length, 1)
+    assertEquals(bundles[0].comment, undefined)
     assertEquals((await g.get(['ask']))[0].decided, undefined)
   })
 }
@@ -310,7 +310,7 @@ test('replying to a digest keeps the words without choosing its first decision',
   await queue(g, g.vocab, inbox, (b) => g.apply(b), at(10), true)
   let [digest] = await g.read('.mail_notice&.mail&*')
   await g.apply([{ entity: digest.entity, mail: { message_id: 'digest@box' } }])
-  let batch = await arrived({ graph: g, ...options })({
+  let bundles = await arrived({ graph: g, ...options })({
     from: 'ana@books.example',
     to: inbox.from,
     headers: new Headers({
@@ -318,20 +318,20 @@ test('replying to a digest keeps the words without choosing its first decision',
       'In-Reply-To': 'digest@box',
     }),
   }, { text: '2', verified: true })
-  await g.apply(batch)
-  assertEquals(batch[0].comment, undefined)
+  await g.apply(bundles)
+  assertEquals(bundles[0].comment, undefined)
   assertEquals((await g.get(['ask']))[0].decided, undefined)
-  assertEquals(comp(batch[0], 'doc').body, '2')
+  assertEquals(comp(bundles[0], 'doc').body, '2')
 })
 
 test('invalid choice numbers keep a comment without completing the decision', async () => {
   let g = await world()
-  let batch = await arrived({ graph: g, ...options })({
+  let bundles = await arrived({ graph: g, ...options })({
     from: 'ana@books.example',
     to: 'ask@books.example',
     headers: new Headers({ 'Message-ID': 'invalid@box' }),
   }, { target: 'ask', text: '9', verified: true })
-  await g.apply(batch)
-  assertEquals(comp(batch[0], 'comment').target, 'ask')
+  await g.apply(bundles)
+  assertEquals(comp(bundles[0], 'comment').target, 'ask')
   assertEquals((await g.get(['ask']))[0].decided, undefined)
 })

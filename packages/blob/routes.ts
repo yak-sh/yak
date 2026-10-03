@@ -218,7 +218,7 @@ export let routes = (
         let actor = await host.who?.(request) ?? null
         // Fresh rows each time: `apply` reads and writes the bundles it is
         // given, so the check's must not be the write's.
-        let batch = () =>
+        let bundles = () =>
           signed([{
             entity: { eid: at.sha },
             artifact,
@@ -226,9 +226,9 @@ export let routes = (
             entity: { eid: rep.eid },
             representation: rep.row,
           }], actor)
-        await host.graph.apply(batch(), { check: true, trusted: true })
+        await host.graph.apply(bundles(), { check: true, trusted: true })
         await keep(store, at.sha, bytes)
-        await host.graph.apply(batch(), { trusted: true })
+        await host.graph.apply(bundles(), { trusted: true })
         let response = json(artifact)
         response.headers.set('location', `${PREFIX}${rep.path}`)
         return response

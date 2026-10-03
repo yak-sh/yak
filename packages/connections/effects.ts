@@ -17,7 +17,7 @@ export type Host = { graph: Graph }
  * effects. */
 export let effects = (host: Host): Handlers => ({
   integration_install: async () => {
-    let change = await install(host.graph.read)
-    if (change.length) await host.graph.apply(change, { trusted: true })
+    let bundles = await install(host.graph.read)
+    if (bundles.length) await host.graph.apply(bundles, { trusted: true })
   },
 })

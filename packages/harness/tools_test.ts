@@ -48,7 +48,7 @@ test('a graph tool writes and reads the harness graph', async () => {
   let tools = graphTools(h.g)
   let by = (name: string) => tools.find((t) => t.name == name)!
   await by('graph_apply').run({
-    change: [{ entity: { eid: 't1' }, doc: { title: 'a task' }, task: {} }],
+    bundles: [{ entity: { eid: 't1' }, doc: { title: 'a task' }, task: {} }],
   })
   let out = await by('graph_query').run({ q: '.task&?doc' })
   assert(out.includes('a task'), out)
@@ -68,7 +68,7 @@ test('a graph tool’s answer carries what a direct call is owed beside it', asy
     },
   }).filter((t) => t.name == 'graph_apply')
   let out = await apply.run({
-    change: [{ entity: { eid: 't1' }, doc: { title: 'a task' }, task: {} }],
+    bundles: [{ entity: { eid: 't1' }, doc: { title: 'a task' }, task: {} }],
   })
   assert(out.includes('near: an older task'), out)
   assertEquals(told, [['t1']])

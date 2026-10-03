@@ -119,7 +119,7 @@ let canon = (v: unknown): unknown =>
 let said = (v: unknown) => JSON.stringify(canon(v))
 
 /**
- * The change that installs built integrations in a graph: each one missing
+ * The batch that installs built integrations in a graph: each one missing
  * there, or held otherwise than its seed says, written whole — a property the
  * seed does not name is cleared — and marked `built`. Nothing, where every one
  * already matches. A host applies it trusted, since `built` is server-owned,

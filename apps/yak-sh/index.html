@@ -30,7 +30,7 @@
     rendering records as entities, plus the packages that run agent sessions,
     tools and tasks over them. <code>yak</code> is its command line, and
     <a href="https://yaks.app">yaks.app</a> hosts the apps built with it.
-    Every change is an entity patch, and every list is a query.
+    Each bundle is an entity patch, and every list is a query.
   </p>
       <pre
         class=Code><code>deno run -A --minimum-dependency-age=0 jsr:@yaks/cli/install</code></pre>
@@ -55,7 +55,7 @@
         <dt>bundle</dt>
         <dd>One entity's components as a JSON object: <code>{entity: {eid}, doc: {title}}</code>.</dd>
         <dt>batch</dt>
-        <dd>A list of changes applied in one transaction. Each component in a bundle is a patch: an omitted property is unchanged, <code>null</code> clears it.</dd>
+        <dd>A list of bundles applied in one transaction. Each component in a bundle is a patch: an omitted property is unchanged, <code>null</code> clears it.</dd>
         <dt>vocabulary</dt>
         <dd>The schema a graph accepts: each package's <code>vocab.json</code>, JSON Schema 2020-12 plus a few keywords of its own.</dd>
         <dt>query</dt>
@@ -105,7 +105,7 @@ console.log(await g.read('.doc.title="Getting started"'))</code></pre>
         <li><a href="https://jsr.io/@yaks/fts">fts</a> full-text search over FTS5
         <li><a href="https://jsr.io/@yaks/embedding">embedding</a> vectors and <code>.near=&lt;entity&gt;</code>
         <li><a href="https://jsr.io/@yaks/blob">blob</a> long values stored by hash
-        <li><a href="https://jsr.io/@yaks/journal">journal</a> history, undo and a change feed
+        <li><a href="https://jsr.io/@yaks/journal">journal</a> history, undo and a batch feed
         <li><a href="https://jsr.io/@yaks/effects">effects</a> work owed by a commit, run by a pool
         <li><a href="https://jsr.io/@yaks/id">id</a> eids, and short ids like <code>T-7</code>
         <li><a href="https://jsr.io/@yaks/key">key</a>, <a href="https://jsr.io/@yaks/alias">alias</a>, <a href="https://jsr.io/@yaks/names">names</a> other ways to address an entity

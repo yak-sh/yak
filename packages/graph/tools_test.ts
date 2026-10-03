@@ -21,7 +21,7 @@ let doc = {
 
 test('a declaration wears the run the module gives it', () => {
   let [t] = loadTools(doc, {
-    book_shelve: (args) => ({ change: [{ book: args }] }),
+    book_shelve: (args) => ({ bundles: [{ book: args }] }),
   })
   assertEquals(t.name, 'book_shelve')
   assertEquals(t.noun, 'book')

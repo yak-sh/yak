@@ -37,10 +37,10 @@
  * the `$alias` the caller referred to it by — and no other `$` key.
  *
  * ## Apply is pluggable, in fixed phases
- * A change runs through an ordered list of {@link Phase}s — normalize, admit,
+ * A batch runs through an ordered list of {@link Phase}s — normalize, admit,
  * mint, prepare, precondition, rules, mutate, cascade, stamp, journal, commit,
  * effect, audit. The order matters, so a {@link Plugin} registers a {@link Hook}
- * against a named phase; the hook takes the list of changes and returns what
+ * against a named phase; the hook takes the bundles and returns what
  * the next phase sees, which is how a hook rewrites it, adds to it, or (by
  * throwing) refuses it. Every registry is per graph instance.
  *

@@ -225,7 +225,7 @@ export let deals = (net: Net) => {
       : null
   }
 
-  // Take up a gift: the hand-in and what it gives, in one change.
+  // Take up a gift: the hand-in and what it gives, in one batch.
   let take = (g: Giver, d: Deal, give: Goods, hero: string) => {
     done.add(d.eid)
     write([

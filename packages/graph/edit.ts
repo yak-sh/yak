@@ -80,7 +80,7 @@ export let isFieldOp = (v: unknown): v is Record<string, unknown> =>
  * write transaction of its own. Values come back as plain text. */
 export type EditHost = {
   /** A declared component's value as it is stored, never a value written
-   * earlier in the same change. */
+   * earlier in the same batch. */
   component: (eid: string, name: string) => Record<string, unknown> | undefined
   /** Whether this is a declared, client-writable text property. */
   text: (name: string, prop: string) => boolean
@@ -92,7 +92,7 @@ export type EditHost = {
 }
 
 /** Resolve field operators in order, without mutating the caller's bundles. A
- * literal written earlier in the change feeds a later edit to the same
+ * literal written earlier in the batch feeds a later edit to the same
  * property; removing a component discards the pending values for that entity,
  * so the next edit reads the stored value again. Each edit adds a `$was`
  * precondition describing the stored value; a precondition the caller supplied

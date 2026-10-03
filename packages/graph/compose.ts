@@ -1,4 +1,4 @@
-// The return value: the change as applied, as one bundle per entity.
+// The return value: the batch as applied, as one bundle per entity.
 //
 // Every phase of `apply()` works in patches, and each adds its own bundle —
 // the write the caller sent, the `created` the stamp phase produced, the
@@ -25,12 +25,12 @@
 // plugin's own bookkeeping, written and journaled with everything else, and an
 // entity that only quiet bundles touched is left out of the return value.
 // @yaks/archetype is the reason — classifying an entity creates a descriptor
-// and may change the archetype of some entity the change merely referenced,
+// and may change the archetype of some entity the batch merely referenced,
 // and a caller that wrote one recipe gets one recipe back, with whatever
 // archetype the classification gave it.
 //
-// A delete overrides everything. An entity this change deleted comes back as
-// the tombstone alone, whatever the change said about it on the way in — a
+// A delete overrides everything. An entity this batch deleted comes back as
+// the tombstone alone, whatever the batch said about it on the way in — a
 // cache that keeps the doc row of a deleted entity keeps a row that no longer
 // exists.
 //
@@ -44,9 +44,9 @@ import { dead, reserved, TOMBSTONE } from './bundle.ts'
 
 /**
  * A list of patches composed into one bundle per entity, in the order the
- * change first named each one: the identity with whatever `num` storage
+ * batch first named each one: the identity with whatever `num` storage
  * assigned, every component as applied, the `$alias` the caller referred to it
- * by, and no other `$` key. An entity the change deleted comes back as
+ * by, and no other `$` key. An entity the batch deleted comes back as
  * `{entity, tombstone: {}}`.
  *
  * ```ts
@@ -79,7 +79,7 @@ export let composed = (bundles: Bundle[]): Bundle[] => {
 // other than a quiet bundle named and the ones deleted.
 //
 // The loop is the whole function, and what it returns is built before it
-// starts. The first change a graph applies can be a whole world, and V8
+// starts. The first batch a graph applies can be a whole world, and V8
 // compiles a function whose first call spends that long in one loop while it
 // is still inside it (on-stack replacement), before any code after the loop has
 // run; that code, having told the compiler nothing, sent every later call back
@@ -98,7 +98,7 @@ let folded = (bundles: Bundle[]) => {
     if (!b.$quiet) said.add(eid)
     // The identity is merged rather than replaced: only the phase that created
     // it knows the `num`, and only the caller's own bundle carries the alias.
-    // The first number wins, so a change spread across several stores reads
+    // The first number wins, so a batch spread across several stores reads
     // the way a query over them does — a num is one store's own counter, while
     // the eid identifies the entity everywhere.
     if (b.entity.num !== undefined && one.entity.num == null) {

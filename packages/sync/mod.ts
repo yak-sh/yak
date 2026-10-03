@@ -22,7 +22,7 @@
  * list of bundles the server responds with is applied back through the same
  * local graph, which is how the numbers it assigned, the properties it stamped
  * and the entities it deleted reach the client. If the server refuses the
- * write, the optimistic change is undone from the copy {@link sync} took of
+ * write, the optimistic batch is undone from the copy {@link sync} took of
  * those entities beforehand, along with whatever the write's rules added, and
  * the refusal is reported. A rule the page ran itself is a guess the server's
  * answer replaces: what it added is undone as the answer lands. If the server

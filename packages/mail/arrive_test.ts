@@ -94,7 +94,7 @@ test('routed: the book wins, the id grammar catches the rest', async () => {
 test('arrived: a letter, with both lookups answered', async () => {
   let { g } = await seeded()
   let receive = arrived({ graph: g, domain, triage: pile })
-  let batch = await receive(
+  let bundles = await receive(
     got({
       from: 'Ana <ana@books.example>',
       subject: 'Re: Is there soup?',
@@ -105,24 +105,26 @@ test('arrived: a letter, with both lookups answered', async () => {
     }, 'ana@books.example'),
     { text: 'there is soup' },
   )
-  assertEquals(batch.length, 1)
-  let mail = comp(batch[0], 'mail')
+  assertEquals(bundles.length, 1)
+  let mail = comp(bundles[0], 'mail')
   assertEquals(mail.target, ana)
   assertEquals(mail.reply_to, 'e-first')
   assertEquals(mail.verified, true)
   assertEquals(mail.from, 'ana@books.example')
-  assertEquals(comp(batch[0], 'doc').body, 'there is soup')
+  assertEquals(comp(bundles[0], 'doc').body, 'there is soup')
   // Signed by the author the book knows, never by whoever runs the box.
-  assertEquals(batch[0].$actor, { by: ana })
+  assertEquals(bundles[0].$actor, { by: ana })
 })
 
 test('arrived: a stranger writes to the triage pile', async () => {
   let { g } = await seeded()
   let receive = arrived({ graph: g, domain, triage: pile })
-  let batch = await receive(got({ from: 'bo@elsewhere.com', subject: 'hello' }))
-  assertEquals(comp(batch[0], 'mail').target, pile)
+  let bundles = await receive(
+    got({ from: 'bo@elsewhere.com', subject: 'hello' }),
+  )
+  assertEquals(comp(bundles[0], 'mail').target, pile)
   // Nobody checked is not a check that failed.
-  assertEquals(comp(batch[0], 'mail').verified, undefined)
+  assertEquals(comp(bundles[0], 'mail').verified, undefined)
 })
 
 test('arrived: a letter is written by its sender, never by the graph owner', async () => {
@@ -153,10 +155,10 @@ test('arrived: the same Message-ID lands once', async () => {
 
 test('arrived: what it records is what an arrival is — no ask to send', async () => {
   let { g } = await seeded()
-  let batch = await arrived({ graph: g, domain })(
+  let bundles = await arrived({ graph: g, domain })(
     got({ from: 'ana@books.example', subject: 'hi' }, 'ana@books.example'),
   )
-  await g.apply(batch)
+  await g.apply(bundles)
   let letter = ((await g.read('!mail.message_id')) as Bundle[])
     .find((b) => comp(b, 'doc')?.title == 'hi')
   assert(letter)

@@ -320,12 +320,12 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
           'effects(vocab, { write: (b) => graph.apply(b, { trusted: true }) })',
       )
     }
-    let batch = marked(bundles, gen + 1)
-    if (!context?.parent || !peek(context.graph)) return opts.write(batch)
-    link(context.graph, batch, context.parent)
-    let clean = () => unlink(context.graph, batch)
+    let tagged = marked(bundles, gen + 1)
+    if (!context?.parent || !peek(context.graph)) return opts.write(tagged)
+    link(context.graph, tagged, context.parent)
+    let clean = () => unlink(context.graph, tagged)
     try {
-      let out = opts.write(batch)
+      let out = opts.write(tagged)
       if (isPromise(out)) return out.finally(clean)
       clean()
       return out
@@ -429,7 +429,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     let one = plan.patterns.filter((p) => !p.makes)
     // The batch is passed to the query only where the query is about it: a
     // `-comp` clause reads the deletions a storage's overlay carries.
-    let batch = s.gone?.length ? bundles : []
+    let pending = s.gone?.length ? bundles : []
     if (
       one.length > 1 || plan.collections.length ||
       plan.patterns.some((p) => p.binds.length) ||
@@ -443,7 +443,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
         )
       }
       return after(
-        tx.bindings([plan], batch, reads(plan, vocab)),
+        tx.bindings([plan], pending, reads(plan, vocab)),
         ([rows]) =>
           rows
             .filter((r) => r.entities.some((e) => e && touched.has(e)))

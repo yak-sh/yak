@@ -57,7 +57,7 @@ export type ClientOpts = {
    * served under. Omit it and the graph is local only: nothing is posted
    * anywhere. */
   url?: string
-  /** how changes are POSTed to `/apply` (default: the global `fetch`) */
+  /** how bundles are POSTed to `/apply` (default: the global `fetch`) */
   fetch?: Fetch
   /** how the WebSocket is opened (default: the global `WebSocket`) */
   connect?: Connect
@@ -194,9 +194,9 @@ let named = (vocab: Vocab, bundles: Bundle[]) => {
 }
 
 // Which declared rules a page runs. Its own (@yaks/graph `own`) run on every
-// change. Any other rule is the server's, since only the server holds the
+// batch. Any other rule is the server's, since only the server holds the
 // whole graph: the page runs one early only where its author marked it
-// `optimistic`, and never on a change the server sent, which already carries
+// `optimistic`, and never on a batch the server sent, which already carries
 // what the server's run of it did. A page with no server is the whole graph,
 // and runs every rule.
 let paged =

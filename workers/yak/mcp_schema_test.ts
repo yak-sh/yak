@@ -694,8 +694,8 @@ test(
       }
       let first = await schema()
       let ajv = new Ajv({ strict: false })
-      let takes = (input: object, change: unknown) =>
-        ajv.compile(input)({ change })
+      let takes = (input: object, bundles: unknown) =>
+        ajv.compile(input)({ bundles })
 
       // The guide's own letter: a recipient wearing `email{address}`, the letter
       // as `doc` + `mail`, and the ask, `deliver{to}`.
@@ -721,7 +721,7 @@ test(
       }]
       assertEquals(takes(first.input, misspelt), true)
       let refused = (await assertRejects(
-        () => agent.tool('graph_apply', { change: misspelt }),
+        () => agent.tool('graph_apply', { bundles: misspelt }),
         Error,
       )).message
       assertStringIncludes(refused, 'unknown property: email.adress')

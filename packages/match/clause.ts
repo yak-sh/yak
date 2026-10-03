@@ -568,8 +568,8 @@ export let compile = (ctx: Ctx, c: Clause): Arm => {
       arms.every((a) => a.alone),
     )
   }
-  // A removal is about the change under evaluation, not about a row: the
-  // source says what the change took off (@yaks/sql's `gone` extension says it
+  // A removal is about the batch under evaluation, not about a row: the
+  // source says what the batch took off (@yaks/sql's `gone` extension says it
   // to SQL).
   if (c.kind == 'gone') {
     let comp = c.comp

@@ -24,7 +24,7 @@ export type Host = { graph: Graph }
 export let effects = (host: Host): Handlers => ({
   vocab_describe: async () => {
     let g = host.graph
-    let change = await described(g, g.vocab.docs)
-    if (change.length) await g.apply(change, { trusted: true })
+    let bundles = await described(g, g.vocab.docs)
+    if (bundles.length) await g.apply(bundles, { trusted: true })
   },
 })

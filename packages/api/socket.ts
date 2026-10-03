@@ -1,7 +1,7 @@
 // The WebSocket half: a socket wired to the subscription registry, and
 // nothing else. Clients send two kinds of message, the server sends one frame
 // shape back (see the README's Protocol), and no durable write ever crosses
-// this connection — changes are applied with `POST /apply`, and the socket is
+// this connection — bundles are applied with `POST /apply`, and the socket is
 // how a client learns about them.
 //
 // Frames sent before the socket opens are queued: an upgrade hands back a

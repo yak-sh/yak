@@ -95,13 +95,13 @@ export let routes = (
           triage: options.triage,
           inbox: options.inbox,
         })
-        let batch = await receive({ from, to, headers: head(headers) }, {
+        let bundles = await receive({ from, to, headers: head(headers) }, {
           text,
           ...(verified == null ? {} : { verified }),
         })
         // No bundles: this Message-ID is already here. A caller that cannot
         // tell "recorded" from "recorded earlier" would post it again.
-        let landed = batch.length ? await host.graph.apply(batch) : []
+        let landed = bundles.length ? await host.graph.apply(bundles) : []
         return json({ eid: landed[0]?.entity.eid ?? null })
       } catch (err) {
         return refuse(err, request)

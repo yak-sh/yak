@@ -42,12 +42,12 @@ test('a batch carries only its own operations', () => {
 
 test('a batch from the feed recasts as the bundles it committed', () => {
   let { g, j } = wikiGraph()
-  let change: Bundle[] = [
+  let bundles: Bundle[] = [
     { entity: { eid: 'p1' }, page: { title: 'Kickoff' } },
     { entity: { eid: 'n1' }, note: { text: 'aside', page: 'p1' } },
   ]
-  sync(g.apply(change))
-  assertEquals(j.since(0).map((e) => applied(j.at(e.seq)!)), [change])
+  sync(g.apply(bundles))
+  assertEquals(j.since(0).map((e) => applied(j.at(e.seq)!)), [bundles])
 })
 
 test('a feed drains what was committed while it was away', () => {

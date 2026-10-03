@@ -1,13 +1,13 @@
 // The precondition: a write that states the value it was based on. `$was`
 // carries, per property, the SHA-256 of the value the caller read (or `null`
 // for "I read no value"); if the stored value has changed since, the whole
-// change is refused and the committed value is reported back, so the caller can
+// batch is refused and the committed value is reported back, so the caller can
 // merge onto it rather than overwriting a writer it never saw. It works like
 // git's `--ff-only`.
 //
 // Two details matter, and both are the difference between a check that works
-// and one that only looks like it does. The change is refused as A whole: a
-// change guarding two properties that loses one of them must apply neither, or
+// and one that only looks like it does. The batch is refused as A whole: a
+// batch guarding two properties that loses one of them must apply neither, or
 // you end up with a title from one writer and a body from another. And every
 // property named must be declared — a check on a property that does not exist
 // would read `undefined`, compare equal to "absent", and protect nothing,
@@ -15,7 +15,7 @@
 //
 // An entity deleted since it was read is not stale but gone. Its `$was` is
 // still checked for names, then left to the mutate phase, which swallows a
-// write that raced a delete (./mutate.ts) rather than refusing the change
+// write that raced a delete (./mutate.ts) rather than refusing the batch
 // around it.
 
 import type { Vocab } from '@yaks/vocab'
@@ -56,11 +56,11 @@ export let token = (value: unknown): string | null =>
     : sha256(typeof value == 'object' ? JSON.stringify(value) : String(value))
 
 /**
- * The precondition phase: check every `$was` the change carries against the
- * state as the change found it, and throw {@link Stale} on the first property
+ * The precondition phase: check every `$was` the batch carries against the
+ * state as the batch found it, and throw {@link Stale} on the first property
  * that changed. It reads through the transaction, before anything in the
- * change has been written — a check made after the change's own writes would
- * refuse a value the change itself had just written.
+ * batch has been written — a check made after the batch's own writes would
+ * refuse a value the batch itself had just written.
  */
 export let guard = (
   bundles: Bundle[],

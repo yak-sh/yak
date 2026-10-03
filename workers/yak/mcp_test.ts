@@ -686,7 +686,7 @@ test(
       // the eids the first minted without reading a sentence.
       let cake = minted(
         await agent.tool('graph_apply', {
-          change: [{
+          bundles: [{
             entity: { eid: '$cake' },
             // A brand-new entity wearing nothing but shared words has no home
             // to go to, and this person has two apps: `$app` says which
@@ -717,7 +717,7 @@ test(
       // so it is dropped and the row reads as written now (T-33147).
       let old = minted(
         await agent.tool('graph_apply', {
-          change: [{
+          bundles: [{
             entity: { eid: '$old' },
             $app: 'recipes',
             doc: { title: 'Written in April' },
@@ -734,7 +734,7 @@ test(
         String(new Date().getFullYear()),
       )
       await agent.tool('graph_apply', {
-        change: [{ entity: { eid: old }, tombstone: {} }],
+        bundles: [{ entity: { eid: old }, tombstone: {} }],
       })
       let found = JSON.parse(await agent.tool('search', { words: 'lemon' }))
       assertEquals(
@@ -748,7 +748,7 @@ test(
       // does.
       let seeding = (title: string) =>
         agent.tool('graph_apply', {
-          change: [{
+          bundles: [{
             entity: { eid: '$r' },
             $app: 'recipes',
             alias: { name: 'recipe:lemon-cakes' },
@@ -774,7 +774,7 @@ test(
       // tombstoned, so it could be claimed again (what the rest of this test
       // counts is the app's own rows, and this one was ours).
       await agent.tool('graph_apply', {
-        change: [{ entity: { eid: once }, tombstone: {} }],
+        bundles: [{ entity: { eid: once }, tombstone: {} }],
       })
       assertEquals(
         JSON.parse(
@@ -790,7 +790,7 @@ test(
         let ask of [
           () =>
             agent.tool('graph_apply', {
-              change: [{
+              bundles: [{
                 entity: { eid: '$r' },
                 $app: 'recipes',
                 recipe: { serves: 4 },
@@ -816,7 +816,7 @@ test(
       )
       let box = minted(
         await agent.tool('graph_apply', {
-          change: [{
+          bundles: [{
             entity: { eid: '$pancakes' },
             doc: { title: 'Pancakes' },
             recipe: { title: 'Pancakes', serves: 4 },
@@ -837,7 +837,7 @@ test(
       let typo = (await assertRejects(
         () =>
           agent.tool('graph_apply', {
-            change: [{ entity: { eid: box }, recipe: { calories: 500 } }],
+            bundles: [{ entity: { eid: box }, recipe: { calories: 500 } }],
           }),
         Error,
       )).message
@@ -873,7 +873,7 @@ test(
       await assertRejects(
         () =>
           agent.tool('graph_apply', {
-            change: [{
+            bundles: [{
               entity: { eid: '$d' },
               $app: 'recipes',
               dayline: { on: 'today' },
@@ -907,7 +907,7 @@ test(
       await assertRejects(
         () =>
           agent.tool('graph_apply', {
-            change: [{
+            bundles: [{
               entity: { eid: '$j' },
               $app: 'recipes',
               jot: { text: 'hi' },
@@ -932,7 +932,7 @@ test(
       // one keeps every row already written under it, and the deploy says
       // both — the manifest reads as one word and the store answers two.
       await agent.tool('graph_apply', {
-        change: [{ entity: { eid: '$n' }, note: { text: 'wrote it' } }],
+        bundles: [{ entity: { eid: '$n' }, note: { text: 'wrote it' } }],
       })
       await manifest(vocabFile({
         recipe: { title: txt, serves: num },
@@ -949,7 +949,7 @@ test(
       assertStringIncludes(renamed, 'name it in vocab.json again')
       assertStringIncludes(renamed, 'Nothing is migrated behind you')
       await agent.tool('graph_apply', {
-        change: [{ entity: { eid: '$n2' }, note: { body: 'said it' } }],
+        bundles: [{ entity: { eid: '$n2' }, note: { body: 'said it' } }],
       })
       let notes = JSON.parse(
         await agent.tool('graph_query', { q: '.note' }),
@@ -964,7 +964,7 @@ test(
       // Once the old name holds nothing, the next deploy drops it: the rename
       // is finished and the store answers one word (T-38052).
       await agent.tool('graph_apply', {
-        change: [{
+        bundles: [{
           entity: notes[0].entity,
           note: { text: null, body: 'wrote it' },
         }],
@@ -998,7 +998,7 @@ test(
       // not the format this platform happens to have started with.
       assertStringIncludes(inYaml, 'kept, not in vocab.yml')
       await agent.tool('graph_apply', {
-        change: [{ entity: { eid: '$s' }, sticker: { colour: 'red' } }],
+        bundles: [{ entity: { eid: '$s' }, sticker: { colour: 'red' } }],
       })
       assertEquals(
         JSON.parse(

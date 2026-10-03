@@ -1596,7 +1596,7 @@ export class Store {
     meta: this.#get('name') == PLATFORM_STORE,
     app: this.#get('app'),
     mail: () => this.#get('mail'),
-    graph: { ...g, apply: (change, opts) => this.#asIs(change, opts) },
+    graph: { ...g, apply: (bundles, opts) => this.#asIs(bundles, opts) },
     as: async (who, bundles, via) =>
       await this.#graph.apply(
         signed(bundles, {
@@ -1628,7 +1628,7 @@ export class Store {
       this.#runs = {
         said,
         run: runner(
-          { ...g, apply: (change, opts) => this.#asIs(change, opts) },
+          { ...g, apply: (bundles, opts) => this.#asIs(bundles, opts) },
           {
             host: g,
             tools: [
@@ -1912,8 +1912,8 @@ export class Store {
     let at = this.#stored(this.#graph)
     for (let install of installsOf(PLUGINS)) {
       try {
-        let change = await install((q) => this.#graph.read(q), at)
-        if (change.length) await this.#trust(change, null)
+        let bundles = await install((q) => this.#graph.read(q), at)
+        if (bundles.length) await this.#trust(bundles, null)
       } catch (e) {
         await this.#broke('install', e)
       }
@@ -2788,14 +2788,14 @@ export class Store {
       if (poured(original)) {
         return refuse(new Refused('streaming writes cannot be dry-run'))
       }
-      let change: Bundle[]
+      let bundles: Bundle[]
       try {
-        change = JSON.parse(row.body)
-        if (!Array.isArray(change)) throw new Error('not a batch')
+        bundles = JSON.parse(row.body)
+        if (!Array.isArray(bundles)) throw new Error('not a batch')
       } catch {
         return refuse(new Refused('held write is not a JSON batch'))
       }
-      let names = change.flatMap((b) =>
+      let names = bundles.flatMap((b) =>
         Object.keys(b).filter((name) =>
           name != 'entity' && !name.startsWith('$')
         )

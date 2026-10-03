@@ -245,7 +245,7 @@ test('transfer keeps guards on other properties and components atomic', () => {
   }
 })
 
-test('an ordinary conflict refuses the entire change', () => {
+test('an ordinary conflict refuses the entire batch', () => {
   let g = books(libraryGraph())
   sync(g.apply([keyed('isbn', 'b1', DUNE)]))
   let before = g.read('*')

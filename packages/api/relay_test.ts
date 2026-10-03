@@ -354,7 +354,7 @@ test('sustained peer movement does not resend stored data to existing members', 
       relay: [{ entity: { eid: 'b1' }, browsing: { x: x % 9 } }],
     }])
   }
-  // A real durable change still sends the changed stored bundle.
+  // A durable batch still sends the changed stored bundle.
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 13 } }])
   assertEquals(watcher.take().at(-1)?.bundles?.[0].book, { price: 13 })
 })

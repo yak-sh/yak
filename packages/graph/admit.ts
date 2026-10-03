@@ -1,4 +1,4 @@
-// Admission: what a change is allowed to contain. Three rules, and each is a
+// Admission: what a batch is allowed to contain. Three rules, and each is a
 // deliberate choice about which mistakes are loud and which are silent.
 //
 //   an undeclared component is refused  a component this graph's vocabulary
@@ -31,7 +31,7 @@ import { cast, unknownComps, unknownProps, type Vocab } from '@yaks/vocab'
 import type { Bundle, Comp } from './bundle.ts'
 import { comps, dead, reserved } from './bundle.ts'
 
-/** A change refused at admission: the message names the component and the
+/** A batch refused at admission: the message names the component and the
  * property, so the caller can see exactly what was wrong. */
 export class Refused extends Error {
   /** @param message what was wrong, naming the component and property the
@@ -43,16 +43,16 @@ export class Refused extends Error {
 }
 
 /**
- * The change as bundles, refused unless it is one: an array whose every
+ * The bundles, refused unless they form a batch: an array whose every
  * member is an object whose `entity` names an eid. Every door hands `apply()`
  * what arrived, and the first phase reads each bundle's eid, so the shape is
  * refused here, before anything reads it, naming the bundle by its place.
  */
-export let formed = (change: unknown): Bundle[] => {
-  if (!Array.isArray(change)) {
-    throw new Refused('a change is an array of bundles')
+export let formed = (bundles: unknown): Bundle[] => {
+  if (!Array.isArray(bundles)) {
+    throw new Refused('a batch is an array of bundles')
   }
-  change.forEach((b, i) => {
+  bundles.forEach((b, i) => {
     let eid = b && typeof b == 'object' ? b.entity?.eid : undefined
     if (typeof eid != 'string' || !eid) {
       throw new Refused(
@@ -61,7 +61,7 @@ export let formed = (change: unknown): Bundle[] => {
       )
     }
   })
-  return change
+  return bundles
 }
 
 // One component patch, admitted: undeclared properties refused, unwritable ones
@@ -133,10 +133,10 @@ export let known = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
   })
 
 /**
- * The admit phase: every bundle in the change, reduced to what this caller may
+ * The admit phase: every bundle in the batch, reduced to what this caller may
  * write, or refused if it names a component or property this graph's
  * vocabulary does not declare. A bundle whose components were all dropped is
- * removed from the change — it asked for nothing this caller may write.
+ * removed from the batch — it asked for nothing this caller may write.
  * `trusted` admits server-owned properties; it is the calling program's
  * decision, never a client's. `teach` ends the refusal of an undeclared
  * component (@yaks/vocab `unknownComps`). A `replica` (trusted) keeps the

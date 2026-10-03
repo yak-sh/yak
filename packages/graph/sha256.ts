@@ -3,7 +3,7 @@
 // promise, and hashing through it would make every guarded write async —
 // including one over an embedded database that is otherwise synchronous end to
 // end (see @yaks/fp `after`). A precondition hashes a handful of small strings per
-// change, so the cost of hashing them here is nothing next to making the whole
+// batch, so the cost of hashing them here is nothing next to making the whole
 // pipeline asynchronous.
 //
 // This is FIPS 180-4 SHA-256 over the UTF-8 bytes of a string, hex-encoded —

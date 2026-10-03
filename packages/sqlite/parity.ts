@@ -64,7 +64,7 @@ export let rig = (storage: Storage): Graph =>
   })
 
 /** One step of the script: a batch, and the clock it is applied under. */
-export type Step = { name: string; batch: Bundle[]; now?: string }
+export type Step = { name: string; bundles: Bundle[]; now?: string }
 
 let AT = '2026-03-01T00:00:00.000Z'
 
@@ -72,7 +72,7 @@ let AT = '2026-03-01T00:00:00.000Z'
 export let script: Step[] = [
   {
     name: 'create',
-    batch: [
+    bundles: [
       { entity: { eid: 'm1' }, doc: { title: 'Acme' } },
       {
         entity: { eid: 'p1' },
@@ -91,28 +91,28 @@ export let script: Step[] = [
   },
   {
     name: 'patch a property, leave the rest',
-    batch: [{ entity: { eid: 'p1' }, product: { price: 9 } }],
+    bundles: [{ entity: { eid: 'p1' }, product: { price: 9 } }],
     now: '2026-03-02T00:00:00.000Z',
   },
   {
     name: 'clear a property',
-    batch: [{ entity: { eid: 'p1' }, product: { status: null } }],
+    bundles: [{ entity: { eid: 'p1' }, product: { status: null } }],
   },
   {
     name: 'drop a component',
-    batch: [{ entity: { eid: 'p2' }, product: null }],
+    bundles: [{ entity: { eid: 'p2' }, product: null }],
   },
   {
     name: 'a reference to nothing brings nothing into being',
-    batch: [{ entity: { eid: 'r5' }, review: { stars: 2, product: 'p5' } }],
+    bundles: [{ entity: { eid: 'r5' }, review: { stars: 2, product: 'p5' } }],
   },
   {
     name: 'a bundle of its own does, and numbers it then',
-    batch: [{ entity: { eid: 'p5' }, product: { price: 5 } }],
+    bundles: [{ entity: { eid: 'p5' }, product: { price: 5 } }],
   },
   {
     name: '$was holds',
-    batch: [{
+    bundles: [{
       entity: { eid: 'p1' },
       doc: { title: 'Mug II' },
       $was: { doc: { title: token('Mug') } },
@@ -120,7 +120,7 @@ export let script: Step[] = [
   },
   {
     name: '$was has moved: the whole batch is refused',
-    batch: [
+    bundles: [
       { entity: { eid: 'p9' }, doc: { title: 'never lands' } },
       {
         entity: { eid: 'p1' },
@@ -131,33 +131,33 @@ export let script: Step[] = [
   },
   {
     name: 'an alias, and an id derived from it',
-    batch: [
+    bundles: [
       { entity: { eid: '$maker' }, doc: { title: 'Bodge & Sons' } },
       { entity: { eid: '$mark' }, bookmark: { of: '$maker' } },
     ],
   },
   {
     name: 'a hook refuses inside the transaction',
-    batch: [
+    bundles: [
       { entity: { eid: 'p8' }, doc: { title: 'boom' } },
       { entity: { eid: 'p7' }, product: { price: 1 } },
     ],
   },
   {
     name: 'the number a refused batch minted is handed out again',
-    batch: [{ entity: { eid: 'p6' }, product: { price: 3 } }],
+    bundles: [{ entity: { eid: 'p6' }, product: { price: 3 } }],
   },
   {
     name: 'a delete takes its dependents with it',
-    batch: [{ entity: { eid: 'p1' }, $delete: true }],
+    bundles: [{ entity: { eid: 'p1' }, $delete: true }],
   },
   {
     name: 'a deleted target detaches its referrers',
-    batch: [{ entity: { eid: 'm1' }, $delete: true }],
+    bundles: [{ entity: { eid: 'm1' }, $delete: true }],
   },
   {
     name: 'a write that raced the delete is swallowed, and mints nothing',
-    batch: [{
+    bundles: [{
       entity: { eid: 'p1' },
       product: { price: 2, maker: 'x9' },
       $was: { doc: { title: token('Mug II') } },
@@ -165,7 +165,7 @@ export let script: Step[] = [
   },
   {
     name: 'any other write brings the dead back, and mints what it names',
-    batch: [{ entity: { eid: 'p1' }, product: { price: 1, maker: 'm9' } }],
+    bundles: [{ entity: { eid: 'p1' }, product: { price: 1, maker: 'm9' } }],
   },
 ]
 
@@ -250,11 +250,11 @@ let refused = (e: unknown): Said => ({
 
 let say = (
   g: Graph,
-  batch: Bundle[],
+  bundles: Bundle[],
   now: string,
 ): Said | Promise<Said> => {
   try {
-    let out = g.apply(batch, { now })
+    let out = g.apply(bundles, { now })
     return out instanceof Promise
       ? out.then((bs) => ({ ok: byNum(bs) }), refused)
       : { ok: byNum(out) }
@@ -291,8 +291,8 @@ let state = (g: Graph) =>
 export let parity = (a: Graph, b: Graph): void | Promise<void> =>
   after(
     each(script, null, (_, step) =>
-      after(say(a, step.batch, step.now ?? AT), (sa) =>
-        after(say(b, step.batch, step.now ?? AT), (sb) => {
+      after(say(a, step.bundles, step.now ?? AT), (sa) =>
+        after(say(b, step.bundles, step.now ?? AT), (sb) => {
           assertEquals(sa, sb, `returned: ${step.name}`)
           return after(state(a), (ra) =>
             after(state(b), (rb) => {

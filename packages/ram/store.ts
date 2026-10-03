@@ -23,9 +23,9 @@
 // transaction touched, replayed backwards, restores the map and its indexes
 // exactly as they were without copying anything the write did not touch.
 //
-// The same log is how declared rules see a change before it is written: the
-// change is patched in, the rules are asked (./rules.ts), and the log is
-// rewound, so a rule reads the graph as the change would leave it through the
+// The same log is how declared rules see a batch before it is written: the
+// batch is patched in, the rules are asked (./rules.ts), and the log is
+// rewound, so a rule reads the graph as the batch would leave it through the
 // same indexes every read uses, and nothing it saw outlives the question.
 
 import type {
@@ -61,7 +61,7 @@ export type RamOpts = {
   now?: number
   /** keep the `num` a patch's identity already carries, and never assign one.
    * This is what a store mirroring another graph needs — a client applying the
-   * changes a server returned is being told the identity, not choosing it. An
+   * bundles a server returned is being told the identity, not choosing it. An
    * entity it has not been told a number for has none: a number it guessed
    * could be another entity's. Off by default: a store that mirrors nothing
    * owns its own numbering. Such a store also keeps the computed values it is
@@ -93,9 +93,9 @@ export type Tx = {
    * an unknown one is simply absent. */
   get: (eids: Eid[], comps?: string[]) => Bundle[]
   /** what declared rules are evaluated through: every match run against this
-   * graph with `batch` folded in, as though it had been written, and nothing
+   * graph with `bundles` folded in, as though it had been written, and nothing
    * of it left behind */
-  bindings: (matches: Match[], batch: Bundle[]) => Binding[][]
+  bindings: (matches: Match[], bundles: Bundle[]) => Binding[][]
   /** apply these patches → the entities they created, each with its `num` */
   patch: (bundles: Bundle[]) => Entity[]
   /** Evict live payloads, not identities. A later patch keeps the same number.
@@ -339,7 +339,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   }
 
   // What one read sees: every row, by id, by component and by value, and what
-  // a change under evaluation removed. A fresh view per read, so what a run
+  // a batch under evaluation removed. A fresh view per read, so what a run
   // keeps against it (a walk's closure) never outlives the rows it was worked
   // out from.
   let view = (gone?: Index['gone']): Index => {
@@ -538,27 +538,27 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     return out
   }
 
-  // The change folded in, the matches asked, the log rewound. What the change
+  // The batch folded in, the matches asked, the log rewound. What the batch
   // took a component off is its own list, since a removed component leaves
-  // nothing in a row to ask about; one written again later in the change is
+  // nothing in a row to ask about; one written again later in the batch is
   // not gone. A deleted entity is removed, and matches nothing.
-  let ask = (matches: Match[], batch: Bundle[]): Binding[][] => {
+  let ask = (matches: Match[], bundles: Bundle[]): Binding[][] => {
     if (!matches.length) return []
     let mark = log.length
     let minted = next
     try {
-      tx.remove(batch.filter(dead).map((b) => b.entity))
-      patch(batch.filter((b) => !dead(b)))
+      tx.remove(bundles.filter(dead).map((b) => b.entity))
+      patch(bundles.filter((b) => !dead(b)))
       let gone = new Map<string, Set<Eid>>()
-      for (let b of batch) {
+      for (let b of bundles) {
         for (let [name, c] of comps(b)) {
           let at = gone.get(name) ?? new Set()
           if (c == null) gone.set(name, at.add(b.entity.eid))
           else at.delete(b.entity.eid)
         }
       }
-      let anchor = batch.length
-        ? new Set(batch.map((b) => b.entity.eid))
+      let anchor = bundles.length
+        ? new Set(bundles.map((b) => b.entity.eid))
         : undefined
       return bindings(
         matches,

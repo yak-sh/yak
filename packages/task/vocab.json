@@ -106,7 +106,7 @@
       "noun": "task",
       "verb": "new",
       "title": "Create a task",
-      "description": "Create a task: a stored record with task{} and doc{title, body} field groups. It is open because it has neither a completed nor a cancelled mark. Pass a project, priority, assignee or domain and it gets a filed{} group holding those filing fields too. Returns the applied changes as bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
+      "description": "Create a task: a stored record with task{} and doc{title, body} field groups. It is open because it has neither a completed nor a cancelled mark. Pass a project, priority, assignee or domain and it gets a filed{} group holding those filing fields too. Returns the applied bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
       "input": {
         "title": {
           "type": "string",
@@ -172,7 +172,7 @@
       "noun": "task",
       "verb": "update",
       "title": "Update a task",
-      "description": "Change a task’s status, title, body or filing. `status` is not a stored field: done adds the completed mark and removes the cancelled one, cancelled does the reverse, and open removes both. Anything left out is unchanged. Returns the applied changes as bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
+      "description": "Change a task’s status, title, body or filing. `status` is not a stored field: done adds the completed mark and removes the cancelled one, cancelled does the reverse, and open removes both. Anything left out is unchanged. Returns the applied bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
       "input": {
         "task": {
           "type": "string",

@@ -59,7 +59,7 @@ export let sequencing: Hook = (bundles, tx) =>
       for (let id of groups.keys()) order(id)
       let pending: void | Promise<void> = undefined
       for (let session of ordered) {
-        let batch = groups.get(session)!
+        let sessionBundles = groups.get(session)!
         pending = after(pending, () =>
           after(
             tx.read(
@@ -69,18 +69,20 @@ export let sequencing: Hook = (bundles, tx) =>
             ),
             (latest) =>
               after(
-                batch.some((b) => entry(b)?.seq != null)
+                sessionBundles.some((b) => entry(b)?.seq != null)
                   ? tx.read(
                     parse(
                       '.entry.session=' + session + '&.entry.seq>=' +
                         Math.min(
-                          ...batch.filter((b) => entry(b)?.seq != null).map((
-                            b,
-                          ) => Number(entry(b)!.seq)),
+                          ...sessionBundles.filter((b) => entry(b)?.seq != null)
+                            .map((
+                              b,
+                            ) => Number(entry(b)!.seq)),
                         ) + '&.entry.seq<=' + Math.max(
-                          ...batch.filter((b) => entry(b)?.seq != null).map((
-                            b,
-                          ) => Number(entry(b)!.seq)),
+                          ...sessionBundles.filter((b) => entry(b)?.seq != null)
+                            .map((
+                              b,
+                            ) => Number(entry(b)!.seq)),
                         ),
                     ),
                   )
@@ -119,7 +121,7 @@ export let sequencing: Hook = (bundles, tx) =>
                         let occupied = new Map(
                           own.map((b) => [Number(entry(b)?.seq), b.entity.eid]),
                         )
-                        for (let b of batch) {
+                        for (let b of sessionBundles) {
                           let e = entry(b)!
                           let old = own.find((o) =>
                             o.entity.eid == b.entity.eid

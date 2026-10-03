@@ -210,8 +210,7 @@ export let pour = (
  *
  * `?check=1` asks only whether the array would be accepted: every phase runs
  * and the transaction is rolled back, so nothing is written and no effect
- * observes it, while a refusal is still a refusal. That is what lets one set
- * of changes be spread over several graphs — ask them all, then commit.
+ * observes it, while a refusal is still a refusal. That is what lets one batch be spread over several graphs — ask them all, then commit.
  *
  * `content-type: application/x-ndjson` is the same endpoint for an import too
  * big to hold in memory — see {@link pour}.

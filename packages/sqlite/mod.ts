@@ -172,10 +172,10 @@ export type Tx = {
    * read per level */
   doom: (eids: string[]) => Doom
   /** what declared rules are evaluated through: every match run against this
-   * graph with `batch` folded in, through one batch overlay (./overlay.ts) */
+   * graph with `bundles` folded in, through one batch overlay (./overlay.ts) */
   bindings: (
     matches: Match[],
-    batch: Bundle[],
+    bundles: Bundle[],
     covers: string[],
   ) => Binding[][]
   /** patch the bundles in → the entities this patch minted */
@@ -295,7 +295,7 @@ let plan = (vocab: Vocab, derived: Derived = NONE): Plan => {
 
 /**
  * Bind a store to a driver and a vocabulary — a {@link Storage} @yaks/graph
- * can apply changes to. `base` options (a derived-property registry, a fixed
+ * can apply bundles to. `base` options (a derived-property registry, a fixed
  * `now` for time phrases) ride every read; a per-call `opts` merges over them.
  */
 export let storage = (
@@ -331,8 +331,8 @@ export let storage = (
     read: (query, o) => read(driver, vocab, query, { ...opts(), ...o }),
     get: identity,
     doom: (eids) => doom(driver, vocab, eids),
-    bindings: (matches, batch, covers) =>
-      bindings(driver, vocab, matches, batch, covers, base),
+    bindings: (matches, bundles, covers) =>
+      bindings(driver, vocab, matches, bundles, covers, base),
     patch: (bundles) => patch(driver, vocab, bundles, base.number, base.adopt),
     remove: (entities) => {
       remove(driver, vocab, entities)

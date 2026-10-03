@@ -6,7 +6,7 @@ tools provided by graph plugins. Use `mcp()` for an HTTP request handler or
 `@yaks/mcp/stdio` for a server launched as a local process.
 
 A **bundle** is one entity's components as a JSON object, identified by
-`entity.eid`. A **batch** is a list of changes applied in one transaction. MCP
+`entity.eid`. A **batch** is a list of bundles applied in one transaction. MCP
 arguments are JSON objects; graph data and tool results use bundles.
 
 ## Install
@@ -149,7 +149,7 @@ tools are listed by default; `search` requires a callback.
 
 | Tool           | Purpose                                                         |
 | -------------- | --------------------------------------------------------------- |
-| `graph_apply`  | Apply changes and return their applied bundles                  |
+| `graph_apply`  | Apply bundles and return their applied bundles                  |
 | `graph_query`  | Read entities selected by a query                               |
 | `graph_show`   | Read named entities, each whole                                 |
 | `graph_schema` | Describe components, properties, and kinds                      |
@@ -159,7 +159,7 @@ For the vocabulary in the in-memory example:
 
 ```jsonc
 // graph_apply
-{ "change": [
+{ "bundles": [
   { "entity": { "eid": "b1" },
     "book": { "title": "Dune", "price": 12, "status": "shelved" } }
 ] }
@@ -175,10 +175,10 @@ For the vocabulary in the in-memory example:
 { "component": "book" }
 ```
 
-`graph_apply` accepts `check: true` to test changes and roll them back; the
-answer is what a kept write would have returned, or the refusal it would have
-met. Call records are still written. A later application can fail even if the
-check succeeded.
+`graph_apply` accepts `check: true` to test a batch and roll it back; the answer
+is what a kept write would have returned, or the refusal it would have met. Call
+records are still written. A later application can fail even if the check
+succeeded.
 
 `graph_query` accepts a query defined by [@yaks/query](../query/README.md),
 optional `filters` joined with `&`, and a `limit`. `graph_show` returns the
@@ -254,7 +254,7 @@ schemas. A new component therefore does not require a new tool.
 
 `mcp({ authenticate })` calls `authenticate(request)` for each POST request. Its
 actor, such as `{ by: memberId, via: sessionId }`, determines attribution for
-the call and the changes returned by its tool. Client-supplied `$actor` values
+the call and the bundles returned by its tool. Client-supplied `$actor` values
 do not override it. Return `null` for unattributed requests or throw
 `Unauthorized` from `@yaks/api` for HTTP 401. The application and graph plugins
 supply authorization; authentication and tool metadata do not enforce access
@@ -300,7 +300,7 @@ graph.use(shelf)
 
 A tool is `run(call, graph)`: the call's bundle, carrying its validated
 arguments in `call.args` (`argsOf`) and the caller in `created` (`who`), and the
-graph it runs on. It returns bundles. The runner applies changes as the caller
+graph it runs on. It returns bundles. The runner applies bundles as the caller
 and records the result. Read tools return selected bundles without rewriting
 those entities. A text result uses `content: { body: '…' }` and
 `output: { source: call.entity.eid }` on its bundle.
@@ -337,7 +337,7 @@ yourself before connecting the transport; `server()` does not call it.
 
 ## Refusals
 
-Bad tool arguments and rejected changes return tool error text with `isError`.
+Bad tool arguments and rejected batches return tool error text with `isError`.
 Legacy HTTP transport responses include 405 for methods other than POST, 400 for
 malformed JSON or anything other than one JSON-RPC request or notification, 401
 for `Unauthorized`, and 202 for notifications. Request arrays are rejected.

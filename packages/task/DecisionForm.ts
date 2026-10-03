@@ -13,7 +13,7 @@ export let DecisionForm = (
   { e, drafts, apply, name, blocking, caret }: {
     e: Bundle
     drafts: Drafts
-    apply: (change: Bundle[]) => unknown
+    apply: (bundles: Bundle[]) => unknown
     name: (eid: string) => string
     blocking?: boolean
     caret?: number

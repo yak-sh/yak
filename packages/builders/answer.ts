@@ -1,5 +1,5 @@
 // Every tool returns the same named-output value. Validate it once, then write
-// retained output takes and their citations in one guarded graph change. Each
+// retained output takes and their citations in one guarded graph batch. Each
 // call has its own entity per slot, and replay keeps it: its `output_of` key finds it again (build.ts). A reference in
 // one output may name a sibling of the same answer as `$<slot>`.
 //

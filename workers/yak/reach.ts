@@ -880,8 +880,8 @@ let isComp = (k: string) => !NOT_A_COMP.includes(k) && !k.startsWith('$')
 // entities out of one — so the door derives content-addressed ids by the same
 // rules as a store, mints the rest, and hands every store the one answer. A
 // bundle with no address at all is minted the same way, for the same reason.
-let minted = (batch: Bundle[], vocab: Vocab) => {
-  let stated = batch.map((e) => {
+let minted = (bundles: Bundle[], vocab: Vocab) => {
+  let stated = bundles.map((e) => {
     let eid = e.entity?.eid
     if (typeof eid == 'string') return e
     // An eid is the only address an app's store has: it mints no numbers
@@ -981,10 +981,10 @@ let routed = async (
   env: Env,
   reach: Reach[],
   named: Reach | undefined,
-  batch: Bundle[],
+  bundles: Bundle[],
 ) => {
   let { words, apart, vocab } = await spoken(env, reach)
-  let { entities, eids, aliases } = minted(batch, vocab)
+  let { entities, eids, aliases } = minted(bundles, vocab)
   // Where the entity already lives, read only when the answer depends on it:
   // a death fans out to whoever holds the eid, and a shared word with no app
   // named goes to the app that already wears it.
@@ -1123,7 +1123,7 @@ export let written = async (
   env: Env,
   reach: Reach[],
   named: Reach | undefined,
-  batch: Bundle[],
+  bundles: Bundle[],
   headers: Record<string, string> = {},
   check = false,
 ): Promise<{
@@ -1138,23 +1138,23 @@ export let written = async (
   // `requested` refuses, said here because this door is where it would be
   // lost. `$app` is the door's own (agent.ts `aimed`), which is why it is
   // named beside the graph's.
-  requested(batch, ['$app'])
-  let { parts, aliases } = await routed(env, reach, named, batch)
+  requested(bundles, ['$app'])
+  let { parts, aliases } = await routed(env, reach, named, bundles)
   if (!parts.length) throw refuse('arguments', 'entities: nothing to write')
   if (parts.length > 1 && !check) {
     await Promise.all(parts.map((p) => sent(env, p, true, headers)))
   }
   let outs = await Promise.all(parts.map((p) => sent(env, p, check, headers)))
-  let bundles = outs.flat()
+  let applied = outs.flat()
   // Where a `$alias` actually landed. A store may put a bundle somewhere other
   // than the id this door minted for it: one carrying a name somebody already
   // holds is a patch of that entity (@yaks/alias, T-34390). The batch as
   // applied says so, so the map a caller reads is corrected from the answer.
-  for (let b of bundles) {
+  for (let b of applied) {
     if (typeof b.$alias == 'string') aliases[b.$alias] = b.entity.eid
   }
   return {
-    bundles,
+    bundles: applied,
     aliases,
     where: parts.map((p) => at(p.r)).join(' and '),
   }

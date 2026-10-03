@@ -56,7 +56,7 @@ echo $! > $D/serve.pid
 - Data shaped like the real thing: read entities from the live graph
   (`yak graph show`, `yak graph query … --json`, read-only) and write them into
   the probe with
-  `<worktree CLI> --config $D/yak.json graph apply --change @file`. Reading the
+  `<worktree CLI> --config $D/yak.json graph apply --bundles @file`. Reading the
   live graph is fine; writing to it, or pressing anything on a page served by
   it, is not.
 - Harness and process state have their own homes: set `HARNESS_HOME` and

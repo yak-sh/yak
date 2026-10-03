@@ -67,7 +67,7 @@ export let authorize = (h: Pick<Harness, 'g' | 'vault'>): Authorization => {
     }
     if (action == 'begin') {
       // A CLI command may reach this graph before its integration-install
-      // effect runs. Apply the same seed change before asking for its link.
+      // effect runs. Apply the same seed batch before asking for its link.
       if (!await known(h.g.read, provider.integration)) {
         let seed = await install(
           h.g.read,

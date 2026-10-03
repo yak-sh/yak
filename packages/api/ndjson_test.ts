@@ -19,10 +19,10 @@ let shop = (hold: (nth: number) => Promise<void> | void = () => {}) => {
   let graph = shopGraph()
   let widths: number[] = []
   let apply = graph.apply
-  graph.apply = async (change, opts) => {
-    widths.push(change.length)
+  graph.apply = async (bundles, opts) => {
+    widths.push(bundles.length)
     await hold(widths.length)
-    return await apply(change, opts)
+    return await apply(bundles, opts)
   }
   return { handler: api({ graph, authenticate: () => ada }), widths }
 }
@@ -120,8 +120,8 @@ test('the answer is line for line: bookkeeping stays out of it', async () => {
   let graph = shopGraph()
   let apply = graph.apply
   // A plugin that lands a descriptor beside every batch, the way archetypes do.
-  graph.apply = async (change, opts) => [
-    ...await apply(change, opts),
+  graph.apply = async (bundles, opts) => [
+    ...await apply(bundles, opts),
     { entity: { eid: 'meta' }, book: { price: 0 } },
   ]
   let handler = api({ graph, authenticate: () => ada })

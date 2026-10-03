@@ -46,7 +46,7 @@
  * ← { id, relay: Bundle[] }                        peer values from a client
  * ← { id, refused: { error, message, … } }         the subscription was refused
  * ```
- * No durable write crosses the socket: changes are applied with
+ * No durable write crosses the socket: bundles are applied with
  * `POST /apply`, and the socket is how every connected client learns about
  * them. A relayed value is the one exception: it is forwarded to the other
  * subscribers; components declaring `save` also keep periodic snapshots and

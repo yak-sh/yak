@@ -23,7 +23,7 @@
 // resolved bare names this way for as long as it has had them (src/db.ts
 // `resolveId`), and a caller who wants namespaced names writes whatever prefix
 // they like. A leading `$` would mean the opposite of what this component
-// means: `$cake` is an alias local to one list of changes, which @yaks/graph
+// means: `$cake` is an alias local to one batch, which @yaks/graph
 // assigns an id and then forgets, whereas this name is stored and outlives the
 // write.
 

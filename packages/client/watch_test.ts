@@ -100,7 +100,7 @@ test('a watch stops after close', () => {
   c.close()
 })
 
-test('a watch carries what its query names, after a change as at first', () => {
+test('a watch carries what its query names, after a batch as at first', () => {
   let c = boxClient()
   c.mutate([dal()])
   let dinners = c.watch('.recipe.course=dinner')

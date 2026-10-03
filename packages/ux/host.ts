@@ -32,7 +32,7 @@ export type { Bundle }
 /** A page's own graph, as much as a UX component needs of it: a @yaks/client
  * `client()` over this package's vocabulary (./vocab.ts) is one. */
 export type Front = {
-  mutate: (change: Bundle[]) => unknown
+  mutate: (bundles: Bundle[]) => unknown
   watch: (query: string) => {
     value: Bundle[]
     subscribe: (fn: (rows: Bundle[]) => void) => () => void

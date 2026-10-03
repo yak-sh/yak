@@ -10,9 +10,9 @@
 //              numbers, stamped properties, cascade deletions, what its rules
 //              added — and they are applied locally in turn, marked as an echo
 //              so they are not sent back again. What the page's own run of
-//              those rules guessed is undone in the same change, so the
+//              those rules guessed is undone in the same batch, so the
 //              server's answer replaces it.
-//   refused    the server would not take it. The optimistic change is undone
+//   refused    the server would not take it. The optimistic batch is undone
 //              from the copy taken before it, with everything its rules added,
 //              and the refusal is reported. A write that was held (a delete —
 //              see sync.ts) was never applied locally, so there is nothing to
@@ -90,11 +90,11 @@ let refusalOf = async (res: Response): Promise<Refusal> => {
  * caller then keeps its rows pinned.
  */
 export let exchange = async (
-  batch: Bundle[],
+  bundles: Bundle[],
   opts: PostOpts,
 ): Promise<PostResult> => {
   let { graph } = opts
-  let sent = opts.sent ?? outward(batch, graph.vocab)
+  let sent = opts.sent ?? outward(bundles, graph.vocab)
   if (!sent.length) return { settled: true }
   let res: Response
   try {
@@ -112,18 +112,21 @@ export let exchange = async (
   }
   if (!res.ok) {
     let refused = await refusalOf(res)
-    let back = opts.held ? [] : inverse(batch, graph.vocab)
+    let back = opts.held ? [] : inverse(bundles, graph.vocab)
     if (back.length) await replicate(graph, back)
     opts.report({ sent, refused, reverted: back.length > 0 })
     return { settled: true, refused }
   }
   let applied = await res.json()
   if (!Array.isArray(applied)) throw new Error('/apply returned no bundles')
-  let landing = [...(opts.held ? [] : guessed(batch, graph.vocab)), ...applied]
+  let landing = [
+    ...(opts.held ? [] : guessed(bundles, graph.vocab)),
+    ...applied,
+  ]
   if (landing.length) await replicate(graph, landing)
   return { settled: true, applied }
 }
 
 /** Send an optimistic or held write and say whether its outcome is known. */
-export let post = async (batch: Bundle[], opts: PostOpts): Promise<boolean> =>
-  (await exchange(batch, opts)).settled
+export let post = async (bundles: Bundle[], opts: PostOpts): Promise<boolean> =>
+  (await exchange(bundles, opts)).settled

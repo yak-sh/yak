@@ -1,8 +1,8 @@
 // Ordered preconditions, for an application whose checks have to read state
-// that storage derives. It rehearses the admitted, storage-ready change in a
+// that storage derives. It rehearses the admitted, storage-ready batch in a
 // nested transaction, checking each operation against the ones written before
 // it, and then always rolls that transaction back. Unlike `$was`, these checks
-// deliberately see earlier writes in the same change. No stamps and no effects
+// deliberately see earlier writes in the same batch. No stamps and no effects
 // run during the rehearsal.
 import { after, each, isPromise } from '@yaks/fp'
 import type { Bundle } from './bundle.ts'
@@ -14,7 +14,7 @@ import { mutate } from './mutate.ts'
 import { cascade } from './cascade.ts'
 import { state } from './state.ts'
 
-/** Build a precondition hook that checks each operation in a change against
+/** Build a precondition hook that checks each operation in a batch against
  * the operations before it. Register it after any storage transformations
  * (blob swaps, for instance). `check` receives one live bundle at a time, and
  * whatever it returns replaces that operation.

@@ -33,11 +33,11 @@ let stash = (): Stash => {
 let open = (s: Client, kept?: Stash) => {
   let queue: (() => void)[] = []
   let line: Client = {
-    mutate: (change: Bundle[]) =>
+    mutate: (bundles: Bundle[]) =>
       new Promise((ok, no) =>
         queue.push(() => {
           try {
-            ok(s.mutate(change))
+            ok(s.mutate(bundles))
           } catch (err) {
             no(err)
           }
@@ -90,7 +90,7 @@ test('what the store never took is back on the next load, and sent', async () =>
   assertEquals(kept.length, 0, 'the store has it now')
 })
 
-test('sending ends the draft everywhere, in one change with the send', async () => {
+test('sending ends the draft everywhere, in one batch with the send', async () => {
   let s = store()
   let [a, b] = [open(s), open(s)]
   a.type('p', 'looks good')

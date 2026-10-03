@@ -113,7 +113,7 @@ export type Rig = {
   refuse?: string
   /** the domain whose addresses are the graph's own, for local delivery */
   local?: string
-  /** whose graph it is: the writer of a change that names none */
+  /** whose graph it is: the writer of a batch that names none */
   owner?: Actor
 }
 

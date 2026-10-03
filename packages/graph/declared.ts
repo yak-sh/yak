@@ -1,7 +1,7 @@
 // Running the declared rules. A rule is a query (./join.ts parses one into a
 // plan); a storage adapter evaluates that query against the graph with the
-// pending change folded in (its `bindings` method, over an overlay of the
-// change); and this file is the other half — what a matched row writes, and
+// pending batch folded in (its `bindings` method, over an overlay of the
+// batch); and this file is the other half — what a matched row writes, and
 // how the whole set of rules reaches a fixpoint.
 //
 // What a rule emits is deliberately small. Each of its patterns writes exactly
@@ -10,11 +10,11 @@
 // whatever the variable was bound to. A pattern that only writes creates its
 // entity, and that entity's id is derived from the rule's name and the
 // entities it matched (./identity.ts `derivedEid`) — so the same rule on the
-// same match always produces the same entity, in this change or a later one,
+// same match always produces the same entity, in this batch or a later one,
 // and a rule cannot create a second copy of what it already created.
 //
 // The fixpoint, and why it terminates quickly. What a rule produces joins the
-// change, the overlay is rebuilt, and every rule is evaluated again — so a rule
+// batch, the overlay is rebuilt, and every rule is evaluated again — so a rule
 // can fire on what another rule just wrote. It terminates because a rule fires
 // at most once per `(rule name, the entities it matched)`: a second firing with
 // the same key is not slow convergence, it is a rule that failed to exclude
@@ -22,7 +22,7 @@
 // rather than being looped over. That refusal is the whole termination
 // argument; there is no iteration limit doing the real work.
 //
-// Nothing here writes rows. The patches join the change and `mutate` writes
+// Nothing here writes rows. The patches join the batch and `mutate` writes
 // them, so a rule's output is admitted, stamped, journaled, cascaded and
 // returned exactly like anything a client sent.
 //
@@ -68,7 +68,7 @@ export type Ready = { rule: Declared; plan: Match }
 
 /**
  * Whether a rule is a page's own: everything it writes is `sync: none`, state
- * that never leaves the page holding it. A page runs it on every change; a
+ * that never leaves the page holding it. A page runs it on every batch; a
  * graph that serves pages never holds what it writes, so it never runs one.
  */
 export let own = ({ plan }: Ready, vocab: Vocab): boolean => {
@@ -182,7 +182,7 @@ export let emitted = (
         resource,
       )
       // A resource that converts to nothing writes nothing —
-      // `+created.by=#Actor` on a change nobody signed leaves the property
+      // `+created.by=#Actor` on a batch nobody signed leaves the property
       // alone rather than clearing it, so a rule needs no conditional around
       // the property it wanted to write.
       if (v !== undefined) patch[s.comp][s.prop] = v
@@ -195,16 +195,16 @@ export let emitted = (
 }
 
 /**
- * Run a set of declared rules over a change until nothing new fires.
+ * Run a set of declared rules over a batch until nothing new fires.
  *
  * `tx.bindings` is the storage adapter's method: it evaluates each match
- * against the graph with the pending change folded in. A storage adapter
+ * against the graph with the pending batch folded in. A storage adapter
  * without it runs no declared rules — a rule is a query, and a store that
  * cannot evaluate one can say nothing about it.
  *
  * `admit` is the graph's own admission function, passed in so this file need
  * not know what a property is: whatever a rule wrote goes through it before it
- * joins the change.
+ * joins the batch.
  */
 export let settle = (
   rules: Ready[],
@@ -215,7 +215,7 @@ export let settle = (
   admit: (made: Bundle[]) => Bundle[] = (made) => made,
   tracing?: Context,
 ): Bundle[] | Promise<Bundle[]> => {
-  // An empty change is about nothing, and a match with no batch under it is
+  // An empty batch is about nothing, and a match with no batch under it is
   // asked of the whole graph (a template's invocation): the rules have
   // nothing to fire on.
   if (!rules.length || !bundles.length || !tx.bindings) return bundles
@@ -223,9 +223,9 @@ export let settle = (
   let plans = rules.map((r) => r.plan)
   let covers = cover(rules, vocab)
   let fired = new Set<string>()
-  let round = (batch: Bundle[]): Bundle[] | Promise<Bundle[]> =>
+  let round = (bundles: Bundle[]): Bundle[] | Promise<Bundle[]> =>
     after(
-      ask(plans, batch, covers),
+      ask(plans, bundles, covers),
       (found) => {
         let made: Bundle[] = []
         rules.forEach((r, i) => {
@@ -255,13 +255,13 @@ export let settle = (
           }
         })
         if (!made.length) {
-          return batch
+          return bundles
         }
         // Admitted like anything else that reaches the graph: a property this
         // vocabulary does not declare is dropped, and a value it rejects
-        // refuses the whole change. A rule is server code, so it is allowed to
+        // refuses the whole batch. A rule is server code, so it is allowed to
         // write server-owned properties.
-        return round([...batch, ...admit(made)])
+        return round([...bundles, ...admit(made)])
       },
     )
   return round(bundles)
@@ -270,10 +270,10 @@ export let settle = (
 /**
  * A template, invoked: the template's query merged with its arguments as a
  * bindings query (./join.ts `filled`), matched against the graph once, and the
- * bundles it emits — for the caller to apply as an ordinary change.
+ * bundles it emits — for the caller to apply as an ordinary batch.
  *
  * It is the same engine the `rules` phase runs, called directly instead of
- * being asked about a pending change. That is all a template is: a rule with
+ * being asked about a pending batch. That is all a template is: a rule with
  * its variables filled in.
  */
 export let invoked = (
@@ -295,7 +295,7 @@ export let invoked = (
 }
 
 /** The components a set of rules reads — what storage's overlay of the pending
- * change has to cover. */
+ * batch has to cover. */
 export let cover = (rules: Ready[], vocab: Vocab): string[] => [
   ...new Set(rules.flatMap((r) => reads(r.plan, vocab))),
 ]

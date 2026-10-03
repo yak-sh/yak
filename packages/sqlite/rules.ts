@@ -67,19 +67,19 @@ export let bindings = (
   driver: Driver,
   vocab: Vocab,
   matches: Match[],
-  batch: Bundle[],
+  bundles: Bundle[],
   covers: string[],
   opts: BindOpts = {},
 ): Binding[][] => {
   if (!matches.length) return []
-  let over = overlay(driver, vocab, batch, covers)
+  let over = overlay(driver, vocab, bundles, covers)
   // What the batch is about, as the ids the overlay speaks in: the anchor
   // every match is narrowed to, so a rule asks about this batch rather than
   // about the file. With no batch there is nothing to be about and nothing to
   // anchor to: the caller is asking the match outright, which is what a
   // template invocation is.
-  let touched = batch.length
-    ? [...new Set(batch.map((b) => over.ids.get(b.entity.eid)!))]
+  let touched = bundles.length
+    ? [...new Set(bundles.map((b) => over.ids.get(b.entity.eid)!))]
       .filter((id) => id !== undefined)
     : undefined
   let on = { at: over.at, gone: over.gone, touched }

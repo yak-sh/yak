@@ -1100,13 +1100,13 @@ let gave = async (
       if (!bytes) return null
       let fixed = await contentType(bytes, mime)
       rep = representation(app.eid, sha, fixed, name)
-      let changes: Bundle[] = [{
+      let bundles: Bundle[] = [{
         entity: { eid: rep.eid },
         representation: rep.row,
       }]
       if (fixed != mime) {
         if (file) {
-          changes.push({
+          bundles.push({
             entity: { eid: await useOf(sha) },
             attachment: { mime: fixed },
             $was: {
@@ -1118,14 +1118,14 @@ let gave = async (
             },
           })
         } else if (artifact) {
-          changes.push({
+          bundles.push({
             entity: { eid: sha },
             artifact: { media_type: fixed },
             $was: { artifact: { media_type: token(artifact.media_type) } },
           })
         }
       }
-      let applied = await graph.apply(changes, KERNEL)
+      let applied = await graph.apply(bundles, KERNEL)
       if (
         !applied.some((b) =>
           b.entity.eid == rep.eid && b.representation &&
@@ -1248,28 +1248,26 @@ export let acting = (env: Env, space: Space, app: App, who: Who) => {
       if (!edits(mode(app.access), who.role)) no('not_a_writer')
       let mine = { space, app, who }
       let homes = await borrowed(env, space, app, who)
+      let bundles = batched(mutation)
       // A word this app uses lives in another app's store (T-32728), so a
       // bundle naming one is split the way the agent door splits it: the
       // borrowed word to its home, everything else here. One logical batch —
       // every part is admitted before any of them commits.
       if (homes.length) {
-        let batch = (mutation as { entities?: Bundle[] }).entities
-        if (batch) {
-          let out = await written(
-            env,
-            [mine, ...homes],
-            mine,
-            batch,
-            await named(env, who),
-          )
-          return {
-            entities: [...new Set(out.bundles.map((b) => b.entity.eid))],
-            aliases: out.aliases,
-          }
+        let out = await written(
+          env,
+          [mine, ...homes],
+          mine,
+          bundles,
+          await named(env, who),
+        )
+        return {
+          entities: [...new Set(out.bundles.map((b) => b.entity.eid))],
+          aliases: out.aliases,
         }
       }
       let applied = await metaOf(store).apply(
-        batched(mutation),
+        bundles,
         { ...vouched(who), ...await named(env, who) },
       )
       return {

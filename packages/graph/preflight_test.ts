@@ -20,13 +20,13 @@ for (let async of [false, true]) {
           return bs
         }),
     )
-    let batch = [
+    let bundles = [
       { entity: { eid: 'b' }, book: { pages: 1 } },
       { entity: { eid: 'b' }, book: { pages: 2 } },
       { entity: { eid: 'b' }, book: null },
       { entity: { eid: 'b' }, book: { pages: 3 } },
     ]
-    assertEquals(await check(batch, detached(storage)), batch)
+    assertEquals(await check(bundles, detached(storage)), bundles)
     assertEquals(seen, [undefined, 1, 2, undefined])
     assertEquals(await storage.get(['b']), [])
     let effects = 0
@@ -44,7 +44,7 @@ for (let async of [false, true]) {
         },
       }],
     })
-    await g.apply(batch)
+    await g.apply(bundles)
     assertEquals(comp((await storage.get(['b']))[0], 'book').pages, 3)
     assertEquals(effects, 1)
   })
@@ -57,23 +57,27 @@ for (let async of [false, true]) {
       if (bs[0].book) throw new Error('refused')
       return bs
     })
-    let batch: Bundle[] = [
+    let bundles: Bundle[] = [
       { entity: { eid: 'b' }, doc: { title: 'prefix' } },
       { entity: { eid: 'b' }, book: { pages: 3 } },
     ]
     if (async) {
       await assertRejects(
         async () => {
-          await check(batch, detached(storage))
+          await check(bundles, detached(storage))
         },
         Error,
         'refused',
       )
-    } else assertThrows(() => check(batch, detached(storage)), Error, 'refused')
+    } else {assertThrows(
+        () => check(bundles, detached(storage)),
+        Error,
+        'refused',
+      )}
     assertEquals(await storage.get(['b']), [])
     calls = 0
     await check(
-      [batch[0], { entity: { eid: 'b' }, tombstone: {} }, batch[1]],
+      [bundles[0], { entity: { eid: 'b' }, tombstone: {} }, bundles[1]],
       detached(storage),
     )
     assertEquals(calls, 2)

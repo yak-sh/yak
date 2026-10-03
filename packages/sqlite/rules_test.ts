@@ -161,12 +161,12 @@ test('an entity variable and a plain value are not the same slot', () => {
 test('the same statement reads a batch that has not landed', () => {
   let { driver } = floor()
   let m = match('$p .product; .review, review.product=$p')
-  let batch = [
+  let bundles = [
     // A review of Ubik, and a price change — neither written yet.
     { entity: { eid: 'r2' }, review: { stars: 3, product: 'p2' } },
     { entity: { eid: 'p1' }, product: { price: 99 } },
   ]
-  let over = overlay(driver, shop, batch, reads(m, shop))
+  let over = overlay(driver, shop, bundles, reads(m, shop))
   assertEquals(
     matched(driver, m, shop, {}, { at: over.at }, over.with)
       .map((h) => h.entities).sort(),
@@ -204,8 +204,8 @@ test('a removal is a clause, and only a batch answers it', () => {
   // `-product`: the entities this batch took `product` off. p1 keeps its doc,
   // so the rest of the pattern is answered from the committed file as usual.
   let m = match('.doc, -product')
-  let batch = [{ entity: { eid: 'p1' }, product: null }]
-  let over = overlay(driver, shop, batch, reads(m, shop))
+  let bundles = [{ entity: { eid: 'p1' }, product: null }]
+  let over = overlay(driver, shop, bundles, reads(m, shop))
   assertEquals(
     matched(driver, m, shop, {}, { at: over.at, gone: over.gone }, over.with)
       .map((h) => h.entities),
@@ -229,11 +229,11 @@ test('a removal is a clause, and only a batch answers it', () => {
 test('a component removed and written again in one batch is not gone', () => {
   let { driver } = floor()
   let m = match('-product')
-  let batch = [
+  let bundles = [
     { entity: { eid: 'p1' }, product: null },
     { entity: { eid: 'p1' }, product: { price: 12 } },
   ]
-  let over = overlay(driver, shop, batch, reads(m, shop))
+  let over = overlay(driver, shop, bundles, reads(m, shop))
   assertEquals(
     matched(driver, m, shop, {}, { at: over.at, gone: over.gone }, over.with)
       .length,

@@ -377,7 +377,7 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
     assertEquals((broken.created as { by: string | null }).by, null)
 
     // The kernel flag is the kernel's: a client sending it is still a client,
-    // and its server-owned change is dropped, not written.
+    // and its server-owned batch is dropped, not written.
     let forgedFlag = await k.at('jeff69.yaks.app', '/recipes/api/apply', {
       method: 'POST',
       headers: { cookie, 'x-yak-kernel': '1' },

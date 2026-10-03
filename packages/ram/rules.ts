@@ -6,18 +6,18 @@
 // join, every pattern's entity and the values its variables took, kept where
 // the variables agree.
 //
-// The store folds the change in before asking (./store.ts `bindings`), so what
-// this file is handed is the graph as the change would leave it, the entities
-// the change is about, and what it removed. The first is the source a filter
-// reads; the second is the anchor, since a rule is about a change and not the
-// whole graph: at least one of its patterns binds an entity the change wrote,
+// The store folds the batch in before asking (./store.ts `bindings`), so what
+// this file is handed is the graph as the batch would leave it, the entities
+// the batch is about, and what it removed. The first is the source a filter
+// reads; the second is the anchor, since a rule is about a batch and not the
+// whole graph: at least one of its patterns binds an entity the batch wrote,
 // so a gated rule does not fire on every entity that ever failed its gate. The
 // third answers `-comp`, the one clause no row can answer.
 //
-// The anchor is also the plan. An anchored pattern is read from the change
+// The anchor is also the plan. An anchored pattern is read from the batch
 // alone, and each pattern after it is found through what the ones before it
 // bound: its entity by id, or its property through the store's keyed index.
-// A keystroke's change is one entity, so a rule over it reads a handful of
+// A keystroke's batch is one entity, so a rule over it reads a handful of
 // bundles, however large the page's graph.
 
 import type { Bind, Binding, Eid, Match, Pattern } from '@yaks/graph'
@@ -124,7 +124,7 @@ let joined = (slots: [string, Slot][], b: Bundle, x: Index, vars: Vars) => {
   return out
 }
 
-// One flat level of a match: its patterns joined, anchored to the change when
+// One flat level of a match: its patterns joined, anchored to the batch when
 // `anchor` is given.
 let level = (
   plan: Match,
@@ -191,7 +191,7 @@ let level = (
     }
     entities[i] = null
   }
-  // Anchored, each pattern in turn is the one read from the change and the rest
+  // Anchored, each pattern in turn is the one read from the batch and the rest
   // are found through it; a row two turns both find is kept once.
   let orders = anchor
     ? live.map((k) => [k, ...live.filter((i) => i != k)])
@@ -203,7 +203,7 @@ let level = (
 /**
  * Evaluate declared rules' matches over a source (@yaks/graph `Tx.bindings`):
  * each match's bindings, with its collections attached. `anchor` is the set of
- * entities the change is about, which every outer binding must touch; left out,
+ * entities the batch is about, which every outer binding must touch; left out,
  * the match is asked outright, as a template's invocation asks it.
  */
 export let bindings = (

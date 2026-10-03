@@ -4,7 +4,7 @@
 // it.
 //
 // The registry registers a hook on the graph's own `effect` phase, so it sees
-// every committed transaction — a local write, and the changes @yaks/sync
+// every committed transaction — a local write, and the batches @yaks/sync
 // applied when the server pushed some. There is no polling and no comparing
 // of the whole store.
 //

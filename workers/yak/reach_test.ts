@@ -159,14 +159,14 @@ test('the app version selects its store declarations after preparation', async (
   assertEquals(await props(1), ['body'])
   assertEquals(await read(1, '/uses'), { neighbor: 'other' })
   assertEquals(await read(1, '/tools'), { old: oldTool })
-  let change = [{
+  let bundles = [{
     entity: { eid: crypto.randomUUID() },
     note: { body: 'hello', mood: 'bright' },
   }]
   let apply = (version: number) =>
     door(version)('/apply', {
       method: 'POST',
-      body: JSON.stringify(change),
+      body: JSON.stringify(bundles),
     }, vouched(owner))
   assertEquals((await apply(1)).status, 400)
   assertEquals(await props(2), ['body', 'mood'])

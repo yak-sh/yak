@@ -503,7 +503,7 @@
       "noun": "comment",
       "verb": "new",
       "title": "Comment on an entity",
-      "description": "Create a comment on an entity: doc{body} holds the markdown and comment{target, reply_to} links to its thread and, optionally, the comment it answers. Attributed to the caller. Omit reply_to to start a branch. Returns the applied changes as bundles.",
+      "description": "Create a comment on an entity: doc{body} holds the markdown and comment{target, reply_to} links to its thread and, optionally, the comment it answers. Attributed to the caller. Omit reply_to to start a branch. Returns the applied bundles.",
       "input": {
         "target": {
           "type": "string",

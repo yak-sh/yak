@@ -499,7 +499,7 @@ export let runs = (
       let applied = await storeApply(
         at.session,
         String(a.where),
-        a.change as Bundle[],
+        a.bundles as Bundle[],
         a.check === true,
       )
       return [said(call, json(applied))]

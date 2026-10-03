@@ -128,7 +128,8 @@ let receiptsFor = (at: Stored) =>
   at.env.STORE
     ? mediaReceipts(records<Partial<MediaReceipt>>(
       {
-        apply: (change) => meta({ STORE: at.env.STORE! }).apply(change, KERNEL),
+        apply: (bundles) =>
+          meta({ STORE: at.env.STORE! }).apply(bundles, KERNEL),
       },
       vaultOf(at.env),
       'generated-media:' + at.app + ':',

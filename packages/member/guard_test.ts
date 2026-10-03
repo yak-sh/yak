@@ -162,7 +162,7 @@ test('an empty batch is nobody’s business', () => {
 
 // ---- an open thing: new rows, and your own ---------------------------------
 
-// One change by one principal, as the guarded graph takes it.
+// One batch by one principal, as the guarded graph takes it.
 let as = (s: Storage, who: string | Actor | null, b: Bundle, floors?: Floors) =>
   sync(
     guarded(s, ids.list, floors).apply([

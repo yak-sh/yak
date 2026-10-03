@@ -38,9 +38,9 @@ export let rules = (store: () => Storage): void => {
         { entity: { eid: 'r1' }, review: { stars: 5, product: 'p1' } },
       ])
     )
-    return (source: string, batch: Bundle[] = []) => {
+    return (source: string, bundles: Bundle[] = []) => {
       let m = match(source)
-      let found = s.tx((tx) => tx.bindings!([m], batch, reads(m, shop)))
+      let found = s.tx((tx) => tx.bindings!([m], bundles, reads(m, shop)))
       return (found as Binding[][])[0]
     }
   }

@@ -95,15 +95,15 @@ export let turned = (id: string, patch: Grid): Bundle[] => [{
 export let refusal = (io: Pick<Io, 'state'>, at: string): string =>
   me(io).at == at && me(io).said ? String(me(io).said) : ''
 
-/** Write `change` to the graph from `at`: a refusal is said there until a
+/** Write `bundles` to the graph from `at`: a refusal is said there until a
  * write from anywhere lands. */
 export let write = (
   io: Pick<Io, 'apply' | 'set'>,
   at: string,
-  change: Bundle[],
+  bundles: Bundle[],
 ): Promise<void> =>
   Promise.resolve()
-    .then(() => io.apply(change))
+    .then(() => io.apply(bundles))
     .then(
       () => io.set(put({ said: null, at: null })),
       (err) =>
@@ -124,7 +124,7 @@ export let editing = (
   host: Host,
   more: Pick<Ux, 'find' | 'fields' | 'drafts' | 'Float'>,
 ): Ux => {
-  let set = (change: Bundle[]) => void host.front.mutate(change)
+  let set = (bundles: Bundle[]) => void host.front.mutate(bundles)
   let { vocab, front, name, id, kind, when } = host
   return {
     vocab,

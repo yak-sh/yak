@@ -27,7 +27,7 @@ let fixture = () => {
   let oops: Job[] = []
   let fx = effects(blog, { report: (_e, job) => oops.push(job) })
   let g = blogGraph([fx])
-  let apply = (change: Bundle[]) => sync(g.apply(change))
+  let apply = (bundles: Bundle[]) => sync(g.apply(bundles))
   return { fx, g, seen, oops, apply }
 }
 
@@ -340,7 +340,7 @@ let owing = () => {
   let seen: string[] = []
   let fx = effects(owingBlog)
   let g = blogGraph([fx], owingBlog)
-  let apply = (change: Bundle[]) => sync(g.apply(change))
+  let apply = (bundles: Bundle[]) => sync(g.apply(bundles))
   let note = (e: Event) => void seen.push(`${e.kind} ${e.entity.eid}`)
   return { fx, seen, apply, note }
 }

@@ -71,8 +71,8 @@ export type Saving = Marking & {
 export let FEEDBACK = 'feedback'
 
 /**
- * A mark on an entity that already holds the words, as the list of changes
- * that writes it: `memory` and, for a correction, `feedback`, and nothing
+ * A mark on an entity that already holds the words, as the bundles
+ * that write it: `memory` and, for a correction, `feedback`, and nothing
  * about the words themselves. Who marked it, and when, the graph stamps.
  *
  * ```ts
@@ -99,7 +99,7 @@ export let marked = (m: Marking): Bundle[] => {
 }
 
 /**
- * Words the graph holds nowhere yet, as the list of changes that keeps them:
+ * Words the graph holds nowhere yet, as the bundles that keep them:
  * a doc whose body is the words exactly as they were said, marked. The byline
  * is stamped by the graph, so nothing here writes one.
  */

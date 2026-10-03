@@ -39,7 +39,7 @@ import {
 
 // The graph a host builds: the plugin over one vault, writing what it says
 // about a seal back through the graph, and reporting where the graph does. `call` is @yaks/tools', a component whose
-// text carries a whole change as JSON, and so are `error`, `exception` and
+// text carries a whole batch as JSON, and so are `error`, `exception` and
 // `content`, the words a failed seal is said in.
 let setup = <V extends Vault = Local>(vault: V = ramVault() as V) => {
   let vocab = loadVocab([secretsDoc, provisionalDoc, toolsDoc, docDoc])
@@ -141,7 +141,7 @@ test('deleting a secret, or its component, drops it from the vault', async () =>
   assertEquals(await reveal(vault, 'A', none), undefined)
 })
 
-test('a dry run seals nothing, and neither does a refused change', async () => {
+test('a dry run seals nothing, and neither does a refused batch', async () => {
   let { g, vault } = setup()
   await g.apply([sealed('A', 'one')])
   await g.apply([sealed('A', 'two'), sealed('B', 'three')], { check: true })
@@ -234,16 +234,16 @@ test('a secret inside a call is its handle there too, and sealed when the call a
   let { g, vault } = setup()
   let [call] = await g.apply([{
     entity: { eid: 'c1' },
-    call: { args: { change: [sealed('A', 'hidden')] } },
+    call: { args: { bundles: [sealed('A', 'hidden')] } },
   }])
-  let args = (call.call as Record<string, { change: Bundle[] }>).args
+  let args = (call.call as Record<string, { bundles: Bundle[] }>).args
   assert(!JSON.stringify(args).includes('hidden'))
-  let [change] = args.change
-  await g.apply([change])
+  let [bundle] = args.bundles
+  await g.apply([bundle])
   assertEquals(await reveal(vault, 'A'), 'hidden')
   assertEquals(
     (await row(g, 'A'))!.value,
-    (change.secret as Record<string, string>).value,
+    (bundle.secret as Record<string, string>).value,
   )
 })
 

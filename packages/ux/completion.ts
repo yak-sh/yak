@@ -31,7 +31,7 @@ import {
 /** As much of a front-end graph as a field needs; a @yaks/client `client()`
  * is one. */
 export type Front = {
-  mutate: (change: Bundle[]) => unknown
+  mutate: (bundles: Bundle[]) => unknown
   watch: (query: string) => {
     value: Bundle[]
     subscribe: (fn: (rows: Bundle[]) => void) => () => void

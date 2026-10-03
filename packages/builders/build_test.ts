@@ -570,7 +570,7 @@ test('unrelated changes read a bounded number of rows with many builders', async
   await g.apply([{ entity: { eid: 'unrelated' }, project: { name: 'Other' } }])
   assertEquals(failed, [])
   assert(count < 8, `${count} rows read for 32 unrelated builders`)
-  console.log(`32 builders, unrelated graph change: ${count} rows read`)
+  console.log(`32 builders, unrelated graph batch: ${count} rows read`)
 })
 
 test('an authored using value and its admitted form have one key', async () => {

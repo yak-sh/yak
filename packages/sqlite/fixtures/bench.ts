@@ -91,12 +91,12 @@ export function packageBenches(layer: 'sqlite' | 'sql' | 'query') {
   }
   let phase = 0
   let write = () => store.tx((tx) => tx.patch(data.batches[phase++ % 2]))
-  for (let batch of data.batches) {
+  for (let bundles of data.batches) {
     write()
-    let rows = store.tx((tx) => tx.get(batch.map((b) => b.entity.eid)))
+    let rows = store.tx((tx) => tx.get(bundles.map((b) => b.entity.eid)))
     assertEquals(
       rows.map((b) => (b.doc as Comp).title),
-      batch.map((b) => b.doc.title),
+      bundles.map((b) => b.doc.title),
     )
   }
   Deno.bench(`${layer}/${loc.mode}/apply-100`, () => {

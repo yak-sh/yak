@@ -4,7 +4,7 @@
 // lock. Transactional stores keep it after the `$was` guard, so bytes and rows
 // roll back together. Both leave text intact until the guard checks it, then
 // substitute references in `precondition` and restore text in `commit`. `$blob`
-// carries the prepared references and original text through the change.
+// carries the prepared references and original text through the batch.
 
 import type { Bundle, Comp, Plugin } from '@yaks/graph'
 import { after, each } from '@yaks/fp'
@@ -127,7 +127,7 @@ export let blobs = (
   let props = opts.props ?? bodies(vocab)
   let reference = opts.reference ?? ((sha: string) => sha)
   let prepare = (bundles: Bundle[]) => {
-    // Cache only within this change: a rolled-back transactional reference
+    // Cache only within this batch: a rolled-back transactional reference
     // must never be reused. Equal values need one hash and one store call.
     let refs = new Map<string, string | number>()
     let intern = (value: string) => {

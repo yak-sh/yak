@@ -13,7 +13,7 @@
 // The graph decides what is deleted; storage only removes what it is told to.
 // That split is the point: a cascade rule is about meaning, it is written in
 // the vocabulary, and every storage adapter gets it without reimplementing it
-// in SQL. Every surviving entity's change is added back into the change the
+// in SQL. Every surviving entity's change is added back into the batch the
 // caller gets, so a client cache that applies the return value keeps no stale
 // rows.
 //
@@ -24,7 +24,7 @@
 // `doomSql`); one that cannot is walked here instead, with one reverse read
 // per level through `about()` (./gather.ts). Either way the question is asked
 // after the patches are written, because what points at the entities being
-// deleted is a question about the graph as this change leaves it.
+// deleted is a question about the graph as this batch leaves it.
 
 import type { Death, Vocab } from '@yaks/vocab'
 import { after } from '@yaks/fp'
@@ -55,7 +55,7 @@ let at = (b: Bundle, comp: string, prop: string): Eid | null => {
 // order the read happened to return them in — which is per property, so an
 // entity referencing a deleted one through two properties would land wherever
 // the first property put it. The single-statement version returns that order
-// too, so a client applying the change cannot tell which path produced it.
+// too, so a client applying the batch cannot tell which path produced it.
 let born = (bundles: Bundle[]): Bundle[] =>
   [...bundles].sort((a, b) => (a.entity.num ?? 0) - (b.entity.num ?? 0))
 
@@ -102,7 +102,7 @@ let walk = (
  * that reads a doomed entity's components has one chance, before the rows go.
  * It always walks the references: a plugin calls it in the phases that read
  * from the gather, where storage's own single-statement answer would be about
- * rows this change has not written yet.
+ * rows this batch has not written yet.
  */
 export let doomed = (
   tx: Tx,
@@ -139,7 +139,7 @@ let letting = (
 
 // What is deleted, and which references are cleared: storage's own answer when
 // it has one, and the walk when it does not. The walk does a gather of its own
-// — this phase runs after `mutate`, so it must see this change's own writes —
+// — this phase runs after `mutate`, so it must see this batch's own writes —
 // and reads the cascade properties together with the detach/release ones, so
 // one reverse read serves both.
 let reckon = (
@@ -156,7 +156,7 @@ let reckon = (
         let dead = gone.map((g) => g.eid)
         // The detach/release references into everything deleted, including
         // the entities the walk turned up — one read, and no read at all when
-        // this change's own deletes were all of it.
+        // this batch's own deletes were all of it.
         return after(about(held, vocab, dead, soft), (owners) => ({
           gone,
           loose: letting(vocab, born(owners), dead),
@@ -191,9 +191,9 @@ let loosen = (
 
 /**
  * The cascade phase: work out everything that is deleted along with what this
- * change deleted, clear the detach and release references, remove those
- * entities, and add a bundle for each of them to the change. A caller that
- * applies the returned change to a cache ends up exactly where the graph is.
+ * batch deleted, clear the detach and release references, remove those
+ * entities, and add a bundle for each of them to the batch. A caller that
+ * applies the returned batch to a cache ends up exactly where the graph is.
  */
 export let cascade = (
   bundles: Bundle[],
@@ -203,7 +203,7 @@ export let cascade = (
 ): Bundle[] | Promise<Bundle[]> => {
   if (!st.killed.length) return bundles
   return after(reckon(tx, vocab, st.killed), ({ gone, loose }) => {
-    // The entities the change named come first, whatever order the answer
+    // The entities the batch named come first, whatever order the answer
     // arrived in: they are deleted because the caller said so, and an entity
     // storage has never heard of is still one of them.
     let dead = [...new Set([...st.killed, ...gone.map((g) => g.eid)])]
@@ -218,7 +218,7 @@ export let cascade = (
               ...released,
               ...detached,
               // The entities deleted because something else was. The ones the
-              // change named are already in it, carrying their own delete.
+              // batch named are already in it, carrying their own delete.
               ...dead.filter((eid) => !st.killed.includes(eid))
                 .map((eid) => tombstoned({ eid })),
             ],

@@ -189,9 +189,9 @@ export let live = ({ box, front, edits }: LiveOpts): Host => {
     front,
     useAnswers,
     edits,
-    apply: async (change) => {
+    apply: async (bundles) => {
       if (!box.wire) throw new Error('this inspector reaches no server')
-      await box.wire.submit(change)
+      await box.wire.submit(bundles)
     },
     get,
     link: (eid) => {

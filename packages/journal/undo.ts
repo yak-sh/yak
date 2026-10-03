@@ -181,8 +181,8 @@ export let undo =
   (seq: number, actor?: Actor): Bundle[] | Promise<Bundle[]> => {
     let batch = j.at(seq)
     if (!batch) throw new Error(`no journal batch #${seq}`)
-    let change = undone(batch, { guard: true })
-    if (!change.length) return []
-    if (actor) change[0] = { ...change[0], $actor: actor }
-    return g.apply(change, { trusted: true })
+    let bundles = undone(batch, { guard: true })
+    if (!bundles.length) return []
+    if (actor) bundles[0] = { ...bundles[0], $actor: actor }
+    return g.apply(bundles, { trusted: true })
   }

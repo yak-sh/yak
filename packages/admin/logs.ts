@@ -244,7 +244,7 @@ let keepIt = (why: string) =>
     `${why}. Reading Sentry needs a token that can read the ${SENTRY.org} ` +
       'org (org:read), made at sentry.io → User Settings → Personal Tokens. ' +
       "Keep an op:// reference to one in this box's vault, once:\n  yak " +
-      `graph apply --change '[{"entity":{"eid":"$s"},"secret":{"name":` +
+      `graph apply --bundles '[{"entity":{"eid":"$s"},"secret":{"name":` +
       `"${TOKEN}","value":"op://<vault>/<item>/<field>"}}]'\nLive traffic ` +
       'is `yak admin tail --admin`.',
   )

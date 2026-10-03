@@ -253,7 +253,7 @@ test('a store nobody mirrors keeps its own numbering', () => {
 })
 
 test('a map has no schema: install does nothing', () => {
-  // and a Store is a Storage — the seam @yaks/graph applies changes through
+  // and a Store is a Storage — the seam @yaks/graph applies bundles through
   let s: Storage = shopRam()
   assertEquals(s.install(), undefined)
 })

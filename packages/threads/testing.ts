@@ -39,7 +39,7 @@ export let open: Open<{ gated?: boolean; fail?: boolean }> = async (start) => {
   await graph.apply([{ entity: { eid: start.me } }])
   let fx = effects(vocab, {
     owner: start.me,
-    write: (batch) => graph.apply(batch, { trusted: true }),
+    write: (bundles) => graph.apply(bundles, { trusted: true }),
   })
   fx.handle({
     finish: async (event, tx, write) => {

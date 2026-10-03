@@ -1,5 +1,5 @@
 // Delivery of the session bus. A native transcript gets an input in the same
-// change that marks the item said; a caller using a tool sees owed lines in
+// batch that marks the item said; a caller using a tool sees owed lines in
 // that tool's reply. The listener for an outside harness uses listen.ts.
 
 import {

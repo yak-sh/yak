@@ -169,10 +169,10 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
   // Post one write on the chain. `held` means it was never applied locally, so
   // a refusal has nothing to revert and an unanswered request has nothing to
   // keep pinned.
-  let send = (batch: Bundle[], held = false) => {
-    let release = opts.replica?.protect(batch.map((b) => b.entity.eid))
+  let send = (bundles: Bundle[], held = false) => {
+    let release = opts.replica?.protect(bundles.map((b) => b.entity.eid))
     queue(() =>
-      exchange(batch, {
+      exchange(bundles, {
         graph,
         url: opts.url,
         fetch: opts.fetch ?? ((r) => globalThis.fetch(r)),
@@ -232,8 +232,8 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
         })
       },
       // After the rules, still before the patches: what they added, marked
-      // with the copy to put back. The server's own change carries what its
-      // rules added, so a change that came from it has nothing to mark.
+      // with the copy to put back. The server's own batch carries what its
+      // rules added, so a batch that came from it has nothing to mark.
       rules: (bundles, tx) => {
         let added = bundles.filter((b) => !asked(b))
         if (!added.length || bundles.some(echoed)) return bundles

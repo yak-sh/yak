@@ -24,7 +24,7 @@ import { type Ids, toBundles, type VocabDoc } from '@yaks/vocab'
 
 let str = (v: unknown) => v == null ? '' : String(v)
 
-// The rows a vocabulary is described in, in the order a change writes them,
+// The rows a vocabulary is described in, in the order a batch writes them,
 // so each reference lands on an entity written before it.
 let ROWS = ['_package', '_comp', '_extends', '_prop', '_before', '_vocab']
 let rank = (b: Bundle) => ROWS.findIndex((r) => b[r] !== undefined)

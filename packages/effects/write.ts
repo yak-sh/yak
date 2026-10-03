@@ -6,7 +6,7 @@
 // stamped properties, no journal row, no subscriber notified, and no other
 // effect ever hearing about it. That is how the outcome of a letter became a
 // row a page only found on its next query, instead of an update it was pushed
-// (T-34044). So an effect's write is a new batch — a list of changes applied in
+// (T-34044). So an effect's write is a new batch — bundles applied in
 // one transaction — through the graph's own `apply()`, after the commit that
 // triggered the handler.
 //

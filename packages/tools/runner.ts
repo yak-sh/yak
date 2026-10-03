@@ -32,7 +32,7 @@
 // that the property was absent, so a second server loses the race instead of
 // running the tool twice; it writes `done` or `failed` when the result is
 // applied. A call asked through `call()` is written already claimed, in the
-// same change: the caller asking is the one waiting for the answer, so the
+// same batch: the caller asking is the one waiting for the answer, so the
 // tool runs where it asked, and every other runner (an effect of the same
 // commit, another thread of the process, another process) finds the call held
 // from the moment it exists. A call left `running` by a process that died has
@@ -562,7 +562,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     return pending
   }
 
-  // A call written and claimed in one change, then run here. The claim is its
+  // A call written and claimed in one batch, then run here. The claim is its
   // own bundle: the call is the caller's, the claim is the runner's
   // bookkeeping and carries no identity. A call somebody claimed first (only
   // a named one can be) reads the way `run` reads it.
@@ -731,13 +731,13 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       keeps = !tool.readOnly || state == 'failed' || state == 'interrupted',
       code?: string,
     ): Promise<Bundle[]> => {
-      let change = [
+      let bundles = [
         ...(keeps ? made : []),
         ...ending(call, started, state, made),
         ...code ? [{ entity: call.entity, interrupted: { code } }] : [],
       ]
       let landed = await persist(
-        () => g.apply(change),
+        () => g.apply(bundles),
         (e) => opts.report?.(e, call, tool.name),
       )
       return keeps ? landed : [...made, ...landed]
@@ -890,8 +890,8 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       let asked = names ? tools.filter((t) => names.includes(t.name)) : tools
       let fresh = asked.filter((t) => !stood.has(t.name))
       if (fresh.length) {
-        let batch = standing(fresh)
-        for (let t of fresh) stood.set(t.name, batch)
+        let bundles = standing(fresh)
+        for (let t of fresh) stood.set(t.name, bundles)
       }
       let batches = new Set(asked.map((t) => stood.get(t.name)!))
       return Promise.all(batches).then((all) => all.flat())

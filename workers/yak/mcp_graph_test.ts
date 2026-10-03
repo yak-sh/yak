@@ -50,6 +50,35 @@ test(
   },
 )
 
+test(
+  'graph_apply translates published bundle arguments at the connector',
+  async () => {
+    let k = await kernel()
+    try {
+      let agent = connector(k, (await signIn(k)).cookie)
+      await agent.tool('app_new', { slug: 'notes', title: 'Notes' })
+      for (let key of ['bundles', 'change', 'entities']) {
+        let title = `Written through ${key}`
+        let said = await agent.tool('graph_apply', {
+          app: 'notes',
+          [key]: [{ entity: { eid: '$note' }, doc: { title } }],
+        })
+        let eid = minted(said, '$note')
+        let [row] = JSON.parse(
+          await agent.tool('graph_query', {
+            app: 'notes',
+            q: `.entity.eid=${eid}&.doc`,
+          }),
+        )
+        assertEquals(row.doc.title, title)
+      }
+    } finally {
+      await k.stop()
+    }
+  },
+  { tags: ['published-arguments'] },
+)
+
 // A reduction asks about the selection, not its members, and is answered with
 // its value, as `/query` answers it — one app's or the whole reach's.
 test('graph_query answers a count and a tally as their value', async () => {
@@ -385,7 +414,7 @@ test('a write with no app routes each component to its own app', async () => {
     // keeps none of it: not in the app's store, not anywhere.
     let pie = minted(
       await agent.tool('graph_apply', {
-        change: [{
+        bundles: [{
           entity: { eid: '$pie' },
           doc: { title: 'Apple pie' },
           recipe: { serves: 6 },
@@ -486,7 +515,7 @@ test('a write with no app routes each component to its own app', async () => {
 
     // Arguments sent as a string are the caller's mistake, answered as one.
     await assertRejects(
-      () => agent.tool('graph_apply', JSON.stringify({ change: [] })),
+      () => agent.tool('graph_apply', JSON.stringify({ bundles: [] })),
       Error,
       'not a string',
     )
@@ -1390,7 +1419,7 @@ test('the platform admin reads and patches an app it holds no seat in', async ()
     let bell = minted(
       await theirs.tool('graph_apply', {
         ...at,
-        change: [{ entity: { eid: '$bell' }, sfx: { notes: 'doorbell' } }],
+        bundles: [{ entity: { eid: '$bell' }, sfx: { notes: 'doorbell' } }],
       }),
       '$bell',
     )
@@ -1402,7 +1431,7 @@ test('the platform admin reads and patches an app it holds no seat in', async ()
     let patch = (agent: typeof theirs) =>
       agent.tool('graph_apply', {
         ...at,
-        change: [{ entity: { eid: bell }, sfx: { notes: 'chime' } }],
+        bundles: [{ entity: { eid: bell }, sfx: { notes: 'chime' } }],
       })
 
     let admin = connector(k, k.owner.cookie)

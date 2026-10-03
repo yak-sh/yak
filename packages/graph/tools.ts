@@ -131,7 +131,7 @@ export let runs = (seams: Seams = {}): Runs => {
     // the runner signed as the caller, and the batch as applied is what comes
     // back. `check: true` makes the call a rehearsal, which the runner answers
     // with what a kept write would have returned (@yaks/tools).
-    graph_apply: (call) => formed(argsOf(call).change),
+    graph_apply: (call) => formed(argsOf(call).bundles),
     // The one concession to typing by hand is the query line:
     // `.book.status=shelved` is the grammar @yaks/query owns, so this takes it as a string, and each
     // of the optional `filters` narrows the whole of it (`conjoin`). It stays a

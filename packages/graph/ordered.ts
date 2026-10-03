@@ -1,6 +1,6 @@
 // Writing one operation at a time, for a plugin whose checks depend on what
-// earlier operations in the same change wrote. `$was` still compares against
-// the state before the change; these `beforeWrite` hooks see everything
+// earlier operations in the same batch wrote. `$was` still compares against
+// the state before the batch; these `beforeWrite` hooks see everything
 // written before them. It reuses the same mutate and cascade functions, once
 // per operation, inside the enclosing transaction — so a refusal at the end
 // rolls back everything that came before it.
@@ -29,11 +29,11 @@ export let ordered = (
       ? [bundles]
       : bundles.map((b) => [b]),
     [] as Bundle[],
-    (out, batch) => {
-      // Only this change's own deaths win over its later patches. A grave
-      // from an earlier change belongs to mutate: a fresh write revives it,
+    (out, bundles) => {
+      // Only this batch's own deaths win over its later patches. A grave
+      // from an earlier batch belongs to mutate: a fresh write revives it,
       // while a write carrying old $was values is swallowed as a race.
-      let live = batch.filter((b) => !killed.has(b.entity.eid))
+      let live = bundles.filter((b) => !killed.has(b.entity.eid))
       if (!live.length) return out
       return after(
         each(checks, live, (bs, check) => check(bs, held)),

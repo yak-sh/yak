@@ -35,7 +35,7 @@ effect)? Does only this process care, like a view refreshing (an observer)?
 
 A declared rule is a match with write clauses and no code
 (packages/graph/README.md, "A rule with no code at all"):
-`.product, +!shelf, +shelf.aisle=Z`. Its writes join the pending change and get
+`.product, +!shelf, +shelf.aisle=Z`. Its writes join the pending batch and get
 admission, stamps and the journal like the caller's own. What it creates gets an
 id derived from the rule and the match, so every evaluation, on any process or
 page, names the same entity.

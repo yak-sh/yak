@@ -242,7 +242,7 @@ test(
       // Once per store: the person renames the recipe, deploys again, and the
       // seed does not put the old title back.
       await agent.tool('graph_apply', {
-        change: [{ entity: { eid: soup.entity.eid }, doc: { title: 'Dal' } }],
+        bundles: [{ entity: { eid: soup.entity.eid }, doc: { title: 'Dal' } }],
       })
       let again = await agent.tool('app_deploy', app)
       assertEquals(again.includes('seeded'), false)

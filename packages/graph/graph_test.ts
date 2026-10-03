@@ -389,10 +389,10 @@ test('an unstamped correction still derives, journals and observes committed dat
 
 test('unstamped corrections require trust and still validate and guard writes', () => {
   let one = g()
-  let change = [{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }]
-  assertThrows(() => one.apply(change, { stamp: false }), Refused)
+  let bundles = [{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }]
+  assertThrows(() => one.apply(bundles, { stamp: false }), Refused)
   assertEquals(one.get(['b1']), [])
-  sync(one.apply(change))
+  sync(one.apply(bundles))
   assertThrows(
     () =>
       one.apply([{ entity: { eid: 'b1' }, undeclared: {} }], {
@@ -404,7 +404,7 @@ test('unstamped corrections require trust and still validate and guard writes', 
   assertThrows(
     () =>
       one.apply([{
-        ...change[0],
+        ...bundles[0],
         $was: { doc: { title: token('Emma') } },
       }], { trusted: true, stamp: false }),
     Stale,
@@ -430,7 +430,7 @@ test("a batch nobody signed is the graph's own, and a signed one is not", () => 
   assertEquals(at(hers, 'b2', 'created').by, 'ada')
 })
 
-test("each entity is its own bundle's writer's, and the rest the change's", () => {
+test("each entity is its own bundle's writer's, and the rest the batch's", () => {
   let out = sync(
     g().apply([
       { entity: { eid: 'b1' }, doc: { title: 'Dune' }, $actor: { by: 'ada' } },

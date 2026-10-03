@@ -13,7 +13,7 @@
  * The store's answer, and every text another interface makes it hold, is
  * heard by its `rev`, newest last, and what was typed here since is merged
  * onto it (./merge.ts): neither side's typing is dropped. A draft ends when
- * its text is emptied, in the same change as the send it went into.
+ * its text is emptied, in the same batch as the send it went into.
  *
  * @module
  */
@@ -36,10 +36,10 @@ import { merge } from './merge.ts'
 export let draftEid = (by: string, place: string): string =>
   derivedEid(['draft', by, place].join('|'))
 
-/** As much of a graph as a desk needs: a write answered with the change as
+/** As much of a graph as a desk needs: a write answered with the batch as
  * the store took it, and a watch. A @yaks/client `client()` is one. */
 export type Client = {
-  mutate: (change: Bundle[]) => Bundle[] | Promise<Bundle[]>
+  mutate: (bundles: Bundle[]) => Bundle[] | Promise<Bundle[]>
   watch: (query: string) => {
     value: Bundle[]
     subscribe: (fn: (rows: Bundle[]) => void) => () => void
@@ -60,7 +60,7 @@ export type Drafts = {
   text: (place: string) => string
   /** the person typed: keep it */
   type: (place: string, text: string) => void
-  /** it was sent, or discarded: empty it at once, in one change with `also`
+  /** it was sent, or discarded: empty it at once, in one batch with `also`
    * (the send it went into) */
   spend: (place: string, also?: Bundle[]) => void
 }
@@ -210,7 +210,7 @@ export let desk = (
   }
 
   // A write of what is typed, over what it was typed over, with `also`
-  // beside it in one change.
+  // beside it in one batch.
   let send = (place: string, also: Bundle[] = [], spent?: string) => {
     clearTimeout(timers.get(place))
     timers.delete(place)

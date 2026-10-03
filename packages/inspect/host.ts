@@ -52,7 +52,7 @@ export type Front = {
   /** the components it holds: the inspector's own (./front.json), and
    * whatever else the page keeps there (a field's @yaks/filter state) */
   vocab: { comps: string[] }
-  mutate: (change: Bundle[]) => unknown
+  mutate: (bundles: Bundle[]) => unknown
   watch: (query: string) => {
     value: Bundle[]
     subscribe: (fn: (rows: Bundle[]) => void) => () => void
@@ -67,8 +67,8 @@ export type Host = {
   /** the answer to each ask, held while the view asking is mounted: a hook,
    * called once per render with the whole set */
   useAnswers: (asks: Asks) => Record<string, Answer>
-  /** write a change to the graph; a write it refuses rejects, saying why */
-  apply: (change: Bundle[]) => void | Promise<void>
+  /** write a batch to the graph; a write it refuses rejects, saying why */
+  apply: (bundles: Bundle[]) => void | Promise<void>
   /** the page's own graph, where the inspector keeps its state */
   front: Front
   /** an entity the host holds, by eid, read reactively: one an answer
@@ -107,7 +107,7 @@ export type Io = Omit<Host, 'useAnswers' | 'front'> & {
   /** one of the inspector's own entities, read reactively */
   state: (eid: string) => Bundle | undefined
   /** write the inspector's own state */
-  set: (change: Bundle[]) => void
+  set: (bundles: Bundle[]) => void
 }
 
 /** What a view is drawn with. */

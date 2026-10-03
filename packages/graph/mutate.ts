@@ -1,5 +1,5 @@
 // The mutate phase: the patches are written. Everything interesting has
-// already been decided — admission narrowed the change to what this vocabulary
+// already been decided — admission narrowed the batch to what this vocabulary
 // declares, and the preconditions held — so what is left is to hand the live
 // bundles to the transaction and record the ids storage assigned.
 //
@@ -9,15 +9,15 @@
 // before it — is swallowed, so an edit made against a view from before the
 // delete loses deterministically. Any other write clears the tombstone and
 // lands: the entity is back, with its eid, its number, and exactly the
-// components that write gives it. Within one change, a patch after the
-// change's own delete of an entity is dropped: the change said both, and the
+// components that write gives it. Within one batch, a patch after the
+// batch's own delete of an entity is dropped: the batch said both, and the
 // delete is what the cascade acts on.
 //
 // An event is a component that lives no time (`durable: "0s"`): the rules
-// have read it, and it is never written. It leaves the change here, so
+// have read it, and it is never written. It leaves the batch here, so
 // nothing stamps or journals it (a journal that recorded one would have undo
 // restore what was never stored), and rejoins it after the journal, on its
-// entity, for whoever hears the applied change (`State.heard`). A bundle of
+// entity, for whoever hears the applied batch (`State.heard`). A bundle of
 // nothing but events leaves whole.
 
 import { after } from '@yaks/fp'
@@ -54,8 +54,8 @@ let said = (b: Bundle, events: Set<string>): Bundle => ({
   ...Object.fromEntries(comps(b).filter(([c]) => events.has(c))),
 })
 
-/** The change with what was heard and never written back in it, each on its
- * entity's bundle, or beside the others where the change wrote nothing of
+/** The batch with what was heard and never written back in it, each on its
+ * entity's bundle, or beside the others where the batch wrote nothing of
  * that entity. */
 export let rejoin = (bundles: Bundle[], heard: Bundle[]): Bundle[] => {
   let out = [...bundles]
@@ -69,10 +69,10 @@ export let rejoin = (bundles: Bundle[], heard: Bundle[]): Bundle[] => {
 }
 
 /**
- * The mutate phase: write the change's live bundles, swallow the ones that
+ * The mutate phase: write the batch's live bundles, swallow the ones that
  * raced a delete, revive a deleted entity any other write gives a component,
  * and record which entities were deleted and which were created. Delete
- * bundles stay in the change — the cascade phase is what acts on them.
+ * bundles stay in the batch — the cascade phase is what acts on them.
  */
 export let mutate = (
   bundles: Bundle[],
@@ -83,11 +83,11 @@ export let mutate = (
   let events = eventsOf(vocab)
   let eids = [...new Set(bundles.map((b) => b.entity.eid))]
   return after(tx.get(eids), (found) => {
-    // Deleted before this change began: a write may bring one back.
+    // Deleted before this batch began: a write may bring one back.
     let buried = new Set(
       found.filter((b) => dead(b)).map((b) => b.entity.eid),
     )
-    // Deleted by this change: nothing later in it writes to one.
+    // Deleted by this batch: nothing later in it writes to one.
     let gone = new Set<string>()
     let live: Bundle[] = []
     let back: string[] = []

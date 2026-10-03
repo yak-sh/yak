@@ -1,4 +1,4 @@
-// The `$` keys a change may carry. A bundle's ordinary keys name components,
+// The `$` keys a batch may carry. A bundle's ordinary keys name components,
 // and admission refuses one this graph does not declare. A `$` key is another
 // kind of thing: it asks the pipeline to DO something, and a request nobody
 // implements did not happen — `$num: true` on a graph with no allocator would

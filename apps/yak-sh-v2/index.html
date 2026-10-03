@@ -243,7 +243,7 @@
         rendering records as entities, plus the packages that run agent
         sessions, tools and tasks over them. <b>yak</b> is its command line,
         and <a href=https://yaks.app>yaks.app</a> hosts the apps built with it.
-        Every change is an entity patch, and every list is a query.
+        Each bundle is an entity patch, and every list is a query.
       </p>
       <pre><code>deno run -A --minimum-dependency-age=0 jsr:@yaks/cli/install</code></pre>
       <p class=Only-crt>
@@ -288,7 +288,7 @@
         <dd>One entity's components as a JSON object:
           <code>{entity: {eid}, doc: {title}}</code>.</dd>
         <dt>batch</dt>
-        <dd>A list of changes applied in one transaction. Each component in a
+        <dd>A list of bundles applied in one transaction. Each component in a
           bundle is a patch: an omitted property is unchanged, <code>null</code>
           clears it.</dd>
         <dt>vocabulary</dt>
@@ -362,7 +362,7 @@ console.log(await g.read('.doc.title="Getting started"'))</code></pre>
             <dt><a href=https://jsr.io/@yaks/fts data-pkg=fts>fts</a><dd>full-text search over FTS5
             <dt><a href=https://jsr.io/@yaks/embedding data-pkg=embedding>embedding</a><dd>vectors and <code>.near=&lt;entity&gt;</code>
             <dt><a href=https://jsr.io/@yaks/blob data-pkg=blob>blob</a><dd>long values stored by hash
-            <dt><a href=https://jsr.io/@yaks/journal data-pkg=journal>journal</a><dd>history, undo and a change feed
+            <dt><a href=https://jsr.io/@yaks/journal data-pkg=journal>journal</a><dd>history, undo and a batch feed
             <dt><a href=https://jsr.io/@yaks/effects data-pkg=effects>effects</a><dd>work owed by a commit, run by a pool
             <dt><a href=https://jsr.io/@yaks/id data-pkg=id>id</a><dd>eids, and short ids like <code>T-7</code>
             <dt><a href=https://jsr.io/@yaks/key data-pkg=key>key</a>, <a href=https://jsr.io/@yaks/alias data-pkg=alias>alias</a>, <a href=https://jsr.io/@yaks/names data-pkg=names>names</a><dd>other ways to address an entity
@@ -668,9 +668,9 @@ console.log(await transcript(g, 'session'))</code></pre>
         its own. Claims do not expire; deleting a session releases them.
       </p>
       <div class=Ex data-run=sh>
-        <pre><code>yak graph apply --change '[{"entity":{"eid":"ada"},"session":{}},{"entity":{"eid":"bo"},"session":{}}]'
-yak graph apply --change '[{"entity":{"eid":"T-1"},"claim":{"session":"ada"}}]'
-yak graph apply --change '[{"entity":{"eid":"T-1"},"claim":{"session":"bo"}}]'
+        <pre><code>yak graph apply --bundles '[{"entity":{"eid":"ada"},"session":{}},{"entity":{"eid":"bo"},"session":{}}]'
+yak graph apply --bundles '[{"entity":{"eid":"T-1"},"claim":{"session":"ada"}}]'
+yak graph apply --bundles '[{"entity":{"eid":"T-1"},"claim":{"session":"bo"}}]'
 yak graph query .conflict</code></pre>
       </div>
 
@@ -709,7 +709,7 @@ yak session peek S-2</code></pre>
       </p>
       <table>
         <tr><th>Tool<th>Purpose
-        <tr><td><code>graph_apply</code><td>apply changes, answer the applied bundles
+        <tr><td><code>graph_apply</code><td>apply bundles, answer the applied bundles
         <tr><td><code>graph_query</code><td>read the entities a query selects
         <tr><td><code>graph_show</code><td>read named entities, each whole
         <tr><td><code>graph_schema</code><td>describe components, properties and kinds
@@ -723,7 +723,7 @@ yak session peek S-2</code></pre>
       <div class=Ex data-run=sh>
         <pre><code>yak graph query '.task&amp;?doc'
 yak graph schema claim
-yak graph apply --check --change '[{"entity":{"eid":"$t"},"task":{},"doc":{"title":"only a check"}}]'</code></pre>
+yak graph apply --check --bundles '[{"entity":{"eid":"$t"},"task":{},"doc":{"title":"only a check"}}]'</code></pre>
       </div>
 
       <h2>Hooks</h2>
@@ -751,7 +751,7 @@ yak graph apply --check --change '[{"entity":{"eid":"$t"},"task":{},"doc":{"titl
         <code>~/.claude/projects</code>.
       </p>
       <div class=Ex data-run=sh>
-        <pre><code>yak graph apply --change '[{"entity":{"eid":"$s"},"session":{}},{"entity":{"eid":"$e"},"entry":{"session":"$s"},"content":{"body":"fix T-2"},"imported":{"source":"claude","line":1}}]'
+        <pre><code>yak graph apply --bundles '[{"entity":{"eid":"$s"},"session":{}},{"entity":{"eid":"$e"},"entry":{"session":"$s"},"content":{"body":"fix T-2"},"imported":{"source":"claude","line":1}}]'
 yak graph query .imported</code></pre>
       </div>
 

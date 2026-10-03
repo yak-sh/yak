@@ -113,7 +113,7 @@ for (let streaming of [false, true]) {
   })
 }
 
-test('socket snapshots, changes and projections omit local data and its coverage', async () => {
+test('socket snapshots, batches and projections omit local data and its coverage', async () => {
   let { g } = setup()
   await g.apply([
     { entity: { eid: 'a' }, doc: { title: 'Author' } },

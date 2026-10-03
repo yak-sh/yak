@@ -488,12 +488,12 @@ export let connecting = async (
       if (!at || at.space.eid != space.eid || at.app.trashed) {
         return no('Choose a live app in this space.')
       }
-      let changes = await attach(c.graph.read, {
+      let bundles = await attach(c.graph.read, {
         owner: space.eid,
         app: at.app.eid,
         connection: eid,
       })
-      if (changes.length) await c.graph.apply(changes)
+      if (bundles.length) await c.graph.apply(bundles)
       await rebound(env, [at.app.eid])
       return {
         say: `${at.app.title || at.app.slug} can now use ${
@@ -785,14 +785,14 @@ let CONNECTIONS: Row[] = [
       }
       let connection = text(args.connection, 'connection')
       let c = ctxOf(ctx.env, who)
-      let changes = await attach(c.graph.read, {
+      let bundles = await attach(c.graph.read, {
         owner: space.eid,
         app: app.eid,
         connection,
       }).catch((e) => {
         throw refuse('conflict', e instanceof Error ? e.message : String(e))
       })
-      if (changes.length) await c.graph.apply(changes)
+      if (bundles.length) await c.graph.apply(bundles)
       await rebound(ctx.env, [app.eid])
       return {
         space,

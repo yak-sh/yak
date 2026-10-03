@@ -58,7 +58,7 @@ export let lineage = (
   eid: Eid,
 ): Bundle[] | Promise<Bundle[]> => up(g, eid, new Set(), [])
 
-// Where this change files each entity it moves: a removed filing, or a cleared
+// Where this batch files each entity it moves: a removed filing, or a cleared
 // project, leaves it under nothing.
 let moves = (bundles: Bundle[]): Map<Eid, Eid | undefined> => {
   let out = new Map<Eid, Eid | undefined>()
@@ -73,8 +73,8 @@ let moves = (bundles: Bundle[]): Map<Eid, Eid | undefined> => {
 /**
  * The `precondition` hook that keeps projects a tree: it refuses filing an
  * entity under a project that is already under it, itself included. The
- * parents it walks are the ones this change leaves, so two projects filed under
- * each other in one change are refused too.
+ * parents it walks are the ones this batch leaves, so two projects filed under
+ * each other in one batch are refused too.
  */
 export let nesting: Hook = (bundles, tx) => {
   let moved = moves(bundles)

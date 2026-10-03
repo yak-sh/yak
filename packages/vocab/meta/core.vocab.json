@@ -18,7 +18,7 @@
       "const": true
     },
     "rule": {
-      "description": "true = this $defs entry declares a rule: a query the graph runs over every batch of changes, and nothing else. There is no implementation anywhere \u2014 the `match` query is the rule, and the components its `+` patterns name are what it writes.",
+      "description": "true = this $defs entry declares a rule: a query the graph runs over every batch of bundles, and nothing else. There is no implementation anywhere \u2014 the `match` query is the rule, and the components its `+` patterns name are what it writes.",
       "const": true
     },
     "optimistic": {

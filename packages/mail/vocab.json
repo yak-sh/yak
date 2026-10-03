@@ -247,7 +247,7 @@
       "noun": "mail",
       "verb": "reply",
       "title": "Reply to a mail message",
-      "description": "Write a reply threaded on one message and request that it be sent. It is addressed to the other side of the original (the sender of a received message, or the recipient of one you sent) from the address the original used, with the subject prefixed `Re:`. Replying to a received message archives it: a thread you have answered is not waiting on you. The configured sender delivers it; a graph with no sender configured records the reply and never sends it. Returns the applied changes as bundles: JSON objects with entity ids and the components (named groups of fields) written or removed. Confirm the recipient and message before requesting delivery; a sent email cannot be recalled.",
+      "description": "Write a reply threaded on one message and request that it be sent. It is addressed to the other side of the original (the sender of a received message, or the recipient of one you sent) from the address the original used, with the subject prefixed `Re:`. Replying to a received message archives it: a thread you have answered is not waiting on you. The configured sender delivers it; a graph with no sender configured records the reply and never sends it. Returns the applied bundles: JSON objects with entity ids and the components (named groups of fields) written or removed. Confirm the recipient and message before requesting delivery; a sent email cannot be recalled.",
       "input": {
         "letter": {
           "type": "string",
@@ -275,7 +275,7 @@
       "noun": "mail",
       "verb": "send",
       "title": "Send a mail message",
-      "description": "Create a mail message and request that it be sent. `to` is an email address or the id of an entity in this graph; an address nobody in the graph has becomes a new `email` entity, so the address book grows as mail is sent. `from` defaults to the caller’s own email address. Without a configured sender, the message is recorded but not sent. A configured sender delivers it asynchronously and writes `delivered` or `bounced` onto the message. Returns the applied changes as bundles: JSON objects with entity ids and the components (named groups of fields) written or removed. Confirm the recipient and message before requesting delivery; a sent email cannot be recalled. The initial result is not a delivery receipt; read the message again to check its outcome.",
+      "description": "Create a mail message and request that it be sent. `to` is an email address or the id of an entity in this graph; an address nobody in the graph has becomes a new `email` entity, so the address book grows as mail is sent. `from` defaults to the caller’s own email address. Without a configured sender, the message is recorded but not sent. A configured sender delivers it asynchronously and writes `delivered` or `bounced` onto the message. Returns the applied bundles: JSON objects with entity ids and the components (named groups of fields) written or removed. Confirm the recipient and message before requesting delivery; a sent email cannot be recalled. The initial result is not a delivery receipt; read the message again to check its outcome.",
       "input": {
         "to": {
           "type": "string",

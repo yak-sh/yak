@@ -15,7 +15,7 @@
 // already there.
 //
 // The refusal. A key whose `of` was not minted in this write — a caller who
-// wrote an id down — is refused instead, unless the same change explicitly
+// wrote an id down — is refused instead, unless the same batch explicitly
 // deletes the holder. A transfer guards the observed key.of inside the
 // transaction. Otherwise the caller named both the entity and the value and
 // the two disagree; swapping the id underneath

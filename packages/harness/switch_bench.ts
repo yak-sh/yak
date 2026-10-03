@@ -12,13 +12,13 @@ let depth = Number(Deno.args[1] ?? 1000)
 let h = await harness(directory + '/test.db')
 try {
   for (let i = 0; i < count; i++) {
-    let changes: Bundle[] = [{
+    let bundles: Bundle[] = [{
       entity: { eid: 's' + i },
       session: { id: 's' + i },
     }]
     let length = i < 2 ? depth : 10
     for (let j = 0; j < length; j++) {
-      changes.push({
+      bundles.push({
         entity: { eid: 'e' + i + '-' + j },
         entry: { session: 's' + i, seq: j + 1 },
         content: {
@@ -27,7 +27,7 @@ try {
         ...(j ? { output: { source: 'e' + i + '-0' } } : {}),
       })
     }
-    await h.g.apply(changes)
+    await h.g.apply(bundles)
   }
 } finally {
   h.close()

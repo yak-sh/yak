@@ -1,5 +1,5 @@
 // One page socket over the app store and every component home it uses. Each
-// source's raw change feed invalidates the page's own query; the answer is
+// source's raw batch feed invalidates the page's own query; the answer is
 // read through page-graph, where ownership and cross-store composition live.
 // A lost source closes the page socket so @yaks/sync reconnects and refills.
 import { type Frame, queue, refusal } from '@yaks/api'

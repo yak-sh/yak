@@ -36,8 +36,8 @@ test('dodging sideways moves without turning the hero', () => {
     players: () => [],
     settled: () => true,
     keep: () => {},
-    move: (changes: Bundle[]) => {
-      for (let change of changes) hero = { ...hero, ...change }
+    move: (bundles: Bundle[]) => {
+      for (let bundle of bundles) hero = { ...hero, ...bundle }
     },
     tick: () => {},
   } as unknown as Net

@@ -101,7 +101,7 @@ test('a new task answers its nearest tasks, and not itself or a memory', async (
 
     // Two made by one call are not each other's neighbours: both are new.
     let plan = await call(yak, 'graph_apply', {
-      change: ['again', 'once more'].map((w, i) => ({
+      bundles: ['again', 'once more'].map((w, i) => ({
         entity: { eid: `$t${i}` },
         doc: { title: `Fix the login page crash ${w}` },
         task: {},

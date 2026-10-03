@@ -1,4 +1,4 @@
-// The gather: the reads a change is going to need, taken once, before the
+// The gather: the reads a batch is going to need, taken once, before the
 // hooks run.
 //
 // Over a database on the far side of a network, the cost of `apply()` is not
@@ -24,7 +24,7 @@
 // correct answer — so the transaction built here falls back to the storage for
 // anything it was not asked for, and caches the result. The cost of a forgotten
 // ask is then exactly the round trip it would have saved, which is a number a
-// test can measure (@yaks/d1's `hops_test.ts`), rather than a change that fails
+// test can measure (@yaks/d1's `hops_test.ts`), rather than a batch that fails
 // in production and passes in the test.
 //
 // The gather is also where an asynchronous storage becomes a single await: one
@@ -176,7 +176,7 @@ export let merged = (held: Bundle | null, b: Bundle): Bundle => {
 }
 
 /**
- * Every entity a change names or references — what the core itself reads, and
+ * Every entity a batch names or references — what the core itself reads, and
  * what a storage adapter needs while writing. Passed to the gather as its
  * first ask, so `apply()` reads all of them from the database once.
  */
@@ -199,7 +199,7 @@ export let reached = (bundles: Bundle[], vocab: Vocab): Eid[] => {
 /**
  * Satisfy every ask at once: one `tx.get` for the entities named by id, and
  * one `tx.read` for everything referencing the entities asked about. Each is
- * skipped when nothing asked for it, so a change nobody needs to read around
+ * skipped when nothing asked for it, so a batch nobody needs to read around
  * costs nothing.
  */
 export let gather = (
@@ -273,8 +273,8 @@ export let complete = (tx: Tx, snap: Snap): void | Promise<void> => {
  * a query is the storage's job, and doing it here would mean a second query
  * engine in the core.
  *
- * Only the phases that run before the change is written get one — a snapshot
- * of the graph as the change found it is exactly what a precondition needs,
+ * Only the phases that run before the batch is written get one — a snapshot
+ * of the graph as the batch found it is exactly what a precondition needs,
  * and exactly what a phase reading after the write must not have. That is why
  * the cascade does a fresh gather of its own.
  */

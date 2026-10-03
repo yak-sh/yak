@@ -49,7 +49,7 @@ let _value: D1Value = null as unknown as ArrayBuffer | string | number | boolean
 let _result: D1Result<Row> = null as unknown as D1Result<Row>
 let _rows: Row[] = _result.results
 // And the entry point, called the way a Worker calls it — implementing the
-// `Storage` interface @yaks/graph applies changes through.
+// `Storage` interface @yaks/graph applies bundles through.
 let _store = (vocab: Vocab): Storage => storage(db, vocab)
 // The vault over the same binding.
 let _vault = (key: CryptoKey): D1Vault => d1Vault(db, key)

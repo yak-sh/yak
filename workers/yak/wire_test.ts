@@ -36,13 +36,19 @@ test('a page line, as the store writes it', () => {
   for (let [page, store] of cases) assertEquals(lined(page), store, page)
 })
 
-test('a batch arrives in either envelope, and never as junk', () => {
-  let one = [{ entity: { eid: 'e1' }, doc: { title: 'x' } }]
-  assertEquals(batched({ entities: one }), one)
-  assertEquals(batched(one), one)
-  assertThrows(() => batched({ nope: 1 }), Error, 'entities')
-  assertThrows(() => batched(null), Error, 'entities')
-})
+test(
+  'a batch arrives bare or in a current or published envelope, and never as junk',
+  () => {
+    let one = [{ entity: { eid: 'e1' }, doc: { title: 'x' } }]
+    for (let key of ['bundles', 'entities', 'change']) {
+      assertEquals(batched({ [key]: one }), one)
+    }
+    assertEquals(batched(one), one)
+    assertThrows(() => batched({ nope: 1 }), Error, 'bundles')
+    assertThrows(() => batched(null), Error, 'bundles')
+  },
+  { tags: ['published-arguments'] },
+)
 
 test('a bundle that names no entity is given one', () => {
   assertEquals(batched([{ doc: { title: 'x' } }]), [

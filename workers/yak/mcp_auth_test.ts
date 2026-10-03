@@ -275,7 +275,10 @@ test('the door before anyone signs in', async () => {
     // The generic tier's write is among them — it is listed signed out
     // (T-34541) and it is this refusal that answers a call, which is the
     // sequence a host walks into the sign-in.
-    await shut('tools/call', { name: 'graph_apply', arguments: { change: [] } })
+    await shut('tools/call', {
+      name: 'graph_apply',
+      arguments: { bundles: [] },
+    })
     await shut('tools/call', { name: 'app_list' })
     await shut('tools/call', {
       name: 'command',
@@ -619,7 +622,7 @@ test('signed out: the gallery, the guide, and one public app', async () => {
     for (
       let call of [
         { name: 'app_list' },
-        { name: 'graph_apply', arguments: { change: [] } },
+        { name: 'graph_apply', arguments: { bundles: [] } },
       ]
     ) {
       let r = await k.at('yaks.app', '/mcp', {

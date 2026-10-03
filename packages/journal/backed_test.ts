@@ -42,7 +42,7 @@ let build = () => {
     vocab,
     plugins: [journal(log({ rows: (s) => db.query(s) }), { now: () => NOW })],
   })
-  let apply = (change: Bundle[]) => sync(g.apply(change))
+  let apply = (bundles: Bundle[]) => sync(g.apply(bundles))
   apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' }, $actor: ada }])
   apply([
     { entity: { eid: 'p1' }, page: { title: 'Retro' }, $actor: bob },
@@ -157,7 +157,7 @@ test('a history reads who wrote each change through its transaction', () => {
   ])
 })
 
-test('a change carrying two writers’ work records each one’s as theirs', () => {
+test('a batch carrying two writers’ work records each one’s as theirs', () => {
   let { apply, rows } = build()
   apply([
     { entity: { eid: 'p3' }, page: { title: 'Plan' }, $actor: ada },

@@ -87,8 +87,8 @@ Phrase the title so it doesn't start with `@` ("The @yaks/ui style guide …").
 Revise the body by patching it, never by minting a second design:
 
 ```sh
-python3 -c "import json; json.dump([{'entity':{'eid':'D-…'},'doc':{'body':open('body.md').read()}}], open('change.json','w'))"
-yak graph apply --change @change.json
+python3 -c "import json; json.dump([{'entity':{'eid':'D-…'},'doc':{'body':open('body.md').read()}}], open('bundles.json','w'))"
+yak graph apply --bundles @bundles.json
 ```
 
 When the owner answers questions, comment his words verbatim on the design
@@ -114,7 +114,7 @@ is recorded as yours (M-31958).
 
 One task per thing (M-4492); a body is the irreducible ask plus pointers, never
 a restatement of the design (M-14370): "D-…, task tree item 4." is often
-enough. File the tree as one change, with `$alias` eids and `requires` edges
+enough. File the tree as one batch, with `$alias` eids and `requires` edges
 from a task to what it needs, dry-run first:
 
 ```json
@@ -126,8 +126,8 @@ from a task to what it needs, dry-run first:
 ```
 
 ```sh
-yak graph apply --change @tree.json --check   # see what it would do
-yak graph apply --change @tree.json
+yak graph apply --bundles @tree.json --check   # see what it would do
+yak graph apply --bundles @tree.json
 yak task list '.task .order=-created.at' --limit 20   # read back the ids
 ```
 

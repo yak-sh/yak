@@ -85,7 +85,7 @@ export let commandField = (
   let fields = completion({
     watch: local.watch,
     ent: local.ent,
-    mutate: (change) => closed ? [] : local.mutate(change),
+    mutate: (bundles) => closed ? [] : local.mutate(bundles),
   }, { complete, drafts })
   let owner: string | null | undefined
   let stop = effect(() => {
@@ -108,7 +108,7 @@ export let commandField = (
           watch: local.watch,
           // desk may finish an in-flight acknowledgement after close. It
           // must not start another graph write or recreate a closed watch.
-          mutate: (change) => closed ? [] : local.mutate(change),
+          mutate: (bundles) => closed ? [] : local.mutate(bundles),
         }, {
           by: () => closed ? undefined : account,
           stash: store ? scoped(store, account) : undefined,

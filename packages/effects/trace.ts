@@ -1,4 +1,4 @@
-// What happened, worked out from what was committed. The changes a client
+// What happened, worked out from what was committed. The bundles a client
 // sends record only what to write: the same bundle patches a component that
 // already existed and creates one that did not, and a cascade's casualty comes
 // back as a bare tombstone with none of the components it used to carry. A

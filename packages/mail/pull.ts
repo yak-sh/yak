@@ -267,8 +267,8 @@ export let pull = async (
   let messages = await tray('message', from.messages, async (m) => {
     // An outbound copy has nothing to record; taking it clears the tray.
     if (m.dir && m.dir != 'in') return
-    let batch = await receive(...received(m))
-    if (batch.length) await graph.apply(batch)
+    let bundles = await receive(...received(m))
+    if (bundles.length) await graph.apply(bundles)
   }, from.notified)
   let requests = graph.vocab.comp('hook')
     ? await tray('request', from.requests, async (r) => {

@@ -28,7 +28,7 @@ export type Opened = Driver & { close: () => void }
  * may have open too, so it also runs in WAL mode, with WAL's crash-safe pairing
  * `synchronous = normal`, a 64 MiB retained WAL limit, and a one-minute busy
  * timeout; a database in memory belongs to this process alone and needs none
- * of that. A graph change may be a large atomic batch, so contention gives
+ * of that. A graph batch may be large, so contention gives
  * the one writer that bounded minute to finish. A writer held longer is a
  * performance failure, not a reason for every other process to wait forever.
  *

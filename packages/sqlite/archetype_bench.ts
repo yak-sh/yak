@@ -54,9 +54,9 @@ let moves = [true, false].map((add) =>
   data.batches[0].map((b) => ({ entity: b.entity, retired: add ? {} : null }))
 )
 // Warm both directions, verifying the move instead of timing a silent no-op.
-for (let batch of moves) {
-  g.apply(batch)
-  let first = store.tx((tx) => tx.get([batch[0].entity.eid]))[0]
+for (let bundles of moves) {
+  g.apply(bundles)
+  let first = store.tx((tx) => tx.get([bundles[0].entity.eid]))[0]
   let tables = Object.keys(first).filter((n) => n != 'entity')
   assertEquals(first.entity.archetype, eidOf(tables))
 }

@@ -115,9 +115,9 @@ let host = (answers: Answers = {}, edits = true) => {
       ),
     // A write naming T-404 is refused, as a graph refuses an id that names
     // nothing.
-    apply: (change) => {
-      applied.push(change)
-      if (JSON.stringify(change).includes('T-404')) {
+    apply: (bundles) => {
+      applied.push(bundles)
+      if (JSON.stringify(bundles).includes('T-404')) {
         return Promise.reject(new Error("no entity 'T-404'"))
       }
     },

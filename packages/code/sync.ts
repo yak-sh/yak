@@ -124,7 +124,7 @@ export type Read = {
   refused: string[]
 }
 
-/** The biggest change one transaction carries. */
+/** The most bundles one transaction carries. */
 let BATCH = 1000
 
 /**
@@ -146,9 +146,9 @@ export let codeMirror = async (
     return d(c, { entity: { eid: '' }, [name]: c })
   }
   let repository = ids('repository', { common })
-  let apply = async (change: Bundle[]) => {
-    for (let i = 0; i < change.length; i += BATCH) {
-      await g.apply(signed(change.slice(i, i + BATCH), opts.actor ?? null), {
+  let apply = async (bundles: Bundle[]) => {
+    for (let i = 0; i < bundles.length; i += BATCH) {
+      await g.apply(signed(bundles.slice(i, i + BATCH), opts.actor ?? null), {
         trusted: true,
       })
     }
@@ -188,7 +188,7 @@ export let codeMirror = async (
     let mods = new Set([...paths.map(moduleOf)])
     let { nodes, refused } = await exported(root, here)
     said.refused = refused
-    let change: Bundle[] = []
+    let bundles: Bundle[] = []
     let later: Bundle[] = []
 
     // Packages first, so a module's reference to one lands on an entity that
@@ -200,12 +200,12 @@ export let codeMirror = async (
       for (let old of wasPkgs) {
         let c = comp(old, 'package')!
         if (c.manifest == m && c.name != now?.name) {
-          change.push({ entity: old.entity, package: null, doc: null })
+          bundles.push({ entity: old.entity, package: null, doc: null })
         }
       }
       if (!now) continue
       said.packages++
-      change.push({
+      bundles.push({
         entity: { eid: packageOf(now.name) },
         package: { name: now.name, version: now.version ?? null, manifest: m },
         doc: { title: now.name, body: now.description ?? null },
@@ -228,13 +228,18 @@ export let codeMirror = async (
     for (let path of paths) {
       let m = moduleOf(path)
       if (gone.includes(path)) {
-        change.push({ entity: { eid: m }, file: null, module: null, doc: null })
+        bundles.push({
+          entity: { eid: m },
+          file: null,
+          module: null,
+          doc: null,
+        })
         continue
       }
       let body = text(path)
       let md = isMarkdown(path) ? markdown(path, body) : undefined
       said.modules++
-      change.push({
+      bundles.push({
         entity: { eid: m },
         file: { path, repository },
         module: { blob: await blobOf(body), package: pkgOf(path) },
@@ -279,11 +284,11 @@ export let codeMirror = async (
         if (mods.has(b.entity.eid)) continue
         let want = pkgOf(path)
         if (str(comp(b, 'module')?.package) != str(want)) {
-          change.push({ entity: b.entity, module: { package: want } })
+          bundles.push({ entity: b.entity, module: { package: want } })
         }
       }
     }
-    await apply([...change, ...later])
+    await apply([...bundles, ...later])
   }
 
   let binding: Binding = {

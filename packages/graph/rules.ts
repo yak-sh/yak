@@ -1,6 +1,6 @@
 import { type Context, during, live as observed } from '@yaks/trace'
 // The declarative way to extend a phase. A {@link Hook} is code that takes the
-// bundles; a rule is a query over one bundle in the change plus what the rule
+// bundles; a rule is a query over one bundle in the batch plus what the rule
 // produces — and the query expresses both at once. `.entity, +!created` states
 // what the rule needs (an entity the graph holds no `created` for) and what it
 // does about it (add `created`, which is also what makes the rule fire exactly
@@ -9,7 +9,7 @@ import { type Context, during, live as observed } from '@yaks/trace'
 //
 // All rules in A phase see the same state. The bundles a phase's rules are
 // evaluated against are composed once — what the graph holds for each entity,
-// with this change's patch folded in — before any rule fires. Two rules in one
+// with this batch's patch folded in — before any rule fires. Two rules in one
 // phase therefore see the same state and cannot react to each other's writes,
 // which is exactly what the `created`/`updated` pair needs: creating an entity
 // must not also count as updating it.
@@ -17,12 +17,12 @@ import { type Context, during, live as observed } from '@yaks/trace'
 // The `*comp` write set is a rule's declaration of what it writes. The current
 // version records it and refuses a `produce` or a `run` that writes outside
 // it. In the effect phase it also names the writes that trigger the rule: at
-// least one of them must appear in this change, so the mere presence of a
+// least one of them must appear in this batch, so the mere presence of a
 // stored component cannot re-run an effect on an unrelated edit. A rule that
 // declares no write set is unchecked — declaring one is opting in.
 //
 // Resources are the other half of a rule's match. `#Now` binds a singleton the
-// phase provides — the change's timestamp, its actor, the vocabulary, the
+// phase provides — the batch's timestamp, its actor, the vocabulary, the
 // calling program's environment — into the bundle under its own name, so `run`
 // takes the bound bundle and nothing else: everything a rule reads, it named.
 // Resources are built at most once per phase and are read-only; writing one is
@@ -77,22 +77,22 @@ export type Tick = {
   owner?: (rule: Rule) => string | undefined
   /** the component vocabulary this graph uses */
   vocab: Vocab
-  /** the phase's transaction (a detached one outside the change's own) */
+  /** the phase's transaction (a detached one outside the batch's own) */
   tx: Tx
   /** the phase running: what distinguishes a rule whose output still has to be
    * written from one whose output the `mutate` phase will write for it */
   phase: Phase
-  /** the change as this phase found it — what the rules are evaluated against.
+  /** the batch as this phase found it — what the rules are evaluated against.
    * An effect rule with a `*write` set requires one of those components to
-   * appear in this change for the matched entity, even when `of` supplies
+   * appear in this batch for the matched entity, even when `of` supplies
    * more. */
   bundles: Bundle[]
   /** the singletons a rule may name with `#`, by name */
   resources: Record<string, Resource>
-  /** the graph as this change found it, for the entities the change names. A
-   * rule asks about a component the change does not carry — a condition on
+  /** the graph as this batch found it, for the entities the batch names. A
+   * rule asks about a component the batch does not carry — a condition on
    * `created`, say — through this; a phase with nothing gathered leaves it out,
-   * and a rule then sees only the change itself. */
+   * and a rule then sees only the batch itself. */
   of?: (eid: Eid) => Bundle | undefined
 }
 
@@ -171,7 +171,7 @@ export let registry = (
  * `({ trashed, Actor, Now })`.
  *
  * The bundle keeps the `$actor` the entity's own bundles named, where one did:
- * the writer of this entity when the change carries more than one's work.
+ * the writer of this entity when the batch carries more than one's work.
  */
 export type Bound = Bundle & {
   /** `#Vocab` — the component vocabulary this graph uses */
@@ -179,7 +179,7 @@ export type Bound = Bundle & {
   /** `#Now` — the timestamp this transaction stamps with; `Now.at` reads it,
    * and a property written `at: Now` is given it */
   Now: { at: string }
-  /** `#Actor` — who is writing this change; a property written `by: Actor` is
+  /** `#Actor` — who is writing this batch; a property written `by: Actor` is
    * given the eid, and nothing at all when no actor is named */
   Actor: Actor
 }
@@ -193,7 +193,7 @@ export type Bound = Bundle & {
 export type Patch = Record<string, Comp | null>
 
 /**
- * A rule: a query over one bundle in the change, plus what it produces.
+ * A rule: a query over one bundle in the batch, plus what it produces.
  *
  * `produce` is the no-code case — a bundle template merged into the matched
  * bundle — and `run` covers everything else, as a function of the bound
@@ -220,7 +220,7 @@ export type Rule = {
    * `+!comp` also requires it did not already, so the rule fires once; `*comp`
    * declares the write set (and requires the component to be present);
    * `#Name` binds a resource; the rest filters. An effect rule with a write
-   * set only runs when this change writes one of those components on the
+   * set only runs when this batch writes one of those components on the
    * matched entity. */
   match: Query
   /** components to merge into the matched bundle, verbatim */
@@ -311,7 +311,7 @@ let compile = (r: Rule, v: Vocab): Ready => {
     try {
       // A phase selects from one frozen set of bundles. Building the reference
       // index once per rule, rather than once per entity, keeps the cost
-      // linear in the size of the change. Rules are predicates: ordering and
+      // linear in the size of the batch. Rules are predicates: ordering and
       // windowing do not decide which entities fire, so those clauses are
       // dropped.
       ready.test = matcher({
@@ -362,12 +362,12 @@ let resolved = (p: Patch): Patch => {
 let wrote = (p: Patch): string[] => Object.keys(p).filter((k) => !reserved(k))
 
 /**
- * Run the rules of one phase over a change: the bundles in, the bundles plus
+ * Run the rules of one phase over a batch: the bundles in, the bundles plus
  * what the rules produced out.
  *
  * Every rule is matched against the same frozen state before any of them
  * writes. A phase that runs after `mutate` writes what its rules produced
- * through the transaction; before `mutate`, the patches simply join the change
+ * through the transaction; before `mutate`, the patches simply join the batch
  * and `mutate` writes them like any other.
  */
 export let fire = (
@@ -403,7 +403,7 @@ export let fire = (
     if (ready.test) live.push([r, ready, ready.test])
   }
   if (!live.length) return bundles
-  // One view per entity, not per patch: the phases add bundles to the change
+  // One view per entity, not per patch: the phases add bundles to the batch
   // as they go, and a rule is about the entity, so it must not fire once per
   // patch that mentions that entity.
   let seen = new Map<Eid, Bundle>()
@@ -411,7 +411,7 @@ export let fire = (
   for (let b of bundles) {
     let eid = b.entity.eid
     let view = merged(seen.get(eid) ?? tick.of?.(eid) ?? null, b)
-    // The writer the entity's own bundles named, where one did: a change can
+    // The writer the entity's own bundles named, where one did: a batch can
     // carry more than one writer's work (./stamp.ts `writers`).
     if (b.$actor) view.$actor ??= b.$actor
     seen.set(eid, view)
@@ -503,7 +503,7 @@ export let fire = (
     (made) => {
       if (!made.length) return bundles
       // A phase's rules run after its core work, so from `mutate` onwards the
-      // change has already been written and whatever a rule produced has to be
+      // batch has already been written and whatever a rule produced has to be
       // written here. Before `mutate`, it is still to come and will write it.
       let late = PHASES.indexOf(tick.phase) >= PHASES.indexOf('mutate')
       return late

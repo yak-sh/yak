@@ -89,12 +89,12 @@ for (let async of [false, true]) {
         },
       },
     })
-    let batch: Bundle[] = [2, 3, null, 4].map((pages) => ({
+    let bundles: Bundle[] = [2, 3, null, 4].map((pages) => ({
       entity: { eid: 'b' },
       book: pages == null ? null : { pages },
       $was: { book: { pages: token(1) } },
     }))
-    let out = g.apply(batch)
+    let out = g.apply(bundles)
     assertEquals(out instanceof Promise, async)
     assertEquals(comp((await out)[0], 'book'), { pages: 4 })
     assertEquals(seen, [1, 2, 3, undefined])
@@ -155,19 +155,19 @@ for (let async of [false, true]) {
         },
       }],
     })
-    let batch = [
+    let bundles = [
       { entity: { eid: 'b' }, doc: { title: 'prefix' } },
       { entity: { eid: 'b' }, book: { pages: 3 } },
     ]
     if (async) {
       await assertRejects(
         async () => {
-          await g.apply(batch)
+          await g.apply(bundles)
         },
         Error,
         'late',
       )
-    } else assertThrows(() => g.apply(batch), Error, 'late')
+    } else assertThrows(() => g.apply(bundles), Error, 'late')
     assertEquals(await storage.get(['b']), [])
     assertEquals(effects, 0)
   })
@@ -196,15 +196,15 @@ test('a host may defer effects; its clock is frozen before context leaves', () =
       },
     }],
   })
-  let batch = [{ entity: { eid: 'a' }, book: {} }]
-  let out = g.apply(batch)
+  let bundles = [{ entity: { eid: 'a' }, book: {} }]
+  let out = g.apply(bundles)
   assert(!(out instanceof Promise))
   assertEquals(comp(out[0], 'created').at, '2026-09-10T00:00:00Z')
   assertEquals([clocks, observations, queued.length], [1, 0, 1])
   active = false
   queued.pop()!()
   assertEquals(observations, 1)
-  g.apply(batch, { now: 'fixed', check: true })
+  g.apply(bundles, { now: 'fixed', check: true })
   assertEquals(queued.length, 0)
 })
 

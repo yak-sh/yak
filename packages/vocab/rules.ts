@@ -1,5 +1,5 @@
 // Rules a vocabulary declares. A `$defs` entry marked `rule: true` is a query
-// the graph runs over every batch of changes — and that is the whole
+// the graph runs over every batch of bundles — and that is the whole
 // declaration. There is no implementation to join it to, which is what makes it
 // different from a tool: a tool declaration names the tool and a module
 // implements it, while a rule's `match` is the implementation. An app ships one

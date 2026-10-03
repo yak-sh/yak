@@ -3,19 +3,19 @@
 // It runs at `precondition` — inside the transaction, before a single row has
 // moved — for the same reason the `$was` guard does: a check that reads after
 // the write is checking its own work. Throwing here rolls the whole transaction
-// back, so a list of changes is admitted entirely or not at all, and there is
+// back, so a batch is admitted entirely or not at all, and there is
 // no half-written state for the caller to reconcile.
 //
 // It asks four questions, in this order:
 //
 //   1. May this principal write this app at all? (`open` mode, or owner/editor)
-//   2. Do the changes touch a component that asks a floor of its own? The
+//   2. Do the bundles touch a component that asks a floor of its own? The
 //      access rows ask owner, always; the vocabulary declares the rest
 //      (`floor`, keywords.ts), and so may the program installing the guard
 //      (`floors`).
 //   3. Is the principal in only because the app is `open`? Then it adds rows,
 //      and changes only the rows it wrote.
-//   4. Does a change write a component sooner than its `pace` lets this writer
+//   4. Does a bundle write a component sooner than its `pace` lets this writer
 //      (pace.ts)?
 //
 // None of them is a new level. They are the rules that an editor writes the
@@ -30,13 +30,13 @@
 //
 // A row is the principal's own when its `created.by` names them, or when it is
 // them. Without a `created.by`, a row belongs to the `created.via` that made
-// it. A caller with neither identity owns nothing, so it only adds. A change
+// it. A caller with neither identity owns nothing, so it only adds. A bundle
 // that changes nothing — every property it names already holds that value —
 // is nobody's business, which lets the same bytes be uploaded twice.
 //
-// The principal is whatever `$actor` the changes carry. An HTTP layer replaces
+// The principal is whatever `$actor` the bundles carry. An HTTP layer replaces
 // that field with the identity it authenticated before calling `apply()`
-// (@yaks/api `signed`). Changes with no `$actor` act as nobody — allowed on an
+// (@yaks/api `signed`). Bundles with no `$actor` act as nobody — allowed on an
 // `open` app, refused everywhere else — which is what an anonymous visitor
 // should get.
 
@@ -87,7 +87,7 @@ let held = (where: Guard): Floors => ({
   ...OWNED,
 })
 
-// The first component these changes touch whose floor this principal, holding
+// The first component these bundles touch whose floor this principal, holding
 // this level, does not stand on.
 let short = (
   floors: Floors,
@@ -143,7 +143,7 @@ let adding = (
  * any of it: the app (its mode decides for a principal with no level), the
  * principal's own entity (a share link's bearer is a grant), everything filed
  * about the principal — their membership rows, their grants — and the rows the
- * changes name, whose byline says whose they are. @yaks/graph fetches all of it
+ * bundles name, whose byline says whose they are. @yaks/graph fetches all of it
  * in one gather, so the steps of the check cost no round trip of their own.
  */
 export let wanting = (where: Guard) => (bundles: Bundle[]): Ask[] => {
@@ -156,7 +156,7 @@ export let wanting = (where: Guard) => (bundles: Bundle[]): Ask[] => {
 }
 
 /**
- * The `precondition` hook: refuse changes this principal may not write.
+ * The `precondition` hook: refuse bundles this principal may not write.
  * Registered by {@link https://jsr.io/@yaks/member/doc/~/members | members};
  * exported on its own for a graph that wants the check without this package's
  * components.

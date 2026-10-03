@@ -63,7 +63,7 @@ export let sync = async (
     String((b[DEP] as { source: string }).source)
   let state = prior.find((b) => source(b) == 'state')
   let have = new Set(prior.map(source))
-  let changes: Bundle[] = [
+  let bundles: Bundle[] = [
     ...prior.filter((b) => source(b) != 'state' && !want.has(source(b)))
       .map((b): Bundle => ({ entity: b.entity, $delete: true, $quiet: true })),
     ...[...want].filter((source) => !have.has(source)).map((
@@ -74,14 +74,14 @@ export let sync = async (
       $quiet: true,
     })),
   ]
-  if (!changes.length) return []
+  if (!bundles.length) return []
   let version = (state?.[DEP] as { version?: string } | undefined)?.version
   return [{
     entity: { eid: identityEid(DEP, [builder, 'state']) },
     [DEP]: { builder, source: 'state', version: crypto.randomUUID() },
     $was: { [DEP]: { version: token(version) } },
     $quiet: true,
-  }, ...changes]
+  }, ...bundles]
 }
 
 export let candidates = async (

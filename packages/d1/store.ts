@@ -158,7 +158,7 @@ let merged = (v: Vocab, held: Bundle, b: Bundle): Bundle => {
 
 /**
  * Bind a store to a D1 binding and a vocabulary — the `Storage` a
- * {@link https://jsr.io/@yaks/graph | @yaks/graph} applies changes to.
+ * {@link https://jsr.io/@yaks/graph | @yaks/graph} applies bundles to.
  *
  * `base` options (a derived-property registry, an @yaks/sql extension, a fixed
  * `now` for time phrases) ride every read; a per-call `opts` merges over them.

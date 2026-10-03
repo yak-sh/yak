@@ -85,17 +85,17 @@ let applied = async (
   // A dry run is the tool's `check`: every phase runs and the transaction is
   // rolled back, so the result is what would have been written.
   let dry = args['dry-run'] === true
-  let asked = (change: unknown) =>
-    tool.run({ change, ...(dry ? { check: true } : {}) }, c)
-  if (args.change) return await asked(args.change)
+  let asked = (bundles: unknown) =>
+    tool.run({ bundles, ...(dry ? { check: true } : {}) }, c)
+  if (args.bundles) return await asked(args.bundles)
   // This is already the body: `@path` is read from that file and `-` from
   // stdin for every argument value of every subcommand (args.ts `inflate`), so
   // what arrives here is the bundles themselves. Given no argument at all,
   // read stdin.
   let body = typeof args.file == 'string' ? args.file : await c.reads.stdin()
   let code = 0
-  for (let change of chunks(bundlesIn(body))) {
-    code = await asked(change) || code
+  for (let bundles of chunks(bundlesIn(body))) {
+    code = await asked(bundles) || code
     if (code) break
   }
   return code
@@ -295,7 +295,7 @@ export let own: Command[] = [
       additionalProperties: false,
       properties: {
         file: { type: 'string', description: '@file, or - for stdin' },
-        change: {
+        bundles: {
           type: 'array',
           description: 'one batch of bundles, inline',
         },

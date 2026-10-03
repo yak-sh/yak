@@ -55,7 +55,7 @@ export type Was = Record<string, Record<string, string | null>>
 /**
  * Who is writing, carried on a bundle like a component: the actor the stamp
  * phase records, and optionally the instrument the write came through. The
- * server that received the change decides whether to trust what a client sent
+ * server that received the batch decides whether to trust what a client sent
  * or replace it; `apply()` stamps whatever reaches it.
  */
 export type Actor = { by?: Eid; via?: Eid }
@@ -76,7 +76,7 @@ export type Bundle =
     /** a per-property precondition that must still hold */
     $was?: Was
     /** who is writing this entity: an entity whose bundles name nobody is
-     * written by the change's writer, the first one it names */
+     * written by the batch's writer, the first one it names */
     $actor?: Actor
     /** the `$name` alias this bundle was referred to by, when the graph picked
      * its id */

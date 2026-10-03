@@ -22,7 +22,7 @@ let bob = { by: 'bob', via: 'cli' }
 
 let fixture = () => {
   let { g, j } = wikiGraph()
-  return { g, j, apply: (change: Bundle[]) => sync(g.apply(change)) }
+  return { g, j, apply: (bundles: Bundle[]) => sync(g.apply(bundles)) }
 }
 
 // A batch, flattened to one line per delta: `1 ada page.title Kickoff→Retro`.

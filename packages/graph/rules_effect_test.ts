@@ -145,8 +145,8 @@ test('effect rules do not observe checks or refused writes', () => {
       }],
     }],
   })
-  let batch = [{ entity: { eid: 'b1' }, book: { pages: 412 } }]
-  one.apply(batch, { check: true })
+  let bundles = [{ entity: { eid: 'b1' }, book: { pages: 412 } }]
+  one.apply(bundles, { check: true })
   one.use({
     name: 'closed',
     hooks: {
@@ -155,7 +155,7 @@ test('effect rules do not observe checks or refused writes', () => {
       },
     },
   })
-  assertThrows(() => one.apply(batch), Error, 'closed')
+  assertThrows(() => one.apply(bundles), Error, 'closed')
   assertEquals(seen, [])
   assertEquals(held(one), undefined)
 })

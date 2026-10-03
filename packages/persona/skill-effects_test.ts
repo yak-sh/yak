@@ -516,17 +516,17 @@ test('skill per-pass lease release errors reject the awaited effect and retry', 
   let graph = leasedGraph()
   let apply = graph.apply.bind(graph)
   let fail = true
-  graph.apply = (changes, ...rest) => {
+  graph.apply = (bundles, ...rest) => {
     if (
       fail &&
-      changes.some((change) =>
-        (change.lease as { holder?: string | null } | undefined)?.holder ===
+      bundles.some((bundle) =>
+        (bundle.lease as { holder?: string | null } | undefined)?.holder ===
           null
       )
     ) {
       return Promise.reject(new Error('lease release failed'))
     }
-    return apply(changes, ...rest)
+    return apply(bundles, ...rest)
   }
   let calls = 0
   let fx = skillEffects({ graph, me: 'host' }, { skills: true }, {

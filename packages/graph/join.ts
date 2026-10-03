@@ -155,7 +155,7 @@ let pattern = (query: And): Pattern => {
 // The plans already parsed, by text. A plan is a value nobody changes, so the
 // same text hands back the same plan, and what compiles its filters (an
 // in-memory store's matcher, keyed by the filter's tree) compiles them once
-// rather than on every change a rule is asked about. Bounded, since a caller
+// rather than on every batch a rule is asked about. Bounded, since a caller
 // may parse text it was handed.
 let parsed = new Map<string, Match>()
 
@@ -213,8 +213,8 @@ let fresh = (source: string): Match => {
 }
 
 /**
- * Every component a match reads — what storage's overlay of the pending change
- * has to cover for the compiled statement to see that change. `+!` clauses
+ * Every component a match reads — what storage's overlay of the pending batch
+ * has to cover for the compiled statement to see that batch. `+!` clauses
  * count too: testing that a component is absent is still a read. A path is
  * resolved through the vocabulary, so a path through a reference reads the
  * component it names on either side.
@@ -224,7 +224,7 @@ export let reads = (m: Match, v: Vocab): string[] => {
   let path = (p: string[], facet = false) => {
     // A reverse association names the component on the far side (`.reviews`
     // is `review.product` seen from the product), and that is the component
-    // the overlay has to cover for the traversal to see the pending change.
+    // the overlay has to cover for the traversal to see the pending batch.
     let far = v.assoc(p[0])
     if (far) return void out.add(far.comp)
     try {
@@ -240,7 +240,7 @@ export let reads = (m: Match, v: Vocab): string[] => {
     for (let c of clauses) {
       if (c.kind == 'and' || c.kind == 'or') walk(c.clauses)
       else if (c.kind == 'pred') path(c.path, bare(c))
-      // `-comp` reads the change's own component removals, which the overlay
+      // `-comp` reads the batch's own component removals, which the overlay
       // carries only for the components it covers — so a removal is a read
       // too.
       else if (c.kind == 'gone') out.add(c.comp)
@@ -275,10 +275,10 @@ export let writes = (m: Match): string[] => [
 /**
  * A match's bindings with its collections attached, the half of evaluating a
  * match that no backend owns. `rows` answers one flat level: its patterns
- * joined, anchored to the change when `anchored` is true. A collection level
+ * joined, anchored to the batch when `anchored` is true. A collection level
  * is asked narrowed to the values its parents bound (`narrowed`) and never
  * anchored: it reads every member of an outer binding, including the ones the
- * change did not touch. Each member is attached to the parent whose shared
+ * batch did not touch. Each member is attached to the parent whose shared
  * variables it holds, and a parent with none keeps an empty collection.
  */
 export let collected = (

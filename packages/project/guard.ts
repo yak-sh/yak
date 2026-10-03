@@ -26,7 +26,7 @@
 // before this hook ever sees the write.
 //
 // The hook runs at `precondition`, inside the transaction and before any row
-// has changed, so a refusal rolls the whole write back: the list of changes
+// has changed, so a refusal rolls the whole write back: the bundles
 // passed to `graph.apply()` is committed entirely or not at all.
 
 import type { Bundle, Comp, Hook } from '@yaks/graph'

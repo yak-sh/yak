@@ -22,7 +22,7 @@ export let argsOf = (call: Bundle): Record<string, unknown> =>
 /** Who asked: the `created{by, via}` a call carries — the identity it acts
  * for, and the run it came through — or `null` for nobody. A tool writes in
  * that name, never the runner's; one that needs the session behind a call
- * reads `via`. A call not yet stamped says it on `$actor`, as the change that
+ * reads `via`. A call not yet stamped says it on `$actor`, as the batch that
  * writes it does. */
 export let who = (call: Bundle): Actor | null => {
   let said = (prop: 'by' | 'via') =>

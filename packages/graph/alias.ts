@@ -1,7 +1,7 @@
-// Aliases: how a change refers to an entity it is about to create, before it
+// Aliases: how a batch refers to an entity it is about to create, before it
 // knows the entity's id. A bundle's `entity.eid` may be an alias — any id
 // starting with `$` — and every reference to that alias elsewhere in the same
-// change points at the same entity:
+// batch points at the same entity:
 //
 //   [{ entity: { eid: '$dune' }, doc: { title: 'Dune' } },
 //    { entity: { eid: 'r1' }, review: { stars: 5, book: '$dune' } }]
@@ -15,13 +15,13 @@
 // for the component it owns, and the graph calls it.
 //
 // Resolution is a small fixpoint, because a derived id may depend on a
-// reference that is itself an alias (an edge to an entity this same change is
+// reference that is itself an alias (an edge to an entity this same batch is
 // creating). Each pass resolves whatever has no unresolved alias left beneath
-// it; a change whose aliases only depend on each other is a cycle and is
+// it; a batch whose aliases only depend on each other is a cycle and is
 // refused, since no set of ids could satisfy it.
 //
 // Each resolved bundle keeps the alias it was written under, as `$alias`, so a
-// caller reading the returned change learns which id each alias became,
+// caller reading the returned batch learns which id each alias became,
 // without a second response channel.
 
 import type { Vocab } from '@yaks/vocab'
@@ -52,8 +52,8 @@ let pointsAt = (b: Bundle, vocab: Vocab): Eid[] =>
   )
 
 // One bundle with every id in `at` rewritten to the id it maps to. `strict` is
-// what the mint phase passes: an alias nothing in the change creates means the
-// change cannot be applied, whereas an ordinary eid that is not in the map is
+// what the mint phase passes: an alias nothing in the batch creates means the
+// batch cannot be applied, whereas an ordinary eid that is not in the map is
 // simply left alone.
 let rewrite = (
   b: Bundle,
@@ -73,7 +73,7 @@ let rewrite = (
       if (!eid) {
         if (strict && isAlias(val)) {
           throw new Refused(
-            `${name}.${prop} references ${val}, which this change does not ` +
+            `${name}.${prop} references ${val}, which this batch does not ` +
               `create`,
           )
         }
@@ -112,8 +112,8 @@ export let substitute = (
     : bundles
 
 /**
- * The mint phase: give every alias in the change a real id, and rewrite the
- * change to use it. An ordinary entity gets a fresh id from `mint`; a
+ * The mint phase: give every alias in the batch a real id, and rewrite the
+ * batch to use it. An ordinary entity gets a fresh id from `mint`; a
  * component with a `derive` supplies its own. The returned bundles carry the
  * alias they were written under as `$alias`.
  */
@@ -154,7 +154,7 @@ export let resolve = (
     for (let alias of ready) {
       // A content-addressed component derives the entity's id; anything else
       // gets a fresh one. The whole group is searched, so it does not matter
-      // which bundle in the change carried the deriving component.
+      // which bundle in the batch carried the deriving component.
       let named: Eid | undefined
       for (let b of groups.get(alias)!) {
         let full = rewrite(b, vocab, at, true)

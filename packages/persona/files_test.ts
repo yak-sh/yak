@@ -8,7 +8,7 @@ import { memo, sync } from '@yaks/mirror'
 import { checkout, fleet, nested } from './testing.ts'
 import { personaFiles, personaMirror } from './files.ts'
 
-let then = (g: Graph, ...batch: Bundle[]): Graph => (g.apply(batch), g)
+let then = (g: Graph, ...bundles: Bundle[]): Graph => (g.apply(bundles), g)
 
 let texts = async (g: Graph) =>
   new Map((await personaFiles(g)).files.map((f) => [f.path, f.text]))

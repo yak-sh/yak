@@ -88,7 +88,7 @@ export let attributed = async (
   let rows = await graph.read(
     `(.created.via=${via} !created.by|.updated.via=${via} !updated.by) .limit=${size} ?created ?updated`,
   ) as Bundle[]
-  let change = rows.map((r) => {
+  let bundles = rows.map((r) => {
     let out: Bundle = { entity: r.entity, $was: {} }
     for (let name of ['created', 'updated']) {
       let stamp = r[name] as Comp | undefined
@@ -99,8 +99,10 @@ export let attributed = async (
     }
     return out
   })
-  if (change.length) await graph.apply(change, { trusted: true, stamp: false })
-  return { filled: change.length, more: change.length == size }
+  if (bundles.length) {
+    await graph.apply(bundles, { trusted: true, stamp: false })
+  }
+  return { filled: bundles.length, more: bundles.length == size }
 }
 
 export let registrationDoc: VocabDoc = {

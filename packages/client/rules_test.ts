@@ -1,5 +1,5 @@
 /// <reference lib="deno.ns" />
-// Declared rules in a page's graph: its own rules on every change, the
+// Declared rules in a page's graph: its own rules on every batch, the
 // server's rules marked optimistic as it writes, and the server's answer as
 // the truth afterwards.
 

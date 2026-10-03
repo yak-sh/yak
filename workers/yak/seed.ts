@@ -166,7 +166,7 @@ export let parts = (all: Sown[]): Sown[][] => {
  * has not applied yet throws (writes.ts `Pending`): it is neither taken nor
  * refused, and sending it again would only wait beside it. */
 export type Applying = (
-  batch: Bundle[],
+  bundles: Bundle[],
   check: boolean,
 ) => Promise<string | null>
 

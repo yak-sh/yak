@@ -36,7 +36,7 @@ export type ReadOpts = {
 }
 
 /** One entity the cascade deletes, and how far from the original delete it
- * was: the entities the change named are depth 0, the ones deleted with them
+ * was: the entities the batch named are depth 0, the ones deleted with them
  * are depth 1, and so on. This is also the order they are returned in. */
 export type Gone = { eid: Eid; depth: number }
 
@@ -44,7 +44,7 @@ export type Gone = { eid: Eid; depth: number }
  * pointing at one of the deleted entities. */
 export type Loose = { eid: Eid; comp: string; prop: string }
 
-/** What else gets deleted along with the entities a change deleted, and which
+/** What else gets deleted along with the entities a batch deleted, and which
  * references have to be cleared — the whole question ./cascade.ts asks, so a
  * storage adapter that can answer it in one statement answers it in one
  * call. */
@@ -53,7 +53,7 @@ export type Doom = { gone: Gone[]; loose: Loose[] }
 /**
  * An open transaction. Every phase of `apply()` between `precondition` and
  * `commit` runs against one of these, so a precondition reads the state the
- * change will be written onto, and a cascade sees the rows it is about to
+ * batch will be written onto, and a cascade sees the rows it is about to
  * remove. The adapter commits when the body returns and rolls back if it
  * throws.
  */
@@ -93,14 +93,14 @@ export type Tx = {
    * itself. */
   doom?: (eids: Eid[]) => Doom | null | Promise<Doom | null>
   /** what the declared rules run through: evaluate each match against this
-   * graph with `batch` folded in, as though it had already been applied.
+   * graph with `bundles` folded in, as though it had already been applied.
    * `covers` names the components the matches read, so a store building an
-   * overlay of the pending change builds only those. A storage adapter without
+   * overlay of the pending batch builds only those. A storage adapter without
    * this method runs no declared rules — a rule is a query, and a store that
    * cannot evaluate one can say nothing about it. */
   bindings?: (
     matches: Match[],
-    batch: Bundle[],
+    bundles: Bundle[],
     covers: string[],
   ) => Binding[][] | Promise<Binding[][]>
   /** write the bundles → the entities this patch created, with their `num`
@@ -166,8 +166,8 @@ export type Storage = {
 /**
  * A `Tx` that is not a transaction: each call is its own unit of work against
  * the storage. This is what a hook receives in the phases that run outside the
- * change's transaction — `normalize` before it opens, `effect` after it
- * commits, `audit` after it rolled back — where writing into the change's
+ * batch's transaction — `normalize` before it opens, `effect` after it
+ * commits, `audit` after it rolled back — where writing into the batch's
  * transaction is either impossible or exactly the wrong thing.
  */
 export let detached = (storage: Storage): Tx => ({
@@ -175,10 +175,10 @@ export let detached = (storage: Storage): Tx => ({
   get: (eids, comps) => storage.get(eids, comps),
   // A match is a question about committed data, which is exactly what there
   // is to ask out here: an effect registered on a pattern (@yaks/effects) asks
-  // it after the change has been applied. A store that cannot evaluate one
+  // it after the batch has been applied. A store that cannot evaluate one
   // throws when it is asked rather than omitting the method, because whether
   // it can is not known until a transaction is open.
-  bindings: (matches, batch, covers) =>
+  bindings: (matches, bundles, covers) =>
     storage.tx((tx) => {
       if (!tx.bindings) {
         throw new Error(
@@ -186,7 +186,7 @@ export let detached = (storage: Storage): Tx => ({
             'query, and it cannot evaluate one',
         )
       }
-      return tx.bindings(matches, batch, covers)
+      return tx.bindings(matches, bundles, covers)
     }),
   patch: (bundles) => storage.tx((tx) => tx.patch(bundles)),
   remove: (entities) => storage.tx((tx) => tx.remove(entities)),

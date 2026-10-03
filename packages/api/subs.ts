@@ -933,8 +933,8 @@ export let subscriptions = (graph: Graph, opts: {
     // did.
     let raw = subs.filter((s) => s.raw)
     for (let tx of raw.length ? txs : []) {
-      let batch = composed(tx)
-      for (let s of raw) s.send({ id: s.id, bundles: batch })
+      let bundles = composed(tx)
+      for (let s of raw) s.send({ id: s.id, bundles })
     }
     let applied = txs.flat()
     let queries = subs.filter((s) => !s.raw)
@@ -1574,8 +1574,8 @@ export let subscriptions = (graph: Graph, opts: {
         waiting.bundles = coalesced([...waiting.bundles, ...accepted])
         return waiting.done
       }
-      let run = (batch: Bundle[]) => {
-        let out = peers.write(sink, batch)
+      let run = (bundles: Bundle[]) => {
+        let out = peers.write(sink, bundles)
         return peerChange(out, sink)
       }
       if (!pendingWork) return ordered(() => run(accepted))

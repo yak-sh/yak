@@ -91,7 +91,7 @@ for (let backend of ['ram', 'sqlite']) {
       let g = graph({ storage: s, vocab, plugins: [archetypes()] })
       let get = (eid: string) => s.tx((tx) => tx.get([eid]))[0]
       let batches = [texts.map(blob), owners]
-      for (let batch of first ? batches : batches.reverse()) g.apply(batch)
+      for (let bundles of first ? batches : batches.reverse()) g.apply(bundles)
       assertNotEquals(eidOf([]), sha256(''))
       assertEquals(get('empty').entity.archetype, eidOf([]))
       assertEquals(get('document').entity.archetype, eidOf(['doc']))
@@ -121,8 +121,8 @@ test('archetype/blob: file backfill and reopen preserve text in both insertion o
       let s = storage(db, vocab)
       s.install()
       let batches = [texts.map(blob), owners]
-      for (let batch of first ? batches : batches.reverse()) {
-        s.tx((tx) => tx.patch(batch)) // legacy/unclassified physical rows
+      for (let bundles of first ? batches : batches.reverse()) {
+        s.tx((tx) => tx.patch(bundles)) // legacy/unclassified physical rows
       }
       // As a file an older build wrote: no mark this vocabulary installed.
       meta(db).del(SCHEMA)

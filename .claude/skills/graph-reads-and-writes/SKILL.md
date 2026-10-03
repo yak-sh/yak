@@ -16,27 +16,27 @@ description: >
 
 # Writing to and reading from the graph
 
-The graph is entities carrying components; a write is a change, a read is a
-query. packages/graph/README.md is the reference ("Writes and reads", "IDs and
-names", "Plugins and transactions"). This skill is the part you get wrong when
-you go by feel.
+The graph is entities carrying components; a write applies a batch of bundles,
+a read is a query. packages/graph/README.md is the reference ("Writes and reads",
+"IDs and names", "Plugins and transactions"). This skill is the part you get
+wrong when you go by feel.
 
 ## A write is a list of patches
 
-A change is an array of bundles applied in one transaction, all or nothing.
+A batch is an array of bundles applied in one transaction, all or nothing.
 Each bundle is a patch: an omitted property is unchanged, `null` clears a
 property, a `null` component removes it, `$delete: true` deletes the entity.
-What comes back is the change as applied (one composed patch per entity, with
-whatever plugins and reference handling added), not a snapshot; cast it into
-any cache you keep, or the cache keeps ghosts.
+The returned batch contains the applied bundles (one composed patch per entity,
+with whatever plugins and reference handling added), not a snapshot; cast it
+into any cache you keep, or the cache keeps ghosts.
 
-- Try it first: `yak graph apply --change @file.json --check` runs every phase
-  and rolls back. With a large change the check prints every bundle; parse the
+- Try it first: `yak graph apply --bundles @file.json --check` runs every phase
+  and rolls back. With a large batch the check prints every bundle; parse the
   JSON to count rather than reading it.
 - An argument that starts with `@` is read as a file path, on every `yak`
   command: a title like "@yaks/fp on jsr" fails with "No such file". Phrase
   titles so they don't start with `@`.
-- `$name` as an eid is an alias local to one change; human ids (`T-12`) are
+- `$name` as an eid is an alias local to one batch; human ids (`T-12`) are
   resolved by `g.address`, and one that names nothing is refused, not taken for
   an eid.
 - Admission refuses a component or property the vocabulary doesn't declare,
@@ -46,15 +46,15 @@ any cache you keep, or the cache keeps ghosts.
 ## Read-then-write carries `$was`
 
 `$was` names the SHA-256 of each value you read, per property; if one moved,
-the whole change is refused (packages/graph/guard.ts). Pass a bundle through
+the whole batch is refused (packages/graph/guard.ts). Pass a bundle through
 whole at every hop; rebuilding it from its components silently drops the guard.
 Memory edits take it as `was` (`memory_save`): compute it from the body you
 actually read, never guess it.
 
 ## Who a write is stamped as
 
-Each entity in a change is stamped with the writer its own first bundle names in
-`$actor`, else the change's writer (`writers()` in packages/graph/stamp.ts), and
+Each entity in a batch is stamped with the writer its own first bundle names in
+`$actor`, else the batch's writer (`writers()` in packages/graph/stamp.ts), and
 the journal records one transaction per writer. So a session's own rows (a
 persona snapshot, a report) name the session, and the person is the writer only
 of what that person typed or asked for. The owner is the actor only for an act he
@@ -85,7 +85,7 @@ with what the delete cascaded (packages/journal/README.md, "Undo"), but not its
   `edgeEid(from, relation, to)` (packages/edge): linking twice is one edge, and
   unlinking deletes that eid.
 - A component with `durable: "0s"` is an event: `apply()` hands it back in the
-  applied change and stores nothing, and a bundle carrying only events is
+  applied bundles and stores nothing, and a bundle carrying only events is
   neither stamped nor journaled.
 
 ## Reading
@@ -105,7 +105,7 @@ naming a property with its component) is the `query-grammar` skill. This is how 
 
 ## Scripts against the db
 
-Write through the graph: a script opens it, or a change goes through
+Write through the graph: a script opens it, or bundles go through
 `yak graph apply`. Then stamps, journal, archetype pointers and the full-text
 and vector indexes stay right. SQL is @yaks/sql's AST, and nothing else writes a
 SQL string (M-39498). A raw SQL writer that must exist calls

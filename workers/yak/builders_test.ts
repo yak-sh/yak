@@ -307,7 +307,7 @@ test('shadow outputs do not start downstream immediate builders', async () => {
     label: 'shadow build retained',
   })
   // The shadow model returns no output in this fixture, so exercise the
-  // generated-row change door explicitly with its shadow build provenance.
+  // generated-row write door explicitly with its shadow build provenance.
   let [shadow] = (await v.read('.build&*')).filter((b) =>
     (b.build as Comp).variant != 'main'
   )

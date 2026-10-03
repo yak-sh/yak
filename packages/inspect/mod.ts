@@ -24,7 +24,7 @@
  *   entities a part names, asked for.
  * - `frame(inspector, chrome)`: the index and the stack around them
  *   (./Frame.ts).
- * - `note`: the change that leaves a note under a heading (./notes.ts).
+ * - `note`: the batch that leaves a note under a heading (./notes.ts).
  * - `Host`, `View`, `Answer`, `Ask`: the contract (./host.ts).
  * - `stackOf`, `stackPath`, `queryPath`, `pagePath`, `at`: the inspector's
  *   addresses, each a stack of panes (./where.ts).

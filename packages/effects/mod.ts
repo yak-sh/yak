@@ -7,7 +7,7 @@
  * transaction commits. When a letter is written, send it. When an order is
  * paid, print a receipt.
  *
- * A batch, here and throughout, is a list of changes applied in one
+ * A batch, here and throughout, is bundles applied in one
  * transaction: the array passed to `apply()`, written in full or not at all.
  *
  * ## Declared, then handled
@@ -60,7 +60,7 @@
  * - **Isolated.** A handler that throws is passed to `report` and the next
  *   handler still runs.
  * - **Written with the write.** Where the pool is kept, a run is committed with
- *   the change that owes it, so no crash between the two can lose it.
+ *   the batch that owes it, so no crash between the two can lose it.
  *
  * ## Writing back
  * An effect that writes has one route, and it is the graph's own `apply()`:

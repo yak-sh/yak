@@ -242,7 +242,7 @@ test(
 
       // ---- the generic tier ----------------------------------------------
       let wrote = await tool('graph_apply', {
-        change: [{
+        bundles: [{
           entity: { eid: '$note' },
           doc: { title: 'A marzipan note' },
           note: { body: 'lemon, and a little almond', pages: 2 },

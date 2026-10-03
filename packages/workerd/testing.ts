@@ -56,7 +56,7 @@ export let shopGraph = (): Graph => graph({ storage: ram(shop), vocab: shop })
 export let req = (path: string, init: RequestInit = {}): Request =>
   new Request(`https://shop.test${path}`, init)
 
-/** A `POST /apply` request carrying a list of changes as its JSON body. */
+/** A `POST /apply` request carrying bundles as its JSON body. */
 export let post = (path: string, body: unknown): Request =>
   req(path, { method: 'POST', body: JSON.stringify(body) })
 

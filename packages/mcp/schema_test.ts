@@ -23,7 +23,7 @@ let writing = async () => {
   let tool = tools.find((t: { name: string }) => t.name == 'graph_apply')
   await client.close()
   return tool!.inputSchema as {
-    properties: { change: { items: Record<string, unknown> } }
+    properties: { bundles: { items: Record<string, unknown> } }
   }
 }
 
@@ -81,7 +81,7 @@ test('every tool publishes its answer, and its answers fit it', async () => {
   let made = await client.callTool({
     name: 'graph_apply',
     arguments: {
-      change: [{
+      bundles: [{
         entity: { eid: '$b' },
         doc: { title: 'Dune' },
         book: { price: 9 },
@@ -115,7 +115,7 @@ test('every tool publishes its answer, and its answers fit it', async () => {
 
 test('graph_apply takes the vocabulary, typed and described', async () => {
   let schema = await writing()
-  let book = at(schema, 'properties', 'change', 'items', 'properties', 'book')
+  let book = at(schema, 'properties', 'bundles', 'items', 'properties', 'book')
   let props = at(book, 'anyOf', '0', 'properties')
   assertEquals(Object.keys(props as object), ['price', 'status', 'author'])
   assertEquals(at(props, 'price', 'type'), ['number', 'null'])
@@ -126,7 +126,7 @@ test('graph_apply takes the vocabulary, typed and described', async () => {
     'sold',
   ])
   // The two sugars a batch may say beside its components.
-  let items = at(schema, 'properties', 'change', 'items', 'properties')
+  let items = at(schema, 'properties', 'bundles', 'items', 'properties')
   assertEquals(at(items, '$delete', 'type'), 'boolean')
   assertEquals(at(items, '$was', 'type'), 'object')
   assertEquals(at(items, 'entity', 'required'), ['eid'])
@@ -149,7 +149,7 @@ test('a host states its own reading of a property on the write door', async () =
   let author = at(
     schema,
     'properties',
-    'change',
+    'bundles',
     'items',
     'properties',
     'book',
@@ -167,7 +167,7 @@ test('the write door names its own words, and stays open to newer ones', async (
     at(
       schema,
       'properties',
-      'change',
+      'bundles',
       'items',
       'properties',
       name,

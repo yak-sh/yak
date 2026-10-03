@@ -1,13 +1,13 @@
-// The pluggable half of `apply()`. A change runs through a fixed, ordered list
+// The pluggable half of `apply()`. A batch runs through a fixed, ordered list
 // of phases; a plugin registers a hook against a named one. The order matters
-// — a precondition has to read before the change writes, a cascade has to
+// — a precondition has to read before the batch writes, a cascade has to
 // decide which rows go before they go, an effect must not fire until the
 // transaction commits — so "register code anywhere in apply()" would be a way
 // to write bugs, not a feature.
 //
 // A hook takes the list of bundles and returns the list the next phase sees.
 // That one signature covers everything a hook does: rewriting a bundle, adding
-// one, removing one, and refusing the whole change (by throwing). Hooks
+// one, removing one, and refusing the whole batch (by throwing). Hooks
 // communicate with each other, and with the core, through the bundles: a
 // component is just data on an entity, and a component that never reaches a
 // table is a perfectly good way for one phase to tell a later one what it
@@ -30,26 +30,26 @@ import type { ToolDefinition } from '@yaks/vocab/tools'
  * - `normalize` — canonicalize what arrived. Pure, before the transaction.
  * - `admit` — refuse an undeclared component or property, drop server-owned
  *   properties, validate each value against the vocabulary.
- * - `mint` — give every `$alias` in the change a real id (a fresh one, or one
+ * - `mint` — give every `$alias` in the batch a real id (a fresh one, or one
  *   derived from the content) and rewrite the references to it.
  * - `prepare` — finish idempotent external work before taking the transaction's
  *   write lock. Graph checks still run against current data inside it; prepared
  *   external content may remain unreferenced after a refusal or dry run.
- * - `precondition` — the `$was` check, and any other "may this change be
+ * - `precondition` — the `$was` check, and any other "may this batch be
  *   applied" check that has to read first (a lease, a quota). The transaction
  *   is open by now.
  * - `rules` — the declarative half: a rule is a query, and at this point the
- *   pending change is readable as if it were already in the tables (storage
+ *   pending batch is readable as if it were already in the tables (storage
  *   provides an overlay), so a rule is evaluated against the graph with this
- *   change already applied, and the `+` half of the rule joins the change as
+ *   batch already applied, and the `+` half of the rule joins the batch as
  *   patches. This runs before anything is persisted on purpose — a component
  *   that is never stored (`sync: peers`) is visible to a rule, and can be
- *   produced by one, only while the change is still in memory.
+ *   produced by one, only while the batch is still in memory.
  * - `mutate` — the patches are written.
  * - `cascade` — a delete takes its dependents with it, and references marked
- *   `detach` are cleared. The entities it deleted are added to the change.
+ *   `detach` are cleared. The entities it deleted are added to the batch.
  * - `stamp` — `created` when the entity is new, `updated` when it is touched.
- * - `journal` — record the change as applied. (The journal is a plugin.)
+ * - `journal` — record the batch as applied. (The journal is a plugin.)
  * - `commit` — the last thing inside the transaction; it returns and the
  *   transaction commits.
  * - `effect` — post-commit observers. Each is isolated: a failing effect is
@@ -88,7 +88,7 @@ export let PHASES: Phase[] = [
   'audit',
 ]
 
-/** The phases that run inside the change's transaction. */
+/** The phases that run inside the batch's transaction. */
 export let INSIDE: Phase[] = [
   'precondition',
   'rules',
@@ -101,7 +101,7 @@ export let INSIDE: Phase[] = [
 
 /**
  * A hook: the bundles in, the bundles the next phase sees out. Throwing
- * refuses the whole change (and, from inside the transaction, rolls it back).
+ * refuses the whole batch (and, from inside the transaction, rolls it back).
  * In the phases outside the transaction the `tx` is a detached one — each call
  * is its own unit of work. The `audit` phase, and only it, also passes the
  * error that rolled the transaction back.
@@ -118,13 +118,13 @@ export type Hook = (
 ) => Bundle[] | Promise<Bundle[]>
 
 /**
- * An ordered write hook may certify that this change's checks and writes are
+ * An ordered write hook may certify that this batch's checks and writes are
  * independent of each other: checking every operation and then mutating and
  * cascading them together produces exactly the same result as checking and
  * writing them one at a time. That covers the hook's rewrites and any
  * cascades, not just its reads. The default is one operation at a time; the
  * operations are combined only when every `beforeWrite` hook certifies the
- * change.
+ * batch.
  */
 export type WriteHook = Hook & { independent?: boolean }
 
@@ -271,14 +271,14 @@ export type Plugin = {
   requests?: string[]
   /** the phases it hooks, at most one hook each */
   hooks?: Partial<Record<Phase, Hook>>
-  /** the rules it registers in code: a query over one bundle in the change,
+  /** the rules it registers in code: a query over one bundle in the batch,
    * plus what the rule produces (see {@link Rule}). The phase runs every rule
    * registered on it, in plugin order, before its hooks. */
   rules?: Rule[]
   /** the rules it declares as data — a query and nothing else (see
    * {@link Declared}). They run in the `rules` phase, over storage's overlay
-   * of the pending change, until they reach a fixpoint, and what they produce
-   * joins the change. A declared rule needs no code at all: an app ships one
+   * of the pending batch, until they reach a fixpoint, and what they produce
+   * joins the batch. A declared rule needs no code at all: an app ships one
    * in its vocabulary. */
   declared?: Declared[]
   /** the resources it provides: a singleton built from the current phase's
@@ -288,7 +288,7 @@ export type Plugin = {
    * resource name is capitalized, which is what distinguishes it from a
    * component name in the bundle they share; a lowercase name is refused. */
   resources?: Record<string, Resource>
-  /** what its hooks are going to read, given the change. `apply()` merges
+  /** what its hooks are going to read, given the batch. `apply()` merges
    * every plugin's asks with its own and satisfies them all in one read before
    * any hook runs (see {@link Ask} and ./gather.ts), so a hook's `tx.get` and
    * `about()` are answered from memory instead of costing a round trip each.
@@ -340,7 +340,7 @@ export type Tracker = {
   /** The same transaction, with its writes observed; reads behave exactly as
    * the storage contract specifies. */
   tx: Tx
-  /** Drain the pending changes; a repeated flush with no writes since does
+  /** Drain the pending batches; a repeated flush with no writes since does
    * nothing. */
   flush: (bundles: Bundle[]) => Bundle[] | Promise<Bundle[]>
 }

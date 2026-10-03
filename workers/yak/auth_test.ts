@@ -366,7 +366,7 @@ test('the agent door signs with the same actor the page door does', async () => 
   let door = mcp(store.door)
 
   let out = await call(door, 'graph_apply', {
-    change: [{ entity: { eid: CAKE }, doc: { title: 'Lemon drizzle' } }],
+    bundles: [{ entity: { eid: CAKE }, doc: { title: 'Lemon drizzle' } }],
   }, { ...head, authorization: 'Bearer what-the-edge-already-checked' })
   assertEquals(out.status, 200)
   let reply = await out.json() as { result: { isError?: boolean } }

@@ -884,7 +884,7 @@ export { dec, enc }
  * read nothing in order to write, so nothing is gathered beforehand and nothing
  * is passed forward to a later phase. The transaction is recorded as applied —
  * one row per component the bundles patched or removed, in the order they
- * arrived — under its writer. A change carrying more than one writer's work is
+ * arrived — under its writer. A batch carrying more than one writer's work is
  * recorded as one transaction per writer, each holding what its entities'
  * bundles wrote (@yaks/graph `writers`), so an entity's history names who
  * wrote it, as its stamps do.

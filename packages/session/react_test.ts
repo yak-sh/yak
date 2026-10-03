@@ -1874,9 +1874,9 @@ for (let committed of [false, true]) {
     let { model, asked } = scripted([calls(['c1', 'hi']), says('r2', 'done')])
     let apply = g.apply, read = g.read
     let failed = false, saves = 0, landed = false
-    g.apply = (batch, opts) => {
+    g.apply = (bundles, opts) => {
       if (
-        batch.some((b) =>
+        bundles.some((b) =>
           b.attempt && (b.attempt as Comp).by === null && !b.interrupted
         )
       ) {
@@ -1887,7 +1887,7 @@ for (let committed of [false, true]) {
         }
         landed = true
       }
-      return apply(batch, opts)
+      return apply(bundles, opts)
     }
     g.read = (...args) => {
       if (committed && landed && !failed) {

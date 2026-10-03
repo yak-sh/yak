@@ -1507,7 +1507,7 @@ test('host anatomy reads before graph readiness and tracks lazy alias runs once'
         assertThrows(() => host.graph)
         captured = true
         factories++
-        return [{ name: 'fixture', hooks: { commit: (batch) => batch } }]
+        return [{ name: 'fixture', hooks: { commit: (bundles) => bundles } }]
       },
     },
     tools: {

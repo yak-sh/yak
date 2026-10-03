@@ -121,7 +121,7 @@ test('a batch applied comes back as it landed, and reads back', async () => {
   let client = await connect({ actor: ada })
   let wrote = bundles(result(
     await called(client, 'graph_apply', {
-      change: [spring],
+      bundles: [spring],
     }),
   ))
   // One bundle for the one entity — its components, its number and its stamp
@@ -138,14 +138,14 @@ test('a batch applied comes back as it landed, and reads back', async () => {
   // tombstone alone.
   let [minted] = bundles(result(
     await called(client, 'graph_apply', {
-      change: [{ entity: { eid: '$new' }, doc: { title: 'Emma' } }],
+      bundles: [{ entity: { eid: '$new' }, doc: { title: 'Emma' } }],
     }),
   ))
   assertEquals(minted.$alias, '$new')
   assert(minted.entity.eid != '$new')
   let [died] = bundles(result(
     await called(client, 'graph_apply', {
-      change: [{ entity: { eid: minted.entity.eid }, $delete: true }],
+      bundles: [{ entity: { eid: minted.entity.eid }, $delete: true }],
     }),
   ))
   assertEquals(died, {
@@ -166,7 +166,7 @@ test('a checked batch says what would land and keeps none of it', async () => {
   let g = shopGraph()
   let client = await connect({ graph: g, actor: ada })
   let out = await called(client, 'graph_apply', {
-    change: [{ entity: { eid: '$new' }, doc: { title: 'Emma' } }],
+    bundles: [{ entity: { eid: '$new' }, doc: { title: 'Emma' } }],
     check: true,
   })
   assertEquals(out.isError, undefined)
@@ -179,7 +179,7 @@ test('a checked batch says what would land and keeps none of it', async () => {
   assertEquals(await g.read('.doc.title="Emma"&*'), [])
   // And a batch it would refuse is refused, rehearsal or not.
   let no = await called(client, 'graph_apply', {
-    change: [{ entity: { eid: 'b1' }, book: { colour: 'red' } }],
+    bundles: [{ entity: { eid: 'b1' }, book: { colour: 'red' } }],
     check: true,
   })
   assertEquals(no.isError, true)
@@ -188,9 +188,9 @@ test('a checked batch says what would land and keeps none of it', async () => {
 
 test('an applied batch may drop a component, and says so', async () => {
   let client = await connect()
-  await called(client, 'graph_apply', { change: [spring] })
+  await called(client, 'graph_apply', { bundles: [spring] })
   let out = await called(client, 'graph_apply', {
-    change: [{ entity: { eid: 'b1' }, doc: null }],
+    bundles: [{ entity: { eid: 'b1' }, doc: null }],
   })
   assertEquals(out.isError, undefined)
   assertEquals(bundles(result(out))[0].doc, null)
@@ -199,7 +199,7 @@ test('an applied batch may drop a component, and says so', async () => {
 test('filters and limit narrow the whole query line', async () => {
   let client = await connect()
   await called(client, 'graph_apply', {
-    change: [spring, { entity: { eid: 'b2' }, book: { price: 40 } }],
+    bundles: [spring, { entity: { eid: 'b2' }, book: { price: 40 } }],
   })
   let found = bundles(result(
     await called(client, 'graph_query', {
@@ -231,7 +231,7 @@ test('filters and limit narrow the whole query line', async () => {
 test('graph_query answers a projection as bundles, with what its paths reach', async () => {
   let client = await connect()
   await called(client, 'graph_apply', {
-    change: [
+    bundles: [
       { entity: { eid: 'a1' }, doc: { title: 'Ursula' } },
       { ...spring, book: { price: 12, author: 'a1' } },
     ],
@@ -254,7 +254,7 @@ test('the server signs the batch, never the client', async () => {
   let graph = shopGraph()
   let client = await connect({ graph, actor: ada })
   await called(client, 'graph_apply', {
-    change: [{ ...spring, $actor: { by: 'villain' } }],
+    bundles: [{ ...spring, $actor: { by: 'villain' } }],
   })
   // What landed is what this is about: the call was written as the door's
   // actor, and the runner signed the tool's bundles with the same name.
@@ -293,7 +293,7 @@ test('an unattributed server leaves the actor off', async () => {
   let graph = shopGraph()
   let client = await connect({ graph })
   await called(client, 'graph_apply', {
-    change: [{ ...spring, $actor: { by: 'villain' } }],
+    bundles: [{ ...spring, $actor: { by: 'villain' } }],
   })
   assertEquals(
     comp((await graph.read('.book.price=12&*'))[0], 'created').by,
@@ -413,8 +413,8 @@ test('a refusal is the tool error the agent reads, not a broken call', async () 
   // The write door's schema is the vocabulary (T-34153), so a bundle with no
   // identity and a value of the wrong type are each refused where they were
   // typed — with the path that names them.
-  let said = async (change: unknown) => {
-    let out = await called(client, 'graph_apply', { change })
+  let said = async (bundles: unknown) => {
+    let out = await called(client, 'graph_apply', { bundles })
     assertEquals(out.isError, true)
     assert(Array.isArray(out.content))
     return String(out.content[0].text)
@@ -443,7 +443,7 @@ test('a refusal is the tool error the agent reads, not a broken call', async () 
 
   // And what the schema cannot see — a batch that is not an array of bundles
   // at all — the tool still says for itself.
-  let bare = await called(client, 'graph_apply', { change: 'a book' })
+  let bare = await called(client, 'graph_apply', { bundles: 'a book' })
   assertEquals(bare.isError, true)
 })
 

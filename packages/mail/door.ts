@@ -185,7 +185,7 @@ export let queue = async (
   tx: Pick<Tx, 'get' | 'read'>,
   vocab: Vocab,
   options: Inbox,
-  write: (change: Bundle[]) => unknown,
+  write: (bundles: Bundle[]) => unknown,
   now: string = new Date().toISOString(),
   daily = false,
 ): Promise<void> => {
@@ -193,9 +193,9 @@ export let queue = async (
   let notices = await tx.read(
     `.mail_notice&.deliver.to=${JSON.stringify(options.person)}&*`,
   )
-  let change = planned(inbox, notices, options, now, daily)
-  let existing = new Set((await tx.get(change.map((b) => b.entity.eid)))
+  let bundles = planned(inbox, notices, options, now, daily)
+  let existing = new Set((await tx.get(bundles.map((b) => b.entity.eid)))
     .map((b) => b.entity.eid))
-  let fresh = change.filter((b) => !existing.has(b.entity.eid))
+  let fresh = bundles.filter((b) => !existing.has(b.entity.eid))
   if (fresh.length) await write(fresh)
 }

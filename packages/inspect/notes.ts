@@ -47,7 +47,7 @@ export let titled = (subject: string, heading: string, text: string): string =>
   `${heading ? `${subject} · ${heading}` : subject}: ${line(text, 80)}`
 
 /**
- * A note on the entity `eid`, left under `heading`, as the change that
+ * A note on the entity `eid`, left under `heading`, as the batch that
  * leaves it: a comment on it that is an open task.
  *
  * ```ts

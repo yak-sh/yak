@@ -62,7 +62,7 @@ test('the door answers the protocol, and signs what a tool writes', async () => 
   assert(listed.result.tools.length >= 4)
 
   let wrote = await door(call('graph_apply', {
-    change: [{
+    bundles: [{
       entity: { eid: 'b1' },
       book: { price: 12 },
       $actor: { by: 'villain' },
@@ -204,7 +204,7 @@ test('an MCP connection writes through its own graph session', async () => {
 
   let apply = () =>
     call('graph_apply', {
-      change: [{ entity: { eid: 'b1' }, book: { price: 12 } }],
+      bundles: [{ entity: { eid: 'b1' }, book: { price: 12 } }],
     })
   let resumed = mcp({ graph: g, sessions: g })
   let wrote = await resumed(
@@ -245,7 +245,7 @@ test('authentication keeps its actor while the MCP session names the run', async
   await door(
     new Request(
       call('graph_apply', {
-        change: [{ entity: { eid: 'b1' }, book: { price: 12 } }],
+        bundles: [{ entity: { eid: 'b1' }, book: { price: 12 } }],
       }),
       { headers: { 'mcp-session-id': id } },
     ),
@@ -266,13 +266,13 @@ test('x-via keeps its session, and a one-shot CLI call gets one', async () => {
     sessions: g,
     authenticate: sessionAuth({ graph: g }),
   })
-  let change = (eid: string) =>
+  let bundles = (eid: string) =>
     call('graph_apply', {
-      change: [{ entity: { eid }, book: { price: 12 } }],
+      bundles: [{ entity: { eid }, book: { price: 12 } }],
     })
 
   let harness = await door(
-    new Request(change('b1'), {
+    new Request(bundles('b1'), {
       headers: { 'x-via': 'harness-run' },
     }),
   )
@@ -281,7 +281,7 @@ test('x-via keeps its session, and a one-shot CLI call gets one', async () => {
   assertEquals(comp((await g.get(['b1']))[0], 'created').via, 's1')
   assertEquals((await g.read('.session')).length, 1)
 
-  let cli = await door(change('b2'))
+  let cli = await door(bundles('b2'))
   let id = cli.headers.get('mcp-session-id')
   assert(id)
   let [session] = await g.read(`.session.id=${JSON.stringify(id)}&*`)
@@ -303,7 +303,7 @@ test('what the host owes a direct call rides after the answer, which is unchange
       }))),
   })[0].handle
   let said = await (await door(call('graph_apply', {
-    change: [{ entity: { eid: 'b1' }, book: { price: 12 } }],
+    bundles: [{ entity: { eid: 'b1' }, book: { price: 12 } }],
   }))).json()
   let [made, near] = said.result.structuredContent.result as Bundle[]
   assertEquals([made.entity.eid, made.book], ['b1', { price: 12 }])
@@ -334,7 +334,7 @@ test('a call is answered while a subscriber is still reading what it wrote', asy
     .handle
   let said: { result: { structuredContent: { result: Bundle[] } } } | undefined
   let asked = door(call('graph_apply', {
-    change: [{ entity: { eid: 'b1' }, book: { price: 12 } }],
+    bundles: [{ entity: { eid: 'b1' }, book: { price: 12 } }],
   }))
   Promise.resolve(asked).then(async (r) => said = await r.json())
   try {
@@ -438,7 +438,7 @@ test('a pinned modern HTTP client discovers awaited facets and records malformed
     assert(tools.tools.some((t) => t.name == 'graph_apply'))
     let bad = await client.callTool({
       name: 'graph_apply',
-      arguments: { change: 'malformed' },
+      arguments: { bundles: 'malformed' },
     })
     assertEquals(bad.isError, true)
     assert(
@@ -449,11 +449,11 @@ test('a pinned modern HTTP client discovers awaited facets and records malformed
     let calls = await g.read('.call&?created')
     assertEquals(calls.length, 1)
     assertEquals(comp(calls[0], 'created').by, 'm1')
-    assertEquals(comp(calls[0], 'call').args, { change: 'malformed' })
+    assertEquals(comp(calls[0], 'call').args, { bundles: 'malformed' })
     let wrote = await client.callTool({
       name: 'graph_apply',
       arguments: {
-        change: [{
+        bundles: [{
           entity: { eid: 'modern-book' },
           book: { price: 19 },
           $actor: { by: 'villain' },

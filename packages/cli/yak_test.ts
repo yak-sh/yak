@@ -53,19 +53,19 @@ let ran = async (
   }
 }
 
-let change = '[{"entity":{"eid":"$a"},"doc":{"title":"One"}}]'
+let bundles = '[{"entity":{"eid":"$a"},"doc":{"title":"One"}}]'
 
 test('a dry run is the tool’s check, and nothing else moves', async () => {
   let { calls: [dry] } = await ran([
     'apply',
-    '--change',
-    change,
+    '--bundles',
+    bundles,
     '--dry-run',
   ])
   assertEquals(dry.name, 'graph_apply')
   assertEquals(dry.arguments.check, true)
-  assert(Array.isArray(dry.arguments.change))
-  let { calls: [wet] } = await ran(['apply', '--change', change])
+  assert(Array.isArray(dry.arguments.bundles))
+  let { calls: [wet] } = await ran(['apply', '--bundles', bundles])
   assertEquals(wet.arguments.check, undefined)
 })
 

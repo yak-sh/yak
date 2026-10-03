@@ -17,7 +17,7 @@
 //
 // A share link is the fourth way in. A grant may name a `token` instead of a
 // person; whoever opens that link acts as the grant, so the HTTP layer signs
-// the changes with the grant's own entity id. `levelOn` therefore checks the
+// the bundles with the grant's own entity id. `levelOn` therefore checks the
 // principal's own entity for a `grant` component before it looks for grants
 // filed about the principal.
 //

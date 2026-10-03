@@ -134,9 +134,9 @@ export let atlas = (opts: ModelOptions = {}): AtlasModel => {
   // Fixed reusable record slots avoid a trail of deleted event tombstones.
   let slots = Array.from({ length: 256 }, (_, i) => derivedEid(`${page}|${i}`))
   let eventIds = new Map<string, string>()
-  let write = (change: Bundle[]) => {
-    if (closed || !change.length) return
-    let result = local.mutate(change)
+  let write = (bundles: Bundle[]) => {
+    if (closed || !bundles.length) return
+    let result = local.mutate(bundles)
     if (result instanceof Promise) {
       void result.catch(() => {
         if (!closed) console.error('MRI local write')
@@ -161,7 +161,7 @@ export let atlas = (opts: ModelOptions = {}): AtlasModel => {
   let eventWatch = local.watch('.AtlasEvent&.order=AtlasEvent.seq')
   let coverageWatch = local.watch(`.entity.eid=${stateId}&.AtlasCoverage`)
   let typed = desk({
-    mutate: (change) => closed ? [] : local.mutate(change),
+    mutate: (bundles) => closed ? [] : local.mutate(bundles),
     watch: (query) => local.watch(query),
   }, { by: () => closed ? undefined : actor, pace: 0 })
   let identity = (id: string) => {
@@ -272,7 +272,7 @@ export let atlas = (opts: ModelOptions = {}): AtlasModel => {
       let at = id && spans.get(id)
       return at ? eventIds.get(`${at.epoch}:${at.seq}`) ?? null : null
     }
-    let changes: Bundle[] = [{
+    let bundles: Bundle[] = [{
       entity: { eid },
       AtlasEvent: {
         seq: event.seq,
@@ -290,9 +290,9 @@ export let atlas = (opts: ModelOptions = {}): AtlasModel => {
         'AtlasEvent',
       )!
       if (!keys.has(`${stored.data.epoch}:${stored.data.seq}`)) {
-        changes.push({ entity: row.entity, AtlasEvent: null })
+        bundles.push({ entity: row.entity, AtlasEvent: null })
       } else if ((stored.parent ?? null) != ref(stored.data.parent)) {
-        changes.push({
+        bundles.push({
           entity: row.entity,
           AtlasEvent: {
             parent: ref(stored.data.parent),
@@ -300,14 +300,14 @@ export let atlas = (opts: ModelOptions = {}): AtlasModel => {
         })
       }
     }
-    changes.push({
+    bundles.push({
       entity: { eid: stateId },
       Visualize: {
         received: state().received + 1,
         cause: ref(chosen),
       },
     })
-    write(changes)
+    write(bundles)
   }
   let start = (tail = false) => {
     if (closed || state().paused || feed) return
@@ -429,11 +429,11 @@ export let atlas = (opts: ModelOptions = {}): AtlasModel => {
           ...nodes.map((n) => n.id),
           ...source.anatomy.edges.map((e) => e.id),
         ])
-        let changes: Bundle[] = []
+        let bundles: Bundle[] = []
         for (let row of [...nodeWatch.value, ...edgeWatch.value]) {
           let id = publicId(row.entity.eid)
           if (!current.has(id)) {
-            changes.push({
+            bundles.push({
               entity: row.entity,
               AtlasPart: null,
               AtlasRelation: null,
@@ -441,14 +441,14 @@ export let atlas = (opts: ModelOptions = {}): AtlasModel => {
           }
         }
         for (let node of nodes) {
-          changes.push({ entity: { eid: identity(node.id) }, AtlasPart: node })
+          bundles.push({ entity: { eid: identity(node.id) }, AtlasPart: node })
         }
         for (let edge of source.anatomy.edges) {
           if (
             !nodes.some((n) => n.id == edge.from) ||
             !nodes.some((n) => n.id == edge.to)
           ) continue
-          changes.push({
+          bundles.push({
             entity: { eid: identity(edge.id) },
             AtlasRelation: {
               ...edge,
@@ -462,7 +462,7 @@ export let atlas = (opts: ModelOptions = {}): AtlasModel => {
         for (let row of rows()) {
           let stored = component<{ data: Activity }>(row, 'AtlasEvent')!
           let node = located(stored.data, nodes)
-          changes.push({
+          bundles.push({
             entity: row.entity,
             AtlasEvent: {
               data: { ...stored.data, node },
@@ -470,7 +470,7 @@ export let atlas = (opts: ModelOptions = {}): AtlasModel => {
             },
           })
         }
-        changes.push({
+        bundles.push({
           entity: { eid: stateId },
           Visualize: {
             host: source.coverage.scope,
@@ -485,7 +485,7 @@ export let atlas = (opts: ModelOptions = {}): AtlasModel => {
             takenAt: source.takenAt,
           },
         })
-        write(changes)
+        write(bundles)
         for (let id of identities.keys()) {
           if (!current.has(id)) identities.delete(id)
         }

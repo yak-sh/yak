@@ -27,7 +27,7 @@
       "noun": "design",
       "verb": "new",
       "title": "Propose a design",
-      "description": "Write a proposed change down as a stored record with named field groups: design{}, doc{title, body} and proposed{}. Who proposed it and when are stamped from the caller, never passed as arguments. Returns the applied changes as bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
+      "description": "Write a proposed change down as a stored record with named field groups: design{}, doc{title, body} and proposed{}. Who proposed it and when are stamped from the caller, never passed as arguments. Returns the applied bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
       "input": {
         "title": {
           "type": "string",
@@ -58,7 +58,7 @@
       "noun": "design",
       "verb": "decide",
       "title": "Decide a design",
-      "description": "Record the decision on a proposed design: approved or declined. The decider is the caller, stamped from the caller’s identity, so a decision an agent makes is recorded as the agent’s, and as an owner’s only when the owner is calling. Returns the applied changes as bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
+      "description": "Record the decision on a proposed design: approved or declined. The decider is the caller, stamped from the caller’s identity, so a decision an agent makes is recorded as the agent’s, and as an owner’s only when the owner is calling. Returns the applied bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
       "input": {
         "design": {
           "type": "string",

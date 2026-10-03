@@ -20,14 +20,14 @@ let now = (g: Graph, eid: string, vocab = said): Worn | undefined => {
 let ids = (bundles: Bundle[]) => bundles.map((b) => b.entity.eid)
 
 // One persona, its two tiers, and a second persona under it.
-let graph = (...batch: Bundle[]): Graph => {
+let graph = (...bundles: Bundle[]): Graph => {
   let g = world()
   g.apply([
     voiced('n1', 'TaskMaster', 'the voice'),
     memory('m1', 'one', 'first'),
     memory('m2', 'two', 'second'),
     memory('m3', 'three', 'third'),
-    ...batch,
+    ...bundles,
   ])
   return g
 }

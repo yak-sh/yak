@@ -454,7 +454,7 @@ for (let readOnly of [false, true]) {
     using time = new FakeTime()
     let { g } = world()
     let runs = 0, attempts = 0, now = 0
-    let reports: unknown[] = [], changes: Bundle[][] = []
+    let reports: unknown[] = [], batches: Bundle[][] = []
     let busy = Object.assign(new Error('storage unavailable'), {
       retryable: true,
     })
@@ -476,7 +476,7 @@ for (let readOnly of [false, true]) {
     let apply = g.apply
     g.apply = (b, opts) => {
       if (b.some((one) => one.result)) {
-        changes.push(b)
+        batches.push(b)
         if (++attempts <= 2) throw busy
       }
       return apply(b, opts)
@@ -491,7 +491,7 @@ for (let readOnly of [false, true]) {
     await time.tickAsync(2000)
     let answer = await pending
     assertEquals([runs, attempts], [1, 3])
-    assertEquals(changes.every((b) => b === changes[0]), true)
+    assertEquals(batches.every((b) => b === batches[0]), true)
     assertEquals(body(answer.find((b) => b.output)), 'precious 2')
     assertEquals(answer.some((b) => b.exception || b.error), false)
     assertEquals((answer.find((b) => b.result)!.result as Comp).ms, 7)

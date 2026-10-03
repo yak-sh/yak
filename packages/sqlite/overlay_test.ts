@@ -99,7 +99,7 @@ test('the overlay costs the batch, never the database', () => {
         )
       )
     }
-    let batch: Bundle[] = [
+    let bundles: Bundle[] = [
       ...Array.from({ length: 20 }, (_, i) => ({
         entity: { eid: `n${i}` },
         doc: { title: `fresh${i}` },
@@ -110,7 +110,7 @@ test('the overlay costs the batch, never the database', () => {
     ]
     let statements = 0
     let counted = spy(driver, () => void statements++)
-    let over = overlay(counted, shop, batch)
+    let over = overlay(counted, shop, bundles)
     assertEquals(seen(counted, over, '.product.price>=100000').length, 21)
     return statements
   }

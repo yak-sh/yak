@@ -370,7 +370,7 @@ for (let writer of ['p', 'child', 'other', 'external']) {
       } else {
         let apply = harnessTools(h.g).find((t) => t.name == 'graph_apply')!
         await apply.run({
-          change: [{
+          bundles: [{
             entity: { eid: 'work' },
             completed: {},
             $actor: { by: 'spoof' },
@@ -414,7 +414,10 @@ test('parent completion does not suppress a later child response', async () => {
   let { h, ctx, spawn } = await setup()
   let child = String(await spawn.run({ task: 'work' }, ctx))
   let apply = harnessTools(h.g).find((t) => t.name == 'graph_apply')!
-  await apply.run({ change: [{ entity: { eid: 'work' }, completed: {} }] }, ctx)
+  await apply.run(
+    { bundles: [{ entity: { eid: 'work' }, completed: {} }] },
+    ctx,
+  )
   await h.g.apply([{
     entity: { eid: 'later-answer' },
     entry: { session: child, seq: 2 },
