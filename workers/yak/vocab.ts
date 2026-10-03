@@ -1267,8 +1267,10 @@ export let grew = (
   let mine = was.$defs ?? {}
   let theirs = next.$defs ?? {}
   let delta = changed(was, next)
+  // A whole view carries its retired membership in the lens declaration.
+  // Property renames still need their source component's stored membership.
   let dropped = delta.dropped.filter((n) =>
-    !n.includes('.') && !rows(n) && !sources?.has(n) &&
+    !n.includes('.') && !rows(n) &&
     ![...sources ?? []].some((p) => p.startsWith(`${n}.`))
   )
   let defs: Record<string, PropSchema> = { ...mine }

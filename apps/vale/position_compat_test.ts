@@ -16,10 +16,12 @@ import { type Frame, subscriptions } from '../../packages/api/subs.ts'
 import core from '../../packages/kernel/vocab.json' with { type: 'json' }
 import words from './vocab.json' with { type: 'json' }
 import {
+  contractedLenses,
   contractPaths,
   lensRule,
   retainedLenses,
 } from '../../workers/yak/lenses.ts'
+import { grew } from '../../workers/yak/vocab.ts'
 
 let app = { ...words, package: '@app/vale-compat' }
 let speaks = { [packageEid(app.package)]: 0 }
@@ -324,7 +326,16 @@ test('the mover preserves newer saved values, historical attribution, contracts 
       !!d.$defs?.seen
     ),
   )
-  equal(lensRule('vale', app)?.live, undefined)
+  equal(
+    lensRule('vale', {
+      ...app,
+      $defs: {
+        ...app.$defs,
+        saved_position: { ...app.$defs.saved_position, live: false },
+      },
+    })?.live,
+    undefined,
+  )
 })
 
 test('unmoved seen rows still answer kept pages while migration is rehearsal-only', async () => {
@@ -702,4 +713,62 @@ test('equivalent transaction facts preserve old writes and mover patches despite
       )
     }
   }
+})
+
+test('empty Vale view sources leave the active vocabulary while rename membership survives', async () => {
+  let expanded = {
+    ...app,
+    $defs: {
+      ...app.$defs,
+      seen: app.$defs.saved_position.ops[0].view.declaration,
+    },
+  }
+  let contracted = contractedLenses(expanded)
+  let drained = grew(expanded, contracted, () => 0)
+  equal(drained.doc.$defs?.seen, undefined)
+  ok(drained.dropped.includes('seen'))
+  ok(!drained.kept.some((path) => path.startsWith('seen.')))
+  let vocab = loadVocab([metaDoc, ...lensDocs, core, drained.doc])
+  equal(vocab.comp('seen'), undefined)
+  let g = graph({
+    vocab,
+    storage: ram(vocab),
+    plugins: [
+      lenses(undefined, { vocab, rows: lensesIn([drained.doc]) }),
+    ],
+  })
+  equal(await g.view('.player .position'), null)
+  ok(
+    compile(lensesIn([drained.doc])).schema([drained.doc]).some((d) =>
+      !!d.$defs?.seen
+    ),
+  )
+  equal(
+    grew(expanded, contracted, () => 1).doc.$defs?.seen,
+    expanded.$defs.seen,
+  )
+  let renamed = {
+    package: 'recipe',
+    $defs: {
+      recipe: {
+        component: true,
+        type: 'object',
+        properties: { title: { type: 'string' } },
+      },
+      doc: {
+        component: true,
+        type: 'object',
+        properties: { title: { type: 'string' } },
+      },
+      renamed: {
+        lens: true,
+        step: 20261003184100,
+        ops: [{ rename: { from: 'recipe.title', to: 'doc.title' } }],
+      },
+    },
+  }
+  let recipe = grew(renamed, contractedLenses(renamed), () => 0).doc.$defs
+    ?.recipe
+  ok(recipe)
+  equal(recipe?.properties, {})
 })
