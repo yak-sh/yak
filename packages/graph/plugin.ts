@@ -301,8 +301,9 @@ export type Plugin = {
    * operations already written before it. Opting in makes mutate and cascade
    * run one operation at a time, in the same transaction. `$was` still checks
    * against the pre-write state. No external side effects: any later refusal
-   * rolls back everything written before it. */
-  beforeWrite?: (bundles: Bundle[]) => WriteHook
+   * rolls back everything written before it. Return undefined when this batch
+   * needs no check from this plugin. */
+  beforeWrite?: (bundles: Bundle[]) => WriteHook | undefined
   /** the plugin's name, for diagnostics */
   name: string
   /** the components this plugin contributes, as @yaks/vocab documents */

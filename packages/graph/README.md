@@ -660,11 +660,14 @@ An **ask** declares a read needed before a phase (`Ask`): `eids` names entities,
 `select` narrows their components, and `about` names reference targets, narrowed
 by `comps`. A **gather** satisfies the core's asks and `Plugin.wants(bundles)`
 before preconditions (`gather`). Hooks use `tx.get` and `about(tx, vocab, ids)`
-to reuse those reads. Undeclared reads still work through storage.
+to reuse those reads. Undeclared reads still work through storage. An ask with
+`hint: true` predicts a later read; a failed hint retries the gather without
+hints, and phases still fetch anything they need.
 
 `beforeWrite(bundles)` returns a hook that checks each operation against earlier
-writes in the same transaction. `$was` still checks the state before the batch.
-Only when every hook declares `independent: true` are the operations combined.
+writes in the same transaction, or `undefined` when this batch needs no check
+from that plugin. `$was` still checks the state before the batch. Only when
+every hook declares `independent: true` are the operations combined.
 `preflight(storage, vocab, hook)` rehearses ordered checks in a nested
 transaction and always rolls it back; it requires storage with nested rollback
 support. Neither mechanism supports external side effects in its checks.

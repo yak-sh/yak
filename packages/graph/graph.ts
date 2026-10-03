@@ -890,9 +890,10 @@ export let graph = (opts: Options): Graph => {
                 ),
                 phase('mutate', held, (b) => {
                   if (checking && !certified(b)) throw new NeedsWrite()
-                  checks = plugins.flatMap((p) =>
-                    p.beforeWrite ? [p.beforeWrite(b)] : []
-                  )
+                  checks = plugins.flatMap((p) => {
+                    let check = p.beforeWrite?.(b)
+                    return check ? [check] : []
+                  })
                   return checks.length
                     ? ordered(b, tx, vocab, snap, st, checks)
                     : mutate(b, held, st, vocab)

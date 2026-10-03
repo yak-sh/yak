@@ -244,3 +244,33 @@ for (let async of [false, true]) {
     })
   }
 }
+
+for (let async of [false, true]) {
+  test(`beforeWrite factories may decline only their own batch check (${async})`, async () => {
+    let base = memory()
+    let g = graph({ storage: async ? slow(base) : base, vocab: books })
+    let checked: string[] = []
+    g.use({
+      name: 'conditional',
+      beforeWrite: (bs) =>
+        bs.some((b) => b.book)
+          ? (bs) => {
+            checked.push('book')
+            return bs
+          }
+          : undefined,
+    })
+    g.use({
+      name: 'always',
+      beforeWrite: () => (bs) => {
+        checked.push('always')
+        return bs
+      },
+    })
+    await g.apply([{ entity: { eid: 'd1' }, doc: { title: 'read' } }])
+    assertEquals(checked, ['always'])
+    checked = []
+    await g.apply([{ entity: { eid: 'b1' }, book: { pages: 4 } }])
+    assertEquals(checked, ['book', 'always'])
+  })
+}
