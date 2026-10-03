@@ -1,13 +1,13 @@
 // The box service consumes complete spool records and checkpoints only after
 // graph admission. A crash between apply and ack resends the reporter's eids.
 
-import type { Bundle, Graph } from '@yaks/graph'
+import type { Graph } from '@yaks/graph'
+import { intake, type Source } from './intake.ts'
+export { intake, type Record, type Source } from './intake.ts'
 import { sleep } from '@yaks/effects'
 import { files } from './file.ts'
 import { caught, spool } from './report.ts'
 
-export type Record = { rows: Bundle[]; ack: () => void | Promise<void> }
-export type Source = () => AsyncIterable<Record>
 export type Options = {
   source?: Source
   spool?: string
@@ -15,12 +15,6 @@ export type Options = {
   report?: (error: unknown) => void
 }
 
-export let intake = async (g: Graph, source: Source): Promise<void> => {
-  for await (let record of source()) {
-    await g.apply(record.rows, { trusted: true })
-    await record.ack()
-  }
-}
 export let service = async (
   host: {
     graph: Graph

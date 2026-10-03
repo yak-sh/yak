@@ -4,6 +4,7 @@
   "exports": {
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
+    "./intake": "./intake.ts",
     "./report": "./report.ts",
     "./sentry": "./sentry.ts",
     "./page": "./page.js",
