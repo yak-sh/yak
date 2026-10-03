@@ -2926,12 +2926,14 @@ export class Store {
     // it — which would leave it the one door with no policy on it. So it asks
     // the same seam, by hand, at the handshake.
     if (path == '/ws') {
+      let actor
       try {
-        await this.#auth(request)
+        actor = await this.#auth(request)
       } catch (e) {
         return refuse(e, request)
       }
-      return this.#live.accept(request, spoken(request))
+      let read = spoken(request)
+      return this.#live.accept(request, read, { actor, speaks: read.speaks })
     }
     // A batch is applied here, whoever sent it; a dry run is @yaks/api's.
     if (
@@ -3146,10 +3148,11 @@ export class Store {
       commit: subs.commit,
       // A relay carries no membership news and no stored rows, so there is
       // nothing here to rename — only the sink to translate.
-      relay: (sink, bundles) => subs.relay(by(sink), bundles),
-      enqueue: (sink, bundles) =>
-        (subs.enqueue ?? subs.relay)(by(sink), bundles),
+      relay: (sink, bundles, writer) => subs.relay(by(sink), bundles, writer),
+      enqueue: (sink, bundles, writer) =>
+        (subs.enqueue ?? subs.relay)(by(sink), bundles, writer),
       pace: subs.pace,
+      save: subs.save,
       relaying: (sink) => subs.relaying(by(sink)),
       relayed: (sink, keys) => subs.relayed(by(sink), keys),
     }
@@ -3507,7 +3510,7 @@ export class Store {
   webSocketClose(ws: Wire): void | Promise<void> {
     let run = (): void | Promise<void> => {
       if (this.#draft) return this.#draft.then(() => this.webSocketClose(ws))
-      if (!this.#unbuilt) this.#live.close(ws)
+      if (!this.#unbuilt) return this.#live.close(ws)
     }
     return this.#profile ? this.#profile.run('ws close', run) : run()
   }

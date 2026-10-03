@@ -132,6 +132,73 @@ test('a woken object serves the socket it inherited', () => {
   assertEquals((ws.sent.at(-1)!.bundles as Bundle[])[0].entity.eid, 'p1')
 })
 
+test('a woken socket saves and finishes values as its vouched writer', async () => {
+  let vocab = loadVocab({
+    $defs: {
+      position: {
+        component: true,
+        sync: 'peers',
+        durable: 'forever',
+        save: '1h',
+        properties: { x: { type: 'number' } },
+      },
+      created: {
+        component: true,
+        properties: {
+          at: { type: 'string', format: 'date-time' },
+          by: { type: 'string' },
+          via: { type: 'string' },
+        },
+      },
+      updated: {
+        component: true,
+        properties: {
+          at: { type: 'string', format: 'date-time' },
+          by: { type: 'string' },
+          via: { type: 'string' },
+        },
+      },
+    },
+  })
+  let storage = store(vocab), ctx = hibernation(), ws = wire()
+  ctx.live.push(ws)
+  ws.serializeAttachment({ writer: { actor: { by: 'person', via: 'tab' } } })
+  let [, first] = instance(storage, ctx, vocab)
+  first.message(ws, ask('hero', '.entity.eid=hero'))
+  let [g, woken] = instance(storage, ctx, vocab)
+  woken.wake()
+  send(woken, ws, {
+    relay: [{
+      entity: { eid: 'hero' },
+      position: { x: 1 },
+      $actor: { via: 'forged' },
+    }],
+  })
+  await until(() => (g.get(['hero']) as Bundle[])[0]?.position != null)
+  send(woken, ws, { relay: [{ entity: { eid: 'hero' }, position: { x: 2 } }] })
+  await woken.close(ws)
+  let [row] = g.get(['hero']) as Bundle[]
+  assertEquals(row.position, { x: 2 })
+  assertEquals((row.created as { by: string; via: string }).by, 'person')
+  assertEquals((row.created as { via: string }).via, 'tab')
+  assertEquals((row.updated as { via: string }).via, 'tab')
+})
+
+test('a legacy socket reconnects before saving but still answers existing relays', () => {
+  let ctx = hibernation(), ws = wire()
+  ctx.live.push(ws)
+  let g = graph({ storage: store(), vocab: shop })
+  let subs = subscriptions(g)
+  let live = sockets({
+    ...subs,
+    save: (comp) => comp == 'position' ? 30_000 : null,
+  }, ctx)
+  send(live, ws, { relay: [{ entity: { eid: 'hero' }, browsing: { x: 1 } }] })
+  assertEquals(ws.closed, [])
+  send(live, ws, { relay: [{ entity: { eid: 'hero' }, position: { x: 1 } }] })
+  assertEquals(ws.closed, [[1012, 'writer handshake required']])
+})
+
 test('shared cold snapshots keep separate ACKs and live membership', () => {
   let storage = store(), ctx = hibernation()
   let [g, first] = instance(storage, ctx)

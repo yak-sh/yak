@@ -21,9 +21,11 @@
 import {
   type Ask,
   decode,
+  fault,
   type Frame,
   json,
   type Opening,
+  type PeerWriter,
   queue,
   receive,
   refusal,
@@ -71,7 +73,7 @@ export type Hibernation = {
 /** The plumbing an object wires its handlers to. */
 export type Sockets = {
   /** answer a `/ws` request: accept the socket for hibernation, return the 101 */
-  accept(request: Request, opts?: ReadOpts): Response
+  accept(request: Request, opts?: ReadOpts, writer?: PeerWriter): Response
   /** a frame arrived — the object's `webSocketMessage` */
   message(
     ws: Wire,
@@ -79,7 +81,7 @@ export type Sockets = {
     scope?: (kind: SocketKind, work: () => void) => void,
   ): void
   /** a socket went away — the object's `webSocketClose` */
-  close(ws: Wire): void
+  close(ws: Wire): void | Promise<void>
   /** re-open the subscriptions of every socket this object inherited; call it
    * at the top of `fetch`, so a batch applied on a woken object still pushes */
   wake(): void
@@ -100,6 +102,7 @@ declare let WebSocketPair: { new (): { 0: unknown; 1: Wire } }
 // there, so the subscriptions live under one key and the rest is left alone.
 type Held = {
   read?: ReadOpts
+  writer?: PeerWriter
   subs?: Record<string, Ask>
   subref?: string
   relay?: string[]
@@ -296,9 +299,10 @@ export let sockets = (
     if (closed.has(ws)) return
     closed.add(ws)
     let to = sinks.get(ws)
+    let dropped: void | Promise<void> = undefined
     if (to) {
       to.close()
-      subs.drop(to.send)
+      dropped = subs.drop(to.send)
     }
     sinks.delete(ws)
     queries.delete(ws)
@@ -309,15 +313,22 @@ export let sockets = (
       ws.serializeAttachment({ ...held, subref: undefined, subs: undefined })
       backing().delete(held.subref)
     }
+    return dropped
   }
 
   let retire = (ws: Wire, error: unknown) => {
     if (!(error instanceof MissingSubscriptions)) throw error
-    drop(ws)
+    finish(ws)
     try {
       ws.close?.(1012, 'subscriptions lost')
     } catch { /* the socket may already be closed */ }
     report?.(error)
+  }
+
+  // A protocol retirement has no caller to await its final saved writes.
+  let finish = (ws: Wire) => {
+    let out = drop(ws)
+    if (out) out.catch((error) => fault(error, 'socket close'))
   }
 
   // The sink for a socket, created once. A socket this object has not seen
@@ -384,7 +395,7 @@ export let sockets = (
   }
 
   return {
-    accept: (request, opts) => {
+    accept: (request, opts, writer) => {
       if ((request.headers.get('upgrade') ?? '').toLowerCase() != 'websocket') {
         return json(
           { error: 'NotAllowed', message: 'this is a WebSocket endpoint' },
@@ -395,7 +406,9 @@ export let sockets = (
       // Accepted for hibernation: the runtime holds this socket while the
       // object is evicted and wakes the object with the next frame, so an idle
       // client costs nothing.
-      if (opts) pair[1].serializeAttachment({ read: opts })
+      if (opts || writer) {
+        pair[1].serializeAttachment({ read: opts, writer })
+      }
       ctx.acceptWebSocket(pair[1])
       // The 101 carries the other end; `webSocket` is the runtime's own
       // ResponseInit field, which no standard declares.
@@ -412,6 +425,22 @@ export let sockets = (
       if (!open(ws)) return
       let input = decode(data)
       let run = () => {
+        let held = ws.deserializeAttachment() as Held | null
+        let msg = 'value' in input ? input.value : undefined
+        // Sockets accepted before writer attribution shipped must reconnect
+        // before saving: only a handshake can vouch for their instrument.
+        if (
+          held?.writer === undefined && msg && typeof msg == 'object' &&
+          'relay' in msg && Array.isArray(msg.relay) &&
+          msg.relay.some((b) =>
+            b && typeof b == 'object' &&
+            Object.keys(b).some((comp) => subs.save?.(comp) != null)
+          )
+        ) {
+          finish(ws)
+          ws.close?.(1012, 'writer handshake required')
+          return
+        }
         let to = sink(ws)
         let ask = asked('value' in input ? input.value : null)
         let sender = sinks.get(ws)!
@@ -427,9 +456,10 @@ export let sockets = (
             undefined,
             input,
             (ws.deserializeAttachment() as Held | null)?.read,
+            (ws.deserializeAttachment() as Held | null)?.writer,
           ) == 'close'
         ) {
-          drop(ws)
+          finish(ws)
           ws.close?.(1008, 'relay flood')
           return
         }
