@@ -53,8 +53,21 @@ export let catalogAt = (url: string, send: typeof fetch = fetch): Catalog => ({
       'q',
       `.entity.eid=${ids.join(',')} ?file ?module ?symbol`,
     )
-    let response = await send(at, { signal: AbortSignal.timeout(5000) })
-    if (!response.ok) throw Error(`code catalog: ${response.status}`)
+    let response: Response
+    try {
+      response = await send(at, { signal: AbortSignal.timeout(5000) })
+    } catch (error) {
+      // Transport unavailability is the pool waiting on the catalog, not a
+      // defect to report on every attempt. The final failure is still reported.
+      if (error instanceof Error) throw Object.assign(error, { retry: {} })
+      throw error
+    }
+    if (!response.ok) {
+      let error = Error(`code catalog: ${response.status}`)
+      throw response.status >= 500 || [408, 429].includes(response.status)
+        ? Object.assign(error, { retry: {} })
+        : error
+    }
     let rows = await response.json()
     if (!Array.isArray(rows)) throw Error('code catalog: expected bundles')
     return rows

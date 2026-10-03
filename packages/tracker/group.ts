@@ -1,7 +1,7 @@
 // Grouping decides patches from records; graph admission commits them together.
 // The occurrence link is the receipt: resends and retried effects never count twice.
 
-import { type Bundle, derivedEid, type Graph, token } from '@yaks/graph'
+import { type Bundle, derivedEid, type Graph, Stale, token } from '@yaks/graph'
 import { absent, and, eq, every } from '@yaks/query'
 import { faultKey } from './fault.ts'
 import { enrichFrames } from './frames.ts'
@@ -146,40 +146,73 @@ export let trim = async (g: Graph, bug: string, count = 100): Promise<void> => {
   }
 }
 
-/** Fill previously grouped occurrences without recounting them. Catalog outages
- * retry in the pool; the original occurrence and text grouping already landed. */
+/** A frame resolver's own failure remains grouped text, not another catalog job.
+ * Reporting still records terminal failures; it cannot feed enrichment itself. */
+export let frameable = (row: Bundle | undefined): row is Bundle => {
+  let tags = comp(row, 'error').tags
+  return !!row?.error && !!row.exception && !!comp(row, 'error').bug &&
+    !(tags && typeof tags == 'object' &&
+      'handler' in tags && tags.handler == 'error_frames')
+}
+
+let inputs = (row: Bundle) => ({
+  error: { commit: token(comp(row, 'error').commit) },
+  exception: {
+    stack: token(comp(row, 'exception').stack),
+    frames: token(comp(row, 'exception').frames),
+  },
+})
+
+/** Catalog awaits cannot freeze the group or the source. Re-read both before
+ * committing and keep guards through admission; contention never recounts. */
 export let reframe = async (
   g: Graph,
   eid: string,
   enrich: Enrich,
 ): Promise<void> => {
-  let [row] = await g.get([eid])
-  if (!row?.error || !row.exception) return
-  let full = await enrich(row)
-  let frames = comp(full, 'exception').frames
-  if (!Array.isArray(frames)) return
-  let patch: Bundle[] = [{
-    entity: row.entity,
-    $was: {
-      error: { bug: token(comp(row, 'error').bug) },
-      exception: { frames: token(comp(row, 'exception').frames) },
-    },
-    exception: { frames },
-  }]
-  let bug = str(comp(row, 'error').bug)
-  let culprit = frames.find((f) => f.app && f.symbol)?.symbol
-  let top = frames.find((f) => f.app) ?? frames[0]
-  let [known] = bug ? await g.get([bug]) : []
-  if (known?.bug && !comp(known, 'bug').culprit && (culprit || top)) {
-    patch.push({
-      entity: { eid: bug },
-      $was: { bug: { culprit: token(comp(known, 'bug').culprit) } },
-      bug: culprit ? { culprit, spot: null } : {
-        spot: `${top.file}${top.line ? `:${top.line}` : ''}${
-          top.function ? ` ${top.function}` : ''
-        }`,
+  for (let tries = 0; tries < 3; tries++) {
+    let [source] = await g.get([eid])
+    if (!frameable(source)) return
+    let full = await enrich(source)
+    let frames = comp(full, 'exception').frames
+    if (!Array.isArray(frames)) return
+    let [row] = await g.get([eid])
+    if (!frameable(row)) return
+    if (JSON.stringify(inputs(source)) != JSON.stringify(inputs(row))) continue
+    let bug = str(comp(row, 'error').bug)
+    let patch: Bundle[] = [{
+      entity: row.entity,
+      $was: {
+        ...inputs(row),
+        error: { ...inputs(row).error, bug: token(bug) },
       },
-    })
+      exception: { frames },
+    }]
+    let culprit = frames.find((f) => f.app && f.symbol)?.symbol
+    let top = frames.find((f) => f.app) ?? frames[0]
+    let [known] = await g.get([bug])
+    if (known?.bug && !comp(known, 'bug').culprit && (culprit || top)) {
+      patch.push({
+        entity: { eid: bug },
+        $was: {
+          bug: {
+            culprit: token(comp(known, 'bug').culprit),
+            spot: token(comp(known, 'bug').spot),
+          },
+        },
+        bug: culprit ? { culprit, spot: null } : {
+          spot: `${top.file}${top.line ? `:${top.line}` : ''}${
+            top.function ? ` ${top.function}` : ''
+          }`,
+        },
+      })
+    }
+    try {
+      await g.apply(patch, { trusted: true })
+      return
+    } catch (error) {
+      if (!(error instanceof Stale)) throw error
+    }
   }
-  await g.apply(patch, { trusted: true })
+  throw Object.assign(new Error('frame inputs kept moving'), { retry: {} })
 }
