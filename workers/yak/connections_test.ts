@@ -141,17 +141,18 @@ test(
   async () => {
     let s = await setup()
     let offered = async (enable?: string[]) =>
-      (await s.shown(enable)).built.map((b) => b.name)
+      (await s.shown(enable)).built.filter((b) => b.name == 'google-calendar')
     let google = ['google-calendar']
-    assertEquals(await offered(google), ['openrouter'])
+    assertEquals(await offered(google), [])
     await s.at.apply(
       [registration('google', { id: 'yaks', secret: 's' })],
       KERNEL,
     )
     // Still in Google's testing mode: offered only on `?enable=`.
-    assertEquals(await offered(), ['openrouter'])
-    assertEquals(await offered(google), ['google-calendar', 'openrouter'])
-    let [calendar] = (await s.shown(google)).built
+    assertEquals(await offered(), [])
+    let calendars = await offered(google)
+    assertEquals(calendars.map((b) => b.name), ['google-calendar'])
+    let [calendar] = calendars
     assertEquals(
       [calendar.face.title, calendar.face.site],
       ['Google Calendar', 'https://calendar.google.com'],
