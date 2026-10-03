@@ -63,7 +63,7 @@ Immediate builders keep `builder_dep{builder,source}` rows. A `component:name`
 source names a component their query reads, including nested collections; an
 `entity:eid` source names a selected input whose content enters the key. The
 effect pool records every component moved on an entity in `effect.touched`, so
-one graph change looks up only the matching dependencies. Definition edits
+one graph batch looks up only the matching dependencies. Definition edits
 refresh the rows, and a compare-and-set version prevents an older reconciliation
 from erasing newer dependencies.
 
@@ -97,7 +97,7 @@ in one output may name a sibling output of the same answer as `"$<slot>"`, which
 becomes that output's id, so a creature's `sounds{cry}` can point at the `sfx`
 the same answer made in slot `cry`; a `$` naming no sibling is refused, and text
 properties keep what they say. The package validates writable components, the
-artifact reference and citations before writing all outputs as one graph change.
+artifact reference and citations before writing all outputs as one graph batch.
 `cites` edges record each output's used inputs. The artifact's
 `artifact{address,media_type,size}` holds byte metadata; `built.artifact` only
 points to it.

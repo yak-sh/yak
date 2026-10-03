@@ -6,7 +6,7 @@ write statements from [@yaks/sqlite](../sqlite/README.md). Reads and
 transactions are asynchronous.
 
 A **bundle** is one entity's components represented as a JSON object. A
-**batch** is a list of changes applied in one transaction. D1's `batch()` API
+**batch** is a list of bundles applied in one transaction. D1's `batch()` API
 executes the SQL statements implementing those changes atomically. Application
 reads made before that call are outside the database transaction; see
 [The transaction](#the-transaction).

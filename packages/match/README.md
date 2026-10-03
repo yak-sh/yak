@@ -136,7 +136,7 @@ against the same moment. `opts.computed` is described under
 
 `index()` supplies `list` and a lazy eid lookup. Optional `wearing`, `keyed` and
 `ranged` methods let a caller provide smaller candidate sets. `gone` supplies
-the eids from which a pending change removed a component.
+the eids from which a pending batch removed a component.
 
 ```ts
 import { index, keyOf, live, matcher } from '@yaks/match'
@@ -629,10 +629,10 @@ before any bundle is read.
   hook has no entry.
 - **`.refs` and `!refs`** — only `.refs=<id>` is a question about backlinks.
 
-A removal (`-comp`) is not refused: it asks what a pending change took off,
-which an `Index` answers through its `gone` member (@yaks/ram's rules supply
-it). A source without one holds no pending change, and the clause matches
-nothing, as @yaks/sql answers it with no batch under the statement.
+A removal (`-comp`) is not refused: it asks what a pending batch took off, which
+an `Index` answers through its `gone` member (@yaks/ram's rules supply it). A
+source without one holds no pending batch, and the clause matches nothing, as
+@yaks/sql answers it with no batch under the statement.
 
 - **A predicate the property's type cannot answer** (`.book.price>cheap`), **a
   path whose root is not a reference property**, and **a reverse hop that is

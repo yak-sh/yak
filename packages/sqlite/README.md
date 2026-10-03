@@ -109,7 +109,7 @@ examples. See [mod.ts](./mod.ts) for the root export list.
 Applications normally write through `graph.apply()`, which checks admission and
 preconditions, runs plugins, and plans cascading deletion. The storage adapter
 implements the resulting row changes and transaction. Low-level callers can use
-`store.tx(tx => tx.patch(change))`, but that bypasses graph validation and
+`store.tx(tx => tx.patch(bundles))`, but that bypasses graph validation and
 plugins.
 
 ```ts
@@ -459,7 +459,7 @@ unique indexes apply only where their `present` properties have values.
 ### Querying pending changes with an overlay
 
 An **overlay** represents pending patches as common table expressions in one SQL
-statement. `overlay(driver, vocab, change, covers)` lets rules read the state
+statement. `overlay(driver, vocab, bundles, covers)` lets rules read the state
 those patches would produce. It returns common table expressions in `with`, a
 component source-name resolver `at`, removed-row information `gone`, covered
 component names in `covers`, and eid-to-integer mappings in `ids`. Bound
@@ -499,8 +499,8 @@ try {
   store.tx((tx) =>
     tx.patch([{ entity: { eid: 'a' }, doc: { title: 'Before' } }])
   )
-  let change = [{ entity: { eid: 'a' }, doc: { title: 'After' } }]
-  let over = overlay(sql, vocab, change, ['doc'])
+  let bundles = [{ entity: { eid: 'a' }, doc: { title: 'After' } }]
+  let over = overlay(sql, vocab, bundles, ['doc'])
   let hits = matched(
     sql,
     match('.doc.title=After'),
@@ -512,7 +512,7 @@ try {
   equal(hits.map((b) => b.entities), [['a']])
   equal(
     store.tx((tx) =>
-      tx.bindings([match('.doc.title=After')], change, ['doc'])
+      tx.bindings([match('.doc.title=After')], bundles, ['doc'])
     )[0],
     hits,
   )

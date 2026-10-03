@@ -78,7 +78,7 @@ const result = await tick(g, Date.now())
 ```
 
 `tick(graph, now)` finds all due wakes. For each wake it submits one **batch**,
-a list of changes applied in one transaction. The batch writes `fired{at}` and
+a list of bundles applied in one transaction. The batch writes `fired{at}` and
 updates or clears `wake.at`; `#Now` contains the same instant. A rule using
 `*fired` runs only when that component was written in the current transaction.
 
@@ -235,7 +235,7 @@ wakes.
 ## Lower-level functions
 
 - `due(storage, now)` returns overdue wake bundles, oldest first.
-- `ring(bundle, now)` creates the firing change without applying it.
+- `ring(bundle, now)` creates the firing bundles without applying them.
 - `soonest(storage, now)` returns the earliest future instant.
 - `cadence(graph, wake, now)` returns the cadence of the first `while` condition
   that holds, or `null`.

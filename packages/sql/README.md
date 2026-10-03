@@ -700,7 +700,7 @@ equal(statement.distinct, true)
 
 `On.at` maps component names to tables or overlay sources; `On.gone` names the
 removed-owner source for `-comp`. `On.touched` requires at least one pattern to
-match an integer id the change touched. Omit it to read the whole committed
+match an integer id the batch touched. Omit it to read the whole committed
 graph. Collections are evaluated by the storage adapter. Multi-hop variable
 bindings are not routed through their full path yet.
 

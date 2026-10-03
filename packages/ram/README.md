@@ -384,9 +384,9 @@ equal(store.read('.task.status=done')[0].entity.eid, 't2')
 
 `Tx.bindings` evaluates
 [declared rules](../graph/README.md#rules-over-more-than-one-entity) with a
-proposed change temporarily patched into the Map, then rewinds it. Patterns join
+proposed batch temporarily patched into the Map, then rewinds it. Patterns join
 on their variables in memory. At least one pattern must match an entity in a
-nonempty change; evaluation uses component and value indexes to find the other
+nonempty batch; evaluation uses component and value indexes to find the other
 matches.
 
 ```ts

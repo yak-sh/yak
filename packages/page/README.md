@@ -49,7 +49,7 @@ console.log(await g.read('.web'))
 ```
 
 Each object passed to `apply()` is a **bundle**: one entity's components as a
-JSON object. A **batch** is a list of changes applied in one transaction. The
+JSON object. A **batch** is a list of bundles applied in one transaction. The
 example uses memory storage; replace it with a persistent graph storage adapter
 to keep records across restarts.
 
@@ -92,7 +92,7 @@ receive a restrictive Content-Security-Policy from `@yaks/blob`; that header is
 not present when someone opens a copied HTML file directly.
 
 `froze(page, html, { blobs, now? })` scrubs and stores the HTML, then returns
-the changes to apply with `{ trusted: true }`. It derives the blob key from the
+the bundles to apply with `{ trusted: true }`. It derives the blob key from the
 stored HTML's SHA-256, so identical stored documents use the same key. It adds
 the HTML title only if the page has no `doc` component.
 

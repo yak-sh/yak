@@ -183,7 +183,7 @@ Consider a task list with a browser UI:
 
 1. Compose a vocabulary and task plugins with a storage adapter.
 2. A controller applies a task bundle. The graph validates and commits it, then
-   publishes the applied change to configured observers.
+   publishes the applied bundles to configured observers.
 3. A local or remote query subscription updates the matching task list.
 4. A renderer chooses a view from each bundle's components. Pure controls
    receive values and callbacks; they need not know about the graph.

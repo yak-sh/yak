@@ -6,7 +6,7 @@ connection as the graph so its records commit or roll back with the changes they
 describe.
 
 A **bundle** is one entity's components as a JSON object. A **batch** is a list
-of changes applied in one transaction, normally one `graph.apply()` call. The
+of bundles applied in one transaction, normally one `graph.apply()` call. The
 journal represents a recorded transaction as a `Batch`, identified by its
 increasing `seq`. The **host** is the process that opened the graph, such as
 `yak serve` or a CLI command.
@@ -95,7 +95,7 @@ The graph passes the resolved `$actor` to the journal: `by` identifies whom the
 write acts for, and `via` identifies the session, connector or other entity
 through which it was made. Both are stored as references into `entity`, then
 read back as public eids. Create those entities before attributing writes to
-them. Unspecified actors are recorded as null. A change whose bundles name more
+them. Unspecified actors are recorded as null. A batch whose bundles name more
 than one writer is recorded as one transaction per writer, each holding what its
 entities' bundles wrote (@yaks/graph `writers`).
 
@@ -190,8 +190,8 @@ batches with before/after deltas.
 | `j.scrubValue(field, value)`, `j.scrubRef(field, ref)` | Explicit history redaction                                   |
 | `j.holds(ref)`                                         | Whether history still references stored content              |
 
-To turn a feed entry into graph changes, load its batch with `j.at(entry.seq)`
-and pass that to `applied(batch)`. `applied()` reconstructs the changes without
+To turn a feed entry into graph bundles, load its batch with `j.at(entry.seq)`
+and pass that to `applied(batch)`. `applied()` reconstructs the bundles without
 reading current graph state. It does not repeat transaction attribution in the
 returned bundles.
 
@@ -259,7 +259,7 @@ An undone delete cannot give back:
 `undone(batch, { guard? })` builds the inverse without applying it; guards are
 off by default there. To reverse part of a transaction, cut `batch.deltas` to
 the entities wanted before passing it. `applied(batch)` reconstructs the forward
-change.
+bundles.
 
 A nonexistent sequence makes `undo()` throw an `Error`; a batch with no
 reversible changes returns `[]`.

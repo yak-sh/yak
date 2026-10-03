@@ -35,7 +35,7 @@ import { desk } from '@yaks/draft'
 let drafts = desk(client, { by: () => person, stash: localStorage })
 drafts.type('T-5.comment', 'looks good') // text() answers at once
 drafts.text('T-5.comment') // 'looks good', here and, soon, everywhere
-drafts.spend('T-5.comment', commentBundles) // sent: emptied in one change
+drafts.spend('T-5.comment', commentBundles) // sent: emptied in one batch
 ```
 
 A keystroke costs no round trip. The text is kept in the stash (Web Storage,
@@ -44,11 +44,11 @@ store out of reach loses nothing: the next load finds it there and sends it. The
 store is written at most once a pace (`pace`, 500 ms) per draft, one write in
 flight at a time; what was typed while one flew is merged onto its answer, and
 so is every text another interface makes the store hold. A spend goes at once,
-in the same change as the send it went into, so a refused send leaves the draft.
+in the same batch as the send it went into, so a refused send leaves the draft.
 
-`client` is anything with a `mutate` answered by the change as the store applied
-it, and a `watch`: a @yaks/client `client()` is one. `by` is read reactively;
-while it is unknown, typing is kept and written once it is.
+`client` is anything with a `mutate` answered by the applied bundles and a
+`watch`: a @yaks/client `client()` is one. `by` is read reactively; while it is
+unknown, typing is kept and written once it is.
 
 ## Files
 

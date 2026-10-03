@@ -97,7 +97,7 @@ handlers.
   `.count`, `.distinct=`) arrive as their value and again when it moves. wire.ts
   turns a query line into the host's grammar and bundles into the cache's
   changes.
-- **Writes.** A change is applied locally, kept in a durable outbox, and POSTed
+- **Writes.** A batch is applied locally, kept in a durable outbox, and POSTed
   to `/web/apply` (live.ts `post`), attributed to the configured owner by the
   web door using @yaks/api's admission and write handler. A refusal is recorded
   in the refusal ledger and the rows it touched are read again; a network error

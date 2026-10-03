@@ -519,7 +519,7 @@ equal(lives('2m'), true)
 
 `said`, `kept`, `paced` and `saved` normalize the declarations. `ms` converts
 `ms`, `s`, `m`, `h` and `d` durations; `forever` and `connection` return null.
-An **event** is a component with `durable: '0s'`: rules and the applied change
+An **event** is a component with `durable: '0s'`: rules and the applied bundles
 see it, but it is not stored. A `sync: 'none'` component cannot declare pace,
 and `sync: 'peers', durable: 'forever'` without `save` is refused by `storable`.
 `save` is refused with any other sync or lifetime. `saveOf` returns

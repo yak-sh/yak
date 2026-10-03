@@ -55,7 +55,7 @@ vocabulary does not know. Value-only patches and net-zero changes do not move
 the pointer.
 
 Pending archetype assignments are written before the journal; new archetype
-records are included in the journal's batch (a list of changes applied in one
+records are included in the journal's batch (a list of bundles applied in one
 transaction). A second flush classifies writes made by journal/commit hooks
 without recursively journaling the journal. Normally an entity gets one integer
 update per transaction; a commit hook that changes its component set again

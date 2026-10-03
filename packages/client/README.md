@@ -28,7 +28,7 @@ deno add jsr:@yaks/client
 ## Use
 
 This local client creates a recipe and watches matching entities. `mutate()`
-applies a [change](../graph/README.md#data-model) through the graph.
+applies a [batch](../graph/README.md#data-model) through the graph.
 
 ```ts
 import { client } from '@yaks/client'
@@ -95,7 +95,7 @@ The module also exports `Client`, `ClientOpts`, `ClientWatchOpts`, `Watch`,
 | `watch(query, opts?)` | Return a live query result.                                           |
 | `read(query, opts?)`  | Read a query once, synchronously: the rows a watch on it would hold.  |
 | `ent(eid)`            | Read one cached entity, or `undefined` when it is absent from memory. |
-| `mutate(change)`      | Call the graph's `apply()`; returns bundles or a promise of bundles.  |
+| `mutate(bundles)`     | Call the graph's `apply()`; returns bundles or a promise of bundles.  |
 | `ready`               | Wait for local persistence and any configured epoch restore.          |
 | `setEpoch(epoch)`     | Validate the server cache epoch and refresh remote subscriptions.     |
 | `close()`             | Close all watches, the connection, and cache activity.                |
@@ -131,10 +131,10 @@ and failure behavior.
 With a server connection, `mutate()` also accepts `alias: {name}` when the
 vocabulary declares `alias`. A name may belong to an entity absent from the
 page's cache, so this write waits for the server's resolved eid and then lands
-its returned bundles locally. Browser-owned fields in the same change follow
-that eid and stay off the wire. The returned promise resolves to the applied
-bundles or rejects on refusal or transport failure. A local-only client needs
-the `@yaks/key` and `@yaks/alias` graph plugins to write names.
+its returned bundles locally. Browser-owned fields in the same batch follow that
+eid and stay off the wire. The returned promise resolves to the applied bundles
+or rejects on refusal or transport failure. A local-only client needs the
+`@yaks/key` and `@yaks/alias` graph plugins to write names.
 
 ## Rules
 
@@ -143,14 +143,14 @@ The page's graph runs the vocabulary's
 page's own copy, which holds only what the page subscribed to:
 
 - A rule whose writes are all `sync: none` components is the page's own. It runs
-  on every change, including what the server sends, and may refuse. A server
+  on every batch, including what the server sends, and may refuse. A server
   never runs one.
 - A rule the server runs too runs here only when its declaration says
   `optimistic: true`, and only on the page's own writes. What it adds shows at
   once; what it refuses throws from `mutate()` before anything is sent. When the
   server answers, what it added to server-kept components is undone in the same
-  change that lands the server's result, so the server's answer replaces it.
-  When the server refuses, the write is undone with everything its rules added.
+  batch that lands the server's result, so the server's answer replaces it. When
+  the server refuses, the write is undone with everything its rules added.
 - Any other rule is the server's alone; its result arrives with the server's
   answer.
 
@@ -455,7 +455,7 @@ reservations.
 Subscriptions can share rows and cover different properties. A query reporting
 an entity as `gone` removes its own membership without removing another
 subscription's data. Query snapshots replace fields within their declared
-coverage; raw change feeds apply patches. Other subscriptions' covered fields,
+coverage; raw batch feeds apply patches. Other subscriptions' covered fields,
 local components, and unacknowledged writes are preserved. A `.fields`
 projection covers only the properties it names, so it never clears one it did
 not read; the entities its paths reach are held while it reaches them, and its

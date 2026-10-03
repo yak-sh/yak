@@ -26,7 +26,7 @@ target entity; its pool component records its state and attempts.
 
 Without the `effect` component, a handled effect runs in the process that
 committed. A handler failure goes to `report` and cannot roll back the committed
-[change](../graph/README.md#data-model).
+[batch](../graph/README.md#data-model).
 
 ```ts
 import { graph } from '@yaks/graph'
@@ -89,7 +89,7 @@ or the other.
 
 An **event** describes what triggered a handler (`Event`), with `kind`,
 `entity`, and the component's `name`. The registry reads component presence
-before applying changes, including entities a cascade will delete, and derives
+before applying bundles, including entities a cascade will delete, and derives
 events from the applied [patches](../graph/README.md#data-model).
 
 | Observer                       | Effect declaration       | Trigger                                                  |
@@ -98,7 +98,7 @@ events from the applied [patches](../graph/README.md#data-model).
 | `changed(comp, prop, handler)` | `changed: ['comp.prop']` | An applied patch includes that property                  |
 | `changed(comp, handler)`       | `changed: [comp]`        | An applied patch updates that component                  |
 | `removed(comp, handler)`       | `removed: [comp]`        | The component is removed, directly or by entity deletion |
-| `on(pattern, handler)`         | `match: pattern`         | A pattern matches an entity touched by the change        |
+| `on(pattern, handler)`         | `match: pattern`         | A pattern matches an entity touched by the batch         |
 
 A `changed` event describes the applied patch, not a comparison of old and new
 values. `comp` holds the component on creation, the applied properties on
@@ -157,7 +157,7 @@ may be owned by another thread.
 
 An observer's [pattern](../query/README.md#multi-entity-matches) is evaluated
 against the committed graph to find handler targets. It is checked only when a
-change moves a component it reads. A match triggers a handler only if the change
+batch moves a component it reads. A match triggers a handler only if the batch
 touched an entity that the pattern bound. An entity that already matched can
 trigger again when touched; this is not a false-to-true transition test.
 
@@ -188,7 +188,7 @@ equal(removed, ['removed'])
 
 A lone `-post` registers the same event as `removed('post', handler)`, including
 cascaded deletions. Mixed patterns such as `.product, -shelf` need a storage
-adapter that can query the change's removal overlay. Queries joining multiple
+adapter that can query the batch's removal overlay. Queries joining multiple
 entities need `bindings`, as provided by [@yaks/sqlite](../sqlite/README.md) and
 [@yaks/durable-object](../durable-object/README.md). Matched events can carry
 `vars` and `binding` for these results.
@@ -203,7 +203,7 @@ commit transaction. An observer is never replayed after a crash. An effect's
 
 `before(vocab)` reads the component presence needed by `events`; `wanting`
 declares those reads for graph gathering. `strip` removes the temporary
-`$before` request from the applied change.
+`$before` request from the applied bundles.
 
 ```ts
 import { type Bundle, graph } from '@yaks/graph'
@@ -216,19 +216,19 @@ let vocab = loadVocab({ $defs: { post: { component: true } } })
 let storage = ram(vocab)
 let g = graph({ storage, vocab })
 await g.apply([{ entity: { eid: 'p1' }, post: {} }])
-let change: Bundle[] = [{ entity: { eid: 'p1' }, post: null }]
+let bundles: Bundle[] = [{ entity: { eid: 'p1' }, post: null }]
 await storage.tx(async (tx) => {
-  let prepared = await before(vocab)(change, tx)
+  let prepared = await before(vocab)(bundles, tx)
   equal(events(prepared).map((e) => [e.kind, e.name, e.touched]), [
     ['removed', 'post', ['post']],
   ])
-  equal(strip(prepared), change)
+  equal(strip(prepared), bundles)
 })
 ```
 
 ## Failure isolation
 
-Refused changes trigger no handlers. After commit, thrown errors and rejected
+Refused batches trigger no handlers. After commit, thrown errors and rejected
 promises go to `report` while other handlers continue. The default reporter uses
 `console.warn`. Synchronous handlers preserve a synchronous `apply()` result;
 returning a promise makes that call asynchronous. Work started without returning
@@ -260,14 +260,14 @@ equal((await g.get(['p1']))[0].post, {})
 
 ## Writing back
 
-Configure `write` to apply a new change through the graph. Return its result
-when callers should await it. Use `{ trusted: true }` if the handler writes
-server-owned properties. The new change receives the graph's admission, rules,
+Configure `write` to apply a new batch through the graph. Return its result when
+callers should await it. Use `{ trusted: true }` if the handler writes
+server-owned properties. The new batch receives the graph's admission, rules,
 stamps, journal and notifications; direct storage writes bypass that pipeline.
 
-A **generation** counts how many handler writes preceded a change: zero for an
+A **generation** counts how many handler writes preceded a batch: zero for an
 initial write, one for its handler's write, and one more for each further
-handler write. The `$effect` request carries it. Changes past `depth` (default
+handler write. The `$effect` request carries it. Batches past `depth` (default
 2) still commit but trigger no more handlers; `depth: 0` disables handlers for
 all handler writes.
 
@@ -297,11 +297,11 @@ await g.apply([{ entity: { eid: 'p1' }, post: { count: 0 } }])
 await g.apply([{ entity: { eid: 'p1' }, post: { count: 1 } }])
 equal(calls, 1)
 equal((await g.get(['p1']))[0].post, { count: 2 })
-let change = [{ entity: { eid: 'p1' }, post: { count: 3 } }]
-let tagged = marked(change, 1)
+let bundles = [{ entity: { eid: 'p1' }, post: { count: 3 } }]
+let tagged = marked(bundles, 1)
 equal(generation(tagged), 1)
-equal(generation(change), 0)
-equal(unmark(tagged), change)
+equal(generation(bundles), 0)
+equal(unmark(tagged), bundles)
 ```
 
 <a id="the-durable-tier-optional"></a>
@@ -309,7 +309,7 @@ equal(unmark(tagged), change)
 ## The pool (optional)
 
 Load `effectDoc` beside your own vocabulary to record runs in the same
-transaction as the change that owes them. A crash after commit cannot lose the
+transaction as the batch that owes them. A crash after commit cannot lose the
 recorded run. `work(g)` claims due runs and continues until none can start;
 `work(g, signal)` with a live signal keeps working until the signal aborts.
 
@@ -557,8 +557,8 @@ equal((await held(g, 'refresh-index'))?.holder, null)
 
 `take` uses preconditions on holder and expiry, and taking your own lease renews
 it. `drop` releases only your own lease. `released(g, holder)` returns release
-patches to apply with the change recording that holder's ending. The default
-hold lasts 30 seconds; `gone` permits immediate takeover of a lease whose holder
+patches to apply with the batch recording that holder's ending. The default hold
+lasts 30 seconds; `gone` permits immediate takeover of a lease whose holder
 ended.
 
 `holding` takes a lease, renews it while its callback runs, and releases it when

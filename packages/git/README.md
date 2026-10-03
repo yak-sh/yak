@@ -279,7 +279,7 @@ is one entity's components represented as a JSON object. An optional `beside`
 returns bundles about the commit —
 `(oids) => [{ entity: { eid: oids.oid },
 made: { release } }]` — that are
-submitted with the ref update as one **batch**, a list of changes applied in one
+submitted with the ref update as one **batch**, a list of bundles applied in one
 transaction. This package declares no component joining a commit to its
 application input, because that input depends on the application; `beside` is
 where the caller supplies those rows. The parent commit is read from the ref

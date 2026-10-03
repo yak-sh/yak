@@ -9,7 +9,7 @@ The graph's storage adapter stores messages, addresses, recipients, and delivery
 outcomes. This package opens no database of its own. You supply the email
 transport; `stash()` provides an in-memory transport for tests and development.
 A **bundle** is one entity's components as a JSON object. A **batch** is a list
-of changes applied in one transaction.
+of bundles applied in one transaction.
 
 ## Install
 
@@ -369,7 +369,7 @@ refuses a component the graph does not declare.
 Replies use the original recipient address as sender for received messages, or
 the original sender address when following up on an outgoing message. The reply
 subject has one `Re:` prefix. Sending defaults `from` to the caller's
-`email.address`. Both tools return changes for the tool runner to apply; the
+`email.address`. Both tools return bundles for the tool runner to apply; the
 configured sending effect performs delivery. With `sender: { "via": "stash" }`,
 the same flow records outgoing messages in memory.
 

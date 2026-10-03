@@ -129,19 +129,19 @@ console.log(await may.canRead(null, 'notes')) // false
 ```
 
 A **bundle** is one entity's components as a JSON object. A **batch** is a list
-of changes applied in one transaction. The guard selects the first nonempty
+of bundles applied in one transaction. The guard selects the first nonempty
 `$actor.by` in the batch as its principal, and uses the configured app's access
 rules for the entire batch. It is not a per-entity filter for a graph containing
 several independently protected apps.
 
 `members()` registers a `precondition` hook. It reads permissions inside the
-transaction before applying changes; throwing `Denied` or `Paced` rolls back
+transaction before applying bundles; throwing `Denied` or `Paced` rolls back
 that transaction. It is handed the vocabulary the graph was loaded with, whose
-components may declare who writes them and how often (below). Changes without an
+components may declare who writes them and how often (below). Batches without an
 actor are anonymous, so ordinary writes are allowed only when the app is `open`.
 
 The code receiving a request must authenticate the caller and replace any
-client-supplied actor before applying changes. [@yaks/api](../api) uses
+client-supplied actor before applying bundles. [@yaks/api](../api) uses
 `signed()` for that replacement. This package trusts the actor it receives.
 
 Reads do not pass through `apply()`. Call `policy(storage, { space }).canRead`
@@ -151,7 +151,7 @@ asynchronous storage; `await` works with either.
 
 ## Only an owner edits the access rows
 
-Changes that write or remove `member`, `grant` or `access` components require
+Batches that write or remove `member`, `grant` or `access` components require
 owner permission on the configured app. An editor can change ordinary data but
 cannot write these access-control components. This additional check also runs
 for an `open` app.
@@ -179,7 +179,7 @@ one.
 }
 ```
 
-A change that writes or removes a floored component is refused for anyone below
+A batch that writes or removes a floored component is refused for anyone below
 the floor, with a `Denied` naming the component (`need` is the floor, `comp` the
 component). A program installing the guard names floors for words it did not
 declare with `floors`, which win over declared ones:
@@ -225,8 +225,8 @@ whose `$actor.via` matches its `created.via`; a guest with only `via` may change
 and delete those rows. A matching `via` grants no permission on a row carrying
 someone else's `created.by`, and supplies no signed-in identity or permission
 level. A caller with neither `by` nor `via` owns nothing, so it only adds. A
-change that leaves every property it names as it was is admitted on any row, so
-a retried write of the same values is not refused. Owners and editors are not
+batch that leaves every property it names as it was is admitted on any row, so a
+retried write of the same values is not refused. Owners and editors are not
 affected.
 
 Create the first owner membership before installing `members()`, as in the

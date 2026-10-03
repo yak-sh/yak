@@ -170,7 +170,7 @@ transcript status.
 <a id="a-lock-is-a-lease-not-a-patch"></a>
 
 `claim{session}` is stored on the entity a session claims. A **batch** is a list
-of changes applied in one transaction. If a batch attempts to replace another
+of bundles applied in one transaction. If a batch attempts to replace another
 session's claim, the whole transaction fails with `Bounced`; the collision is
 then recorded as `conflict{target, loser, holder, at}`: with `page` claimed by
 `ada`, a batch holding `{ entity: { eid: page }, claim: { session: bo } }` fails

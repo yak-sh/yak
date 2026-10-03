@@ -6,7 +6,7 @@ application supplies the vocabulary, plugins, and request authorization.
 
 Graph data persists in the object's embedded SQLite database. A **bundle** is
 one entity's components represented as a JSON object; a **batch** is a list of
-changes applied in one transaction. Socket subscriptions are saved in WebSocket
+bundles applied in one transaction. Socket subscriptions are saved in WebSocket
 attachments so they can be restored after the object hibernates.
 
 For graph write phases and adapter responsibilities, see the

@@ -9,7 +9,7 @@ publication through JSR and npm; runtime requirements vary by package.
 
 An **entity** is a record identified by `entity.eid`. Its **components** are
 named objects describing different aspects of the record. A **bundle** is one
-entity's components as a JSON object. A **batch** is a list of changes applied
+entity's components as a JSON object. A **batch** is a list of bundles applied
 in one transaction. A **vocabulary** is the schema declaring the components,
 properties and relationships a graph accepts.
 

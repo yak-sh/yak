@@ -34,7 +34,7 @@ configuration in SQLite. Text bodies use blob tables in that database; binary
 artifacts and private credential files live separately on disk. Frontend
 selection and navigation state are local, with draft recovery files described
 below. A **bundle** is one entity's components as a JSON object. A **batch** is
-a list of changes applied in one transaction. The **host** is the process that
+a list of bundles applied in one transaction. The **host** is the process that
 opened the graph. An **ask** is a recorded model request; a **settled** session
 has finished its current turn without more calls to execute and can accept new
 input.

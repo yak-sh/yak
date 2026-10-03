@@ -5,7 +5,7 @@
 a JSON config file. A graph stores entities. Each entity has a stable ID and
 components, which are named objects containing properties. A bundle is one
 entity's components represented as a JSON object; it can describe the entity's
-current state or a change to it. A batch is a list of changes applied in one
+current state or a change to it. A batch is a list of bundles applied in one
 transaction.
 
 ```sh

@@ -27,17 +27,17 @@ These terms describe the data passed between the packages.
 - A **patch** describes a change to one entity: an omitted property is left
   alone, a `null` property is cleared, and a `null` component is removed. A
   bundle sent to `apply()` is a patch.
-- A **change** is an array of bundles sent to `apply()` together.
-- A **transaction** is the unit in which storage applies a change: either all
-  its writes commit or none do.
+- A **batch** is an array of bundles sent to `apply()` together.
+- A **transaction** is the unit in which storage applies a batch: either all its
+  writes commit or none do.
 - **Storage** is the adapter that holds bundles, answers
   [queries](../query/README.md#query-model), and opens transactions (`Storage`).
 - A **graph** combines a vocabulary, storage, and the contributions that extend
   its reads and writes (`Graph`).
 - A **phase** is a named step in the write pipeline (`Phase`).
 - A **plugin** is a named contribution registered on one graph (`Plugin`).
-- A **hook** takes a change and a phase's `Tx`, and returns the change for the
-  next step (`Hook`). Throwing before commit refuses the change.
+- A **hook** takes bundles and a phase's `Tx`, and returns the bundles for the
+  next step (`Hook`). Throwing before commit refuses the batch.
 - A **rule** matches data and produces component patches. A `Rule` acts on each
   matched entity in a phase; a `Declared` rule's query supplies its writes and
   can match several entities.
@@ -66,9 +66,9 @@ an error you can read.
 
 An **actor** identifies who writes (`by`) and the instrument the write came
 through (`via`), carried as `$actor` (`Actor`). Each entity uses the first actor
-its bundles name, or the first actor in the change. `signed(change, actor)`
+its bundles name, or the first actor in the batch. `signed(bundles, actor)`
 replaces all incoming actors. `graph({ actor })` supplies an actor for unsigned
-changes. The calling program decides which actors it trusts.
+bundles. The calling program decides which actors it trusts.
 
 ## Install
 
@@ -126,7 +126,7 @@ across processes and does not implement every SQL query feature.
 
 ## Writes and reads
 
-`apply(change)` accepts an array of bundle patches and applies it in one
+`apply(bundles)` accepts an array of bundle patches and applies it in one
 transaction:
 
 - An omitted property is unchanged.
@@ -138,31 +138,31 @@ transaction:
   and number.
 - A **precondition** is a requirement on stored state before a write. `$was`
   supplies per-property hashes of the values the caller read (`Was`). A mismatch
-  refuses the entire change rather than overwriting a concurrent edit.
+  refuses the entire batch rather than overwriting a concurrent edit.
 - A write to a tombstoned entity whose `$was` names a value read before the
-  delete raced it, and is dropped while the rest of the change lands. Any other
+  delete raced it, and is dropped while the rest of the batch lands. Any other
   write that gives it a component brings it back under the same eid and number,
   holding only what that write gives.
 
-The return value is the change as applied, including whatever plugins and
-reference handling added to it. It contains one composed patch per affected
-entity; it is not a full snapshot of every affected entity. A deleted entity is
-represented by its identity plus `tombstone: {}`.
+The return value is the applied batch, including whatever plugins and reference
+handling added to it. It contains one composed patch per affected entity; it is
+not a full snapshot of every affected entity. A deleted entity is represented by
+its identity plus `tombstone: {}`.
 
 `read(query)` returns the bundles matching the query. For example, `.book`
 selects entities that have that component, and `.book.pages>400` filters on a
 property. See [@yaks/query](../query/README.md) for the syntax and which parts
 each adapter supports. An empty query does not mean "dump the database".
 
-`apply(change, { check: true })` runs the write phases and rolls back instead of
-committing; it returns the proposed patches, runs audit hooks, and skips
+`apply(bundles, { check: true })` runs the write phases and rolls back instead
+of committing; it returns the proposed patches, runs audit hooks, and skips
 effects. Trusted server code may correct metadata with
-`apply(change, { trusted: true, stamp: false })`: core provenance and mark rules
-are skipped, preserving stored timestamps and attribution, while plugin rules
-and hooks, validation, journaling and effects still run. Disabling stamping is
-refused without `trusted: true`. `apply(change, { replica: true })` lands rows
-another graph already admitted in a partial copy of it, leaving out the
-components this vocabulary does not declare instead of refusing them, and
+`apply(bundles, { trusted: true, stamp: false })`: core provenance and mark
+rules are skipped, preserving stored timestamps and attribution, while plugin
+rules and hooks, validation, journaling and effects still run. Disabling
+stamping is refused without `trusted: true`. `apply(bundles, { replica: true })`
+lands rows another graph already admitted in a partial copy of it, leaving out
+the components this vocabulary does not declare instead of refusing them, and
 keeping the computed values it was sent, which it has no rule to derive.
 `g.rows(query)` returns adapter-specific rows for aggregates and other raw query
 results. `g.get(eids)` returns those entities whole, tombstones included, by eid
@@ -256,7 +256,7 @@ equal((await g.get(['b1']))[0].book, { title: 'Edited' })
 The vocabulary's [death keyword](../vocab/README.md#routing-and-references)
 chooses what deleting a reference target does: `cascade` deletes the referring
 entity, `detach` clears its property, `release` removes its component, and
-`keep` retains the reference. The applied change includes these patches.
+`keep` retains the reference. The applied batch includes these patches.
 
 ```ts
 import { graph } from '@yaks/graph'
@@ -407,7 +407,7 @@ equal(reduced('distinct', await g.rows('.book&.distinct=book.pages')), {
 
 Use an explicit eid when the application already has an identity for the thing.
 An **alias** is an eid starting with `$` that asks the graph to assign an eid,
-local to one change:
+local to one batch:
 
 ```ts
 import { graph } from '@yaks/graph'
@@ -437,7 +437,7 @@ equal((await g.get([applied[0].entity.eid]))[0].book, {
 ```
 
 The graph assigns an eid and resolves every reference to the same alias within
-that change. Reusing `$newBook` in a later change does not refer to the previous
+that batch. Reusing `$newBook` in a later batch does not refer to the previous
 entity. For persistent, idempotent names, compose
 [@yaks/alias](../alias/README.md), which builds on
 [@yaks/key](../key/README.md). `g.address(ids)` asks the installed plugins to
@@ -527,7 +527,7 @@ storage; `g.use()` does not reload it.
 
 `PHASES` lists the order: `normalize`, `admit`, `mint`, `prepare`,
 `precondition`, `rules`, `mutate`, `cascade`, `stamp`, `journal`, `commit`,
-`effect`, `audit`. Only `precondition` through `commit` run inside the change's
+`effect`, `audit`. Only `precondition` through `commit` run inside the batch's
 transaction.
 
 The write pipeline separates the work done before anything is written, the
@@ -579,17 +579,17 @@ let effects = 0, checks = 0
 g.use({
   name: 'uppercase',
   hooks: {
-    normalize: (change) =>
-      change.map((b) =>
+    normalize: (bundles) =>
+      bundles.map((b) =>
         b.book ? { ...b, book: { ...b.book as object, title: 'DUNE' } } : b
       ),
-    effect: (change) => {
+    effect: (bundles) => {
       effects++
-      return change
+      return bundles
     },
-    audit: (change, _tx, error) => {
+    audit: (bundles, _tx, error) => {
       if (error instanceof Checked) checks++
-      return change
+      return bundles
     },
   },
 })
@@ -658,12 +658,12 @@ equal(await g.read('.book.title=412', { ...opts, native: true }), [])
 
 An **ask** declares a read needed before a phase (`Ask`): `eids` names entities,
 `select` narrows their components, and `about` names reference targets, narrowed
-by `comps`. A **gather** satisfies the core's asks and `Plugin.wants(change)`
+by `comps`. A **gather** satisfies the core's asks and `Plugin.wants(bundles)`
 before preconditions (`gather`). Hooks use `tx.get` and `about(tx, vocab, ids)`
 to reuse those reads. Undeclared reads still work through storage.
 
-`beforeWrite(change)` returns a hook that checks each operation against earlier
-writes in the same transaction. `$was` still checks the state before the change.
+`beforeWrite(bundles)` returns a hook that checks each operation against earlier
+writes in the same transaction. `$was` still checks the state before the batch.
 Only when every hook declares `independent: true` are the operations combined.
 `preflight(storage, vocab, hook)` rehearses ordered checks in a nested
 transaction and always rolls it back; it requires storage with nested rollback
@@ -689,7 +689,7 @@ const vocab = loadVocab({
 })
 const store = ram(vocab)
 const g = graph({ storage: store, vocab })
-const change = [1, 2].map((pages) => ({
+const bundles = [1, 2].map((pages) => ({
   entity: { eid: 'b1' },
   book: { pages },
 }))
@@ -699,7 +699,7 @@ const check = async (bundles: Bundle[], tx: Tx) => {
   return bundles
 }
 const rehearsal = preflight(store, vocab, check)
-await rehearsal(change, detached(store))
+await rehearsal(bundles, detached(store))
 equal(seen, [undefined, 1])
 equal(await g.get(['b1']), [])
 seen.length = 0
@@ -708,7 +708,7 @@ g.use({
   wants: () => [{ eids: ['b1'], select: ['book'] }],
   beforeWrite: () => check,
 })
-await g.apply(change)
+await g.apply(bundles)
 equal(seen, [undefined, 1])
 equal((await g.get(['b1']))[0].book, { pages: 2 })
 ```
@@ -748,14 +748,14 @@ const g = graph({
             return tx.patch(bundles)
           },
         },
-        flush: async (change) => {
+        flush: async (bundles) => {
           const made: Bundle[] = [...pending].map(([eid, pages]) => ({
             entity: { eid },
             tracked: { pages },
           }))
           pending.clear()
           if (made.length) await tx.patch(made)
-          return [...change, ...made]
+          return [...bundles, ...made]
         },
       }
     },
@@ -845,7 +845,7 @@ runner to apply. `search` is included only when `seams.search` is supplied.
 
 ## Rules
 
-`Plugin.rules` contains `Rule` values evaluated over the entities a change names
+`Plugin.rules` contains `Rule` values evaluated over the entities a batch names
 at a chosen phase. Their `produce` or `run` writes to the matched entity. All
 rules in that phase see the same state before their output is written.
 
@@ -857,7 +857,7 @@ and cannot appear on the value side of a match comparison: read them in `run()`.
 
 A rule's `*comp` clauses declare its **write set**, the components its output
 may write. A rule with a write set is refused if it writes outside it. In the
-`effect` phase, one of these components must also occur in the change for the
+`effect` phase, one of these components must also occur in the batch for the
 matched entity. A rule without a write set is unchecked.
 
 `Plugin.declared` contains `Declared` values whose query supplies the writes.
@@ -921,7 +921,7 @@ Declared rules require `Tx.bindings`. An adapter without it skips declared
 rules. [@yaks/sqlite](../sqlite/README.md) and [@yaks/ram](../ram/README.md)
 both implement it, and run the same script of rule scenarios.
 
-`graph({ runs })` chooses which declared rules run on a change. By default a
+`graph({ runs })` chooses which declared rules run on a batch. By default a
 graph runs every rule but a page's own: one whose writes are all `sync: none`
 components (`own(rule, vocab)`), state only a page holds. A page chooses for
 itself ([@yaks/client](../client/README.md#rules)): its own rules, and the
@@ -1013,7 +1013,7 @@ A pattern containing only write clauses creates an entity. Its id is derived
 from the rule name and matched entity ids, so repeated evaluation of the same
 match identifies the same created entity.
 
-Generated patches join the pending change and every rule is evaluated again,
+Generated patches join the pending batch and every rule is evaluated again,
 allowing one rule to react to another's output. A rule may fire only once per
 `(rule name, matched entities)` in one application. If it matches again, the
 transaction is refused with the rule name and binding. Write the match so its
@@ -1049,8 +1049,8 @@ bindings.
 pending patches, and returns generated bundle patches for the caller to apply.
 It does not write them itself and returns an empty array if `tx.bindings` is
 unavailable. Rules running in the graph's pipeline instead add their patches to
-the current change: those patches receive admission checks, mutation, cascading
-reference handling, stamps, and journaling alongside the caller's changes.
+the current batch: those patches receive admission checks, mutation, cascading
+reference handling, stamps, and journaling alongside the caller's bundles.
 
 ## Admission and schema checks
 
@@ -1174,17 +1174,17 @@ unsent component patches while retaining a clear before a later partial patch.
 import { coalesced, composed } from '@yaks/graph'
 import { equal } from '@yaks/testing'
 
-const change = [
+const bundles = [
   { entity: { eid: 'b1' }, book: { title: 'Dune' }, $actor: { by: 'ada' } },
   { entity: { eid: 'b1' }, book: { pages: 412 } },
 ]
-equal(composed(change), [{
+equal(composed(bundles), [{
   entity: { eid: 'b1' },
   book: { title: 'Dune', pages: 412 },
 }])
 equal(
   coalesced([
-    ...change,
+    ...bundles,
     { entity: { eid: 'b1' }, book: null },
     { entity: { eid: 'b1' }, book: { pages: 1 } },
   ]),
@@ -1199,7 +1199,7 @@ An **edit hunk** replaces `old` text with `new` text, requiring one match unless
 `all: true` (`EditHunk`). `patchText` applies hunks and refuses missing,
 ambiguous, or unchanged text. A **field operator** is a property value with a
 `$` key, such as `{ $edit: { old: 'Dune', new: 'DUNE' } }`.
-`resolveEdits(change, host)` resolves field operators and adds `$was` for the
+`resolveEdits(bundles, host)` resolves field operators and adds `$was` for the
 stored value; `edits(host)` registers it as a normalize hook. The host must keep
 its reads stable through commit, using an enclosing write transaction when
 backed by a database.

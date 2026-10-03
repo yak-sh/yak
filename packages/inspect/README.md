@@ -123,8 +123,8 @@ name, linked), `reads` (a value as a person reads it) and `useNamed`.
 A browser or a terminal supplies a `Host` once (./host.ts): the vocabulary, a
 hook answering a view's asks while it is mounted, where links go, `go`, which
 follows one in place (a link's, or a pressed row's), how an entity is named and
-when a moment was, and `apply`, which writes a change and rejects with the
-reason when the graph refuses it (the value or heading that wrote says it).
+when a moment was, and `apply`, which writes a batch and rejects with the reason
+when the graph refuses it (the value or heading that wrote says it).
 `inspector(registry, host)` gives the `Door` every view is drawn through, and
 `frame()` the index and the stack around it.
 

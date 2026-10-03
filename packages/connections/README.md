@@ -107,7 +107,7 @@ uses through an integration: the shared one, or with `each`, the one the owner
 holds. A host reads the space's ask with it before a person connects their own.
 
 `known(read, name)` is an integration by name, and `installed(read)` every built
-one a graph holds. `install(read)` is the change that installs the built
+one a graph holds. `install(read)` returns the bundles that install the built
 integrations: each one missing, or held otherwise than its seed says, written
 whole and marked `built`, and nothing where all match.
 
@@ -121,7 +121,7 @@ its vault, and the redirect):
   `connected`. A key goes from here straight to the vault.
 - `disconnect(ctx, connection)` deletes the connection, which drops its
   credential from the vault. Each app that shared it is linked to a new `needed`
-  connection in the same change, by the same name, as directly and as openly; a
+  connection in the same batch, by the same name, as directly and as openly; a
   person's own is not replaced, since the app still asks them.
 - `resolve(ctx, app, integration, person?)` returns the connected connection an
   app uses through an integration for that person, its `uses` link and the

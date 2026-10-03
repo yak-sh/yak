@@ -134,7 +134,7 @@ state. The `refuse` option prevents specified commands from being supervised and
 always refuses the supervisor's own command.
 
 `Store` is the minimal persistence interface used by launch and supervision:
-`apply()` writes a **batch** (a list of changes committed in one transaction),
+`apply()` writes a **batch** (a list of bundles committed in one transaction),
 `get()` reads given rows, `running()` reads processes without an exit, and
 `services()` reads service entities. `store(graph)` implements it with graph
 reads.

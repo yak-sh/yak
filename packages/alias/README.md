@@ -7,7 +7,7 @@ identifier). A bundle is a JSON object containing `entity: {eid}` and the
 entity's named components, such as `recipe: {title}` in the example below.
 
 This is not the same thing as a graph's `$temporary` aliases, which resolve only
-within the one list of changes they appear in. This plugin stores names through
+within the one batch they appear in. This plugin stores names through
 [@yaks/key](../key/README.md), so they can be resolved by later writes and
 requests.
 

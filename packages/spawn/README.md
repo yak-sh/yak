@@ -15,7 +15,7 @@ document declares the `session spawn`, `session wait`, and `session peek` tools.
 ## Starting an agent
 
 Write a session and its first input in one transaction. A **bundle** is one
-entity's components as a JSON object, and a **batch** is a list of changes
+entity's components as a JSON object, and a **batch** is a list of bundles
 applied in one transaction.
 
 ```jsonc

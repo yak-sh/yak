@@ -7,7 +7,7 @@ reconciles optimistic writes or reverts them when refused. Use it with
 
 A **Sync** is a graph's connection to a server, returned by `sync()`. It
 registers a [plugin](../graph/README.md#data-model) that posts local
-[changes](../graph/README.md#data-model) to `/apply` and applies server updates
+[bundles](../graph/README.md#data-model) to `/apply` and applies server updates
 received on `/ws`.
 
 A Sync holds [subscriptions](../api/README.md#subscriptions) under ids and
@@ -15,7 +15,7 @@ applies their [frames](../api/README.md#subscriptions). A subscription can ask
 for a [query](../query/README.md#query-model) or `true` for the raw stream of
 committed patches.
 
-An **optimistic write** is a change committed locally before the server answers
+An **optimistic write** is a batch committed locally before the server answers
 it. `report` receives a `Trouble`: the sent bundles,
 [refusal](../api/README.md#refusals-and-request-reports) or transport error, and
 whether the optimistic write was reverted. `Refusal` carries the server's
@@ -79,7 +79,7 @@ components is undone before that response lands.
 
 A refusal reverts the sent properties and everything the write's rules added.
 Caller-written local and peer values stay. A transport failure keeps the local
-change: the server may have applied it before the connection failed. There is no
+batch: the server may have applied it before the connection failed. There is no
 automatic HTTP retry.
 
 ```ts
@@ -126,8 +126,8 @@ equal(trouble[2].reverted, false)
 link.close()
 ```
 
-A change containing a deletion waits for the server in its entirety. Deletion
-has no local inverse; an accepted response supplies the tombstones. The inverse
+A batch containing a deletion waits for the server in its entirety. Deletion has
+no local inverse; an accepted response supplies the tombstones. The inverse
 patches for optimistic writes affect touched properties and do not implement
 general conflict resolution for overlapping writes.
 
@@ -514,8 +514,8 @@ There is one root export, with no sub-module exports.
 `post(bundles, options)` sends and reconciles one write outside the Sync's
 ordered queue, resolving to whether its outcome is known. It uses the same
 selection and reconciliation as `sync()`. Use `asking` to mark caller input, or
-supply `PostOpts.sent` for an already selected change and `held: true` when it
-has not committed locally.
+supply `PostOpts.sent` for already selected bundles and `held: true` when the
+write has not committed locally.
 
 ```ts
 import { graph } from '@yaks/graph'

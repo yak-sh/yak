@@ -117,7 +117,7 @@ equal(reversed(vocab), { cites: 'cited by' })
 the graph's `mint` [phase](../graph/README.md#data-model), its `stated(vocab)`
 hook refuses writes that specify an endpoint without the other endpoint or a
 declared relation component. A patch specifying neither endpoint can update
-`ord` without restating the link. Bundles for the same entity in a change are
+`ord` without restating the link. Bundles for the same entity in a batch are
 checked together.
 
 ```ts

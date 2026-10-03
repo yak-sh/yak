@@ -53,7 +53,7 @@ required to create a task.
 ## Use
 
 A **bundle** is one entity's components as a JSON object. A **batch** is a list
-of changes applied in one transaction. This complete example creates two tasks
+of bundles applied in one transaction. This complete example creates two tasks
 and their dependency in an in-memory graph:
 
 ```ts
@@ -138,9 +138,9 @@ let preview = await g.apply(plan, { check: true })
 let written = await g.apply(plan)
 ```
 
-A dry run returns the proposed changes with resolved ids, then rolls back the
+A dry run returns the proposed bundles with resolved ids, then rolls back the
 transaction. It runs admission, preconditions and rules, but keeps no entity or
-journal writes and runs no post-commit effects. Invalid changes still fail. Ids
+journal writes and runs no post-commit effects. Invalid batches still fail. Ids
 generated during a preview are not reserved for a later write. The HTTP form is
 `POST /apply?check=1`; the CLI form is `yak apply --dry-run`.
 

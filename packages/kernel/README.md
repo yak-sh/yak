@@ -108,7 +108,7 @@ resolves them.
 
 `kernel()` preserves `completed.by` across later writes of `completed`. Its
 precondition hook runs before stamping. On the first completion it uses the
-incoming `by`, if supplied by trusted server code, or the change's actor; on
+incoming `by`, if supplied by trusted server code, or the batch's actor; on
 later writes it keeps the stored `by`. Removing `completed` permits a subsequent
 completion to name another writer. `rules()` installs the same plugin.
 

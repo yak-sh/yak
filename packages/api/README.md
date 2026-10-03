@@ -12,12 +12,11 @@ each request before a route answers it, refusing the request by throwing
 (`Filter`).
 
 A **subscription** holds a [query](../query/README.md#query-model) and pushes
-its answer to one client when a committed
-[change](../graph/README.md#data-model) affects it. A **frame** is one
-subscription message (`Frame`), such as `{ id: 'books', bundles: [...] }`. A
-**sink** receives frames (`Sink`). The **subscription registry** keeps
-subscriptions for sinks (`Subs`). It lives in memory; keep it, or its handler,
-between requests.
+its answer to one client when a committed [batch](../graph/README.md#data-model)
+affects it. A **frame** is one subscription message (`Frame`), such as
+`{ id: 'books', bundles: [...] }`. A **sink** receives frames (`Sink`). The
+**subscription registry** keeps subscriptions for sinks (`Subs`). It lives in
+memory; keep it, or its handler, between requests.
 
 ## Install
 
@@ -51,17 +50,17 @@ const vocab = loadVocab({
 })
 const g = graph({ vocab, storage: ram(vocab) })
 const handle = api({ graph: g })
-const change = [{ entity: { eid: 'b1' }, book: { title: 'Dune', price: 12 } }]
+const bundles = [{ entity: { eid: 'b1' }, book: { title: 'Dune', price: 12 } }]
 const written = await handle(
   new Request('https://shop.test/apply', {
     method: 'POST',
-    body: JSON.stringify(change),
+    body: JSON.stringify(bundles),
   }),
 )
 equal(written.status, 200)
-equal(await written.json(), change)
+equal(await written.json(), bundles)
 const answer = await handle(new Request('https://shop.test/query?q=.book'))
-equal(await answer.json(), change)
+equal(await answer.json(), bundles)
 const declarations = await handle(new Request('https://shop.test/vocab'))
 equal((await declarations.json()).docs, vocab.docs)
 ```
@@ -156,7 +155,7 @@ unattributed requests. Throw `Unauthorized` to answer with HTTP 401.
 Authentication does not decide which entities or properties a caller may access;
 the graph and application supply that policy.
 
-`write(request, bundles)` adds caller context before signing a JSON change or
+`write(request, bundles)` adds caller context before signing a JSON batch or
 each NDJSON chunk, including checked writes. `read(request)` supplies graph
 `ReadOpts` for queries, socket frames and applied write replies. Applied replies
 use the graph's answer hooks with `patch: true`, so callers receive their own
@@ -285,8 +284,8 @@ equal(bundle.local.note, 'this node')
 `subscriptions(graph)` observes the graph's `effect` phase, including direct
 application writes. `open` sends the current answer and subsequent changes;
 `close` closes one subscription; `drop` closes every subscription for a sink.
-`subscribe: true` selects the **raw feed**, which sends each committed change
-without an initial answer. `commit` admits changes from another process, and
+`subscribe: true` selects the **raw feed**, which sends each committed batch
+without an initial answer. `commit` admits bundles from another process, and
 `restore` opens saved subscriptions together, sharing initial reads.
 
 ```ts
