@@ -8,6 +8,8 @@
   "token": "https://oauth2.googleapis.com/token",
   "client": "google",
   "scopes": [
+    "openid",
+    "email",
     "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/calendar.calendarlist.readonly"
   ],
@@ -18,5 +20,6 @@
   "hosts": [
     "www.googleapis.com"
   ],
-  "testing": true
+  "testing": true,
+  "userinfo": "https://openidconnect.googleapis.com/v1/userinfo"
 }

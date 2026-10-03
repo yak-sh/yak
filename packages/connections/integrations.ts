@@ -37,6 +37,8 @@ export type Integration = {
   authorize?: string
   /** where codes and refresh tokens are exchanged; none means a pasted key */
   token?: string
+  /** OpenID endpoint naming the account when no id_token is returned. */
+  userinfo?: string
   /** what a connection asks for when nothing narrower was needed */
   scopes?: string[]
   /** extra authorize parameters, such as Google's `access_type: 'offline'` */

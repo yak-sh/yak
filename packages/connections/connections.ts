@@ -43,7 +43,13 @@
 
 import { type Bundle, type Comp, type Eid, token } from '@yaks/graph'
 import { edgeEid, link } from '@yaks/edge'
-import { type Attempt, type Client, client, OAuthError } from '@yaks/oauth'
+import {
+  type Attempt,
+  type Client,
+  client,
+  OAuthError,
+  type Tokens,
+} from '@yaks/oauth'
 import {
   records,
   reveal,
@@ -54,6 +60,7 @@ import {
 import {
   connectable,
   INTEGRATION,
+  type Integration,
   integrationEid,
   keyed,
   known,
@@ -413,9 +420,82 @@ export let resolve = async (
     comp(r.connection, CONNECTION).integration == integration
   )
 
+/** Choose an owner's account. Without a name, the person's own address wins,
+ * otherwise the oldest connection. No remembered selection can let a newer
+ * throwaway change what unattended commands use. */
+export let pick = async (
+  read: Read,
+  owner: Eid,
+  integration: string,
+  as?: string,
+): Promise<Bundle | undefined> => {
+  let found =
+    (await read(`.${CONNECTION}.owner=${owner}${ALL}&.order=created.at`))
+      .filter((b) => comp(b, CONNECTION).integration == integration)
+  let address = (b: Bundle) =>
+    String(comp(b, CONNECTION).account ?? '').toLowerCase()
+  if (as) {
+    let name = as.toLowerCase()
+    let exact = found.filter((b) => address(b) == name)
+    let matches = exact.length
+      ? exact
+      : name.includes('@')
+      ? []
+      : found.filter((b) => address(b).split('@')[0] == name)
+    if (matches.length > 1) {
+      throw new Error(
+        `${as} names several ${integration} accounts; use the whole address`,
+      )
+    }
+    if (!matches.length) {
+      throw new Error(`no ${integration} account is named ${as}`)
+    }
+    return matches[0]
+  }
+  let [person] = await read(`.entity.eid=${owner}&*`)
+  let own = String(comp(person, 'email').address ?? '').toLowerCase()
+  return found.find((b) => own && address(b) == own) ?? found[0]
+}
+
+/** The address the provider returned. An id_token is used only to name an
+ * account after the authenticated code exchange, never as authorization. */
+export let accountOf = async (
+  integration: Integration,
+  tokens: Tokens,
+  fetcher: typeof fetch = fetch,
+): Promise<string | undefined> => {
+  let body: Record<string, unknown> = {}
+  if (tokens.id_token) {
+    let payload = tokens.id_token.split('.')[1]
+    try {
+      let bytes = Uint8Array.from(
+        atob(payload.replaceAll('-', '+').replaceAll('_', '/')),
+        (c) => c.charCodeAt(0),
+      )
+      body = JSON.parse(new TextDecoder().decode(bytes))
+    } catch {
+      throw new Error('the provider returned an invalid id_token')
+    }
+  } else if (integration.userinfo && tokens.access_token) {
+    let res = await fetcher(integration.userinfo, {
+      headers: {
+        authorization: `Bearer ${tokens.access_token}`,
+        accept: 'application/json',
+      },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(30_000),
+    })
+    if (!res.ok) throw new Error(`the userinfo endpoint refused: ${res.status}`)
+    body = await res.json()
+  }
+  return typeof body.email == 'string' && body.email.includes('@')
+    ? body.email.toLowerCase()
+    : undefined
+}
+
 // The OAuth client for a connection: its integration's endpoints, the scopes
 // it was asked for, and its tokens kept as its own secret.
-let signIn = async (c: Ctx, b: Bundle): Promise<Client> => {
+let signIn = async (c: Ctx, b: Bundle, staged?: Tokens): Promise<Client> => {
   let name = String(comp(b, CONNECTION).integration)
   let i = await known(c.graph.read, name)
   if (!i?.authorize || !i.token) {
@@ -429,7 +509,16 @@ let signIn = async (c: Ctx, b: Bundle): Promise<Client> => {
   return client({
     authorize: i.authorize,
     token: i.token,
-    scopes: scopes.length ? scopes : i.scopes,
+    scopes: scopes.length
+      ? [
+        ...new Set([
+          ...scopes,
+          ...(i.scopes ?? []).filter((s) =>
+            ['openid', 'email', 'profile'].includes(s)
+          ),
+        ]),
+      ]
+      : i.scopes,
     params: i.params,
     client: registered ?? (i.client_id ? { id: i.client_id } : undefined),
     auth: i.auth,
@@ -438,7 +527,12 @@ let signIn = async (c: Ctx, b: Bundle): Promise<Client> => {
     resource: i.resource,
     issuer: i.issuer,
   }, {
-    store: records(c.graph, c.vault, ''),
+    store: staged
+      ? {
+        read: () => Promise.resolve(staged),
+        update: (_, fn) => fn(staged),
+      }
+      : records(c.graph, c.vault, ''),
     key: nameOf(b),
     redirect: c.redirect ?? '',
     fetch: c.fetch,
@@ -481,8 +575,54 @@ export let connect = async (
       [CONNECTION]: now,
     }])
   }
-  await (await signIn(c, b)).complete(given.attempt, given.callback)
-  return c.graph.apply([{ entity: { eid: connection }, [CONNECTION]: now }])
+  let tokens: Tokens = {}
+  await (await signIn(c, b, tokens)).complete(given.attempt, given.callback)
+  let i = await known(c.graph.read, String(comp(b, CONNECTION).integration))
+  account = i
+    ? await accountOf(i, tokens, c.fetch ?? fetch) ?? account
+    : account
+  let grant = comp(b, CONNECTION)
+  let existing = account
+    ? (await c.graph.read(`.${CONNECTION}.owner=${grant.owner}${ALL}`))
+      .find((other) =>
+        other.entity.eid != connection &&
+        comp(other, CONNECTION).integration == grant.integration &&
+        String(comp(other, CONNECTION).account ?? '').toLowerCase() ==
+          account!.toLowerCase()
+      )
+    : undefined
+  // A different account never overwrites what the person already holds.
+  let different = grant.status == 'connected' && grant.account && account &&
+    String(grant.account).toLowerCase() != account.toLowerCase()
+  let target = existing ??
+    (different
+      ? fresh(
+        String(grant.owner),
+        String(grant.integration),
+        strs(grant.scopes),
+      )
+      : b)
+  let transient = existing && grant.status != 'connected'
+  let out = transient ? await links(c.graph.read, 'to', connection) : []
+  return c.graph.apply([
+    {
+      ...target,
+      entity: { eid: target.entity.eid },
+      [SECRET]: { name: nameOf(target), value: JSON.stringify(tokens) },
+      [CONNECTION]: {
+        ...comp(target, CONNECTION),
+        status: 'connected',
+        ...account ? { account } : {},
+      },
+    },
+    ...out.flatMap((
+      l,
+    ) => [{ entity: { eid: l.entity.eid }, tombstone: {} }, {
+      ...link(far(l, 'to'), USES, target.entity.eid),
+      [USES]: comp(l, USES),
+    }]),
+    ...transient ? [{ entity: { eid: connection }, tombstone: {} }] : [],
+  ])
 }
 
 /** End a connection, and forget its credential. The apps that shared it each

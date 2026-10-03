@@ -48,6 +48,8 @@ export type Provider = {
 export type Tokens = {
   access_token?: string
   token_type?: string
+  /** OpenID identity returned by the provider, retained across refresh. */
+  id_token?: string
   refresh_token?: string
   expires_at?: number
   scope?: string
@@ -109,6 +111,7 @@ let str = (v: unknown) => typeof v == 'string' && v ? v : undefined
 let NONE: Tokens = {
   access_token: undefined,
   token_type: undefined,
+  id_token: undefined,
   refresh_token: undefined,
   expires_at: undefined,
   scope: undefined,
@@ -175,6 +178,7 @@ export let client = (provider: Provider, o: Options): Client => {
     return {
       access_token: access,
       token_type: str(body.token_type),
+      id_token: str(body.id_token) ?? was.id_token,
       // A refresh may or may not issue a new refresh token (RFC 6749 §6).
       refresh_token: str(body.refresh_token) ?? was.refresh_token,
       expires_at: Number.isFinite(life) && life > 0

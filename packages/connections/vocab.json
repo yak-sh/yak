@@ -115,6 +115,11 @@
           "type": "boolean",
           "stamped": true,
           "description": "installed by the host from @yaks/connections' own seed data. Only the host writes it, so no space can mark an integration built or sign in as a built one's client"
+        },
+        "userinfo": {
+          "type": "string",
+          "format": "uri",
+          "description": "OpenID endpoint naming the signed-in account when the token answer has no id_token"
         }
       }
     },

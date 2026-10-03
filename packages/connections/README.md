@@ -111,6 +111,38 @@ one a graph holds. `install(read)` returns the bundles that install the built
 integrations: each one missing, or held otherwise than its seed says, written
 whole and marked `built`, and nothing where all match.
 
+`pick(read, owner, integration, as?)` chooses an account. With no `as`, it
+chooses the person's own email address, otherwise the oldest connection through
+that integration. The default is computed, never stored. An explicit `as` is a
+whole address or a local part that names just one account.
+
+```ts
+import { pick } from '@yaks/connections'
+import { equal } from '@yaks/testing'
+let accounts = [
+  {
+    entity: { eid: 'first' },
+    connection: {
+      integration: 'calendar',
+      owner: 'ann',
+      account: 'ann@example.com',
+    },
+  },
+  {
+    entity: { eid: 'second' },
+    connection: {
+      integration: 'calendar',
+      owner: 'ann',
+      account: 'work@example.com',
+    },
+  },
+]
+let read = (q: unknown) =>
+  String(q).includes('.connection.owner=') ? accounts : []
+equal((await pick(read, 'ann', 'calendar'))?.entity.eid, 'first')
+equal((await pick(read, 'ann', 'calendar', 'work'))?.entity.eid, 'second')
+```
+
 The rest are for trusted code, and act on the `Ctx` they are given (the graph,
 its vault, and the redirect):
 
@@ -118,7 +150,10 @@ its vault, and the redirect):
   until the person returns.
 - `connect(ctx, connection, given, account?)` keeps a pasted key (`{key}`), or
   completes a sign-in (`{attempt, callback}`), and marks the connection
-  `connected`. A key goes from here straight to the vault.
+  `connected`. A key goes from here straight to the vault. An OAuth sign-in
+  names its account from the exchanged `id_token` email or
+  `integration.userinfo`. Another account makes another connection; the same
+  account renews behind its held handle.
 - `disconnect(ctx, connection)` deletes the connection, which drops its
   credential from the vault. Each app that shared it is linked to a new `needed`
   connection in the same batch, by the same name, as directly and as openly; a

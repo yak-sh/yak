@@ -3,6 +3,7 @@
 // deleted owner leaves behind.
 
 import { test } from '@yaks/testing'
+import { kernelDoc } from '@yaks/kernel'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, type Comp, graph, Stale } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
@@ -20,6 +21,7 @@ import {
   sentinelOf,
 } from '@yaks/secrets'
 import {
+  accountOf,
   attach,
   begin,
   clientOf,
@@ -36,6 +38,7 @@ import {
   known,
   list,
   need,
+  pick,
   refresh,
   registration,
   resolve,
@@ -45,12 +48,6 @@ import { runs } from './tools.ts'
 
 let here: VocabDoc = {
   $defs: {
-    entity: {
-      component: true,
-      type: 'object',
-      wire: false,
-      properties: { num: { type: 'number', stamped: true } },
-    },
     space: { component: true, type: 'object', properties: {} },
     app: { component: true, type: 'object', properties: {} },
   },
@@ -70,7 +67,7 @@ let NOW = 1_000_000
 
 // A credential on its way to the vault wears @yaks/effects' `provisional`.
 let vocab = loadVocab(
-  [here, edgeDoc, secretsDoc, provisionalDoc, connectionsDoc],
+  [kernelDoc, here, edgeDoc, secretsDoc, provisionalDoc, connectionsDoc],
   [edgeKeywords],
 )
 
@@ -588,3 +585,88 @@ test(
     assertEquals(await run.connection_list(asked({ owner: 'app' }), g), [])
   },
 )
+
+let identity = (email: string) =>
+  `e30.${btoa(JSON.stringify({ email }))}.signature`
+
+test('accountOf names an account from the exchange or the authenticated userinfo door', async () => {
+  assertEquals(
+    await accountOf(CALENDAR, { id_token: identity('Ann@Example.com') }),
+    'ann@example.com',
+  )
+  let seen: string | null = null
+  let fetcher = ((_url: RequestInfo | URL, init?: RequestInit) => {
+    seen = new Headers(init?.headers).get('authorization')
+    assertEquals(init?.redirect, 'manual')
+    return Promise.resolve(Response.json({ email: 'bob@example.com' }))
+  }) as typeof fetch
+  assertEquals(
+    await accountOf(
+      { ...CALENDAR, userinfo: 'https://auth.example/userinfo' },
+      { access_token: 'token' },
+      fetcher,
+    ),
+    'bob@example.com',
+  )
+  assertEquals(seen, 'Bearer token')
+})
+
+test('signing in to another account preserves the held grant, and the same account renews it', async () => {
+  let { g, c, needs } = await setup(
+    [200, { access_token: 'A', id_token: identity('ann@example.com') }],
+    [200, { access_token: 'B', id_token: identity('bob@example.com') }],
+    [200, { access_token: 'C', id_token: identity('ann@example.com') }],
+  )
+  let first = await needs({ app: undefined })
+  let finish = async (eid: string) => {
+    let { attempt } = await begin(c, eid)
+    return connect(c, eid, {
+      attempt,
+      callback: `${REDIRECT}?state=${attempt.state}&code=one`,
+    })
+  }
+  await finish(first)
+  await finish(first)
+  assertEquals(await credential(c, first), 'A')
+  let second = await pick(g.read, 'space', 'calendar', 'bob')
+  assert(second)
+  assertEquals(await credential(c, second.entity.eid), 'B')
+  let transient = await needs({ app: undefined })
+  await finish(transient)
+  assertEquals(await credential(c, first), 'C')
+  assertEquals((await g.read('.connection.owner=space')).length, 2)
+  assertEquals((await g.read(`.entity.eid=${transient}`)).length, 0)
+})
+
+test('pick computes the own-address default then the oldest, and only explicit ambiguous names refuse', async () => {
+  let { g, c, needs } = await setup()
+  let oldest = await needs({ app: undefined, integration: 'texts' })
+  await connect(c, oldest, { key: 'A' }, 'ann@one.example')
+  let newer = await needs({ app: undefined, integration: 'texts' })
+  await connect(c, newer, { key: 'B' }, 'ann@two.example')
+  // Pick's read door can be remote. Give it the provenance and person's
+  // email a real host's vocabulary adds to the same bundles.
+  let read = async (q: Parameters<typeof g.read>[0]) => {
+    if (String(q) == '.entity.eid=space&*') {
+      return [{
+        entity: { eid: 'space' },
+        email: { address: 'ann@two.example' },
+      }]
+    }
+    return (await g.read(String(q).replace('&.order=created.at', ''))).map((
+      b,
+    ) => ({
+      ...b,
+      created: { at: b.entity.eid == oldest ? '2020-01-01' : '2020-02-01' },
+    })).sort((a, b) => a.created.at.localeCompare(b.created.at))
+  }
+  assertEquals((await pick(read, 'space', 'texts'))?.entity.eid, newer)
+  assertEquals((await pick(g.read, 'space', 'texts'))?.entity.eid, oldest)
+  assertEquals(
+    (await pick(g.read, 'space', 'texts', 'ann@two.example'))?.entity.eid,
+    newer,
+  )
+  await assertRejects(() => pick(g.read, 'space', 'texts', 'ann'))
+  await assertRejects(() => pick(g.read, 'space', 'texts', 'missing'))
+  assertEquals(await pick(g.read, 'space', 'absent'), undefined)
+})

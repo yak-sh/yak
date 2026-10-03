@@ -61,6 +61,7 @@ export {
   registration,
 } from './clients.ts'
 export {
+  accountOf,
   attach,
   begin,
   bindingOf,
@@ -74,6 +75,7 @@ export {
   list,
   type Need,
   need,
+  pick,
   refresh,
   resolve,
   type Resolved,
