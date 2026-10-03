@@ -3,6 +3,7 @@
 
 import { assertEquals } from '@std/assert'
 import { graph, type Storage } from '@yaks/graph'
+import { processDoc } from '@yaks/process'
 import { kernelDoc } from '@yaks/kernel/vocab'
 import { docDoc } from '@yaks/doc'
 import { effects } from '@yaks/effects'
@@ -21,6 +22,7 @@ import { mem } from '../sqlite/testing.ts'
 
 let vocab = loadVocab([
   kernelDoc,
+  processDoc,
   docDoc,
   mailDoc,
   notifyDoc,
@@ -156,4 +158,38 @@ test('native comments never feed through the bus; outside task claims retain the
   await feed(g)
   assertEquals((await g.get(['note']))[0].notified != null, false)
   assertEquals((await g.read('.entry.session=native')).length, 2)
+})
+
+test('a process-backed harness claim still hears comments with a using entry', async () => {
+  let store = storage(mem(), vocab)
+  store.install()
+  let g = await fresh(store)
+  // The spawned runner's using entry is a request to its outside process,
+  // not permission for the native inbox router to inject it too.
+  await g.apply([
+    { entity: { eid: 'outside' }, process: { pid: 1234 } },
+    {
+      entity: { eid: 'outside-start' },
+      entry: { session: 'outside' },
+      content: { body: 'outside start' },
+      using: {},
+    },
+    {
+      entity: { eid: 'outside-task' },
+      claim: { session: 'outside' },
+      doc: { title: 'task' },
+    },
+    {
+      entity: { eid: 'outside-note' },
+      comment: { target: 'outside-task' },
+      doc: { body: 'person reply' },
+    },
+  ], { trusted: true })
+  let lines = await reply(g, {
+    entity: { eid: 'outside-call' },
+    created: { via: 'outside' },
+  })
+  assertEquals(lines.length, 2)
+  assertEquals((await g.get(['outside-note']))[0].notified != null, true)
+  assertEquals((await g.read('.entry.session=outside')).length, 1)
 })

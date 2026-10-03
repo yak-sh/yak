@@ -120,7 +120,8 @@ export let pending = async (
   let vocab = graph.vocab
   // Native inbox replies are admitted by the thread router, not the bus.
   // An outside harness claiming work retains its listener exception.
-  let native =
+  let [owner] = await graph.get([session])
+  let native = !owner?.process &&
     (await graph.read(`.entry.session=${session}&.using&.limit=1`)).length > 0
   let seen = new Set<string>()
   let items: Bundle[] = []
