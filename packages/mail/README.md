@@ -530,6 +530,84 @@ thread. Replies retain their envelope and also carry
 thread address reaches the same conversation as web and TUI. Unverified or
 unknown senders are kept as mail only, never attributed to the recipient.
 
+A [conversation](../inbox/README.md) starts when a letter has no `In-Reply-To`
+or `References`, is addressed to `with.inbox.from`, and has a verified author
+resolving to `with.inbox.person`. Enable `@yaks/inbox` alongside `@yaks/mail` so
+the graph declares `conversation`. The received entity keeps its `mail` envelope
+and Message-ID, gains `conversation{}`, and carries the person's full text in
+`doc.body` with its first line as `doc.title`. Its `created.by` is the sender,
+never the mailbox's operator. Empty text, unverified senders, unknown senders,
+and other people remain mail only. A repeated Message-ID creates nothing.
+Letters addressed to a thread or replying to a conversation remain comments
+rather than starting another conversation. A reply with an unknown parent
+remains mail.
+
+External provenance is checked before the configured-person filter. A known
+session, role, effect, call, output or transcript entry as sender, the
+configured inbox address as sender, or `Auto-Submitted` other than `no` is kept
+as mail only, never converted to a conversation or comment. Ordinary inbound
+mail preserves its sender attribution for anyone in the address book, not just
+the configured person; an unknown sender has no `created.by`. `created.via` is
+unset because an arrival names no originating graph session. The same entity
+retains its original `mail.from`, verification verdict and body, with no
+`deliver`, so a router can inspect the received words rather than treating an
+effect's prose as external input. DKIM authenticates a sending domain, not
+whether a person or an automation typed the words; receiving edges must preserve
+automatic-mail headers. Mail does not guess authorship from the recipient.
+
+Both `POST /mail/inbound` and the pull service use `arrived`; neither starts a
+session itself. Answering belongs to the separately configured harness inbox
+router, which accepts only its configured person's words. For example, this
+records a verified letter without a transport or model:
+
+```ts
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { kernel, kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { docDoc } from '@yaks/doc'
+import { inboxDoc } from '@yaks/inbox/vocab'
+import { arrived, mailDoc } from '@yaks/mail'
+import { equal } from '@yaks/testing'
+
+let vocab = loadVocab([kernelDoc, docDoc, inboxDoc, mailDoc], [kernelKeywords])
+let g = graph({ vocab, storage: ram(vocab), plugins: [kernel()] })
+await g.apply([{
+  entity: { eid: 'ana' },
+  email: { address: 'ana@example.com' },
+}])
+let receive = arrived({
+  graph: g,
+  inbox: { person: 'ana', from: 'inbox@example.com' },
+})
+await g.apply(
+  await receive({
+    from: 'relay@example.com',
+    to: 'inbox@example.com',
+    headers: new Headers({
+      From: 'Ana <ana@example.com>',
+      'Message-ID': '<hello@example.com>',
+    }),
+  }, { text: 'Can we plan dinner?\nTomorrow would work.', verified: true }),
+)
+let [conversation] = await g.read('.conversation *')
+equal(conversation.created?.by, 'ana')
+equal(conversation.doc?.title, 'Can we plan dinner?')
+equal(
+  await receive({
+    from: 'relay@example.com',
+    to: 'inbox@example.com',
+    headers: new Headers({ 'Message-ID': '<hello@example.com>' }),
+  }),
+  [],
+)
+```
+
+Verification is the trusted receiving edge's verdict, supplied as `verified` or
+its `Authentication-Results` header. Keep the arrival endpoint behind a
+perimeter or configure `door.secret`; do not let untrusted callers assert that
+verdict. No existing mail is backfilled into conversations.
+
 Decisions show numbered choices and the recommendation. A reply containing only
 a choice number (before quoted text) selects that choice; other words are a
 custom answer. Out-of-range numbers remain comments. Answers are attributed to

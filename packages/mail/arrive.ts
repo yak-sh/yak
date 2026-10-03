@@ -110,8 +110,8 @@ export type Arrivals = {
   domain?: string
   /** where a letter addressed to nobody here lands — the triage entity */
   triage?: Eid
-  /** The opted-in person, for replies sent to a thread address. */
-  inbox?: { person: Eid }
+  /** The opted-in person and inbox address; replies also use the person. */
+  inbox?: { person: Eid; from?: string }
 }
 
 /**
@@ -147,7 +147,43 @@ async (m, arrival = {}) => {
     ...(target ? { target } : {}),
     ...(reply ? { reply } : {}),
   })
-  let letter = { ...bundles[0], $actor: by ? { by } : {} }
+  let letter: Bundle = { ...bundles[0], $actor: by ? { by } : {} }
+  // Provenance is independent of the current person allowlist. A session or
+  // effect's sender remains that sender, not the inbox recipient, but its
+  // own prose must not gain a conversation/comment mark on re-entry.
+  let writer = by
+    ? (await graph.read(`.entity.eid=${JSON.stringify(by)}`))[0]
+    : undefined
+  let canonical = domain ? canon(domain) : (address: string) => address
+  let automatic = m.headers.get('auto-submitted')?.trim().toLowerCase()
+  let external = !(
+    writer?.session || writer?.role || writer?.effect || writer?.call ||
+    writer?.output || writer?.entry ||
+    (automatic && automatic != 'no') ||
+    (inbox?.from && canonical(author(m)) == canonical(inbox.from))
+  )
+  if (!external) return [letter]
+  // A reply whose parent is unknown is still a reply, never a fresh request.
+  // External provenance was checked first; the allowlist and verification
+  // fail closed before adding the mark
+  // that the harness routes. Keep the envelope on the conversation itself so
+  // Message-ID deduplication and subsequent email replies use the same root.
+  let mail = letter.mail as Record<string, unknown>
+  let text = arrival.text ?? ''
+  if (
+    inbox?.from && by == inbox.person && mail.verified == true &&
+    canonical(m.to) == canonical(inbox.from) &&
+    !arrival.target && !reply && !answers && !m.headers.get('references') &&
+    text.trim()
+  ) {
+    let { target: _target, ...envelope } = mail
+    return [{
+      ...letter,
+      mail: envelope,
+      conversation: {},
+      doc: { title: text.split(/\r?\n/, 1)[0], body: text },
+    }]
+  }
   let parent = reply
     ? (await graph.read(`.entity.eid=${JSON.stringify(reply)}`))[0]
     : undefined

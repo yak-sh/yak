@@ -33,7 +33,9 @@ export let replied = async (
   let mail = comp(letter, 'mail')
   let prior = comp(parent, 'mail')
   if (parent?.mail_notice && !prior.target) return [letter]
-  let target = str(prior.target || mail.target)
+  let target = parent?.conversation
+    ? parent.entity.eid
+    : str(prior.target || mail.target)
   if (!by || mail.verified != true || !target) return [letter]
   let recipient = str(comp(parent, 'deliver').to)
   // A stored outgoing envelope proves whom we asked. Without it, only an
@@ -46,7 +48,8 @@ export let replied = async (
     : addressed
   if (ancestor) target = ancestor
   if (
-    !root || root.mail || !(root.task || root.design || root.session ||
+    !root || (root.mail && !root.conversation) ||
+    !(root.task || root.design || root.session ||
       root.bug || root.project || root.doc)
   ) return [letter]
   let replyTo =

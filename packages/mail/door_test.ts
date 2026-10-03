@@ -9,6 +9,8 @@ import { edgeDoc, edgeKeywords, edges, link } from '@yaks/edge'
 import { projectDoc } from '@yaks/project'
 import { taskDoc, tasks } from '@yaks/task'
 import { type Row, threads } from '@yaks/inbox'
+import { inboxDoc } from '@yaks/inbox/vocab'
+import { sessionDoc } from '@yaks/session/vocab'
 import { mailDoc } from './comp.ts'
 import { arrived } from './arrive.ts'
 import { inboxAt, planned, queue } from './door.ts'
@@ -17,6 +19,7 @@ import { message, sending } from './send.ts'
 import { stash } from './stash.ts'
 import { routes } from './routes.ts'
 import { service } from './service.ts'
+import { type Edge, pull } from './pull.ts'
 
 let at = (n: number) => `2026-10-02T12:00:${String(n).padStart(2, '0')}.000Z`
 let inbox = {
@@ -74,9 +77,12 @@ let world = async () => {
     taskDoc,
     projectDoc,
     mailDoc,
+    inboxDoc,
+    sessionDoc,
   ], [kernelKeywords, edgeKeywords])
   let g = graph({
     vocab,
+    actor: { by: 'agent' },
     storage: ram(vocab),
     plugins: [kernel(), tasks(), edges(vocab)],
   })
@@ -334,4 +340,245 @@ test('invalid choice numbers keep a comment without completing the decision', as
   await g.apply(bundles)
   assertEquals(comp(bundles[0], 'comment').target, 'ask')
   assertEquals((await g.get(['ask']))[0].decided, undefined)
+})
+
+// Both receiving doors share arrived(); no harness or transport can spend money
+// in this fixture. A default graph writer makes sender attribution observable.
+let freshLetter = (extra: Record<string, unknown> = {}) => ({
+  from: 'bounces@relay.example',
+  to: 'In_Box@Books.Example',
+  headers: {
+    From: 'Ana <ana@books.example>',
+    Subject: 'Not the conversation title',
+    'Message-ID': '<conversation@box>',
+  },
+  text: 'Can we plan dinner?\nMy own words, in full.',
+  verified: true,
+  ...extra,
+})
+let postFresh = (g: ReturnType<typeof graph>, extra = {}) =>
+  routes({ graph: g }, options)[0].handle(
+    new Request('http://box/mail/inbound', {
+      method: 'POST',
+      body: JSON.stringify(freshLetter(extra)),
+    }),
+  )
+
+test('a verified new inbox letter is a caller-attributed conversation, once, and replies remain comments', async () => {
+  let g = await world()
+  let response = await postFresh(g)
+  assertEquals(response.status, 200)
+  let { eid } = await response.json()
+  let [root] = await g.get([eid])
+  assertEquals(root.conversation, {})
+  assertEquals(comp(root, 'created').by, 'person')
+  assertEquals(comp(root, 'created').via, undefined)
+  assertEquals(comp(root, 'doc'), {
+    title: 'Can we plan dinner?',
+    body: freshLetter().text,
+  })
+  assertEquals(comp(root, 'mail').message_id, 'conversation@box')
+  assertEquals(comp(root, 'mail').target, undefined)
+  assertEquals(root.comment, undefined)
+  assertEquals(root.deliver, undefined)
+  assertEquals(await (await postFresh(g)).json(), { eid: null })
+  let follow = await postFresh(g, {
+    headers: {
+      From: 'Ana <ana@books.example>',
+      'Message-ID': '<follow@box>',
+      'In-Reply-To': '<conversation@box>',
+    },
+    text: 'Tomorrow instead',
+  })
+  assertEquals(follow.status, 200)
+  let [reply] = await g.get([(await follow.json()).eid])
+  assertEquals(reply.conversation, undefined)
+  assertEquals(comp(reply, 'comment').target, eid)
+  assertEquals(comp(reply, 'created').by, 'person')
+  assertEquals(comp(reply, 'doc').body, 'Tomorrow instead')
+  let rows = await g.read('.conversation | .comment *')
+  let list = threads(
+    rows.map((b) => ({
+      eid: b.entity.eid,
+      comps: b as Row['comps'],
+    })),
+    reader,
+  )
+  assertEquals(list.find((t) => t.eid == eid)?.messages.map((r) => r.eid), [
+    eid,
+    reply.entity.eid,
+  ])
+  for (
+    let [from, verified] of [['stranger@books.example', true], [
+      'ana@books.example',
+      false,
+    ]] as const
+  ) {
+    let rejected = await arrived({ graph: g, ...options })({
+      from,
+      to: inbox.from,
+      headers: new Headers({ 'In-Reply-To': '<conversation@box>' }),
+    }, { verified, text: 'Not authorized' })
+    assertEquals(rejected[0].conversation, undefined)
+    assertEquals(rejected[0].comment, undefined)
+  }
+  let idReply = await arrived({ graph: g, ...options })({
+    from: 'ana@books.example',
+    to: `${eid}@books.example`,
+    headers: new Headers({ 'Message-ID': 'direct@box' }),
+  }, { target: eid, verified: true, text: 'Direct thread reply' })
+  await g.apply(idReply)
+  assertEquals(idReply[0].conversation, undefined)
+  assertEquals(comp(idReply[0], 'comment').target, eid)
+})
+
+for (
+  let [name, extra] of [
+    ['unknown sender', { headers: { From: 'stranger@books.example' } }],
+    ['failed verification', { verified: false }],
+    ['missing verification', { verified: undefined }],
+    ['different address', { to: 'other@books.example' }],
+    ['unknown parent', {
+      headers: { From: 'ana@books.example', 'In-Reply-To': '<lost@box>' },
+    }],
+    ['references without parent', {
+      headers: { From: 'ana@books.example', References: '<lost@box>' },
+    }],
+    ['empty words', { text: '   ' }],
+  ] as const
+) {
+  test(`new inbox letters fail closed: ${name}`, async () => {
+    let g = await world()
+    let res = await postFresh(g, extra)
+    assertEquals(res.status, 200)
+    let [kept] = await g.get([(await res.json()).eid])
+    assertEquals(kept.conversation, undefined)
+    assertEquals(kept.comment, undefined)
+    assertEquals(comp(kept, 'doc').body, freshLetter(extra).text)
+    if (name == 'unknown sender') {
+      assertEquals(comp(kept, 'created').by, undefined)
+    }
+  })
+}
+
+test('a different known sender and an inactive inbox cannot start conversations', async () => {
+  let g = await world()
+  await g.apply([{
+    entity: { eid: 'other' },
+    email: { address: 'other@books.example' },
+  }])
+  let receive = arrived({ graph: g, ...options })
+  let kept = await receive({
+    from: 'other@books.example',
+    to: inbox.from,
+    headers: new Headers(),
+  }, { verified: true, text: 'Hello' })
+  await g.apply(kept)
+  assertEquals(kept[0].conversation, undefined)
+  assertEquals(
+    comp((await g.get([kept[0].entity.eid]))[0], 'created').by,
+    'other',
+  )
+  let res = await routes({ graph: g }, { domain: options.domain })[0].handle(
+    new Request('http://box/mail/inbound', {
+      method: 'POST',
+      body: JSON.stringify(freshLetter()),
+    }),
+  )
+  assertEquals(res.status, 200)
+  assertEquals(
+    (await g.get([(await res.json()).eid]))[0].conversation,
+    undefined,
+  )
+})
+
+test('pull records a verified inbox conversation before acknowledgement and redelivery adds nothing', async () => {
+  let g = await world()
+  let acked: string[] = []
+  let edge: Edge = {
+    messages: () =>
+      Promise.resolve([{
+        id: 'msg:123:<pulled@box>',
+        from: 'bounces@relay.example',
+        from_header: 'Ana <ana@books.example>',
+        to: inbox.from,
+        subject: 'Envelope subject',
+        text: 'Pulled words\nKeep them all',
+        verified: true,
+      }]),
+    notified: async (ids) => {
+      let [kept] = await g.read('.mail.message_id=pulled@box *')
+      assertEquals(kept.conversation, {})
+      assertEquals(comp(kept, 'created').by, 'person')
+      assertEquals(comp(kept, 'doc').title, 'Pulled words')
+      acked.push(...ids)
+    },
+    requests: () => Promise.resolve([]),
+    processed: async () => {},
+  }
+  assertEquals(await pull({ graph: g, ...options }, edge), {
+    messages: 1,
+    requests: 0,
+  })
+  assertEquals(await pull({ graph: g, ...options }, edge), {
+    messages: 1,
+    requests: 0,
+  })
+  assertEquals(acked, ['msg:123:<pulled@box>', 'msg:123:<pulled@box>'])
+  assertEquals((await g.read('.conversation *')).length, 1)
+})
+
+test('system-generated inbound echoes cannot become conversations or comments, independently of the person filter', async () => {
+  let g = await world()
+  await g.apply([
+    {
+      entity: { eid: 'agent-session' },
+      session: { actor: 'person' },
+      email: { address: 'agent@books.example' },
+    },
+    { entity: { eid: 'person' }, session: { actor: 'person' } },
+  ])
+  for (
+    let [from, automatic] of [
+      ['agent@books.example', 'no'],
+      ['ana@books.example', 'no'],
+      [inbox.from, 'no'],
+      ['ana@books.example', 'auto-replied'],
+    ]
+  ) {
+    for (let target of [undefined, 'ask']) {
+      let out = await arrived({ graph: g, ...options })({
+        from,
+        to: inbox.from,
+        headers: new Headers({ 'Auto-Submitted': automatic }),
+      }, {
+        text: 'System prose',
+        verified: true,
+        ...(target ? { target } : {}),
+      })
+      assertEquals(out[0].conversation, undefined)
+      assertEquals(out[0].comment, undefined)
+      assertEquals(comp(out[0], 'doc').body, 'System prose')
+      await g.apply(out)
+      if (from == 'agent@books.example') {
+        assertEquals(
+          comp((await g.get([out[0].entity.eid]))[0], 'created').by,
+          'agent-session',
+        )
+      }
+    }
+  }
+})
+
+test('an automatic echo of the configured person fails closed without a system identity', async () => {
+  let g = await world()
+  for (let target of [undefined, 'ask']) {
+    let out = await arrived({ graph: g, ...options })({
+      from: 'ana@books.example',
+      to: inbox.from,
+      headers: new Headers({ 'Auto-Submitted': 'auto-generated' }),
+    }, { verified: true, text: 'Effect prose', ...(target ? { target } : {}) })
+    assertEquals(out[0].conversation, undefined)
+    assertEquals(out[0].comment, undefined)
+  }
 })

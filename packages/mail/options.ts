@@ -49,6 +49,7 @@ export type Options = {
 /** Whose inbox reaches a mail client, and how its links return here. */
 export type Inbox = {
   person: Eid
+  /** The inbox address: verified letters from person start conversations here. */
   from: string
   base: string
   /** UTC hour for the single daily digest (default 9). */
