@@ -133,11 +133,8 @@ let base = new URL('api/', document.baseURI)
 await dressVale()
 let opening = connect(base, await vocabulary(base))
 // The world, shops, crafting and item pictures read store designs. Start
-// asking about the hero alongside the watches, then grow ground from them.
-let asking = opening.me().then(async (me) => ({
-  me,
-  heroes: me.person ? await opening.heroes(me.person) : [],
-}))
+// asking who is here alongside the watches, then grow ground from them.
+let asking = opening.me()
 let hadThemes = false
 let hadBuildings = false
 let redraw: (affects: Affects, kinds?: Set<string>) => void = () => {}
@@ -1380,7 +1377,10 @@ Object.assign(globalThis, {
 
 let busy = gate.querySelector('.Gate_Busy')
 if (busy) busy.textContent = 'Finding the others…'
-let { me, heroes } = await asking
+// Saved hero positions resolve regions, so read them only after the store's
+// themes have arrived, just like the ground grown above.
+let me = await asking
+let heroes = me.person ? await opening.heroes(me.person) : []
 chat.me(me)
 folk.me(me)
 party.me(me)
