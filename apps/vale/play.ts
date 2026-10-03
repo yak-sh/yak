@@ -1017,7 +1017,6 @@ export let game = (
               fought.foe = ''
               teleported = request.entity.eid
               bundles.push({ entity: { eid: teleported }, completed: {} })
-
             }
           }
         } catch { /* a malformed request never moves a hero */ }

@@ -1,7 +1,7 @@
 // Rehearse the hosted mover over captured player data in a disposable SQLite file.
 import { type Bundle, graph } from '@yaks/graph'
 import { loadVocab, metaDoc } from '@yaks/vocab'
-import { lenses, lensesIn, packageEid } from '@yaks/lens'
+import { lenses, lensesIn, packageEid, versions } from '@yaks/lens'
 import { docs as lensDocs } from '../packages/lens/vocab.ts'
 import { open } from '@yaks/sqlite/db'
 import { storage } from '@yaks/sqlite'
@@ -76,12 +76,16 @@ try {
       stamp: false,
     },
   )
-  let expanded = await g.read('.player .position')
-  let acknowledgements = await g.read('.teleport_request .completed')
-  if (expanded.length !== heroes.length || acknowledgements.length !== 3) {
-    throw new Error(
-      `expanded reads lost player data: ${expanded.length} positions, ${acknowledgements.length} acknowledgements`,
-    )
+  for (
+    let opts of [{}, { speaks: versions([lensDocAt('yourname/vale', words)]) }]
+  ) {
+    let expanded = await g.read('.player .position', opts)
+    let acknowledgements = await g.read('.teleport_request .completed', opts)
+    if (expanded.length !== heroes.length || acknowledgements.length !== 3) {
+      throw new Error(
+        `expanded reads lost player data: ${expanded.length} positions, ${acknowledgements.length} acknowledgements`,
+      )
+    }
   }
   let speaks = { [packageEid('@app/yourname/vale')]: 0 }
   if ((await g.read('.seen', { speaks })).length !== heroes.length) {
