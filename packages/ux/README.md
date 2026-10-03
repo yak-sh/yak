@@ -214,8 +214,8 @@ drawn with @yaks/ui's `Prop` and `Edit` parts.
 A 'none' choice in a reference or well control clears the value. Typed over in
 place, the value keeps its element, font and box, so nothing on the page moves;
 Enter (a body: leaving it) emits what was typed, and Escape puts the value back.
-A [body](../blob/README.md) (`store: 'blob'`) the bundle does
-not carry is one the page has not loaded, and is not offered for typing over.
+A [body](../blob/README.md) (`store: 'blob'`) the bundle does not carry is one
+the page has not loaded, and is not offered for typing over.
 
 ```ts
 import { h } from 'preact'
