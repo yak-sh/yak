@@ -10,8 +10,10 @@ import {
   col,
   type Driver,
   type Insert,
+  lit,
   render,
   scan,
+  type Stmt,
   type Tx,
   val,
 } from '@yaks/sql'
@@ -143,5 +145,34 @@ test('native integer values round-trip beyond 32 bits', () => {
     }
   } finally {
     sql.close()
+  }
+})
+
+test('cached native row metadata follows external schema edits and rollback', () => {
+  let db = new Database(':memory:')
+  try {
+    let sql = driver(db)
+    let outside = (s: Stmt) => db.exec(render(s).sql)
+    sql.query({ t: 'create table', name: 'sample', cols: [{ name: 'x' }] })
+    sql.query({ t: 'insert', into: 'sample', cols: ['x'], rows: [[lit(1)]] })
+    for (let i = 0; i < 2; i++) assertEquals(scan(sql, 'sample'), [{ x: 1 }])
+    sql.query({ t: 'savepoint', name: 'shape' })
+    outside({
+      t: 'alter table',
+      table: 'sample',
+      add: { name: 'y', default: lit(2) },
+    })
+    assertEquals(scan(sql, 'sample'), [{ x: 1, y: 2 }])
+    outside({ t: 'drop', kind: 'table', name: 'sample' })
+    outside({ t: 'create table', name: 'sample', cols: [{ name: 'z' }] })
+    sql.query({ t: 'insert', into: 'sample', cols: ['z'], rows: [[lit(3)]] })
+    assertEquals(scan(sql, 'sample'), [{ z: 3 }])
+    sql.query({ t: 'rollback', to: 'shape' })
+    sql.query({ t: 'release', name: 'shape' })
+    assertEquals(scan(sql, 'sample'), [{ x: 1 }])
+    sql.query({ t: 'update', table: 'sample', set: { x: lit(4) } })
+    assertEquals(scan(sql, 'sample'), [{ x: 4 }])
+  } finally {
+    db.close()
   }
 })

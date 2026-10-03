@@ -84,6 +84,20 @@ export let prepared = (db: Database) => {
   // SQLite integers are 64-bit. The library's default reader truncates them
   // to 32 bits; safe JS integers must round-trip through every driver caller.
   db.int64 = true
+  // @db/sqlite captures this option when constructing a statement. Our own
+  // synchronous statements can keep their column names and row decoder:
+  // live() evicts them whenever the schema changes, including rollback.
+  // Restore the database option before returning so other callers' statements
+  // retain their own concurrency policy.
+  let prepare = (sql: string) => {
+    let previous = db.unsafeConcurrency
+    db.unsafeConcurrency = true
+    try {
+      return db.prepare(sql)
+    } finally {
+      db.unsafeConcurrency = previous
+    }
+  }
   let cache = new Map<string, ReturnType<Database['prepare']>>()
   let schema = db.prepare(
     render({ t: 'pragma', schema: 'main', name: 'schema_version' }).sql,
@@ -109,7 +123,7 @@ export let prepared = (db: Database) => {
     live()
     let statement = cache.get(sql)
     if (!statement) {
-      statement = db.prepare(sql)
+      statement = prepare(sql)
       if (sql.slice(statement.sql.length).trim()) {
         statement.finalize()
         if (params.length) {

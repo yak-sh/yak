@@ -8,12 +8,7 @@ import {
   type Tracker,
   type Tx,
 } from '@yaks/graph'
-import {
-  type Archetype,
-  archetypeDoc,
-  Archetypes,
-  tablesOf,
-} from './sets.ts'
+import { type Archetype, archetypeDoc, Archetypes, tablesOf } from './sets.ts'
 
 type Held = { set: Archetype; assigned?: string; dead: boolean }
 

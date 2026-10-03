@@ -208,7 +208,7 @@ for (let async of [false, true]) {
     }
     let tx = base.tx((tx) => ({
       ...tx,
-      get: async ? async (eids: string[]) => get(eids) : get,
+      get: async ? async (eids: string[]) => await get(eids) : get,
     })) as Tx
     let snap = await gather(tx, books, [
       { eids: ['b1'] },
