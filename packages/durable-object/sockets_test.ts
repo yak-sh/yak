@@ -699,3 +699,52 @@ test('a caller view survives socket acceptance and hibernation', () => {
   wokenGraph.apply([{ entity: { eid: 'p1' }, product: { price: 8 } }])
   assertEquals(made[1].sent.at(-1)!.gone, ['p1'])
 })
+
+test('hibernation hydrates saved positions only under surviving socket keys before watches reopen', async () => {
+  let vocab = loadVocab({
+    $defs: {
+      hero: { component: true, properties: { name: { type: 'string' } } },
+      position: {
+        component: true,
+        sync: 'peers',
+        durable: 'forever',
+        save: '.hero',
+        properties: { x: { type: 'number' } },
+      },
+    },
+  })
+  let storage = store(vocab), ctx = hibernation(), ws = wire(), watcher = wire()
+  ctx.live.push(ws, watcher)
+  ws.serializeAttachment({
+    writer: {},
+    relay: ['held position'],
+  })
+  watcher.serializeAttachment({ subs: { positions: '.hero .position' } })
+  let initial = graph({ storage, vocab })
+  initial.apply([
+    { entity: { eid: 'held' }, hero: { name: 'Held' }, position: { x: 1 } },
+    {
+      entity: { eid: 'offline' },
+      hero: { name: 'Offline' },
+      position: { x: 2 },
+    },
+  ])
+  let g = graph({ storage, vocab })
+  let subs = subscriptions({
+    ...g,
+    get: async (...args) => await g.get(...args),
+  })
+  let live = sockets(subs, ctx)
+  await live.wake()
+  assertEquals(watcher.sent[0].bundles?.map((b) => b.entity.eid), ['held'])
+  assertEquals(watcher.sent[0].relay?.[0].position, { x: 1 })
+  assertEquals((await subs.read('.hero .position')).map((b) => b.entity.eid), [
+    'held',
+  ])
+  await live.close(ws)
+  assertEquals(await subs.read('.hero .position'), [])
+  assertEquals(
+    (await subs.read('.hero .position', { durable: true })).length,
+    2,
+  )
+})

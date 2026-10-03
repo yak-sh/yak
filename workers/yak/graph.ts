@@ -17,7 +17,13 @@ import {
   lensesIn,
   packageEid,
 } from '@yaks/lens'
-import { declaredLenses, lensDocAt, lensRule, spoken } from './lenses.ts'
+import {
+  contractPaths,
+  declaredLenses,
+  lensDocAt,
+  lensRule,
+  spoken,
+} from './lenses.ts'
 // The Store Durable Object, built out of the packages (T-33810, D-33490): one
 // app's graph, and nothing of the fleet's. It is composition, not code —
 //
@@ -163,7 +169,7 @@ import {
   schema as vectorSchema,
   semantic,
 } from '@yaks/embedding'
-import { after } from '@yaks/fp'
+import { after, isPromise } from '@yaks/fp'
 import {
   type Actor,
   type AdmitOpts,
@@ -661,6 +667,7 @@ export class Store {
   #ctx: State
   #vocab!: Vocab
   #graph!: Graph
+  #subs?: Subs
   #anatomy: ReturnType<typeof workerAnatomy> | null = null
   // The object's SQLite, as the driver every statement here runs through.
   #sql!: Driver
@@ -871,7 +878,7 @@ export class Store {
     )
     this.#lensMove = lensRule(name, declaration, (path) => {
       let [comp, prop] = path.split('.')
-      return !!vocab.prop(comp, prop)
+      return prop ? !!vocab.prop(comp, prop) : !!vocab.comp(comp)
     })
     let drive = this.#sql = driver(ctx.storage, observe, this.#measure)
     let bytes = sqliteBlobs(drive)
@@ -1122,6 +1129,8 @@ export class Store {
       ),
     )
     let subs = subscriptions(g)
+    this.#subs = subs
+    subs.observe((bundles) => this.#rouse(bundles))
     // Only an app's store answers a page, and the platform's own two are made
     // of the rows an app's page is spared.
     let spared = own ? [] : PLATFORM.filter((w) => vocab.comp(w))
@@ -1160,7 +1169,12 @@ export class Store {
     // runtime and outlive every incarnation of this object, so whatever they
     // are watching is re-opened against the new one. Without this a deploy
     // would leave every open page subscribed to a registry nothing commits to.
-    this.#live.wake()
+    let restored = this.#live.wake()
+    if (isPromise(restored)) {
+      restored.catch((error) =>
+        defect(error, { request: 'socket restore', store: name })
+      )
+    }
   }
 
   /** What this object holds, and the seam that says who is asking it — the
@@ -1759,7 +1773,7 @@ export class Store {
   // door the kernel writes through, carrying the tick's instant, which is the
   // `#Now` its rules read.
   #clock: Pick<Graph, 'read' | 'apply'> = {
-    read: (q, o) => this.#graph.read(q, o),
+    read: (q, o) => (this.#subs ?? this.#graph).read(q, o),
     apply: (b, o) => this.#trust(b as Bundle[], null, o),
   }
 
@@ -2040,17 +2054,9 @@ export class Store {
     tx: (body) => this.#ctx.storage.transactionSync(body),
     drop: (paths) => {
       let was = appDoc(this.#get('vocab') ?? '{}')
-      let defs = { ...was.$defs }
-      for (let path of paths) {
-        let [comp, prop] = path.split('.')
-        if (!defs[comp]?.properties?.[prop]) continue
-        let properties = { ...defs[comp].properties }
-        delete properties[prop]
-        defs[comp] = { ...defs[comp], properties }
-      }
       this.#put(
         'vocab',
-        this.#prepared(JSON.stringify({ ...was, $defs: defs })),
+        this.#prepared(JSON.stringify(contractPaths(was, paths))),
       )
     },
   })
@@ -2414,7 +2420,7 @@ export class Store {
     if (this.#refused) return this.#stalled()
     let selected = this.#select(request)
     if (this.#refused) return this.#stalled()
-    this.#live.wake()
+    await this.#live.wake()
     // The clock, started. A wake row is owed at an instant and the runtime's
     // alarm is how this object comes back for it — but an object that has
     // never been asked anything is not running, so a request is the moment its
@@ -3184,7 +3190,13 @@ export class Store {
       return held
     }
     return {
-      snapshot: (query, opts) => subs.snapshot(asking(query, words), opts),
+      read: subs.read,
+      observe: subs.observe,
+      snapshot: (query, opts) =>
+        subs.snapshot(
+          typeof query == 'string' ? asking(query, words) : query,
+          opts,
+        ),
       open: (sink, id, query, opts) =>
         subs.open(
           by(sink),
@@ -3550,7 +3562,7 @@ export class Store {
       if (this.#unbuilt) return void this.#hangUp(ws)
       try {
         let prof = this.#profile
-        this.#live.message(
+        return this.#live.message(
           ws,
           data,
           prof ? (kind, work) => prof.run(`ws ${kind}`, work) : undefined,
