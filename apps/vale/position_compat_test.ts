@@ -5,6 +5,7 @@ import { loadVocab, metaDoc } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { storage } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
+import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { compile, lenses, lensesIn, packageEid, versions } from '@yaks/lens'
 import { docs as lensDocs } from '../../packages/lens/vocab.ts'
 import { club } from '../../packages/member/testing.ts'
@@ -25,7 +26,7 @@ let speaks = { [packageEid(app.package)]: 0 }
 let moment = '2026-10-03T18:00:00.000Z', time = Date.parse(moment)
 let person = { by: 'kim', via: 'browser' }
 let value = (row: Bundle, name: string) => row[name] as Record<string, unknown>
-let setup = async (guard = false, expanded = false) => {
+let setup = async (guard = false, expanded = false, shuffled = false) => {
   let vocab = loadVocab([
     metaDoc,
     ...club.docs,
@@ -41,7 +42,28 @@ let setup = async (guard = false, expanded = false) => {
       }
       : app,
   ], [memberKeywords])
-  let storage = ram(vocab)
+  let data = ram(vocab)
+  let reordered = (value: unknown): unknown =>
+    value && typeof value == 'object'
+      ? Array.isArray(value) ? value.map(reordered) : Object.fromEntries(
+        Object.entries(value).reverse().map(([k, v]) => [k, reordered(v)]),
+      )
+      : value
+  let storage = shuffled
+    ? {
+      ...data,
+      tx: (body: (tx: import('@yaks/graph').Tx) => unknown) =>
+        data.tx((tx) =>
+          body({
+            ...tx,
+            get: (ids, names) =>
+              Promise.resolve(tx.get(ids, names)).then((rows) =>
+                rows.map((r) => reordered(r) as Bundle)
+              ),
+          })
+        ),
+    } as typeof data
+    : data
   let g = graph({
     vocab,
     storage,
@@ -564,10 +586,11 @@ test('deploying the Vale view preserves stored eid text when the request becomes
       type: 'string',
       index: true,
     }
-    let oldVocab = loadVocab([metaDoc, ...lensDocs, core, before])
+    let oldVocab = loadVocab([metaDoc, archetypeDoc, ...lensDocs, core, before])
     let oldGraph = graph({
       vocab: oldVocab,
       storage: storage(driver, oldVocab),
+      plugins: [archetypes()],
     })
     oldGraph.install()
     await oldGraph.apply([{
@@ -584,7 +607,7 @@ test('deploying the Vale view preserves stored eid text when the request becomes
       entity: { eid: 'pending-request' },
       teleport_request: { player: 'pending', level: 'mossvale', x: 8, z: 9 },
     }], { trusted: true, now: moment })
-    let vocab = loadVocab([metaDoc, ...lensDocs, core, {
+    let vocab = loadVocab([metaDoc, archetypeDoc, ...lensDocs, core, {
       ...app,
       $defs: { ...app.$defs, seen: declaration },
     }])
@@ -593,6 +616,7 @@ test('deploying the Vale view preserves stored eid text when the request becomes
       storage: storage(driver, vocab),
       plugins: [
         lenses(undefined, { vocab, rows: lensesIn([app]) }),
+        archetypes(),
       ],
     })
     g.install()
@@ -625,7 +649,57 @@ test('deploying the Vale view preserves stored eid text when the request becomes
       (await g.read('.seen.teleport=pending-request', { speaks })).length,
       1,
     )
+    ok(source.entity.archetype)
+    let rule = lensRule('vale-compat', app)!
+    let patches = (await g.read(rule.find, { native: true })).flatMap((row) =>
+      rule.move(row, (q) => g.read(q, { native: true }) as Bundle[])
+    )
+    await g.apply(signed(patches, null), { trusted: true })
+    equal((await g.read('.seen', { native: true })).length, 0)
+    equal((await g.read('.player .position')).length, 1)
+    equal((await g.read('.teleport_request .completed')).length, 1)
   } finally {
     driver.close()
+  }
+})
+
+test('equivalent transaction facts preserve old writes and mover patches despite object key order', async () => {
+  for (let move of [false, true]) {
+    for (let acknowledgement of [null, 'pending-request']) {
+      let g = await setup(false, true, true)
+      await g.apply([{
+        entity: { eid: 'pending' },
+        player: {},
+        seen: {
+          level: 'mossvale',
+          x: 8,
+          z: 9,
+          at: moment,
+          teleport: acknowledgement,
+        },
+      }, {
+        entity: { eid: 'pending-request' },
+        teleport_request: { player: 'pending', level: 'mossvale', x: 8, z: 9 },
+      }], { trusted: true, now: moment })
+      if (move) {
+        let rule = lensRule('vale-compat', app)!
+        let patches = (await g.read(rule.find, { native: true })).flatMap((
+          row,
+        ) => rule.move(row, (q) => g.read(q, { native: true }) as Bundle[]))
+        await g.apply(signed(patches, null), { trusted: true })
+      } else {
+        await g.apply([{
+          entity: { eid: 'pending' },
+          seen: { x: 88 },
+          $speaks: speaks,
+        }])
+      }
+      equal(value((await g.get(['pending']))[0], 'position').x, move ? 8 : 88)
+      equal((await g.read('.seen', { native: true })).length, 0)
+      equal(
+        (await g.read('.teleport_request .completed')).length,
+        acknowledgement ? 1 : 0,
+      )
+    }
   }
 })

@@ -69,7 +69,22 @@ type Check = {
   canonical?: boolean
 }
 let checked = '$lensCheck'
-let same = (a: unknown, b: unknown) => JSON.stringify(a) == JSON.stringify(b)
+// A transaction may gather the same facts in a different component order.
+// Identity pointers describe storage; the write's identity is its eid.
+let change = (rows: Bundle[]) =>
+  rows.map((row) => ({ ...row, entity: { eid: row.entity.eid } }))
+let canonical = (value: unknown): string | undefined =>
+  JSON.stringify(
+    value,
+    (_key, item) =>
+      item && typeof item == 'object' && !Array.isArray(item)
+        ? Object.fromEntries(
+          Object.entries(item).sort(([a], [b]) => a.localeCompare(b)),
+        )
+        : item,
+  )
+let same = (a: Bundle[], b: Bundle[]) =>
+  canonical(change(a)) == canonical(change(b))
 export let lenses = (
   report: (error: unknown) => void = (error) => console.error(error),
   pending?: { vocab: Vocab; rows: Bundle[] },

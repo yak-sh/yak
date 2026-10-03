@@ -365,10 +365,15 @@ export let stageViews = (
               source[name] == related.entity.eid)
         ) delete source[name]
       }
-      let moved = putViews([{ ...held, [v.from]: source }], [v], {
-        ...ctx,
-        migrate: true,
-      })
+      // Held components supply facts, not extra writes on the source.
+      let moved = putViews(
+        [{ entity: { eid: held.entity.eid }, [v.from]: source }],
+        [v],
+        {
+          ...ctx,
+          migrate: true,
+        },
+      )
       let base = moved[0]
       base[v.from] = null
       base.$actor = writer.$actor
