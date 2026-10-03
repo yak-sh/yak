@@ -76,6 +76,7 @@ export class Archetypes {
    * cached scalar says nothing about which entity currently carries it. */
   decode(value: unknown): Archetype {
     if (typeof value != 'string') return this.intern(tablesOf(value))
+    if (value.length > 8192) return this.intern(tablesOf(value))
     let found = this.byText.get(value)
     if (found) return found
     let set = this.intern(tablesOf(value))
