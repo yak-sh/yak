@@ -50,7 +50,7 @@ test('record excludes an interleaved apply and all its phases', async () => {
 })
 
 for (let async of [false, true]) {
-  test(`graph activity preserves legacy timing, rollback and hook args (${async})`, async () => {
+  test(`graph activity preserves rollback and hook args (${async})`, async () => {
     let audit: unknown
     let seen: Event[] = []
     let storage = memory()
@@ -76,16 +76,11 @@ for (let async of [false, true]) {
     })
     let c = channel(g)
     let off = c.subscribe((e) => seen.push(e))
-    let timings: string[] = []
     let out = g.apply(
       [{ entity: { eid: 'book-private' }, book: { pages: 7 } }],
       {
         check: true,
         parent: 'external',
-        trace: (name, ms) => {
-          timings.push(name)
-          ok(ms >= 0)
-        },
       },
     )
     equal(isPromise(out), async)
@@ -100,7 +95,7 @@ for (let async of [false, true]) {
     ) {
       ok(seen.some((e) => e.kind == 'phase' && e.name == name))
     }
-    ok(timings.includes('transaction'))
+    ok(seen.filter((e) => e.stage == 'end').every((e) => e.duration! >= 0))
     ok(!JSON.stringify(seen).includes('book-private'))
     off()
     equal(peek(g), undefined)
@@ -232,8 +227,8 @@ for (let inactive of [false, true]) {
 }
 
 for (let async of [false, true]) {
-  test(`subscribing does not change legacy trace frequency (${async})`, async () => {
-    let record = async (observed: boolean) => {
+  test(`another subscriber does not change recorded phases (${async})`, async () => {
+    let phases = async (observed: boolean) => {
       let store = memory()
       let g = graph({
         vocab: books,
@@ -248,19 +243,25 @@ for (let async of [false, true]) {
         }],
       })
       let off = observed ? channel(g).subscribe(() => {}) : () => {}
-      let phases: string[] = []
+      let names: string[] = []
       try {
         for (let check of [false, true]) {
-          await g.apply([
-            { entity: { eid: 'book' }, book: { pages: 1 } },
-          ], { check, trace: (name) => phases.push(name) })
+          let captured = await record(g, () =>
+            g.apply([
+              { entity: { eid: 'book' }, book: { pages: 1 } },
+            ], { check }))
+          names.push(
+            ...captured.spans.filter((e) => e.kind == 'phase').map((e) =>
+              e.name
+            ),
+          )
         }
-        return phases
+        return names
       } finally {
         off()
       }
     }
-    equal(await record(true), await record(false))
+    equal(await phases(true), await phases(false))
   })
 }
 

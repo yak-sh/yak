@@ -72,8 +72,9 @@ notification, not a successful apply's continuation.**
 `@yaks/trace` owns measurement. Producers record names, stages, causal span IDs,
 monotonic times, finite counts and outcomes only while subscribers exist. No
 query text, entity values, payloads, credentials or secret values cross this
-stream. `apply(bundles, { trace })` remains the domain trace contract;
-performance observation does not repurpose persisted effects/trace components.
+stream. [`record(graph, run)`](../trace/README.md) captures one call’s span tree
+for timing an apply. Performance observation does not repurpose persisted
+effects/trace components.
 
 `observe(graph)` leases that exact graph's shared stream. It adds one local
 `epoch` and increasing `seq` to each shared record and retains at most 256.

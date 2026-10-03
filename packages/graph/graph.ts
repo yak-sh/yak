@@ -156,16 +156,11 @@ export type ApplyOpts = {
   check?: boolean
   /** Hold observers until an enclosing transaction commits. */
   deferEffects?: (run: () => void | Promise<void>) => void
-  /** Observe phase duration without changing the result. */
-  trace?: (
-    phase: Phase | 'gather' | 'transaction' | 'compose',
-    ms: number,
-  ) => void
 }
 
 /** Data options for a write, also usable across a thread boundary.
- * Trace callbacks and deferred effects belong to a local graph. */
-export type WriteOpts = Omit<ApplyOpts, 'trace' | 'deferEffects'>
+ * Deferred effects belong to a local graph. */
+export type WriteOpts = Omit<ApplyOpts, 'deferEffects'>
 
 /**
  * How a dry run leaves a transaction that has done all its work. The phases
@@ -315,7 +310,6 @@ type Timing = <T>(
   name: Phase | 'gather' | 'transaction' | 'compose',
   run: () => T | Promise<T>,
   plugin?: string,
-  compatibility?: boolean,
 ) => T | Promise<T>
 type Run = {
   admission: boolean
@@ -518,31 +512,6 @@ export let graph = (opts: Options): Graph => {
       ? signed(bundles, opts.actor)
       : bundles
 
-  let legacy = <T>(
-    o: ApplyOpts,
-    name: Phase | 'gather' | 'transaction' | 'compose',
-    run: () => T | Promise<T>,
-  ): T | Promise<T> => {
-    if (!o.trace) return run()
-    let start = performance.now()
-    let done = () => {
-      try {
-        o.trace?.(name, performance.now() - start)
-      } catch (e) {
-        console.error('graph trace observer failed', e)
-      }
-    }
-    try {
-      let out = run()
-      if (isPromise(out)) return out.finally(done)
-      done()
-      return out
-    } catch (e) {
-      done()
-      throw e
-    }
-  }
-
   // Synchronous phases use plain loops. A continuation is needed only when a
   // core, rule or hook yields; all registrations still come from the moment
   // the phase began, and each hook gets its own context.
@@ -566,7 +535,6 @@ export let graph = (opts: Options): Graph => {
               admission: run.admission,
             }),
           plugin,
-          false,
         )
         : h(bundles, tx, undefined, { graph: g, admission: run.admission })
       if (isPromise(out)) {
@@ -646,10 +614,9 @@ export let graph = (opts: Options): Graph => {
       name: Phase | 'gather' | 'transaction' | 'compose',
       run: () => T | Promise<T>,
       plugin?: string,
-      compatibility = true,
     ): T | Promise<T> => {
       let c = tracing && live(tracing) && peek(g)
-      if (!c) return compatibility ? legacy(o, name, run) : run()
+      if (!c) return run()
       let before = current
       let span = c.begin({
         kind: 'phase',
@@ -663,10 +630,7 @@ export let graph = (opts: Options): Graph => {
         current = before
       }
       try {
-        let out = during(
-          span,
-          () => compatibility ? legacy(o, name, run) : run(),
-        )
+        let out = during(span, run)
         if (isPromise(out)) {
           return out.then((value) => {
             restore()
@@ -790,7 +754,6 @@ export let graph = (opts: Options): Graph => {
                       parent: current,
                     }),
                   plugin,
-                  false,
                 )
                 : hook(out, outside))),
           () =>
@@ -817,7 +780,6 @@ export let graph = (opts: Options): Graph => {
                   admission,
                 }),
               plugin,
-              false,
             )
             : hook(b, outside, err, { graph: g, admission })
           return isPromise(out)
@@ -838,7 +800,7 @@ export let graph = (opts: Options): Graph => {
         throw err
       }
       let done = tracing && live(tracing) && peek(g)
-        ? timed('audit', () => auditing(bundles, err), undefined, false)
+        ? timed('audit', () => auditing(bundles, err))
         : auditing(bundles, err)
       return isPromise(done) ? done.then(raise) : raise()
     }
@@ -1023,18 +985,14 @@ export let graph = (opts: Options): Graph => {
         if (checking) return b
         let defer = o.deferEffects ?? opts.deferEffects
         if (!defer) {
-          return tracing
-            ? timed('effect', () => effects(b), undefined, false)
-            : effects(b)
+          return tracing ? timed('effect', () => effects(b)) : effects(b)
         }
         // Sample the calling program's clock while its transaction-scoped
         // context still exists.
         instant ??= o.now ?? opts.clock?.() ?? now
         defer(() =>
           after(
-            tracing
-              ? timed('effect', () => effects(b), undefined, false)
-              : effects(b),
+            tracing ? timed('effect', () => effects(b)) : effects(b),
             () => {},
           )
         )

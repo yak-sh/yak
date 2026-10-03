@@ -170,6 +170,8 @@ import {
   semantic,
 } from '@yaks/embedding'
 import { after, isPromise } from '@yaks/fp'
+import { type Event, record } from '@yaks/trace'
+import { phases } from './store-inspect.ts'
 import {
   type Actor,
   type AdmitOpts,
@@ -2632,12 +2634,18 @@ export class Store {
     request: Request,
     seq: number | null = null,
     opts: ApplyOpts = {},
+    spans?: Event[],
   ) {
     if (poured(request)) {
       if (opts.check) {
         return refuse(new Refused('streaming writes cannot be dry-run'))
       }
       return await this.#route(request)
+    }
+    let failed = (e: unknown) => {
+      let no = constrained(e)
+      caught(no, { request: 'write', store: this.#name() })
+      return refuse(no)
     }
     try {
       let body = JSON.parse(await readBody(request))
@@ -2647,25 +2655,35 @@ export class Store {
       let kernel = request.headers.get('x-yak-kernel') == '1'
       let who = kernel ? null : await this.#auth(request)
       body = this.#spokenWrites(request, body)
-      let out
-      this.#landing = seq
-      try {
-        out = kernel
-          ? this.#trust(body as Bundle[], vouchOf(request).person, opts)
-          : this.#graph.apply(signed(body as Bundle[], who), opts)
-      } finally {
-        this.#landing = null
+      let apply = async () => {
+        try {
+          let out
+          this.#landing = seq
+          try {
+            out = kernel
+              ? this.#trust(body as Bundle[], vouchOf(request).person, opts)
+              : this.#graph.apply(signed(body as Bundle[], who), opts)
+          } finally {
+            this.#landing = null
+          }
+          let applied = published(this.#vocab, await out)
+          // The durable log and internal effects keep canonical patches. Each
+          // caller, including a keyed resend, receives its own vocabulary view.
+          return json(
+            seq == null ? await this.#callerAnswer(request, applied) : applied,
+          )
+        } catch (e) {
+          return failed(e)
+        }
       }
-      let applied = published(this.#vocab, await out)
-      // The durable log and internal effects keep canonical patches. Each
-      // caller, including a keyed resend, receives its own vocabulary view.
-      return json(
-        seq == null ? await this.#callerAnswer(request, applied) : applied,
-      )
+      if (!spans) return apply()
+      // Parsing and auth have settled; the apply root begins inside record,
+      // before its callback yields. Refusals are responses, so their spans stay.
+      let captured = await record(this.#graph, apply)
+      spans.push(...captured.spans)
+      return captured.result
     } catch (e) {
-      let no = constrained(e)
-      caught(no, { request: 'write', store: this.#name() })
-      return refuse(no)
+      return failed(e)
     }
   }
 
@@ -2853,12 +2871,8 @@ export class Store {
         )
       )
       let physical = inspectStorage(this.#sql, 160, names)
-      let phases: Record<string, number> = {}
-      let start = performance.now()
-      let answer = await this.#commit(original, null, {
-        check: true,
-        trace: (phase, ms) => phases[phase] = (phases[phase] ?? 0) + ms,
-      })
+      let spans: Event[] = []
+      let answer = await this.#commit(original, null, { check: true }, spans)
       let applied = answer.ok ? (await answer.json() as Bundle[]).length : null
       return Response.json({
         physical,
@@ -2866,8 +2880,8 @@ export class Store {
           seq: n,
           status: answer.status,
           bundles: applied,
-          ms: performance.now() - start,
-          phases,
+          ms: spans[0]?.duration ?? 0,
+          phases: phases(spans),
         },
       })
     }

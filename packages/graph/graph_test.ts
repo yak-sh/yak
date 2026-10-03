@@ -4,6 +4,7 @@
 // synchronous.
 
 import { test } from '@yaks/testing'
+import { record } from '@yaks/trace'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import { isPromise } from '@yaks/fp'
@@ -51,20 +52,21 @@ test('outside reads whole committed state and evaluates bindings after each writ
 
 test('a traced dry run reports phases and leaves the graph unchanged', () => {
   let one = g()
-  let phases: string[] = []
-  let out = sync(one.apply([{ entity: { eid: 'b1' }, book: { pages: 7 } }], {
-    check: true,
-    trace: (phase, ms) => {
-      phases.push(phase)
-      assert(ms >= 0)
-    },
-  }))
+  let captured = record(one, () =>
+    one.apply([
+      { entity: { eid: 'b1' }, book: { pages: 7 } },
+    ], { check: true }))
+  assert(!isPromise(captured))
+  let out = sync(captured.result)
+  let phases = captured.spans.filter((span) => span.kind == 'phase')
+  assert(phases.every((span) => span.duration! >= 0))
+  let names = phases.map((span) => span.name)
   assertEquals(at(out, 'b1', 'book').pages, 7)
   assertEquals(one.get(['b1']), [])
-  assert(phases.includes('gather'))
-  assert(phases.includes('mutate'))
-  assert(phases.includes('transaction'))
-  assert(phases.includes('compose'))
+  assert(names.includes('gather'))
+  assert(names.includes('mutate'))
+  assert(names.includes('transaction'))
+  assert(names.includes('compose'))
 })
 
 for (let async of [false, true]) {

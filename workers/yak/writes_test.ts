@@ -114,10 +114,56 @@ test('inspection dry-runs a held write without changing it or the graph', async 
   assertEquals(result.dryRun.seq, 1)
   assertEquals(result.dryRun.status, 200)
   assertEquals(result.dryRun.bundles, 1)
-  assert(result.dryRun.phases.mutate >= 0)
+  assert(Number.isFinite(result.dryRun.ms) && result.dryRun.ms >= 0)
+  assertEquals(Object.keys(result.dryRun).sort(), [
+    'bundles',
+    'ms',
+    'phases',
+    'seq',
+    'status',
+  ])
+  assertEquals(Object.keys(result.dryRun.phases).sort(), [
+    'admit',
+    'cascade',
+    'commit',
+    'compose',
+    'gather',
+    'journal',
+    'mint',
+    'mutate',
+    'normalize',
+    'precondition',
+    'prepare',
+    'rules',
+    'stamp',
+    'transaction',
+  ])
+  assert(
+    Object.values(result.dryRun.phases).every((ms) =>
+      typeof ms == 'number' && Number.isFinite(ms) && ms >= 0
+    ),
+  )
   assert(
     result.physical.shown.some((t: { name: string }) => t.name == 'yak_writes'),
   )
+  assertEquals(await o.title('n1'), undefined)
+  assertEquals(o.writes('interrupted'), 1)
+
+  // A refused apply still supplies its completed phase spans to inspection.
+  let restore = poisoned(o, 'once')
+  try {
+    let refused = await o.fetch(new Request(path, { headers: KERNEL }))
+    assertEquals(refused.status, 200)
+    let failed = (await refused.json()).dryRun
+    assertEquals(failed.status, 500)
+    assertEquals(failed.bundles, null)
+    assert(failed.phases.mutate >= 0)
+    assert(failed.phases.transaction >= 0)
+    assertEquals(failed.phases.audit, undefined)
+    assertEquals(failed.phases.effect, undefined)
+  } finally {
+    restore()
+  }
   assertEquals(await o.title('n1'), undefined)
   assertEquals(o.writes('interrupted'), 1)
 })
