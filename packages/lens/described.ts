@@ -1,6 +1,7 @@
 import { type Bundle, type Comp, derivedEid, type Graph } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
 import { compile, type Speaks } from './compile.ts'
+import { history } from './steps.ts'
 
 /** The ordinary `_package{name}` identity. */
 export let packageEid = (name: string): string => derivedEid(`_package|${name}`)
@@ -27,18 +28,19 @@ export let lensesIn = (docs: VocabDoc[]): Bundle[] => {
   return rows
 }
 
-/** The step count a set of declaring documents speaks. */
+/** The latest step timestamp a set of declaring documents speaks. */
 export let versions = (docs: VocabDoc[]): Speaks => {
   let out: Speaks = Object.fromEntries(
     docs.filter((d) => d.package).map((d) => [packageEid(d.package!), 0]),
   )
+  let groups = new Map<string, { step: number }[]>()
   for (let b of lensesIn(docs)) {
     let s = b._lens as Comp
-    out[String(s.package)] = Math.max(
-      out[String(s.package)] ?? 0,
-      Number(s.step) + 1,
-    )
+    let pkg = String(s.package), steps = groups.get(pkg) ?? []
+    steps.push({ step: Number(s.step) })
+    groups.set(pkg, steps)
   }
+  for (let [pkg, steps] of groups) out[pkg] = history(steps).version
   return out
 }
 
@@ -50,14 +52,29 @@ export let described = async (
 ): Promise<Bundle[]> => {
   if (!g.vocab.comp('_lens')) return []
   let rows = lensesIn(docs)
+  if (!rows.length) return []
   let held = new Map(
-    (await g.get(rows.map((r) => r.entity.eid), ['_lens'])).map((
+    (await g.read('._lens')).map((
       r,
     ) => [r.entity.eid, r]),
   )
+  let latest = new Map<string, number>()
+  for (let row of held.values()) {
+    let step = row._lens as Comp, pkg = String(step.package)
+    latest.set(pkg, Math.max(latest.get(pkg) ?? -1, Number(step.step)))
+  }
   return rows.filter((r) => {
     let was = held.get(r.entity.eid)?._lens as Comp | undefined
-    if (!was) return true
+    if (!was) {
+      let step = r._lens as Comp
+      let newest = latest.get(String(step.package)) ?? -1
+      if (Number(step.step) <= newest) {
+        throw new Error(
+          `Lens: step ${step.step} must follow landed step ${newest}`,
+        )
+      }
+      return true
+    }
     if (JSON.stringify(was.ops) != JSON.stringify((r._lens as Comp).ops)) {
       throw new Error(`Lens: immutable step ${r.entity.eid} changed`)
     }

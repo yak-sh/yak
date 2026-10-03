@@ -187,3 +187,30 @@ test('find and put move seeded rows once through an expanded vocabulary', () => 
   equal(row.recipe, { title: 'Seed cake' })
   equal(row.doc, { title: 'Seed cake' })
 })
+
+test('landed timestamp steps are immutable and new steps must follow the retained history', async () => {
+  let early = 20261003140000, late = 20261004102000
+  let declaration = (step: number, to = 'doc.title') => ({
+    ...kitchen,
+    $defs: {
+      ...kitchen.$defs,
+      rename: {
+        lens: true,
+        step,
+        ops: [{ rename: { from: 'recipe.title', to } }],
+      },
+    },
+  })
+  let g = setup()
+  g.apply(await described(g, [declaration(late)]), { trusted: true })
+  equal(await described(g, [declaration(late)]), [])
+  await throws(
+    () => described(g, [declaration(late, 'doc.body')]),
+    'immutable step',
+  )
+  await throws(
+    () => described(g, [declaration(early)]),
+    'must follow landed step',
+  )
+  equal((await described(g, [declaration(20261005102000)])).length, 1)
+})

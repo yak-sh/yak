@@ -16,6 +16,7 @@ import {
   val,
 } from '@yaks/sql'
 import { driver } from './native.ts'
+import { open } from './db.ts'
 import { storage } from './mod.ts'
 import { mem, shop } from './testing.ts'
 
@@ -118,5 +119,29 @@ test('failed row decoding releases a cached write before rollback and the next s
     tx({ t: 'release', name: 'nested' }, { t: 'release', name: 'next' })
   } finally {
     db.close()
+  }
+})
+
+test('native integer values round-trip beyond 32 bits', () => {
+  let sql = open(':memory:')
+  try {
+    sql.query({
+      t: 'create table',
+      name: 'numbers',
+      cols: [{ name: 'value', type: 'integer' }],
+    })
+    for (
+      let value of [20261003140000, -20261003140000, Number.MAX_SAFE_INTEGER]
+    ) {
+      sql.query({
+        t: 'insert',
+        into: 'numbers',
+        cols: ['value'],
+        rows: [[val(value)]],
+      })
+      assertEquals(scan(sql, 'numbers', undefined, ['value']).at(-1), { value })
+    }
+  } finally {
+    sql.close()
   }
 })

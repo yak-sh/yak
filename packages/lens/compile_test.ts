@@ -220,3 +220,100 @@ test('authored steps pass vocabulary loading and derive the declared identities'
     }])
   )
 })
+
+test('timestamp histories accept gaps, compose sorted suffixes and speak per package', () => {
+  let early = 20261003140000, late = 20261004102000
+  let declaration = (
+    packageName: string,
+    step: number,
+    from: string,
+    to: string,
+  ) => ({
+    package: packageName,
+    $defs: { change: { lens: true, step, ops: [{ rename: { from, to } }] } },
+  })
+  let docs = [
+    declaration('kitchen', late, 'recipe.name', 'recipe.heading'),
+    declaration('other', early, 'note.title', 'note.name'),
+    declaration('kitchen', early, 'recipe.title', 'recipe.name'),
+  ]
+  let rows = lensesIn(docs), other = packageEid('other')
+  equal(versions(docs), { [pkg]: late, [other]: early })
+  let whole = compile(rows)
+  equal(
+    whole.put(b({ recipe: { title: 'Cake' } })),
+    b({ recipe: { heading: 'Cake' } }),
+  )
+  equal(
+    whole.get(b({ recipe: { heading: 'Cake' } })),
+    b({ recipe: { title: 'Cake' } }),
+  )
+  let suffix = compile(rows, { [pkg]: early })
+  equal(
+    suffix.put(b({ recipe: { name: 'Cake' }, note: { title: 'Old note' } })),
+    b({ recipe: { heading: 'Cake' }, note: { title: 'Old note' } }),
+  )
+  equal(
+    suffix.get(b({ recipe: { heading: 'Cake' } })),
+    b({ recipe: { name: 'Cake' } }),
+  )
+  equal(suffix.ask(parse('.recipe.name~=cake')), parse('.recipe.heading~=cake'))
+  let current = b({ recipe: { heading: 'Cake' } })
+  ok(compile(rows, versions(docs)).put(current) === current)
+  // A cutoff describes all changes up to that timestamp, even in a gap.
+  equal(
+    compile(rows, { [pkg]: 20261003235959 }).put(
+      b({ recipe: { name: 'Cake' } }),
+    ),
+    current,
+  )
+})
+
+test('timestamp histories retain landed pilot count clients', () => {
+  let late = 20261004102000
+  let updated = [...rows, {
+    entity: { eid: 'later' },
+    _lens: {
+      package: pkg,
+      step: late,
+      ops: [{ rename: { from: 'doc.title', to: 'doc.heading' } }],
+    },
+  }]
+  equal(
+    compile(updated, { [pkg]: 0 }).put(b({ recipe: { title: 'Cake' } })),
+    b({ recipe: {}, doc: { heading: 'Cake' } }),
+  )
+  equal(
+    compile(updated, { [pkg]: 1 }).put(b({ doc: { title: 'Cake' } })),
+    b({ doc: { heading: 'Cake' } }),
+  )
+  equal(
+    compile(updated, { [pkg]: 1 }).get(b({ doc: { heading: 'Cake' } })),
+    b({ doc: { title: 'Cake' } }),
+  )
+})
+
+test('timestamp histories refuse duplicate steps, invalid dates and future caller versions', async () => {
+  let declaration = (step: number) => ({
+    ...rows[0],
+    _lens: { ...(rows[0]._lens as object), step },
+  })
+  for (
+    let step of [
+      20260230010101,
+      20261303140000,
+      20261003146000,
+      20261003140000.5,
+      NaN,
+      -1,
+    ]
+  ) {
+    await throws(() => compile([declaration(step)]))
+  }
+  let step = declaration(20261003140000)
+  await throws(() => compile([step, step]), 'duplicate step')
+  await throws(
+    () => compile([step], { [pkg]: 20261004102000 }),
+    'unknown version',
+  )
+})

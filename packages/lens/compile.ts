@@ -1,4 +1,5 @@
 import type { Bundle, Comp } from '@yaks/graph'
+import { history } from './steps.ts'
 import { document, type DocumentLens, type Json } from './document.ts'
 import {
   and,
@@ -11,7 +12,7 @@ import {
   want,
 } from '@yaks/query'
 
-/** A caller's step count, keyed by the declaring package's eid. */
+/** A caller's latest step timestamp, keyed by the declaring package's eid. */
 export type Speaks = Record<string, number>
 /** The pilot's single operation. Paths name a component and one property. */
 export type Rename = { rename: { from: string; to: string } }
@@ -103,52 +104,49 @@ let identity: Lens = {
 }
 let cache = new Map<string, Lens>()
 
-/** Compile stored `_lens` rows once. Missing `speaks` means version zero for
- * moving old stored rows; a plugin bypasses compilation for current callers.
- * Rows must describe contiguous, immutable steps in each package. */
+/** Compile stored `_lens` rows once. Missing `speaks` means before all steps
+ * for moving stored rows; a plugin bypasses compilation for current callers.
+ * Each package's immutable timestamp steps run in order. */
 export let compile = (rows: Bundle[], speaks?: Speaks): Lens => {
-  let steps = rows.filter((r) => r._lens).map((r) => r._lens as Comp)
-    .toSorted((a, b) =>
-      String(a.package).localeCompare(String(b.package)) ||
-      Number(a.step) - Number(b.step)
-    )
-  let key = JSON.stringify([steps, speaks])
-  let hit = cache.get(key)
-  if (hit) return hit
-  let totals: Speaks = {}
-  for (let s of steps) {
-    totals[String(s.package)] = (totals[String(s.package)] ?? 0) + 1
-  }
-  let counts: Speaks = {}
-  let pairs: Pair[] = []
-  for (let s of steps) {
+  let groups = new Map<string, (Comp & { step: number })[]>()
+  for (let row of rows) {
+    if (!row._lens) continue
+    let s = row._lens as Comp & { step: number }
     if (typeof s.package != 'string' || !s.package) {
       fail('a step needs its package eid')
     }
     let pkg = String(s.package)
-    let n = counts[pkg] ?? 0
-    if (s.step !== n) fail(`package ${pkg} needs step ${n}, got ${s.step}`)
-    counts[pkg] = n + 1
-    if (!Array.isArray(s.ops)) fail(`step ${n} ops must be an array`)
-    let start = speaks ? speaks[pkg] ?? totals[pkg] : 0
-    if (!Number.isInteger(start) || start < 0) {
-      fail(`invalid version for ${pkg}`)
-    }
-    for (let op of s.ops as Rename[]) {
-      if (!op || !op.rename || Object.keys(op).length != 1) {
-        fail('only rename is supported')
-      }
-      let from = path(op.rename.from), to = path(op.rename.to)
-      if (from.join('.') == to.join('.')) fail('a rename must change its path')
-      if (Number(s.step) >= start) {
-        pairs.push({ from, to, change: document([{ rename: { from, to } }]) })
-      }
-    }
+    let steps = groups.get(pkg) ?? []
+    steps.push(s)
+    groups.set(pkg, steps)
   }
+  let ordered = [...groups].toSorted(([a], [b]) => a.localeCompare(b)).map(
+    ([pkg, steps]) => [pkg, history(steps, speaks ? speaks[pkg] : 0)] as const,
+  )
   for (let [pkg, version] of Object.entries(speaks ?? {})) {
-    if (
-      !Number.isInteger(version) || version < 0 || version > (counts[pkg] ?? 0)
-    ) fail(`unknown version ${version} for ${pkg}`)
+    if (!groups.has(pkg)) history([], version)
+  }
+  let key = JSON.stringify([ordered.map(([pkg, h]) => [pkg, h.steps]), speaks])
+  let hit = cache.get(key)
+  if (hit) return hit
+  let pairs: Pair[] = []
+  for (let [, { steps, remaining }] of ordered) {
+    let selected = new Set(remaining)
+    for (let s of steps) {
+      if (!Array.isArray(s.ops)) fail(`step ${s.step} ops must be an array`)
+      for (let op of s.ops as Rename[]) {
+        if (!op || !op.rename || Object.keys(op).length != 1) {
+          fail('only rename is supported')
+        }
+        let from = path(op.rename.from), to = path(op.rename.to)
+        if (from.join('.') == to.join('.')) {
+          fail('a rename must change its path')
+        }
+        if (selected.has(s)) {
+          pairs.push({ from, to, change: document([{ rename: { from, to } }]) })
+        }
+      }
+    }
   }
   let lens: Lens = !pairs.length ? identity : {
     put: (b) => put(b, pairs),

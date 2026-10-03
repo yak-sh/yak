@@ -6,11 +6,11 @@ read-view semantics through `compile(rows, speaks)`, plus `ask` for old query
 ASTs and `find` for stored rows still carrying old properties. This package owns
 the private `_lens{package, step, ops}` declarations and the graph plugin.
 
-| Export    | What it offers                                                                     |
-| --------- | ---------------------------------------------------------------------------------- |
-| `.`       | `document`, `compile`, `lensesIn`, `described`, `versions`, `packageEid`, `lenses` |
-| `./vocab` | Private `_lens{package, step, ops}` declarations                                   |
-| `./rules` | The graph's write normalization and read translations                              |
+| Export    | What it offers                                                                                                              |
+| --------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `.`       | `document`, `documentChain`, `compile`, `lensesIn`, `described`, `versions`, `packageEid`, `history`, `timestamp`, `lenses` |
+| `./vocab` | Private `_lens{package, step, ops}` declarations                                                                            |
+| `./rules` | The graph's write normalization and read translations                                                                       |
 
 JSON paths use dots, or arrays of keys for names containing dots and array
 indexes. A compiled operation list snapshots its declarations and copies only
@@ -84,29 +84,39 @@ declarations. Hoist/plunge destinations must be strictly shallower/deeper; paths
 cannot contain their own source. Array index moves address the resulting array
 after source consumption; `in` is useful for transforming array entries.
 
-For file formats, version steps are ordinary lists. Compile the suffix once for
-the version a caller holds; the inverse runs that suffix in reverse.
+Each change has a numeric UTC timestamp, written as `YYYYMMDDHHMMSS` (for
+example, `20261003140000`). Calendar dates are validated; steps need not be
+contiguous or authored in declaration order. A caller speaks one timestamp per
+package, meaning every change up to that timestamp. Translation applies only
+later steps, sorted by timestamp; the inverse runs them in reverse. Steps are
+immutable once landed. Re-stamp a branch's new step before landing if another
+branch has already landed a later timestamp; inserting an earlier step would
+change what an existing timestamp means.
+
+For JSON file formats, `documentChain(steps, speaks)` compiles that suffix. An
+omitted `speaks` (or zero) means before all changes. `history(steps).version`
+returns the current timestamp, or zero for an empty history. `document(ops)`
+remains the primitive for one operation list.
 
 ```ts
-import { document, type Op } from '@yaks/lens'
+import { documentChain, history, type Op } from '@yaks/lens'
 import { equal } from '@yaks/testing'
 
-let steps: Op[][] = [
-  [{ rename: { from: 'title', to: 'name' } }],
-  [{ rename: { from: 'name', to: 'heading' } }],
+let steps: { step: number; ops: Op[] }[] = [
+  { step: 20261003140000, ops: [{ rename: { from: 'title', to: 'name' } }] },
+  { step: 20261004102000, ops: [{ rename: { from: 'name', to: 'heading' } }] },
 ]
-let callerVersion = 1
-let lens = document(steps.slice(callerVersion).flat())
+let lens = documentChain(steps, 20261003140000)
 equal(lens.put({ name: 'Cake' }), { heading: 'Cake' })
 equal(lens.get({ heading: 'Cake' }), { name: 'Cake' })
+equal(history(steps).version, 20261004102000)
 ```
 
-The pilot stores graph steps as `_lens` rows and authors them with `lensesIn`.
-That registration currently accepts graph renames only. Declaration documents
-use the programmatic JSON operation lists above and require no graph rows. This
-split is a pilot format choice: document translation and its step-count versions
-work independently of a store, while query rewriting beyond graph renames
-remains future work.
+The graph stores steps as `_lens` rows and authors them with `lensesIn`. That
+registration currently accepts graph renames only. Declaration documents use the
+JSON operation lists above and require no graph rows. Graph and JSON histories
+share the timestamp ordering and cutoff rules; query rewriting beyond graph
+renames remains future work.
 
 The graph pilot uses comp.prop renames. A declaring vocabulary carries its
 package name and an ordinary `$defs` entry:
@@ -119,7 +129,7 @@ let docs = [{
   $defs: {
     title: {
       lens: true,
-      step: 0,
+      step: 20261003140000,
       ops: [
         { rename: { from: 'recipe.title', to: 'doc.title' } },
       ],
@@ -129,21 +139,28 @@ let docs = [{
 let lens = compile(lensesIn(docs))
 lens.put({ entity: { eid: 'cake' }, recipe: { title: 'Cake' } })
 // { entity: { eid: 'cake' }, recipe: {}, doc: { title: 'Cake' } }
-Object.values(versions(docs)) // [1]
+Object.values(versions(docs)) // [20261003140000]
 ```
 
 `lensesIn` reads entries ignored by `loadVocab`, derives the ordinary package
-and step identities, and validates each package's contiguous steps. `described`
+and step identities, and validates each package's timestamp history. `described`
 produces missing rows. Steps are append-only: changing operations at an existing
-step refuses instead of reinterpreting an old caller. `compile(rows, speaks)`
-composes the remaining steps and caches against their content and the package
-version map. Without `speaks` it starts at zero, for the mover. With current
-versions it returns identity functions.
+step or inserting a new step before a retained later step refuses instead of
+reinterpreting an old caller. `compile(rows, speaks)` composes the remaining
+steps and caches against their content and the package version map. Without
+`speaks` it starts at zero, for the mover. With current versions it returns
+identity functions.
 
-The plugin declares `$speaks`, a package-eid to step-count map on writes. Reads
-carry the same map in `ReadOpts.speaks`. No map means current: normalization
-returns the exact inputs, reads no rows, and asks parse nothing. A door can omit
-a current map to take that path.
+The plugin declares `$speaks`, a package-eid to latest-timestamp map on writes.
+Reads carry the same map in `ReadOpts.speaks`. No map means current:
+normalization returns the exact inputs, reads no rows, and asks parse nothing. A
+door can omit a current map to take that path.
+
+Landed pilot histories retain their original contiguous steps `0..n-1` and count
+versions `0..n` so deployed clients keep answering. A package may append
+timestamp steps after those retained steps; its current version then becomes the
+greatest timestamp. A pilot count still selects its original suffix plus all
+later timestamp steps. New declarations use timestamps.
 
 The graph adapter supports rename in this pilot. Omission is preserved, null
 clears a property, and moving a property retains `recipe{}`. Removing the source

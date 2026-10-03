@@ -1,3 +1,5 @@
+import { history } from './steps.ts'
+
 /** JSON documents have no graph vocabulary, storage or effects. */
 export type Json = null | boolean | number | string | Json[] | {
   [key: string]: Json
@@ -313,3 +315,11 @@ export let document = (ops: readonly Op[]): DocumentLens => {
     get: (value) => reverse.reduce((out, run) => run(out, true), value as Json),
   }
 }
+
+/** Compile the timestamp suffix of a JSON format's declared changes. Zero
+ * speaks before all changes, including when the argument is omitted. */
+export let documentChain = (
+  steps: readonly { step: number; ops: readonly Op[] }[],
+  speaks = 0,
+): DocumentLens =>
+  document(history(steps, speaks).remaining.flatMap(({ ops }) => [...ops]))

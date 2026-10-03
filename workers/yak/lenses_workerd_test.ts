@@ -43,7 +43,7 @@ test('a kept page speaks its vocabulary on writes, queries and socket pushes', a
           recipe: { properties: {} },
           titles: {
             lens: true,
-            step: 0,
+            step: 20261003140000,
             ops: [{ rename: { from: 'recipe.title', to: 'doc.title' } }],
           },
         },

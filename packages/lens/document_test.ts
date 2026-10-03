@@ -259,3 +259,21 @@ test('JSON prototype names stay ordinary keys through paths and scatter in both 
   equal(added, { constructor: { prototype: { polluted: true } } })
   equal(({} as Record<string, unknown>).polluted, undefined)
 })
+
+test('JSON timestamp chains translate only the ordered suffix and reverse it', async () => {
+  let { documentChain } = await import('./document.ts')
+  let early = 20261003140000, late = 20261004102000
+  let steps: { step: number; ops: Op[] }[] = [
+    { step: late, ops: [{ rename: { from: 'name', to: 'heading' } }] },
+    { step: early, ops: [{ rename: { from: 'title', to: 'name' } }] },
+  ]
+  let all = documentChain(steps), suffix = documentChain(steps, early)
+  equal(all.put({ title: 'Cake' }), { heading: 'Cake' })
+  equal(all.get({ heading: 'Cake' }), { title: 'Cake' })
+  equal(suffix.put({ name: 'Cake' }), { heading: 'Cake' })
+  equal(suffix.get({ heading: 'Cake' }), { name: 'Cake' })
+  let current = { heading: 'Cake' }
+  ok(documentChain(steps, late).put(current) === current)
+  steps[0].ops[0] = { rename: { from: 'broken', to: 'bad' } }
+  equal(suffix.put({ name: 'Cake' }), current)
+})

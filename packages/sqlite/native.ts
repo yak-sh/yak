@@ -81,6 +81,9 @@ let refs = (e: Expr): string[] => {
  * short. A rendered statement is always one.
  */
 export let prepared = (db: Database) => {
+  // SQLite integers are 64-bit. The library's default reader truncates them
+  // to 32 bits; safe JS integers must round-trip through every driver caller.
+  db.int64 = true
   let cache = new Map<string, ReturnType<Database['prepare']>>()
   let schema = db.prepare(
     render({ t: 'pragma', schema: 'main', name: 'schema_version' }).sql,

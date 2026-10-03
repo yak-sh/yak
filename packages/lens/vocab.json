@@ -5,7 +5,7 @@
       "type": "object",
       "wire": false,
       "identity": ["package", "step"],
-      "description": "One forward step in a package's vocabulary; steps 0 through n-1 speak version n.",
+      "description": "One immutable forward step in a package's vocabulary, named by a UTC YYYYMMDDHHMMSS timestamp.",
       "properties": {
         "package": {
           "type": "string",
@@ -16,7 +16,7 @@
         "step": {
           "type": "integer",
           "minimum": 0,
-          "description": "The zero-based forward step."
+          "description": "The UTC YYYYMMDDHHMMSS timestamp; landed pilot steps retain their original zero-based names."
         },
         "ops": {
           "type": "array",
