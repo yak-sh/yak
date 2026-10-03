@@ -24,6 +24,12 @@ work: file it and fix it in the package that owns it, never around it in
 apps/vale. Code that predates this is being moved (the tasks under "Mossvale's
 state lives in the page's graph").
 
+Hero positions relay between connected pages, and the server saves their latest
+value every thirty seconds. A returning hero resumes that position facing the
+default direction. Wildlife positions only relay. Teleport requests carry a
+`completed` mark once the addressed hero moves. Villager schedules read live
+player positions, so saved positions keep nobody awake after disconnect.
+
 Vale's chat slash commands use the shared browser-safe `@yaks/cli/grammar` for
 parsing (`argsFor`) and completion (`complete`). Command arguments accept both
 `--name=value` and `--name value`. Commands declare `positional` beside `input`;
