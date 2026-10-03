@@ -7,7 +7,7 @@
     "./rules": "./rules.ts"
   },
   "license": "Apache-2.0",
-  "description": "Defines provider-neutral model requests and replies, plus graph components for providers, models, and tools, without implementing a transport.",
+  "description": "Defines provider-neutral model request and reply types, vocabulary for providers and models, and helpers for billing and recovering generated media. Implements no transport.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },
