@@ -2533,14 +2533,18 @@ export class Store {
     )
   }
 
-  #callerAnswer(
+  async #callerAnswer(
     request: Request,
     rows: Bundle[],
-  ): Bundle[] | Promise<Bundle[]> {
+  ): Promise<Bundle[]> {
     let opts = spoken(request)
-    return opts.speaks
-      ? this.#graph.answer(rows, { ...opts, patch: true })
-      : rows
+    let visible = published(this.#vocab, rows)
+    return published(
+      this.#vocab,
+      opts.speaks
+        ? await this.#graph.answer(visible, { ...opts, patch: true })
+        : visible,
+    )
   }
 
   #spokenWrites(request: Request, rows: Bundle[]): Bundle[] {
