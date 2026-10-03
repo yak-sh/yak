@@ -22,6 +22,8 @@ let heroes = await read('seen'),
 let declaration = words.$defs.saved_position.ops[0].view.declaration
 let doc = { ...words, $defs: { ...words.$defs, seen: declaration } }
 let vocab = loadVocab([metaDoc, ...lensDocs, doc, core, wake])
+let oldWords = JSON.parse(await Deno.readTextFile(`${dir}/old-vocab.json`))
+let oldVocab = loadVocab([metaDoc, ...lensDocs, oldWords, core, wake])
 try {
   await Deno.remove(`${dir}/rehearsal.db`)
 } catch (e) {
@@ -29,17 +31,6 @@ try {
 }
 let driver = open(`${dir}/rehearsal.db`)
 try {
-  let g = graph({
-    vocab,
-    storage: storage(driver, vocab),
-    plugins: [
-      lenses(undefined, {
-        vocab,
-        rows: lensesIn([lensDocAt('yourname/vale', words)]),
-      }),
-    ],
-  })
-  g.install()
   let clean = (row: Bundle): Bundle => ({
     entity: { eid: row.entity.eid },
     ...Object.fromEntries(
@@ -63,19 +54,44 @@ try {
       ]),
     ),
   })
-  await g.apply(
-    [...heroes, ...requests, ...villagers].map(clean).concat([
-      {
-        entity: { eid: packageEid('@app/yourname/vale') },
-        _package: { name: '@app/yourname/vale' },
-      },
-      ...lensesIn([lensDocAt('yourname/vale', words)]),
-    ]),
+  let old = graph({ vocab: oldVocab, storage: storage(driver, oldVocab) })
+  old.install()
+  await old.apply([...heroes, ...requests, ...villagers].map(clean), {
+    trusted: true,
+    stamp: false,
+  })
+  let g = graph({
+    vocab,
+    storage: storage(driver, vocab),
+    plugins: [
+      lenses(undefined, {
+        vocab,
+        rows: lensesIn([lensDocAt('yourname/vale', words)]),
+      }),
+    ],
+  })
+  g.install()
+  await g.apply([
     {
-      trusted: true,
-      stamp: false,
+      entity: { eid: packageEid('@app/yourname/vale') },
+      _package: { name: '@app/yourname/vale' },
     },
+    ...lensesIn([lensDocAt('yourname/vale', words)]),
+  ], { trusted: true, stamp: false })
+  let adopted = await g.read('.teleport_request', { native: true })
+  let original = new Map(
+    requests.map(clean).map((r) => [r.entity.eid, r.teleport_request]),
   )
+  for (let row of adopted) {
+    if (
+      JSON.stringify(row.teleport_request) !==
+        JSON.stringify(original.get(row.entity.eid))
+    ) {
+      throw new Error(
+        `request reference changed while fitting ${row.entity.eid}`,
+      )
+    }
+  }
   for (
     let opts of [{}, { speaks: versions([lensDocAt('yourname/vale', words)]) }]
   ) {
