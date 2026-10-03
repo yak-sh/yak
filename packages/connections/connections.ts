@@ -704,3 +704,30 @@ export let refresh = async (
   let oauth = await signIn(c, await held(c.graph.read, connection))
   return marking(c, connection, () => oauth.refresh(stale))
 }
+
+/** A selected account's bearer and optional website session, read privately
+ * from its vault. The session is not handed to browser-only API doors. */
+export let accountCredential = async (
+  ctx: Ctx,
+  owner: Eid,
+  integration: string,
+  as?: string,
+): Promise<
+  { connection: Bundle; bearer: string; session?: string } | undefined
+> => {
+  let connection = await pick(ctx.graph.read, owner, integration, as)
+  if (!connection) return undefined
+  let bearer = await credential(ctx, connection.entity.eid)
+  if (!bearer) return undefined
+  let raw = await reveal(ctx.vault, nameOf(connection), {
+    env: () => undefined,
+  })
+  let session: string | undefined
+  try {
+    let record = JSON.parse(raw ?? '{}')
+    session = typeof record.website_session == 'string'
+      ? record.website_session
+      : undefined
+  } catch { /* A pasted key is not an OAuth record. */ }
+  return { connection, bearer, ...session ? { session } : {} }
+}

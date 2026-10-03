@@ -61,6 +61,7 @@ export {
   registration,
 } from './clients.ts'
 export {
+  accountCredential,
   accountOf,
   attach,
   begin,
