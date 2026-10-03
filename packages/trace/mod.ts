@@ -4,6 +4,7 @@
  * depends only on the web platform, not on a graph, server or UI. */
 
 export type Kind =
+  | 'process-start'
   | 'apply'
   | 'phase'
   | 'rule'

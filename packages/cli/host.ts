@@ -112,6 +112,7 @@ import type { Command, Ctx } from './run.ts'
 import type { Anatomy, AnatomyObserver } from '@yaks/code/anatomy'
 import { roles as serveRoles, type Thread } from '@yaks/threads'
 export type { Thread } from '@yaks/threads'
+import { during, outcome, peek as tracing, type Span } from '@yaks/trace'
 import { nativeAnatomy, secretNames } from './anatomy.ts'
 
 export {
@@ -801,12 +802,51 @@ export let words = async (
  * It is injectable, so a test can assemble a host from modules it wrote inline
  * rather than files on disk.
  */
-export let compose = async (
+export let compose = (
   config: Config,
   roles: readonly Role[],
   load: Load = facet,
   opts: ComposeOpts = {},
 ): Promise<Served> => {
+  // The config exists before its graph does, so a consumer can subscribe to
+  // its channel before any startup work. No recorder is created by a host.
+  let c = tracing(config)
+  if (!c) return composed(config, roles, load, opts)
+  let root = c.begin({
+    kind: 'process-start',
+    name: '@yaks/cli.compose',
+    package: '@yaks/cli',
+  })
+  let part: Span | undefined
+  let next = (name: string) => {
+    part?.end()
+    part = c.begin({
+      kind: 'phase',
+      name: `@yaks/cli.compose.${name}`,
+      package: '@yaks/cli',
+      parent: root?.id,
+    })
+  }
+  return during(root, async () => {
+    try {
+      let host = await composed(config, roles, load, opts, next)
+      part?.end()
+      return host
+    } catch (error) {
+      part?.end({ outcome: outcome(error) })
+      throw error
+    }
+  }) as Promise<Served>
+}
+
+let composed = async (
+  config: Config,
+  roles: readonly Role[],
+  load: Load,
+  opts: ComposeOpts,
+  part?: (name: string) => void,
+): Promise<Served> => {
+  part?.('reporter')
   if (!roles.includes('graph')) {
     throw new Error('a host opens a graph — its roles include graph')
   }
@@ -820,12 +860,14 @@ export let compose = async (
   // option names read once now, so the option has it the first time a factory
   // looks. Only those: a secret code reads at the moment it is used (`reveal`)
   // is fetched then, and a command does not wait on 1Password for it.
+  part?.('vault')
   let vault = vaultOf(path)
   await warm(vault, (config.plugins ?? []).flatMap((p) => bound(given(p))))
   let secretDeclarations = (config.plugins ?? []).flatMap((p) =>
     secretNames(given(p)).map((name) => ({ name, package: used(p) }))
   )
   let plugins = named(config, vault)
+  part?.('roles')
   let observed = nativeAnatomy(
     plugins.map(([p]) => p),
     roles,
@@ -855,6 +897,7 @@ export let compose = async (
     roles.includes(role)
       ? taking(plugins, name, observedLoad)
       : Promise.resolve([])
+  part?.('facets')
   let [vocabs, graphs, watched, served, dressed, running] = await Promise.all([
     take('graph', 'vocab'),
     take('graph', 'graph'),
@@ -867,13 +910,18 @@ export let compose = async (
       observedLoad,
     ),
   ])
+  part?.('vocabulary')
   let { docs, vocab, derived, backed } = wordsOf(vocabs)
+  part?.('anatomy')
   observed.declarations(docs, vocab)
 
+  part?.('sqlite')
   let sql = open(path)
+  part?.('migrations')
   try {
     migrations(sql).ready()
     for (let statement of blobSchema()) sql.query(statement)
+    part?.('host')
     let chosen = plugins.find(([name]) => name == '@yaks/blob')?.[1].store as
       | Backend
       | undefined
@@ -1027,9 +1075,11 @@ export let compose = async (
     // line — goes through them. A factory is handed the host with nothing open
     // on it yet, the same promise `graph` makes: keep the reference, do not
     // call it.
+    part?.('extensions')
     let extend = graphs.flatMap(([r, options]) =>
       r.extend?.(host, options) ?? []
     )
+    part?.('storage')
     store = storage(sql, vocab, {
       derived,
       backed,
@@ -1037,7 +1087,9 @@ export let compose = async (
       number: config.numbers ?? false,
       adopt: config.adopt ?? false,
     })
+    part?.('install')
     store.install()
+    part?.('effects')
 
     // The registry, in every process: the effects the plugins' vocabularies
     // declare are what a commit owes, so whatever this process writes, the
@@ -1057,6 +1109,7 @@ export let compose = async (
           tags: { handler: job.handler },
         }),
     })
+    part?.('plugins')
     let contributed = graphs.flatMap(([r, options, plugin]) => {
       let made = r.plugins?.(host, options) ?? []
       observed.graph(plugin, made)
@@ -1074,6 +1127,7 @@ export let compose = async (
           'one back — add @yaks/id to plugins',
       )
     }
+    part?.('graph')
     g = graph({
       storage: host.storage,
       vocab,
@@ -1088,6 +1142,7 @@ export let compose = async (
     // declared effect has one handler, from whichever plugin gives it code,
     // and one this config gives no code has nothing to do here: its runs are
     // settled as done, not left owed to a process that will never come.
+    part?.('bindings')
     observed.graphed()
     let effecting = roles.includes('effects')
     observed.effects(new Map(), effecting)
@@ -1119,9 +1174,11 @@ export let compose = async (
     // created once the plugins have installed theirs. `adopt` brings the indexes
     // into line with what the vocabulary declares and rebuilds one that
     // drifted, and writes nothing on a start where nothing changed.
+    part?.('fts')
     if (text.length) adopt(sql, text, derived)
     // Each index owns its read. The search tool brings their ranked answers
     // together, then reads only the entities that will be returned.
+    part?.('search')
     let meanings = graphs.flatMap(([r, options]) =>
       r.meaning ? [r.meaning(host, options)] : []
     )
@@ -1178,6 +1235,7 @@ export let compose = async (
     // A plugin's own tools are listed from its vocabulary and run by its
     // `./tools`, imported the first time one of them is called.
     let generic = tier({ search: ranked, keywords: vocab.keywords })
+    part?.('tools')
     observed.tier(generic)
     let tools = made = [
       ...generic,
@@ -1201,6 +1259,7 @@ export let compose = async (
         })
       ),
     ]
+    part?.('runner')
     let replies = graphs.flatMap(([r, options]) =>
       r.reply ? [r.reply(host, options)] : []
     )
@@ -1332,6 +1391,7 @@ export let compose = async (
     // created would store a dangling id on its very first write. What a
     // process starting owes is owed when it starts working the effects
     // (@yaks/effects `start`), not here.
+    part?.('process')
     if (self && opts.process !== false) {
       await g.apply([started({ roles: [...roles] })])
     }

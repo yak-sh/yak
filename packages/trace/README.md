@@ -73,11 +73,12 @@ and concurrent subscribers keep their subscriptions and history.
 `Event` exports `id`, optional `parent`, `kind`, `name`, `stage`, monotonic
 `time`, optional `start` and `duration`, optional `package` and `plugin`,
 optional `outcome`, and numeric `counts`. Kinds are `apply`, `phase`, `rule`,
-`query`, `get`, `effect`, `request`, `fanout`, `sql`, and `bench`. Outcomes are
-`ok`, `check`, `refused`, `error`, and `interrupted`. A span's start and end
-share one string ID; pass that ID as a child's `parent`. IDs are channel-local,
-not durable or cross-process identities. `instant(activity, end?)` records a
-point event without an open span.
+`query`, `get`, `effect`, `request`, `fanout`, `sql`, `bench`, and
+`process-start`. Outcomes are `ok`, `check`, `refused`, `error`, and
+`interrupted`. A span's start and end share one string ID; pass that ID as a
+child's `parent`. IDs are channel-local, not durable or cross-process
+identities. `instant(activity, end?)` records a point event without an open
+span.
 
 Names identify code, not data. Producers must never include entity IDs, bundle
 values, query text, URLs, secrets or credentials. Counts contain only numeric
@@ -90,3 +91,27 @@ The channel owns no scheduler, durable telemetry, transport, API authentication
 or UI. SSE, tools and other views consume this same channel and own their queue,
 authorization and unsubscribe lifetimes. Activity from another process is not
 implicitly transported alongside graph replication.
+
+A `process-start` span records host startup, distinct from an `apply` span's
+`compose` phase. `@yaks/cli.compose` emits it on the config object's channel,
+with `phase` children for its parts. Subscribe to that config before calling
+`compose`; subscribing to the graph after it opens cannot observe startup.
+
+```ts
+import { equal } from '@yaks/testing'
+import { channel } from '@yaks/trace'
+
+let config = {}
+let c = channel(config)
+let stop = c.subscribe(() => {})
+let root = c.begin({ kind: 'process-start', name: '@yaks/cli.compose' })
+let part = c.begin({
+  kind: 'phase',
+  name: '@yaks/cli.compose.sqlite',
+  parent: root?.id,
+})
+part?.end()
+root?.end()
+equal(c.history().at(-1)?.kind, 'process-start')
+stop()
+```
