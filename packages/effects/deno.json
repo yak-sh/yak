@@ -7,7 +7,7 @@
     "./tools": "./tools.ts"
   },
   "license": "Apache-2.0",
-  "description": "Runs isolated handlers for component creation, changes, and removal after a graph transaction has committed, with an optional durable ledger.",
+  "description": "Runs application code after graph changes commit, with isolated failures, an optional pool for persisted runs, and leases for work held by one process.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },
