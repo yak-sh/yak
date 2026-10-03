@@ -86,6 +86,34 @@ test('every query selects the same entities', () => {
   }
 })
 
+test('epoch millisecond properties resolve the same time bounds in both evaluators', () => {
+  let bs: Bundle[] = [
+    { entity: { eid: 'old' }, book: { price: NOW - 30_001 } },
+    { entity: { eid: 'boundary' }, book: { price: NOW - 30_000 } },
+    { entity: { eid: 'recent' }, book: { price: NOW - 29_999 } },
+    { entity: { eid: 'future' }, book: { price: NOW + 1 } },
+    { entity: { eid: 'missing' }, book: {} },
+  ]
+  let s = loaded(shop, bs)
+  let iso = new Date(NOW - 30_000).toISOString()
+  let cases: [string, string[]][] = [
+    ['.book.price<="30s ago"', ['boundary', 'old']],
+    ['.book.price<"30s ago"', ['old']],
+    ['.book.price>"30s ago"', ['future', 'recent']],
+    ['.book.price="30s ago"', ['boundary', 'recent']],
+    ['.book.price!="30s ago"', ['future', 'missing', 'old']],
+    [`.book.price>=${iso}`, ['boundary', 'future', 'recent']],
+    ['.book.price="30s ago...now"', ['boundary', 'recent']],
+    ['.book.price="30s ago,now"', ['boundary', 'recent']],
+    [`.book.price<=${NOW - 30_000}`, ['boundary', 'old']],
+    [`.book.price=${NOW - 30_000}`, ['boundary']],
+  ]
+  for (let [q, want] of cases) {
+    assertEquals(eids(matcher(q, shop, { now: NOW })(bs)).sort(), want, q)
+    assertEquals(eids(fromSql(s, q)).sort(), want, q)
+  }
+})
+
 test('a window cuts the whole alternation, on both sides', () => {
   let s = sql()
   let sides = [

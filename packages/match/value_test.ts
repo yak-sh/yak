@@ -82,3 +82,19 @@ test('a question the property cannot answer is refused, not guessed', () => {
   // an operand no number can equal is a constant false, which is exact
   assertFalse(hit('', 'cheap', 'number', 3))
 })
+
+test('numeric times compare against epoch milliseconds', () => {
+  for (let tag of ['time', 'number'] as const) {
+    let value = (ms: number) => tag == 'time' ? ago(ms) : NOW - ms
+    assert(hit('<=', '30s ago', tag, value(30_000)))
+    assert(hit('<', '30s ago', tag, value(30_001)))
+    assertFalse(hit('<', '30s ago', tag, value(30_000)))
+    assertFalse(hit('<=', '30s ago', tag, value(29_999)))
+    assertFalse(hit('<=', '30s ago', tag, null))
+    assert(hit('', '30s ago', tag, value(29_999)))
+    assertFalse(hit('', '30s ago', tag, value(0)))
+    assert(hit('!', '30s ago', tag, null))
+    assert(hit('>=', ago(30_000), tag, value(30_000)))
+    assertFalse(hit('>=', ago(30_000), tag, value(30_001)))
+  }
+})

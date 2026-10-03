@@ -357,8 +357,8 @@ let lowerScalar = (
 ): Frag | null => {
   let d = ctx.d
   if (op == EXISTS) return { sql: `${c} is not null`, params: [] }
-  if (tag == 'time' && op != '~') {
-    let t = d.time(c, op, value, ctx.now)
+  if ((tag == 'time' || tag == 'number') && op != '~') {
+    let t = d.time(c, op, value, ctx.now, tag)
     if (t) return t
   }
   if (op == '') return d.eq(c, value, tag, textAffinity)

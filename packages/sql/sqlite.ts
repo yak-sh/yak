@@ -84,7 +84,13 @@ export type Dialect = {
     textAffinity?: boolean,
   ) => Frag | null
   contains: (colExpr: string, value: string) => Frag | null
-  time: (colExpr: string, op: string, value: string, now: number) => Frag | null
+  time: (
+    colExpr: string,
+    op: string,
+    value: string,
+    now: number,
+    tag?: 'time' | 'number',
+  ) => Frag | null
   refEq: (colExpr: string, eids: string[], negate: boolean) => Frag
   refPresent: (colExpr: string, negate: boolean) => Frag
   // Membership in a list of any length. A host caps the parameters one
@@ -331,21 +337,24 @@ export let sqlite: Dialect = {
   ne,
   cmp,
   contains,
-  time: (c, op, value, now) => {
+  time: (c, op, value, now, tag = 'time') => {
     // `op` is '' for equals, '!' for not-equals (none of what equals selects),
     // otherwise a comparison. What each asks of a stamp is @yaks/query's
     // `timeEdges`, resolved against `now`; an operand that is not made of
     // phrases declines, and the ordinary scalar path handles it.
     let arms = timeEdges(op == '' || op == '!' ? '=' : op, value, now)
     if (!arms) return null
-    let hit = stampish(
-      c,
-      anyOf(
-        arms.map((a) =>
-          all(a.map(([o, ms]) => ({ sql: `${c} ${o} ?`, params: [iso(ms)] })))
-        ),
+    let inner = anyOf(
+      arms.map((a) =>
+        all(a.map(([o, ms]) => ({
+          sql: `${c} ${o} ?`,
+          params: [tag == 'number' ? ms : iso(ms)],
+        })))
       ),
     )
+    let hit = tag == 'number'
+      ? { sql: `(${c} is not null and ${inner.sql})`, params: inner.params }
+      : stampish(c, inner)
     return op == '!'
       ? { sql: `(coalesce(${hit.sql}, 0) = 0)`, params: hit.params }
       : hit

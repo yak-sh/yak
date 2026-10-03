@@ -13,9 +13,9 @@
 //   `~`          contains, case-insensitively; an empty operand means presence.
 //   < <= > >=    comparisons, and an absent property never compares true.
 //   exists       the property has a value.
-// A time-typed property reads its operand as time phrases first (@yaks/query's
-// `timeEdges` says what each operator asks of a stamp) and falls back to the
-// plain rules when the operand is no phrase at all.
+// Time and number properties read time phrases first (@yaks/query's `timeEdges`
+// says what each operator asks of a stamp). A number compares in epoch ms, a
+// time as ISO text; an operand that is no phrase follows the plain rules.
 //
 // A function here returns `null` where it cannot express the question exactly —
 // a comparison against an operand the property's type cannot hold. The caller
@@ -134,20 +134,30 @@ export let contains = (value: string): Check => {
 let iso = (ms: number): string => new Date(ms).toISOString()
 
 /**
- * A time-typed property against a time phrase, resolved relative to `now`, by
+ * An ISO or epoch-ms property against a time phrase, resolved relative to `now`, by
  * the edges @yaks/query's `timeEdges` names: a comma list of phrases or ranges
  * of them is any-of under equals (none-of under not-equals), and a comparison
  * reads the operand as one phrase. Returns `null` when the operand is not made
  * of phrases, so the caller falls back to the plain rules.
  */
-export let time = (op: string, value: string, now: number): Check | null => {
+export let time = (
+  op: string,
+  value: string,
+  now: number,
+  tag: 'time' | 'number' = 'time',
+): Check | null => {
   let arms = timeEdges(op == '' || op == '!' ? '=' : op, value, now)
   if (!arms) return null
   let tests = arms.map((all) =>
-    all.map(([o, ms]): Check => (v) => rel(String(v), iso(ms), o))
+    all.map(([o, ms]): Check =>
+      tag == 'number'
+        ? (v) => rel(Number(v), ms, o)
+        : (v) => rel(String(v), iso(ms), o)
+    )
   )
   let hit: Check = (v) =>
-    stamp(v) && tests.some((all) => all.every((t) => t(v)))
+    (tag == 'number' ? v != null : stamp(v)) &&
+    tests.some((all) => all.every((t) => t(v)))
   return op == '!' ? (v) => !hit(v) : hit
 }
 
@@ -163,8 +173,8 @@ export let check = (
   now: number,
 ): Check | null => {
   if (op == EXISTS) return (v) => v != null
-  if (tag == 'time' && op != '~') {
-    let t = time(op, value, now)
+  if ((tag == 'time' || tag == 'number') && op != '~') {
+    let t = time(op, value, now, tag)
     if (t) return t
   }
   if (op == '') return eq(value, tag)
