@@ -56,8 +56,8 @@ let encounter = (item: string, gap: number) => {
     nearReady: () => false,
     settled: () => false,
     follow: () => {},
-    move: (changes: { entity: { eid: string }; [key: string]: unknown }[]) => {
-      for (let { entity, ...components } of changes) {
+    move: (bundles: { entity: { eid: string }; [key: string]: unknown }[]) => {
+      for (let { entity, ...components } of bundles) {
         rows[entity.eid] = { ...rows[entity.eid], entity, ...components }
       }
     },
