@@ -150,5 +150,5 @@ test('deployed resolves prior versions but keeps the serving version open', asyn
   await g.deployed(app, 2)
   let open = await g.unseen(app)
   equal(open.length, 1)
-  equal(open[0].bug?.fault, 'current')
+  equal((open[0].bug as Comp)?.fault, 'current')
 })

@@ -209,7 +209,10 @@ test('new conversation keeps its exact draft across remount, rejects blank words
   let { useRoute } = await import('../../live.ts')
   let sent: import('../../types.ts').Change[] = []
   let restore = useRoute((frame) => {
-    if ('apply' in frame) sent.push(...frame.apply)
+    if (
+      frame && typeof frame == 'object' && 'apply' in frame &&
+      Array.isArray(frame.apply)
+    ) sent.push(...frame.apply)
   })
   let actor = 'new-conversation-person'
   let words = '  Keep my spacing  \nSecond line\n'
@@ -263,7 +266,7 @@ test('new conversation keeps its exact draft across remount, rejects blank words
     )
     assertEquals(drafts.text(conversationPlace(actor)), ' \n ')
   } finally {
-    restore()
+    useRoute(restore)
     seen.free()
     cache.value = {}
   }
@@ -273,21 +276,28 @@ test('answering session links follow answers edges and repaint the session statu
   let { AnsweringSessions } = await import('./PersonInbox.tsx')
   let { mutate } = await import('../../live.ts')
   cache.value = {
-    root: { entity: { eid: 'root' }, conversation: {} },
+    root: { entity: { eid: 'root', num: 1 }, conversation: {} },
     answer: {
-      entity: { eid: 'answer' },
+      entity: { eid: 'answer', num: 2 },
       answers: {},
       edge: { from: 'aaaaaaaa-0000-4000-8000-000000000042', to: 'root' },
     },
     unrelated: {
-      entity: { eid: 'unrelated' },
+      entity: { eid: 'unrelated', num: 3 },
       answers: {},
       edge: { from: 'other', to: 'elsewhere' },
     },
     'aaaaaaaa-0000-4000-8000-000000000042': {
       entity: { eid: 'aaaaaaaa-0000-4000-8000-000000000042', num: 42 },
-      session: { status: 'running' },
-      doc: { title: 'Thread worker' },
+      session: {
+        eid: 'aaaaaaaa-0000-4000-8000-000000000042',
+        id: 'S-42',
+        status: 'running',
+      },
+      doc: {
+        eid: 'aaaaaaaa-0000-4000-8000-000000000042',
+        title: 'Thread worker',
+      },
     },
   }
   let seen = mount(<AnsweringSessions root='root' />)

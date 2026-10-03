@@ -1,13 +1,15 @@
 // Runtime entrypoints are the only Cloudflare inheritance in this Worker.
 // The graph, queue consumer and authenticated doors also run in RAM fixtures.
 import { DurableObject } from 'cloudflare:workers'
-import { Tracker as ObjectStore } from './object.ts'
+import { type State, Tracker as ObjectStore } from './object.ts'
 import { type Env, worker } from './worker.ts'
 import type { Bundle } from '@yaks/graph'
+import type { Wire } from '@yaks/durable-object'
+import type { Message } from './queue.ts'
 
 export class Tracker extends DurableObject<Env> {
   tracker: ObjectStore
-  constructor(ctx: DurableObjectState, env: Env) {
+  constructor(ctx: State, env: Env) {
     super(ctx, env)
     this.tracker = new ObjectStore(ctx, env)
   }
@@ -38,15 +40,16 @@ export class Tracker extends DurableObject<Env> {
   alarm() {
     return this.tracker.alarm()
   }
-  webSocketMessage(ws: WebSocket, data: string | ArrayBuffer) {
+  webSocketMessage(ws: Wire, data: string | ArrayBuffer) {
     return this.tracker.webSocketMessage(ws, data)
   }
-  webSocketClose(ws: WebSocket) {
+  webSocketClose(ws: Wire) {
     return this.tracker.webSocketClose(ws)
   }
 }
 export default {
   fetch: (request: Request, env: Env) => worker(env).fetch(request),
-  queue: (batch: MessageBatch, env: Env) => worker(env).queue(batch.messages),
-  scheduled: (_event: ScheduledEvent, env: Env) => worker(env).scheduled(),
+  queue: (batch: { messages: Message[] }, env: Env) =>
+    worker(env).queue(batch.messages),
+  scheduled: (_event: unknown, env: Env) => worker(env).scheduled(),
 }
