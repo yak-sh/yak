@@ -237,7 +237,7 @@ test('user-only skills are absent from model discovery and refused by the loader
       entity: { eid: 'session' },
       home: { worktree: 'missing' },
     }])
-    await assertRejects(() => skillCwd(h.g, 'session', at.repo), Refused)
+    assertEquals(await skillCwd(h.g, 'session', at.repo), undefined)
   } finally {
     h.close()
     await at.free()
