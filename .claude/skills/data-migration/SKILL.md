@@ -57,8 +57,13 @@ M-37965 recover on its own); this is how to follow them.
    left behind have filled it.
 3. **Back up.** `bin/backup` takes 8 to 20 minutes and holds a lock. If a run
    finished minutes ago, `git -C ~/.yak log -1` shows it and it will do.
-4. **Run it live.** Rewriting rows can run with `yak` up. Dropping a column or
-   renaming a table needs `systemctl --user stop yak` first and `start` after.
+4. **Run it live when the code that reads the new shape goes live, never
+   before.** The running `yak serve` and `yak-work@` processes run the code
+   they started with, so rows moved ahead of a landing and a restart are rows
+   they can no longer find. Land the code, then run the migration and
+   `yak restart` back to back. A session cannot restart the live server: it
+   lands, asks on its task, and the locus runs both. A change that drops a
+   column or renames a table is the same, done in that one sitting.
 5. **Delete the script** in the next commit. Its commit is the record; say in
    the message what moved, with counts.
 
