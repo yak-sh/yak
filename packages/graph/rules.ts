@@ -50,7 +50,7 @@ import { type Context, during, live as observed } from '@yaks/trace'
 // @yaks/logic's unification, planned). A rule that tries it is refused rather
 // than silently compared against the literal text `Now.at`.
 
-import { matcher, type Select } from '@yaks/match'
+import { index, matcher, type Select } from '@yaks/match'
 import {
   type And,
   declared,
@@ -278,11 +278,17 @@ let words = (f: And): string[] =>
 // Compiled once per rule, per vocabulary. Keyed by the rule object, so this is
 // a memo rather than a registry — two graphs sharing a plugin share the
 // compilation only while they use the same vocabulary.
-let cache = new WeakMap<Rule, { v: Vocab; ready: Ready }>()
+let cache = new WeakMap<
+  Rule,
+  { v: Vocab; match: Rule['match']; key: string; ready: Ready }
+>()
 
 let compile = (r: Rule, v: Vocab): Ready => {
+  let key = typeof r.match == 'string' ? r.match : JSON.stringify(r.match)
   let hit = cache.get(r)
-  if (hit && hit.v == v) return hit.ready
+  if (hit && hit.v == v && hit.match === r.match && hit.key == key) {
+    return hit.ready
+  }
   let ast: Ast = typeof r.match == 'string'
     ? parse(r.match, { text: false })
     : r.match
@@ -324,7 +330,7 @@ let compile = (r: Rule, v: Vocab): Ready => {
       if (words(d.filter).every((c) => !!v.comp(c))) throw e
     }
   }
-  cache.set(r, { v, ready })
+  cache.set(r, { v, match: r.match, key, ready })
   return ready
 }
 
@@ -420,6 +426,7 @@ export let fire = (
     written.set(eid, names)
   }
   let views = [...seen.values()]
+  let among = index(views)
   let positions = new Map(views.map((v, i) => [v.entity.eid, i]))
   // Built once, however many rules name it: `#Now` is a single timestamp for
   // the whole phase because the resource is called once for the whole phase.
@@ -431,7 +438,7 @@ export let fire = (
   // Every match is evaluated before any rule acts.
   let hits: [Rule, Ready, number][] = []
   for (let [r, ready, test] of live) {
-    test(views).forEach((v) => {
+    test(among).forEach((v) => {
       if (
         tick.phase == 'effect' && ready.checked &&
         !ready.writes.some((name) => written.get(v.entity.eid)?.has(name))

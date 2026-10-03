@@ -6,6 +6,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { isPromise } from '@yaks/fp'
+import { parse } from '@yaks/query'
 import { graph } from './graph.ts'
 import type { Bundle } from './bundle.ts'
 import type { Phase, Plugin } from './plugin.ts'
@@ -200,3 +201,24 @@ test('a rule about an unknown component is inert', () => {
   let out = sync(one.apply([{ entity: { eid: 'b1' }, book: { pages: 412 } }]))
   assertEquals(comp(out.find((b) => b.book), 'book'), { pages: 412 })
 })
+
+for (let ast of [false, true]) {
+  test(`changed rule matches replace warmed predicates (${ast})`, () => {
+    let query = '.book.pages>10 *book'
+    let rule: Rule = {
+      phase: 'precondition',
+      match: ast ? structuredClone(parse(query)) : query,
+      produce: { book: { shelved: true } },
+    }
+    let one = g([{ name: 'shelf', rules: [rule] }])
+    let input = (eid: string) => [{ entity: { eid }, book: { pages: 20 } }]
+    assertEquals(sync(one.admit(input('b1')))[0].book, {
+      pages: 20,
+      shelved: true,
+    })
+    query = '.book.pages<10 *book'
+    if (typeof rule.match == 'string') rule.match = query
+    else Object.assign(rule.match, parse(query))
+    assertEquals(sync(one.admit(input('b2')))[0].book, { pages: 20 })
+  })
+}
