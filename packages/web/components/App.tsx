@@ -1,11 +1,10 @@
-import { door, pagePath } from '../hosting.ts'
+import { door, hosting, pagePath } from '../hosting.ts'
 import { vocab } from '../types.ts'
 import { searchAt } from '../url.ts'
 import { entityPath } from '../url.ts'
 import { useEffect, useLayoutEffect } from 'preact/hooks'
 import { idOf } from '../types.ts'
 import { ent, mode, routeSub, row, serverName } from '../live.ts'
-import { queryPath } from '@yaks/inspect'
 import { block, Id, Tabs } from '@yaks/ui'
 import { filterable, FilterInput } from './Filter.tsx'
 import { applicable } from './registry.ts'
@@ -214,7 +213,7 @@ export let App = () => {
                       type='button'
                       aria-label='Inspect'
                       data-tip='Inspect'
-                      onClick={() => location.assign(queryPath())}
+                      onClick={() => location.assign(hosting().inspect!)}
                     >
                       <Icon name='table' />
                     </Tab>

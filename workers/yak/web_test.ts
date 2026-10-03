@@ -1,6 +1,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import * as apps from './apps.ts'
+import { PAGE } from '../../packages/inspect/routes.ts'
 import { ADA, ADA_OWNS, as, platform, seeded, visit } from './serving-probe.ts'
 
 let ELI = 'e0000000-0000-4000-8000-000000000001'
@@ -12,6 +13,8 @@ let assets = {
           '<html><head><link rel="manifest" href="/web/manifest.webmanifest"></head><body><script src="/web/app.js"></script></body></html>',
           { headers: { 'content-type': 'text/html' } },
         )
+        : new URL(req.url).pathname == '/_web/inspect/index.html'
+        ? new Response(PAGE)
         : new Response('asset', {
           headers: { 'content-type': 'text/javascript' },
         }),
@@ -33,6 +36,10 @@ test('app web is member-only even for open apps; mounts the store and signed-in 
       '/cookbook/_web',
       '/cookbook/_web/web/app.js',
       '/cookbook/_web/owner',
+      '/cookbook/_web/inspect',
+      '/cookbook/_web/inspect/q=.doc',
+      '/cookbook/_web/inspect/app.js',
+      '/cookbook/_web/inspect/styles.css',
     ]
   ) {
     let anonymous = await get(path)
@@ -47,6 +54,7 @@ test('app web is member-only even for open apps; mounts the store and signed-in 
   assertEquals(page.status, 200)
   let html = await page.text()
   assert(html.includes('"api":"/cookbook/api"'))
+  assert(html.includes('"inspect":"/cookbook/_web/inspect"'))
   assert(html.includes('crossorigin="use-credentials"'))
   assert(html.includes('src="/cookbook/_web/web/app.js?v='))
   assertEquals(await (await get('/cookbook/_web/owner', cookie)).json(), {
@@ -62,6 +70,28 @@ test('app web is member-only even for open apps; mounts the store and signed-in 
   assertEquals(
     await (await get('/cookbook/_web/owner', await as(ELI))).json(),
     { owner: ELI },
+  )
+  let inspect = await get('/cookbook/_web/inspect/q=.doc', cookie)
+  let inspector = await inspect.text()
+  assert(inspector.includes('globalThis.YAK_INSPECT='))
+  assert(inspector.includes('"page":"/cookbook/_web/inspect"'))
+  assert(inspector.includes('"api":"/cookbook/api"'))
+  assert(inspector.includes('src="/cookbook/_web/inspect/app.js?v='))
+  assert(inspector.includes('href="/cookbook/_web/inspect/styles.css?v='))
+  assertEquals(
+    await (await get('/cookbook/_web/inspect/app.js', cookie)).text(),
+    'asset',
+  )
+  assertEquals(
+    await (await get('/cookbook/_web/inspect/styles.css', cookie)).text(),
+    'asset',
+  )
+  assertEquals(
+    await (await apps.fetch(
+      visit('/cookbook/_web/inspect', { method: 'HEAD', headers: { cookie } }),
+      env,
+    )).text(),
+    '',
   )
   await dir.apply({
     entities: [{ entity: { eid: app.eid }, home: {} }],

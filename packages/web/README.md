@@ -18,8 +18,9 @@ entity addresses stay under that mount, while reads, writes and subscriptions
 use the app's existing `/api` doors. The vocabulary comes from `/api/vocab` in
 @yaks/api's `{docs, keywords}` envelope. A host without tasks or transcripts
 gets generic browsing instead of task/session queries and verbs; transcript
-chrome only asks for runtime columns the vocabulary actually declares. Box-only
-Inspect and the removed legacy freeze doors are not app operations.
+chrome only asks for runtime columns the vocabulary actually declares. The
+Inspect link opens the inspector over the same store at `/<app>/_web/inspect`.
+The legacy freeze door is not an app operation.
 
 `assets.ts` builds the same browser module, page and stylesheet the routes facet
 serves into a static host's directory. workers/yak builds them during its normal

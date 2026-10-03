@@ -2475,6 +2475,9 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     if (path.startsWith('/_web/web/')) {
       return webAsset(req, env, path.slice('/_web/web/'.length))
     }
+    if (path == '/_web/inspect/app.js' || path == '/_web/inspect/styles.css') {
+      return webAsset(req, env, path.slice('/_web/'.length))
+    }
     return webPage(req, env, url.pathname.slice(0, -path.length), who.person)
   }
   // The `/api/` doors stay the kernel's, always, and keep their own refusals,

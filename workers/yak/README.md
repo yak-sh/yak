@@ -513,7 +513,12 @@ envelope. The page declares `/<app>/api` for its wire and uses the signed-in
 person as the Inbox target. `/<app>/api/vocab` answers the shared docs+keywords
 wire, including borrowed docs; the Store's internal `/vocab` remains the app's
 manifest. The ordinary `/api/query` serves archetype rows and tallies already.
-Deployment preparation builds the package assets into ignored `public/_web`.
+The Inspect link opens `/<app>/_web/inspect`, the inspector over the same store
+and signed-in account. Its entity and query addresses stay under that mount;
+reads, writes and subscriptions use `/<app>/api`.
+
+Deployment preparation builds the package assets into ignored `public/_web`,
+including the inspector in `public/_web/inspect`.
 
 ### Remote terminal inspector
 

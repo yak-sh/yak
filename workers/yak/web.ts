@@ -10,6 +10,7 @@ export let webHost = (at: string): Hosting => ({
   api: at + '/api',
   apply: at + '/api/apply',
   owner: at + '/_web/owner',
+  inspect: at + '/_web/inspect',
 })
 export let webAsset = async (req: Request, env: Env, name: string) => {
   let response = await env.ASSETS.fetch(
@@ -52,25 +53,39 @@ export let webPage = async (
       headers: { 'cache-control': 'no-store' },
     })
   }
+  let inspect = path == at + '/_web/inspect' ||
+    path.startsWith(at + '/_web/inspect/')
   let asset = await env.ASSETS.fetch(
-    new Request(new URL('/_web/index.html', req.url)),
+    new Request(
+      new URL(
+        inspect ? '/_web/inspect/index.html' : '/_web/index.html',
+        req.url,
+      ),
+    ),
   )
   if (!asset.ok) return asset
   let host = { ...webHost(at), storage: `${at}:${person}` }
-  let page = (await asset.text()).replaceAll('/web/', host.page + '/web/')
+  let page = inspect
+    ? (await asset.text()).replaceAll('/inspect/', host.inspect + '/')
+    : (await asset.text()).replaceAll('/web/', host.page + '/web/')
   // Keep a cached browser page from mixing one deploy's JS with another.
   let version = encodeURIComponent(env.CF_VERSION_METADATA?.id ?? '')
-  page = page.replaceAll('/web/app.js"', `/web/app.js?v=${version}\"`)
-    .replaceAll('/web/styles.css"', `/web/styles.css?v=${version}\"`)
+  let assets = inspect ? '/inspect/' : '/web/'
+  page = page.replaceAll(assets + 'app.js"', `${assets}app.js?v=${version}"`)
+    .replaceAll(assets + 'styles.css"', `${assets}styles.css?v=${version}"`)
   page = page.replace(
     'rel="manifest"',
     'rel="manifest" crossorigin="use-credentials"',
   )
   // JSON lives as data, never executable text supplied by an app or person.
-  let data = JSON.stringify(host).replaceAll('<', '\\u003c')
+  let data = JSON.stringify(
+    inspect ? { page: host.inspect, api: host.api } : host,
+  ).replaceAll('<', '\\u003c')
   page = page.replace(
     '<head>',
-    `<head><script>globalThis.YAK_WEB=${data}</script>`,
+    `<head><script>globalThis.${
+      inspect ? 'YAK_INSPECT' : 'YAK_WEB'
+    }=${data}</script>`,
   )
   return new Response(req.method == 'HEAD' ? null : page, {
     headers: {

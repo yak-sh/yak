@@ -36,6 +36,7 @@ import { frame } from './Frame.ts'
 import { docs as own } from './front.ts'
 import type { View } from './host.ts'
 import { live } from './live.ts'
+import { apiPath } from './hosting.ts'
 import { editing, STACK } from './state.ts'
 import { HOME, queryPath, stackOf, stackPath } from './where.ts'
 import { composed } from './views.ts'
@@ -64,7 +65,7 @@ let near = (): { rows: HTMLElement[]; on: number } => {
 // The entities a line answers, asked of the server: a picker's candidates.
 let find = async (line: string, limit: number, signal?: AbortSignal) => {
   let q = encodeURIComponent(`${line}&.limit=${limit}`)
-  let r = await fetch(`/query?q=${q}`, { signal })
+  let r = await fetch(apiPath(`/query?q=${q}`), { signal })
   if (!r.ok) throw new Error(await r.text())
   return await r.json()
 }
@@ -72,10 +73,10 @@ let find = async (line: string, limit: number, signal?: AbortSignal) => {
 /** Draw the inspector on this page, with `more` views ahead of its own: the
  * ones the config's plugins contribute (./plugins.ts). */
 export let boot = async (more: View[] = []): Promise<void> => {
-  let { docs, keywords } = await (await fetch('/vocab')).json()
+  let { docs, keywords } = await (await fetch(apiPath('/vocab'))).json()
   let vocab = loadVocab(docs, keywords)
   let box = client(vocab, [], {
-    url: location.origin,
+    url: location.origin + apiPath(''),
     signal,
     vault: false,
     wireVault: false,

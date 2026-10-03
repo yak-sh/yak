@@ -10,6 +10,11 @@ drawn by one, that declares the queries it needs as data, draws what the host
 answers, and sends an edit out as bundles. The inspector's own state lives in
 the page's own graph.
 
+An app web serves it at `/<app>/_web/inspect`, over that app's store and
+signed-in account; its links stay under that mount and its transport uses
+`/<app>/api`. For example, `/notes/_web/inspect/q=.doc` reads the notes app's
+documents.
+
 It has a page of its own at `/inspect` and a terminal of its own, `yak inspect`:
 nothing of another package's app around it. A host that lists `@yaks/api` and
 this package serves it.

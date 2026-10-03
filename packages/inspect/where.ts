@@ -13,6 +13,8 @@
  * @module
  */
 
+import { hosting } from './hosting.ts'
+
 /** What a pane shows: the first page, a query's page, or an entity's. */
 export type At = { query?: string } | { id: string }
 
@@ -68,8 +70,8 @@ let segment = (pane: string) =>
  */
 export let stackPath = (panes: string[]): string =>
   !panes.length || panes.length == 1 && panes[0] == HOME
-    ? '/inspect'
-    : `/inspect/${panes.map(segment).join('/')}`
+    ? hosting().page
+    : `${hosting().page}/${panes.map(segment).join('/')}`
 
 /** Where the page for `query` is; with none, the first page. */
 export let queryPath = (query = ''): string => stackPath([paneOf({ query })])
@@ -107,7 +109,10 @@ let decoded = (s: string) => {
  */
 export let stackOf = (href: string): string[] | undefined => {
   let { pathname } = new URL(href, 'http://inspect.invalid')
-  if (pathname != '/inspect' && !pathname.startsWith('/inspect/')) return
-  let panes = pathname.split('/').slice(2).filter(Boolean).map(decoded)
+  let mount = hosting().page
+  if (pathname != mount && !pathname.startsWith(mount + '/')) return
+  let panes = pathname.slice(mount.length).split('/').filter(Boolean).map(
+    decoded,
+  )
   return panes.length ? panes : [HOME]
 }
