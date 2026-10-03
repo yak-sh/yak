@@ -10,6 +10,7 @@ import {
   externalWords,
   inboxHandlers,
   reusable,
+  threadPrompt,
 } from './answering.ts'
 import { at } from './testing.ts'
 
@@ -218,6 +219,32 @@ test('settled cache reuse is a model-window share and unknown observations start
     let [cold] = await g.read('.inbox_input.message=cold&?content')
     assertStringIncludes(String(c(cold, 'content').body), 'warm answer')
     assertStringIncludes(String(c(cold, 'content').body), 'cold')
+  } finally {
+    await h.close()
+  }
+})
+
+test('whole-thread input includes letters from the shared discussion read', async () => {
+  let h = await fresh(), g = h.graph
+  try {
+    await g.apply([
+      input('thread'),
+      {
+        entity: { eid: 'letter' },
+        mail: {
+          target: 'thread',
+          from: 'person@example.test',
+          to: 'inbox@example.test',
+          message_id: 'received',
+        },
+        doc: { body: 'Words that came by mail' },
+        $actor: { by: 'person' },
+      },
+      input('comment', 'thread'),
+    ])
+    let prompt = await threadPrompt(g, 'thread', 'person')
+    assertStringIncludes(prompt, 'Words that came by mail')
+    assertStringIncludes(prompt, 'comment')
   } finally {
     await h.close()
   }

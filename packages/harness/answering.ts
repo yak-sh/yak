@@ -24,6 +24,7 @@ import {
 } from '@yaks/session'
 import type { Host } from '@yaks/cli/host'
 import { seed } from './agent.ts'
+import { discussion, words as declaredWords } from '@yaks/inbox/queries'
 import { cachedPrefixExpires } from '@yaks/model'
 
 export type InboxOptions = {
@@ -73,9 +74,9 @@ export let externalWords = async (
   let writers = ids.length ? await g.get(ids) : []
   if (
     writers.some((writer) =>
-      ['session', 'effect', 'builder', 'process', 'call', 'tool'].some((name) =>
-        writer[name]
-      )
+      ['session', 'effect', 'builder', 'process', 'call', 'tool', 'role'].some((
+        name,
+      ) => writer[name])
     )
   ) return false
   if (b.mail) {
@@ -120,7 +121,11 @@ export let threadPrompt = async (
   extra: Bundle[] = [],
 ): Promise<string> => {
   let roots = await g.get([root, person])
-  let messages = await g.read(`.comment.target=${root}&*`)
+  let query = discussion(
+    roots.filter((b) => b.entity.eid == root).map(row),
+    declaredWords(g.vocab),
+  )
+  let messages = query ? await g.read(query) : []
   let all = [...roots, ...messages]
   let thread = threads(all.map(row), readerAt(all.map(row), person), {
     all: true,
@@ -178,17 +183,16 @@ export let answering = (g: Graph, o: AnsweringOptions) => {
       let session: string | undefined
       if (claim) {
         let [owner] = await g.get([claim])
-        if (
-          owner?.process ||
-          !(await g.read(`.entry.session=${claim}&.using&.limit=1`)).length
-        ) return // the claim's outside listener owns this exception
-        if (owner?.session && working(statusOf(await transcript(g, claim)))) {
+        let entries = await transcript(g, claim)
+        if (owner?.session && working(statusOf(entries))) {
+          if (owner.process || !entries.some((b) => b.using)) return
+          // An outside task claim is the sole legacy-listener exception.
           session = claim
         }
       }
       if (!session) {
         let prior = await g.read(
-          `.answers&.edge.to=${root}&?edge&.order=-created.at`,
+          `.answers&.edge.to=${root}&?edge&.order=-created.at&.limit=1`,
         )
         for (let edge of prior) {
           let id = String(comp(edge, 'edge').from)
