@@ -44,6 +44,7 @@ import {
   narrow,
   type Query as Sub,
   type Raw,
+  render,
   type Row,
   screen,
   type Select,
@@ -349,6 +350,192 @@ let probe = (vocab: Vocab, names: string[], owners: number[]): Select =>
     where: eq(col('column2', 'worn'), lit(true)),
   })
 
+// A previous table set is only a guess about which read to prepare. The read
+// always fetches the current spine, descriptor and component values together;
+// a descriptor that names another table sends it through the ordinary gather.
+let shapes = new WeakMap<
+  Driver,
+  WeakMap<Vocab, Map<string, readonly string[]>>
+>()
+let stored = new WeakMap<Vocab, Set<string>>()
+let readable = (vocab: Vocab) => at(stored, vocab, () => new Set(tables(vocab)))
+type Joined = { statement: Raw; names: string[]; props: string[][] }
+let joined = new WeakMap<
+  Vocab,
+  WeakMap<object, WeakMap<object, Map<string, Joined | null>>>
+>()
+let bounded = <K, V>(cache: Map<K, V>, key: K, value: V, limit: number) => {
+  if (cache.size >= limit && !cache.has(key)) {
+    cache.delete(cache.keys().next().value!)
+  }
+  cache.set(key, value)
+  return value
+}
+
+// Each facet's references and derived dependencies have their own scope.
+// Inline joins retain indexed owner probes; a LEFT JOIN over a subquery with
+// its own joins would make SQLite materialize that facet's entire table.
+let scoped = (
+  p: Projection,
+  name: string,
+  prefix: string,
+): Projection | null => {
+  let aliases = new Map([[name, prefix]])
+  for (let j of p.joins) {
+    if (j.src.t != 'table') return null
+    let alias = j.src.as ?? j.src.name
+    aliases.set(alias, `${prefix}:${alias}`)
+  }
+  let raw = false
+  let rename = (node: unknown): unknown => {
+    if (!node || typeof node != 'object') return node
+    if (Array.isArray(node)) return node.map(rename)
+    let value = node as Record<string, unknown>
+    // Bound/literal values are data, not SQL trees. A lowered fragment cannot
+    // have its identifiers renamed, so it retains the ordinary gather.
+    if (value.t == 'val' || value.t == 'lit') return node
+    if (value.t == 'raw') {
+      raw = true
+      return node
+    }
+    if (value.t == 'col') {
+      return { ...value, of: aliases.get(String(value.of)) ?? value.of }
+    }
+    if (value.t == 'table') {
+      return {
+        ...value,
+        as: aliases.get(String(value.as ?? value.name)) ?? value.as,
+      }
+    }
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, rename(v)]),
+    )
+  }
+  let out = rename(p) as Projection
+  return raw ? null : out
+}
+
+let joinedPlan = (
+  vocab: Vocab,
+  names: string[],
+  opts: BindOpts,
+): Joined | null => {
+  let cache = at(
+    at(
+      at(joined, vocab, () => new WeakMap()),
+      opts.derived ?? NONE,
+      () => new WeakMap(),
+    ),
+    opts.backed ?? NONE,
+    () => new Map(),
+  )
+  let key = JSON.stringify(names)
+  if (cache.has(key)) return cache.get(key)!
+  let base = spine(vocab, among(col('eid', 'e'), each([])))
+  let columns = [...base.cols!]
+  let joins = [...base.joins!]
+  let props: string[][] = []
+  let width = columns.length, breadth = joins.length + 1
+  for (let [i, name] of names.entries()) {
+    let alias = `@g${i}`
+    let p = scoped(project(vocab, name, opts.derived, opts.backed), name, alias)
+    if (!p) return bounded(cache, key, null, 128)
+    let fields = p.sel.map((e) => {
+      if (e.t != 'as' && e.t != 'col') {
+        throw Error('a projected property needs a name')
+      }
+      return e.name
+    })
+    props.push(fields)
+    width += fields.length + 1
+    breadth += p.joins.length + 1
+    // The outer read and every nested projection fit workerd's column and
+    // SQLite's joined-table limits. Wide entities keep the set-shaped gather.
+    if (width > 100 || breadth > 60 || fields.length + 1 > 100) {
+      return bounded(cache, key, null, 128)
+    }
+    joins.push(
+      left(table(name, alias), eq(col('entity', alias), col('id', 'e'))),
+      ...p.joins,
+    )
+    columns.push(as(col('entity', alias), `@${i}`))
+    for (let [j, prop] of fields.entries()) {
+      let expr = p.sel[j]
+      columns.push(as(expr.t == 'as' ? expr.e : expr, `@${i}.${prop}`))
+    }
+  }
+  let statement = render(select({ ...base, cols: columns, joins }))
+  if (statement.sql.length > 90_000 || statement.params.length > 100) {
+    return bounded(cache, key, null, 128)
+  }
+  return bounded(cache, key, { statement, names, props }, 128)
+}
+
+let joinedGet = (
+  driver: Driver,
+  vocab: Vocab,
+  eids: string[],
+  opts: BindOpts,
+  names: string[],
+  wanted?: string[],
+): Bundle[] | { spine: Row[] } | undefined => {
+  let plan = joinedPlan(vocab, names, opts)
+  if (!plan) return
+  // The owners' JSON array is the final bind in this SELECT. All projection
+  // expressions precede its WHERE, so their own parameters stay in place.
+  let rows: Row[]
+  try {
+    rows = driver.query({
+      ...plan.statement,
+      params: [...plan.statement.params.slice(0, -1), JSON.stringify(eids)],
+    })
+  } catch (err) {
+    // A raw schema edit can remove a table from the previous shape. Read the
+    // current descriptor before deciding which remaining tables to gather.
+    if (err instanceof Error && /no such (table|column):/i.test(err.message)) {
+      return
+    }
+    throw err
+  }
+  let found = new Map<string, Bundle>()
+  let numbered = !!vocab.prop('entity', 'num')
+  let covered = new Set(names)
+  for (let row of rows) {
+    let entity = {
+      eid: String(row.eid),
+      ...!numbered || row.num == null ? {} : { num: Number(row.num) },
+      ...row.archetype == null ? {} : { archetype: String(row.archetype) },
+    }
+    let bundle: Bundle = row.dead == null ? { entity } : tombstoned(entity)
+    found.set(entity.eid, bundle)
+    if (row.dead != null) continue
+    let current = row['@tables'] == null
+      ? undefined
+      : descriptor(driver, String(row['@tables'])).tables
+    if (
+      wanted == null &&
+      (!current ||
+        current.some((name) => readable(vocab).has(name) && !covered.has(name)))
+    ) return { spine: rows }
+    for (let [i, name] of names.entries()) {
+      if (row[`@${i}`] == null || current && !current.includes(name)) continue
+      let values = Object.fromEntries(
+        plan.props[i].map((prop) => [prop, row[`@${i}.${prop}`]]),
+      )
+      bundle[name] = decoded(vocab, name, values) as Comp
+    }
+  }
+  backedGet(
+    driver,
+    vocab,
+    eids.filter((eid) => !found.has(eid)),
+    opts,
+    wanted,
+  )
+    .forEach((b) => found.set(b.entity.eid, b))
+  return eids.flatMap((eid) => found.get(eid) ?? [])
+}
+
 /**
  * Identity, not search: these entities as they stand. A tombstoned one comes
  * back carrying `tombstone` (it is still an identity, just a deleted one); an
@@ -365,7 +552,30 @@ export let get = (
   comps?: string[],
 ): Bundle[] => {
   // The tables this read may touch: every component's, or the named ones'.
-  let names = tables(vocab).filter((c) => !comps || comps.includes(c))
+  let names = comps
+    ? [...new Set(comps)].filter((c) => readable(vocab).has(c))
+    : tables(vocab)
+  let remembered = at(
+    at(shapes, driver, () => new WeakMap()),
+    vocab,
+    () => new Map(),
+  )
+  let initial: Row[] | undefined
+  // Small, repeated identity reads benefit from one statement. Large gathers
+  // still read each worn table once for all its owners, rather than joining
+  // the union of every different entity's facets.
+  if (eids.length && eids.length <= 32) {
+    let guess = comps
+      ? names
+      : eids.every((eid) => remembered.has(eid))
+      ? [...new Set(eids.flatMap((eid) => [...remembered.get(eid)!]))].sort()
+      : undefined
+    if (guess) {
+      let rows = joinedGet(driver, vocab, eids, opts, guess, comps)
+      if (Array.isArray(rows)) return rows
+      initial = rows?.spine
+    }
+  }
   let asked = new Set(names)
   let found = new Map<string, Bundle>()
   // Whether a number is this store's to show. The spine table holds the column
@@ -387,7 +597,8 @@ export let get = (
     let byId = new Map<number, Bundle>()
     let groups = new Map<string, number[]>()
     for (
-      let row of driver.query(spine(vocab, among(col('eid', 'e'), each(ids))))
+      let row of initial ??
+        driver.query(spine(vocab, among(col('eid', 'e'), each(ids))))
     ) {
       let eid = String(row.eid)
       let entity = {
@@ -398,11 +609,20 @@ export let get = (
       let bundle = row.dead == null ? { entity } : tombstoned(entity)
       found.set(eid, bundle)
       byId.set(Number(row.id), bundle)
-      if (row.dead != null) continue
+      if (row.dead != null) {
+        bounded(remembered, eid, [], 2048)
+        continue
+      }
       if (row['@tables'] == null) {
         owners.push(Number(row.id))
       } else {
         let key = String(row['@tables'])
+        bounded(
+          remembered,
+          eid,
+          descriptor(driver, key).tables.filter((c) => names.includes(c)),
+          2048,
+        )
         let group = groups.get(key)
         if (!group) groups.set(key, group = [])
         group.push(Number(row.id))
@@ -456,6 +676,9 @@ export let get = (
   }
   backedGet(driver, vocab, eids.filter((e) => !found.has(e)), opts, comps)
     .forEach((b) => found.set(b.entity.eid, b))
+  for (let eid of eids) {
+    if (!found.has(eid)) bounded(remembered, eid, [], 2048)
+  }
   return eids.flatMap((eid) => found.has(eid) ? [found.get(eid)!] : [])
 }
 

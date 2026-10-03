@@ -111,7 +111,7 @@ test('classified gathers select only present tables and only their owners', () =
   }
   asked = []
   s.tx((tx) => tx.get(['a']))
-  assertEquals(asked.length, 3) // spine + created + doc
+  assertEquals(asked.length, 1) // fresh spine, descriptor and facets together
   asked = []
   s.tx((tx) => tx.get(['a'], ['marker']))
   assertEquals(asked.length, 1) // known missing; no projection probe
