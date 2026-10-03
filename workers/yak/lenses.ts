@@ -1,6 +1,6 @@
 // The platform's lens wiring: the page's kept deploy decides what it speaks;
 // the store keeps the newest chain when its code is rolled back.
-import { compile, lensesIn, versions } from '@yaks/lens'
+import { compile, type GraphOp, lensesIn, versions } from '@yaks/lens'
 import { type Bundle, type Comp, type ReadOpts, Refused } from '@yaks/graph'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
 import type { App, Directory, Space } from './directory.ts'
@@ -82,7 +82,7 @@ export let retainedLenses = (was: VocabDoc, next: VocabDoc): VocabDoc => {
     let [comp, prop] = path.split('.')
     let schema = was.$defs?.[comp]
     let property = schema?.properties?.[prop]
-    if (!schema) continue // Core columns are the platform's.
+    if (!schema || obsolete.has(comp)) continue // Core columns are the platform's.
     let kept = defs[comp] ?? { ...schema, properties: {} }
     defs[comp] = property && !obsolete.has(path)
       ? {
@@ -102,22 +102,36 @@ let renames = (doc: VocabDoc) =>
     Number((a._lens as Comp).step) - Number((b._lens as Comp).step)
   ).flatMap((
     row,
-  ) => ((row._lens as Comp).ops as { rename: { from: string; to: string } }[]))
+  ) => ((row._lens as Comp).ops as GraphOp[]))
 
 /** The graph pilot uses comp.prop renames; JSON document operations remain
  * independent of the store's schema and mover. */
 export let lensPaths = (doc: VocabDoc): string[] =>
-  renames(doc).flatMap((op) => [op.rename.from, op.rename.to])
+  renames(doc).flatMap((op) =>
+    'rename' in op ? [op.rename.from, op.rename.to] : [
+      op.view.from,
+      ...Object.values(op.view.props).flatMap((p) =>
+        'path' in p ? [p.path] : []
+      ),
+    ]
+  )
 
 /** Consumed names, excluding a name a later step deliberately restores. */
 export let lensObsolete = (doc: VocabDoc): readonly string[] =>
   compile(lensesIn([lensDocAt('schema', doc)])).sources
 
 /** The desired schema after movement. `grew` retains any nonempty source. */
-export let contractedLenses = (doc: VocabDoc): VocabDoc => {
+export let contractPaths = (
+  doc: VocabDoc,
+  paths: readonly string[],
+): VocabDoc => {
   let defs = { ...doc.$defs }
-  for (let path of lensObsolete(doc)) {
+  for (let path of paths) {
     let [comp, prop] = path.split('.')
+    if (!prop) {
+      delete defs[comp]
+      continue
+    }
     if (!defs[comp]?.properties?.[prop]) continue
     let properties = { ...defs[comp].properties }
     delete properties[prop]
@@ -125,6 +139,8 @@ export let contractedLenses = (doc: VocabDoc): VocabDoc => {
   }
   return { ...doc, $defs: defs }
 }
+export let contractedLenses = (doc: VocabDoc): VocabDoc =>
+  contractPaths(doc, lensObsolete(doc))
 
 export let spoken = (request: Request): ReadOpts => {
   let said = request.headers.get('x-yak-speaks')
@@ -200,17 +216,23 @@ export let lensRule = (
   let source = lens.sources
   return {
     mark: `${LENS_MARK}/${Object.values(latest)[0]}` as Mark,
-    live: 'apps',
+    ...(Object.values(doc.$defs ?? {}).some((s) =>
+        s.lens === true && s.live === false
+      )
+      ? {}
+      : { live: 'apps' as const }),
     find: lens.find(admits),
     drop: source.filter((path) => {
       let [comp, prop] = path.split('.')
-      return !!doc.$defs?.[comp]?.properties?.[prop]
+      return prop ? !!doc.$defs?.[comp]?.properties?.[prop] : true
     }),
-    move: (row: Bundle) => {
+    move: (row: Bundle, read) => {
       if (
         !source.some((path) => {
           let [comp, prop] = path.split('.')
-          return (row[comp] as Comp | undefined)?.[prop] != null
+          return prop
+            ? (row[comp] as Comp | undefined)?.[prop] != null
+            : !!row[comp]
         })
       ) return []
       // Storage returns null for an empty column. A snapshot's null is
@@ -225,13 +247,32 @@ export let lensRule = (
             : comp,
         ]),
       ) as Bundle
-      let patch = lens.put(present)
+      let facts = lens.views.flatMap((v) =>
+        Object.values(v.props).flatMap((p) =>
+          'ack' in p
+            ? read?.(
+              `.${p.ack.component}&?${
+                p.ack.order.split('.')[0]
+              }&?${p.ack.mark}&*`,
+            ) ?? []
+            : []
+        )
+      )
+      let patches = lens.put([present], {
+        facts: [row, ...facts],
+        migrate: true,
+      })
+      let patch = patches[0]
       for (let path of source) {
         let [comp, prop] = path.split('.')
+        if (!prop) {
+          patch[comp] = null
+          continue
+        }
         if ((row[comp] as Comp | undefined)?.[prop] == null) continue
         patch[comp] = { ...patch[comp] as Comp, [prop]: null }
       }
-      return [patch]
+      return patches
     },
   }
 }

@@ -1,5 +1,13 @@
 import type { Bundle, Comp } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
+import {
+  type ComponentView,
+  type Facts,
+  getViews,
+  stageViews,
+  validateView,
+  viewDependencies,
+} from './view.ts'
 import { schema } from './schema.ts'
 import { history } from './steps.ts'
 import { document, type DocumentLens, type Json } from './document.ts'
@@ -18,10 +26,14 @@ import {
 export type Speaks = Record<string, number>
 /** The pilot's single operation. Paths name a component and one property. */
 export type Rename = { rename: { from: string; to: string } }
+export type ViewOp = { view: ComponentView }
+export type GraphOp = Rename | ViewOp
 /** The pure directions of a compiled vocabulary change. */
 export type Lens = {
-  put: (bundle: Bundle) => Bundle
-  get: (bundle: Bundle, held?: Bundle) => Bundle
+  put: (bundles: Bundle[], ctx?: Facts) => Bundle[]
+  get: (bundles: Bundle[], ctx?: Facts) => Bundle[]
+  views: readonly ComponentView[]
+  dependencies: readonly string[]
   ask: (query: Query) => Query
   /** Consumed source properties, excluding names a later step restores. */
   sources: readonly string[]
@@ -106,6 +118,8 @@ let get = (b: Bundle, pairs: Pair[], held?: Bundle): Bundle => {
 let identity: Lens = {
   put: (b) => b,
   get: (b) => b,
+  views: [],
+  dependencies: [],
   ask: (q) => q,
   sources: [],
   find: () => and(never()),
@@ -142,13 +156,19 @@ export let compile = (rows: Bundle[], speaks?: Speaks): Lens => {
   let hit = cache.get(key)
   if (hit) return hit
   let pairs: Pair[] = []
+  let views: ComponentView[] = []
   for (let [, { steps, remaining }] of ordered) {
     let selected = new Set(remaining)
     for (let s of steps) {
       if (!Array.isArray(s.ops)) fail(`step ${s.step} ops must be an array`)
-      for (let op of s.ops as Rename[]) {
-        if (!op || !op.rename || Object.keys(op).length != 1) {
-          fail('only rename is supported')
+      for (let op of s.ops as GraphOp[]) {
+        if (op && 'view' in op && Object.keys(op).length == 1) {
+          validateView(op.view)
+          if (selected.has(s)) views.push(structuredClone(op.view))
+          continue
+        }
+        if (!op || !('rename' in op) || Object.keys(op).length != 1) {
+          return fail('expected rename or component view')
         }
         let from = path(op.rename.from), to = path(op.rename.to)
         if (from.join('.') == to.join('.')) {
@@ -165,11 +185,18 @@ export let compile = (rows: Bundle[], speaks?: Speaks): Lens => {
     consumed.delete(pair.to.join('.'))
     consumed.add(pair.from.join('.'))
   }
-  let sources = [...consumed]
-  let lens: Lens = !pairs.length ? identity : {
+  let sources = [...consumed, ...views.map((v) => v.from)]
+  let lens: Lens = !pairs.length && !views.length ? identity : {
+    views,
+    dependencies: [...new Set(views.flatMap(viewDependencies))],
     sources,
-    put: (b) => put(b, pairs),
-    get: (b, held) => get(b, pairs, held),
+    put: (b, ctx) => stageViews(b.map((row) => put(row, pairs)), views, ctx),
+    get: (b, ctx) => {
+      let held = new Map(ctx?.facts?.map((r) => [r.entity.eid, r]))
+      return getViews(b, views, ctx).map((row) =>
+        get(row, pairs, held.get(row.entity.eid))
+      )
+    },
     ask: (q) => {
       let extra = new Map<string, ReturnType<typeof want>>()
       let rewrite = (p: string[]): string[] => {
@@ -243,7 +270,19 @@ export let compile = (rows: Bundle[], speaks?: Speaks): Lens => {
         ? and(or(...source.map(present)), every())
         : and(never())
     },
-    schema: (docs) => schema(docs, pairs),
+    schema: (docs) => {
+      let out = schema(docs, pairs)
+      for (let v of views.toReversed()) {
+        let found = out.findIndex((d) => d.$defs?.[v.from])
+        if (found < 0) out = [...out, { $defs: { [v.from]: v.declaration } }]
+        else {out = out.map((d, i) =>
+            i == found
+              ? { ...d, $defs: { ...d.$defs, [v.from]: v.declaration } }
+              : d
+          )}
+      }
+      return out
+    },
   }
   if (cache.size >= 64) cache.delete(cache.keys().next().value!)
   cache.set(key, lens)

@@ -11,7 +11,17 @@ import {
 } from '@yaks/query'
 import { type Bundle, derivedEid } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
-import { compile } from './compile.ts'
+import { compile as batches } from './compile.ts'
+// The rename cases each speak about one entity; the production interface is a batch.
+let compile = (...args: Parameters<typeof batches>) => {
+  let lens = batches(...args)
+  return {
+    ...lens,
+    put: (b: Bundle) => lens.put([b])[0],
+    get: (b: Bundle, held?: Bundle) =>
+      lens.get([b], { facts: held ? [held] : undefined, patch: !!held })[0],
+  }
+}
 import { lensesIn, packageEid, versions } from './described.ts'
 import { docs } from './vocab.ts'
 

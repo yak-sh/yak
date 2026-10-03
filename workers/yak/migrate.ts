@@ -231,6 +231,7 @@ export let respelled = (text: string): string | null => {
 export let BOUNDARIES = [
   'yak/store/lens/1',
   'yak/store/lens-contract/1',
+  'yak/store/lens-view/1',
   'yak/store/interruption-contract/1',
   'yak/store/interruption-contract/2',
   'yak/store/interruption-contract/3',

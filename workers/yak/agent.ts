@@ -590,6 +590,7 @@ export let reaching = async (
     // queries but does not reinterpret bundles already answered by a store.
     ask: (q) => addressing(vocab)(q, self.address),
     answer: (bundles) => bundles,
+    view: () => null,
     read: (q) => storage.read(q),
     rows: (q) => storage.rows(q),
     get: (eids, comps) => storage.get(eids, comps),

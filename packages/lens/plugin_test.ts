@@ -210,7 +210,7 @@ test('find and put move seeded rows once through an expanded vocabulary', () => 
     let rows = g.read(lens.find()) as Bundle[]
     if (rows.length) {
       g.apply(rows.map((row) => {
-        let patch = lens.put(row)
+        let [patch] = lens.put([row])
         return {
           ...patch,
           recipe: { ...(patch.recipe as object), title: null },

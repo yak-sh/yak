@@ -1,7 +1,7 @@
 # @yaks/lens
 
 Pure, compiled changes between JSON document versions. `document(ops)` gives
-`put` (old to current) and `get` (current to old). Bundles add patch and
+`put` (old to current) and `get` (current to old). Graph batches add patch and
 read-view semantics through `compile(rows, speaks)`, plus `ask` for old query
 ASTs, `schema` for old vocabulary declarations, and `find` for stored rows still
 carrying old properties. This package owns the private
@@ -114,13 +114,14 @@ equal(history(steps).version, 20261004102000)
 ```
 
 The graph stores steps as `_lens` rows and authors them with `lensesIn`. That
-registration currently accepts graph renames only. Declaration documents use the
-JSON operation lists above and require no graph rows. Graph and JSON histories
-share the timestamp ordering and cutoff rules; query rewriting beyond graph
-renames remains future work.
+registration accepts graph renames and declared component views. Declaration
+documents use the JSON operation lists above and require no graph rows. Graph
+and JSON histories share the timestamp ordering and cutoff rules; JSON file
+changes remain independent of graph component views.
 
-The graph pilot uses comp.prop renames. A declaring vocabulary carries its
-package name and an ordinary `$defs` entry:
+A graph change can rename a comp.prop or retire a component with a declared
+view. A declaring vocabulary carries its package name and an ordinary `$defs`
+entry:
 
 ```ts
 import { compile, lensesIn, versions } from '@yaks/lens'
@@ -138,8 +139,8 @@ let docs = [{
   },
 }]
 let lens = compile(lensesIn(docs))
-lens.put({ entity: { eid: 'cake' }, recipe: { title: 'Cake' } })
-// { entity: { eid: 'cake' }, recipe: {}, doc: { title: 'Cake' } }
+lens.put([{ entity: { eid: 'cake' }, recipe: { title: 'Cake' } }])
+// [{ entity: { eid: 'cake' }, recipe: {}, doc: { title: 'Cake' } }]
 Object.values(versions(docs)) // [20261003140000]
 ```
 
@@ -153,9 +154,10 @@ steps and caches against their content and the package version map. Without
 identity functions.
 
 The plugin declares `$speaks`, a package-eid to latest-timestamp map on writes.
-Reads carry the same map in `ReadOpts.speaks`. No map means current:
-normalization returns the exact inputs, reads no rows, and asks parse nothing. A
-door can omit a current map to take that path.
+Reads carry the same map in `ReadOpts.speaks`. No map means current: without
+pending component views, normalization returns the exact inputs and reads no
+rows. Pending views expand stored sources for current callers, including
+version-pinned pages, until the mover consumes them.
 
 Landed pilot histories retain their original contiguous steps `0..n-1` and count
 versions `0..n` so deployed clients keep answering. A package may append
@@ -163,20 +165,20 @@ timestamp steps after those retained steps; its current version then becomes the
 greatest timestamp. A pilot count still selects its original suffix plus all
 later timestamp steps. New declarations use timestamps.
 
-The graph adapter supports rename in this pilot. Omission is preserved, null
-clears a property, and moving a property retains `recipe{}`. Removing the source
-aspect clears its moved property without deleting the target's unrelated
-properties. Conflicting writes to both names refuse before storing anything;
-`$was` preconditions translate by the same mapping. Old reads copy `doc.title`
-back only onto entities carrying `recipe{}`; `doc.title` remains readable
-because it existed in the old vocabulary too. Raw subscription patches carry
-`ReadOpts.patch`: the adapter reads stored source membership, without copying
-other stored properties, and translates target removals into alias clears. A
-within-component rename removes its replacement from the old view. For a
-subscription patch, `get(patch, held)` uses the held row only to learn whether
-an omitted source component exists; it never copies held properties. Explicit
-source component removal stays a removal, and destination component removal
-clears the old aliased property.
+For a rename, Omission is preserved, null clears a property, and moving a
+property retains `recipe{}`. Removing the source aspect clears its moved
+property without deleting the target's unrelated properties. Conflicting writes
+to both names refuse before storing anything; `$was` preconditions translate by
+the same mapping. Old reads copy `doc.title` back only onto entities carrying
+`recipe{}`; `doc.title` remains readable because it existed in the old
+vocabulary too. Raw subscription patches carry `ReadOpts.patch`: the adapter
+reads stored source membership, without copying other stored properties, and
+translates target removals into alias clears. A within-component rename removes
+its replacement from the old view. For a subscription patch,
+`get([patch], {facts: [held], patch: true})` uses the held row only to learn
+whether an omitted source component exists; it never copies held properties.
+Explicit source component removal stays a removal, and destination component
+removal clears the old aliased property.
 
 The mover uses `find` and `put`, explicitly clearing the old stored property
 through its expanded vocabulary. `sources` names consumed properties and
@@ -197,4 +199,31 @@ omission/null semantics, a compiled mode for speed, and query rewriting. The
 pilot ships no dependency on `@yaks/logic`. Grammar routing such as bare `.eid=`
 stays at its door. Query rewriting for the document operations beyond rename is
 outside this pilot: their inverses transform documents, while the graph adapter
-explicitly accepts only comp.prop renames.
+uses graph renames and declared component views.
+
+A `view` operation retires a whole component while preserving its old doors. It
+declares `from`, the old `declaration`, a canonical membership `match`, and
+`props`. Each property maps to a canonical `path` (optionally converting ISO
+strings to numeric milliseconds with `convert: "milliseconds"`), an explicit
+`retired` default, or an `ack` relation naming a request `component`, its source
+`ref`, the companion `mark`, and the deterministic latest-row `order` path. An
+omitted acknowledgement preserves it; null clears the represented marks; a
+non-null write marks only a request addressed to the source entity.
+
+The graph interface translates whole changes: `put(bundles, {facts, vocab})` can
+emit patches on more than one entity, and `get(bundles, {facts, vocab})` can
+reconstruct a virtual source from related entities. The graph shell supplies
+facts and repeats translation inside the write transaction. The core validates
+old `$was` values against the old view and emits canonical transaction guards. A
+graph read view selects canonical candidates, reconstructs whole old bundles,
+then runs the caller's original query, projections and aggregates with its old
+schema and supplied moment. Subscriptions include the relation's dependencies.
+
+View sources are whole component names in `sources`; contracting one removes its
+membership too. During expansion, unmoved source rows reconstruct through the
+same pure migration for current and old reads. Normal partial writes consume a
+pending source atomically, preserving its other values and historical marks;
+explicit clears consume it too, so old data cannot reappear. Migration mode
+preserves an equal or newer canonical saved moment and existing marks, and uses
+the source's historical attribution for an acknowledged request. A lens step
+with `live: false` remains rehearsal-only in the hosted mover.
