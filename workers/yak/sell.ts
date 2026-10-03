@@ -53,7 +53,7 @@ import { bound, type Env } from './env.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { manageAt } from './route.ts'
 import { type Host, url as hostUrl } from './host.ts'
-import { whoIs } from './session.ts'
+import { adminWho } from './identity.ts'
 import { refuse } from './tool.ts'
 import { caught } from './sentry.ts'
 
@@ -1102,9 +1102,8 @@ export let priceAt = async (dir: Directory, file: Response) => {
  *
  * The gate is A seat in `yak`, the platform's own space: whoever owns that row
  * owns the platform, which is the same authority `space_sell` and the meter
- * already answer to. Read through `whoIs`, so it is the session cookie and
- * never an agent's bearer — what a tool may do is deliberately not this
- * (T-34541 fixed the connector's roster, and a rate is not on it).
+ * already answer to. A website session or an OAuth token identifies the caller;
+ * a pasted grant does not. The connector's tool roster does not expose this door.
  *
  * It writes through `stamp`, which empties the directory's read cache, so the
  * rate a sale is charged is the rate set a moment ago rather than one a TTL
@@ -1117,9 +1116,9 @@ export let fees = async (req: Request, env: Env) => {
   let dir = dirOf(env)
   let meta = await dir.space(dirPart.META.space)
   if (!meta) return json(503, 'no_platform', 'the directory has not seeded yet')
-  let who = await whoIs(
+  let who = await adminWho(
+    env,
     req,
-    env.SESSION_SECRET,
     (person) => dir.role(meta, person),
   )
   if (who.role != 'owner') {

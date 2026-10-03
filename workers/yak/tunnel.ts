@@ -32,8 +32,8 @@
 // opened to the tunnel (@yaks/tunnel filter.ts).
 //
 // A tunnel's token is answered to the caller once and never kept or logged:
-// the machine's `yak` puts it straight into its own vault. Session
-// cookie only, never an agent's bearer, and under `/api/`, so the same-origin
+// the machine's `yak` puts it straight into its own vault. A website session
+// or an OAuth token opens this door, never a pasted grant. Under `/api/`, the same-origin
 // guard (route.ts `guarded`) stands in front of it the way it stands in front
 // of the fee.
 import { type Api, connect, disconnect, gateways, tunnels } from '@yaks/tunnel'
@@ -43,7 +43,7 @@ import { itsApp, namespace, nowhere, script } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import type { Answer } from './plugin.ts'
 import { caught } from './sentry.ts'
-import { whoIs } from './session.ts'
+import { adminWho } from './identity.ts'
 import { TUNNELED } from './tunnel_door.ts'
 
 let dirOf = (env: Env) =>
@@ -102,9 +102,9 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   if (!space) {
     return json(404, 'no_space', `no space is called ${said('space') || '""'}`)
   }
-  let who = await whoIs(
+  let who = await adminWho(
+    env,
     req,
-    env.SESSION_SECRET,
     (person) => dir.role(space, person),
   )
   let meta = await dir.space(dirPart.META.space)

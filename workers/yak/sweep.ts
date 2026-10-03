@@ -11,7 +11,7 @@
 //                                         owes, and where each rule stands
 //
 // The gate is the one the fee answers to (sell.ts `fees`): an owner of the
-// platform's own space, read off the session cookie. A store is named by the
+// platform's own space, read off a website session or an OAuth token. A store is named by the
 // kernel, never by a caller, so a name the listing does not hold is refused
 // rather than waking an object nobody made.
 import * as dirPart from './directory.ts'
@@ -19,7 +19,7 @@ import { directory, storeName } from './directory.ts'
 import { GIT_STORE, PLATFORM_STORE, storeOf } from './door.ts'
 import { bound, type Env } from './env.ts'
 import { KERNEL } from './meta.ts'
-import { whoIs } from './session.ts'
+import { adminWho } from './identity.ts'
 
 export let PATH = '/api/move'
 
@@ -55,9 +55,9 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let dir = dirOf(env)
   let meta = await dir.space(dirPart.META.space)
   if (!meta) return json(503, 'no_platform', 'the directory has not seeded yet')
-  let who = await whoIs(
+  let who = await adminWho(
+    env,
     req,
-    env.SESSION_SECRET,
     (person) => dir.role(meta, person),
   )
   if (who.role != 'owner') {

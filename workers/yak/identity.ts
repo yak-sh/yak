@@ -86,7 +86,7 @@ import { cookieValue, opened, seal, verify } from './lib/token.ts'
 import { agentsOf, servicesOf } from './connected.ts'
 import { HANDOFF, handoffTo, opener, safeNext, spender } from './handoff.ts'
 export { HANDOFF } from './handoff.ts'
-import { directory, META, type Space } from './directory.ts'
+import { directory, META, type Role, type Space } from './directory.ts'
 import {
   daysLeft,
   doomed,
@@ -149,7 +149,7 @@ import {
 } from './route.ts'
 import { canon, mint, nameOf, personOf, spend } from './signin.ts'
 import { RETRY, source, within } from './rate.ts'
-import { type Caller, minted } from './session.ts'
+import { type Caller, minted, type Who } from './session.ts'
 import { caught } from './sentry.ts'
 import { sha256 } from '@yaks/graph'
 
@@ -247,6 +247,30 @@ export let withAuth = async (
   env: Env,
   req: Request,
 ): Promise<Caller | null> => (await asking(env, req)).who
+
+/** The admin HTTP doors take a website session or an OAuth token, never a
+ * pasted grant. Verification remains `asking`'s, and a presented bearer never
+ * falls back to the ambient cookie. Each door still checks its own live seat. */
+export let adminWho = async (
+  env: Env,
+  req: Request,
+  roleOf: (person: string) => Promise<Role | null>,
+): Promise<Who> => {
+  if (
+    req.headers.has('authorization') &&
+    !/^Bearer\s+(\S+)$/i.test(req.headers.get('authorization') ?? '')
+  ) {
+    return { person: null, role: null }
+  }
+  let who = await withAuth(env, req)
+  if (!who || who.via == 'grant') return { person: null, role: null }
+  return {
+    person: who.person,
+    role: await roleOf(who.person),
+    until: who.until,
+    ...(who.instrument ? { via: who.instrument } : {}),
+  }
+}
 
 // The RFC 9728 challenge a protected resource answers an anonymous caller
 // with: where to find the metadata that names this platform's authorization
@@ -1169,6 +1193,61 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
         'Try again in a minute.',
     }, { status: 429, headers: { 'retry-after': String(RETRY) } })
   }
-  return new OAuthProvider<Env>(opts(env))
+  let path = new URL(req.url).pathname
+  // Account discovery belongs to the same provider that minted the token.
+  // Read the address live: tokens keep their existing format and held grants
+  // are neither reissued nor changed. A cookie alone is not a userinfo token.
+  if (path == '/oauth/userinfo') {
+    let headers = {
+      'cache-control': 'private, no-store',
+      'access-control-allow-origin': '*',
+    }
+    if (req.method == 'OPTIONS') {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          ...headers,
+          'access-control-allow-methods': 'GET, OPTIONS',
+          'access-control-allow-headers': 'Authorization',
+        },
+      })
+    }
+    if (req.method != 'GET') {
+      return new Response(null, {
+        status: 405,
+        headers: { ...headers, allow: 'GET, OPTIONS' },
+      })
+    }
+    let who = await withAuth(env, req)
+    if (who?.via != 'oauth') {
+      let res = unauthorized(req, env)
+      return new Response(res.body, {
+        status: res.status,
+        headers: { ...Object.fromEntries(res.headers), ...headers },
+      })
+    }
+    let email = await directory(bound(env.DIRECTORY, dirPart.fetch, env))
+      .emailAt(who.person)
+    if (!email) {
+      return Response.json({ error: 'no_account' }, { status: 404, headers })
+    }
+    return Response.json({ sub: who.person, email }, { headers })
+  }
+  let res = await new OAuthProvider<Env>(opts(env))
     .fetch(await plain(req, env), env, context() as never)
+  // The provider owns all its metadata; add only the account-discovery door
+  // it does not offer a configuration field for.
+  if (
+    path == '/.well-known/oauth-authorization-server' && res.ok &&
+    req.method == 'GET'
+  ) {
+    let metadata = await res.json() as Record<string, unknown>
+    let headers = new Headers(res.headers)
+    headers.delete('content-length')
+    return Response.json({
+      ...metadata,
+      userinfo_endpoint: hostUrl(env, '/oauth/userinfo'),
+    }, { headers })
+  }
+  return res
 }
