@@ -124,6 +124,9 @@ export let compile = (rows: Bundle[], speaks?: Speaks): Lens => {
     ([pkg, steps]) => [pkg, history(steps, speaks ? speaks[pkg] : 0)] as const,
   )
   for (let [pkg, version] of Object.entries(speaks ?? {})) {
+    if (typeof version != 'number') {
+      fail(`unknown version ${version} for ${pkg}`)
+    }
     if (!groups.has(pkg)) history([], version)
   }
   let key = JSON.stringify([ordered.map(([pkg, h]) => [pkg, h.steps]), speaks])

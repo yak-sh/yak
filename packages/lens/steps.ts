@@ -32,7 +32,7 @@ export let history = <T extends { step: number }>(
     previous = step
   }
   let version = previous >= 10000000000000 ? previous : legacy
-  let start = speaks ?? version
+  let start = speaks === undefined ? version : speaks
   if (
     !Number.isSafeInteger(start) || start < 0 ||
     !(start <= legacy || timestamp(start) && start <= version)

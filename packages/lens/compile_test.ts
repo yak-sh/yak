@@ -312,6 +312,9 @@ test('timestamp histories refuse duplicate steps, invalid dates and future calle
   }
   let step = declaration(20261003140000)
   await throws(() => compile([step, step]), 'duplicate step')
+  for (let version of [null, undefined, '20261003140000']) {
+    await throws(() => compile([step], { [pkg]: version } as never))
+  }
   await throws(
     () => compile([step], { [pkg]: 20261004102000 }),
     'unknown version',
