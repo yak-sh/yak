@@ -50,7 +50,7 @@ import { type Context, during, live as observed } from '@yaks/trace'
 // @yaks/logic's unification, planned). A rule that tries it is refused rather
 // than silently compared against the literal text `Now.at`.
 
-import { type Filter, filter, index, matcher, type Select } from '@yaks/match'
+import { filter, index, matcher } from '@yaks/match'
 import {
   type And,
   declared,
@@ -236,8 +236,7 @@ export type Rule = {
 // `test` of null means this graph's vocabulary declares none of the components
 // the rule is about — the rule never fires, which is not an error.
 type Ready = {
-  test: Select | null
-  single: Filter | null
+  query: And | null
   ensures: string[]
   gates: string[]
   resources: string[]
@@ -296,8 +295,7 @@ let compile = (r: Rule, v: Vocab): Ready => {
   let d = declared(ast)
   let named = [...d.gates, ...d.ensures, ...d.writes]
   let ready: Ready = {
-    test: null,
-    single: null,
+    query: null,
     ensures: d.ensures,
     gates: d.gates,
     resources: d.resources,
@@ -328,9 +326,11 @@ let compile = (r: Rule, v: Vocab): Ready => {
           !['order', 'limit', 'after'].includes(c.kind)
         ),
       }
-      let moment = { now: Date.now() }
-      ready.test = matcher(query, v, moment)
-      ready.single = filter(query, v, moment)
+      // Validate once, but retain the tree rather than a predicate whose
+      // relative-time literals would keep the first firing's clock.
+      matcher(query, v)
+      filter(query, v)
+      ready.query = query
     } catch (e) {
       if (words(d.filter).every((c) => !!v.comp(c))) throw e
     }
@@ -388,7 +388,7 @@ export let fire = (
   let { bundles } = tick
   // The rules that can match here, each compiled once. A phase none of whose
   // rules can match costs nothing more.
-  let live: [Rule, Ready, Select][] = []
+  let live: [Rule, Ready][] = []
   for (let r of rules) {
     let ready = compile(r, tick.vocab)
     // Checked before the match, and whether or not this rule could ever fire
@@ -411,7 +411,7 @@ export let fire = (
         )
       }
     }
-    if (ready.test) live.push([r, ready, ready.test])
+    if (ready.query) live.push([r, ready])
   }
   if (!live.length) return bundles
   // One view per entity, not per patch: the phases add bundles to the batch
@@ -462,10 +462,13 @@ export let fire = (
   }
   // Every match is evaluated before any rule acts.
   let hits: [Rule, Ready, number][] = []
-  for (let [r, ready, test] of live) {
+  // @yaks/match retains static forms and refreshes time-dependent ones for
+  // this phase's moment. Parsed declarations remain shared across firings.
+  let moment = { now: Date.now() }
+  for (let [r, ready] of live) {
     let matches = single
-      ? ready.single!(views[0], among) ? views : []
-      : test(among)
+      ? filter(ready.query!, tick.vocab, moment)(views[0], among) ? views : []
+      : matcher(ready.query!, tick.vocab, moment)(among)
     matches.forEach((v) => {
       if (
         tick.phase == 'effect' && ready.checked &&

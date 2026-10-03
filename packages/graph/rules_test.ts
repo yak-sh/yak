@@ -7,6 +7,8 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { isPromise } from '@yaks/fp'
 import { parse } from '@yaks/query'
+import { loadVocab } from '@yaks/vocab'
+import { Refused } from './admit.ts'
 import { graph } from './graph.ts'
 import type { Bundle } from './bundle.ts'
 import type { Phase, Plugin } from './plugin.ts'
@@ -23,6 +25,53 @@ let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
 
 let held = (one: ReturnType<typeof g>, eid: string) =>
   (one.get([eid]) as Bundle[])[0]
+
+for (let count of [1, 2]) {
+  test(`warmed admission refreshes relative-time rules (${count} rows)`, () => {
+    let vocab = loadVocab([{
+      $defs: {
+        due: {
+          component: true,
+          type: 'object',
+          properties: { at: { type: 'string', format: 'date-time' } },
+        },
+      },
+    }])
+    let make = () =>
+      graph({
+        vocab,
+        storage: memory(),
+        plugins: [{
+          name: 'deadline',
+          admission: () => true,
+          rules: [{
+            phase: 'precondition',
+            match: '.due.at<now, *due',
+            run: () => {
+              throw new Refused('deadline passed')
+            },
+          }],
+        }],
+      })
+    let now = Date.parse('2026-10-03T12:00:00Z')
+    let input = Array.from({ length: count }, (_, i) => ({
+      entity: { eid: `due-${i}` },
+      due: { at: new Date(now + 60_000).toISOString() },
+    }))
+    let clock = Date.now
+    Date.now = () => now
+    try {
+      let warmed = make()
+      assertEquals(sync(warmed.admit(input)), sync(make().admit(input)))
+      now += 120_000
+      for (let one of [make(), warmed]) {
+        assertThrows(() => one.admit(input), Refused, 'deadline passed')
+      }
+    } finally {
+      Date.now = clock
+    }
+  })
+}
 
 test('a produce-only rule writes its template into what it matched', () => {
   let one = g([{
