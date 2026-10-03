@@ -21,7 +21,7 @@ import type { Resource, Rule } from './rules.ts'
 import type { Declared } from './declared.ts'
 import type { Derive } from './alias.ts'
 import type { Graph } from './graph.ts'
-import type { VocabDoc } from '@yaks/vocab'
+import type { Vocab, VocabDoc } from '@yaks/vocab'
 import type { ToolDefinition } from '@yaks/vocab/tools'
 
 /**
@@ -230,7 +230,25 @@ export type Tool<R = Bundle[]> = {
 }
 
 /** A read hook's caller options and committed storage, outside a transaction. */
-export type ReadContext = { opts: ReadOpts; tx: Tx }
+export type ReadContext = { opts: ReadOpts; tx: Tx; vocab?: Vocab }
+
+/** A caller's vocabulary over canonical candidates. The graph addresses
+ * `original` before asking for the view, reads whole candidates with `query`,
+ * and selects and projects `answer` with `original` and `vocab`. Transports
+ * may overlay their held canonical values before calling `answer`. */
+export type ReadView = {
+  /** The addressed query in the caller's vocabulary. */
+  original: Ast
+  /** A canonical candidate query, before final ordering and windowing. */
+  query: Ast
+  /** The caller's schema, including components absent from storage. */
+  vocab: Vocab
+  /** Canonical components whose changes can affect this answer, including
+   * dependencies on entities outside the selected candidate set. */
+  dependencies?: readonly string[]
+  /** Reconstruct the caller's whole bundles before its query selects them. */
+  answer: (bundles: Bundle[]) => Bundle[] | Promise<Bundle[]>
+}
 
 /**
  * A plugin: a self-contained contribution to a graph. It brings a component
@@ -241,6 +259,9 @@ export type ReadContext = { opts: ReadOpts; tx: Tx }
 export type Plugin = {
   /** Whether this caller needs the read hooks; false keeps the ordinary read path. */
   reads?: (opts: ReadOpts) => boolean
+  /** Supply a complete caller view; the first non-null view in plugin order
+   * owns this query. Native reads bypass views and ask/answer hooks. */
+  view?: (ctx: ReadContext, query: Ast) => ReadView | null | Promise<ReadView | null>
   /** Rewrite a parsed query after core addressing and before storage. */
   ask?: (ctx: ReadContext, query: Ast) => Ast | Promise<Ast>
   /** Rewrite outgoing bundles after storage and projection. */

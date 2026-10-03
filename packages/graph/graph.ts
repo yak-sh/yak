@@ -47,7 +47,8 @@
 // wrote inside the transaction is never left believing its rows are still
 // there.
 
-import { and, parse, want } from '@yaks/query'
+import { and, eq, list, parse, want } from '@yaks/query'
+import { matcher, rows as matchRows } from '@yaks/match'
 import { rulesIn, type Vocab } from '@yaks/vocab'
 import {
   type Context,
@@ -61,7 +62,7 @@ import { after, each, isPromise } from '@yaks/fp'
 import { type Actor, type Bundle, comps, type Eid } from './bundle.ts'
 import type { ReadTx, Row, Storage, Tx } from './storage.ts'
 import { detached, type Query, type ReadOpts } from './storage.ts'
-import type { Hook, Phase, Plugin, Tracker, WriteHook } from './plugin.ts'
+import type { Hook, Phase, Plugin, ReadView, Tracker, WriteHook } from './plugin.ts'
 import { type Derive, isAlias, resolve, substitute } from './alias.ts'
 import { identified, identities } from './identity.ts'
 import { mint as fresh } from './mint.ts'
@@ -216,6 +217,9 @@ export type Graph = {
   ask: (query: Query, opts?: ReadOpts) => Query | Promise<Query>
   /** Run plugin answer rewrites, also used by subscription transports. */
   answer: (bundles: Bundle[], opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
+  /** A caller view with canonical candidates and its addressed original query,
+   * or null when ordinary storage reads answer this caller directly. */
+  view: (query: Query, opts?: ReadOpts) => ReadView | null | Promise<ReadView | null>
   /** a query → the matching entities, each carrying the components the query
    * names (`*` for every one, ./projection.ts) */
   read: (query: Query, opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
@@ -273,6 +277,7 @@ export let graph = (opts: Options): Graph => {
   let plugins = [...(opts.plugins ?? [])]
   let askHooks = plugins.filter((p) => p.ask)
   let answerHooks = plugins.filter((p) => p.answer)
+  let viewHooks = plugins.filter((p) => p.view)
   const emptyReadOpts: ReadOpts = {}
   let report = opts.report ?? failed
   let mint = opts.mint ?? (() => fresh() as Eid)
@@ -895,7 +900,7 @@ export let graph = (opts: Options): Graph => {
       )
       if (!hooks.length) return q
       let ast = typeof q == 'string' ? parse(q) : q
-      let ctx = { opts: readOpts ?? emptyReadOpts, tx: detached(storage) }
+      let ctx = { opts: readOpts ?? emptyReadOpts, tx: detached(storage), vocab }
       return after(
         each(hooks, ast, (at, p) => p.ask!(ctx, at)),
         (out) => out === ast ? q : out,
@@ -908,17 +913,61 @@ export let graph = (opts: Options): Graph => {
       !p.reads || p.reads(readOpts ?? emptyReadOpts)
     )
     if (!hooks.length) return bundles
-    let ctx = { opts: readOpts ?? emptyReadOpts, tx: detached(storage) }
+    let ctx = { opts: readOpts ?? emptyReadOpts, tx: detached(storage), vocab }
     return each(hooks, bundles, (at, p) => p.answer!(ctx, at))
   }
 
   let rewrites = (readOpts?: ReadOpts) =>
     !readOpts?.native && (
       askHooks.some((p) => !p.reads || p.reads(readOpts ?? emptyReadOpts)) ||
-      answerHooks.some((p) => !p.reads || p.reads(readOpts ?? emptyReadOpts))
+      answerHooks.some((p) => !p.reads || p.reads(readOpts ?? emptyReadOpts)) ||
+      viewHooks.some((p) => !p.reads || p.reads(readOpts ?? emptyReadOpts))
     )
 
-  let get = (eids: Eid[], comps?: string[], readOpts?: ReadOpts) => {
+  let view = (query: Query, readOpts?: ReadOpts) => {
+    if (readOpts?.native || !viewHooks.length) return null
+    let hooks = viewHooks.filter((p) =>
+      !p.reads || p.reads(readOpts ?? emptyReadOpts)
+    )
+    if (!hooks.length) return null
+    return after(aim(query, address), (q) => {
+      let original = typeof q == 'string' ? parse(q) : q
+      let ctx = { opts: readOpts ?? emptyReadOpts, tx: detached(storage), vocab }
+      return after(
+        each(hooks, null as ReadView | null, (at, p) =>
+          at ?? p.view!(ctx, original)),
+        (out) => out ? { ...out, original } : null,
+      )
+    })
+  }
+
+  // Candidates must reach the answer as whole bundles, before any final
+  // shaping. Applying a caller's limit in storage could discard the only
+  // entity whose reconstructed values pass its filter.
+  let shaped = new Set([
+    'fields', 'every', 'count', 'distinct', 'tally', 'order', 'limit', 'after',
+  ])
+  let candidates = (v: ReadView, readOpts?: ReadOpts) =>
+    after(
+      storage.read({
+        ...v.query,
+        clauses: v.query.clauses.filter((c) => !shaped.has(c.kind)),
+      }, { ...readOpts, native: true }),
+      v.answer,
+    )
+
+  let readView = (v: ReadView, readOpts?: ReadOpts) =>
+    after(candidates(v, readOpts), (bundles) => {
+      let p = projection(v.vocab, v.original)
+      if (p) {
+        return flat(p.fold(matchRows(p.query, v.vocab, readOpts)(bundles)))
+      }
+      return matcher(v.original, v.vocab, readOpts)(bundles).map(
+        only(named(v.vocab, v.original)),
+      )
+    })
+
+  let getTranslated = (eids: Eid[], comps?: string[], readOpts?: ReadOpts) => {
     if (
       readOpts?.native || !askHooks.length && !answerHooks.length ||
       !rewrites(readOpts)
@@ -935,6 +984,21 @@ export let graph = (opts: Options): Graph => {
         (out) => answer(out, readOpts),
       )
     })
+  }
+
+  let get = (eids: Eid[], comps?: string[], readOpts?: ReadOpts) => {
+    if (!viewHooks.length || readOpts?.native || comps?.length === 0) {
+      return getTranslated(eids, comps, readOpts)
+    }
+    let q = and(eq('entity.eid', list(...eids)), ...comps?.map(want) ?? [])
+    return after(view(q, readOpts), (v) =>
+      v
+        ? after(storage.get(eids), (bundles) =>
+          after(v.answer(bundles), (out) =>
+            out.filter((b) => eids.includes(b.entity.eid)).map(
+              only(comps ? new Set(comps) : null),
+            )))
+        : getTranslated(eids, comps, readOpts))
   }
 
   let readStored = (q: Query, readOpts?: ReadOpts, nested = false) => {
@@ -962,6 +1026,13 @@ export let graph = (opts: Options): Graph => {
     query: Query,
     readOpts?: ReadOpts,
   ): Bundle[] | Promise<Bundle[]> => {
+    if (viewHooks.length && !readOpts?.native) {
+      return after(view(query, readOpts), (v) =>
+        v ? readView(v, readOpts) : readRenamed(query, readOpts))
+    }
+    return readRenamed(query, readOpts)
+  }
+  let readRenamed = (query: Query, readOpts?: ReadOpts) => {
     if (!rewrites(readOpts)) return readPlain(query, readOpts)
     return after(
       ask(query, readOpts),
@@ -972,7 +1043,9 @@ export let graph = (opts: Options): Graph => {
         ),
     )
   }
-  let read = askHooks.length || answerHooks.length ? readTranslated : readPlain
+  let read = askHooks.length || answerHooks.length || viewHooks.length
+    ? readTranslated
+    : readPlain
 
   let rowsPlain = (query: Query, readOpts?: ReadOpts) =>
     after(aim(query, address), (q) => storage.rows(q, readOpts))
@@ -981,6 +1054,15 @@ export let graph = (opts: Options): Graph => {
     query: Query,
     readOpts?: ReadOpts,
   ): Row[] | Promise<Row[]> => {
+    if (viewHooks.length && !readOpts?.native) {
+      return after(view(query, readOpts), (v) =>
+        v
+          ? after(candidates(v, readOpts), matchRows(v.original, v.vocab, readOpts))
+          : rowsRenamed(query, readOpts))
+    }
+    return rowsRenamed(query, readOpts)
+  }
+  let rowsRenamed = (query: Query, readOpts?: ReadOpts) => {
     if (!rewrites(readOpts)) return rowsPlain(query, readOpts)
     return after(ask(query, readOpts), (q) => {
       if (q === query) return storage.rows(q, readOpts)
@@ -1008,7 +1090,9 @@ export let graph = (opts: Options): Graph => {
       }
     })
   }
-  let rows = askHooks.length || answerHooks.length ? rowsTranslated : rowsPlain
+  let rows = askHooks.length || answerHooks.length || viewHooks.length
+    ? rowsTranslated
+    : rowsPlain
 
   let g: Graph = {
     vocab,
@@ -1020,11 +1104,13 @@ export let graph = (opts: Options): Graph => {
     rewrites,
     ask,
     answer,
+    view,
     use: (plugin) => {
       plugins.push(plugin)
       if (plugin.ask) askHooks.push(plugin)
       if (plugin.answer) answerHooks.push(plugin)
-      if (plugin.ask || plugin.answer) {
+      if (plugin.view) viewHooks.push(plugin)
+      if (plugin.ask || plugin.answer || plugin.view) {
         read = readTranslated
         rows = rowsTranslated
       }
