@@ -1,5 +1,5 @@
 /** Chat Completions for generated media and Alibaba explicit-cache models. */
-import { ModelError, type Reply, type Request } from '@yaks/model'
+import { cacheExpiry, ModelError, type Reply, type Request } from '@yaks/model'
 import { generatedMedia, jsonFrames, type MediaStore } from '@yaks/openai'
 import { chatTools, messages } from './prompt.ts'
 import { generationCost } from './cost.ts'
@@ -145,6 +145,7 @@ export let chat = async (
   }
   let id = '', model = req.model, text = '', chunks: string[] = []
   let images: unknown[] = [], reported: unknown
+  let cacheExpiresAt: string | null | undefined
   let calls = new Map<number, { id: string; name: string; args: string }>()
   let receive = (value: Data) => {
     if (value.error) {
@@ -157,6 +158,9 @@ export let chat = async (
     id = str(value.id) || id
     model = str(value.model) || model
     reported = value.usage ?? reported
+    if (value.cache_expires_at !== undefined) {
+      cacheExpiresAt = cacheExpiry(value.cache_expires_at) ?? null
+    }
     let choice = obj(list(value.choices)[0])
     let delta = obj(choice.delta ?? choice.message)
     let audioPart = obj(delta.audio)
@@ -229,5 +233,6 @@ export let chat = async (
     ],
     ...artifacts.length ? { artifacts } : {},
     ...billed,
+    ...cacheExpiresAt !== undefined ? { cacheExpiresAt } : {},
   }
 }

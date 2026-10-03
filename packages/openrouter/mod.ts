@@ -1,7 +1,13 @@
 import { listing, speechModels } from './list.ts'
 export { listed, listing } from './list.ts'
 /** OpenRouter's stateless OpenResponses adapter. */
-import type { Model, Reply, Request } from '@yaks/model'
+import {
+  type CacheContext,
+  type Model,
+  prefixCacheMark,
+  type Reply,
+  type Request,
+} from '@yaks/model'
 import {
   type Options as ResponsesOptions,
   responses as openResponses,
@@ -63,7 +69,9 @@ export let responses = (options: Options): Model => {
         )
       },
       vocab: openrouterDoc,
-      mark: (reply: Reply) => ({ openrouter: { response_id: reply.id } }),
+      mark: (reply: Reply, cache?: CacheContext) => ({
+        openrouter: { response_id: reply.id, ...prefixCacheMark(reply, cache) },
+      }),
     },
   )
 }

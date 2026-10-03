@@ -50,3 +50,62 @@ test('metadata transport failure does not suppress a model ask', async () => {
   assertEquals(confirmed.model, { name: 'release', offered: true })
   assertEquals(confirmed.pending as Comp | undefined, undefined)
 })
+
+test('resolved provider snapshots dispatch retention on every reply and keeps explicit expiry', async () => {
+  let vocab = loadVocab([kernelDoc, edgeDoc, modelDoc], [
+    kernelKeywords,
+    edgeKeywords,
+  ])
+  let g = graph({ storage: ram(vocab), vocab })
+  let provider = identityEid('provider', ['cache-provider'])
+  let model = identityEid('model', ['cached-model'])
+  await g.apply([
+    {
+      entity: { eid: provider },
+      provider: { name: 'cache-provider', cache_retention: 300 },
+    },
+    {
+      entity: { eid: model },
+      model: { name: 'cached-model' },
+      price: { input: 0, output: 0 },
+    },
+    {
+      entity: { eid: edgeEid(provider, 'serves', model) },
+      edge: { from: provider, to: model },
+      serves: { name: 'cached-model' },
+    },
+  ])
+  let explicit: string | null | undefined
+  let fake: Model = async (req) => {
+    // A provider row changing while a request runs cannot change its snapshot.
+    await g.apply([{
+      entity: { eid: provider },
+      provider: { cache_retention: null },
+    }])
+    return {
+      id: 'r',
+      model: req.model,
+      items: [],
+      ...explicit !== undefined ? { cacheExpiresAt: explicit } : {},
+    }
+  }
+  let served = await providerResolver(g, { 'cache-provider': fake })(
+    { provider },
+    (await g.get([model]))[0],
+  )
+  let before = Date.now()
+  let reply = await served.model({ model: served.name, items: [], tools: [] })
+  let expiry = Date.parse(reply.cacheExpiresAt!)
+  assertEquals(
+    expiry >= before + 300_000 && expiry <= Date.now() + 300_000,
+    true,
+  )
+  reply = await served.model({ model: served.name, items: [], tools: [] })
+  assertEquals(reply.cacheExpiresAt, null)
+  explicit = '2026-10-03T09:00:00Z'
+  reply = await served.model({ model: served.name, items: [], tools: [] })
+  assertEquals(reply.cacheExpiresAt, '2026-10-03T09:00:00.000Z')
+  explicit = null
+  reply = await served.model({ model: served.name, items: [], tools: [] })
+  assertEquals(reply.cacheExpiresAt, null)
+})

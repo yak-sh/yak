@@ -49,6 +49,11 @@
         },
         "offered": {
           "type": "boolean"
+        },
+        "cache_retention": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "documented cached-prefix retention in seconds for this provider\u2019s configured endpoint and models; used from request start only when the answer has no explicit expiry. Missing means unknown"
         }
       }
     },
@@ -83,7 +88,11 @@
           "type": "array",
           "items": {
             "type": "string",
-            "enum": ["text", "image", "audio"]
+            "enum": [
+              "text",
+              "image",
+              "audio"
+            ]
           },
           "uniqueItems": true,
           "description": "the outputs requested when this model is asked"

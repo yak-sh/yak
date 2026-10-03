@@ -126,3 +126,19 @@ Audio cost is the provider's billed amount: chat audio uses `usage.cost`, and
 speech uses its `X-Generation-Id` to read `/api/v1/generation`'s
 `data.total_cost`. Missing audio usage takes the same lookup. Only metadata
 lookups retry; a paid generation is never replayed to obtain its bill.
+
+## Cached-prefix expiry
+
+Responses and Chat Completions preserve explicit `cache_expires_at` metadata and
+mark `openrouter.cache_expires_at`. Missing metadata uses only the selected
+provider row's documented retention through the session resolver; missing
+retention remains cold. See
+[cached-prefix expiry](../model/README.md#cached-prefix-expiry).
+
+OpenRouter's
+[prompt caching documentation](https://openrouter.ai/docs/guides/best-practices/prompt-caching)
+describes different retention and cache controls for routed providers. A single
+OpenRouter row can serve those different models, so it has no universal
+retention default. Set `provider.cache_retention` only when that row's routed
+models and cache configuration share a verified conservative retention. Neither
+cached-token counts nor OpenRouter response caching imply prefix expiry.

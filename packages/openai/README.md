@@ -214,3 +214,37 @@ validated with mocked responses, not a paid live request.
 See the
 [OpenAI web search guide](https://developers.openai.com/api/docs/guides/tools-web-search)
 for provider behavior and supported models.
+
+## Cached-prefix expiry
+
+The adapter accepts explicit `cache_expires_at` response metadata (ISO instant
+or Unix seconds) and records the effective expiry as `openai.cache_expires_at`.
+It does not infer prompt expiry from `expires_at`, `previous_response_id`, or
+cached-token usage. See
+[cached-prefix expiry](../model/README.md#cached-prefix-expiry) for the
+dispatch-time fallback and reader.
+
+OpenAI's
+[prompt caching documentation](https://developers.openai.com/api/docs/guides/prompt-caching)
+distinguishes model families: GPT-5.6 and later default to a minimum of 30
+minutes after write or reuse; earlier models' in-memory retention is usually
+5–10 minutes, and extended retention has separate model/organization rules. This
+adapter does not select a retention policy. A conservative 300-second estimate
+is appropriate only for a provider row whose API models and configuration have a
+verified documented retention of at least that long. It is an estimate, not a
+cache-hit guarantee. API documentation is not a TTL promise for Codex's ChatGPT
+backend or an arbitrary compatible endpoint; those rows remain unknown unless an
+applicable retention is verified or explicit expiry is returned. No provider row
+is automatically seeded with a TTL.
+
+The public response schema does not promise `cache_expires_at`; the adapter
+accepts it as explicit endpoint metadata when returned, not assumed to exist.
+
+For the locus administering a verified API provider (replace the eid), after
+loading the vocabulary:
+
+```sh
+printf '%s\n' '[{"entity":{"eid":"<verified-api-provider-eid>"},"provider":{"cache_retention":300}}]' > retention.json
+yak graph apply --bundles @retention.json --check
+# Apply without --check only after verifying this provider's endpoint/models.
+```

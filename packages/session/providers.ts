@@ -7,7 +7,7 @@
 // agent @yaks/spawn launches, or another host lent that provider.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
-import { confirmed, type Model, ModelError } from '@yaks/model'
+import { confirmed, type Model, ModelError, prefixCacheMark } from '@yaks/model'
 import type { Served } from './react.ts'
 
 /** One provider's offering of a model: who serves it, under what name, and
@@ -121,6 +121,15 @@ async (using, model) => {
       (m): m is 'text' | 'image' | 'audio' =>
         m == 'text' || m == 'image' || m == 'audio',
     )
+    // Read retention per dispatch, not at startup or completion. The answer's
+    // explicit expiry wins; unknown providers must not inherit another TTL.
+    let [providerRow] = found.provider
+      ? await g.get([found.provider], ['provider'])
+      : []
+    let cache = {
+      requestedAt: Date.now(),
+      retention: (providerRow?.provider as Comp | undefined)?.cache_retention,
+    }
     let reply = await serve({
       ...req,
       ...!req.modalities && modalities?.length ? { modalities } : {},
@@ -134,7 +143,10 @@ async (using, model) => {
         { trusted: true },
       )
     }
-    return reply
+    return {
+      ...reply,
+      cacheExpiresAt: prefixCacheMark(reply, cache).cache_expires_at,
+    }
   }, serve)
   return { model: wrapped, name: found.name }
 }

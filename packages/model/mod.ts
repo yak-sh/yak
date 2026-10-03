@@ -70,6 +70,9 @@ export {
 } from './media.ts'
 
 export { modelDoc }
+export { cachedPrefixExpires, cacheExpiry, prefixCacheMark } from './cache.ts'
+export type { CacheContext } from './cache.ts'
+import type { CacheContext } from './cache.ts'
 
 export let PROVIDER = 'provider'
 export let MODEL = 'model'
@@ -250,6 +253,10 @@ export type Reply = {
   /** the answer to each of the request's questions, by the question's name */
   answers?: Record<string, Answer>
   usage?: Usage
+  /** Effective cached-prefix expiry, not response/credential retention. Adapters
+   * supply explicit expiry; the resolver applies documented retention. Null
+   * means the provider sent an invalid value; it must not gain a fallback. */
+  cacheExpiresAt?: string | null
   /** the dollars the provider reported this request cost, where it reports
    * them; a caller weighs `usage` at the model's {@link Price} otherwise */
   cost?: number
@@ -275,7 +282,7 @@ export type Model = ((req: Request) => Promise<Reply>) & {
   recover?: (call: string) => Promise<Reply>
   list?: () => Promise<Listed[]>
   info?: (name: string) => Promise<Listed | undefined>
-  mark?: (reply: Reply) => Mark
+  mark?: (reply: Reply, cache?: CacheContext) => Mark
   anchor?: (comps: Record<string, unknown>) => string | undefined
   vocab?: VocabDoc
 }

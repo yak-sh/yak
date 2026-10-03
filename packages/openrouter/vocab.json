@@ -4,7 +4,16 @@
     "openrouter": {
       "component": true,
       "description": "OpenRouter response metadata; not a server-side continuation handle.",
-      "properties": { "response_id": { "type": "string" } }
+      "properties": {
+        "response_id": {
+          "type": "string"
+        },
+        "cache_expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "the recorded expiry of this request\u2019s cached prefix; provider-reported where present, otherwise request start plus documented provider retention. Missing means unknown, not warm"
+        }
+      }
     }
   }
 }

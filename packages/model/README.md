@@ -455,3 +455,33 @@ provider adapters implement `Model`. The `tool` component belongs to
 [@yaks/tools](../tools/README.md), and generated artifacts to
 [@yaks/blob](../blob/README.md). Applications provide graph storage and private
 media receipt storage.
+
+## Cached-prefix expiry
+
+A **cached-prefix expiry** is the instant a completed request's prompt cache is
+expected to stop being reusable, not the lifetime of a stored response or a
+credential. Providers record `cache_expires_at` on their own ask component.
+`cachedPrefixExpires` reads that snapshot; absent or invalid expiry is unknown
+and must not justify routing a reply to a settled session.
+
+```ts
+import { cachedPrefixExpires } from '@yaks/model'
+import { equal } from '@yaks/testing'
+
+equal(
+  cachedPrefixExpires({
+    openai: { cache_expires_at: '2026-10-03T10:05:00Z' },
+  }),
+  '2026-10-03T10:05:00.000Z',
+)
+equal(cachedPrefixExpires({ usage: { cached_tokens: 1000 } }), undefined)
+```
+
+The session provider resolver reads `provider.cache_retention` (seconds) at
+request dispatch and snapshots dispatch plus retention when no explicit expiry
+is returned. An invalid explicit expiry does not gain a fallback. Set retention
+only from documentation applicable to that provider's endpoint and models; there
+is no transport-wide default. Existing asks without expiry remain cold, so no
+backfill is needed. Consumers also require a completed ask, known
+`usage.input_tokens` and `usage.output_tokens`, and the selected
+`model.context`.

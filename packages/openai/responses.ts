@@ -3,9 +3,12 @@ import { generatedImages, type Images } from './images.ts'
 // Provider-neutral model items in and out; transport.ts alone owns the HTTP
 // calls to the Responses API.
 import {
+  type CacheContext,
+  cacheExpiry,
   type Item,
   type Model,
   ModelError,
+  prefixCacheMark,
   type Reply,
   type Request,
   type Usage,
@@ -209,7 +212,12 @@ export let responses = (opts: Options): Model =>
     list: async () =>
       listing(await opts.credential(), opts.fetch, opts.refresh, opts.headers),
     vocab: openaiDoc,
-    mark: (reply: Reply) => ({ [OPENAI_COMP]: { response_id: reply.id } }),
+    mark: (reply: Reply, cache?: CacheContext) => ({
+      [OPENAI_COMP]: {
+        response_id: reply.id,
+        ...prefixCacheMark(reply, cache),
+      },
+    }),
     anchor: (comps: Record<string, unknown>) => {
       if (!opts.store) return undefined
       let id = (comps[OPENAI_COMP] as Record<string, unknown> | undefined)
@@ -266,6 +274,11 @@ let ask = (opts: Options) => {
       return {
         id: str(out.response.id),
         model: out.model,
+        ...out.response.cache_expires_at !== undefined
+          ? {
+            cacheExpiresAt: cacheExpiry(out.response.cache_expires_at) ?? null,
+          }
+          : {},
         items: items(out.items),
         ...artifacts.length ? { artifacts } : {},
         ...tokenUsage(out.response.usage),

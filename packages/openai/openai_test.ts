@@ -308,7 +308,9 @@ test('the Model shares refresh, redacted frame hooks, store, and anchor policy',
   })
   let reply = await model(req)
   assertEquals(seen[0], '[redacted]')
-  assertEquals(model.mark!(reply), { openai: { response_id: 'r1' } })
+  assertEquals(model.mark!(reply), {
+    openai: { response_id: 'r1', cache_expires_at: null },
+  })
   assertEquals(model.anchor!(model.mark!(reply)), 'r1')
   assertEquals(
     responses({ credential: () => codex }).anchor!(model.mark!(reply)),
@@ -378,4 +380,43 @@ test('equivalent tool registries produce an identical request prefix', () => {
   assertEquals(JSON.stringify(first), JSON.stringify(second))
   assertEquals(first.prompt_cache_key, 'stable')
   assertEquals(body(req).prompt_cache_key, undefined)
+})
+
+test('prefix expiry is explicit metadata, not stored response lifetime or cached tokens', async () => {
+  for (let value of [1791021900, 'bad', undefined]) {
+    let model = responses({
+      credential: () => ({ token: 'mock', base: 'https://api.openai.com/v1' }),
+      fetch: () =>
+        Promise.resolve(
+          new Response(
+            sse({
+              type: 'response.completed',
+              response: {
+                id: 'r',
+                model: 'm',
+                status: 'completed',
+                expires_at: 1791025500,
+                ...value !== undefined ? { cache_expires_at: value } : {},
+                usage: { input_tokens_details: { cached_tokens: 1000 } },
+              },
+            }),
+            { headers: { 'content-type': 'text/event-stream' } },
+          ),
+        ),
+    })
+    let reply = await model({ model: 'm', items: [], tools: [] })
+    assertEquals(
+      model.mark?.(reply, { requestedAt: 1791021600000, retention: 300 })
+        ?.openai.cache_expires_at,
+      value === 'bad' ? null : '2026-10-03T10:05:00.000Z',
+    )
+    assertEquals(
+      reply.cacheExpiresAt,
+      value === undefined
+        ? undefined
+        : value === 'bad'
+        ? null
+        : '2026-10-03T10:05:00.000Z',
+    )
+  }
 })

@@ -86,7 +86,9 @@ test('OpenRouter shares Responses transport but not credentials, anchors or nati
     args: '{"q":"x"}',
   })
   assertEquals(model.anchor, undefined)
-  assertEquals(model.mark?.(reply), { openrouter: { response_id: 'or-1' } })
+  assertEquals(model.mark?.(reply), {
+    openrouter: { response_id: 'or-1', cache_expires_at: null },
+  })
   await model({
     model: 'vendor/model',
     items: [{ kind: 'user', text: 'hi' }, ...reply.items, {
@@ -425,4 +427,37 @@ test('generation metadata lag retries only lookup and obeys cancellation', async
         return Promise.resolve(new Response('', { status: 404 }))
       },
     }), DOMException)
+})
+
+test('explicit prefix expiry is recorded through Responses and chat, not response-cache TTL', async () => {
+  for (let modelName of ['vendor/model', 'qwen/qwen3-max']) {
+    let model = responses({
+      key: () => 'mock',
+      speech: [],
+      fetch: () =>
+        Promise.resolve(
+          modelName.startsWith('qwen/')
+            ? sse([{
+              id: 'r',
+              model: modelName,
+              cache_expires_at: 1791021900,
+              choices: [],
+            }])
+            : sse([{
+              type: 'response.completed',
+              response: {
+                id: 'r',
+                model: modelName,
+                status: 'completed',
+                cache_expires_at: 1791021900,
+              },
+            }]),
+        ),
+    })
+    let reply = await model({ model: modelName, items: [], tools: [] })
+    assertEquals(
+      model.mark?.(reply)?.openrouter.cache_expires_at,
+      '2026-10-03T10:05:00.000Z',
+    )
+  }
 })
