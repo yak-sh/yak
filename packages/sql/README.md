@@ -1,21 +1,31 @@
 # @yaks/sql
 
-SQL, and the only place SQL text is written. Statements are values built from
-this package's nodes and turned into text and bound parameters by `render`. Its
-largest user compiles a [@yaks/query](../query/README.md) abstract syntax tree
-(AST) against a [@yaks/vocab](../vocab/README.md) component schema. It opens no
-database, executes no statements, and stores no data. The supplied SQLite
-dialect targets the layout maintained by [@yaks/sqlite](../sqlite/README.md).
+Build SQL as data and compile [query ASTs](../query/README.md#query-model)
+against a [vocabulary](../vocab/README.md#vocabulary). Render the result as
+SQLite text with bound parameters, or pass it to a driver. The package opens no
+database; [@yaks/sqlite](../sqlite/README.md) supplies the storage adapter.
+
+A **node** is a plain object with a `t` tag describing SQL, such as
+`{ t: 'col', name: 'title' }`. An **expression** (`Expr`) is a node used as a
+column value, condition or argument. A **statement** (`Stmt`) is a node an
+engine can execute: a select, write or schema operation. A **parameter**
+(`Param`) is a value bound to a statement's `?` placeholder.
+
+**Raw** is SQL text with its parameters in order, made by this package:
+`{ t: 'raw', sql: 'select ?', params: ['Dune'], … }`. `Compiled` is a type alias
+for `Raw`. Callers build nodes; only this package constructs `Raw`, which can
+also be embedded in another node.
+
+## Compile a query
 
 ```sh
 deno add jsr:@yaks/sql jsr:@yaks/query jsr:@yaks/vocab
 ```
 
-## The pipeline
-
 ```ts
-import { compile } from '@yaks/sql'
+import { bind, compile, render } from '@yaks/sql'
 import { parse } from '@yaks/query'
+import { equal } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
 
 let vocab = loadVocab({
@@ -30,180 +40,412 @@ let vocab = loadVocab({
     },
   },
 })
-let ast = parse('.task.status=open&.task.priority>=1')
-let { sql, params } = compile(ast, vocab)
-// Execute sql with params using your database driver.
+let ast = parse('.task.status=open .task.priority>=1')
+let compiled = compile(ast, vocab)
+equal(compiled.params, ['open', 1])
+equal(render(bind(ast, vocab)).sql, compiled.sql)
 ```
 
-`bind(ast, vocab, opts)` resolves paths, coerces values to their declared types,
-collects joins, and builds a `Select`. `render(select)` returns the statement as
-a `Raw`, `{ sql, params }`; `compile` calls both. Values belong in `params` in
-their returned order.
-
-## Terms used here
-
-- **Entity table:** every entity the graph writes has a row containing its
-  integer primary key `id`, public string `eid`, optional human-readable number
-  `num`, and `archetype` pointer.
-- **Component table:** a table named for a component, with an integer `entity`
-  owner column and the component's declared columns. A LEFT JOIN returns NULL
-  for an absent component's columns. Presence checks distinguish a missing row
-  from a row whose values are all NULL.
-- **Reference column:** stores another entity's integer `id`. Comparing it to a
-  public `eid` resolves that string through the entity table.
-- **Presence test:** asks whether a component exists, such as `.task`, `.doc`,
-  or `!claim`, without comparing a stored value.
-
-Deleted entities retain their identity rows and appear in `tombstone`. Compiled
-queries exclude these entities.
+`bind` resolves [paths](../query/README.md#query-model), coerces values to their
+declared types, collects joins and returns a `Select`. `render` returns `Raw`;
+`compile` calls both. Send `sql` and `params` together to the engine.
+`BindOpts.now` fixes the moment relative time literals resolve against.
 
 ## Exports
 
-The package has one import path, `@yaks/sql`. It exports:
+All exports use the single import path `@yaks/sql`.
 
-- `compile`, `bind`, `BindOpts`, `Compiled`, and `Unsupported` for compilation,
-  `screen` for the ids a query admits, and `tallied` for how an aggregate counts
-  a property's values;
-- the statement nodes (`Select`, `Insert`, `CreateTable`, `Stmt`, `Expr`, …),
-  their builders (`select`, `col`, `val`, `eq`, `and`, `among`, `when`, …), and
-  `render`;
-- `Tag`/`tagOf` for the supplied SQL layout;
-- `Derived`/`DerivedProp` and `Extension`/`Site` for application expressions;
-- `rule` and `Plan`/`On`/`At`/`Gone` for a rule's match as one statement;
-- `archetypeSet` and its types for component-presence optimization;
-- `doomSql`, `looseSql`, `narrow`, `DEEP`, and compound-query helpers including
-  `ARMS` and `STOCK` for deletion planning;
-- reference-walk and identity helpers, re-exported from `walk.ts` and
-  `ident.ts`.
+| Part                  | Exports                                                                                                                     |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Query compilation     | `compile`, `bind`, `BindOpts`, `Compiled`, `screen`, `tallied`, `Unsupported`, `whole`                                      |
+| SQL nodes             | `Expr`, `Query`, `Stmt`, `Select`, `Insert`, `Update`, `Delete`, schema-operation types, `Raw`, `Param`, and their builders |
+| Rendering             | `render`, `shape`, `isRaw`                                                                                                  |
+| Drivers               | `Driver`, `Row`, `effect`, `scan`, `tally`                                                                                  |
+| Property reads        | `Tag`, `tagOf`, `held`, `field`, `Derived`, `DerivedProp`, `ladders`, `derivedOf`, `worn`                                   |
+| Computed components   | `Backing`, `Backings`, `eidOf`, `idOf`, `eidAt`                                                                             |
+| Clause compilation    | `Extension`, `Compile`, `Site`, `OrderBy`, `Begin`, `Screen`                                                                |
+| Presence optimization | `ArchetypeSet`, `Matching`, `archetypeSet`                                                                                  |
+| Rule compilation      | `rule`, `Plan`, `On`, `At`, `Gone`                                                                                          |
+| Reference lookups     | `identity`, `Identity`, `walk`                                                                                              |
+| Deletion lookups      | `doomSql`, `looseSql`, `narrow`, `DEEP`                                                                                     |
+| Compound statements   | `Arm`, `arms`, `cut`, `ARMS`, `STOCK`                                                                                       |
 
-See [mod.ts](./mod.ts) for the complete re-export list.
+[mod.ts](./mod.ts) lists every node type and builder.
 
-## The AST
+## Build and render nodes
 
-[ast.ts](./ast.ts) holds the nodes: expressions (columns, bound values,
-literals, functions, operators, `in`, `exists`, `case`, subqueries, a trigger's
-`raise`), queries (`select` with CTEs and joins, compounds such as `union all`,
-`values`), writes with upserts and `returning`, and DDL (tables, indexes, views,
-virtual tables, triggers, `alter`, `drop`, pragmas, transactions). Every node is
-plain data.
-
-[render.ts](./render.ts) writes one as SQLite text with `?` placeholders.
-Identifiers are always quoted; function, type and pragma names are checked
-against their grammar; operators come from a fixed list. A value is a bound
-parameter, except where SQLite binds nothing (a trigger, a view, a default, a
-check, an index's `where`), where it is written as a literal. AND and OR nest in
-halves, so a long list never exceeds SQLite's depth limit.
-
-`Raw` is the one node that carries text. Only this package makes one, and
-`render` returns one, so a caller holds finished statements but cannot write
-text of its own. The query binder still assembles its storage layout from text
-behind the SQLite dialect ([sqlite.ts](./sqlite.ts)), which is internal.
-
-## Matching on the archetype column
-
-An archetype describes an entity's set of components. With `opts.archetypes`, a
-presence test can compile to `entity.archetype in (…)` instead of a read of the
-component's table. `archetypeSet(cache, ids)` constructs this resolver from an
-`@yaks/archetype` cache and a map from descriptor eids to database integer ids.
-
-This optimization handles AND/OR/NOT, presence through a reference or reverse
-association, and `.kind=`. Kind matching requires the named kind and excludes
-kinds preceding it in the vocabulary's ordering. Value comparisons still read
-the relevant columns.
-
-The resolver must describe a current, complete catalog for the query. Returning
-`undefined` declines; returning `[]` means nothing matches. Without a resolver
-or a dialect's `archetype` expression, presence tests the component's own owners
-(`id in (select entity from memo)`) and absence the rest, which SQLite drives
-from the component's rows with or without table statistics. `@yaks/sqlite` loads
-the catalog lazily when its vocabulary includes archetypes.
-
-## Computed properties
-
-A property declared `computed: true` has no stored value. Supply its SQL
-expression, built from the AST, in a `Derived` map keyed by
-`component.property`. A derived entry can also override how a stored property is
-read. SQL can then filter the expression without first loading every entity into
-JavaScript; index use depends on the expression and database query plan.
+Builders such as `col`, `val`, `eq` and `select` make nodes. Queries support
+joins, common table expressions, grouping, windows, compounds and subqueries.
+Writes support upserts and `returning`. Schema operations include tables,
+indexes, views, virtual tables, triggers, alterations, drops and pragmas;
+transaction operations and `explain query plan` are statements too.
 
 ```ts
-import { col, type Derived, eq, fn, lit, select, sub, table } from '@yaks/sql'
+import {
+  among,
+  col,
+  each,
+  eq,
+  insert,
+  render,
+  select,
+  shape,
+  table,
+  val,
+} from '@yaks/sql'
+import { equal } from '@yaks/testing'
 
-let derived: Derived = {
-  'order.total': {
-    tag: 'number',
-    expr: (owner) =>
-      sub(select({
-        cols: [fn('coalesce', fn('sum', col('amount', 'line')), lit(0))],
-        from: table('line'),
-        where: eq(col('order', 'line'), owner),
-      })),
-  },
-}
-// With order.total declared in your vocabulary:
-// compile(ast, vocab, { derived })
+let read = render(select({
+  cols: [col('title')],
+  from: table('book'),
+  where: eq(col('author'), val("O'Brien")),
+}))
+equal(read.sql, 'select "title" from "book" where "author" = ?')
+equal(read.params, ["O'Brien"])
+equal(render(insert('book', { title: 'Dune' })).params, ['Dune'])
+
+// A set of any length uses one parameter.
+equal(render(among(col('id'), each([1, 2, 3]))).params, ['[1,2,3]'])
+
+let schema = render({
+  t: 'create table',
+  name: 'book',
+  cols: [{ name: 'title', type: 'text', default: val("O'Brien") }],
+})
+equal(schema.sql, `create table "book" ("title" text default 'O''Brien')`)
+equal(schema.params, [])
+equal(shape(schema), 'create table "book" ("title" text default ?)')
 ```
 
-`tag` controls comparison coercion; `values` supplies enum members; `deps` names
-extra component joins. `text(stored)` optionally reads an old/new stored value
-without looking up its owner, for example in full-text index triggers.
+Compose queries from nodes without writing SQL text:
 
-A status ladder needs no entry. A component whose vocabulary declares `status`
-([@yaks/vocab](../vocab/README.md)) has its computed `status` read as a `case`
-over an `exists` per rung, built from that declaration for every store
-(`ladders(vocab)`); an entry of your own for the same property wins.
+```ts
+import {
+  as,
+  col,
+  eq,
+  fn,
+  join,
+  lit,
+  over,
+  render,
+  select,
+  sub,
+  table,
+  unionAll,
+  val,
+} from '@yaks/sql'
+import { equal } from '@yaks/testing'
 
-A qualified derived property returns NULL when its entity lacks that component
-unless `worn: false` is set. Use that option for expressions intended to work
-without the component, such as an update time that falls back to creation time.
+let titles = select({ cols: [col('title')], from: table('book') })
+let query = select({
+  with: [{
+    name: 'titles',
+    q: unionAll(titles, select({ cols: [val('Untitled')] })),
+  }],
+  cols: [
+    col('title', 'titles'),
+    as(over(fn('row_number'), undefined, [col('title', 'titles')]), 'position'),
+  ],
+  from: table('titles'),
+  joins: [
+    join(table('book'), eq(col('title', 'book'), col('title', 'titles'))),
+  ],
+  where: eq(col('title', 'titles'), sub(select({ cols: [val('Dune')] }))),
+})
+equal(render(query).params, ['Untitled', 'Dune'])
+equal(render(query).sql.includes('row_number() over'), true)
+equal(
+  render(select({ cols: [lit(1)], from: { t: 'from', q: titles } })).params,
+  [],
+)
+```
+
+Writes are nodes too; upserts bind their update values after their inserted
+values:
+
+```ts
+import { col, eq, insert, render, val } from '@yaks/sql'
+import { equal } from '@yaks/testing'
+
+let write = {
+  ...insert('book', { title: 'Dune' }),
+  upsert: [{ on: [col('title')], set: { title: val('Dune Messiah') } }],
+  returning: [col('title')],
+}
+equal(render(write).params, ['Dune', 'Dune Messiah'])
+equal(
+  render({
+    t: 'update',
+    table: 'book',
+    set: { title: val('Dune') },
+    where: eq(col('id'), val(7)),
+  }).params,
+  ['Dune', 7],
+)
+equal(
+  render({ t: 'delete', from: 'book', where: eq(col('id'), val(7)) }).params,
+  [7],
+)
+```
+
+Schema nodes inline values that SQLite stores for later execution. Transaction
+nodes name the engine's transaction operations:
+
+```ts
+import { col, insert, render, select, type Stmt, table, val } from '@yaks/sql'
+import { equal } from '@yaks/testing'
+
+let statements: Stmt[] = [
+  { t: 'create index', name: 'by_title', on: 'book', cols: [col('title')] },
+  { t: 'create view', name: 'titles', q: select({ cols: [val('Dune')] }) },
+  { t: 'create virtual table', name: 'search', using: 'fts5', args: ['title'] },
+  {
+    t: 'create trigger',
+    name: 'added',
+    timing: 'after',
+    event: 'insert',
+    on: 'book',
+    body: [insert('log', { message: 'added' })],
+  },
+  { t: 'alter table', table: 'book', add: { name: 'author', type: 'text' } },
+  { t: 'drop', kind: 'view', name: 'titles', ifExists: true },
+  { t: 'pragma', name: 'journal_mode', value: 'wal' },
+  { t: 'explain query plan', of: select({ from: table('book') }) },
+]
+equal(
+  statements.map((statement) => render(statement).params),
+  statements.map(() => []),
+)
+equal(render(statements[1]).sql, `create view "titles" as select 'Dune'`)
+equal(render(statements[3]).sql.includes("values ('added')"), true)
+equal(render({ t: 'begin', mode: 'immediate' }).sql, 'begin immediate')
+equal(render({ t: 'savepoint', name: 'write' }).sql, 'savepoint "write"')
+equal(render({ t: 'rollback', to: 'write' }).sql, 'rollback to "write"')
+equal(render({ t: 'release', name: 'write' }).sql, 'release "write"')
+equal(render({ t: 'commit' }).sql, 'commit')
+```
+
+Identifiers are quoted. Function, type, pragma and module names are checked;
+operators come from a fixed list. `val` binds a parameter except where SQLite
+stores SQL to execute later (triggers, views, defaults, checks and partial index
+conditions); there it renders a quoted literal. `lit` always renders a literal.
+AND and OR nest in halves when large to avoid SQLite's expression depth limit.
+`shape` masks literals as well as leaving parameter placeholders visible, while
+keeping identifiers for diagnosis. Treat built nodes as immutable: rendering
+caches parameter-free parts.
+
+## Driver
+
+A **driver** (`Driver`) is the synchronous boundary that executes statements.
+Its `query` returns **rows** (`Row`), objects keyed by column name. An optional
+`run` returns the number of rows changed, excluding triggers. `effect` uses
+`run` when available and otherwise `query`; `scan` selects rows and `tally`
+counts them.
+
+This example supplies a driver that records the rendered statement. A storage
+adapter supplies the engine connection.
+
+```ts
+import { type Driver, effect, insert, render, scan, tally } from '@yaks/sql'
+import { equal } from '@yaks/testing'
+
+let sent: string[] = []
+let driver: Driver = {
+  query: (statement) => {
+    sent.push(render(statement).sql)
+    return statement.t == 'select' && statement.cols?.[0]?.t == 'as'
+      ? [{ n: 2 }]
+      : [{ title: 'Dune' }]
+  },
+}
+effect(driver, insert('book', { title: 'Dune' }))
+equal(scan(driver, 'book', undefined, ['title']), [{ title: 'Dune' }])
+equal(tally(driver, 'book'), 2)
+equal(sent[0], 'insert into "book" ("title") values (?)')
+```
+
+Optional driver capabilities include `tx` for synchronous transactions,
+`extension` for native SQL extensions, `template` for reusable empty schemas,
+`file` for a database file needing a write lock before reads, and `arms` for the
+engine's compound-select allowance. Async engines wrap execution at their own
+boundary.
+
+## SQLite layout and value types
+
+The compiler targets the layout maintained by
+[@yaks/sqlite](../sqlite/README.md): the `entity` table holds integer `id`,
+string [eid](../graph/README.md#data-model), optional `num` and `archetype`.
+Each stored [component](../graph/README.md#data-model) has a table with an
+integer `entity` owner column. [References](../vocab/README.md#vocabulary) store
+the target's integer id; reads project it to an eid. Deleted entities keep their
+identity row and are listed in `tombstone`; compiled queries exclude them. A
+presence predicate tests for a component row, including one whose properties are
+all NULL.
+
+A **Tag** is the type used to coerce comparisons: a vocabulary
+[scalar](../vocab/README.md#the-format), `enum` or `eid`. `tagOf` derives it
+from a loaded property. `held` converts boolean operands to their stored form.
+`field` maps a property named `entity` to `$entity`, reserving the table's
+`entity` column for its owner.
+
+```ts
+import { field, held, tagOf, tallied } from '@yaks/sql'
+import { equal } from '@yaks/testing'
+import { loadVocab } from '@yaks/vocab'
+
+let vocab = loadVocab({
+  $defs: {
+    task: {
+      component: true,
+      properties: { done: { type: 'boolean' } },
+    },
+  },
+})
+equal(tagOf(vocab.prop('task', 'done')!), 'bool')
+equal(held('true', 'bool'), '1')
+equal(field('entity'), '$entity')
+equal(
+  ['number', 'text', 'bool'].map((tag) =>
+    tallied(tag as 'number' | 'text' | 'bool')
+  ),
+  ['number', 'text', null],
+)
+```
+
+## Derived properties
+
+A **derived property** (`DerivedProp`) supplies an expression for reading a
+property, keyed by `component.property` in a **Derived** map. It reads a
+computed property or overrides a stored property's read. `expr(owner)` receives
+the expression naming the entity's integer id. `tag` controls comparisons;
+`values` supplies enum members and `deps` adds component joins.
+
+```ts
+import { compile, type Derived, lit, worn } from '@yaks/sql'
+import { parse } from '@yaks/query'
+import { equal } from '@yaks/testing'
+import { loadVocab } from '@yaks/vocab'
+
+let vocab = loadVocab({
+  $defs: {
+    task: {
+      component: true,
+      properties: { rank: { type: 'number', computed: true } },
+    },
+  },
+})
+let derived: Derived = { 'task.rank': { tag: 'number', expr: () => lit(10) } }
+equal(compile(parse('.task.rank>=5'), vocab, { derived }).params, [5])
+equal(worn(vocab, derived)('task', 'rank'), true)
+equal(worn(vocab)('task', 'rank'), false)
+```
+
+A derived property reads NULL without its component unless `worn: false` lets it
+answer without the component. `text(stored)` optionally reads a replaced value
+directly, for example when maintaining full-text indexes from old and new
+trigger values.
+
+A vocabulary [ladder](../vocab/README.md#kinds-and-status) needs no caller
+entry: `ladders` builds its status expression. `derivedOf` combines those
+expressions with the caller's map, whose entries win.
+
+```ts
+import { derivedOf, ladders, lit } from '@yaks/sql'
+import { equal } from '@yaks/testing'
+import { loadVocab } from '@yaks/vocab'
+
+let vocab = loadVocab({
+  $defs: {
+    job: { component: true, status: { failed: 'failed', default: 'pending' } },
+    failed: { component: true },
+  },
+})
+equal(ladders(vocab)['job.status'].values, ['failed', 'pending'])
+let override = { tag: 'enum' as const, expr: () => lit('pending') }
+equal(derivedOf(vocab, { 'job.status': override })['job.status'], override)
+```
 
 ## Computed components
 
-A component declared `computed: true` has no table: its entities are rows of
-another package's tables, and they have no row in the entity table either.
-@yaks/journal's `_tx` and `_change` are its transactions and its changes. The
-package that owns the rows supplies a `Backing`: a select with one row per
-entity, its integer id as `entity` and a column per property, the shape of a
-component table. Pass the backings in `backed`, each with the `tag` its eids end
-with (@yaks/sqlite derives one per store):
+A **backing** (`Backing`) supplies the rows of a component declared
+`computed: true`, as a select with one row per entity, an integer `entity`
+column and a column per property. `Backings` is keyed by component name. These
+entities have no row in the entity table. The **spine** is the source a query
+selects its entities from: the entity table, or the backing's rows when the
+query requires that computed component.
 
 ```ts
-import { as, type Backings, col, select, table } from '@yaks/sql'
+import {
+  as,
+  type Backings,
+  col,
+  compile,
+  eidOf,
+  idOf,
+  select,
+  table,
+} from '@yaks/sql'
+import { parse } from '@yaks/query'
+import { equal } from '@yaks/testing'
+import { loadVocab } from '@yaks/vocab'
 
+let vocab = loadVocab({
+  $defs: {
+    event: {
+      component: true,
+      computed: true,
+      properties: { value: { type: 'number' } },
+    },
+  },
+})
+let tag = '3f1c9e0d7b5a4c2e8f6d1b3a5c7e9f0a'
 let backed: Backings = {
-  _tx: {
+  event: {
     rows: select({
-      cols: [as(col('id'), 'entity'), as(col('ts'), 'at')],
-      from: table('journal_tx'),
+      cols: [as(col('id'), 'entity'), col('value')],
+      from: table('events'),
     }),
-    tag: '3f1c9e0d7b5a4c2e8f6d1b3a5c7e9f0a',
+    tag,
   },
 }
-// With _tx declared computed in your vocabulary:
-// compile(parse('._tx.at>2026-09-01'), vocab, { backed })
+equal(compile(parse('.event.value>=2'), vocab, { backed }).params, [2])
+equal(eidOf(tag, 42), '0000002a' + tag)
+equal(idOf(tag, eidOf(tag, 42)), 42)
+equal(idOf(tag, 'unrelated'), null)
 ```
 
-A query that asks for a computed component reads its backing's rows in place of
-the entity table: `._change.target=T-5` selects from the journal's changes,
-through their index on `target`. Every other query reads the entity table as
-before, and none of its entities wears a computed component. A clause about a
-component the query's entities never wear is answered without a join: false
-where it needs the component, true where it holds without it. A reference into
-the backing (`_change.tx`) holds the row's id, and paths follow it
-(`._change.tx._tx.via=S-7`).
+The store supplies `tag`, a 32-character hex suffix identifying the store and
+component. `eidOf` prefixes the integer id in at least eight hex digits; `idOf`
+reads it back and `eidAt` builds that read as an expression. Reference paths
+into backings follow their integer ids. A backed spine has no numbers,
+archetypes or tombstones; its entities carry only its computed component. Other
+components' predicates are answered without joining across the two id spaces.
+Missing backings or tags are refused.
 
-An entity's eid is its id in eight or more hex digits, then the tag
-(`eidOf(tag, 42)` is `0000002a` and the tag), so nothing stores it and
-`.entity.eid=`, a reference equality and a `.after` cursor read the id back out
-(`idOf`). A computed component's entities have no number.
+## Clause compilation
 
-## Extensions
-
-An `Extension` supplies compilation for clauses owned by another package, such
-as text search, vector search, or edges:
+An **Extension** is a named contribution that compiles another package's
+[clauses](../query/README.md#query-model). A **Site** gives it the vocabulary,
+current time, `owner` expression, `join(comp)` to add a LEFT JOIN, and
+`from(comp, as)` to read the component's source under an alias. A clause
+compiler returns an expression or `null` to decline. Extensions run before
+built-in compilation, in registration order; the first answer wins.
 
 ```ts
-import { among, col, eq, type Extension, select, table, val } from '@yaks/sql'
+import {
+  among,
+  col,
+  compile,
+  eq,
+  type Extension,
+  select,
+  table,
+  val,
+} from '@yaks/sql'
+import { parse } from '@yaks/query'
+import { equal } from '@yaks/testing'
+import { loadVocab } from '@yaks/vocab'
 
 let labels: Extension = {
   name: 'labels',
@@ -221,162 +463,321 @@ let labels: Extension = {
         : null,
   },
 }
-// After creating a label table, pass { extend: [labels] } to compile().
+equal(compile(parse('poetry'), loadVocab({}), { extend: [labels] }).params, [
+  'poetry',
+])
 ```
 
-Each clause compiler receives a `Site` containing the vocabulary, the current
-time, and `owner`, the expression for the current entity's integer id.
-`site.join(comp)` adds a LEFT JOIN and returns its owner column, and
-`site.from(comp, as)` names a component's table as a source for a subquery. The
-compiler returns an `Expr`, or `null` to decline. Extensions run in registration
-order before built-in compilation; the first non-null answer wins. Claiming an
-otherwise unsupported directive such as `near`, `edges`, or `reaches` makes it a
-filter.
+`order(value, site)` optionally handles `.order=` values that name no property.
+It receives the value without a leading `-`. Its expression renders with
+literals, and the hook runs again for an `.after` anchor's owner.
 
-An optional `order(value, site)` handles ordering by values that do not name a
-property. It receives the value without its leading `-` and returns an `Expr` or
-`null`. An order expression is written with its values as literals. Pagination
-calls this hook again for the cursor entity.
-
-`begin(screen)` runs once at the start of each `bind` call, allowing a reused
-extension to reset state shared by its clause and ordering hooks. Calling
-`screen()` lazily compiles the other filters into a `Raw` statement selecting
-the admitted entities' integer ids as `id`, in no order, excluding this
-extension's clauses and ordering, limits, and projections. It returns `null`
-when no other filters exist. Ranking extensions use this candidate set before
-selecting the nearest or highest-ranked results; ranking all entities first and
-filtering afterward would return the wrong subset. The exported
-`screen(ast, vocab, opts?)` builds the same statement for a whole query, for a
-search run beside one.
-
-## Ordering and paging
-
-`.order=book.price` sorts ascending; `.order=-book.price` sorts descending. The
-ordered property may sit on the entity a chain of references reaches, as a path
-predicate's does: `.order=review.book.book.price` orders reviews by their book's
-price, and `.fields=_prop.comp._comp.name` projects each property's component
-name beside it. An extension may supply the order expression. Explicit ordering
-uses entity `num` descending as the tie-breaker. Without `.order=`, a `.limit`
-or `.after` window returns newest numbers first; a complete result returns
-oldest numbers first.
-
-`.after=<id>` identifies the entity by number, human id, or eid. With explicit
-ordering, the compiler reads its order value in a correlated subquery and
-compares that value, then the spine order for equal values. NULL values sort
-first ascending and last descending; the spine breaks ties between NULL values
-too. An anchor that no longer matches the filters can still define a position.
-With explicit ordering, a nonexistent anchor starts at the first page; without
-it, `.after` uses the numeric condition `entity.num < ?` directly for numeric
-cursors. An eid cursor uses the anchor's spine position, including for
-unnumbered entities. `@yaks/match` implements the corresponding in-memory
-sorting and cursor comparison.
-
-## What it compiles, and what it refuses
-
-Supported constructs include property predicates, any-of lists, ranges, time
-phrases, booleans, reference paths, reverse associations, `.kind`,
-presence/absence, ordering, `.limit`/`.after`, `.count`/`.distinct`/`.tally`,
-`.fields`, `*` projections, `.refs=`, and `.entity.eid=`/`.entity.num=`.
-Individual combinations can still be unsupported; the binder throws
-`Unsupported` rather than silently ignoring them. Callers may report the error
-or use another evaluator.
-
-`.distinct` and `.tally` count a number as the number it is and a text, enum or
-eid as its text (`tallied`), and refuse any other type. Over a reference they
-group by the integer it stores and read each group's eid once.
-
-Text terms require a search extension, such as `@yaks/fts`, or a custom text
-compiler. `.edges` and edge-typed walks require `@yaks/edge`; `.near` requires a
-vector extension such as `@yaks/embedding`, which also supplies ordering. See
-[bind.ts](./bind.ts) for the precise restrictions.
-
-The `.refs=` backlink query groups reference columns by table and splits
-compound SELECTs into groups of `ARMS` terms, combining those groups with OR to
-stay within the engine's compound-query limit.
-
-## Naming entities
-
-`.entity.eid=` and `.entity.num=` accept sets. `@yaks/id` also parses display
-ids such as `B-7`: the letter is a label, and 7 is the entity number. A set
-binds as one JSON parameter however long it is, since a host caps how many
-parameters one statement binds (a Durable Object's SQLite takes 100). Property
-any-of lists of scalar equalities use the same one-parameter set.
-
-```text
-.entity.eid=a3f1,b7c2  "entity"."eid" in (select value from json_each(?))  ["a3f1","b7c2"]
-.entity.num=3,4        "entity"."num" in (select value from json_each(?))  [3,4]
-.entity.eid=B-7        "entity"."num" in (select value from json_each(?))  [7]
-```
-
-`@yaks/match` applies the same identity predicates to a bundle: one entity's
-components represented as a JSON object.
-
-## Reverse hops
-
-Given a `review.book` reference to a book, the vocabulary derives `.reviews` as
-a reverse association. Compilation uses correlated `EXISTS` or `count`
-subqueries, avoiding duplicate outer rows:
-
-```text
-.reviews         books with a review
-!reviews         books without reviews
-.reviews>=5       books with at least five reviews
-.reviews.stars=5  books with a five-star review
-```
-
-Child filters use the same clause compiler. Unsupported child clauses reject the
-whole association. Nested reverse associations and child predicates referring to
-entity metadata are among the unsupported cases.
-
-## The transitive walk
-
-`.fork.from->S-7` follows references recursively using a common table expression
-(CTE), up to the query's depth limit. The compiler supplies a one-step relation
-with `from` and `to` integer owner ids.
-
-A chained path such as `.fork.from.entry.session->S-1` composes its reference
-joins into that step:
-
-```sql
-select "fork"."entity" as "from", "__w1"."session" as "to"
-from "fork" join "entry" as "__w1" on "__w1"."entity" = "fork"."from"
-```
-
-Each recursive step traverses the entire chain. Every hop must be a reference; a
-scalar hop or an edge relation without its extension throws `Unsupported`.
-`@yaks/match` evaluates the same reference chains in memory.
-
-## The death cascade
-
-Deletion planning is separate from query filtering. Reference properties declare
-whether deleting their target also deletes the owner, removes its component, or
-clears the reference. The graph decides which changes to apply; these helpers
-compile the database lookups:
+A **screen** (`Screen`) is a lazy statement selecting the integer `id` of each
+entity admitted by the other filters, without ordering, limits or projections.
+`begin(screen)` runs once per bind and lets a reused Extension reset its state.
+The screen excludes that Extension's clauses and returns `null` when there are
+no remaining filters. Ranking among these ids before limiting preserves the
+other filters. The exported `screen` builds this statement for a whole query.
 
 ```ts
-import { doomSql, looseSql } from '@yaks/sql'
+import { compile, type Extension, lit, screen } from '@yaks/sql'
+import { parse } from '@yaks/query'
+import { equal } from '@yaks/testing'
+import { loadVocab } from '@yaks/vocab'
 
-// With your loaded vocabulary:
-// doomSql(vocab, ['p1'])  // statements selecting entities to delete and depths
-// looseSql(vocab, ['p1']) // statements selecting references to detach/release
+let vocab = loadVocab({
+  $defs: {
+    doc: {
+      component: true,
+      properties: { title: { type: 'string' } },
+    },
+  },
+})
+let candidates: unknown[] = []
+let ranking: Extension = {
+  name: 'ranking',
+  begin: (screen) => {
+    candidates.push(screen()?.params ?? null)
+  },
+  compile: { text: () => lit(true) },
+  order: (value, site) => value == 'rank' ? site.owner : null,
+}
+compile(parse('poetry .doc.title=Dune .order=rank .limit=2'), vocab, {
+  extend: [ranking],
+})
+equal(candidates, [['Dune']])
+equal(screen(parse('.doc.title=Dune .limit=2'), vocab)?.params, ['Dune'])
+equal(screen(parse('.limit=2'), vocab), null)
 ```
 
-Both return lists of statements. Cascade depth labels saturate at `DEEP` (32),
-which terminates cycles without limiting the set of reachable entities.
-`@yaks/sqlite` and `@yaks/d1` use these helpers for `Tx.doom`; other stores may
-let `@yaks/graph` perform the traversal.
+## Presence optimization
 
-The compound-query helpers use `ARMS = 4`, leaving room for the seed term under
-workerd's five-term limit. `STOCK = 400` is the larger allowance for an embedded
-SQLite driver. Reference columns from one table share a term. If `narrow(vocab)`
-is true, the closure fits in one statement and `looseSql` repeats it so both
-lookups can run together. For wider schemas, callers execute the returned
-statements in rounds until no new entities are found, then collect the affected
-surviving references. The writes form a batch: a list of changes applied in one
-transaction.
+An **ArchetypeSet** resolves a vocabulary
+[presence](../vocab/README.md#routing-and-references) test to the integer ids of
+matching [archetypes](../archetype/README.md). `archetypeSet` combines a cache's
+`matching` with the caller's current eid-to-integer-id map.
 
-## Compatibility
+```ts
+import { Archetypes } from '@yaks/archetype'
+import { archetypeSet, compile } from '@yaks/sql'
+import { parse } from '@yaks/query'
+import { equal } from '@yaks/testing'
+import { loadVocab } from '@yaks/vocab'
 
-Pure TypeScript, using `@yaks/query`, `@yaks/vocab`, and `@yaks/id`. The package
-can run on Deno or Node via JSR/npm; execution still requires a compatible SQL
-storage adapter.
+let cache = new Archetypes()
+let descriptor = cache.intern(['task'])
+let archetypes = archetypeSet(cache, new Map([[descriptor.eid, 7]]))
+let vocab = loadVocab({ $defs: { task: { component: true } } })
+equal(compile(parse('.task'), vocab, { archetypes }).params, ['[7]'])
+```
+
+The resolver must describe a complete, current catalog. `undefined` declines;
+`[]` means nothing matches. Presence can then read `entity.archetype` instead of
+a component table, including boolean combinations, reference paths, reverse
+associations and `.kind`. Value comparisons still read their columns. Without a
+resolver, presence reads the component's owner ids.
+
+## Ordering, paging and aggregates
+
+[Directives](../query/README.md#directives) control projections, aggregates and
+windows. `.order=book.price` is ascending and a leading `-` makes it descending.
+Paths can follow references. Explicit ordering uses descending entity number and
+then integer id to break ties. Without explicit ordering, a `.limit` or `.after`
+window reads newest first; a complete result reads oldest first. Unnumbered
+entities use integer id alone.
+
+```ts
+import { compile } from '@yaks/sql'
+import { parse } from '@yaks/query'
+import { equal } from '@yaks/testing'
+import { loadVocab } from '@yaks/vocab'
+
+let vocab = loadVocab({
+  $defs: {
+    book: {
+      component: true,
+      properties: { price: { type: 'number' } },
+    },
+  },
+})
+equal(compile(parse('.book .order=book.price .limit=2'), vocab).params, [2])
+equal(
+  compile(parse('.book .after=b1 .fields=book.price .limit=2'), vocab).params,
+  [2],
+)
+equal(compile(parse('.book .count'), vocab).sql.includes('count(*) as n'), true)
+equal(
+  compile(parse('.book .tally=book.price'), vocab).sql.includes('group by'),
+  true,
+)
+equal(
+  compile(parse('.book .distinct=book.price'), vocab).sql.includes('as value'),
+  true,
+)
+```
+
+`.after` reads the anchor's order value even if it no longer matches the
+filters. NULL sorts first ascending and last descending; ties include NULL
+values. With explicit ordering, a missing anchor starts at the first page.
+Numeric cursors require a vocabulary declaring `entity.num`; an eid cursor also
+works without numbering.
+
+`.count` returns `value: ''` and `n`. `.distinct` returns `value`, and `.tally`
+returns `value` and `n` per group. `tallied` permits numbers as numbers and
+text, enum or eid as text; other types are refused. Reference aggregates group
+by the stored integer and read each group's eid once. Absent values and empty
+text are dropped.
+
+## Identity, references and walks
+
+An **Identity** is an operand list split into `eids` and entity `nums`.
+`identity` uses [@yaks/id](../id/README.md) to read display ids such as `B-7` as
+entity number 7. Identity lists and scalar equality lists use one JSON parameter
+per set, regardless of length.
+
+```ts
+import { compile, identity } from '@yaks/sql'
+import { parse } from '@yaks/query'
+import { equal } from '@yaks/testing'
+import { loadVocab } from '@yaks/vocab'
+
+let vocab = loadVocab({
+  $defs: {
+    entity: {
+      component: true,
+      properties: { num: { type: 'number' } },
+    },
+  },
+})
+equal(identity('eid', 'b1,B-7'), { eids: ['b1'], nums: [7] })
+equal(compile(parse('.entity.eid=b1,b2'), vocab).params, ['["b1","b2"]'])
+equal(compile(parse('.entity.num=3,4'), vocab).params, ['[3,4]'])
+```
+
+[Reverse associations](../vocab/README.md#routing-and-references) compile to
+correlated EXISTS or count subqueries, which preserve one outer row per entity.
+`.refs=<eid>` finds backlinks across reference properties, grouping columns by
+table and cutting compound selects to fit the engine limit.
+[Walks](../query/README.md#walks-and-qualifiers) compile reference chains to a
+recursive common table expression. The exported `walk` accepts a one-step query
+projecting `from` and `to` integer ids; edge packages supply their own step.
+
+```ts
+import { compile } from '@yaks/sql'
+import { parse } from '@yaks/query'
+import { equal } from '@yaks/testing'
+import { loadVocab } from '@yaks/vocab'
+
+let vocab = loadVocab({
+  $defs: {
+    book: { component: true },
+    review: {
+      component: true,
+      properties: {
+        book: { type: 'string', ref: 'book' },
+        stars: { type: 'number' },
+      },
+    },
+    fork: {
+      component: true,
+      properties: { from: { type: 'string', ref: 'entity' } },
+    },
+  },
+})
+equal(compile(parse('.reviews>=5'), vocab).params, [5])
+equal(compile(parse('.reviews.review.stars=5'), vocab).params, [5])
+equal(compile(parse('.review.book.book'), vocab).sql.includes('"__pl"'), true)
+equal(compile(parse('.refs=b1'), vocab).params, ['b1', 'b1'])
+equal(compile(parse('.fork.from[<=3]->b1'), vocab).params, ['b1', 3])
+```
+
+A walk with no explicit depth bound deduplicates on integer id to terminate
+cycles and limits results to the query package's `WALK_LIMIT`. An explicit depth
+bound includes depth in the recursion. Every step of a chained path traverses
+the whole chain; every hop must be a reference.
+
+## Rule compilation
+
+A **Plan** is the shape `rule` accepts for a
+[multi-entity match](../query/README.md#multi-entity-matches): patterns with
+filters, gates, variable bindings and whether they only make entities. It is
+structurally compatible with [@yaks/graph](../graph/README.md)'s `Match`. `rule`
+produces one select with `e0`, `e1`, … for matched eids and `v_<name>` for
+variables. Shared variables equate stored integer ids or scalar values; mixing
+those two forms is refused.
+
+```ts
+import { render, rule } from '@yaks/sql'
+import { parse } from '@yaks/query'
+import { equal } from '@yaks/testing'
+import { loadVocab } from '@yaks/vocab'
+
+let vocab = loadVocab({
+  $defs: {
+    task: {
+      component: true,
+      properties: { priority: { type: 'number' } },
+    },
+  },
+})
+let statement = rule(
+  {
+    patterns: [{
+      entity: 'task',
+      filter: parse('.task.priority=1'),
+      gates: [],
+      binds: [],
+      makes: false,
+    }],
+  },
+  vocab,
+  {},
+  { touched: [7] },
+)
+equal(render(statement).params, [1, '[7]'])
+equal(statement.distinct, true)
+```
+
+`On.at` maps component names to tables or overlay sources; `On.gone` names the
+removed-owner source for `-comp`. `On.touched` requires at least one pattern to
+match an integer id the change touched. Omit it to read the whole committed
+graph. Collections are evaluated by the storage adapter. Multi-hop variable
+bindings are not routed through their full path yet.
+
+## Deletion lookups and compound statements
+
+`doomSql` selects entities deleted by reference
+[death declarations](../vocab/README.md#routing-and-references), including the
+seed, with `eid`, `num` and `depth`. `looseSql` selects surviving references
+with `comp`, `prop`, `eid` and `ord` for the graph to detach or release. These
+functions return lists of statements; the graph decides the writes.
+
+An **Arm** groups one component table and its reference property names as
+`[comp, props]`. `arms` groups them and `cut` splits them into groups.
+
+```ts
+import { arms, cut, doomSql, looseSql, narrow } from '@yaks/sql'
+import { equal } from '@yaks/testing'
+import { loadVocab } from '@yaks/vocab'
+
+let vocab = loadVocab({
+  $defs: {
+    note: {
+      component: true,
+      properties: {
+        about: { type: 'string', ref: 'entity', death: 'cascade' },
+        related: { type: 'string', ref: 'entity', death: 'detach' },
+      },
+    },
+  },
+})
+equal(narrow(vocab), true)
+equal(doomSql(vocab, ['p1'])[0].params, ['["p1"]'])
+equal(looseSql(vocab, ['p1'])[0].params, ['["p1"]', 'note', 'related'])
+equal(arms([['note', 'about'], ['note', 'related']]), [['note', [
+  'about',
+  'related',
+]]])
+equal(cut([1, 2, 3], 2), [[1, 2], [3]])
+```
+
+`ARMS` is 4, leaving one term for a recursive seed under workerd's five-term
+compound-select limit. `STOCK` is 400 for embedded engines with a larger
+allowance. Cascade depth saturates at `DEEP` (32) to terminate cycles; the
+reachable set is not depth-limited.
+
+If `narrow(vocab)` is true, each closure fits in one statement and `looseSql`
+repeats it so both lookups can run together. For wider vocabularies, execute
+`doomSql` in rounds seeded with all eids found until no new ones appear, then
+pass that closed set to `looseSql`.
+
+## Limits
+
+`Unsupported` names a feature this compiler cannot answer exactly, with the
+refusing package in `by`. Unknown names use the vocabulary's `Unknown` error.
+
+```ts
+import { compile, Unsupported } from '@yaks/sql'
+import { parse } from '@yaks/query'
+import { equal } from '@yaks/testing'
+import { loadVocab } from '@yaks/vocab'
+
+try {
+  compile(parse('poetry'), loadVocab({}))
+  throw new Error('expected a refusal')
+} catch (error) {
+  equal(error instanceof Unsupported, true)
+}
+```
+
+Text terms need [@yaks/fts](../fts/README.md) or another Extension; `.near`
+needs [@yaks/embedding](../embedding/README.md); `.edges` and edge-typed walks
+need [@yaks/edge](../edge/README.md). Nested reverse associations and reverse
+child predicates reading entity metadata are unsupported. JSON-valued properties
+permit presence tests but not comparisons, ordering or projection. Some scalar
+comparisons also decline when SQLite cannot match their semantics, such as
+non-ASCII containment. [bind.ts](./bind.ts) states the restrictions.
+
+The package is pure TypeScript and uses `@yaks/query`, `@yaks/vocab` and
+`@yaks/id`. Execution requires a compatible driver and the expected layout;
+[@yaks/match](../match/README.md) evaluates queries over bundles in memory.
