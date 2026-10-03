@@ -1138,7 +1138,13 @@ export class Store {
       graph: g,
       subs,
       authenticate: this.#auth,
-      ...(declaredLenses(declaration) ? { read: spoken } : {}),
+      ...(declaredLenses(declaration)
+        ? {
+          read: spoken,
+          write: (request: Request, rows: Bundle[]) =>
+            this.#spokenWrites(request, rows),
+        }
+        : {}),
     })
     // The registry is fresh, and the sockets are not: they belong to the
     // runtime and outlive every incarnation of this object, so whatever they
@@ -2396,7 +2402,9 @@ export class Store {
       defect(e, { request: 'write log', store: this.#name() })
       return unkept()
     }
-    if (was?.state == 'applied') return new Response(was.answer, JSONED)
+    if (was?.state == 'applied') {
+      return this.#callerResponse(request, new Response(was.answer, JSONED))
+    }
     if (was?.state == 'refused') return refuse(new Refused(was.why))
     if (was?.state == 'failed') return parked(seq, was.why, was.audit)
     if (was?.state == 'interrupted' || was?.state == 'unreviewed') {
@@ -2420,7 +2428,7 @@ export class Store {
           : 'earlier writes to this app are still waiting',
       ))
     } else void this.#drain()
-    return answer
+    return answer.then((response) => this.#callerResponse(request, response))
   }
 
   /** The log from its oldest waiting write to its newest, one at a time. A
@@ -2528,6 +2536,33 @@ export class Store {
    * handed, so it can never arrive from outside. An NDJSON import is
    * @yaks/api's `pour`, chunk by chunk.
    */
+  async #callerResponse(
+    request: Request,
+    response: Response,
+  ): Promise<Response> {
+    if (response.status != 200 || !spoken(request).speaks) return response
+    let bundles = await response.json() as Bundle[]
+    return new Response(
+      JSON.stringify(await this.#callerAnswer(request, bundles)),
+      response,
+    )
+  }
+
+  #callerAnswer(
+    request: Request,
+    rows: Bundle[],
+  ): Bundle[] | Promise<Bundle[]> {
+    let opts = spoken(request)
+    return opts.speaks
+      ? this.#graph.answer(rows, { ...opts, patch: true })
+      : rows
+  }
+
+  #spokenWrites(request: Request, rows: Bundle[]): Bundle[] {
+    let speaks = spoken(request).speaks
+    return speaks ? rows.map((b) => ({ ...b, $speaks: speaks })) : rows
+  }
+
   async #commit(
     request: Request,
     seq: number | null = null,
@@ -2546,8 +2581,7 @@ export class Store {
       }
       let kernel = request.headers.get('x-yak-kernel') == '1'
       let who = kernel ? null : await this.#auth(request)
-      let speaks = spoken(request).speaks
-      if (speaks) body = body.map((b: Bundle) => ({ ...b, $speaks: speaks }))
+      body = this.#spokenWrites(request, body)
       let out
       this.#landing = seq
       try {
@@ -2557,7 +2591,12 @@ export class Store {
       } finally {
         this.#landing = null
       }
-      return json(published(this.#vocab, await out))
+      let applied = published(this.#vocab, await out)
+      // The durable log and internal effects keep canonical patches. Each
+      // caller, including a keyed resend, receives its own vocabulary view.
+      return json(
+        seq == null ? await this.#callerAnswer(request, applied) : applied,
+      )
     } catch (e) {
       let no = constrained(e)
       caught(no, { request: 'write', store: this.#name() })

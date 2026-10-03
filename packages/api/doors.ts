@@ -25,6 +25,10 @@ import { signed } from './actor.ts'
 import { fault, json, refusal } from './refuse.ts'
 import { published } from './publish.ts'
 
+/** Context the application gives each incoming write before authentication
+ * signs it. Streaming imports call it once per chunk, including checks. */
+export type WriteContext = (request: Request, bundles: Bundle[]) => Bundle[]
+
 /**
  * How many bundles go into one transaction when an import arrives one bundle
  * per line. It is the width the D1 adapter's round-trip limit counts — 50
@@ -133,6 +137,8 @@ export let pour = (
   request: Request,
   who: Actor | null,
   activity: object = graph,
+  context?: WriteContext,
+  opts?: ReadOpts,
 ): Response => {
   let body = request.body
   if (!body) throw new Refused('/apply takes one bundle per line')
@@ -153,7 +159,7 @@ export let pour = (
     // chunk is refused and one of its own lines is identified.
     let blame = 0
     let flush = async () => {
-      let batch = signed(held, who)
+      let batch = signed(context ? context(request, held) : held, who)
       let applied: Bundle[]
       try {
         applied = await graph.apply(batch, {
@@ -164,7 +170,13 @@ export let pour = (
         blame = at[await culprit(graph, batch, cause)]
         throw err
       }
-      for (let b of published(graph.vocab, asked(held, applied))) await say(b)
+      let reply = opts
+        ? await graph.answer(published(graph.vocab, applied), {
+          ...opts,
+          patch: true,
+        })
+        : applied
+      for (let b of published(graph.vocab, asked(held, reply))) await say(b)
       committed += held.length
       held = []
       at = []
@@ -207,21 +219,29 @@ export let write = async (
   request: Request,
   who: Actor | null,
   activity: object = graph,
+  context?: WriteContext,
+  opts?: ReadOpts,
 ): Promise<Response> => {
-  if (poured(request)) return pour(graph, request, who, activity)
+  if (poured(request)) return pour(graph, request, who, activity, context, opts)
   let body = await request.json()
   if (!Array.isArray(body)) {
     throw new Refused('/apply takes a JSON array of bundles')
   }
   let check = new URL(request.url).searchParams.has('check')
   let cause = peek(activity) ? parent(activity, request) : undefined
+  let applied = await graph.apply(
+    signed(context ? context(request, body) : body, who),
+    { check, ...(cause && { parent: cause }) },
+  )
   return json(
     published(
       graph.vocab,
-      await graph.apply(signed(body, who), {
-        check,
-        ...(cause && { parent: cause }),
-      }),
+      opts
+        ? await graph.answer(published(graph.vocab, applied), {
+          ...opts,
+          patch: true,
+        })
+        : applied,
     ),
   )
 }

@@ -1,4 +1,6 @@
 import type { Bundle, Comp } from '@yaks/graph'
+import type { VocabDoc } from '@yaks/vocab'
+import { schema } from './schema.ts'
 import { history } from './steps.ts'
 import { document, type DocumentLens, type Json } from './document.ts'
 import {
@@ -22,6 +24,8 @@ export type Lens = {
   get: (bundle: Bundle, held?: Bundle) => Bundle
   ask: (query: Query) => Query
   find: () => Query
+  /** The property declarations an old caller's local graph admits. */
+  schema: (docs: VocabDoc[]) => VocabDoc[]
 }
 
 type Pair = {
@@ -101,6 +105,7 @@ let identity: Lens = {
   get: (b) => b,
   ask: (q) => q,
   find: () => and(never()),
+  schema: (docs) => docs,
 }
 let cache = new Map<string, Lens>()
 
@@ -223,6 +228,7 @@ export let compile = (rows: Bundle[], speaks?: Speaks): Lens => {
     },
     find: () =>
       and(or(...pairs.map((p) => present(p.from.join('.')))), every()),
+    schema: (docs) => schema(docs, pairs),
   }
   if (cache.size >= 64) cache.delete(cache.keys().next().value!)
   cache.set(key, lens)

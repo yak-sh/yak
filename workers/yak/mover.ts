@@ -50,7 +50,7 @@ export type Rule = {
   move: (row: Bundle, read?: (line: string) => Bundle[]) => Bundle[]
   /** Where it runs for real. Absent, it is only rehearsed. */
   live?: 'apps' | 'all'
-  /** Properties to shed once empty, in each batch's transaction. */
+  /** Source properties to shed with the final batch, once the rule is drained. */
   drop?: string[]
 }
 
@@ -197,7 +197,7 @@ export let step = (
     let read = (line: string) => sync(m.read(line))
     sync(m.apply(rows.flatMap((row) => rule.move(row, read))))
   }
-  if (rule.drop?.length) {
+  if (rows.length < n && rule.drop?.length) {
     if (!m.drop) {
       throw new Error('a store mover must support property contraction')
     }

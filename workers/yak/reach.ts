@@ -113,7 +113,13 @@ let META_SCREEN = SCREEN.filter((k) =>
 
 // One store in reach: the app, the space it is in, and who the caller is
 // there. `at` is what a bundle names as the component's home.
-export type Reach = { space: Space; app: App; who: Who }
+export type Reach = {
+  space: Space
+  app: App
+  who: Who
+  /** This store's caller vocabulary, retained throughout a composed read. */
+  headers?: Record<string, string>
+}
 
 export let at = (r: { space: Space; app: App }) =>
   `${r.space.slug}/${r.app.slug}`
@@ -154,7 +160,7 @@ async (line: string) => {
       return await res.json()
     },
     {},
-    vouched(r.who),
+    { ...vouched(r.who), ...r.headers },
   )
   return Array.isArray(bundles)
     ? listed(bundles as Row[], said ?? asked) as Bundle[]
@@ -781,6 +787,7 @@ export let vocabAt = async (
   env: Env,
   space: Space,
   app: App,
+  headers: Record<string, string> = {},
 ): Promise<VocabDoc> => {
   if (at({ space, app }) == META_STORE) return PLATFORM_WORDS
   if (releaseOf(app) == '0') return {}
@@ -792,7 +799,28 @@ export let vocabAt = async (
       return '{}'
     })
   })
-  return meant(JSON.parse(said))
+  let doc = meant(JSON.parse(said))
+  if (!headers['x-yak-speaks']) return doc
+  // The store owns schema translation, including destinations from its core
+  // documents. Keep this home's component set when composing the space.
+  return appStore(env.STORE, space, app).consume(
+    '/vocab.json',
+    async (res) => {
+      if (!res.ok) throw rejected(res.status, await told(res))
+      let docs = await res.json() as VocabDoc[]
+      let own = new Set(Object.keys(doc.$defs ?? {}))
+      return {
+        ...doc,
+        $defs: Object.fromEntries(
+          docs.flatMap((d) =>
+            Object.entries(d.$defs ?? {}).filter(([name]) => own.has(name))
+          ),
+        ),
+      }
+    },
+    {},
+    headers,
+  )
 }
 
 // Every word in reach as one vocabulary: the platform's core plus each app's
@@ -822,7 +850,10 @@ let union = (docs: VocabDoc[]): Vocab => {
 // answer no single store could have ordered.
 let spoken = async (env: Env, reach: Reach[]) => {
   let own = await Promise.all(
-    reach.map(async (r) => ({ r, doc: await vocabAt(env, r.space, r.app) })),
+    reach.map(async (r) => ({
+      r,
+      doc: await vocabAt(env, r.space, r.app, r.headers),
+    })),
   )
   let words = new Map<string, Reach[]>()
   for (let { r, doc } of own) {
@@ -942,7 +973,7 @@ let sent = (
   }, {
     method: 'POST',
     body: JSON.stringify(part.entities),
-  }, { ...vouched(r.who), ...headers })
+  }, { ...vouched(r.who), ...r.headers, ...headers })
 }
 
 // The batch, split by component into one part per store.

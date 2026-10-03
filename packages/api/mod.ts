@@ -63,7 +63,7 @@ export {
   routed,
 } from './route.ts'
 export { type Authenticate, signed } from './actor.ts'
-export { ask, CHUNK, pour, poured, write } from './doors.ts'
+export { ask, CHUNK, pour, poured, write, type WriteContext } from './doors.ts'
 export { published } from './publish.ts'
 export {
   fault,

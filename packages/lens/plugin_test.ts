@@ -1,5 +1,5 @@
 import { equal, ok, test, throws } from '@yaks/testing'
-import { type Bundle, detached, graph, Refused } from '@yaks/graph'
+import { type Bundle, detached, graph, Refused, token } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { metaDoc } from '@yaks/vocab'
@@ -213,4 +213,65 @@ test('landed timestamp steps are immutable and new steps must follow the retaine
     'must follow landed step',
   )
   equal((await described(g, [declaration(20261005102000)])).length, 1)
+})
+
+test('retained lenses serve old callers after the source property is undeclared', () => {
+  let contracted = {
+    ...kitchen,
+    $defs: {
+      ...kitchen.$defs,
+      recipe: {
+        ...kitchen.$defs.recipe,
+        properties: { yield: { type: 'integer' } },
+      },
+    },
+  }
+  let vocab = loadVocab([metaDoc, ...docs, contracted])
+  let g = graph({ vocab, storage: ram(vocab), plugins: [lenses()] })
+  let retained = lensesIn([kitchen])
+  g.apply([
+    { entity: { eid: pkg }, _package: { name: 'kitchen' } },
+    ...retained,
+  ], { trusted: true })
+  g.apply([{
+    entity: { eid: 'cake' },
+    recipe: { title: 'Cake', yield: 2 },
+    $speaks: speaks,
+  }])
+  let current = g.get(['cake']) as Bundle[]
+  equal(current[0].recipe, { yield: 2 })
+  equal(current[0].doc, { title: 'Cake' })
+  equal((g.get(['cake'], ['recipe'], { speaks }) as Bundle[])[0].recipe, {
+    title: 'Cake',
+    yield: 2,
+  })
+  equal(
+    (g.read('.recipe.title~=cake', { speaks }) as Bundle[]).map((row) =>
+      row.entity.eid
+    ),
+    ['cake'],
+  )
+  equal(
+    lenses().answer!(
+      { opts: { speaks, patch: true }, tx: detached(g.storage) },
+      [{ entity: { eid: 'cake' }, doc: { title: 'New cake' } }],
+    ),
+    [{
+      entity: { eid: 'cake' },
+      doc: { title: 'New cake' },
+      recipe: { title: 'New cake' },
+    }],
+  )
+  g.apply([{
+    entity: { eid: 'cake' },
+    recipe: { title: 'New cake' },
+    $was: { recipe: { title: token('Cake') } },
+    $speaks: speaks,
+  }])
+  equal((g.get(['cake']) as Bundle[])[0].recipe, { yield: 2 })
+  equal((g.get(['cake']) as Bundle[])[0].doc, { title: 'New cake' })
+  equal(
+    (g.get([retained[0].entity.eid], ['_lens']) as Bundle[])[0]._lens,
+    retained[0]._lens,
+  )
 })

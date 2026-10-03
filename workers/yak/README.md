@@ -281,6 +281,15 @@ answer. A clean rule goes `live: 'apps'`, then `'all'`, the directory last, and
 its mark joins `BOUNDARIES` in that release. `yak admin move --admin` wakes the
 dormant stores a few a minute and says where each rule stands in each.
 
+An app's declared lens also supplies its mover rule. Its expanded vocabulary
+holds source columns only while they hold values. The final batch drops empty
+translated app properties and columns in the same transaction as its stamp;
+rehearsal rolls those schema changes back too. The store retains its newest
+vocabulary and immutable lens history when app code rolls back. A kept page's
+deploy selects its `$speaks` for writes, dry runs, streamed imports, reads,
+subscriptions and vocabulary declarations, including composed app/home access.
+Core platform columns remain owned by the platform's vocabulary.
+
 ## App bindings
 
 Apps may request D1, R2 and Vectorize resources in `wrangler.jsonc` or

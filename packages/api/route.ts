@@ -10,7 +10,7 @@
 import type { Graph, ReadOpts } from '@yaks/graph'
 import { Refused } from '@yaks/graph'
 import { type Authenticate } from './actor.ts'
-import { ask, write } from './doors.ts'
+import { ask, write, type WriteContext } from './doors.ts'
 import { denoUpgrade } from './deno.ts'
 import { json } from './refuse.ts'
 import { type Report, served } from './request.ts'
@@ -50,10 +50,12 @@ export let routed = (route: Route, method: string, path: string): boolean =>
 export type Options = {
   /** the graph this API reads and writes */
   graph: Graph
-  /** Caller read context, passed to queries and held by the socket. */
+  /** Caller read context for queries, write replies and socket frames. */
   read?: (
     request: Request,
   ) => ReadOpts | undefined | Promise<ReadOpts | undefined>
+  /** Caller write context, applied to JSON batches and every import chunk. */
+  write?: WriteContext
   /** Runtime activity stays keyed by the composed graph, not a read overlay. */
   activity?: object
   /** who is writing (default: nobody — writes are stored unattributed) */
@@ -99,12 +101,20 @@ export let api = (opts: Options): Handler => {
   let door: Handler = async (request) => {
     let path = new URL(request.url).pathname
     let who = await authenticate(request)
-    let readOpts = opts.read && (path == '/query' || path == '/ws')
+    let readOpts = opts.read &&
+        (path == '/query' || path == '/ws' || path == '/apply')
       ? await opts.read(request)
       : undefined
     if (path == '/apply') {
       return request.method == 'POST'
-        ? await write(graph, request, who, opts.activity ?? graph)
+        ? await write(
+          graph,
+          request,
+          who,
+          opts.activity ?? graph,
+          opts.write,
+          readOpts,
+        )
         : no('/apply takes POST', 405)
     }
     if (path == '/query') {

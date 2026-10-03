@@ -40,11 +40,12 @@ let linked = async (
   space: Space,
   app: App,
   who: Who,
+  headers: Record<string, string> = {},
 ) => {
   let res = await appStore(env.STORE, space, app, env)(
     '/ws',
     req,
-    vouched(who),
+    { ...vouched(who), ...headers },
   ) as Response & { webSocket?: Socket | null }
   if (res.status != 101 || !res.webSocket) {
     await res.body?.cancel()
@@ -59,11 +60,19 @@ export let pageSocket = async (
   space: Space,
   app: App,
   graph: Awaited<ReturnType<typeof sources>>,
+  headers: Record<string, string> = {},
 ) => {
   let links: (Socket | null)[] = []
   try {
-    for (let r of graph.reach) {
-      let link = await linked(req, env, r.space, r.app, r.who)
+    for (let [i, r] of graph.reach.entries()) {
+      let link = await linked(
+        req,
+        env,
+        r.space,
+        r.app,
+        r.who,
+        i == 0 ? headers : {},
+      )
       links.push(link)
       if (link) await opened(link)
     }
@@ -82,7 +91,7 @@ export let pageSocket = async (
     let sub = subs.get(id)
     if (!sub || sub.line === true) return
     let version = ++sub.version
-    reading(env, graph, sub.line).then(
+    reading(env, graph, sub.line, false, headers).then(
       (answer) => {
         if (subs.get(id)?.version != version || closed) return
         let frame = Array.isArray(answer)

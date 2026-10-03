@@ -1334,7 +1334,10 @@ let api = async (
     return new Response(null, { status: 204 })
   }
   let headers = vouched(who)
-  if (app.lenses && ['/apply', '/query', '/ws'].includes(path)) {
+  if (
+    app.lenses &&
+    ['/apply', '/query', '/ws', '/vocab', '/vocab.json'].includes(path)
+  ) {
     try {
       Object.assign(
         headers,
@@ -1509,13 +1512,13 @@ let api = async (
       headers,
     )
     if (wire.failed) return wire.failed
-    let docs = await vocabulary(env, space, app, who)
+    let docs = await vocabulary(env, space, app, who, headers)
     if (!docs.ok) return docs
     return Response.json({ docs: await docs.json(), keywords: wire.keywords })
   }
   if (path == '/vocab.json') {
     if (!mayRead) return refused('not_a_reader')
-    return vocabulary(env, space, app, who)
+    return vocabulary(env, space, app, who, headers)
   }
   if (path == '/query') {
     if (!mayRead) return refused('not_a_reader')
@@ -1549,7 +1552,7 @@ let api = async (
     if (!mayRead) return refused('not_a_reader')
     let graph = await sources(env, space, app, who)
     if (graph.reach.length > 1) {
-      return pageSocket(req, env, space, app, graph)
+      return pageSocket(req, env, space, app, graph, headers)
     }
     return store('/ws', req, headers)
   }
@@ -1599,7 +1602,7 @@ let api = async (
     let sent: unknown
     try {
       sent = JSON.parse(body)
-      let graph = await sources(env, space, app, who)
+      let graph = await sources(env, space, app, who, headers)
       let applied = graph.reach.length > 1
         ? (await written(
           env,

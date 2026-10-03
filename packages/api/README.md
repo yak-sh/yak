@@ -167,6 +167,18 @@ entities or properties a caller may access; the application and graph plugins
 supply the relevant authorization policy. The graph validates changes and
 preconditions.
 
+`api({ graph, write })` accepts a write context callback
+`write(request, bundles): Bundle[]`. It can give incoming bundles the context
+the graph needs from this request. It runs for JSON batches and each NDJSON
+chunk, including `?check=1`; the handler signs the returned bundles with the
+authenticated actor before applying them. Without a callback, bundles pass
+straight to signing.
+
+`read(request): ReadOpts` supplies the caller's context for queries, socket
+frames and applied write replies. Applied replies run the graph's answer hooks
+with `patch: true`, including checked writes and each NDJSON chunk, so a caller
+receives its own vocabulary while the graph commits its current vocabulary.
+
 ## Subscriptions
 
 A query subscription first receives its current result, then updates after graph

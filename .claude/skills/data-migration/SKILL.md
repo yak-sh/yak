@@ -24,9 +24,9 @@ M-37965 recover on its own); this is how to follow them.
 ## Decide the shape first
 
 - **One shape after.** The old shape is deleted in the same change, never kept
-  beside the new as a synonym or a fallback reader. The only exception is the
-  platform's expand-then-contract window below, which closes once every store
-  has moved.
+  beside the new as a synonym or a fallback reader. During movement the
+  platform retains nonempty source columns; a declared lens serves old callers
+  after the mover contracts them.
 - **A missing value reads as the safe side.** When a row is lost, stale or
   never written, the reader must fail closed: an app with no access mode is
   private, not public (`mode()` in packages/member/words.ts). A default that
@@ -76,8 +76,13 @@ passes: expand, then contract").
 - A clean rule goes `live: 'apps'`, then `'all'`, the directory last; its mark
   joins `BOUNDARIES` in workers/yak/migrate.ts in that release, so a rollback
   never lands on code that can't read the moved rows.
-- Ship it as expand, migrate, contract: the first release reads both shapes,
-  the mover moves, and a later release deletes the old reader once
+- A migration covered by a declared lens expands while source rows remain,
+  then contracts in the mover's final transaction. The store keeps the newest
+  vocabulary and immutable lens chain through a code rollback. Kept pages speak
+  their deploy's timestamp, so old reads, writes and vocabulary declarations
+  translate at the graph doors (packages/lens/README.md).
+- Other migrations ship as expand, migrate, contract: the first release reads
+  both shapes, the mover moves, and a later release deletes the old reader once
   `yak admin move --admin` shows every store moved. Each release rolls back one
   step safely.
 - A batch that fails unwinds, is reported, and the store keeps serving the shape

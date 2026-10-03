@@ -32,13 +32,19 @@ let appsAt = async (env: Env, space: Space, slugs: string[]) => {
     .filter((a): a is App => !!a && !sandboxed(a))
 }
 
-export let sources = async (env: Env, space: Space, app: App, who: Who) => {
+export let sources = async (
+  env: Env,
+  space: Space,
+  app: App,
+  who: Who,
+  headers: Record<string, string> = {},
+) => {
   let uses = await usesOf(env, space, app)
   let slugs = [...new Set(Object.values(uses))]
   let homes = (await appsAt(env, space, slugs))
     .filter((one) => reads(mode(one.access), who.role))
     .map((one) => ({ space, app: one, who }))
-  return { uses, reach: [{ space, app, who }, ...homes] as Reach[] }
+  return { uses, reach: [{ space, app, who, headers }, ...homes] as Reach[] }
 }
 
 export let borrowed = async (env: Env, space: Space, app: App, who: Who) =>
@@ -53,7 +59,16 @@ export let reading = async (
 ): Promise<unknown> => {
   let asked = asking(line)
   let names = [...split(line).parts.keys()]
-  if (names.some((name) => uses[name])) return read(env, reach, asked, live)
+  if (names.some((name) => uses[name])) {
+    return read(
+      env,
+      reach.map((r, i) =>
+        i == 0 ? { ...r, headers: { ...r.headers, ...headers } } : r
+      ),
+      asked,
+      live,
+    )
+  }
   let { space, app, who } = reach[0]
   let store = appStore(env.STORE, space, app, env)
   let rows = await metaOf(store, { ...vouched(who), ...headers }).query(asked, {
@@ -80,6 +95,7 @@ export let vocabulary = async (
   space: Space,
   app: App,
   who: Who,
+  headers: Record<string, string> = {},
 ) => {
   let { uses, reach } = await sources(env, space, app, who)
   let store = appStore(env.STORE, space, app, env)
@@ -97,7 +113,7 @@ export let vocabulary = async (
       return { failed }
     },
     {},
-    vouched(who),
+    { ...vouched(who), ...headers },
   )
   if (result.failed) return result.failed
   let docs = result.docs!

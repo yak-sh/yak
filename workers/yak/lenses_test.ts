@@ -7,7 +7,7 @@ import type { Objects } from '@yaks/blob'
 import { driver } from '@yaks/durable-object'
 import type { App, Directory, Space } from './directory.ts'
 import { Store } from './graph.ts'
-import { doorOf } from './door.ts'
+import { doorOf, IDEMPOTENCY } from './door.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { state } from './testing.ts'
 import {
@@ -379,4 +379,41 @@ test('timestamp steps append in landing order and survive rollback', () => {
     refused = true
   }
   assert(refused)
+})
+
+test('old apply replies and keyed resends speak the caller vocabulary', async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  let store = new Store(ctx)
+  let door = doorOf((r) => store.fetch(r), name)
+  let renamed = {
+    $defs: {
+      recipe: { properties: { heading: { type: 'string' } } },
+      title_step: {
+        lens: true,
+        step: 20261003140000,
+        ops: [{ rename: { from: 'recipe.title', to: 'recipe.heading' } }],
+      },
+    },
+  }
+  assert(
+    (await door(
+      '/vocab',
+      { method: 'POST', body: JSON.stringify(renamed) },
+      KERNEL,
+    )).ok,
+  )
+  let entity = { eid: crypto.randomUUID() }
+  let body = JSON.stringify([{ entity, recipe: { title: 'Cake' } }])
+  let sent = { ...headers, [IDEMPOTENCY]: crypto.randomUUID() }
+  let apply = () => door('/apply', { method: 'POST', body }, sent)
+  let first = await (await apply()).json()
+  let resent = await (await apply()).json()
+  assertEquals(first, resent)
+  assertEquals(first.find((r: Bundle) => r.entity.eid == entity.eid).recipe, {
+    title: 'Cake',
+  })
+  assertEquals((await metaOf(door).query('.recipe'))[0].recipe as Comp, {
+    heading: 'Cake',
+  })
 })
