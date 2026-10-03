@@ -160,10 +160,11 @@ let adding = (
         let row = held.get(b.entity.eid)!
         let allowed = !dead(b) && !dead(row) &&
           comps(b).every(([name, patch]) =>
-            patch != null && refs(row, name).some((eid) => {
+            refs(row, name).some((eid) => {
               let target = owners.get(eid)
               return !!target && !dead(target) && mine(target, who, via) &&
-                (!row[name] || idle({ entity: b.entity, [name]: patch }, row))
+                (patch === null || !row[name] ||
+                  idle({ entity: b.entity, [name]: patch }, row))
             })
           )
         if (!allowed) throw new Denied(who, app, 'editor')

@@ -190,9 +190,9 @@ The access rows ask `owner` whatever either says.
 
 A component may declare `permit`: companion mark names mapped to local reference
 properties. On an existing row, the owner of the stored reference's target may
-add the named mark. The target belongs to its `created.by`, or, when it has no
-byline, to its `created.via`. The app must still admit the writer; the mark's
-floor and pace apply too.
+add or remove the named mark. The target belongs to its `created.by`, or, when
+it has no byline, to its `created.via`. The app must still admit the writer; the
+mark's floor and pace apply too.
 
 ```json
 {
@@ -213,8 +213,8 @@ floor and pace apply too.
 
 Here an app owner writes `request{target, text}`. The referenced row's owner
 answers on that request with `completed{}`; the graph fills the mark's `at`,
-`by` and `via`. Repeating the mark preserves its history. Removing it requires
-ordinary permission on the request row.
+`by` and `via`. Repeating the mark preserves its history. Writing
+`completed: null` removes it under the same referenced ownership.
 
 Load declarations with `memberKeywords`. `permitted(vocab)` reports malformed
 maps, undeclared companions, companions with writable properties, and properties
@@ -223,9 +223,9 @@ properties; `created`, `updated` and `tombstone` cannot be companions.
 `permitsIn(vocab)` reads valid declarations and throws on invalid ones.
 
 This permission changes only the named mark. It grants no request edits,
-rebinding, component removal or entity deletion, including changes split across
-several bundles in one batch. A missing or deleted target grants nothing, and a
-newly created request cannot supply its own permission. Owners and editors
+rebinding, request component removal or entity deletion, including changes split
+across several bundles in one batch. A missing or deleted target grants nothing,
+and a newly created request cannot supply its own permission. Owners and editors
 retain their ordinary rights; floors and access-control words remain protected.
 
 ## How often a component may be written

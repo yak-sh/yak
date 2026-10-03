@@ -145,12 +145,44 @@ test('a mark never grants request edits, deletion, rebinding or creation', async
     assertEquals(await f.read('new'), undefined)
   }
   await f.apply(person, mark())
-  await assertRejects(
-    async () => await f.apply(person, patch('completed', null)),
-    Denied,
-  )
   await f.apply(owner, patch('completed', null))
   assertEquals((await f.read()).completed, undefined)
+})
+
+test('a referenced owner may remove a mark without editing the request', async () => {
+  let f = await fixture()
+  for (
+    let [actor, eid] of [[person, 'request'], [guest, 'guest-request']] as const
+  ) {
+    await f.apply(actor, mark(eid))
+    let before = await f.read(eid)
+    await assertRejects(
+      async () =>
+        await f.apply({ by: 'stranger' }, patch('completed', null, eid)),
+      Denied,
+    )
+    await assertRejects(
+      async () =>
+        await f.apply(
+          actor,
+          patch('completed', null, eid),
+          patch('request', { x: 2 }, eid),
+        ),
+      Denied,
+    )
+    await assertRejects(async () =>
+      await f.g.apply(
+        signed([
+          patch('completed', { via: 'forged' }, eid),
+        ], actor),
+        { trusted: true, stamp: false },
+      ), Denied)
+    assertEquals(await f.read(eid), before)
+    await f.apply(actor, patch('completed', null, eid))
+    await f.apply(actor, patch('completed', null, eid))
+    assertEquals((await f.read(eid)).completed, undefined)
+    assertEquals((await f.read(eid)).request, before.request)
+  }
 })
 
 test('permission requires a live stored target and obeys mode and mark floors', async () => {

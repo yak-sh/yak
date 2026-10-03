@@ -10,7 +10,7 @@
       "enum": ["person", "viewer", "editor", "owner"]
     },
     "permit": {
-      "description": "Companion mark to local reference property. The owner of the stored reference's target may add the mark on this existing row; other changes retain ordinary permissions.",
+      "description": "Companion mark to local reference property. The owner of the stored reference's target may add or remove the mark on this existing row; other changes retain ordinary permissions.",
       "type": "object",
       "propertyNames": { "pattern": "^[a-z][a-z0-9_]{0,39}$" },
       "additionalProperties": {
