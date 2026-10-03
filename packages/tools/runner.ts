@@ -495,6 +495,8 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   ): Promise<'free' | 'mine' | 'lapsed' | 'theirs'> => {
     let by = (call.execution as Comp | undefined)?.by
     if (by == null) return 'free'
+    // An unnamed runner's own claim still owes the unfinished-call check.
+    if (!opts.owner && by == owner) return 'free'
     if (by == opts.owner) return 'mine'
     let [holder] = await g.get([String(by)])
     return holder?.exit ? 'lapsed' : 'theirs'

@@ -220,7 +220,7 @@ test('taskEntry references the stable prefix without copying later inputs', asyn
         entity: { eid: 'active' },
         entry: { session: 'p' },
         ask: { through: 'first' },
-        attempt: { state: 'inflight' },
+        attempt: { by: 'holder' },
       },
       {
         entity: { eid: 'partial' },
@@ -280,7 +280,7 @@ test('taskEntry inherits completed output and tool results with recent inputs', 
         entity: { eid: 'ask' },
         entry: { session: 'p' },
         ask: { through: 'input' },
-        attempt: { state: 'completed' },
+        attempt: { by: null },
       },
       {
         entity: { eid: 'output' },
@@ -331,7 +331,8 @@ test('terminal attempts do not pin task forks to an old prefix', async () => {
           entity: { eid: 'old-ask' },
           entry: { session: 'p' },
           ask: { through: 'old-input' },
-          attempt: { state },
+          attempt: { by: null },
+          ...state == 'interrupted' ? { interrupted: {} } : {},
         },
         {
           entity: { eid: 'new-input' },

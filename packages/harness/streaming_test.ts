@@ -233,7 +233,7 @@ test('restart resumes a dispatched attempt from its partial history', async () =
         entity: { eid: 'request' },
         entry: { session: 'interrupted-session' },
         ask: { through: 'question' },
-        attempt: { state: 'inflight' },
+        attempt: { by: 'holder' },
       },
       {
         entity: { eid: 'partial' },
@@ -248,7 +248,7 @@ test('restart resumes a dispatched attempt from its partial history', async () =
     await a.idle('interrupted-session')
     const entries = await a.transcript('interrupted-session')
     assertEquals(requests, 1)
-    assertEquals(entries.filter((b) => b.error).length, 0)
+    assertEquals(entries.filter((b) => b.failed).length, 0)
     assertEquals(entries.filter((b) => b.exception).length, 0)
     assertEquals(statusOf(entries), 'settled')
     assertEquals(
@@ -277,7 +277,7 @@ test('fork admission cannot capture mutable in-flight output', async () => {
         entity: { eid: 'request' },
         entry: { session: 'parent' },
         ask: {},
-        attempt: { state: 'inflight' },
+        attempt: { by: 'holder' },
       },
       {
         entity: { eid: 'partial' },
@@ -299,7 +299,7 @@ test('fork admission cannot capture mutable in-flight output', async () => {
     )
     await h.g.apply([{
       entity: { eid: 'request' },
-      attempt: { state: 'completed' },
+      attempt: { by: null },
     }], { trusted: true })
     await h.g.apply([{
       entity: { eid: 'child' },
@@ -393,7 +393,7 @@ test('operational interruption retains partial context, waits, and continues fro
     let rows = await a.transcript(id)
     assertEquals(statusOf(rows), 'failed')
     assertEquals(rows.filter((b) => b.exception).length, 0)
-    assertEquals(rows.filter((b) => b.error).length, 1)
+    assertEquals(rows.filter((b) => b.interrupted).length, 1)
     await a.resume()
     await a.resume()
     await a.idle(id)

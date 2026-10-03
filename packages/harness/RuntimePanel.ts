@@ -31,7 +31,11 @@ let label = (match: string, text: string, color: string): Renderer => ({
 })
 export let runtimeViews = define([
   label('.session&.dispatch.status=queued', 'queued', 'Key'),
-  label('.session&.attempt.by&!interrupted', 'generating', 'Key'),
+  label(
+    '.session&.attempt.by&!interrupted&.dispatch.status!=queued',
+    'generating',
+    'Key',
+  ),
   label('.session&.interrupted', 'interrupted', 'Muted'),
   label('.session.status=running&.call', 'waiting for tool', 'Key'),
   label('.session.status=running', 'running', 'Key'),
