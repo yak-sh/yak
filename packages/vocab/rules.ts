@@ -51,7 +51,9 @@ export let rulesIn = (input: VocabDoc | VocabDoc[]): RuleDecl[] => {
   let out: RuleDecl[] = []
   let seen = new Set<string>()
   for (let doc of docs) {
-    for (let [name, entry] of Object.entries(doc.$defs ?? {})) {
+    let defs = doc.$defs ?? {}
+    for (let name of Object.keys(defs)) {
+      let entry = defs[name]
       if (entry?.rule !== true) continue
       if (seen.has(name)) throw new Error(`rule '${name}' is declared twice`)
       seen.add(name)

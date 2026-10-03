@@ -40,7 +40,7 @@
 
 import { and, eq, list, or, type Query as Ast } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
-import { after } from '@yaks/fp'
+import { after, isPromise } from '@yaks/fp'
 import type { Bundle, Comp, Eid } from './bundle.ts'
 import { comps, dead } from './bundle.ts'
 import type { Tx } from './storage.ts'
@@ -50,6 +50,10 @@ import type { Tx } from './storage.ts'
  * and one ask may use both; an ask that uses neither reads nothing.
  */
 export type Ask = {
+  /** Speculative read-ahead, using only a previous plan to predict what a
+   * phase will ask. If reading hints fails, retry without them; the phase
+   * still reads anything it needs through the ordinary transaction. */
+  hint?: boolean
   /** these entities, whole */
   eids?: Eid[]
   /** just these components, which is enough until something reads the whole
@@ -202,7 +206,7 @@ export let reached = (bundles: Bundle[], vocab: Vocab): Eid[] => {
  * skipped when nothing asked for it, so a batch nobody needs to read around
  * costs nothing.
  */
-export let gather = (
+let gathering = (
   tx: Tx,
   vocab: Vocab,
   asks: Ask[],
@@ -236,6 +240,25 @@ export let gather = (
       return snap
     })
   })
+}
+
+/** Read-ahead hints may be stale; they never add a reason to refuse a write.
+ * Only the gather reads run here, before any phase can write or check policy. */
+export let gather = (
+  tx: Tx,
+  vocab: Vocab,
+  asks: Ask[],
+): Snap | Promise<Snap> => {
+  let failed = (error: unknown): Snap | Promise<Snap> => {
+    if (!asks.some((a) => a.hint)) throw error
+    return gathering(tx, vocab, asks.filter((a) => !a.hint))
+  }
+  try {
+    let out = gathering(tx, vocab, asks)
+    return isPromise(out) ? out.catch(failed) : out
+  } catch (error) {
+    return failed(error)
+  }
 }
 
 /** Read the rest of any partially-read entity, before anything writes or

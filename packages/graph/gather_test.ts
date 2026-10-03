@@ -6,9 +6,9 @@
 // asserts the tally.
 
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Graph, Plugin, Storage, Tx } from './mod.ts'
-import { about, graph } from './mod.ts'
+import { about, gather, graph, holding } from './mod.ts'
 import { books, memory } from './testing.ts'
 
 // The same storage, with every read door counted. A transaction's calls count
@@ -196,3 +196,36 @@ test('a named-only gather never enumerates reverse reference properties', () => 
   storage.tx((tx) => about(tx, vocab, ['book']))
   assertEquals(scans, 1)
 })
+
+for (let async of [false, true]) {
+  test(`failed read hints fall back, required reads still fail (${async})`, async () => {
+    let calls: string[][] = []
+    let base = memory()
+    let get = (eids: string[]) => {
+      calls.push(eids)
+      if (eids.includes('stale')) throw new Error('stale descriptor')
+      return [{ entity: { eid: 'b1' }, book: { pages: 4 } }]
+    }
+    let tx = base.tx((tx) => ({
+      ...tx,
+      get: async ? async (eids: string[]) => get(eids) : get,
+    })) as Tx
+    let snap = await gather(tx, books, [
+      { eids: ['b1'] },
+      { eids: ['stale'], hint: true },
+    ])
+    assertEquals(calls, [['b1', 'stale'], ['b1']])
+    let held = holding(tx, books, snap)
+    assertEquals((await held.get(['b1']))[0].book, { pages: 4 })
+    await assertRejects(
+      async () => await held.get(['stale']),
+      Error,
+      'stale descriptor',
+    )
+    await assertRejects(
+      async () => await gather(tx, books, [{ eids: ['stale'] }]),
+      Error,
+      'stale descriptor',
+    )
+  })
+}
