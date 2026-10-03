@@ -99,3 +99,14 @@ best-effort, not a CPU-idleness guarantee: tests, direct `deno bench` calls,
 other benchmark gates, and jobs started later do not acquire this lock. Keep the
 box quiet. Calling `bin/bench.ts` directly also bypasses serialization; use the
 tasks above for measurements.
+
+## Relay admission
+
+`deno run -A --config deno.json bench/relay-admission.ts` measures synchronous
+Store relay admission and an ordinary `graph.apply(check)` reference over
+Durable SQLite. Pass a checkout path to run the same fixture against another
+revision. Each run warms an authenticated socket per owned entity, then sends 10
+values/second/entity for 200 simulated ticks at 1, 10 and 100 entities. The
+reported cost is median active wall time from three rounds; authentication,
+observers and the fanout timer are outside timing. SQL statements, write
+statements, transactions and refusals accompany the timings.

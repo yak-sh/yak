@@ -331,3 +331,45 @@ test('preconditions see held peer values on stored entities and committed guards
   )
   assertEquals((await g.get(['stored']))[0].presence, undefined)
 })
+
+test('a warmed admission runs newly registered and changing checks', async () => {
+  let g = graph({ storage: memory(), vocab: books })
+  let input: Bundle[] = [{ entity: { eid: 'b1' }, book: { pages: 1 } }]
+  await g.admit(input)
+  let allowed = true
+  g.use({
+    name: 'permission',
+    admission: () => true,
+    hooks: {
+      precondition: (b) => {
+        if (!allowed) throw new Refused('permission moved')
+        return b
+      },
+    },
+  })
+  assertEquals((await g.admit(input))[0].book, { pages: 1 })
+  allowed = false
+  await assertRejects(
+    async () => await g.admit(input),
+    Refused,
+    'permission moved',
+  )
+  assertEquals(await g.get(['b1']), [])
+})
+
+test('a warmed write uses rules installed after its first apply', async () => {
+  let vocab = loadVocab({
+    $defs: {
+      book: { component: true, properties: { pages: { type: 'number' } } },
+      doc: { component: true, properties: { title: { type: 'string' } } },
+    },
+  })
+  let g = graph({ storage: ram(vocab), vocab })
+  let input: Bundle[] = [{ entity: { eid: 'b1' }, book: { pages: 1 } }]
+  await g.apply(input)
+  g.use({
+    name: 'titles',
+    declared: [{ name: 'title', match: '.book !doc +doc.title=Read' }],
+  })
+  assertEquals((await g.apply(input))[0].doc, { title: 'Read' })
+})
