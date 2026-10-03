@@ -7,7 +7,7 @@
     "./rules": "./rules.ts"
   },
   "license": "Apache-2.0",
-  "description": "Represents typed links as graph entities with content-derived ids and supports traversal through storage reads and SQL queries.",
+  "description": "Creates directed links as graph entities with content-derived eids, validates writes, and follows links through storage reads and SQL queries.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },
