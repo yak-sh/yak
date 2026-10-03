@@ -11,7 +11,7 @@
     "./views": "./views.ts"
   },
   "license": "Apache-2.0",
-  "description": "Executes recorded graph tool invocations and stores results independently of sessions.",
+  "description": "Executes recorded graph tool calls and keeps their answers, duration, and execution state; parses app-declared commands and provides their HTTP route and answer rendering.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

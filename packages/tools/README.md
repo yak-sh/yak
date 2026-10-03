@@ -1,118 +1,52 @@
 # @yaks/tools
 
-`@yaks/tools` executes tools through a graph and records each invocation in that
-graph. A tool is a named function that receives graph data and validated
-arguments, then returns graph patches. The package records the request,
-execution state, result, elapsed time, and any failure.
+Executes recorded graph tool calls and keeps their answers, duration, and
+execution state. It also parses app-declared commands and provides their HTTP
+route and answer rendering.
 
-For app-declared commands, `@yaks/tools/declared` parses `tool: true` entries,
-fills their arguments, and invokes the host's apply, query, or worker effect.
-`@yaks/tools/routes` contributes `POST /command` when the host supplies a
-caller-scoped `command(name, args)` function. The host resolves the app and
-authorizes the caller; [@yaks/api](../api/README.md) serves the route. An app
-command may declare `floor: "person"`, `"editor"`, or `"owner"` to restrict
-callers at that door. `discoverable: false` keeps scheduled internal commands
-out of command listings. A worker command that only reads may say
-`readOnly: true`; query commands are read-only by their act.
+## Calls and answers
+
+A **call** is an [entity](../graph/README.md#data-model) recording a request to
+run a [tool](../graph/README.md#tools):
+`call: { to: toolEid('person_greet'), args: { name: 'Ada' } }`. A **runner**
+validates calls, invokes its tools, and writes their answers and bookkeeping to
+a [graph](../graph/README.md#data-model) (`Runner`). An **answer** is the array
+of [bundles](../graph/README.md#data-model) a tool returns. **Content** is the
+text attached to an entity, `content: { body: 'hello' }`. **Output** identifies
+what produced an entity, its provider id, and its data:
+`output: { source: '<call eid>', value: { total: 3 } }`. A **result** is the
+entity recording completion, with `result: { call: '<call eid>', ms: 3 }` and
+the answer's text in `content.body`. A **call claim** is the call's
+`execution.by`, identifying the runner holding it. **Execution state** is
+computed from that call claim, an interruption, and the call's explicitly named
+answers: `running`, `done`, `failed`, or `interrupted`.
 
 ```sh
 deno add jsr:@yaks/tools
 ```
 
-A **bundle** is one entity's components represented as a JSON object. In
-[@yaks/graph](../graph), it is also the patch used to read or write that entity:
-the `entity` field contains its id, and the other fields contain its components.
-A tool is `run(call, graph)`: it receives the call entity as a bundle and the
-graph it runs on, and returns an array of bundles:
+## Run a tool
+
+A tool returns bundles; the runner applies them as the caller. Load the
+[vocabulary](../vocab/README.md#vocabulary), register the tools with `ensure()`,
+and use `call()` for a direct invocation. `executionComputed` supplies execution
+state to RAM; `executionDerived(vocab)` supplies it to
+[SQLite](../sqlite/README.md).
 
 ```ts
-import { argsOf, type Tool } from '@yaks/graph'
-
-const greet: Tool = {
-  noun: 'person',
-  verb: 'greet',
-  description: 'Greet a person',
-  inputSchema: {
-    type: 'object',
-    required: ['name'],
-    properties: { name: { type: 'string' } },
-  },
-  run: (call) => [{
-    entity: { eid: '$greeting' },
-    content: { body: `hello ${argsOf(call).name}` },
-    output: { source: call.entity.eid },
-  }],
-}
-```
-
-`call.args` is an object. The runner validates it against `inputSchema` and
-hands the tool the call with the validated arguments in their place (`argsOf`),
-the caller in `created{by, via}` (`who`), and, where a program on this machine
-runs the call, that program in `process{pid, command, cwd}`. A tool does not
-apply its returned bundles. The runner applies them and attributes the writes to
-the caller.
-
-<a id="components"></a>
-
-## Stored data
-
-The graph is the durable store for calls and their outcomes. `toolsDoc` declares
-these components:
-
-- `tool{name, description}` identifies a registered tool. `name` is its identity
-  (the vocabulary's `identity` keyword): the entity id is derived from it, and
-  `toolEid(name)` computes that id for a call to point at.
-- `call{to, args, id?, source?}` records an invocation. `to` refers to a `tool`
-  entity, `args` is an object of arguments, `id` can preserve a transport's
-  correlation id, and `source` can refer to the request or schedule that created
-  the call.
-- `execution{state, by?}` records the state (`running`, `done`, or `failed`)
-  and, when configured, the process that claimed the call.
-- `result{call, ms}` refers to the completed call and records its duration. The
-  result entity also gets `content{body}` containing a text rendering of the
-  answer.
-- `content{body}` stores text. `output{source, id?, value?}` identifies what
-  produced output, can preserve provider-specific output metadata, and carries
-  the output as data where its producer declared a shape for it.
-- `refusal{code}` records a deliberate no. `exception` records an unexpected
-  failure and can carry diagnostic fields
-  supplied by the graph's stamping rules.
-
-The call is written before its tool runs, so the request remains recorded if
-execution is interrupted. Tool output, the result, and the final execution state
-are then committed together. A tool marked `readOnly` returns existing bundles
-without writing them again; the runner still stores its result and execution
-state. A call with `check: true` to a tool that writes is a rehearsal: the
-runner applies the tool's output with every check and rolls it back, answers
-what a kept write would have returned, and stores only its own bookkeeping.
-
-A storage refusal marked `retryable: true` keeps the completed answer in memory
-and retries its persistence with backoff. The tool runs once; its answer and
-duration stay the same. The first refusal is reported through `report`.
-Admission and precondition refusals still fail the call. Until persistence
-succeeds, a process crash can still lose the in-memory answer.
-
-<a id="running-a-tool"></a>
-
-## Ordinary usage
-
-Load the vocabulary into a graph, create a runner with the tools available in
-the current process, and register their `tool` entities with `ensure()` (or
-`ensure(['person_greet'])` for just the tools named, which is what a server does
-on the way into each call):
-
-```ts
-import { argsOf, graph, mint, type Tool } from '@yaks/graph'
+import { argsOf, graph, type Tool } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import {
   answerOf,
+  executionComputed,
   faulted,
   runner,
   toolEid,
   toolsDoc,
   worded,
 } from '@yaks/tools'
+import { equal } from '@yaks/testing'
 
 const greet: Tool = {
   noun: 'person',
@@ -129,224 +63,608 @@ const greet: Tool = {
     output: { source: call.entity.eid },
   }],
 }
-
 const vocab = loadVocab([toolsDoc])
-const g = graph({ vocab, storage: ram(vocab) })
+const g = graph({ vocab, storage: ram(vocab, { computed: executionComputed }) })
 const r = runner(g, { tools: [greet] })
-await r.ensure()
-
-const id = mint()
-const records = await r.call({
-  entity: { eid: id },
+await r.ensure(['person_greet'])
+const bundles = await r.call({
+  entity: { eid: 'greet-ada' },
   call: { to: toolEid('person_greet'), args: { name: 'Ada' } },
 })
-
-if (faulted(records, id)) throw new Error(worded(answerOf(records, id)))
-console.log(worded(answerOf(records, id)))
+equal(faulted(bundles, 'greet-ada'), false)
+equal(worded(answerOf(bundles, 'greet-ada')), 'hello Ada')
+equal(
+  ((await g.get(['greet-ada']))[0].execution as { state: string }).state,
+  'done',
+)
+equal((await g.read('.result.call=greet-ada')).length, 1)
 ```
 
-`call()` writes the call already claimed, in one change, and runs its tool in
-this process: the caller asking is the one waiting for the answer. A `$` eid is
-given a fresh one first, so the call is in flight here from the moment it is
-written. It returns the tool's output together with runner bookkeeping. Use
-`answerOf(records, id)` to remove this call's own record (the call and its
-result) before displaying the answer; it goes by the call's eid, never by shape,
-since a tool that reads transcripts answers other calls and results. `worded()`
-says a text answer (a row carrying only its words and the call it answers) as
-its `content.body`, a search hit as one line, and any other entity whole as
-JSON, so an entry or a comment is said with its eid and its writer.
-`structured(tool, answer)` is the answer as data: the bundles under `result`, or
-the `output.value` of a tool that declares an `outputSchema`. `valueIn(answer)`
-is the `output.value` an answer carries: the same answer as data, which a caller
-reads instead of parsing the words. `faulted(records, id)` checks this call's
-stored execution state rather than treating an answer that contains `error` data
-as an execution failure.
-
-Use `run(callId)` for a call already stored in the graph, and `due(callId)` for
-one a rule selected: it runs the call if nobody holds it and otherwise leaves
-it, where `run()` answers with the call in flight or refuses an unfinished one.
-Use `drive()` to run all currently eligible calls in one pass.
-
-<a id="whose-name-a-tool-writes-in"></a>
-
-The runner reads the caller from the call's `created.by` provenance stamp and
-uses that identity when applying tool output. Authorization therefore applies to
-the caller rather than the process executing the tool. If the vocabulary does
-not declare and stamp `created`, the tool runs without a caller identity.
-
-The graph passed as the first argument to `runner()` stores calls and runner
-bookkeeping. The optional `host` setting is the `Graph` handed to tools as their
-second argument; it defaults to the storage graph. This separation lets a
-process keep invocation records in one graph while tools operate on another.
-
-Other runner options are `owner`, the process entity written to `execution.by`;
-`process`, the `{pid, command, cwd}` of the program running the calls, put on
-every call a tool is handed and never stored; `report`, called for unexpected
-errors; `otherwise`, the tool that answers a call naming none of the runner's
-tools (left out, such a call is left for the runner that has its tool); `reply`,
-what a direct caller is owed beside the answer; and `now`, an injectable clock
-used to measure `result.ms`.
-
-A `Reply` is `(call, answer, wrote) => Promise<Bundle[]>`, asked after every
-call run through `call()` and never for one an effect runs. `wrote` is what the
-call's own write applied: its answer when the tool wrote and the write was kept,
-so an entity it created wears the `created` its write was stamped with, and
-nothing for a read, a rehearsal or a refusal. The bundles it returns follow the
-tool's own in the answer and are not written. A reply that throws is reported
-and the answer goes out without it. [@yaks/session](../session/README.md) owes a
-caller the items addressed to it; [@yaks/embedding](../embedding/README.md) owes
-a new entity's nearest neighbours.
-
-<a id="the-two-rules"></a>
-
-## Selecting pending calls
-
-`toolsDoc` declares two effect-phase rules:
-
-```text
-call_ready  $call .call, !execution, !results, !wake; +result.call=$call
-call_woken  $call .call, .wake, .fired, !results;       +result.call=$call
-```
-
-`call_ready` selects a call nobody has claimed, with no result and no `wake`
-component. A call written through `call()` carries its claim from the start, so
-it owes no run: the caller is running it. `call_woken` selects a call whose
-[@yaks/wake](../wake) trigger has fired. If the graph does not load the wake
-components, only the first rule can match.
-
-The emitted result entity has an id derived from the rule match. Reprocessing
-the same call therefore addresses the same result entity rather than creating a
-second one.
-
-Importing `@yaks/tools` does not start a polling loop or register effects. A
-process that should execute calls written by other processes registers each
-runner rule with [@yaks/effects](../effects):
-
-```ts ignore
-for (const rule of r.rules) {
-  fx.on(rule.plan, (event) => r.due(event.entity.eid))
-}
-```
-
-`drive()` evaluates the same rules once. `reconcile(r)` calls
-`drive({ redrive: true })` and is intended for startup recovery.
-
-<a id="at-most-once-and-what-a-crash-leaves-behind"></a>
-
-## Claims and recovery
-
-Before invoking a tool, the runner writes `execution.state = "running"` with a
-precondition that prevents two processes from claiming an unclaimed call. It
-then writes `done` or `failed` with the result, and a runner that loses the
-claim to another has nothing to run. Concurrent runners over the same graph
-object share an in-process invocation.
-
-When `owner` is set, `execution.by` identifies the process holding the claim. A
-runner leaves a call claimed by another active owner alone. If that owner's
-entity has an `exit` component, the claim is considered abandoned and a later
-sweep can take it. This also prevents imported call histories from being
-executed again merely because another runner reads them.
-
-A claim naming this runner's own owner that this runner is not running belongs
-to another runner under the same name, and is left to it, redrive and all: an
-owner's own claims are taken again only once it has exited. Calling `run()` for
-a call that has a `running` claim with no owner and no result throws
-`UnfinishedCall`. `reconcile()` retries such calls during startup. Retrying can
-repeat an external side effect if the process stopped after that effect but
-before committing the result, so the package provides at-most-once claiming, not
-an exactly-once execution guarantee.
-
-An argument declared as naming an entity (`ref`, or `items.ref` for a list)
-reaches the tool as the eid it names: the runner resolves what the caller typed
-(an eid, `T-7`, a name) through `g.address`, once, for every tool. A tool that
-writes is refused with `CallError('arguments', …)` before it runs when such an
-argument names nothing of the declared kind, so a stray eid never becomes a new
-entity. A read-only tool is answered about whatever the id names.
-
-Throw `CallError(code, message)` for an expected refusal. The runner stores an
-`refusal{code}` bundle, marks the execution failed, and returns a result. Other
-thrown values produce an `exception` bundle and are also passed to `report`.
-Argument parsing, schema validation, and rejected graph writes follow the same
-failure path, ensuring a claimed call ends in `failed` with a result.
-
-<a id="scheduling"></a>
-
-## Scheduled calls
-
-A call with `wake{at}` becomes eligible after its `fired` component is written.
-A call with `wake{every}` is a recurring schedule and is not executed itself.
-Each firing creates a separate call whose `call.source` refers to the schedule.
-The generated call id is derived from the schedule id and firing time, so two
-different firing times create two calls and repeating the same firing time
-addresses the same call.
-
-Keep one scheduling owner per graph. [@yaks/session](../session) runs the calls
-in its transcript in order through `run()` and does not register these effects.
-
-<a id="a-check-is-a-tool-whose-verb-is-check"></a>
-
-## Health checks
-
-A health check is an ordinary tool whose `verb` is `check`. There is no separate
-registry: `checks(tools)` filters a loaded tool list to those checks. Each
-package can therefore declare checks for its own invariants, and removing that
-package removes its checks.
-
-`checked(call, about, findings)` builds the standard one-bundle response for a
-check. `about` is the claim that holds when nothing is found ("no transcript has
-stalled"): the body reads `<about> — nothing to report`, or
-`<n> finding(s) against: <about>` above the findings. It always includes
-readable `content.body` and `output.source`. If there are findings, `finding.level`
-contains the most severe level: `fail` for a measured invariant violation, or
-`warn` for a leak or an outcome the check could not determine. A check with no
-findings still returns a response. `ailing(answer)` is true only when that
-verdict is `fail`. Reporting a failed invariant does not mean the tool
-invocation itself failed; use `faulted()` for the latter.
+`ensure()` registers all the runner's tools; `ensure(names)` registers only
+those named. `toolEid(name)` derives the eid from `tool.name`, the vocabulary's
+[identity keyword](../vocab/README.md#identity-and-indexes). `toolRow(tool)`
+builds the advertised `tool{name, description, revision}` bundle. `call()`
+writes the call and call claim together before invoking the tool in this
+process. A call whose eid is a [graph alias](../graph/README.md#ids-and-names)
+is assigned a fresh eid first.
 
 ## Exports
 
-The main `@yaks/tools` entry point exports:
+| Import                 | Exports                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/tools`          | `runner`, `Runner`, `Opts`, `Reply`; `toolEid`, `toolRow`, `answerOf`, `worded`, `structured`, `valueIn`, `display`, `faulted`, `parsed`; `reconcile`, `CallError`, `UnfinishedCall`, `Interrupted`; `executionState`, `executionComputed`, `executionDerived`; `RULES`, `READY`, `WOKEN`, `WORDS`, `MOST`; `CHECK`, `checks`, `checked`, `ailing`, `Finding`, `Level`; `toolsDoc`, `callDoc`, `toolDoc` |
+| `@yaks/tools/access`   | `mayCall`, `Floor`                                                                                                                                                                                                                                                                                                                                                                                       |
+| `@yaks/tools/declared` | `parseTools`, `filled`, `invoke`, `commands`, `schemaOf`, `viewsOf`, `mayCall`, `TOOLS_EXAMPLE`; `Arg`, `ToolDef`, `Tools`, `Context`                                                                                                                                                                                                                                                                    |
+| `@yaks/tools/routes`   | `routes`                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `@yaks/tools/vocab`    | `toolsDoc`, `callDoc`, `toolDoc`, `docs`, `description`, `derived`                                                                                                                                                                                                                                                                                                                                       |
+| `@yaks/tools/value`    | `valueIn`                                                                                                                                                                                                                                                                                                                                                                                                |
+| `@yaks/tools/views`    | `views`                                                                                                                                                                                                                                                                                                                                                                                                  |
 
-- vocabulary documents: `toolsDoc`, `callDoc`, and `toolDoc`;
-- runner construction and types: `runner`, `Runner`, and `Opts`;
-- rule metadata: `RULES`, `READY`, and `WOKEN`;
-- invocation helpers: `toolEid`, `answerOf`, `worded`, `structured`, `faulted`,
-  and `reconcile`;
-- errors: `CallError` and `UnfinishedCall`;
-- check helpers and types: `CHECK`, `checks`, `checked`, `ailing`, `Finding`,
-  and `Level`.
+## Stored data
 
-Use `@yaks/tools/vocab` when only declarations are needed. It exports
-`toolsDoc`, `callDoc`, `toolDoc`, and `docs` without importing the runner or the
-JSON Schema validation code. `callDoc` contains the invocation and output
-components but omits `tool`; `toolDoc` contains only `tool`; `toolsDoc` contains
-both plus the effect rules.
+`toolsDoc` declares these [components](../graph/README.md#data-model):
 
-<a id="what-replaced-the-tool-call-log"></a>
+| Component                            | Purpose                                                                                           |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `tool{name, description, revision?}` | Identifies a registered tool; its eid is derived from `name`.                                     |
+| `call{to, args, id?, source?}`       | Names the tool, arguments, optional provider id, and originating entity.                          |
+| `execution{by, state}`               | Holds the call claim and computed execution state.                                                |
+| `result{call, ms?}`                  | Records completion and duration when the runner observed the start.                               |
+| `content{body}`                      | Carries content.                                                                                  |
+| `output{source?, id?, value?}`       | Records output.                                                                                   |
+| `refusal{code}`                      | A **refusal** records a deliberate rejection with a reason code.                                  |
+| `exception`                          | An **exception** records an unexpected failure; diagnostic properties may be stamped by the host. |
+| `finding{level}`                     | Carries a [check](#health-checks)'s verdict.                                                      |
 
-## Querying invocation history
+`callDoc` omits the `tool` declaration; `toolDoc` contains only that
+declaration. `toolsDoc` contains both and the runner's effect rules. Importing
+declarations from `@yaks/tools/vocab` avoids importing the runner and its input
+validation.
 
-Invocation history lives in the graph rather than in a separate telemetry table.
-The former log fields map to graph data as follows:
+```ts
+import { callDoc, toolDoc, toolsDoc } from '@yaks/tools/vocab'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
 
-| Information | Graph field                                                                                 |
-| ----------- | ------------------------------------------------------------------------------------------- |
-| Tool        | `call.to`, referring to `tool{name}`                                                        |
-| Caller      | `created.by` on the call                                                                    |
-| Duration    | `result.ms`                                                                                 |
-| Outcome     | `execution.state`                                                                           |
-| Failure     | A `refusal` or `exception` bundle whose `output.source` refers to the call |
-| Time        | `created.at`                                                                                |
-
-For example:
-
-```text
-.result                       # completed calls, newest first
-.exception                    # unexpected failures
-.call .execution.state=failed # calls whose execution failed
+const split = loadVocab([callDoc, toolDoc])
+const whole = loadVocab([toolsDoc])
+equal(!!split.comp('call'), true)
+equal(!!split.comp('tool'), true)
+equal(!!whole.comp('result'), true)
 ```
 
-Because these records are graph components, they are journaled and available to
-graph subscriptions. The old transport name is not stored; add a component to
-`call` if an application needs it. These records also cannot survive a failure
-that prevents the graph transaction itself from being written.
+Calls remain recorded if a process stops before answering. The tool's answer and
+runner bookkeeping commit together. A storage refusal marked `retryable: true`
+keeps the completed answer in memory and retries persistence with backoff; it
+does not invoke the tool again. The first refusal is reported through `report`.
+Until persistence succeeds, a process crash can lose that in-memory answer.
+
+## Reads, rehearsals, and failures
+
+A `readOnly` tool returns bundles without writing them again; the runner still
+writes its result and call claim. A **rehearsal** is a call with `check: true`
+to a tool that writes: every write phase runs, the write rolls back, and the
+proposed answer is returned. The runner still records completion.
+
+Throw `CallError(code, message)` for an expected refusal. Other thrown values
+produce an `exception` answer and are passed to `report`. Invalid arguments,
+failed schema validation, and refused graph writes also produce failed calls.
+The runner resolves schema-declared
+[references](../vocab/README.md#routing-and-references) through `g.address`
+before invocation. A tool that writes is refused if such an argument names no
+entity of the declared component; a read-only tool can read whatever the id
+names, including deleted history.
+
+```ts
+import { graph, type Tool } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import {
+  answerOf,
+  CallError,
+  executionComputed,
+  faulted,
+  runner,
+  toolEid,
+  toolsDoc,
+} from '@yaks/tools'
+import { equal } from '@yaks/testing'
+
+const vocab = loadVocab([toolsDoc])
+const g = graph({ vocab, storage: ram(vocab, { computed: executionComputed }) })
+const write: Tool = {
+  name: 'write_text',
+  description: 'Write text',
+  inputSchema: { type: 'object', properties: { check: { type: 'boolean' } } },
+  run: (call) => [{
+    entity: { eid: 'text' },
+    content: { body: 'hello' },
+    output: { source: call.entity.eid },
+  }],
+}
+const read: Tool = {
+  name: 'read_text',
+  description: 'Read text',
+  readOnly: true,
+  run: () => [{ entity: { eid: 'read-only' }, content: { body: 'hello' } }],
+}
+const refuse: Tool = {
+  name: 'refuse',
+  description: 'Refuse a call',
+  run: () => {
+    throw new CallError('access', 'Permission required')
+  },
+}
+const r = runner(g, { tools: [write, read, refuse] })
+await r.ensure()
+const call = (id: string, name: string, args = {}) =>
+  r.call({
+    entity: { eid: id },
+    call: { to: toolEid(name), args },
+  })
+const proposed = await call('preview', 'write_text', { check: true })
+equal(answerOf(proposed, 'preview')[0].content, { body: 'hello' })
+equal(await g.get(['text']), [])
+await call('read', 'read_text')
+equal(await g.get(['read-only']), [])
+await call('write', 'write_text')
+equal((await g.get(['text']))[0].content, { body: 'hello' })
+const failed = await call('refused', 'refuse')
+equal(faulted(failed, 'refused'), true)
+equal(answerOf(failed, 'refused')[0].refusal, { code: 'access' })
+```
+
+## Read an answer
+
+`answerOf(bundles, callId)` removes this call and its result by identity. It
+preserves other calls and results when a tool returns them as data.
+`faulted(bundles, callId)` checks the named call's execution state, rather than
+mistaking failure data in its answer for a failed invocation.
+
+`worded(answer)` says text-only answers as `content.body`, search hits as one
+line, and other bundles whole as JSON. It limits text to `WORDS` characters by
+default and counts the bundles left unsaid. `most` in runner options limits the
+answer's JSON size to `MOST` characters by default; larger answers are refused
+with `too_large`.
+
+`structured(tool, answer)` returns `{ result: answer }`, or `output.value` for a
+tool declaring `outputSchema`. `valueIn(answer)` reads that data directly.
+`display(value)` renders structured data as Markdown fields.
+
+```ts
+import { answerOf, display, structured, worded } from '@yaks/tools'
+import { valueIn } from '@yaks/tools/value'
+import { equal } from '@yaks/testing'
+
+const value = { total: 3 }
+const answer = [{
+  entity: { eid: 'total' },
+  content: { body: 'Three items' },
+  output: { source: 'count', value },
+}]
+const bundles = [...answer, {
+  entity: { eid: 'result' },
+  result: { call: 'count', ms: 1 },
+}]
+equal(answerOf(bundles, 'count'), answer)
+equal(worded(answer), 'Three items')
+equal(valueIn(answer), value)
+equal(structured({ outputSchema: { type: 'object' } }, answer), value)
+equal(structured({}, answer), { result: answer })
+equal(display(value).includes('**total**: `3`'), true)
+equal(display([]), 'No rows.')
+```
+
+## Pending calls and scheduling
+
+`run(callId)` executes a stored call, awaits an invocation already running in
+this process, or recalls its recorded answer. A read-only answer is not stored
+as bundles; recalling it returns its result with the answer's text.
+`due(callId)` runs a call a rule selected and leaves a held call alone.
+`drive()` runs one pass over eligible calls. `reconcile(r)` calls
+`drive({ redrive: true })` for startup recovery.
+
+The runner's [rules](../graph/README.md#data-model) select an unclaimed call
+without a result or wake (`call_ready`), or a call whose
+[@yaks/wake](../wake/README.md) has fired without a result (`call_woken`). Their
+matches derive result eids, so rerunning a call addresses the same result.
+Importing this package starts no timer and registers no effects. A host can
+register each rule with [@yaks/effects](../effects/README.md):
+
+```ts
+import { graph } from '@yaks/graph'
+import { effects } from '@yaks/effects'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal, until } from '@yaks/testing'
+import { executionComputed, runner, toolEid, toolsDoc } from '@yaks/tools'
+
+const vocab = loadVocab([toolsDoc])
+const fx = effects(vocab, {
+  report: (error) => {
+    throw error
+  },
+})
+const g = graph({
+  vocab,
+  storage: ram(vocab, { computed: executionComputed }),
+  plugins: [fx],
+})
+const r = runner(g, {
+  tools: [{
+    name: 'echo',
+    description: 'Say hello',
+    run: (call) => [{
+      entity: { eid: '$hello' },
+      content: { body: 'hello' },
+      output: { source: call.entity.eid },
+    }],
+  }],
+})
+await r.ensure()
+for (const rule of r.rules) fx.on(rule.plan, (event) => r.due(event.entity.eid))
+await g.apply([{
+  entity: { eid: 'pending' },
+  call: { to: toolEid('echo'), args: {} },
+}])
+await until(async () => (await g.read('.result.call=pending')).length == 1)
+equal((await g.read('.output.source=pending&*'))[0].content, { body: 'hello' })
+```
+
+A one-shot call with `wake.at` runs in place after firing. A recurring call with
+`wake.every` or `wake.while` creates one call per firing, with `call.source`
+pointing to the schedule. The generated eid is derived from the schedule eid and
+`fired.at`, so repeating a firing does not create a second call. Keep one
+scheduling owner per graph. [@yaks/session](../session/README.md) runs its
+transcript's calls in order rather than registering these effects.
+
+```ts
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { wakeDoc } from '@yaks/wake'
+import { runner, toolEid, toolsDoc } from '@yaks/tools'
+import { equal } from '@yaks/testing'
+
+const vocab = loadVocab([toolsDoc, wakeDoc])
+const g = graph({ vocab, storage: ram(vocab) })
+let ran = 0
+const r = runner(g, {
+  tools: [{
+    name: 'daily',
+    description: 'Do daily work',
+    run: () => {
+      ran++
+      return []
+    },
+  }],
+})
+await r.ensure()
+await g.apply([{
+  entity: { eid: 'schedule' },
+  call: { to: toolEid('daily'), args: {} },
+  wake: { at: '2030-01-01T00:00:00.000Z', every: '1d' },
+}])
+await r.drive()
+equal(ran, 0)
+for (const at of ['2030-01-01T00:00:00.000Z', '2030-01-02T00:00:00.000Z']) {
+  await g.apply([{ entity: { eid: 'schedule' }, fired: { at } }])
+  await r.drive()
+}
+await r.drive()
+equal(ran, 2)
+equal((await g.read('.call.source=schedule')).length, 2)
+equal(await g.read('.result.call=schedule'), [])
+```
+
+## Call claims, recovery, and interruption
+
+A [precondition](../graph/README.md#writes-and-reads) on `execution.by` prevents
+two runners from claiming the same call. Runners over the same graph object
+share in-process invocations. The runner leaves call claims held by active
+owners alone, including call claims held by its own owner in another runner. An
+owner whose entity carries `exit` has abandoned its call claims, so another
+runner can take them. Without an explicit `owner`, the runner generates an owner
+eid.
+
+`run()` throws `UnfinishedCall` for an unfinished, anonymously claimed call.
+`reconcile()` may run it again. Recovery can repeat an external side effect if
+the process stopped after the side effect and before persisting the result;
+claiming does not guarantee exactly-once execution.
+
+`interrupt(why)` ends calls this runner is running; `interrupt(why, holder)`
+ends a holder's unanswered call claims. `interruptCall(callId, why, answer?)`
+ends an unstarted or anonymously claimed call without invoking its tool. A named
+call claim is refused with `UnfinishedCall`. An `Interrupted(message, code)`
+thrown by a tool records interruption rather than a refusal or defect.
+Interruption marks are supplied by [@yaks/kernel](../kernel/README.md).
+
+```ts
+import { graph } from '@yaks/graph'
+import { kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import {
+  executionComputed,
+  executionState,
+  faulted,
+  runner,
+  toolEid,
+  toolsDoc,
+} from '@yaks/tools'
+import { equal } from '@yaks/testing'
+
+const vocab = loadVocab([toolsDoc, kernelDoc], [kernelKeywords])
+const g = graph({ vocab, storage: ram(vocab, { computed: executionComputed }) })
+let ran = 0
+const r = runner(g, {
+  tools: [{
+    name: 'work',
+    description: 'Do work',
+    run: () => {
+      ran++
+      return []
+    },
+  }],
+})
+await r.ensure()
+await g.apply([{
+  entity: { eid: 'cancelled' },
+  call: { to: toolEid('work'), args: {} },
+}])
+const interrupted = await r.interruptCall('cancelled', 'Caller cancelled')
+equal(faulted(interrupted, 'cancelled'), true)
+equal(executionState((await g.get(['cancelled']))[0]), 'interrupted')
+await r.drive()
+equal(ran, 0)
+```
+
+## Runner options
+
+`host` is the graph passed to tool functions; it defaults to the graph storing
+calls. `owner` identifies the call claim holder. `process` supplies
+`{pid, command, cwd}` on the call handed to the tool and is never stored by the
+runner. `otherwise` answers calls naming tools the runner lacks; without it,
+those calls are left for another runner. `takes(call)` can restrict which calls
+the runner accepts. `now` supplies the clock measuring `result.ms`.
+
+The runner uses the caller's identity from `created.by` or `$actor` when
+applying tool answers. It does not invent a caller identity when neither is
+present. `report` receives unexpected errors, including failed persistence and
+replies.
+
+A **reply** is extra answer bundles owed to a direct caller (`Reply`).
+`reply(call, answer, wrote)` runs after `call()`, never after a deferred
+invocation. `wrote` contains the tool's applied answer for a kept write and is
+empty for reads, rehearsals, and refusals. Replies are appended and not written;
+a failed reply is reported and the tool's answer still returns.
+
+```ts
+import { graph, type Tool } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { answerOf, runner, toolEid, toolsDoc, worded } from '@yaks/tools'
+import { equal } from '@yaks/testing'
+
+const vocab = loadVocab([toolsDoc])
+const records = graph({ vocab, storage: ram(vocab) })
+const host = graph({ vocab, storage: ram(vocab) })
+await host.apply([{ entity: { eid: 'source' }, content: { body: 'hello' } }])
+const read: Tool = {
+  name: 'read',
+  description: 'Read host text',
+  readOnly: true,
+  run: (_call, graph) => graph.get(['source']),
+}
+const r = runner(records, {
+  tools: [read],
+  host,
+  owner: 'server',
+  reply: async (_call, _answer, wrote) => {
+    equal(wrote, [])
+    return [{ entity: { eid: 'extra' }, content: { body: 'reply' } }]
+  },
+})
+await r.ensure()
+const bundles = await r.call({
+  entity: { eid: 'read-host' },
+  call: { to: toolEid('read'), args: {} },
+})
+equal(worded(answerOf(bundles, 'read-host')), 'hello\nreply')
+equal(await records.get(['source', 'extra']), [])
+```
+
+## Health checks
+
+A **check** is a tool whose `verb` is `check`; `checks(tools)` selects those
+tools. A **finding** is `{ level, text }` describing something a check found
+(`Finding`). A finding's **level** is `fail` for a measured contract violation
+or `warn` for a leak or a verdict the check could not establish (`Level`).
+
+`checked(callId, about, findings)` builds one answer bundle, even with no
+findings. `finding.level` carries the most severe level. `ailing(answer)` tests
+for `fail`; reporting a violation does not itself make the invocation fail.
+
+```ts
+import { ailing, checked, checks, worded } from '@yaks/tools'
+import { equal } from '@yaks/testing'
+
+const tools = [{ noun: 'queue', verb: 'check' }, {
+  noun: 'queue',
+  verb: 'list',
+}]
+equal(checks(tools), [tools[0]])
+const clear = checked('check-queue', 'No calls are stuck', [])
+equal(worded(clear), 'No calls are stuck — nothing to report')
+equal(ailing(clear), false)
+const failed = checked('check-queue', 'No calls are stuck', [
+  { level: 'warn', text: 'A holder cannot be inspected' },
+  { level: 'fail', text: 'A call has no active holder or result' },
+])
+equal(failed[0].finding, { level: 'fail' })
+equal(ailing(failed), true)
+```
+
+## App-declared commands
+
+A **command** is an app's `tool: true` declaration with exactly one act:
+`apply`, `query`, or `worker` (`ToolDef`). A **command template** is that
+command's `apply` bundles or `query` text with `$name` variables filled from
+arguments. `parseTools(source, componentNames)` reads and checks these
+declarations from a JSON string or object. `filled(command, args)` fills its
+command template without performing the act; `invoke(command, args, acts)` hands
+it to the supplied boundary. `commands(definitions, worker?)` converts
+declarations to tools a runner can execute.
+
+```ts
+import { filled, invoke, parseTools, schemaOf } from '@yaks/tools/declared'
+import { equal } from '@yaks/testing'
+
+const definitions = parseTools({
+  $defs: {
+    log_run: {
+      tool: true,
+      description: 'Log a run',
+      input: { miles: { type: 'number' }, note: { type: 'string' } },
+      required: ['miles'],
+      apply: {
+        entity: { eid: '$run' },
+        run: { miles: '$miles', note: '$note' },
+      },
+    },
+    runs: {
+      tool: true,
+      description: 'Read runs',
+      input: { since: { type: 'number' } },
+      query: '.run&.run.miles>=$since',
+    },
+    tick: {
+      tool: true,
+      description: 'Advance a counter',
+      worker: '/tick',
+      input: { count: { type: 'integer' } },
+      required: ['count'],
+    },
+  },
+}, ['run'])
+equal(filled(definitions.log_run, { miles: '5' }), {
+  apply: { entity: { eid: '$run' }, run: { miles: 5 } },
+})
+equal(filled(definitions.runs, {}), { query: '.run' })
+equal(filled(definitions.runs, { since: 5 }), { query: '.run&.run.miles>=5' })
+equal(schemaOf(definitions.log_run).required, ['miles'])
+const acts = {
+  apply: (bundles: unknown[]) => bundles,
+  query: (query: string) => query,
+  worker: (path: string, args: Record<string, unknown>) => ({ path, args }),
+}
+equal(await invoke(definitions.tick, { count: '2' }, acts), {
+  path: '/tick',
+  args: { count: 2 },
+})
+```
+
+A whole `$name` retains the argument's type; within text it becomes text. `$$`
+is a literal dollar sign. Omitted optional arguments remove their containing
+keys or `&`-separated query clauses. Unbound eids in `apply` remain graph
+aliases; unknown variables and undeclared component names are refused. Query
+argument values are percent-encoded; an entire query supplied through one
+argument is passed through. See [query syntax](../query/README.md#query-model).
+
+`model: true` offers a command to an app's models. A command template's
+`$session`, when not declared as an input, must come from the invocation's
+`Context.session`. `view` names a relative HTML file in the app;
+`viewsOf(source)` lists the files for the host to check. `discoverable: false`
+is metadata for hosts to hide internal commands. A worker command can declare
+`readOnly: true`; a query command is read-only by its act.
+
+A **floor** is the least caller authority a command requires: `person`,
+`editor`, or `owner` (`Floor`). `mayCall(floor, person, role)` checks this
+floor; the host still authorizes each act.
+
+```ts
+import { mayCall } from '@yaks/tools/access'
+import { commands, filled, parseTools, viewsOf } from '@yaks/tools/declared'
+import { equal } from '@yaks/testing'
+
+const source = {
+  $defs: {
+    own_calls: {
+      tool: true,
+      description: 'Read this session’s calls',
+      model: true,
+      input: {},
+      query: '.call.source=$session',
+      view: 'calls.html',
+      floor: 'person',
+    },
+  },
+}
+const definitions = parseTools(source)
+equal(viewsOf(source), ['calls.html'])
+equal(filled(definitions.own_calls, {}, { session: 's1' }), {
+  query: '.call.source=s1',
+})
+equal(commands(definitions)[0].readOnly, true)
+equal(mayCall('editor', 'ada', 'editor'), true)
+equal(mayCall('owner', 'ada', 'editor'), false)
+equal(mayCall('person', null, null), false)
+```
+
+## HTTP route and views
+
+`routes(host)` contributes `POST /command` if `host.command` exists. It accepts
+`{name,args}`, returns the host's answer with `ok: true`, and converts expected
+refusals to HTTP error responses. Unexpected errors propagate to the host. The
+host resolves the app and caller and authorizes invocation;
+[@yaks/api](../api/README.md) serves the route.
+
+```ts
+import { routes } from '@yaks/tools/routes'
+import { CallError } from '@yaks/tools'
+import { equal } from '@yaks/testing'
+
+const [route] = routes({
+  command: async (name, args) => {
+    if (name != 'echo') throw new CallError('missing', 'Unknown command')
+    return { answer: args.text }
+  },
+})
+const request = (name: string) =>
+  new Request('https://example.test/command', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, args: { text: 'hello' } }),
+  })
+equal(await (await route.handle(request('echo'))).json(), {
+  answer: 'hello',
+  ok: true,
+})
+equal((await route.handle(request('unknown'))).status, 404)
+equal(routes({}), [])
+```
+
+`views` supplies `Tile` and `Page` [renderers](../render/README.md#use) for
+`content.body`, preserving line breaks through the rendering backend.
+
+```ts
+import { views } from '@yaks/tools/views'
+import { render } from '@yaks/text'
+import { loadVocab } from '@yaks/vocab'
+import { toolsDoc } from '@yaks/tools/vocab'
+import { equal } from '@yaks/testing'
+
+const vocab = loadVocab([toolsDoc])
+const bundle = { entity: { eid: 'message' }, content: { body: 'one\ntwo' } }
+equal(render(views, bundle, 'Tile', vocab).includes('one'), true)
+equal(render(views, bundle, 'Page', vocab).includes('two'), true)
+```
+
+## Limits
+
+The runner does not discover tools, start a polling loop, or fire wakes. Hosts
+load tools through
+[@yaks/graph/tools](../graph/README.md#built-in-tool-declarations), register
+effects through [@yaks/effects](../effects/README.md), and drive time through
+[@yaks/wake](../wake/README.md). Durable storage, stamping, and query
+capabilities depend on the graph's installed packages and adapter.
