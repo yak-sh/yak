@@ -1,5 +1,5 @@
 import { equal, ok, test, throws } from '@yaks/testing'
-import { channel, during, link, parent, peek, unlink } from './mod.ts'
+import { channel, during, link, parent, peek, record, unlink } from './mod.ts'
 import type { Event } from './mod.ts'
 
 test('trace is subscriber-owned, finite and preserves zero duration', () => {
@@ -85,4 +85,111 @@ test('during keeps synchronous answers and classifies async failures', async () 
     4,
   )
   equal(counted, false)
+})
+
+test('record preserves synchronous results and captures beyond channel history', () => {
+  let target = {}
+  let captured = record(target, () => {
+    let c = ok(peek(target))
+    let root = ok(c.begin({ kind: 'bench', name: 'round' }))
+    for (let i = 0; i < 300; i++) {
+      c.begin({ kind: 'sql', name: 'book.select', parent: root.id })?.end({
+        counts: { rows: i },
+      })
+    }
+    c.instant({ kind: 'phase', name: 'done', parent: root.id })
+    root.end()
+    return 7
+  })
+  equal(captured.result, 7)
+  equal(captured.spans.length, 302)
+  equal(captured.spans[0].name, 'round')
+  equal(captured.spans[300].counts, { rows: 299 })
+  equal(captured.spans[301].stage, 'instant')
+  ok(captured.spans.slice(0, -1).every((e) => e.duration! >= 0))
+  equal(peek(target), undefined)
+  equal(record(target, () => 0), { result: 0, spans: [] })
+})
+
+test('record leaves a concurrent subscriber and its history intact', async () => {
+  let target = {}
+  let c = channel(target)
+  let seen: Event[] = []
+  let stop = c.subscribe((e) => seen.push(e))
+  try {
+    c.instant({ kind: 'query', name: 'before' })
+    let before = c.history()
+    let wait = Promise.withResolvers<void>()
+    let captured = record(target, () => {
+      let own = c.begin({ kind: 'apply', name: 'own' })
+      return wait.promise.then(() => {
+        own?.end()
+        return 9
+      })
+    })
+    c.begin({ kind: 'apply', name: 'other' })?.end()
+    wait.resolve()
+    equal((await captured).spans.map((e) => e.name), ['own'])
+    equal(c.history(), seen)
+    equal(c.history().slice(0, before.length), before)
+    ok(c.active)
+    c.instant({ kind: 'query', name: 'after' })
+    equal(c.history(), seen)
+    equal(seen.map((e) => e.name), [
+      'before',
+      'own',
+      'other',
+      'other',
+      'own',
+      'after',
+    ])
+  } finally {
+    stop()
+  }
+})
+
+test('record owns its root before a subscriber reenters the channel', () => {
+  let target = {}
+  let c = channel(target)
+  let stop = c.subscribe((e) => {
+    if (e.name == 'own' && e.stage == 'start') {
+      c.begin({ kind: 'apply', name: 'other' })?.end()
+    }
+  })
+  try {
+    let captured = record(target, () => {
+      let root = c.begin({ kind: 'apply', name: 'own' })
+      c.begin({ kind: 'phase', name: 'prepare', parent: root?.id })?.end()
+      root?.end()
+    })
+    equal(captured.spans.map((e) => e.name), ['own', 'prepare'])
+  } finally {
+    stop()
+  }
+})
+
+test('record disconnects on throws and rejections and restores nested calls', async () => {
+  let target = {}
+  let error = new Error('failure')
+  let run = () => {
+    let c = ok(peek(target))
+    return during(c.begin({ kind: 'apply', name: 'apply' }), () => {
+      throw error
+    })
+  }
+  equal(await throws(() => record(target, run)), error)
+  equal(peek(target), undefined)
+  equal(
+    await throws(() => record(target, () => Promise.reject(error))),
+    error,
+  )
+  equal(peek(target), undefined)
+  let outer = record(target, () =>
+    record(target, () => {
+      ok(peek(target)).begin({ kind: 'get', name: 'get' })?.end()
+      return 3
+    }))
+  equal(outer.result.result, 3)
+  equal(outer.spans, outer.result.spans)
+  equal(peek(target), undefined)
 })

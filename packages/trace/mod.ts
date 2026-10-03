@@ -12,6 +12,8 @@ export type Kind =
   | 'effect'
   | 'request'
   | 'fanout'
+  | 'sql'
+  | 'bench'
 
 export type Outcome = 'ok' | 'check' | 'refused' | 'error' | 'interrupted'
 export type Counts = Readonly<Record<string, number>>
@@ -60,6 +62,7 @@ export type Channel = {
 let channels = new WeakMap<object, Channel>()
 let capacity = 256
 let recordings = new WeakMap<Channel, number>()
+let roots = new WeakMap<Channel, (id: string) => void>()
 let links = new WeakMap<
   object,
   WeakMap<object, { id: string; recording: number }>
@@ -138,6 +141,7 @@ let create = (): Channel => {
       // Copy code metadata before delivering: a listener may mutate its caller.
       a = { ...a }
       let id = `${epoch}.${++sequence}`
+      roots.get(out)?.(id)
       let start = performance.now()
       let recording = epoch
       let ended = false
@@ -166,8 +170,10 @@ let create = (): Channel => {
     },
     instant: (a, o) => {
       if (!listeners.size) return
+      let id = `${epoch}.${++sequence}`
+      roots.get(out)?.(id)
       return emit({
-        ...event(a, `${epoch}.${++sequence}`, 'instant', performance.now()),
+        ...event(a, id, 'instant', performance.now()),
         outcome: o?.outcome,
         counts: counts(o?.counts),
       })
@@ -191,6 +197,77 @@ export let channel = (target: object): Channel => {
 export let peek = (target: object): Channel | undefined => {
   let found = channels.get(target)
   return found?.active ? found : undefined
+}
+
+/** One call's result and parent-linked span tree. Each span is its end event,
+ * or its start event if still open when the call returns; instants stay whole. */
+export type Recorded<T> = { result: T; spans: Event[] }
+
+let tree = (events: Map<string, Event>, root?: string): Event[] => {
+  if (!root) return []
+  let children = new Map<string, Event[]>()
+  for (let e of events.values()) {
+    if (!e.parent || e.id == root) continue
+    let siblings = children.get(e.parent)
+    if (!siblings) children.set(e.parent, siblings = [])
+    siblings.push(e)
+  }
+  let found: Event[] = []
+  let pending = [events.get(root)!]
+  while (pending.length) {
+    let e = pending.pop()!
+    found.push(e)
+    pending.push(...(children.get(e.id) ?? []).toReversed())
+  }
+  return found
+}
+
+/** Subscribe for a single operation, whose root must begin synchronously in
+ * run(). Descendants are selected by parent IDs, including across awaits.
+ * Capturing directly from delivery leaves every subscriber's history intact. */
+export function record<T>(
+  target: object,
+  run: () => T,
+): T extends PromiseLike<unknown> ? Promise<Recorded<Awaited<T>>> : Recorded<T>
+export function record<T>(
+  target: object,
+  run: () => T | PromiseLike<T>,
+): Recorded<T> | Promise<Recorded<T>> {
+  let c = channel(target)
+  let events = new Map<string, Event>()
+  let root: string | undefined
+  let stop = c.subscribe((e) => {
+    if (e.stage == 'end' || !events.has(e.id)) events.set(e.id, e)
+  })
+  let before = roots.get(c)
+  // Nominate before delivery: another subscriber can reenter the producer
+  // before this recorder receives the original root's start event.
+  roots.set(c, (id) => {
+    root ??= id
+    before?.(id)
+  })
+  let done = (result: T): Recorded<T> => {
+    stop()
+    return { result, spans: tree(events, root) }
+  }
+  let failed = (error: unknown): never => {
+    stop()
+    throw error
+  }
+  try {
+    let result: T | PromiseLike<T>
+    try {
+      result = run()
+    } finally {
+      if (before) roots.set(c, before)
+      else roots.delete(c)
+    }
+    return result && typeof (result as PromiseLike<T>).then == 'function'
+      ? Promise.resolve(result).then(done, failed)
+      : done(result as T)
+  } catch (error) {
+    return failed(error)
+  }
 }
 
 /** A parent carried through a local callback, never through persisted rows.

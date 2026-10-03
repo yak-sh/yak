@@ -1,12 +1,53 @@
 import { stub } from '@std/testing/mock'
 import { equal, ok, test, throws } from '@yaks/testing'
-import { channel, type Event, peek } from '@yaks/trace'
+import { channel, type Event, peek, record } from '@yaks/trace'
 import { isPromise } from '@yaks/fp'
 import { graph } from './graph.ts'
 import { token } from './guard.ts'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { books, memory, slow } from './testing.ts'
+
+test('record excludes an interleaved apply and all its phases', async () => {
+  let gates = [Promise.withResolvers<void>(), Promise.withResolvers<void>()]
+  let g = graph({
+    vocab: books,
+    storage: memory(),
+    plugins: [{
+      name: 'shop',
+      hooks: {
+        normalize: (b) => {
+          let book = b[0].book as { pages: number }
+          return gates[book.pages].promise.then(() => b)
+        },
+      },
+    }],
+  })
+  let captured = record(
+    g,
+    () => g.apply([{ entity: { eid: 'first' }, book: { pages: 0 } }]),
+  )
+  let other = await record(g, () => {
+    let applying = g.apply([{ entity: { eid: 'second' }, book: { pages: 1 } }])
+    gates[1].resolve()
+    return applying
+  })
+  gates[0].resolve()
+  let own = await captured
+  equal(own.result[0].entity.eid, 'first')
+  equal(other.result[0].entity.eid, 'second')
+  equal(own.spans.filter((e) => e.kind == 'apply').length, 1)
+  let ids = new Set(own.spans.map((e) => e.id))
+  ok(own.spans.slice(1).every((e) => ids.has(e.parent!)))
+  ok(other.spans.every((e) => !ids.has(e.id)))
+  for (
+    let name of ['normalize', 'prepare', 'mutate', 'transaction', 'compose']
+  ) {
+    ok(own.spans.some((e) => e.kind == 'phase' && e.name == name))
+  }
+  ok(own.spans.every((e) => e.duration! >= 0))
+  equal(peek(g), undefined)
+})
 
 for (let async of [false, true]) {
   test(`graph activity preserves legacy timing, rollback and hook args (${async})`, async () => {

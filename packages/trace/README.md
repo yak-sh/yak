@@ -9,6 +9,7 @@ contains only previously observed events, not activity during the gap.
 
 ```ts
 import { channel, peek } from '@yaks/trace'
+import { equal } from '@yaks/testing'
 
 let target = {}
 let activity = channel(target)
@@ -23,20 +24,60 @@ if (observing) {
   })
   span?.end({ counts: { bundles: 1 } })
 }
-console.assert(received.join(',') == 'start,end')
-console.assert(activity.history().length == 2)
+equal(received, ['start', 'end'])
+equal(activity.history().length, 2)
 stop()
-console.assert(peek(target) == undefined)
+equal(peek(target), undefined)
 ```
+
+`record(target, run)` subscribes for one call and returns `{ result, spans }`. A
+**span tree** is an array of events connected by their `id` and `parent`: the
+root comes first, followed by its descendants. Each span appears once, as its
+end event with `duration`, or as its start event if still open when the call
+finishes. Instant events appear whole. The tree keeps phase names, durations,
+attribution, outcomes and counts.
+
+```ts
+import { peek, record } from '@yaks/trace'
+import { equal, ok } from '@yaks/testing'
+
+let target = {}
+let captured = await record(target, () => {
+  let activity = ok(peek(target))
+  let root = ok(activity.begin({ kind: 'apply', name: 'apply' }))
+  return Promise.resolve().then(() => {
+    activity.begin({
+      kind: 'phase',
+      name: 'prepare',
+      parent: root.id,
+    })?.end()
+    root.end()
+    return 42
+  })
+})
+equal(captured.result, 42)
+equal(captured.spans.map((span) => span.name), ['apply', 'prepare'])
+equal(captured.spans[1].parent, captured.spans[0].id)
+ok(captured.spans.every((span) => span.duration! >= 0))
+equal(peek(target), undefined)
+```
+
+`run` must begin the operation's root synchronously, before its first `await`;
+its descendants carry parent IDs across asynchronous work. Interleaved calls on
+the same channel stay out of the tree. Recording ends when `run` returns or its
+promise settles, and errors propagate after unsubscribing. A synchronous `run`
+returns `{ result, spans }` directly; an asynchronous `run` returns a promise.
+The tree is independent of the bounded history, so large calls remain complete,
+and concurrent subscribers keep their subscriptions and history.
 
 `Event` exports `id`, optional `parent`, `kind`, `name`, `stage`, monotonic
 `time`, optional `start` and `duration`, optional `package` and `plugin`,
 optional `outcome`, and numeric `counts`. Kinds are `apply`, `phase`, `rule`,
-`query`, `get`, `effect`, `request`, and `fanout`. Outcomes are `ok`, `check`,
-`refused`, `error`, and `interrupted`. A span's start and end share one string
-ID; pass that ID as a child's `parent`. IDs are channel-local, not durable or
-cross-process identities. `instant(activity, end?)` records a point event
-without an open span.
+`query`, `get`, `effect`, `request`, `fanout`, `sql`, and `bench`. Outcomes are
+`ok`, `check`, `refused`, `error`, and `interrupted`. A span's start and end
+share one string ID; pass that ID as a child's `parent`. IDs are channel-local,
+not durable or cross-process identities. `instant(activity, end?)` records a
+point event without an open span.
 
 Names identify code, not data. Producers must never include entity IDs, bundle
 values, query text, URLs, secrets or credentials. Counts contain only numeric
