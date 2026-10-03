@@ -172,6 +172,42 @@ test('a broken manifest is refused in its own file name', () => {
   )
 })
 
+test('a request permits only declared marks through stored references', () => {
+  let request = (permit: unknown, target = {
+    type: 'string',
+    ref: 'hero',
+    death: 'keep',
+  }) => ({
+    $defs: {
+      hero: { properties: {} },
+      request: { floor: 'owner', permit, properties: { target } },
+    },
+  })
+  let v = appVocab(request({ completed: 'target' }))
+  assertEquals(v.comp('request')?.keywords.permit, { completed: 'target' })
+  for (
+    let permit of [null, [], { missing: 'target' }, { completed: 'missing' }, {
+      hero: 'target',
+    }]
+  ) {
+    assertThrows(
+      () => appDoc(request(permit), 'vocab.yml'),
+      Error,
+      'vocab.yml:',
+    )
+  }
+  assertThrows(
+    () =>
+      appDoc(request({ completed: 'target' }, {
+        type: 'string',
+        ref: 'missing',
+        death: 'keep',
+      })),
+    Error,
+    'stored reference',
+  )
+})
+
 test('a manifest is refused in the words that fix it', () => {
   assertThrows(() => appDoc('{'), Error, 'vocab.json is not JSON')
   assertThrows(() => appDoc('[]'), Error, 'vocab.json is an object')

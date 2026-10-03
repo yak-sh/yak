@@ -186,6 +186,50 @@ declare with `floors`, which win over declared ones:
 `members({ app: 'shop', space: 'club', vocab, floors: { product: 'editor' } })`.
 The access rows ask `owner` whatever either says.
 
+## The owner of a referenced row may answer with a mark
+
+A component may declare `permit`: companion mark names mapped to local reference
+properties. On an existing row, the owner of the stored reference's target may
+add the named mark. The target belongs to its `created.by`, or, when it has no
+byline, to its `created.via`. The app must still admit the writer; the mark's
+floor and pace apply too.
+
+```json
+{
+  "$defs": {
+    "request": {
+      "component": true,
+      "type": "object",
+      "floor": "owner",
+      "permit": { "completed": "target" },
+      "properties": {
+        "target": { "type": "string", "ref": "entity", "death": "keep" },
+        "text": { "type": "string" }
+      }
+    }
+  }
+}
+```
+
+Here an app owner writes `request{target, text}`. The referenced row's owner
+answers on that request with `completed{}`; the graph fills the mark's `at`,
+`by` and `via`. Repeating the mark preserves its history. Removing it requires
+ordinary permission on the request row.
+
+Load declarations with `memberKeywords`. `permitted(vocab)` reports malformed
+maps, undeclared companions, companions with writable properties, and properties
+that are not stored references. Companions must be marks containing only stamped
+properties; `created`, `updated` and `tombstone` cannot be companions.
+`permitsIn(vocab)` reads valid declarations and throws on invalid ones.
+
+This permission changes only the named mark. It grants no request edits,
+rebinding, component removal or entity deletion, including changes split across
+several bundles in one batch. A missing or deleted target grants nothing, and a
+newly created request cannot supply its own permission. Owners and editors
+retain their ordinary rights; floors and access-control words remain protected.
+
+## How often a component may be written
+
 `pace` is @yaks/vocab's keyword: how often one instrument may write one entity's
 component. On a stored component this guard holds it by the bundle's
 `$actor.via`, for guests and signed-in writers alike. Writers with no `via`
@@ -272,26 +316,27 @@ invitation handler.
 
 The main export includes:
 
-| Exports                                                | Purpose                                                                        |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| `memberDoc`                                            | Vocabulary document containing access components and pacing metadata.          |
-| `MEMBER`, `GRANT`, `ACCESS`, `GOVERNED`                | Component names and the list requiring owner permission.                       |
-| `Role`, `Level`, `Mode`; `ROLES`, `LEVELS`, `MODES`    | Value types and their supported values.                                        |
-| `role`, `level`, `mode`                                | Read a value with its default: member, viewer or private.                      |
-| `reads`, `edits`, `callsOut`, `writes`, `reaches`      | Pure permission checks.                                                        |
-| `members(guard)`                                       | Graph plugin with the vocabulary, permission-read requirements and write hook. |
-| `guarding(guard)`, `wanting(guard)`, `actorOf`, `asks` | Write hook and supporting helpers.                                             |
-| `policy(storage, where)`                               | Read and write checks bound to storage.                                        |
-| `modeOn`, `levelOn`, `readsOn`, `writesOn`             | Checks using an existing graph transaction.                                    |
-| `Guard`, `Floors`, `Viewer`, `Where`, `Policy`         | Configuration and policy types.                                                |
-| `Denied`                                               | Error with `actor`, `app`, `need` and `act` fields.                            |
+| Exports                                                                      | Purpose                                                                        |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `memberDoc`                                                                  | Vocabulary document containing access components and pacing metadata.          |
+| `MEMBER`, `GRANT`, `ACCESS`, `GOVERNED`                                      | Component names and the list requiring owner permission.                       |
+| `Role`, `Level`, `Mode`; `ROLES`, `LEVELS`, `MODES`                          | Value types and their supported values.                                        |
+| `role`, `level`, `mode`                                                      | Read a value with its default: member, viewer or private.                      |
+| `reads`, `edits`, `callsOut`, `writes`, `reaches`                            | Pure permission checks.                                                        |
+| `members(guard)`                                                             | Graph plugin with the vocabulary, permission-read requirements and write hook. |
+| `guarding(guard)`, `wanting(guard)`, `actorOf`, `asks`                       | Write hook and supporting helpers.                                             |
+| `policy(storage, where)`                                                     | Read and write checks bound to storage.                                        |
+| `modeOn`, `levelOn`, `readsOn`, `writesOn`                                   | Checks using an existing graph transaction.                                    |
+| `Guard`, `Floors`, `Viewer`, `Where`, `Policy`                               | Configuration and policy types.                                                |
+| `Denied`                                                                     | Error with `actor`, `app`, `need` and `act` fields.                            |
+| `memberKeywords`, `floorsIn`, `floored`, `permitsIn`, `permitted`; `Permits` | Permission declarations, their validation and loaded forms.                    |
 
 ## What is deliberately not here
 
 Authentication belongs to the caller. Permissions apply to an app as a whole,
-apart from the floors and a visitor's own rows above; this package supplies no
-per-grant query filters. It supports exactly the `viewer`, `editor` and `owner`
-levels.
+apart from floors, a visitor's own rows and declared companion marks; this
+package supplies no per-grant query filters. It supports exactly the `viewer`,
+`editor` and `owner` levels.
 
 ## Integration
 
