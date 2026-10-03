@@ -1,9 +1,11 @@
 // Rehearse the hosted mover over captured player data in a disposable SQLite file.
 import { type Bundle, graph } from '@yaks/graph'
-import { loadVocab } from '@yaks/vocab'
+import { loadVocab, metaDoc } from '@yaks/vocab'
+import { lenses, lensesIn, packageEid } from '@yaks/lens'
+import { docs as lensDocs } from '../packages/lens/vocab.ts'
 import { open } from '@yaks/sqlite/db'
 import { storage } from '@yaks/sqlite'
-import { lensRule } from '../workers/yak/lenses.ts'
+import { lensDocAt, lensRule } from '../workers/yak/lenses.ts'
 import { wakeMove } from '../apps/vale/position-move.ts'
 import { unpacked } from '../apps/vale/ability-update.ts'
 import words from '../apps/vale/vocab.json' with { type: 'json' }
@@ -19,10 +21,24 @@ let heroes = await read('seen'),
   villagers = await read('villagers')
 let declaration = words.$defs.saved_position.ops[0].view.declaration
 let doc = { ...words, $defs: { ...words.$defs, seen: declaration } }
-let vocab = loadVocab([doc, core, wake])
+let vocab = loadVocab([metaDoc, ...lensDocs, doc, core, wake])
+try {
+  await Deno.remove(`${dir}/rehearsal.db`)
+} catch (e) {
+  if (!(e instanceof Deno.errors.NotFound)) throw e
+}
 let driver = open(`${dir}/rehearsal.db`)
 try {
-  let g = graph({ vocab, storage: storage(driver, vocab) })
+  let g = graph({
+    vocab,
+    storage: storage(driver, vocab),
+    plugins: [
+      lenses(undefined, {
+        vocab,
+        rows: lensesIn([lensDocAt('yourname/vale', words)]),
+      }),
+    ],
+  })
   g.install()
   let clean = (row: Bundle): Bundle => ({
     entity: { eid: row.entity.eid },
@@ -47,14 +63,34 @@ try {
       ]),
     ),
   })
-  await g.apply([...heroes, ...requests, ...villagers].map(clean), {
-    trusted: true,
-    stamp: false,
-  })
+  await g.apply(
+    [...heroes, ...requests, ...villagers].map(clean).concat([
+      {
+        entity: { eid: packageEid('@app/yourname/vale') },
+        _package: { name: '@app/yourname/vale' },
+      },
+      ...lensesIn([lensDocAt('yourname/vale', words)]),
+    ]),
+    {
+      trusted: true,
+      stamp: false,
+    },
+  )
+  let expanded = await g.read('.player .position')
+  let acknowledgements = await g.read('.teleport_request .completed')
+  if (expanded.length !== heroes.length || acknowledgements.length !== 3) {
+    throw new Error(
+      `expanded reads lost player data: ${expanded.length} positions, ${acknowledgements.length} acknowledgements`,
+    )
+  }
+  let speaks = { [packageEid('@app/yourname/vale')]: 0 }
+  if ((await g.read('.seen', { speaks })).length !== heroes.length) {
+    throw new Error('kept page lost expanded sightings')
+  }
   let rule = lensRule('yourname/vale', words)!
-  let source = await g.read(rule.find)
+  let source = await g.read(rule.find, { native: true })
   let patches = source.flatMap((row) =>
-    rule.move(row, (q) => g.read(q) as Bundle[])
+    rule.move(row, (q) => g.read(q, { native: true }) as Bundle[])
   )
   await g.apply(patches, { trusted: true })
   for (let hero of heroes.map(clean)) {
@@ -88,7 +124,7 @@ try {
   let schedules = wakeMove(await g.read('.villager ?wake'))
   await g.apply(schedules, { trusted: true })
   let after = {
-    seen: (await g.read('.seen')).length,
+    seen: (await g.read('.seen', { native: true })).length,
     positions: (await g.read('.player .position')).length,
     completed: (await g.read('.teleport_request .completed')).length,
     wakes: schedules.length,
@@ -100,12 +136,15 @@ try {
   ) {
     throw new Error(`migration counts disagree: ${JSON.stringify(after)}`)
   }
-  let again = (await g.read(rule.find)).flatMap((row) =>
-    rule.move(row, (q) => g.read(q) as Bundle[])
+  let again = (await g.read(rule.find, { native: true })).flatMap((row) =>
+    rule.move(row, (q) => g.read(q, { native: true }) as Bundle[])
   )
   let wakeAgain = wakeMove(await g.read('.villager ?wake'))
   if (again.length || wakeAgain.length) {
     throw new Error('migration is not idempotent')
+  }
+  if ((await g.read('.seen', { speaks })).length !== heroes.length) {
+    throw new Error('kept page lost migrated locations')
   }
   console.log(
     JSON.stringify({
