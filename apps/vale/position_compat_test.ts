@@ -3,6 +3,8 @@ import { equal, ok, test, throws, until } from '@yaks/testing'
 import { type Bundle, graph, signed, token } from '@yaks/graph'
 import { loadVocab, metaDoc } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
+import { storage } from '@yaks/sqlite'
+import { open } from '@yaks/sqlite/db'
 import { compile, lenses, lensesIn, packageEid, versions } from '@yaks/lens'
 import { docs as lensDocs } from '../../packages/lens/vocab.ts'
 import { club } from '../../packages/member/testing.ts'
@@ -526,5 +528,104 @@ test('partial writes preserve pending locations and explicit clears consume thei
     let kept = (await g.get(['pending'], ['seen'], { speaks }))[0]
     if (whole) equal(kept.seen, undefined)
     else equal(value(kept, 'seen').teleport, clear ? null : 'pending-request')
+  }
+})
+
+test('canonical expansion keeps relation facts when a caller projects only request metadata', async () => {
+  let g = await setup(false, true)
+  await g.apply([{
+    entity: { eid: 'pending' },
+    player: {},
+    seen: {
+      level: 'mossvale',
+      x: 8,
+      z: 9,
+      at: moment,
+      teleport: 'pending-request',
+    },
+  }, {
+    entity: { eid: 'pending-request' },
+    teleport_request: { player: 'pending', level: 'mossvale', x: 8, z: 9 },
+  }], { trusted: true, now: moment })
+  let metadata = (await g.get(['pending-request'], ['created']))[0]
+  equal(metadata.entity.eid, 'pending-request')
+  equal(Object.keys(metadata).sort(), ['created', 'entity'])
+})
+
+test('deploying the Vale view preserves stored eid text when the request becomes a keep reference', async () => {
+  let driver = open(':memory:')
+  try {
+    let declaration = app.$defs.saved_position.ops[0].view.declaration
+    let before = structuredClone(app) as import('@yaks/vocab').VocabDoc
+    delete before.$defs!.saved_position
+    delete before.$defs!.position
+    before.$defs!.seen = declaration
+    before.$defs!.teleport_request.properties!.player = {
+      type: 'string',
+      index: true,
+    }
+    let oldVocab = loadVocab([metaDoc, ...lensDocs, core, before])
+    let oldGraph = graph({
+      vocab: oldVocab,
+      storage: storage(driver, oldVocab),
+    })
+    oldGraph.install()
+    await oldGraph.apply([{
+      entity: { eid: 'pending' },
+      player: {},
+      seen: {
+        level: 'mossvale',
+        x: 8,
+        z: 9,
+        at: moment,
+        teleport: 'pending-request',
+      },
+    }, {
+      entity: { eid: 'pending-request' },
+      teleport_request: { player: 'pending', level: 'mossvale', x: 8, z: 9 },
+    }], { trusted: true, now: moment })
+    let vocab = loadVocab([metaDoc, ...lensDocs, core, {
+      ...app,
+      $defs: { ...app.$defs, seen: declaration },
+    }])
+    let g = graph({
+      vocab,
+      storage: storage(driver, vocab),
+      plugins: [
+        lenses(undefined, { vocab, rows: lensesIn([app]) }),
+      ],
+    })
+    g.install()
+    await g.apply([
+      {
+        entity: { eid: packageEid(app.package) },
+        _package: { name: app.package },
+      },
+      ...lensesIn([app]),
+    ], { trusted: true })
+    let held =
+      (await g.get(['pending-request'], undefined, { native: true }))[0]
+    equal(value(held, 'teleport_request').player, 'pending')
+    equal(
+      (await g.read('.teleport_request.player=pending .completed')).length,
+      1,
+    )
+    equal(
+      (await g.read('.player .position')).map((r) => value(r, 'position').x),
+      [8],
+    )
+    equal(
+      (await g.get(['pending-request'], ['created']))[0].entity.eid,
+      'pending-request',
+    )
+    let source = (await g.get(['pending'], undefined, { native: true }))[0]
+    equal(source.position, undefined)
+    equal(value(source, 'seen').teleport, 'pending-request')
+    equal(
+      (await g.read('.seen.teleport=pending-request', { speaks })).length,
+      1,
+    )
+  } finally {
+    driver.close()
   }
 })

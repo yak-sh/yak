@@ -81,7 +81,6 @@ export let lenses = (
   let current = (
     rows: Bundle[],
     tx: Tx,
-    patch = false,
   ): Bundle[] | Promise<Bundle[]> => {
     if (!expansion) return rows
     let lens = expansion
@@ -100,14 +99,12 @@ export let lenses = (
           let at = new Map(all.map((r) => [r.entity.eid, r]))
           for (let row of rows) {
             let was = at.get(row.entity.eid)
-            let merged = patch ? { ...was, ...row } as Bundle : row
-            if (patch) {
-              for (let [c, p] of Object.entries(row)) {
-                if (
-                  c != 'entity' && !c.startsWith('$') && p &&
-                  typeof p == 'object'
-                ) merged[c] = { ...was?.[c] as object, ...p }
-              }
+            let merged = { ...was, ...row } as Bundle
+            for (let [c, p] of Object.entries(row)) {
+              if (
+                c != 'entity' && !c.startsWith('$') && p &&
+                typeof p == 'object'
+              ) merged[c] = { ...was?.[c] as object, ...p }
             }
             at.set(row.entity.eid, merged)
           }
@@ -130,7 +127,25 @@ export let lenses = (
             delete merged.$was
             at.set(row.entity.eid, merged)
           }
-          return rows.map((r) => at.get(r.entity.eid)!)
+          return rows.map((r) => {
+            let held = at.get(r.entity.eid)!
+            let out = { ...r }
+            for (let v of lens.views) {
+              for (let p of Object.values(v.props)) {
+                let c = 'path' in p
+                  ? p.path.split('.')[0]
+                  : 'ack' in p
+                  ? p.ack.mark
+                  : undefined
+                if (!c) continue
+                let asked = !!r[v.from] || c in r ||
+                  'ack' in p && p.ack.component in r
+                if (asked && held[c] !== undefined) out[c] = held[c]
+              }
+              delete out[v.from]
+            }
+            return out
+          })
         },
       ))
   }
@@ -375,12 +390,12 @@ export let lenses = (
       })
     },
     answer: ({ opts, tx, vocab }, rows) => {
-      if (!opts.speaks) return current(rows, tx, opts.patch)
+      if (!opts.speaks) return current(rows, tx)
       return after(tx.read('._lens'), (steps) => {
         let lens = compile(steps, opts.speaks)
         if (!lens.views.length) {
           return after(
-            current(rows, tx, opts.patch),
+            current(rows, tx),
             (expanded) =>
               opts.patch
                 ? after(

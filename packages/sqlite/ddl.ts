@@ -410,7 +410,7 @@ export let retired = (driver: Driver, vocab: Vocab): Stmt[] => {
  * fingerprint instead, and moving it fits every store once more: move it when
  * fitting learns to see something it did not.
  */
-export let FIT = 6
+export let FIT = 7
 
 /**
  * What fitting reads off a file before an install creates anything: each
@@ -456,14 +456,22 @@ let fits = (t: Stood, fresh: CreateTable, changes: number): boolean => {
 // An eid and its integer reference are two storage forms for one entity.
 // Versions of an app can move in either direction, so resolve through the
 // entity spine whenever its vocabulary changes that relation.
+let referenceFields = (vocab: Vocab, comp: string): Set<string> =>
+  new Set(
+    stored(vocab, comp).filter((p) => p.category == 'ref').map((p) =>
+      field(p.prop)
+    ),
+  )
+
 let converted = (
   t: Stood,
   fresh: CreateTable,
+  references: Set<string>,
 ): { name: string; from: string; to: string }[] =>
   fresh.cols.flatMap((c) => {
     let old = t.cols.find((r) => r.name == c.name)
     let type = String(old?.type).toLowerCase()
-    if (c.ref && c.type == 'integer' && type == 'text') {
+    if (references.has(c.name) && c.type == 'integer' && type == 'text') {
       return [{ name: c.name, from: 'eid', to: 'id' }]
     }
     if (
@@ -484,7 +492,7 @@ export let unresolved = (
   Object.fromEntries(
     comps(vocab, was).flatMap((comp) => {
       let fresh = tableDdl(vocab, comp)
-      let changes = converted(was[comp], fresh)
+      let changes = converted(was[comp], fresh, referenceFields(vocab, comp))
       return changes.length
         ? [[
           comp,
@@ -543,7 +551,7 @@ export let refit = (
           type: String(r.type ?? '') || undefined,
         }))
       let fresh = tableDdl(vocab, comp, comp, extra)
-      let refs = converted(t, fresh)
+      let refs = converted(t, fresh, referenceFields(vocab, comp))
       if (fits(t, fresh, refs.length)) return []
       let old = t.cols.map((r) => String(r.name))
       let cols = fresh.cols.map((r) => r.name).filter((name) =>

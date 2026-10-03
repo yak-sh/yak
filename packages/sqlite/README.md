@@ -213,19 +213,21 @@ try {
 `install()` preserves existing data, adds missing columns, and rebuilds a table
 whose foreign keys or checks (a reference's death word, an enum) no longer match
 the vocabulary, then retires obsolete vocabulary indexes and creates the
-declared ones. When a text property becomes a reference, it resolves each stored
-eid to the entity spine's integer id during the rebuild; rolling back the
-vocabulary resolves the id to its eid. A value that cannot resolve leaves the
-old table untouched and reports an error. A table whose rows the new shape would
-refuse, such as a value an enum no longer lists, is left as it stood and
-reported through `base.report` (the console by default): its rows need an
-application migration that prepares them. It initializes the store epoch and
-number sequence and runs bounded `PRAGMA optimize` for file-backed drivers, so
-the planner can use table statistics. A database in memory that nothing has
-installed into is made from a template: the first one a process makes for a
-vocabulary is kept, and each later one is a copy of it, since copying a schema
-is a page copy and making one is hundreds of statements (@yaks/sql
-`Driver.template`).
+declared ones. When a text property becomes a reference, including a `keep`
+reference with no foreign key, it resolves each stored eid to the entity spine's
+integer id during the rebuild. A reference with a foreign key can resolve back
+to eid text when its declaration reverses. A `keep` reference has no physical
+key identifying its old interpretation, so a code rollback must retain its
+current declaration. A value that cannot resolve leaves the old table untouched
+and reports an error. A table whose rows the new shape would refuse, such as a
+value an enum no longer lists, is left as it stood and reported through
+`base.report` (the console by default): its rows need an application migration
+that prepares them. It initializes the store epoch and number sequence and runs
+bounded `PRAGMA optimize` for file-backed drivers, so the planner can use table
+statistics. A database in memory that nothing has installed into is made from a
+template: the first one a process makes for a vocabulary is kept, and each later
+one is a copy of it, since copying a schema is a page copy and making one is
+hundreds of statements (@yaks/sql `Driver.template`).
 
 A store installs once, and an install over a file that already holds what it
 would make changes no schema (the doc view is made again only where the file's
