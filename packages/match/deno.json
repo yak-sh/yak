@@ -1,7 +1,7 @@
 {
   "name": "@yaks/match",
   "version": "0.2.10",
-  "description": "Runs query ASTs against entity bundles held in memory, without SQL or a database.",
+  "description": "Evaluates queries over bundles in memory: selections, filters, rows and routing, without SQL or a database.",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "imports": {
