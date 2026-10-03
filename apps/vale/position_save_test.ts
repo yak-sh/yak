@@ -4,6 +4,8 @@ import { FakeTime } from '@std/testing/time'
 import { type Bundle, graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
+import { storage } from '@yaks/sqlite'
+import { open } from '@yaks/sqlite/db'
 import { subscriptions } from '../../packages/api/subs.ts'
 import core from '../../packages/kernel/vocab.json' with { type: 'json' }
 import words from './vocab.json' with { type: 'json' }
@@ -70,4 +72,30 @@ test('hibernation restores surviving hero holders and peer wake observers may re
   equal(heard.includes(0), true)
   equal(await after.read(connected), [])
   off()
+})
+
+test('the stored Vale save query compares numeric position age in SQLite', async () => {
+  let vocab = loadVocab([words, core]), driver = open(':memory:')
+  try {
+    let g = graph({ vocab, storage: storage(driver, vocab) })
+    g.install()
+    let at = Date.parse('2026-10-03T18:00:00.000Z')
+    await g.apply([
+      { entity: { eid: 'hero' }, player: {}, position: { at } },
+      { entity: { eid: 'wildlife' }, position: { at } },
+      { entity: { eid: 'new-hero' }, player: {} },
+    ])
+    let query = words.$defs.position.save
+    equal(
+      (await g.read(query, { now: at + 29_999 })).map((r) => r.entity.eid),
+      ['new-hero'],
+    )
+    equal(
+      (await g.read(query, { now: at + 30_000 })).map((r) => r.entity.eid)
+        .sort(),
+      ['hero', 'new-hero'],
+    )
+  } finally {
+    driver.close()
+  }
 })
