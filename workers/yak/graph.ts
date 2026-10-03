@@ -976,8 +976,10 @@ export class Store {
           : []),
         ...(declaredLenses(declaration)
           ? [
-            lenses((error) =>
-              defect(error, { request: 'lens normalize', store: name })
+            lenses(
+              (error) =>
+                defect(error, { request: 'lens normalize', store: name }),
+              { vocab, rows: lensesIn([lensDocAt(name, declaration)]) },
             ),
           ]
           : []),
@@ -2045,8 +2047,8 @@ export class Store {
   // its effects wait in `held` for the caller: run once the batch commits,
   // dropped when it is a rehearsal.
   #mover = (held: (() => void | Promise<void>)[]): Moving => ({
-    read: (q) => this.#graph.read(q),
-    rows: (q) => this.#graph.rows(q),
+    read: (q) => this.#graph.read(q, { native: true }),
+    rows: (q) => this.#graph.rows(q, { native: true }),
     apply: (patch) =>
       this.#trust(patch, null, {
         deferEffects: (run) => void held.push(run),

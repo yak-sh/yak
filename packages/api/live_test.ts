@@ -153,6 +153,7 @@ test('caller views select live values and refresh when another entity changes a 
       query: parse('.hero *'),
       vocab: old,
       dependencies: ['position', 'hero'],
+      saved: true,
       answer: (rows) => {
         let signal =
           (f.g.get(['signal'], undefined, { native: true }) as Bundle[])[0]

@@ -1612,8 +1612,17 @@ export let subscriptions = (graph: Graph, opts: {
   // reconstructing and selecting the caller's components.
   let viewValues = (view: ReadView, readOpts: ReadOpts = {}) =>
     after(
-      snapshot(view.query, { ...readOpts, native: true }, true, false),
-      (bundles) => view.answer(bundles as Bundle[]),
+      graph.read(view.query, { ...readOpts, native: true, durable: true }),
+      (rows) =>
+        after(view.expand ? view.expand(rows) : rows, (expanded) => {
+          // Canonical live reads strip even positions reconstructed from an
+          // unmoved saved source. A durable caller component keeps its saved
+          // baseline; held values replace that baseline under active holders.
+          let baseline = view.saved || readOpts.durable
+            ? expanded
+            : expanded.map(stored)
+          return view.answer(overlay(baseline, peers.values()))
+        }),
     )
   let viewed = (view: ReadView, readOpts: ReadOpts = {}): Answer =>
     after(viewValues(view, readOpts), (bundles) => {
