@@ -125,9 +125,15 @@ export type Opening = { sink: Sink; id: string; query: Ask; opts?: ReadOpts }
 /** The subscription registry: what the socket layer talks to, and what an
  * application can drive directly. */
 export type Subs = {
+  /** Read bundles using the graph's query and read-option contract, with held
+   * peer values unless `durable: true` selects storage alone. */
+  read: Graph['read']
+  /** Observe changes to held peer values after registry work has released.
+   * Observers may read the registry or write the graph. */
+  observe: (fn: (bundles: Bundle[]) => void | Promise<unknown>) => () => void
   /** Answer one query from storage and the peer values held right now. */
   snapshot: (
-    query: string,
+    query: Query,
     opts?: ReadOpts,
   ) => Bundle[] | Reduced | Promise<Bundle[] | Reduced>
   /** open (or replace) a subscription and send its current set */
@@ -172,7 +178,7 @@ export type Subs = {
    * store somewhere that outlives this process's memory. */
   relaying: (sink: Sink) => string[]
   /** Take those keys back after such a loss, so a close still clears them. */
-  relayed: (sink: Sink, keys: string[]) => void
+  relayed: (sink: Sink, keys: string[]) => void | Promise<void>
 }
 
 type Sub = {
@@ -442,6 +448,32 @@ export let subscriptions = (graph: Graph, opts: {
   let network = (sub: Sub) => sub.peer ? peerNet : durableNet
   let peerComp = (name: string) => syncOf(graph.vocab, name) == 'peers'
   let pendingWork: Promise<void> | undefined
+  let observers = new Set<(bundles: Bundle[]) => void | Promise<unknown>>()
+  let observed: Bundle[] = []
+  let observing = false
+  let notify = (bundles: Bundle[]) => {
+    if (!observers.size || !bundles.length) return
+    observed.push(...bundles)
+    if (observing) return
+    observing = true
+    queueMicrotask(() => {
+      // No observer is awaited by ordered work: its callback may itself ask
+      // for a snapshot or apply a change whose subscriptions enter that work.
+      after(pendingWork, () => {
+        observing = false
+        let changes = coalesced(observed)
+        observed = []
+        for (let fn of observers) {
+          try {
+            let out = fn(changes)
+            if (isPromise(out)) out.catch((err) => fault(err, 'peer observer'))
+          } catch (err) {
+            fault(err, 'peer observer')
+          }
+        }
+      })
+    })
+  }
   let ordered = <T>(fn: () => T | Promise<T>): T | Promise<T> => {
     let out = pendingWork ? pendingWork.then(fn) : fn()
     if (isPromise(out)) {
@@ -635,8 +667,9 @@ export let subscriptions = (graph: Graph, opts: {
       ? project(graph, sub.plan, { durable: true, native: true })
       : after(
         graph.read(queryOf(sub, q), {
+          ...sub.opts,
           durable: true,
-          native: !!sub.ast || graph.rewrites(),
+          native: !!sub.ast || graph.rewrites(sub.opts) || sub.opts?.native,
         }),
         answered,
       )
@@ -768,7 +801,7 @@ export let subscriptions = (graph: Graph, opts: {
             // entities it selects moving.
             if (
               held.get(sink)?.get(id) === sub && !sub.reads?.unseen &&
-              !sub.plan?.reaches.length
+              !sub.plan?.reaches.length && sub.opts?.now == null
             ) {
               sub.routed = network(sub).add(sub, ast, sub.members)
             }
@@ -806,11 +839,13 @@ export let subscriptions = (graph: Graph, opts: {
         sub.peer
           ? after(
             source(sub),
-            (bundles) => matchRows(queryOf(sub), graph.vocab)(bundles),
+            (bundles) =>
+              matchRows(queryOf(sub), graph.vocab, sub.opts)(bundles),
           )
           : graph.rows(queryOf(sub), {
+            ...sub.opts,
             durable: true,
-            native: !!sub.ast || graph.rewrites(),
+            native: !!sub.ast || graph.rewrites(sub.opts) || sub.opts?.native,
           }),
         (rows) => reduced(sub.agg!, rows),
       )
@@ -1158,8 +1193,9 @@ export let subscriptions = (graph: Graph, opts: {
         (sub.candidates = sub.durable
           ? after(
             graph.read(sub.durable, {
+              ...sub.opts,
               durable: true,
-              native: !!sub.ast || graph.rewrites(),
+              native: !!sub.ast || graph.rewrites(sub.opts) || sub.opts?.native,
             }),
             (rows) => rows.map(stored),
           )
@@ -1202,12 +1238,13 @@ export let subscriptions = (graph: Graph, opts: {
   ): Bundle[] | Promise<Bundle[]> => {
     if (!sub.peer) {
       return graph.read(queryOf(sub), {
+        ...sub.opts,
         durable: true,
-        native: !!sub.ast || graph.rewrites(),
+        native: !!sub.ast || graph.rewrites(sub.opts) || sub.opts?.native,
       })
     }
     return after(prepared ?? source(sub, scope), (bundles) => {
-      let chosen = matcher(queryOf(sub), graph.vocab)(bundles)
+      let chosen = matcher(queryOf(sub), graph.vocab, sub.opts)(bundles)
       return chosen.filter((b) => !scope || scope.has(b.entity.eid))
         .map((b) => sub.cut(stored(b)))
     })
@@ -1215,19 +1252,28 @@ export let subscriptions = (graph: Graph, opts: {
 
   let snapshot = (
     line: Query,
+    readOpts: ReadOpts = {},
     nested = false,
+    reduce = true,
   ): Bundle[] | Reduced | Promise<Bundle[] | Reduced> => {
     let ast = typeof line == 'string' ? parse(line) : line
-    let op = aggregate(ast)
+    let op = reduce ? aggregate(ast) : null
+    if (readOpts.durable) {
+      return op
+        ? after(graph.rows(line, readOpts), (rows) => reduced(op, rows))
+        : graph.read(line, readOpts)
+    }
     let plan = peerPlan(ast, graph.vocab)
     let p = op ? null : projection(graph.vocab, ast)
-    let cut = p?.cut ?? only(named(graph.vocab, line, nested))
+    let cut = p?.cut ??
+      only(named(graph.vocab, line, nested || !!readOpts.native))
     if (!plan.peers) {
       if (op) {
         return after(
           graph.rows(ast, {
+            ...readOpts,
             durable: true,
-            native: nested || graph.rewrites(),
+            native: nested || readOpts.native || graph.rewrites(readOpts),
           }),
           (rows) => reduced(op, rows),
         )
@@ -1235,12 +1281,17 @@ export let subscriptions = (graph: Graph, opts: {
       // A projection answers what is stored, the entities it reaches too.
       if (p) {
         return graph.read(ast, {
+          ...readOpts,
           durable: true,
-          native: nested || graph.rewrites(),
+          native: nested || readOpts.native || graph.rewrites(readOpts),
         })
       }
       return after(
-        graph.read(ast, { durable: true, native: nested || graph.rewrites() }),
+        graph.read(ast, {
+          ...readOpts,
+          durable: true,
+          native: nested || readOpts.native || graph.rewrites(readOpts),
+        }),
         (rows) =>
           rows.map((row) =>
             cut(overlay([row], peers.values([row.entity.eid]))[0])
@@ -1259,6 +1310,7 @@ export let subscriptions = (graph: Graph, opts: {
       raw: false,
       query: typeof line == 'string' ? line : '',
       ast: typeof line == 'string' ? undefined : line,
+      opts: { ...readOpts, native: nested || readOpts.native },
       members: new Set(),
       fields: new Map(),
       routed: false,
@@ -1272,13 +1324,14 @@ export let subscriptions = (graph: Graph, opts: {
       source(sub),
       (bundles) =>
         op
-          ? reduced(op, matchRows(line, graph.vocab)(bundles))
-          : matcher(line, graph.vocab)(bundles).map(cut),
+          ? reduced(op, matchRows(line, graph.vocab, readOpts)(bundles))
+          : matcher(line, graph.vocab, readOpts)(bundles).map(cut),
     )
   }
 
   let peerChange = (bundles: Bundle[], except?: Sink, casted = false) => {
     if (!bundles.length) return
+    notify(bundles)
     // Old members hear the patch that moved a row out; new members receive
     // its full held value in the membership frame below.
     if (!casted) cast(bundles, except)
@@ -1491,24 +1544,29 @@ export let subscriptions = (graph: Graph, opts: {
     )
     return after(out, () => delivery)
   }
+  let answering = (query: Query, readOpts: ReadOpts = {}, reduce = true) =>
+    after(
+      graph.ask(query, readOpts),
+      (q) =>
+        after(
+          snapshot(q, readOpts, q !== query, reduce),
+          (out) => Array.isArray(out) ? graph.answer(out, readOpts) : out,
+        ),
+    )
   return {
+    // A host can read while its own graph apply is saving a relay. This read
+    // takes the currently admitted held values without entering ordered work.
+    read: (query, readOpts) =>
+      after(answering(query, readOpts, false), (out) => out as Bundle[]),
+    observe: (fn) => {
+      observers.add(fn)
+      return () => void observers.delete(fn)
+    },
     snapshot: (query, readOpts) => {
       flushPeers()
       return ordered(() =>
         after(
-          graph.rewrites(readOpts)
-            ? after(
-              graph.ask(query, readOpts),
-              (q) =>
-                after(
-                  snapshot(q, q !== query),
-                  (out) =>
-                    Array.isArray(out)
-                      ? graph.answer(published(graph.vocab, out), readOpts)
-                      : out,
-                ),
-            )
-            : snapshot(query),
+          answering(query, readOpts),
           (out) => Array.isArray(out) ? published(graph.vocab, out) : out,
         )
       )
@@ -1588,7 +1646,33 @@ export let subscriptions = (graph: Graph, opts: {
       return next.done
     },
     relaying: (sink) => peers.holds(sink),
-    relayed: (sink, keys) => peers.adopt(sink, keys),
+    relayed: (sink, keys) =>
+      ordered(() => {
+        let before = new Set(peers.holds(sink))
+        peers.adopt(sink, keys)
+        let restored = peers.holds(sink).filter((key) => {
+          let comp = key.slice(key.indexOf(' ') + 1)
+          return !before.has(key) && saveOf(graph.vocab, comp) != null
+        })
+        if (!restored.length) return
+        let ids = [...new Set(restored.map((k) => k.slice(0, k.indexOf(' '))))]
+        return after(
+          graph.get(ids, undefined, { native: true, durable: true }),
+          (rows) => {
+            let held = new Set(restored)
+            let values = rows.flatMap((row) => {
+              let value: Bundle = { entity: row.entity }
+              for (let [comp, patch] of comps(row)) {
+                if (held.has(row.entity.eid + ' ' + comp) && patch != null) {
+                  value[comp] = patch
+                }
+              }
+              return comps(value).length ? [value] : []
+            })
+            return peerChange(peers.write(sink, values), sink)
+          },
+        )
+      }),
     pace: (comp) => peerComp(comp) ? paceOf(graph.vocab, comp) : null,
     save: (comp) => saveOf(graph.vocab, comp),
   }

@@ -274,7 +274,7 @@ export let receive = (
   input: Incoming = decode(data),
   opts?: ReadOpts,
   writer?: PeerWriter,
-): void | 'close' => {
+): void | 'close' | Promise<void> => {
   let id = ''
   let fail = (err: unknown) => {
     fault(err, 'socket message')
@@ -292,19 +292,17 @@ export let receive = (
     id = 'id' in msg && msg.id != null ? String(msg.id) : ''
     let subscribe = 'subscribe' in msg ? msg.subscribe : undefined
     if (typeof subscribe == 'string' || subscribe === true) {
-      subs.open(to, id, subscribe, opts)
-      return
+      return subs.open(to, id, subscribe, opts)
     }
     if ('unsubscribe' in msg && msg.unsubscribe != null) {
-      subs.close(to, String(msg.unsubscribe))
-      return
+      return subs.close(to, String(msg.unsubscribe))
     }
     if ('relay' in msg && Array.isArray(msg.relay)) {
       let verdict = gate(subs, to, now)(msg.relay)
       if (verdict == 'close') return 'close'
       if (verdict == 'skip') return
       let out = (subs.enqueue ?? subs.relay)(to, msg.relay, writer)
-      if (isPromise(out)) out.catch(fail)
+      if (isPromise(out)) return out.catch(fail)
       return
     }
     throw new SyntaxError('expected {subscribe}, {unsubscribe} or {relay}')
