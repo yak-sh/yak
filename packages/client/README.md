@@ -1,15 +1,22 @@
 # @yaks/client
 
-Create an in-memory graph with reactive queries, an optional server connection,
-and optional IndexedDB persistence. Applications write and read **bundles**: one
-entity's components as a JSON object. `client()` combines `@yaks/graph`,
-`@yaks/ram`, `@yaks/match`, and `@yaks/sync`, and provides the storage and watch
-lifecycle around them.
+Assembles a browser graph with server synchronization, reactive queries, and
+IndexedDB persistence for local components and retained server data.
 
-The graph holds entity data in RAM. Separate persistence interfaces store
-browser-owned components and cached server data. See the
-[graph architecture](../graph/ARCHITECTURE.md) for bundle structure and how
-changes pass through the graph.
+A **client** combines an in-memory [graph](../graph/README.md#data-model) with
+optional synchronization and persistence (`Client`). It reads and writes
+[bundles](../graph/README.md#data-model) using a shared
+[vocabulary](../vocab/README.md#vocabulary).
+
+A **watch** holds a [query](../query/README.md#query-model)'s current bundle
+array and notifies listeners when it changes (`Watch`). A **watch registry**
+creates and closes the watches on one graph (`Watches`).
+
+A **vault** persists this browser's components independently of the server
+(`Vault`). A **cache** tracks retained server data, subscription membership, and
+[coverage](../graph/README.md#projections) around the in-memory graph
+(`Retained`). A **wire vault** persists the cache's server data separately from
+local components (`WireVault`).
 
 ## Install
 
@@ -18,33 +25,15 @@ deno add jsr:@yaks/client
 # or: npx jsr add @yaks/client
 ```
 
-## Exports
-
-All exports come from `@yaks/client`:
-
-| Export                           | Purpose                                                                   |
-| -------------------------------- | ------------------------------------------------------------------------- |
-| `client`                         | Assemble the graph, storage, watches, and optional synchronization.       |
-| `watches`                        | Add reactive queries to an existing graph.                                |
-| `idb`, `stash`                   | IndexedDB and in-memory implementations of `Vault` for local components.  |
-| `keep`, `localComps`             | Connect a `Vault` to a graph, or select the components it stores.         |
-| `wireIdb`, `wireStash`           | IndexedDB and in-memory implementations of `WireVault` for server data.   |
-| `retention`                      | Add cache retention to an existing graph, RAM store, and watch registry.  |
-| `RETENTION_ROWS`, `ANSWER_BYTES` | Default cache budgets: 20,000 rows and 1,000,000 bytes of query metadata. |
-
-The module also exports `Client`, `ClientOpts`, `ClientWatchOpts`, `Watch`,
-`Watches`, `WatchOpts`, `WatchesOpts`, `Hold`, `Make`, `Vault`, `Saved`, `Kept`,
-`IdbOpts`, `Retained`, `WireVault`, and `SavedAnswer` types.
-
 ## Use
 
-This local-only example defines two components, creates a recipe, and watches
-matching entities. A **batch** is a list of changes applied in one transaction;
-the array passed to `mutate` is one batch.
+This local client creates a recipe and watches matching entities. `mutate()`
+applies a [change](../graph/README.md#data-model) through the graph.
 
 ```ts
 import { client } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
 
 let vocab = loadVocab({
   $defs: {
@@ -68,11 +57,36 @@ await box.mutate([{
   recipe: { serves: 4, course: 'dinner' },
 }])
 let dinners = box.watch('.recipe.course=dinner')
-console.log(dinners.value.length) // 1
-console.log(box.ent(eid)?.doc) // { title: 'Dal' }
+equal(dinners.value.length, 1)
+equal(dinners.ready, true)
+equal(box.ent(eid)?.doc, { title: 'Dal' })
+equal(box.read('.recipe').length, 1)
+let changes = 0
+let stop = dinners.subscribe(() => changes++)
+await box.mutate([{ entity: { eid }, recipe: { serves: 6 } }])
+equal(changes, 1)
+stop()
 dinners.close()
 box.close()
 ```
+
+## Exports
+
+All exports come from `@yaks/client`:
+
+| Export                           | Purpose                                                                   |
+| -------------------------------- | ------------------------------------------------------------------------- |
+| `client`                         | Assemble the graph, storage, watches, and optional synchronization.       |
+| `watches`                        | Add reactive queries to an existing graph.                                |
+| `idb`, `stash`                   | IndexedDB and in-memory implementations of `Vault` for local components.  |
+| `keep`, `localComps`             | Connect a `Vault` to a graph, or select the components it stores.         |
+| `wireIdb`, `wireStash`           | IndexedDB and in-memory implementations of `WireVault` for server data.   |
+| `retention`                      | Add cache retention to an existing graph, RAM store, and watch registry.  |
+| `RETENTION_ROWS`, `ANSWER_BYTES` | Default cache budgets: 20,000 rows and 1,000,000 bytes of query metadata. |
+
+The module also exports `Client`, `ClientOpts`, `ClientWatchOpts`, `Watch`,
+`Watches`, `WatchOpts`, `WatchesOpts`, `Hold`, `Make`, `Vault`, `Saved`, `Kept`,
+`IdbOpts`, `Retained`, `WireVault`, and `SavedAnswer` types.
 
 `client(vocab, plugins?, opts?)` returns these application methods:
 
@@ -91,26 +105,36 @@ available. A deleted entity read by `ent()` carries a `tombstone` component; an
 entity absent from this client's cache is not evidence of deletion.
 
 To connect to a server implementing `@yaks/sync`, supply its base `url` and use
-the same vocabulary on both ends:
+the same vocabulary on both ends. This example requires a running server and is
+excluded from local tests.
 
 ```ts ignore
-let remote = client(vocab, [], { url: 'https://recipes.example' })
+import { client } from '@yaks/client'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+const remote = client(loadVocab({ $defs: {} }), [], {
+  url: 'https://recipes.example',
+  vault: false,
+})
+equal(remote.wire !== undefined, true)
+remote.close()
 ```
 
 Server-synchronized edits normally apply locally before `POST /apply` completes.
 Deletions wait for the server: the local tier keeps no inverse for one. Server
 refusals can revert optimistic edits and are reported through `opts.report`.
 Components declared `sync: none` stay local; `sync: peers` components are
-relayed through the WebSocket. See [@yaks/sync](https://jsr.io/@yaks/sync) for
-transport and failure behavior.
+relayed through the WebSocket. See [@yaks/sync](../sync/README.md) for transport
+and failure behavior.
 
 With a server connection, `mutate()` also accepts `alias: {name}` when the
 vocabulary declares `alias`. A name may belong to an entity absent from the
 page's cache, so this write waits for the server's resolved eid and then lands
-its returned bundles locally. Browser-owned fields in the same batch follow that
-eid and stay off the wire. The returned promise resolves to the applied bundles
-or rejects on refusal or transport failure. A local-only client needs the
-`@yaks/key` and `@yaks/alias` graph plugins to write names.
+its returned bundles locally. Browser-owned fields in the same change follow
+that eid and stay off the wire. The returned promise resolves to the applied
+bundles or rejects on refusal or transport failure. A local-only client needs
+the `@yaks/key` and `@yaks/alias` graph plugins to write names.
 
 ## Rules
 
@@ -132,16 +156,38 @@ page's own copy, which holds only what the page subscribed to:
 
 A client with no server is the whole graph, and runs every rule.
 
-```json
-{
-  "$defs": {
-    "shelve": {
-      "rule": true,
-      "optimistic": true,
-      "match": ".doc, +!shelf, +shelf.aisle=Z"
-    }
-  }
-}
+```ts
+import { client } from '@yaks/client'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+const vocab = loadVocab({
+  $defs: {
+    doc: {
+      component: true,
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+      },
+    },
+    shelf: {
+      component: true,
+      type: 'object',
+      properties: {
+        aisle: { type: 'string' },
+      },
+    },
+    shelve: {
+      rule: true,
+      optimistic: true,
+      match: '.doc, +!shelf, +shelf.aisle=Z',
+    },
+  },
+})
+const box = client(vocab, [], { vault: false })
+await box.mutate([{ entity: { eid: 'book' }, doc: { title: 'Dune' } }])
+equal(box.ent('book')?.shelf, { aisle: 'Z' })
+box.close()
 ```
 
 A rule-created entity's id is derived from the rule and what it matched, so the
@@ -152,12 +198,32 @@ page's result and the server's name the same entity.
 A watch exposes `value` (the current bundle array), `ready`,
 `subscribe(listener)`, and `close()`:
 
-```ts ignore
-let dinners = remote.watch('.recipe.course=dinner&.recipe.serves>4')
-console.log(dinners.value, dinners.ready)
-let stop = dinners.subscribe((bundles) => console.log(bundles))
-stop() // Remove this listener.
-dinners.close() // Release this watch handle.
+Use `watches()` to add a watch registry to an existing graph:
+
+```ts
+import { watches } from '@yaks/client'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+const vocab = loadVocab({
+  $defs: {
+    note: {
+      component: true,
+      type: 'object',
+      properties: { text: { type: 'string' } },
+    },
+  },
+})
+const g = graph({ vocab, storage: ram(vocab) })
+const seen = watches(g)
+const notes = seen.watch('.note .order=note.text')
+await g.apply([{ entity: { eid: 'n' }, note: { text: 'hello' } }])
+equal(notes.value.map((b) => b.note), [{ text: 'hello' }])
+notes.close()
+equal(seen.size(), 0)
+seen.close()
 ```
 
 An aggregate query (`.count`, `.tally=prop`, `.distinct=prop`) answers a value
@@ -165,10 +231,9 @@ instead of rows. A server watch carries it as `reduced`, in the shape `/query`
 answers with (`{count}`, `{tally}` or `{distinct}`), undefined until the server
 has answered; its `value` stays empty:
 
-```ts ignore
-let open = remote.watch('.task&.tally=task.status', { evaluate: 'server' })
-open.reduced // { tally: { done: 12, open: 3 } }, once answered
-```
+For a connected client, open `.task .tally=task.status` with
+`{ evaluate: 'server' }` and read `watch.reduced` after `watch.ready` becomes
+true. For example, the answer can be `{ tally: { done: 12, open: 3 } }`.
 
 A server watch the server refused says why in `refused` (the refusal's message),
 and is not ready, until the server answers it again.
@@ -203,24 +268,41 @@ include restored drafts.
 
 ### With signals
 
-Pass a signal factory to make `value` and `ready` reactive reads. For example,
-with `@preact/signals`:
+A **holder** is an object with a replaceable `value` (`Hold`). A **signal
+factory** creates holders (`Make`); pass one to make watch `value` and `ready`
+reactive reads:
 
-```ts ignore
-import { signal } from '@preact/signals'
+```ts
+import { client, type Make } from '@yaks/client'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
 
-let reactive = client(vocab, [], { signal })
-let dinners = reactive.watch('.recipe.course=dinner')
+const held: { value: unknown }[] = []
+const signal: Make = (value) => {
+  const holder = { value }
+  held.push(holder)
+  return holder
+}
+const box = client(loadVocab({ $defs: {} }), [], { signal, vault: false })
+const all = box.watch('*')
+equal(all.value, [])
+equal(all.ready, true)
+equal(held.some((holder) => holder.value === all.value), true)
+equal(held.some((holder) => holder.value === all.ready), true)
+box.close()
 ```
 
-A Preact component that reads `dinners.value` or `dinners.ready` then subscribes
-to that signal. The application closes the watch when it is no longer needed. No
+Pass `signal` from `@preact/signals` to use its reactive holders. A Preact
+component that reads `dinners.value` or `dinners.ready` then subscribes to that
+signal. The application closes the watch when it is no longer needed. No
 rendering framework is imported by this package.
 
 ### With React
 
 For a watch whose lifetime is managed by the application, React's
 `useSyncExternalStore` can subscribe to it:
+
+The React example requires a React application and is excluded from local tests.
 
 ```tsx ignore
 import { useSyncExternalStore } from 'react'
@@ -274,20 +356,58 @@ overwrite edits or deletions made while loading was in progress.
 
 In environments with IndexedDB, `idb()` is the default local `Vault`. Its
 configuration accepts `name`, `store`, and an `indexedDB` implementation. The
-default database is `yaks`, with an object store named `local`, keyed by entity
-id. Use an application-specific name:
-
-```ts ignore
-import { idb } from '@yaks/client'
-
-let persistent = client(vocab, [], { vault: idb({ name: 'recipes-local' }) })
-await persistent.ready
-```
+default database is `yaks`, with an object store named `local`, keyed by eid.
+Use an application-specific name with `vault: idb({ name: 'recipes-local' })` in
+`ClientOpts`.
 
 `vault: false` disables local persistence. `stash()` provides the same interface
 in memory for tests or an application-selected fallback; it does not survive a
 process restart. Custom `Vault` implementations provide `load`, `save`, `drop`,
-and `clear`. The vault only persists records; queries run against the RAM store.
+and `clear`. The vault only persists component values; queries run against the
+RAM store.
+
+A **saved entity** carries the persistence shape (`Saved`), such as
+`{ eid: 'n', comps: { draft: { text: 'hello' } } }`. Both vault interfaces use
+this shape; the vault selects local components, and the wire vault selects
+server components.
+
+This example uses an IndexedDB implementation in memory so it runs outside a
+browser too. `keep()` attaches a vault to a graph; `client()` normally does that
+for you. `localComps()` selects exactly the components the vault persists.
+
+```ts
+import { idb, keep, localComps, stash } from '@yaks/client'
+import { IDBFactory } from 'npm:fake-indexeddb@^6.2.2'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+const vocab = loadVocab({
+  $defs: {
+    draft: {
+      component: true,
+      type: 'object',
+      sync: 'none',
+      durable: 'forever',
+      properties: { text: { type: 'string' } },
+    },
+  },
+})
+const vault = idb({ name: 'draft-example', indexedDB: new IDBFactory() })
+const g = graph({ vocab, storage: ram(vocab) })
+await keep(g, vault).ready
+await g.apply([{ entity: { eid: 'n' }, draft: { text: 'hello' } }])
+const saved = await vault.load()
+equal(saved[0].comps, { draft: { text: 'hello' } })
+equal(localComps((await g.get(['n']))[0], vocab), saved[0].comps)
+const memory = stash(saved)
+equal(await memory.load(), saved)
+await memory.drop(['n'])
+equal(await memory.load(), [])
+await vault.clear()
+equal(await vault.load(), [])
+```
 
 ## Options
 
@@ -346,19 +466,10 @@ concerns.
 
 ### Restoring server data
 
-Server persistence is separate from the local component vault:
-
-```ts ignore
-import { wireIdb } from '@yaks/client'
-
-let cached = client(vocab, [], {
-  url: 'https://recipes.example',
-  vault: idb({ name: 'recipes-local' }),
-  wireVault: wireIdb({ name: 'recipes-server' }),
-  retention: 20_000,
-})
-// After obtaining the server's current epoch, call cached.setEpoch(epoch).
-```
+Server persistence uses the wire vault. Configure
+`vault: idb({ name: 'recipes-local' })` and
+`wireVault: wireIdb({ name: 'recipes-server' })` in `ClientOpts`, then call
+`setEpoch()` with the server's validated epoch.
 
 An **epoch** is the server-supplied identifier for the dataset version whose
 cached state remains valid. Pass a validated epoch as `opts.epoch`, or call
@@ -389,14 +500,154 @@ closing the client also cancels an older restore.
 `cached.cache.size()` counts inactive rows in memory, and
 `cached.cache.answerBytes()` reports retained query metadata size.
 
+The wire vault implements bounded persistence without a connection. A **saved
+answer** stores a server query key, ordered membership, and coverage, without
+component values (`SavedAnswer`).
+
+```ts
+import { type SavedAnswer, wireIdb, wireStash } from '@yaks/client'
+import { IDBFactory } from 'npm:fake-indexeddb@^6.2.2'
+import { equal } from '@yaks/testing'
+
+const answer: SavedAnswer = {
+  key: 'query-key',
+  members: [['n', true]],
+  peers: [],
+}
+for (
+  const vault of [
+    wireStash(),
+    wireIdb({
+      name: 'wire-example',
+      indexedDB: new IDBFactory(),
+    }),
+  ]
+) {
+  equal(await vault.load('boot', 1), [])
+  await vault.save('boot', [{ eid: 'n', comps: { doc: { title: 'Café' } } }], 1)
+  equal((await vault.load('boot', 1)).map((r) => r.eid), ['n'])
+  await vault.saveAnswers!('boot', [answer], 1_000)
+  equal(await vault.loadAnswers!('boot', 1_000), [answer])
+  equal(await vault.load('next', 1), [])
+  equal(await vault.loadAnswers!('next', 1_000), [])
+}
+```
+
+To attach a cache to an existing graph, use `retention()`. This checks coverage,
+row notifications, and eviction after a subscription closes:
+
+```ts
+import { retention, watches } from '@yaks/client'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+const vocab = loadVocab({
+  $defs: {
+    doc: {
+      component: true,
+      type: 'object',
+      properties: { title: { type: 'string' } },
+    },
+  },
+})
+const store = ram(vocab)
+const g = graph({ vocab, storage: store })
+const seen = watches(g)
+const cache = retention(g, store, seen, { limit: 0 })
+let changed = 0
+const stop = cache.onRows(() => changed++)
+cache.subscribe('s', '.doc', { prime: false })
+await cache.land({
+  id: 's',
+  bundles: [
+    { entity: { eid: 'n' }, doc: { title: 'Café' } },
+  ],
+})
+equal(cache.loaded('n', 'doc', 'title'), true)
+equal(cache.answer('s').map((b) => b.entity.eid), ['n'])
+cache.unsubscribe('s')
+equal(store.read('.doc'), [])
+equal(changed > 0, true)
+stop()
+cache.close()
+seen.close()
+```
+
 ### Letting the server decide membership
 
 A partial client cache cannot always evaluate a query correctly: referenced
 entities, sort fields, or semantic vectors may be missing, and the RAM text
 matcher differs from SQLite FTS. Use server evaluation for these queries:
 
-```ts ignore
-let hits = cached.watch('café', { evaluate: 'server' })
+The following uses an in-memory socket to supply server results without a
+network. An application normally supplies only `url`, using the browser's
+WebSocket and fetch implementations.
+
+```ts
+import { client } from '@yaks/client'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+const events = new EventTarget()
+const sent: { id: string }[] = []
+const socket = {
+  readyState: 1,
+  send: (data: string) => sent.push(JSON.parse(data)),
+  close: () => {},
+  addEventListener: events.addEventListener.bind(events),
+}
+const box = client(
+  loadVocab({
+    $defs: {
+      doc: {
+        component: true,
+        type: 'object',
+        properties: { title: { type: 'string' } },
+      },
+    },
+  }),
+  [],
+  {
+    url: 'https://example.test',
+    connect: () => socket,
+    fetch: () => Response.json([]),
+    vault: false,
+    wireVault: false,
+  },
+)
+const hits = box.watch('café', { evaluate: 'server' })
+equal(hits.ready, false)
+const id = sent[0].id
+const frame = (data: object) =>
+  events.dispatchEvent(
+    new MessageEvent('message', { data: JSON.stringify({ id, ...data }) }),
+  )
+frame({
+  reset: true,
+  bundles: [{ entity: { eid: 'n' }, doc: { title: 'Café' } }],
+})
+equal(hits.value.map((b) => b.entity.eid), ['n'])
+equal(hits.ready, true)
+const shared = box.watch('café', { evaluate: 'server' })
+equal(shared.value, hits.value)
+shared.close()
+frame({ refused: { message: 'unavailable' } })
+equal(hits.refused, 'unavailable')
+equal(hits.ready, false)
+const count = box.watch('.doc .count', { evaluate: 'server' })
+events.dispatchEvent(
+  new MessageEvent('message', {
+    data: JSON.stringify({
+      id: sent.at(-1)!.id,
+      count: 1,
+    }),
+  }),
+)
+equal(count.reduced, { count: 1 })
+equal(count.value, [])
+box.close()
 ```
 
 The query text is not parsed or evaluated locally. The server validates it and
@@ -449,13 +700,21 @@ For applications using `@yaks/sync` directly,
 `wire.subscribe(query, id, { prime: false })` disables locally evaluated initial
 membership. Ordinary subscriptions keep that behavior enabled.
 
+## Limits
+
+Queries run against [RAM](../ram/README.md), which does not implement every
+SQLite query feature. Use server evaluation when a query needs data absent from
+the cache or the server's ranking. The application supplies a validated epoch
+and manages durable offline write queuing; [@yaks/sync](../sync/README.md)
+provides the transport and failure behavior.
+
 ## Related packages
 
 - [@yaks/graph](../graph/README.md): bundles, transactions, and plugins.
 - [@yaks/ram](../ram/README.md): in-memory entity storage and queries.
-- [@yaks/match](https://jsr.io/@yaks/match): per-bundle query matching.
+- [@yaks/match](../match/README.md): per-bundle query matching.
 - [@yaks/query](../query/README.md): query syntax.
-- [@yaks/sync](https://jsr.io/@yaks/sync): HTTP and WebSocket synchronization.
+- [@yaks/sync](../sync/README.md): HTTP and WebSocket synchronization.
 
 ## Verification
 
