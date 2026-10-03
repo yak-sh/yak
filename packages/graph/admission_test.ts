@@ -337,7 +337,7 @@ test('a warmed admission runs newly registered and changing checks', async () =>
   let input: Bundle[] = [{ entity: { eid: 'b1' }, book: { pages: 1 } }]
   await g.admit(input)
   let allowed = true
-  g.use({
+  let policy: Plugin = {
     name: 'permission',
     admission: () => true,
     hooks: {
@@ -346,9 +346,22 @@ test('a warmed admission runs newly registered and changing checks', async () =>
         return b
       },
     },
-  })
+  }
+  g.use(policy)
   assertEquals((await g.admit(input))[0].book, { pages: 1 })
+  policy.hooks!.precondition = () => {
+    throw new Refused('replacement check')
+  }
+  await assertRejects(
+    async () => await g.admit(input),
+    Refused,
+    'replacement check',
+  )
   allowed = false
+  policy.hooks!.precondition = (b) => {
+    if (!allowed) throw new Refused('permission moved')
+    return b
+  }
   await assertRejects(
     async () => await g.admit(input),
     Refused,
@@ -367,9 +380,9 @@ test('a warmed write uses rules installed after its first apply', async () => {
   let g = graph({ storage: ram(vocab), vocab })
   let input: Bundle[] = [{ entity: { eid: 'b1' }, book: { pages: 1 } }]
   await g.apply(input)
-  g.use({
-    name: 'titles',
-    declared: [{ name: 'title', match: '.book !doc +doc.title=Read' }],
-  })
+  let policy: Plugin = { name: 'titles', declared: [] }
+  g.use(policy)
+  await g.apply(input)
+  policy.declared!.push({ name: 'title', match: '.book !doc +doc.title=Read' })
   assertEquals((await g.apply(input))[0].doc, { title: 'Read' })
 })

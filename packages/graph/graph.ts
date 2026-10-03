@@ -334,26 +334,10 @@ export let graph = (opts: Options): Graph => {
   // `identity` derives its entity's id from that value (identity.ts). Fixed
   // for the life of this graph, because the vocabulary is.
   let declared = identities(vocab)
-  let loaded: Plugin[] = []
   let phaseHooks = new Map<Phase, [string, Hook][]>()
   let phaseRules = new Map<Phase, Rule[]>()
-  let declarations: Ready[] | undefined
-  let derived: Record<string, Derive> | undefined
-  // Plans depend on the registered plugins, never on stored rows or a writer's
-  // standing. Keep direct registry edits coherent as well as use().
-  let refresh = () => {
-    if (
-      loaded.length == plugins.length &&
-      loaded.every((p, i) => p === plugins[i])
-    ) {
-      return
-    }
-    loaded = [...plugins]
-    phaseHooks.clear()
-    phaseRules.clear()
-    declarations = undefined
-    derived = undefined
-  }
+  let declarations: Ready[] = []
+  let declarationKey: string | undefined
 
   // Every content-addressed component's id-deriving function, by component
   // name. Read once per apply, so a plugin registered later is included. A
@@ -361,7 +345,7 @@ export let graph = (opts: Options): Graph => {
   // entity's id from the relation component it carries, which a list of
   // properties cannot express.
   let derives = (): Record<string, Derive> =>
-    derived ??= Object.assign(
+    Object.assign(
       {},
       declared,
       ...plugins.map((p) => p.derive ?? {}),
@@ -404,16 +388,23 @@ export let graph = (opts: Options): Graph => {
 
   // The hooks registered on a phase, in plugin registration order.
   let hooks = (phase: Phase): [string, Hook][] => {
-    refresh()
     let found = phaseHooks.get(phase)
-    if (!found) {
+    let i = 0
+    let same = !!found
+    for (let p of plugins) {
+      let h = p.hooks?.[phase]
+      if (!h) continue
+      if (found?.[i]?.[0] !== p.name || found?.[i]?.[1] !== h) same = false
+      i++
+    }
+    if (!same || found!.length != i) {
       found = plugins.flatMap((p) => {
         let h = p.hooks?.[phase]
         return h ? [[p.name, h] as [string, Hook]] : []
       })
       phaseHooks.set(phase, found)
     }
-    return found
+    return found!
   }
 
   // The rules registered on a phase: the core's own (the stamps), then each
@@ -421,8 +412,9 @@ export let graph = (opts: Options): Graph => {
   // The marks come from the vocabulary, so a program that replaces the
   // created/updated pair with a policy of its own still gets them.
   let stamping = [...provenance(opts.provenance), ...marks(vocab)]
-  // Declared rules are parsed once per registry. A plugin registered later
-  // invalidates the plan; a writer's choices and stored state are never cached.
+  // Reuse parsed declarations while their contents agree. Registrations are
+  // mutable, including nested hooks, rule arrays and declaration properties;
+  // check those inputs afresh, never a writer's choices or stored state.
   //
   // Most of them come from the graph's own vocabulary, because that is where
   // an app's `vocab.json` ends up — so an app that ships a `rule: true` entry
@@ -430,28 +422,43 @@ export let graph = (opts: Options): Graph => {
   // built carries documents the loaded vocabulary never saw, so those are read
   // too.
   let declaring = () => {
-    refresh()
-    if (declarations) return declarations
     let seen = new Set(vocab.docs)
-    return declarations = ready([
+    let rules = [
       ...rulesIn(vocab.docs),
       ...plugins.flatMap((p) => [
         ...(p.declared ?? []),
         ...rulesIn((p.vocab ?? []).filter((d) => !seen.has(d))),
       ]),
-    ])
+    ]
+    let key = JSON.stringify(rules)
+    if (key !== declarationKey) {
+      declarations = ready(rules.map((r) => ({
+        ...r,
+        ...(r.before ? { before: [...r.before] } : {}),
+      })))
+      declarationKey = key
+    }
+    return declarations
   }
   let ruled = (phase: Phase, stamp = true): Rule[] => {
-    refresh()
     let found = phaseRules.get(phase)
-    if (!found) {
+    let i = 0
+    let same = !!found
+    for (let p of plugins) {
+      for (let r of p.rules ?? []) {
+        if (r.phase != phase) continue
+        if (found?.[i] !== r) same = false
+        i++
+      }
+    }
+    if (!same || found!.length != i) {
       found = plugins.flatMap((p) => p.rules ?? []).filter((r) =>
         r.phase == phase
       )
       phaseRules.set(phase, found)
     }
     let stamps = stamp ? stamping.filter((r) => r.phase == phase) : []
-    return stamps.length ? [...stamps, ...found] : found
+    return stamps.length ? [...stamps, ...found!] : found!
   }
 
   // The singletons a rule may bind with `#Name`: each plugin's, then this
@@ -518,7 +525,6 @@ export let graph = (opts: Options): Graph => {
     | Promise<
       Bundle[]
     > => {
-    refresh()
     if (o.stamp === false && !o.trusted) {
       throw new Refused('only trusted writes may disable stamping')
     }
@@ -1324,7 +1330,6 @@ export let graph = (opts: Options): Graph => {
     view,
     use: (plugin) => {
       plugins.push(plugin)
-      refresh()
       if (plugin.ask) askHooks.push(plugin)
       if (plugin.answer) answerHooks.push(plugin)
       if (plugin.view) viewHooks.push(plugin)
