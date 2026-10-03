@@ -118,11 +118,17 @@ export let pending = async (
   session: Eid,
 ): Promise<{ item: Bundle; line: string }[]> => {
   let vocab = graph.vocab
+  // Native inbox replies are admitted by the thread router, not the bus.
+  // An outside harness claiming work retains its listener exception.
+  let native =
+    (await graph.read(`.entry.session=${session}&.using&.limit=1`)).length > 0
   let seen = new Set<string>()
   let items: Bundle[] = []
   for (let q of addressedTo(vocab, session)) {
     for (let b of await graph.read(and(...q.clauses, every()))) {
-      if (seen.has(b.entity.eid) || author(b) == session) continue
+      if (
+        seen.has(b.entity.eid) || author(b) == session || (native && b.comment)
+      ) continue
       seen.add(b.entity.eid)
       items.push(b)
     }

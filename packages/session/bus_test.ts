@@ -72,15 +72,11 @@ test('native bus delivery appends input and marks the item once', async () => {
   let wakes: string[] = []
   let g = await fresh(undefined, (eid) => wakes.push(eid))
   wakes.length = 0
-  assertEquals(await feed(g), 2)
+  assertEquals(await feed(g), 1)
   let entries = await g.read('.entry.session=native&*')
-  assertEquals(entries.length, 3)
+  assertEquals(entries.length, 2)
   assertEquals(
-    (entries[1].content as { body: string }).body.includes('please check'),
-    true,
-  )
-  assertEquals(
-    (entries[2].content as { body: string }).body.includes('child finished'),
+    (entries[1].content as { body: string }).body.includes('child finished'),
     true,
   )
   assertEquals(entries.slice(1).every((e) => !!e.attention), true)
@@ -88,20 +84,20 @@ test('native bus delivery appends input and marks the item once', async () => {
     entries.slice(1).every((e) => wakes.includes(e.entity.eid)),
     true,
   )
-  assertEquals((await g.get(['note']))[0].notified != null, true)
+  assertEquals((await g.get(['note']))[0].notified != null, false)
   assertEquals((await g.get(['knock']))[0].notified != null, true)
   assertEquals(await feed(g), 0)
-  assertEquals((await g.read('.entry.session=native')).length, 3)
+  assertEquals((await g.read('.entry.session=native')).length, 2)
 })
 
 test('SQLite finds the same addressed comment and knock', async () => {
   let store = storage(mem(), vocab)
   store.install()
   let g = await fresh(store)
-  assertEquals(await feed(g), 2)
+  assertEquals(await feed(g), 1)
   assertEquals(
-    (await g.get(['note', 'knock'])).every((b) => !!b.notified),
-    true,
+    (await g.get(['note', 'knock'])).map((b) => !!b.notified),
+    [false, true],
   )
 })
 
@@ -123,10 +119,41 @@ test('the session duty delivers without a Claude transcript directory', async ()
   let stop = new AbortController()
   let run = service({ graph: g }, { transcripts: '' }, stop.signal)
   try {
-    await until(async () => (await g.get(['note']))[0].notified)
-    assertEquals((await g.read('.entry.session=native')).length, 3)
+    await until(async () => (await g.get(['knock']))[0].notified)
+    assertEquals((await g.read('.entry.session=native')).length, 2)
   } finally {
     stop.abort()
     await run
   }
+})
+
+test('native comments never feed through the bus; outside task claims retain their listener', async () => {
+  let g = await fresh()
+  await g.apply([
+    {
+      entity: { eid: 'direct' },
+      comment: { target: 'outside' },
+      doc: { body: 'direct words' },
+    },
+    {
+      entity: { eid: 'task' },
+      doc: { title: 'claimed' },
+      claim: { session: 'outside' },
+    },
+    {
+      entity: { eid: 'claimed-note' },
+      comment: { target: 'task' },
+      doc: { body: 'claimed words' },
+    },
+  ], { trusted: true })
+  let first = await reply(g, {
+    entity: { eid: 'call2' },
+    created: { via: 'outside' },
+  })
+  assertEquals(first.length, 2) // letter and claimed comment, never direct comment
+  assertEquals((await g.get(['direct']))[0].notified != null, false)
+  assertEquals((await g.get(['claimed-note']))[0].notified != null, true)
+  await feed(g)
+  assertEquals((await g.get(['note']))[0].notified != null, false)
+  assertEquals((await g.read('.entry.session=native')).length, 2)
 })

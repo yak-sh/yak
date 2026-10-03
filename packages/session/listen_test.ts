@@ -41,7 +41,7 @@ let heard = async (rows: Bundle[], session: string) => {
     }], [idKeywords]),
     get: () => [],
     apply: (bundles: Bundle[]) => (applied.push(...bundles), bundles),
-    read: () => rows,
+    read: (q: unknown) => typeof q == 'string' ? [] : rows,
   } as unknown as Graph
   await hear(graph, null, session, (line) => lines.push(line))
   return { lines, marked: applied.map((b) => b.entity.eid) }

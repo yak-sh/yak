@@ -22,9 +22,6 @@ let candidates = async (g: Graph): Promise<Eid[]> => {
   let unsaid = (...clauses: Clause[]) =>
     and(...clauses, absent('notified'), every())
   let queries = [
-    ...g.vocab.comp('comment')
-      ? [unsaid(present('comment'), present('comment.target.claim.session'))]
-      : [],
     ...g.vocab.comp('knock')
       ? [
         unsaid(
