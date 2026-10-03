@@ -1,7 +1,7 @@
 // Expiration removes a declaration's component through the ordinary graph
 // door, with bounded batches, concurrency guards and one daily duty.
 import { equal, ok, test } from '@yaks/testing'
-import { type Access, type Bundle, graph } from '@yaks/graph'
+import { type Access, type Bundle, type Comp, graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { DAY, EXPIRE, expire, expireDaily } from './expire.ts'
@@ -42,7 +42,10 @@ test('expire batches matching rows; preserves live runs, other components and un
     run('done'),
     run('failed', 'failed'),
     run('pending', 'pending'),
-    { ...run('running', 'pending'), effect: { state: 'pending', at: old, lease_owner: 'worker' } },
+    {
+      ...run('running', 'pending'),
+      effect: { state: 'pending', at: old, lease_owner: 'worker' },
+    },
     run('recent', 'done', recent),
     run('missing', 'done', ''),
     { ...run('kept'), item: {} },
@@ -86,7 +89,7 @@ test('expire reselects if a matched run is revived between reading and applying'
     },
   }
   equal(await expire(door, { now }), 1)
-  equal((await g.get(['revived']))[0].effect?.state, 'pending')
+  equal(((await g.get(['revived']))[0].effect as Comp)?.state, 'pending')
 })
 
 test('daily duty sweeps on startup, only once before a day elapses, and again the next day', async () => {
@@ -120,7 +123,7 @@ test('a failed daily sweep leaves a short recoverable hold, not a day-long succe
   } catch (e) {
     equal((e as Error).message, 'storage failure')
   }
-  let lease = (await g.get([leaseEid(EXPIRE)]))[0].lease
+  let lease = (await g.get([leaseEid(EXPIRE)]))[0].lease as Comp
   ok(Date.parse(String(lease?.until)) < now + DAY)
   await expireDaily(g, { owner: 'two', now: () => now + DAY })
   ok((await g.get(['retry']))[0].tombstone)

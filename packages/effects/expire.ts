@@ -11,7 +11,7 @@ import {
   Stale,
   token,
 } from '@yaks/graph'
-import { HOLD, LEASE, leaseEid, take } from './lease.ts'
+import { HOLD, LEASE, leaseEid, sleep, take } from './lease.ts'
 
 /** The daily expiration duty shared by every effects worker. */
 export let EXPIRE = '@yaks/effects/expire'
@@ -80,6 +80,9 @@ export let expire = async (
       } catch (err) {
         if (!(err instanceof Stale)) throw err
       }
+      // Resolved synchronous adapters still need a task boundary: lease
+      // renewals and the worker's other runs must progress during a sweep.
+      await sleep(0, opts.signal)
     }
   }
   return removed
