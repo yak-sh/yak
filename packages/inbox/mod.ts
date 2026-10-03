@@ -2,6 +2,7 @@
 import { type Row } from './reader.ts'
 import { activityAt } from './threads.ts'
 export * from './reader.ts'
+export { inboxDoc } from './vocab.ts'
 
 export {
   activityAt,

@@ -151,6 +151,8 @@ export let threads = <R extends Row>(
     let received = messages.filter((r) => !saidBy(who, r, byId))
     let reply = received.filter((r) =>
       answers(who, r, byId) || to(r) ||
+      (!!root.comps.conversation && started &&
+        r.comps.comment?.target == eid) ||
       (!!r.comps.entry?.session && started && !!r.comps.output)
     )
     let direct = group.some(to) ||

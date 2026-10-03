@@ -382,7 +382,8 @@ grouped approximately by function, **not** by dependency order.
 - **[@yaks/inbox](./inbox)** — Pure thread and attention policy: group facts
   into Needs you, Replies, Updates and Recent lanes, with unread state and
   said/received search. Builds read queries and atomic opened/archive bundles;
-  performs no I/O.
+  declares `conversation{}` and `inbox_new` (`yak inbox new <text>`). Performs
+  no I/O and starts no sessions.
 
 - **[@yaks/memory](./memory)** — what a person said, kept in their own words: a
   `memory` component on a `doc` whose body is what they said plus a few lines of

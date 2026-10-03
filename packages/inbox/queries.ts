@@ -28,6 +28,7 @@ let union = (arms: string[], has: Words) =>
 // message bodies for said/received search. No unrelated delivery job payloads.
 let fields = [
   'doc',
+  'conversation',
   'content',
   'comment',
   'entry',
@@ -84,6 +85,7 @@ export let candidates = (who: Reader, has: Words = () => true): string => {
   let authored = select('created.by', [who.actor])
   let kinds = [
     'doc',
+    'conversation',
     'task',
     'session',
     'design',

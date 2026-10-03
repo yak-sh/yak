@@ -1,0 +1,31 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "inbox",
+  "$defs": {
+    "conversation": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "before": ["doc"],
+      "description": "a thread with no other subject; doc holds the person's words and its first line as the title",
+      "properties": {}
+    },
+    "inbox_new": {
+      "tool": true,
+      "noun": "inbox",
+      "verb": "new",
+      "title": "Start a conversation",
+      "description": "Create a conversation: conversation{} marks the thread and doc{title, body} holds the caller's words, with their first line as the title. Attributed to the caller. Returns the applied bundles; starts no session itself.",
+      "input": {
+        "text": {
+          "type": "string",
+          "description": "the words that start the conversation; the first line is its title"
+        }
+      },
+      "required": ["text"],
+      "positional": ["text..."]
+    }
+  }
+}

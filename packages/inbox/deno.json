@@ -3,10 +3,12 @@
   "version": "0.2.10",
   "exports": {
     ".": "./mod.ts",
-    "./queries": "./queries.ts"
+    "./queries": "./queries.ts",
+    "./vocab": "./vocab.ts",
+    "./tools": "./tools.ts"
   },
   "license": "Apache-2.0",
-  "description": "Pure person and thread attention policy shared by inbox doors.",
+  "description": "Pure person and thread attention policy, with conversation rows shared by inbox doors.",
   "publish": {
     "exclude": [
       "**/*_test.ts",
