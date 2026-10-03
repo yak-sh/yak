@@ -16,6 +16,9 @@ export type Config = {
   /** which of the package's exports this program checks (default `["."]`);
    * `./vocab` and `./views` are added whenever the package exports them */
   entries?: string[]
+  /** package-relative resource globs consumed by the browser compiler catalog;
+   * they do not introduce TypeScript entrypoints or compiler options */
+  resources?: string[]
   [key: string]: unknown
 }
 
@@ -25,7 +28,11 @@ export function mergeConfigs(configs: { url: URL; config: Config }[]): Config {
   let options: Record<string, unknown> | undefined
   for (let { url, config } of configs) {
     for (let key of Object.keys(config)) {
-      if (!['_', 'compilerOptions', 'imports', 'entries'].includes(key)) {
+      if (
+        !['_', 'compilerOptions', 'imports', 'entries', 'resources'].includes(
+          key,
+        )
+      ) {
         throw new Error(`${url}: unsupported platform config field ${key}`)
       }
     }

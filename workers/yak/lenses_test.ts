@@ -177,6 +177,71 @@ test('the app lens mover rehearses, consumes its source, and is idempotent', asy
   )
 })
 
+test('a later rename can restore a name without moving or clearing current rows', async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  let store = new Store(ctx)
+  let door = doorOf((r) => store.fetch(r), name)
+  let meta = metaOf(door)
+  let declare = async (doc: unknown) => {
+    let res = await door('/vocab', {
+      method: 'POST',
+      body: JSON.stringify(doc),
+    }, KERNEL)
+    assert(res.ok, await res.text())
+  }
+  await declare(old)
+  await meta.apply([{
+    entity: { eid: 'seed' },
+    recipe: { title: 'Seed cake' },
+  }], KERNEL)
+  let first = {
+    $defs: {
+      recipe: { properties: { heading: { type: 'string' } } },
+      titles: {
+        lens: true,
+        step: 20261003130000,
+        ops: [{ rename: { from: 'recipe.title', to: 'recipe.heading' } }],
+      },
+    },
+  }
+  await declare(first)
+  await store.alarm()
+  await declare({
+    $defs: {
+      recipe: old.$defs.recipe,
+      titles: first.$defs.titles,
+      title_again: {
+        lens: true,
+        step: 20261003140000,
+        ops: [{ rename: { from: 'recipe.heading', to: 'recipe.title' } }],
+      },
+    },
+  })
+  await meta.apply([
+    { entity: { eid: 'new' }, recipe: { title: 'New cake' } },
+    { entity: { eid: 'seed' }, recipe: { title: 'Seed cake' } },
+  ], KERNEL)
+  await store.alarm()
+  assertEquals(
+    (await meta.query('.recipe&.order=recipe.title')).map((r) => r.recipe),
+    [{ title: 'New cake' }, { title: 'Seed cake' }],
+  )
+  await assertRejects(() => meta.query('.recipe.heading'))
+  store = new Store(ctx)
+  await meta.apply([{
+    entity: { eid: 'seed' },
+    recipe: { heading: 'Middle cake' },
+  }], {
+    ...KERNEL,
+    'x-yak-speaks': JSON.stringify(versions([lensDocAt(name, first)])),
+  })
+  assertEquals(
+    ((await meta.query('.recipe.title~=Middle'))[0].recipe as Comp).title,
+    'Middle cake',
+  )
+})
+
 test('a conflicting old lens write refuses the whole batch', async () => {
   let ctx = state()
   using _db = ctx.storage

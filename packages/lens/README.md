@@ -179,16 +179,16 @@ source component removal stays a removal, and destination component removal
 clears the old aliased property.
 
 The mover uses `find` and `put`, explicitly clearing the old stored property
-through its expanded vocabulary. `find(admits)` skips source properties that
-earlier steps have already removed. A patch translation alone cannot clear a
-column the new vocabulary no longer admits. The mover expands the vocabulary
-while rows still carry that property, then drops the old column as soon as no
-rows need it. The immutable lens chain remains in the graph: old reads and
-writes translate at its boundaries even though the source property is no longer
-declared. A rollback serves older code with the newest vocabulary and retained
-chain, so it does not reintroduce the old column. This package owns neither
-storage movement nor kept app versions, reload policy, rollback decisions,
-envelopes or tool arguments.
+through its expanded vocabulary. `sources` names consumed properties and
+excludes a name a later step restores; `find(admits)` skips sources that earlier
+steps have already removed. A patch translation alone cannot clear a column the
+new vocabulary no longer admits. The mover expands the vocabulary while rows
+still carry that property, then drops the old column as soon as no rows need it.
+The immutable lens chain remains in the graph: old reads and writes translate at
+its boundaries even though the source property is no longer declared. A rollback
+serves older code with the newest vocabulary and retained chain, so it does not
+reintroduce the old column. This package owns neither storage movement nor kept
+app versions, reload policy, rollback decisions, envelopes or tool arguments.
 
 An op list expresses direction and patch consumption. Declared graph rules can
 copy a value after admission, but do not clear or consume it, and do not invert.

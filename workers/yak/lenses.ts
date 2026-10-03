@@ -104,23 +104,14 @@ let renames = (doc: VocabDoc) =>
     row,
   ) => ((row._lens as Comp).ops as { rename: { from: string; to: string } }[]))
 
-export let lensSources = (doc: VocabDoc): string[] =>
-  renames(doc).map((op) => op.rename.from)
-
 /** The graph pilot uses comp.prop renames; JSON document operations remain
  * independent of the store's schema and mover. */
 export let lensPaths = (doc: VocabDoc): string[] =>
   renames(doc).flatMap((op) => [op.rename.from, op.rename.to])
 
 /** Consumed names, excluding a name a later step deliberately restores. */
-export let lensObsolete = (doc: VocabDoc): string[] => {
-  let paths = new Set<string>()
-  for (let { rename } of renames(doc)) {
-    paths.delete(rename.to)
-    paths.add(rename.from)
-  }
-  return [...paths]
-}
+export let lensObsolete = (doc: VocabDoc): readonly string[] =>
+  compile(lensesIn([lensDocAt('schema', doc)])).sources
 
 /** The desired schema after movement. `grew` retains any nonempty source. */
 export let contractedLenses = (doc: VocabDoc): VocabDoc => {
@@ -200,18 +191,18 @@ export let lensRule = (
   if (!declaredLenses(doc)) return null
   let rows = lensesIn([lensDocAt(name, doc)])
   let latest = versions([lensDocAt(name, doc)])
-  let source = lensSources(doc)
   let lens = compile(
     rows,
     Object.fromEntries(
       Object.keys(latest).map((pkg) => [pkg, 0]),
     ),
   )
+  let source = lens.sources
   return {
     mark: `${LENS_MARK}/${Object.values(latest)[0]}` as Mark,
     live: 'apps',
     find: lens.find(admits),
-    drop: lensObsolete(doc).filter((path) => {
+    drop: source.filter((path) => {
       let [comp, prop] = path.split('.')
       return !!doc.$defs?.[comp]?.properties?.[prop]
     }),

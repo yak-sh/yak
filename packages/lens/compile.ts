@@ -23,6 +23,8 @@ export type Lens = {
   put: (bundle: Bundle) => Bundle
   get: (bundle: Bundle, held?: Bundle) => Bundle
   ask: (query: Query) => Query
+  /** Consumed source properties, excluding names a later step restores. */
+  sources: readonly string[]
   /** Stored sources still admitted after earlier migrations contracted. */
   find: (admits?: (path: string) => boolean) => Query
   /** The property declarations an old caller's local graph admits. */
@@ -105,6 +107,7 @@ let identity: Lens = {
   put: (b) => b,
   get: (b) => b,
   ask: (q) => q,
+  sources: [],
   find: () => and(never()),
   schema: (docs) => docs,
 }
@@ -157,7 +160,14 @@ export let compile = (rows: Bundle[], speaks?: Speaks): Lens => {
       }
     }
   }
+  let consumed = new Set<string>()
+  for (let pair of pairs) {
+    consumed.delete(pair.to.join('.'))
+    consumed.add(pair.from.join('.'))
+  }
+  let sources = [...consumed]
   let lens: Lens = !pairs.length ? identity : {
+    sources,
     put: (b) => put(b, pairs),
     get: (b, held) => get(b, pairs, held),
     ask: (q) => {
@@ -228,7 +238,7 @@ export let compile = (rows: Bundle[], speaks?: Speaks): Lens => {
       return extra.size ? and(...out.clauses, ...extra.values()) : out
     },
     find: (admits = () => true) => {
-      let source = pairs.map((p) => p.from.join('.')).filter(admits)
+      let source = sources.filter(admits)
       return source.length
         ? and(or(...source.map(present)), every())
         : and(never())

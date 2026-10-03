@@ -34,6 +34,16 @@ test('platform maps resolve at their own config, then share one program', () => 
   )
 })
 
+test('package resources coexist with the platform type-checking program', () => {
+  assertEquals(
+    mergeConfigs([
+      { url: a, config: { ...config(), resources: ['**/*.css'] } },
+      { url: b, config: config() },
+    ]),
+    mergeConfigs([{ url: a, config: config() }]),
+  )
+})
+
 test('platform merging refuses conflicts, hidden options and runtime libs', () => {
   assertThrows(() => mergeConfigs([]), Error, 'No platform configs')
   assertThrows(
