@@ -9,7 +9,13 @@ import { Store } from './graph.ts'
 import { doorOf } from './door.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { state } from './testing.ts'
-import { latestSpeaks, lensDocAt, lensRule, pageSpeaks } from './lenses.ts'
+import {
+  latestSpeaks,
+  lensDocAt,
+  lensRule,
+  pageSpeaks,
+  retainedLenses,
+} from './lenses.ts'
 
 let name = 'throwaway/lens-recipes'
 let old = {
@@ -308,5 +314,43 @@ test('a later step gets its own mover stamp after the first step finished', asyn
     ((await meta.query('.recipe ?heading'))[0].heading as Comp).text,
     'Cake',
   )
-  assertEquals(await meta.query('.doc.title'), [])
+  assertEquals(await meta.query('.recipe .doc.title'), [])
+})
+
+test('timestamp steps append in landing order and survive rollback', () => {
+  let first = {
+    $defs: {
+      ...next.$defs,
+      titles: { ...next.$defs.titles, step: 20261003140000 },
+    },
+  }
+  let second = {
+    $defs: {
+      ...first.$defs,
+      heading_step: {
+        lens: true,
+        step: 20261004102000,
+        ops: [{ rename: { from: 'doc.title', to: 'heading.text' } }],
+      },
+    },
+  }
+  let latest = latestSpeaks(name, second)!
+  assertEquals(Object.values(latest), [20261004102000])
+  assertEquals(latestSpeaks(name, first, latest), latest)
+  let rollback = retainedLenses(second, old)
+  assertEquals(Object.values(versions([lensDocAt(name, rollback)])), [
+    20261004102000,
+  ])
+  let refused = false
+  try {
+    retainedLenses(second, {
+      $defs: {
+        ...second.$defs,
+        late_branch: { ...first.$defs.titles, step: 20261003150000 },
+      },
+    })
+  } catch {
+    refused = true
+  }
+  assert(refused)
 })

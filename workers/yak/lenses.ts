@@ -37,6 +37,18 @@ export let latestSpeaks = (
  * Steps are immutable even before their private rows have been planted. */
 export let retainedLenses = (was: VocabDoc, next: VocabDoc): VocabDoc => {
   if (!declaredLenses(was)) return next
+  // An unseen step must follow the newest retained step. A branch rebased
+  // behind another migration re-stamps its new step before it can deploy.
+  let held = Object.values(was.$defs ?? {}).filter((s) => s.lens === true)
+  let newest = Math.max(...held.map((s) => Number(s.step)))
+  for (let s of Object.values(next.$defs ?? {})) {
+    if (s.lens !== true || held.some((h) => h.step === s.step)) continue
+    if (Number(s.step) <= newest) {
+      throw new Refused(
+        `Lens: step ${s.step} must follow ${newest}; re-stamp it`,
+      )
+    }
+  }
   let defs = { ...next.$defs }
   for (let [name, s] of Object.entries(was.$defs ?? {})) {
     if (s.lens !== true) continue
