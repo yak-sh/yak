@@ -63,7 +63,7 @@ test('a companion works off-page across pause, restart and retry', async () => {
     entities: [{
       entity: { eid: hero },
       player: {},
-      seen: { level: 'mossvale', x: 1, z: 5, at: new Date().toISOString() },
+      position: { level: 'mossvale', x: 1, z: 5, at: Date.now() },
     }],
   })
 
