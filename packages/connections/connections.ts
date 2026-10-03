@@ -73,6 +73,9 @@ export let USES = 'uses'
 let SECRET = 'secret'
 let EDGE = 'edge'
 
+/** An explicit account name did not select one connection. */
+export class AccountError extends Error {}
+
 /** needed: no credential yet; connected: one is kept; broken: the service
  * refused it. */
 export type Status = 'needed' | 'connected' | 'broken'
@@ -445,12 +448,12 @@ export let pick = async (
       ? []
       : found.filter((b) => address(b).split('@')[0] == name)
     if (matches.length > 1) {
-      throw new Error(
+      throw new AccountError(
         `${as} names several ${integration} accounts; use the whole address`,
       )
     }
     if (!matches.length) {
-      throw new Error(`no ${integration} account is named ${as}`)
+      throw new AccountError(`no ${integration} account is named ${as}`)
     }
     return matches[0]
   }

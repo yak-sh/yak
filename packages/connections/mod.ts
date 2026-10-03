@@ -62,6 +62,7 @@ export {
 } from './clients.ts'
 export {
   accountCredential,
+  AccountError,
   accountOf,
   attach,
   begin,

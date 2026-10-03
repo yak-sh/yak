@@ -97,6 +97,19 @@ test('fee uses computed own account by default and --as selects another bearer',
   }
 })
 
+test('an unknown --as account is a refusal, not an exception', async () => {
+  let { host, ask } = await box()
+  try {
+    await assertRejects(
+      () => ask('admin_fee', { as: ADMIN }),
+      Refused,
+      `no yaks.app account is named ${ADMIN}`,
+    )
+  } finally {
+    await host.close()
+  }
+})
+
 test('upload accepts the oldest account default without --as and sends bearer bytes', async () => {
   let { host, kept, ask } = await box()
   let dir = Deno.makeTempDirSync({ prefix: 't64688-' }),

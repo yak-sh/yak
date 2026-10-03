@@ -14,7 +14,7 @@ import {
 } from '@yaks/secrets'
 import { CallError, Interrupted } from '@yaks/tools'
 import { type Host, person } from '@yaks/cli/host'
-import { accountCredential, authorize } from '@yaks/connections'
+import { accountCredential, AccountError, authorize } from '@yaks/connections'
 import { authorizeCLI } from '@yaks/connections/cli'
 import { yaksApp } from '@yaks/connections/yaks-app'
 import { ADMIN, BOT } from '../../workers/yak/lib/bots.ts'
@@ -142,7 +142,13 @@ export let runs = (
   let acting = async (a: Args): Promise<Account> => {
     let owner = await person(host)
     if (!owner) throw new Refused('A configured person is required')
-    let at = await accountCredential(host, owner, 'yaks.app', word(a, 'as'))
+    let at
+    try {
+      at = await accountCredential(host, owner, 'yaks.app', word(a, 'as'))
+    } catch (error) {
+      if (error instanceof AccountError) throw new Refused(error.message)
+      throw error
+    }
     if (!at) {
       throw new Refused(
         'No yaks.app connection; sign in with yak auth yaks.app',
