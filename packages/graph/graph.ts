@@ -362,6 +362,22 @@ export let graph = (opts: Options): Graph => {
         ...new Set(bundles.flatMap((b) => comps(b).map(([name]) => name))),
       ],
     },
+    // Provenance can introduce references that the input did not name. Read
+    // those identities alongside the batch, rather than one query at stamp.
+    // These are hints: unused metadata must never add a refusal.
+    ...bundles.some((b) => b.$actor)
+      ? [{
+        eids: [
+          ...new Set(bundles.flatMap((b) =>
+            [b.$actor?.by, b.$actor?.via].filter((eid): eid is Eid =>
+              typeof eid == 'string'
+            )
+          )),
+        ],
+        select: [],
+        hint: true,
+      }]
+      : [],
     ...plugins.flatMap((p) =>
       p.wants?.(bundles, { graph: g, admission }) ?? []
     ),
