@@ -63,10 +63,11 @@ The codes an endpoint returns, and what each means:
   the trash still count until erased; shared version snapshots do not.
 - **`too_many_reports`** — 429. More than 30 reports from one app in one minute.
   A page in a render loop, not a broken endpoint.
-- **`refused`** — 400. The app's store would not take the write, and the message
-  is its own sentence: a component or property nobody declared, a `$was` that
-  moved, a row that is not theirs to change, a component whose `floor` they are
-  below, or one written sooner than its `pace` lets them
+- **`refused`** — the store’s status: 400 for invalid input, 403 for a forbidden
+  write, 409 for a stale precondition, or 429 for a pace. The message is its own
+  sentence: a component or property nobody declared, a `$was` that moved, a row
+  that is not theirs to change, a component whose `floor` they are below, or one
+  written sooner than its `pace` lets them
   (<https://yaks.app/docs/components.md>). Show the message; for a pace, send
   the same write again once it has run.
 
@@ -166,10 +167,10 @@ release it happened on and not the one before.
 
 An exception has no `doc` component, and a listing leaves `exception`, `refusal`
 and `error` rows out unless the filter names that diagnostic. Asking for
-`.entry` also admits transcript `refusal` rows, but not
-exceptions. `.doc` is the person's own rows and never the platform's crashes.
-Asking for the stamps is not asking for these: `.created` alone does not drag
-them in. To query exceptions rather than use `app_errors`, name `.exception`.
+`.entry` also admits transcript `refusal` rows, but not exceptions. `.doc` is
+the person's own rows and never the platform's crashes. Asking for the stamps is
+not asking for these: `.created` alone does not drag them in. To query
+exceptions rather than use `app_errors`, name `.exception`.
 
 ## Hearing about it once
 

@@ -201,6 +201,38 @@ test('an existing session gains a browser instrument and keeps its person and st
     who.via,
   ])
   assertEquals((await verify(old, SECRET))?.person, 'p-1')
+  let req = asked(`${COOKIE}=${old}`)
+  assertEquals((await browserOf(req, SECRET))?.via, who.via)
+  assertEquals(
+    (await whoIs(req, SECRET, () => Promise.resolve('editor'))).via,
+    who.via,
+  )
+  for (let remember of [true, true, false]) {
+    let again = await browsing(req, ENV, async (req) => {
+      let caller = await whoIs(req, SECRET, () => Promise.resolve('editor'))
+      assertEquals([caller.person, caller.role, caller.via], [
+        'p-1',
+        'editor',
+        who.via,
+      ])
+      return Response.json(caller)
+    }, remember)
+    let set = again.headers.get('set-cookie')
+    if (remember) {
+      assert(set)
+      assertEquals((await verify(value(set), SECRET))?.via, who.via)
+    } else assertEquals(set, null)
+    await again.body?.cancel()
+  }
+  let replacement = await minted(req, ENV, SECRET, 'p-1', 'garden')
+  assertEquals((await verify(value(replacement), SECRET))?.via, who.via)
+  let other = await sign({
+    person: 'p-1',
+    space: 'garden',
+    exp: Math.floor(Date.now() / 1000) + SESSION - 1,
+  }, SECRET)
+  let another = await browserOf(asked(`${COOKIE}=${other}`), SECRET)
+  assert(another && another.via != who.via)
 })
 
 test('forged and expired browser instruments never become a writer', async () => {

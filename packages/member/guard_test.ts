@@ -7,7 +7,7 @@ import { isPromise } from '@yaks/fp'
 import { Denied } from './deny.ts'
 import { Paced } from './pace.ts'
 import type { Floors } from './words.ts'
-import { grant, guarded, ids, seedAgo, setMode, store } from './testing.ts'
+import { grant, guarded, ids, setMode, store } from './testing.ts'
 
 let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
   assert(!isPromise(out), 'apply() went async over a Map')
@@ -317,40 +317,50 @@ test('a declared floor of person is anyone signed in', () => {
   assertEquals((s.read('.line') as Bundle[]).length, 1)
 })
 
-test('a writer writes a paced component once a pace', () => {
+test('a writer paces each entity separately, including an owner', () => {
   let s = opened()
-  as(s, ids.kim, line('l1'))
-  let e = paced(() => as(s, ids.kim, line('l2')))
-  assertEquals([e.comp, e.pace], ['line', HOUR])
+  let kim = { by: ids.kim, via: 'browser' }
+  as(s, kim, line('l1'))
+  as(s, kim, line('l2'))
+  let e = paced(() => as(s, kim, line('l1', 'edited')))
+  assertEquals([e.actor, e.entity, e.comp, e.pace], [
+    'browser',
+    'l1',
+    'line',
+    HOUR,
+  ])
   assert(e.wait > HOUR - 60_000 && e.wait <= HOUR, `${e.wait}`)
-  // Changing what they said is writing it again.
-  paced(() => as(s, ids.kim, line('l1', 'edited')))
-  // Saying the same thing again is not.
-  as(s, ids.kim, line('l1'))
-  // Each writer keeps a pace of their own, the owner too.
-  as(s, ids.mo, line('l3'))
-  as(s, ids.dana, line('l4'))
-  paced(() => as(s, ids.dana, line('l5')))
-  assertEquals((s.read('.line') as Bundle[]).length, 3)
+  as(s, kim, line('l1'))
+  let owner = { by: ids.dana, via: 'owners-browser' }
+  as(s, owner, line('l3'))
+  as(s, owner, line('l4'))
+  paced(() => as(s, owner, line('l3', 'edited')))
+  assertEquals((s.read('.line') as Bundle[]).length, 4)
 })
 
-test('two at once is two inside a pace', () => {
+test('one batch writes distinct paced entities', () => {
   let s = opened()
+  sync(
+    guarded(s, ids.list).apply([line('l1'), line('l2')].map((b) => ({
+      ...b,
+      $actor: { by: ids.raj, via: 'browser' },
+    }))),
+  )
+  assertEquals((s.read('.line') as Bundle[]).length, 2)
+})
+
+test('a paced refusal rolls back all values and clocks in its batch', () => {
+  let s = opened()
+  let actor = { by: ids.raj, via: 'browser' }
+  as(s, actor, line('l1'))
   paced(() =>
     sync(
-      guarded(s, ids.list).apply([line('l1'), line('l2')].map((b) => ({
-        ...b,
-        $actor: { by: ids.raj },
-      }))),
+      guarded(s, ids.list).apply([
+        { ...line('l2'), $actor: actor },
+        { ...line('l1', 'edited'), $actor: actor },
+      ]),
     )
   )
-  assertEquals((s.read('.line') as Bundle[]).length, 0)
-})
-
-test('a pace runs from the last write, made or changed', () => {
-  let s = opened()
-  seedAgo(s, 2 * HOUR, { ...line('old'), $actor: { by: ids.kim } })
-  as(s, ids.kim, line('l1'))
-  seedAgo(s, HOUR / 2, { ...line('old', 'x'), $actor: { by: ids.mo } })
-  paced(() => as(s, ids.mo, line('l2')))
+  assertEquals((s.read('.line') as Bundle[]).length, 1)
+  as(s, actor, line('l2'))
 })

@@ -32,6 +32,7 @@ import type { Role } from './directory.ts'
 import type { Env } from './env.ts'
 import { apex, type Host } from './host.ts'
 import { hostOf } from './route.ts'
+import { sha256 } from '@yaks/graph'
 
 export type Who = {
   person: string | null
@@ -93,7 +94,7 @@ export let whoIs = async (
     person: claims.person,
     role: await roleOf(claims.person),
     until: claims.exp,
-    ...(claims.via ? { via: claims.via } : {}),
+    via: claims.via ?? `session:${sha256(token)}`,
   }
 }
 
@@ -144,7 +145,12 @@ export let browserOf = async (
   let token = cookieValue(req.headers.get('cookie'))
   if (!token || !secret) return null
   let claims = await verify(token, secret)
-  if (claims) return claims.via ? { via: claims.via, exp: claims.exp } : null
+  if (claims) {
+    return {
+      via: claims.via ?? `session:${sha256(token)}`,
+      exp: claims.exp,
+    }
+  }
   let browser = await opened<Browser>('browser', token, secret)
   return browser && typeof browser.via == 'string' && browser.via &&
       typeof browser.exp == 'number' && browser.exp * 1000 > Date.now()
@@ -206,14 +212,15 @@ export let browsing = async (
 ): Promise<Response> => {
   let secret = env.SESSION_SECRET
   if (!secret) return serve(req)
-  let browser = await browserOf(req, secret)
-  if (browser && browser.exp - Date.now() / 1000 > SESSION / 2) {
-    return serve(req)
-  }
   let claims = await verify(
     cookieValue(req.headers.get('cookie')) ?? '',
     secret,
   )
+  let browser = await browserOf(req, secret)
+  if (
+    browser && (!claims || claims.via && !claims.legacy) &&
+    browser.exp - Date.now() / 1000 > SESSION / 2
+  ) return serve(req)
   let via = browser?.via ?? crypto.randomUUID()
   let exp = Math.floor(Date.now() / 1000) + SESSION
   let token = claims

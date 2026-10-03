@@ -164,6 +164,9 @@ export let wanting = (where: Guard) => (bundles: Bundle[]): Ask[] => {
 export let guarding = (where: Guard): Hook => {
   let floors = held(where)
   let paces = pacesIn(where.vocab)
+  if (Object.keys(paces).length && !where.vocab.comp('_pace')) {
+    throw new Error('stored pacing needs memberDoc in the graph vocabulary')
+  }
   return (bundles, tx) => {
     if (!bundles.length) return bundles
     let who = actorOf(bundles)
@@ -180,7 +183,7 @@ export let guarding = (where: Guard): Hook => {
             writes(level)
               ? bundles
               : adding(tx, who, where.app, bundles, writerOf(bundles).via),
-            (b) => pacing(paces, tx, who, b),
+            (b) => pacing(paces, tx, b),
           )
         }),
     ) as Bundle[] | Promise<Bundle[]>

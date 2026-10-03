@@ -469,6 +469,26 @@ test('a worker is handed the app itself, and only on its own store', async () =>
   )
 })
 
+test('the app keeps its instrument when its self grant is renewed', async () => {
+  let first = await granting(SECRET, 'jeff/recipes', {
+    person: app.eid,
+    role: 'editor',
+    via: app.eid,
+  })
+  for (
+    let sealed of [first, await owning(SECRET, 'jeff/recipes', app)]
+  ) {
+    let who = await granted(
+      new Request('https://jeff.yaks.app/recipes/api/apply', {
+        headers: { 'x-yak-grant': sealed },
+      }),
+      SECRET,
+      'jeff/recipes',
+    )
+    assertEquals(who, { person: app.eid, role: 'editor', via: app.eid })
+  }
+})
+
 test('the app acting as itself is told apart from any visitor', () => {
   assert(itsApp({ person: 'a1', role: 'editor' }, app))
   assert(!itsApp(who, app))

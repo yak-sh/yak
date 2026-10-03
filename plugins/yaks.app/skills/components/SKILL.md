@@ -435,8 +435,8 @@ and readable and simply never searched.
 **Who writes it, and how often.** A component can say who may write it and how
 often each of them may, beside its `properties`, and the store holds both at
 every door a person writes through: the page's `./api/apply` and `graph_apply`
-alike. A chat on an `open` app is the case — anyone may read it, only people
-signed in may say something, and nobody more than once a second:
+alike. On an `open` app, a line can require a signed-in person and permit each
+writing browser or client to change that line once a second:
 
     { "$defs": {
         "line": {
@@ -451,22 +451,23 @@ is refused, naming the component:
 
     someone signed out may not write line in <app> — only someone signed in may
 
-`pace` is how often each writer may write the component: `"1s"`, `"500ms"`,
-`"5m"`. A write that comes sooner — a second line inside the second, or two in
-one write — is refused, saying when they may again. It runs from the last row
-wearing the component that the same person made or changed, by its `created` and
-`updated` stamps. The owner keeps it too, and everyone signed out counts as one
-writer, so a pace that should hold each person apart asks a `floor` of `person`
-as well. Writing the same values again is no write, so a retried request is not
-refused.
+`pace` is how often one vouched browser or client may change this entity's
+component: `"1s"`, `"500ms"`, `"5m"`. A write that comes sooner is refused,
+saying when it may write again. Writing another entity or another component uses
+its own pace, so a batch may write many different lines. The platform vouches
+for the writer's `via`, independently of its person: guests have their own pace,
+signing in keeps that pace, and separate instruments of the same person keep
+separate paces. A write with no `via` shares the unnamed instrument's pace on
+that entity and component. Owners keep the pace too. Writing the same values
+again is no write, so a retried request is not refused.
 
-    line is written at most once every 1s by each writer — kim may again in 400ms
+    line is written at most once every 1s by each writer — <via> may again in 400ms
 
 Either refusal reaches a page as `refused` with that sentence
 (<https://yaks.app/docs/errors.md>), and an agent's tool as the same sentence.
-Neither is a break: nothing is filed. A page that sends one write per line,
-paced as the component is, is never refused. `me()` on load says whether the
-person is signed in, before they type.
+Neither is a break: nothing is filed. A page that changes each line at its
+component’s pace is never refused. `me()` on load says whether the person is
+signed in, before they type.
 
 Your components are yours. No other app's store has heard of them, and no other
 app's rows can collide with them — unless a sibling app of the same person
@@ -523,27 +524,27 @@ whole:
 
 These are the names, all of them:
 
-    about access account_alert account_usage alias answer app archetype
-    archived artifact ask attachment attempt attribute_writes belief binding
-    blob bounced browser build build_of builder builder_answer
-    builder_change builder_dep builder_edit builder_model_answer
-    builder_open builder_ring built call call_ready call_woken cancel
-    cancelled checkout chosen cites comment commit compat completed
-    connection contains content cost created delegates deliver delivered
-    deploy dispatch doc edge effect email entity entry error exception
-    execution failed favorite fee feedback file filed finding fired former
-    gallery gitobj grant home hook hostname image imported installed
-    integration integration_install interrupted invite inviting key lease
-    lines mail mail_inbox mail_notice mail_post member memory meter model
-    notice notified opened openrouter order output output_of parent pending
-    person plan price product project provider provisional published
-    quarantined questions quote reads recalled ref referenced refusal
-    register_writes report repository representation requires restored
-    result retired revision rtc satisfies screenshot secret seeded serves
-    session session_run sfu signed_in signin space spend staged stop stripe
-    supersedes supervises sweep switched task theme tool topic trashed
-    tree_entry tunnel updated usage uses using verified wake wants web
-    worked worktree
+    _pace about access account_alert account_usage alias answer app
+    archetype archived artifact ask attachment attempt attribute_writes
+    belief binding blob bounced browser build build_of builder
+    builder_answer builder_change builder_dep builder_edit
+    builder_model_answer builder_open builder_ring built call call_ready
+    call_woken cancel cancelled checkout chosen cites comment commit compat
+    completed connection contains content cost created delegates deliver
+    delivered deploy dispatch doc edge effect email entity entry error
+    exception execution failed favorite fee feedback file filed finding
+    fired former gallery gitobj grant home hook hostname image imported
+    installed integration integration_install interrupted invite inviting
+    key lease lines mail mail_inbox mail_notice mail_post member memory
+    meter model notice notified opened openrouter order output output_of
+    parent pending person plan price product project provider provisional
+    published quarantined questions quote reads recalled ref referenced
+    refusal register_writes report repository representation requires
+    restored result retired revision rtc satisfies screenshot secret seeded
+    serves session session_run sfu signed_in signin space spend staged stop
+    stripe supersedes supervises sweep switched task theme tool topic
+    trashed tree_entry tunnel updated usage uses using verified wake wants
+    web worked worktree
 
 When your first choice is taken, ask what the component is _for_ and name that:
 the taken name is the general one, yours is the specific one. Not `comment` but

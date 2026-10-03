@@ -186,16 +186,34 @@ declare with `floors`, which win over declared ones:
 `members({ app: 'shop', space: 'club', vocab, floors: { product: 'editor' } })`.
 The access rows ask `owner` whatever either says.
 
-`pace` is @yaks/vocab's keyword: how often a writer's value is taken. On a
-stored component this guard holds it. A change that writes the component is
-refused with `Paced` when the same writer made or last changed a row wearing it
-less than a pace ago, by the rows' `created` and `updated` stamps, and when it
-writes two at once. `Paced` carries `comp`, `pace` and `wait`, the milliseconds
-until they may write it again. Everyone holds a pace, owners included, and
-everyone signed out counts as one writer. A `person` floor beside a pace refuses
-visitors, so every writer is signed in and has a pace of their own. A change
-that leaves the component as it stands is no write of it, so a retried write is
-not refused. `pacesIn(vocab)` reads the paces back.
+`pace` is @yaks/vocab's keyword: how often one instrument may write one entity's
+component. On a stored component this guard holds it by the bundle's
+`$actor.via`, for guests and signed-in writers alike. Writers with no `via`
+share a clock on each entity's component, even when their `by` differs. Another
+entity, component or `via` keeps its own clock, so one batch may write many
+entities. Owners keep the pace too.
+
+A write inside its clock's interval is refused with `Paced`, carrying `actor`
+(the `via`, or null), `entity`, `comp`, `pace` and `wait` (milliseconds until
+the writer may try again). Writing the same values is a retry and starts no
+clock. Clearing a component goes at once and preserves its clock; deleting the
+entity removes its clocks with it. `pacesIn(vocab)` reads the stored paces back.
+
+The package also declares `_pace{writes}`, a server-owned component on each
+paced entity. Its JSON ledger keeps independent component/via clocks; changing
+another component or alternating instruments cannot erase one. Accepted clock
+patches commit with their values, and expired clocks are removed on that
+entity's next paced write. Clients cannot write or clear the ledger, and its
+`sync: none` keeps it off outgoing sync writes. An existing row without a ledger
+conservatively initializes each worn component from its recent `created` and
+`updated` instruments. Its first accepted paced write persists these clocks;
+after that, entity stamps no longer influence pacing. This online transition
+keeps a recent legacy write paced without rewriting stores at boot.
+
+`pacing(paces, tx, bundles, now?)` returns the accepted bundles with clock
+patches, and derives each entity's writer from the bundles as the graph does.
+The hook supplied by `guarding()` therefore needs `memberDoc` in the graph's
+vocabulary when any component declares a stored pace.
 
 ## A visitor to an open app adds, and changes only its own rows
 
@@ -256,7 +274,7 @@ The main export includes:
 
 | Exports                                                | Purpose                                                                        |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| `memberDoc`                                            | Vocabulary document containing the three components.                           |
+| `memberDoc`                                            | Vocabulary document containing access components and pacing metadata.          |
 | `MEMBER`, `GRANT`, `ACCESS`, `GOVERNED`                | Component names and the list requiring owner permission.                       |
 | `Role`, `Level`, `Mode`; `ROLES`, `LEVELS`, `MODES`    | Value types and their supported values.                                        |
 | `role`, `level`, `mode`                                | Read a value with its default: member, viewer or private.                      |

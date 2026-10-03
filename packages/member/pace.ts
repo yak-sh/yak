@@ -1,34 +1,30 @@
-// A stored component's `pace` (@yaks/vocab), held per writer: a change that
-// writes one is refused when the same writer wrote a row wearing it less than a
-// pace ago, and when it writes two at once. It is the flood rule a chat needs —
-// one line a second from each person, however fast a page sends — said once in
-// the vocabulary and held here, for every door, rather than in every page that
-// reads the rows.
+// A stored component's pace is held per instrument, entity and component.
+// The graph's entity stamps cannot keep these clocks: another instrument or
+// an unrelated component can overwrite updated without changing this clock.
+// `_pace{writes}` keeps the last accepted write of each key on its entity,
+// inside the same transaction as the values it admits. Expired clocks are
+// discarded on that entity's next paced write.
 //
-// A writer is the change's principal, and everyone signed out is one writer:
-// nobody. The store cannot tell one anonymous visitor from another, so they
-// share one pace. A component that must give each writer a pace of their own
-// also asks a `floor` of `person`, which refuses visitors outright.
+// A writer is the bundle's vouched via, whether signed in or out. All writers
+// with no via share a clock on that entity's component. Authentication belongs
+// to the receiving door, which replaces whatever actor the client claimed.
 //
-// What a writer wrote, and when, is read off the stamps the graph already
-// keeps: a row's `created` says who made it, and its `updated` who changed it
-// last. A change that leaves every property of the component as it stands is
-// no write of it, so a retry of the same line is not refused for its own
-// first landing.
+// Saying the same values again is no write and starts no clock. Clearing a
+// component goes at once and leaves its clock intact; deleting the entity
+// removes the clocks with it, through the graph's ordinary lifecycle.
 
 import type { Bundle, Comp, Eid, ReadTx } from '@yaks/graph'
-import { after, each } from '@yaks/fp'
-import { dead } from '@yaks/graph'
-import { absent, and, eq, ge, or, present } from '@yaks/query'
+import { after } from '@yaks/fp'
+import { composed, dead, raced, token, writers } from '@yaks/graph'
 import { paceOf, syncOf, type Vocab } from '@yaks/vocab'
 
-/** How often each writer writes each paced component, in ms, by name. */
+/** How often one via writes one entity’s component, in ms, by name. */
 export type Paces = Record<string, number>
 
 /** A write refused for coming sooner than its component's pace. */
 export class Paced extends Error {
   /**
-   * @param actor who was writing, or `null` for somebody signed out
+   * @param actor the writing instrument, or `null` when no via was supplied
    * @param comp the component they wrote
    * @param pace how often one writer may write it, in ms
    * @param wait how long until they may again, in ms
@@ -38,10 +34,11 @@ export class Paced extends Error {
     public comp: string,
     public pace: number,
     public wait: number,
+    public entity?: Eid,
   ) {
     super(
       `${comp} is written at most once every ${span(pace)} by each writer — ` +
-        `${actor ?? 'someone signed out'} may again in ${span(wait)}`,
+        `${actor ?? 'a writer with no via'} may again in ${span(wait)}`,
     )
     this.name = 'Paced'
   }
@@ -82,63 +79,96 @@ export let pacesIn = (v: Vocab): Paces =>
     }),
   )
 
-// The rows wearing `comp` that this writer made, or last changed, since then.
-let wrote = (comp: string, who: Eid | null, since: string) => {
-  let by = (stamp: string) =>
-    who ? eq(`${stamp}.by`, who) : absent(`${stamp}.by`)
-  let at = (stamp: string) => and(by(stamp), ge(`${stamp}.at`, since))
-  return and(present(comp), or(at('created'), at('updated')))
+// One independent clock. The ledger is read whole, never queried inside.
+type Write = { comp: string; via: Eid | null; at: number }
+
+let clocks = (row: Bundle | undefined, paces: Paces, now: number): Write[] => {
+  let ledger = row?._pace as Comp | undefined
+  if (ledger) return ledger.writes as Write[]
+  // TODO: Remove this transition reader once pre-ledger rows have migrated.
+  // Their stamps lack component history, so conservatively initialize every
+  // worn paced component from both recent instruments. The first accepted
+  // write persists these clocks; all later checks read only the ledger.
+  let recent = new Map<string, Write>()
+  for (let stamp of ['created', 'updated']) {
+    let s = row?.[stamp] as Comp | undefined
+    if (!s) continue
+    let at = Date.parse(String(s.at))
+    if (!Number.isFinite(at)) continue
+    let via = s.via as Eid | undefined ?? null
+    for (let [comp, pace] of Object.entries(paces)) {
+      if (!row?.[comp] || at + pace <= now) continue
+      let key = JSON.stringify([comp, via])
+      if (at > (recent.get(key)?.at ?? -Infinity)) {
+        recent.set(key, { comp, via, at })
+      }
+    }
+  }
+  return [...recent.values()]
 }
 
-// When this writer last wrote a row, by its stamps; 0 when neither says.
-let last = (row: Bundle, who: Eid | null) =>
-  Math.max(
-    0,
-    ...['created', 'updated'].map((stamp) => {
-      let s = row[stamp] as Comp | undefined
-      return s && (s.by ?? null) == who ? Date.parse(String(s.at)) || 0 : 0
-    }),
-  )
+// A JSON-valued property read from storage is another object, but the same
+// value is still a retry. Use the graph's own value tokens for that case.
+let same = (a: unknown, b: unknown) =>
+  a == b || typeof a == 'object' && typeof b == 'object' && token(a) == token(b)
 
-// Whether a bundle writes this component: gives or changes one of its
-// properties, where the row holds another value or none.
-let writes = (b: Bundle, comp: string, row: Bundle | undefined) => {
-  let patch = b[comp] as Comp | null | undefined
-  if (!patch || dead(b)) return false
-  let held = row?.[comp] as Comp | null | undefined
-  return !held || Object.entries(patch).some(([p, v]) => held[p] != v)
-}
+// Whether this patch gives or changes a value; clearing goes at once.
+let writes = (patch: Comp | null, held: Comp | undefined) =>
+  !!patch &&
+  (!held || Object.entries(patch).some(([p, v]) => !same(v, held[p])))
 
 /**
- * Refuse a change that writes a paced component sooner than its pace allows
- * this writer: two at once, or one less than a pace after the last row wearing
- * it they wrote. `now` is the moment the change is taken, in ms.
+ * Refuse changes sooner than the component's pace permits their via on that
+ * entity. Append the accepted clocks as server-owned patches for the graph to
+ * persist with the change. Distinct entities, components and vias hold
+ * independent clocks; all writers with no via share one on each component.
+ * `now` is the moment the change is taken, in ms.
  */
 export let pacing = (
   paces: Paces,
   tx: ReadTx,
-  who: Eid | null,
   bundles: Bundle[],
   now: number = Date.now(),
 ): Bundle[] | Promise<Bundle[]> => {
-  let paced = Object.keys(paces).filter((c) => bundles.some((b) => b[c]))
-  if (!paced.length) return bundles
+  if (!bundles.some((b) => Object.keys(paces).some((c) => b[c]))) return bundles
   let eids = [...new Set(bundles.map((b) => b.entity.eid))]
+  let writer = writers(bundles)
   return after(tx.get(eids), (rows) => {
     let held = new Map(rows.map((r) => [r.entity.eid, r]))
-    return each(paced, bundles, (out, comp) => {
-      let pace = paces[comp]
-      let writing = bundles.filter((b) =>
-        writes(b, comp, held.get(b.entity.eid))
-      )
-      if (writing.length > 1) throw new Paced(who, comp, pace, pace)
-      if (!writing.length) return out
-      let since = new Date(now - pace + 1).toISOString()
-      return after(tx.read(wrote(comp, who, since)), (recent) => {
-        if (!recent.length) return out
-        let at = Math.max(...recent.map((r) => last(r, who)))
-        throw new Paced(who, comp, pace, at ? at + pace - now : pace)
-      })
-    })
+    // A transaction writes one resulting value per component. Deletion wins,
+    // and the graph swallows a patch that raced a tombstone; neither may gain
+    // a clock patch that would bring a deleted entity back.
+    let changes = composed(bundles.filter((b) => {
+      let row = held.get(b.entity.eid)
+      return !row || !dead(row) || !raced(b)
+    }))
+    let patches: Bundle[] = []
+    for (let b of changes) {
+      if (dead(b)) continue
+      let eid = b.entity.eid
+      let row = held.get(eid)
+      let via = writer(eid).via ?? null
+      let recent = clocks(row, paces, now)
+      let next: Write[] | undefined
+      for (let [comp, pace] of Object.entries(paces)) {
+        if (!writes(b[comp] as Comp | null, row?.[comp] as Comp | undefined)) {
+          continue
+        }
+        let last = recent.find((w) => w.comp == comp && w.via == via)
+        let wait = last ? last.at + pace - now : 0
+        if (wait > 0) throw new Paced(via, comp, pace, wait, eid)
+        next ??= recent.filter((w) => w.at + (paces[w.comp] ?? 0) > now)
+        next.push({ comp, via, at: now })
+      }
+      if (next) {
+        patches.push({
+          entity: b.entity,
+          _pace: { writes: next },
+          $actor: writer(eid),
+          $quiet: true,
+        })
+      }
+    }
+    return patches.length ? [...bundles, ...patches] : bundles
   })
 }

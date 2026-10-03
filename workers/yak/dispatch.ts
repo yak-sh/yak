@@ -253,7 +253,7 @@ export let granting = (secret: string, store: string, who: Who) =>
 // (@yaks/member `guarding`, `governs`). The eid comes from the directory's own
 // row for the app, never from the request.
 export let owning = (secret: string, store: string, app: App) =>
-  granting(secret, store, { person: app.eid, role: 'editor' })
+  granting(secret, store, { person: app.eid, role: 'editor', via: app.eid })
 
 /** Whether this caller is the app acting as itself rather than as its visitor
  * — the app entity is not a person, so nothing asks the directory to name it

@@ -98,6 +98,10 @@ designing words; the `data-migration` skill covers moving stored rows.
   The same cookie holds the browser before sign-in and the person after it.
   `attribution.ts` follows directory receipts to fill missing authors in each
   app, preserving the original stamps. Analytics never receives this identity.
+- **Stored pace is per entity, component and vouched via** (`member/pace.ts`),
+  with durable `_pace{writes}` clocks. Signing in keeps its browser clock;
+  different entities and instruments do not hold one another up. No via pools
+  only that entity/component’s unnamed instrument.
 - **What people hold keeps working**: sign-ins, links, tokens, tickets in an
   inbox (M-37923). A change to how they are made migrates them.
 - **Input is precious** (M-59093): a draft, an unsent message or a form is

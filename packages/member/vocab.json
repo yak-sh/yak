@@ -80,6 +80,42 @@
           "description": "public: anyone reads. open: anyone reads and writes. private: only those with a permission see it."
         }
       }
+    },
+    "_pace": {
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "sync": "none",
+      "description": "The last accepted write of each paced component through each instrument on this entity; maintained by the write guard in the value's transaction.",
+      "properties": {
+        "writes": {
+          "type": "array",
+          "stamped": true,
+          "description": "Independent component and via clocks, read whole; a null via pools writers carrying no instrument.",
+          "items": {
+            "type": "object",
+            "required": [
+              "comp",
+              "via",
+              "at"
+            ],
+            "properties": {
+              "comp": {
+                "type": "string"
+              },
+              "via": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "at": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
     }
   }
 }
