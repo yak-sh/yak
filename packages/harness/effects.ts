@@ -11,6 +11,9 @@ import { running } from '@yaks/session'
 import { lend } from './agent.ts'
 import { here } from './local.ts'
 import { hosted } from './store.ts'
+import { inboxHandlers, type InboxOptions } from './answering.ts'
+import { instructionFiles } from '@yaks/context/host'
+import { homeAt, owing } from './workspace.ts'
 
 let word = (options: Record<string, unknown>, name: string) =>
   typeof options[name] == 'string' ? options[name] : undefined
@@ -33,5 +36,27 @@ export let effects = (
   host.stopping.addEventListener('abort', () => void lent.release?.(), {
     once: true,
   })
-  return running(host.graph, { ...lend(lent), stopping: host.stopping })
+  let handlers = running(host.graph, { ...lend(lent), stopping: host.stopping })
+  let inbox = options.inbox as InboxOptions | undefined
+  if (!inbox?.person) {
+    return { ...handlers, inbox_answer: () => {}, inbox_publish: () => {} }
+  }
+  return {
+    ...handlers,
+    ...inboxHandlers(host, {
+      ...inbox,
+      holder: host.me,
+      gone: host.gone,
+      stopping: host.stopping,
+      opening: async () => {
+        let cwd = Deno.cwd()
+        let home = await homeAt(host.graph, cwd)
+        let files = await instructionFiles(cwd)
+        return {
+          home,
+          files: [...files, ...await owing(host.graph, home, files)],
+        }
+      },
+    }),
+  }
 }

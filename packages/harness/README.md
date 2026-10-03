@@ -1077,3 +1077,63 @@ provider's model catalog or prices. Authorize the provider with **A** first.
 Selection itself neither performs authentication nor contacts the model; an
 unauthorized request reports the provider error rather than falling back to a
 different provider. This is a local selection UI, not automatic model routing.
+
+## Answering inbox threads
+
+An **answering session** is a native session linked by `answers{}` from itself
+to the thread root. Its `session.status` is computed from its transcript; the
+thread carries no copy of that status. Each admitted input records
+`inbox_input{message, root, reply}`: the external message, its thread root and
+its published reply. Routing commits that input and a fresh session together, so
+an effect retry does not duplicate work.
+
+Enable the inbox plugin and opt the harness into answering. This snippet is
+configuration for the host, not a command to run against an existing graph:
+
+```json
+{
+  "plugins": [
+    "@yaks/inbox",
+    {
+      "use": "@yaks/harness",
+      "with": {
+        "inbox": {
+          "person": "<person UUID>",
+          "provider": "openai",
+          "model": "gpt-6.1-sol",
+          "effort": "high",
+          "reuseAt": 0.25
+        }
+      }
+    }
+  ]
+}
+```
+
+The host also needs its session, effects, model, provider, context, edge and
+other harness plugins. With no `inbox.person`, answering is inactive.
+
+```sh
+yak inbox new 'Help me work through this question.'
+yak comment new <thread> 'Here is more context.'
+```
+
+System authorship is rejected before eligibility: session replies, agent
+comments and effect writes cannot start or feed an answering session. Incoming
+mail preserves its authenticated sender and received envelope through its
+conversion to a conversation or comment. The configured person restriction is an
+independent eligibility check, not the loop guard.
+
+The answering session receives the current root and ordered thread, with each
+speaker identified, plus the checkout's common persona. A working native session
+claiming the task takes its reply. Otherwise the thread's working session takes
+it; a settled session takes it only when its recorded prefix expiry is still in
+the future and its measured input plus output is below `reuseAt` of the model's
+context window. Missing expiry, usage or window is cold. See
+[model cache observations](../model/README.md) for provider retention
+configuration. A cold reply starts a fresh session with the whole thread.
+
+Settled final prose becomes a session-authored comment. The input's reply
+reference and the comment are committed together, so publication retries are
+harmless. A reply received during a model request remains owed until a request
+whose context boundary includes it has settled.
