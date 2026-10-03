@@ -38,4 +38,5 @@ node_modules.lock/
 
 # Fresh throughput measurements are local; only the accepted baseline is versioned.
 /bench/results.json
+/bench/*.results.json
 /bench/*.json.tmp

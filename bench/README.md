@@ -10,6 +10,18 @@ written to `bench/results.json`.
 Benches run separately from `deno task test` and `deno task check`. The fast
 suite only checks fixture correctness and the ratchet's comparison logic.
 
+## Benchmark package runner
+
+`deno task benchmark:throughput` runs the 40 storage-layer and archetype
+workloads through [@yaks/benchmark](../packages/benchmark/README.md), retaining
+three raw Deno averages per bench, their statistics, round medians, commit and
+load average in `bench/throughput.results.json`. It shares the box-wide
+throughput lock below. `deno task benchmark:check` checks
+`bench/throughput.baseline.json` at its committed 20% tolerance.
+`deno task benchmark:accept` explicitly accepts that suite's baseline; review
+and commit the diff. The `bench:*` commands above use their own baseline and
+results files.
+
 ## Fleet corpus and storage
 
 The deterministic corpus in `packages/sqlite/fixtures/fleet.ts` has seed

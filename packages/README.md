@@ -39,6 +39,9 @@ grouped approximately by function, **not** by dependency order.
 
 ## Package index
 
+- **[@yaks/benchmark](./benchmark)** — Named workloads, raw samples, JSON runs
+  and explicit baseline ratchets, with process-configured reporters.
+
 - **[@yaks/tracker](./tracker)** — Error capture, bug grouping, regression,
   notification and retention, shared by box and hosted tracker stores.
 

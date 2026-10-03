@@ -1,0 +1,11 @@
+{
+  "name": "@yaks/benchmark",
+  "version": "0.2.10",
+  "exports": {
+    ".": "./mod.ts",
+    "./deno": "./deno.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Named workloads, raw samples, JSON runs and explicit baseline ratchets, with process-configured reporters.",
+  "publish": { "exclude": ["**/*_test.ts"] }
+}

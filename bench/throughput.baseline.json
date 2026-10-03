@@ -1,0 +1,251 @@
+{
+  "version": 1,
+  "metric": "median-of-3-deno-avg-ns",
+  "workload": 1,
+  "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+  "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+  "suite": "throughput",
+  "tolerance": 0.2,
+  "benches": [
+    {
+      "name": "sqlite/memory/point",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 382441
+    },
+    {
+      "name": "sqlite/memory/status-open",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 15042361
+    },
+    {
+      "name": "sqlite/memory/fts",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 982411
+    },
+    {
+      "name": "sqlite/memory/walk-16",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 583999
+    },
+    {
+      "name": "sqlite/memory/walk-unbounded",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 1080449
+    },
+    {
+      "name": "sqlite/memory/apply-100",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 6046596
+    },
+    {
+      "name": "sqlite/file/point",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 418728
+    },
+    {
+      "name": "sqlite/file/status-open",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 16333968
+    },
+    {
+      "name": "sqlite/file/fts",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 1050489
+    },
+    {
+      "name": "sqlite/file/walk-16",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 625310
+    },
+    {
+      "name": "sqlite/file/walk-unbounded",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 1131055
+    },
+    {
+      "name": "sqlite/file/apply-100",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 6691690
+    },
+    {
+      "name": "sql/memory/point",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 377339
+    },
+    {
+      "name": "sql/memory/status-open",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 16044103
+    },
+    {
+      "name": "sql/memory/fts",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 1026644
+    },
+    {
+      "name": "sql/memory/walk-16",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 648722
+    },
+    {
+      "name": "sql/memory/walk-unbounded",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 1121463
+    },
+    {
+      "name": "sql/memory/apply-100",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 6009728
+    },
+    {
+      "name": "sql/file/point",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 432993
+    },
+    {
+      "name": "sql/file/status-open",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 16784382
+    },
+    {
+      "name": "sql/file/fts",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 1106945
+    },
+    {
+      "name": "sql/file/walk-16",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 658156
+    },
+    {
+      "name": "sql/file/walk-unbounded",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 1154459
+    },
+    {
+      "name": "sql/file/apply-100",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 6872965
+    },
+    {
+      "name": "query/memory/point",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 379164
+    },
+    {
+      "name": "query/memory/status-open",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 14804987
+    },
+    {
+      "name": "query/memory/fts",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 978181
+    },
+    {
+      "name": "query/memory/walk-16",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 595958
+    },
+    {
+      "name": "query/memory/walk-unbounded",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 1016926
+    },
+    {
+      "name": "query/memory/apply-100",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 5595165
+    },
+    {
+      "name": "query/file/point",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 447938
+    },
+    {
+      "name": "query/file/status-open",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 15544973
+    },
+    {
+      "name": "query/file/fts",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 1076930
+    },
+    {
+      "name": "query/file/walk-16",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 671513
+    },
+    {
+      "name": "query/file/walk-unbounded",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 1147041
+    },
+    {
+      "name": "query/file/apply-100",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 6970566
+    },
+    {
+      "name": "archetype/memory/backfill",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 319894420
+    },
+    {
+      "name": "archetype/memory/move-100",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 6588588
+    },
+    {
+      "name": "archetype/file/backfill",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 223351867
+    },
+    {
+      "name": "archetype/file/move-100",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 7448232
+    }
+  ]
+}
