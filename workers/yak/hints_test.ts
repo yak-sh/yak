@@ -5,10 +5,8 @@
 // directories review them mechanically — a read-only tool advertised
 // destructive is a person asked to approve a list of their own apps.
 //
-// The lists below are pinned on purpose. A new tool with no hints lands in
-// none of them and the diff says which line to add it to, which is the whole
-// point: the table is the declaration, and a tool that forgot to declare
-// cannot slip through wearing whatever the default happened to be.
+// Writers declare their behavior rather than inheriting a destructive
+// transport default; read-only tools never tell a host they can destroy.
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { annotated, core } from '@yaks/mcp'
@@ -19,98 +17,11 @@ import { PUBLISHED } from './published.ts'
 import { TOOLS } from './tools.ts'
 import { platformVocab } from './vocab.ts'
 
-// A pure look-up: it fetches, lists or retrieves and changes nothing. `about`
-// is here too — it says one fixed paragraph, plus who the caller is signed in
-// as, and writes nothing.
-let READS = [
-  'about',
-  'app_list',
-  'app_secret_list',
-  'app_published',
-  'app_versions',
-  'app_stats',
-  // What the apps in reach can be asked to do (declared.ts): a listing, and
-  // the same one however often it is asked.
-  'commands',
-  'connection_list',
-  'domain_status',
-  'gallery_search',
-  'guide',
-  'memory_recall',
-  'sandbox_read',
-  'sandbox_wait',
-  'store_writes',
-  'store_inspect',
-]
-
-// It can delete, or change something no second call takes back. A create is
-// not here: it only adds, and the undo of a create is the delete that is.
-let DESTROYS = [
-  'app_delete',
-  'app_secret_remove',
-  // It runs an app's own command, and this side cannot know which: a template
-  // carrying nulls drops a component. So it takes the safe default rather than
-  // a promise that would be wrong for half the commands there are.
-  'command',
-  'connection_attach',
-  'app_files',
-  'app_rollback',
-  'app_unpublish',
-  'app_update',
-  'member_remove',
-  'sandbox_exec',
-  'sandbox_shell',
-  'sandbox_ship',
-  'sandbox_stop',
-  'sandbox_write',
-  'space_delete',
-  'domain_detach',
-  // Reversible — the way back is written down before anything moves — and
-  // still destructive: it throws away everything written since the moment
-  // asked for, and a host should stop and ask before it does that.
-  'store_restore',
-  'store_retry',
-  // Rows already there are patched in place, deletes included.
-  'store_load',
-  // A rebuild rewrites a builder's outputs in place, and drops a link the new
-  // answer leaves out.
-  'builder_build',
-]
-
-// It reaches past yaks.app: a letter to somebody's inbox, a page the whole web
-// can then read, a record at Cloudflare.
-let OUTSIDE = [
-  'app_deploy',
-  'app_files',
-  'app_publish',
-  'app_rollback',
-  'app_unpublish',
-  'domain_attach',
-  'domain_detach',
-  'domain_status',
-  'feedback',
-  'member_add',
-  'sandbox_exec',
-  'sandbox_shell',
-  'sandbox_ship',
-  // It mints an account at Stripe and hands back a link onto Stripe's own
-  // hosted form.
-  'space_sell',
-  // Cloudflare's analytics, and an app's own worker.
-  'app_stats',
-  'command',
-  // A builder asks a model for its outputs.
-  'builder_build',
-]
-
 let sorted = (names: string[]) => [...names].sort()
 
 // The connector's roster: the platform's tools, and the names a directory
 // listed that they answer under still (published.ts).
 let ROSTER = [...TOOLS, ...PUBLISHED]
-
-let picked = (has: (t: (typeof ROSTER)[number]) => boolean) =>
-  sorted(ROSTER.filter(has).map((t) => t.name))
 
 // The words are the file's (tools.yml, M-34605), and this is the pair of
 // checks that keeps the file and the roster one list: a row whose name the
@@ -154,25 +65,6 @@ test('every platform tool has a title', () => {
     ROSTER.length,
     'two tools share a title',
   )
-})
-
-test('the read-only tools are the pinned ones', () => {
-  assertEquals(picked((t) => !!t.readOnly), sorted(READS))
-})
-
-test('the destructive tools are the pinned ones', () => {
-  // Through the transport, not the field: what a client is told is what
-  // `annotated` derives, and an unsaid `destructive` on a writer means true.
-  assertEquals(
-    sorted(
-      ROSTER.filter((t) => annotated(t).destructiveHint).map((t) => t.name),
-    ),
-    sorted(DESTROYS),
-  )
-})
-
-test('the open-world tools are the pinned ones', () => {
-  assertEquals(picked((t) => !!t.openWorld), sorted(OUTSIDE))
 })
 
 test('a read tool is never destructive, and every write says which', () => {

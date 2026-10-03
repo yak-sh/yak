@@ -31,12 +31,12 @@ test(
         await r.body?.cancel()
         return r.status
       }
-      // The page door answers every refusal the store makes as 400 `refused`,
+      // The page door answers a permission refusal as 403 `refused`,
       // carrying the store's own sentence (apps.ts `/apply`).
       let denied = async (c: typeof owner, b: unknown) => {
         let r = await c.post([b])
         let said = await r.text()
-        assertEquals(r.status, 400, `${JSON.stringify(b)}: ${said}`)
+        assertEquals(r.status, 403, `${JSON.stringify(b)}: ${said}`)
         assertStringIncludes(said, 'may not write')
       }
       let entry = { entity: { eid: 'entry' }, doc: { title: 'Welcome' } }

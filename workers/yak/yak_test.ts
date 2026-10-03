@@ -7,6 +7,7 @@ import {
   assert,
   assertEquals,
   assertMatch,
+  assertObjectMatch,
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
@@ -197,7 +198,8 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
       k.at('jeff69.yaks.app', '/recipes/api/me', {
         headers: cookie ? { cookie } : {},
       }).then((r) => r.json())
-    assertEquals(await asMe(cookie), {
+    let me = await asMe(cookie)
+    assertObjectMatch(me, {
       person: jeff69,
       name: called,
       role: 'owner',
@@ -205,6 +207,8 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
       writes: true,
       signIn: null,
     })
+    assert(typeof me.via == 'string' && me.via)
+    assertEquals((await asMe(cookie)).via, me.via)
     let guest = await asMe()
     assertEquals([guest.person, guest.name, guest.role], [null, null, null])
     assertEquals([guest.reads, guest.writes], [true, false])
@@ -224,9 +228,10 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
     await owner.applied([
       { entity: { eid: cake }, doc: { title: "Grandma's lemon cake" } },
     ])
-    let [hit] = await owner.get(`id=${cake}`)
+    let [hit] = await owner.get(`id=${cake}&?doc&?created`)
+    assertEquals((hit.created as { via: string }).via, me.via)
     assertEquals((hit.doc as { title: string }).title, "Grandma's lemon cake")
-    assertEquals(await nobody.get(`id=${cake}`), [hit])
+    assertEquals(await nobody.get(`id=${cake}&?doc&?created`), [hit])
     // A body is stored as a content-addressed blob entity, so the store's own
     // rows live in the spine a filter selects from. A listing must answer docs
     // and nothing else: the tester's first list rendered `undefined` for each

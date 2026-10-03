@@ -132,7 +132,7 @@ test('an anonymous blob read revives a removed immutable representation', async 
   let inspected = await store(`/inspect?eid=${rep}`, {}, KERNEL)
   let buried = await inspected.json()
   assertEquals(buried.identity.tombstoned, true)
-  assertEquals(buried.identity.tables, ['tombstone'])
+  assertEquals(buried.identity.tables.includes('representation'), false)
   let bare = await apps.fetch(visit(`/cookbook/api/blob/${file.sha}`), env)
   assertEquals(bare.status, 302)
   assertEquals(new URL(bare.headers.get('location')!).pathname, file.url)

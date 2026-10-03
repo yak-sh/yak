@@ -1,6 +1,7 @@
 // Scheduled companion work runs here with the app's scoped store grant. A
 // page only reads the state it writes, so closing every page changes nothing.
 import { companionTick } from './companion-tick.ts'
+import { writer } from './chat.ts'
 import { LODES } from './gather.ts'
 import { destinationOf } from './teleport.ts'
 import { installBuildingDesigns, refreshTerrain, vale } from './terrain.ts'
@@ -164,7 +165,7 @@ let gather = async (req, env) => {
   let hero = await heroOf(req, env, args?.player)
   if (hero instanceof Response) return hero
   let person = req.headers.get('x-yak-person')
-  if (!person || hero.created?.by != person) {
+  if (!person || writer(hero) != person) {
     return new Response('You can only direct your own hero.', { status: 403 })
   }
   return save(env, [{
@@ -183,7 +184,7 @@ let where = async (req, env, themes) => {
   let player = hero.entity.eid
   let owner = req.headers.get('x-yak-role') == 'owner'
   let person = req.headers.get('x-yak-person')
-  if (!owner && (!person || hero.created?.by != person)) {
+  if (!owner && (!person || writer(hero) != person)) {
     return new Response('You can only locate your own hero.', { status: 403 })
   }
   let [[current]] = await Promise.all([

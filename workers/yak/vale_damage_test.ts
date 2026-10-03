@@ -8,10 +8,13 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import words from '../../apps/vale/vocab.json' with { type: 'json' }
-import { accepted, client, connector, kernel, seed, signIn } from './probe.ts'
+import { accepted, client, connector, seed, signIn } from './probe.ts'
+import { workerKernel } from './worker-probe.ts'
 
 test('the Mossvale owner turns a hero’s damage off and on', async () => {
-  let k = await kernel()
+  let k = await workerKernel(
+    new URL('../../apps/vale/worker.js', import.meta.url),
+  )
   try {
     let owner = await seed(k, [{ slug: 'damagelab', apps: [] }])
     let agent = connector(k, owner.cookie)

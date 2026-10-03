@@ -70,7 +70,14 @@ let dirOf = (env: Env) =>
 
 // A space with Ada in it, and her builder's object.
 let seeded = async (script: Turn[] = []) => {
-  let { env } = platform(SECRET, { AI: ai(script) as Env['AI'] })
+  let { env } = platform(SECRET, {
+    AI: ai(script) as Env['AI'],
+    BUILDER_MODEL_FREE: '@cf/test/free',
+    MODEL_FETCH: () =>
+      Promise.resolve(
+        new Response('$0.15 per M input tokens, $0.5 per M output tokens'),
+      ),
+  })
   let dir = dirOf(env)
   await dir.apply({
     entities: [

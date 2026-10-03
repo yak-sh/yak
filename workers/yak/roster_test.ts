@@ -296,6 +296,25 @@ test(
         }),
         'is no builder',
       )
+      assertStringIncludes(
+        await refused(tool, 'builder_supply', {
+          space: mine,
+          app,
+          builder: '00000000-0000-4000-8000-000000000000',
+          for: '00000000-0000-4000-8000-000000000001',
+          slot: 'main',
+          artifact: '00000000-0000-4000-8000-000000000002',
+        }),
+        'is no builder',
+      )
+      assertStringIncludes(
+        await refused(tool, 'builder_choose', {
+          space: mine,
+          app,
+          output: '00000000-0000-4000-8000-000000000000',
+        }),
+        'is no output take',
+      )
 
       // ---- a second release, and the first one put back -------------------
       await tool('app_files', {

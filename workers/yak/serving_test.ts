@@ -1341,19 +1341,27 @@ test('rung 1½: the router acts as the caller, not as the app it fronts', async 
 test("rung 1½: the router's own onward request is not intercepted again", async () => {
   let env: Env
   let ran = 0
-  using k = await fronted(async (req) => {
+  using k = await router(async (req) => {
     ran++
     // The grant the kernel handed it, forwarded — which is what the router's
     // own `env.STORE`/`env.FILES` calls carry (dispatch.ts shim). A request
-    // wearing one lands on the app that owns the path, or this is a loop.
+    // wearing one lands on its own app, or this is a loop. The grant stays
+    // scoped to that app when the router tries to forward it elsewhere.
     let asked = await apps.fetch(
+      new Request(visit('/cookbook/print'), { headers: req.headers }),
+      env,
+    )
+    let other = await apps.fetch(
       new Request(visit('/garden/print'), { headers: req.headers }),
       env,
     )
+    assertEquals(other.status, 401)
+    assertEquals((await other.json()).error.code, 'not_a_reader')
     return new Response(`behind me: ${await asked.text()}`)
-  })
+  }, ['/cookbook/print'])
   env = k.env
-  assertStringIncludes(await (await k.at('/garden/print')).text(), 'garden')
+  k.put('ada/cookbook/index.html', '<!doctype html><body>cookbook</body>')
+  assertStringIncludes(await (await k.at('/cookbook/print')).text(), 'cookbook')
   assertEquals(ran, 1)
 })
 
@@ -1711,7 +1719,7 @@ test('photo and file uploads enforce space R2 limits from actual bytes', async (
 test('an open visitor cannot choose generated media, and the editor browser can', async () => {
   let { platform, seeded, as, ADA, visit } = await import('./serving-probe.ts')
   let p = platform()
-  let { dir, space, app } = await seeded(p.env, 'open')
+  let { space, app } = await seeded(p.env, 'open')
   let { appStore } = await import('./directory.ts')
   let store = appStore(p.env.STORE, space, app, p.env)
   let { KERNEL, metaOf } = await import('./meta.ts')

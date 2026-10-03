@@ -1,5 +1,11 @@
 // The connector through the whole kernel (probe.ts `kernel`), by subject.
-import { assertEquals, assertMatch, assertStringIncludes } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertMatch,
+  assertStringIncludes,
+} from '@std/assert'
+import { opened } from './lib/token.ts'
 import { test, until } from '@yaks/testing'
 import {
   connector,
@@ -36,7 +42,14 @@ test('the stream names its session and replays a missed line', async () => {
     })
     let session = init.headers.get('mcp-session-id') ?? ''
     await init.json()
-    assertMatch(session, /^[0-9a-f-]{36}$/)
+    let instrument = await opened<{ person: string; via: string }>(
+      'instrument',
+      session,
+      k.secret,
+    )
+    assert(instrument)
+    assertEquals(instrument.person, jeff.person)
+    assertMatch(instrument.via, /^[0-9a-f-]{36}$/)
 
     // An app of his own, whose views are what move — the one list an app's
     // deploy still moves, now that its commands are not tools (T-34541).

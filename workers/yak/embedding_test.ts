@@ -25,6 +25,10 @@ let AI = {
   gateway: () => ({ getUrl: () => Promise.resolve('') }),
 }
 
+// The store also holds searchable vocabulary documentation. Rank these notes
+// as their own corpus, rather than assuming they are its only embedded rows.
+let NOTES = '.entity.eid=hobbit,flight,kitchen'
+
 // A store over an object's state, and its door.
 let open = (st: ReturnType<typeof state>) => {
   let store = new Store(st, { AI })
@@ -40,8 +44,8 @@ let notes = async (st = state()) => {
     { entity: { eid: 'kitchen' }, doc: { title: 'what cooks do at night' } },
   ], KERNEL)
   let near = (q: string) =>
-    door.query(q).then((rows) => rows.map((b) => b.entity.eid))
-  await until(() => near('.near=hobbit').then((eids) => eids.length))
+    door.query(`${NOTES}&${q}`).then((rows) => rows.map((b) => b.entity.eid))
+  await until(() => near('.near=hobbit').then((eids) => eids.length == 2))
   return { door, near }
 }
 
@@ -53,7 +57,7 @@ test('a store answers .near from its own vectors, closest first', async () => {
 
 test('words rank by meaning among what a line selects', async () => {
   let { door } = await notes()
-  let hits = await door.meaning('dragon burglar', { within: '.doc', limit: 2 })
+  let hits = await door.meaning('dragon burglar', { within: NOTES, limit: 2 })
   assertEquals(hits.map((h) => h.entity).sort(), ['flight', 'hobbit'])
   let none = await door.meaning('dragon', { within: '.entity.eid=kitchen' })
   assertEquals(none.map((h) => h.entity), ['kitchen'])
@@ -74,13 +78,17 @@ test('a store woken with its vectors in another space re-embeds them all', async
   })
   let door = open(st)
   let near = (q: string) =>
-    door.query(q).then((rows) => rows.map((b) => b.entity.eid))
+    door.query(`${NOTES}&${q}`).then((rows) => rows.map((b) => b.entity.eid))
   await until(() => near('.near=hobbit').then((eids) => eids.length))
   assertEquals(await near('.near=hobbit&.order=similar'), ['flight', 'kitchen'])
-  let spaces = sql.query(select({
-    cols: [col('model')],
-    from: table(TABLE),
-    distinct: true,
-  }))
-  assertEquals(spaces, [{ model: SPACE }])
+  let spaces = () =>
+    sql.query(select({
+      cols: [col('model')],
+      from: table(TABLE),
+      distinct: true,
+    }))
+  // The notes becoming searchable does not mean the rest of the store's
+  // migration has finished: schema documentation runs in the same sweep.
+  await until(() => spaces().every((r) => r.model == SPACE))
+  assertEquals(spaces(), [{ model: SPACE }])
 })

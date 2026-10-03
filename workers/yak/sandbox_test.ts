@@ -458,6 +458,7 @@ test('a build that ships pays for both in one write', async () => {
     {
       calls: [call('c4', 'app_deploy', { app: 'chess' })],
       usage: { input: 900, output: 40, cached: 0 },
+      cost: 0.01,
     },
     { text: 'it is at https://ada.yaks.app/chess/' },
   ])

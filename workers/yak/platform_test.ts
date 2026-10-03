@@ -433,12 +433,13 @@ test('the directory plants the platform, and not one app word', async () => {
 // header that picks a vocabulary picks the other one when the name is an app's.
 test('a store that is not the directory is still an app', async () => {
   let store = new Store(state())
+  let eid = crypto.randomUUID()
   let no = await store.fetch(
     new Request('http://store/apply', {
       method: 'POST',
       headers: { 'x-store': 'ada/cookbook' },
       body: JSON.stringify(
-        [{ entity: { eid: crypto.randomUUID() }, space: { slug: 'ada' } }],
+        [{ entity: { eid }, space: { slug: 'ada' } }],
       ),
     }),
   )
@@ -450,7 +451,7 @@ test('a store that is not the directory is still an app', async () => {
   assertEquals(why.startsWith('unknown component: space'), true)
   assertEquals(why.includes('vocab.json'), true)
   let read = await (await store.fetch(
-    new Request('http://store/query?q=%3Fdoc', {
+    new Request(`http://store/query?q=.entity.eid=${eid}`, {
       headers: { 'x-store': 'ada/cookbook' },
     }),
   )).json() as Bundle[]

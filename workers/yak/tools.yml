@@ -825,7 +825,7 @@ app_secret_remove:
     https://yaks.app/docs/code.
 
 builder_supply:
-  title: Supply an app builder's existing artifact
+  title: Supply a builder artifact
   description: >-
     Answer exactly one outer binding of any builder with an artifact already
     in this app's store. Supply takes the builder, the first entity of its

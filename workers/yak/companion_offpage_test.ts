@@ -13,6 +13,7 @@ import { Store } from './graph.ts'
 import { parseTools } from '@yaks/tools/declared'
 import { ADA, ADA_OWNS, platform, seeded } from './serving-probe.ts'
 import type { Dispatch } from './door.ts'
+import { vouched } from './session.ts'
 
 let SECOND = 'b0000000-0000-4000-8000-000000000002'
 let read = (door: ReturnType<typeof appStore>, line: string, who = ADA_OWNS) =>
@@ -80,11 +81,15 @@ test('a companion works off-page across pause, restart and retry', async () => {
       limits.push(options.limits)
       return {
         fetch: async (req) => {
+          let caller = await granted(req, p.env.SESSION_SECRET, name)
+          assert(caller)
+          let ordering = new URL(req.url).pathname.endsWith('/gather')
           assertEquals(
-            await granted(req, p.env.SESSION_SECRET, name),
-            { person: k.app.eid, role: 'editor' },
+            [caller.person, caller.role],
+            ordering ? [ADA, 'owner'] : [k.app.eid, 'editor'],
           )
-          let app = {
+          assert(caller.via)
+          let binding = (who: Parameters<typeof vouched>[0]) => ({
             fetch: (path: string, init?: RequestInit) => {
               if (path == 'ai/run') {
                 asks++
@@ -100,15 +105,16 @@ test('a companion works off-page across pause, restart and retry', async () => {
                   ),
                 }
                 : init
-              return door(`/${path}`, content, {
-                'x-yak-person': k.app.eid,
-                'x-yak-role': 'editor',
-              })
+              return door(`/${path}`, content, vouched(who))
             },
-          }
+          })
           // The dispatcher's two doors (dispatch.ts): `STORE` as the caller,
-          // `APP` as the app. A firing's caller is the app, so both are it.
-          return worker.fetch(req, { APP: app, STORE: app })
+          // `APP` as the app. An initial order keeps its person's actor;
+          // subsequent firings run as the app.
+          return worker.fetch(req, {
+            APP: binding({ person: k.app.eid, role: 'editor', via: k.app.eid }),
+            STORE: binding(caller),
+          })
         },
       }
     },

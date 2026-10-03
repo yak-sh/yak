@@ -20,6 +20,7 @@ import { COOKIE, sign, verify } from './lib/token.ts'
 import type { Custom } from './domains.ts'
 import type { Command } from './declared.ts'
 import type { Bundle } from '@yaks/graph'
+import type { Env } from './env.ts'
 import { valueIn } from '@yaks/tools/value'
 import { parse } from '@std/toml'
 import { createServer, request } from 'node:http'
@@ -163,7 +164,7 @@ let toml = () =>
  * first, as the workerd kernel's does, since the first person to sign in owns
  * the meta space. `close` ends it.
  */
-let boot = async () => {
+let boot = async (bindings: Partial<Env> = {}) => {
   // Loaded when a test asks: the runner imports this module for its Stripe
   // helpers and has no use for the kernel's whole graph.
   await (await import('./wrangler.ts')).ready()
@@ -185,6 +186,7 @@ let boot = async () => {
     ...Object.fromEntries(
       ratelimits.map((r) => [r.name, limiter(r.simple.limit, r.simple.period)]),
     ),
+    ...bindings,
   })
   let server = Deno.serve(
     { hostname: '127.0.0.1', port: 0, onListen: () => {} },
@@ -242,8 +244,8 @@ export let kernel = async (): Promise<Kernel> => {
  * `stop`: for a test that needs the kernel whole, such as one that times a
  * store's first wake.
  */
-export let fresh = async (): Promise<Kernel> => {
-  let { close, ...k } = await boot()
+export let fresh = async (bindings: Partial<Env> = {}): Promise<Kernel> => {
+  let { close, ...k } = await boot(bindings)
   return owning(k, close)
 }
 

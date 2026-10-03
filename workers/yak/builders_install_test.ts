@@ -76,7 +76,10 @@ test('builders install preserves legacy provenance in a store declaring builders
   assert(typeof (builder.builder as Comp).definition == 'string')
   assertEquals(builder.staged, before[1].staged)
   assertEquals(await g.get([output]), [before[0]])
-  assertEquals(current(run.build as Comp, before[0].built as Comp), true)
+  assertEquals(
+    current(run.build as Comp, before[0].built as Comp, !!before[0].chosen),
+    true,
+  )
   assertEquals(await g.read('.call&*'), calls)
   assertEquals(await install(g, false, null), [])
 })

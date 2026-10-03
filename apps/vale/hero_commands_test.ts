@@ -18,7 +18,7 @@ seedDesigns()
 
 let HERO = '01234567-89ab-cdef-0123-456789abcdef'
 let OTHER = '11234567-89ab-cdef-0123-456789abcdef'
-let fixture = async () => {
+let fixture = async (named = false) => {
   let vocab = loadVocab([core, words])
   let g = graph({ storage: ram(vocab), vocab })
   await g.apply([
@@ -52,11 +52,19 @@ let fixture = async () => {
           return Response.json({ bundles: rows })
         }
         let url = new URL(path, 'https://store.test/')
-        return Response.json(
-          url.searchParams.has('live')
-            ? []
-            : await g.read(url.searchParams.get('q')!),
-        )
+        let rows = url.searchParams.has('live')
+          ? []
+          : await g.read(url.searchParams.get('q')!)
+        // The public store door can spell an author as their eid and name.
+        return Response.json(rows.map((row) => {
+          let created = comp(row, 'created')
+          return named && typeof created.by == 'string'
+            ? {
+              ...row,
+              created: { ...created, by: { eid: created.by, name: 'Owner' } },
+            }
+            : row
+        }))
       },
     },
   }
@@ -116,6 +124,27 @@ test('hero commands accept current names and eids, default to the caller, and re
       404,
     )
   }
+})
+
+test('hero commands authorize the author when the store names their reference', async () => {
+  let { ask, wrote } = await fixture(true)
+  assertEquals(
+    (await ask('where', { player: HERO }, 'person', 'editor')).status,
+    200,
+  )
+  assertEquals((await ask('gather', { player: HERO })).status, 200)
+  assertEquals(wrote.at(-1)?.directive, {
+    player: HERO,
+    goal: 'wood',
+    count: 1,
+  })
+  for (let command of ['where', 'gather']) {
+    assertEquals(
+      (await ask(command, { player: OTHER }, 'person', 'editor')).status,
+      403,
+    )
+  }
+  assertEquals(wrote.length, 1)
 })
 
 test('hero commands refuse ambiguous names with each matching hero and retain authorization', async () => {

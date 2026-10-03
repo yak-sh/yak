@@ -216,6 +216,19 @@ let undialected = (
   { $schema: _, ...rest }: Record<string, unknown>,
 ): Record<string, unknown> => rest
 
+// An answer describes a composed vocabulary, including internal and UX
+// components. The authoring meta-schema reserves those names for the host;
+// its name restriction does not constrain what the host reports.
+let reported = (keywords: Keywords[]): Record<string, unknown> => {
+  let meta = extendMeta(keywords)
+  let properties = meta.properties as Record<string, unknown>
+  let { propertyNames: _, ...defs } = properties.$defs as Record<
+    string,
+    unknown
+  >
+  return undialected({ ...meta, properties: { ...properties, $defs: defs } })
+}
+
 /**
  * The generic tier, declared and implemented: ./vocab.json's entries paired
  * with {@link runs}. A graph with no ranked search has no `search` tool at
@@ -237,11 +250,11 @@ export let tier = (seams: Seams = {}): NamedTool[] => {
       name: decl.name!,
       run: doing[decl.name!],
       // What `graph_schema` answers is a vocabulary document, so its shape is
-      // the meta-schema, admitting the keywords this graph's documents use.
+      // the meta-schema, admitting the names and keywords this graph uses.
       // No declaration could state it: the keywords come from one graph, and
       // a declaration is written before there is a graph.
       ...(decl.name == 'graph_schema'
-        ? { outputSchema: undialected(extendMeta(seams.keywords ?? [])) }
+        ? { outputSchema: reported(seams.keywords ?? []) }
         : {}),
     }))
 }

@@ -157,11 +157,9 @@ test("an app's letters, listed and sent through the connector", async () => {
         },
       ],
     })
-    // The store denies it; the page door hands a visitor the refusal as 400
-    // `refused` with the store's own sentence (apps.ts), which is what says
-    // the rule held.
+    // The store denies it, and the page door preserves its permission refusal.
     assert(!relay.ok, 'an open app is not an open relay')
-    assertEquals(relay.status, 400)
+    assertEquals(relay.status, 403)
     assertStringIncludes(await relay.text(), 'may not write')
     assertEquals(await titles({ direction: 'sent' }), [
       'One more thing',
