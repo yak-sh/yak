@@ -11,7 +11,8 @@ description: >
   composed anatomy and causal activity is `platform-visualize`, not wiring.
   Declared words are `vocabulary`; effects and rules are `effects-and-rules`;
   drawn views are `ui-building`; keys a plugin reads are
-  `secrets-and-connections`. A new package or an owner-decided boundary gets a
+  `secrets-and-connections`; how its README is written is
+  `writing-documentation`. A new package or an owner-decided boundary gets a
   design first (`design-docs`).
 ---
 
@@ -58,8 +59,8 @@ Copy the shape of a small one, such as packages/draft:
   rows read it, and `deno task jsr` puts it on jsr.io. Imports name outside
   dependencies only, never another workspace package.
 - **The workspace list** in the root deno.json names the package.
-- **README.md**: what it is, its exports, how to use it, its limits. Its
-  examples run as tests.
+- **README.md**, written as the `writing-documentation` skill says: its
+  terms defined, every major feature shown in an example that runs.
 - **vocab.json and vocab.ts** if it declares words (the `vocabulary` skill).
 - **browser.json** if a page imports it: `deno task check:browser` type-checks
   its browser-facing exports, and always its `./vocab` and `./views`, with only

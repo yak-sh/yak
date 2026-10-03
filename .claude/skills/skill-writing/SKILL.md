@@ -9,10 +9,11 @@ description: >
   fired at the wrong moment or never fired, turn what a session learned about
   an area into something the next agent will know, or find area knowledge
   sitting in a memory, a README or a brief that every agent there needs, even
-  when the request only says "document this", "write this down", "so agents
-  know how this works" or "make a skill". Anthropic's `skill-creator` covers the
-  format; this is the judgment on top. A brief for one agent is
-  `agent-briefs`; a proposal for the owner is `design-docs`.
+  when the request only says "write this down", "so agents know how this
+  works" or "make a skill". Anthropic's `skill-creator` covers the format; this
+  is the judgment on top. A brief for one agent is `agent-briefs`; a proposal
+  for the owner is `design-docs`; how a README or guide page is written is
+  `writing-documentation`.
 ---
 
 # Writing skills
