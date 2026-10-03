@@ -40,6 +40,44 @@ let setup = (report?: (error: unknown) => void) => {
   return g
 }
 
+test('migration selection skips contracted sources and finds the remaining old rows', () => {
+  let next = {
+    ...kitchen,
+    $defs: {
+      ...kitchen.$defs,
+      recipe: { component: true, properties: {} },
+      doc: {
+        component: true,
+        properties: {
+          title: { type: 'string' },
+          heading: { type: 'string' },
+        },
+      },
+      heading: {
+        lens: true,
+        step: 1,
+        ops: [{ rename: { from: 'doc.title', to: 'doc.heading' } }],
+      },
+    },
+  }
+  let vocab = loadVocab([metaDoc, ...docs, next])
+  let g = graph({ vocab, storage: ram(vocab) })
+  g.apply([
+    { entity: { eid: 'pending' }, recipe: {}, doc: { title: 'Cake' } },
+    { entity: { eid: 'moved' }, recipe: {}, doc: { heading: 'Pie' } },
+  ])
+  let chain = compile(lensesIn([next]))
+  let admits = (path: string) => {
+    let [comp, prop] = path.split('.')
+    return !!vocab.prop(comp, prop)
+  }
+  equal(
+    (g.read(chain.find(admits)) as Bundle[]).map((row) => row.entity.eid),
+    ['pending'],
+  )
+  equal(g.read(chain.find(() => false)), [])
+})
+
 test('an unversioned caller needs no metadata read and keeps its exact values', () => {
   let vocab = loadVocab([metaDoc, ...docs, kitchen])
   let storage = ram(vocab)

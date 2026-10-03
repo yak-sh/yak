@@ -2521,21 +2521,6 @@ export class Store {
     }
   }
 
-  /**
-   * One batch in at `/apply`, the kernel's or a caller's. The graph's own
-   * `apply()` is called in one synchronous step after `#landing` names the
-   * kept write, so the `yak/writes` hook below takes exactly that write out
-   * of the log in the transaction that commits its batch: never one without
-   * the other, and so never applied twice.
-   *
-   * `x-yak-kernel` is the platform writing about its own data: the server-
-   * owned properties are admitted and @yaks/member's guard stands down
-   * (`#trust`). The flag is the kernel's by construction: a store is only
-   * ever reached through a request the Worker builds from scratch, and
-   * door.ts `storeOf` strips the whole vouch set from any request it is
-   * handed, so it can never arrive from outside. An NDJSON import is
-   * @yaks/api's `pour`, chunk by chunk.
-   */
   async #callerResponse(
     request: Request,
     response: Response,
@@ -2563,6 +2548,21 @@ export class Store {
     return speaks ? rows.map((b) => ({ ...b, $speaks: speaks })) : rows
   }
 
+  /**
+   * One batch in at `/apply`, the kernel's or a caller's. The graph's own
+   * `apply()` is called in one synchronous step after `#landing` names the
+   * kept write, so the `yak/writes` hook below takes exactly that write out
+   * of the log in the transaction that commits its batch: never one without
+   * the other, and so never applied twice.
+   *
+   * `x-yak-kernel` is the platform writing about its own data: the server-
+   * owned properties are admitted and @yaks/member's guard stands down
+   * (`#trust`). The flag is the kernel's by construction: a store is only
+   * ever reached through a request the Worker builds from scratch, and
+   * door.ts `storeOf` strips the whole vouch set from any request it is
+   * handed, so it can never arrive from outside. An NDJSON import is
+   * @yaks/api's `pour`, chunk by chunk.
+   */
   async #commit(
     request: Request,
     seq: number | null = null,

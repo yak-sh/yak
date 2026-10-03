@@ -2,7 +2,6 @@
 // the store keeps the newest chain when its code is rolled back.
 import { compile, lensesIn, versions } from '@yaks/lens'
 import { type Bundle, type Comp, type ReadOpts, Refused } from '@yaks/graph'
-import { and, every, never, or, present } from '@yaks/query'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
 import type { App, Directory, Space } from './directory.ts'
 import { storeName } from './directory.ts'
@@ -211,9 +210,7 @@ export let lensRule = (
   return {
     mark: `${LENS_MARK}/${Object.values(latest)[0]}` as Mark,
     live: 'apps',
-    find: source.some(admits)
-      ? and(or(...source.filter(admits).map((p) => present(p))), every())
-      : and(never()),
+    find: lens.find(admits),
     drop: lensObsolete(doc).filter((path) => {
       let [comp, prop] = path.split('.')
       return !!doc.$defs?.[comp]?.properties?.[prop]

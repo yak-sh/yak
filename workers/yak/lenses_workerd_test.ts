@@ -3,22 +3,27 @@ import { assert, assertEquals } from '@std/assert'
 import { test, until } from '@yaks/testing'
 import { browser, client, connector, relay, seed, workerd } from './probe.ts'
 
-test('a kept page speaks its vocabulary on writes, queries and socket pushes', async () => {
+test('a kept page speaks its vocabulary on writes, queries and composed socket pushes', async () => {
   let k = workerd()
   let slug = `lens${crypto.randomUUID().slice(0, 6)}`
   let app = 'recipes'
   let host = `${slug}.yaks.app`
-  let them = await seed(k, [{ slug, apps: [app] }])
+  let them = await seed(k, [{ slug, apps: ['shelf', app] }])
   let agent = connector(k, them.cookie)
   let files = client(k, host, app, them.cookie)
+  let shelf = client(k, host, 'shelf', them.cookie)
   let mine = browser(k, host, them.cookie)
   let wire = await relay(k, host, them.cookie, `https://${host}`)
   let dir = Deno.makeTempDirSync({ prefix: 'tasks-lens-page-' })
   let stop: (() => void) | undefined
   let document = Object.getOwnPropertyDescriptor(globalThis, 'document')
   try {
+    let book = { properties: { pages: { type: 'number' } } }
+    await shelf.put('/index.html', '<h1>Shelf</h1>')
+    await shelf.put('/vocab.json', JSON.stringify({ $defs: { book } }))
+    await agent.tool('app_deploy', { space: slug, app: 'shelf' })
     let old = {
-      $defs: { recipe: { properties: { title: { type: 'string' } } } },
+      $defs: { book, recipe: { properties: { title: { type: 'string' } } } },
     }
     await files.put('/index.html', '<!doctype html><h1>Recipes</h1>')
     await files.put('/vocab.json', JSON.stringify(old))
@@ -40,6 +45,7 @@ test('a kept page speaks its vocabulary on writes, queries and socket pushes', a
       '/vocab.json',
       JSON.stringify({
         $defs: {
+          book,
           recipe: { properties: {} },
           titles: {
             lens: true,
@@ -53,16 +59,17 @@ test('a kept page speaks its vocabulary on writes, queries and socket pushes', a
     await page.apply({
       entity: { eid: '$cake' },
       recipe: { title: 'Lemon cake' },
+      book: { pages: 12 },
     })
-    let [oldView] = await page.query('.recipe.title~=cake')
+    let [oldView] = await page.query('.recipe.title~=cake&.book')
     assertEquals(oldView.recipe.title, 'Lemon cake')
     let [current] = await files.get('.recipe&?doc')
     assertEquals((current.doc as { title: string }).title, 'Lemon cake')
     assertEquals((current.recipe as { title?: null }).title, undefined)
 
-    let seen: { recipe: { title: string } }[][] = []
+    let seen: { recipe: { title: string }; book: { pages: number } }[][] = []
     stop = live.subscribe(
-      '.recipe.title~=cake',
+      '.recipe.title~=cake&.book',
       (rows: typeof seen[number]) => seen.push(rows),
     )
     await until(() => seen.at(-1)?.[0]?.recipe.title == 'Lemon cake', {
@@ -73,6 +80,13 @@ test('a kept page speaks its vocabulary on writes, queries and socket pushes', a
       doc: { title: 'Lime cake' },
     }])
     await until(() => seen.at(-1)?.[0]?.recipe.title == 'Lime cake', {
+      timeout: 15_000,
+    })
+    await shelf.applied([{
+      entity: current.entity,
+      book: { pages: 13 },
+    }])
+    await until(() => seen.at(-1)?.[0]?.book.pages == 13, {
       timeout: 15_000,
     })
     assertEquals(
@@ -87,6 +101,7 @@ test('a kept page speaks its vocabulary on writes, queries and socket pushes', a
     await wire.stop()
     Deno.removeSync(dir, { recursive: true })
     await agent.tool('app_delete', { space: slug, app, forever: true })
+    await agent.tool('app_delete', { space: slug, app: 'shelf', forever: true })
     await agent.tool('space_delete', { space: slug, forever: true })
   }
 })

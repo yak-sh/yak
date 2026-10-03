@@ -18,12 +18,13 @@ import {
 export type Speaks = Record<string, number>
 /** The pilot's single operation. Paths name a component and one property. */
 export type Rename = { rename: { from: string; to: string } }
-/** The four pure directions of a compiled vocabulary change. */
+/** The pure directions of a compiled vocabulary change. */
 export type Lens = {
   put: (bundle: Bundle) => Bundle
   get: (bundle: Bundle, held?: Bundle) => Bundle
   ask: (query: Query) => Query
-  find: () => Query
+  /** Stored sources still admitted after earlier migrations contracted. */
+  find: (admits?: (path: string) => boolean) => Query
   /** The property declarations an old caller's local graph admits. */
   schema: (docs: VocabDoc[]) => VocabDoc[]
 }
@@ -226,8 +227,12 @@ export let compile = (rows: Bundle[], speaks?: Speaks): Lens => {
       }) as Query
       return extra.size ? and(...out.clauses, ...extra.values()) : out
     },
-    find: () =>
-      and(or(...pairs.map((p) => present(p.from.join('.')))), every()),
+    find: (admits = () => true) => {
+      let source = pairs.map((p) => p.from.join('.')).filter(admits)
+      return source.length
+        ? and(or(...source.map(present)), every())
+        : and(never())
+    },
     schema: (docs) => schema(docs, pairs),
   }
   if (cache.size >= 64) cache.delete(cache.keys().next().value!)
