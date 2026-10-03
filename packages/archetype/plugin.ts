@@ -12,7 +12,6 @@ import {
   type Archetype,
   archetypeDoc,
   Archetypes,
-  eidOf,
   tablesOf,
 } from './sets.ts'
 
@@ -25,6 +24,8 @@ type Held = { set: Archetype; assigned?: string; dead: boolean }
  * Stamps, cascades and journal writes use the same tracker as ordinary patches.
  */
 export function archetypes(cache: Archetypes = new Archetypes()): Plugin {
+  let empty = cache.intern([])
+  let meta = cache.intern(['archetype'])
   // A previous write tells us which descriptors the next one may need, not
   // whether they still exist or what they hold. Gather reads every hint anew;
   // a changed shape simply asks for its unexpected descriptors afterwards.
@@ -49,7 +50,7 @@ export function archetypes(cache: Archetypes = new Archetypes()): Plugin {
     name: '@yaks/archetype',
     admission: () => true,
     vocab: [archetypeDoc],
-    derive: { archetype: (comp) => eidOf(tablesOf(comp.tables)) },
+    derive: { archetype: (comp) => cache.decode(comp.tables).eid },
     wants: (bundles) => {
       let eids = new Set<string>()
       let moved = new Map<string, Archetype>()
@@ -67,7 +68,7 @@ export function archetypes(cache: Archetypes = new Archetypes()): Plugin {
         eids.add(set.eid)
       }
       if (!eids.size) return []
-      eids.add(cache.intern(['archetype']).eid)
+      eids.add(meta.eid)
       return [{ eids: [...eids], hint: true }]
     },
     hooks: {
@@ -89,7 +90,8 @@ export function archetypes(cache: Archetypes = new Archetypes()): Plugin {
           }
         }),
     },
-    track: (tx, found) => tracking(tx, found, cache, initial, needed),
+    track: (tx, found) =>
+      tracking(tx, found, cache, empty, meta, initial, needed),
   }
 }
 
@@ -97,16 +99,17 @@ function tracking(
   tx: Tx,
   found: (eid: string) => Bundle | null | undefined,
   cache: Archetypes,
+  empty: Archetype,
+  meta: Archetype,
   initial: (eid: string, set: Archetype) => void,
   rememberRead: (eid: string, set: Archetype) => void,
 ): Tracker {
   let held = new Map<string, Held>()
   let dirty = new Set<string>()
   let validated = new Map<string, Archetype>()
-  let empty = cache.intern([])
 
   let descriptor = (b: Bundle) => {
-    let a = cache.intern(tablesOf((b.archetype as { tables: unknown }).tables))
+    let a = cache.decode((b.archetype as { tables: unknown }).tables)
     if (a.eid != b.entity.eid) {
       throw new Refused('Invalid stored archetype identity')
     }
@@ -163,7 +166,7 @@ function tracking(
                   'Archetypes are never removed; mark retired instead',
                 )
               }
-              let set = cache.intern(tablesOf(comp.tables))
+              let set = cache.decode(comp.tables)
               if (set.eid != b.entity.eid) {
                 throw new Refused('archetype.tables does not name its entity')
               }
@@ -239,7 +242,6 @@ function tracking(
       // Archetype entities themselves carry an archetype. That recursion stops
       // at one self-classifying entity, rather than an infinite chain of
       // descriptors.
-      let meta = cache.intern(['archetype'])
       needed.set(meta.eid, meta)
       return after(tx.get([...needed.keys()]), (rows) => {
         let existing = new Set(

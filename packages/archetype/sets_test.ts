@@ -47,3 +47,18 @@ test('archetype transitions and presence answers are cached and invalidate on ne
   assertEquals(cache.matching(p), [b.eid, c.eid])
   assertEquals(new Archetypes().intern(['task', 'doc']).eid, b.eid)
 })
+
+test('archetype decoding caches scalar content and reads mutable inputs anew', () => {
+  let cache = new Archetypes()
+  let note = cache.decode('["note"]')
+  assertStrictEquals(cache.decode('["note"]'), note)
+  assertEquals(cache.decode('["other"]').tables, ['other'])
+  let names = ['note']
+  assertStrictEquals(cache.decode(names), note)
+  names[0] = 'other'
+  assertEquals(cache.decode(names).tables, ['other'])
+  for (let value of ['[1]', '["a|b"]', '{', null]) {
+    assertThrows(() => cache.decode(value))
+  }
+  assertStrictEquals(cache.decode('["note"]'), note)
+})

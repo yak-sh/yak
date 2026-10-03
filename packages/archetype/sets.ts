@@ -63,12 +63,27 @@ export function satisfies(predicate: Presence, archetype: Archetype): boolean {
 export class Archetypes {
   private byEid = new Map<string, Archetype>()
   private bySet = new Map<string, Archetype>()
+  private byText = new Map<string, Archetype>()
   private edges = new Map<string, Archetype>()
   private predicates = new Map<string, readonly string[]>()
 
   /** Look up a set already learned from the file or computed by this process. */
   get(eid: string): Archetype | undefined {
     return this.byEid.get(eid)
+  }
+
+  /** Decode immutable scalar content. Mutable arrays are read anew, and a
+   * cached scalar says nothing about which entity currently carries it. */
+  decode(value: unknown): Archetype {
+    if (typeof value != 'string') return this.intern(tablesOf(value))
+    let found = this.byText.get(value)
+    if (found) return found
+    let set = this.intern(tablesOf(value))
+    if (this.byText.size >= 256) {
+      this.byText.delete(this.byText.keys().next().value!)
+    }
+    this.byText.set(value, set)
+    return set
   }
 
   /** Intern a set, returning the very same immutable object on repeated use. */
