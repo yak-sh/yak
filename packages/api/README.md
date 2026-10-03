@@ -1,16 +1,23 @@
 # @yaks/api
 
-HTTP and WebSocket access to a [@yaks/graph](../graph/README.md) graph. `api()`
-returns a fetch-style handler: a `Request` goes in and a `Response` comes out.
-Your application supplies the graph, authentication policy, and server runtime.
+Serves graph writes, queries, and live query subscriptions through an HTTP and
+WebSocket request handler. Your application supplies the
+[graph](../graph/README.md#data-model), authentication policy, and server
+runtime.
 
-A **bundle** is one entity's components as a JSON object, with its identity in
-`entity.eid`. A **batch** is a list of changes applied in one transaction. The
-JSON `/apply` endpoint accepts a batch of bundles; queries return bundles.
+A **handler** takes a `Request` and returns a `Response`, synchronously or
+asynchronously (`Handler`). A **route** gives a handler an HTTP method and path
+(`Route`): `{ method: 'GET', path: '/health', handle }`. A **filter** checks
+each request before a route answers it, refusing the request by throwing
+(`Filter`).
 
-This package creates no database. Persistent data, its one component `request`
-included, belongs to the graph's storage adapter. Subscription membership and
-peer values are kept in memory by the handler's subscription registry.
+A **subscription** holds a [query](../query/README.md#query-model) and pushes
+its answer to one client when a committed
+[change](../graph/README.md#data-model) affects it. A **frame** is one
+subscription message (`Frame`), such as `{ id: 'books', bundles: [...] }`. A
+**sink** receives frames (`Sink`). The **subscription registry** keeps
+subscriptions for sinks (`Subs`). It lives in memory; keep it, or its handler,
+between requests.
 
 ## Install
 
@@ -21,437 +28,674 @@ deno add jsr:@yaks/api
 
 ## Use
 
-Given an application module that exports an initialized graph and an
-`Authenticate` callback:
+The handler can be called directly, without binding a port:
 
-```ts ignore
+```ts
 import { api } from '@yaks/api'
-import { authenticate, graph } from './shop.ts'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
 
-let handler = api({ graph, authenticate })
-Deno.serve({ port: 8000 }, handler)
+const vocab = loadVocab({
+  $defs: {
+    book: {
+      component: true,
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        price: { type: 'number' },
+      },
+    },
+  },
+})
+const g = graph({ vocab, storage: ram(vocab) })
+const handle = api({ graph: g })
+const change = [{ entity: { eid: 'b1' }, book: { title: 'Dune', price: 12 } }]
+const written = await handle(
+  new Request('https://shop.test/apply', {
+    method: 'POST',
+    body: JSON.stringify(change),
+  }),
+)
+equal(written.status, 200)
+equal(await written.json(), change)
+const answer = await handle(new Request('https://shop.test/query?q=.book'))
+equal(await answer.json(), change)
+const declarations = await handle(new Request('https://shop.test/vocab'))
+equal((await declarations.json()).docs, vocab.docs)
 ```
 
-Keep the handler for subsequent requests so its subscription registry is reused.
-The following requests assume the graph's vocabulary declares `doc.title`,
-`book.price`, and `book.status`:
+| Endpoint         | Request                                                           | Response                             |
+| ---------------- | ----------------------------------------------------------------- | ------------------------------------ |
+| `POST /apply`    | JSON array of [bundles](../graph/README.md#data-model), or NDJSON | Applied bundles                      |
+| `GET /query?q=…` | URL-encoded query                                                 | Bundles or an aggregate value        |
+| `POST /query`    | JSON string or `{"q":"…"}`                                        | Same as GET                          |
+| `/ws`            | WebSocket upgrade                                                 | Subscription frames                  |
+| `GET /vocab`     | GET                                                               | `{ docs, keywords }` for `loadVocab` |
 
-```sh
-curl http://localhost:8000/apply \
-  -H 'content-type: application/json' \
-  -d '[{"entity":{"eid":"b1"},"doc":{"title":"Dune"},"book":{"price":12,"status":"shelved"}}]'
+`/apply` returns [patches](../graph/README.md#data-model) and graph-generated
+changes, rather than every stored component. `?check=1` runs the write pipeline
+and rolls the transaction back; effects do not run. It reserves nothing and
+provides no transaction across graphs. A subsequent write can still fail.
 
-curl -G http://localhost:8000/query \
-  --data-urlencode 'q=.book.status=shelved&.book.price<20'
-```
-
-| Endpoint         | Request                    | Response                                |
-| ---------------- | -------------------------- | --------------------------------------- |
-| `POST /apply`    | JSON array of bundles      | The bundles as applied, one per entity  |
-| `GET /query?q=…` | URL-encoded query          | Selected bundles, or an aggregate value |
-| `POST /query`    | JSON string or `{"q":"…"}` | Same as GET                             |
-| `/ws`            | WebSocket upgrade          | Subscription messages                   |
-| `GET /vocab`     |                            | `{docs, keywords}`: the vocabulary      |
-
-`GET /query?live=1&q=…` answers the same filter against stored bundles and
-values currently held by connected peers. A relayed value disappears when its
-connection closes or its declared duration expires. The ordinary `/query`
-continues to read durable data only, including the latest saved peer value. Live
-peer predicates use the values connected writers hold, so a saved value does not
-count as presence after its writer disconnects.
-
-The `/apply` result contains the patches and what the graph generated, including
-assigned entity numbers, timestamps, and cascading deletions where the graph is
-configured to produce them. It is not a read of every component on each entity.
-Components declaring `sync: none` stay on their node: HTTP answers, socket
-frames and projection coverage omit them. `published(vocab, bundles)` applies
-this transport projection without changing stored data, identities, aliases,
-stamps or deletion markers. Add `?check=1` to validate and roll back the
-transaction before commit; effects do not run. This reserves nothing, and a
-later write can still fail. It does not provide a transaction across multiple
-graphs.
-
-Queries use [@yaks/query](../query/README.md). Aggregate queries return values
-instead of bundles: `.count` returns `{"count":n}`, `.distinct=prop` returns
-`{"distinct":[…]}`, and `.tally=prop` returns `{"tally":{…}}`. The storage
-adapter must support the requested query.
-
-A `.fields` projection still answers bundles. Each selected entity carries only
-the properties named, and each entity a path reaches through a reference comes
-back as a bundle of its own, after the selected ones, carrying what was read off
-it. A property the entity lacks is left out:
-
-```sh
-curl -G http://localhost:8000/query \
-  --data-urlencode 'q=.review&.fields=review.stars,review.book.doc.title'
-# [{"entity":{"eid":"r1"},"review":{"stars":5,"book":"b1"}},
-#  {"entity":{"eid":"b1"},"doc":{"title":"Dune"}}]
-```
+`GET /query?live=1&q=…` uses the subscription registry's `snapshot`: stored
+bundles with current relayed values. Ordinary `/query` reads stored data,
+including saved relayed values. A saved value does not count as a connected
+writer's presence after that writer disconnects.
 
 ## Exports
 
-All exports are available from `@yaks/api`:
+| Import             | Exports                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/api`        | `api`, `Options`, `Handler`, `Route`, `routed`, `Filter`; `Authenticate`, `signed`, `PeerWriter`; `ask`, `write`, `pour`, `poured`, `CHUNK`, `WriteContext`; `published`; `subscriptions`, `Subs`, `Ask`, `Frame`, `Sink`, `Opening`; `attach`, `decode`, `Incoming`, `queue`, `receive`, `sink`, `Socket`, `Upgrade`; `denoUpgrade`, `denoListen`, `Listen`, `Listener`, `Addr`; `json`, `refusal`, `refuse`, `fault`, `Refusal`, `Unauthorized`; `served`, `requested`, `agent`, `Report`, `Watch`, `Answered`; `timed` |
+| `@yaks/api/vocab`  | `apiDoc`, `docs`, `description`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `@yaks/api/routes` | `handler`, `Hosting`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `@yaks/api/tools`  | `runs`, `Serving`, `PORT`, `HOSTNAME`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
-| Exports                                                         | Purpose                                                                               |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `api`, `Options`, `Handler`                                     | Build and type the request handler                                                    |
-| `Route`, `routed`                                               | Describe and match application routes by method and exact path or trailing `*` prefix |
-| `Filter`                                                        | A check a plugin puts in front of every route, refusing a request by throwing         |
-| `Authenticate`, `signed`                                        | Identify a caller and replace client-supplied write attribution                       |
-| `ask`, `write`, `pour`, `CHUNK`                                 | Query, JSON write, and streaming import handlers; import chunk size                   |
-| `published`                                                     | Project outgoing bundles, leaving `sync: none` components on their node               |
-| `subscriptions`, `Subs`, `Ask`, `Frame`, `Sink`                 | Manage subscriptions and their messages                                               |
-| `attach`, `receive`, `sink`, `Socket`, `Upgrade`, `denoUpgrade` | Connect the subscription protocol to sockets                                          |
-| `denoListen`, `Listen`, `Listener`, `Addr`                      | Bind a port on Deno, which is what the `serve` tool listens with                      |
-| `json`, `refusal`, `refuse`, `Refusal`, `Unauthorized`          | Construct JSON responses and translate errors                                         |
-| `served`, `requested`, `agent`, `Report`, `Watch`, `Answered`   | Watch a handler's answers, and write a broken request as its `request` bundle         |
-| `timed`                                                         | A client `fetch` that says one line per response, with the `Server-Timing` it carried |
+## Query answers
 
-`Route` and `routed` help an application compose additional routes; `api()`
-itself only serves the three paths above.
+A query with `.fields` returns narrowed bundles and separate bundles for
+entities reached through references. Aggregate queries return a value instead of
+bundles. Both GET and POST use the same query syntax and storage support.
 
-## Importing one bundle per line
+```ts
+import { api, type Frame, subscriptions } from '@yaks/api'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
 
-Send `application/x-ndjson` to import a stream of bundles. Blank lines are
-skipped; each group of 50 bundles is applied in its own transaction. The
-implementation also accepts content types containing `ndjson`.
-
-```sh
-curl http://localhost:8000/apply \
-  -H 'content-type: application/x-ndjson' \
-  --data-binary @rows.ndjson
-```
-
-The response is NDJSON, emitted as each group completes. It includes applied
-bundles corresponding to input entities; additional entities produced by plugins
-or cascading deletes are omitted. Request and response bodies are streamed
-rather than accumulated in full.
-
-Once streaming starts, the HTTP status is 200, including when a later line
-fails. An error is the last response line:
-
-```json
-{
-  "error": "Refused",
-  "message": "unknown property: book.colour",
-  "line": 137,
-  "committed": 100
+const vocab = loadVocab({
+  $defs: {
+    book: {
+      component: true,
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        price: { type: 'number' },
+      },
+    },
+  },
+})
+const g = graph({ vocab, storage: ram(vocab) })
+await g.apply([{ entity: { eid: 'b1' }, book: { title: 'Dune', price: 12 } }])
+const handle = api({ graph: g })
+const ask = async (q: string) =>
+  (await handle(
+    new Request('https://shop.test/query', {
+      method: 'POST',
+      body: JSON.stringify({ q }),
+    }),
+  )).json()
+equal(await ask('.book&.count'), { count: 1 })
+equal(await ask('.book&.distinct=book.price'), { distinct: ['12'] })
+equal(await ask('.book&.tally=book.price'), { tally: { '12': 1 } })
+equal(await ask('.book&.fields=book.title'), [{
+  entity: { eid: 'b1' },
+  book: { title: 'Dune' },
+}])
+const subs = subscriptions(g)
+const frames: Frame[] = []
+const to = (frame: Frame) => {
+  frames.push(frame)
 }
+await subs.open(to, 'titles', '.book&.fields=book.title')
+equal(frames[0].coverage, { b1: { book: ['title'] } })
+await subs.open(to, 'count', '.book&.count')
+equal(frames[1], { id: 'count', count: 1 })
+await subs.drop(to)
 ```
 
-`line` is a 1-based input line number. `committed` counts input bundles in
-successful earlier groups. The failed group is rolled back, but earlier groups
-remain committed. For an apply error, the handler tests the failed group with
-one bundle omitted at a time, using rollback-only checks. If no single omission
-makes the group succeed, it reports the group's first line. Therefore the
-reported line is not always the only offending line, and the group may already
-have been read past it. Processing stops after the error.
-
-With `?check=1`, every group is rolled back and `committed` counts bundles that
-passed the check, not stored bundles. Later groups cannot depend on entities
-that earlier check-only groups would have created.
-
-A `$name` alias resolves only within its group of 50 bundles. Keep an entity and
-its alias references in the same group, or use known entity IDs for references
-across groups.
-
-## Authentication and write attribution
+## Authentication and caller context
 
 `authenticate(request)` runs on every request, including reads and WebSocket
-upgrades. It returns an actor such as `{ by: memberId, via: sessionId }`, or
-`null`. The API replaces each submitted `$actor` with that result before
-applying changes. `by` identifies the entity responsible for the write; optional
-`via` records the entity through which it was made.
+upgrades. Its [actor](../graph/README.md#data-model) replaces client-supplied
+`$actor` on every incoming bundle. Omitting it, or returning `null`, permits
+unattributed requests. Throw `Unauthorized` to answer with HTTP 401.
+Authentication does not decide which entities or properties a caller may access;
+the graph and application supply that policy.
 
-Omitting authentication or returning `null` permits unattributed requests. Throw
-`Unauthorized` to return HTTP 401. Authentication alone does not define which
-entities or properties a caller may access; the application and graph plugins
-supply the relevant authorization policy. The graph validates changes and
-preconditions.
+`write(request, bundles)` adds caller context before signing a JSON change or
+each NDJSON chunk, including checked writes. `read(request)` supplies graph
+`ReadOpts` for queries, socket frames and applied write replies. Applied replies
+use the graph's answer hooks with `patch: true`, so callers receive their own
+vocabulary while storage keeps the graph's vocabulary.
 
-`api({ graph, write })` accepts a write context callback
-`write(request, bundles): Bundle[]`. It can give incoming bundles the context
-the graph needs from this request. It runs for JSON batches and each NDJSON
-chunk, including `?check=1`; the handler signs the returned bundles with the
-authenticated actor before applying them. Without a callback, bundles pass
-straight to signing.
+```ts
+import { api, signed, Unauthorized } from '@yaks/api'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
 
-`read(request): ReadOpts` supplies the caller's context for queries, socket
-frames and applied write replies. Applied replies run the graph's answer hooks
-with `patch: true`, including checked writes and each NDJSON chunk, so a caller
-receives its own vocabulary while the graph commits its current vocabulary.
+const vocab = loadVocab({ $defs: {} })
+const g = graph({ vocab, storage: ram(vocab) })
+const handle = api({
+  graph: g,
+  authenticate: () => {
+    throw new Unauthorized('sign in')
+  },
+})
+const response = await handle(new Request('https://shop.test/vocab'))
+equal(response.status, 401)
+equal(await response.json(), { error: 'Unauthorized', message: 'sign in' })
+equal(
+  signed([{ entity: { eid: 'b1' }, $actor: { by: 'untrusted' } }], {
+    by: 'member',
+  }),
+  [{ entity: { eid: 'b1' }, $actor: { by: 'member' } }],
+)
+```
+
+## Streaming imports
+
+A **chunk** is the group of up to `CHUNK` (50) input bundles that `pour` applies
+in one transaction. Send `application/x-ndjson` to `/apply`: one bundle per
+line, with blank lines skipped. `poured` accepts any content type containing
+`ndjson`. Request and response bodies are streamed; each completed chunk emits
+its applied input bundles, omitting additional entities generated by the graph.
+
+```ts
+import { api, poured } from '@yaks/api'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+const vocab = loadVocab({
+  $defs: {
+    book: {
+      component: true,
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+      },
+    },
+  },
+})
+const g = graph({ vocab, storage: ram(vocab) })
+const handle = api({ graph: g })
+const bundle = { entity: { eid: 'b1' }, book: { title: 'Dune' } }
+const input = () =>
+  new Request('https://shop.test/apply?check=1', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-ndjson' },
+    body: '\n' + JSON.stringify(bundle) + '\n',
+  })
+equal(poured(input()), true)
+const checked = await handle(input())
+equal((await checked.text()).trim(), JSON.stringify(bundle))
+equal(await g.read('.book'), [])
+const committed = await handle(
+  new Request('https://shop.test/apply', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-ndjson' },
+    body: JSON.stringify(bundle),
+  }),
+)
+equal((await committed.text()).trim(), JSON.stringify(bundle))
+equal(await g.read('.book'), [bundle])
+```
+
+The status stays 200 once streaming starts. A failure is the final response
+line: `{ error, message, line, committed }`. `line` is a 1-based input line
+number; `committed` counts input bundles in successful preceding chunks. The
+failed chunk rolls back; earlier chunks remain committed. For an apply failure,
+the handler checks the chunk with one bundle omitted at a time to locate the
+failure. If no single omission succeeds, it reports the chunk's first line.
+Processing stops after the failure; the reported line need not be the only bad
+line or the last line read.
+
+Under `?check=1`, `committed` counts bundles that passed checks, and later
+chunks cannot depend on entities earlier chunks would have created. A `$name`
+[alias](../graph/README.md#ids-and-names) resolves only within its chunk; use
+known eids for references across chunks.
+
+## Outgoing bundles
+
+`published` omits components declaring `sync: none` from HTTP responses, socket
+frames and projection coverage. It preserves identities, aliases, stamps and
+deletion markers without changing stored bundles.
+
+```ts
+import { published } from '@yaks/api'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+const vocab = loadVocab({
+  $defs: {
+    local: {
+      component: true,
+      type: 'object',
+      sync: 'none',
+      properties: {
+        note: { type: 'string' },
+      },
+    },
+  },
+})
+const bundle = { entity: { eid: 'b1' }, local: { note: 'this node' } }
+equal(published(vocab, [bundle]), [{ entity: { eid: 'b1' } }])
+equal(bundle.local.note, 'this node')
+```
 
 ## Subscriptions
 
-A query subscription first receives its current result, then updates after graph
-commits. Those are the graph's own commits, and, in a host whose config lists
-@yaks/journal, every commit another process or thread makes to the same store
-(`host.feed`, @yaks/journal's `feed`): a `yak` command run beside `yak serve`
-reaches an open tab too. Open a socket to `/ws` and send:
+`subscriptions(graph)` observes the graph's `effect` phase, including direct
+application writes. `open` sends the current answer and subsequent changes;
+`close` closes one subscription; `drop` closes every subscription for a sink.
+`subscribe: true` selects the **raw feed**, which sends each committed change
+without an initial answer. `commit` admits changes from another process, and
+`restore` opens saved subscriptions together, sharing initial reads.
 
-```ts ignore
-socket.send(
-  JSON.stringify({
-    subscribe: '.book.status=shelved&.book.price<20',
-    id: 'cheap',
-  }),
-)
-// Initial response: { id: 'cheap', bundles: [...], transientReset: [...] }
-// If b1 stops matching: { id: 'cheap', bundles: [], gone: ['b1'] }
+```ts
+import { type Frame, subscriptions } from '@yaks/api'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal, until } from '@yaks/testing'
+
+const vocab = loadVocab({
+  $defs: {
+    book: {
+      component: true,
+      type: 'object',
+      properties: {
+        price: { type: 'number' },
+      },
+    },
+  },
+})
+const g = graph({ vocab, storage: ram(vocab) })
+const subs = subscriptions(g)
+const frames: Frame[] = []
+const to = (frame: Frame) => {
+  frames.push(frame)
+}
+await subs.restore([{ sink: to, id: 'cheap', query: '.book.price<20' }])
+equal(frames[0].bundles, [])
+await g.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+await until(() => frames.length == 2)
+equal(frames[1].bundles, [{ entity: { eid: 'b1' }, book: { price: 12 } }])
+await g.apply([{ entity: { eid: 'b1' }, book: { price: 25 } }])
+await until(() => frames.length == 3)
+equal(frames[2].gone, ['b1'])
+await subs.close(to, 'cheap')
+await subs.open(to, 'all', true)
+await g.apply([{ entity: { eid: 'b2' }, book: { price: 10 } }])
+await until(() => frames.length == 4)
+equal(frames[3].id, 'all')
+await subs.drop(to)
 ```
 
+Query frames contain current matching bundles and `gone` eids for deleted
+entities or entities that stopped matching. A refresh may send the whole answer.
+Queries that can test one entity at a time use
+[@yaks/match](../match/README.md); queries with references, ordering or limits
+use dependency reads or refreshes. Writes return at commit without waiting for
+subscriber reads; commits arriving during a read share the next pass.
+
+A `.fields` [projection](../graph/README.md#projections) carries `coverage` for
+selected bundles. A covered property omitted from its bundle is absent; an
+uncovered property was not read. Entities reached through references travel in
+`peers`, with `peerCoverage` and `peerGone`, outside the selected set. Aggregate
+queries send `{ id, count }`, `{ id, distinct }` or `{ id, tally }` on opening
+and when their value changes. Initial query frames carry `transientReset` eids
+and may carry [transient frames](../graph/README.md#transient-text).
+
+`subscriptions(graph, { invalidate })` accepts an application dependency rule:
+returning `true` from `invalidate(query, applied)` refreshes that subscription.
+It does not discover dependencies outside the query automatically.
+
+### Relayed values
+
+A **relay** forwards `sync: peers` components to other sinks watching their
+entities. It holds one value per entity and component under its last writer's
+connection, merging partial patches. It never echoes a connection's own values.
+A clear (`{ component: null }`), disconnect or declared duration expiry clears
+that value. Raw feeds receive every relay; query subscriptions receive existing
+values when they open or an entity joins their answer.
+
+```ts
+import { type Frame, subscriptions } from '@yaks/api'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+const vocab = loadVocab({
+  $defs: {
+    cursor: {
+      component: true,
+      type: 'object',
+      sync: 'peers',
+      durable: 'connection',
+      properties: { x: { type: 'number' } },
+    },
+    position: {
+      component: true,
+      type: 'object',
+      sync: 'peers',
+      durable: 'forever',
+      save: '30s',
+      properties: { x: { type: 'number' } },
+    },
+  },
+})
+const g = graph({ vocab, storage: ram(vocab) })
+const subs = subscriptions(g)
+const writer = (_frame: Frame) => {}
+const seen: Frame[] = []
+const reader = (frame: Frame) => {
+  seen.push(frame)
+}
+await subs.open(reader, 'all', true)
+const cursor = { entity: { eid: 'b1' }, cursor: { x: 4 } }
+await subs.relay(writer, [cursor])
+equal(seen[0].relay, [cursor])
+equal(await g.read('.cursor'), [])
+equal(await subs.snapshot('.cursor.x=4'), [cursor])
+await subs.relay(writer, [{ entity: { eid: 'b1' }, position: { x: 7 } }])
+equal(await g.read('.position'), [{
+  entity: { eid: 'b1' },
+  position: { x: 7 },
+}])
+await subs.drop(writer)
+equal(await subs.snapshot('.cursor'), [])
+await subs.drop(reader)
+```
+
+Without `save`, relayed values stay outside storage. A component declaring
+`sync: peers`, `durable: forever` and `save: '30s'` saves its first accepted
+value immediately, then at most once per interval, and saves a pending last
+value on disconnect. Explicit clears remove the saved component immediately;
+quiet values leave no save timer. Each input checks through
+`graph.apply(..., {check: true})` before changing the held value; each save uses
+ordinary `apply` with the connection's authenticated actor and vocabulary
+versions (`PeerWriter`). A refused input leaves the previous accepted value
+intact; a refused save is sent to its writer.
+
+A query can select by relayed values; moving, clearing or expiring them changes
+membership. Subscription `bundles` carry stored components, while `relay`
+carries current relayed values. A projection through a reference cannot be read
+over relayed values.
+
+## WebSocket protocol
+
+`attach` connects a socket to a subscription registry and drops its
+subscriptions on close. `receive` dispatches one message; `decode` admits UTF-8
+text of up to 64 KiB before JSON parsing. Oversized or malformed messages
+produce a `refused` frame with a recoverable top-level id, or an empty id. They
+do not close the socket or disturb other subscriptions.
+
 ```text
-→ { subscribe: "<query>" | true, id: "<id>" }
-→ { subscribe: "<query>" | true, id: "<id>", acks: true }
-→ { subscribe: "<query>" | true, id: "<id>", acks: true, frames: true }
+→ { subscribe: "<query>" | true, id: "<id>", acks?: true, frames?: true }
 → { ack: "<token>" }
 → { unsubscribe: "<id>" }
 → { relay: Bundle[] }
-← { id, bundles: Bundle[], gone?: Eid[] }
-← { id, bundles, coverage, peers?, peerCoverage?, peerGone?, gone? }
-← { id, count: n } | { id, distinct: […] } | { id, tally: {…} }
-← { id, relay: Bundle[] }
-← { id, transient: TransientFrame[] }
+← { id, bundles, gone?, coverage?, peers?, peerCoverage?, peerGone? }
+← { id, count } | { id, distinct } | { id, tally }
+← { id, relay: Bundle[] } | { id, transient: TransientFrame[] }
 ← { id, refused: { error, message, … } }
 ← { frames: [{ id, … }, …], ack: "<token>" }
 ```
 
-Incoming messages are limited to 64 KiB of UTF-8 text. Oversized or malformed
-messages receive one `refused` frame without closing the socket or disturbing
-other subscriptions. A refusal names the request's top-level `id` when it can be
-recovered; otherwise its `id` is empty. ACKs go through the same admission.
+An **ack** is the token a client echoes after applying a frame. With
+`acks:
+true`, non-relay frames wait for their ack before more non-relay frames
+are sent. `frames: true` groups adjacent non-relay frames under one ack;
+acknowledge only after applying the whole group. Relay-only frames carry no ack
+or replay state. On reconnect, clients reopen subscriptions and resend relayed
+values.
 
-Peer relays wait up to 16 ms so movements arriving together share a frame.
-Waiting relays keep the newest property values, with a clear retained before a
-later partial value. A membership or durable-data frame sends preceding relays
-first, then goes out without waiting for the relay timer. With `acks: true`,
-durable and membership frames carry an `ack` token and wait for its return.
-`frames: true` opts into ordered groups of adjacent non-peer frames with one
-outer `ack` token. The client acknowledges a group after applying every frame.
-Without that opt-in, each frame keeps its original single-frame shape. Peer-only
-frames carry no token or replay state. On reconnect, clients resend the peer
-values they are saying and reopen their subscriptions. The server admits peer
-relays at the component's declared pace, caps unpaced traffic, and closes
-connections that keep flooding. A rejected update leaves the last accepted value
-in place until it clears or the connection closes.
+`queue` handles socket buffering and acks; `sink` queues frames until the socket
+opens. Relay frames wait up to 16 ms and merge recent patches, retaining a clear
+before a later partial patch. A membership or stored-data frame flushes
+preceding relays first. Admission uses the component's declared pace, caps
+unpaced traffic, and closes persistent floods. Rejected inputs leave accepted
+values intact.
 
-Query updates contain current bundles for matching entities and `gone` IDs for
-entities that were deleted or stopped matching. A refreshed query can return its
-whole current set.
+```ts
+import { decode, type Frame, queue } from '@yaks/api'
+import { equal } from '@yaks/testing'
 
-A `.fields` projection's frames carry its bundles narrowed, as `/query` answers
-them, with `coverage`: for each bundle, the properties it answers for. A covered
-property the bundle leaves out is absent; one not covered was never read, so a
-client merging the bundle into a cache keeps it. The entities a path reaches
-ride beside the set rather than in it: `peers` carries them, `peerCoverage` what
-each covers, and `peerGone` the ones no path reaches any more. A projection that
-reaches is read again whole after any commit that touches an entity along its
-paths, and each such frame carries every rider. An aggregate query (`.count`,
-`.distinct=prop`, `.tally=prop`) is answered with its value in the shape
-`/query` answers it, first when it opens and again after a commit that changes
-it; it carries no bundles. `subscribe: true` selects the committed-change feed,
-with no initial snapshot: each message contains the combined transaction
-changes, like the JSON `/apply` result.
-
-Initial query messages also contain `transientReset` IDs and may include
-`transient` snapshots or existing peer values. `transient` messages carry
-nonpersistent property updates from the graph; their frame type is defined by
-[@yaks/graph](../graph/README.md).
-
-Durable writes use HTTP `/apply`. Socket `relay` messages carry components
-marked `sync: peers`, such as cursor position or typing status. They are
-validated and forwarded to other subscribers watching those entities. Without
-`save`, they stay outside storage. Raw subscribers receive all relays. An entity
-that joins a subscription's set arrives with the values peers are already
-relaying for it, as a subscription that opens does. The relay holds one value
-per entity and component, under the connection that last wrote it, and never
-sends a connection what it holds itself. Values clear when a writer clears them,
-the connection holding them closes, or the vocabulary's duration, such as
-`durable: "5s"`, expires; a clear is sent as a component set to `null`.
-
-A component with `sync: peers`, `durable: forever` and `save: "30s"` also stores
-its latest value. The first accepted write saves immediately; subsequent partial
-patches merge and save at most once an interval, with any pending last value
-saved when its writer disconnects. Explicit clears remove the saved component
-immediately. Quiet values leave no save timer running. The page sends the same
-relay messages, with no extra HTTP write.
-
-Saved inputs rehearse through `graph.apply(..., {check: true})` before changing
-the held value, and each save uses ordinary `apply()` as the socket's
-authenticated actor, carrying its vocabulary versions. Admission and ownership
-therefore apply to both the input and the eventual save; the rehearsal costs a
-read/check per input, without committing it. A refused input leaves an earlier
-accepted save intact. A refusal when saving is reported to the writer.
-`Subs.relay`, `Subs.enqueue`, `receive` and `attach` accept a final optional
-`PeerWriter` for hosts that wire sockets themselves.
-
-A query may select by a relayed component, such as
-`.player&.position.region=east`. The registry tests the held peer values beside
-durable rows when it opens and when either half changes. Moving, clearing, or
-expiring a peer value changes membership; `bundles` still carry only durable
-components, while `relay` carries the peer value.
-
-The registry observes the graph's `effect` phase, including writes made directly
-by the application. For queries that can be tested one entity at a time,
-[@yaks/match](../match/README.md) rechecks changed entities. Queries involving
-references, ordering, limits, or other unsupported incremental conditions run
-again. The strategy is selected when the subscription opens.
-
-A writer is answered at its commit and does not wait for subscribers to be told.
-Commits that land while a pass is still reading are handled together in the next
-pass, so a burst of writes costs subscribers one more pass rather than one per
-commit.
-
-### Queries that depend on entities outside their result
-
-For dependencies the query itself does not express, create a registry with
-`subscriptions(graph, { invalidate })` and pass it as `api({ graph, subs })`.
-`invalidate(query, applied)` returning `true` causes that subscription to read
-and send its full current result and IDs that left. This is an
-application-supplied dependency rule; it does not discover dependencies
-automatically.
-
-## Refusals
-
-Errors contain the thrown error's name as `error`, its `message`, and additional
-fields other than its stack. For example, a failed `$was` precondition reports
-the property and its current value:
-
-```json
-{
-  "error": "Stale",
-  "message": "book.price of b1 has moved since it was read",
-  "eid": "b1",
-  "comp": "book",
-  "prop": "price",
-  "current": 12
-}
+const sent: (Frame & { ack: string })[] = []
+const q = queue({
+  send: (text) => {
+    sent.push(JSON.parse(text))
+  },
+})
+q.enable()
+q.send({ id: 'books', bundles: [] })
+q.send({ id: 'books', gone: ['b1'] })
+equal(sent.length, 1)
+q.ack(sent[0].ack)
+equal(sent.length, 2)
+equal(sent[1].gone, ['b1'])
+equal(decode('{"unsubscribe":"books"}'), { value: { unsubscribe: 'books' } })
+q.close()
 ```
 
-| Status | Cause                                                |
-| ------ | ---------------------------------------------------- |
-| 400    | `Refused`, `Unsupported`, `SyntaxError` or `Unknown` |
-| 401    | `Unauthorized`                                       |
-| 403    | `Denied`                                             |
-| 404    | `NotFound` or an unknown route                       |
-| 405    | Wrong HTTP method or `/ws` without an upgrade header |
-| 409    | `Stale`                                              |
-| 500    | An error name not in `STATUS`                        |
+A socket can be wired without an HTTP upgrade when the host already owns it:
 
-HTTP errors use these statuses. Subscription errors are socket messages, and
-streaming import errors use the final NDJSON line described above. The
-error-name mapping is @yaks/graph's `STATUS`, the same table the tool runner
-reads to tell a refusal from a defect.
+```ts
+import { attach, type Frame, type Socket, subscriptions } from '@yaks/api'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal, until } from '@yaks/testing'
 
-### A request that broke
-
-An answer at 500 or over, thrown or returned, carries an `x-request-id` header,
-and the request is handed to `report` (an `api()` option, and `Hosting.report`
-for the plugin's handler) as a bundle under that id:
-
-```json
-{
-  "entity": { "eid": "5b0f…" },
-  "request": {
-    "method": "POST",
-    "url": "http://localhost:8000/apply",
-    "route": "/apply",
-    "status": 500,
-    "ms": 3,
-    "agent": "curl 8.5.0"
-  }
+const vocab = loadVocab({ $defs: {} })
+const g = graph({ vocab, storage: ram(vocab) })
+const subs = subscriptions(g)
+const events = new EventTarget()
+const frames: Frame[] = []
+const socket: Socket = {
+  readyState: 1,
+  send: (text) => {
+    frames.push(JSON.parse(text))
+  },
+  addEventListener: events.addEventListener.bind(events),
 }
+attach(subs, socket)
+events.dispatchEvent(
+  new MessageEvent('message', {
+    data: JSON.stringify({ subscribe: '.entity', id: 'all' }),
+  }),
+)
+await until(() => frames.length == 1)
+equal(frames[0].bundles, [])
+events.dispatchEvent(
+  new MessageEvent('message', {
+    data: JSON.stringify({ unsubscribe: 'all' }),
+  }),
+)
+events.dispatchEvent(new Event('close'))
 ```
 
-`report` also receives the error when one was thrown. Without one, the failure
-is said on the console with its id. `request` is this package's component
-(./vocab.json); where the bundle is kept is the reporter's choice. `served` puts
-the same watch around any handler, and an answer that already carries an
-`x-request-id` is not reported a second time.
+Durable writes use `/apply`; socket relays only carry `sync: peers` components.
+`denoUpgrade` is the default WebSocket upgrade. Other runtimes supply an
+`Upgrade` returning `{ socket, response }`; Cloudflare Workers can use
+`workerUpgrade` from [@yaks/workerd](../workerd/README.md).
 
-## The plugin: the handler, and the `serve` tool
+## Refusals and request reports
 
-This package is also the plugin that makes a host answer HTTP at all.
-[`routes.ts`](./routes.ts) exports `handler`, which the host calls once its
-graph is open and `host.routes` holds every listed plugin's routes: what comes
-back is those routes beside `/apply`, `/query` and `/ws`, and it becomes
-`host.handler`. The route that names a path most closely answers it: an exact
-path over a prefix, a longer prefix over a shorter, and plugin order between
-equals. The three doors are exact paths, so a plugin's catch-all (`/*`) answers
-only what nothing else claims. In front of all of it stand the plugins' filters
-(`host.filters`): each sees every request first, and one that throws answers the
-request with that refusal, so nothing behind it runs. A config that does not
-list this package composes a host with no handler, and the routes the other
-plugins would have added are never asked for ([@yaks/cli](../cli/README.md)).
-`/mcp` is one of those routes, contributed by [@yaks/mcp](../mcp/README.md) when
-a config lists that package too.
+A **refusal** is the JSON error body sent to a caller (`Refusal`): its error
+name, message, and enumerable details except `stack`. `refusal` constructs that
+body; `refuse` adds the HTTP status from
+[@yaks/graph](../graph/README.md#admission-and-schema-checks). `json` constructs
+a JSON response. `fault` logs errors whose status is at least 500, leaving
+expected client refusals unlogged.
 
-This package serves and composes routes; each feature package owns its own
-endpoint in `<package>/routes`. For example, [@yaks/tools](../tools/README.md)
-owns the command route, while `@yaks/api` hosts it alongside the graph doors.
+```ts
+import { json, refusal, refuse, Unauthorized } from '@yaks/api'
+import { equal } from '@yaks/testing'
 
-[`vocab.json`](./vocab.json) declares one tool, `serve`, and
-[`tools.ts`](./tools.ts) implements it: it binds a TCP port and answers with
-that handler. So a config listing `@yaks/api` is a config whose graph can be
-served, and `yak serve` is that tool being called like any other.
+const error = new Unauthorized('sign in')
+equal(refusal(error), { error: 'Unauthorized', message: 'sign in' })
+equal(refuse(error).status, 401)
+equal(await json({ ready: true }).json(), { ready: true })
+```
+
+| Status | Error names                                               |
+| ------ | --------------------------------------------------------- |
+| 400    | `Refused`, `Unsupported`, `SyntaxError`, `Unknown`        |
+| 401    | `Unauthorized`                                            |
+| 403    | `Denied`                                                  |
+| 404    | `NotFound` (also unknown routes)                          |
+| 405    | Wrong endpoint method, or `/ws` without an upgrade header |
+| 409    | `Stale`                                                   |
+| 500    | Unmapped error names                                      |
+
+Socket refusals are frames, and streaming import refusals are final NDJSON
+lines. An HTTP answer at 500 or over carries `x-request-id` and is handed to
+`report` as a bundle with the **request component**, which records method, URL
+without query string, matched route, status, duration and reduced user agent.
+`served` watches any handler this way. An answer already carrying `x-request-id`
+is not reported again. `report` chooses where to keep the bundle; the default
+reports to the console. `requested` constructs it and `agent` reduces a
+`User-Agent`.
+
+```ts
+import { agent, requested, served, timed } from '@yaks/api'
+import { type Bundle } from '@yaks/graph'
+import { equal } from '@yaks/testing'
+
+const request = new Request('https://shop.test/books?private=value')
+const reports: Bundle[] = []
+const handle = served(() => new Response('unavailable', { status: 503 }), {
+  report: (bundle) => {
+    reports.push(bundle)
+  },
+  route: () => '/books',
+})
+const response = await handle(request)
+equal(reports[0].entity.eid, response.headers.get('x-request-id'))
+equal(requested('r1', request, { status: 503, ms: 2 }).request, {
+  method: 'GET',
+  url: 'https://shop.test/books',
+  status: 503,
+  ms: 2,
+})
+equal(agent('curl/8.5.0'), 'curl 8.5.0')
+const lines: string[] = []
+const fetch = timed((line) => {
+  lines.push(line)
+}, () =>
+  new Response('', {
+    headers: { 'server-timing': 'read;dur=2' },
+  }))
+await fetch(request)
+equal(lines, ['GET /books?private=value 200  read;dur=2'])
+```
+
+`timed` is a client fetch wrapper that prints the response's `Server-Timing`
+header through a supplied callback, returning the response unchanged.
+
+## Plugin routes and serving
+
+`@yaks/api/routes` exports `handler(host)`, which composes plugin routes and
+filters with the four endpoints. Exact paths beat prefixes; longer prefixes beat
+shorter ones; plugin order breaks ties. A plugin's exact route can override an
+endpoint. A catch-all route only answers paths no endpoint claims. Host commits
+from `host.feed` reach the subscription registry as well as local graph commits.
+
+```ts
+import { routed } from '@yaks/api'
+import { handler } from '@yaks/api/routes'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+const vocab = loadVocab({ $defs: {} })
+const g = graph({ vocab, storage: ram(vocab) })
+const route = {
+  method: 'GET',
+  path: '/health',
+  handle: () => new Response('ready'),
+}
+equal(routed(route, 'GET', '/health'), true)
+const checked: string[] = []
+const handle = handler({
+  graph: g,
+  who: () => null,
+  routes: [route],
+  filters: [(request) => {
+    checked.push(new URL(request.url).pathname)
+  }],
+})
+equal(
+  await (await handle(new Request('https://shop.test/health'))).text(),
+  'ready',
+)
+equal(checked, ['/health'])
+```
+
+`@yaks/api/vocab` declares the request component and the `serve` tool.
+`@yaks/api/tools` implements `serve`: it binds a TCP port, starts the host's
+[duties](../cli/README.md#duties-the-work-nobody-is-asking-for), and returns
+when the server stops. Port and hostname come from tool arguments, then
+configuration, then `PORT` (8787) and `HOSTNAME` (`127.0.0.1`). It reports the
+bound address on stderr while the call remains running. See
+[@yaks/tools](../tools/README.md) for tool execution and
+[@yaks/cli](../cli/README.md) for host configuration.
+
+A host configured with this package exposes the tool through `yak`:
 
 ```json
 {
   "db": "graph.db",
-  "plugins": ["@yaks/api", "@yaks/mcp", "@yaks/task"],
+  "plugins": ["@yaks/api"],
   "port": 8787
 }
 ```
 
 ```sh
-yak serve --config yak.json          # the configured port
-yak serve --config yak.json --port 0 # an arbitrary free one
+yak serve --config yak.json
+# In another terminal, check the served vocabulary:
+curl --fail http://127.0.0.1:8787/vocab
 ```
 
-The port and interface come from the call's `port` and `hostname` arguments,
-then from the config's, then from `PORT` (8787) and `HOSTNAME` (`127.0.0.1`).
-The server answers every request it is given, so it listens on this machine
-alone unless a config names a wider interface, such as `"hostname": "0.0.0.0"`.
+The following binds a local port, so it is excluded from documentation tests:
 
-The call is the record of the server. The runner writes the call row and marks
-it `running` before the tool starts, and writes the result when the tool returns
-— which is when the server stops. So a server that is up is a call still marked
-`running`, a server that has stopped is a result saying where it listened and
-for how long, and a process killed while serving leaves a call marked `running`
-whose process never recorded an exit, which is the state that keeps another
-runner from starting a second server in its place. Because nothing is printed
-until the call returns, the tool writes the address to standard error as soon as
-the port is bound.
+```ts ignore
+import { api, denoListen } from '@yaks/api'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
 
-While it listens, the tool also takes over the host's duties — the effect sweep
-and each plugin's `./service` — in their long-running form, and first finishes
-any tool calls a previous process was killed in the middle of.
+const vocab = loadVocab({ $defs: {} })
+const g = graph({ vocab, storage: ram(vocab) })
+let port = 0
+const server = denoListen({
+  port: 0,
+  hostname: '127.0.0.1',
+  onListen: (addr) => {
+    port = addr.port
+  },
+}, api({ graph: g }))
+try {
+  equal((await fetch(`http://127.0.0.1:${port}/vocab`)).status, 200)
+} finally {
+  await server.shutdown()
+  await server.finished
+}
+```
 
-## Serving it yourself
+## Limits
 
-Deno's WebSocket upgrade is the default. In Cloudflare Workers, pass
-`workerUpgrade` from [@yaks/workerd](../workerd/README.md), or use that
-package's `worker()` entrypoint. For Node or Bun, use a fetch-style server
-adapter and an `upgrade` callback implemented with the runtime's WebSocket
-library. An upgrade returns `{ socket, response }`.
+This package creates no database. [Storage](../graph/README.md#data-model)
+adapters persist graph data; [@yaks/query](../query/README.md) defines query
+syntax and the adapter decides which queries it supports. Authorization belongs
+to the application and graph plugins. Feature packages own their routes, such as
+[@yaks/mcp](../mcp/README.md)'s `/mcp`.
 
-## Compatibility
-
-The handler uses standard `Request`, `Response`, and socket interfaces and is
-intended for Deno, Node, Bun, and Cloudflare Workers. The package type-checks
-with `dom` and `esnext` libraries. `denoUpgrade` and `denoListen` look up Deno
-at call time and throw outside Deno; other runtimes must provide their own
-upgrade callback, and a runtime that binds its own port has no use for the
-`serve` tool.
-
-## The related packages
-
-[@yaks/graph](../graph/README.md) defines entities, changes, and write
-processing; [@yaks/vocab](../vocab/README.md) defines component schemas;
-[@yaks/query](../query/README.md) defines query syntax; and
-[@yaks/match](../match/README.md) evaluates queries in memory. Storage adapters
-such as [@yaks/sqlite](../sqlite/README.md), [@yaks/d1](../d1/README.md), and
-[@yaks/durable-object](../durable-object/README.md) persist the data.
+The handler uses standard web interfaces. `denoListen` and `denoUpgrade` look up
+Deno at call time and throw outside Deno. Other runtimes provide their own
+WebSocket upgrade, and runtimes that bind their own ports do not use `serve`.
 
 ## License
 
