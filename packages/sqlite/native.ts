@@ -84,6 +84,28 @@ export let prepared = (db: Database) => {
   // SQLite integers are 64-bit. The library's default reader truncates them
   // to 32 bits; safe JS integers must round-trip through every driver caller.
   db.int64 = true
+  let prepare = (sql: string) => {
+    let statement = db.prepare(sql)
+    let original = statement.getRowObject.bind(statement)
+    let names: string[] | undefined
+    let decode: ReturnType<typeof original> | undefined
+    // Inspect the columns as @db/sqlite does on every read. Only the generated
+    // decoder is reusable: it reads each value's live type and receives the
+    // integer/JSON options for this call. Temp and attached schemas can change
+    // independently of main's version, so metadata itself never stays cached.
+    statement.getRowObject = () => {
+      let current = statement.columnNames()
+      if (
+        !decode || names!.length != current.length ||
+        names!.some((name, i) => name !== current[i])
+      ) {
+        names = current
+        decode = original()
+      }
+      return decode
+    }
+    return statement
+  }
   let cache = new Map<string, ReturnType<Database['prepare']>>()
   let schema = db.prepare(
     render({ t: 'pragma', schema: 'main', name: 'schema_version' }).sql,
@@ -109,7 +131,7 @@ export let prepared = (db: Database) => {
     live()
     let statement = cache.get(sql)
     if (!statement) {
-      statement = db.prepare(sql)
+      statement = prepare(sql)
       if (sql.slice(statement.sql.length).trim()) {
         statement.finalize()
         if (params.length) {

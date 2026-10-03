@@ -17,7 +17,7 @@ import {
   type Tx,
   val,
 } from '@yaks/sql'
-import { driver } from './native.ts'
+import { driver, prepared } from './native.ts'
 import { open } from './db.ts'
 import { storage } from './mod.ts'
 import { mem, shop } from './testing.ts'
@@ -174,5 +174,42 @@ test('cached native row metadata follows external schema edits and rollback', ()
     assertEquals(scan(sql, 'sample'), [{ x: 4 }])
   } finally {
     db.close()
+  }
+})
+
+test('native decoders follow temp and attached schema metadata on every read', () => {
+  for (let schema of ['temp', 'attached']) {
+    let db = new Database(':memory:')
+    try {
+      // These SQLite schema forms are inputs to the native text boundary;
+      // @yaks/sql's graph AST does not express temp tables or ATTACH.
+      if (schema == 'attached') db.exec("attach ':memory:' as attached")
+      db.exec(
+        `create table ${schema}.sample (x); insert into ${schema}.sample values (1)`,
+      )
+      let text = `select * from ${schema}.sample`
+      let plain = db.prepare(text)
+      let run = prepared(db)
+      let same = () => {
+        let expected = plain.all()
+        assertEquals(run(text), expected)
+        return expected
+      }
+      same()
+      same()
+      db.exec(`alter table ${schema}.sample add column y default 2`)
+      // The dependency reads metadata before stepping a statement. A schema
+      // recompile updates that metadata during the step; preserve its answer
+      // on that first read, then use the refreshed columns on the next one.
+      same()
+      assertEquals(same(), [{ x: 1, y: 2 }])
+      db.exec(
+        `drop table ${schema}.sample; create table ${schema}.sample (z); insert into ${schema}.sample values (3)`,
+      )
+      same()
+      assertEquals(same(), [{ z: 3 }])
+    } finally {
+      db.close()
+    }
   }
 })
