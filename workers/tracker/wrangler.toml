@@ -1,0 +1,45 @@
+# Independent error intake, stores and delivery. No binding points to yak.
+name = "yak-tracker"
+main = "index.ts"
+tsconfig = ".wrangler/paths.json"
+compatibility_date = "2026-07-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+preview_urls = false
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[[durable_objects.bindings]]
+name = "TRACKERS"
+class_name = "Tracker"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Tracker"]
+
+[[queues.producers]]
+binding = "ERRORS"
+queue = "yak-errors"
+
+[[queues.consumers]]
+queue = "yak-errors"
+max_batch_size = 100
+max_batch_timeout = 1
+max_retries = 10
+dead_letter_queue = "yak-errors-dead"
+
+[[send_email]]
+name = "MAIL"
+
+[triggers]
+crons = ["* * * * *"]
+
+# Runtime secrets: TRACKER_SECRET (tracker-only signing key), MAIL_TO and
+# MAIL_FROM. T-59075 supplies the queue and Workers Builds connection.
+[alias]
+"croner" = "../yak/node_modules/croner/dist/croner.js"
+"marked" = "../yak/node_modules/marked/lib/marked.esm.js"
+"@cfworker/json-schema" = "../yak/node_modules/@cfworker/json-schema/dist/esm/index.js"
+"@std/yaml" = "../yak/node_modules/@std/yaml/mod.js"
