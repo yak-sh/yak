@@ -204,7 +204,7 @@ export type Pool = {
    * one, pass after pass until nothing is left to start, giving way to the
    * host between them — and none at all where a process that stays up is
    * already working it. */
-  work: (g: Access, signal?: AbortSignal) => Promise<void>
+  work: (g: Access, signal?: AbortSignal, passes?: number) => Promise<void>
   /** Look again now, rather than at the next pass: what a thread beside this
    * one says after it wrote runs down (./registry.ts `nudge`). */
   wake: () => void
@@ -727,14 +727,14 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         unlink(graph!, run)
       }
     },
-    work: async (g, signal = AbortSignal.abort()) => {
+    work: async (g, signal = AbortSignal.abort(), passes = Infinity) => {
       graph = g
       if (signal.aborted) {
         if (await working(g, { except: me, now: clock(), gone: opts.gone })) {
           return
         }
         await join(g)
-        for (;;) {
+        for (let n = 0; n < passes; n++) {
           let started = await pass(g)
           if (!started.length) break
           await Promise.all(started)

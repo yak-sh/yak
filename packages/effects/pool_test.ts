@@ -436,3 +436,20 @@ test('local completion retry retains reply, respects backoff and bounds', async 
     await a.fx.stop()
   }
 })
+
+test('finite pool passes leave newly owed work for the next wake', async () => {
+  let a = proc(store(), { max: 1, defer: true })
+  a.fx.handle({
+    post_note: async (event) => {
+      a.ran.push(event.entity.eid)
+      if (event.entity.eid == 'p1') await a.g.apply([post('p2')])
+    },
+  })
+  await a.g.apply([post('p1')])
+  await a.fx.work(a.g, AbortSignal.abort(), 1)
+  assertEquals(a.ran, ['p1'])
+  assertEquals((await run(a.g, 'post_note', 'p2')).state, 'pending')
+  await a.fx.work(a.g, AbortSignal.abort(), 1)
+  assertEquals(a.ran, ['p1', 'p2'])
+  assertEquals(a.oops, [])
+})

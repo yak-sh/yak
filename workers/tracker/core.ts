@@ -70,7 +70,7 @@ export let store = (storage: Storage, config: Config) => {
     // grouping's newly owed notifications finish in this wake too.
     drain: async () => {
       await tick(g)
-      for (let n = 0; n < 4; n++) await fx.work(g, AbortSignal.abort())
+      await fx.work(g, AbortSignal.abort(), 4)
     },
     bugs: (app?: string) => read(app),
     unseen: (app?: string) => read(app, '.bug.status=open !notified'),

@@ -206,7 +206,7 @@ export type Effects = Plugin & {
    * keeps working until it aborts; an aborted one is one pass, taken only
    * where no process that stays up is working the pool. Does nothing where
    * the vocabulary keeps no `effect` rows. */
-  work: (g: Access, signal?: AbortSignal) => Promise<void>
+  work: (g: Access, signal?: AbortSignal, passes?: number) => Promise<void>
   /** Look at the pool again now, rather than at the next pass. */
   wake: () => void
   /** Settles once every run this process started has, and a worker whose
@@ -717,7 +717,8 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     },
     slots: () => [...slots],
     docs: () => describe(slots),
-    work: (g, signal) => pooled?.work(g, signal) ?? Promise.resolve(),
+    work: (g, signal, passes) =>
+      pooled?.work(g, signal, passes) ?? Promise.resolve(),
     wake: () => pooled?.wake(),
     idle: () => pooled?.idle() ?? Promise.resolve(),
     stop: () => pooled?.stop() ?? Promise.resolve(),
