@@ -28,8 +28,18 @@ let measurement = (): Measurement => ({
   ns: Object.fromEntries(benchmarkNames().map((n) => [n, 100])),
 })
 test('bench median is the middle run, not the fastest or mean', () => {
-  assertEquals(median([500, 100, 110]), 110)
-  for (let values of [[], [1], [1, 2, NaN], [1, 2, 0], [1, 2, Infinity]]) {
+  assertEquals(median([500, 100, 110, 110, 110, 100, 500]), 110)
+  for (
+    let values of [[], [1], [1, 2, 3], [1, 2, 3, 4, 5, 6, NaN], [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      0,
+    ], [1, 2, 3, 4, 5, 6, Infinity]]
+  ) {
     assertThrows(() => median(values))
   }
 })

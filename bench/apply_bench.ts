@@ -12,8 +12,8 @@ for (let mode of APPLY_MODES) {
       for (let shape of APPLY_SHAPES) {
         Deno.bench({
           name: `apply/${mode}/${work}-${shape}-${n}`,
-          n: 3,
-          warmup: 1,
+          n: 10,
+          warmup: 5,
           fn: (b) => {
             let f = applyFixture(mode)
             try {

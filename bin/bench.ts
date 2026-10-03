@@ -10,8 +10,8 @@ import {
 } from '../bench/names.ts'
 
 export const REGRESSION_THRESHOLD = 0.20
-export const RUNS = 3
-export const METRIC = 'median-of-3-deno-avg-ns'
+export const RUNS = 7
+export const METRIC = 'median-of-7-deno-avg-ns'
 const BASELINE = 'bench/baseline.json'
 const RESULTS = 'bench/results.json'
 const PIPELINE_FILES = ['bench/apply_bench.ts', 'bench/relay_bench.ts']
@@ -37,7 +37,7 @@ export function median(values: number[]): number {
   ) {
     throw new Error(`Expected ${RUNS} finite, positive measurements`)
   }
-  return [...values].sort((a, b) => a - b)[1]
+  return [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)]
 }
 
 export function validateNames(

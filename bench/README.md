@@ -43,8 +43,9 @@ graph, then copied through storage outside timing, including its stamps and
 archetype descriptors. The graph is warmed before measuring. Every edited entity
 already exists; every created entity is absent. Creates cannot turn into edits
 or grow the corpus across samples. Each sample verifies the saved titles, stamps
-and archetype pointers after timing. SQLite writes use ordinary commits; there
-is no enclosing rollback transaction.
+and archetype pointers after timing. Deno takes at least ten measured iterations
+and five warmup iterations per apply case. SQLite writes use ordinary commits;
+there is no enclosing rollback transaction.
 
 The ratchet divides each Deno operation by N and records **ns/bundle**,
 displayed as **µs/bundle**. `counts` reports SQL statements per apply and per
@@ -81,10 +82,10 @@ socket round trip or fanout to observers.
 
 ## Samples and comparison
 
-The runner takes three independent Deno process averages per case, sequentially,
+The runner takes seven independent Deno process averages per case, sequentially,
 and records their median, raw samples, runtime, CPU, source revision, units and
 Linux load-average samples. Deno's JSON exposes an average; the metric is
-`median-of-3-deno-avg-ns`, not the per-iteration median. The storage modes run
+`median-of-7-deno-avg-ns`, not the per-iteration median. The storage modes run
 in separate processes, followed by the graph/relay cases. Allow several minutes.
 
 Missing or renamed cases, failed runs, invalid timings or counts, and different
