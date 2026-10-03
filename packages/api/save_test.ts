@@ -307,11 +307,8 @@ test('the socket saves with its authenticated actor and vocabulary versions', as
   )
   equal(socket.taken().map((f) => f.refused), [])
   equal(f.read(), { x: 1 })
-  equal(writes.map((rows) => rows[0].$actor), [{ by: 'Ada', via: 'browser' }, {
-    by: 'Ada',
-    via: 'browser',
-  }])
-  equal(writes.map((rows) => rows[0].$speaks), [{ garden: 1 }, { garden: 1 }])
+  equal(writes.map((rows) => rows[0].$actor), [{ by: 'Ada', via: 'browser' }])
+  equal(writes.map((rows) => rows[0].$speaks), [{ garden: 1 }])
   socket.emit('close')
 })
 

@@ -67,6 +67,7 @@ export let starting = (opts: Opts = {}): Hook => (bundles: Bundle[]) =>
  */
 export let wakes = (opts: Opts = {}): Plugin => ({
   name: '@yaks/wake',
+  admission: () => true,
   vocab: [wakeDoc],
   hooks: { normalize: starting(opts), precondition: conditions },
 })

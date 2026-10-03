@@ -50,6 +50,9 @@ export type Where = {
   /** the space whose owners own every app in it. Omit it and only grants
    * count — a graph holding one app and no roster needs no space. */
   space?: Eid
+  /** Standing rows superseded by an authoritative source are left out. Other
+   * stored grants and memberships still participate in the same policy. */
+  ignore?: (row: Bundle) => boolean
 }
 
 /** The checks the HTTP layer and the write guard both call. Each returns a
@@ -108,9 +111,10 @@ export let levelOn = (
   if (!who) return null
   return after(tx.get([who], [GRANT]), ([self]) => {
     // A share link's bearer is the grant they opened.
-    let own = of(self, GRANT)
+    let own = self && !where.ignore?.(self) ? of(self, GRANT) : undefined
     if (own && own.app == app) return level(own.access)
     return after(filed(tx, who), (found) => {
+      found = found.filter((row) => !where.ignore?.(row))
       // The space's owner, before any grant. Never stored per app — a space
       // owner owns everything in it, and storing that would be a row to forget
       // to write.

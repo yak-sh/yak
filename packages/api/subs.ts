@@ -37,9 +37,9 @@ import type { Bundle, Eid, Graph, Query, ReadOpts } from '@yaks/graph'
 import { after, isPromise, over } from '@yaks/fp'
 import { during, link, parent, peek, unlink } from '@yaks/trace'
 import {
-  admit,
   coalesced,
   composed,
+  formed,
   transient,
   type TransientFrame,
 } from '@yaks/graph'
@@ -1409,12 +1409,6 @@ export let subscriptions = (graph: Graph, opts: {
     },
   })
 
-  let bare = (bundles: Bundle[]) =>
-    admit(bundles, graph.vocab).map((b) => {
-      let out: Bundle = { entity: { eid: b.entity.eid } }
-      for (let [name, patch] of comps(b)) out[name] = patch
-      return out
-    })
   let batch: {
     writes: Map<string, { sink: Sink; row: Bundle }>
     done: Promise<void>
@@ -1450,8 +1444,8 @@ export let subscriptions = (graph: Graph, opts: {
     }
   }
   let enqueue = (sink: Sink, bundles: Bundle[], writer?: PeerWriter) => {
-    let accepted = bare(bundles)
-    let stage = () => {
+    bundles = formed(bundles)
+    let stage = (accepted: Bundle[]) => {
       let rows = peers.write(sink, accepted)
       if (!rows.length) return
       if (!batch) {
@@ -1484,12 +1478,19 @@ export let subscriptions = (graph: Graph, opts: {
     }
     // The fan-out promise must not lock the registry while its batch is
     // gathering more inputs. Flush orders delivery after storage work.
-    if (!saved(accepted)) return stage()
     let delivery: void | Promise<void>
     let out = ordered(() =>
-      after(saves.write(sink, accepted, writer), () => {
-        delivery = stage()
-      })
+      after(
+        saves.write(
+          sink,
+          bundles,
+          writer,
+          peers.values(bundles.map((b) => b.entity.eid)),
+        ),
+        (accepted) => {
+          delivery = stage(accepted)
+        },
+      )
     )
     return after(out, () => delivery)
   }
@@ -1559,35 +1560,51 @@ export let subscriptions = (graph: Graph, opts: {
     },
     commit,
     relay: (sink, bundles, writer) => {
+      bundles = formed(bundles)
       flushPeers()
       // Admit before queueing, so even a patch superseded while waiting still
       // gets the same refusal as one sent without a backlog.
-      let accepted = bare(bundles)
-      if (saved(accepted)) {
+      if (saved(bundles)) {
         return ordered(() =>
-          after(saves.write(sink, accepted, writer), () => {
-            let out = peers.write(sink, accepted)
-            return peerChange(out, sink)
-          })
+          after(
+            saves.write(
+              sink,
+              bundles,
+              writer,
+              peers.values(bundles.map((b) => b.entity.eid)),
+            ),
+            (accepted) => {
+              let out = peers.write(sink, accepted)
+              return peerChange(out, sink)
+            },
+          )
         )
       }
-      let waiting = relays.get(sink)
-      if (waiting) {
-        waiting.bundles = coalesced([...waiting.bundles, ...accepted])
-        return waiting.done
-      }
-      let run = (bundles: Bundle[]) => {
-        let out = peers.write(sink, bundles)
-        return peerChange(out, sink)
-      }
-      if (!pendingWork) return ordered(() => run(accepted))
-      let next = { bundles: accepted, done: Promise.resolve() }
-      relays.set(sink, next)
-      next.done = ordered(() => {
-        relays.delete(sink)
-        return run(next.bundles)
-      }) as Promise<void>
-      return next.done
+      return after(
+        saves.write(
+          sink,
+          bundles,
+          writer,
+          peers.values(bundles.map((b) => b.entity.eid)),
+        ),
+        (accepted) => {
+          let waiting = relays.get(sink)
+          if (waiting) {
+            waiting.bundles = coalesced([...waiting.bundles, ...accepted])
+            return waiting.done
+          }
+          let run = (rows: Bundle[]) =>
+            peerChange(peers.write(sink, rows), sink)
+          if (!pendingWork) return ordered(() => run(accepted))
+          let next = { bundles: accepted, done: Promise.resolve() }
+          relays.set(sink, next)
+          next.done = ordered(() => {
+            relays.delete(sink)
+            return run(next.bundles)
+          }) as Promise<void>
+          return next.done
+        },
+      )
     },
     relaying: (sink) => peers.holds(sink),
     relayed: (sink, keys) => peers.adopt(sink, keys),

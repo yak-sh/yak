@@ -897,6 +897,7 @@ export let journal = (
   let skip = new Set(opts.skip ?? ['created', 'updated'])
   return {
     name: opts.name ?? '@yaks/journal',
+    admission: () => true,
     hooks: {
       journal: (bundles: Bundle[], _tx: Tx) => {
         let writer = writers(bundles)

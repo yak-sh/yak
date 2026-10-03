@@ -242,11 +242,17 @@ test('an app worker query can read a connected peer position', async () => {
     }),
   )
   assertEquals(deployed.status, 200)
+  let actor = await store.door.authenticate(
+    new Request('http://store/ws', { headers }),
+  )
+  let attachment: unknown = { writer: { actor } }
   let ws = {
     readyState: 1,
     send: () => {},
-    serializeAttachment: () => {},
-    deserializeAttachment: () => null,
+    serializeAttachment: (value: unknown) => {
+      attachment = value
+    },
+    deserializeAttachment: () => attachment,
   }
   states.get(name)!.live.push(ws)
   await store.webSocketMessage(

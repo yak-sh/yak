@@ -64,6 +64,9 @@ export type Guard = Where & {
    * an `open` app, and wins over a declared one. The access rows ask `owner`
    * whatever either says. */
   floors?: Floors
+  /** Current standing vouched by the receiving boundary. Null is an
+   * authoritative absence; undefined asks the stored roster. */
+  level?: (who: Viewer) => Level | null | undefined
 }
 
 /** The principal a signed transaction acts as: every bundle in it was signed by
@@ -149,7 +152,10 @@ let adding = (
 export let wanting = (where: Guard) => (bundles: Bundle[]): Ask[] => {
   if (!bundles.length) return []
   let who = actorOf(bundles)
-  let eids = [where.app, ...bundles.map((b) => b.entity.eid)]
+  let level = where.level?.(who)
+  let eids = bundles.map((b) => b.entity.eid)
+  if (!writes(level ?? null)) eids.push(where.app)
+  if (level !== undefined) return [{ eids }]
   return who
     ? [{ eids: [...eids, who] }, { about: [who], comps: [GRANT, MEMBER] }]
     : [{ eids }]
@@ -170,22 +176,28 @@ export let guarding = (where: Guard): Hook => {
   return (bundles, tx) => {
     if (!bundles.length) return bundles
     let who = actorOf(bundles)
+    let vouched = where.level?.(who)
     return after(
-      modeOn(tx, where.app),
-      (m) =>
-        after(levelOn(tx, who, where.app, where), (level) => {
-          if (!edits(m, level)) throw new Denied(who, where.app, 'editor')
-          let comp = short(floors, who, level, bundles)
-          if (comp) {
-            throw new Denied(who, where.app, floors[comp], 'write', comp)
-          }
-          return after(
-            writes(level)
-              ? bundles
-              : adding(tx, who, where.app, bundles, writerOf(bundles).via),
-            (b) => pacing(paces, tx, b),
-          )
-        }),
+      vouched === undefined ? levelOn(tx, who, where.app, where) : vouched,
+      (level) =>
+        after(
+          writes(level) ? null : modeOn(tx, where.app),
+          (mode) => {
+            if (!writes(level) && !edits(mode!, level)) {
+              throw new Denied(who, where.app, 'editor')
+            }
+            let comp = short(floors, who, level, bundles)
+            if (comp) {
+              throw new Denied(who, where.app, floors[comp], 'write', comp)
+            }
+            return after(
+              writes(level)
+                ? bundles
+                : adding(tx, who, where.app, bundles, writerOf(bundles).via),
+              (b) => pacing(paces, tx, b),
+            )
+          },
+        ),
     ) as Bundle[] | Promise<Bundle[]>
   }
 }

@@ -10,16 +10,16 @@
 // proven where a clock can be held, in @yaks/api's relay_test.ts.
 import { assert, assertEquals } from '@std/assert'
 import type { Frame } from '@yaks/api'
-import type { Bundle } from '@yaks/graph'
+import type { Actor, Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { Store } from './graph.ts'
 import { test, until } from '@yaks/testing'
 
-let wire = () => {
+let wire = (actor: Actor | null = { by: ADA }) => {
   let sent: Frame[] = []
   let closed: number[] = []
-  let held: unknown = null
+  let held: unknown = { writer: { actor } }
   return {
     sent,
     closed,
@@ -91,22 +91,30 @@ let get = (store: Store, path: string) =>
   store.fetch(new Request(`http://store${path}`, { headers: headers() }))
 
 // A cookbook with one recipe in it, and two cooks watching it.
-let watching = async (ctx = state()) => {
+let watching = async (ctx = state(), access = 'private', schema = SCHEMA) => {
   let store = new Store(ctx)
-  assertEquals((await post(store, '/vocab', SCHEMA)).status, 200)
+  assertEquals((await post(store, '/vocab', schema)).status, 200)
+  assertEquals(
+    (await store.fetch(
+      new Request('http://store/vocab', {
+        headers: { ...headers(), 'x-yak-access': access },
+      }),
+    )).status,
+    200,
+  )
   await post(store, '/apply', [{
     entity: { eid: CAKE },
     doc: { title: 'Lemon drizzle' },
     recipe: { serves: 8 },
   }])
-  let watch = () => {
-    let ws = wire()
+  let watch = (actor: Actor | null = { by: ADA }, opening = false) => {
+    let ws = wire(actor)
     ctx.live.push(ws)
     store.webSocketMessage(
       ws,
       JSON.stringify({ subscribe: '.recipe', id: 'r' }),
     )
-    ws.sent.length = 0
+    if (!opening) ws.sent.length = 0
     return ws
   }
   return { ctx, store, watch }
@@ -277,4 +285,152 @@ test('a durable component sent to the relay door is not stored by it', async () 
   assertEquals(bert.sent, [])
   let [b] = await (await get(store, '/query?q=.recipe')).json() as Bundle[]
   assertEquals((b.recipe as { serves: number }).serves, 8)
+})
+
+test('an open-app visitor cannot take or clear another cook’s relayed value', async () => {
+  let { store, watch } = await watching(state(), 'open')
+  let ada = watch(), guest = watch({ via: 'guest-browser' }), bert = watch()
+  store.webSocketMessage(ada, JSON.stringify({ relay: says(CAKE, { x: 3 }) }))
+  await until(() => relay(bert).length)
+  bert.sent.length = 0
+  for (let comp of [{ x: 9 }, null]) {
+    let attacker = watch({ via: 'other-browser' })
+    store.webSocketMessage(
+      attacker,
+      JSON.stringify({ relay: says(CAKE, comp) }),
+    )
+    await until(() => attacker.sent.some((f) => f.refused))
+    assertEquals(attacker.sent.find((f) => f.refused)?.refused?.error, 'Denied')
+    assertEquals(relay(bert), [])
+    assertEquals(relay(watch({ by: ADA }, true)), says(CAKE, { x: 3 }))
+    store.webSocketClose(attacker)
+    assertEquals(relay(bert), [])
+  }
+  // The rightful sender still owns the lifetime after the refused takeover.
+  store.webSocketClose(ada)
+  await until(() => relay(bert).length)
+  assertEquals(relay(bert), says(CAKE, null))
+  assertEquals(guest.closed, [])
+})
+
+test('relay admission uses the vouched socket actor, ignoring a bundle’s claim', async () => {
+  let { store, watch } = await watching(state(), 'open')
+  let guest = watch({ via: 'guest-browser' }), bert = watch()
+  store.webSocketMessage(
+    guest,
+    JSON.stringify({
+      relay: [{ ...says(CAKE, { x: 9 })[0], $actor: { by: ADA } }],
+    }),
+  )
+  await until(() => guest.sent.some((f) => f.refused))
+  assertEquals(guest.sent.find((f) => f.refused)?.refused?.error, 'Denied')
+  assertEquals(relay(bert), [])
+  assertEquals(relay(watch({ by: ADA }, true)), [])
+})
+
+test('a malformed relay batch never leaves a held value for another subscriber', async () => {
+  let { store, watch } = await watching()
+  for (
+    let [bad, error] of [
+      [says(CAKE, { x: 'wrong type' }), 'Refused'],
+      [says(CAKE, { unknown: 3 }), 'Refused'],
+      [[{ presence: { x: 3 } }], 'Refused'],
+      [
+        [{ ...says(CAKE, { x: 3 })[0], $was: { recipe: { serves: 2 } } }],
+        'Stale',
+      ],
+    ]
+  ) {
+    let ada = watch(), bert = watch()
+    store.webSocketMessage(ada, JSON.stringify({ relay: bad }))
+    await until(() => ada.sent.some((f) => f.refused))
+    assertEquals(ada.sent.find((f) => f.refused)?.refused?.error, error)
+    assertEquals(relay(bert), [])
+    assertEquals(relay(watch({ by: ADA }, true)), [])
+    assertEquals((await store.door.graph.get([CAKE]))[0].presence, undefined)
+  }
+})
+
+test('a hibernated editor reconnects for current standing before relaying again', async () => {
+  let { ctx, store, watch } = await watching()
+  let EVE = 'd0000000-0000-4000-8000-000000000004'
+  let head = { ...headers(), 'x-yak-person': EVE, 'x-yak-role': 'editor' }
+  await store.door.authenticate(
+    new Request('http://store/ws', { headers: head }),
+  )
+  let eve = watch({ by: EVE }), bert = watch()
+  store.webSocketMessage(eve, JSON.stringify({ relay: says(CAKE, { x: 3 }) }))
+  await until(() => relay(bert).length)
+  assertEquals(await store.door.graph.get([EVE]), [])
+
+  let woken = new Store(ctx)
+  let late = wire()
+  ctx.live.push(late)
+  woken.webSocketMessage(
+    late,
+    JSON.stringify({ subscribe: '.recipe', id: 'r' }),
+  )
+  late.sent.length = 0
+  woken.webSocketMessage(eve, JSON.stringify({ relay: says(CAKE, { x: 4 }) }))
+  assertEquals(eve.closed, [1012])
+  assertEquals(relay(late), [])
+
+  // A replacement connection goes through the ordinary handshake's auth seam.
+  await woken.door.authenticate(
+    new Request('http://store/ws', { headers: head }),
+  )
+  let back = wire({ by: EVE })
+  ctx.live.push(back)
+  woken.webSocketMessage(
+    back,
+    JSON.stringify({ subscribe: '.recipe', id: 'r' }),
+  )
+  woken.webSocketMessage(back, JSON.stringify({ relay: says(CAKE, { x: 5 }) }))
+  await until(() =>
+    relay(late).some((b) => (b.presence as { x?: number })?.x == 5)
+  )
+  assertEquals(back.closed, [])
+  assertEquals(await woken.door.graph.get([EVE]), [])
+})
+
+test('an open-app guest can keep moving a new ephemeral entity without storing it', async () => {
+  let { ctx, store, watch } = await watching(state(), 'open')
+  let guest = watch({ via: 'guest-browser' }), observer = wire()
+  ctx.live.push(observer)
+  store.webSocketMessage(
+    observer,
+    JSON.stringify({ subscribe: '.presence', id: 'p' }),
+  )
+  let eid = 'e0000000-0000-4000-8000-000000000005'
+  for (let x of [1, 2]) {
+    store.webSocketMessage(guest, JSON.stringify({ relay: says(eid, { x }) }))
+    await until(() =>
+      relay(observer).some((b) => (b.presence as { x?: number })?.x == x)
+    )
+    assertEquals(guest.sent.filter((f) => f.refused), [])
+    assertEquals(await store.door.graph.get([eid]), [])
+  }
+})
+
+test('an app-local grant admits a relaying editor with no kernel role', async () => {
+  let { store, watch } = await watching()
+  let EVE = 'd0000000-0000-4000-8000-000000000004'
+  assertEquals(
+    (await post(store, '/apply', [{
+      entity: { eid: 'e0000000-0000-4000-8000-000000000005' },
+      grant: { app: APP, person: EVE, access: 'editor' },
+    }])).status,
+    200,
+  )
+  let head = headers()
+  head['x-yak-person'] = EVE
+  delete head['x-yak-role']
+  await store.door.authenticate(
+    new Request('http://store/ws', { headers: head }),
+  )
+  let eve = watch({ by: EVE }), observer = watch()
+  store.webSocketMessage(eve, JSON.stringify({ relay: says(CAKE, { x: 4 }) }))
+  await until(() => relay(observer).length)
+  assertEquals(relay(observer), says(CAKE, { x: 4 }))
+  assertEquals(eve.sent.filter((f) => f.refused), [])
 })

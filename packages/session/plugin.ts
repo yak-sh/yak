@@ -66,6 +66,7 @@ export let sessions = (opts: SessionOpts = {}): Plugin => {
     )
   return {
     name: '@yaks/session',
+    admission: () => true,
     vocab: [sessionDoc],
     hooks: { precondition, audit: auditing(opts) },
     // A session written under an alias with the harness's own id for it is

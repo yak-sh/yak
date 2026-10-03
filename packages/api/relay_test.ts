@@ -5,8 +5,11 @@
 // that only ever says "here it is" leaves a cursor on the screen forever.
 
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
-import type { Bundle, Graph } from '@yaks/graph'
+import { assert, assertEquals, assertThrows } from '@std/assert'
+import { type Bundle, type Graph, graph } from '@yaks/graph'
+import { admitSchema } from '@yaks/graph/schema'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
 import { shopGraph } from './testing.ts'
 import { api } from './route.ts'
 import { relay as relaying } from './relay.ts'
@@ -956,4 +959,127 @@ test('a durable reference edit orders after pending peer membership', async () =
   clock.tick(16)
   await clearing
   assertEquals(subs.snapshot('.browsing&*'), [])
+})
+
+for (let method of ['relay', 'enqueue'] as const) {
+  test(`${method} forwards the value checked after a write hook`, async () => {
+    let vocab = loadVocab([{
+      $defs: {
+        cursor: {
+          component: true,
+          sync: 'peers',
+          durable: 'connection',
+          properties: { x: { type: 'number', maximum: 100, validate: true } },
+        },
+      },
+    }])
+    let g = graph({ vocab, storage: ram(vocab) })
+    g.use({
+      name: 'clamp',
+      admission: () => true,
+      hooks: {
+        precondition: (rows) =>
+          rows.map((b) => ({
+            ...b,
+            cursor: { x: Math.min(100, (b.cursor as { x: number }).x) },
+          })),
+      },
+    })
+    g.use(admitSchema(vocab))
+    let clock = stopped(), writer = ear(), watcher = ear()
+    let subs = subscriptions(g, { timer: clock.timer })
+    let send = subs[method]
+    assert(send)
+    subs.open(watcher.to, 'watch', '.cursor&*')
+    watcher.take()
+    let done = send(writer.to, [{
+      entity: { eid: 'cursor' },
+      cursor: { x: 200 },
+    }])
+    clock.tick(16)
+    await done
+    assertEquals(relayed(watcher.take()), [{
+      entity: { eid: 'cursor' },
+      cursor: { x: 100 },
+    }])
+    assertEquals(g.get(['cursor']), [])
+    await subs.drop(writer.to)
+  })
+
+  test(`${method} refuses unsaved input before changing its held value`, async () => {
+    let g = shop(), clock = stopped(), watcher = ear(), writer = ear()
+    g.apply([{ entity: { eid: 'b1' }, book: { price: 10 } }])
+    let identities: unknown[] = []
+    g.use({
+      name: 'authenticated',
+      requests: ['$speaks'],
+      admission: () => true,
+      hooks: {
+        precondition: (rows) => {
+          identities.push(rows[0].$actor)
+          if (rows.some((b) => b.$actor?.by != 'Ada')) throw new Error('denied')
+          return rows
+        },
+      },
+    })
+    let subs = subscriptions(g, { timer: clock.timer })
+    let send = subs[method]
+    assert(send)
+    subs.open(watcher.to, 'all', '.book&*')
+    watcher.take()
+    let write = (row: Bundle, by = 'Ada') =>
+      send(writer.to, [row], {
+        actor: { by, via: 'tab' },
+        speaks: { garden: 1 },
+      })
+    let row = { entity: { eid: 'b1' }, browsing: { x: 1 } }
+    let first = write({ ...row, $actor: { by: 'thief' } })
+    clock.tick(16)
+    await first
+    assertEquals(identities[0], { by: 'Ada', via: 'tab' })
+    assertEquals(subs.relaying(writer.to), ['b1 browsing'])
+    watcher.take()
+    for (
+      let b of [
+        { ...row, browsing: { x: 9 } },
+        { ...row, browsing: null },
+      ]
+    ) assertThrows(() => write(b, 'Bea'), Error, 'denied')
+    assertThrows(() => write({ ...row, $was: { book: { price: null } } }))
+    assertThrows(() => write({ ...row, $mystery: true }))
+    assertThrows(() => write({ ...row, browsing: { x: 'bad' } }))
+    assertEquals(watcher.take(), [])
+    let late = ear()
+    subs.open(late.to, 'late', '.book&*')
+    assertEquals(relayed(late.take()), [row])
+    await subs.drop(writer.to)
+  })
+}
+
+test('unsaved partial peer patches check the complete held value without storing it', () => {
+  let vocab = loadVocab([{
+    $defs: {
+      cursor: {
+        component: true,
+        sync: 'peers',
+        durable: 'connection',
+        required: ['x', 'y'],
+        properties: {
+          x: { type: 'number', minimum: 0, validate: true },
+          y: { type: 'number' },
+        },
+      },
+    },
+  }])
+  let g = graph({ vocab, storage: ram(vocab), plugins: [admitSchema(vocab)] })
+  let subs = subscriptions(g), writer = ear()
+  let row = { entity: { eid: 'cursor' }, cursor: { x: 1, y: 2 } }
+  subs.relay(writer.to, [row])
+  subs.relay(writer.to, [{ ...row, cursor: { x: 3 } }])
+  assertThrows(() => subs.relay(writer.to, [{ ...row, cursor: { x: -1 } }]))
+  assertEquals(g.get(['cursor']), [])
+  let late = ear()
+  subs.open(late.to, 'late', '.cursor&*')
+  assertEquals(relayed(late.take()), [{ ...row, cursor: { x: 3, y: 2 } }])
+  subs.drop(writer.to)
 })

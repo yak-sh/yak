@@ -21,15 +21,15 @@
 // does. From there on, every credential is a vouch, which is what this file
 // starts from.
 import { test } from '@yaks/testing'
+import { after } from '@yaks/fp'
 import { assert, assertEquals } from '@std/assert'
 import type { Handler } from '@yaks/api'
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, Refused, signed } from '@yaks/graph'
 import { mcp } from '@yaks/mcp'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { seal } from './lib/token.ts'
 import { GRANT, granted, granting } from './dispatch.ts'
-import { Store } from './graph.ts'
-import { vouchOf } from './graph.ts'
+import { grantEid, Store, vouchOf } from './graph.ts'
 import type { Who } from './session.ts'
 import { vouched } from './session.ts'
 import { storeOf } from './door.ts'
@@ -389,4 +389,157 @@ test('the agent door refuses what the page door refuses', async () => {
   )
   assertEquals(out.status, 401)
   assertEquals((await out.json()).error, 'Unauthorized')
+})
+
+test('admission learns current standing without keeping a person or grant', async () => {
+  let { store, head } = await cookbook()
+  let actor = await store.door.authenticate(
+    new Request('http://store/ws', { headers: head }),
+  )
+  let patch = [{ entity: { eid: CAKE }, doc: { title: 'Checked cake' } }]
+  let checked = await store.door.graph.admit(signed(patch, actor))
+  assertEquals(checked.find((b) => b.entity.eid == CAKE)?.doc, patch[0].doc)
+  assertEquals(await store.door.graph.get([CAKE, ADA]), [])
+  assertEquals(await (await get(store, '/query?q=.grant', head)).json(), [])
+  // The rehearsal must not leave the vouch cache believing it kept these rows.
+  assertEquals((await post(store, '/apply', patch, head)).status, 200)
+  assertEquals((await store.door.graph.get([ADA]))[0].person, {})
+  assertEquals(
+    (await (await get(store, '/query?q=.grant', head)).json()).length,
+    1,
+  )
+})
+
+test(
+  'a revoked kernel standing cannot regain its stored grant through a write',
+  async () => {
+    let { store, head } = await cookbook('public')
+    assertEquals(
+      (await post(store, '/apply', [{
+        entity: { eid: CAKE },
+        doc: { title: 'Before revocation' },
+      }], head)).status,
+      200,
+    )
+    let revoked = vouch({ person: ADA, role: null }, 'public')
+    let out = await post(store, '/apply', [{
+      entity: { eid: CAKE },
+      doc: { title: 'After revocation' },
+    }], revoked)
+    assertEquals(out.status, 403)
+    let cake = (await store.door.graph.get([CAKE]))[0]
+    assertEquals((cake.doc as { title: string }).title, 'Before revocation')
+    assertEquals(
+      (await (await get(store, '/query?q=.grant', head)).json())[0].grant
+        .access,
+      'owner',
+    )
+  },
+  { tags: ['revoked-standing'] },
+)
+
+test(
+  'admission mirrors new vouch rows for rules in both temporary and fallback transactions',
+  async () => {
+    for (let query of [false, true]) {
+      let { store } = await cookbook('private')
+      let head = vouch({ person: MALLORY, role: 'editor' }, 'private')
+      let actor = await store.door.authenticate(
+        new Request('http://store/ws', { headers: head }),
+      )
+      let grant = grantEid(APP, MALLORY)
+      let graph = store.door.graph
+      graph.use({
+        name: 'fixture/vouched-rule',
+        admission: () => true,
+        hooks: {
+          rules: (bundles, tx) =>
+            after(
+              query
+                ? after(tx.read('.person'), (people) =>
+                  after(tx.read('.grant'), (grants) => [...people, ...grants]))
+                : tx.get([MALLORY, grant]),
+              (rows) => {
+                let person = rows.find((b) =>
+                  b.entity.eid == MALLORY
+                )
+                let standing = rows.find((b) => b.entity.eid == grant)
+                if (
+                  !person?.person ||
+                  (standing?.grant as { access?: string })?.access != 'editor'
+                ) {
+                  throw new Refused(
+                    'the rule requires the writer’s mirrored person and grant',
+                  )
+                }
+                return bundles
+              },
+            ),
+        },
+      })
+      let patch = [{ entity: { eid: CAKE }, doc: { title: 'Vouched cake' } }]
+      await graph.admit(signed(patch, actor))
+      assertEquals(await graph.get([MALLORY, grant, CAKE]), [])
+      assertEquals(
+        (await post(store, '/apply?check=1', patch, head)).status,
+        200,
+      )
+      assertEquals(await graph.get([MALLORY, grant, CAKE]), [])
+      assertEquals((await post(store, '/apply', patch, head)).status, 200)
+      assertEquals((await graph.get([MALLORY]))[0].person, {})
+      assertEquals(
+        ((await graph.get([grant]))[0].grant as { access: string }).access,
+        'editor',
+      )
+    }
+  },
+  { tags: ['vouch-parity'] },
+)
+
+test('an app-local editor grant still admits a writer with no kernel role', async () => {
+  let { store, head } = await cookbook('private')
+  let local = 'e0000000-0000-4000-8000-000000000005'
+  assertEquals(
+    (await post(store, '/apply', [{
+      entity: { eid: CAKE },
+      doc: { title: 'Owner’s cake' },
+    }, {
+      entity: { eid: local },
+      grant: { app: APP, person: MALLORY, access: 'editor' },
+    }], head)).status,
+    200,
+  )
+  let editor = vouch({ person: MALLORY, role: null }, 'private')
+  assertEquals((await get(store, '/query?q=.doc', editor)).status, 200)
+  assertEquals(
+    (await post(store, '/apply', [{
+      entity: { eid: CAKE },
+      doc: { title: 'Edited cake' },
+    }], editor)).status,
+    200,
+  )
+  assertEquals(
+    ((await store.door.graph.get([CAKE]))[0].doc as { title: string }).title,
+    'Edited cake',
+  )
+})
+
+test('a revoked kernel mirror cannot grant a private read or write', async () => {
+  let { store, head } = await cookbook('private')
+  assertEquals(
+    (await post(store, '/apply', [{
+      entity: { eid: CAKE },
+      doc: { title: 'Private cake' },
+    }], head)).status,
+    200,
+  )
+  let revoked = vouch({ person: ADA, role: null }, 'private')
+  assertEquals((await get(store, '/query?q=.doc', revoked)).status, 403)
+  assertEquals(
+    (await post(store, '/apply', [{
+      entity: { eid: CAKE },
+      doc: { title: 'Revoked edit' },
+    }], revoked)).status,
+    403,
+  )
 })

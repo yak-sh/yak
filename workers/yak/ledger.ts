@@ -31,7 +31,7 @@
 // door. The platform diagnostic fields on `exception` remain intact.
 
 import {
-  type ApplyOpts,
+  type AdmitOpts,
   type Bundle,
   comps,
   type Graph,
@@ -112,6 +112,18 @@ let mine = (b: Bundle): boolean => {
  */
 export let ledger = (host: Graph): Graph => {
   let self = graph({ vocab: VOCAB, storage: ram(VOCAB) })
+  let passing = async (
+    method: 'apply' | 'admit',
+    bundles: Bundle[],
+    opts?: AdmitOpts,
+  ) => {
+    let batch = (Array.isArray(bundles) ? bundles : [bundles]) as Bundle[]
+    let here = batch.filter(mine)
+    let there = batch.filter((b) => !mine(b))
+    let sent = there.length ? await host[method](there, opts) : []
+    let kept = here.length ? await self[method](here, opts) : []
+    return [...sent, ...kept]
+  }
   let door: Graph = {
     ...self,
     use: (plugin) => (self.use(plugin), door),
@@ -123,14 +135,8 @@ export let ledger = (host: Graph): Graph => {
     // record the refusal as this call's failure. The other way round, a
     // refusal was already a success by the time it was raised. A check is a
     // check on both sides: dropped, it would keep what it was only checking.
-    apply: async (bundles: Bundle[], opts?: ApplyOpts) => {
-      let batch = (Array.isArray(bundles) ? bundles : [bundles]) as Bundle[]
-      let here = batch.filter(mine)
-      let there = batch.filter((b) => !mine(b))
-      let sent = there.length ? await host.apply(there, opts) : []
-      let kept = here.length ? await self.apply(here, opts) : []
-      return [...sent, ...kept]
-    },
+    apply: (bundles, opts) => passing('apply', bundles, opts),
+    admit: (bundles, opts) => passing('admit', bundles, opts),
   }
   return door
 }

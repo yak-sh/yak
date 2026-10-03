@@ -41,23 +41,25 @@ export type AuditOpts = {
  *
  * Registered by {@link https://jsr.io/@yaks/session/doc/~/sessions | sessions}.
  */
-export let auditing = (opts: AuditOpts = {}): Hook => (bundles, tx, err) => {
-  if (!(err instanceof Bounced)) return bundles
-  let now = opts.now ?? (() => new Date().toISOString())
-  let mint = opts.mint ?? (() => crypto.randomUUID() as Eid)
-  return after(tx.get([err.loser, err.holder]), (found) => {
-    let live = new Set(
-      found.filter((b) => b[TOMBSTONE] == null).map((b) => b.entity.eid),
-    )
-    let record: Bundle = {
-      entity: { eid: mint() },
-      [CONFLICT]: {
-        target: err.on,
-        loser: live.has(err.loser) ? err.loser : null,
-        holder: live.has(err.holder) ? err.holder : null,
-        at: now(),
-      },
-    }
-    return after(tx.patch([record]), () => bundles)
-  })
-}
+export let auditing =
+  (opts: AuditOpts = {}): Hook => (bundles, tx, err, ctx) => {
+    if (ctx?.admission) return bundles
+    if (!(err instanceof Bounced)) return bundles
+    let now = opts.now ?? (() => new Date().toISOString())
+    let mint = opts.mint ?? (() => crypto.randomUUID() as Eid)
+    return after(tx.get([err.loser, err.holder]), (found) => {
+      let live = new Set(
+        found.filter((b) => b[TOMBSTONE] == null).map((b) => b.entity.eid),
+      )
+      let record: Bundle = {
+        entity: { eid: mint() },
+        [CONFLICT]: {
+          target: err.on,
+          loser: live.has(err.loser) ? err.loser : null,
+          holder: live.has(err.holder) ? err.holder : null,
+          at: now(),
+        },
+      }
+      return after(tx.patch([record]), () => bundles)
+    })
+  }

@@ -166,6 +166,7 @@ import {
 import { after } from '@yaks/fp'
 import {
   type Actor,
+  type AdmitOpts,
   type ApplyOpts,
   type Bundle,
   type Comp,
@@ -1019,6 +1020,9 @@ export class Store {
         // per space hit the runtime's depth limit (T-34844).
         {
           name: 'yak/rules',
+          // The only skipped rule is the trash's stamp: it adds a valid
+          // clock and byline and cannot refuse. The rules phase still runs.
+          admission: () => true,
           rules: rulesOf(PLUGINS),
           resources: {
             Env: () => meta ? { ...this.#bind, META: this.#meta } : undefined,
@@ -1125,13 +1129,18 @@ export class Store {
       this.#naming(subs, spared),
       ctx,
       (error) => defect(error, { request: 'socket restore', store: name }),
+      {
+        // After a wake only a fresh handshake can supply current standing.
+        // Guest instruments have no standing to lose.
+        writer: ({ actor }) => !actor?.by || this.#vouched.has(actor.by),
+      },
     )
     // The one `Authenticate` (T-33813). The app is read at request time — the
     // object may learn which app it holds from the request being answered —
     // and the mode with it, so a store told its access changed follows the
     // new word without a reboot.
     this.#auth = authenticating(
-      policy(g.storage),
+      policy(g.storage, { ignore: this.#staleGrant }),
       () => this.#get('app'),
       (v) => void (v.person && this.#vouched.set(v.person, v)),
     )
@@ -1425,6 +1434,23 @@ export class Store {
     },
   }
 
+  #staleGrant = (row: Bundle): boolean => {
+    let grant = row.grant as Comp | null | undefined
+    let app = grant?.app, person = grant?.person
+    return typeof app == 'string' && typeof person == 'string' &&
+      row.entity.eid == grantEid(app, person) &&
+      this.#vouched.get(person)?.level === null
+  }
+
+  #untold(bundles: Bundle[]) {
+    let who = actorOf(bundles)
+    let v = who ? this.#vouched.get(who) : null
+    if (!who || !v) return null
+    let app = this.#get('app')
+    let said = `${app ?? ''} ${v.level ?? ''} ${v.title ?? ''}`
+    return this.#told.get(who) == said ? null : { who, v, app, said }
+  }
+
   /**
    * Who this store knows, from what the kernel vouched: the person as an
    * entity of its own (so a byline resolves to somebody), the name to call
@@ -1447,21 +1473,21 @@ export class Store {
     // them here puts them in the batch's own gather, so the store learns their
     // identities in the read every batch already takes rather than in one of
     // its own (T-34032).
+    admission: () => true,
     wants: (bundles) => {
-      let who = actorOf(bundles)
-      if (!who) return []
-      let app = this.#get('app')
+      let vouch = this.#untold(bundles)
+      if (!vouch) return []
+      let { who, app } = vouch
       return [{ eids: app ? [who, app, grantEid(app, who)] : [who] }]
     },
     hooks: {
-      precondition: (bundles, tx) => {
-        let who = actorOf(bundles)
-        let v = who ? this.#vouched.get(who) : null
-        if (!who || !v) return bundles
-        let app = this.#get('app')
-        let said = `${app ?? ''} ${v.level ?? ''} ${v.title ?? ''}`
-        if (this.#told.get(who) == said) return bundles
-        this.#told.set(who, said)
+      precondition: (bundles, tx, _err, context) => {
+        let vouch = this.#untold(bundles)
+        if (!vouch) return bundles
+        let { who, v, app, said } = vouch
+        if (!context?.admission) this.#told.set(who, said)
+        // Admission mirrors the same rows in its temporary transaction so
+        // rules see exactly what an ordinary write sees, without retaining it.
         // The app writing as itself (dispatch.ts `owning`, `env.APP`) is the
         // one actor that is not a person: it is already a row here, carrying
         // this store's `access`, and calling it a person would put the app in
@@ -1487,7 +1513,8 @@ export class Store {
       // stores). Either way what this object believes it has written down goes
       // too, or the next batch by that person would skip a row that is not
       // there.
-      audit: (bundles) => {
+      audit: (bundles, _tx, _err, context) => {
+        if (context?.admission) return bundles
         let who = actorOf(bundles)
         if (who) this.#told.delete(who)
         return bundles
@@ -1553,14 +1580,23 @@ export class Store {
    * which of this platform's words ask a level of their own (`FLOORS`).
    */
   #guarding(app: string, vocab: Vocab, manifest: VocabDoc): Plugin {
-    let plugin = members({ app, vocab, floors: floorsOf(manifest) })
+    let plugin = members({
+      app,
+      vocab,
+      floors: floorsOf(manifest),
+      level: (who) =>
+        who ? this.#vouched.get(who)?.level ?? undefined : undefined,
+      ignore: this.#staleGrant,
+    })
     let guard = plugin.hooks?.precondition
     return {
       ...plugin,
       hooks: {
         ...plugin.hooks,
-        precondition: (bundles, tx) =>
-          this.#kernelling || !guard ? bundles : guard(bundles, tx),
+        precondition: (bundles, tx, err, context) =>
+          this.#kernelling || !guard
+            ? bundles
+            : guard(bundles, tx, err, context),
       },
     }
   }
@@ -1578,14 +1614,23 @@ export class Store {
   // wrote it; the claim and the result beside it are the server's own
   // bookkeeping, and a tool's answer is the caller's own write, already signed
   // as them.
-  #asIs(bundles: Bundle[], opts: ApplyOpts = {}) {
+  #asIs(bundles: Bundle[], opts: AdmitOpts = {}, admission = false) {
     this.#kernelling = true
     try {
-      return this.#graph.apply(bundles, { ...opts, trusted: true })
+      return this.#graph[admission ? 'admit' : 'apply'](bundles, {
+        ...opts,
+        trusted: true,
+      })
     } finally {
       this.#kernelling = false
     }
   }
+
+  #kernelGraph = (g: Graph): Graph => ({
+    ...g,
+    apply: (bundles, opts) => this.#asIs(bundles, opts),
+    admit: (bundles, opts) => this.#asIs(bundles, opts, true),
+  })
 
   // What a plugin may know about this store (plugin.ts `Stored`), over the
   // graph it is built with. Its kernel door is `#asIs`, as the runner's is,
@@ -1596,7 +1641,7 @@ export class Store {
     meta: this.#get('name') == PLATFORM_STORE,
     app: this.#get('app'),
     mail: () => this.#get('mail'),
-    graph: { ...g, apply: (bundles, opts) => this.#asIs(bundles, opts) },
+    graph: this.#kernelGraph(g),
     as: async (who, bundles, via) =>
       await this.#graph.apply(
         signed(bundles, {
@@ -1628,7 +1673,7 @@ export class Store {
       this.#runs = {
         said,
         run: runner(
-          { ...g, apply: (bundles, opts) => this.#asIs(bundles, opts) },
+          this.#kernelGraph(g),
           {
             host: g,
             tools: [
@@ -2622,6 +2667,8 @@ export class Store {
   // one applied after an await — finds `#landing` empty.
   #logging: Plugin = {
     name: 'yak/writes',
+    // Logging follows a successful write and adds no admission refusal.
+    admission: () => true,
     hooks: {
       commit: (bundles) => {
         if (this.#landing != null) {
@@ -2658,10 +2705,7 @@ export class Store {
         }, 400)
       }
       // #asIs supplies trust and preserves the graph's journal and observers.
-      let g = {
-        ...this.#graph,
-        apply: (b: Bundle[], o?: ApplyOpts) => this.#asIs(b, o),
-      }
+      let g = this.#kernelGraph(this.#graph)
       return Response.json(await attributed(g, via, by))
     }
     if (path == '/released') {

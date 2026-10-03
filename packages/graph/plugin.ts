@@ -106,9 +106,16 @@ export let INSIDE: Phase[] = [
  * is its own unit of work. The `audit` phase, and only it, also passes the
  * error that rolled the transaction back.
  */
-/** Present only while this graph is observed. The third hook argument remains
- * the audit error; adding context must not change existing hook semantics. */
-export type HookContext = { graph: object; parent?: string }
+/** The hook's graph and operation; the third argument remains the audit error.
+ * An observed operation also carries its current activity parent. */
+export type HookContext = {
+  graph: object
+  parent?: string
+  /** Checking a value without retaining it; ordinary writes and dry runs are
+   * false. A host may supply the same authoritative standing without writing
+   * its bookkeeping rows in this case. */
+  admission?: boolean
+}
 
 export type Hook = (
   bundles: Bundle[],
@@ -239,6 +246,14 @@ export type ReadContext = { opts: ReadOpts; tx: Tx }
  * family gets privileged access; it is all plugins.
  */
 export type Plugin = {
+  /** Certify that this batch's admission can run without lasting state. Its
+   * hooks, rules and tracker through stamping must have no external side
+   * effects; journal and commit work must add no admission refusal.
+   * Ordered checks may read preceding patches through `tx.get`; a query that
+   * needs those temporary writes falls back to an ordinary dry run. Without
+   * certification, a plugin with work beyond normalization, admission or
+   * minting keeps the ordinary `apply(check)` path. */
+  admission?: (bundles: Bundle[]) => boolean
   /** Whether this caller needs the read hooks; false keeps the ordinary read path. */
   reads?: (opts: ReadOpts) => boolean
   /** Rewrite a parsed query after core addressing and before storage. */
@@ -294,7 +309,7 @@ export type Plugin = {
    * `about()` are answered from memory instead of costing a round trip each.
    * Declaring nothing is safe — the reads still work, they just cost what they
    * used to. */
-  wants?: (bundles: Bundle[]) => Ask[]
+  wants?: (bundles: Bundle[], context?: HookContext) => Ask[]
   /** the tools it contributes to a transport that serves them */
   tools?: Tool[]
   /** which of its components are content-addressed, and how each derives its

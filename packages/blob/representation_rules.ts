@@ -7,6 +7,7 @@ import { type Representation, represents } from './representation.ts'
 
 export let representations = (): Plugin => ({
   name: 'representations',
+  admission: () => true,
   hooks: {
     precondition: (bundles, tx) => {
       let touched = bundles.filter((b) =>

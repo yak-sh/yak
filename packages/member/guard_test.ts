@@ -1,8 +1,11 @@
 // The write side: what actually lands, through a guarded `apply()`.
 
-import { test } from '@yaks/testing'
+import { equal, test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Actor, Bundle, Comp, Storage } from '@yaks/graph'
+import { graph } from '@yaks/graph'
+import { members } from './plugin.ts'
+import { club } from './testing.ts'
 import { isPromise } from '@yaks/fp'
 import { Denied } from './deny.ts'
 import { Paced } from './pace.ts'
@@ -363,4 +366,32 @@ test('a paced refusal rolls back all values and clocks in its batch', () => {
   )
   assertEquals((s.read('.line') as Bundle[]).length, 1)
   as(s, actor, line('l2'))
+})
+
+test('vouched standing governs both writes and admission without reviving old grants', () => {
+  let s = store()
+  let level: 'editor' | null | undefined = 'editor'
+  let g = graph({
+    storage: s,
+    vocab: club,
+    plugins: [members({
+      app: ids.notes,
+      space: ids.club,
+      vocab: club,
+      level: () => level,
+    })],
+  })
+  let b = {
+    entity: { eid: 'vouched' },
+    pick: { title: 'Piranesi' },
+    $actor: { by: ids.kim },
+  }
+  equal(sync(g.admit([b]))[0].pick, b.pick)
+  equal(s.get(['vouched']), [])
+  g.apply([b])
+  grant(s, 'stale', { app: ids.notes, person: ids.kim, access: 'owner' })
+  level = null
+  for (let write of [g.admit, g.apply]) denied(() => write([b]))
+  level = undefined
+  g.admit([b])
 })

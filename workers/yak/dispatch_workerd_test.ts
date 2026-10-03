@@ -4,7 +4,8 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { SHIM } from './dispatch.ts'
+import { GRANT, granting, SHIM } from './dispatch.ts'
+import { handle } from './directory.ts'
 import { connector, script, seed, workerd } from './probe.ts'
 
 let fixture = (name: string) =>
@@ -41,7 +42,7 @@ test('workerd links the shim, the app, and its wasm', async () => {
 test("workerd serves a file to a visitor and to its app's worker", async () => {
   let k = workerd()
   let space = 'filebindprobe'
-  let { cookie } = await seed(k, [{ slug: space, apps: ['assets'] }])
+  let { cookie, eids } = await seed(k, [{ slug: space, apps: ['assets'] }])
   let agent = connector(k, cookie)
   await agent.tool('app_files', {
     space,
@@ -65,12 +66,19 @@ test("workerd serves a file to a visitor and to its app's worker", async () => {
         fetch(req, env, ctx) {
           return app.fetch(new Request(
             'https://${space}.yaks.app/assets/read',
-            { headers: { 'x-yak-app': 'assets' } },
+            { headers: { ...Object.fromEntries(req.headers), 'x-yak-app': 'assets' } },
           ), env, ctx)
         }
       }`,
   }, 'probe.js')
-  let nested = await app.at('/read')
+  // Dispatch supplies a signed visitor grant, including for a signed-out
+  // visitor. The standalone script enters the shim through that same door.
+  let grant = await granting(
+    k.secret,
+    handle({ slug: space }, 'assets', eids[`${space}/assets`]),
+    { person: null, role: null },
+  )
+  let nested = await app.at('/read', { headers: { [GRANT]: grant } })
   assertEquals(nested.status, 200)
   assertEquals((await nested.text()).includes('a cached page'), true)
 })

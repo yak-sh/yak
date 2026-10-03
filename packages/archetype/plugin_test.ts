@@ -1,9 +1,135 @@
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
-import { graph, type Storage, type Tx } from '@yaks/graph'
+import { assertEquals, assertThrows } from '@std/assert'
+import { type Bundle, graph, Refused, type Storage, type Tx } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { archetypeDoc, archetypes, eidOf } from './mod.ts'
+
+let fixture = (stamped = false) => {
+  let vocab = loadVocab([archetypeDoc, {
+    $defs: {
+      note: {
+        component: true,
+        type: 'object',
+        properties: { text: { type: 'string' } },
+      },
+      ...(stamped
+        ? {
+          created: {
+            component: true,
+            type: 'object',
+            properties: { at: { type: 'string', stamped: true } },
+          },
+        }
+        : {}),
+    },
+  }])
+  let storage = ram(vocab)
+  let writes = 0
+  let g = graph({
+    vocab,
+    storage: {
+      ...storage,
+      tx: (body) =>
+        storage.tx((tx) =>
+          body({
+            ...tx,
+            patch: (bundles) => {
+              writes++
+              return tx.patch(bundles)
+            },
+          })
+        ),
+    },
+    plugins: [archetypes()],
+  })
+  return { g, storage, writes: () => writes }
+}
+
+test('archetype admission checks creation and edits without storage writes', () => {
+  let { g, writes } = fixture()
+  g.admit([{ entity: { eid: 'a' }, note: { text: 'new' } }])
+  assertEquals(g.get(['a', eidOf(['note'])]), [])
+  assertEquals(writes(), 0)
+  g.apply([{ entity: { eid: 'a' }, note: { text: 'kept' } }])
+  let before = writes()
+  g.admit([{ entity: { eid: 'a' }, note: { text: 'heard' } }])
+  assertEquals((g.get(['a']) as Bundle[])[0].note, { text: 'kept' })
+  assertEquals(writes(), before)
+})
+
+test('a cached table set cannot hide an invalid stored archetype', () => {
+  let { g, storage } = fixture()
+  g.apply([{ entity: { eid: 'a' }, note: { text: 'kept' } }])
+  storage.tx((tx) =>
+    tx.patch([{
+      entity: { eid: eidOf(['note']) },
+      archetype: { tables: '[]' },
+    }])
+  )
+  let patch = [{ entity: { eid: 'a' }, note: { text: 'refused' } }]
+  assertThrows(
+    () => g.admit(patch),
+    Refused,
+    'Invalid stored archetype identity',
+  )
+  assertThrows(
+    () => g.apply(patch, { check: true }),
+    Refused,
+    'Invalid stored archetype identity',
+  )
+  assertEquals((g.get(['a']) as Bundle[])[0].note, { text: 'kept' })
+})
+
+test('archetype admission preserves missing-descriptor and occupied-id refusals', () => {
+  let { g, storage, writes } = fixture()
+  storage.tx((tx) =>
+    tx.patch([{
+      entity: { eid: 'empty', archetype: eidOf([]) },
+    }])
+  )
+  assertThrows(
+    () => g.admit([{ entity: { eid: 'empty' }, note: {} }]),
+    Refused,
+    'Missing archetype',
+  )
+  storage.tx((tx) =>
+    tx.patch([{
+      entity: { eid: eidOf(['note']) },
+      note: { text: 'occupied' },
+    }])
+  )
+  assertThrows(
+    () => g.admit([{ entity: { eid: 'new' }, note: {} }]),
+    Refused,
+    'Archetype identity is occupied',
+  )
+  assertEquals(g.get(['new']), [])
+  assertEquals(writes(), 0)
+})
+
+test('archetype admission checks the descriptor needed after provenance stamps', () => {
+  let { g, storage, writes } = fixture(true)
+  storage.tx((tx) =>
+    tx.patch([{
+      entity: { eid: eidOf(['note', 'created']) },
+      note: { text: 'occupied' },
+    }])
+  )
+  let patch = [{ entity: { eid: 'new' }, note: {} }]
+  assertThrows(
+    () => g.admit(patch),
+    Refused,
+    'Archetype identity is occupied',
+  )
+  assertEquals(g.get(['new']), [])
+  assertEquals(writes(), 0)
+  assertThrows(
+    () => g.apply(patch, { check: true }),
+    Refused,
+    'Archetype identity is occupied',
+  )
+})
 
 for (let async of [false, true]) {
   test(`archetype: RAM plugin, async=${async}, transaction rollback`, async () => {

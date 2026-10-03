@@ -1065,6 +1065,62 @@ named errors to HTTP status codes (`Stale` is 409; an unlisted error is 500).
 numeric constraints. Register it after any other `beforeWrite` plugins that
 could rewrite checked values.
 
+`graph.admit(bundles, opts)` checks a value through the ordinary write pipeline
+without retaining it. It normalizes and addresses the submitted patches, checks
+requests, `$was`, permission hooks, rules, and complete proposed values through
+`beforeWrite`. It returns the checked patches composed by entity, including rule
+outputs, rewrites and stamps. A host forwards values from this result, so its
+peers receive what the pipeline checked. Effects do not run.
+
+The optional `overlay` contains canonical peer values the host already admitted.
+Partial patches are checked against those complete values. On a stored entity,
+precondition hooks see its held peer values alongside committed ownership;
+`$was` checks the committed values before the overlay. An overlay does not make
+an unstored entity exist for permission checks.
+
+```ts
+import { graph } from '@yaks/graph'
+import { admitSchema } from '@yaks/graph/schema'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+const vocab = loadVocab({
+  $defs: {
+    point: {
+      component: true,
+      sync: 'peers',
+      type: 'object',
+      required: ['x', 'y'],
+      properties: {
+        x: { type: 'number', minimum: 0, validate: true },
+        y: { type: 'number', validate: true },
+      },
+    },
+  },
+})
+const g = graph({ storage: ram(vocab), vocab, plugins: [admitSchema(vocab)] })
+const patch = { entity: { eid: 'p1' }, point: { x: 2 } }
+equal(
+  await g.admit([patch], {
+    overlay: [{ entity: { eid: 'p1' }, point: { x: 1, y: 3 } }],
+  }),
+  [{ entity: { eid: 'p1' }, point: { x: 2, y: 3 } }],
+)
+equal(await g.get(['p1']), [])
+```
+
+A plugin's `admission(bundles)` certifies that its hooks, rules and tracker
+through stamping can run against temporary rows without lasting state or
+external side effects, and that its journal and commit work add no refusal.
+Admission runs those same checks against a temporary transaction whose `get`
+sees preceding patches. Plugins with mutation-dependent checks that need the
+adapter's queries, and plugins without the relevant certification, use the
+adapter's ordinary dry run instead. Every hook receives
+`context.admission: true` on both paths, including audit hooks, so admission
+bookkeeping can stay temporary. Ordinary writes and `apply({check: true})`
+receive `false`.
+
 ```ts
 import { graph, Refused, status } from '@yaks/graph'
 import { admitSchema } from '@yaks/graph/schema'

@@ -873,6 +873,10 @@ test('a Store live query sees only connected peer positions', async () => {
     recipe: { serves: 8 },
   }], owner)
   let ws = wire()
+  let actor = await store.door.authenticate(
+    new Request('http://store/ws', { headers: headers(owner) }),
+  )
+  ws.serializeAttachment({ writer: { actor } })
   ctx.live.push(ws)
   let path = `/query?live=1&q=${
     encodeURIComponent(`.entity.eid=${CAKE}&.position`)

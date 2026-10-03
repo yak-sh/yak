@@ -666,6 +666,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
 
   let fx: Effects = {
     name: opts.name ?? '@yaks/effects',
+    admission: () => true,
     // The generation counter an effect's own write carries (write.ts `ORIGIN`)
     // comes back in through `apply()` like any other request, so this plugin
     // declares it.

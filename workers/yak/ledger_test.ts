@@ -81,3 +81,19 @@ test('checking a refusal does not keep its invocation', async () => {
   assertEquals(await host.get(['checked']), [])
   assertEquals(await door.get(['checked']), [])
 })
+
+test('admission checks both the caller’s data and its invocation without keeping either', async () => {
+  let host = app(), door = ledger(host)
+  let batch = [{ entity: { eid: 'data' }, doc: { title: 'Checked data' } }, {
+    entity: { eid: 'invocation' },
+    refusal: { code: 'invalid' },
+  }]
+  let admitted = await door.admit(batch)
+  assertEquals(admitted.find((b) => b.entity.eid == 'data')?.doc, batch[0].doc)
+  assertEquals(
+    admitted.find((b) => b.entity.eid == 'invocation')?.refusal,
+    batch[1].refusal,
+  )
+  assertEquals(await host.get(['data']), [])
+  assertEquals(await door.get(['invocation']), [])
+})

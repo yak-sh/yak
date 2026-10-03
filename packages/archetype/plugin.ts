@@ -27,6 +27,7 @@ type Held = { set: Archetype; assigned?: string; dead: boolean }
 export function archetypes(cache: Archetypes = new Archetypes()): Plugin {
   return {
     name: '@yaks/archetype',
+    admission: () => true,
     vocab: [archetypeDoc],
     derive: { archetype: (comp) => eidOf(tablesOf(comp.tables)) },
     hooks: {
@@ -59,7 +60,17 @@ function tracking(
 ): Tracker {
   let held = new Map<string, Held>()
   let dirty = new Set<string>()
+  let validated = new Map<string, Archetype>()
   let empty = cache.intern([])
+
+  let descriptor = (b: Bundle) => {
+    let a = cache.intern(tablesOf((b.archetype as { tables: unknown }).tables))
+    if (a.eid != b.entity.eid) {
+      throw new Refused('Invalid stored archetype identity')
+    }
+    validated.set(a.eid, a)
+    return a
+  }
 
   let ensure = (eids: string[]) => {
     let missing = [...new Set(eids)].filter((e) => !held.has(e))
@@ -70,22 +81,15 @@ function tracking(
       let ids = [
         ...new Set(before.flatMap((b) => {
           let id = b?.entity.archetype
-          return id && !cache.get(id) ? [id] : []
+          return id && !validated.has(id) ? [id] : []
         })),
       ]
       return after(ids.length ? tx.get(ids) : [], (defs) => {
-        for (let b of defs) {
-          let a = cache.intern(
-            tablesOf((b.archetype as { tables: unknown }).tables),
-          )
-          if (a.eid != b.entity.eid) {
-            throw new Refused('Invalid stored archetype identity')
-          }
-        }
+        for (let b of defs) descriptor(b)
         for (let i = 0; i < missing.length; i++) {
           let b = before[i]
           let assigned = b?.entity.archetype
-          let set = assigned ? cache.get(assigned) : undefined
+          let set = assigned ? validated.get(assigned) : undefined
           if (assigned && !set) {
             throw new Refused(`Missing archetype ${assigned}`)
           }
@@ -196,6 +200,7 @@ function tracking(
           rows.filter((b) => b.archetype != null).map((b) => b.entity.eid),
         )
         for (let b of rows) {
+          if (existing.has(b.entity.eid)) descriptor(b)
           if (!existing.has(b.entity.eid) && (dead(b) || comps(b).length)) {
             throw new Refused(`Archetype identity is occupied: ${b.entity.eid}`)
           }

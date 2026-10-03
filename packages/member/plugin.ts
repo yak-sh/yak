@@ -55,6 +55,7 @@ import { type Guard, guarding, wanting } from './guard.ts'
  */
 export let members = (where: Guard): Plugin => ({
   name: '@yaks/member',
+  admission: () => true,
   vocab: [memberDoc],
   hooks: { precondition: guarding(where) },
   wants: wanting(where),

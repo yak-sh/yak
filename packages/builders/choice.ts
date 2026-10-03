@@ -49,6 +49,7 @@ export let choosing: Hook = (bundles, tx) => {
 
 export let choices = (): Plugin => ({
   name: '@yaks/builders',
+  admission: () => true,
   hooks: { precondition: choosing },
 })
 

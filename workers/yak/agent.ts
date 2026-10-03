@@ -25,6 +25,7 @@
 // actually write.
 import { z } from 'zod'
 import type {
+  ApplyOpts,
   Bundle,
   Eid,
   Graph,
@@ -558,6 +559,24 @@ export let reaching = async (
   // as two tools that are not there. One roster, one order, whoever is asking
   // (`platform`, T-34541).
   let plugins = [platform(ctx), post(ctx)]
+  let writing = async (bundles: Bundle[], opts?: ApplyOpts) => {
+    let asked = (Array.isArray(bundles) ? bundles : [bundles]) as Bundle[]
+    let { batch, where } = await aimed(ctx, asked)
+    // The same `Reach` the fan-out is holding, where it holds one: reach.ts
+    // routes by identity — a word's declarers are picked out of this very
+    // list — so a second object naming the same app is not it.
+    let one = where &&
+      (reach.find((r) => r.app.eid == where.app.eid) ?? where)
+    let out = await written(
+      ctx.env,
+      one && !reach.includes(one) ? [...reach, one] : reach,
+      one,
+      batch,
+      await titling(ctx.dir, ctx.person),
+      opts?.check === true,
+    )
+    return aliased(out)
+  }
   let self: Graph = {
     vocab,
     worn: () => false,
@@ -579,24 +598,8 @@ export let reaching = async (
     // store: `get` fans across the reach, and a name held in whichever store
     // this caller can see answers.
     address: (ids) => addressed(detached(storage), ids),
-    apply: async (bundles, opts) => {
-      let asked = (Array.isArray(bundles) ? bundles : [bundles]) as Bundle[]
-      let { batch, where } = await aimed(ctx, asked)
-      // The same `Reach` the fan-out is holding, where it holds one: reach.ts
-      // routes by identity — a word's declarers are picked out of this very
-      // list — so a second object naming the same app is not it.
-      let one = where &&
-        (reach.find((r) => r.app.eid == where.app.eid) ?? where)
-      let out = await written(
-        ctx.env,
-        one && !reach.includes(one) ? [...reach, one] : reach,
-        one,
-        batch,
-        await titling(ctx.dir, ctx.person),
-        opts?.check === true,
-      )
-      return aliased(out)
-    },
+    apply: writing,
+    admit: (bundles, opts) => writing(bundles, { ...opts, check: true }),
   }
   return { graph: self, prop: reading(clashes) }
 }

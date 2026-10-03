@@ -5,12 +5,12 @@ import {
   type Actor,
   type Bundle,
   type Comp,
-  composed,
   comps,
+  formed,
   type Graph,
   signed,
 } from '@yaks/graph'
-import { saveOf } from '@yaks/vocab'
+import { saveOf, syncOf } from '@yaks/vocab'
 import { and, eq, parse } from '@yaks/query'
 import type { Timer } from './relay.ts'
 
@@ -81,25 +81,43 @@ export let saving = <C>(
       })
     })
   }
-  let write = (conn: C, bundles: Bundle[], writer: PeerWriter = {}) => {
-    let rows = composed(bundles).flatMap((b) =>
-      comps(b).flatMap(([comp, patch]) =>
-        saveOf(graph.vocab, comp) == null ? [] : [{
-          entity: b.entity,
-          [comp]: patch == null ? null : {
-            ...values.get(b.entity.eid + ' ' + comp)?.row[comp] as Comp,
-            ...patch,
-          },
-        }]
-      )
-    )
-    if (!rows.length) return
-    // Rehearse before changing ownership or the relay's held value. In
-    // particular, an unauthorized takeover must not replace an owed save.
+  let write = (
+    conn: C,
+    bundles: Bundle[],
+    writer: PeerWriter = {},
+    held: Bundle[] = [],
+  ) => {
+    bundles = formed(bundles)
+    // Pending saves survive disconnect; current relay values also supply the
+    // complete proposed component for checking a partial patch.
+    let overlay = bundles.flatMap((b) =>
+      comps(b).flatMap(([comp]) => {
+        let v = values.get(b.entity.eid + ' ' + comp)
+        return v ? [v.row] : []
+      })
+    ).concat(held)
     return after(
-      graph.apply(signedRows(rows, writer), { check: true }),
-      () =>
-        after(
+      graph.admit(signedRows(bundles, writer), { overlay }),
+      (admitted) => {
+        let accepted = admitted.flatMap((b) => {
+          let row: Bundle = { entity: { eid: b.entity.eid } }
+          for (let [comp, patch] of comps(b)) {
+            if (syncOf(graph.vocab, comp) == 'peers') row[comp] = patch
+          }
+          return comps(row).length ? [row] : []
+        })
+        let rows = accepted.flatMap((b) =>
+          comps(b).flatMap(([comp, patch]) =>
+            saveOf(graph.vocab, comp) == null ? [] : [{
+              entity: b.entity,
+              [comp]: patch == null ? null : {
+                ...values.get(b.entity.eid + ' ' + comp)?.row[comp] as Comp,
+                ...patch,
+              },
+            }]
+          )
+        )
+        return after(
           over(rows, (row) => {
             let [comp] = comps(row)[0]
             let key = row.entity.eid + ' ' + comp
@@ -114,8 +132,9 @@ export let saving = <C>(
             values.set(key, v)
             return save(key, v)
           }),
-          () => {},
-        ),
+          () => accepted,
+        )
+      },
     )
   }
   let drop = (conn: C) =>

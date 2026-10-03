@@ -7,7 +7,7 @@
 // only a loaded vocabulary knows. So a graph is built in two steps — load the
 // documents, then pass the same vocabulary to the plugin.
 
-import type { Hook, Plugin } from '@yaks/graph'
+import { dead, type Hook, type Plugin } from '@yaks/graph'
 import { after } from '@yaks/fp'
 import type { Vocab } from '@yaks/vocab'
 import { KEY, names } from './kinds.ts'
@@ -46,6 +46,8 @@ let minting = (vocab: Vocab): Hook => {
  */
 export let keys = (vocab: Vocab): Plugin => ({
   name: '@yaks/key',
+  // Releasing a key or deleting its holder writes kind tags during cascade.
+  admission: (bundles) => bundles.every((b) => !dead(b) && b[KEY] !== null),
   vocab: [keyDoc],
   derive: { [KEY]: derive(names(vocab)) },
   hooks: { mint: minting(vocab), cascade: retired(vocab) },

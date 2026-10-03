@@ -415,8 +415,13 @@ saved, including an explicit clear.
 
 The server checks on arrival and every second while a value is pending. When a
 writer disconnects, its latest value remains pending until the query matches;
-disconnect never bypasses the query. Each input rehearses ordinary `apply`
-before replacing the pending value; each save applies as the connection's
+disconnect never bypasses the query. Every relay, with or without `save`, passes
+`graph.admit` before it is held or forwarded. Admission runs ordinary write
+checks as the connection's authenticated writer, including ownership, request
+guards and schema constraints. Partial patches are checked with the latest
+admitted peer value, and the relay forwards the checked result after write hooks
+and rules. Certified plugins check temporary rows without stored writes; other
+plugins use an ordinary dry run. Each save applies as the connection's
 authenticated actor and vocabulary versions (`PeerWriter`). A refused input
 leaves the previous accepted value intact; a refused save is sent to its writer.
 

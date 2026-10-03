@@ -155,6 +155,8 @@ export let blobs = (
   }
   return {
     name: '@yaks/blob',
+    // Preparing a body may retain external bytes or mint a local reference.
+    admission: (bundles) => bundles.every((b) => !written(b, props).length),
     hooks: {
       prepare: (bundles) => store.transactional ? bundles : prepare(bundles),
       precondition: (bundles) =>

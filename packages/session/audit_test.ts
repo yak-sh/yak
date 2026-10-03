@@ -59,3 +59,14 @@ test('any other refusal writes nothing', () => {
   )
   assertEquals((s.tx((tx) => tx.get(['c1'])) as Bundle[]).length, 0)
 })
+
+test('checking a contested claim refuses without recording a conflict', () => {
+  let s = store()
+  let g = locked(s, opts)
+  g.apply([{ entity: { eid: ids.p1 }, claim: { session: ids.run1 } }])
+  assertThrows(
+    () => g.admit([{ entity: { eid: ids.p1 }, claim: { session: ids.run2 } }]),
+    Bounced,
+  )
+  assertEquals((s.tx((tx) => tx.get(['c1'])) as Bundle[]).length, 0)
+})

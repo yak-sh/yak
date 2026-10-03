@@ -185,7 +185,7 @@ test('a woken socket saves and finishes values as its vouched writer', async () 
   assertEquals((row.updated as { via: string }).via, 'tab')
 })
 
-test('a legacy socket reconnects before saving but still answers existing relays', () => {
+test('a legacy socket answers reads and reconnects before every relay', () => {
   let ctx = hibernation(), ws = wire()
   ctx.live.push(ws)
   let g = graph({ storage: store(), vocab: shop })
@@ -194,9 +194,10 @@ test('a legacy socket reconnects before saving but still answers existing relays
     ...subs,
     save: (comp) => comp == 'position' ? '.hero' : null,
   }, ctx)
-  send(live, ws, { relay: [{ entity: { eid: 'hero' }, browsing: { x: 1 } }] })
+  send(live, ws, { subscribe: '.entity', id: 'legacy' })
   assertEquals(ws.closed, [])
-  send(live, ws, { relay: [{ entity: { eid: 'hero' }, position: { x: 1 } }] })
+  assertEquals(ws.sent[0].id, 'legacy')
+  send(live, ws, { relay: [{ entity: { eid: 'hero' }, browsing: { x: 1 } }] })
   assertEquals(ws.closed, [[1012, 'writer handshake required']])
 })
 
@@ -365,6 +366,9 @@ test('an idle area subscriber hears a mover after hibernation', async () => {
   let [g, first] = instance(storage, ctx, vocab)
   g.apply([{ entity: { eid: 'mover' }, product: { price: 3 } }])
   let idle = wire(), moving = wire()
+  moving.serializeAttachment({
+    writer: { actor: { by: 'person', via: 'tab' } },
+  })
   ctx.live.push(idle, moving)
   send(first, idle, {
     subscribe: '.product&.position.x=0...10',

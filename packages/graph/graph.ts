@@ -48,7 +48,7 @@
 // there.
 
 import { and, parse, want } from '@yaks/query'
-import { rulesIn, type Vocab } from '@yaks/vocab'
+import { rulesIn, syncOf, type Vocab } from '@yaks/vocab'
 import {
   type Context,
   during,
@@ -58,7 +58,7 @@ import {
   recording,
 } from '@yaks/trace'
 import { after, each, isPromise } from '@yaks/fp'
-import { type Actor, type Bundle, comps, type Eid } from './bundle.ts'
+import { type Actor, type Bundle, comps, dead, type Eid } from './bundle.ts'
 import type { ReadTx, Row, Storage, Tx } from './storage.ts'
 import { detached, type Query, type ReadOpts } from './storage.ts'
 import type { Hook, Phase, Plugin, Tracker, WriteHook } from './plugin.ts'
@@ -68,7 +68,14 @@ import { mint as fresh } from './mint.ts'
 import { admit, formed, known, Refused } from './admit.ts'
 import { requested } from './request.ts'
 import { composed } from './compose.ts'
-import { type Ask, complete, gather, holding, reached } from './gather.ts'
+import {
+  type Ask,
+  complete,
+  gather,
+  holding,
+  merged,
+  reached,
+} from './gather.ts'
 import { guard } from './guard.ts'
 import { mutate, rejoin } from './mutate.ts'
 import { ordered } from './ordered.ts'
@@ -86,6 +93,32 @@ import { own, type Ready, ready, settle } from './declared.ts'
 import { state } from './state.ts'
 import { addressing } from './said.ts'
 import { flat, named, only, projection } from './projection.ts'
+import { NeedsWrite, rehearsing } from './admission.ts'
+
+/** Checking options. `overlay` is the host's already admitted, canonical
+ * component values, used to check a partial patch's complete proposed value.
+ * Only peer components enter the current-value view; committed ownership
+ * stays in place, and `$was` checks committed state before the overlay. */
+export type AdmitOpts = ApplyOpts & { overlay?: Bundle[] }
+
+let overlaid = (
+  bundles: Bundle[],
+  vocab: Vocab,
+  overlay: Bundle[] = [],
+): Bundle[] => {
+  if (!overlay.length) return bundles
+  let at = new Map(composed(overlay).map((b) => [b.entity.eid, b]))
+  return bundles.map((b) => {
+    let prior = at.get(b.entity.eid)
+    if (!prior) return b
+    let out = { ...b }
+    for (let [name, patch] of comps(b)) {
+      if (patch == null || syncOf(vocab, name) != 'peers') continue
+      out[name] = { ...prior[name] as Record<string, unknown>, ...patch }
+    }
+    return out
+  })
+}
 
 /** The options one `apply()` call can pass. */
 export type ApplyOpts = {
@@ -245,6 +278,11 @@ export type Graph = {
   /** apply bundles in one transaction → the bundles as applied, one per
    * entity, plus everything the pipeline generated */
   apply: (bundles: Bundle[], opts?: ApplyOpts) => Bundle[] | Promise<Bundle[]>
+  /** Check a value through ordinary write admission without retaining it.
+   * Certified plugins check against temporary rows; unsupported policies use
+   * the owning adapter's ordinary dry run. Returns composed checked patches,
+   * including rule outputs, rewrites and stamps. */
+  admit: (bundles: Bundle[], opts?: AdmitOpts) => Bundle[] | Promise<Bundle[]>
 }
 
 /** A graph's data interface, whether its storage is local or another thread
@@ -294,15 +332,36 @@ export let graph = (opts: Options): Graph => {
   // batch names or references, which is what the `$was` check, `mutate` and
   // storage's own number assignment all need — plus whatever each plugin
   // declares.
-  let asking = (bundles: Bundle[]): Ask[] => [
+  let asking = (bundles: Bundle[], admission = false): Ask[] => [
     {
       eids: reached(bundles, vocab),
       select: [
         ...new Set(bundles.flatMap((b) => comps(b).map(([name]) => name))),
       ],
     },
-    ...plugins.flatMap((p) => p.wants?.(bundles) ?? []),
+    ...plugins.flatMap((p) =>
+      p.wants?.(bundles, { graph: g, admission }) ?? []
+    ),
   ]
+
+  let certified = (bundles: Bundle[]) =>
+    !bundles.some(dead) &&
+    plugins.every((p) =>
+      p.admission ? p.admission(bundles) : !p.track && !p.beforeWrite &&
+        ![
+          'prepare',
+          'precondition',
+          'rules',
+          'mutate',
+          'cascade',
+          'stamp',
+          'journal',
+          'commit',
+        ].some((name) => p.hooks?.[name as Phase]) &&
+        !p.rules?.some((r) =>
+          !['normalize', 'admit', 'mint', 'effect', 'audit'].includes(r.phase)
+        )
+    )
 
   // The hooks registered on a phase, in plugin registration order.
   let hooks = (phase: Phase): [string, Hook][] =>
@@ -392,7 +451,13 @@ export let graph = (opts: Options): Graph => {
     }
   }
 
-  let applying = (bundles: Bundle[], o: ApplyOpts, tracing?: Context):
+  let applying = (
+    bundles: Bundle[],
+    o: AdmitOpts,
+    tracing?: Context,
+    admission = false,
+    fallback = false,
+  ):
     | Bundle[]
     | Promise<
       Bundle[]
@@ -401,6 +466,7 @@ export let graph = (opts: Options): Graph => {
       throw new Refused('only trusted writes may disable stamping')
     }
     let current = tracing?.parent
+    let checking = false
     let st = state()
     let now = o.now ?? new Date().toISOString()
     let instant: string | undefined
@@ -450,7 +516,7 @@ export let graph = (opts: Options): Graph => {
       }
     }
     let gathering = (tx: Tx, b: Bundle[]) =>
-      timed('gather', () => gather(tx, vocab, asking(b)))
+      timed('gather', () => gather(tx, vocab, asking(b, checking)))
 
     // A phase: the core's own work first (it is what the rules and hooks
     // extend), then the rules evaluated together, then each hook, each seeing
@@ -489,11 +555,16 @@ export let graph = (opts: Options): Graph => {
           tracing && live(tracing) && peek(g)
             ? timed(
               name,
-              () => h(b, tx, undefined, { graph: g, parent: current }),
+              () =>
+                h(b, tx, undefined, {
+                  graph: g,
+                  parent: current,
+                  admission,
+                }),
               plugin,
               false,
             )
-            : h(b, tx)
+            : h(b, tx, undefined, { graph: g, admission })
         )
       }
       return timed(name, () => each(steps, bundles, (b, step) => step(b)))
@@ -596,11 +667,16 @@ export let graph = (opts: Options): Graph => {
           let out = tracing && live(tracing) && peek(g)
             ? timed(
               'audit',
-              () => hook(b, outside, err, { graph: g, parent: current }),
+              () =>
+                hook(b, outside, err, {
+                  graph: g,
+                  parent: current,
+                  admission,
+                }),
               plugin,
               false,
             )
-            : hook(b, outside, err)
+            : hook(b, outside, err, { graph: g, admission })
           return isPromise(out)
             ? out.catch((e) => {
               report(e, { phase: 'audit', plugin })
@@ -624,7 +700,8 @@ export let graph = (opts: Options): Graph => {
       return isPromise(done) ? done.then(raise) : raise()
     }
 
-    let inside = (bundles: Bundle[]) => {
+    let inside = (bundles: Bundle[]): Bundle[] | Promise<Bundle[]> => {
+      checking = admission && !fallback && certified(bundles)
       let run = (tx: Tx) =>
         // Every read the phases before the write will make, taken as one call.
         // It is handed to those phases alone — a snapshot of the graph as the
@@ -635,6 +712,7 @@ export let graph = (opts: Options): Graph => {
         // is folded back into the snapshot, so those phases still see each
         // other's writes.
         after(gathering(tx, bundles), (snap) => {
+          if (checking) tx = rehearsing(tx, vocab, snap)
           let trackers: Tracker[] = []
           for (let p of plugins) {
             if (!p.track) continue
@@ -652,7 +730,40 @@ export let graph = (opts: Options): Graph => {
           return after(
             each(
               [
-                phase('precondition', held, (b) => guard(b, held, vocab)),
+                phase('precondition', held, (b) =>
+                  after(guard(b, held, vocab), (guarded) => {
+                    if (!admission || !o.overlay?.length) {
+                      return guarded
+                    }
+                    let ids = new Set(guarded.map((b) =>
+                      b.entity.eid
+                    ))
+                    let overlay = composed(o.overlay).filter((b) =>
+                      ids.has(b.entity.eid)
+                    )
+                    return after(
+                      held.get(overlay.map((b) => b.entity.eid)),
+                      () => {
+                        for (let row of overlay) {
+                          if (!snap.got.get(row.entity.eid)) continue
+                          let peer: Bundle = { entity: row.entity }
+                          for (let [name, patch] of comps(row)) {
+                            if (syncOf(vocab, name) != 'peers') continue
+                            peer[name] = patch
+                            snap.only?.get(row.entity.eid)?.add(name)
+                          }
+                          let eid = row.entity.eid
+                          snap.got.set(
+                            eid,
+                            merged(snap.got.get(eid) ?? null, peer),
+                          )
+                        }
+                        return guarded
+                      },
+                    )
+                  })),
+                (b: Bundle[]) =>
+                  admission ? overlaid(b, vocab, o.overlay) : b,
                 // The declared rules, before any row of the batch is
                 // written: what they produce joins the batch, and `mutate`
                 // writes it like anything else.
@@ -699,6 +810,7 @@ export let graph = (opts: Options): Graph => {
                   holds,
                 ),
                 phase('mutate', held, (b) => {
+                  if (checking && !certified(b)) throw new NeedsWrite()
                   checks = plugins.flatMap((p) =>
                     p.beforeWrite ? [p.beforeWrite(b)] : []
                   )
@@ -715,19 +827,30 @@ export let graph = (opts: Options): Graph => {
                 phase('stamp', tx, (b) =>
                   births(b, st), holds),
                 flush,
-                phase('journal', tx),
-                // What was heard and never written joins the batch again.
-                (b: Bundle[]) =>
-                  st.heard.length ? rejoin(b, st.heard) : b,
-                phase('commit', tx),
-                flush,
+                (b: Bundle[]) => {
+                  if (checking && !certified(b)) {
+                    throw new NeedsWrite()
+                  }
+                  return b
+                },
+                ...(checking
+                  ? [(b: Bundle[]) =>
+                    st.heard.length ? rejoin(b, st.heard) : b]
+                  : [
+                    phase('journal', tx),
+                    // What was heard and never written joins the batch again.
+                    (b: Bundle[]) =>
+                      st.heard.length ? rejoin(b, st.heard) : b,
+                    phase('commit', tx),
+                    flush,
+                  ]),
               ],
               bundles,
               (b, step) =>
                 step(b),
             ),
             (b) => {
-              if (o.check) {
+              if (o.check && !checking) {
                 throw new Checked(b)
               }
               return b
@@ -737,9 +860,14 @@ export let graph = (opts: Options): Graph => {
       // A rolled-back dry run is not a refusal: it is audited like any other
       // rollback, then returns what the phases produced, and skips the
       // effects, which observe committed data only.
-      let fell = (e: unknown) =>
-        e instanceof Checked
-          ? after(auditing(bundles, e), () => e.bundles)
+      let fell = (e: unknown): Bundle[] | Promise<Bundle[]> =>
+        e instanceof NeedsWrite
+          ? (fallback = true, inside(bundles))
+          : e instanceof Checked
+          ? after(
+            auditing(bundles, e),
+            () => e.bundles,
+          )
           : audited(bundles, e)
       let committed: Bundle[] | Promise<Bundle[]>
       try {
@@ -748,6 +876,7 @@ export let graph = (opts: Options): Graph => {
         return fell(e)
       }
       let observe = (b: Bundle[]) => {
+        if (checking) return b
         let defer = o.deferEffects ?? opts.deferEffects
         if (!defer) {
           return tracing
@@ -824,14 +953,15 @@ export let graph = (opts: Options): Graph => {
 
   let apply = (
     bundles: Bundle[],
-    o: ApplyOpts = {},
+    o: AdmitOpts = {},
+    admission = false,
   ): Bundle[] | Promise<Bundle[]> => {
     let c = peek(g)
-    if (!c) return applying(bundles, o)
+    if (!c) return applying(bundles, o, undefined, admission)
     let epoch = recording(c)
     let span = c.begin({
       kind: 'apply',
-      name: 'apply',
+      name: admission ? 'admit' : 'apply',
       package: '@yaks/graph',
       parent: o.parent ?? parent(g, bundles),
     })
@@ -842,7 +972,7 @@ export let graph = (opts: Options): Graph => {
           channel: c,
           parent: span?.id,
           recording: epoch,
-        }),
+        }, admission),
       o.check ? 'check' : 'ok',
       (out) => ({ input: bundles.length, output: out.length }),
     )
@@ -1082,6 +1212,7 @@ export let graph = (opts: Options): Graph => {
       )
     },
     apply,
+    admit: (bundles, o) => apply(bundles, { ...o, check: true }, true),
   }
   return g
 }

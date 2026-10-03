@@ -246,6 +246,11 @@ export let sockets = (
   subs: Subs,
   ctx: Hibernation,
   report?: (error: Error) => void,
+  opts: {
+    /** A host whose authenticated standing expires on wake can require a
+     * new handshake before this writer relays again. */
+    writer?: (writer: PeerWriter) => boolean
+  } = {},
 ): Sockets => {
   let sinks = new Map<
     Wire,
@@ -428,14 +433,12 @@ export let sockets = (
         let held = ws.deserializeAttachment() as Held | null
         let msg = 'value' in input ? input.value : undefined
         // Sockets accepted before writer attribution shipped must reconnect
-        // before saving: only a handshake can vouch for their instrument.
+        // before relaying: only a handshake can vouch for their instrument.
         if (
-          held?.writer === undefined && msg && typeof msg == 'object' &&
-          'relay' in msg && Array.isArray(msg.relay) &&
-          msg.relay.some((b) =>
-            b && typeof b == 'object' &&
-            Object.keys(b).some((comp) => subs.save?.(comp) != null)
-          )
+          (held?.writer === undefined ||
+            opts.writer?.(held.writer) === false) &&
+          msg && typeof msg == 'object' &&
+          'relay' in msg && Array.isArray(msg.relay)
         ) {
           finish(ws)
           ws.close?.(1012, 'writer handshake required')
