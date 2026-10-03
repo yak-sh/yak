@@ -7,11 +7,14 @@ WorkingDirectory=%h/.yak
 Environment=PATH=%h/.deno/bin:%h/.local/bin:%h/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
 Environment=LANG=C.UTF-8 LC_ALL=C.UTF-8
 Environment=DENO_DIR=%h/.cache/deno
-ExecStart=%h/.deno/bin/yak work --config %h/.yak/tracker.json --roles effects,@yaks/tracker
-Restart=always
+ExecStartPre=/usr/bin/rm -f %t/yak-tracker-%i.ready
+ExecStart=%h/.deno/bin/yak work --config %h/.yak/tracker.json --roles effects,@yaks/tracker --ready %t/yak-tracker-%i.ready
+ExecStopPost=/usr/bin/rm -f %t/yak-tracker-%i.ready
+Restart=on-failure
 RestartSec=2
 KillMode=process
 TimeoutStopSec=infinity
 
 [Install]
 WantedBy=default.target
+DefaultInstance=boot

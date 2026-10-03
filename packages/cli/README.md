@@ -352,12 +352,16 @@ box graph for the roles it is handed. The same package works the pool and leased
 services for independent `yak work` processes.
 
 On the box, `yak.service` runs `serve --no-duties`, and independent `yak-work@`
-units run the pool and plugin services. **Use `yak restart`**, not raw systemctl
-restart: it starts a replacement worker, waits for readiness, then queues old
-workers' graceful stops and the web restart without waiting for either shutdown.
-Web never waits for effects, and a session requesting its own restart can finish
-that request. A failed handover before readiness cleans up only the candidate;
-once ready, the candidate survives later enqueue errors.
+units run the pool and plugin services. The independent tracker uses
+`yak-tracker@` workers over its own config and `yak-tracker-web.service` for
+HTTP. **Use `yak restart`**, not raw systemctl restart: it starts replacements
+for the primary pool and each active optional worker role, waits for all their
+readiness files, then queues old workers' graceful stops and active web units'
+restarts without waiting for shutdown. Inactive or uninstalled optional units
+stay untouched; discovery and enqueue failures are reported. Web never waits for
+effects, and a session requesting its own restart can finish that request. A
+failed handover before readiness cleans up only the candidate; once ready, the
+candidate survives later enqueue errors.
 
 `yak --no-duties` (config `duties: false`) turns them off for a host that stays
 up: it takes no lease, works no effects, and runs neither the services nor the

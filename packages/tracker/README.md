@@ -55,7 +55,7 @@ commit (or version without a commit).
 
 ## The box role
 
-Copy `box.json` to `~/.yak/tracker.json` and `yak-tracker.service` to the user
+Copy `box.json` to `~/.yak/tracker.json` and `yak-tracker@.service` to the user
 systemd unit directory. The tracker uses `~/.yak/tracker.db`, never `yak.db`.
 Its command is
 `yak work --config ~/.yak/tracker.json --roles
@@ -70,9 +70,22 @@ commit and global process eid. A tool preserves the failing call's `$actor`.
 Console telemetry remains alongside reporting. Intake commits the full bundles
 before acknowledging them; a crash in between resends the same eids.
 
-Enable the unit with `systemctl --user enable --now yak-tracker.service`.
-Restart watched hosts through `yak restart` to load their reporting config;
-rolling web or task workers does not stop the tracker unit. No mail recipient is
+After copying the template, run `systemctl --user daemon-reload` and enable
+`yak-tracker@boot.service`. `yak restart` hands over the primary workers and the
+active tracker workers before draining the old ones, and separately restarts
+`yak.service` and the active `yak-tracker-web.service`. Both tracker workers use
+the same tracker config and spool; its leased intake finishes an admitted record
+before releasing the lease. The tracker web unit runs
+`yak serve --no-duties --config ~/.yak/tracker.json`, independently of intake.
+
+To move an installed `yak-tracker.service` onto the template, copy
+`yak-tracker@.service` into `~/.config/systemd/user/`, run
+`systemctl --user daemon-reload`, then `yak restart` while the old tracker is
+still active. The replacement becomes ready before that unit drains. Once the
+handover is queued, disable `yak-tracker.service` without `--now`, remove its
+unit file, enable `yak-tracker@boot.service` without `--now` for the next login,
+and run `systemctl --user daemon-reload` again. Do not start a second boot
+worker while the ready candidate is serving the role. No mail recipient is
 configured by default. The sample plugin options name the box checkout and fleet
 HTTP catalog; adjust `code.cwd`, `code.url` and served `code.origins` for
 another machine. No source records are copied into the tracker. Loading the mail

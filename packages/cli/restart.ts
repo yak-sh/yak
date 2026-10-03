@@ -1,8 +1,16 @@
-// A systemd worker handover: prove a unique candidate ready before queuing
-// retirement of the old workers and the serving process. No shutdown is awaited.
+// Ready-first handover for the box's independent duty roles. Each worker uses
+// its own template and graph; serving units drain separately after all are ready.
+
+export type Worker = {
+  unit: string
+  old: string[]
+  optional?: boolean
+}
 
 export type RestartOptions = {
   runtimeDir: string
+  workers?: Worker[]
+  web?: string[]
   systemctl?: string
   run?: (
     command: string,
@@ -12,6 +20,16 @@ export type RestartOptions = {
   now?: () => number
   sleep?: (milliseconds: number) => Promise<void>
 }
+
+let workers: Worker[] = [
+  { unit: 'yak-work', old: ['yak-work@*.service'] },
+  {
+    unit: 'yak-tracker',
+    old: ['yak-tracker.service', 'yak-tracker@*.service'],
+    optional: true,
+  },
+]
+let web = ['yak.service', 'yak-tracker-web.service']
 
 let run: NonNullable<RestartOptions['run']> = async (command, args) => {
   let result = await new Deno.Command(command, {
@@ -36,7 +54,15 @@ let ready = async (path: string) => {
   }
 }
 
-/** Queue a user-systemd handover, returning the candidate unit or rejecting. */
+let matches = (pattern: string, unit: string) => {
+  let [before, after] = pattern.split('*')
+  return after == null
+    ? unit == before
+    : unit.startsWith(before) && unit.endsWith(after)
+}
+
+/** Queue a user-systemd handover, returning the primary candidate or rejecting.
+ * Optional roles are rolled only when active; discovery errors still reject. */
 export let restart = async (options: RestartOptions): Promise<string> => {
   let execute = options.run ?? run
   let exists = options.ready ?? ready
@@ -56,50 +82,63 @@ export let restart = async (options: RestartOptions): Promise<string> => {
     }
     return result.stdout
   }
-
-  // Snapshot first: the new unit must never be mistaken for an old worker.
+  let roles = options.workers ?? workers
+  let serving = options.web ?? web
+  // Snapshot every role first: no candidate can be mistaken for an old worker.
   let listed = await call(
     'list-units',
     '--state=active',
     '--plain',
     '--no-legend',
     '--no-pager',
-    'yak-work@*.service',
+    ...roles.flatMap((r) => r.old),
+    ...serving,
   )
-  let old = listed.split('\n').map((line) => line.trim().split(/\s+/)[0])
-    .filter((unit) => /^yak-work@[^\s]+\.service$/.test(unit))
-  let instance = crypto.randomUUID()
-  let candidate = `yak-work@${instance}.service`
-  let file = `${
-    options.runtimeDir.replace(/\/$/, '')
-  }/yak-work-${instance}.ready`
-  let handed = false
+  let active = listed.split('\n').map((line) => line.trim().split(/\s+/)[0])
+    .filter((unit) => unit.endsWith('.service'))
+  let replacing = roles.map((r) => ({
+    ...r,
+    old: active.filter((unit) => r.old.some((p) => matches(p, unit))),
+  })).filter((r) => !r.optional || r.old.length)
+  let candidates: { unit: string; ready: boolean }[] = []
   try {
-    await call('--no-block', 'start', candidate)
-    let deadline = now() + 15_000
-    while (true) {
-      if (now() >= deadline) {
-        throw new Error(`Timed out after 15000ms waiting for ${file}`)
+    for (let role of replacing) {
+      let instance = crypto.randomUUID()
+      let candidate = { unit: `${role.unit}@${instance}.service`, ready: false }
+      let file = `${
+        options.runtimeDir.replace(/\/$/, '')
+      }/${role.unit}-${instance}.ready`
+      candidates.push(candidate)
+      await call('--no-block', 'start', candidate.unit)
+      let deadline = now() + 15_000
+      while (true) {
+        if (now() >= deadline) {
+          throw new Error(`Timed out after 15000ms waiting for ${file}`)
+        }
+        let found = await exists(file)
+        if (found && now() < deadline) break
+        await sleep(Math.min(100, Math.max(0, deadline - now())))
       }
-      let found = await exists(file)
-      if (found && now() < deadline) break
-      await sleep(Math.min(100, Math.max(0, deadline - now())))
+      candidate.ready = true
     }
-    handed = true
+    let old = replacing.flatMap((r) => r.old)
     if (old.length) await call('--no-block', 'stop', ...old)
-    await call('--no-block', 'restart', 'yak.service')
-    return candidate
+    let webs = serving.filter((unit) => active.includes(unit))
+    if (webs.length) await call('--no-block', 'restart', ...webs)
+    return candidates[0]?.unit ?? ''
   } catch (error) {
-    // Once ready, the pool must survive any later handover enqueue failure.
-    if (handed) throw error
-    // Even a failed start may have queued a job. Recovery touches only this unit.
-    try {
-      await call('--no-block', 'stop', candidate)
-    } catch (cleanup) {
-      throw new AggregateError(
-        [error, cleanup],
-        'Worker handover and cleanup failed',
-      )
+    // A ready pool survives later failures. Never retire old roles until every
+    // replacement is ready; a failed start may still have queued a job.
+    let errors: unknown[] = [error]
+    for (let candidate of candidates.filter((c) => !c.ready)) {
+      try {
+        await call('--no-block', 'stop', candidate.unit)
+      } catch (cleanup) {
+        errors.push(cleanup)
+      }
+    }
+    if (errors.length > 1) {
+      throw new AggregateError(errors, 'Worker handover and cleanup failed')
     }
     throw error
   }

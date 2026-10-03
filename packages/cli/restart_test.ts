@@ -19,7 +19,8 @@ let fixture = () => {
         stdout: args.includes('list-units')
           ? 'yak-work@old.service loaded active running old\n' +
             'yak-work@older.service loaded active running older\n' +
-            'other.service loaded active running other\n'
+            'other.service loaded active running other\n' +
+            'yak.service loaded active running web\n'
           : '',
         stderr: '',
       })
@@ -79,6 +80,10 @@ test('restart snapshots active workers before start and retires only after ready
       '--no-legend',
       '--no-pager',
       'yak-work@*.service',
+      'yak-tracker.service',
+      'yak-tracker@*.service',
+      'yak.service',
+      'yak-tracker-web.service',
     ],
     ['--user', '--no-block', 'start', candidate],
     [
@@ -114,7 +119,7 @@ test('restart starts unique candidates and handles no existing workers', async (
   let second = await restart(f.options)
   assert(first !== second)
   assertEquals(f.calls.filter((call) => call.args.includes('stop')), [])
-  assertEquals(f.calls.length, 6)
+  assertEquals(f.calls.length, 4)
 })
 
 test('restart bounds readiness to 15 seconds and stops only its candidate', async () => {
@@ -231,4 +236,118 @@ test('restart rejects readiness that arrives after its deadline', async () => {
     'stop',
     candidateOf(f),
   ])
+})
+
+let tracker = (f: ReturnType<typeof fixture>, legacy = true) => {
+  let run = f.options.run!
+  f.options.run = async (command, args) => {
+    let result = await run(command, args)
+    return args.includes('list-units')
+      ? {
+        ...result,
+        stdout: result.stdout +
+          `${
+            legacy ? 'yak-tracker' : 'yak-tracker@old'
+          }.service loaded active running tracker\n` +
+          'yak-tracker-web.service loaded active running web\n',
+      }
+      : result
+  }
+}
+
+test('restart hands over both graphs before draining either and restarts both webs', async () => {
+  let f = fixture()
+  tracker(f)
+  let candidate = await restart(f.options)
+  let next = f.calls[2].args[3]
+  assertMatch(next, /^yak-tracker@[a-f0-9-]+\.service$/)
+  assertEquals(f.calls.map((c) => c.args.slice(1)), [
+    f.calls[0].args.slice(1),
+    ['--no-block', 'start', candidate],
+    ['--no-block', 'start', next],
+    [
+      '--no-block',
+      'stop',
+      'yak-work@old.service',
+      'yak-work@older.service',
+      'yak-tracker.service',
+    ],
+    ['--no-block', 'restart', 'yak.service', 'yak-tracker-web.service'],
+  ])
+  assertEquals(f.events, [
+    'list',
+    'start',
+    'ready',
+    'start',
+    'ready',
+    'stop',
+    'restart',
+  ])
+  let instance = next.slice('yak-tracker@'.length, -'.service'.length)
+  assertEquals(f.paths[1], `/runtime/yak-tracker-${instance}.ready`)
+})
+
+test('restart rolls active tracker instances on every subsequent handover', async () => {
+  let f = fixture()
+  tracker(f, false)
+  await restart(f.options)
+  assert(f.calls[3].args.includes('yak-tracker@old.service'))
+  assert(!f.calls[3].args.includes('yak-tracker.service'))
+})
+
+test('failed tracker readiness leaves all old roles and the ready primary running', async () => {
+  let f = fixture()
+  tracker(f)
+  f.options.ready = (path) => Promise.resolve(path.includes('yak-work-'))
+  await assertRejects(() => restart(f.options), Error, 'Timed out')
+  assertEquals(f.calls.length, 4)
+  assertEquals(f.calls[3].args, [
+    '--user',
+    '--no-block',
+    'stop',
+    f.calls[2].args[3],
+  ])
+  assert(!f.calls.some((c) => c.args.includes('restart')))
+})
+
+test('tracker start errors are visible and clean up only the failed candidate', async () => {
+  let f = fixture()
+  tracker(f)
+  let run = f.options.run!
+  f.options.run = async (command, args) => {
+    let result = await run(command, args)
+    return args.includes('start') &&
+        args.some((a) => a.startsWith('yak-tracker@'))
+      ? { code: 5, stdout: '', stderr: 'tracker template missing' }
+      : result
+  }
+  await assertRejects(
+    () => restart(f.options),
+    Error,
+    'tracker template missing',
+  )
+  assertEquals(f.calls.length, 4)
+  assertEquals(f.calls[3].args, [
+    '--user',
+    '--no-block',
+    'stop',
+    f.calls[2].args[3],
+  ])
+})
+
+test('inactive or uninstalled optional roles are never started or restarted', async () => {
+  let f = fixture()
+  await restart(f.options)
+  assert(
+    !f.calls.slice(1).some((c) => c.args.some((a) => a.includes('tracker'))),
+  )
+})
+
+test('tracker web enqueue failures remain visible after both pools are ready', async () => {
+  let f = fixture()
+  tracker(f)
+  fail(f, 'restart', 'yak-tracker-web.service')
+  await assertRejects(() => restart(f.options), Error, 'failed restart')
+  assertEquals(f.calls.length, 5)
+  assertEquals(f.calls.filter((c) => c.args.includes('stop')).length, 1)
 })
