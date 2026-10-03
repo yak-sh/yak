@@ -11,8 +11,33 @@ test('appRoute admits app routes and refuses resources', () => {
     assertEquals(appRoute(p), true, p)
   }
   for (
-    let p of ['/blob/abc123', '/logs/x.jsonl', '/index.html', '/a/b', '/x.css']
+    let p of [
+      '/blob/abc123',
+      '/logs/x.jsonl',
+      '/index.html',
+      '/a/b',
+      '/x.css',
+      '/inspect',
+    ]
   ) {
     assertEquals(appRoute(p), false, p)
+  }
+})
+
+test('the app inspector keeps native navigation instead of the web entity router', () => {
+  let host = globalThis as { YAK_WEB?: import('../hosting.ts').Hosting }
+  let prior = host.YAK_WEB
+  host.YAK_WEB = {
+    page: '/notes/_web',
+    api: '/notes/api',
+    apply: '/notes/api/apply',
+    owner: '/notes/_web/owner',
+    inspect: '/notes/_web/inspect',
+  }
+  try {
+    assertEquals(appRoute('/inspect'), false)
+    assertEquals(appRoute('/T-9'), true)
+  } finally {
+    host.YAK_WEB = prior
   }
 })

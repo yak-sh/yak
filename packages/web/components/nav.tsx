@@ -1,4 +1,4 @@
-import { localPath, pagePath } from '../hosting.ts'
+import { hosting, localPath, pagePath } from '../hosting.ts'
 import { addressId, entityPath, searchAt } from '../url.ts'
 import { signal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
@@ -76,7 +76,9 @@ export let navigate = (to: string) => {
 // Whether a path is the app's own route shape — `/` or ONE extensionless
 // segment (`/T-123`, `/home`). Multi-segment and dotted paths are real
 // resources (/blob/<sha>, /logs/…, files) and keep native navigation.
-export let appRoute = (path: string) => /^\/[^/?#.]*$/.test(path)
+export let appRoute = (path: string) =>
+  /^\/[^/?#.]*$/.test(path) &&
+  path != localPath(hosting().inspect ?? '/inspect')
 
 // The whole class of in-app links intercepted at the NAVIGATION layer: any
 // click that would LEAVE the document for an app route — an md-rendered
