@@ -865,13 +865,12 @@ test('socket peers share a fanout and never echo an older owner value', async ()
   assertEquals(relayed(one.take()), [
     { entity: { eid: 'p1' }, browsing: { x: 5 } },
   ])
-  subs.drop(one.to)
-  assertEquals(subs.snapshot('.browsing&*').map((b) => b.entity.eid).sort(), [
-    'p1',
-    'p2',
-  ])
-  subs.drop(two.to)
-  assertEquals(subs.snapshot('.browsing&*'), [])
+  await subs.drop(one.to)
+  let remaining = await subs.snapshot('.browsing&*')
+  assert(Array.isArray(remaining))
+  assertEquals(remaining.map((b) => b.entity.eid).sort(), ['p1', 'p2'])
+  await subs.drop(two.to)
+  assertEquals(await subs.snapshot('.browsing&*'), [])
 })
 
 test('batched membership re-enters and clears on expiry or pending drop', async () => {
