@@ -529,12 +529,12 @@ interrupted pass leaves only a short hold for recovery. A worker checks the
 lease again while it stays up, so no restart is needed for the next pass.
 
 `expire(g)` runs a pass explicitly and returns the number of matching component
-rows removed. Each transaction removes at most 100 rows by default. Removal
-uses the graph's `apply()` with guards against values changed since selection,
-so its reference consequences, tombstones, journal and subscribers follow the
-ordinary write path. The graph removes owners left with only provenance stamps.
-The `effect` component expires settled `done` and `failed` runs recorded at
-least seven days ago; pending runs are not selected.
+rows removed. Each transaction removes at most 100 rows by default. Removal uses
+the graph's `apply()` with guards against values changed since selection, so its
+reference consequences, tombstones, journal and subscribers follow the ordinary
+write path. The graph removes owners left with only provenance stamps. The
+`effect` component expires settled `done` and `failed` runs recorded at least
+seven days ago; pending runs are not selected.
 
 ```ts
 import { graph } from '@yaks/graph'
@@ -543,11 +543,16 @@ import { loadVocab } from '@yaks/vocab'
 import { expire } from '@yaks/effects'
 import { equal } from '@yaks/testing'
 
-let vocab = loadVocab({ $defs: {
-  cache: { component: true, expire: '.cache.old=true',
-    properties: { old: { type: 'boolean' } } },
-  item: { component: true },
-} })
+let vocab = loadVocab({
+  $defs: {
+    cache: {
+      component: true,
+      expire: '.cache.old=true',
+      properties: { old: { type: 'boolean' } },
+    },
+    item: { component: true },
+  },
+})
 let g = graph({ vocab, storage: ram(vocab) })
 await g.apply([{ entity: { eid: 'one' }, cache: { old: true }, item: {} }])
 equal(await expire(g, { batch: 10 }), 1)
