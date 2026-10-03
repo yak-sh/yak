@@ -1,112 +1,113 @@
-# Layer throughput ratchet
+# Throughput ratchet
 
-Before a refactor phase, run `deno task bench` in a quiet session worktree and
-save `bench/results.json` outside the worktree (for example,
-`cp bench/results.json /tmp/before.json`). After the change, run it again and
-compare the `ns` maps: **lower ns/op is better**, ops/sec is `1e9 / ns`.
-`deno task bench:check` always runs fresh measurements and fails if any bench is
-more than **20% slower** than the committed `bench/baseline.json`
-(`REGRESSION_THRESHOLD` in `bin/bench.ts`). It never changes the baseline. For
-an intentional new reference, run `deno task bench:ratchet`, review the numbers
-and commit the baseline with an explanation. This is explicit acceptance,
-including any regressions, not an automatic lowering of the floor.
+`deno task bench` measures storage reads and patches, `graph.apply`, and warmed
+relay admission. `deno task bench:check` takes fresh measurements and refuses
+metrics more than **20% higher** than `bench/baseline.json`. It checks statement
+counts as well as elapsed time. `deno task bench:ratchet` explicitly accepts a
+fresh baseline; review and commit its diff. Measurements and metadata are also
+written to `bench/results.json`.
 
-## What is measured
+Benches run separately from `deno task test` and `deno task check`. The fast
+suite only checks fixture correctness and the ratchet's comparison logic.
 
-The shared fixture is `packages/sqlite/fixtures/fleet.ts`: seed `0x36756`, 2,048
-tasks with documents, 128 claims, 384 completed tasks, and 4,064
-requires/contains edges (6,113 entities including the session). Requires chains
-are 64 tasks long, so the depth-16 and unbounded walks return genuinely
-different sets (16 vs 63). FTS returns 64 documents; the status filter returns
-1,536 tasks. Each benchmark file checks the exact expected eid set before
-timing, rather than assuming that a compiler that became faster still returns
-the right answer.
+## Fleet corpus and storage
 
-Every layer runs the same five reads and a transactional batch of 100 doc-title
-changes in both `:memory:` and a fresh temporary **file** database. File mode
-uses **WAL + synchronous=normal**, including real commits; setup/migrations, FTS
-index creation, seed loading, correctness assertions, and cleanup are outside
-timing. The file DB is not deserialized into RAM. `DB_PATH` is set before fleet
-imports; no benchmark opens the operator's graph. Temporary files are closed and
-removed at process unload. Linux runs use the system SQLite library by default.
+The deterministic corpus in `packages/sqlite/fixtures/fleet.ts` has seed
+`0x36756`, 2,048 tasks, 128 claims, 384 completed tasks, and 4,064
+requires/contains edges: 6,113 entities including the session. Dependency chains
+are 64 tasks long. FTS selects 64 documents; the open-status filter selects
+1,536 tasks. Each storage bench checks its expected eid set before timing.
 
-| Layer    | Timed read boundary                                                                                                      |
-| -------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `sqlite` | Execute precompiled membership SQL via the `@yaks/sqlite` driver, then `get()` to hydrate bundles; parse/lower excluded. |
-| `sql`    | Lower an already-parsed AST with `@yaks/sql.compile`, execute, hydrate with the same `get()`.                            |
-| `query`  | `@yaks/query` parse → lower → execute → hydrate, through `@yaks/sqlite.read`.                                            |
-| `fleet`  | `src/query.ts.parseQuery` → `src/sql.ts.where` → `db.ts.matching`, including fleet hydration. No JS fallback is allowed. |
+The `sqlite`, `sql` and `query` layers measure five hydrated reads and a
+transactional batch of 100 changed titles, in memory and in a fresh SQLite file.
+The SQLite layer executes precompiled membership SQL; SQL lowers a parsed AST;
+query includes parsing. All three use the same prepare-per-call driver and small
+fleet-shaped vocabulary. The `archetype` cases measure backfill and 100
+archetype moves. Setup, seed loading, assertions and cleanup are outside timing.
+Files use WAL and `synchronous=normal`; timed writes commit to the file.
 
-Package layers use the small fleet-shaped vocabulary and FTS/traversal
-extensions; fleet uses its real, wider vocabulary, stamps, blob storage, indexes
-and rules. Thus fleet cost includes application overhead, not just a parser tax.
-All reads hydrate their selection; these are not counts masquerading as entity
-reads. Package drivers prepare/finalize statements per call at all three levels;
-fleet retains its production statement cache. SQL/query have no write parser of
-their own: their `apply-100` benches intentionally use the same transactional
-`@yaks/sqlite` patch path as the storage bench. Fleet uses the real
-`db.ts.apply`, including journal and provenance. Batches alternate two values,
-so all 100 cells actually change on every iteration without growing the entity
-corpus or changing read memberships. Fleet's journal grows as it does in
-production; each sample starts from a fresh database. One write op means **one
-batch**, not one cell.
+## Graph apply
 
-## Samples and comparison
+`bench/apply_bench.ts` compares N separate one-bundle applies with one apply of
+N bundles, for edits and creates at N=200 and N=1,000, on a SQLite file and
+`@yaks/ram`. It reuses the fleet corpus with production vocabulary documents
+from kernel, doc, edge, task, session, tools, model, context, archetype and
+effects. The graph uses the production kernel, doc, edge, task, session,
+archetype and effects plugins, including declared task rules and core stamps.
+SQLite additionally records the journal and uses the production cached driver.
+Both adapters number entities. This fixed composition is independent of the
+operator's config; it does not include blob storage or FTS indexing.
 
-`deno task bench` runs the four `*_bench.ts` files with `deno bench --json`,
-three fresh processes per storage mode, sequentially. Results have all 48 names,
-three ns/op samples per name, runtime/CPU/source-revision metadata, and the
-median. Deno's JSON exposes an average but not p50: the metric is therefore
-explicitly `median-of-3-deno-avg-ns`, **not** the per-iteration median. The JSON
-`ns` map and console ns/op/ops/sec table use that median of independent run
-averages. Allow a few minutes; don't run concurrently with test suites or other
-heavy jobs. `revision` records HEAD at invocation; uncommitted source changes
-are included in the measurement, so retain the diff alongside any before/after
-results.
+A sample owns a freshly seeded store. The seed is created once through this
+graph, then copied through storage outside timing, including its stamps and
+archetype descriptors. The graph is warmed before measuring. Every edited entity
+already exists; every created entity is absent. Creates cannot turn into edits
+or grow the corpus across samples. Each sample verifies the saved titles, stamps
+and archetype pointers after timing. SQLite writes use ordinary commits; there
+is no enclosing rollback transaction.
 
-Missing/extra/renamed benches, failed runs, nonpositive/nonfinite timings, or
-incomparable metric/workload/runtime/CPU metadata fail closed. An absent
-baseline is an error for `bench:check`, not permission to bless the current
-performance. Bump `WORKLOAD_VERSION` when changing the corpus, query shapes, or
-timed boundary, and explicitly accept a new baseline. Hardware/load and
-filesystem differences matter for absolute times: compare on the same box under
-similar load, inspect the raw samples, and investigate a noisy failure instead
-of repeatedly accepting it away. A runtime/CPU change also requires explicit
-acceptance.
-
-Benches are **not executed** by `deno task check` or the fast `deno task test`
-tier; only the small fixture/ratchet correctness tests run there. The existing
-hot-path ratio gate is independent: `bench:gate` / `bench:accept` now retain
-their original numbers in `bench/hotpath.baseline.json`. Web performance is
-unchanged. Neither existing gate is replaced by this throughput suite;
-`bench:hotpaths` retains the old direct `deno bench -A src` entry point.
-
-## Box-wide serialization
-
-`bench`, `bench:check`, and `bench:ratchet` use `bin/bench.sh` to take an
-exclusive `flock` on `${TMPDIR:-/tmp}/yaks-throughput-bench.lock` before
-starting Deno. All sessions/worktrees on the box must use the same TMPDIR (the
-default is `/tmp`). This requires Bash and util-linux `flock`. A second
-invocation prints one waiting line with the holder's PID and waits up to 1,800
-seconds, then fails without measuring if the lock is still busy. The PID can
-briefly be unknown while the first holder records it. The kernel releases the
-lock on process exit; stale PID text is harmless. Never delete the lock file,
-even after a crash: doing so would let new runs bypass waiters on the old inode.
-
-The runner prints the sample count and warns at measurement start if `ps` finds
-other `deno bench` processes or test runs (with their PIDs). This is
-best-effort, not a CPU-idleness guarantee: tests, direct `deno bench` calls,
-other benchmark gates, and jobs started later do not acquire this lock. Keep the
-box quiet. Calling `bin/bench.ts` directly also bypasses serialization; use the
-tasks above for measurements.
+The ratchet divides each Deno operation by N and records **ns/bundle**,
+displayed as **µs/bundle**. `counts` reports SQL statements per apply and per
+bundle, including BEGIN/COMMIT, post-commit reads and the cached driver's
+internal schema-version probes. Native statement executions are counted in a
+separate process so the observer adds no timing overhead. RAM has zero SQL
+statements. `deno run -A bench/apply-fixture.ts` independently verifies these
+counts.
 
 ## Relay admission
 
-`deno run -A --config deno.json bench/relay-admission.ts` measures synchronous
-Store relay admission and an ordinary `graph.apply(check)` reference over
-Durable SQLite. Pass a checkout path to run the same fixture against another
-revision. Each run warms an authenticated socket per owned entity, then sends 10
-values/second/entity for 200 simulated ticks at 1, 10 and 100 entities. The
-reported cost is median active wall time from three rounds; authentication,
-observers and the fanout timer are outside timing. SQL statements, write
-statements, transactions and refusals accompany the timings.
+`bench/relay_bench.ts` reuses T-64601's fixture retained by T-64638:
+authenticated sockets relaying ordinary admitted presence values on a warmed
+Store backed by Durable SQLite, at 1, 10 and 100 entities. A Deno operation
+sends ten simulated 100ms turns; the ratchet divides by ten times the entity
+count to record **ns/value**, displayed as **µs/value**. Two warm values
+exercise restored sinks and the held peer overlay before timing. Setup,
+observers, timer-driven fanout and cleanup are outside timing. Message admission
+completes synchronously; its returned delivery promise represents the excluded
+fanout.
+
+`counts` reports SQL statements, reads, writes and transactions per value.
+`deno run -A bench/relay-fixture.ts --counts` verifies them independently. The
+comparative CLI remains available:
+
+```sh
+deno run -A bench/relay-admission.ts /path/to/checkout 200
+```
+
+It reports relay and ordinary `graph.apply(check)` costs from three rounds at
+each entity count. A checkout argument permits comparing the same fixture across
+revisions. The warmed relay ratchet covers admission/coalescing rather than a
+socket round trip or fanout to observers.
+
+## Samples and comparison
+
+The runner takes three independent Deno process averages per case, sequentially,
+and records their median, raw samples, runtime, CPU, source revision, units and
+Linux load-average samples. Deno's JSON exposes an average; the metric is
+`median-of-3-deno-avg-ns`, not the per-iteration median. The storage modes run
+in separate processes, followed by the graph/relay cases. Allow several minutes.
+
+Missing or renamed cases, failed runs, invalid timings or counts, and different
+runtime/CPU/workload metadata fail closed. Changes to a workload or timed
+boundary need an explicit fresh baseline. `revision` records HEAD; uncommitted
+source changes are included, so retain the diff when comparing revisions.
+Inspect the raw samples and load averages when investigating a noisy result.
+
+## Box-wide serialization
+
+The three tasks use `bin/bench.sh` to acquire an exclusive `flock` on
+`${TMPDIR:-/tmp}/yaks-throughput-bench.lock`. Use the same TMPDIR across
+worktrees. A second invocation reports the holder's PID and waits up to 1,800
+seconds. The kernel releases the lock when its process exits. Never delete the
+lock file: waiters retain its inode.
+
+The runner warns if it finds other Deno bench/test processes at startup. This is
+not a CPU-idleness guarantee: direct bench commands and tests bypass the lock.
+Profile/probe commands should acquire the same lock. Calling `bin/bench.ts`
+directly also bypasses it.
+
+[Apply profiling](apply-profile.md) records the box composition's transaction
+residual and create-scaling investigation.
+[Workerd socket microtasks](workerd-microtasks.md) records a standalone
+hibernation probe. These are separate from the fixed ratchet composition and
+from the test suite.

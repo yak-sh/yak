@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Storage, graph.apply and relay measurements share this lock.
 # One inode shared by all worktrees. Never unlink it: waiters hold this inode.
 set -euo pipefail
 lock="${TMPDIR:-/tmp}/yaks-throughput-bench.lock"

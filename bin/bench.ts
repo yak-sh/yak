@@ -1,16 +1,20 @@
 #!/usr/bin/env -S deno run -A
 // Absolute throughput ratchet, separate from bench-gate.ts's hot-path ratios.
+import { MODES, WORKLOAD_VERSION } from '../packages/sqlite/fixtures/fleet.ts'
+
 import {
+  applyBenchmarkNames,
   benchmarkNames,
-  MODES,
-  WORKLOAD_VERSION,
-} from '../packages/sqlite/fixtures/fleet.ts'
+  bundlesPerOp,
+  relayBenchmarkNames,
+} from '../bench/names.ts'
 
 export const REGRESSION_THRESHOLD = 0.20
 export const RUNS = 3
 export const METRIC = 'median-of-3-deno-avg-ns'
 const BASELINE = 'bench/baseline.json'
 const RESULTS = 'bench/results.json'
+const PIPELINE_FILES = ['bench/apply_bench.ts', 'bench/relay_bench.ts']
 const FILES = [
   'packages/sqlite/throughput_bench.ts',
   'packages/sqlite/archetype_bench.ts',
@@ -24,6 +28,7 @@ export type Measurement = {
   runtime: string
   cpu: string
   ns: Record<string, number>
+  counts?: Record<string, Record<string, number>>
 }
 
 export function median(values: number[]): number {
@@ -100,6 +105,47 @@ export function regressions(base: Measurement, current: Measurement): string[] {
   )
 }
 
+export function validateCounts(counts: NonNullable<Measurement['counts']>) {
+  let fields: Record<string, string[]> = Object.fromEntries([
+    ...applyBenchmarkNames().map((n) => [n, ['sqlPerApply', 'sqlPerBundle']]),
+    ...relayBenchmarkNames().map((
+      n,
+    ) => [n, ['sql', 'reads', 'writes', 'transactions']]),
+  ])
+  if (
+    JSON.stringify(Object.keys(counts).sort()) !=
+      JSON.stringify(Object.keys(fields).sort())
+  ) {
+    throw new Error('Statement count benchmark set changed')
+  }
+  for (let [name, keys] of Object.entries(fields)) {
+    if (
+      JSON.stringify(Object.keys(counts[name]).sort()) !=
+        JSON.stringify(keys.sort()) ||
+      Object.values(counts[name]).some((n) => !Number.isFinite(n) || n < 0)
+    ) {
+      throw new Error(`Invalid statement counts: ${name}`)
+    }
+  }
+}
+export function countRegressions(base: Measurement, current: Measurement) {
+  if (!base.counts && !current.counts) return []
+  if (!base.counts || !current.counts) {
+    throw new Error('Missing statement counts')
+  }
+  validateCounts(base.counts)
+  validateCounts(current.counts)
+  let failed: string[] = []
+  for (let [name, counts] of Object.entries(base.counts)) {
+    for (let [field, n] of Object.entries(counts)) {
+      if (current.counts[name][field] > n * (1 + REGRESSION_THRESHOLD)) {
+        failed.push(`${name}/${field}: ${n} → ${current.counts[name][field]}`)
+      }
+    }
+  }
+  return failed
+}
+
 async function measure() {
   console.error(
     `bench: ${RUNS} samples per benchmark per storage mode (median)`,
@@ -137,8 +183,12 @@ async function measure() {
   )
   let runtime = ''
   let cpu = ''
+  let load: string[] = []
   for (let run = 0; run < RUNS; run++) {
-    for (let mode of MODES) {
+    for (let mode of [...MODES, 'pipeline']) {
+      if (Deno.build.os == 'linux') {
+        load.push(Deno.readTextFileSync('/proc/loadavg').trim())
+      }
       console.error(`bench: sample ${run + 1}/${RUNS}, ${mode}`)
       let env: Record<string, string> = {
         DB_PATH: ':memory:',
@@ -152,7 +202,12 @@ async function measure() {
           'libsqlite3.so.0'
       }
       let child = await new Deno.Command(Deno.execPath(), {
-        args: ['bench', '-A', '--json', ...FILES],
+        args: [
+          'bench',
+          '-A',
+          '--json',
+          ...(mode == 'pipeline' ? PIPELINE_FILES : FILES),
+        ],
         env,
         stdout: 'piped',
         stderr: 'inherit',
@@ -170,11 +225,29 @@ async function measure() {
       cpu = report.cpu
       let values = extract(
         report,
-        benchmarkNames().filter((n) => n.split('/')[1] == mode),
+        benchmarkNames().filter((n) =>
+          mode == 'pipeline'
+            ? n.startsWith('apply/') || n.startsWith('relay/')
+            : !n.startsWith('apply/') && !n.startsWith('relay/') &&
+              n.split('/')[1] == mode
+        ),
       )
-      for (let [name, ns] of Object.entries(values)) samples[name].push(ns)
+      for (let [name, ns] of Object.entries(values)) {
+        samples[name].push(ns / bundlesPerOp(name))
+      }
     }
   }
+  let counts: NonNullable<Measurement['counts']> = {}
+  for (let file of ['bench/apply-fixture.ts', 'bench/relay-fixture.ts']) {
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: ['run', '-A', file, '--counts'],
+      stdout: 'piped',
+      stderr: 'inherit',
+    }).output()
+    if (!out.success) throw new Error(`Statement counts failed: ${file}`)
+    Object.assign(counts, JSON.parse(new TextDecoder().decode(out.stdout)))
+  }
+  validateCounts(counts)
   let ns = Object.fromEntries(
     Object.entries(samples).map(([n, v]) => [n, median(v)]),
   )
@@ -194,6 +267,18 @@ async function measure() {
     revision: new TextDecoder().decode(rev.stdout).trim(),
     ns,
     samples,
+    counts,
+    loadAverage: load,
+    units: Object.fromEntries(
+      benchmarkNames().map((name) => [
+        name,
+        name.startsWith('apply/')
+          ? 'ns/bundle'
+          : name.startsWith('relay/')
+          ? 'ns/value'
+          : 'ns/op',
+      ]),
+    ),
   }
   return result
 }
@@ -224,12 +309,16 @@ export async function main(mode = 'run') {
   }
   write(RESULTS, { ...current, suiteTimings })
   for (let [name, ns] of Object.entries(current.ns)) {
+    let pipeline = name.startsWith('apply/') || name.startsWith('relay/')
+    let unit = pipeline ? current.units[name].replace('ns/', 'µs/') : 'ns/op'
     console.log(
-      `${name.padEnd(30)} ${ns.toFixed(0).padStart(12)} ns/op  ${
-        (1e9 / ns).toFixed(1).padStart(10)
-      } ops/s`,
+      `${name.padEnd(36)} ${
+        (pipeline ? ns / 1000 : ns).toFixed(pipeline ? 3 : 0).padStart(12)
+      } ${unit}`,
     )
   }
+  console.log(`load average samples: ${current.loadAverage.join('; ')}`)
+  console.log(`SQL counts: ${JSON.stringify(current.counts)}`)
   if (mode == 'ratchet') {
     write(BASELINE, current)
     console.log(
@@ -238,6 +327,8 @@ export async function main(mode = 'run') {
   }
   if (base) {
     let failed = regressions(base, current)
+    let counts = countRegressions(base, current)
+    for (let line of counts) console.error(`REGRESSION ${line}`)
     for (let name of failed) {
       console.error(
         `REGRESSION ${name}: ${
@@ -245,9 +336,11 @@ export async function main(mode = 'run') {
         }% slower`,
       )
     }
-    if (failed.length) {
+    if (failed.length || counts.length) {
       throw new Error(
-        `${failed.length} benchmarks exceeded REGRESSION_THRESHOLD (${
+        `${
+          failed.length + counts.length
+        } metrics exceeded REGRESSION_THRESHOLD (${
           REGRESSION_THRESHOLD * 100
         }%)`,
       )

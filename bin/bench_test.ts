@@ -1,17 +1,23 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import {
+  countRegressions,
   extract,
   type Measurement,
   median,
   METRIC,
   regressions,
+  validateCounts,
   validateNames,
 } from './bench.ts'
+import { WORKLOAD_VERSION } from '../packages/sqlite/fixtures/fleet.ts'
+
 import {
+  applyBenchmarkNames,
   benchmarkNames,
-  WORKLOAD_VERSION,
-} from '../packages/sqlite/fixtures/fleet.ts'
+  bundlesPerOp,
+  relayBenchmarkNames,
+} from '../bench/names.ts'
 
 let measurement = (): Measurement => ({
   version: 1,
@@ -69,4 +75,33 @@ test('Deno JSON extraction rejects failed, absent, and duplicate results', () =>
       benches: [{ name: 'one', results: [{ failed: 'boom' }] }],
     }, ['one'])
   )
+})
+
+test('apply and relay measurements normalize by the values in one operation', () => {
+  assertEquals(bundlesPerOp('apply/file/edit-alone-1000'), 1000)
+  assertEquals(bundlesPerOp('apply/ram/create-batch-200'), 200)
+  assertEquals(bundlesPerOp('relay/store/entities-100'), 1000)
+  assertEquals(bundlesPerOp('sqlite/file/apply-100'), 1)
+})
+test('statement counts accept zero for ram and refuse missing or increased work', () => {
+  let base = {
+    ...measurement(),
+    counts: Object.fromEntries([
+      ...applyBenchmarkNames().map((
+        n,
+      ) => [n, { sqlPerApply: 0, sqlPerBundle: 0 }]),
+      ...relayBenchmarkNames().map((
+        n,
+      ) => [n, { sql: 1, reads: 1, writes: 0, transactions: 1 }]),
+    ]),
+  }
+  validateCounts(base.counts)
+  let current = structuredClone(base)
+  assertEquals(countRegressions(base, current), [])
+  let name = relayBenchmarkNames()[0]
+  current.counts[name].reads = 2
+  assertEquals(countRegressions(base, current), [`${name}/reads: 1 → 2`])
+  delete current.counts[name]
+  assertThrows(() => countRegressions(base, current))
+  assertThrows(() => countRegressions(base, measurement()))
 })

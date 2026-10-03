@@ -78,7 +78,7 @@ const config :Workerd.Config = (
 )
 
 let timeout = async <T>(promise: Promise<T>, label: string): Promise<T> => {
-  let timer: number | undefined
+  let timer: ReturnType<typeof setTimeout> | undefined
   try {
     return await Promise.race([
       promise,

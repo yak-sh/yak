@@ -1,0 +1,1454 @@
+{
+  "revision": "7958c7632",
+  "composition": {
+    "kind": "environment",
+    "deno": "2.9.1",
+    "load": "6.79 6.81 5.79 3/1815 2476192",
+    "plugins": [
+      "@yaks/kernel",
+      "ids",
+      "@yaks/secrets",
+      "@yaks/key",
+      "@yaks/alias",
+      "@yaks/edge",
+      "@yaks/blob",
+      "representations",
+      "@yaks/doc",
+      "@yaks/archetype",
+      "@yaks/journal",
+      "@yaks/task",
+      "@yaks/project",
+      "@yaks/session",
+      "@yaks/model",
+      "@yaks/process",
+      "@yaks/builders",
+      "@yaks/mail",
+      "@yaks/wake",
+      "@yaks/page",
+      "@yaks/draft",
+      "@yaks/effects"
+    ],
+    "scratch": "file on same filesystem as configured box database"
+  },
+  "box_samples": [
+    {
+      "kind": "sample",
+      "work": "create",
+      "n": 1,
+      "rounds": 9,
+      "wall_us_per_bundle": 3557.132000000024,
+      "samples_us_per_bundle": [
+        5275.058999999942,
+        4455.90900000002,
+        4811.886999999956,
+        4411.9759999999815,
+        3329.345999999987,
+        2820.4429999999547,
+        3557.132000000024,
+        3240.0030000000015,
+        3421.463000000017
+      ],
+      "wall": 3557.132000000024,
+      "phases": {
+        "phase/normalize": {
+          "us_per_bundle": 60.439,
+          "calls_per_apply": 1
+        },
+        "phase/admit": {
+          "us_per_bundle": 26.065,
+          "calls_per_apply": 1
+        },
+        "phase/mint": {
+          "us_per_bundle": 40.926,
+          "calls_per_apply": 1
+        },
+        "phase/prepare": {
+          "us_per_bundle": 2.588,
+          "calls_per_apply": 1
+        },
+        "phase/gather": {
+          "us_per_bundle": 215.853,
+          "calls_per_apply": 1
+        },
+        "tracker/@yaks/archetype/make": {
+          "us_per_bundle": 10.726,
+          "calls_per_apply": 1
+        },
+        "phase/precondition": {
+          "us_per_bundle": 91.332,
+          "calls_per_apply": 1
+        },
+        "phase/rules": {
+          "us_per_bundle": 448.451,
+          "calls_per_apply": 1
+        },
+        "phase/mutate": {
+          "us_per_bundle": 451.733,
+          "calls_per_apply": 1
+        },
+        "phase/cascade": {
+          "us_per_bundle": 6.426,
+          "calls_per_apply": 1
+        },
+        "phase/stamp": {
+          "us_per_bundle": 766.855,
+          "calls_per_apply": 1
+        },
+        "tracker/@yaks/archetype/flush": {
+          "us_per_bundle": 546.795,
+          "calls_per_apply": 2
+        },
+        "phase/journal": {
+          "us_per_bundle": 146.489,
+          "calls_per_apply": 1
+        },
+        "phase/commit": {
+          "us_per_bundle": 289.077,
+          "calls_per_apply": 1
+        },
+        "storage-head": {
+          "us_per_bundle": 67.124,
+          "calls_per_apply": 1
+        },
+        "storage-tail": {
+          "us_per_bundle": 174.415,
+          "calls_per_apply": 1
+        },
+        "phase/transaction": {
+          "us_per_bundle": 3288.197,
+          "calls_per_apply": 1
+        },
+        "phase/compose": {
+          "us_per_bundle": 16.988,
+          "calls_per_apply": 1
+        }
+      },
+      "sql": {
+        "storage-head/pragma/schema_version": {
+          "us_per_bundle": 31.536,
+          "calls_per_apply": 1
+        },
+        "storage-head/begin/": {
+          "us_per_bundle": 13.185,
+          "calls_per_apply": 1
+        },
+        "body/select/rows": {
+          "us_per_bundle": 667.112,
+          "calls_per_apply": 26
+        },
+        "body/insert/entity": {
+          "us_per_bundle": 66.368,
+          "calls_per_apply": 1
+        },
+        "body/pragma/table_info": {
+          "us_per_bundle": 42.883,
+          "calls_per_apply": 1
+        },
+        "body/insert/doc": {
+          "us_per_bundle": 114.717,
+          "calls_per_apply": 1
+        },
+        "body/insert/task": {
+          "us_per_bundle": 44.647,
+          "calls_per_apply": 1
+        },
+        "body/update/created": {
+          "us_per_bundle": 24.28,
+          "calls_per_apply": 1
+        },
+        "body/insert/created": {
+          "us_per_bundle": 36.769,
+          "calls_per_apply": 1
+        },
+        "flush/@yaks/archetype/raw/": {
+          "us_per_bundle": 83.826,
+          "calls_per_apply": 1
+        },
+        "flush/@yaks/archetype/select/rows": {
+          "us_per_bundle": 309.329,
+          "calls_per_apply": 22
+        },
+        "flush/@yaks/archetype/update/entity": {
+          "us_per_bundle": 26.177,
+          "calls_per_apply": 1
+        },
+        "body/insert/journal_tx": {
+          "us_per_bundle": 34.925,
+          "calls_per_apply": 1
+        },
+        "body/insert/journal_change": {
+          "us_per_bundle": 53.757,
+          "calls_per_apply": 2
+        },
+        "body/insert/journal_field": {
+          "us_per_bundle": 15.822,
+          "calls_per_apply": 1
+        },
+        "body/raw/": {
+          "us_per_bundle": 86.438,
+          "calls_per_apply": 1
+        },
+        "storage-tail/commit/": {
+          "us_per_bundle": 166.556,
+          "calls_per_apply": 1
+        }
+      },
+      "load": "6.79 6.81 5.79 3/1815 2476194"
+    },
+    {
+      "kind": "sample",
+      "work": "edit",
+      "n": 1,
+      "rounds": 9,
+      "wall_us_per_bundle": 4375.009999999975,
+      "samples_us_per_bundle": [
+        7659.9319999999125,
+        5478.2109999999875,
+        4291.723000000047,
+        4153.102999999987,
+        4375.009999999975,
+        4040.680000000066,
+        3641.5120000000343,
+        76641.51700000002,
+        16736.524999999914
+      ],
+      "wall": 4375.009999999975,
+      "phases": {
+        "phase/normalize": {
+          "us_per_bundle": 31.682,
+          "calls_per_apply": 1
+        },
+        "phase/admit": {
+          "us_per_bundle": 22.185,
+          "calls_per_apply": 1
+        },
+        "phase/mint": {
+          "us_per_bundle": 31.387,
+          "calls_per_apply": 1
+        },
+        "phase/prepare": {
+          "us_per_bundle": 1.501,
+          "calls_per_apply": 1
+        },
+        "phase/gather": {
+          "us_per_bundle": 253.841,
+          "calls_per_apply": 1
+        },
+        "tracker/@yaks/archetype/make": {
+          "us_per_bundle": 2.273,
+          "calls_per_apply": 1
+        },
+        "phase/precondition": {
+          "us_per_bundle": 44.862,
+          "calls_per_apply": 1
+        },
+        "phase/rules": {
+          "us_per_bundle": 371.645,
+          "calls_per_apply": 1
+        },
+        "phase/mutate": {
+          "us_per_bundle": 833.884,
+          "calls_per_apply": 1
+        },
+        "phase/cascade": {
+          "us_per_bundle": 4.098,
+          "calls_per_apply": 1
+        },
+        "phase/stamp": {
+          "us_per_bundle": 838.985,
+          "calls_per_apply": 1
+        },
+        "tracker/@yaks/archetype/flush": {
+          "us_per_bundle": 740.24,
+          "calls_per_apply": 2
+        },
+        "phase/journal": {
+          "us_per_bundle": 123.295,
+          "calls_per_apply": 1
+        },
+        "phase/commit": {
+          "us_per_bundle": 685.86,
+          "calls_per_apply": 1
+        },
+        "storage-head": {
+          "us_per_bundle": 77.292,
+          "calls_per_apply": 1
+        },
+        "storage-tail": {
+          "us_per_bundle": 166.409,
+          "calls_per_apply": 1
+        },
+        "phase/transaction": {
+          "us_per_bundle": 4204.629,
+          "calls_per_apply": 1
+        },
+        "phase/compose": {
+          "us_per_bundle": 12.102,
+          "calls_per_apply": 1
+        }
+      },
+      "sql": {
+        "storage-head/pragma/schema_version": {
+          "us_per_bundle": 56.005,
+          "calls_per_apply": 1
+        },
+        "storage-head/begin/": {
+          "us_per_bundle": 12.031,
+          "calls_per_apply": 1
+        },
+        "body/raw/": {
+          "us_per_bundle": 232.61,
+          "calls_per_apply": 3
+        },
+        "body/select/rows": {
+          "us_per_bundle": 1112.267,
+          "calls_per_apply": 48
+        },
+        "body/update/doc": {
+          "us_per_bundle": 62.779,
+          "calls_per_apply": 1
+        },
+        "body/update/updated": {
+          "us_per_bundle": 27.526,
+          "calls_per_apply": 1
+        },
+        "body/insert/journal_tx": {
+          "us_per_bundle": 48.019,
+          "calls_per_apply": 1
+        },
+        "body/insert/journal_change": {
+          "us_per_bundle": 28.627,
+          "calls_per_apply": 1
+        },
+        "body/insert/journal_field": {
+          "us_per_bundle": 15.111,
+          "calls_per_apply": 1
+        },
+        "body/insert/entity": {
+          "us_per_bundle": 67.332,
+          "calls_per_apply": 2
+        },
+        "body/pragma/table_info": {
+          "us_per_bundle": 56.037,
+          "calls_per_apply": 1
+        },
+        "body/insert/effect": {
+          "us_per_bundle": 106.419,
+          "calls_per_apply": 2
+        },
+        "flush/@yaks/archetype/raw/": {
+          "us_per_bundle": 29.252,
+          "calls_per_apply": 1
+        },
+        "flush/@yaks/archetype/select/rows": {
+          "us_per_bundle": 521.962,
+          "calls_per_apply": 43
+        },
+        "flush/@yaks/archetype/update/entity": {
+          "us_per_bundle": 66.044,
+          "calls_per_apply": 4
+        },
+        "storage-tail/commit/": {
+          "us_per_bundle": 140.551,
+          "calls_per_apply": 1
+        }
+      },
+      "load": "6.79 6.81 5.79 3/1815 2476197"
+    },
+    {
+      "kind": "sample",
+      "work": "create",
+      "n": 200,
+      "rounds": 9,
+      "wall_us_per_bundle": 781.854495,
+      "samples_us_per_bundle": [
+        869.8497350000002,
+        794.0768049999997,
+        672.184964999999,
+        719.7794549999992,
+        663.2992650000006,
+        711.27571,
+        781.854495,
+        818.9004850000003,
+        891.21938
+      ],
+      "wall": 781.854495,
+      "phases": {
+        "phase/normalize": {
+          "us_per_bundle": 1.796,
+          "calls_per_apply": 1
+        },
+        "phase/admit": {
+          "us_per_bundle": 1.565,
+          "calls_per_apply": 1
+        },
+        "phase/mint": {
+          "us_per_bundle": 3.488,
+          "calls_per_apply": 1
+        },
+        "phase/prepare": {
+          "us_per_bundle": 0.01,
+          "calls_per_apply": 1
+        },
+        "phase/gather": {
+          "us_per_bundle": 2.395,
+          "calls_per_apply": 1
+        },
+        "tracker/@yaks/archetype/make": {
+          "us_per_bundle": 0.012,
+          "calls_per_apply": 1
+        },
+        "phase/precondition": {
+          "us_per_bundle": 1.931,
+          "calls_per_apply": 1
+        },
+        "phase/rules": {
+          "us_per_bundle": 5.642,
+          "calls_per_apply": 1
+        },
+        "phase/mutate": {
+          "us_per_bundle": 80.063,
+          "calls_per_apply": 1
+        },
+        "phase/cascade": {
+          "us_per_bundle": 0.055,
+          "calls_per_apply": 1
+        },
+        "phase/stamp": {
+          "us_per_bundle": 287.153,
+          "calls_per_apply": 1
+        },
+        "tracker/@yaks/archetype/flush": {
+          "us_per_bundle": 306.407,
+          "calls_per_apply": 2
+        },
+        "phase/journal": {
+          "us_per_bundle": 58.376,
+          "calls_per_apply": 1
+        },
+        "phase/commit": {
+          "us_per_bundle": 26.3,
+          "calls_per_apply": 1
+        },
+        "storage-head": {
+          "us_per_bundle": 0.303,
+          "calls_per_apply": 1
+        },
+        "storage-tail": {
+          "us_per_bundle": 2.879,
+          "calls_per_apply": 1
+        },
+        "phase/transaction": {
+          "us_per_bundle": 772.121,
+          "calls_per_apply": 1
+        },
+        "phase/compose": {
+          "us_per_bundle": 1.043,
+          "calls_per_apply": 1
+        }
+      },
+      "sql": {
+        "storage-head/pragma/schema_version": {
+          "us_per_bundle": 0.196,
+          "calls_per_apply": 1
+        },
+        "storage-head/begin/": {
+          "us_per_bundle": 0.054,
+          "calls_per_apply": 1
+        },
+        "body/select/rows": {
+          "us_per_bundle": 206.237,
+          "calls_per_apply": 4205
+        },
+        "body/insert/entity": {
+          "us_per_bundle": 16.869,
+          "calls_per_apply": 200
+        },
+        "body/pragma/table_info": {
+          "us_per_bundle": 0.137,
+          "calls_per_apply": 1
+        },
+        "body/insert/doc": {
+          "us_per_bundle": 18.469,
+          "calls_per_apply": 200
+        },
+        "body/insert/task": {
+          "us_per_bundle": 30.952,
+          "calls_per_apply": 200
+        },
+        "body/update/created": {
+          "us_per_bundle": 14.958,
+          "calls_per_apply": 200
+        },
+        "body/insert/created": {
+          "us_per_bundle": 25.975,
+          "calls_per_apply": 200
+        },
+        "flush/@yaks/archetype/raw/": {
+          "us_per_bundle": 0.208,
+          "calls_per_apply": 1
+        },
+        "flush/@yaks/archetype/select/rows": {
+          "us_per_bundle": 252.443,
+          "calls_per_apply": 4201
+        },
+        "flush/@yaks/archetype/update/entity": {
+          "us_per_bundle": 24.583,
+          "calls_per_apply": 200
+        },
+        "body/insert/journal_tx": {
+          "us_per_bundle": 0.323,
+          "calls_per_apply": 1
+        },
+        "body/insert/journal_change": {
+          "us_per_bundle": 40.282,
+          "calls_per_apply": 400
+        },
+        "body/insert/journal_field": {
+          "us_per_bundle": 9.822,
+          "calls_per_apply": 200
+        },
+        "body/raw/": {
+          "us_per_bundle": 0.423,
+          "calls_per_apply": 1
+        },
+        "storage-tail/commit/": {
+          "us_per_bundle": 2.449,
+          "calls_per_apply": 1
+        }
+      },
+      "load": "6.79 6.81 5.79 4/1816 2476265"
+    },
+    {
+      "kind": "sample",
+      "work": "edit",
+      "n": 200,
+      "rounds": 9,
+      "wall_us_per_bundle": 1258.92879,
+      "samples_us_per_bundle": [
+        1689.3544599999996,
+        1134.9291199999993,
+        1101.2923100000012,
+        1155.7561699999997,
+        1172.369799999999,
+        1300.8595349999996,
+        1365.8639299999982,
+        1258.92879,
+        1604.1461199999958
+      ],
+      "wall": 1258.92879,
+      "phases": {
+        "phase/normalize": {
+          "us_per_bundle": 1.23,
+          "calls_per_apply": 1
+        },
+        "phase/admit": {
+          "us_per_bundle": 1.116,
+          "calls_per_apply": 1
+        },
+        "phase/mint": {
+          "us_per_bundle": 2.134,
+          "calls_per_apply": 1
+        },
+        "phase/prepare": {
+          "us_per_bundle": 0.005,
+          "calls_per_apply": 1
+        },
+        "phase/gather": {
+          "us_per_bundle": 11.318,
+          "calls_per_apply": 1
+        },
+        "tracker/@yaks/archetype/make": {
+          "us_per_bundle": 0.014,
+          "calls_per_apply": 1
+        },
+        "phase/precondition": {
+          "us_per_bundle": 2.757,
+          "calls_per_apply": 1
+        },
+        "phase/rules": {
+          "us_per_bundle": 4.452,
+          "calls_per_apply": 1
+        },
+        "phase/mutate": {
+          "us_per_bundle": 249.951,
+          "calls_per_apply": 1
+        },
+        "phase/cascade": {
+          "us_per_bundle": 0.042,
+          "calls_per_apply": 1
+        },
+        "phase/stamp": {
+          "us_per_bundle": 272.969,
+          "calls_per_apply": 1
+        },
+        "tracker/@yaks/archetype/flush": {
+          "us_per_bundle": 456.833,
+          "calls_per_apply": 2
+        },
+        "phase/journal": {
+          "us_per_bundle": 31.222,
+          "calls_per_apply": 1
+        },
+        "phase/commit": {
+          "us_per_bundle": 218.426,
+          "calls_per_apply": 1
+        },
+        "storage-head": {
+          "us_per_bundle": 0.244,
+          "calls_per_apply": 1
+        },
+        "storage-tail": {
+          "us_per_bundle": 2.934,
+          "calls_per_apply": 1
+        },
+        "phase/transaction": {
+          "us_per_bundle": 1251.771,
+          "calls_per_apply": 1
+        },
+        "phase/compose": {
+          "us_per_bundle": 1.151,
+          "calls_per_apply": 1
+        }
+      },
+      "sql": {
+        "storage-head/pragma/schema_version": {
+          "us_per_bundle": 0.158,
+          "calls_per_apply": 1
+        },
+        "storage-head/begin/": {
+          "us_per_bundle": 0.042,
+          "calls_per_apply": 1
+        },
+        "body/select/rows": {
+          "us_per_bundle": 412.116,
+          "calls_per_apply": 8412
+        },
+        "body/raw/": {
+          "us_per_bundle": 0.717,
+          "calls_per_apply": 2
+        },
+        "body/update/doc": {
+          "us_per_bundle": 36.447,
+          "calls_per_apply": 200
+        },
+        "body/update/updated": {
+          "us_per_bundle": 14.898,
+          "calls_per_apply": 200
+        },
+        "body/insert/journal_tx": {
+          "us_per_bundle": 0.315,
+          "calls_per_apply": 1
+        },
+        "body/insert/journal_change": {
+          "us_per_bundle": 17.138,
+          "calls_per_apply": 200
+        },
+        "body/insert/journal_field": {
+          "us_per_bundle": 9.145,
+          "calls_per_apply": 200
+        },
+        "body/insert/entity": {
+          "us_per_bundle": 40.293,
+          "calls_per_apply": 400
+        },
+        "body/pragma/table_info": {
+          "us_per_bundle": 0.328,
+          "calls_per_apply": 1
+        },
+        "body/insert/effect": {
+          "us_per_bundle": 80.145,
+          "calls_per_apply": 400
+        },
+        "flush/@yaks/archetype/raw/": {
+          "us_per_bundle": 0.251,
+          "calls_per_apply": 1
+        },
+        "flush/@yaks/archetype/select/rows": {
+          "us_per_bundle": 373.502,
+          "calls_per_apply": 8401
+        },
+        "flush/@yaks/archetype/update/entity": {
+          "us_per_bundle": 41.051,
+          "calls_per_apply": 800
+        },
+        "storage-tail/commit/": {
+          "us_per_bundle": 2.67,
+          "calls_per_apply": 1
+        }
+      },
+      "load": "6.79 6.81 5.79 4/1819 2476362"
+    },
+    {
+      "kind": "sample",
+      "work": "create",
+      "n": 1000,
+      "rounds": 9,
+      "wall_us_per_bundle": 756.1185779999996,
+      "samples_us_per_bundle": [
+        1032.2180639999997,
+        964.5820450000001,
+        752.7229960000004,
+        756.1185779999996,
+        862.9188670000003,
+        707.5668249999999,
+        766.7693310000013,
+        717.9175689999993,
+        723.7569089999997
+      ],
+      "wall": 756.1185779999996,
+      "phases": {
+        "phase/normalize": {
+          "us_per_bundle": 1.385,
+          "calls_per_apply": 1
+        },
+        "phase/admit": {
+          "us_per_bundle": 1.049,
+          "calls_per_apply": 1
+        },
+        "phase/mint": {
+          "us_per_bundle": 3.284,
+          "calls_per_apply": 1
+        },
+        "phase/prepare": {
+          "us_per_bundle": 0.002,
+          "calls_per_apply": 1
+        },
+        "phase/gather": {
+          "us_per_bundle": 2.412,
+          "calls_per_apply": 1
+        },
+        "tracker/@yaks/archetype/make": {
+          "us_per_bundle": 0.003,
+          "calls_per_apply": 1
+        },
+        "phase/precondition": {
+          "us_per_bundle": 4.464,
+          "calls_per_apply": 1
+        },
+        "phase/rules": {
+          "us_per_bundle": 4.503,
+          "calls_per_apply": 1
+        },
+        "phase/mutate": {
+          "us_per_bundle": 81.98,
+          "calls_per_apply": 1
+        },
+        "phase/cascade": {
+          "us_per_bundle": 0.025,
+          "calls_per_apply": 1
+        },
+        "phase/stamp": {
+          "us_per_bundle": 280.753,
+          "calls_per_apply": 1
+        },
+        "tracker/@yaks/archetype/flush": {
+          "us_per_bundle": 212.919,
+          "calls_per_apply": 2
+        },
+        "phase/journal": {
+          "us_per_bundle": 57.699,
+          "calls_per_apply": 1
+        },
+        "phase/commit": {
+          "us_per_bundle": 100.311,
+          "calls_per_apply": 1
+        },
+        "storage-head": {
+          "us_per_bundle": 0.064,
+          "calls_per_apply": 1
+        },
+        "storage-tail": {
+          "us_per_bundle": 0.91,
+          "calls_per_apply": 1
+        },
+        "phase/transaction": {
+          "us_per_bundle": 746.194,
+          "calls_per_apply": 1
+        },
+        "phase/compose": {
+          "us_per_bundle": 1.976,
+          "calls_per_apply": 1
+        }
+      },
+      "sql": {
+        "storage-head/pragma/schema_version": {
+          "us_per_bundle": 0.043,
+          "calls_per_apply": 1
+        },
+        "storage-head/begin/": {
+          "us_per_bundle": 0.009,
+          "calls_per_apply": 1
+        },
+        "body/select/rows": {
+          "us_per_bundle": 206.254,
+          "calls_per_apply": 21005
+        },
+        "body/insert/entity": {
+          "us_per_bundle": 16.936,
+          "calls_per_apply": 1000
+        },
+        "body/pragma/table_info": {
+          "us_per_bundle": 0.032,
+          "calls_per_apply": 1
+        },
+        "body/insert/doc": {
+          "us_per_bundle": 18.282,
+          "calls_per_apply": 1000
+        },
+        "body/insert/task": {
+          "us_per_bundle": 31.905,
+          "calls_per_apply": 1000
+        },
+        "body/update/created": {
+          "us_per_bundle": 14.946,
+          "calls_per_apply": 1000
+        },
+        "body/insert/created": {
+          "us_per_bundle": 24.811,
+          "calls_per_apply": 1000
+        },
+        "flush/@yaks/archetype/raw/": {
+          "us_per_bundle": 0.052,
+          "calls_per_apply": 1
+        },
+        "flush/@yaks/archetype/select/rows": {
+          "us_per_bundle": 178.527,
+          "calls_per_apply": 21001
+        },
+        "flush/@yaks/archetype/update/entity": {
+          "us_per_bundle": 14.382,
+          "calls_per_apply": 1000
+        },
+        "body/insert/journal_tx": {
+          "us_per_bundle": 0.082,
+          "calls_per_apply": 1
+        },
+        "body/insert/journal_change": {
+          "us_per_bundle": 40.354,
+          "calls_per_apply": 2000
+        },
+        "body/insert/journal_field": {
+          "us_per_bundle": 9.293,
+          "calls_per_apply": 1000
+        },
+        "body/raw/": {
+          "us_per_bundle": 0.091,
+          "calls_per_apply": 1
+        },
+        "storage-tail/commit/": {
+          "us_per_bundle": 0.786,
+          "calls_per_apply": 1
+        }
+      },
+      "load": "6.28 6.70 5.77 4/1811 2476621"
+    },
+    {
+      "kind": "sample",
+      "work": "edit",
+      "n": 1000,
+      "rounds": 9,
+      "wall_us_per_bundle": 1335.1594049999983,
+      "samples_us_per_bundle": [
+        1658.135968999999,
+        1222.6896809999998,
+        1217.5141190000013,
+        1306.4223509999974,
+        1254.5572350000004,
+        1335.1594049999983,
+        1587.9823419999993,
+        1363.3340179999977,
+        1493.0353020000002
+      ],
+      "wall": 1335.1594049999983,
+      "phases": {
+        "phase/normalize": {
+          "us_per_bundle": 0.97,
+          "calls_per_apply": 1
+        },
+        "phase/admit": {
+          "us_per_bundle": 1.018,
+          "calls_per_apply": 1
+        },
+        "phase/mint": {
+          "us_per_bundle": 3.197,
+          "calls_per_apply": 1
+        },
+        "phase/prepare": {
+          "us_per_bundle": 0.001,
+          "calls_per_apply": 1
+        },
+        "phase/gather": {
+          "us_per_bundle": 9.9,
+          "calls_per_apply": 1
+        },
+        "tracker/@yaks/archetype/make": {
+          "us_per_bundle": 0.003,
+          "calls_per_apply": 1
+        },
+        "phase/precondition": {
+          "us_per_bundle": 2.904,
+          "calls_per_apply": 1
+        },
+        "phase/rules": {
+          "us_per_bundle": 2.579,
+          "calls_per_apply": 1
+        },
+        "phase/mutate": {
+          "us_per_bundle": 264.666,
+          "calls_per_apply": 1
+        },
+        "phase/cascade": {
+          "us_per_bundle": 0.035,
+          "calls_per_apply": 1
+        },
+        "phase/stamp": {
+          "us_per_bundle": 224.773,
+          "calls_per_apply": 1
+        },
+        "tracker/@yaks/archetype/flush": {
+          "us_per_bundle": 503.269,
+          "calls_per_apply": 2
+        },
+        "phase/journal": {
+          "us_per_bundle": 31.356,
+          "calls_per_apply": 1
+        },
+        "phase/commit": {
+          "us_per_bundle": 286.056,
+          "calls_per_apply": 1
+        },
+        "storage-head": {
+          "us_per_bundle": 0.06,
+          "calls_per_apply": 1
+        },
+        "storage-tail": {
+          "us_per_bundle": 1.884,
+          "calls_per_apply": 1
+        },
+        "phase/transaction": {
+          "us_per_bundle": 1327.653,
+          "calls_per_apply": 1
+        },
+        "phase/compose": {
+          "us_per_bundle": 1.126,
+          "calls_per_apply": 1
+        }
+      },
+      "sql": {
+        "storage-head/pragma/schema_version": {
+          "us_per_bundle": 0.041,
+          "calls_per_apply": 1
+        },
+        "storage-head/begin/": {
+          "us_per_bundle": 0.008,
+          "calls_per_apply": 1
+        },
+        "body/select/rows": {
+          "us_per_bundle": 394.376,
+          "calls_per_apply": 42014
+        },
+        "body/update/doc": {
+          "us_per_bundle": 34.642,
+          "calls_per_apply": 1000
+        },
+        "body/update/updated": {
+          "us_per_bundle": 13.928,
+          "calls_per_apply": 1000
+        },
+        "body/insert/journal_tx": {
+          "us_per_bundle": 0.143,
+          "calls_per_apply": 1
+        },
+        "body/insert/journal_change": {
+          "us_per_bundle": 17.405,
+          "calls_per_apply": 1000
+        },
+        "body/insert/journal_field": {
+          "us_per_bundle": 9.87,
+          "calls_per_apply": 1000
+        },
+        "body/raw/": {
+          "us_per_bundle": 0.228,
+          "calls_per_apply": 1
+        },
+        "body/insert/entity": {
+          "us_per_bundle": 34.238,
+          "calls_per_apply": 2000
+        },
+        "body/pragma/table_info": {
+          "us_per_bundle": 0.106,
+          "calls_per_apply": 1
+        },
+        "body/insert/effect": {
+          "us_per_bundle": 78.359,
+          "calls_per_apply": 2000
+        },
+        "flush/@yaks/archetype/select/rows": {
+          "us_per_bundle": 411.041,
+          "calls_per_apply": 42003
+        },
+        "flush/@yaks/archetype/update/entity": {
+          "us_per_bundle": 45.302,
+          "calls_per_apply": 4000
+        },
+        "storage-tail/commit/": {
+          "us_per_bundle": 1.657,
+          "calls_per_apply": 1
+        }
+      },
+      "load": "6.04 6.63 5.76 7/1904 2477192"
+    }
+  ],
+  "lone_edit": {
+    "kind": "sample",
+    "work": "edit",
+    "n": 1,
+    "rounds": 101,
+    "wall_us_per_bundle": 3562.6780000000053,
+    "samples_us_per_bundle": [
+      9413.181000000008,
+      6892.524999999978,
+      6099.212999999963,
+      4282.439000000068,
+      4370.196000000078,
+      3579.9710000000005,
+      3593.8690000000406,
+      3750.645000000077,
+      3461.3180000000057,
+      3337.7499999999145,
+      3352.1670000000086,
+      3299.3660000000773,
+      3135.968000000048,
+      3129.105000000095,
+      3081.099999999992,
+      3939.5139999999174,
+      3217.0059999999694,
+      68824.94800000006,
+      21087.940000000002,
+      3408.6190000000443,
+      3222.0450000000938,
+      3502.8219999999237,
+      3381.0609999999315,
+      4433.670000000006,
+      3216.1989999999605,
+      3079.3659999999363,
+      3350.612000000069,
+      3548.526000000038,
+      3191.4430000000493,
+      3262.273999999934,
+      3448.8229999999476,
+      3374.6150000000625,
+      3466.199999999958,
+      3903.0199999999695,
+      5029.522000000043,
+      7170.305999999982,
+      4284.76999999998,
+      3562.6780000000053,
+      4589.781000000016,
+      4212.425000000053,
+      3769.131000000016,
+      3399.342000000047,
+      4434.272000000078,
+      4193.144999999959,
+      3221.3879999999335,
+      3115.2270000000044,
+      3060.7049999999845,
+      2976.9249999999374,
+      3441.338999999971,
+      4229.559999999992,
+      3587.099999999964,
+      3282.4209999998857,
+      3406.2790000000405,
+      2963.837999999896,
+      3111.548999999968,
+      3002.3559999999634,
+      3186.5690000001905,
+      4732.739000000038,
+      54829.2849999998,
+      12807.896000000028,
+      3105.118000000175,
+      4030.582000000095,
+      2990.839000000051,
+      2994.3960000000516,
+      3072.646999999961,
+      3132.859999999937,
+      3198.620000000119,
+      3027.135000000044,
+      3503.0850000000555,
+      3866.805000000113,
+      3642.8739999998925,
+      3551.2529999998605,
+      3956.4620000001014,
+      4373.783000000003,
+      3896.8529999999646,
+      3702.83500000005,
+      3957.4290000000474,
+      3929.213000000118,
+      3886.796000000004,
+      3961.0830000001442,
+      3997.514999999794,
+      4001.166000000012,
+      4130.5439999998725,
+      4120.462000000089,
+      4502.683999999817,
+      3436.4009999999325,
+      3144.995999999992,
+      3314.348000000109,
+      4281.733000000031,
+      3131.0309999998935,
+      2928.681000000097,
+      2908.766999999898,
+      3183.0549999999675,
+      3747.8360000000066,
+      3784.0380000000096,
+      4914.248000000043,
+      3757.1609999999964,
+      3565.0090000001455,
+      59333.20800000001,
+      21919.216000000008,
+      3254.131000000143
+    ],
+    "wall": 3562.6780000000053,
+    "phases": {
+      "phase/normalize": {
+        "us_per_bundle": 40.95,
+        "calls_per_apply": 1
+      },
+      "phase/admit": {
+        "us_per_bundle": 19.79,
+        "calls_per_apply": 1
+      },
+      "phase/mint": {
+        "us_per_bundle": 30.032,
+        "calls_per_apply": 1
+      },
+      "phase/prepare": {
+        "us_per_bundle": 1.075,
+        "calls_per_apply": 1
+      },
+      "phase/gather": {
+        "us_per_bundle": 225.251,
+        "calls_per_apply": 1
+      },
+      "tracker/@yaks/archetype/make": {
+        "us_per_bundle": 2.176,
+        "calls_per_apply": 1
+      },
+      "phase/precondition": {
+        "us_per_bundle": 48.147,
+        "calls_per_apply": 1
+      },
+      "phase/rules": {
+        "us_per_bundle": 308.99,
+        "calls_per_apply": 1
+      },
+      "phase/mutate": {
+        "us_per_bundle": 659.977,
+        "calls_per_apply": 1
+      },
+      "phase/cascade": {
+        "us_per_bundle": 3.068,
+        "calls_per_apply": 1
+      },
+      "phase/stamp": {
+        "us_per_bundle": 520.47,
+        "calls_per_apply": 1
+      },
+      "tracker/@yaks/archetype/flush": {
+        "us_per_bundle": 651.162,
+        "calls_per_apply": 2
+      },
+      "phase/journal": {
+        "us_per_bundle": 130.747,
+        "calls_per_apply": 1
+      },
+      "phase/commit": {
+        "us_per_bundle": 624.021,
+        "calls_per_apply": 1
+      },
+      "storage-head": {
+        "us_per_bundle": 45.266,
+        "calls_per_apply": 1
+      },
+      "storage-tail": {
+        "us_per_bundle": 97.425,
+        "calls_per_apply": 1
+      },
+      "phase/transaction": {
+        "us_per_bundle": 3378.359,
+        "calls_per_apply": 1
+      },
+      "phase/compose": {
+        "us_per_bundle": 11.299,
+        "calls_per_apply": 1
+      }
+    },
+    "sql": {
+      "storage-head/pragma/schema_version": {
+        "us_per_bundle": 25.836,
+        "calls_per_apply": 1
+      },
+      "storage-head/begin/": {
+        "us_per_bundle": 11.164,
+        "calls_per_apply": 1
+      },
+      "body/raw/": {
+        "us_per_bundle": 294.731,
+        "calls_per_apply": 3
+      },
+      "body/select/entity": {
+        "us_per_bundle": 177.784,
+        "calls_per_apply": 5
+      },
+      "body/select/": {
+        "us_per_bundle": 66.156,
+        "calls_per_apply": 1
+      },
+      "body/select/archetype": {
+        "us_per_bundle": 34.647,
+        "calls_per_apply": 2
+      },
+      "body/select/key": {
+        "us_per_bundle": 27.833,
+        "calls_per_apply": 2
+      },
+      "body/select/entry": {
+        "us_per_bundle": 26.441,
+        "calls_per_apply": 2
+      },
+      "body/select/effect": {
+        "us_per_bundle": 27.164,
+        "calls_per_apply": 2
+      },
+      "body/select/edge": {
+        "us_per_bundle": 26.969,
+        "calls_per_apply": 2
+      },
+      "body/select/symbol": {
+        "us_per_bundle": 26.939,
+        "calls_per_apply": 2
+      },
+      "body/select/module": {
+        "us_per_bundle": 27.105,
+        "calls_per_apply": 2
+      },
+      "body/select/file": {
+        "us_per_bundle": 26.318,
+        "calls_per_apply": 2
+      },
+      "body/select/package": {
+        "us_per_bundle": 26.982,
+        "calls_per_apply": 2
+      },
+      "body/select/tool": {
+        "us_per_bundle": 30.714,
+        "calls_per_apply": 2
+      },
+      "body/select/call": {
+        "us_per_bundle": 26.702,
+        "calls_per_apply": 2
+      },
+      "body/select/execution": {
+        "us_per_bundle": 30.196,
+        "calls_per_apply": 2
+      },
+      "body/select/result": {
+        "us_per_bundle": 26.789,
+        "calls_per_apply": 2
+      },
+      "body/select/output": {
+        "us_per_bundle": 52.307,
+        "calls_per_apply": 2
+      },
+      "body/select/lease": {
+        "us_per_bundle": 34.774,
+        "calls_per_apply": 2
+      },
+      "body/select/secret": {
+        "us_per_bundle": 19.625,
+        "calls_per_apply": 2
+      },
+      "body/select/process": {
+        "us_per_bundle": 17.931,
+        "calls_per_apply": 2
+      },
+      "body/select/ref": {
+        "us_per_bundle": 18.287,
+        "calls_per_apply": 2
+      },
+      "body/select/_package": {
+        "us_per_bundle": 19.495,
+        "calls_per_apply": 2
+      },
+      "body/select/_comp": {
+        "us_per_bundle": 18.79,
+        "calls_per_apply": 2
+      },
+      "body/select/_prop": {
+        "us_per_bundle": 17.304,
+        "calls_per_apply": 2
+      },
+      "body/update/doc": {
+        "us_per_bundle": 45.268,
+        "calls_per_apply": 1
+      },
+      "body/update/updated": {
+        "us_per_bundle": 28.498,
+        "calls_per_apply": 1
+      },
+      "body/insert/journal_tx": {
+        "us_per_bundle": 51.656,
+        "calls_per_apply": 1
+      },
+      "body/insert/journal_change": {
+        "us_per_bundle": 30.67,
+        "calls_per_apply": 1
+      },
+      "body/insert/journal_field": {
+        "us_per_bundle": 15.186,
+        "calls_per_apply": 1
+      },
+      "body/insert/entity": {
+        "us_per_bundle": 52.946,
+        "calls_per_apply": 2
+      },
+      "body/pragma/table_info": {
+        "us_per_bundle": 40.107,
+        "calls_per_apply": 1
+      },
+      "body/insert/effect": {
+        "us_per_bundle": 97.296,
+        "calls_per_apply": 2
+      },
+      "flush/@yaks/archetype/raw/": {
+        "us_per_bundle": 27.054,
+        "calls_per_apply": 1
+      },
+      "flush/@yaks/archetype/select/entity": {
+        "us_per_bundle": 28.375,
+        "calls_per_apply": 1
+      },
+      "flush/@yaks/archetype/select/archetype": {
+        "us_per_bundle": 22.358,
+        "calls_per_apply": 2
+      },
+      "flush/@yaks/archetype/select/key": {
+        "us_per_bundle": 18.352,
+        "calls_per_apply": 2
+      },
+      "flush/@yaks/archetype/select/entry": {
+        "us_per_bundle": 16.843,
+        "calls_per_apply": 2
+      },
+      "flush/@yaks/archetype/select/effect": {
+        "us_per_bundle": 19.254,
+        "calls_per_apply": 2
+      },
+      "flush/@yaks/archetype/select/edge": {
+        "us_per_bundle": 16.816,
+        "calls_per_apply": 2
+      },
+      "flush/@yaks/archetype/select/symbol": {
+        "us_per_bundle": 16.679,
+        "calls_per_apply": 2
+      },
+      "flush/@yaks/archetype/select/module": {
+        "us_per_bundle": 16.9,
+        "calls_per_apply": 2
+      },
+      "flush/@yaks/archetype/select/file": {
+        "us_per_bundle": 17.289,
+        "calls_per_apply": 2
+      },
+      "flush/@yaks/archetype/select/package": {
+        "us_per_bundle": 17.005,
+        "calls_per_apply": 2
+      },
+      "flush/@yaks/archetype/select/tool": {
+        "us_per_bundle": 17.448,
+        "calls_per_apply": 2
+      },
+      "flush/@yaks/archetype/select/call": {
+        "us_per_bundle": 16.604,
+        "calls_per_apply": 2
+      },
+      "flush/@yaks/archetype/select/execution": {
+        "us_per_bundle": 17.041,
+        "calls_per_apply": 2
+      },
+      "flush/@yaks/archetype/select/result": {
+        "us_per_bundle": 17.326,
+        "calls_per_apply": 2
+      },
+      "flush/@yaks/archetype/select/output": {
+        "us_per_bundle": 16.964,
+        "calls_per_apply": 2
+      },
+      "flush/@yaks/archetype/select/lease": {
+        "us_per_bundle": 16.536,
+        "calls_per_apply": 2
+      },
+      "flush/@yaks/archetype/select/secret": {
+        "us_per_bundle": 17.108,
+        "calls_per_apply": 2
+      },
+      "flush/@yaks/archetype/select/process": {
+        "us_per_bundle": 17.054,
+        "calls_per_apply": 2
+      },
+      "flush/@yaks/archetype/select/ref": {
+        "us_per_bundle": 17.052,
+        "calls_per_apply": 2
+      },
+      "flush/@yaks/archetype/select/_package": {
+        "us_per_bundle": 17.02,
+        "calls_per_apply": 2
+      },
+      "flush/@yaks/archetype/select/_comp": {
+        "us_per_bundle": 45.956,
+        "calls_per_apply": 2
+      },
+      "flush/@yaks/archetype/select/_prop": {
+        "us_per_bundle": 31.719,
+        "calls_per_apply": 2
+      },
+      "flush/@yaks/archetype/update/entity": {
+        "us_per_bundle": 64.456,
+        "calls_per_apply": 4
+      },
+      "storage-tail/commit/": {
+        "us_per_bundle": 92.32,
+        "calls_per_apply": 1
+      }
+    },
+    "load": "5.96 6.60 5.75 8/1920 2477789"
+  },
+  "effects_create_scans": [
+    {
+      "n": 200,
+      "calls": 200,
+      "visits": 160000
+    },
+    {
+      "n": 1000,
+      "calls": 1000,
+      "visits": 4000000
+    }
+  ],
+  "cpu_profile": {
+    "command": "deno run -A --cpu-prof --cpu-prof-md --cpu-prof-interval=200 --cpu-prof-dir=/tmp/apply-profile-cpu --cpu-prof-name=create.cpuprofile bench/apply-profile.ts 12 create-1000",
+    "sampling_interval_us": 200,
+    "samples": 52821,
+    "inPool_self_samples": 4422,
+    "inPool_inclusive_samples": 5764,
+    "report_self_percent": 11.0,
+    "report_inclusive_percent": 14.3,
+    "note": "Percentages are from Deno generated CPU report; this separate sampling run is not a timing baseline."
+  },
+  "notes": [
+    "Timing wrappers add overhead: these numbers attribute costs, ratchet numbers come from unprofiled benches.",
+    "box_samples used SQL labels grouped as rows and rendered SELECT twice; lone_edit labels read AST directly and records driver time only.",
+    "Original single-run 681\u21921259 us/create magnitude is not reproduced; repeated warmed box creates 782\u2192756 us/bundle; operation count proves a quadratic term still exists."
+  ]
+}

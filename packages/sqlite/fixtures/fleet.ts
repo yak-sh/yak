@@ -152,7 +152,7 @@ export const OPERATIONS = [
   'walk-unbounded',
   'apply-100',
 ]
-export const LAYERS = ['sqlite', 'sql', 'query', 'fleet'] as const
+export const LAYERS = ['sqlite', 'sql', 'query'] as const
 export const MODES = ['memory', 'file'] as const
 export const benchmarkNames = () => [
   ...LAYERS.flatMap((layer) =>
