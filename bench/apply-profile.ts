@@ -5,6 +5,7 @@ import { compose, facet } from '@yaks/cli/host'
 import { configPath, read } from '@yaks/cli'
 import { type Bundle, type Graph, signed, type Storage } from '@yaks/graph'
 import type { Stmt } from '@yaks/sql'
+import { record as capture } from '@yaks/trace'
 
 const config = read(configPath()!)
 const parent = config.db!.slice(0, config.db!.lastIndexOf('/'))
@@ -150,12 +151,21 @@ try {
     plugins: g.plugins.map((p) => p.name),
     scratch: 'file on same filesystem as configured box database',
   }))
-  const apply = (bundles: Bundle[]) =>
-    g.apply(signed(bundles, { by: actor }), {
-      trace: (name, ms) => {
-        if (active) record(costs, `phase/${name}`, ms)
-      },
-    })
+  const apply = async (bundles: Bundle[]) => {
+    const captured = await capture(
+      g,
+      () => g.apply(signed(bundles, { by: actor })),
+    )
+    if (active) {
+      for (const span of captured.spans) {
+        if (
+          span.kind == 'phase' && span.stage == 'end' &&
+          span.package == '@yaks/graph' && !span.plugin
+        ) record(costs, `phase/${span.name}`, span.duration!)
+      }
+    }
+    return captured.result
+  }
   const fresh = (n: number): Bundle[] =>
     Array.from({ length: n }, () => ({
       entity: { eid: eid() },
