@@ -1,0 +1,2512 @@
+{
+  "description": "Historical calibration before rebasing onto the graph cascade and recorded-span changes. These failed checks are retained; none was accepted as a higher baseline. Units and raw process averages are as recorded by the runner.",
+  "baseline": {
+    "version": 1,
+    "metric": "median-of-7-deno-avg-ns",
+    "workload": 1,
+    "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+    "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+    "measuredAt": "2026-10-03T22:41:16.904Z",
+    "revision": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+    "ns": {
+      "sqlite/memory/point": 347260,
+      "sqlite/memory/status-open": 8322272,
+      "sqlite/memory/fts": 722768,
+      "sqlite/memory/walk-16": 566220,
+      "sqlite/memory/walk-unbounded": 914728,
+      "sqlite/memory/apply-100": 6661479,
+      "sqlite/file/point": 364955,
+      "sqlite/file/status-open": 8665907,
+      "sqlite/file/fts": 790061,
+      "sqlite/file/walk-16": 616529,
+      "sqlite/file/walk-unbounded": 937119,
+      "sqlite/file/apply-100": 7009461,
+      "sql/memory/point": 350052,
+      "sql/memory/status-open": 8669979,
+      "sql/memory/fts": 773439,
+      "sql/memory/walk-16": 610185,
+      "sql/memory/walk-unbounded": 929890,
+      "sql/memory/apply-100": 6511735,
+      "sql/file/point": 380996,
+      "sql/file/status-open": 8658178,
+      "sql/file/fts": 823143,
+      "sql/file/walk-16": 654558,
+      "sql/file/walk-unbounded": 1019711,
+      "sql/file/apply-100": 7199917,
+      "query/memory/point": 365145,
+      "query/memory/status-open": 8849085,
+      "query/memory/fts": 802110,
+      "query/memory/walk-16": 625107,
+      "query/memory/walk-unbounded": 948074,
+      "query/memory/apply-100": 6360371,
+      "query/file/point": 377176,
+      "query/file/status-open": 9411935,
+      "query/file/fts": 819895,
+      "query/file/walk-16": 651678,
+      "query/file/walk-unbounded": 1043108,
+      "query/file/apply-100": 7067138,
+      "archetype/memory/backfill": 36833042,
+      "archetype/memory/move-100": 9379214,
+      "archetype/file/backfill": 39314551,
+      "archetype/file/move-100": 9930321,
+      "apply/file/edit-alone-200": 1519469.455,
+      "apply/file/edit-batch-200": 262100.23,
+      "apply/file/edit-alone-1000": 1335211.117,
+      "apply/file/edit-batch-1000": 152423.916,
+      "apply/file/create-alone-200": 1548565.02,
+      "apply/file/create-batch-200": 329990.175,
+      "apply/file/create-alone-1000": 1498482.043,
+      "apply/file/create-batch-1000": 236177.979,
+      "apply/ram/edit-alone-200": 159456.665,
+      "apply/ram/edit-batch-200": 28091.405,
+      "apply/ram/edit-alone-1000": 128110.457,
+      "apply/ram/edit-batch-1000": 26539.081,
+      "apply/ram/create-alone-200": 153940.925,
+      "apply/ram/create-batch-200": 30317.625,
+      "apply/ram/create-alone-1000": 139580.417,
+      "apply/ram/create-batch-1000": 28105.869,
+      "relay/store/entities-1": 581684.8,
+      "relay/store/entities-10": 317959.19,
+      "relay/store/entities-100": 289369.806
+    },
+    "samples": {
+      "sqlite/memory/point": [
+        352601,
+        313023,
+        347260,
+        407286,
+        322299,
+        337221,
+        358579
+      ],
+      "sqlite/memory/status-open": [
+        8577572,
+        8201138,
+        8322272,
+        20423207,
+        8191274,
+        7949308,
+        11240007
+      ],
+      "sqlite/memory/fts": [
+        722768,
+        692053,
+        717412,
+        732650,
+        720717,
+        747072,
+        758693
+      ],
+      "sqlite/memory/walk-16": [
+        559640,
+        534735,
+        570300,
+        566220,
+        560962,
+        572763,
+        578450
+      ],
+      "sqlite/memory/walk-unbounded": [
+        914728,
+        840469,
+        921493,
+        905013,
+        878782,
+        934266,
+        946374
+      ],
+      "sqlite/memory/apply-100": [
+        7091810,
+        6036536,
+        6661479,
+        7258431,
+        6375176,
+        6647492,
+        6739963
+      ],
+      "sqlite/file/point": [
+        357800,
+        344845,
+        364955,
+        346897,
+        367238,
+        367138,
+        374175
+      ],
+      "sqlite/file/status-open": [
+        8665907,
+        14512437,
+        8298937,
+        8223716,
+        8383825,
+        8886478,
+        11763953
+      ],
+      "sqlite/file/fts": [
+        798831,
+        1491667,
+        802230,
+        717926,
+        739833,
+        790061,
+        779762
+      ],
+      "sqlite/file/walk-16": [
+        891489,
+        615714,
+        629398,
+        581375,
+        592339,
+        630250,
+        616529
+      ],
+      "sqlite/file/walk-unbounded": [
+        1058273,
+        927945,
+        922043,
+        882504,
+        937119,
+        992848,
+        1044938
+      ],
+      "sqlite/file/apply-100": [
+        7599866,
+        6981636,
+        7252916,
+        6913851,
+        7009461,
+        6975618,
+        8158518
+      ],
+      "sql/memory/point": [
+        371948,
+        329916,
+        350052,
+        335143,
+        340863,
+        396541,
+        351093
+      ],
+      "sql/memory/status-open": [
+        9068413,
+        7966769,
+        8808613,
+        8110234,
+        8669979,
+        9479342,
+        8532940
+      ],
+      "sql/memory/fts": [
+        818426,
+        719124,
+        846715,
+        727243,
+        773439,
+        775526,
+        770689
+      ],
+      "sql/memory/walk-16": [
+        650979,
+        606876,
+        610185,
+        581785,
+        590872,
+        610413,
+        620881
+      ],
+      "sql/memory/walk-unbounded": [
+        993915,
+        922013,
+        990124,
+        898478,
+        885758,
+        929890,
+        934389
+      ],
+      "sql/memory/apply-100": [
+        6681328,
+        6237932,
+        6742663,
+        6308732,
+        6423901,
+        6511735,
+        6743101
+      ],
+      "sql/file/point": [
+        381121,
+        396910,
+        373862,
+        360393,
+        374770,
+        414699,
+        380996
+      ],
+      "sql/file/status-open": [
+        8797375,
+        8658178,
+        8188864,
+        8173219,
+        7593262,
+        10724399,
+        9182864
+      ],
+      "sql/file/fts": [
+        823143,
+        781952,
+        843008,
+        731214,
+        769737,
+        1053729,
+        863319
+      ],
+      "sql/file/walk-16": [
+        658431,
+        641150,
+        694027,
+        609701,
+        654558,
+        648214,
+        658612
+      ],
+      "sql/file/walk-unbounded": [
+        1010156,
+        1069148,
+        1019711,
+        1023395,
+        1006824,
+        1052107,
+        987998
+      ],
+      "sql/file/apply-100": [
+        6930535,
+        7455099,
+        6951569,
+        7096117,
+        7199917,
+        7401655,
+        7309398
+      ],
+      "query/memory/point": [
+        374567,
+        360617,
+        372538,
+        353285,
+        365145,
+        365704,
+        364297
+      ],
+      "query/memory/status-open": [
+        8707980,
+        8909355,
+        8730666,
+        8796310,
+        9026133,
+        8989846,
+        8849085
+      ],
+      "query/memory/fts": [
+        779184,
+        814847,
+        784973,
+        802110,
+        746862,
+        847373,
+        826143
+      ],
+      "query/memory/walk-16": [
+        621527,
+        628265,
+        620774,
+        639450,
+        599342,
+        625107,
+        663299
+      ],
+      "query/memory/walk-unbounded": [
+        1023383,
+        1000922,
+        944772,
+        948074,
+        913795,
+        916344,
+        967650
+      ],
+      "query/memory/apply-100": [
+        6814962,
+        6302472,
+        7129846,
+        6293159,
+        5992645,
+        6360371,
+        6951370
+      ],
+      "query/file/point": [
+        389183,
+        374245,
+        377176,
+        354822,
+        362634,
+        381489,
+        602917
+      ],
+      "query/file/status-open": [
+        9788206,
+        8196527,
+        9411935,
+        7908326,
+        9229048,
+        10099542,
+        20421956
+      ],
+      "query/file/fts": [
+        805397,
+        777829,
+        1575943,
+        751431,
+        819895,
+        876343,
+        859810
+      ],
+      "query/file/walk-16": [
+        651678,
+        634613,
+        1028264,
+        614735,
+        617146,
+        866948,
+        706176
+      ],
+      "query/file/walk-unbounded": [
+        1043108,
+        1140485,
+        960838,
+        888320,
+        949662,
+        1075780,
+        1149124
+      ],
+      "query/file/apply-100": [
+        7067138,
+        6882832,
+        7000739,
+        7126173,
+        6594301,
+        7139595,
+        7672964
+      ],
+      "archetype/memory/backfill": [
+        38309032,
+        35667116,
+        62138430,
+        34699745,
+        35863257,
+        36833042,
+        44005331
+      ],
+      "archetype/memory/move-100": [
+        10383703,
+        9125537,
+        10110128,
+        9013248,
+        9379214,
+        9323271,
+        9663968
+      ],
+      "archetype/file/backfill": [
+        39048792,
+        37057470,
+        40360882,
+        64314948,
+        36240147,
+        41287745,
+        39314551
+      ],
+      "archetype/file/move-100": [
+        9588539,
+        10407018,
+        9993553,
+        9930321,
+        9022469,
+        9872611,
+        11324241
+      ],
+      "apply/file/edit-alone-200": [
+        1447816.69,
+        1350246.095,
+        1376667.555,
+        1532549.695,
+        1541841.935,
+        1605299.805,
+        1519469.455
+      ],
+      "apply/file/edit-batch-200": [
+        257589.26,
+        254871.93,
+        262046.215,
+        262100.23,
+        266421.285,
+        275877.985,
+        285512.745
+      ],
+      "apply/file/edit-alone-1000": [
+        1372221.249,
+        1274347.477,
+        1270255.859,
+        1273286.373,
+        1398201.948,
+        1336709.49,
+        1335211.117
+      ],
+      "apply/file/edit-batch-1000": [
+        161688.041,
+        159915.789,
+        152423.916,
+        148635.661,
+        176886.261,
+        151895.569,
+        152354.822
+      ],
+      "apply/file/create-alone-200": [
+        1869351.745,
+        1548565.02,
+        1430213.695,
+        1458805.51,
+        1574832.27,
+        1552608.2,
+        1490498.66
+      ],
+      "apply/file/create-batch-200": [
+        417000.32,
+        356353.655,
+        309139.265,
+        300566.93,
+        319574.24,
+        329990.175,
+        349766.285
+      ],
+      "apply/file/create-alone-1000": [
+        1621681.969,
+        1506612.715,
+        1338018.291,
+        1388701.492,
+        1506604.008,
+        1498482.043,
+        1456222.488
+      ],
+      "apply/file/create-batch-1000": [
+        236177.979,
+        278588.587,
+        224778.547,
+        216616.438,
+        241782.88,
+        235886.921,
+        271000.691
+      ],
+      "apply/ram/edit-alone-200": [
+        194977.66,
+        169826.78,
+        146872.225,
+        149533.015,
+        169258.67,
+        159371.81,
+        159456.665
+      ],
+      "apply/ram/edit-batch-200": [
+        29210.415,
+        26355.18,
+        28091.405,
+        25246.08,
+        26166.155,
+        28391,
+        29548.8
+      ],
+      "apply/ram/edit-alone-1000": [
+        125020.437,
+        131847.618,
+        127002.244,
+        128110.457,
+        118982.695,
+        145598.658,
+        158079.392
+      ],
+      "apply/ram/edit-batch-1000": [
+        25860.93,
+        28790.043,
+        27028.635,
+        31195.481,
+        26431.546,
+        26539.081,
+        25353.499
+      ],
+      "apply/ram/create-alone-200": [
+        153052.475,
+        158338.48,
+        153940.925,
+        206004.81,
+        178816.18,
+        145421.915,
+        129217.645
+      ],
+      "apply/ram/create-batch-200": [
+        30584.855,
+        31168.7,
+        26262.485,
+        30317.625,
+        29303.615,
+        33874.44,
+        26450.68
+      ],
+      "apply/ram/create-alone-1000": [
+        139580.417,
+        134386.835,
+        131788.515,
+        140593.365,
+        137210.225,
+        139833.814,
+        144093.629
+      ],
+      "apply/ram/create-batch-1000": [
+        37161.293,
+        31082.452,
+        26807.675,
+        27648.075,
+        28105.869,
+        26999.472,
+        29760.889
+      ],
+      "relay/store/entities-1": [
+        609818.7,
+        545528,
+        487992.6,
+        581684.8,
+        629843.4,
+        649022.3,
+        500320.8
+      ],
+      "relay/store/entities-10": [
+        353913.39,
+        353612.12,
+        312401.15,
+        303055.25,
+        317959.19,
+        379943.6,
+        309193.66
+      ],
+      "relay/store/entities-100": [
+        306814.169,
+        314895.659,
+        274109.263,
+        288852.381,
+        289369.806,
+        314522.11,
+        286169.607
+      ]
+    },
+    "counts": {
+      "apply/file/edit-alone-200": {
+        "sqlPerApply": 44.63,
+        "sqlPerBundle": 44.63
+      },
+      "apply/file/edit-batch-200": {
+        "sqlPerApply": 2462,
+        "sqlPerBundle": 12.31
+      },
+      "apply/file/edit-alone-1000": {
+        "sqlPerApply": 44.526,
+        "sqlPerBundle": 44.526
+      },
+      "apply/file/edit-batch-1000": {
+        "sqlPerApply": 12062,
+        "sqlPerBundle": 12.062
+      },
+      "apply/file/create-alone-200": {
+        "sqlPerApply": 48,
+        "sqlPerBundle": 48
+      },
+      "apply/file/create-batch-200": {
+        "sqlPerApply": 3630,
+        "sqlPerBundle": 18.15
+      },
+      "apply/file/create-alone-1000": {
+        "sqlPerApply": 48,
+        "sqlPerBundle": 48
+      },
+      "apply/file/create-batch-1000": {
+        "sqlPerApply": 18030,
+        "sqlPerBundle": 18.03
+      },
+      "apply/ram/edit-alone-200": {
+        "sqlPerApply": 0,
+        "sqlPerBundle": 0
+      },
+      "apply/ram/edit-batch-200": {
+        "sqlPerApply": 0,
+        "sqlPerBundle": 0
+      },
+      "apply/ram/edit-alone-1000": {
+        "sqlPerApply": 0,
+        "sqlPerBundle": 0
+      },
+      "apply/ram/edit-batch-1000": {
+        "sqlPerApply": 0,
+        "sqlPerBundle": 0
+      },
+      "apply/ram/create-alone-200": {
+        "sqlPerApply": 0,
+        "sqlPerBundle": 0
+      },
+      "apply/ram/create-batch-200": {
+        "sqlPerApply": 0,
+        "sqlPerBundle": 0
+      },
+      "apply/ram/create-alone-1000": {
+        "sqlPerApply": 0,
+        "sqlPerBundle": 0
+      },
+      "apply/ram/create-batch-1000": {
+        "sqlPerApply": 0,
+        "sqlPerBundle": 0
+      },
+      "relay/store/entities-1": {
+        "sql": 1,
+        "reads": 1,
+        "writes": 0,
+        "transactions": 1
+      },
+      "relay/store/entities-10": {
+        "sql": 1,
+        "reads": 1,
+        "writes": 0,
+        "transactions": 1
+      },
+      "relay/store/entities-100": {
+        "sql": 1,
+        "reads": 1,
+        "writes": 0,
+        "transactions": 1
+      }
+    },
+    "loadAverage": [
+      "3.83 3.47 4.08 3/1796 2597340",
+      "4.10 3.55 4.09 6/1878 2598193",
+      "3.79 3.51 4.07 5/1776 2599049",
+      "4.35 3.86 4.12 1/1533 2608322",
+      "3.54 3.70 4.06 3/1488 2608794",
+      "3.24 3.62 4.03 2/1466 2609338",
+      "4.03 3.65 3.97 2/1529 2618168",
+      "3.66 3.59 3.94 5/1511 2619532",
+      "3.26 3.50 3.90 3/1519 2620482",
+      "2.39 3.17 3.73 3/1492 2625697",
+      "2.55 3.16 3.72 2/1475 2626425",
+      "2.33 3.07 3.68 2/1470 2626870",
+      "3.18 3.02 3.56 2/1478 2631505",
+      "3.06 3.00 3.55 2/1471 2632025",
+      "3.05 3.00 3.54 4/1518 2632648",
+      "3.80 3.36 3.59 4/1517 2640536",
+      "3.51 3.32 3.57 4/1499 2641177",
+      "3.55 3.33 3.57 3/1513 2642377",
+      "4.03 3.64 3.65 2/1537 2650777",
+      "4.68 3.80 3.71 5/1541 2652325",
+      "4.59 3.84 3.72 4/1538 2653503"
+    ],
+    "units": {
+      "sqlite/memory/point": "ns/op",
+      "sqlite/memory/status-open": "ns/op",
+      "sqlite/memory/fts": "ns/op",
+      "sqlite/memory/walk-16": "ns/op",
+      "sqlite/memory/walk-unbounded": "ns/op",
+      "sqlite/memory/apply-100": "ns/op",
+      "sqlite/file/point": "ns/op",
+      "sqlite/file/status-open": "ns/op",
+      "sqlite/file/fts": "ns/op",
+      "sqlite/file/walk-16": "ns/op",
+      "sqlite/file/walk-unbounded": "ns/op",
+      "sqlite/file/apply-100": "ns/op",
+      "sql/memory/point": "ns/op",
+      "sql/memory/status-open": "ns/op",
+      "sql/memory/fts": "ns/op",
+      "sql/memory/walk-16": "ns/op",
+      "sql/memory/walk-unbounded": "ns/op",
+      "sql/memory/apply-100": "ns/op",
+      "sql/file/point": "ns/op",
+      "sql/file/status-open": "ns/op",
+      "sql/file/fts": "ns/op",
+      "sql/file/walk-16": "ns/op",
+      "sql/file/walk-unbounded": "ns/op",
+      "sql/file/apply-100": "ns/op",
+      "query/memory/point": "ns/op",
+      "query/memory/status-open": "ns/op",
+      "query/memory/fts": "ns/op",
+      "query/memory/walk-16": "ns/op",
+      "query/memory/walk-unbounded": "ns/op",
+      "query/memory/apply-100": "ns/op",
+      "query/file/point": "ns/op",
+      "query/file/status-open": "ns/op",
+      "query/file/fts": "ns/op",
+      "query/file/walk-16": "ns/op",
+      "query/file/walk-unbounded": "ns/op",
+      "query/file/apply-100": "ns/op",
+      "archetype/memory/backfill": "ns/op",
+      "archetype/memory/move-100": "ns/op",
+      "archetype/file/backfill": "ns/op",
+      "archetype/file/move-100": "ns/op",
+      "apply/file/edit-alone-200": "ns/bundle",
+      "apply/file/edit-batch-200": "ns/bundle",
+      "apply/file/edit-alone-1000": "ns/bundle",
+      "apply/file/edit-batch-1000": "ns/bundle",
+      "apply/file/create-alone-200": "ns/bundle",
+      "apply/file/create-batch-200": "ns/bundle",
+      "apply/file/create-alone-1000": "ns/bundle",
+      "apply/file/create-batch-1000": "ns/bundle",
+      "apply/ram/edit-alone-200": "ns/bundle",
+      "apply/ram/edit-batch-200": "ns/bundle",
+      "apply/ram/edit-alone-1000": "ns/bundle",
+      "apply/ram/edit-batch-1000": "ns/bundle",
+      "apply/ram/create-alone-200": "ns/bundle",
+      "apply/ram/create-batch-200": "ns/bundle",
+      "apply/ram/create-alone-1000": "ns/bundle",
+      "apply/ram/create-batch-1000": "ns/bundle",
+      "relay/store/entities-1": "ns/value",
+      "relay/store/entities-10": "ns/value",
+      "relay/store/entities-100": "ns/value"
+    }
+  },
+  "checks": [
+    {
+      "version": 1,
+      "metric": "median-of-7-deno-avg-ns",
+      "workload": 1,
+      "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+      "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+      "measuredAt": "2026-10-03T23:03:53.582Z",
+      "revision": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "ns": {
+        "sqlite/memory/point": 335149,
+        "sqlite/memory/status-open": 8601190,
+        "sqlite/memory/fts": 772993,
+        "sqlite/memory/walk-16": 596208,
+        "sqlite/memory/walk-unbounded": 908893,
+        "sqlite/memory/apply-100": 6479601,
+        "sqlite/file/point": 354101,
+        "sqlite/file/status-open": 8692637,
+        "sqlite/file/fts": 784239,
+        "sqlite/file/walk-16": 675104,
+        "sqlite/file/walk-unbounded": 974858,
+        "sqlite/file/apply-100": 7239949,
+        "sql/memory/point": 343947,
+        "sql/memory/status-open": 8399158,
+        "sql/memory/fts": 774625,
+        "sql/memory/walk-16": 609341,
+        "sql/memory/walk-unbounded": 944930,
+        "sql/memory/apply-100": 6642753,
+        "sql/file/point": 375051,
+        "sql/file/status-open": 8298712,
+        "sql/file/fts": 802434,
+        "sql/file/walk-16": 651861,
+        "sql/file/walk-unbounded": 992833,
+        "sql/file/apply-100": 7397549,
+        "query/memory/point": 367535,
+        "query/memory/status-open": 9068321,
+        "query/memory/fts": 816211,
+        "query/memory/walk-16": 639318,
+        "query/memory/walk-unbounded": 980482,
+        "query/memory/apply-100": 6893560,
+        "query/file/point": 379476,
+        "query/file/status-open": 8930287,
+        "query/file/fts": 827495,
+        "query/file/walk-16": 656863,
+        "query/file/walk-unbounded": 983758,
+        "query/file/apply-100": 7513833,
+        "archetype/memory/backfill": 35787067,
+        "archetype/memory/move-100": 9491660,
+        "archetype/file/backfill": 38271185,
+        "archetype/file/move-100": 9641333,
+        "apply/file/edit-alone-200": 1693106.375,
+        "apply/file/edit-batch-200": 305621.075,
+        "apply/file/edit-alone-1000": 1329351.903,
+        "apply/file/edit-batch-1000": 165395.386,
+        "apply/file/create-alone-200": 1490394.295,
+        "apply/file/create-batch-200": 306241.06,
+        "apply/file/create-alone-1000": 2002240.698,
+        "apply/file/create-batch-1000": 253747.151,
+        "apply/ram/edit-alone-200": 169106.44,
+        "apply/ram/edit-batch-200": 28969.89,
+        "apply/ram/edit-alone-1000": 131189.822,
+        "apply/ram/edit-batch-1000": 29637.012,
+        "apply/ram/create-alone-200": 149350.67,
+        "apply/ram/create-batch-200": 28194.605,
+        "apply/ram/create-alone-1000": 134616.587,
+        "apply/ram/create-batch-1000": 27688.234,
+        "relay/store/entities-1": 524945.3,
+        "relay/store/entities-10": 343353.5,
+        "relay/store/entities-100": 299127.24
+      },
+      "samples": {
+        "sqlite/memory/point": [
+          345340,
+          351903,
+          335149,
+          334665,
+          339294,
+          326196,
+          327209
+        ],
+        "sqlite/memory/status-open": [
+          8601190,
+          8257260,
+          8392839,
+          8468714,
+          10829447,
+          9096116,
+          14525798
+        ],
+        "sqlite/memory/fts": [
+          736733,
+          718449,
+          772993,
+          781382,
+          786135,
+          723867,
+          1446000
+        ],
+        "sqlite/memory/walk-16": [
+          590719,
+          581184,
+          606886,
+          596208,
+          617912,
+          571290,
+          607168
+        ],
+        "sqlite/memory/walk-unbounded": [
+          937953,
+          872466,
+          911677,
+          898617,
+          962949,
+          908893,
+          881965
+        ],
+        "sqlite/memory/apply-100": [
+          6479601,
+          6559587,
+          6216987,
+          6450000,
+          6960925,
+          6633688,
+          6457374
+        ],
+        "sqlite/file/point": [
+          354101,
+          356468,
+          377016,
+          351475,
+          370826,
+          340979,
+          343777
+        ],
+        "sqlite/file/status-open": [
+          9388138,
+          9062211,
+          8692637,
+          8270640,
+          8892617,
+          8140171,
+          8068036
+        ],
+        "sqlite/file/fts": [
+          738836,
+          788565,
+          802872,
+          762022,
+          784239,
+          790787,
+          767228
+        ],
+        "sqlite/file/walk-16": [
+          587788,
+          695403,
+          630165,
+          808624,
+          675104,
+          627990,
+          697405
+        ],
+        "sqlite/file/walk-unbounded": [
+          923535,
+          1889541,
+          974858,
+          1033186,
+          1102256,
+          944422,
+          946830
+        ],
+        "sqlite/file/apply-100": [
+          7112447,
+          10664908,
+          7001998,
+          7421840,
+          7464905,
+          7087774,
+          7239949
+        ],
+        "sql/memory/point": [
+          377115,
+          363087,
+          334745,
+          334516,
+          350244,
+          343947,
+          341294
+        ],
+        "sql/memory/status-open": [
+          8112839,
+          8843025,
+          9599620,
+          12611432,
+          8399158,
+          8119460,
+          8188594
+        ],
+        "sql/memory/fts": [
+          748403,
+          793323,
+          774625,
+          1463509,
+          787202,
+          750383,
+          736679
+        ],
+        "sql/memory/walk-16": [
+          605419,
+          631633,
+          594803,
+          694565,
+          609341,
+          608418,
+          627522
+        ],
+        "sql/memory/walk-unbounded": [
+          953927,
+          944930,
+          935739,
+          901629,
+          948024,
+          1246004,
+          916145
+        ],
+        "sql/memory/apply-100": [
+          6551553,
+          6642753,
+          7540951,
+          6454411,
+          7978146,
+          10903961,
+          6346028
+        ],
+        "sql/file/point": [
+          360384,
+          388511,
+          375051,
+          371898,
+          383205,
+          346842,
+          389905
+        ],
+        "sql/file/status-open": [
+          8159690,
+          9003595,
+          8249345,
+          8298712,
+          8954175,
+          7831113,
+          9109014
+        ],
+        "sql/file/fts": [
+          830509,
+          779200,
+          1314025,
+          802434,
+          993276,
+          754003,
+          787567
+        ],
+        "sql/file/walk-16": [
+          669983,
+          636630,
+          1125307,
+          647106,
+          681683,
+          646807,
+          651861
+        ],
+        "sql/file/walk-unbounded": [
+          940913,
+          995056,
+          1200565,
+          992833,
+          987875,
+          1005476,
+          968584
+        ],
+        "sql/file/apply-100": [
+          6808995,
+          7748393,
+          7142173,
+          7013345,
+          7525641,
+          7397549,
+          7809884
+        ],
+        "query/memory/point": [
+          616372,
+          362643,
+          367140,
+          378334,
+          387103,
+          367535,
+          363943
+        ],
+        "query/memory/status-open": [
+          18635994,
+          9237615,
+          9068321,
+          8799482,
+          10609373,
+          8974278,
+          8578807
+        ],
+        "query/memory/fts": [
+          800845,
+          830747,
+          796601,
+          816211,
+          1144539,
+          832235,
+          783206
+        ],
+        "query/memory/walk-16": [
+          639318,
+          631995,
+          719665,
+          635462,
+          636910,
+          658288,
+          648007
+        ],
+        "query/memory/walk-unbounded": [
+          977695,
+          966938,
+          1871465,
+          946748,
+          985318,
+          980482,
+          987050
+        ],
+        "query/memory/apply-100": [
+          6919702,
+          6638263,
+          8677392,
+          6958273,
+          6893560,
+          6394815,
+          6360754
+        ],
+        "query/file/point": [
+          367438,
+          429252,
+          369534,
+          403539,
+          381419,
+          367209,
+          379476
+        ],
+        "query/file/status-open": [
+          9380597,
+          10438218,
+          8663895,
+          8804592,
+          8930287,
+          8971900,
+          8481751
+        ],
+        "query/file/fts": [
+          869142,
+          820300,
+          800997,
+          803227,
+          873526,
+          858703,
+          827495
+        ],
+        "query/file/walk-16": [
+          664671,
+          644011,
+          688405,
+          629018,
+          667494,
+          618661,
+          656863
+        ],
+        "query/file/walk-unbounded": [
+          1027837,
+          949206,
+          974689,
+          961230,
+          983758,
+          988342,
+          1021979
+        ],
+        "query/file/apply-100": [
+          7530997,
+          7513833,
+          7097470,
+          7026659,
+          7930526,
+          7216801,
+          7858510
+        ],
+        "archetype/memory/backfill": [
+          35983441,
+          35157083,
+          35787067,
+          36133163,
+          39591646,
+          35440784,
+          35397213
+        ],
+        "archetype/memory/move-100": [
+          9687839,
+          9639295,
+          9491660,
+          9402650,
+          9907261,
+          9108787,
+          9376514
+        ],
+        "archetype/file/backfill": [
+          38194847,
+          44403406,
+          38271185,
+          37054588,
+          38737152,
+          37930652,
+          58103720
+        ],
+        "archetype/file/move-100": [
+          9433644,
+          11008060,
+          9641333,
+          9637087,
+          10823263,
+          9515756,
+          11175215
+        ],
+        "apply/file/edit-alone-200": [
+          1519029.33,
+          2755023.59,
+          1678039.245,
+          1556161.755,
+          2165321.265,
+          1693106.375,
+          1857598.225
+        ],
+        "apply/file/edit-batch-200": [
+          283249.24,
+          451394.68,
+          320967.585,
+          291815.495,
+          364220.075,
+          305621.075,
+          253799.24
+        ],
+        "apply/file/edit-alone-1000": [
+          1347680.968,
+          1799373.489,
+          1296446.478,
+          1323880.23,
+          1492505.598,
+          1329351.903,
+          1304795.459
+        ],
+        "apply/file/edit-batch-1000": [
+          178277.95,
+          166600.796,
+          159811.054,
+          169341.619,
+          165395.386,
+          156839.603,
+          160833.459
+        ],
+        "apply/file/create-alone-200": [
+          1698822.28,
+          1946613.355,
+          1454241.56,
+          1507668.875,
+          1477841.06,
+          1396255.32,
+          1490394.295
+        ],
+        "apply/file/create-batch-200": [
+          302544.12,
+          380588.17,
+          306241.06,
+          322729.96,
+          324049.375,
+          291804.225,
+          293119.845
+        ],
+        "apply/file/create-alone-1000": [
+          2785126.962,
+          2076664.73,
+          2002240.698,
+          2039010.444,
+          1734059.336,
+          1648606.394,
+          1397378.349
+        ],
+        "apply/file/create-batch-1000": [
+          317328.533,
+          264923.638,
+          256773.336,
+          250237.882,
+          253110.75,
+          253747.151,
+          230470.287
+        ],
+        "apply/ram/edit-alone-200": [
+          169194.725,
+          184185.755,
+          197909.215,
+          169106.44,
+          157551.15,
+          159926.635,
+          152296.85
+        ],
+        "apply/ram/edit-batch-200": [
+          29425.365,
+          33126.945,
+          28969.89,
+          27595.985,
+          28801.925,
+          29690.135,
+          25252.845
+        ],
+        "apply/ram/edit-alone-1000": [
+          131891.028,
+          120639.3,
+          124394.379,
+          130877.775,
+          152169.707,
+          131189.822,
+          134068.116
+        ],
+        "apply/ram/edit-batch-1000": [
+          27960.25,
+          31985.505,
+          29637.012,
+          25846.896,
+          33804.942,
+          31795.002,
+          25434.249
+        ],
+        "apply/ram/create-alone-200": [
+          143383.095,
+          149350.67,
+          158745.87,
+          191881.81,
+          141266.255,
+          153268.57,
+          129621.2
+        ],
+        "apply/ram/create-batch-200": [
+          29149.59,
+          29135.7,
+          27966.18,
+          41705.055,
+          24603.7,
+          28194.605,
+          25298.245
+        ],
+        "apply/ram/create-alone-1000": [
+          139530.641,
+          132598.807,
+          128674.275,
+          135161.692,
+          140705.928,
+          134616.587,
+          131785.279
+        ],
+        "apply/ram/create-batch-1000": [
+          31354.481,
+          28496.218,
+          27688.234,
+          30849.732,
+          25122.165,
+          26230.289,
+          25047.527
+        ],
+        "relay/store/entities-1": [
+          573560.1,
+          523630.1,
+          524945.3,
+          500469.5,
+          476745.6,
+          534210.8,
+          536014.8
+        ],
+        "relay/store/entities-10": [
+          347415.38,
+          343353.5,
+          316361.54,
+          362000.48,
+          312227.72,
+          353348.02,
+          311682.23
+        ],
+        "relay/store/entities-100": [
+          305142.51,
+          300516.429,
+          285554.46,
+          299127.24,
+          300026.138,
+          281486.393,
+          274473.122
+        ]
+      },
+      "counts": {
+        "apply/file/edit-alone-200": {
+          "sqlPerApply": 44.63,
+          "sqlPerBundle": 44.63
+        },
+        "apply/file/edit-batch-200": {
+          "sqlPerApply": 2462,
+          "sqlPerBundle": 12.31
+        },
+        "apply/file/edit-alone-1000": {
+          "sqlPerApply": 44.526,
+          "sqlPerBundle": 44.526
+        },
+        "apply/file/edit-batch-1000": {
+          "sqlPerApply": 12062,
+          "sqlPerBundle": 12.062
+        },
+        "apply/file/create-alone-200": {
+          "sqlPerApply": 48,
+          "sqlPerBundle": 48
+        },
+        "apply/file/create-batch-200": {
+          "sqlPerApply": 3630,
+          "sqlPerBundle": 18.15
+        },
+        "apply/file/create-alone-1000": {
+          "sqlPerApply": 48,
+          "sqlPerBundle": 48
+        },
+        "apply/file/create-batch-1000": {
+          "sqlPerApply": 18030,
+          "sqlPerBundle": 18.03
+        },
+        "apply/ram/edit-alone-200": {
+          "sqlPerApply": 0,
+          "sqlPerBundle": 0
+        },
+        "apply/ram/edit-batch-200": {
+          "sqlPerApply": 0,
+          "sqlPerBundle": 0
+        },
+        "apply/ram/edit-alone-1000": {
+          "sqlPerApply": 0,
+          "sqlPerBundle": 0
+        },
+        "apply/ram/edit-batch-1000": {
+          "sqlPerApply": 0,
+          "sqlPerBundle": 0
+        },
+        "apply/ram/create-alone-200": {
+          "sqlPerApply": 0,
+          "sqlPerBundle": 0
+        },
+        "apply/ram/create-batch-200": {
+          "sqlPerApply": 0,
+          "sqlPerBundle": 0
+        },
+        "apply/ram/create-alone-1000": {
+          "sqlPerApply": 0,
+          "sqlPerBundle": 0
+        },
+        "apply/ram/create-batch-1000": {
+          "sqlPerApply": 0,
+          "sqlPerBundle": 0
+        },
+        "relay/store/entities-1": {
+          "sql": 1,
+          "reads": 1,
+          "writes": 0,
+          "transactions": 1
+        },
+        "relay/store/entities-10": {
+          "sql": 1,
+          "reads": 1,
+          "writes": 0,
+          "transactions": 1
+        },
+        "relay/store/entities-100": {
+          "sql": 1,
+          "reads": 1,
+          "writes": 0,
+          "transactions": 1
+        }
+      },
+      "loadAverage": [
+        "3.43 3.76 3.72 3/1512 2660628",
+        "3.53 3.76 3.72 3/1498 2661295",
+        "3.51 3.74 3.71 3/1506 2661990",
+        "4.75 4.05 3.83 3/1498 2668846",
+        "4.24 3.98 3.81 3/1494 2669749",
+        "4.01 3.95 3.81 3/1493 2670742",
+        "3.92 3.75 3.74 4/1508 2677424",
+        "3.66 3.70 3.72 4/1507 2678217",
+        "3.69 3.70 3.72 3/1520 2678868",
+        "2.61 3.38 3.61 4/1506 2684227",
+        "2.94 3.40 3.61 2/1479 2685004",
+        "2.82 3.34 3.59 2/1496 2685509",
+        "3.58 3.42 3.57 4/1564 2693242",
+        "3.71 3.46 3.58 5/1581 2694100",
+        "3.88 3.51 3.60 3/1550 2694958",
+        "2.64 3.39 3.56 6/1568 2700996",
+        "3.67 3.60 3.63 3/1486 2701644",
+        "3.11 3.48 3.58 3/1496 2702454",
+        "2.74 3.24 3.48 2/1498 2707725",
+        "2.74 3.21 3.47 2/1480 2708448",
+        "2.93 3.21 3.46 1/1494 2709262"
+      ],
+      "units": {
+        "sqlite/memory/point": "ns/op",
+        "sqlite/memory/status-open": "ns/op",
+        "sqlite/memory/fts": "ns/op",
+        "sqlite/memory/walk-16": "ns/op",
+        "sqlite/memory/walk-unbounded": "ns/op",
+        "sqlite/memory/apply-100": "ns/op",
+        "sqlite/file/point": "ns/op",
+        "sqlite/file/status-open": "ns/op",
+        "sqlite/file/fts": "ns/op",
+        "sqlite/file/walk-16": "ns/op",
+        "sqlite/file/walk-unbounded": "ns/op",
+        "sqlite/file/apply-100": "ns/op",
+        "sql/memory/point": "ns/op",
+        "sql/memory/status-open": "ns/op",
+        "sql/memory/fts": "ns/op",
+        "sql/memory/walk-16": "ns/op",
+        "sql/memory/walk-unbounded": "ns/op",
+        "sql/memory/apply-100": "ns/op",
+        "sql/file/point": "ns/op",
+        "sql/file/status-open": "ns/op",
+        "sql/file/fts": "ns/op",
+        "sql/file/walk-16": "ns/op",
+        "sql/file/walk-unbounded": "ns/op",
+        "sql/file/apply-100": "ns/op",
+        "query/memory/point": "ns/op",
+        "query/memory/status-open": "ns/op",
+        "query/memory/fts": "ns/op",
+        "query/memory/walk-16": "ns/op",
+        "query/memory/walk-unbounded": "ns/op",
+        "query/memory/apply-100": "ns/op",
+        "query/file/point": "ns/op",
+        "query/file/status-open": "ns/op",
+        "query/file/fts": "ns/op",
+        "query/file/walk-16": "ns/op",
+        "query/file/walk-unbounded": "ns/op",
+        "query/file/apply-100": "ns/op",
+        "archetype/memory/backfill": "ns/op",
+        "archetype/memory/move-100": "ns/op",
+        "archetype/file/backfill": "ns/op",
+        "archetype/file/move-100": "ns/op",
+        "apply/file/edit-alone-200": "ns/bundle",
+        "apply/file/edit-batch-200": "ns/bundle",
+        "apply/file/edit-alone-1000": "ns/bundle",
+        "apply/file/edit-batch-1000": "ns/bundle",
+        "apply/file/create-alone-200": "ns/bundle",
+        "apply/file/create-batch-200": "ns/bundle",
+        "apply/file/create-alone-1000": "ns/bundle",
+        "apply/file/create-batch-1000": "ns/bundle",
+        "apply/ram/edit-alone-200": "ns/bundle",
+        "apply/ram/edit-batch-200": "ns/bundle",
+        "apply/ram/edit-alone-1000": "ns/bundle",
+        "apply/ram/edit-batch-1000": "ns/bundle",
+        "apply/ram/create-alone-200": "ns/bundle",
+        "apply/ram/create-batch-200": "ns/bundle",
+        "apply/ram/create-alone-1000": "ns/bundle",
+        "apply/ram/create-batch-1000": "ns/bundle",
+        "relay/store/entities-1": "ns/value",
+        "relay/store/entities-10": "ns/value",
+        "relay/store/entities-100": "ns/value"
+      },
+      "suiteTimings": {
+        "version": 1,
+        "metric": "wall-seconds / mean-concurrent-8M-LCG-seconds",
+        "tolerance": 0.25,
+        "suites": {
+          "check": {
+            "baseline": {
+              "ratio": 320.0575530642966,
+              "controlFloorSeconds": 0.04952385293749997,
+              "seconds": 19.028932877
+            },
+            "latest": {
+              "seconds": 33.406003503,
+              "controlSeconds": 0.05042902028124971,
+              "samples": 32,
+              "code": 0,
+              "at": "2026-10-03T22:08:39.554Z",
+              "ratio": 662.4360996245821,
+              "verdict": "REGRESSION",
+              "loaded": false
+            }
+          },
+          "test": {
+            "baseline": {
+              "ratio": 738.614673431059,
+              "controlFloorSeconds": 0.05178629543076968,
+              "seconds": 43.901683555
+            }
+          },
+          "test bin/bench_test.ts": {
+            "baseline": {
+              "ratio": 21.915073382312094,
+              "controlFloorSeconds": 0.042178283999999996,
+              "seconds": 0.924340189
+            },
+            "latest": {
+              "seconds": 0.924340189,
+              "controlSeconds": 0.042178283999999996,
+              "samples": 1,
+              "code": 0,
+              "at": "2026-10-03T22:19:59.105Z",
+              "ratio": 21.915073382312094,
+              "verdict": "NEW",
+              "loaded": false
+            }
+          },
+          "test bin/bench_test.ts packages/sqlite/fixtures/fleet_test.ts": {
+            "latest": {
+              "seconds": 0.9115836340000001,
+              "controlSeconds": 0.043758429999999994,
+              "samples": 1,
+              "code": 0,
+              "at": "2026-10-03T22:04:20.313Z",
+              "ratio": 20.832183284455137,
+              "verdict": "NEW",
+              "loaded": false
+            }
+          }
+        }
+      },
+      "timingRegressions": {
+        "apply/file/create-alone-1000": 1.336179307155034
+      },
+      "countsMatchBaseline": true
+    },
+    {
+      "version": 1,
+      "metric": "median-of-7-deno-avg-ns",
+      "workload": 1,
+      "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+      "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+      "measuredAt": "2026-10-03T23:34:46.692Z",
+      "revision": "680bfaf8679068af895f345cd58ae9b95d03fca7",
+      "ns": {
+        "sqlite/memory/point": 329851,
+        "sqlite/memory/status-open": 9107229,
+        "sqlite/memory/fts": 748914,
+        "sqlite/memory/walk-16": 603070,
+        "sqlite/memory/walk-unbounded": 947764,
+        "sqlite/memory/apply-100": 6393651,
+        "sqlite/file/point": 357758,
+        "sqlite/file/status-open": 8403508,
+        "sqlite/file/fts": 762832,
+        "sqlite/file/walk-16": 623698,
+        "sqlite/file/walk-unbounded": 962094,
+        "sqlite/file/apply-100": 7244659,
+        "sql/memory/point": 351734,
+        "sql/memory/status-open": 9660851,
+        "sql/memory/fts": 816735,
+        "sql/memory/walk-16": 641599,
+        "sql/memory/walk-unbounded": 1015543,
+        "sql/memory/apply-100": 7181541,
+        "sql/file/point": 381297,
+        "sql/file/status-open": 9876794,
+        "sql/file/fts": 838530,
+        "sql/file/walk-16": 766038,
+        "sql/file/walk-unbounded": 1035737,
+        "sql/file/apply-100": 8059682,
+        "query/memory/point": 381768,
+        "query/memory/status-open": 8817751,
+        "query/memory/fts": 806563,
+        "query/memory/walk-16": 658995,
+        "query/memory/walk-unbounded": 1202733,
+        "query/memory/apply-100": 6921421,
+        "query/file/point": 389783,
+        "query/file/status-open": 9484096,
+        "query/file/fts": 853568,
+        "query/file/walk-16": 675949,
+        "query/file/walk-unbounded": 1096488,
+        "query/file/apply-100": 7679356,
+        "archetype/memory/backfill": 43154510,
+        "archetype/memory/move-100": 10765246,
+        "archetype/file/backfill": 41302251,
+        "archetype/file/move-100": 10561542,
+        "apply/file/edit-alone-200": 2395882.4,
+        "apply/file/edit-batch-200": 433016.53,
+        "apply/file/edit-alone-1000": 1923759.215,
+        "apply/file/edit-batch-1000": 195168.142,
+        "apply/file/create-alone-200": 2050497.055,
+        "apply/file/create-batch-200": 475137.55,
+        "apply/file/create-alone-1000": 2191319.527,
+        "apply/file/create-batch-1000": 275736.191,
+        "apply/ram/edit-alone-200": 164342.675,
+        "apply/ram/edit-batch-200": 28972.01,
+        "apply/ram/edit-alone-1000": 149459.419,
+        "apply/ram/edit-batch-1000": 32403.017,
+        "apply/ram/create-alone-200": 154251.615,
+        "apply/ram/create-batch-200": 28965.615,
+        "apply/ram/create-alone-1000": 138537.581,
+        "apply/ram/create-batch-1000": 30221.907,
+        "relay/store/entities-1": 534844.5,
+        "relay/store/entities-10": 347649.28,
+        "relay/store/entities-100": 299679.236
+      },
+      "samples": {
+        "sqlite/memory/point": [
+          331372,
+          329851,
+          328862,
+          371607,
+          328912,
+          548534,
+          326558
+        ],
+        "sqlite/memory/status-open": [
+          8648070,
+          8460956,
+          9151499,
+          11043306,
+          8118105,
+          14289797,
+          9107229
+        ],
+        "sqlite/memory/fts": [
+          731297,
+          829159,
+          718045,
+          874714,
+          715005,
+          1558350,
+          748914
+        ],
+        "sqlite/memory/walk-16": [
+          598072,
+          564678,
+          566801,
+          686427,
+          620459,
+          942908,
+          603070
+        ],
+        "sqlite/memory/walk-unbounded": [
+          895704,
+          947764,
+          870089,
+          1020287,
+          937871,
+          1621869,
+          985988
+        ],
+        "sqlite/memory/apply-100": [
+          6389482,
+          6215366,
+          6290922,
+          6987780,
+          6393651,
+          7595179,
+          7466716
+        ],
+        "sqlite/file/point": [
+          366802,
+          362886,
+          357758,
+          353594,
+          561746,
+          352613,
+          357708
+        ],
+        "sqlite/file/status-open": [
+          8534392,
+          8347794,
+          8246101,
+          8049853,
+          10450989,
+          9335436,
+          8403508
+        ],
+        "sqlite/file/fts": [
+          752570,
+          763914,
+          740617,
+          735889,
+          769315,
+          811091,
+          762832
+        ],
+        "sqlite/file/walk-16": [
+          608629,
+          615106,
+          684231,
+          589470,
+          646556,
+          623698,
+          685155
+        ],
+        "sqlite/file/walk-unbounded": [
+          947681,
+          1027811,
+          929892,
+          962094,
+          921458,
+          997091,
+          1261720
+        ],
+        "sqlite/file/apply-100": [
+          7031964,
+          6899830,
+          7284072,
+          15657872,
+          7244659,
+          7610456,
+          6900364
+        ],
+        "sql/memory/point": [
+          345689,
+          351638,
+          351734,
+          405452,
+          350900,
+          374149,
+          375063
+        ],
+        "sql/memory/status-open": [
+          8791595,
+          8390890,
+          9660851,
+          11525910,
+          9499432,
+          10835966,
+          20830827
+        ],
+        "sql/memory/fts": [
+          799565,
+          790447,
+          772756,
+          947896,
+          830281,
+          816735,
+          1105177
+        ],
+        "sql/memory/walk-16": [
+          635098,
+          836025,
+          593118,
+          949335,
+          641599,
+          679483,
+          635757
+        ],
+        "sql/memory/walk-unbounded": [
+          999100,
+          1818064,
+          908509,
+          1902652,
+          1036102,
+          1015543,
+          982928
+        ],
+        "sql/memory/apply-100": [
+          7181541,
+          7592771,
+          6599883,
+          8880038,
+          7193693,
+          6891648,
+          6720082
+        ],
+        "sql/file/point": [
+          378198,
+          409709,
+          363564,
+          415552,
+          360625,
+          418259,
+          381297
+        ],
+        "sql/file/status-open": [
+          8788383,
+          10371869,
+          10366064,
+          9752482,
+          9876794,
+          11545667,
+          8682964
+        ],
+        "sql/file/fts": [
+          793375,
+          838530,
+          1595648,
+          809433,
+          874576,
+          1069814,
+          834609
+        ],
+        "sql/file/walk-16": [
+          651606,
+          664221,
+          1000346,
+          1023731,
+          644843,
+          841332,
+          766038
+        ],
+        "sql/file/walk-unbounded": [
+          1035737,
+          955392,
+          971784,
+          2117872,
+          1026383,
+          1152172,
+          1128237
+        ],
+        "sql/file/apply-100": [
+          7307623,
+          7128244,
+          8059682,
+          19091202,
+          7672654,
+          9846461,
+          8486961
+        ],
+        "query/memory/point": [
+          396513,
+          381768,
+          368837,
+          366193,
+          383285,
+          617563,
+          370494
+        ],
+        "query/memory/status-open": [
+          9679391,
+          8774671,
+          8707725,
+          8817751,
+          8524952,
+          14467291,
+          9638447
+        ],
+        "query/memory/fts": [
+          823600,
+          791143,
+          806563,
+          797769,
+          777419,
+          1231789,
+          843475
+        ],
+        "query/memory/walk-16": [
+          658995,
+          647130,
+          946087,
+          640168,
+          637755,
+          1136651,
+          816447
+        ],
+        "query/memory/walk-unbounded": [
+          1264529,
+          1202733,
+          1892491,
+          1007991,
+          951362,
+          1729357,
+          1187631
+        ],
+        "query/memory/apply-100": [
+          7261317,
+          7271895,
+          7142842,
+          6921421,
+          6257513,
+          6840232,
+          6539132
+        ],
+        "query/file/point": [
+          599972,
+          382853,
+          384954,
+          427123,
+          369898,
+          409477,
+          389783
+        ],
+        "query/file/status-open": [
+          11458580,
+          8496338,
+          9484096,
+          9408860,
+          11066576,
+          10652891,
+          8854979
+        ],
+        "query/file/fts": [
+          799699,
+          849057,
+          825743,
+          874573,
+          1268153,
+          1234305,
+          853568
+        ],
+        "query/file/walk-16": [
+          660230,
+          637907,
+          657320,
+          722259,
+          781959,
+          895733,
+          675949
+        ],
+        "query/file/walk-unbounded": [
+          1096488,
+          952702,
+          996461,
+          1230507,
+          1272968,
+          1337328,
+          961127
+        ],
+        "query/file/apply-100": [
+          7195653,
+          6853235,
+          7679356,
+          20909742,
+          8424126,
+          9099674,
+          6993764
+        ],
+        "archetype/memory/backfill": [
+          54592594,
+          36019603,
+          36261554,
+          44777487,
+          41437274,
+          61390174,
+          43154510
+        ],
+        "archetype/memory/move-100": [
+          10765246,
+          9536271,
+          10531742,
+          11961561,
+          9510539,
+          13640680,
+          11040000
+        ],
+        "archetype/file/backfill": [
+          41368508,
+          41302251,
+          38944407,
+          83636229,
+          38447194,
+          45453482,
+          40069599
+        ],
+        "archetype/file/move-100": [
+          10469510,
+          9633010,
+          10561542,
+          19611847,
+          11919195,
+          13325841,
+          10467878
+        ],
+        "apply/file/edit-alone-200": [
+          1567211.41,
+          1355331.255,
+          2395882.4,
+          5776210.27,
+          2469660.77,
+          2589213.915,
+          1476234.04
+        ],
+        "apply/file/edit-batch-200": [
+          276272.345,
+          254686.185,
+          433016.53,
+          1034303.055,
+          537662.265,
+          1307101.57,
+          253504.705
+        ],
+        "apply/file/edit-alone-1000": [
+          1465536.234,
+          1352574.066,
+          1923759.215,
+          3953315.849,
+          2189302.227,
+          2635903.936,
+          1749991.798
+        ],
+        "apply/file/edit-batch-1000": [
+          169252.909,
+          165962.681,
+          177117.603,
+          204012.184,
+          237530.195,
+          195168.142,
+          199217.874
+        ],
+        "apply/file/create-alone-200": [
+          1667706.945,
+          1778343.565,
+          2050497.055,
+          2555945.54,
+          2578876.695,
+          2371736.17,
+          1490633.08
+        ],
+        "apply/file/create-batch-200": [
+          323898.285,
+          475137.55,
+          405908.665,
+          500676.735,
+          509161.31,
+          488788.15,
+          294419.165
+        ],
+        "apply/file/create-alone-1000": [
+          1378770.84,
+          2303452.54,
+          4048022.702,
+          2191319.527,
+          2476641.051,
+          2152934.576,
+          1458047.434
+        ],
+        "apply/file/create-batch-1000": [
+          222248.072,
+          311045.216,
+          389309.344,
+          268566.803,
+          285638.833,
+          275736.191,
+          226962.1
+        ],
+        "apply/ram/edit-alone-200": [
+          164342.675,
+          151449.725,
+          168605.175,
+          152779.16,
+          187548.5,
+          165513.105,
+          141637.405
+        ],
+        "apply/ram/edit-batch-200": [
+          34262.875,
+          25302.615,
+          28972.01,
+          28314.27,
+          35650.45,
+          33985.86,
+          28234.775
+        ],
+        "apply/ram/edit-alone-1000": [
+          137653.633,
+          125619.201,
+          149459.419,
+          252550.282,
+          141164.341,
+          154991.633,
+          212782.147
+        ],
+        "apply/ram/edit-batch-1000": [
+          26838.423,
+          32403.017,
+          31178.928,
+          72179.685,
+          26563.39,
+          34029.421,
+          32574.924
+        ],
+        "apply/ram/create-alone-200": [
+          162823.595,
+          154251.615,
+          193716.645,
+          388419.73,
+          140718.03,
+          149481.19,
+          146897.73
+        ],
+        "apply/ram/create-batch-200": [
+          29130.02,
+          28965.615,
+          31116.045,
+          92450.2,
+          26870.59,
+          27401.595,
+          27611.36
+        ],
+        "apply/ram/create-alone-1000": [
+          130860.228,
+          141177.112,
+          167852.716,
+          169152.386,
+          127607.428,
+          138537.581,
+          129123.954
+        ],
+        "apply/ram/create-batch-1000": [
+          31752.929,
+          33008.241,
+          30221.907,
+          29859.338,
+          30024.905,
+          34206.758,
+          27529.295
+        ],
+        "relay/store/entities-1": [
+          534844.5,
+          585771.7,
+          645876,
+          539832.6,
+          532577.9,
+          529138.5,
+          518162.1
+        ],
+        "relay/store/entities-10": [
+          337533.5,
+          404117.08,
+          347649.28,
+          386075.9,
+          344115.24,
+          350988.37,
+          336591.78
+        ],
+        "relay/store/entities-100": [
+          296478.514,
+          292857.694,
+          370296.816,
+          309524.704,
+          299891.627,
+          292564.996,
+          299679.236
+        ]
+      },
+      "counts": {
+        "apply/file/edit-alone-200": {
+          "sqlPerApply": 44.63,
+          "sqlPerBundle": 44.63
+        },
+        "apply/file/edit-batch-200": {
+          "sqlPerApply": 2462,
+          "sqlPerBundle": 12.31
+        },
+        "apply/file/edit-alone-1000": {
+          "sqlPerApply": 44.526,
+          "sqlPerBundle": 44.526
+        },
+        "apply/file/edit-batch-1000": {
+          "sqlPerApply": 12062,
+          "sqlPerBundle": 12.062
+        },
+        "apply/file/create-alone-200": {
+          "sqlPerApply": 48,
+          "sqlPerBundle": 48
+        },
+        "apply/file/create-batch-200": {
+          "sqlPerApply": 3630,
+          "sqlPerBundle": 18.15
+        },
+        "apply/file/create-alone-1000": {
+          "sqlPerApply": 48,
+          "sqlPerBundle": 48
+        },
+        "apply/file/create-batch-1000": {
+          "sqlPerApply": 18030,
+          "sqlPerBundle": 18.03
+        },
+        "apply/ram/edit-alone-200": {
+          "sqlPerApply": 0,
+          "sqlPerBundle": 0
+        },
+        "apply/ram/edit-batch-200": {
+          "sqlPerApply": 0,
+          "sqlPerBundle": 0
+        },
+        "apply/ram/edit-alone-1000": {
+          "sqlPerApply": 0,
+          "sqlPerBundle": 0
+        },
+        "apply/ram/edit-batch-1000": {
+          "sqlPerApply": 0,
+          "sqlPerBundle": 0
+        },
+        "apply/ram/create-alone-200": {
+          "sqlPerApply": 0,
+          "sqlPerBundle": 0
+        },
+        "apply/ram/create-batch-200": {
+          "sqlPerApply": 0,
+          "sqlPerBundle": 0
+        },
+        "apply/ram/create-alone-1000": {
+          "sqlPerApply": 0,
+          "sqlPerBundle": 0
+        },
+        "apply/ram/create-batch-1000": {
+          "sqlPerApply": 0,
+          "sqlPerBundle": 0
+        },
+        "relay/store/entities-1": {
+          "sql": 1,
+          "reads": 1,
+          "writes": 0,
+          "transactions": 1
+        },
+        "relay/store/entities-10": {
+          "sql": 1,
+          "reads": 1,
+          "writes": 0,
+          "transactions": 1
+        },
+        "relay/store/entities-100": {
+          "sql": 1,
+          "reads": 1,
+          "writes": 0,
+          "transactions": 1
+        }
+      },
+      "loadAverage": [
+        "3.53 2.98 3.20 3/1577 2728959",
+        "3.45 3.00 3.20 6/1682 2730145",
+        "3.64 3.06 3.21 3/1664 2731143",
+        "3.54 3.26 3.27 3/1607 2736867",
+        "3.22 3.21 3.25 1/1631 2737545",
+        "3.15 3.19 3.25 4/1627 2738355",
+        "5.01 3.82 3.47 5/1751 2747510",
+        "4.50 3.79 3.46 3/1718 2748355",
+        "4.40 3.80 3.47 3/1760 2749201",
+        "6.02 4.66 3.85 4/1852 2759415",
+        "5.63 4.66 3.87 2/1664 2760295",
+        "7.02 5.05 4.02 6/1891 2762252",
+        "6.22 5.42 4.38 4/1716 2772945",
+        "5.31 5.27 4.35 3/1721 2773849",
+        "5.73 5.36 4.40 4/1725 2774862",
+        "5.51 5.80 4.78 3/1729 2785324",
+        "6.85 6.10 4.90 4/1812 2786597",
+        "7.35 6.26 4.98 10/1763 2788689",
+        "5.02 5.98 5.13 3/1681 2805231",
+        "4.84 5.88 5.12 3/1708 2807456",
+        "5.19 5.89 5.14 6/1756 2808388"
+      ],
+      "units": {
+        "sqlite/memory/point": "ns/op",
+        "sqlite/memory/status-open": "ns/op",
+        "sqlite/memory/fts": "ns/op",
+        "sqlite/memory/walk-16": "ns/op",
+        "sqlite/memory/walk-unbounded": "ns/op",
+        "sqlite/memory/apply-100": "ns/op",
+        "sqlite/file/point": "ns/op",
+        "sqlite/file/status-open": "ns/op",
+        "sqlite/file/fts": "ns/op",
+        "sqlite/file/walk-16": "ns/op",
+        "sqlite/file/walk-unbounded": "ns/op",
+        "sqlite/file/apply-100": "ns/op",
+        "sql/memory/point": "ns/op",
+        "sql/memory/status-open": "ns/op",
+        "sql/memory/fts": "ns/op",
+        "sql/memory/walk-16": "ns/op",
+        "sql/memory/walk-unbounded": "ns/op",
+        "sql/memory/apply-100": "ns/op",
+        "sql/file/point": "ns/op",
+        "sql/file/status-open": "ns/op",
+        "sql/file/fts": "ns/op",
+        "sql/file/walk-16": "ns/op",
+        "sql/file/walk-unbounded": "ns/op",
+        "sql/file/apply-100": "ns/op",
+        "query/memory/point": "ns/op",
+        "query/memory/status-open": "ns/op",
+        "query/memory/fts": "ns/op",
+        "query/memory/walk-16": "ns/op",
+        "query/memory/walk-unbounded": "ns/op",
+        "query/memory/apply-100": "ns/op",
+        "query/file/point": "ns/op",
+        "query/file/status-open": "ns/op",
+        "query/file/fts": "ns/op",
+        "query/file/walk-16": "ns/op",
+        "query/file/walk-unbounded": "ns/op",
+        "query/file/apply-100": "ns/op",
+        "archetype/memory/backfill": "ns/op",
+        "archetype/memory/move-100": "ns/op",
+        "archetype/file/backfill": "ns/op",
+        "archetype/file/move-100": "ns/op",
+        "apply/file/edit-alone-200": "ns/bundle",
+        "apply/file/edit-batch-200": "ns/bundle",
+        "apply/file/edit-alone-1000": "ns/bundle",
+        "apply/file/edit-batch-1000": "ns/bundle",
+        "apply/file/create-alone-200": "ns/bundle",
+        "apply/file/create-batch-200": "ns/bundle",
+        "apply/file/create-alone-1000": "ns/bundle",
+        "apply/file/create-batch-1000": "ns/bundle",
+        "apply/ram/edit-alone-200": "ns/bundle",
+        "apply/ram/edit-batch-200": "ns/bundle",
+        "apply/ram/edit-alone-1000": "ns/bundle",
+        "apply/ram/edit-batch-1000": "ns/bundle",
+        "apply/ram/create-alone-200": "ns/bundle",
+        "apply/ram/create-batch-200": "ns/bundle",
+        "apply/ram/create-alone-1000": "ns/bundle",
+        "apply/ram/create-batch-1000": "ns/bundle",
+        "relay/store/entities-1": "ns/value",
+        "relay/store/entities-10": "ns/value",
+        "relay/store/entities-100": "ns/value"
+      },
+      "suiteTimings": {
+        "version": 1,
+        "metric": "wall-seconds / mean-concurrent-8M-LCG-seconds",
+        "tolerance": 0.25,
+        "suites": {
+          "check": {
+            "baseline": {
+              "ratio": 320.0575530642966,
+              "controlFloorSeconds": 0.04952385293749997,
+              "seconds": 19.028932877
+            },
+            "latest": {
+              "seconds": 33.406003503,
+              "controlSeconds": 0.05042902028124971,
+              "samples": 32,
+              "code": 0,
+              "at": "2026-10-03T22:08:39.554Z",
+              "ratio": 662.4360996245821,
+              "verdict": "REGRESSION",
+              "loaded": false
+            }
+          },
+          "test": {
+            "baseline": {
+              "ratio": 738.614673431059,
+              "controlFloorSeconds": 0.05178629543076968,
+              "seconds": 43.901683555
+            }
+          },
+          "test bin/bench_test.ts": {
+            "baseline": {
+              "ratio": 21.915073382312094,
+              "controlFloorSeconds": 0.042178283999999996,
+              "seconds": 0.924340189
+            },
+            "latest": {
+              "seconds": 0.924340189,
+              "controlSeconds": 0.042178283999999996,
+              "samples": 1,
+              "code": 0,
+              "at": "2026-10-03T22:19:59.105Z",
+              "ratio": 21.915073382312094,
+              "verdict": "NEW",
+              "loaded": false
+            }
+          },
+          "test bin/bench_test.ts packages/sqlite/fixtures/fleet_test.ts": {
+            "latest": {
+              "seconds": 0.9115836340000001,
+              "controlSeconds": 0.043758429999999994,
+              "samples": 1,
+              "code": 0,
+              "at": "2026-10-03T22:04:20.313Z",
+              "ratio": 20.832183284455137,
+              "verdict": "NEW",
+              "loaded": false
+            }
+          }
+        }
+      },
+      "timingRegressions": {
+        "query/memory/walk-unbounded": 1.2686066699434855,
+        "apply/file/edit-alone-200": 1.5767887877680304,
+        "apply/file/edit-batch-200": 1.6521028234122497,
+        "apply/file/edit-alone-1000": 1.4407902918920947,
+        "apply/file/edit-batch-1000": 1.2804299162606476,
+        "apply/file/create-alone-200": 1.3241271942201045,
+        "apply/file/create-batch-200": 1.4398536259450756,
+        "apply/file/create-alone-1000": 1.4623595506109108,
+        "apply/ram/edit-batch-1000": 1.2209547497142046
+      },
+      "countsMatchBaseline": true
+    }
+  ],
+  "focusedCreateAlone1000": [
+    {
+      "load": "1.44 2.51 3.14 4/1490 2719596",
+      "ioBefore": "some avg10=0.00 avg60=0.16 avg300=0.83 total=23190763099\nfull avg10=0.00 avg60=0.16 avg300=0.82 total=14291815231",
+      "us": 1506.083723,
+      "wallSeconds": 28.741736798081547,
+      "cpuSeconds": 27.175282000000003,
+      "ioAfter": "some avg10=2.00 avg60=0.73 avg300=0.90 total=23191381075\nfull avg10=1.90 avg60=0.67 avg300=0.88 total=14292420212"
+    },
+    {
+      "load": "2.27 2.62 3.15 4/1545 2721003",
+      "ioBefore": "some avg10=2.00 avg60=0.73 avg300=0.90 total=23191381075\nfull avg10=1.90 avg60=0.67 avg300=0.88 total=14292420212",
+      "us": 1422.135815,
+      "wallSeconds": 27.502189251128584,
+      "cpuSeconds": 25.552514999999993,
+      "ioAfter": "some avg10=2.36 avg60=1.25 avg300=1.01 total=23192058972\nfull avg10=2.26 avg60=1.19 avg300=0.98 total=14293090528"
+    },
+    {
+      "load": "2.49 2.65 3.15 3/1550 2722082",
+      "ioBefore": "some avg10=2.36 avg60=1.25 avg300=1.01 total=23192058972\nfull avg10=2.26 avg60=1.19 avg300=0.98 total=14293090528",
+      "us": 1420.884636,
+      "wallSeconds": 26.33368161204271,
+      "cpuSeconds": 24.552576000000002,
+      "ioAfter": "some avg10=2.21 avg60=1.65 avg300=1.13 total=23192826675\nfull avg10=2.20 avg60=1.61 avg300=1.11 total=14293849559"
+    },
+    {
+      "load": "2.95 2.73 3.16 4/1560 2722831",
+      "ioBefore": "some avg10=2.21 avg60=1.65 avg300=1.13 total=23192826675\nfull avg10=2.20 avg60=1.61 avg300=1.11 total=14293849559",
+      "us": 1411.180655,
+      "wallSeconds": 26.77366084512323,
+      "cpuSeconds": 25.13752600000001,
+      "ioAfter": "some avg10=2.36 avg60=1.90 avg300=1.24 total=23193565885\nfull avg10=2.13 avg60=1.82 avg300=1.20 total=14294579480"
+    },
+    {
+      "load": "2.99 2.75 3.16 5/1570 2723946",
+      "ioBefore": "some avg10=2.36 avg60=1.90 avg300=1.24 total=23193565885\nfull avg10=2.13 avg60=1.82 avg300=1.20 total=14294579480",
+      "us": 2080.205312,
+      "wallSeconds": 34.45804661512375,
+      "cpuSeconds": 24.476496999999995,
+      "ioAfter": "some avg10=4.19 avg60=3.12 avg300=1.63 total=23195413666\nfull avg10=4.07 avg60=3.02 avg300=1.58 total=14296392680"
+    },
+    {
+      "load": "3.06 2.80 3.16 3/1535 2725072",
+      "ioBefore": "some avg10=4.19 avg60=3.12 avg300=1.63 total=23195413666\nfull avg10=4.07 avg60=3.02 avg300=1.58 total=14296392680",
+      "us": 2039.538772,
+      "wallSeconds": 34.34415049687959,
+      "cpuSeconds": 25.65911600000001,
+      "ioAfter": "some avg10=2.64 avg60=3.03 avg300=1.79 total=23196551416\nfull avg10=2.46 avg60=2.87 avg300=1.72 total=14297500156"
+    },
+    {
+      "load": "3.25 2.87 3.17 4/1553 2726887",
+      "ioBefore": "some avg10=2.64 avg60=3.03 avg300=1.79 total=23196551416\nfull avg10=2.46 avg60=2.87 avg300=1.72 total=14297500156",
+      "us": 1989.62745,
+      "wallSeconds": 34.34465773589909,
+      "cpuSeconds": 25.932260999999983,
+      "ioAfter": "some avg10=2.62 avg60=2.87 avg300=1.88 total=23197629495\nfull avg10=2.60 avg60=2.75 avg300=1.82 total=14298554006"
+    }
+  ]
+}
