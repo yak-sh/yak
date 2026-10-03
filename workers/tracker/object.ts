@@ -171,7 +171,9 @@ export class Tracker {
       await tracker.drain()
       // Wakes and retryable effects must progress even without new reports.
       let pending = await tracker.graph.read('.effect.state=pending .limit=1')
-      let wakes = await tracker.graph.read('.wake.at>0 .limit=1')
+      let wakes = await tracker.graph.read(
+        '.wake.at>=1970-01-01T00:00:00Z .limit=1',
+      )
       if (pending.length || wakes.length) {
         await this.ctx.storage.setAlarm(Date.now() + 1000)
       }
@@ -187,8 +189,10 @@ export class Tracker {
       )
       // The box subscribes here; arbitrary graph writes are not a tracker RPC.
       if (
-        !('subscribe' in frame) && !('unsubscribe' in frame) &&
-        !('ack' in frame)
+        !frame || typeof frame != 'object' ||
+        Object.keys(frame).some((key) =>
+          !['subscribe', 'unsubscribe', 'ack', 'id'].includes(key)
+        )
       ) {
         ws.send(
           JSON.stringify({

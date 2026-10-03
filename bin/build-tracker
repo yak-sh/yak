@@ -1,0 +1,18 @@
+#!/bin/sh
+# Workers Builds bootstraps the independent tracker, never yak or its siblings.
+set -eu
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cache=$(npm config get cache)
+DENO_INSTALL=${DENO_INSTALL:-"$cache/deno-install"}
+DENO_DIR=${DENO_DIR:-"$cache/deno"}
+export DENO_INSTALL DENO_DIR
+if ! command -v deno >/dev/null 2>&1; then
+  if [ ! -x "$DENO_INSTALL/bin/deno" ]; then
+    curl -fsSL https://deno.land/install.sh | sh -s -- -y --no-modify-path
+  fi
+  PATH="$DENO_INSTALL/bin:$PATH"
+  export PATH
+fi
+cd "$root"
+npm ci --prefix workers/yak --prefer-offline --no-audit --no-fund
+exec deno run -A workers/tracker/deploy.ts

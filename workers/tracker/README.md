@@ -15,9 +15,10 @@ deno run -A workers/tracker/scratch.ts
 
 The scratch harness owns one workerd runtime, closes it in `finally`, and
 removes its scratch directory. It checks SQLite intake, duplicate delivery,
-tenant authorization, subscription frames and heartbeat intake. It sends no
-email and deploys nothing. The build door uses the pinned Wrangler and workspace
-paths from `workers/yak/wrangler.ts`; npm dependencies are installed with
+tenant authorization, subscription frames, heartbeat intake and the queue canary
+through the runtime consumer. It sends no email and deploys nothing. The build
+door uses the pinned Wrangler and workspace paths from
+`workers/yak/wrangler.ts`; npm dependencies are installed with
 `npm ci --prefix workers/yak` before a cold build.
 
 ## Access and RPC
@@ -65,10 +66,9 @@ connection for this Worker, its own Email Sending binding, and the dedicated
 Worker and restore its previous version. Source is ready; production queue and
 build activation are separate account operations.
 
-Workers Builds: root repository, build command `npm ci --prefix workers/yak`,
-deploy command `deno run -A workers/tracker/deploy.ts`. Install Deno in the
-build image as `bin/build-yak` does if it is absent. Watch `workers/tracker` and
-`packages`.
+Workers Builds: repository root, deploy command `sh bin/build-tracker`, with
+build command empty. The wrapper installs Deno and the pinned npm dependencies.
+Watch `workers/tracker`, `packages` and `bin/build-tracker`.
 
 `deploy.ts` hashes the dry-run bundle and skips an unchanged deployment. It
 publishes a server-minted canary through the Worker's queue, checks that intake

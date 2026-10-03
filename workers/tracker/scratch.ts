@@ -1,5 +1,5 @@
 #!/usr/bin/env -S deno run -A
-// One owned workerd harness proves SQLite DO intake, RPC, hibernation and
+// One owned workerd harness proves SQLite DO intake, RPC and
 // independent recovery. No live queue, account API or email is contacted.
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
@@ -18,7 +18,6 @@ let scratch = await Deno.makeTempDir({ prefix: 't59076-workerd-' })
 let secret = 'scratch-only-tracker-secret'
 let server = createTestHarness({
   root,
-  persist: scratch,
   workers: [{
     config: {
       name: 'tracker-probe',
@@ -38,6 +37,14 @@ let server = createTestHarness({
       },
       migrations: [{ tag: 'v1', new_sqlite_classes: ['Tracker'] }],
       vars: { TRACKER_SECRET: secret },
+      queues: {
+        producers: [{ binding: 'ERRORS', queue: 'tracker-scratch-errors' }],
+        consumers: [{
+          queue: 'tracker-scratch-errors',
+          max_batch_size: 10,
+          max_batch_timeout: 1,
+        }],
+      },
     },
   }],
 })
@@ -99,6 +106,7 @@ try {
   })
   ws.send(
     JSON.stringify({
+      subscribe: '.bug',
       relay: [{ entity: rows[0].entity, error: { message: 'poison' } }],
       id: 'write',
     }),
@@ -120,8 +128,26 @@ try {
     })).status,
     200,
   )
+  let canary = await server.fetch(
+    `/canary?scope=platform&hash=${'a'.repeat(64)}`,
+    {
+      method: 'POST',
+      headers: { authorization: `Bearer ${admin}` },
+    },
+  )
+  equal(canary.status, 200)
+  let published = await canary.json()
+  await until(async () => {
+    let response = await server.fetch(
+      `/query?scope=platform&q=.error.bug+.entity.eid=${published.eid}`,
+      {
+        headers: { authorization: `Bearer ${admin}` },
+      },
+    )
+    return response.ok && (await response.json()).length == 1
+  }, { timeout: 10_000 })
   console.log(
-    'scratch workerd: SQLite intake, duplicate ack recovery, tenant auth, read-only WebSocket, heartbeat passed',
+    'scratch workerd: SQLite intake, duplicate ack recovery, tenant auth, read-only WebSocket, heartbeat, queue canary passed',
   )
 } finally {
   await server.close()

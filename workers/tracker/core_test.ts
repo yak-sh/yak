@@ -129,3 +129,26 @@ test('same batch duplicate eids do not multiply occurrence counts', async () => 
   equal(((await g.bugs())[0].bug as Comp)?.hits, 1)
   equal(batch(rows).scope, platform)
 })
+
+test('deployed resolves prior versions but keeps the serving version open', async () => {
+  let g = fixture()
+  let app = '00000000-0000-4000-8000-000000000005'
+  let old = capture(Error('old break'), {
+    sink: () => {},
+    version: 1,
+    during: { app, space },
+    fault: 'old',
+  })
+  let current = capture(Error('current break'), {
+    sink: () => {},
+    version: 2,
+    during: { app, space },
+    fault: 'current',
+  })
+  await g.ingest([...old, ...current])
+  await g.drain()
+  await g.deployed(app, 2)
+  let open = await g.unseen(app)
+  equal(open.length, 1)
+  equal(open[0].bug?.fault, 'current')
+})

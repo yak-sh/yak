@@ -97,6 +97,7 @@ if (import.meta.main) {
           canary.searchParams.set('hash', hash)
           let response = await fetch(canary, {
             method: 'POST',
+            signal: AbortSignal.timeout(5000),
             headers: { authorization: `Bearer ${ticket}` },
           })
           if (!response.ok) return false
@@ -108,6 +109,7 @@ if (import.meta.main) {
           query.searchParams.set('scope', 'platform')
           query.searchParams.set('q', `.error.bug .entity.eid=${eid}`)
           let response = await fetch(query, {
+            signal: AbortSignal.timeout(5000),
             headers: { authorization: `Bearer ${ticket}` },
           })
           let rows = response.ok ? await response.json() : []
@@ -121,6 +123,7 @@ if (import.meta.main) {
           await run([
             'rollback',
             version,
+            '--yes',
             '--message',
             'tracker canary missing',
           ])
