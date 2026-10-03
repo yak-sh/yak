@@ -64,6 +64,11 @@ let paced = async (response: Response) => {
   assertEquals(response.status, 429, await response.clone().text())
   await response.body?.cancel()
 }
+let visible = (rows: object[]) => {
+  for (let row of rows) {
+    assert(!('_pace' in row), 'internal pace clocks stay in the store')
+  }
+}
 let idOf = (v: unknown): string | undefined =>
   typeof v == 'string' ? v : (v as { eid?: string } | null)?.eid
 
@@ -81,7 +86,11 @@ test('stored pacing separates entities and sealed vias, keeps earlier writers, a
       await session(k, owner.person, crypto.randomUUID()),
     )
     let eid = crypto.randomUUID()
-    await page.applied([move(eid, 1)])
+    let saved = await page.applied([move(eid, 1)])
+    visible(saved)
+    let made = saved.find((r) => r.entity.eid == eid)!
+    assertEquals(made.position, { x: 1 })
+    assert(made.created, 'the public creation stamp still reaches the caller')
     await paced(await page.post([move(eid, 2)]))
 
     // This is the same person through another verified instrument. It may
@@ -116,10 +125,30 @@ test('stored pacing separates entities and sealed vias, keeps earlier writers, a
     assertEquals((await page.get(`.entity.eid=${eid}&?position`))[0].position, {
       x: 3,
     })
+    for (let query of [`.entity.eid=${eid}`, `.entity.eid=${eid}&*`]) {
+      let rows = await page.get(query)
+      visible(rows)
+      assertEquals(rows[0].position, { x: 3 })
+    }
+    let stamped = await page.get(`.entity.eid=${eid}&*&?created&?updated`)
+    visible(stamped)
+    assert(
+      stamped[0].created && stamped[0].updated,
+      'requested public stamps still reach the caller',
+    )
 
     // A different entity has its own pace, including when several are written
     // together by one instrument.
-    await page.applied([move(crypto.randomUUID(), 7)])
+    let envelopeEid = crypto.randomUUID()
+    let envelope = await page.applied({ entities: [move(envelopeEid, 7)] })
+    assertEquals(envelope.ok, true)
+    visible(envelope.bundles)
+    let enveloped = envelope.bundles.find((r) => r.entity.eid == envelopeEid)!
+    assertEquals(enveloped.position, { x: 7 })
+    assert(
+      enveloped.created,
+      'the legacy envelope still includes the public stamp',
+    )
     let batch = [move(crypto.randomUUID(), 8), move(crypto.randomUUID(), 9)]
     await page.applied(batch)
     await paced(await page.post([{ ...batch[0], position: { x: 10 } }]))

@@ -61,6 +61,7 @@ import {
 import { matcher, net, rows as matchRows } from '@yaks/match'
 import { type And, parse } from '@yaks/query'
 import { paceOf, syncOf } from '@yaks/vocab'
+import { published } from './publish.ts'
 import { cares, type Interest, interest } from './interest.ts'
 import { peerPlan } from './peer_query.ts'
 import { fault, type Refusal, refusal } from './refuse.ts'
@@ -463,7 +464,32 @@ export let subscriptions = (graph: Graph, opts: {
     readOpts?: ReadOpts,
     raw = false,
   ): Sub['send'] => {
-    if (!graph.rewrites(readOpts)) return sink
+    let sendPublished: Sink = (frame) => {
+      let out: Frame = { ...frame }
+      for (let key of ['bundles', 'peers', 'relay'] as const) {
+        if (frame[key]) out[key] = published(graph.vocab, frame[key])
+      }
+      for (let key of ['coverage', 'peerCoverage'] as const) {
+        if (!frame[key]) continue
+        out[key] = Object.fromEntries(
+          Object.entries(frame[key]).map(([eid, coverage]) => [
+            eid,
+            coverage === true ? true : Object.fromEntries(
+              Object.entries(coverage).filter(([comp]) =>
+                syncOf(graph.vocab, comp) != 'none'
+              ),
+            ),
+          ]),
+        )
+      }
+      if (frame.transient) {
+        out.transient = frame.transient.filter((f) =>
+          syncOf(graph.vocab, f.component) != 'none'
+        )
+      }
+      return sink(out)
+    }
+    if (!graph.rewrites(readOpts)) return sendPublished
     let patchOpts = { ...readOpts, patch: true }
     let waiting: Promise<void> | undefined
     let send = (frame: Frame) => {
@@ -474,7 +500,7 @@ export let subscriptions = (graph: Graph, opts: {
           if (!bundles) return
           return after(
             graph.answer(
-              bundles,
+              published(graph.vocab, bundles),
               key == 'relay' || raw && key == 'bundles' ? patchOpts : readOpts,
             ),
             (out) => {
@@ -499,26 +525,29 @@ export let subscriptions = (graph: Graph, opts: {
                   return [row]
                 },
               )
-              return after(graph.answer(rows, readOpts), (out) => {
-                rewritten[key] = { ...coverage }
-                for (let row of out) {
-                  rewritten[key]![row.entity.eid] = Object.fromEntries(
-                    Object.entries(row).filter(([name]) => name != 'entity')
-                      .map((
-                        [name, props],
-                      ) => [
-                        name,
-                        props && typeof props == 'object'
-                          ? Object.keys(props).length
-                            ? Object.keys(props)
-                            : true
-                          : [],
-                      ]),
-                  )
-                }
-              })
+              return after(
+                graph.answer(published(graph.vocab, rows), readOpts),
+                (out) => {
+                  rewritten[key] = { ...coverage }
+                  for (let row of out) {
+                    rewritten[key]![row.entity.eid] = Object.fromEntries(
+                      Object.entries(row).filter(([name]) => name != 'entity')
+                        .map((
+                          [name, props],
+                        ) => [
+                          name,
+                          props && typeof props == 'object'
+                            ? Object.keys(props).length
+                              ? Object.keys(props)
+                              : true
+                            : [],
+                        ]),
+                    )
+                  }
+                },
+              )
             }),
-            () => sink(rewritten),
+            () => sendPublished(rewritten),
           ),
       )
     }
@@ -1270,6 +1299,7 @@ export let subscriptions = (graph: Graph, opts: {
     }
   }
   live.subscribe((frame) => {
+    if (syncOf(graph.vocab, frame.component) == 'none') return
     for (const mine of held.values()) {
       for (const sub of mine.values()) {
         if (!sub.raw && !visible(sub, frame)) continue
@@ -1387,16 +1417,22 @@ export let subscriptions = (graph: Graph, opts: {
     snapshot: (query, readOpts) => {
       flushPeers()
       return ordered(() =>
-        graph.rewrites(readOpts)
-          ? after(
-            graph.ask(query, readOpts),
-            (q) =>
-              after(
-                snapshot(q, q !== query),
-                (out) => Array.isArray(out) ? graph.answer(out, readOpts) : out,
-              ),
-          )
-          : snapshot(query)
+        after(
+          graph.rewrites(readOpts)
+            ? after(
+              graph.ask(query, readOpts),
+              (q) =>
+                after(
+                  snapshot(q, q !== query),
+                  (out) =>
+                    Array.isArray(out)
+                      ? graph.answer(published(graph.vocab, out), readOpts)
+                      : out,
+                ),
+            )
+            : snapshot(query),
+          (out) => Array.isArray(out) ? published(graph.vocab, out) : out,
+        )
       )
     },
     enqueue,

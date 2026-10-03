@@ -204,11 +204,11 @@ paced entity. Its JSON ledger keeps independent component/via clocks; changing
 another component or alternating instruments cannot erase one. Accepted clock
 patches commit with their values, and expired clocks are removed on that
 entity's next paced write. Clients cannot write or clear the ledger, and its
-`sync: none` keeps it off outgoing sync writes. An existing row without a ledger
-conservatively initializes each worn component from its recent `created` and
-`updated` instruments. Its first accepted paced write persists these clocks;
-after that, entity stamps no longer influence pacing. This online transition
-keeps a recent legacy write paced without rewriting stores at boot.
+`sync: none` keeps it off transports in either direction. An existing row
+without a ledger conservatively initializes each worn component from its recent
+`created` and `updated` instruments. Its first accepted paced write persists
+these clocks; after that, entity stamps no longer influence pacing. This online
+transition keeps a recent legacy write paced without rewriting stores at boot.
 
 `pacing(paces, tx, bundles, now?)` returns the accepted bundles with clock
 patches, and derives each entity's writer from the bundles as the graph does.

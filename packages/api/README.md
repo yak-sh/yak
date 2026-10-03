@@ -61,9 +61,13 @@ continues to read durable data only.
 The `/apply` result contains the patches and what the graph generated, including
 assigned entity numbers, timestamps, and cascading deletions where the graph is
 configured to produce them. It is not a read of every component on each entity.
-Add `?check=1` to validate and roll back the transaction before commit; effects
-do not run. This reserves nothing, and a later write can still fail. It does not
-provide a transaction across multiple graphs.
+Components declaring `sync: none` stay on their node: HTTP answers, socket
+frames and projection coverage omit them. `published(vocab, bundles)` applies
+this transport projection without changing stored data, identities, aliases,
+stamps or deletion markers. Add `?check=1` to validate and roll back the
+transaction before commit; effects do not run. This reserves nothing, and a
+later write can still fail. It does not provide a transaction across multiple
+graphs.
 
 Queries use [@yaks/query](../query/README.md). Aggregate queries return values
 instead of bundles: `.count` returns `{"count":n}`, `.distinct=prop` returns
@@ -93,6 +97,7 @@ All exports are available from `@yaks/api`:
 | `Filter`                                                        | A check a plugin puts in front of every route, refusing a request by throwing         |
 | `Authenticate`, `signed`                                        | Identify a caller and replace client-supplied write attribution                       |
 | `ask`, `write`, `pour`, `CHUNK`                                 | Query, JSON write, and streaming import handlers; import chunk size                   |
+| `published`                                                     | Project outgoing bundles, leaving `sync: none` components on their node               |
 | `subscriptions`, `Subs`, `Ask`, `Frame`, `Sink`                 | Manage subscriptions and their messages                                               |
 | `attach`, `receive`, `sink`, `Socket`, `Upgrade`, `denoUpgrade` | Connect the subscription protocol to sockets                                          |
 | `denoListen`, `Listen`, `Listener`, `Addr`                      | Bind a port on Deno, which is what the `serve` tool listens with                      |

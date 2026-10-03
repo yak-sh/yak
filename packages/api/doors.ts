@@ -23,6 +23,7 @@ import { parse } from '@yaks/query'
 import { parent, peek } from '@yaks/trace'
 import { signed } from './actor.ts'
 import { fault, json, refusal } from './refuse.ts'
+import { published } from './publish.ts'
 
 /**
  * How many bundles go into one transaction when an import arrives one bundle
@@ -163,7 +164,7 @@ export let pour = (
         blame = at[await culprit(graph, batch, cause)]
         throw err
       }
-      for (let b of asked(held, applied)) await say(b)
+      for (let b of published(graph.vocab, asked(held, applied))) await say(b)
       committed += held.length
       held = []
       at = []
@@ -215,10 +216,13 @@ export let write = async (
   let check = new URL(request.url).searchParams.has('check')
   let cause = peek(activity) ? parent(activity, request) : undefined
   return json(
-    await graph.apply(signed(body, who), {
-      check,
-      ...(cause && { parent: cause }),
-    }),
+    published(
+      graph.vocab,
+      await graph.apply(signed(body, who), {
+        check,
+        ...(cause && { parent: cause }),
+      }),
+    ),
   )
 }
 
@@ -261,7 +265,7 @@ export let ask = async (
   let op = aggregate(ast)
   return op
     ? json(reduced(op, await graph.rows(ast, options)))
-    : listed(await graph.read(ast, options))
+    : listed(published(graph.vocab, await graph.read(ast, options)))
 }
 
 // How much of a listed answer is said per piece of the stream.

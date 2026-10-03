@@ -87,6 +87,7 @@ import {
   type Handler,
   json,
   poured,
+  published,
   refuse,
   served,
   signed,
@@ -2531,7 +2532,7 @@ export class Store {
       } finally {
         this.#landing = null
       }
-      return json(await out)
+      return json(published(this.#vocab, await out))
     } catch (e) {
       let no = constrained(e)
       caught(no, { request: 'write', store: this.#name() })
@@ -2548,7 +2549,11 @@ export class Store {
     hooks: {
       commit: (bundles) => {
         if (this.#landing != null) {
-          landed(this.#sql, this.#landing, () => bundles)
+          landed(
+            this.#sql,
+            this.#landing,
+            () => published(this.#vocab, bundles),
+          )
           this.#landing = null
         }
         return bundles
