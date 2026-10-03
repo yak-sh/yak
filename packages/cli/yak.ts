@@ -1,5 +1,5 @@
 // The `yak` command. It has built-in subcommands — `help`, `work`, `restart`, `init`,
-// `login`, `logout`, `apply` — and other subcommands are graph tools (local.ts),
+// `auth`, `apply` — and other subcommands are graph tools (local.ts),
 // an MCP server's tools (platform.ts), plugin terminal controls, or an app's
 // own commands (commands.ts). Either
 // list costs something to gather, so run.ts asks for it only when the
@@ -39,8 +39,7 @@ import { bundlesIn, chunks } from './apply.ts'
 import { appStray, appTools } from './commands.ts'
 import { cli, type Command, type Ctx, helpTool, type Opts } from './run.ts'
 import { listed } from './platform.ts'
-import { forgetToken, saveToken, tokenFor } from './store.ts'
-import { type Result, saidBy } from './roster.ts'
+import { closeAccounts, personal } from './accounts.ts'
 import { ownConfig } from './config.ts'
 import { starter } from './init.ts'
 import { listen, wind } from '@yaks/process/wind'
@@ -56,6 +55,7 @@ let TAIL =
   --host <host>   an MCP server to call over /mcp instead, for a graph this
                   machine cannot open as a file (default $YAKS_HOST, else
                   ${HOST})
+  --as <account>  another account (default is computed, never stored)
   --json          print the structured result instead of the text
   --tui           hold the answer in the terminal, scrollable, until Ctrl-C
   --timing        one line on stderr per response, with its Server-Timing
@@ -65,8 +65,8 @@ let TAIL =
   --help         this page, or one subcommand's own
 
 An argument value written @path is read from that file, and - is read from
-stdin. $YAKS_TOKEN is the bearer token when set; otherwise the one
-\`yak login\` saved.`
+stdin. $YAKS_TOKEN is the bearer token when set; otherwise the selected
+yaks.app connection supplies it. Sign in with \`yak auth yaks.app\`.`
 
 // `apply` is `graph_apply` fed from a stream. One batch is applied in one
 // transaction, and a file of fifty thousand bundles is a bulk load rather than
@@ -101,42 +101,6 @@ let applied = async (
   return code
 }
 
-// Signing out ends the token, not just this machine's copy of it: a token
-// forgotten here is still a live credential wherever else it was pasted. A
-// host that mints tokens takes one back with its `grant` tool, handed the
-// token itself (yaks.app, T-39755); a host with no such tool refuses the call,
-// and the token is forgotten here all the same, with the refusal said.
-let ended = async (_args: Record<string, unknown>, c: Ctx) => {
-  let token = tokenFor(c.host, c.state)
-  if (!token) {
-    c.out(`no bearer token for ${c.host} to end`)
-    return 0
-  }
-  let told = await c.ask('tools/call', {
-    name: 'grant',
-    arguments: { revoke: token },
-  }).then(
-    (r) => ({ ok: !(r as Result).isError, text: saidBy(r as Result).text }),
-    (e) => ({ ok: false, text: (e as Error).message }),
-  )
-  forgetToken(c.host, c.state)
-  c.out(
-    told.ok
-      ? `${told.text} Forgot it here too.`
-      : `${c.host} did not revoke it (${told.text}); forgot it here.`,
-  )
-  // The environment's token outlives a file this machine forgot.
-  if (tokenFor(c.host, c.state)) {
-    c.note('YAKS_TOKEN still names a token in this shell: unset it')
-  }
-  return told.ok ? 0 : 1
-}
-
-// The graph this command opened, when it opened one. Imported only when the
-// command named a config, because importing it pulls in a database driver and
-// every plugin the config names — `yak login` on a machine with no graph at
-// all must not pay for that, and neither must a command aimed at an MCP
-// server.
 let local: typeof import('./local.ts') | undefined
 
 // Where this command's tools come from: the graph a config names, opened here,
@@ -258,34 +222,7 @@ export let own: Command[] = [
     positional: ['name'],
     run: init,
   },
-  {
-    name: 'login',
-    description: 'save a bearer token for this host. yaks.app mints one ' +
-      'with its `grant` tool: ask an assistant connected to yaks.app for a ' +
-      'CLI token, and paste the `yak login …` line it answers',
-    inputSchema: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['token'],
-      properties: { token: { type: 'string' } },
-    },
-    positional: ['token'],
-    run: (args, c) => {
-      c.out(
-        `bearer token for ${c.host} saved in ${
-          saveToken(c.host, String(args.token), c.state)
-        }`,
-      )
-      return 0
-    },
-  },
-  {
-    name: 'logout',
-    description: 'end the bearer token for this host: the host revokes it, ' +
-      'and this machine forgets it',
-    inputSchema: { type: 'object', additionalProperties: false },
-    run: ended,
-  },
+
   {
     name: 'apply',
     description:
@@ -330,9 +267,18 @@ export let main = async (
 ): Promise<number> => {
   let code = 1
   try {
+    let { configPath } = await import('./config.ts')
+    if (
+      argv.includes('auth') && !configPath() &&
+      !argv.some((a) => a == '--config' || a.startsWith('--config='))
+    ) {
+      let path = await personal()
+      argv = ['--config', path, ...argv]
+    }
     return code = await cli([...extra, ...TOOLS], { ...YAK, argv })
   } finally {
     await local?.close(code)
+    await closeAccounts()
   }
 }
 
@@ -357,6 +303,7 @@ if (import.meta.main) {
   })
   wind.done.then(async (code) => {
     await local?.close(code)
+    await closeAccounts()
     Deno.exit(code)
   })
   ran.then(Deno.exit)

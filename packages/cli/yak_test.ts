@@ -7,7 +7,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { cli } from './run.ts'
-import { saveToken, tokenFor } from './store.ts'
+import { tokenFor } from './store.ts'
 import { own, YAK } from './yak.ts'
 
 type Call = { name: string; arguments: Record<string, unknown> }
@@ -24,12 +24,12 @@ let ran = async (
   let home = Deno.makeTempDirSync()
   let calls: Call[] = []
   let said: string[] = []
-  if (o.token) saveToken('yaks.test', o.token, home)
   try {
     await cli(own, {
       ...YAK,
       argv,
-      env: (name) => name == 'YAKS_HOME' ? home : undefined,
+      env: (name) =>
+        name == 'YAKS_HOME' ? home : name == 'YAKS_TOKEN' ? o.token : undefined,
       host: 'yaks.test',
       reads: { file: () => '', stdin: () => '' },
       out: (l) => said.push(l),
@@ -47,7 +47,11 @@ let ran = async (
           : Promise.resolve({ content: [{ type: 'text', text: 'Revoked.' }] })
       },
     })
-    return { calls, said, kept: tokenFor('yaks.test', home) }
+    return {
+      calls,
+      said,
+      kept: await tokenFor('yaks.test', home, { env: () => undefined }),
+    }
   } finally {
     Deno.removeSync(home, { recursive: true })
   }
@@ -98,19 +102,4 @@ test('init writes a config whose graph knows its person', async () => {
   } finally {
     Deno.removeSync(dir, { recursive: true })
   }
-})
-
-test('a sign-out asks the host to revoke the token, then forgets it', async () => {
-  let out = await ran(['logout'], { token: 'yaks_abc' })
-  assertEquals(out.calls, [{
-    name: 'grant',
-    arguments: { revoke: 'yaks_abc' },
-  }])
-  assertEquals(out.kept, null)
-  // A host that cannot revoke it still has it forgotten here, and says so.
-  let no = await ran(['logout'], { token: 'yaks_abc', refusing: true })
-  assertEquals(no.kept, null)
-  assert(no.said.join('\n').includes('did not revoke it'), no.said.join('\n'))
-  // And with nothing kept there is nothing to ask anybody.
-  assertEquals((await ran(['logout'])).calls, [])
 })

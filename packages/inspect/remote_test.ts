@@ -1,6 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { saveToken } from '@yaks/cli'
+import { accountHost, closeAccounts, personal } from '@yaks/cli'
+import { connect, integrationEid, need } from '@yaks/connections'
 import { remote } from './remote.ts'
 
 // The login file is isolated, and both transports meet a real HTTP door.
@@ -35,8 +36,24 @@ test('remote inspector uses saved login on resolution, HTTP and socket handshake
   })
   try {
     let host = `127.0.0.1:${server.addr.port}`
-    saveToken(host, 'probe-token', state)
-    let { url, wire } = await remote('probe/empty', host, state)
+    let path = await personal(state)
+    let h = await accountHost(path)
+    await h.graph.apply([{
+      entity: { eid: integrationEid(`http://${host}/mcp`) },
+      integration: { name: `http://${host}/mcp`, hosts: ['127.0.0.1'] },
+    }])
+    let [b] = await h.graph.apply(
+      await need(h.graph.read, {
+        owner: h.config.person!,
+        integration: `http://${host}/mcp`,
+      }),
+    )
+    await connect({ graph: h.graph, vault: h.vault }, b.entity.eid, {
+      key: 'probe-token',
+    })
+    let { url, wire } = await remote('probe/empty', host, state, undefined, {
+      config: path,
+    })
     assertEquals(url, `http://${host}/empty/api`)
     assertEquals(
       await (await wire.fetch!(
@@ -68,16 +85,17 @@ test('remote inspector uses saved login on resolution, HTTP and socket handshake
         remote('missing', host, state, () =>
           Promise.resolve(Response.json({
             error: { code: 'not_found', message: 'no app missing' },
-          }, { status: 404 }))),
+          }, { status: 404 })), { config: path }),
       Error,
       'no app missing',
     )
     await assertRejects(
       () => remote('empty', host, `${state}/none`),
       Error,
-      'yak login',
+      'yak auth yaks.app',
     )
   } finally {
+    await closeAccounts()
     controller.abort()
     await server.finished
     Deno.removeSync(state, { recursive: true })

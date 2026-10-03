@@ -48,6 +48,8 @@ export let commands: CliCommand[] = [{
           args.app,
           context.host,
           context.state,
+          undefined,
+          { config: context.config, as: context.as },
         )
         : { url, wire: {} }
       await open(

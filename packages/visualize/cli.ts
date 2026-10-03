@@ -135,7 +135,10 @@ export let commands = [{
   run: async (
     args: Record<string, unknown>,
     host: Pick<Host, 'config'>,
-    context: Pick<Ctx, 'host' | 'json' | 'state' | 'via' | 'out' | 'note'>,
+    context: Pick<
+      Ctx,
+      'host' | 'config' | 'as' | 'json' | 'state' | 'via' | 'out' | 'note'
+    >,
   ): Promise<number> => {
     try {
       let what = args.what ?? 'anatomy'
@@ -181,7 +184,10 @@ export let commands = [{
       let key = new URL(doorUrl(context.host)).origin == origin.origin
         ? context.host
         : origin.host
-      let token = tokenFor(key, context.state)
+      let token = await tokenFor(key, context.state, {
+        config: context.config,
+        as: context.as,
+      })
       let headers = new Headers({ accept: 'application/json' })
       if (token) headers.set('authorization', `Bearer ${token}`)
       if (context.via) headers.set('x-via', context.via)

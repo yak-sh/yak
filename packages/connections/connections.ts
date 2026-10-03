@@ -692,6 +692,8 @@ export let credential = async (
   if (i && keyed(i)) {
     return await reveal(c.vault, nameOf(b), { env: () => undefined })
   }
+  let raw = await reveal(c.vault, nameOf(b), { env: () => undefined })
+  if (raw && !raw.trimStart().startsWith('{')) return raw
   let oauth = await signIn(c, b)
   return marking(c, connection, oauth.token)
 }

@@ -36,7 +36,7 @@ export let commands: CliCommand[] = [{
         }, yaksApp({ graph: host.graph, vault: host.vault })),
         typeof args.name == 'string' ? args.name : undefined,
         undefined,
-        typeof args.as == 'string' ? args.as : undefined,
+        typeof args.as == 'string' ? args.as : context.as,
       ),
     )
     return 0

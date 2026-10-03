@@ -23,12 +23,11 @@ implementation. `yak` turns each tool in the selected graph into a subcommand.
 Its arguments and help come from the tool's input schema, so a new tool does not
 require a new CLI release.
 
-`yak` provides five commands itself: `help`, `init`, `login`, `logout`, and
-`apply`. Its other commands come from a configured plugin, a graph opened in the
-current process, or an MCP server queried at run time. `yak serve` is a tool
-rather than a command of this package: [@yaks/api](../api/README.md) declares
-and implements it, so a config listing that package is a config whose graph can
-be served.
+`yak` provides `help`, `init`, and `apply` itself. Its other commands come from
+a configured plugin, a graph opened in the current process, or an MCP server
+queried at run time. `yak serve` is a tool rather than a command of this
+package: [@yaks/api](../api/README.md) declares and implements it, so a config
+listing that package is a config whose graph can be served.
 
 The package has two main responsibilities:
 
@@ -101,7 +100,7 @@ package behind each component, come from its `graph_schema`, asked once and
 cached beside its tool list; a reply that carries no entities prints as its
 text. Terminal controls from a plugin's `./cli` facet, such as the harness's
 `connection authorize`, run in that terminal process and use their own command
-implementations, as do `help`, `init`, `login`, `logout`, and `apply`.
+implementations, as do `help`, `init`, and `apply`.
 
 ## The config
 
@@ -461,18 +460,20 @@ input, it groups bundles into batches of 50; `--dry-run` validates and reports
 the result while rolling back the transaction.
 
 Remote authentication uses `$YAKS_TOKEN` when set. Otherwise,
-`yak login <token>` stores a token for the selected host. yaks.app mints one
-with its `grant` tool: ask an assistant connected to yaks.app for a CLI token,
-and paste the `yak login …` line it answers. `yak logout` ends the token: it
-hands the token back to the host's `grant` tool to revoke, then removes it here,
-and says so when the host could not revoke it. Tokens and cached tool lists are
-stored separately under `$YAKS_HOME`, or the platform config directory followed
-by `/yaks`:
+`yak auth yaks.app` signs in through OAuth. The sign-in is a connection in the
+configured graph. A machine with no graph creates a small personal graph in its
+CLI state directory on its first `yak auth`.
 
-| File         | Contents                                                                |
-| ------------ | ----------------------------------------------------------------------- |
-| `token.json` | Per-host bearer tokens; mode `0600` on non-Windows systems              |
-| `tools.json` | Per-host tool schemas, protocol version, roster version, and vocabulary |
+`--as <account>` is optional on commands that reach yaks.app. Without it, the
+connection whose account matches the configured person's own address wins,
+otherwise the oldest connection. The default is computed, never stored.
+`YAKS_TOKEN` still supplies a sandbox bearer without opening a graph.
+
+| File                           | Contents                                                                |
+| ------------------------------ | ----------------------------------------------------------------------- |
+| `accounts.json`, `accounts.db` | The personal account graph on a machine with no configured graph        |
+| `secrets/`                     | Private vault beside the account graph; no token in graph text          |
+| `tools.json`                   | Per-host tool schemas, protocol version, roster version, and vocabulary |
 
 The tool cache avoids an MCP round trip for ordinary calls. A server response
 that reports a changed roster invalidates or updates the cache.
@@ -509,23 +510,21 @@ The package exports eight entry points:
   @yaks/web's app and @yaks/inspect's page are each served this way.
 
 Application commands use `yak command <name> [arguments] --app <app>`, or the
-short form `yak <app> <name> [arguments]`, as the `yak login` account. The
-command's `vocab.json` declares `positional` beside `input`, with a final `...`
-suffix for every remaining bare word, and `short` on the input property it
+short form `yak <app> <name> [arguments]`, as the selected yaks.app connection.
+The command's `vocab.json` declares `positional` beside `input`, with a final
+`...` suffix for every remaining bare word, and `short` on the input property it
 shortens. Without `positional`, it takes only named arguments (`name=value` or
 `--name value`). Its input schema decides each value's type; `@path` reads a
 file and `-` reads stdin. `--app` selects an app when several share a command
 name. A graph tool with the same command name takes precedence.
 
-`yak admin tool <name> [arguments]` uses the same grammar, acting as the account
-selected with `--as <account>`, `--owner` or `--admin`. It looks for a connector
-tool first, then an app command the account can reach; `--app` selects the app
-when commands share a name. For example:
+The same optional `--as` selects an account for connector tools and app
+commands; no separate admin forwarding command is needed.
 
 ```sh
-yak admin tool where matt --owner
-yak admin tool app_list --admin
-yak admin tool app_errors --space yourname --app vale --owner
+yak where matt
+yak app_list --as admin@bot.yak.sh
+yak app_errors --space yourname --app vale
 ```
 
 ### Reporting outside the watched graph

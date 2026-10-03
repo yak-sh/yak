@@ -56,10 +56,8 @@ export {
   cached,
   configDir,
   forget,
-  forgetToken,
   remember,
   type Roster,
-  saveToken,
   stateDir,
   tokenFor,
 } from './store.ts'
@@ -87,3 +85,11 @@ export { type Config, configPath, read } from './config.ts'
 export { fileVault, vaultOf } from './vault.ts'
 export { listed, printed, rosterOf } from './platform.ts'
 export { appStray, appTools, toolCall } from './commands.ts'
+
+export {
+  accountHost,
+  type AccountOptions,
+  closeAccounts,
+  personal,
+  personalPath,
+} from './accounts.ts'

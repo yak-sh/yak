@@ -74,39 +74,9 @@ let write = (dir: string, path: string, body: unknown, secret = false) => {
 // Every function below is handed the directory it keeps its files in, this
 // machine's own by default, so a test passes a scratch directory rather than
 // setting a variable the whole process shares with every test beside it.
-let tokensPath = (dir: string): string => `${dir}/token.json`
 let rostersPath = (dir: string): string => `${dir}/tools.json`
 
-/** The bearer token for a host: the environment first, so a sandbox that sets
- * `YAKS_TOKEN` never has to write a file. */
-export let tokenFor = (
-  host: string,
-  dir: string = stateDir(),
-): string | null => {
-  let said = env('YAKS_TOKEN')
-  if (said) return said
-  let kept = read(tokensPath(dir))[host]
-  return typeof kept == 'string' ? kept : null
-}
-
-/** Save a bearer token for a host, readable by nobody else. */
-export let saveToken = (
-  host: string,
-  token: string,
-  dir: string = stateDir(),
-): string => {
-  let path = tokensPath(dir)
-  write(dir, path, { ...read(path), [host]: token }, true)
-  return path
-}
-
-/** Delete the saved bearer token for a host. */
-export let forgetToken = (host: string, dir: string = stateDir()): void => {
-  let path = tokensPath(dir)
-  let kept = read(path)
-  delete kept[host]
-  write(dir, path, kept, true)
-}
+export { accountToken as tokenFor } from './accounts.ts'
 
 /** The cached tool list for a host, if there is one. */
 export let cached = (host: string, dir: string = stateDir()): Roster | null => {

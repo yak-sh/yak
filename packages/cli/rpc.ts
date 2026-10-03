@@ -34,7 +34,7 @@ export let VIA = 'x-via'
  * nothing here needs a socket). */
 export type Door = {
   url: string
-  token?: string | null
+  token?: string | null | (() => string | null | Promise<string | null>)
   /** the session this command line is part of, sent on the `x-via` header —
    * it records what wrote something, and is never a credential. A host that
    * stores transcripts resolves it to that session and attributes the writes
@@ -70,9 +70,7 @@ let eventData = (body: string): string =>
     .map((l) => l.slice(5).trim())
     .join('')
 
-let SIGN_IN =
-  'not signed in — run `yak login <token>` (`yak help login` says ' +
-  'where a token comes from), or set YAKS_TOKEN'
+let SIGN_IN = 'not signed in — run `yak auth yaks.app`, or set YAKS_TOKEN'
 
 /** A client of one MCP server. Request ids count up within the process; the
  * session id, if the server issued one, is sent on every request after the
@@ -82,13 +80,16 @@ export let rpc = (door: Door): Rpc => {
   let n = 0
   let session: string | null = null
   return async (method, params = {}) => {
+    let token = typeof door.token == 'function'
+      ? await door.token()
+      : door.token
     let request = new Request(door.url, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
         'mcp-protocol-version': PROTOCOL,
-        ...(door.token ? { authorization: `Bearer ${door.token}` } : {}),
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
         ...(door.via ? { [VIA]: door.via } : {}),
         ...(session ? { 'mcp-session-id': session } : {}),
       },

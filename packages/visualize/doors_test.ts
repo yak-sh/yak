@@ -1,3 +1,5 @@
+import { accountHost, closeAccounts, personal } from '@yaks/cli'
+import { connect, integrationEid, need } from '@yaks/connections'
 // The agent and terminal doors at their in-memory seams: one host's helpers
 // and the serving process's HTTP replies, never a second composed graph.
 
@@ -218,16 +220,29 @@ let terminal = async (
   let fetcher = globalThis.fetch
   let reader = Deno.readTextFileSync
   let token = Deno.env.get('YAKS_TOKEN')
-  let state = '/virtual/visualize-doors'
+  let state = await Deno.makeTempDir()
+  let config = await personal(state)
+  let h = await accountHost(config)
+  for (let [host, key] of Object.entries(opts.tokens ?? {})) {
+    let origin =
+      new URL(/^https?:/.test(host) ? host : `https://${host}`).origin
+    let name = `${origin}/mcp`
+    if (
+      (await h.graph.read('.connection')).some((b) =>
+        (b.connection as Record<string, unknown>)?.integration == name
+      )
+    ) continue
+    await h.graph.apply([{
+      entity: { eid: integrationEid(name) },
+      integration: { name, hosts: [new URL(origin).hostname] },
+    }])
+    let [b] = await h.graph.apply(
+      await need(h.graph.read, { owner: h.config.person!, integration: name }),
+    )
+    await connect({ graph: h.graph, vault: h.vault }, b.entity.eid, { key })
+  }
   if (opts.token) Deno.env.set('YAKS_TOKEN', opts.token)
   else Deno.env.delete('YAKS_TOKEN')
-  Deno.readTextFileSync = (path) => {
-    if (path == `${state}/token.json`) {
-      keys.push(String(path))
-      return JSON.stringify(opts.tokens ?? {})
-    }
-    return reader(path)
-  }
   globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
     sent.push(new Request(input, init))
     return Promise.resolve(Response.json(value, { status: opts.status ?? 200 }))
@@ -236,6 +251,7 @@ let terminal = async (
     host: opts.host ?? 'localhost:8787',
     json: opts.json ?? false,
     state,
+    config,
     via: opts.via,
     out: (s: string) => out.push(s),
     note: (s: string) => notes.push(s),
@@ -252,6 +268,8 @@ let terminal = async (
   } finally {
     globalThis.fetch = fetcher
     Deno.readTextFileSync = reader
+    await closeAccounts()
+    await Deno.remove(state, { recursive: true })
     if (token == null) Deno.env.delete('YAKS_TOKEN')
     else Deno.env.set('YAKS_TOKEN', token)
   }
@@ -333,7 +351,7 @@ test('CLI selects credentials only for the requested origin and carries provenan
   )
   equal(
     selected.sent[0].headers.get('authorization'),
-    'Bearer selected-host-key',
+    'Bearer matching-key',
   )
   let absent = await terminal({ url: 'https://unknown.test', json: true }, {}, {
     host: 'default.test',

@@ -19,9 +19,10 @@ export let remote = async (
   host: string,
   state?: string,
   go: typeof fetch = fetch,
+  account: { config?: string; as?: string } = {},
 ): Promise<{ url: string; wire: Connection }> => {
-  let token = tokenFor(host, state)
-  if (!token) throw new Error('not signed in — run yak login first')
+  let token = await tokenFor(host, state, account)
+  if (!token) throw new Error('not signed in — run yak auth yaks.app first')
   let headers = { authorization: `Bearer ${token}` }
   let at = new URL('/api/app', doorUrl(host))
   at.searchParams.set('app', app)

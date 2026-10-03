@@ -44,6 +44,8 @@ export type Ctx = {
   /** The MCP server this command talks to, where it talks to one — and the
    * name its bearer token is stored under either way. */
   host: string
+  /** Optional account name; absent uses the computed default. */
+  as?: string
   /** The config file naming the graph this command opens, in this process.
    * Absent where the command named an MCP server instead ({@link aimed}). */
   config?: string
@@ -276,6 +278,7 @@ export let globals = (
 ): {
   host?: string
   config?: string
+  as?: string
   duties: boolean
   json: boolean
   tui: boolean
@@ -289,6 +292,7 @@ export let globals = (
   let duties = true
   let help = false
   let config: string | undefined
+  let as: string | undefined
   // A whole shell asks for the timing line with YAKS_TIMING=1; one command
   // asks with the flag.
   let timing = env('YAKS_TIMING') == '1'
@@ -300,13 +304,15 @@ export let globals = (
     else if (a == '--no-duties') duties = false
     else if (a == '--help' || a == '-h') help = true
     else if (a == '--timing') timing = true
+    else if (a == '--as') as = argv[++i] ?? as
+    else if (a.startsWith('--as=')) as = a.slice(5)
     else if (a == '--host') host = argv[++i] ?? host
     else if (a.startsWith('--host=')) host = a.slice(7)
     else if (a == '--config') config = argv[++i] ?? config
     else if (a.startsWith('--config=')) config = a.slice(9)
     else rest.push(a)
   }
-  return { host, config, duties, json, tui, help, timing, rest }
+  return { host, config, as, duties, json, tui, help, timing, rest }
 }
 
 /**
@@ -383,7 +389,7 @@ export let cli = async (
   let note = opts.note ?? ((line: string) => console.error(safe(line)))
   let env = opts.env ?? own
   let said = globals(opts.argv ?? Deno.args, env)
-  let { duties, json, tui, help, timing, rest } = said
+  let { duties, json, tui, help, timing, rest, as } = said
   try {
     // Where this command runs: a file it opens, or an MCP server it calls. A
     // command line naming both is refused here, like any other that means two
@@ -412,6 +418,7 @@ export let cli = async (
     let c: Ctx = {
       host,
       config,
+      as,
       duties,
       json,
       tui,
@@ -423,7 +430,7 @@ export let cli = async (
       state,
       ask: opts.ask ?? rpc({
         url: doorUrl(host),
-        token: tokenFor(host, state),
+        token: () => tokenFor(host, state, { config, as, env }),
         via: speaks,
         fetch: timing ? timed(note) : undefined,
       }),
@@ -499,7 +506,15 @@ export let cli = async (
     }
     try {
       return await found.verb.run(
-        await argsFor(found.verb, found.args, c.reads),
+        {
+          ...await argsFor(found.verb, found.args, c.reads),
+          ...as && 'properties' in (found.verb.inputSchema ?? {}) &&
+              (found.verb.inputSchema as {
+                properties?: Record<string, unknown>
+              }).properties?.as
+            ? { as }
+            : {},
+        },
         at,
       )
     } catch (e) {

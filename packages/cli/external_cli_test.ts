@@ -158,11 +158,10 @@ esac
     assert(candidate != 'yak-work@old.service')
     assertEquals((await Deno.readTextFile(`${dir}/calls`)).trim().split('\n'), [
       '--user list-units --state=active --plain --no-legend --no-pager ' +
-      'yak-work@*.service',
+      'yak-work@*.service yak-tracker.service yak-tracker@*.service yak.service yak-tracker-web.service',
       `--user --no-block start ${candidate}`,
       'ready',
       '--user --no-block stop yak-work@old.service',
-      '--user --no-block restart yak.service',
     ])
     let instance = candidate.slice('yak-work@'.length, -'.service'.length)
     assertEquals(

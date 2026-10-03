@@ -177,8 +177,8 @@ on calling out (workers/yak/public/docs/code.md).
   `PATH`, `HOME`, `XDG_CONFIG_HOME` and `OP_SERVICE_ACCOUNT_TOKEN`.
 - **A short-lived grant handed to a child**: the build sandbox's `YAKS_TOKEN`
   dies with its container (workers/yak/sandbox.ts). The `yak` CLI reads
-  `YAKS_TOKEN` before the token `yak login` saved; a CLI speaking to a remote
-  host has no vault of its own (packages/cli/store.ts).
+  `YAKS_TOKEN` before the selected yaks.app connection; a graphless machine
+  makes a personal account graph on first `yak auth` (packages/cli/accounts.ts).
 - **Outside CLIs** a managed spawn runs (Claude Code, the Codex CLI) find their
   own logins through `HOME`.
 - **A tool a person runs**: `STRIPE_KEY` for the Stripe sandbox (the `testing`
