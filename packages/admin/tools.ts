@@ -1,78 +1,29 @@
-// The implementations behind the `admin` tools in ./vocab.json, exported as
-// `@yaks/admin/tools`: the owner's verbs on yaks.app, as tools of the graph
-// this box's `yak` opens.
-//
-//   yak admin throwaway            sign in as a throwaway @bot.yak.sh account
-//   yak admin whoami               the account, its spaces, and its role in each
-//   yak admin link                 a standing sign-in link for that account
-//   yak admin tool app_list        any connector tool, as that account
-//   yak admin query jeff/recipes .doc    an app's store, through the filter grammar
-//   yak admin apply jeff/recipes @fix.json    bundles into an app's store
-//   yak admin client google <id> <secret> --admin   keep an OAuth client, from 1Password
-//   yak admin tunnel ada           the tunnel a space has to a machine
-//   yak admin move --rehearse --admin   every store rehearses the store mover
-//
-// The one rule these verbs are shaped around: A TEST ACCOUNT IS THE DEFAULT AND
-// EVERY OTHER ACCOUNT IS A NAMED ACT. No chain of defaults arrives at one —
-// reaching the owner's takes `--owner` and reaching the platform's admin takes
-// `--admin` on that command line, and every command that runs as either wears
-// a banner on stderr (./accounts.ts). `--admin` is what an agent uses for a
-// platform act, so the act is recorded as the admin and not as the owner (D-35373).
-// The default test account is the one `yak admin use` remembered, and only
-// that verb moves it: a sign-in never does, so one agent's throwaway never
-// becomes the account another agent's bare command acts as. A probe names its
-// own with `--as`.
-//
-// Sessions are secrets (@yaks/secrets) in this graph: a verb that signs in or
-// out answers the sealed session beside its words, so the write that records
-// the call is the write that keeps it, and the vault beside the database is
-// where it is read back from. A `@bot.yak.sh` sign-in code is read out of this
-// graph too, where @yaks/mail files the letter.
-//
-// The platform verbs (deploys, errors, tail, rollback, revert) act on this
-// checkout and this box's Cloudflare and GitHub logins (errors reads Sentry
-// with the token this graph's vault keeps, ./logs.ts), and print as they go:
-// a tail runs until it is interrupted, and a revert reports each step of a
-// wait that can take twenty minutes.
-
+// Platform operations run as the selected yaks.app connection. Without --as,
+// connections computes the person's own account, else the oldest sign-in.
 import { fileURLToPath } from 'node:url'
 import { basename } from 'node:path'
-import { argsOf, type Bundle, type Graph } from '@yaks/graph'
+import { argsOf, type Bundle, type Comp, type Graph } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import {
   isOpRef,
   type Local,
   opRead,
+  records,
   reveal,
   sealed,
-  unsealed,
 } from '@yaks/secrets'
 import { CallError, Interrupted } from '@yaks/tools'
-import { toolCall, Usage } from '@yaks/cli'
-import { ADMIN, BOT, isTestAddress } from '../../workers/yak/lib/bots.ts'
-import {
-  type Account,
-  accountsIn,
-  banner,
-  choose,
-  current,
-  isAdmin,
-  isTest,
-  localPart,
-  named,
-  pick,
-  Refused,
-  render,
-  sessionName,
-  throwaway,
-  usable,
-} from './accounts.ts'
+import { type Host, person } from '@yaks/cli/host'
+import { accountCredential, authorize } from '@yaks/connections'
+import { authorizeCLI } from '@yaks/connections/cli'
+import { yaksApp } from '@yaks/connections/yaks-app'
+import { ADMIN, BOT } from '../../workers/yak/lib/bots.ts'
+
+import { Refused } from './refusal.ts'
+export { Refused } from './refusal.ts'
 import {
   acceptInvite,
-  askCode,
-  claimsOf,
   close,
-  codeFor,
   doomedIn,
   feeNow,
   keepClient,
@@ -80,10 +31,8 @@ import {
   moveIn,
   renewing,
   rpc,
-  saidBy,
   setFee,
   setTunnel,
-  spendCode,
   storeApply,
   storeQuery,
   storesNow,
@@ -150,106 +99,22 @@ let said = (call: Bundle, lines: string | string[]): Bundle => ({
   output: { source: call.entity.eid },
 })
 
-// WHO this call runs as, and the mark it wears when the answer is somebody
-// else's own account. Every verb that touches the platform as an account goes
-// through here. A session the platform renews on the way (./api.ts
-// `renewing`) is kept under the same account, in the same write as the
-// answer: a box that kept the old value would sign out ninety days after its
-// first sign-in however often it called.
-let acting = (
-  vault: Local,
-  a: Args,
-  keep: Bundle[],
-  state: string,
-): Account => {
-  let at = pick(accountsIn(vault), {
-    as: word(a, 'as'),
-    owner: a.owner === true,
-    admin: a.admin === true,
-    current: current(state),
-  })
-  if (!isTest(at)) note(banner(at))
-  renewing((fresh) => keep.push(sealed(sessionName(at.address), fresh)))
-  return at
-}
+type Account = { address: string; bearer: string; session?: string }
 
-// Sign in end to end, answering the session sealed under its account. A
-// `@bot.yak.sh` code comes back as a letter in this graph; anyone else's is in
-// their own mail, so it is asked for rather than guessed at.
-let signIn = async (
-  graph: Graph,
-  address: string,
-  given: string | undefined,
-): Promise<Bundle> => {
-  let since = Date.now()
-  await askCode(address)
-  let code = given ??
-    (address.endsWith(BOT)
-      ? await waited(graph, address, since)
-      : await asked(address))
-  return sealed(sessionName(address), await spendCode(address, code))
-}
-
-let waited = (graph: Graph, address: string, since: number) => {
-  note(`waiting for the code to reach the graph for ${address}…`)
-  return codeFor((q) => graph.read(q), address, since)
-}
-
-let asked = async (address: string) => {
-  note(`a code was mailed to ${address}. paste it here:`)
-  let buf = new Uint8Array(64)
-  let n = await Deno.stdin.read(buf)
-  let typed = new TextDecoder().decode(buf.subarray(0, n ?? 0)).trim()
-  if (!/^\d{6}$/.test(typed)) {
-    throw new CallError('code', `not a six-digit code: ${typed}`)
+// Browser-only acts cannot synthesize a cookie from an OAuth bearer.
+let website = (at: Account): string => {
+  if (!at.session) {
+    throw new Refused(
+      `${at.address} was signed in through a browser and has no website session. ` +
+        'This browser-only admin act requires a code sign-in (yak auth yaks.app --as <bot address>).',
+    )
   }
-  return typed
-}
-
-// What this account HAS, as the connector says it: one `app_list`, whose
-// answer is the listing a person reads — every space, the caller's own role in
-// each (the directory's fact, read once, T-35384) and the apps under it. It is
-// the tool's own sentence rather than a shape this end re-formats.
-let listingOf = async (at: Account): Promise<string> =>
-  saidBy(
-    await rpc(at.session)('tools/call', {
-      name: 'app_list',
-      arguments: {},
-    }),
-  ).trim()
-
-// One account, named the way `--as` names one.
-let one = (all: Account[], want: string): Account => {
-  let hit = named(all, want)
-  if (hit.length != 1) throw new Refused(`${want} names ${hit.length} accounts`)
-  return hit[0]
+  return at.session
 }
 
 // Infrastructure belongs to the platform owner. Its credentials are the
 // box's Wrangler/GitHub logins, independent of a yaks.app account session.
 let root = fileURLToPath(new URL('../../', import.meta.url)).replace(/\/$/, '')
-
-// The act is named either way; the flag says WHOSE it is — an agent's
-// (`--admin`) or the owner's (`--owner`) — and the banner says that out loud. The
-// credentials used below are this box's Cloudflare/GitHub login for both,
-// until the admin path has a token of its own (T-35375).
-let platform = (a: Args): void => {
-  if (a.admin !== true && a.owner !== true) {
-    throw new Refused(
-      'yaks.app operations are a named act: add --admin (an agent) or ' +
-        '--owner (the owner)',
-    )
-  }
-  note(
-    a.admin === true
-      ? banner({ name: 'admin', address: ADMIN, session: '' })
-      : banner({
-        name: 'platform',
-        address: 'yaks.app (this box’s Cloudflare/GitHub login)',
-        session: '',
-      }),
-  )
-}
 
 // A platform verb's exit status, as the call's outcome. An interrupt is an
 // expected failure of this invocation; another nonzero status is a defect.
@@ -272,8 +137,50 @@ type Verb = (
 
 /** The implementations of the tools ./vocab.json declares. */
 export let runs = (
-  host: { vault: Local; state: string; stopping: AbortSignal },
+  host: Pick<Host, 'vault' | 'config' | 'graph' | 'stopping'>,
 ): Runs => {
+  let acting = async (a: Args): Promise<Account> => {
+    let owner = await person(host)
+    if (!owner) throw new Refused('A configured person is required')
+    let at = await accountCredential(host, owner, 'yaks.app', word(a, 'as'))
+    if (!at) {
+      throw new Refused(
+        'No yaks.app connection; sign in with yak auth yaks.app',
+      )
+    }
+    let address = String(
+      (at.connection.connection as Comp)?.account ?? '(unnamed account)',
+    )
+    if (at.session) {
+      renewing(async (fresh) => {
+        await records<{ website_session?: string }>(
+          host.graph,
+          host.vault,
+          '',
+          () => {},
+        ).update(
+          String((at.connection.secret as Comp)?.name),
+          (record) => {
+            record.website_session = fresh
+            return Promise.resolve()
+          },
+        )
+      })
+    }
+    return { address, bearer: at.bearer, session: at.session }
+  }
+  // Infrastructure uses the box's Cloudflare/GitHub logins. Only the platform
+  // admin or the configured person's own account may spend those credentials.
+  let platform = async (a: Args) => {
+    let at = await acting(a)
+    let owner = await person(host)
+    let [own] = await host.graph.get(owner ? [owner] : [])
+    if (at.address != ADMIN && at.address != (own?.email as Comp)?.address) {
+      throw new Refused(
+        'Infrastructure requires the platform admin or the configured person’s own account; select it with --as',
+      )
+    }
+  }
   let verb = (run: Verb) => async (call: Bundle, graph: Graph) => {
     let keep: Bundle[] = []
     try {
@@ -284,110 +191,44 @@ export let runs = (
   }
 
   return {
-    admin_whoami: verb(async (call, vault, keep) => {
-      let at = acting(vault, argsOf(call), keep, host.state)
-      let claims = claimsOf(at.session)
-      let lines = [
-        `account   ${at.address}`,
-        `kind      ${
-          isAdmin(at)
-            ? 'ADMIN — the platform’s own'
-            : isTest(at)
-            ? 'test — a throwaway'
-            : 'OWNER — somebody’s own'
-        }`,
-        `person    ${claims?.person ?? '(session unreadable)'}`,
-        `session   ${
-          claims
-            ? `good until ${new Date(claims.exp * 1000).toISOString()}`
-            : '(unreadable)'
-        }`,
-        `zone      ${zone()}`,
-      ]
-      let listing = await listingOf(at)
-      if (!listing) lines.push('spaces    (none)')
-      else {
-        lines.push('spaces', ...listing.split('\n').map((l) => `  ${l}`))
-      }
-      return [said(call, lines)]
-    }),
-
-    admin_accounts: verb((call, vault) => [
-      said(call, render(accountsIn(vault), current(host.state))),
-    ]),
-
-    admin_throwaway: verb(async (call, _vault, _keep, graph) => {
+    admin_throwaway: verb(async (call) => {
       let name = word(argsOf(call), 'name')
-      let address = name ? `${name}${BOT}` : throwaway()
+      let address = name
+        ? `${name}${BOT}`
+        : `probe-${crypto.randomUUID().slice(0, 6)}${BOT}`
+      let auth = authorize(
+        { ...host, owner: await person(host) },
+        yaksApp(host),
+      )
+      try {
+        await authorizeCLI(auth, 'yaks.app', undefined, address)
+      } finally {
+        await auth.close()
+      }
       return [
-        await signIn(graph, address, undefined),
-        said(
-          call,
-          `signed in as ${address} — act as it with --as=${localPart(address)}`,
-        ),
+        said(call, `signed in as ${address} — act as it with --as=${address}`),
       ]
     }),
 
-    admin_login: verb(async (call, _vault, _keep, graph) => {
+    admin_accept: verb(async (call, _vault, _keep, graph) => {
       let a = argsOf(call)
-      let address = String(a.address).trim().toLowerCase()
-      if (!address.includes('@')) {
-        throw new Refused(
-          `${address} is not an address. A bearer for the connector is ` +
-            '`yak login <token>`.',
-        )
-      }
-      if (address == ADMIN && a.admin !== true) {
-        throw new Refused(
-          `${address} is the platform’s admin. Signing in as it is a named ` +
-            'act: add --admin. A throwaway is `yak admin throwaway`.',
-        )
-      }
-      if (!isTestAddress(address) && address != ADMIN && a.owner !== true) {
-        throw new Refused(
-          `${address} is not a test address. Signing in as somebody is a ` +
-            'named act: add --owner. A throwaway is `yak admin throwaway`.',
-        )
-      }
-      return [
-        await signIn(graph, address, word(a, 'code')),
-        said(call, `signed in as ${address}`),
-      ]
-    }),
-
-    admin_accept: verb(async (call, vault, keep, graph) => {
-      let a = argsOf(call)
-      let at = acting(vault, a, keep, host.state)
+      let at = await acting(a)
+      let session = website(at)
       let letter = String(a.letter)
       let eid = (await graph.address([letter])).get(letter) ?? letter
       let [mail] = await graph.get([eid])
-      await acceptInvite(at.session, mail, at.address)
+      await acceptInvite(session, mail, at.address)
       return [
         said(call, `accepted the invitation in ${letter} as ${at.address}`),
       ]
     }),
 
-    admin_use: verb((call, vault) => {
-      let at = one(accountsIn(vault), String(argsOf(call).account))
-      choose(usable(at).address, host.state)
-      return [said(call, `current: ${at.address}`)]
-    }),
-
-    admin_logout: verb((call, vault) => {
-      let at = one(accountsIn(vault), String(argsOf(call).account))
-      if (current(host.state) == at.address) choose(null, host.state)
-      return [
-        unsealed(sessionName(at.address)),
-        said(call, `forgot ${at.address}`),
-      ]
-    }),
-
-    admin_link: verb(async (call, vault, keep) => {
+    admin_link: verb(async (call) => {
       let a = argsOf(call)
-      let at = acting(vault, a, keep, host.state)
+      let at = await acting(a)
       let gone = word(a, 'revoke')
       if (gone) {
-        let ids = await unlink(at.session, gone)
+        let ids = await unlink(website(at), gone)
         return [
           said(
             call,
@@ -398,7 +239,7 @@ export let runs = (
         ]
       }
       let got = await linkFor(
-        at.session,
+        website(at),
         typeof a.days == 'number' ? a.days : undefined,
       )
       return [
@@ -411,27 +252,18 @@ export let runs = (
       ]
     }),
 
-    // The rate is the PLATFORM's, so it is read and moved by a seat in `yak`
-    // (workers/yak/sell.ts `fees`) — never a throwaway's, and never a
-    // default's. The flag is what says so out loud, the same named act `login`
-    // asks for.
-    admin_fee: verb(async (call, vault, keep) => {
+    // The server answers fee operations only to the selected account's seat in yak.
+    admin_fee: verb(async (call) => {
       let a = argsOf(call)
-      if (a.owner !== true && a.admin !== true) {
-        throw new Refused(
-          'the fee is the platform’s: add --admin (an agent) or --owner ' +
-            '(the owner). A test account cannot read it or set it.',
-        )
-      }
       // Read before the account is: a typo is a typo whoever is signed in.
       let bps = word(a, 'bps')
       if (bps != null && !/^\d+$/.test(bps)) {
         throw new CallError('bps', `not a whole number of basis points: ${bps}`)
       }
-      let at = acting(vault, a, keep, host.state)
+      let at = await acting(a)
       let now = bps == null
-        ? await feeNow(at.session)
-        : await setFee(at.session, Number(bps))
+        ? await feeNow(at.bearer)
+        : await setFee(at.bearer, Number(bps))
       return [said(call, `${now.bps} bps — ${now.rate} of each sale`)]
     }),
 
@@ -439,19 +271,19 @@ export let runs = (
     // platform answers goes straight into this graph's vault, where
     // @yaks/tunnel's service reads it, and is never printed: whoever holds it
     // can run the tunnel.
-    admin_tunnel: verb(async (call, vault, keep) => {
+    admin_tunnel: verb(async (call, _vault, keep) => {
       let a = argsOf(call)
       let space = String(a.space)
       let act = word(a, 'act')
-      let at = acting(vault, a, keep, host.state)
+      let at = await acting(a)
       let fields: Record<string, string> = { space, do: act ?? '' }
       for (let k of ['port', 'tunnel', 'service']) {
         let v = word(a, k)
         if (v) fields[k] = v
       }
       let got = act
-        ? await setTunnel(at.session, fields)
-        : await tunnelNow(at.session, space)
+        ? await setTunnel(at.bearer, fields)
+        : await tunnelNow(at.bearer, space)
       if (got.token) keep.push(sealed(TUNNEL_TOKEN, got.token))
       let t = got.tunnel
       return [
@@ -471,33 +303,33 @@ export let runs = (
     // The naming first, and it is the page's own (workers/yak/erase.ts):
     // whoever runs this reads what would go before it goes, the same list the
     // letter carries to a person whose agent asked.
-    admin_delete: verb(async (call, vault, keep) => {
+    admin_delete: verb(async (call) => {
       let slug = String(argsOf(call).space)
-      let at = acting(vault, argsOf(call), keep, host.state)
-      let doomed = await doomedIn(at.session, slug)
+      let at = await acting(argsOf(call))
+      let doomed = await doomedIn(website(at), slug)
       return [
         said(call, [
           ...doomed.map((line) => `  - ${line}`),
-          await close(at.session, slug),
+          await close(website(at), slug),
         ]),
       ]
     }),
 
-    admin_query: verb(async (call, vault, keep) => {
-      let at = acting(vault, argsOf(call), keep, host.state)
+    admin_query: verb(async (call) => {
+      let at = await acting(argsOf(call))
       let rows = await storeQuery(
-        at.session,
+        at.bearer,
         String(argsOf(call).where),
         (argsOf(call).filters ?? []) as string[],
       )
       return [said(call, json(rows))]
     }),
 
-    admin_apply: verb(async (call, vault, keep) => {
+    admin_apply: verb(async (call) => {
       let a = argsOf(call)
-      let at = acting(vault, a, keep, host.state)
+      let at = await acting(a)
       let applied = await storeApply(
-        at.session,
+        at.bearer,
         String(a.where),
         a.bundles as Bundle[],
         a.check === true,
@@ -505,21 +337,18 @@ export let runs = (
       return [said(call, json(applied))]
     }),
 
-    admin_upload: verb(async (call, vault, keep) => {
+    admin_upload: verb(async (call) => {
       let a = argsOf(call)
-      if (!a.admin && !a.owner && !a.as) {
-        throw new Refused('name the account with --admin, --owner or --as')
-      }
       let where = String(a.where)
       if (where.split('/').length != 2) {
         throw new CallError('where', 'name an app as space/app')
       }
-      let at = acting(vault, a, keep, host.state)
+      let at = await acting(a)
       let path = String(a.path)
       let name = word(a, 'name') ?? basename(path)
       let mime = word(a, 'mime') ?? 'application/octet-stream'
       let file = await storeUpload(
-        at.session,
+        at.bearer,
         where,
         await Deno.readFile(path),
         mime,
@@ -531,13 +360,8 @@ export let runs = (
     // The id and the secret are named by their op:// references and read
     // here, so neither is ever an argument: this graph keeps a call as its
     // text. What is printed is the name the client is kept under, never it.
-    admin_client: verb(async (call, vault, keep) => {
+    admin_client: verb(async (call) => {
       let a = argsOf(call)
-      if (a.owner !== true && a.admin !== true) {
-        throw new Refused(
-          'a client is the platform’s: add --admin (an agent) or --owner (the owner)',
-        )
-      }
       let name = word(a, 'name') ?? ''
       let refs = { id: word(a, 'id') ?? '', secret: word(a, 'secret') }
       for (let [arg, ref] of Object.entries(refs)) {
@@ -546,43 +370,22 @@ export let runs = (
         }
       }
       let read = (ref: string) => opRead()(ref, AbortSignal.timeout(10_000))
-      let at = acting(vault, a, keep, host.state)
-      await keepClient(at.session, name, {
+      let at = await acting(a)
+      await keepClient(at.bearer, name, {
         id: await read(refs.id),
         ...refs.secret ? { secret: await read(refs.secret) } : {},
       })
       return [said(call, `kept the ${name} OAuth client on ${zone()}`)]
     }),
 
-    admin_tool: verb(async (call, vault, keep) => {
-      let at = acting(vault, argsOf(call), keep, host.state)
-      let a = argsOf(call)
-      let answer = await toolCall(
-        rpc(at.session),
-        String(a.name),
-        (a.args ?? []) as string[],
-        {
-          app: word(a, 'app'),
-          reads: {
-            file: Deno.readTextFile,
-            stdin: () => new Response(Deno.stdin.readable).text(),
-          },
-        },
-      ).catch((error) => {
-        if (!(error instanceof Usage)) throw error
-        throw new CallError('arguments', error.message)
-      })
-      return [said(call, saidBy(answer))]
-    }),
-
-    admin_push: verb(async (call, vault, keep) => {
+    admin_push: verb(async (call) => {
       let a = argsOf(call)
       let dir = String(a.dir).replace(/\/+$/, '')
-      let at = acting(vault, a, keep, host.state)
+      let at = await acting(a)
       note(`reading ${dir}…`)
       let files = await read(dir)
       note(`read ${files.length} local files`)
-      let lines = await push(rpc(at.session), files, {
+      let lines = await push(rpc(at.bearer), files, {
         app: word(a, 'app') ?? dir.slice(dir.lastIndexOf('/') + 1),
         space: word(a, 'space'),
         title: word(a, 'title'),
@@ -594,18 +397,17 @@ export let runs = (
 
     // Every store asked about the store mover (./move.ts): rehearse each rule
     // everywhere, or wake each store to move what it owes. The platform's act,
-    // so the flag says whose.
-    admin_move: verb(async (call, vault, keep) => {
+    // with authorization checked by the server.
+    admin_move: verb(async (call) => {
       let a = argsOf(call)
-      platform(a)
       let rehearse = a.rehearse === true
       let pace = Number(word(a, 'pace') ?? (rehearse ? 0 : 5))
       if (!Number.isFinite(pace) || pace < 0) {
         throw new CallError('pace', `not a number of stores a minute: ${pace}`)
       }
       let where = word(a, 'where')
-      let at = acting(vault, a, keep, host.state)
-      let stores = (await storesNow(at.session)).filter((s) =>
+      let at = await acting(a)
+      let stores = (await storesNow(at.bearer)).filter((s) =>
         !where || s.at == where || s.at.startsWith(`${where}/`)
       )
       note(
@@ -617,7 +419,7 @@ export let runs = (
           call,
           await sweep({
             stores,
-            ask: (store) => moveIn(at.session, store, rehearse),
+            ask: (store) => moveIn(at.bearer, store, rehearse),
             pace,
             out,
             stopping: host.stopping,
@@ -627,27 +429,27 @@ export let runs = (
     }),
 
     admin_deploys: verb(async (call) => {
-      platform(argsOf(call))
+      await platform(argsOf(call))
       return [said(call, table(await deploys(root, host.stopping)))]
     }),
 
     admin_errors: verb(async (call, vault) => {
-      platform(argsOf(call))
+      await platform(argsOf(call))
       let token = await reveal(vault, TOKEN, { env: () => undefined })
       await errors(word(argsOf(call), 'since'), token, out, note)
       return []
     }),
 
     admin_tail: verb(async (call) => {
-      platform(argsOf(call))
+      await platform(argsOf(call))
       return ended('tail', await tail(root, out, note, host.stopping))
     }),
 
     admin_rollback: verb(async (call) => {
-      platform(argsOf(call))
+      await platform(argsOf(call))
       note(
         'Cloudflare rollback is for a broken build path. Code corrections ' +
-          'belong on main: yak admin revert <sha> --admin.',
+          'belong on main: yak admin revert <sha>.',
       )
       return ended(
         'rollback',
@@ -661,10 +463,10 @@ export let runs = (
     }),
 
     admin_revert: verb(async (call) => {
-      platform(argsOf(call))
+      await platform(argsOf(call))
       let sha = word(argsOf(call), 'sha') ?? ''
       if (!/^[a-f\d]{7,40}$/i.test(sha)) {
-        throw new CallError('sha', 'yak admin revert <sha> --admin|--owner')
+        throw new CallError('sha', 'yak admin revert <sha>')
       }
       return ended(
         'revert',

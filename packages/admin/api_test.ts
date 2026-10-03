@@ -24,6 +24,7 @@ import {
   cookieOf,
   feeNow,
   inviteIn,
+  linkFor,
   listedOn,
   plain,
   renewing,
@@ -268,7 +269,7 @@ test('a renewed cookie is handed on, and an ordinary answer is quiet', async () 
     fee('yak_session=slid.token; Domain=yaks.app; Path=/; Max-Age=7776000'),
   )
   try {
-    await feeNow('old.token')
+    await linkFor('old.token')
     assertEquals(renewed.sent[0].cookie, 'yak_session=old.token')
     assertEquals(fresh, ['slid.token'])
   } finally {
@@ -279,7 +280,7 @@ test('a renewed cookie is handed on, and an ordinary answer is quiet', async () 
   for (let set of [undefined, 'yak_session=old.token; Path=/']) {
     let quiet = answering(fee(set))
     try {
-      await feeNow('old.token')
+      await linkFor('old.token')
       assertEquals(fresh, ['slid.token'])
     } finally {
       quiet.done()

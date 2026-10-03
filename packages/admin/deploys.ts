@@ -4,7 +4,7 @@
 import type { Ran } from '@yaks/git/land'
 import { CallError } from '@yaks/tools'
 import { WRANGLER } from '../../workers/yak/wrangler.ts'
-import { Refused } from './accounts.ts'
+import { Refused } from './refusal.ts'
 import { output } from './subprocess.ts'
 
 // One git run in `cwd`, answered as it came — the runner @yaks/git lands with.
@@ -389,7 +389,7 @@ export let rollbackTarget = (rows: Deploy[], want?: string): Deploy => {
   let target = found[0]
   if (target.refusal) {
     throw new Refused(
-      `${target.id}: ${target.refusal}. Correct code with yak admin revert <sha> --owner; main is always deployed.`,
+      `${target.id}: ${target.refusal}. Correct code with yak admin revert <sha> --as admin@bot.yak.sh; main is always deployed.`,
     )
   }
   return target

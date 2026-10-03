@@ -246,7 +246,7 @@ let keepIt = (why: string) =>
       "Keep an op:// reference to one in this box's vault, once:\n  yak " +
       `graph apply --bundles '[{"entity":{"eid":"$s"},"secret":{"name":` +
       `"${TOKEN}","value":"op://<vault>/<item>/<field>"}}]'\nLive traffic ` +
-      'is `yak admin tail --admin`.',
+      'is `yak admin tail --as admin@bot.yak.sh`.',
   )
 
 // One row per issue and the door it broke at, over the window.

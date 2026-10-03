@@ -3,7 +3,7 @@
 import { test, until } from '@yaks/testing'
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { CallError, Interrupted } from '@yaks/tools'
-import { Refused } from './accounts.ts'
+import { Refused } from './refusal.ts'
 import {
   boundaries,
   command,

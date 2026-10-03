@@ -140,7 +140,7 @@ export let revert = async (
         await new Promise((ok) => setTimeout(ok, 10_000))
       }
       throw new Error(
-        `Workers Builds did not serve ${commit} within 20m; check yak admin deploys --owner and the build logs`,
+        `Workers Builds did not serve ${commit} within 20m; check yak admin deploys --as admin@bot.yak.sh and the build logs`,
       )
     }
     throw new Error('main kept moving through three gate attempts')

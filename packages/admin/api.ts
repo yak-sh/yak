@@ -52,7 +52,10 @@ export let storeUrl = (at: string, path: string, host = zone()) => {
   return `https://${space}.${host}${app ? `/${app}` : ''}/api${path}`
 }
 
-let head = (session: string) => ({ cookie: `${COOKIE}=${session}` })
+let head = (credential: string, browser: boolean) =>
+  browser
+    ? { cookie: `${COOKIE}=${credential}` }
+    : { authorization: `Bearer ${credential}` }
 
 // The claims a session carries, read WITHOUT the secret: the body half is
 // plain base64url JSON (workers/yak/lib/token.ts), so a client can say whose session it
@@ -84,9 +87,9 @@ export let cookieOf = (setCookie: string | null): string | null => {
 // first sign-in however busy it had been. This module holds no credential and
 // must not learn where one lives, so it hands the value on: ./tools.ts writes
 // it back into the vault.
-let told: (fresh: string) => void = () => {}
+let told: (fresh: string) => unknown = () => {}
 
-export let renewing = (note: (fresh: string) => void) => (told = note)
+export let renewing = (note: (fresh: string) => unknown) => (told = note)
 
 // `yak --timing` (or YAKS_TIMING=1): one line on stderr per response, the
 // same line @yaks/cli prints for the connector door. Read off the command
@@ -105,17 +108,18 @@ let sent = async (
   session?: string,
   init: RequestInit & { headers?: Record<string, string> } = {},
   quiet = false,
+  browser = false,
 ) => {
   let asked = {
     ...init,
-    headers: { ...init.headers, ...(session ? head(session) : {}) },
+    headers: { ...init.headers, ...(session ? head(session, browser) : {}) },
   }
   let go = () => fetch(url, asked)
   let r = timing.on && !quiet
     ? await timed(timing.say, go)(new Request(url, asked))
     : await go()
-  let fresh = session ? cookieOf(r.headers.get('set-cookie')) : null
-  if (fresh && fresh != session) told(fresh)
+  let fresh = session && browser ? cookieOf(r.headers.get('set-cookie')) : null
+  if (fresh && fresh != session) await told(fresh)
   return r
 }
 
@@ -151,7 +155,7 @@ export let acceptInvite = async (
   let url = inviteIn(letter, address)
   let r: Response
   try {
-    r = await sent(url, session, { redirect: 'manual' }, true)
+    r = await sent(url, session, { redirect: 'manual' }, true, true)
   } catch {
     throw new Error('invitation request failed')
   }
@@ -167,38 +171,24 @@ export let acceptInvite = async (
 let form = (fields: Record<string, string>) =>
   new URLSearchParams(fields).toString()
 
-let posted = (url: string, fields: Record<string, string>, session?: string) =>
-  sent(url, session, {
-    method: 'POST',
-    redirect: 'manual',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: form(fields),
-  })
-
-// Ask for a code. The card answers the same bytes whether or not a letter
-// went out (identity.ts, T-33020), so there is nothing to read back but the
-// status — a refusal here is a broken door, not a refused address.
-export let askCode = async (address: string) => {
-  let r = await posted(apex('/login'), { email: address })
-  if (r.status != 200) throw new Error(`/login said ${r.status}`)
-  await r.body?.cancel()
-}
-
-// Spend a code. The session is the cookie on the redirect; a wrong or expired
-// code comes back as the card again, which is a 400.
-export let spendCode = async (address: string, code: string) => {
-  let r = await posted(apex('/login/code'), { email: address, code })
-  let session = cookieOf(r.headers.get('set-cookie'))
-  await r.body?.cancel()
-  if (!session) {
-    throw new Error(
-      r.status == 400
-        ? 'that code has expired or was mistyped'
-        : `/login/code said ${r.status} and set no session`,
-    )
-  }
-  return session
-}
+let posted = (
+  url: string,
+  fields: Record<string, string>,
+  session?: string,
+  browser = false,
+) =>
+  sent(
+    url,
+    session,
+    {
+      method: 'POST',
+      redirect: 'manual',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: form(fields),
+    },
+    false,
+    browser,
+  )
 
 /** What minting a standing link answers: the URL, the id that revokes it, when
  * it dies, and every one this account still has standing. */
@@ -215,12 +205,12 @@ export type Link = {
 // is worth a session and nothing more, and the cookie this call is made with is
 // the longer-lived credential of the two.
 export let linkFor = (session: string, days?: number): Promise<Link> =>
-  said(posted(apex(LINK), days ? { days: String(days) } : {}, session))
+  said(posted(apex(LINK), days ? { days: String(days) } : {}, session, true))
 
 /** Taking one back, by its id or the front of one. Answers the ids that went. */
 export let unlink = async (session: string, id: string): Promise<string[]> =>
   (await said<{ revoked: string[] }>(
-    posted(apex(LINK), { revoke: id }, session),
+    posted(apex(LINK), { revoke: id }, session, true),
   )).revoked
 
 /** What the platform takes from a sale, in basis points, and the rate as a
@@ -575,9 +565,15 @@ let read = (status: number, html: string) => {
 // What deleting this space would destroy, as the page names it. A GET only
 // ever draws (identity.ts `closing`), so asking changes nothing.
 export let doomedIn = async (session: string, slug: string) => {
-  let r = await sent(apex(`/space/${slug}/delete`), session, {
-    redirect: 'manual',
-  })
+  let r = await sent(
+    apex(`/space/${slug}/delete`),
+    session,
+    {
+      redirect: 'manual',
+    },
+    false,
+    true,
+  )
   let html = await r.text()
   read(r.status, html)
   return listedOn(html).map(plain)
@@ -590,6 +586,7 @@ export let close = async (session: string, slug: string) => {
     apex(`/space/${slug}/delete`),
     { confirm: slug },
     session,
+    true,
   )
   return read(r.status, await r.text())
 }

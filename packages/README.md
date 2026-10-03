@@ -477,13 +477,8 @@ grouped approximately by function, **not** by dependency order.
   `./page` is what a plugin's routes serve a page with: a body made once and
   kept, and a page's script bundled for the browser.
 
-- **[@yaks/admin](./admin)** — The owner's verbs on yaks.app as `yak admin`
-  tools: accounts and their sign-in, standing links, the fee, a space's
-  deletion, a store's query, any connector tool, and the platform's deploys,
-  errors, tail, rollback and revert. Sessions are secrets in the box's graph.
-  Unpublished (`"publish": false`): it reaches into this repository's
-  `workers/yak`, and is installed into the box's own `yak` through its
-  `yak.json`.
+- **[@yaks/admin](./admin)** — Platform operations on yaks.app as the selected
+  connection: stores, fee, deploys, logs, rollback and revert. Unpublished.
 
 - **[@yaks/harness](./harness)** — A local agent application combining SQLite,
   model execution, shell tools, graph tools and a terminal interface. As a `yak`

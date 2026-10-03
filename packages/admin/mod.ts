@@ -8,7 +8,6 @@
  * @module
  */
 
-export * from './accounts.ts'
 export * from './api.ts'
 export * from './tools.ts'
 export * from './vocab.ts'

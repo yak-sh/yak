@@ -1,482 +1,240 @@
-// The admin verbs at their pure seam: what one refuses before it touches an
-// account or the network, and what one answers once it has. The rest of a
-// verb is the wire (./api_test.ts) and the account rule (./accounts_test.ts).
-import { test } from '@yaks/testing'
-import {
-  assert,
-  assertEquals,
-  assertRejects,
-  assertStringIncludes,
-  assertThrows,
-} from '@std/assert'
-import type { Bundle, Comp, Graph } from '@yaks/graph'
-import { toolsIn } from '@yaks/vocab/tools'
-import { argsFor, vaultOf } from '@yaks/cli'
-import { secretEid } from '@yaks/secrets'
+// Admin reaches one connection, never a parallel account/session registry.
+import { equal, ok, test } from '@yaks/testing'
+import { assertRejects, assertThrows } from '@std/assert'
+import { compose } from '@yaks/cli/host'
+import type { Bundle, Comp } from '@yaks/graph'
+import { integrationEid } from '@yaks/connections'
+import { reveal, secretEid } from '@yaks/secrets'
 import { CallError, Interrupted } from '@yaks/tools'
 import { ADMIN } from '../../workers/yak/lib/bots.ts'
-import { Refused, sessionName } from './accounts.ts'
-import { ended, runs } from './tools.ts'
-import { adminDoc } from './vocab.ts'
+import { ended, Refused, runs } from './tools.ts'
 
-// A box: one graph's directory, whose vault sits beside a database nobody
-// opens, and whose remembered account is its own, never this machine's.
-let box = () => {
-  let dir = Deno.makeTempDirSync()
-  let stopping = new AbortController().signal
-  return { dir, state: dir, vault: vaultOf(`${dir}/yak.db`), stopping }
-}
-
-// What the last verb said on stderr: a banner, a note.
-let heard: string[] = []
-
-// One verb, asked the way the runner asks it. `read` stands in for the graph's
-// letters.
-let ask = async (
-  tool: string,
-  args: Record<string, unknown> = {},
-  o: { at?: ReturnType<typeof box>; read?: () => Bundle[] } = {},
-) => {
-  let at = o.at ?? box()
-  let error = console.error
-  heard = []
-  console.error = (line: string) => heard.push(line)
-  try {
-    return await runs(at)[tool](
-      { entity: { eid: 'c1' }, call: { args } },
-      { read: o.read ?? (() => []) } as unknown as Graph,
-    ) as Bundle[]
-  } finally {
-    console.error = error
-    if (!o.at) Deno.removeSync(at.dir, { recursive: true })
+let box = async () => {
+  let host = await compose({
+    db: ':memory:',
+    person: 'owner',
+    plugins: [
+      '@yaks/kernel',
+      '@yaks/id',
+      '@yaks/edge',
+      '@yaks/doc',
+      '@yaks/persona',
+      '@yaks/mail',
+      '@yaks/effects',
+      '@yaks/secrets',
+      '@yaks/connections',
+    ],
+  }, ['graph'])
+  await host.graph.apply([
+    {
+      entity: { eid: 'owner' },
+      person: {},
+      email: { address: 'own@example.com' },
+    },
+    {
+      entity: { eid: integrationEid('yaks.app') },
+      integration: { name: 'yaks.app', hosts: ['yaks.app'] },
+    },
+  ])
+  let kept = async (address: string, bearer = address, session?: string) => {
+    await host.graph.apply([{
+      entity: { eid: secretEid(`connection:${address}`) },
+      connection: {
+        owner: 'owner',
+        integration: 'yaks.app',
+        account: address,
+        status: 'connected',
+      },
+      secret: {
+        name: `connection:${address}`,
+        value: session
+          ? JSON.stringify({ access_token: bearer, website_session: session })
+          : bearer,
+      },
+    }])
   }
+  let ask = (tool: string, args: Record<string, unknown> = {}) =>
+    runs(host)[tool](
+      { entity: { eid: 'call' }, call: { args } },
+      host.graph,
+    ) as Promise<Bundle[]>
+  return { host, kept, ask }
 }
-
 let body = (answer: Bundle[]) =>
-  answer.map((b) => (b.content as Comp | undefined)?.body).filter(Boolean)
-    .join('\n')
+  answer.map((b) => (b.content as Comp)?.body).filter(Boolean).join('\n')
+let answering = async (
+  reply: (url: string, init?: RequestInit) => Response,
+  run: () => Promise<void>,
+) => {
+  let was = globalThis.fetch
+  globalThis.fetch =
+    ((url, init) => Promise.resolve(reply(String(url), init))) as typeof fetch
+  try {
+    await run()
+  } finally {
+    globalThis.fetch = was
+  }
+}
 
-test('every declared admin verb has an implementation, and no other', () => {
-  let declared = toolsIn(adminDoc).map((t) => t.name).sort()
-  assertEquals(declared, Object.keys(runs(box())).sort())
-  assert(declared.every((n) => n?.startsWith('admin_')), declared.join(' '))
-})
-
-// The fee is the PLATFORM's (workers/yak/sell.ts `fees`), so reading it or
-// moving it is a named act, and a typo is refused before any account is read.
-test('the fee is a named act, in whole basis points', async () => {
-  await assertRejects(
-    () => ask('admin_fee', { bps: '250' }),
-    Refused,
-    '--owner',
-  )
-  await assertRejects(() => ask('admin_fee'), Refused)
-  for (let no of ['2.5', '-5', 'lots', '2,50']) {
-    await assertRejects(
-      () => ask('admin_fee', { bps: no, owner: true }),
-      CallError,
-      'basis points',
-    )
+test('fee uses computed own account by default and --as selects another bearer', async () => {
+  let { host, kept, ask } = await box()
+  try {
+    await kept('probe@bot.yak.sh', 'probe-bearer')
+    await kept('own@example.com', 'own-bearer')
+    let sent: string[] = []
+    await answering((_url, init) => {
+      let headers = new Headers(init?.headers)
+      equal(headers.get('cookie'), null)
+      sent.push(headers.get('authorization')!)
+      return Response.json({ bps: 250, rate: '2.5%' })
+    }, async () => {
+      equal(body(await ask('admin_fee')), '250 bps — 2.5% of each sale')
+      await ask('admin_fee', { as: 'probe' })
+    })
+    equal(sent, ['Bearer own-bearer', 'Bearer probe-bearer'])
+  } finally {
+    await host.close()
   }
 })
 
-// A client is the platform's, and its id and secret are never a call's
-// argument: this graph keeps the call as its text. Both refused before any
-// account is read or anything is fetched.
-test('a client is kept by --admin, from op:// references only', async () => {
-  let ref = 'op://vault/item/field'
-  await assertRejects(
-    () => ask('admin_client', { name: 'g', id: ref }),
-    Refused,
-  )
-  for (let args of [{ id: 'the-id' }, { id: ref, secret: 'the-secret' }]) {
+test('upload accepts the oldest account default without --as and sends bearer bytes', async () => {
+  let { host, kept, ask } = await box()
+  let dir = Deno.makeTempDirSync({ prefix: 't64688-' }),
+    path = `${dir}/theme.mp3`
+  let bytes = new Uint8Array([0x49, 0x44, 0x33, 0, 1])
+  Deno.writeFileSync(path, bytes)
+  try {
+    await kept('probe@bot.yak.sh', 'probe-bearer')
+    await answering((url, init) => {
+      equal(url, 'https://probe.yaks.app/vale/api/blob')
+      equal(
+        new Headers(init?.headers).get('authorization'),
+        'Bearer probe-bearer',
+      )
+      equal(new Headers(init?.headers).get('cookie'), null)
+      equal(init?.body, bytes)
+      return Response.json({
+        url: '/vale/api/blob/sha',
+        bytes: 5,
+        mime: 'audio/mpeg',
+      })
+    }, async () => {
+      equal(
+        body(
+          await ask('admin_upload', {
+            where: 'probe/vale',
+            path,
+            mime: 'audio/mpeg',
+          }),
+        ),
+        '/vale/api/blob/sha — 5 bytes, audio/mpeg',
+      )
+    })
+  } finally {
+    await host.close()
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
+test('delete and accept explain browser OAuth has no website session before making a request', async () => {
+  let { host, kept, ask } = await box()
+  try {
+    await kept('own@example.com', 'browser-bearer')
+    await answering(() => {
+      throw new Error('must not fetch')
+    }, async () => {
+      for (let name of ['admin_delete', 'admin_accept']) {
+        await assertRejects(
+          () => ask(name, { space: 'example', letter: 'missing' }),
+          Refused,
+          'no website session',
+        )
+      }
+    })
+  } finally {
+    await host.close()
+  }
+})
+
+test('delete walks website pages and keeps a renewed cookie only inside the OAuth record', async () => {
+  let { host, kept, ask } = await box()
+  try {
+    await kept('probe@bot.yak.sh', 'oauth-bearer', 'old-website')
+    let hits = 0
+    await answering((_url, init) => {
+      equal(new Headers(init?.headers).get('cookie'), 'yak_session=old-website')
+      equal(new Headers(init?.headers).get('authorization'), null)
+      hits++
+      return new Response('<h1>Deleted</h1><p>Done</p>', {
+        headers: { 'set-cookie': 'yak_session=fresh-website; Path=/' },
+      })
+    }, async () => {
+      await ask('admin_delete', { space: 'probe' })
+    })
+    equal(hits, 2)
+    let record = JSON.parse(
+      (await reveal(host.vault, 'connection:probe@bot.yak.sh'))!,
+    )
+    equal(record.website_session, 'fresh-website')
+    equal(record.access_token, 'oauth-bearer')
+    ok(
+      !JSON.stringify(await host.graph.read('.connection&*')).includes(
+        'fresh-website',
+      ),
+    )
+  } finally {
+    await host.close()
+  }
+})
+
+test('infrastructure rejects a throwaway but accepts the admin and own account with optional --as', async () => {
+  let { host, kept, ask } = await box()
+  try {
+    await kept('probe@bot.yak.sh')
     await assertRejects(
-      () => ask('admin_client', { name: 'g', admin: true, ...args }),
+      () => ask('admin_revert', { sha: 'HEAD' }),
+      Refused,
+      'Infrastructure requires',
+    )
+    await kept(ADMIN)
+    await assertRejects(
+      () => ask('admin_revert', { as: 'admin', sha: 'HEAD' }),
+      CallError,
+      '<sha>',
+    )
+    await kept('own@example.com')
+    await assertRejects(
+      () => ask('admin_revert', { sha: 'HEAD' }),
+      CallError,
+      '<sha>',
+    )
+  } finally {
+    await host.close()
+  }
+})
+
+test('invalid basis points and credential values are rejected before reading accounts', async () => {
+  let { host, ask } = await box()
+  try {
+    for (let bps of ['2.5', '-5', 'lots']) {
+      await assertRejects(
+        () => ask('admin_fee', { bps }),
+        CallError,
+        'basis points',
+      )
+    }
+    await assertRejects(
+      () => ask('admin_client', { name: 'google', id: 'plaintext' }),
       CallError,
       'op://',
     )
+  } finally {
+    await host.close()
   }
-})
-
-// Signing in AS somebody is the same named act, refused before a letter goes
-// anywhere; a word that is not an address is the bearer `yak login` keeps.
-test('login refuses what the argv did not name', async () => {
-  let refused = [
-    [{ address: 'you@example.com' }, '--owner'],
-    [{ address: ADMIN }, '--admin'],
-    [{ address: 'not-an-address' }, 'yak login <token>'],
-  ] as const
-  for (let [args, why] of refused) {
-    await assertRejects(() => ask('admin_login', args), Refused, why)
-  }
-})
-
-let PLATFORM = [
-  'admin_deploys',
-  'admin_errors',
-  'admin_tail',
-  'admin_rollback',
-  'admin_revert',
-]
-
-test('a platform operation names whose act it is before it runs anything', async () => {
-  for (let name of PLATFORM) {
-    await assertRejects(() => ask(name), Refused, '--owner')
-    await assertRejects(() => ask(name, { owner: false }), Refused, '--admin')
-  }
-  await assertRejects(
-    () => ask('admin_revert', { owner: true, sha: 'HEAD' }),
-    CallError,
-    '<sha>',
-  )
-  await assertRejects(
-    () => ask('admin_errors', { owner: true, since: 'soon' }),
-    CallError,
-    '--since',
-  )
-})
-
-// The same act, named by an agent instead of by the owner (D-35373): it gets past
-// the guard, and the banner says it is the admin's.
-test('an agent names a platform operation with --admin', async () => {
-  await assertRejects(
-    () => ask('admin_revert', { admin: true, sha: 'HEAD' }),
-    CallError,
-    '<sha>',
-  )
-  assertStringIncludes(heard.join('\n'), `ADMIN ACCOUNT — ${ADMIN}`)
 })
 
 test('an interrupted platform operation is cut off, not refused', () => {
-  let error = assertThrows(
-    () => ended('errors', 130),
-    Interrupted,
-    'was interrupted',
-  )
-  assertEquals(error.code, 'signal')
+  equal(assertThrows(() => ended('errors', 130), Interrupted).code, 'signal')
   assertThrows(() => ended('errors', 1), Error, 'ended with status 1')
-  assertEquals(ended('errors', 0), [])
-})
-
-// One test account, kept in the vault beside the graph.
-let kept = (at: ReturnType<typeof box>, address: string, value: string) => {
-  let name = sessionName(address)
-  at.vault.seal(secretEid(name), {
-    name,
-    handle: 'h',
-    value,
-  })
-}
-
-// Every request this process makes, answered by `reply`.
-let answering = async <T>(
-  reply: (url: string, init?: RequestInit) => Response,
-  run: (hit: string[]) => Promise<T>,
-): Promise<T> => {
-  let hit: string[] = []
-  let real = globalThis.fetch
-  globalThis.fetch = ((url: string | URL | Request, init?: RequestInit) => {
-    hit.push(String(url))
-    return Promise.resolve(reply(String(url), init))
-  }) as typeof fetch
-  try {
-    return await run(hit)
-  } finally {
-    globalThis.fetch = real
-  }
-}
-
-// `whoami` asks ONCE (T-35384). The listing carries the caller's role in each
-// space (workers/yak tools.ts `app_list`), so what is asserted here is the
-// shape of the asking: one /mcp call and no per-space door, however many
-// spaces come back.
-let listing = (spaces: string[]) =>
-  new Response(JSON.stringify({
-    jsonrpc: '2.0',
-    id: 1,
-    result: { content: [{ type: 'text', text: spaces.join('\n') }] },
-  }))
-
-let whoami = (spaces: string[]) => {
-  let at = box()
-  kept(at, 'ana@bot.yak.sh', 'ana.token')
-  return answering(() => listing(spaces), async (hit) => {
-    try {
-      return { hit, said: body(await ask('admin_whoami', {}, { at })) }
-    } finally {
-      Deno.removeSync(at.dir, { recursive: true })
-    }
-  })
-}
-
-let space = (slug: string, role: string, apps: number) =>
-  [
-    `${slug} — https://${slug}.yaks.app/ — you are ${
-      role == 'owner' ? 'the owner' : `a ${role}`
-    }`,
-    ...Array.from({ length: apps }, (_, i) => `- a${i} (a${i}) v1`),
-  ].join('\n')
-
-test('whoami asks the listing once and no space its own role', async () => {
-  let { hit, said } = await whoami([
-    space('ana', 'owner', 3),
-    space('mom', 'editor', 1),
-    space('empty', 'viewer', 0),
-  ])
-  assertEquals(hit, ['https://yaks.app/mcp'])
-  for (let want of ['ana', 'owner', 'mom', 'editor', 'empty', 'viewer']) {
-    assertStringIncludes(said, want)
-  }
-})
-
-test('whoami with no spaces still asks once', async () => {
-  let { hit, said } = await whoami([])
-  assertEquals(hit, ['https://yaks.app/mcp'])
-  assertStringIncludes(said, 'spaces    (none)')
-})
-
-// A named app, the platform's own store among them, is read and written
-// through the connector's graph tier, where its owner and the platform's
-// admin reach any app's rows (workers/yak/agent.ts `named`).
-test("a named app's store is queried and applied through the graph tier", async () => {
-  let at = box()
-  kept(at, ADMIN, 'admin.token')
-  let rows = [{
-    entity: { eid: 'broke' },
-    exception: { message: 'sift is not a function' },
-  }]
-  let called: { params: unknown }[] = []
-  await answering(
-    (url, init) => {
-      if (!url.endsWith('/mcp')) {
-        return new Response('<!doctype html><title>Nothing here</title>', {
-          status: 404,
-        })
-      }
-      called.push(JSON.parse(String(init?.body)))
-      return new Response(JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        result: {
-          content: [
-            { type: 'text', text: JSON.stringify(rows) },
-            { type: 'text', text: 'The tool list changed; reconnect.' },
-          ],
-          structuredContent: { result: rows },
-        },
-      }))
-    },
-    async (hit) => {
-      try {
-        let bundles = [{ entity: { eid: 'broke' }, exception: null }]
-        let answers = [
-          await ask('admin_query', {
-            admin: true,
-            where: 'yak/platform',
-            filters: ['.exception'],
-          }, { at }),
-          await ask('admin_apply', {
-            admin: true,
-            where: 'yourname/vale',
-            bundles,
-            check: true,
-          }, { at }),
-        ]
-        for (let answer of answers) {
-          assertEquals(JSON.parse(body(answer)), rows)
-        }
-        assertEquals(hit, ['https://yaks.app/mcp', 'https://yaks.app/mcp'])
-        assertEquals(called.map((c) => c.params), [
-          {
-            name: 'graph_query',
-            arguments: { app: 'yak/platform', q: '.exception' },
-          },
-          {
-            name: 'graph_apply',
-            arguments: { app: 'yourname/vale', bundles, check: true },
-          },
-        ])
-      } finally {
-        Deno.removeSync(at.dir, { recursive: true })
-      }
-    },
-  )
-})
-
-test('upload sends local bytes through an app blob door as the named account', async () => {
-  let at = box()
-  let path = `${at.dir}/theme.mp3`
-  let bytes = new Uint8Array([0x49, 0x44, 0x33, 0, 1])
-  Deno.writeFileSync(path, bytes)
-  kept(at, 'ana@bot.yak.sh', 'ana.token')
-  try {
-    await assertRejects(
-      () => ask('admin_upload', { where: 'ana/vale', path }, { at }),
-      Refused,
-      '--as',
-    )
-    await answering((url, init) => {
-      assertEquals(url, 'https://ana.yaks.app/vale/api/blob')
-      assertEquals(init?.method, 'POST')
-      assertEquals(init?.headers, {
-        cookie: 'yak_session=ana.token',
-        'content-type': 'audio/mpeg',
-        'x-yak-name': 'Mossvale%20theme.mp3',
-      })
-      assertEquals(init?.body, bytes)
-      return Response.json({
-        eid: 'sha',
-        url: '/vale/api/blob/sha',
-        mime: 'audio/mpeg',
-        bytes: bytes.length,
-      })
-    }, async () => {
-      let answer = await ask('admin_upload', {
-        where: 'ana/vale',
-        path,
-        mime: 'audio/mpeg',
-        name: 'Mossvale theme.mp3',
-        as: 'ana',
-      }, { at })
-      assertEquals(body(answer), '/vale/api/blob/sha — 5 bytes, audio/mpeg')
-    })
-  } finally {
-    Deno.removeSync(at.dir, { recursive: true })
-  }
-})
-
-// A throwaway's code is a letter in this graph, and the session it buys is
-// answered sealed under the account, beside the words: the write that records
-// the call keeps the session, and nothing else does. The box is shared, so the
-// account a bare command acts as stays the one `use` chose.
-test('a throwaway signs in with the code from the graph', async () => {
-  let at = box()
-  let letter = {
-    entity: { eid: 'l1' },
-    doc: { title: '123456 is your yaks.app code' },
-    mail: {
-      to: 'cook@bot.yak.sh',
-      at: new Date(Date.now() + 1000).toISOString(),
-    },
-  }
-  try {
-    kept(at, 'keep@bot.yak.sh', 'keep.token')
-    await ask('admin_use', { account: 'keep' }, { at })
-    let answer = await answering(
-      (url) =>
-        url.endsWith('/login/code')
-          ? new Response(null, {
-            status: 302,
-            headers: { 'set-cookie': 'yak_session=cook.token; Path=/' },
-          })
-          : new Response('card'),
-      () =>
-        ask('admin_throwaway', { name: 'cook' }, { at, read: () => [letter] }),
-    )
-    assertEquals(answer.find((b) => b.secret)?.secret, {
-      name: sessionName('cook@bot.yak.sh'),
-      value: 'cook.token',
-    })
-    assertStringIncludes(body(answer), '--as=cook')
-    kept(at, 'cook@bot.yak.sh', 'cook.token')
-    let current = body(await ask('admin_accounts', {}, { at })).split('\n')
-      .filter((line) => line.includes('current'))
-    assertEquals(current.length, 1)
-    assertStringIncludes(current[0], 'keep@bot.yak.sh')
-  } finally {
-    Deno.removeSync(at.dir, { recursive: true })
-  }
-})
-
-test('admin tool forwards words to the fetched schema as the selected account', async () => {
-  let at = box()
-  kept(at, 'cook@bot.yak.sh', 'cook.session')
-  let requests: { method: string; params?: unknown }[] = []
-  let tool = toolsIn(adminDoc).find((t) => t.name == 'admin_tool')!
-  try {
-    await answering((_url, init) => {
-      assertEquals(
-        new Headers(init?.headers).get('cookie'),
-        'yak_session=cook.session',
-      )
-      let request = JSON.parse(String(init?.body))
-      requests.push({
-        method: request.method,
-        ...(request.params ? { params: request.params } : {}),
-      })
-      let result = request.method == 'tools/list'
-        ? {
-          tools: [{
-            name: 'count',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                name: { type: 'string' },
-                n: { type: 'number' },
-                enabled: { type: 'boolean' },
-              },
-              required: ['name'],
-            },
-            _meta: { 'yak.sh/command': { positional: ['name'] } },
-          }],
-        }
-        : { content: [{ type: 'text', text: 'counted' }] }
-      return Response.json({ jsonrpc: '2.0', id: request.id, result })
-    }, async () => {
-      let args = await argsFor(tool, [
-        'count',
-        'matt',
-        '--n=4',
-        '--enabled',
-        '--as',
-        'cook',
-      ])
-      assertEquals(body(await ask('admin_tool', args, { at })), 'counted')
-    })
-    assertEquals(requests, [
-      { method: 'tools/list', params: {} },
-      {
-        method: 'tools/call',
-        params: {
-          name: 'count',
-          arguments: { name: 'matt', n: 4, enabled: true },
-        },
-      },
-    ])
-  } finally {
-    Deno.removeSync(at.dir, { recursive: true })
-  }
-})
-
-test('admin tool refuses a name neither the connector nor an app declares', async () => {
-  let at = box()
-  kept(at, 'cook@bot.yak.sh', 'cook.session')
-  try {
-    await answering((_url, init) => {
-      let request = JSON.parse(String(init?.body))
-      let result = request.method == 'tools/list' ? { tools: [] } : {
-        content: [{ type: 'text', text: 'no commands' }],
-        structuredContent: {
-          result: [{
-            entity: { eid: '$commands' },
-            output: { value: { commands: [] } },
-          }],
-        },
-      }
-      return Response.json({ jsonrpc: '2.0', id: request.id, result })
-    }, async () => {
-      await assertRejects(
-        () =>
-          ask('admin_tool', {
-            name: 'space_list',
-            args: [],
-            as: 'cook',
-          }, { at }),
-        CallError,
-        'No tool or app command named space_list',
-      )
-    })
-  } finally {
-    Deno.removeSync(at.dir, { recursive: true })
-  }
+  equal(ended('errors', 0), [])
 })
