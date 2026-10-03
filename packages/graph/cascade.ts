@@ -29,7 +29,7 @@
 import type { Death, Vocab } from '@yaks/vocab'
 import { after } from '@yaks/fp'
 import type { Bundle, Comp, Eid } from './bundle.ts'
-import { tombstoned } from './bundle.ts'
+import { comps, dead, tombstoned } from './bundle.ts'
 import type { Doom, Gone, Loose, Tx } from './storage.ts'
 import type { State } from './state.ts'
 import { about, gather, holding } from './gather.ts'
@@ -201,28 +201,66 @@ export let cascade = (
   vocab: Vocab,
   st: State,
 ): Bundle[] | Promise<Bundle[]> => {
-  if (!st.killed.length) return bundles
-  return after(reckon(tx, vocab, st.killed), ({ gone, loose }) => {
-    // The entities the batch named come first, whatever order the answer
-    // arrived in: they are deleted because the caller said so, and an entity
-    // storage has never heard of is still one of them.
-    let dead = [...new Set([...st.killed, ...gone.map((g) => g.eid)])]
+  // Provenance records writes, not a reason for an entity to exist. Marks
+  // such as completed/archived do record an act and remain substantive.
+  let empty = (changed: Bundle[]): Eid[] | Promise<Eid[]> => {
+    let eids = [
+      ...new Set(
+        changed.filter((b) =>
+          !dead(b) && (
+            !comps(b).length || comps(b).some(([c, v]) =>
+              v == null || c == 'created' || c == 'updated'
+            )
+          )
+        )
+          .map((b) => b.entity.eid),
+      ),
+    ]
+    if (!eids.length) return []
     return after(
-      loosen(tx, vocab, loose, 'release'),
-      (released) =>
-        after(loosen(tx, vocab, loose, 'detach'), (detached) =>
-          after(
-            tx.remove(dead.map((eid) => ({ eid }))),
-            () => [
-              ...bundles,
-              ...released,
-              ...detached,
-              // The entities deleted because something else was. The ones the
-              // batch named are already in it, carrying their own delete.
-              ...dead.filter((eid) => !st.killed.includes(eid))
-                .map((eid) => tombstoned({ eid })),
-            ],
-          )),
+      tx.get(eids),
+      (rows) =>
+        rows.filter((b) =>
+          !dead(b) &&
+          !comps(b).some(([c, v]) =>
+            v != null && c != 'created' && c != 'updated'
+          )
+        ).map((b) => b.entity.eid),
     )
-  })
+  }
+  let emptied = (out: Bundle[], eids: Eid[]): Bundle[] => {
+    for (let eid of eids) {
+      if (st.killed.includes(eid)) continue
+      st.killed.push(eid)
+      out.push(tombstoned({ eid }))
+    }
+    return out
+  }
+  let swept = new Set<Eid>()
+  let pass = (out: Bundle[]): Bundle[] | Promise<Bundle[]> => {
+    let pending = st.killed.filter((eid) => !swept.has(eid))
+    if (!pending.length) return out
+    return after(reckon(tx, vocab, pending), ({ gone, loose }) => {
+      let killed = [...new Set([...pending, ...gone.map((g) => g.eid)])]
+      emptied(out, killed)
+      for (let eid of killed) swept.add(eid)
+      return after(
+        loosen(tx, vocab, loose, 'release'),
+        (released) =>
+          after(
+            loosen(tx, vocab, loose, 'detach'),
+            (detached) =>
+              after(tx.remove(killed.map((eid) => ({ eid }))), () => {
+                let changed = [...released, ...detached]
+                out.push(...changed)
+                // A released component may have been its owner's last. Its
+                // death has the same reference consequences as an explicit one,
+                // so continue to a fixed point within this transaction.
+                return after(empty(changed), (eids) => pass(emptied(out, eids)))
+              }),
+          ),
+      )
+    })
+  }
+  return after(empty(bundles), (eids) => pass(emptied([...bundles], eids)))
 }

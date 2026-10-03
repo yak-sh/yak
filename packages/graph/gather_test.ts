@@ -171,11 +171,12 @@ test('a delete reads backwards once per rung, not once per property', () => {
   // The book dies, its review with it, the bookmark's row is released and the
   // publisher is untouched.
   assert(out.some((b) => b.entity.eid == 'r1' && b.tombstone != null))
-  assert(out.some((b) => b.entity.eid == 'm1' && b.bookmark === null))
+  assert(out.some((b) => b.entity.eid == 'm1' && b.tombstone != null))
   // One read for the batch's own casualties, one for the frontier the walk
-  // turned up. The vocabulary declares four reference properties; the old walk
+  // turned up, and one for the empty owner of the released bookmark.
+  // The vocabulary declares four reference properties; the old walk
   // paid a read per property per casualty per death word.
-  assertEquals(n.read, 2)
+  assertEquals(n.read, 3)
 })
 
 test('a named-only gather never enumerates reverse reference properties', () => {

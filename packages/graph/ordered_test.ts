@@ -71,7 +71,11 @@ for (let async of [false, true]) {
     let storage = async ? slow(memory()) : memory()
     let seen: unknown[] = [], journal: unknown[] = []
     let g = graph({ storage, vocab: books })
-    await g.apply([{ entity: { eid: 'b' }, book: { pages: 1 } }])
+    await g.apply([{
+      entity: { eid: 'b' },
+      book: { pages: 1 },
+      doc: { title: 'keep' },
+    }])
     g.use({
       name: 'ordered',
       beforeWrite: (all) => {

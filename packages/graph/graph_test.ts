@@ -530,10 +530,10 @@ test('a delete tombstones the entity and death spreads by the vocabulary', () =>
   // the review cascaded, and the batch says so
   let casualty = out.find((b) => b.entity.eid == 'r1')!
   assert(isDead(casualty))
-  // the bookmark's row was released; its owner lives
-  assertEquals(out.find((b) => b.entity.eid == 'u1')!.bookmark, null)
+  // Releasing its only component deletes the bookmark's empty owner too.
+  assert(isDead(out.find((b) => b.entity.eid == 'u1')!))
   let [u] = one.get(['u1']) as Bundle[]
-  assertEquals(u.bookmark, undefined)
+  assert(isDead(u))
   // the dead are dead
   let dead = one.get(['b1', 'r1']) as Bundle[]
   assertEquals(dead.filter(isDead).length, 2)

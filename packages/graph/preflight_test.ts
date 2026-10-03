@@ -21,7 +21,7 @@ for (let async of [false, true]) {
         }),
     )
     let bundles = [
-      { entity: { eid: 'b' }, book: { pages: 1 } },
+      { entity: { eid: 'b' }, book: { pages: 1 }, doc: { title: 'keep' } },
       { entity: { eid: 'b' }, book: { pages: 2 } },
       { entity: { eid: 'b' }, book: null },
       { entity: { eid: 'b' }, book: { pages: 3 } },

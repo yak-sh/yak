@@ -258,6 +258,12 @@ chooses what deleting a reference target does: `cascade` deletes the referring
 entity, `detach` clears its property, `release` removes its component, and
 `keep` retains the reference. The applied batch includes these patches.
 
+A write that removes an entity's last component other than the provenance
+stamps `created` and `updated` deletes the entity in the same transaction.
+Removing a component through `release` follows this rule too, including the
+reference consequences of that deletion. Marks such as `completed` and
+`archived` record an act and are not provenance stamps.
+
 ```ts
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
