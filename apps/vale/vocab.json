@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Mossvale",
   "rtc": "open",
-  "description": "A voxel world to adventure in together. What a player is and has done, where they were last seen and where they have explored, is kept in this app's store (player, look, seen, explored, fire, slain, item, gathered, crafted, used, upgraded, equip, learned, respec, journal), and so is what they said (chat) and the villagers who answer them and what they hand over (villager, deal, agreed, handed); what moves (where each player and creature is, how they move, how they fare in a fight, what they wear) is relayed between the players in a level and kept by nobody. Levels' geography and quests are authored data; creature, item, ability, building and region theme designs are store rows seeded from files and watched by every page.",
+  "description": "A voxel world to adventure in together. What a player is and has done, where they last stood and where they have explored, is kept in this app's store (player, look, position, explored, fire, slain, item, gathered, crafted, used, upgraded, equip, learned, respec, journal), and so is what they said (chat) and the villagers who answer them and what they hand over (villager, deal, agreed, handed); what moves (where each player and creature is, how they move, how they fare in a fight, what they wear) is relayed between the players in a level; only hero positions are saved. Levels' geography and quests are authored data; creature, item, ability, building and region theme designs are store rows seeded from files and watched by every page.",
   "models": "open",
   "$defs": {
     "ability_design": {
@@ -1647,14 +1647,33 @@
       "type": "object",
       "kind": false,
       "floor": "owner",
-      "description": "An owner-authorized move of one hero to a safe spot in the world. The hero's active page moves them, or their next page moves them when they return. Their next seen position acknowledges it.",
+      "description": "An owner-authorized move of one hero to a safe spot in the world. The hero's active page moves them, or their next page moves them when they return, then marks this request completed.",
       "properties": {
-        "player": { "type": "string", "index": true },
-        "level": { "type": "string" },
-        "x": { "type": "number" },
-        "z": { "type": "number" }
+        "player": {
+          "type": "string",
+          "index": true,
+          "ref": "player",
+          "death": "keep"
+        },
+        "level": {
+          "type": "string"
+        },
+        "x": {
+          "type": "number"
+        },
+        "z": {
+          "type": "number"
+        }
       },
-      "required": ["player", "level", "x", "z"]
+      "required": [
+        "player",
+        "level",
+        "x",
+        "z"
+      ],
+      "permit": {
+        "completed": "player"
+      }
     },
     "look": {
       "component": true,
@@ -1701,22 +1720,30 @@
       "component": true,
       "type": "object",
       "sync": "peers",
-      "durable": "connection",
+      "durable": "forever",
       "pace": "100ms",
-      "description": "Where something is this moment: its region and world coordinates, in metres. Relayed to nearby pages and kept by nobody, so it goes when the connection that wrote it does. A moving creature's position reaches peers directly, without a stored creature row. A creature that is only wandering has none: its wandering says where it is.",
+      "description": "Where something is this moment: its region and world coordinates, in metres. Relayed to nearby pages. The server saves each hero’s latest position every thirty seconds; wildlife has no player component and is never saved. A disconnected hero returns to the saved spot, facing the default direction.",
       "properties": {
         "level": {
           "type": "string",
-          "description": "Which region contains these world coordinates."
+          "description": "Which region contains these world coordinates.",
+          "index": true
         },
-        "x": { "type": "number" },
-        "y": { "type": "number" },
-        "z": { "type": "number" },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "z": {
+          "type": "number"
+        },
         "at": {
           "type": "number",
           "description": "When the page moving it said so, in ms. A page says where its hero is at least once a second while it plays, so one that has not for a while sleeps."
         }
-      }
+      },
+      "save": ".player (!position.at | .position.at<=\"30s ago\")"
     },
     "motion": {
       "component": true,
@@ -2188,7 +2215,7 @@
     "villager": {
       "component": true,
       "type": "object",
-      "description": "One of the people of the vale, as a mind of their own: the row is their transcript (it wears session). A hero's line said near them is a line of it that asks them for a turn on GLM Flash, a neighbour's news is a line they heard, and their wake calls think every five minutes while a hero has been seen in their land and sleeps while none has (villagers.ts). A page adds the row the first time a hero comes to their land.",
+      "description": "One of the people of the vale, as a mind of their own: the row is their transcript (it wears session). A hero's line said near them is a line of it that asks them for a turn on GLM Flash, a neighbour's news is a line they heard, and their wake calls think every five minutes while a hero is connected in their land and sleeps while none has (villagers.ts). A page adds the row the first time a hero comes to their land.",
       "properties": {
         "id": {
           "type": "string",
@@ -2295,36 +2322,77 @@
       },
       "required": ["player", "village"]
     },
-    "seen": {
-      "component": true,
-      "type": "object",
-      "kind": false,
-      "floor": "person",
-      "description": "Where a hero was last in the world, and when: the level, the spot and which way they faced, where they come back to on any device, and what keeps the villagers of that level awake. A page writes it on a hero its person made as they arrive in a level, every half minute while they move about there, every two minutes while they stand, and as the page is hidden (seen.ts); the store takes it only from a person signed in (floor), so nobody signed out keeps the villagers awake. A hero made signed out is remembered by its tab alone.",
-      "properties": {
-        "level": {
-          "type": "string",
-          "index": true,
-          "description": "Which level, by the app's list of levels."
-        },
-        "x": {
-          "type": "number",
-          "description": "Where in the world, in metres."
-        },
-        "z": { "type": "number" },
-        "yaw": {
-          "type": "number",
-          "description": "Which way they faced, in radians."
-        },
-        "at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "teleport": {
-          "type": "string",
-          "description": "The latest admin teleport request this hero answered."
+    "saved_position": {
+      "lens": true,
+      "step": 20261003184100,
+      "live": false,
+      "ops": [
+        {
+          "view": {
+            "from": "seen",
+            "declaration": {
+              "component": true,
+              "type": "object",
+              "kind": false,
+              "floor": "person",
+              "description": "Where a hero was last in the world, and when: the level, the spot and which way they faced, where they come back to on any device, and what keeps the villagers of that level awake. A page writes it on a hero its person made as they arrive in a level, every half minute while they move about there, every two minutes while they stand, and as the page is hidden (seen.ts); the store takes it only from a person signed in (floor), so nobody signed out keeps the villagers awake. A hero made signed out is remembered by its tab alone.",
+              "properties": {
+                "level": {
+                  "type": "string",
+                  "index": true,
+                  "description": "Which level, by the app's list of levels."
+                },
+                "x": {
+                  "type": "number",
+                  "description": "Where in the world, in metres."
+                },
+                "z": {
+                  "type": "number"
+                },
+                "yaw": {
+                  "type": "number",
+                  "description": "Which way they faced, in radians."
+                },
+                "at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "teleport": {
+                  "type": "string",
+                  "description": "The latest admin teleport request this hero answered."
+                }
+              }
+            },
+            "match": ".player .position",
+            "props": {
+              "level": {
+                "path": "position.level"
+              },
+              "x": {
+                "path": "position.x"
+              },
+              "z": {
+                "path": "position.z"
+              },
+              "at": {
+                "path": "position.at",
+                "convert": "milliseconds"
+              },
+              "yaw": {
+                "retired": 0
+              },
+              "teleport": {
+                "ack": {
+                  "component": "teleport_request",
+                  "ref": "player",
+                  "mark": "completed",
+                  "order": "created.at"
+                }
+              }
+            }
+          }
         }
-      }
+      ]
     },
     "deal": {
       "component": true,
