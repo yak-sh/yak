@@ -1,0 +1,13 @@
+{
+  "name": "@yaks/timing",
+  "version": "0.2.10",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Pure closed-minute timing summaries and slow or representative span-tree selection for tracker stores.",
+  "publish": {
+    "exclude": ["**/*_test.ts", "./browser.json"]
+  }
+}

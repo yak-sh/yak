@@ -1,0 +1,123 @@
+{
+  "title": "timing",
+  "$defs": {
+    "timing": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "wire": false,
+      "description": "One immutable completed minute of a piece of code in during.process; the reporter derives its eid from process, op, name, plugin and at. Rows merge by adding n, total, bucket and count values and taking the greatest max.",
+      "properties": {
+        "op": {
+          "type": "string",
+          "stamped": true,
+          "description": "The span kind."
+        },
+        "name": {
+          "type": "string",
+          "stamped": true,
+          "description": "The measured code, never an entity id, query text, URL or value."
+        },
+        "plugin": {
+          "type": "string",
+          "stamped": true,
+          "description": "The emitting plugin; empty for work without plugin attribution."
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "The UTC completion minute, rounded down."
+        },
+        "n": {
+          "type": "integer",
+          "stamped": true,
+          "description": "The number of completed spans and instants."
+        },
+        "total": {
+          "type": "number",
+          "stamped": true,
+          "description": "The sum of span durations in milliseconds."
+        },
+        "max": {
+          "type": "number",
+          "stamped": true,
+          "description": "The greatest span duration in milliseconds."
+        },
+        "buckets": {
+          "type": "array",
+          "stamped": true,
+          "minItems": 43,
+          "maxItems": 43,
+          "items": { "type": "integer" },
+          "description": "Fixed log-scale counts: exact zero, upper bounds 2^-10 through 2^30 milliseconds inclusive, then overflow. Read whole."
+        },
+        "counts": {
+          "type": "object",
+          "stamped": true,
+          "additionalProperties": { "type": "number" },
+          "description": "The spans' summed numeric metrics, such as bundles, statements and rows; read whole."
+        },
+        "commit": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "The process's commit sha, identifying the code measured."
+        }
+      }
+    },
+    "trace": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "wire": false,
+      "description": "One selected root's span tree, with tracker context in during; every root past its op's threshold and one ordinary root per op per minute are kept.",
+      "properties": {
+        "op": {
+          "type": "string",
+          "stamped": true,
+          "description": "The root span kind."
+        },
+        "name": {
+          "type": "string",
+          "stamped": true,
+          "description": "The root's code, never an entity id, query text, URL or value."
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "When the root began, in UTC."
+        },
+        "ms": {
+          "type": "number",
+          "stamped": true,
+          "description": "The completed root's duration in milliseconds."
+        },
+        "spans": {
+          "type": "array",
+          "stamped": true,
+          "description": "Code metadata, relative starts and durations; span ids and parents are local tree ordinals, never entity references. Read whole. Unfinished descendants omit ms.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "parent": { "type": "string" },
+              "kind": { "type": "string" },
+              "name": { "type": "string" },
+              "plugin": { "type": "string" },
+              "start": { "type": "number" },
+              "ms": { "type": "number" },
+              "outcome": { "type": "string" },
+              "counts": {
+                "type": "object",
+                "additionalProperties": { "type": "number" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

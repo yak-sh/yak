@@ -195,6 +195,7 @@
     "./packages/fp",
     "./packages/logic",
     "./packages/tracker",
+    "./packages/timing",
     "./packages/inbox"
   ],
   "exclude": [

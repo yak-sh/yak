@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "lib": ["dom", "esnext"],
+    "strict": true
+  },
+  "entries": [".", "./vocab"],
+  "imports": {
+    "@yaks/timing": "./mod.ts",
+    "@yaks/timing/vocab": "./vocab.ts"
+  }
+}
