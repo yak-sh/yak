@@ -311,6 +311,19 @@ export type Access =
 // One step of the pipeline: the bundles in, the bundles the next step sees
 // out.
 type Step = (bundles: Bundle[]) => Bundle[] | Promise<Bundle[]>
+type Timing = <T>(
+  name: Phase | 'gather' | 'transaction' | 'compose',
+  run: () => T | Promise<T>,
+  plugin?: string,
+  compatibility?: boolean,
+) => T | Promise<T>
+type Run = {
+  admission: boolean
+  tracing?: Context
+  parent: () => string | undefined
+  resources: Record<string, Resource>
+  timed: Timing
+}
 
 let failed = (err: unknown, at: { phase: Phase; plugin: string }) =>
   console.error(`${at.plugin} failed at ${at.phase} —`, err)
@@ -530,6 +543,82 @@ export let graph = (opts: Options): Graph => {
     }
   }
 
+  // Synchronous phases use plain loops. A continuation is needed only when a
+  // core, rule or hook yields; all registrations still come from the moment
+  // the phase began, and each hook gets its own context.
+  let runHooks = (
+    run: Run,
+    name: Phase,
+    tx: Tx,
+    calls: [string, Hook][],
+    bundles: Bundle[],
+    start = 0,
+  ): Bundle[] | Promise<Bundle[]> => {
+    for (let i = start; i < calls.length; i++) {
+      let [plugin, h] = calls[i]
+      let out = run.tracing && live(run.tracing) && peek(g)
+        ? run.timed(
+          name,
+          () =>
+            h(bundles, tx, undefined, {
+              graph: g,
+              parent: run.parent(),
+              admission: run.admission,
+            }),
+          plugin,
+          false,
+        )
+        : h(bundles, tx, undefined, { graph: g, admission: run.admission })
+      if (isPromise(out)) {
+        return out.then((b) => runHooks(run, name, tx, calls, b, i + 1))
+      }
+      bundles = out
+    }
+    return bundles
+  }
+  let runPhase = (
+    run: Run,
+    name: Phase,
+    tx: Tx,
+    core: Step | undefined,
+    of: ((eid: Eid) => Bundle | undefined) | undefined,
+    rules: Rule[],
+    calls: [string, Hook][],
+    bundles: Bundle[],
+  ): Bundle[] | Promise<Bundle[]> => {
+    if (core) {
+      let out = core(bundles)
+      if (isPromise(out)) {
+        return out.then((b) =>
+          runPhase(run, name, tx, undefined, of, rules, calls, b)
+        )
+      }
+      bundles = out
+    }
+    if (rules.length) {
+      let tracing = run.tracing && live(run.tracing) && peek(g)
+        ? { ...run.tracing, parent: run.parent() }
+        : undefined
+      let out = fire(rules, {
+        vocab,
+        tx,
+        phase: name,
+        bundles,
+        resources: run.resources,
+        of,
+        tracing,
+        owner: tracing
+          ? (r) => plugins.find((p) => p.rules?.includes(r))?.name
+          : undefined,
+      })
+      if (isPromise(out)) {
+        return out.then((b) => runHooks(run, name, tx, calls, b))
+      }
+      bundles = out
+    }
+    return runHooks(run, name, tx, calls, bundles)
+  }
+
   let applying = (
     bundles: Bundle[],
     o: AdmitOpts,
@@ -596,6 +685,13 @@ export let graph = (opts: Options): Graph => {
     }
     let gathering = (tx: Tx, b: Bundle[]) =>
       timed('gather', () => gather(tx, vocab, asking(b, checking)))
+    let run: Run = {
+      admission,
+      tracing,
+      parent: () => current,
+      resources,
+      timed,
+    }
 
     // A phase: the core's own work first (it is what the rules and hooks
     // extend), then the rules evaluated together, then each hook, each seeing
@@ -609,44 +705,12 @@ export let graph = (opts: Options): Graph => {
       of?: (eid: Eid) => Bundle | undefined,
     ): Step =>
     (bundles) => {
-      let steps: Step[] = core ? [core] : []
       let rules = ruled(name, o.stamp !== false)
-      if (rules.length) {
-        steps.push((b) =>
-          fire(rules, {
-            vocab,
-            tx,
-            phase: name,
-            bundles: b,
-            resources,
-            of,
-            tracing: tracing && live(tracing) && peek(g)
-              ? { ...tracing, parent: current }
-              : undefined,
-            owner: tracing && live(tracing) && peek(g)
-              ? (r) => plugins.find((p) => p.rules?.includes(r))?.name
-              : undefined,
-          })
-        )
-      }
-      for (let [plugin, h] of hooks(name)) {
-        steps.push((b) =>
-          tracing && live(tracing) && peek(g)
-            ? timed(
-              name,
-              () =>
-                h(b, tx, undefined, {
-                  graph: g,
-                  parent: current,
-                  admission,
-                }),
-              plugin,
-              false,
-            )
-            : h(b, tx, undefined, { graph: g, admission })
-        )
-      }
-      return timed(name, () => each(steps, bundles, (b, step) => step(b)))
+      let calls = hooks(name)
+      return timed(
+        name,
+        () => runPhase(run, name, tx, core, of, rules, calls, bundles),
+      )
     }
 
     // After the transaction: every effect rule, then every hook, each isolated
