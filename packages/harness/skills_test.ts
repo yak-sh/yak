@@ -332,3 +332,29 @@ test('a session command subdirectory loads from the repository root without chan
     await at.free()
   }
 })
+
+test('retired checkout observations supply no catalogue and never borrow fallback skills', async () => {
+  let at = await scratchRepo()
+  let h = await harness()
+  try {
+    await write(at.repo)
+    await h.g.apply([
+      { entity: { eid: 'retired' }, worktree: { path: at.repo } },
+      {
+        entity: { eid: 'session' },
+        session: {},
+        home: { worktree: 'retired' },
+      },
+    ])
+    await h.g.apply([{ entity: { eid: 'retired' }, worktree: null }])
+    let tools = skillTools(h.g, at.repo)
+    assertEquals(await skillCwd(h.g, 'session', at.repo), undefined)
+    assertEquals(
+      await skillItems(h.g, { session: 'session', tools }, at.repo),
+      [],
+    )
+  } finally {
+    h.close()
+    await at.free()
+  }
+})

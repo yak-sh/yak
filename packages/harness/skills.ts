@@ -29,6 +29,9 @@ export let skillCwd = async (
   let home = comp(owner?.home)
   if (home.worktree) {
     let [tree] = await g.get([String(home.worktree)])
+    // A retired observation still has an entity, but no checkout. Do not
+    // borrow fallback skills for a session whose own checkout went away.
+    if (tree && !tree.worktree) return undefined
     let path = comp(tree?.worktree).path
     if (typeof path != 'string') {
       throw new Refused('Skill checkout is unavailable for this session')
