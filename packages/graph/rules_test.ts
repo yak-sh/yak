@@ -10,7 +10,7 @@ import { parse } from '@yaks/query'
 import { graph } from './graph.ts'
 import type { Bundle } from './bundle.ts'
 import type { Phase, Plugin } from './plugin.ts'
-import { type Rule, stands } from './rules.ts'
+import { fire, type Rule, stands } from './rules.ts'
 import { books, comp, memory } from './testing.ts'
 
 let g = (plugins: Plugin[] = []) =>
@@ -222,3 +222,59 @@ for (let ast of [false, true]) {
     assertEquals(sync(one.admit(input('b2')))[0].book, { pages: 20 })
   })
 }
+
+test('single-row and split-patch rules share frozen references, writers and resources', () => {
+  let rules: Rule[] = [{
+    phase: 'precondition',
+    match: '.book.publisher.doc.title=New, *book, #Now',
+    run: (b) => ({
+      book: {
+        pages: (b.book as { pages: number }).pages + 1,
+        shelved: b.$actor?.by == 'ada',
+      },
+    }),
+  }, {
+    phase: 'precondition',
+    match: '.book.pages=25, !bookmark, +!bookmark, #Now',
+    run: (b) => ({ bookmark: { of: b.entity.eid } }),
+  }]
+  let stored: Bundle = {
+    entity: { eid: 'b1' },
+    doc: { title: 'Old' },
+    book: { pages: 10, publisher: 'b1' },
+  }
+  let one: Bundle = {
+    entity: stored.entity,
+    doc: { title: 'New' },
+    book: { pages: 25 },
+    $actor: { by: 'ada' },
+  }
+  for (
+    let bundles of [[one], [{
+      entity: one.entity,
+      doc: one.doc,
+      $actor: one.$actor,
+    }, { entity: one.entity, book: one.book }]]
+  ) {
+    let resources = 0
+    let out = memory().tx((tx) =>
+      fire(rules, {
+        phase: 'precondition',
+        bundles,
+        vocab: books,
+        tx,
+        of: () => stored,
+        resources: {
+          Now: () => (resources++, stands({ at: 'one instant' })),
+        },
+      })
+    )
+    assertEquals(sync(out).slice(bundles.length), [{
+      entity: one.entity,
+      book: { pages: 26, shelved: true },
+    }, { entity: one.entity, bookmark: { of: 'b1' } }])
+    assertEquals(resources, 1)
+    assertEquals(stored.doc, { title: 'Old' })
+    assertEquals(stored.book, { pages: 10, publisher: 'b1' })
+  }
+})

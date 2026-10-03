@@ -50,7 +50,7 @@ import { type Context, during, live as observed } from '@yaks/trace'
 // @yaks/logic's unification, planned). A rule that tries it is refused rather
 // than silently compared against the literal text `Now.at`.
 
-import { index, matcher, type Select } from '@yaks/match'
+import { type Filter, filter, index, matcher, type Select } from '@yaks/match'
 import {
   type And,
   declared,
@@ -237,6 +237,7 @@ export type Rule = {
 // the rule is about — the rule never fires, which is not an error.
 type Ready = {
   test: Select | null
+  single: Filter | null
   ensures: string[]
   gates: string[]
   resources: string[]
@@ -296,6 +297,7 @@ let compile = (r: Rule, v: Vocab): Ready => {
   let named = [...d.gates, ...d.ensures, ...d.writes]
   let ready: Ready = {
     test: null,
+    single: null,
     ensures: d.ensures,
     gates: d.gates,
     resources: d.resources,
@@ -320,12 +322,15 @@ let compile = (r: Rule, v: Vocab): Ready => {
       // linear in the size of the batch. Rules are predicates: ordering and
       // windowing do not decide which entities fire, so those clauses are
       // dropped.
-      ready.test = matcher({
+      let query = {
         ...d.filter,
         clauses: d.filter.clauses.filter((c) =>
           !['order', 'limit', 'after'].includes(c.kind)
         ),
-      }, v)
+      }
+      let moment = { now: Date.now() }
+      ready.test = matcher(query, v, moment)
+      ready.single = filter(query, v, moment)
     } catch (e) {
       if (words(d.filter).every((c) => !!v.comp(c))) throw e
     }
@@ -412,22 +417,42 @@ export let fire = (
   // One view per entity, not per patch: the phases add bundles to the batch
   // as they go, and a rule is about the entity, so it must not fire once per
   // patch that mentions that entity.
-  let seen = new Map<Eid, Bundle>()
-  let written = new Map<Eid, Set<string>>()
-  for (let b of bundles) {
-    let eid = b.entity.eid
-    let view = merged(seen.get(eid) ?? tick.of?.(eid) ?? null, b)
-    // The writer the entity's own bundles named, where one did: a batch can
-    // carry more than one writer's work (./stamp.ts `writers`).
+  let single = bundles.length == 1
+  let watching = tick.phase == 'effect' && live.some(([, r]) => r.checked)
+  let written = watching ? new Map<Eid, Set<string>>() : undefined
+  let views: Bundle[]
+  if (single) {
+    let b = bundles[0]
+    let view = merged(tick.of?.(b.entity.eid) ?? null, b)
     if (b.$actor) view.$actor ??= b.$actor
-    seen.set(eid, view)
-    let names = written.get(eid) ?? new Set<string>()
-    for (let name of Object.keys(b)) names.add(name)
-    written.set(eid, names)
+    views = [view]
+    written?.set(b.entity.eid, new Set(Object.keys(b)))
+  } else {
+    let seen = new Map<Eid, Bundle>()
+    for (let b of bundles) {
+      let eid = b.entity.eid
+      let view = merged(seen.get(eid) ?? tick.of?.(eid) ?? null, b)
+      // The writer the entity's own bundles named, where one did: a batch can
+      // carry more than one writer's work (./stamp.ts `writers`).
+      if (b.$actor) view.$actor ??= b.$actor
+      seen.set(eid, view)
+      if (written) {
+        let names = written.get(eid) ?? new Set<string>()
+        for (let name of Object.keys(b)) names.add(name)
+        written.set(eid, names)
+      }
+    }
+    views = [...seen.values()]
   }
-  let views = [...seen.values()]
-  let among = index(views)
-  let positions = new Map(views.map((v, i) => [v.entity.eid, i]))
+  let among = single
+    ? {
+      list: views,
+      of: (eid: Eid) => eid == views[0].entity.eid ? views[0] : undefined,
+    }
+    : index(views)
+  let positions = single
+    ? undefined
+    : new Map(views.map((v, i) => [v.entity.eid, i]))
   // Built once, however many rules name it: `#Now` is a single timestamp for
   // the whole phase because the resource is called once for the whole phase.
   let held = new Map<string, unknown>()
@@ -438,12 +463,15 @@ export let fire = (
   // Every match is evaluated before any rule acts.
   let hits: [Rule, Ready, number][] = []
   for (let [r, ready, test] of live) {
-    test(among).forEach((v) => {
+    let matches = single
+      ? ready.single!(views[0], among) ? views : []
+      : test(among)
+    matches.forEach((v) => {
       if (
         tick.phase == 'effect' && ready.checked &&
-        !ready.writes.some((name) => written.get(v.entity.eid)?.has(name))
+        !ready.writes.some((name) => written!.get(v.entity.eid)?.has(name))
       ) return
-      hits.push([r, ready, positions.get(v.entity.eid)!])
+      hits.push([r, ready, single ? 0 : positions!.get(v.entity.eid)!])
     })
   }
   if (!hits.length) return bundles
