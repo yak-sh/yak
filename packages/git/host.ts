@@ -14,6 +14,7 @@ import {
   derivedEid,
   type Graph,
   identityEid,
+  token,
 } from '@yaks/graph'
 import { refEid } from './refs.ts'
 
@@ -143,7 +144,15 @@ export let reconcile = async (g: Graph, common: string): Promise<void> => {
       await Deno.stat(w.path)
     } catch (error) {
       if (!(error instanceof Deno.errors.NotFound)) throw error
-      await g.apply([{ entity: tree.entity, worktree: null }])
+      await g.apply([{
+        entity: tree.entity,
+        worktree: null,
+        $was: {
+          worktree: Object.fromEntries(
+            Object.entries(w).map(([key, value]) => [key, token(value)]),
+          ),
+        },
+      }])
     }
   }
 }
