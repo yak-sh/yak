@@ -228,5 +228,6 @@ from this graph's mail, then grants the request through the ordinary consent
 page. This graph must receive that address's mail. The resulting connection
 holds OAuth tokens and the website session in its vault; neither reaches graph
 text. Browser sign-ins hold only OAuth tokens. `--as` is never required; it only
-reaches another account. A supplied website session in the `yaksApp` host seam
-is for migrating held sign-ins, not a command-line option.
+reaches another account. The terminal-only `./yaks-app` subpath owns MCP
+discovery. A supplied website session in its `yaksApp` host seam is for
+migrating held sign-ins, not a command-line option.
