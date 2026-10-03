@@ -8,7 +8,7 @@
     "./tools": "./tools.ts"
   },
   "license": "Apache-2.0",
-  "description": "The components most graphs of work need: the entity row itself, the marks recording who touched a thing and when, and the tags that give an edge its meaning.",
+  "description": "Shared identity, marks and relationship components for graphs of work, with vocabulary documents, a completion plugin, citation helpers and a comment tool.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

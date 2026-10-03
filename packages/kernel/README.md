@@ -1,140 +1,305 @@
 # @yaks/kernel
 
-Shared identity and metadata components for a graph: the entity row, creation
-and update provenance, the lifecycle marks a status is read from, decisions,
-comments, images, favorites and relationship types. They are exported as JSON
-Schema documents, with a plugin that keeps who finished a piece of work and a
-tool for creating comments.
+Shared identity, marks and relationship components for graphs of work, with
+vocabulary documents, a completion plugin, citation helpers and a comment tool.
 
-## Terms this README uses
+The graph fills in a [mark](../vocab/README.md#vocabulary)'s stamped properties.
+Callers supply the mark, not `at`, `by` or `via`.
 
-The public API uses entities and components. SQL adapters store them in tables
-and rows internally. Three terms are used below:
+This package uses
+[entities, components, bundles, patches, actors and
+plugins](../graph/README.md#data-model),
+[vocabulary](../vocab/README.md#vocabulary) and [links](../edge/README.md).
 
-- an **entity** is a thing the graph knows about, identified by an `eid` (a
-  string, commonly a UUID). It has no type property: an entity is whatever its
-  components make it.
-- a **component** is a named object stored on an entity — `doc: {title, body}`,
-  `comment: {target}`. One entity can have many.
-- a **bundle** is one entity's components as a JSON object, including its id.
-  Writing is passing a list of bundles to `graph.apply()`, which commits all of
-  them in one transaction or none.
+## Marks
 
-A **vocabulary** is the set of component declarations a graph was loaded with
-([@yaks/vocab](../vocab)). Its `vocab.json` is one such declaration, readable as
-ordinary JSON. The package also implements a comment-creation tool.
+For marks with `at`, `by` and `via`, the graph stamps when the write happened,
+who wrote it and the instrument it came through. The calling application
+supplies the actor. In the CLI composition,
+[@yaks/process](../process/README.md) supplies the process entity for writes
+that did not arrive through an authenticated HTTP or MCP request.
 
-## What it declares
+| Mark              | Meaning                                                                                                                                   |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **`created`**     | Who made the entity, when and through what.                                                                                               |
+| **`updated`**     | Who last changed the entity, when and through what.                                                                                       |
+| **`opened`**      | Somebody looked at the entity.                                                                                                            |
+| **`archived`**    | Hidden from ordinary listings, without deleting history or stopping execution.                                                            |
+| **`completed`**   | The work was finished; removing the mark reopens it.                                                                                      |
+| **`failed`**      | The work was tried and given up on; `reason` records why. Removing it permits another attempt.                                            |
+| **`broken`**      | Something outside the graph stopped honoring the entity; `code` records the other side's answer. Removing it says the entity holds again. |
+| **`interrupted`** | A request or call was cut off before finishing; `code` records why. Removing it allows a deliberate retry.                                |
+| **`resolved`**    | The problem stopped happening; removing it says the problem is back. A problem can stop without work being completed.                     |
+| **`verified`**    | Somebody checked the entity against its claims and found they hold. Only checking writes this mark.                                       |
+| **`proposed`**    | Put forward for a decision.                                                                                                               |
+| **`decided`**     | A verdict or chosen answer; `verdict` is `approved` or `declined`, and `choice` is a chosen label or custom answer.                       |
+| **`quarantined`** | Readable but set aside as harmful to act on; applications exclude it from guidance.                                                       |
+| **`pending`**     | Awaiting the first successful answer or confirmation.                                                                                     |
+| **`admitted`**    | A child holds a place under a concurrency bound; removing it gives up the place.                                                          |
+| **`waiting`**     | A child stepped aside while waiting for its own children; removing it queues the child again.                                             |
 
-- `entity{archetype}` — the row every entity has. `archetype` points at the
-  entity describing its particular set of components
-  ([@yaks/archetype](../archetype)), which maintains it; no client writes it,
-  and the component is declared `wire: false` (excluded from the ordinary
-  component input schema). A graph that wants human-readable ids adds
-  [@yaks/id](../id), whose document adds `num` to this same row.
-- the marks recording what happened to something and who did it — `created`,
-  `updated`, `opened`, `archived`, `resolved`, `verified` — each with `at`, `by`
-  and `via` properties that @yaks/graph stamps rather than a caller. `by` is the
-  entity that wrote it and `via` is what it was written through (a session, a
-  client). `resolved` says the problem an entity records (a bug, a thread, a
-  conflict) stopped happening, which is not `completed`: a problem can stop with
-  no task done. `verified` says somebody checked the entity against what it
-  claims and found it holds; a `cites` edge is one thing that carries it. Only
-  the act of checking writes it, never an edit to the entity.
-- the lifecycle marks, shared by every package whose entities finish, fail or
-  stop working, each with the same stamped `at`, `by` and `via`: `completed`
-  (the work was finished; [@yaks/task](../task) reads a task as done from it),
-  `failed{reason}` (it was tried and given up on) and `broken{code}` (something
-  outside the graph stopped honoring it, `code` being the other side's word for
-  it). A status is computed from which of these an entity wears, never stored.
-  The `kernel()` plugin keeps `completed.by` across later writes of the mark, so
-  saying a thing is done again does not change who finished it.
-- the marks recording what was decided about something — `proposed`, `decided`
-  (with a verdict of `approved` or `declined`), `quarantined` (an annotation for
-  applications to exclude a readable record from guidance), and `redaction`,
-  which records that one property of one entity was replaced, keeping a hash of
-  what was there so a claim about it can still be checked.
-- the things that attach to an entity — `comment{target}`, which points a remark
-  at any entity at all (the text itself is the `doc{body}` on the same entity),
-  `image{w, h}` and `favorite`.
-- nine relation tags: `about`, `cites`, `delegates`, `reads`, `references`,
-  `supersedes`, `supervises`, `wants` and `worked`. A link between two entities
-  is itself an entity, carrying `edge{from, to}` plus one of these tags to say
-  what the link means; see [@yaks/edge](../edge), which reads the `edge` keyword
-  each of them declares. Other packages declare their own — `contains` and
-  `requires` are [@yaks/task](../task)'s, `satisfies` is
-  [@yaks/goal](../goal)'s.
+These declarations record marks; applications implement listing filters,
+concurrency bounds and other behavior associated with them. A status can be
+computed from marks: [@yaks/task](../task/README.md) reads `completed` as done.
 
-A `cites` edge keeps the cited entity's content hash in `cites.hash` when it is
-verified. `content(vocab)` hashes only client-written properties, so server
-stamps do not move it. `status(cite, target, vocab)` answers current, moved,
-unverified or unknown without a journal. `verify(cite, target, vocab)` returns
-the patch that records the hash and `verified` mark. [@yaks/git](../git) answers
-file and symbol citations from the commit and place they name.
+A **`favorite`** records that somebody marked the entity as a favorite. It
+declares stamped `at` but has no `by` or `via`, so the graph does not stamp it
+as a mark.
 
-It also declares one tool, `comment_new`, implemented in `tools.ts`: it writes a
-new entity carrying `doc{body}` and `comment{target}`.
-
-## Who a write is signed as
-
-`created.by` identifies the writer supplied by the application. In the full CLI
-composition, a write that did not arrive through an authenticated HTTP or MCP
-request is signed as the process that made it: the `process` row that run wrote
-about itself on the way in ([@yaks/process](../process)'s `started()`). A
-program that runs twice is two writers — two `yak` commands over one database
-file are two of them — so a name in config could not tell them apart, and a
-process entity can.
-
-## Human ids are not here
-
-People type `T-37580`, and nothing about that is this package's: the number, the
-letter, the allocator and the resolver are all [@yaks/id](../id)'s, and a graph
-that never loads it has no numbers to show. This package declares the row they
-are kept in and nothing more.
-
-## The keywords
-
-A vocabulary can be extended with custom JSON Schema keywords. This package adds
-three that the core meta-model does not cover, registered by passing
-`kernelKeywords` to `loadVocab(docs, [kernelKeywords])`:
-
-| keyword    | declared on | meaning                                                                                                     |
-| ---------- | ----------- | ----------------------------------------------------------------------------------------------------------- |
-| `governed` | a component | a project answers for entities carrying it — what a project's reach is computed over                        |
-| `lazy`     | a component | its rows are not included in the snapshot a client loads at startup; a reader asks for them by partition    |
-| `well`     | a property  | the name of a list of suggested values, offered for completion beside the values the property already holds |
-
-## Entry points
-
-`deno.json` names four, and a program imports only the ones it needs:
-
-- `@yaks/kernel` — `kernelDoc`, the `spineDoc` and `marksDoc` subsets,
-  `kernelKeywords`, `KERNEL_URI`, the `kernel()` plugin, and the citation
-  content, status and verify functions. It does not re-export the tool factory.
-- `@yaks/kernel/vocab` — the vocabulary documents and keywords, and nothing
-  else. It reaches no storage, no SQL and no runtime API, so a browser tab can
-  load it on its own.
-- `@yaks/kernel/rules` — `rules()`, the `kernel()` plugin in an array.
-- `@yaks/kernel/tools` — the implementation of `comment_new`.
-
-## Example
+## Use
 
 ```ts
-import { kernelDoc, kernelKeywords } from '@yaks/kernel'
-import { loadVocab } from '@yaks/vocab'
+import { kernel, kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
 
-const vocab = loadVocab([kernelDoc], [kernelKeywords])
-const g = graph({ vocab, storage: ram(vocab) })
-await g.apply([{ entity: { eid: 'example' }, favorite: {} }])
-console.log(await g.read('.favorite'))
+let vocab = loadVocab([kernelDoc], [kernelKeywords])
+let g = graph({ vocab, storage: ram(vocab), plugins: [kernel()] })
+await g.apply([{ entity: { eid: 'work' }, completed: {}, favorite: {} }])
+let [work] = await g.read('.completed&*')
+equal(work.entity.eid, 'work')
+equal(typeof work.completed?.at, 'string')
+equal(work.favorite, {})
 ```
 
-Add [@yaks/id](../id) when entities should have numbers and `B-7` ids. Load
-[@yaks/doc](../doc) and the `./tools` factory as well to use `comment_new`. This
-package does not provide persistence: the example stores records in RAM.
+## Exports
 
-## Compatibility
+| Import               | Exports                                                                                                                                 |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/kernel`       | `kernelDoc`, `spineDoc`, `marksDoc`, `kernelKeywords`, `KERNEL_URI`, `kernel()`, `CITES`, `content()`, `status()`, `verify()`, `Status` |
+| `@yaks/kernel/vocab` | The vocabulary documents, `kernelKeywords`, `docs`, `keywords`, `description`                                                           |
+| `@yaks/kernel/rules` | `rules()`, returning `[kernel()]`                                                                                                       |
+| `@yaks/kernel/tools` | `runs()`, returning the `comment_new` implementation                                                                                    |
 
-Deno, Node and browsers. The declarations and helpers use no platform APIs.
+## Vocabulary documents
+
+`kernelDoc` declares all this package's components and its comment tool.
+`spineDoc` selects `entity`, `created` and `updated`; `marksDoc` selects
+`opened` and `archived`. Load the subsets when the other declarations are
+unnecessary. `docs` contains `kernelDoc`, `keywords` contains `kernelKeywords`,
+and `description` is the manifest's summary. The `./vocab` entry point imports
+no storage or runtime API.
+
+```ts
+import { marksDoc, spineDoc } from '@yaks/kernel/vocab'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+let vocab = loadVocab([spineDoc, marksDoc])
+let g = graph({ vocab, storage: ram(vocab) })
+await g.apply([{ entity: { eid: 'note' }, opened: {}, archived: {} }])
+let [note] = await g.read('.archived&*')
+equal(note.entity.eid, 'note')
+equal(typeof note.opened?.at, 'string')
+equal(typeof note.created?.at, 'string')
+```
+
+The `entity` declaration adds `archetype` to the identity component.
+[@yaks/archetype](../archetype/README.md) maintains it; callers do not write it.
+The component has `wire: false`, excluding it from ordinary component input.
+[@yaks/id](../id/README.md) adds `num`, allocates numbers, formats human ids and
+resolves them.
+
+### Completion
+
+`kernel()` preserves `completed.by` across later writes of `completed`. Its
+precondition hook runs before stamping. On the first completion it uses the
+incoming `by`, if supplied by trusted server code, or the change's actor; on
+later writes it keeps the stored `by`. Removing `completed` permits a subsequent
+completion to name another writer. `rules()` installs the same plugin.
+
+```ts
+import { kernelDoc } from '@yaks/kernel'
+import { rules } from '@yaks/kernel/rules'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+let vocab = loadVocab([kernelDoc])
+let g = graph({ vocab, storage: ram(vocab), plugins: rules() })
+await g.apply([
+  { entity: { eid: 'alice' }, favorite: {} },
+  { entity: { eid: 'bob' }, favorite: {} },
+  { entity: { eid: 'work' }, completed: {}, $actor: { by: 'alice' } },
+])
+await g.apply([
+  { entity: { eid: 'work' }, completed: {}, $actor: { by: 'bob' } },
+])
+let [work] = await g.read('.completed&*')
+equal(work.completed?.by, 'alice')
+```
+
+### Other components and relations
+
+A **`comment`** attaches text to an entity through `target`, with optional
+`reply_to` naming the comment it answers. [@yaks/doc](../doc/README.md) owns the
+`doc` component holding the text. A **`image`** records pixel dimensions as `w`
+and `h`. A **`redaction`** records a replaced `title` or `body` property with
+`target`, `prop` and a hash of the replaced content; its properties are stamped
+and must be supplied by trusted server code.
+
+The package declares [relations](../edge/README.md) with these component names:
+**`about`** says the source is about the target; **`delegates`** says the source
+handed work to the target; **`reads`** says the source reads the target;
+**`references`** says the source refers to the target; **`supersedes`** says the
+source replaces the target; **`supervises`** says the source oversees the
+target; **`wants`** says the source wants the target; **`worked`** says the
+source worked on the target. The query name is the component name except for
+`references`, whose query name is `referenced`.
+
+Add [@yaks/edge](../edge/README.md) for the `edge` component and link behavior.
+Other packages own relations such as [@yaks/task](../task/README.md)'s
+`contains` and `requires` and [@yaks/goal](../goal/README.md)'s `satisfies`.
+
+```ts
+import { kernelDoc } from '@yaks/kernel'
+import { edgeDoc, edgeKeywords } from '@yaks/edge'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+let vocab = loadVocab([kernelDoc, edgeDoc], [edgeKeywords])
+let g = graph({ vocab, storage: ram(vocab) })
+await g.apply([
+  { entity: { eid: 'picture' }, image: { w: 640, h: 480 } },
+  { entity: { eid: 'subject' }, favorite: {} },
+  {
+    entity: { eid: 'relation' },
+    edge: { from: 'picture', to: 'subject' },
+    about: {},
+  },
+])
+let [relation] = await g.read('.about&*')
+equal(relation.edge?.to, 'subject')
+await g.apply([{
+  entity: { eid: 'replacement' },
+  redaction: {
+    target: 'picture',
+    prop: 'body',
+    hash: 'digest-of-replaced-text',
+  },
+}], { trusted: true })
+let [replacement] = await g.read('.redaction&*')
+equal(replacement.redaction?.prop, 'body')
+```
+
+## Citations
+
+A **citation** is a link carrying `cites`, whose `hash` records the cited
+entity's content when verified. `CITES` is the component name, `'cites'`.
+`content(vocab)` hashes client-written properties in a fixed order, excluding
+server stamps. `verify(cite, target, vocab)` returns a patch containing the hash
+and `verified` mark; it refuses a deleted target. Apply that patch to store it.
+
+`status(cite, target, vocab)` returns `current` when the hash matches, `moved`
+when the content changed or the target was deleted, `unverified` without a
+`verified` mark, or `unknown` when a verified citation has no hash.
+
+```ts
+import { content, kernelDoc, status, verify } from '@yaks/kernel'
+import { docDoc } from '@yaks/doc'
+import { edgeDoc, edgeKeywords } from '@yaks/edge'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+let vocab = loadVocab([kernelDoc, docDoc, edgeDoc], [edgeKeywords])
+let target = { entity: { eid: 'note' }, doc: { body: 'oak' } }
+let cite = {
+  entity: { eid: 'citation' },
+  edge: { from: 'claim', to: 'note' },
+  cites: {},
+}
+equal(status(cite, target, vocab), { state: 'unverified' })
+let checked = verify(cite, target, vocab)
+equal(status(checked, target, vocab), { state: 'current' })
+equal(
+  content(vocab)({ ...target, updated: { at: '2026-01-01T00:00:00Z' } }),
+  content(vocab)(target),
+)
+equal(status(checked, { ...target, doc: { body: 'ash' } }, vocab), {
+  state: 'moved',
+})
+equal(status({ ...cite, verified: {} }, target, vocab).state, 'unknown')
+```
+
+[@yaks/git](../git/README.md) answers file and symbol citations from the commit
+and place they name.
+
+## Comment tool
+
+`runs()` implements `comment_new`, returning a patch with `doc.body` and
+`comment.target`, plus `comment.reply_to` when supplied. The tool runner applies
+the patch as the caller; the implementation itself writes nothing. Load the
+kernel and doc vocabulary documents before applying its result.
+
+```ts
+import { kernelDoc } from '@yaks/kernel'
+import { runs } from '@yaks/kernel/tools'
+import { docDoc } from '@yaks/doc'
+import { graph } from '@yaks/graph'
+import { loadTools } from '@yaks/graph/tools'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+let vocab = loadVocab([kernelDoc, docDoc])
+let g = graph({ vocab, storage: ram(vocab) })
+await g.apply([{ entity: { eid: 'work' }, favorite: {} }])
+let [tool] = loadTools(kernelDoc, runs())
+let patches = await tool.run({
+  entity: { eid: 'call' },
+  call: { args: { target: 'work', body: 'Looks good.' } },
+}, g)
+await g.apply(patches)
+let [comment] = await g.read('.comment&*')
+equal(comment.comment?.target, 'work')
+equal(comment.doc?.body, 'Looks good.')
+```
+
+## Kernel keywords
+
+The package registers three custom
+[JSON Schema keywords](../vocab/README.md#extension-keywords): **`governed`**
+says a project answers for entities carrying the component; **`lazy`** excludes
+a component from the client's startup snapshot, so readers request it by
+partition; **`well`** names a list of suggested values for a property. This
+package retains these declarations; consumers implement their behavior.
+
+Register `kernelKeywords` when loading documents that use these keywords, and
+use `KERNEL_URI` in their `$vocabulary` declaration.
+
+```ts
+import { KERNEL_URI, kernelKeywords } from '@yaks/kernel'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+let vocab = loadVocab([{
+  $vocabulary: { 'https://yak.sh/vocab/core': true, [KERNEL_URI]: true },
+  $defs: {
+    note: {
+      component: true,
+      type: 'object',
+      governed: true,
+      lazy: true,
+      properties: { state: { type: 'string', well: 'states' } },
+    },
+  },
+}], [kernelKeywords])
+equal(vocab.comp('note')?.keywords.governed, true)
+equal(vocab.comp('note')?.keywords.lazy, true)
+equal(vocab.prop('note', 'state')?.keywords.well, 'states')
+```
+
+## Limits
+
+The declarations and pure helpers use no platform APIs and work in Deno, Node
+and browsers. This package provides no persistence; choose a
+[storage adapter](../graph/README.md#data-model), such as
+[@yaks/ram](../ram/README.md) for memory. Human ids belong to @yaks/id,
+archetype maintenance to @yaks/archetype, and text to @yaks/doc.
