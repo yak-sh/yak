@@ -125,16 +125,19 @@ export let aimOf = <M extends Mark>(
   chosen = '',
 ): M | null => {
   let explicit = mobs.find((m) => m.eid == chosen && !m.down)
-  if (explicit && [0, ...acts.filter(aims).map(farOf)]
-    .some((far) => explicit.near <= reach(kit, far, explicit))) return explicit
+  if (
+    explicit && [0, ...acts.filter(aims).map(farOf)]
+      .some((far) => explicit.near <= reach(kit, far, explicit))
+  ) return explicit
   let before = mobs.filter((m) => !m.down && (point || off(me, m) <= TURN))
   let fars = [0, ...acts.filter(aims).map(farOf)].sort((a, b) => a - b)
   let far = fars.find((f) => before.some((m) => m.near <= reach(kit, f, m)))
   if (far == null) return null
   let can = before.filter((m) => m.near <= reach(kit, far, m))
-  let score = (m: M) => point
-    ? Math.hypot(m.body.x - point.x, m.body.z - point.z) + m.near * 0.15
-    : m.near
+  let score = (m: M) =>
+    point
+      ? Math.hypot(m.body.x - point.x, m.body.z - point.z) + m.near * 0.15
+      : m.near
   let best = can.reduce((a, b) => score(a) < score(b) ? a : b)
   let was = can.find((m) => m.eid == held)
   return was && score(best) >= score(was) * HOLD ? was : best

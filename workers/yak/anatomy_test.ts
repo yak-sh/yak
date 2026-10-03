@@ -16,6 +16,7 @@ let words = loadVocab([{
 
 let tool: NamedTool = {
   name: 'note_list',
+  description: 'List notes',
   inputSchema: { type: 'object', properties: {} },
   run: () => [],
 }
@@ -31,8 +32,9 @@ test('worker anatomy is per-store composition, not a native or connector roster'
       },
     },
     hooks: {
-      admit: () => {
+      admit: (bundles) => {
         count++
+        return bundles
       },
     },
   }
@@ -46,7 +48,10 @@ test('worker anatomy is per-store composition, not a native or connector roster'
       produce: { note: { text: 'not serialized' } },
     }],
   }])
-  directory.graph([{ name: 'directory', hooks: { commit: () => {} } }], [])
+  directory.graph([{
+    name: 'directory',
+    hooks: { commit: (bundles) => bundles },
+  }], [])
   app.commands({
     note_list: {
       description: 'List notes',

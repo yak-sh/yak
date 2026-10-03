@@ -243,8 +243,8 @@ A provider refusal is recorded as `refusal{code}` with its
 `response{body, headers}` beside it. A retryable request wears
 `interrupted{code}` and `provisional{note}` while the effects pool still owes
 another try. The pool gives it eight tries with backoff, resetting the tries
-when a reply makes progress. A request not retried wears `failed{reason}`;
-new input permits recovery without replaying completed tool operations.
+when a reply makes progress. A request not retried wears `failed{reason}`; new
+input permits recovery without replaying completed tool operations.
 
 An entry wearing `questions{asked}` (typed questions in Jev's terms, by name;
 @yaks/model `Questions`) asks them with the next turn: the runner sends them as

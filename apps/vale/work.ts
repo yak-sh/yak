@@ -477,15 +477,16 @@ export let working = (
         (b) => ({ x: b.at[0], z: b.at[2] }),
         (b) => b.near,
       )
-      let board: Reading | null = (as ? [] : boardsNear(v, f.body.x, f.body.z, READ)).flatMap(
-        (b): Reading[] =>
-          Math.abs(b.at[1] - f.body.y) < 2
-            ? [{
-              ...b,
-              near: Math.hypot(b.at[0] - f.body.x, b.at[2] - f.body.z),
-            }]
-            : [],
-      ).sort((a, b) => a.near - b.near)[0] ?? null
+      let board: Reading | null =
+        (as ? [] : boardsNear(v, f.body.x, f.body.z, READ)).flatMap(
+          (b): Reading[] =>
+            Math.abs(b.at[1] - f.body.y) < 2
+              ? [{
+                ...b,
+                near: Math.hypot(b.at[0] - f.body.x, b.at[2] - f.body.z),
+              }]
+              : [],
+        ).sort((a, b) => a.near - b.near)[0] ?? null
 
       if (!as) {
         let target = interaction({

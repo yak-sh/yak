@@ -22,7 +22,10 @@ import {
 let component = (b: Bundle, name: string): Comp | undefined =>
   typeof b[name] == 'object' && b[name] != null ? b[name] as Comp : undefined
 
-export let executionState = (call: Bundle, answers: readonly Bundle[] = []) => {
+export let executionState = (
+  call: Bundle,
+  answers: readonly Bundle[] = [],
+): 'interrupted' | 'failed' | 'done' | 'running' | null => {
   if (!call.execution) return null
   if (call.interrupted) return 'interrupted'
   let own = answers.filter((b) =>

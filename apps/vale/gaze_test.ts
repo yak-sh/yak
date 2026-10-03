@@ -1,5 +1,5 @@
 // A hero looks at the selected creature before the mouse, without body turns.
-import { test, equal } from '@yaks/testing'
+import { equal, test } from '@yaks/testing'
 import { focus, neck } from './gaze.ts'
 
 test('mouse gaze eases within the neck limits without turning the body', () => {

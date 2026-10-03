@@ -22,7 +22,7 @@ let scratch = async (
 }
 
 let json = JSON.stringify
-let workspace = () => ({
+let workspace = (): Record<string, string> => ({
   'deno.json': json({
     workspace: ['./packages/a', './packages/b', './apps/demo'],
     imports: { preact: 'npm:preact@^10.29.1' },

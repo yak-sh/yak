@@ -30,14 +30,17 @@ export type Reader = {
 // What an inbox item is ABOUT — a subscription is aimed at the task or
 // the venture, never at the individual letter, so this is the eid the
 // watch/mute sets are asked about.
-export let aboutOf = (r: Row) =>
+export let aboutOf = (r: Row): string =>
   String(
     r.comps.comment?.target ?? r.comps.signal?.target ??
       r.comps.mail?.target ?? r.comps.knock?.target ?? '',
   )
 
 // Every entity this actor has said something about, split by mode.
-export let subsOf = (all: Row[], actor?: string) => {
+export let subsOf = (all: Row[], actor?: string): {
+  watching: Set<string>
+  muting: Set<string>
+} => {
   let watching = new Set<string>(), muting = new Set<string>()
   if (actor) {
     for (let r of all) {

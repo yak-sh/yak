@@ -1,4 +1,3 @@
-/// <reference lib="deno.ns" />
 // One immutable, explicitly scoped skill snapshot per MCP server. Resource
 // reads discover bytes; only an explicit prompt retrieval loads instructions.
 import {

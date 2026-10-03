@@ -75,7 +75,11 @@ let unobserved = (): Anatomy => ({
   edges: [],
 })
 
-export let bounded = (n: number | undefined, fallback: number, max: number) =>
+export let bounded = (
+  n: number | undefined,
+  fallback: number,
+  max: number,
+): number =>
   Math.min(max, Math.max(1, Math.floor(Number.isFinite(n) ? n! : fallback)))
 
 export let snapshot = (host: Supplier): Snapshot => {

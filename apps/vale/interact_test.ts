@@ -7,18 +7,19 @@ import {
   prompted,
   workTarget,
 } from './interact.ts'
-import type { Frame } from './play.ts'
-import type { Job } from './work.ts'
+type Friendly = Parameters<typeof interaction>[0]
+type Targets = Parameters<typeof interaction>[1]
 
 test('E acts on the node offering it even beside another hero', () => {
-  let f = { talk: { id: 'villager' }, peer: { eid: 'peer' } } as Pick<
-    Frame,
-    'talk' | 'peer'
-  >
-  let job = { near: { eid: 'tree' }, bench: null, board: null } as Pick<
-    Job,
-    'near' | 'bench' | 'board'
-  >
+  let f: Friendly = {
+    talk: { id: 'villager', x: 1, y: 0, z: 0, near: 1 },
+    peer: { eid: 'peer', body: { x: 0, y: 0, z: 2 } },
+  }
+  let job: Targets = {
+    near: { eid: 'tree', at: [0, 0, 1], near: 1 },
+    bench: null,
+    board: null,
+  }
   equal(interaction(f, job), 'node')
   equal(workTarget(interaction(f, job)), true)
   job.near = null
@@ -29,23 +30,17 @@ test('E acts on the node offering it even beside another hero', () => {
 
 test('pointed and clicked friendly targets own both the prompt and E', () => {
   let at = (x: number, z: number) => ({ x, y: 0, z })
-  let f = {
+  let f: Friendly = {
     talk: { id: 'villager', ...at(1, 0), near: 1 },
     peer: { eid: 'peer', body: at(0, 2) },
     point: at(0, 2),
     friendly: '',
-  } as Pick<
-    Frame,
-    'talk' | 'peer' | 'point' | 'friendly'
-  >
-  let job = {
+  }
+  let job: Targets = {
     near: { eid: 'tree', at: [0, 0, 1], near: 1 },
-    bench: { craft: 'smith', at: [2, 0, 0], near: 2 },
+    bench: { craft: 'forge', at: [2, 0, 0], near: 2 },
     board: null,
-  } as Pick<
-    Job,
-    'near' | 'bench' | 'board'
-  >
+  }
   equal(interaction(f, job), 'peer')
   equal(workTarget(interaction(f, job)), false)
   f.point = at(2, 0)
@@ -83,7 +78,7 @@ test('only the selected interaction keeps a prompt', () => {
     bench: { craft: 'forge' },
     board: { id: 'board' },
     doing: { k: 0.5 },
-  } as unknown as Job
+  }
   let peer = prompted(job, 'peer')
   equal([peer.near, peer.bench, peer.board], [null, null, null])
   equal(peer.doing, job.doing)

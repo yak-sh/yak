@@ -34,7 +34,7 @@ export let inboxAt = async (
   tx: Pick<Tx, 'get' | 'read'>,
   vocab: Vocab,
   who: string,
-) => {
+): Promise<Thread[]> => {
   let has = words(vocab)
   let person = rows(await tx.get([who]))
   let subs = has('subscription')
@@ -186,7 +186,7 @@ export let queue = async (
   vocab: Vocab,
   options: Inbox,
   write: (change: Bundle[]) => unknown,
-  now = new Date().toISOString(),
+  now: string = new Date().toISOString(),
   daily = false,
 ): Promise<void> => {
   let inbox = await inboxAt(tx, vocab, options.person)

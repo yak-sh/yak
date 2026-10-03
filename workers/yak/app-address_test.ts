@@ -30,7 +30,10 @@ test('app selector resolves commandless apps for owners and members, not strange
       await (await ask(`${space}/empty`, { cookie: member.cookie })).json(),
       expected,
     )
-    for (let headers of [{}, { authorization: 'Bearer invalid' }]) {
+    let invalid: Record<string, string>[] = [{}, {
+      authorization: 'Bearer invalid',
+    }]
+    for (let headers of invalid) {
       let denied = await ask(`${space}/empty`, headers)
       assertEquals(denied.status, 401)
       assertEquals((await denied.json()).error.code, 'sign_in')

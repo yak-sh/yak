@@ -125,9 +125,15 @@ let quit = async (g: Graph, session: Eid, entries: Bundle[]) => {
 let ended = async (g: Graph, session: Eid, r: Runner) => {
   if (g.vocab.comp('provisional')) {
     let owed = await g.read(`.entry.session=${session}&.ask&.provisional`)
-    if (owed.length) await g.apply(owed.map((b) => ({
-      entity: b.entity, provisional: null,
-    })), { trusted: true })
+    if (owed.length) {
+      await g.apply(
+        owed.map((b) => ({
+          entity: b.entity,
+          provisional: null,
+        })),
+        { trusted: true },
+      )
+    }
   }
   let self = await one(g, session)
   let d = comp(self, 'dispatch')

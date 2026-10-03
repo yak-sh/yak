@@ -45,6 +45,18 @@
   --ink: var(--negative);
 }
 /* Ledger: a crisp printed label, with a lifted rule rather than a soft chip. */
-.Button { border-radius: 0; border-width: 1px 1px 3px; font-family: var(--mono); font-weight: 600; background: var(--card); }
-.Button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.Button-quiet { border-color: transparent; background: none; }
+.Button {
+  border-radius: 0;
+  border-width: 1px 1px 3px;
+  font-family: var(--mono);
+  font-weight: 600;
+  background: var(--card);
+}
+.Button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.Button-quiet {
+  border-color: transparent;
+  background: none;
+}

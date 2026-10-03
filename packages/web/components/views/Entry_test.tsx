@@ -170,7 +170,9 @@ test('full and normalized prose identify people and model output', () =>
     render(<MessageFull e={e} />, root)
     assertEquals(root.querySelector('.Entry_Speaker')?.textContent, 'person')
     render(
-      <MessageFull e={{ ...e, output: { source: 'ask', id: 'reply' } }} />,
+      <MessageFull
+        e={{ ...e, output: { eid: 'output', source: 'ask', id: 'reply' } }}
+      />,
       root,
     )
     assertEquals(root.querySelector('.Entry_Speaker')?.textContent, 'model')
@@ -223,9 +225,9 @@ test('checkpoint prose stays folded until its summary opens', () =>
       kind: 'entry',
       refs: [],
       kids: [],
-      entry: { session: 'session', seq: 2 },
-      checkpoint: { through: 'previous' },
-      content: { body: 'checkpoint first\ncheckpoint second' },
+      entry: { eid: 'entry', session: 'session', seq: 2 },
+      checkpoint: { eid: 'checkpoint', through: 'previous' },
+      content: { eid: 'content', body: 'checkpoint first\ncheckpoint second' },
     }
     assertEquals(resolve(e, 'Entry.Summary').Render, CheckpointSummary)
     render(<CheckpointSummary e={e} />, root)

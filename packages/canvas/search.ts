@@ -1,6 +1,9 @@
 // A search link dropped on a canvas becomes a live board there. The link
 // itself carries no board spec: outside the canvas it remains an ordinary URL.
-export let searchBoard = (raw: string, origin: string) => {
+export let searchBoard = (raw: string, origin: string): {
+  doc: { title: string; body: string }
+  board: { query: string }
+} | null => {
   let url: URL
   try {
     url = new URL(raw)

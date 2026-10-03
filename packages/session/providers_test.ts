@@ -33,9 +33,9 @@ test('metadata transport failure does not suppress a model ask', async () => {
   }])
 
   let asks = 0
-  let fake: Model = async (req) => {
+  let fake: Model = (req) => {
     asks++
-    return { id: 'r1', model: req.model, items: [] }
+    return Promise.resolve({ id: 'r1', model: req.model, items: [] })
   }
   fake.list = () => Promise.reject(new TypeError('tls handshake eof'))
   let resolve = providerResolver(g, { fake })

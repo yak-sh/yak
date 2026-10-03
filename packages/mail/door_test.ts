@@ -187,7 +187,7 @@ test('the inbox reader queues a letter, transports via stash, and accepts a veri
   let post = stash()
   let sender = sending({ sender: post })
   await sender(
-    { entity: letter.entity, touched: ['mail'] },
+    { kind: 'created', name: 'mail', entity: letter.entity, touched: ['mail'] },
     detached(g.storage),
     (b) => g.apply(b, { trusted: true }),
   )

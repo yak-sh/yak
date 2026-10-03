@@ -4,7 +4,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, type Comp, graph, identityEid } from '@yaks/graph'
-import { kernelDoc, kernelKeywords, spineDoc } from '@yaks/kernel'
+import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { nameKeywords } from '@yaks/names'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'

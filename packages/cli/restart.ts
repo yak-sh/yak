@@ -1,4 +1,3 @@
-/// <reference lib="deno.ns" />
 // A systemd worker handover: prove a unique candidate ready before queuing
 // retirement of the old workers and the serving process. No shutdown is awaited.
 

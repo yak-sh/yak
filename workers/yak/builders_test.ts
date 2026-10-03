@@ -40,9 +40,11 @@ let app = async (models = 0, access = 'private', chain = false) => {
   })
   let p = platform('a probe secret', {
     AI,
-    MODEL_FETCH: async () =>
-      new Response(
-        '$0.15 per M input tokens, $0.5 per M output tokens',
+    MODEL_FETCH: () =>
+      Promise.resolve(
+        new Response(
+          '$0.15 per M input tokens, $0.5 per M output tokens',
+        ),
       ),
   } as Partial<Env>)
   let dir = directory({ fetch: (r) => dirPart.fetch(r, p.env) }, true)

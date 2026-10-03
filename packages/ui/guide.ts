@@ -43,7 +43,7 @@ export let stopsOf = (c: Composition): string[] => [
     [g, entries],
   ) => [g, ...Object.keys(entries)]),
 ]
-export let stops = stopsOf(composition)
+export let stops: string[] = stopsOf(composition)
 let entries = (c: Composition): Entries => {
   let out: Entries = {}
   for (let group of Object.values(sections(c))) {
@@ -57,7 +57,7 @@ let entries = (c: Composition): Entries => {
   return out
 }
 
-let groupTitle = (name: string) =>
+let groupTitle = (name: string): string =>
   name.startsWith('ui/')
     ? name.slice(3)
     : name.startsWith('ux/')
@@ -93,7 +93,7 @@ export let Specimens = (
 }
 let Group = (
   { name, composition: c = composition }: Dressed & { name: string },
-) =>
+): VNode =>
   h(
     Catalog.Group,
     { id: name },
@@ -124,7 +124,7 @@ export let Guide = ({ composition: c = composition }: Dressed = {}): VNode =>
   )
 export let Page = (
   { stop, composition: c = composition }: Dressed & { stop: string },
-) =>
+): VNode<{ composition: Composition }> | VNode =>
   stop == title ? h(Guide, { composition: c }) : h(
     Catalog,
     {},

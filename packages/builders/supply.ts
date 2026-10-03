@@ -2,13 +2,7 @@
 // answer. Each supply adds a take; its call, zero-dollar answer and choice
 // land together, so no runner work is owed.
 
-import {
-  type Actor,
-  type Bundle,
-  type Comp,
-  type Graph,
-  signed,
-} from '@yaks/graph'
+import { type Actor, type Comp, type Graph, signed } from '@yaks/graph'
 import { CallError } from '@yaks/tools'
 import type { Vocab } from '@yaks/vocab'
 import { outputs } from './answer.ts'

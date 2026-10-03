@@ -70,7 +70,7 @@ test('schema admission keeps an ordered tree through partial writes', async () =
   ) {
     await assertRejects(
       async () =>
-        g.apply([{
+        await g.apply([{
           entity: { eid: 'tree' },
           joints: { nodes: invalid },
         }]),

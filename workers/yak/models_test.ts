@@ -66,9 +66,11 @@ let vale = async (
     'a probe secret',
     {
       AI,
-      MODEL_FETCH: async () =>
-        new Response(
-          'Context Window | 100,000 tokens\nUnit Pricing | $0.15 per M input tokens, $0.5 per M output tokens, $0.03 per M cached input tokens',
+      MODEL_FETCH: () =>
+        Promise.resolve(
+          new Response(
+            'Context Window | 100,000 tokens\nUnit Pricing | $0.15 per M input tokens, $0.5 per M output tokens, $0.03 per M cached input tokens',
+          ),
         ),
       ...env,
     } as Partial<Env>,
@@ -609,10 +611,15 @@ test('raw Workers AI audio debits its tariff once and refuses at the account lim
 
 test('accounting preserves provider continuation metadata and passes requests whole', async () => {
   let v = await vale(() => ({}))
-  let raw: Model = Object.assign(async (req: Parameters<Model>[0]) => {
+  let raw: Model = Object.assign((req: Parameters<Model>[0]) => {
     assertEquals(req.anchor, 'prior')
     req.onText?.({ index: 0, text: 'hello' })
-    return { id: 'reply', model: req.model, items: [], cost: 0 }
+    return Promise.resolve({
+      id: 'reply',
+      model: req.model,
+      items: [],
+      cost: 0,
+    })
   }, {
     mark: () => ({ openrouter: { response_id: 'reply' } }),
     anchor: () => 'prior',
@@ -728,17 +735,19 @@ test('accounted recovery preserves cost and never debits a second time', async (
     throw new Error('No generation')
   })
   let call = crypto.randomUUID()
-  let raw: Model = Object.assign(async () => {
-    throw new Error('No generation')
-  }, {
-    recover: async () => ({
-      id: 'same',
-      model: 'fixture',
-      items: [],
-      cost: 0.45,
-      costReported: true,
-    }),
-  })
+  let raw: Model = Object.assign(
+    () => Promise.reject(new Error('No generation')),
+    {
+      recover: () =>
+        Promise.resolve({
+          id: 'same',
+          model: 'fixture',
+          items: [],
+          cost: 0.45,
+          costReported: true,
+        }),
+    },
+  )
   let model = accounted(v.env, (dir) => dir.space('ada'), raw)
   assertEquals((await model.recover!(call)).cost, 0.45)
   await model.recover!(call)

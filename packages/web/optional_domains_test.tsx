@@ -79,10 +79,10 @@ test('a document-only vocabulary browses without task, session or box-only reads
 test('legacy freeze is not offered or scheduled without a host door', () => {
   let prior = globalThis.setTimeout
   let scheduled = 0
-  globalThis.setTimeout = (() => {
+  globalThis.setTimeout = Object.assign(() => {
     scheduled++
     return 0
-  }) as typeof setTimeout
+  }, prior)
   try {
     let spec = pasted('https://example.com/a')!
     assertEquals(spec.changes.map((c) => c.name), ['web'])

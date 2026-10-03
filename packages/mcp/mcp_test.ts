@@ -737,7 +737,7 @@ test('tool listings publish schemas and preserve old and new command grammar', a
     }],
   })
   try {
-    let tool = (await client.listTools()).tools.find((t) =>
+    let tool = (await client.listTools()).tools.find((t: { name: string }) =>
       t.name == 'note_write'
     )!
     assertEquals(tool.inputSchema.properties, {

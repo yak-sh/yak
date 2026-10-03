@@ -34,7 +34,7 @@ export let resolveTarget = async (
   if (villager) return { eid: eidOf(villager.id) }
   if (eid(input.trim())) return { eid: input.trim().toLowerCase() }
 
-  return namedHero(input, query)
+  return await namedHero(input, query)
 }
 
 let namedHero = async (

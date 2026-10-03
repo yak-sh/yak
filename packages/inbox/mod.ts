@@ -16,6 +16,6 @@ export {
 export type { Direction, Lane, Search, Thread } from './threads.ts'
 
 // Single-row views compare their own activity; inbox doors use threads().
-export let isUnread = (r: Row) =>
+export let isUnread = (r: Row): boolean =>
   !r.comps.opened ||
   (!!r.comps.opened.at && activityAt(r) > String(r.comps.opened.at))

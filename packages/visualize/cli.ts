@@ -136,7 +136,7 @@ export let commands = [{
     args: Record<string, unknown>,
     host: Pick<Host, 'config'>,
     context: Pick<Ctx, 'host' | 'json' | 'state' | 'via' | 'out' | 'note'>,
-  ) => {
+  ): Promise<number> => {
     try {
       let what = args.what ?? 'anatomy'
       if (what != 'anatomy' && what != 'activity') {

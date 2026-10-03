@@ -27,7 +27,7 @@ let tabs = (all: string[], on: string, href: (pick: string) => string) =>
 
 /** The guide's page, using contributions gathered by the page's host. */
 export let page = async (
-  theme = Object.keys(themes)[0],
+  theme: string = Object.keys(themes)[0],
   scheme = 'system',
   skin = 'base',
   contributed: Contributions = base,

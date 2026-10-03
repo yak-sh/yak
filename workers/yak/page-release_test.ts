@@ -7,26 +7,44 @@ let code = await Deno.readTextFile(
 let tick = async () => {
   for (let i = 0; i < 8; i++) await Promise.resolve()
 }
+type Release = { version: number; reload?: string }
+type Frame = { data?: string; persisted?: boolean }
+type Element = {
+  children: Element[]
+  style: Record<string, string>
+  textContent: string
+  setAttribute(): void
+  addEventListener(n: string, fn: () => void): void
+  append(...kids: Element[]): void
+  remove(): void
+  click(): void
+}
+class ReleaseEvent {
+  constructor(
+    public type: string,
+    public options: { detail: Release; cancelable: boolean },
+  ) {}
+}
 let browser = (prevent = false) => {
-  let listeners: Record<string, ((e: any) => void)[]> = {}
-  let ears = (kind: string, fn: (e: any) => void) =>
+  let listeners: Record<string, ((e: Frame) => void)[]> = {}
+  let ears = (kind: string, fn: (e: Frame) => void) =>
     (listeners[kind] ??= []).push(fn)
-  let nodes: any[] = []
-  let events: any[] = []
+  let nodes: Element[] = []
+  let events: ReleaseEvent[] = []
   let asks: string[] = []
   let reloads = 0
   let time = 100000
-  let result: any = { version: 2, reload: 'optional' }
-  let storage = new Map()
-  let node = () => {
+  let result: Release = { version: 2, reload: 'optional' }
+  let storage = new Map<string, string>()
+  let node = (): Element => {
     let clicks: Record<string, () => void> = {}
     return {
-      children: [] as any[],
+      children: [],
       style: {},
       textContent: '',
       setAttribute() {},
       addEventListener: (n: string, fn: () => void) => clicks[n] = fn,
-      append(...kids: any[]) {
+      append(...kids: Element[]) {
         this.children.push(...kids)
       },
       remove() {
@@ -37,12 +55,12 @@ let browser = (prevent = false) => {
   }
   class Socket {
     static OPEN = 1
-    callbacks: Record<string, (e?: any) => void> = {}
+    callbacks: Record<string, (e?: Frame) => void> = {}
     constructor(public url: string) {}
-    addEventListener(n: string, fn: (e?: any) => void) {
+    addEventListener(n: string, fn: (e?: Frame) => void) {
       this.callbacks[n] = fn
     }
-    fire(n: string, e?: any) {
+    fire(n: string, e?: Frame) {
       this.callbacks[n]?.(e)
     }
   }
@@ -52,11 +70,11 @@ let browser = (prevent = false) => {
       dataset: { version: '1' },
     },
     visibilityState: 'visible',
-    body: { prepend: (n: any) => nodes.unshift(n) },
+    body: { prepend: (n: Element) => nodes.unshift(n) },
     createElement: node,
     addEventListener: ears,
   }
-  let world: any = {
+  let world = {
     document,
     URL,
     Number,
@@ -78,16 +96,14 @@ let browser = (prevent = false) => {
       asks.push(String(url))
       return Promise.resolve({ ok: true, json: () => Promise.resolve(result) })
     },
-    CustomEvent: class {
-      constructor(public type: string, public options: any) {}
-    },
-    dispatchEvent: (e: any) => {
+    CustomEvent: ReleaseEvent,
+    dispatchEvent: (e: ReleaseEvent) => {
       events.push(e)
       return !prevent
     },
     addEventListener: ears,
   }
-  world.globalThis = world
+  Object.assign(world, { globalThis: world })
   new Function('world', `with (world) { ${code} }`)(world)
   return {
     world,
@@ -95,7 +111,7 @@ let browser = (prevent = false) => {
     asks,
     nodes,
     events,
-    result: (r: any) => result = r,
+    result: (r: Release) => result = r,
     time: (n: number) => time = n,
     fire: (n: string, e = {}) => listeners[n]?.forEach((fn) => fn(e)),
     reloads: () => reloads,

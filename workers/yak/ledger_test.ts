@@ -21,7 +21,7 @@ test('the ledger forwards an app-addressed content-only patch', async () => {
   let sent: Bundle[] = []
   let door = ledger({
     ...host,
-    apply: async (batch, opts) => {
+    apply: (batch, opts) => {
       sent = batch
       return host.apply(batch.map(({ $app: _, ...rest }) => rest), opts)
     },

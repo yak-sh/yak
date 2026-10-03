@@ -47,9 +47,10 @@ test('hosted provider, model and native input override keeps supplied main outpu
   let ctx = {
     person,
     dir: {
-      space: async () => ({ eid: 'space', slug: 'fixture' }),
-      role: async () => 'owner',
-      app: async () => ({ eid: 'app', slug: 'music', access: 'private' }),
+      space: () => Promise.resolve({ eid: 'space', slug: 'fixture' }),
+      role: () => Promise.resolve('owner'),
+      app: () =>
+        Promise.resolve({ eid: 'app', slug: 'music', access: 'private' }),
     },
     env: {
       STORE: {

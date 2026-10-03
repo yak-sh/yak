@@ -59,5 +59,12 @@ a.Head_Title:hover,
   color: var(--border2);
 }
 /* Ledger: a ruled heading, set like the title of a printed record. */
-.Head_Title { font-family: var(--mono); letter-spacing: 0.04em; color: var(--heading); }
-.Head_Facts { border-top: 1px dashed var(--border2); padding-top: var(--half-gap); }
+.Head_Title {
+  font-family: var(--mono);
+  letter-spacing: 0.04em;
+  color: var(--heading);
+}
+.Head_Facts {
+  border-top: 1px dashed var(--border2);
+  padding-top: var(--half-gap);
+}

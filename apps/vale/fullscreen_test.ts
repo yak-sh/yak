@@ -5,7 +5,7 @@ import { parseHTML } from 'linkedom'
 import { fullscreen } from './ui/fullscreen.ts'
 
 test('full screen is offered only where supported', () => {
-  let { document, window } = parseHTML('<html><body></body></html>')
+  let { document } = parseHTML('<html><body></body></html>')
   assertEquals(fullscreen(document, () => {}), null)
 })
 
@@ -48,7 +48,7 @@ test('full screen enters, exits, and follows browser Escape', async () => {
 })
 
 test('a refused full-screen request is reported and can be retried', async () => {
-  let { document, window } = parseHTML('<html><body></body></html>')
+  let { document } = parseHTML('<html><body></body></html>')
   Object.assign(document, { fullscreenEnabled: true })
   let error = new Error('refused'), reported: unknown
   document.documentElement.requestFullscreen = () => Promise.reject(error)

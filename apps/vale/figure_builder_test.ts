@@ -71,12 +71,12 @@ test('figure admission refuses malformed, unsafe and cyclic geometry', async () 
       },
     ]
   ) {
-    await assertRejects(async () => put(patch), Error, 'figure.')
+    await assertRejects(async () => await put(patch), Error, 'figure.')
   }
   assertEquals((await g.get([eid]))[0].figure, source)
   await assertRejects(
     async () =>
-      g.apply([{
+      await g.apply([{
         entity: { eid: crypto.randomUUID() },
         figure: { of: source.of },
       }]),

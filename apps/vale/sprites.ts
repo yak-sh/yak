@@ -77,7 +77,8 @@ export let refreshSprites = () => {
 export let sprite = (kind: string): string => {
   let item = ITEMS[kind]
   return typeof document != 'undefined' && item?.look.length
-    ? start(kind, item).url ?? '' : ''
+    ? start(kind, item).url ?? ''
+    : ''
 }
 
 /** A kind's picture as HTML, sized by the text around it (ui/Sprite.css). */

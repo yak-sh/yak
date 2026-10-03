@@ -86,7 +86,7 @@ export class TElement extends TNode {
   set value(text: string) {
     this.setAttribute('value', text)
   }
-  get ownerDocument() {
+  get ownerDocument(): typeof doc {
     return doc
   }
   focus() {

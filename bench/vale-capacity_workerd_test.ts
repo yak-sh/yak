@@ -243,7 +243,7 @@ test('populated socket capacity', async () => {
         }))
       }
     }
-    let summary = async (
+    let summary = (
       phase: string,
       from: number,
       sent: number,
@@ -275,7 +275,7 @@ test('populated socket capacity', async () => {
     let base = counters(), from = performance.now()
     move(0)
     await wait(expected, from)
-    await summary('first_position', from, clients, base)
+    summary('first_position', from, clients, base)
     await new Promise((done) => setTimeout(done, 250))
     delivered.clear()
     arrivals.clear()
@@ -310,7 +310,7 @@ test('populated socket capacity', async () => {
       await new Promise((done) => setTimeout(done, 150))
     }
     await wait(expected, from)
-    await summary('continuous_and_actions', from, clients * ticks, base)
+    summary('continuous_and_actions', from, clients * ticks, base)
     if (
       delivered.size != expected || actions.size - 3 != clients * 3 || errors ||
       socketFaults

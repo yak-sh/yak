@@ -4,6 +4,19 @@ import type { Point } from './aim.ts'
 import type { Frame } from './play.ts'
 import type { Job } from './work.ts'
 
+type Targets = {
+  near: Pick<NonNullable<Job['near']>, 'eid' | 'at' | 'near'> | null
+  bench: Job['bench']
+  board: Pick<NonNullable<Job['board']>, 'at' | 'near'> | null
+}
+type Friendly = Pick<Frame, 'point' | 'friendly'> & {
+  talk: Pick<NonNullable<Frame['talk']>, 'id' | 'x' | 'y' | 'z' | 'near'> | null
+  peer: {
+    eid: string
+    body: { x: number; y: number; z: number }
+  } | null
+}
+
 export let friendlyKey = (kind: string, at: number[]) =>
   `${kind}/${at.join('/')}`
 
@@ -29,8 +42,8 @@ export let nearby = <T>(
 }
 
 export let interaction = (
-  f: Pick<Frame, 'talk' | 'peer' | 'point' | 'friendly'>,
-  job: Pick<Job, 'near' | 'bench' | 'board'>,
+  f: Friendly,
+  job: Targets,
 ): 'node' | 'bench' | 'board' | 'talk' | 'peer' | null => {
   if (!f.point && !f.friendly) {
     return job.near
@@ -106,10 +119,12 @@ export let workTarget = (target: ReturnType<typeof interaction>) =>
   target == 'node' || target == 'bench' || target == 'board'
 
 /** Only the chosen target may offer an interaction prompt this frame. */
-export let prompted = <T extends Pick<Job, 'near' | 'bench' | 'board'>>(
+export let prompted = <
+  T extends { near: unknown; bench: unknown; board: unknown },
+>(
   job: T,
   target: ReturnType<typeof interaction>,
-): T => ({
+): Omit<T, keyof Targets> & { [K in keyof Targets]: T[K] | null } => ({
   ...job,
   near: target == 'node' ? job.near : null,
   bench: target == 'bench' ? job.bench : null,

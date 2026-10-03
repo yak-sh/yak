@@ -32,7 +32,7 @@ export let character = (tab: Page, acts: Acts) => {
     `<div class=Character_Who></div></div></section>` +
     `<section class=Character aria-label=Appearance>` +
     `<h3 class=Pack_Head>Your look</h3><form class=Make></form>` +
-    `</section></div>`;
+    `</section></div>`
   let face = box.querySelector<HTMLCanvasElement>('.Character_Face')!
   let who = box.querySelector<HTMLElement>('.Character_Who')!
   let form = box.querySelector<HTMLFormElement>('.Make')!

@@ -82,7 +82,7 @@ test('later sightings keep a tab’s teleport acknowledgment', () => {
 })
 
 test('a hero returning on another device keeps their saved frontier land', () => {
-  let row: Bundle = {
+  let row = {
     entity: { eid: 'frontier-hero' },
     seen: {
       level: 'frontier_5_0',
@@ -91,7 +91,7 @@ test('a hero returning on another device keeps their saved frontier land', () =>
       yaw: 1,
       at: '2026-10-02T03:58:54.076Z',
     },
-  }
+  } satisfies Bundle
   let expected = {
     level: 'frontier_5_0',
     x: 1408,

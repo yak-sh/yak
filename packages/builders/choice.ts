@@ -3,7 +3,6 @@
 
 import {
   type Actor,
-  type Bundle,
   type Comp,
   type Graph,
   type Hook,

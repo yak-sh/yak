@@ -13,7 +13,6 @@ import {
   trayLive,
   trayOpen,
   traySessions,
-  trayShown,
 } from './Tray.tsx'
 import { graphStanding } from './session_status.tsx'
 

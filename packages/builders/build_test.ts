@@ -8,7 +8,7 @@ import {
 } from '@std/assert'
 import type { Bundle, Comp, Graph, Tool } from '@yaks/graph'
 import { Refused } from '@yaks/graph'
-import { keyed, keyEid, unkeyed } from '@yaks/key'
+import { keyed } from '@yaks/key'
 import type { Vocab } from '@yaks/vocab'
 import { edgeEid } from '@yaks/edge'
 import { CallError, toolEid } from '@yaks/tools'
@@ -1251,7 +1251,7 @@ test('rerolls retain takes, choose newest, allow earlier choice and survive repl
   assertEquals(comp(await one(g, next), 'doc'), comp(saved, 'doc'))
   await assertRejects(
     async () =>
-      g.apply([
+      await g.apply([
         { entity: { eid: first }, chosen: {} },
         { entity: { eid: next }, chosen: {} },
       ], { trusted: true }),

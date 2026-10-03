@@ -365,7 +365,9 @@ export let journal = (panel: Page, acts: Acts) => {
   let task = (t: Task, here: string) => {
     let tracked = t.state == 'taken' || t.pinned
     let pin: Glyph = t.pinned ? 'pin' : 'pinOff'
-    return `<article class=Journal_Task><header class=Journal_Top><b class=Journal_Title>${esc(t.title)}</b>${
+    return `<article class=Journal_Task><header class=Journal_Top><b class=Journal_Title>${
+      esc(t.title)
+    }</b>${
       tracked
         ? `<button class="Orb Orb-small Journal_Pin" data-pin="${
           esc(t.id)
@@ -392,9 +394,11 @@ export let journal = (panel: Page, acts: Acts) => {
 
   let summary = (t: Task) => {
     let step = next(t)
-    return `<button class="Split_Row Journal_Row" type=button data-select="${esc(t.id)}"><span class=Journal_Label><b>${
-      esc(t.title)
-    }</b>${t.pinned ? glyphText('pin') : ''}</span><small>${
+    return `<button class="Split_Row Journal_Row" type=button data-select="${
+      esc(t.id)
+    }"><span class=Journal_Label><b>${esc(t.title)}</b>${
+      t.pinned ? glyphText('pin') : ''
+    }</span><small>${
       t.state == 'done' ? 'Done' : step ? esc(told(step, here)) : esc(t.from)
     }${
       step?.need ? ` · ${step.have ?? 0} / ${step.need}` : ''

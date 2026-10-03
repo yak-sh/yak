@@ -51,7 +51,10 @@ export let landing = (from: Point, to: Point, reach: number): Point => {
 
 /** First entity under a ray, before the terrain; independent of array order. */
 export let pickRay = <M extends { eid: string; body: Point; radius: number }>(
-  marks: M[], from: Point, ray: Point, far = Infinity,
+  marks: M[],
+  from: Point,
+  ray: Point,
+  far = Infinity,
 ): M | null => {
   let best: M | null = null, near = far
   for (let m of marks) {

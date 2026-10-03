@@ -21,7 +21,7 @@ import {
 } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import type { Frame } from '@yaks/api'
-import { type Bundle, type Rule, sha256 } from '@yaks/graph'
+import { type Bundle, type Comp, type Rule, sha256 } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { doorOf, PLATFORM_STORE } from './door.ts'

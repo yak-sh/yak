@@ -376,7 +376,10 @@ export let confirmed = (
 }
 
 /** Reported dollars win; otherwise usage is weighed at the model row's price. */
-export let billed = (reply: Reply, price?: Price) =>
+export let billed = (
+  reply: Reply,
+  price?: Price,
+): { dollars: number; reported: boolean } | undefined =>
   reply.cost != null
     ? { dollars: reply.cost, reported: reply.costReported ?? true }
     : price && reply.usage

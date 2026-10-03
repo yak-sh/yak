@@ -6,6 +6,7 @@ import { parse } from '@yaks/query'
 import { frontOf } from './spawn.ts'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Bundle } from './net.ts'
+import { comp } from './bundle.ts'
 import { beastId } from './beasts.ts'
 import { fighter } from './danger.ts'
 import {
@@ -203,8 +204,8 @@ test('spawn at uses existing land and entity destinations instead of the offset'
     let said = await ask('owner', 'boar', target)
     assertEquals(said.status, 200)
     if (target != 'mossvale') {
-      assertEquals(wrote[0].spawned?.x, 50)
-      assertEquals(wrote[0].spawned?.z, 52)
+      assertEquals(comp(wrote[0], 'spawned').x, 50)
+      assertEquals(comp(wrote[0], 'spawned').z, 52)
     }
   }
   assertEquals(

@@ -94,7 +94,7 @@ export let dispatchMove = (row: Bundle): Bundle[] => {
   }]
 }
 
-export let dispatchRule: Rule = {
+export let dispatchRule: Rule & { find: string } = {
   mark: 'yak/store/dispatch/1',
   find: '.dispatch.state=queued,active,waiting,settled&*',
   move: dispatchMove,

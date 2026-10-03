@@ -13,6 +13,9 @@ let note = (
 ): Ent => ({
   eid,
   num,
+  kind: 'comment',
+  refs: [],
+  kids: [],
   comment: { eid, target, reply_to },
 })
 let shape = (nodes: Branch[]): unknown[] =>

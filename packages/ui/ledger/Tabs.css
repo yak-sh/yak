@@ -47,6 +47,19 @@
   text-align: center;
 }
 /* Ledger: folder labels, with a double rule on the selected label. */
-.Tabs_Tab { border-radius: 0; border-bottom: 3px solid transparent; font-family: var(--mono); }
-.Tabs_Tab-on { color: var(--accent); background: var(--card); border-color: var(--border2); border-bottom-color: var(--accent); border-bottom-style: double; }
-.Tabs_Tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.Tabs_Tab {
+  border-radius: 0;
+  border-bottom: 3px solid transparent;
+  font-family: var(--mono);
+}
+.Tabs_Tab-on {
+  color: var(--accent);
+  background: var(--card);
+  border-color: var(--border2);
+  border-bottom-color: var(--accent);
+  border-bottom-style: double;
+}
+.Tabs_Tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

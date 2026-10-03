@@ -87,7 +87,10 @@ export let tradesOf = (works: [Trade, number][]): Trades => {
 
 /** The Trades tab keeps each trade's progress beside its guide or station
  * preview. Picking leaves the list and its scroll in place. */
-export let ledger = (tab: Page, guide: (trade: Trade, lvl: number) => string) => {
+export let ledger = (
+  tab: Page,
+  guide: (trade: Trade, lvl: number) => string,
+) => {
   let panes = split(tab.body)
   let mine: Trades | null = null
   let picked: Trade | null = null

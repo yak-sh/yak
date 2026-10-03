@@ -44,5 +44,10 @@ a.Tile:hover,
   white-space: nowrap;
 }
 /* Ledger: individual entries separated by a fine printed rule. */
-.Tile { border-bottom: 1px dashed var(--border); padding: 3px 0; }
-.Tile_Title { font-weight: 600; }
+.Tile {
+  border-bottom: 1px dashed var(--border);
+  padding: 3px 0;
+}
+.Tile_Title {
+  font-weight: 600;
+}

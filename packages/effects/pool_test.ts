@@ -413,10 +413,13 @@ test('local completion retry retains reply, respects backoff and bounds', async 
       post_note: async (_e, _tx, _write, attempt) => {
         let receipt = ++external
         assert(attempt?.retry)
-        await attempt.retry(async () => {
+        await attempt.retry(() => {
           saves++
-          if (!recover || saves == 1) throw new Error('storage unavailable')
+          if (!recover || saves == 1) {
+            return Promise.reject(new Error('storage unavailable'))
+          }
           assertEquals(receipt, 1)
+          return Promise.resolve()
         })
       },
     })

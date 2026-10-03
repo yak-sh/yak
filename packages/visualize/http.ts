@@ -273,7 +273,10 @@ let stream = (host: Hosting, request: Request): Response => {
 }
 
 /** Direct adapter entry is authenticated too, not just the routes facade. */
-export let events = (host: Hosting, request: Request) =>
+export let events = (
+  host: Hosting,
+  request: Request,
+): ReturnType<Route['handle']> =>
   guarded(host, (request) => stream(host, request))(request)
 
 export let http = (host: Hosting): Route[] => [

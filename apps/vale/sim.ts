@@ -261,7 +261,7 @@ export let rest = (
     )
     return !shelter || clearRoam &&
         Math.hypot(to[0] - home[0], to[1] - home[1]) <=
-        roam + 4
+          roam + 4
       ? to
       : beforeShelter(v, home, to)
   }
@@ -360,7 +360,13 @@ export let prowl = (
     ? { x: dx / d, z: dz / d, jump: false }
     : { x: 0, z: 0, jump: false }
   let n = walk(
-    v, b, push, dt, speed, (x, z) => shelter && sheltered(v, x, z), false,
+    v,
+    b,
+    push,
+    dt,
+    speed,
+    (x, z) => shelter && sheltered(v, x, z),
+    false,
   )
   if (quarry && d <= stop) n.yaw = turn(b.yaw, Math.atan2(dx, dz), dt * 10)
   return n

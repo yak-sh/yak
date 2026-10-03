@@ -184,7 +184,7 @@ export let pack = (panel: Page, acts: Acts) => {
   }
 
   // What a thing is, what wearing it would change, and what can be done.
-  let card = (s: Sheet, f: Frame) => {
+  let card = (s: Sheet, f: Pick<Frame, 'rack'>) => {
     if (!picked) {
       return `<p class=Pack_Hint>Tap something to see what it is.</p>`
     }
@@ -255,7 +255,7 @@ export let pack = (panel: Page, acts: Acts) => {
     }`
   }
 
-  let draw = (s: Sheet, f: Frame) => {
+  let draw = (s: Sheet, f: Pick<Frame, 'rack'>) => {
     let worn = SLOTS.map((slot) => {
       let h = s.worn[slot], t = h && piece(h)
       let on = picked?.from == 'worn' && picked.key == slot
@@ -305,7 +305,7 @@ export let pack = (panel: Page, acts: Acts) => {
   return {
     /** show this frame's sheet, when the pack is open and it changed; what
      * was picked is let go once it folds away */
-    show: (f: Frame) => {
+    show: (f: Pick<Frame, 'sheet' | 'rack'>) => {
       sheet = f.sheet
       if (!panel.open) {
         picked = null

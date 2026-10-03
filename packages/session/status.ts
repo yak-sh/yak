@@ -39,7 +39,6 @@ import {
   and,
   as,
   col,
-  count,
   desc,
   eq,
   exists,
@@ -52,7 +51,6 @@ import {
   isNull,
   join,
   lit,
-  lt,
   not,
   or,
   select,
@@ -437,17 +435,6 @@ export let sessionStatus = {
       cols: [col('seq')],
       from: table('entry'),
       where: eq(col('entity'), ask),
-    }))
-    let prior = sub(select({
-      cols: [col('entity', 'p')],
-      from: table('entry', 'p'),
-      where: and(
-        mine('p'),
-        lacks('notice', col('entity', 'p')),
-        lt(col('seq', 'p'), col('seq', 'n')),
-      ),
-      order: [desc(col('seq', 'p'))],
-      limit: lit(1),
     }))
     // Provider refusals name their ask; compaction and no-model refusals do
     // not. Only input arriving after the associated ask still needs an answer.

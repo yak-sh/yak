@@ -29,15 +29,18 @@ onMarkdown((text, repo, inline) => (
 
 // The whole tree as the terminal would receive it — every line, status
 // included, so a body sitting on the last line is never mistaken for chrome.
-let painted = (...entries: EntryLine[]) => {
+let paintedLines = (...entries: EntryLine[]) => {
   let root = new TElement('root')
   render(
     <div>{entries.map((x) => <EntryBody key={x.seq} x={x} />)}</div>,
     root as unknown as Parameters<typeof render>[1],
   )
   let { lines, status } = pane(root)
-  return [...lines, status].map(ansi).join('\n')
+  return [...lines, status]
 }
+
+let painted = (...entries: EntryLine[]) =>
+  paintedLines(...entries).map(ansi).join('\n')
 
 let say = (role: 'agent' | 'user', text: string): EntryLine => ({
   seq: 1,
@@ -73,8 +76,12 @@ test('a Session body cannot speak ANSI to the terminal', () => {
 })
 
 test('terminal prose says which words are a person and which are a model', () => {
-  let out = painted(say('user', 'human words'), say('agent', 'model words'))
-  let plain = out.replace(/\x1b\[[0-9;]*m/g, '')
+  let plain = paintedLines(
+    say('user', 'human words'),
+    say('agent', 'model words'),
+  )
+    .map((line) => line.map((span) => span.text).join(''))
+    .join('\n')
   assertStringIncludes(plain, 'person\n')
   assertStringIncludes(plain, 'model\n')
   assertEquals(plain.indexOf('person') < plain.indexOf('human words'), true)

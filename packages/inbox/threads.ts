@@ -46,7 +46,7 @@ export let threadOf = (
   r: Row,
   who?: Reader,
   byId?: Map<string, Row>,
-  seen = new Set<string>(),
+  seen: Set<string> = new Set<string>(),
 ): string => {
   let reply = str(r.comps.mail?.reply_to)
   if (reply && byId?.has(reply) && !seen.has(r.eid)) {

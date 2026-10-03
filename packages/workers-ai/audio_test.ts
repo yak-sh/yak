@@ -182,7 +182,7 @@ test('music keeps raw gateway errors and never downloads or stores on refusal', 
       throw new Error('not reached')
     },
   })
-  let error = await assertRejects(() => model(ask('minimax/music-2.6')))
+  let error = await assertRejects(() => model(ask('minimax/music-2.6')), Error)
   assertEquals(error.name, 'AiGatewayError')
   assertEquals(error.message, `Workers AI HTTP 400: ${body}`)
   assertEquals(error.stack?.includes(body), true)
@@ -269,8 +269,9 @@ test('native binding fetch preserves the version-3 envelope and raw refusal', as
       }, { status: 400 }))
     },
   }, { media: { store: artifactStore(memoryBlobs()) } })
-  let error = await assertRejects(() =>
-    model({ ...ask('elevenlabs/music-v2'), conversation: 'pilot' })
+  let error = await assertRejects(
+    () => model({ ...ask('elevenlabs/music-v2'), conversation: 'pilot' }),
+    Error,
   )
   assertEquals(error.message.includes('upstream model rejected body'), true)
 })
