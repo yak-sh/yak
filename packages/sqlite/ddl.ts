@@ -292,8 +292,17 @@ let docDdl = (v: Vocab, derived: Derived): Stmt[] => {
 /** The components that have a table of their own: every one but the spine
  * and the computed ones, whose rows another package keeps (@yaks/sql
  * `Backing`). */
-export let tables = (vocab: Vocab): string[] =>
-  vocab.all.filter((name) => name != 'entity' && !vocab.comp(name)?.computed)
+let tableNames = new WeakMap<Vocab, string[]>()
+export let tables = (vocab: Vocab): string[] => {
+  let names = tableNames.get(vocab)
+  if (!names) {
+    names = vocab.all.filter((name) =>
+      name != 'entity' && !vocab.comp(name)?.computed
+    )
+    tableNames.set(vocab, names)
+  }
+  return names
+}
 
 // The whole schema as an ordered list of statements: the spine, then one table
 // per component (the `entity` spine component is the identity table above, not
