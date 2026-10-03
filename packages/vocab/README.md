@@ -1,19 +1,38 @@
 # @yaks/vocab
 
+Loads and checks component vocabularies expressed as JSON Schema, and reads
+their property types, references, display ordering, tool declarations, rules and
+effects. Use it to share declarations between a graph, its storage and its
+consumers. It creates no tables and stores no entity data.
+
+## Vocabulary
+
 A **vocabulary document** is a JSON Schema 2020-12 document whose `$defs`
-entries describe components (`component: true`), tools (`tool: true`), rules
-(`rule: true`), or effects (`effect: true`). This package defines that format
-and loads it: `loadVocab()` reads one or more such documents into a runtime
-model used for validation, query resolution, and storage schema generation. The
-components you declare use the format it defines; the only ones it declares are
-the format's own, which hold a vocabulary as entities
-([below](#a-vocabulary-as-entities)). The loaded model lives in memory; this
-package creates no tables and stores no entity data.
+entries declare [components](../graph/README.md#data-model) (`component: true`),
+[tools](../graph/README.md#tools) (`tool: true`),
+[rules](../graph/README.md#rules) (`rule: true`) or
+[effects](../effects/README.md) (`effect: true`).
+
+A **vocabulary** is the in-memory `Vocab` loaded from one or more vocabulary
+documents. It answers which components and
+[properties](../graph/README.md#data-model) are declared, what their values can
+hold, and how to resolve a [query](../query/README.md).
+
+A **reference** is a string property that names an
+[entity](../graph/README.md#data-model), declared with `ref` and `death`, such
+as `{ type: 'string', ref: 'book', death: 'detach' }`. `ref: 'entity'` accepts
+any entity; another component name requires that component on the target.
+
+A **kind** is a component marked `kind: true` that names an entity for display.
+A **mark** is a component with stamped `at` and at least one of stamped `by` or
+`via`; it records what happened to an entity. The
+[graph](../graph/README.md#stamps-and-actors) fills these properties.
 
 ## Use
 
 ```ts
 import { loadVocab, storable } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
 
 const catalog = {
   $defs: {
@@ -27,647 +46,836 @@ const catalog = {
     },
   },
 }
-const errors = storable(catalog)
-if (errors.length) throw new Error(errors.join('; '))
+equal(storable(catalog), [])
 const vocab = loadVocab(catalog)
-vocab.aim('book.price') // [{ comp: 'book', prop: 'price' }]
-vocab.prop('book', 'price')?.scalar // 'number'
-vocab.check('book', { price: 12 }) // []
+equal(vocab.aim('book.price'), [{ comp: 'book', prop: 'price' }])
+equal(vocab.prop('book', 'price')?.scalar, 'number')
+equal(vocab.check('book', { price: 12 }), [])
+equal(vocab.check('book', { price: 'twelve' }).length, 1)
 ```
 
-`loadVocab` accepts one document or an array. It checks component declarations
-and duplicate names while loading; call `storable()` separately for the storage
-profile checks. Use `metaSchema` with a JSON Schema validator when you also need
-full document validation.
+`loadVocab` accepts one vocabulary document or an array. It checks component
+markers, duplicate names, property types, status and component search lists.
+Call `storable` separately for the checks a storage adapter needs.
+
+## Exports
+
+| Export                    | Provides                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/vocab`             | `loadVocab`, `Vocab`, declaration and loaded metadata types; `storable`, `reserved`; routing errors and messages; `kindOrder`, `pick`, `cast`, `typesOf`, `jsonb`, `composite`; `syncOf`, `durableOf`, `paceOf`, `saveOf`, `ms`, `lives`, `said`, `kept`, `paced`, `saved`, `SYNC`; `rulesIn`, `effectsIn`; `same`, `changed`; `CORE_URI`, `coreVocabulary`, `metaSchema`, `extendMeta`, `Keywords`, `JsonSchema`; `metaDoc`, `toBundles`, `fromBundles`, `Ids`, `Bundle` |
+| `@yaks/vocab/vocab`       | `docs`, containing `metaDoc`, and the package `description`                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `@yaks/vocab/tools`       | `ToolDefinition`, `Role`, `toolDefinition`, `toolDefinitionSchema`, `toolsSaid`, `toolsIn`, `validateToolInput`, `validateToolOutput`, `toolCheck`, `Check`, `errorsText`, `publicToolSchema`, `legacyOptions`                                                                                                                                                                                                                                                            |
+| `@yaks/vocab/constraints` | `Factor`, `Term`, `Score`, `NumericConstraint`, `numberOf`, `constraintErrors`                                                                                                                                                                                                                                                                                                                                                                                            |
 
 ## The format
 
-Each entry in `$defs` declares what it is. `"component": true` marks a
-component: an object schema whose `properties` are the component's properties.
-`"tool": true` marks a tool declaration, and `"rule": true` marks a rule.
-Unmarked scalar subschemas are ignored. An unmarked entry with `type: "object"`
-or `properties` throws, because the loader treats it as a component missing its
-marker. Tool and rule declarations are read by separate functions below.
+Each `$defs` entry declares what it is. `component: true` marks an object schema
+whose `properties` declare the component's properties. `loadVocab` skips tool,
+rule and effect entries and unmarked scalar schemas. An unmarked entry with
+`type: 'object'` or `properties` throws: it looks like a component whose marker
+was omitted.
 
-Standard JSON Schema keywords include `type`, `format`, `enum`, `const`,
-`default`, `description` and `examples`. The yaks keywords — declared through
-JSON Schema's `$vocabulary` mechanism, in `meta/core.vocab.json` — add what a
-component table needs on top:
+Every property declares `type`. A reference or enum declares `type: 'string'`.
+An authored component name starts with a lowercase letter and contains letters,
+digits or underscores, up to 40 characters. Property names follow the same rule
+and cannot be `entity` or `eid`. CamelCase component names are accepted only
+with `sync: 'none'`, for [@yaks/ux](../ux/README.md) state. Names starting with
+`_` belong to the [meta vocabulary](#a-vocabulary-as-entities), and `storable`
+refuses them in authored vocabulary documents.
 
-| keyword      | on    | means                                                                   |
-| ------------ | ----- | ----------------------------------------------------------------------- |
-| `component`  | entry | `true` = this entry is a component. Required; there is no default       |
-| `extends`    | comp  | `true` = add these properties to a component another document declares  |
-| `rule`       | entry | `true` = a declarative rule, read by `rulesIn`                          |
-| `optimistic` | rule  | `true` = a page runs it on its own copy as it writes, before the server |
-| `tool`       | entry | `true` = this entry is a tool declaration, not a table                  |
-| `noun`       | tool  | the resource word a CLI answers to (`session list`, `list session`)     |
-| `verb`       | tool  | the operation word; either word alone is the whole command              |
-| `input`      | tool  | one schema per named argument, as a component declares properties       |
-| `ref`        | prop  | the entity kind a string references (`"project"`, `"entity"`)           |
-| `death`      | prop  | `cascade` \| `detach` \| `release` \| `keep` when the target is deleted |
-| `computed`   | both  | `true` = derived, never stored: a query-only rank, a journal record     |
-| `reads`      | prop  | on a computed prop: components on other entities it reads; `[]` = none  |
-| `status`     | comp  | `{"completed": "done", "default": "open"}`: a computed `status`         |
-| `stamped`    | prop  | `true` = the server owns it: clients read it, never write it            |
-| `search`     | both  | prop: `true` = full-text indexed. comp: `["content.body"]`, found by it |
-| `aliases`    | prop  | input forms that resolve to an enum member                              |
-| `unique`     | both  | prop: no two rows share it. comp: `[["space","slug"]]`                  |
-| `index`      | both  | the same two forms, without the uniqueness                              |
-| `required`   | comp  | native: the properties every row holds (NOT NULL)                       |
-| `default`    | prop  | native: the row's fallback; `{"now": true}` is the clock                |
-| `identity`   | both  | derive the entity's id from this. comp: `["space","slug"]`              |
-| `kind`       | comp  | this component names a display kind                                     |
-| `before`     | comp  | kinds this kind sorts before (feeds the derived kindOrder)              |
-| `embed`      | comp  | `false` = an entity wearing it is never embedded (still found by words) |
-| `wire`       | comp  | `false` = a component clients read but cannot write                     |
-| `sync`       | comp  | who is told about a write: `none` \| `server` (default) \| `peers`      |
-| `durable`    | comp  | how long a value lives: `forever` (default) \| `connection` \| `5s`     |
-| `pace`       | comp  | how often a writer's value is taken: relayed, or stored (`1s`)          |
-| `save`       | comp  | how often the server stores a permanent peer-relayed value (`30s`)      |
+The native JSON Schema keywords include `type`, `format`, `enum`, `const`,
+`default`, `description` and `examples`. `coreVocabulary` declares the yaks
+keywords under `CORE_URI`, `https://yak.sh/vocab/core`. A **meta-schema** is a
+JSON Schema for vocabulary documents; `metaSchema` is the bundled meta-schema.
+Use a JSON Schema validator with it for full document validation.
 
-Two packages add keywords of their own, passed to `loadVocab` beside the
-documents: `edge: true` marks a relation component riding on an edge
-([@yaks/edge](../edge/README.md)), and `key: true` marks a key tag
-([@yaks/key](../key/README.md)). Reach for a key, not `identity`, when the facts
-locate an entity that has a life of its own: the entity keeps a minted eid, and
-a value it holds finds it again. `identity` derives the eid itself, and fits
-only where the facts are the entity, as a link is its two ends.
+| Keyword                               | On                    | Meaning                                                                                                        |
+| ------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `component`, `tool`, `rule`, `effect` | entry                 | The entry's declaration marker                                                                                 |
+| `extends`                             | component             | Adds properties, required properties or status rungs to another document's component                           |
+| `ref`, `death`                        | property              | Reference target and deletion behavior                                                                         |
+| `computed`                            | component or property | Derived and never stored; a computed component uses another package's backing                                  |
+| `reads`                               | computed property     | Components on other entities it reads; `[]` means its own entity; `comp.ref` identifies a reference back to it |
+| `stamped`                             | property              | Server-owned: clients read it and cannot write it                                                              |
+| `status`                              | component             | Ordered components and the statuses they give, with a default                                                  |
+| `kind`, `before`                      | component             | Display kind and the kinds it sorts before                                                                     |
+| `search`                              | property or component | Stored text to index, or another component's text property names                                               |
+| `embed`                               | component             | `false` excludes entities carrying it from embedding                                                           |
+| `aliases`                             | enum property         | Input forms mapped to enum members                                                                             |
+| `unique`, `index`                     | property or component | An individual property flag or composite index declarations                                                    |
+| `required`                            | component             | Properties every stored component must hold                                                                    |
+| `default`                             | property              | A scalar fallback, or `{ now: true }` on a `date-time` property                                                |
+| `identity`                            | property or component | Properties from which an eid is derived                                                                        |
+| `wire`                                | component             | `false` allows clients to read but not write it                                                                |
+| `sync`, `durable`, `pace`             | component             | Who receives writes, how long values live, how often a writer's values are taken                               |
+| `save`                                | component             | How often the server stores a permanent peer-relayed value                                                     |
+| `validate`, `tree`                    | property              | Full JSON Schema checking and flat-tree checking by a schema plugin                                            |
+| `constraints`                         | component             | Numeric bounds over the complete component                                                                     |
 
-An authored name starts with a letter, so `_` names only the components that
-describe a vocabulary itself ([below](#a-vocabulary-as-entities)).
+The vocabulary reports declarations; the consuming packages implement storage,
+search, embedding, synchronization and write behavior.
 
-A component named in CamelCase (`Edit`, `Refused`) belongs to a UX component
-([@yaks/ux](../ux/README.md)): its own state, named after it, or an event it
-emits. It lives in a page's own graph, so it is `sync: none`; `storable()`
-refuses a CamelCase name that syncs, since a store's tables fold case.
+### Property types and checks
 
-An event is a component that is `durable: "0s"`: it lives no time. A graph
-applies it like any other component, so a rule can read it and the applied
-change carries it, but nothing stores it, and a relay hands it on and forgets it
-at once.
+A **scalar** is a loaded property's type name reconstructed from `type` and
+`format`: `text`, `number`, `priority`, `bool`, `query`, `time`, `url`, `json`
+or `jsonb`. `Prop.category` distinguishes `scalar`, `enum` and `ref`.
 
-A computed property's `reads` can name `comp.ref` when that reference points
-back to the entity carrying the computed value. Subscriptions then refresh that
-entity when the referenced component changes.
+`jsonb` holds a JSON value: an object, array or type union. `json` holds JSON
+text in a string. A null clears a property; the string `'null'` is JSON text
+holding JSON null. `check` checks declared properties and their types, not
+nested structures, numeric bounds or required properties. `cast` converts
+non-null values of string properties to text, including JSON text for objects
+and arrays, and leaves references alone.
 
-A computed component (`computed: true` on the component) has no table and
-nothing writes it: its entities are rows another package keeps, read through the
-backing that package supplies (@yaks/sql `Backing`), as @yaks/journal's `_tx`
-and `_change` are. It is never wire-writable, and `refProps()` leaves out its
-references, which no reverse read over stored rows can find.
+```ts
+import { cast, loadVocab, reserved, storable } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
 
-**`status` computes a component's status from what its entity wears.** The
-keyword is an ordered map from a component to the status it gives, plus
-`default`. The first component in the map the entity wears gives its status, an
-entity wearing none reads as `default`, and one without the component reads
-null. The component gains a computed, read-only `status` property whose closed
-set is every status the map can give, and `comp(name).ladder` reports the map as
-rungs. [@yaks/sql](../sql/README.md) reads it as SQL and
-[@yaks/match](../match/README.md) off a bundle, both from this one declaration,
-so no package writes the rule out. The rungs are usually marks (a component with
-a stamped `at` and a `by` or `via`), but any component can be one. The following
-is a `$defs` fragment:
-
-```json
-{
-  "task": {
-    "component": true,
-    "type": "object",
-    "status": {
-      "cancelled": "cancelled",
-      "completed": "done",
-      "default": "open"
-    }
-  }
+const doc = {
+  $defs: {
+    note: {
+      component: true,
+      properties: {
+        text: { type: 'string' },
+        settings: { type: ['string', 'object'] },
+        raw: { type: 'string', format: 'json' },
+      },
+    },
+  },
 }
+const v = loadVocab(doc)
+equal(storable(doc), [])
+equal(v.prop('note', 'settings')?.scalar, 'jsonb')
+equal(v.prop('note', 'settings')?.affinity, 'blob')
+equal(v.check('note', { settings: { color: 'blue' }, raw: 'null' }), [])
+equal(v.check('note', { settings: 5 }).length, 1)
+equal(cast(v, 'note', { text: 12, raw: { ready: true } }), {
+  text: '12',
+  raw: '{"ready":true}',
+})
+equal(reserved(doc, ['note']).length, 1)
 ```
 
-A task wearing `completed` reads `.task.status=done`; one wearing both marks
-reads `cancelled`. Another package adds a rung with an `extends` entry, as
-@yaks/session reads a held claim as `wip`:
-`"task": {"component": true, "extends": true, "status": {"claim": "wip"}}`. Its
-rungs come after the declaring document's, in load order, and it names no
-default. A rung whose component the load does not declare is left out.
+`storable` returns errors for missing types, property `$ref`, invalid indexes,
+defaults, identities, search declarations, constraints and state lifetimes. It
+also checks that a component carrying all of `at`, `by` and `via` stamps all
+three. `reserved(doc, names)` reports `$defs` names the caller already owns.
+Neither function writes storage or migrates data.
 
-Storage adapters interpret the loaded metadata: `type: integer` stores with
-integer affinity where a plain `number` uses SQLite REAL affinity, `enum`
-becomes a CHECK on the column, `required` becomes NOT NULL, and `default` fills
-the row that omits the property. A composite `unique` or `index` entry may be
-partial: an entry of `{"props": ["key"], "present": ["key"]}` covers only the
-rows that hold a key, so multiple rows can omit a key while non-null keys remain
-unique.
+A property with `validate: true` asks a schema plugin to check its full JSON
+Schema. An array may declare `tree: { key: 'name', parent: 'parent' }`: unique
+string keys and parents appearing earlier in the array. `admitSchema` from
+[@yaks/graph/schema](../graph/README.md#admission-and-schema-checks) implements
+these checks. SQLite binary JSON storage and filtering limits belong to
+[@yaks/sql](../sql/README.md).
 
-Every stored `ref` property is indexed automatically, including stamped refs and
-refs with `death: "keep"`. No `index: true` is needed, and `index: false` does
-not opt out. A reference that already leads a declared index (including a
-composite unique or identity index) needs no additional index of its own.
+```ts
+import { graph } from '@yaks/graph'
+import { admitSchema } from '@yaks/graph/schema'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal, throws } from '@yaks/testing'
 
-**`search` selects properties for full-text indexing.**
-[@yaks/fts](https://jsr.io/@yaks/fts) builds one index per component using
-stored text properties marked `search: true`. Unmarked properties remain
-readable but are excluded from that index. `storable()` rejects `search: true`
-on numbers, references, enums, computed properties and the `date-time`, `uri`,
-`query` and `json` string formats. `@yaks/match` searches stored text directly
-and currently does not consult this keyword. The following is a `$defs`
-fragment:
-
-```json
-{
-  "recipe": {
-    "component": true,
-    "type": "object",
-    "properties": {
-      "note": { "type": "string", "search": true },
-      "serves": { "type": "number" }
-    }
-  }
-}
+const v = loadVocab({
+  $defs: {
+    drawing: {
+      component: true,
+      properties: {
+        nodes: {
+          type: 'array',
+          validate: true,
+          tree: { key: 'name', parent: 'parent' },
+          items: {
+            type: 'object',
+            required: ['name'],
+            properties: {
+              name: { type: 'string' },
+              parent: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+  },
+})
+const g = graph({ vocab: v, storage: ram(v) })
+g.use(admitSchema(v))
+await g.apply([{
+  entity: { eid: 'd1' },
+  drawing: {
+    nodes: [{ name: 'root' }, { name: 'leaf', parent: 'root' }],
+  },
+}])
+await throws(() =>
+  g.apply([{
+    entity: { eid: 'd1' },
+    drawing: {
+      nodes: [{ name: 'leaf', parent: 'missing' }],
+    },
+  }]), 'parents must precede')
+equal((await g.get(['d1']))[0].drawing, {
+  nodes: [{ name: 'root' }, { name: 'leaf', parent: 'root' }],
+})
 ```
 
-On a component, `search` names the text its entities are found by when that text
-is another component's: `entry` says `"search": ["content.body"]`, so a
-transcript entry is indexed by what it says, while tool results and process
-output, which carry `content` too, are not. The names share one component and
-each is stored text; a component with its own `search: true` properties cannot
-also carry a list. The loader checks the list once every document is read.
+## Routing and references
 
-**`identity` declares deterministic entity ids.** A component whose property is
-marked `identity: true` derives entity ids from that value, as `@yaks/edge` and
-`@yaks/key` do. Writing the same identity again updates the same entity without
-requiring the caller to retain its `eid`. The following is a `$defs` fragment:
+A **hop** is a component/property pair returned by `aim`, such as
+`{ comp: 'review', prop: 'book' }`. `aim` resolves a
+[path](../query/README.md#query-model) into hops; a component at the end has an
+empty property name. `entity.eid` is built in, even when no vocabulary document
+declares `entity`.
 
-```json
-{
-  "guide": {
-    "component": true,
-    "type": "object",
-    "properties": {
-      "slug": { "type": "string", "identity": true },
-      "brief": { "type": "string" }
-    }
-  }
-}
+A **reverse association** is a reference seen from its target, represented by
+`Assoc` as `{ comp, prop }`. `review.book` gives the name `reviews`; multiple
+references on one component use the property name, as in `loans_book`. Forward
+component names win. Plurals are derived mechanically: `y` becomes `ies`, a
+final `s` stays, and every other name gains `s`.
+
+```ts
+import { loadVocab, Unknown } from '@yaks/vocab'
+import { equal, throws } from '@yaks/testing'
+
+const v = loadVocab({
+  $defs: {
+    book: { component: true, properties: { title: { type: 'string' } } },
+    review: {
+      component: true,
+      properties: { book: { type: 'string', ref: 'book', death: 'detach' } },
+    },
+  },
+})
+equal(v.aim('review.book.book.title'), [
+  { comp: 'review', prop: 'book' },
+  { comp: 'book', prop: 'title' },
+])
+equal(v.aim('book'), [{ comp: 'book', prop: '' }])
+equal(v.aim('entity.eid'), [{ comp: 'entity', prop: 'eid' }])
+equal(v.assoc('reviews'), { comp: 'review', prop: 'book' })
+equal(v.refProps(), [['review', 'book']])
+equal(v.deaths('detach'), [['review', 'book']])
+equal((await throws(() => v.aim('title'))) instanceof Unknown, true)
 ```
 
-`{guide: {slug: 'store', brief: '…'}}` applied a second time patches the first
-entity. This package reports the declaration through `identity(comp)`;
-[@yaks/graph](https://jsr.io/@yaks/graph) derives the id and rejects a bundle
-whose `eid` disagrees with it. A bundle is one entity's components as a JSON
-object.
+A property must be named with its component. `Unknown` identifies a failed
+lookup; `unqualified`, `unknownProps`, `unknownComps` and `shapeOf` provide the
+messages shared by readers and writers.
 
-Applications can build completions from native `examples` and distinct stored
-values. Component names are alphabetical; writable and stamped property lists
-follow their schema declarations. `kindOrder` is alphabetical, constrained
-topologically by `before`; a cycle is an error. A kind that is a mark (it
-declares a stamped `at` with a stamped `by` or `via`, which the graph fills the
-first time it is written) says what happened to an entity, never what the entity
-is, so it follows every kind it does not sort before: a comment marked as a
-memory is still a comment.
+`death` says what the graph does when a reference target is deleted: `cascade`
+deletes the referencing entity, `detach` clears the property, `release` removes
+the referencing component and `keep` retains the reference without a foreign-key
+constraint. `deaths` includes only client-writable references. `refProps`
+includes stamped references too, but excludes computed components, whose
+references cannot be found by reading stored components.
 
-**Reverse associations let queries follow references in reverse.** `review.book`
-makes `.reviews` mean the reviews pointing at a book, and a component with
-several references disambiguates with the property name (`loan.book` →
-`.loans_book`). A forward name always wins, so an association never shadows a
-property or a component.
+## Kinds and status
 
-```json
-{
-  "$vocabulary": { "https://yak.sh/vocab/core": true },
-  "$defs": {
-    "task": {
-      "component": true,
-      "type": "object",
-      "kind": true,
-      "before": ["doc"],
-      "properties": {
-        "priority": { "type": "number", "format": "priority" },
-        "project": { "type": "string", "ref": "project", "death": "detach" }
-      }
-    }
-  }
-}
+`all` lists every loaded component alphabetically; `comps` excludes components
+that are computed or `wire: false`. `props` follows property declaration order;
+`comp` separates writable and stamped properties. `kinds` is alphabetical,
+constrained by `before`. A cycle throws. A `before` naming an unloaded kind has
+no effect. A mark follows every kind it does not sort before, so a marked
+comment is still displayed as a comment. `kindOf` chooses the first kind
+present, or `entity` when none is present.
+
+```ts
+import { kindOrder, loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+const v = loadVocab({
+  $defs: {
+    doc: { component: true, kind: true },
+    task: { component: true, kind: true, before: ['doc'] },
+    completed: { component: true, wire: false },
+  },
+})
+equal(v.all, ['completed', 'doc', 'task'])
+equal(v.comps, ['doc', 'task'])
+equal(v.kinds, ['task', 'doc'])
+equal(v.kindOf({ task: 1, doc: 1 }), 'task')
+equal(
+  kindOrder(
+    ['doc', 'memory', 'task'],
+    (k) => k == 'memory' ? ['doc'] : [],
+    (k) => k == 'memory',
+  ),
+  ['task', 'memory', 'doc'],
+)
 ```
 
-`meta/vocab.schema.json` is the meta-schema a vocabulary document validates
-against.
+A **ladder** is a component's computed status declaration, returned as
+`{ rungs, default }`. A **rung** is `{ comp, status }`: an entity carrying that
+component reads as that status. The first matching rung wins; no matching rung
+gives the default; an entity without the ladder's component has no status.
 
-Every property declares its `type`. An enum property says `"type": "string"`,
-and so does a reference; a property without a type is refused, never read as
-text.
+```ts
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
 
-A property whose type is `object` or `array`, or a union of types
-(`["string", "object"]`), holds a JSON value. The runtime reports scalar `jsonb`
-with blob affinity: SQLite stores it as binary JSON, a write takes the value and
-a read returns it. Such a property may declare its structure with `properties`
-or `items`; `check` holds the value to the declared type, and a graph can opt
-into checking the whole structure. A query filter on one is refused for now.
-
-An app can set `validate: true` on a property to have the hosted Store check its
-complete JSON Schema, including nested items and numeric bounds, before each
-write. The Store also checks the component's `required` list for these rows.
-`v.check` remains a lightweight type check for other graphs. An opted-in array
-may also declare `tree: {key: 'name', parent: 'parent'}`: nodes have unique
-string keys, and any parent must appear earlier in the array. This bounds
-ancestry and refuses missing parents or cycles before installation.
-
-A component can declare a numeric `constraints` entry with `name`, `value`,
-`maximum` and `message`. `value` is a finite weighted sum:
-`{ "sum": [
-{ "each": "effects", "where": { "kind": "damage" }, "product": [
-{ "field": "scale" }, { "field": "hits", "default": 1 } ] } ] }`.
-Each term multiplies its factors and adds the result; `each` selects members of
-a bounded array, and `where` matches exact field values. A factor can be a
-number or a field, optionally with `default` and `inverse: true` for a
-reciprocal. `numberOf(value, row)` from `@yaks/vocab/constraints` evaluates the
-same table in app code. The hosted Store checks the score on the complete
-patched row and refuses scores over the fixed maximum.
-
-`{ "type": "string", "format": "json" }` is JSON text in a string: scalar
-`json`, text affinity, and a string containing any valid JSON value. A null
-clears the property, while the string `"null"` stores the JSON null value.
-
-A string property's value is cast to a string on the way in (`cast`): a number
-or a boolean becomes its text, an object or an array its JSON text.
-
-## One word, one home — and one exception
-
-A component is declared once. Loading two documents that both declare `doc`
-throws: one name, one home, so a package's vocabulary composes with every
-other's. A program that speaks a few of a package's words and not the rest loads
-them from that home with `pick(doc, names)`: the same declarations as a document
-of their own, never a copy.
-
-The exception is the spine. `entity` is the identity row every entity has, and
-more than one package keeps something in it — the archetype a component set adds
-up to, the number a human id is built from. A document adds a property to it by
-marking the entry `extends`:
-
-```json
-{
-  "$defs": {
-    "entity": {
-      "component": true,
-      "extends": true,
-      "properties": { "num": { "type": "number", "stamped": true } }
-    }
-  }
-}
+const v = loadVocab({
+  $defs: {
+    task: {
+      component: true,
+      status: { cancelled: 'cancelled', completed: 'done', default: 'open' },
+    },
+    cancelled: { component: true },
+    completed: { component: true },
+  },
+})
+equal(v.comp('task')?.ladder, {
+  rungs: [
+    { comp: 'cancelled', status: 'cancelled' },
+    { comp: 'completed', status: 'done' },
+  ],
+  default: 'open',
+})
+equal(v.prop('task', 'status')?.values, ['cancelled', 'done', 'open'])
+equal(v.comp('task')?.writable, [])
 ```
 
-An extension carries properties and nothing else — `kind`, `prefix`, `wire` and
-the indexes belong to the document that declares the component — and a property
-the base already has is refused rather than overridden. Extensions are applied
-after every document is read, so the load order decides nothing, and an
-extension of a component no document declares is an error.
+The `status` keyword supplies a computed, read-only enum property. A rung whose
+component is not loaded is omitted; a rung naming a computed component throws.
+[@yaks/sql](../sql/README.md) and [@yaks/match](../match/README.md) evaluate the
+same ladder.
+
+## Composition
+
+A component has one declaring vocabulary document. `pick(doc, names)` selects
+its declarations without copying them into another package. Duplicate component
+declarations throw.
+
+An **extension** is a component entry marked `extends: true` that adds
+properties, required properties or status rungs to another vocabulary document's
+component. Existing properties and rungs cannot be overridden. Other metadata
+belongs to the declaring vocabulary document. Property extensions are applied
+after all declarations; status rungs append in load order and cannot change the
+default. A status-only extension of an unloaded component is skipped; other
+extensions of unloaded components throw.
+
+```ts
+import { loadVocab, pick } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+const base = {
+  $defs: {
+    task: { component: true, status: { default: 'open' } },
+    unused: { component: true },
+  },
+}
+const more = {
+  $defs: {
+    task: {
+      component: true,
+      extends: true,
+      properties: { priority: { type: 'number' } },
+      required: ['priority'],
+      status: { claimed: 'wip' },
+    },
+    claimed: { component: true },
+  },
+}
+const v = loadVocab([more, pick(base, ['task'])])
+equal(v.all, ['claimed', 'task'])
+equal(v.prop('task', 'priority')?.required, true)
+equal(v.comp('task')?.ladder, {
+  rungs: [{ comp: 'claimed', status: 'wip' }],
+  default: 'open',
+})
+```
+
+## Identity and indexes
+
+An **identity** is an ordered property list from which the graph derives an
+entity's eid. Declare `identity: true` on a property or
+`identity: ['space',
+'slug']` on a component. Repeated values identify the same
+entity. Use [@yaks/key](../key/README.md) when values find an entity whose eid
+should stay independent of those values.
+
+An **index** is `{ props, unique, present? }`, describing the ordered properties
+of a component's storage index. A **composite** is its declaration form: a
+property list or `{ props, present? }`. `present` makes an index partial, so
+only components holding those properties participate.
+
+```ts
+import { composite, loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+const v = loadVocab({
+  $defs: {
+    guide: {
+      component: true,
+      unique: [{ props: ['key'], present: ['key'] }],
+      properties: {
+        slug: { type: 'string', identity: true },
+        key: { type: 'string' },
+        owner: { type: 'string', ref: 'entity', death: 'keep' },
+      },
+    },
+  },
+})
+equal(v.identity('guide'), ['slug'])
+equal(v.indexes('guide'), [
+  { props: ['key'], unique: true, present: ['key'] },
+  { props: ['slug'], unique: true },
+  { props: ['owner'], unique: false },
+])
+equal(composite(['slug']), { props: ['slug'] })
+```
+
+Stored references are indexed automatically, including stamped references and
+`death: 'keep'`. `index: false` does not opt out. A reference already leading an
+index needs no extra index. Computed properties have no storage index.
+`required` and `default` are reported to storage adapters; `integer` uses
+integer affinity, while `number` uses real affinity.
+
+## Search declarations
+
+`search: true` selects stored text properties for [@yaks/fts](../fts/README.md).
+`storable` rejects it on numbers, references, enums, computed properties and
+strings formatted as `date-time`, `uri`, `query` or `json`.
+[@yaks/match](../match/README.md) searches text directly and does not consult
+this declaration.
+
+On a component, `search: ['content.body']` selects another component's text. All
+names must belong to that one component and hold stored text. It cannot coexist
+with searched properties of its own. Unloaded components in the list are
+omitted.
+
+```ts
+import { loadVocab, storable } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+const doc = {
+  $defs: {
+    content: {
+      component: true,
+      properties: { body: { type: 'string', search: true } },
+    },
+    entry: { component: true, search: ['content.body'] },
+  },
+}
+equal(storable(doc), [])
+const v = loadVocab(doc)
+equal(v.prop('content', 'body')?.search, true)
+equal(v.comp('entry')?.search, ['content.body'])
+```
+
+## State lifetimes
+
+**sync** says who receives a write: `none`, `server` (default) or `peers`.
+**durable** says how long a value lives: `forever` (default), `connection` or a
+duration such as `5s`. **pace** says how often a writer's value is taken, as a
+positive duration. **save** says how often the server stores a permanent
+peer-relayed value, as a positive duration such as `30s`.
+
+```ts
+import {
+  durableOf,
+  lives,
+  loadVocab,
+  ms,
+  paceOf,
+  saved,
+  saveOf,
+  storable,
+  syncOf,
+} from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+const v = loadVocab({
+  $defs: {
+    cursor: {
+      component: true,
+      sync: 'peers',
+      durable: 'connection',
+      pace: '100ms',
+    },
+    draft: { component: true, sync: 'none', durable: 'forever' },
+    position: {
+      component: true,
+      sync: 'peers',
+      durable: 'forever',
+      pace: '100ms',
+      save: '30s',
+    },
+  },
+})
+equal(syncOf(v, 'cursor'), 'peers')
+equal(durableOf(v, 'cursor'), 'connection')
+equal(paceOf(v, 'cursor'), 100)
+equal(syncOf(v, 'undeclared'), 'server')
+equal(durableOf(v, 'undeclared'), 'forever')
+equal(paceOf(v, 'draft'), null)
+equal(saveOf(v, 'position'), 30_000)
+equal(saveOf(v, 'undeclared'), null)
+equal(saved('0s'), null)
+equal(storable(v.docs[0]), [])
+equal(ms('5s'), 5000)
+equal(ms('connection'), null)
+equal(lives('2m'), true)
+```
+
+`said`, `kept`, `paced` and `saved` normalize the declarations. `ms` converts
+`ms`, `s`, `m`, `h` and `d` durations; `forever` and `connection` return null.
+An **event** is a component with `durable: '0s'`: rules and the applied change
+see it, but it is not stored. A `sync: 'none'` component cannot declare pace,
+and `sync: 'peers', durable: 'forever'` without `save` is refused by `storable`.
+`save` is refused with any other sync or lifetime. `saveOf` returns
+milliseconds, or `null` when no interval is declared or the component is
+unknown.
+
+[@yaks/sync](../sync/README.md) relays the latest value at most once per pace,
+including the final value, and clears immediately. For stored components,
+[@yaks/member](../member/README.md) refuses writes beyond the per-writer pace. A
+component with `sync: 'peers'` and `durable: 'forever'` declares `save`, a
+positive duration such as `30s`. The peers still hear the latest value at its
+pace; [@yaks/api](../api/README.md) also stores each entity's latest value at
+most once a save interval, and saves its last value when the writer's connection
+ends. That stored write goes through admission as the writer, with their `via`;
+the page sends nothing extra. A relay without `save` only hands values on.
+
+This package does not store, expire, relay, pace or save values.
 
 ## Extension keywords
 
-Packages can add metadata such as id prefixes, name properties and units through
-a **keyword vocabulary**: a URI and a registration describing the permitted
-component and property keywords. `@yaks/blob` uses this mechanism for
-`store: "blob"`, which selects string properties for content-addressed storage.
+A **keyword vocabulary** is a `Keywords` registration: a URI, component and
+property keyword names, and optional schemas describing those keywords.
+`loadVocab(docs, keywords)` copies registered keywords into loaded metadata;
+unregistered extension keywords are dropped. `extendMeta` adds them to the
+meta-schema. Their owning packages implement their behavior.
 
 ```ts
 import { extendMeta, loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
 
-let shelf = {
+const shelf = {
   uri: 'https://example.com/vocab/shelf',
-  comp: ['shelf'], // keywords this vocabulary adds to a component
-  prop: ['unit'], // …and to a property
+  comp: ['shelf'],
+  prop: ['unit'],
   doc: { $defs: { shelf: { type: 'string' }, unit: { type: 'string' } } },
 }
-
-const shelfCatalog = {
+const v = loadVocab({
   $defs: {
     book: {
       component: true,
-      type: 'object',
       shelf: 'fiction',
       properties: { weight: { type: 'number', unit: 'gram' } },
     },
   },
-}
-let v = loadVocab(shelfCatalog, [shelf])
-v.comp('book')?.keywords.shelf // 'fiction'
-v.prop('book', 'weight')?.keywords.unit // 'gram'
-extendMeta([shelf]) // the meta-schema, now admitting those keywords
+}, [shelf])
+equal(v.comp('book')?.keywords.shelf, 'fiction')
+equal(v.prop('book', 'weight')?.keywords.unit, 'gram')
+equal(
+  (extendMeta([shelf]).$vocabulary as Record<string, boolean>)[shelf.uri],
+  true,
+)
 ```
 
-The loader copies registered extension keywords to the loaded model. The package
-that declares each keyword implements its behavior.
-[@yaks/id](https://jsr.io/@yaks/id) owns `prefix` this way, and
-[@yaks/names](https://jsr.io/@yaks/names) owns `by_name`. A keyword nobody
-registered is dropped.
-
-## The runtime
-
-```ts ignore
-import { loadVocab } from '@yaks/vocab'
-
-let v = loadVocab([kernel, work]) // application-supplied documents; each component name must be unique
-
-v.comps // client-writable component names, alphabetical
-v.kinds // display kinds: alphabetical, constrained by `before`
-v.prop('task', 'project')
-// { category: 'ref', ref: 'project', death: 'detach',
-//   affinity: 'integer', fk: true, stamped: false, computed: false, … }
-v.aim('comment.target.doc.title') // [{comment,target}, {doc,title}]  path → hops
-v.aim('entity.eid') // [{entity,eid}]  the entity identity
-v.aim('project') // [{project,''}]  a name alone is a component
-v.aim('title') // throws Unknown: '.title is a property, not a component —
-// name it .doc.title'. A property is named with its component; the refusal
-// names each component that declares it, and changes no query's meaning.
-
-v.assoc('reviews') // { comp: 'review', prop: 'book' }  a plural → its reverse
-v.kindOf({ task: 1, doc: 1 }) // 'task' — most specific kind wins
-v.deaths('cascade') // client-writable references with this deletion behavior
-v.check('task', { priority: 1 }) // [] when supplied properties and values are valid
-```
-
-The root export provides these document checks:
-
-- `storable(doc)` checks that every property declares its type, checks scalar,
-  reference, enum and JSON properties, rejects property `$ref` and structure on
-  a property that is not an object or array, and checks indexes, defaults,
-  identities and state lifetimes. A component declaring all of `at`, `by` and
-  `via` must mark each property `stamped: true` so clients cannot supply that
-  provenance.
-- `reserved(doc, names)` rejects entries that reuse a reserved name.
-
-These functions return errors; they do not migrate or write storage. Reference
-`death` values specify what the graph does when the target is deleted: `cascade`
-deletes the referencing entity, `detach` clears its reference property,
-`release` removes its referencing component, and `keep` retains the reference
-without a foreign-key constraint.
-
-`syncOf(vocab, comp)`, `durableOf(vocab, comp)`, `paceOf(vocab, comp)` and
-`saveOf(vocab, comp)` read state-lifetime metadata, including defaults for
-unknown components. `sync` selects server synchronization, peer relay, or
-local-only data; `durable` selects permanent storage, connection-lifetime
-memory, or a duration. `pace` is how often a writer's value is taken. Beside
-`sync: peers`, the writer's own graph takes every write at once, and
-[@yaks/sync](../sync/README.md) sends the latest value per entity at most once a
-pace, the last one always, and a clear at once. On a stored component, a store
-takes one write of it from each writer at most once a pace and refuses the rest,
-which [@yaks/member](../member/README.md)'s guard holds; everyone signed out
-counts as one writer. A `sync: none` component has nobody to take its value, so
-it has no pace. `paceOf` answers in milliseconds, `null` when every write is
-taken.
-
-A component with `sync: peers` and `durable: forever` declares `save`, a
-positive duration such as `30s`. The peers still hear the latest value at its
-`pace`; the server also stores each entity's latest value at most once a save
-interval, and saves its last value when the writer's connection ends. That
-stored write goes through admission as the writer, with their `via`; the page
-sends nothing extra. A relay without `save` only hands values on. `save` is
-refused with any other sync or lifetime. `saveOf` answers in milliseconds,
-`null` when no interval is declared or the component is unknown.
-
-`ms('5s')` returns `5000`; `ms('forever')` and `ms('connection')` return `null`.
-`lives()` validates lifetime strings; `said()`, `kept()`, `paced()` and
-`saved()` normalize the declarations. Storage, sync and access packages
-implement these policies; this package does not retain, expire, pace or save
-data.
-
-See `vocab_test.ts` and `validate_test.ts` for vocabulary loading and validation
-examples.
-
-## Compatibility
-
-The root export is TypeScript with no external runtime dependency. The separate
-`@yaks/vocab/tools` export validates JSON Schema with @cfworker/json-schema,
-which interprets a schema rather than generating code, so it also runs in a
-Cloudflare Worker. Neither uses platform-specific storage; both can run on Deno
-and Node (via JSR / npm).
+Examples include [@yaks/id](../id/README.md)'s `prefix`,
+[@yaks/names](../names/README.md)'s `by_name`, [@yaks/blob](../blob/README.md)'s
+`store`, [@yaks/edge](../edge/README.md)'s `edge` and
+[@yaks/key](../key/README.md)'s `key`.
 
 ## Tools
 
-Import tool helpers from `@yaks/vocab/tools`; they are not re-exported by
-`@yaks/vocab`.
-
-A tool is declared where the components are, in `$defs`, marked `tool: true`:
-
-```json
-{
-  "$defs": {
-    "session": { "component": true, "type": "object", "properties": {} },
-    "session_list": {
-      "tool": true,
-      "noun": "session",
-      "verb": "list",
-      "description": "List sessions in the connected graph.",
-      "input": { "scope": { "type": "string" } },
-      "required": ["scope"],
-      "readOnly": true
-    }
-  }
-}
-```
-
-`toolsIn(docs)` returns those declarations, each with its `input` map converted
-to one object schema for consumers such as the CLI argument parser, MCP tool
-listing and shell completion. `loadVocab` skips tool entries, so a document is
-read once for its components and once for its tools and neither reading knows
-about the other. The entry's key is the tool's name, which is how an
-implementation is found: `loadTools` in `@yaks/graph/tools` joins a declaration
-to the handler the module supplies, and rejects a declaration without a handler.
-
-`surfaces` says where a tool is offered: `["cli"]` on the `yak` command line
-only, `["mcp"]` in an MCP server's listing only. Without it, a tool is offered
-on both; `[]` offers it on neither, for a tool only code calls. A tool that
-keeps its process, such as `serve` or a stream that never returns, is `["cli"]`.
-`offered(surface)` in `@yaks/graph` is the test each door applies.
-
-`roles` names the roles the process running a tool serves (@yaks/cli `ROLES`:
-`graph`, `web`, `effects`), for a tool that needs more than the graph every tool
-runs over. `serve` lists `web`: the process that answers HTTP serves the routes.
-
-`@yaks/vocab/tools` also validates a declaration written in code, independently
-of any document.
+Import tool helpers from `@yaks/vocab/tools`. `toolsIn` reads `$defs` entries
+marked `tool: true`, converts their `input` maps to object schemas, and checks
+metadata, schemas, positional arguments and short flags. `toolsSaid` performs
+the same read without those checks; both refuse duplicate tool names. The entry
+name identifies its implementation, joined by
+[@yaks/graph/tools](../graph/README.md#tools).
 
 ```ts
-import { toolDefinition } from '@yaks/vocab/tools'
-import type { Tool } from '@yaks/graph'
+import {
+  toolsIn,
+  validateToolInput,
+  validateToolOutput,
+} from '@yaks/vocab/tools'
+import { equal, throws } from '@yaks/testing'
 
-const definition = toolDefinition({
-  noun: 'session',
-  verb: 'list',
-  description: 'List sessions',
-  inputSchema: {
-    type: 'object',
-    additionalProperties: false,
-    properties: {
-      limit: { type: 'integer', minimum: 1, default: 20, short: 'n' },
+const [tool] = toolsIn({
+  $defs: {
+    book_list: {
+      tool: true,
+      noun: 'book',
+      verb: 'list',
+      description: 'List books',
+      input: {
+        limit: { type: 'integer', minimum: 1, default: 20, short: 'n' },
+      },
+      outputSchema: { type: 'array', items: { type: 'string' } },
+      readOnly: true,
+      surfaces: ['cli', 'mcp'],
     },
   },
 })
-const tool: Tool = { ...definition, run: () => [] }
+const args = {}
+equal(tool.name, 'book_list')
+equal(validateToolInput(tool, args), { limit: 20 })
+equal(args, {})
+validateToolOutput(tool, ['Dune'])
+await throws(() => validateToolInput(tool, { limit: 0 }))
+await throws(() => validateToolOutput(tool, [12]))
 ```
 
-`toolDefinitionSchema` is the JSON Schema for the declaration itself.
-`validateToolInput(tool, args)` validates a copy of the argument object and
-applies schema defaults. Schemas default to JSON Schema 2020-12; an explicit
-`$schema` selects draft-07, 2019-09, or 2020-12. Unsupported dialects are
-rejected. Local references work; remote references are not fetched.
-`toolOutputValidator(schema)` compiles the same dialects without applying
-defaults, for adapters that need a reusable validator.
-`validateToolOutput(tool, value)` validates against `tool.outputSchema` without
-mutating the result. Validators are cached per schema object. Treat registered
-schemas as immutable.
+`surfaces` selects `cli`, `mcp`, both when omitted, or neither with `[]`.
+`roles` declares process roles: `graph`, `web` or `effects`. These are metadata
+for consumers; this package does not run tools or expose a command line.
 
-Nouns and verbs are single lowercase words (hyphens and digits allowed). A tool
-may declare both, or either one alone. Two words are a command line accepted in
-either order (`session list`, `list session`) and sent to the server as
-`session_list`; one word alone is the whole command and the whole transport
-name, so `"noun": "history"` is `yak history T-5` on the command line and
-`history` over `/mcp`. The entry's own name is the tool's name either way, so a
-tool that already has a name (`land`) may declare neither. `positional` beside
-`input` orders input property names; a final name suffixed `...` takes all
-remaining bare words. `short` on an input property declares its single-letter
-flag. Long options derive from property names. Handlers are functions that
-receive the graph's `Tool` context. The legacy `input` declaration remains
-supported by existing adapters, but cannot be combined with `inputSchema` on the
-same tool. `outputSchema` optionally declares the result schema; tools without
-it have no result validation through this helper.
+`noun` and `verb` are lowercase words with digits and hyphens allowed. Either
+may stand alone or both may be supplied. `positional` orders input property
+names; only its last entry may end in `...` for remaining words. `short` is one
+letter on an input property. `forward` names an array-of-strings input for
+unmatched words. `toolDefinition` validates the same metadata authored in code.
 
-## Rules
+```ts
+import {
+  legacyOptions,
+  publicToolSchema,
+  toolDefinition,
+} from '@yaks/vocab/tools'
+import { equal } from '@yaks/testing'
 
-A `$defs` entry marked `rule: true` declares a graph rule. The graph evaluates
-it during each batch, a list of changes applied in one transaction.
+const tool = toolDefinition({
+  noun: 'find',
+  description: 'Find named books',
+  positional: ['names...'],
+  inputSchema: {
+    type: 'object',
+    properties: {
+      names: { type: 'array', items: { type: 'string' } },
+      limit: { type: 'integer', short: 'n' },
+    },
+  },
+})
+equal(legacyOptions(tool), {
+  positional: [],
+  rest: 'names',
+  short: { n: 'limit' },
+})
+equal(
+  (publicToolSchema(tool.inputSchema!).properties as Record<string, unknown>)
+    .limit,
+  { type: 'integer' },
+)
+```
 
-```json
-{
-  "$defs": {
-    "settle": {
-      "rule": true,
-      "description": "every call gets a result",
-      "match": "$c .call, results=; +result.call=$c",
-      "before": ["sweep"]
-    }
-  }
+`toolDefinitionSchema` describes the metadata. `validateToolInput` clones
+arguments and supplies defaults before checking them. `validateToolOutput`
+checks without applying defaults. `toolCheck(schema)` returns a reusable check
+whose empty error list means valid; `errorsText` formats its errors. Validators
+are cached by schema object, so registered schemas must remain immutable.
+
+Schemas use 2020-12 by default; `$schema` can select draft-07, 2019-09 or
+2020-12. Other dialects are refused. Local references work; remote references
+are not fetched. A code declaration's `inputSchema` cannot be combined with
+`input`. Vocabulary documents declare argument schemas through `input`.
+
+## Rules and effects
+
+`rulesIn` and `effectsIn` read declarations separately from `loadVocab` and
+refuse duplicate names. Rules require a nonempty `match` in the
+[query grammar](../query/README.md). `before` orders rules; `optimistic: true`
+asks [@yaks/client](../client/README.md#rules) to run one before its server
+answers.
+
+```ts
+import { effectsIn, loadVocab, rulesIn } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+const doc = {
+  $defs: {
+    mail: { component: true },
+    settle: {
+      rule: true,
+      match: '.mail, +!queued',
+      before: ['sweep'],
+      optimistic: true,
+    },
+    send_mail: {
+      effect: true,
+      created: ['mail'],
+      sweep: '.mail !sent',
+      tries: 3,
+    },
+  },
 }
+equal(loadVocab(doc).all, ['mail'])
+equal(rulesIn(doc), [{
+  name: 'settle',
+  match: '.mail, +!queued',
+  before: ['sweep'],
+  optimistic: true,
+}])
+equal(effectsIn(doc), [{
+  name: 'send_mail',
+  created: ['mail'],
+  sweep: '.mail !sent',
+  tries: 3,
+}])
 ```
 
-`match` is one or more ordinary query patterns separated by `;`, one per entity,
-joined by the variables they share. Prefix characters specify the actions:
-`+comp` ensures the component, `+!comp` requires absence and adds the component
-to prevent a repeated match, `*comp` is its write set, `$name` names an entity,
-and a `$name` in a value refers to that same variable. `before` names the rules
-this one runs before, to specify execution order.
-
-`optimistic: true` lets a page run the rule on its own copy of the graph as it
-writes ([@yaks/client](../client/README.md#rules)): what it adds shows before
-the server answers, and a refusal stops the write before it is sent. The page
-holds only what it subscribed to, so marking a rule is its author's claim that
-the rule decides correctly from that. A rule that writes only `sync: none`
-components is the page's own and always runs there. Any other rule runs only
-where the whole graph is: on the server, or in a page with no server.
-
-`rulesIn(docs)` reads rule entries, the way `toolsIn` reads tool declarations,
-and `loadVocab` skips both. `match` describes the changes directly; no separate
-handler is required. `@yaks/graph` loads rule declarations from plugin
-documents.
-
-## Effects
-
-A `$defs` entry marked `effect: true` declares what a commit owes after it
-lands: work outside the transaction, such as sending a letter. The declaration
-names the triggers; the code is registered under the same name by whichever
-process runs effects (@yaks/effects `handle`), so every process that loads the
-vocabulary knows what a write owes, whatever code it imported.
-
-```json
-{
-  "$defs": {
-    "mail_post": {
-      "effect": true,
-      "created": ["mail"],
-      "sweep": ".mail&.deliver&!delivered&!bounced&!deliver.tried",
-      "description": "hand an outbound letter to the sender"
-    }
-  }
-}
-```
-
-`created` and `removed` list components; `changed` lists components or
-`comp.prop` for one property; `match` is a pattern in the rule grammar, run
-wherever the batch made it hold. `start: true` is start-up work: a run is owed
-each time a process starts working the effects, its target that process, and
-never by a commit. `tries` bounds the attempts, `idempotent: false` says an
-interrupted run must not run again. `active` is a query that must match
-somewhere before a run is owed. `sweep` is a query whose matches are owed a
-`created` run again whenever a worker starts. `effectsIn(docs)` reads them,
-refuses a name declared twice, and `loadVocab` skips them.
+Effect declarations carry `created` and `removed` component lists, `changed`
+component or property lists, `match`, `start`, `active`, `sweep`, `tries` and
+`idempotent`. At least one of `created`, `changed`, `removed`, `match` or
+`start` must owe work. [@yaks/effects](../effects/README.md) defines their
+execution; [@yaks/graph](../graph/README.md#rules) executes rules. These loaders
+read declarations without parsing queries or running either kind of work.
 
 ## A vocabulary as entities
 
-A vocabulary can be held in a graph, where it is read, searched and linked like
-anything else. The **meta vocabulary** (this package's `vocab.json`, `metaDoc`)
-declares the components it is held in:
+The **meta vocabulary** is `metaDoc`, the components that describe a vocabulary
+as [bundles](../graph/README.md#data-model) in a graph. Its `./vocab` export
+lets a host compose it alongside [@yaks/doc](../doc/README.md) and
+[@yaks/edge](../edge/README.md).
 
-| component  | one per                                                                       | its `doc`                       |
-| ---------- | ----------------------------------------------------------------------------- | ------------------------------- |
-| `_package` | package a document is (`VocabDoc.package`)                                    | its name; its description       |
-| `_comp`    | component a document declares, in `package`                                   | its name; its description       |
-| `_extends` | component a document extends, from `package`, with the `status` rungs it adds | `comp+package`; its description |
-| `_prop`    | property, in `comp` at `ord`, from `package`                                  | `comp.prop`; its description    |
-| `_before`  | kind a kind sorts before, an @yaks/edge relation with `edge.ord` its place    | none                            |
-| `_vocab`   | graph: `hash`, the SHA-256 of the rows as they were last described            | none                            |
+| Component  | Describes                                                     |
+| ---------- | ------------------------------------------------------------- |
+| `_package` | A vocabulary document's package                               |
+| `_comp`    | A declared component and its package                          |
+| `_extends` | A component extension, its package and its added status rungs |
+| `_prop`    | A property, its component, declaration order and package      |
+| `_before`  | An edge from a kind to a kind it sorts before                 |
+| `_vocab`   | A graph's vocabulary hash                                     |
 
-A keyword with a column of its own is written there; every other keyword an
-entry says, another package's (`prefix`, `store`) or JSON Schema's own
-(`minLength`), rides verbatim in `keywords`. `_prop.type` holds a union as the
-list it is. `_prop.package` names the package that declares the property, so a
-property another package adds with `extends` is told from the component's own,
-and a `_package` shows what it declares and what it extends. The components are
-`wire: false`: a graph fills them, and clients read them. Their names start with
-`_`, which no authored name can.
+These components are `wire: false`. `_package`, `_comp`, `_extends` and `_prop`
+carry `doc` for their name and description. Keywords without their own meta
+vocabulary property are retained verbatim in `keywords`, including extension
+keywords and native JSON Schema keywords. Type unions remain lists.
 
-`toBundles(doc, id)` reads one document into bundles, and `fromBundles(rows)`
-turns rows back into documents, one per package, that `loadVocab` loads as the
-vocabulary they came from. `id` is the graph's own derivation of a declared
-identity: a `_package` and a `_comp` are identified by their names, an
-`_extends` by its component and its package, and a `_prop` by its component and
-its name, so each document is read on its own and an extension's properties land
-on the component another document declares, whichever is read first. A `before`
-naming a kind no document declares does not come back from `fromBundles`; it
-constrains nothing in `kindOrder` either.
+`toBundles(doc, id)` projects component declarations; tools, rules and effects
+are omitted. Its `id` callback derives the declared identities using the graph's
+`identities`. `fromBundles` reconstructs one vocabulary document per package,
+including extensions. A `_before` edge naming an absent component is omitted.
+`_vocab` is not produced by `toBundles`.
 
-```ts ignore
+```ts
 import { identities } from '@yaks/graph'
+import { docs } from '@yaks/vocab/vocab'
+import { fromBundles, loadVocab, metaDoc, toBundles } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
 
-let derive = identities(g.vocab)
-let id = (comp, values) => derive[comp](values, { entity: { eid: '' } })
-await g.apply(toBundles(doc, id), { trusted: true })
-await g.read('._comp ?doc') // every component, named
-await g.read('._prop.comp._comp.name=mail .order=_prop.ord ?doc') // mail's
-await g.read('._prop.ref=mail ?doc') // what refers to mail
-await g.read('._prop.package._package.name=@yaks/id ?doc') // what @yaks/id adds
+const derive = identities(loadVocab(metaDoc))
+const id = (
+  comp: '_package' | '_comp' | '_extends' | '_prop',
+  values: Record<string, unknown>,
+) => derive[comp](values, { entity: { eid: '' } })
+const doc = {
+  package: '@example/catalog',
+  $defs: {
+    book: {
+      component: true,
+      kind: true,
+      properties: { title: { type: 'string', minLength: 1 } },
+    },
+  },
+}
+const rows = toBundles(doc, id)
+const [restored] = fromBundles(rows)
+equal(docs, [metaDoc])
+equal(restored.package, '@example/catalog')
+equal(restored.$defs?.book.properties?.title.minLength, 1)
+equal(loadVocab(restored).all, ['book'])
 ```
 
-A host composes the meta vocabulary by listing `@yaks/vocab` among its plugins
-(its `./vocab` export), beside `@yaks/edge` and `@yaks/doc`. `@yaks/code` fills
-it with the vocabulary the graph is served with, each time a process starts.
+## Comparing declarations
 
-## Exports
+`same` compares type unions as sets and compares formats, ignoring description
+and other keywords. `changed` compares `$defs`, including tool entries, and
+reports `dropped`, `added` and `retyped` names. A property is named
+`definition.property`; a retyped name is also added.
 
-The root export includes `loadVocab`, `Vocab`, schema and property types, the
-`Unknown` lookup error and its `unqualified` message, `pick`, `storable`,
-`reserved`, `kindOrder`, `composite`, `same`, `changed`, state-lifetime helpers,
-`rulesIn`, `RuleDecl`, `effectsIn` and `EffectDecl`. `CORE_URI`,
-`coreVocabulary` and `metaSchema` expose the bundled schema documents;
-`Keywords`, `JsonSchema` and `extendMeta` support extensions. `metaDoc`,
-`toBundles`, `fromBundles`, `Ids` and `Bundle` hold a vocabulary as entities.
+```ts
+import { changed, same } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
 
-The `@yaks/vocab/tools` sub-module exports `ToolDefinition`, `toolDefinition`,
-`toolDefinitionSchema`, `toolsIn`, `toolsSaid`, `validateToolInput`,
-`validateToolOutput` and `toolOutputValidator`. `toolsSaid` loads declarations
-without compiling argument validators; `toolsIn` also validates metadata,
-input/output schemas and option mappings.
+equal(same({ type: ['string', 'array'] }, { type: ['array', 'string'] }), true)
+const was = {
+  $defs: {
+    book: {
+      component: true,
+      properties: {
+        price: { type: 'number' },
+        title: { type: 'string' },
+      },
+    },
+  },
+}
+const next = {
+  $defs: {
+    book: {
+      component: true,
+      properties: {
+        price: { type: 'string' },
+        pages: { type: 'integer' },
+      },
+    },
+  },
+}
+equal(changed(was, next), {
+  dropped: ['book.title'],
+  added: ['book.price', 'book.pages'],
+  retyped: ['book.price'],
+})
+```
 
-`same` compares a declaration’s type union and format, ignoring prose and other
-keywords. `changed(was, next)` compares `$defs` (components and tools alike) and
-returns `dropped`, `added`, and `retyped` names. Properties are named
-`definition.property`; retyped words are also additions. It reads no stored
-rows: retaining populated words is the store’s responsibility.
+These helpers read no stored data. The store decides which populated
+declarations can change and how to migrate them.
+
+## Numeric constraints
+
+A **score** is a finite weighted sum declared as `{ sum: [...] }`. Each **term**
+selects the complete component or bounded array members with `each`, filters
+exact fields with `where`, and multiplies its `product` of **factors**. A factor
+is a number or `{ field, default?, inverse? }`; an inverse divides by a positive
+field value. A **numeric constraint** declares
+`{ name, value, maximum, message }`, with a score as `value`.
+
+```ts
+import { constraintErrors, numberOf } from '@yaks/vocab/constraints'
+import { equal } from '@yaks/testing'
+
+const value = {
+  sum: [{
+    each: 'effects',
+    where: { kind: 'damage' },
+    product: [{ field: 'scale' }, { field: 'hits', default: 1 }],
+  }],
+}
+equal(
+  numberOf(value, {
+    effects: [
+      { kind: 'damage', scale: 2, hits: 3 },
+      { kind: 'damage', scale: 4 },
+      { kind: 'healing', scale: 20 },
+    ],
+  }),
+  10,
+)
+equal(
+  constraintErrors([
+    { name: 'damage', value, maximum: 12, message: 'Damage exceeds 12' },
+  ]),
+  [],
+)
+```
+
+`numberOf` bounds scores to 100 terms, products to 16 factors and selected
+arrays to 100 objects. It refuses non-finite factors, invalid reciprocals and
+negative scores. `constraintErrors` checks declaration shape; a schema plugin
+checks the maximum on the complete patched component.
+
+## Limits
+
+The root export has no platform-specific storage or external runtime dependency.
+`@yaks/vocab/tools` uses `@cfworker/json-schema` without generating code,
+including in Cloudflare Workers. Both can run in Deno and Node through JSR.
+
+This package declares and reads metadata. Storage belongs to
+[@yaks/ram](../ram/README.md), [@yaks/sqlite](../sqlite/README.md) and other
+adapters; writes and rule execution belong to [@yaks/graph](../graph/README.md);
+full instance checking belongs to `admitSchema` from
+[@yaks/graph/schema](../graph/README.md#admission-and-schema-checks). References
+do not grant access or restrict who may read an entity.
