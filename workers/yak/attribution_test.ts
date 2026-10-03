@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { graph, Stale } from '@yaks/graph'
+import { type Comp, graph, Stale } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { spineDoc } from '@yaks/kernel/vocab'
@@ -67,7 +67,7 @@ test('a byline that moved after selection cannot be assigned to the wrong browse
   }
   await assertRejects(() => attributed(changed, 'browser', 'ada'), Stale)
   let [row] = await g.get(['a'])
-  assertEquals(row.created?.by, undefined)
-  assertEquals(row.updated?.via, 'another')
-  assertEquals(row.updated?.by, undefined)
+  assertEquals((row.created as Comp)?.by, undefined)
+  assertEquals((row.updated as Comp)?.via, 'another')
+  assertEquals((row.updated as Comp)?.by, undefined)
 })

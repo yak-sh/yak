@@ -105,9 +105,9 @@ tasks live on with a null `project`.
     })
     await apply({ entity: { eid }, task: {}, filed: { project: aliases.$p } })
 
-**`comment`** — `target` (eid), `reply_to` (eid). A note aimed at _any_ entity — a recipe, a
-photo, another comment. The note's own words go in its `doc`. The comment dies
-with its target, so a deleted recipe takes its thread with it.
+**`comment`** — `target` (eid), `reply_to` (eid). A note aimed at _any_ entity —
+a recipe, a photo, another comment. The note's own words go in its `doc`. The
+comment dies with its target, so a deleted recipe takes its thread with it.
 
     await apply({ entity: { eid: '$n' },
       doc: { body: 'Halve the sugar.' }, comment: { target: recipe } })
