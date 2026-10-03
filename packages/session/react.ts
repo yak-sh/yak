@@ -1,7 +1,14 @@
 import { compactAsk } from './compact_ask.ts'
 import { CallError, runner, UnfinishedCall } from '@yaks/tools'
 export { CallError as ToolError } from '@yaks/tools'
-import { argsOf, identityEid, Stale, token, transient } from '@yaks/graph'
+import {
+  argsOf,
+  identityEid,
+  Refused,
+  Stale,
+  token,
+  transient,
+} from '@yaks/graph'
 // The runner's one step. `react(graph, session)` reads the newest entry of a
 // transcript and does the one next thing it calls for: a pending input or
 // result asks the model; an open tool call is run; a failure the provider may
@@ -904,10 +911,19 @@ export let react = async (
     )
     : undefined
   // Resolve media once, before admission, and project beside its source entry.
-  let media = await deps.contextItems?.(window, entries)
-  let dynamic =
-    await deps.requestItems?.(window, entries, { session, tools }) ??
+  let media: Map<Eid, Item[]> | undefined
+  let dynamic: Item[]
+  try {
+    media = await deps.contextItems?.(window, entries)
+    dynamic = await deps.requestItems?.(window, entries, { session, tools }) ??
       []
+  } catch (error) {
+    // A host refusing to prepare context cannot be fixed by asking again.
+    // Record it before returning, so the pool and restart sweep see an ended
+    // transcript and the runner delivers it and releases its child place.
+    if (!(error instanceof Refused)) throw error
+    return append([line({ [REFUSAL]: { code: 'context' } }, error.message)])
+  }
   let req: Request = {
     signal: deps.signal,
     model: spelled,

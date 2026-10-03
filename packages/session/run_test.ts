@@ -7,12 +7,13 @@
 // Processes here are graphs over one in-memory SQLite store, which computes a
 // transcript's status the way a box's does.
 
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import {
   type Bundle,
   type Comp,
   graph,
   identityEid,
+  Refused,
   type Storage,
 } from '@yaks/graph'
 import { storage } from '@yaks/sqlite'
@@ -196,6 +197,73 @@ let clocked = async (model: Model) => {
   }
   return { p, at, status, last, due }
 }
+
+for (let hook of ['contextItems', 'requestItems'] as const) {
+  test(`a ${hook} refusal ends a child once, including across restart`, async () => {
+    let s = store()
+    let { model, asked } = fake()
+    let preparations = 0, reports = 0, unavailable = true
+    let p = proc(s, 'w1', model, {
+      [hook]: () => {
+        preparations++
+        return unavailable
+          ? Promise.reject(new Refused('Checkout is unavailable'))
+          : Promise.resolve(hook == 'contextItems' ? new Map() : [])
+      },
+      report: () => reports++,
+    })
+    await p.g.apply([
+      { entity: { eid: 'root' }, session: {} },
+      ...child('c1', 1),
+    ])
+    await p.fx.work(p.g)
+    await p.fx.idle()
+    let entries = await transcript(p.g, 'c1')
+    assertEquals(statusOf(entries), 'failed')
+    assertEquals(textOf(entries.at(-1)!), 'Checkout is unavailable')
+    assertEquals((entries.at(-1)!.refusal as Comp).code, 'context')
+    let [row] = await p.g.get(['c1'])
+    assertEquals((row.session as Comp).status, 'failed')
+    assertEquals((row.dispatch as Comp).status, 'settled')
+    let receipts = await transcript(p.g, 'root')
+    assertEquals(receipts.length, 1)
+    assert(textOf(receipts[0]).includes('failed'))
+    assertEquals(asked.length, 0)
+    assertEquals(reports, 0)
+    assertEquals(await p.g.read('.effect.state=failed'), [])
+
+    await settle(p.g, 'c1', p.r)
+    let next = proc(s, 'w2', model, { ...p.r, holder: 'w2' })
+    await next.fx.work(next.g)
+    await next.fx.idle()
+    assertEquals(preparations, 1)
+    assertEquals(await transcript(next.g, 'c1'), entries)
+    assertEquals(await transcript(next.g, 'root'), receipts)
+
+    // Explicit new input can recover after the host can prepare context again.
+    unavailable = false
+    await next.g.apply([{
+      entity: { eid: 'c1:more' },
+      entry: { session: 'c1' },
+      content: { body: 'continue' },
+      using: { provider: P, model: M },
+    }])
+    await settle(next.g, 'c1', next.r)
+    assertEquals(statusOf(await transcript(next.g, 'c1')), 'settled')
+    assertEquals(asked.length, 1)
+  })
+}
+
+test('unexpected context errors remain failures of the run', async () => {
+  let { model, asked } = fake()
+  let p = proc(store(), 'w1', model, {
+    requestItems: () => Promise.reject(new Error('Context defect')),
+  })
+  await p.g.apply(ask('s1'))
+  await assertRejects(() => settle(p.g, 's1', p.r), Error, 'Context defect')
+  assertEquals(await kinds(p, 's1'), ['input'])
+  assertEquals(asked.length, 0)
+})
 
 test('a request one process writes is answered by a process working the pool', async () => {
   let s = store()
