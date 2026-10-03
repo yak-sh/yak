@@ -11,6 +11,15 @@ import { files } from '../tracker/file.ts'
 import { caught, spool } from '../tracker/report.ts'
 
 let exists = (path: string) => Deno.stat(path).then(() => true, () => false)
+let gone = (pid: number) => {
+  try {
+    Deno.kill(pid, 0)
+    return false
+  } catch (error) {
+    if (error instanceof Deno.errors.NotFound) return true
+    throw error
+  }
+}
 let text = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
 let root = new URL('../../deno.json', import.meta.url).pathname
 let cli = new URL('./yak.ts', import.meta.url).pathname
@@ -144,17 +153,17 @@ test('restart drains tracker intake without losing its spool or coupling its web
       await Deno.readTextFile(`${dir}/held`),
       String(oldTracker.proc.pid),
     )
-    let run = async (_command: string, args: string[]) => {
+    let run = (_command: string, args: string[]) => {
       let action = args.includes('list-units') ? 'list' : args[2]
       events.push(action)
       if (action == 'list') {
-        return {
+        return Promise.resolve({
           code: 0,
           stderr: '',
           stdout: [old.unit, oldTracker.unit, web.unit].map(
             (unit) => `${unit} loaded active running probe`,
           ).join('\n'),
-        }
+        })
       }
       let units = args.slice(3)
       if (action == 'start') {
@@ -167,7 +176,7 @@ test('restart drains tracker intake without losing its spool or coupling its web
           void exit(child).then(() => start(unit, tracker, true))
         }
       }
-      return { code: 0, stdout: '', stderr: '' }
+      return Promise.resolve({ code: 0, stdout: '', stderr: '' })
     }
     await restart({
       runtimeDir: dir,
@@ -220,14 +229,7 @@ test('restart drains tracker intake without losing its spool or coupling its web
     await Promise.all(children.map((child) => child.output))
     await Promise.all(hosts.map((host) => host.close()))
     for (let child of children) {
-      let gone = false
-      try {
-        Deno.kill(child.proc.pid, 0)
-      } catch (error) {
-        if (!(error instanceof Deno.errors.NotFound)) throw error
-        gone = true
-      }
-      assert(gone, `owned pid ${child.proc.pid} remains`)
+      assert(gone(child.proc.pid), `owned pid ${child.proc.pid} remains`)
     }
     for (let port of ports) {
       let listener = Deno.listen({ hostname: '127.0.0.1', port })

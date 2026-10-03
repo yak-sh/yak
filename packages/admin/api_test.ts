@@ -9,7 +9,7 @@ import {
   assertThrows,
 } from '@std/assert'
 import { type Bundle, graph } from '@yaks/graph'
-import { type And, parse } from '@yaks/query'
+import { parse } from '@yaks/query'
 import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { docDoc } from '@yaks/doc'
@@ -172,7 +172,7 @@ let mailbox = async (letters: Bundle[]) => {
   let vocab = loadVocab([entity, docDoc, mailDoc])
   let g = graph({ storage: ram(vocab), vocab })
   await g.apply(letters)
-  return (q: And) => g.read(q)
+  return g.read
 }
 
 test('the code is found by its address among many newer letters', async () => {

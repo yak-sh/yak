@@ -36,7 +36,7 @@ let doc = {
   },
 }
 let rows = lensesIn([doc]), pkg = packageEid('kitchen')
-let lens = compile(rows)
+let cached = batches(rows), lens = compile(rows)
 let b = (comps: Omit<Bundle, 'entity'>): Bundle => ({
   entity: { eid: 'cake' },
   ...comps,
@@ -185,7 +185,7 @@ test('steps compose in order, and a current caller receives its exact inputs', (
     current.put(bundle) === bundle && current.get(bundle) === bundle &&
       current.ask(query) === query,
   )
-  ok(compile(rows) === lens)
+  ok(batches(rows) === cached)
   ok(compile([]).put(bundle) === bundle)
 })
 
