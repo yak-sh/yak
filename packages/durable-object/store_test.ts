@@ -112,3 +112,51 @@ test('a value the engine will not take never reaches it', () => {
   )
   assert(s.read('.product.available=0').length == 1)
 })
+
+test('reads inherit an enclosing transaction while nested writes keep rollback', () => {
+  using db = durable()
+  let transactions = 0
+  let transact = db.transactionSync.bind(db)
+  db.transactionSync = (body) => {
+    transactions++
+    return transact(body)
+  }
+  let s = storage(db, shop)
+  s.install()
+  transactions = 0
+  s.tx((tx) => {
+    tx.patch([{ entity: { eid: 'p1' }, doc: { title: 'kept' } }])
+    assertEquals(comp((s.get(['p1']) as Bundle[])[0], 'doc').title, 'kept')
+    assertEquals((s.read('.doc.title=kept') as Bundle[])[0].entity.eid, 'p1')
+    assertThrows(() =>
+      s.tx((nested) => {
+        nested.patch([{ entity: { eid: 'p1' }, doc: { title: 'rolled back' } }])
+        throw new Error('cancel inner write')
+      })
+    )
+    assertEquals(comp((s.get(['p1']) as Bundle[])[0], 'doc').title, 'kept')
+  })
+  assertEquals(transactions, 2)
+  transactions = 0
+  assertEquals(comp((s.get(['p1']) as Bundle[])[0], 'doc').title, 'kept')
+  assertEquals(transactions, 1)
+})
+
+test('an empty identity lookup opens no transaction or SQL statement', () => {
+  using db = durable()
+  let transactions = 0, statements = 0
+  let transact = db.transactionSync.bind(db), exec = db.sql.exec.bind(db.sql)
+  db.transactionSync = (body) => {
+    transactions++
+    return transact(body)
+  }
+  db.sql.exec = (query, ...params) => {
+    statements++
+    return exec(query, ...params)
+  }
+  let s = storage(db, shop)
+  s.install()
+  transactions = statements = 0
+  assertEquals(s.get([]), [])
+  assertEquals([transactions, statements], [0, 0])
+})

@@ -33,8 +33,23 @@ export let unit = <R>(
   body: () => R,
   mode: 'write' | 'read' = 'write',
 ): R => {
-  if (driver.tx) return driver.tx(body)
   let held = depth.get(driver) ?? 0
+  // A read already has the outer unit's snapshot. Opening another savepoint
+  // adds no isolation; writes still need their own rollback boundary.
+  if (mode == 'read' && held) return body()
+  if (driver.tx) {
+    depth.set(driver, held + 1)
+    let close = () => depth.set(driver, (depth.get(driver) ?? 1) - 1)
+    try {
+      let out = driver.tx(body)
+      if (out instanceof Promise) return out.finally(close) as R
+      close()
+      return out
+    } catch (error) {
+      close()
+      throw error
+    }
+  }
   let outer = !!driver.file && held == 0
   let name = `yaks_tx_${held}`
   try {

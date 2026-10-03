@@ -512,6 +512,7 @@ export let storage = (
       return screened(driver, vocab, query, { ...opts(), ...o })
     },
     get: (eids, comps) => {
+      if (!eids.length) return []
       ensure()
       return unit(driver, () => identity(eids, comps), 'read')
     },
