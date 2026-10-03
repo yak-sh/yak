@@ -166,3 +166,22 @@ test('the service collects each repository the graph knows', async () => {
     await f.free()
   }
 })
+
+test('collection retires externally removed observations and preserves managed restore history', async () => {
+  let f = await fixture()
+  try {
+    let gone = await f.cut('gone')
+    let managed = await f.cut('managed')
+    let tree = await discover(f.g, gone)
+    let saved = await discover(f.g, managed)
+    await f.g.apply([{ entity: saved.entity, worktree: { managed: true } }])
+    await git(f.repo, 'worktree', 'remove', gone)
+    await git(f.repo, 'worktree', 'remove', managed)
+    assertEquals(await collect(f.g, f.common), {})
+    assertEquals((await f.g.get([tree.entity.eid]))[0]?.worktree, undefined)
+    assert((await f.g.get([saved.entity.eid]))[0]?.worktree)
+    assertEquals(await collect(f.g, f.common), {})
+  } finally {
+    await f.free()
+  }
+})

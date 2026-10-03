@@ -3,6 +3,7 @@
 
 import { type Bundle, type Comp, type Graph, Refused } from '@yaks/graph'
 import { and, eq, every, present } from '@yaks/query'
+import { locate } from '@yaks/git/host'
 import { SKILL } from './comp.ts'
 import { parseSkill, renderSkill } from './skill-text.ts'
 
@@ -163,30 +164,6 @@ export let skillFiles = async (
   return files
 }
 
-type Checkout = { root: string; common: string }
-
-let checkout = async (cwd: string): Promise<Checkout | undefined> => {
-  let git = async (arg: string): Promise<string | undefined> => {
-    let result = await new Deno.Command('git', {
-      cwd,
-      args: ['rev-parse', '--path-format=absolute', arg],
-      stdout: 'piped',
-      stderr: 'piped',
-    }).output()
-    return result.success
-      ? new TextDecoder().decode(result.stdout).trim()
-      : undefined
-  }
-  let root = await git('--show-toplevel')
-  if (!root) return undefined
-  let common = await git('--git-common-dir')
-  if (!common) return undefined
-  return {
-    root: await Deno.realPath(root),
-    common: await Deno.realPath(common),
-  }
-}
-
 // Never follow a link in the skill tree. Missing files represent deletions,
 // not permission to fall back to the graph's last imported instructions.
 let plain = async (path: string, directory: boolean): Promise<boolean> => {
@@ -252,7 +229,7 @@ let localSkills = async (
  * replace its graph skills, including untracked additions and deletions. */
 export let skillsAt = async (g: Graph, cwd?: string): Promise<Bundle[]> => {
   if (cwd == undefined) return repoSkills(g)
-  let at = await checkout(cwd)
+  let at = await locate(cwd)
   if (!at) return []
   let repositories = g.vocab.comps.includes('repository')
     ? await g.read(and(eq('repository.common', at.common), every()))
@@ -260,7 +237,7 @@ export let skillsAt = async (g: Graph, cwd?: string): Promise<Bundle[]> => {
   // An unregistered checkout still has readable local skills, but neither its
   // repository nor their temporary view identities are written to the graph.
   let repository = repositories[0]?.entity.eid ?? `view:repository:${at.common}`
-  return localSkills(g, at.root, await repoSkills(g, repository))
+  return localSkills(g, at.path, await repoSkills(g, repository))
 }
 
 /** Select an exact folder name. Without a checkout, duplicate names across

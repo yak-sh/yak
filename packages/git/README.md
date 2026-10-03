@@ -457,11 +457,11 @@ are async, writing an object is async too.
 
 Here a **host** is the process that opened the graph and runs these operations.
 `@yaks/git/host` adds `discover`, `checkoutAt`, `createWorktree`, `holds`,
-`reclaim`, `lost`, `idleFor`, `linked` and `restore`, which run `git` as a
-subprocess and therefore need Deno. They are kept out of the main entry point,
-which still type-checks with only the web platform in scope. Load `checkoutDoc`
-to get just the four components below — `repository`, `worktree`, `ref` and
-`checkout` — without the Git object components.
+`reclaim`, `lost`, `idleFor`, `linked`, `locate`, `reconcile` and `restore`,
+which run `git` as a subprocess and therefore need Deno. They are kept out of
+the main entry point, which still type-checks with only the web platform in
+scope. Load `checkoutDoc` to get just the four components below — `repository`,
+`worktree`, `ref` and `checkout` — without the Git object components.
 
 Git is authoritative here; the graph holds an observation of it that can be
 refreshed at any time without changing anything.
@@ -528,10 +528,18 @@ process uses it. A `managed` worktree is left to the harness, which takes those
 back when their session ends (@yaks/harness `worktrees.ts`). The `idle` and
 `every` options change the two durations.
 
+`locate(cwd)` reads the canonical checkout root, common Git directory and
+worktree Git directory without writing to the graph. It returns no observation
+when the directory is missing or is not a checkout; other failures remain
+errors. `reconcile(g, common)` removes the `worktree` component from missing
+unmanaged checkouts in that repository, keeping their entities and other
+components. Managed rows retain the history `restore` needs. The service
+reconciles each repository before collecting its idle worktrees.
+
 Identity and locking assume one filesystem and one shared graph, used by
 cooperating processes on that machine. A checkout moved on disk, or changed by
-Git outside this package, is noticed the next time discovery runs; there is no
-background reconciliation.
+Git outside this package, is noticed the next time discovery runs; the service
+reconciles missing unmanaged checkouts on each pass.
 
 ## Reading a commit's source paths
 

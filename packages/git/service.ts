@@ -24,6 +24,7 @@ import {
   linked,
   processCwds,
   reclaim,
+  reconcile,
   repositoryEid,
   worktreeEid,
 } from './host.ts'
@@ -52,6 +53,7 @@ export let collect = async (
   idle: number = IDLE,
   now: number = Date.now(),
 ): Promise<Record<string, Held>> => {
+  await reconcile(g, common)
   let kept: Record<string, Held> = {}
   let repository = repositoryEid(common)
   let live = async () => {

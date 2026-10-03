@@ -98,6 +98,56 @@ let locked = async <T>(
   }
 }
 
+/** Canonical Git directories for the checkout containing `cwd`, or nothing
+ * when that directory is gone or is not a checkout. Other filesystem and
+ * subprocess failures remain errors. This observation writes no graph rows. */
+export let locate = async (cwd: string): Promise<
+  { path: string; common: string; gitdir: string } | undefined
+> => {
+  let dirs: string | undefined
+  try {
+    dirs = await git(cwd, [
+      'rev-parse',
+      '--path-format=absolute',
+      '--show-toplevel',
+      '--git-common-dir',
+      '--absolute-git-dir',
+    ], true)
+  } catch (error) {
+    if (!(error instanceof Deno.errors.NotFound)) throw error
+    // ENOENT can also mean the git executable is missing. Only a missing
+    // checkout directory is an absent observation.
+    try {
+      await Deno.stat(cwd)
+    } catch (missing) {
+      if (missing instanceof Deno.errors.NotFound) return undefined
+      throw missing
+    }
+    throw error
+  }
+  if (!dirs) return undefined
+  let [path, common, gitdir] = await Promise.all(
+    dirs.split('\n').map((dir) => Deno.realPath(dir)),
+  )
+  return { path, common, gitdir }
+}
+
+/** Retire missing unmanaged checkout observations, keeping the entity and its
+ * other components. Managed rows retain the history required by restore. */
+export let reconcile = async (g: Graph, common: string): Promise<void> => {
+  let repository = repositoryEid(common)
+  for (let tree of await g.read('.worktree.repository=' + repository)) {
+    let w = tree.worktree as Comp
+    if (w.managed || typeof w.path != 'string') continue
+    try {
+      await Deno.stat(w.path)
+    } catch (error) {
+      if (!(error instanceof Deno.errors.NotFound)) throw error
+      await g.apply([{ entity: tree.entity, worktree: null }])
+    }
+  }
+}
+
 /** Find the checkout containing `cwd`, and update the repository's refs from
  * Git. A ref that Git no longer has keeps its row, marked absent. */
 export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
@@ -105,13 +155,7 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
   // holds `cwd`, from wherever in it `cwd` is, and a session opening pays for
   // one round of processes rather than six in a row.
   let [dirs, head, branch, refs] = await Promise.all([
-    git(cwd, [
-      'rev-parse',
-      '--path-format=absolute',
-      '--show-toplevel',
-      '--git-common-dir',
-      '--absolute-git-dir',
-    ]),
+    locate(cwd),
     git(cwd, ['rev-parse', '--verify', 'HEAD'], true),
     git(cwd, ['symbolic-ref', '-q', 'HEAD'], true),
     git(cwd, [
@@ -119,9 +163,8 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
       '--format=%(refname)%09%(objectname)%09%(symref)',
     ]),
   ])
-  let [path, common, gitdir] = await Promise.all(
-    dirs!.split('\n').map((dir) => Deno.realPath(dir)),
-  )
+  if (!dirs) throw new Error('not a checkout: ' + cwd)
+  let { path, common, gitdir } = dirs
   let repository = repositoryEid(common)
   let eid = worktreeEid(repository, path)
   let bundles: Bundle[] = [{
@@ -320,7 +363,7 @@ export let checkoutAt = async (
   g: Graph,
   cwd: string,
 ): Promise<Bundle | undefined> => {
-  if (await git(cwd, ['rev-parse', '--is-inside-work-tree'], true) != 'true') {
+  if (!await locate(cwd)) {
     return undefined
   }
   return discover(g, cwd)

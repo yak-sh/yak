@@ -417,3 +417,20 @@ test('skill catalogue filters authored refusals but propagates unexpected metada
   b.skill = { invoke: 'neither' }
   assertEquals(await repoSkills(g), [])
 })
+
+test('a missing checkout has no local skills and never falls back to graph instructions', async () => {
+  let g = world()
+  await g.apply(skill('held', 'review'))
+  let dir = await Deno.makeTempDir({ prefix: 'missing-skills-' })
+  try {
+    assertEquals(await skillsAt(g, dir + '/removed'), [])
+    assertEquals((await repoSkills(g)).length, 1)
+    await assertRejects(
+      () => loadSkill(g, 'review', dir + '/removed'),
+      Refused,
+      'No skill',
+    )
+  } finally {
+    await Deno.remove(dir, { recursive: true })
+  }
+})
