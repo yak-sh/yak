@@ -45,6 +45,8 @@ import { docs as canvas } from '@yaks/canvas/vocab'
 import { docs as tmux } from '@yaks/tmux/vocab'
 import { docs as platform } from '@yaks/platform/vocab'
 import { docs as member } from '@yaks/member/vocab'
+import { docs as inbox } from '@yaks/inbox/vocab'
+import { docs as harness } from '@yaks/harness/vocab'
 import { docs as admin } from '@yaks/admin/vocab'
 
 // A test's localStorage is its own, and starts empty the way a new browser's
@@ -107,6 +109,8 @@ learn([
   platform,
   member,
   admin,
+  inbox,
+  harness,
 ].flatMap((d) => d ?? []))
 
 /**

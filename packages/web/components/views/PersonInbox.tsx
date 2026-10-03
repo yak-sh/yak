@@ -1,26 +1,103 @@
 // The person sees threads; membership, lanes and ordering belong to @yaks/inbox.
 import { type ComponentChild } from 'preact'
 import { attention, lanes, type Search, type Thread } from '@yaks/inbox'
-import { useRef } from 'preact/hooks'
+import { useRef, useState } from 'preact/hooks'
 import { Button, Inbox as Frame, Tabs } from '@yaks/ui'
+import { type Bundle, identityEid } from '@yaks/graph'
+import { useLayoutEffect } from 'preact/hooks'
 import { type Row } from '../../client.ts'
-import { apply, ent } from '../../live.ts'
-import { type Ent } from '../../types.ts'
-import { Branches, Composer } from '../Comments.tsx'
+import { apply, ent, rowsSub, uuid } from '../../live.ts'
+import { type Ent, idOf, vocab } from '../../types.ts'
+import { Branches, Composer, ComposerInput } from '../Comments.tsx'
 import { Decision } from '../Decision.tsx'
 import { Dot } from '../Dot.tsx'
 import { Entity } from '../Entity.tsx'
-import { useDraft } from '../drafts.ts'
+import { drafts, useDraft } from '../drafts.ts'
 import { linkProps } from '../nav.tsx'
 import { Stamp } from '../Stamp.tsx'
 import { Markdown } from '../Markdown.tsx'
 import { usePage } from '../page.ts'
 import { pending, repoUrl } from '../../live.ts'
 import { useInboxThreads } from '../useInbox.ts'
+import { useQuery } from '../useQuery.ts'
 
 export let inboxSearchPlace = (actor: string) => `${actor}.inbox.search`
 export let markThread = (eid: string, mark: 'opened' | 'archived') =>
   void apply(attention(eid, mark)).catch(() => {})
+
+// One place across browser and terminal; sending spends only this draft.
+export let conversationPlace = (actor: string) => `${actor}.inbox.new`
+export let conversationCall = (text: string): Bundle[] => [{
+  entity: { eid: uuid() },
+  call: { to: identityEid('tool', ['inbox_new']), args: { text } },
+}]
+
+export let NewConversation = ({ actor }: { actor: string }) => {
+  let input = useRef<HTMLTextAreaElement>(null)
+  let [text, setText] = useState(() => drafts.text(conversationPlace(actor)))
+  let { sync, spend } = useDraft(conversationPlace(actor), input, setText)
+  let post = () => {
+    let words = input.current?.value ?? ''
+    if (!words.trim()) return
+    // The tool runner writes as the caller. Never trim the actual words or
+    // mint a session here: routing is the separately enabled harness effect.
+    spend(conversationCall(words))
+    input.current!.value = ''
+    setText('')
+  }
+  return (
+    <section aria-label='New conversation'>
+      <ComposerInput
+        elRef={input}
+        rows={2}
+        aria-label='New conversation'
+        placeholder='New conversation…'
+        onInput={(event: Event) =>
+          sync(event.currentTarget as HTMLTextAreaElement)}
+        onKeyDown={(event: KeyboardEvent) => {
+          if (event.key != 'Enter' || event.shiftKey) return
+          event.preventDefault()
+          post()
+        }}
+      />
+      <Button type='button' disabled={!text.trim()} onClick={post}>
+        Start conversation
+      </Button>
+    </section>
+  )
+}
+
+// Answer links hold the sessions themselves: their status is computed on the
+// session read, not copied onto a thread or inferred from its last reply.
+export let AnsweringSessions = ({ root }: { root: string }) => {
+  let links = useQuery(
+    vocab.comp('answers') ? `.answers&.edge.to=${root}&?edge` : '',
+  )
+  let ids = [
+    ...new Set(links.map((e) => String((e.edge as { from: string }).from))),
+  ]
+  let key = ids.join(',')
+  useLayoutEffect(() => rowsSub(key ? key.split(',') : []), [key])
+  return ids.length
+    ? (
+      <section aria-label='Answering sessions'>
+        {ids.map((eid) => {
+          let session = ent(eid)
+          let status = session.session?.status
+          return (
+            <p key={eid}>
+              <a {...linkProps(session)}>
+                {status && <Dot status={status} />} answering ·{' '}
+                {session.doc?.title || idOf(session)} ·{' '}
+                {status || 'Loading session…'}
+              </a>
+            </p>
+          )
+        })}
+      </section>
+    )
+    : null
+}
 
 let preview = (r: Row) =>
   [
@@ -39,6 +116,7 @@ let Conversation = ({ thread: t }: { thread: Thread<Row> }) => {
   return (
     <Frame.Detail>
       <a {...linkProps(e)}>open {e.doc?.title || 'thread'}</a>
+      <AnsweringSessions root={t.eid} />
       {e.decision && <Decision e={e} />}
       {e.doc && !t.messages.some((r) => r.eid == e.eid) && (pending(e)
         ? <p>Loading thread…</p>
@@ -171,21 +249,26 @@ export let PersonInbox = ({ e, limit }: { e: Ent; limit?: number }) => {
   let query = { ...search, text }
   let found = useInboxThreads(e.eid, query)
   return (
-    <InboxThreads
-      {...found}
-      search={query}
-      onSearch={setSearch}
-      limit={limit}
-      find={
-        <Frame.Search
-          elRef={input}
-          type='search'
-          aria-label='Search inbox'
-          placeholder='Search your threads…'
-          onInput={(event: Event) =>
-            sync(event.currentTarget as HTMLInputElement)}
-        />
-      }
-    />
+    <>
+      {vocab.comp('conversation') && vocab.comp('call') && (
+        <NewConversation actor={e.eid} />
+      )}
+      <InboxThreads
+        {...found}
+        search={query}
+        onSearch={setSearch}
+        limit={limit}
+        find={
+          <Frame.Search
+            elRef={input}
+            type='search'
+            aria-label='Search inbox'
+            placeholder='Search your threads…'
+            onInput={(event: Event) =>
+              sync(event.currentTarget as HTMLInputElement)}
+          />
+        }
+      />
+    </>
   )
 }

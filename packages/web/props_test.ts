@@ -233,3 +233,19 @@ test('normalizeChanges: component values, ids, and edges canonicalize', () => {
     ],
   )
 })
+
+test('normalizeChanges preserves structured tool arguments and array columns on the wire', () => {
+  let eid = 'aaaaaaaa-0000-4000-8000-000000000003'
+  let args = { text: '  actual words\n', nested: { enabled: true } }
+  let choices = [{ label: 'Yes', description: 'Proceed' }]
+  assertEquals(
+    normalizeChanges([
+      { eid, name: 'call', comp: { args } },
+      { eid, name: 'decision', comp: { choices } },
+    ]),
+    [
+      { eid, name: 'call', comp: { args } },
+      { eid, name: 'decision', comp: { choices } },
+    ],
+  )
+})

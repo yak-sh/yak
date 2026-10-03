@@ -8,6 +8,7 @@ import {
   type PropType,
   spineProps,
   stamped,
+  vocab,
 } from './types.ts'
 import { short } from '@yaks/id'
 import { timeInstant } from '@yaks/query'
@@ -317,6 +318,14 @@ export let normalizeChanges = (
     if (change.comp == null) return { ...change, eid }
     let comp = Object.fromEntries(
       Object.entries(change.comp).map(([name, value]) => {
+        // Structured columns are graph values, not text editors. The host
+        // admits their schema; keep objects/arrays intact on the write wire.
+        let schema = vocab.def(change.name)?.properties?.[name] as {
+          type?: string
+        } | undefined
+        if (schema?.type == 'object' || schema?.type == 'array') {
+          return [name, value]
+        }
         // A field OPERATOR (e.g. { $edit }) is not a literal — pass it through
         // untouched for apply() to resolve against the current stored value.
         // A scalar parser would (rightly) reject the object as non-text.

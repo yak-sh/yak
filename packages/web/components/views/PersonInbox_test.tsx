@@ -202,3 +202,115 @@ test('inbox direction and archive switches resume from the page graph after remo
     cache.value = {}
   }
 })
+
+test('new conversation keeps its exact draft across remount, rejects blank words and calls inbox_new once', async () => {
+  let { NewConversation, conversationPlace } = await import('./PersonInbox.tsx')
+  let { identityEid } = await import('@yaks/graph')
+  let { useRoute } = await import('../../live.ts')
+  let sent: import('../../types.ts').Change[] = []
+  let restore = useRoute((frame) => {
+    if ('apply' in frame) sent.push(...frame.apply)
+  })
+  let actor = 'new-conversation-person'
+  let words = '  Keep my spacing  \nSecond line\n'
+  let node = () => <NewConversation actor={actor} />
+  let seen = mount(node())
+  try {
+    let box = () => seen.root.querySelector('textarea') as HTMLTextAreaElement
+    await act(() => {
+      box().value = words
+      box().dispatchEvent(
+        new (box().ownerDocument.defaultView!.Event)('input', {
+          bubbles: true,
+        }),
+      )
+    })
+    seen.free()
+    await act(() => {
+      seen = mount(node())
+    })
+    assertEquals(box().value, words)
+
+    await act(() =>
+      (seen.root.querySelector('button') as HTMLButtonElement).click()
+    )
+    let calls = sent.filter((c) =>
+      c.name == 'call' && c.comp?.to == identityEid('tool', ['inbox_new'])
+    )
+
+    assertEquals(calls.length, 1)
+    assertEquals(calls[0].comp?.args, { text: words })
+    assertEquals(drafts.text(conversationPlace(actor)), '')
+    await act(() => {
+      box().value = ' \n '
+      box().dispatchEvent(
+        new (box().ownerDocument.defaultView!.Event)('input', {
+          bubbles: true,
+        }),
+      )
+      box().dispatchEvent(
+        Object.assign(
+          new (box().ownerDocument.defaultView!.Event)('keydown', {
+            bubbles: true,
+          }),
+          { key: 'Enter' },
+        ),
+      )
+    })
+    assertEquals(
+      sent.filter((c) => c.name == 'call').length,
+      1,
+    )
+    assertEquals(drafts.text(conversationPlace(actor)), ' \n ')
+  } finally {
+    restore()
+    seen.free()
+    cache.value = {}
+  }
+})
+
+test('answering session links follow answers edges and repaint the session status', async () => {
+  let { AnsweringSessions } = await import('./PersonInbox.tsx')
+  let { mutate } = await import('../../live.ts')
+  cache.value = {
+    root: { entity: { eid: 'root' }, conversation: {} },
+    answer: {
+      entity: { eid: 'answer' },
+      answers: {},
+      edge: { from: 'aaaaaaaa-0000-4000-8000-000000000042', to: 'root' },
+    },
+    unrelated: {
+      entity: { eid: 'unrelated' },
+      answers: {},
+      edge: { from: 'other', to: 'elsewhere' },
+    },
+    'aaaaaaaa-0000-4000-8000-000000000042': {
+      entity: { eid: 'aaaaaaaa-0000-4000-8000-000000000042', num: 42 },
+      session: { status: 'running' },
+      doc: { title: 'Thread worker' },
+    },
+  }
+  let seen = mount(<AnsweringSessions root='root' />)
+  try {
+    assertEquals(seen.root.querySelectorAll('a').length, 1)
+    assertEquals(
+      seen.root.textContent?.includes('Thread worker · running'),
+      true,
+    )
+    assertEquals(seen.root.querySelector('a')?.getAttribute('href'), '/S-42')
+    await act(() =>
+      mutate({
+        eid: 'aaaaaaaa-0000-4000-8000-000000000042',
+        name: 'session',
+        comp: { status: 'completed' },
+      })
+    )
+    assertEquals(
+      seen.root.textContent?.includes('Thread worker · completed'),
+      true,
+    )
+  } finally {
+    seen.free()
+    cache.value = {}
+  }
+})
