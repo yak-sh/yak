@@ -134,6 +134,7 @@ let VOUCH = [
   'x-yak-write',
   'x-yak-kernel',
   'x-via',
+  'x-yak-via',
 ]
 
 /** Which app this door serves, as the directory has it: the entity the

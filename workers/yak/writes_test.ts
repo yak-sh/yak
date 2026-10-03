@@ -1,7 +1,7 @@
 // The write log (writes.ts) over one store's storage, woken as new
 // incarnations the way a deploy wakes it: writes kept while the store refuses
 // to start, then replayed in order, once, by the alarm alone.
-import { test } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, sha256 } from '@yaks/graph'
 import { doorOf, IDEMPOTENCY, type Namespace, storeOf } from './door.ts'
@@ -186,13 +186,31 @@ test('a write the store fails on is set aside, and the writes behind it go throu
   assertEquals(o.writes(), 0)
 })
 
+test('an alarm replay during async readiness answers the waiting writer', async () => {
+  let o = object()
+  await o.query('.doc')
+  let getAlarm = o.ctx.storage.getAlarm
+  let replay: Promise<void> | undefined
+  o.ctx.storage.getAlarm = async () => {
+    replay ??= o.alarm()
+    await until(() => o.writes() == 0, { label: 'alarm replayed the write' })
+    return getAlarm.call(o.ctx.storage)
+  }
+  o.wake()
+  let applied = await o.apply([titled('n1', 'once')])
+  await replay
+  assertEquals(applied[0].doc, { title: 'once' })
+  assertEquals(await o.title('n1'), 'once')
+  assertEquals(o.writes(), 0)
+})
+
 test('a batch sent again after a reset lost its answer is applied once', async () => {
   let o = object()
   let applied = await metaOf(storeOf(resetting(o), NAME)).apply(
     [{ entity: { eid: '$n' }, doc: { title: 'once' } }],
     KERNEL,
   )
-  let rows = await o.query('.doc')
+  let rows = await o.query('.doc.title=once')
   assertEquals(rows.map((b) => b.entity.eid), [minted(applied).$n])
 })
 
@@ -255,7 +273,7 @@ test('an interrupted write keeps its body while reads recover and explicit retry
     )).status,
     400,
   )
-  let rows = await o.query('.doc')
+  let rows = await o.query('.doc.title=once | .doc.title=later')
   assertEquals(rows.map((r) => r.entity.eid).sort(), ['n1', 'n2'])
 })
 

@@ -59,6 +59,14 @@ export type Ctx = {
   clock?: Clock
 }
 
+/** This caller at one permission level. A door's verified credential names
+ * the instrument; internal callers that name none keep the person's byline. */
+export let asCaller = (ctx: Ctx, role: Who['role']): Who => ({
+  person: ctx.person,
+  role,
+  ...(ctx.who?.instrument ? { via: ctx.who.instrument } : {}),
+})
+
 export type Args = Record<string, unknown>
 
 // What a tool answers: the text, the space it worked in (so the door can
@@ -257,7 +265,7 @@ export let inSpace = async (
     ? await ownSpace(ctx, args.app)
     : await ctx.dir.space(text(args.space, 'space'))
   if (!space) throw refuse('missing', `no space ${args.space}`)
-  let who: Who = { person: ctx.person, role: await roleIn(ctx, space, over) }
+  let who = asCaller(ctx, await roleIn(ctx, space, over))
   if (!who.role) throw refuse('access', `not a member of ${space.slug}`)
   if (write && !writes(who.role)) {
     throw refuse('access', `not a writer of ${space.slug}`)

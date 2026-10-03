@@ -95,11 +95,19 @@ import {
   manageView,
   MOUNT,
   OURS,
+  paged as pagePath,
   route,
   signInAt,
 } from './route.ts'
 import { covers, PLATFORM_PATHS } from './router.ts'
-import { nobody, titling, vouched, type Who, whoIs } from './session.ts'
+import {
+  browsing,
+  nobody,
+  titling,
+  vouched,
+  type Who,
+  whoIs,
+} from './session.ts'
 import { asking } from './identity.ts'
 import { seedy } from './seed.ts'
 import { nameOf } from './signin.ts'
@@ -1405,7 +1413,8 @@ let api = async (
   // signed-out write has no `created.by`, so the page must ask a guest their
   // name and nothing said so; on a `public` one the sign-in bounce arrives
   // after the guest typed, and their work goes with them (C-32675 items 5 and
-  // 6). `person` is null signed out, `name` is what to call them (never an
+  // 6). `person` is null signed out, `via` is this browser's vouched instrument,
+  // `name` is what to call them (never an
   // address — T-32654), `reads`/`writes` are this app's own access answered
   // for this caller, and `signIn` is where a signed-out visitor signs in,
   // holding this page as its return address — null once they are in.
@@ -1414,6 +1423,7 @@ let api = async (
     let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
     return Response.json({
       person: who.person,
+      via: who.via ?? null,
       name: who.person ? await dir.nameAt(who.person) : null,
       role: who.role,
       reads: mayRead,
@@ -2085,7 +2095,20 @@ export let fetch = (req: Request, env: Env): Promise<Response> => {
   // Inside `counting`, so every store hop and bucket op the chain below makes
   // is counted on this request's own tally (hops.ts) and reported beside the
   // stages it took.
-  return c.counting(async () => timed(await served(req, env, c), c))
+  return c.counting(async () => {
+    // Every request gets a verified browser instrument before any app code
+    // runs. Page tokens and machine credentials have their own instrument
+    // and may arrive with the ambient cookie stripped: never replace that
+    // unseen cookie with a signed-out one, even on a failed token or redirect.
+    let res = await browsing(
+      req,
+      env,
+      (req) => served(req, env, c),
+      !pagePath(new URL(req.url).pathname) && !bearing(req) &&
+        !req.headers.has('authorization'),
+    )
+    return timed(res, c)
+  })
 }
 
 // Serving an app, with the stopwatch running (timing.ts): every stage below
@@ -2320,7 +2343,14 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     path = paper.rest
   }
   let store = storeName(space, app)
+  if (
+    paper && (!env.SESSION_SECRET ||
+      !await paged(paper.token, env.SESSION_SECRET, store))
+  ) return json(401, 'not_a_reader', 'This page token does not open this app')
   let itself = await granted(req, env.SESSION_SECRET, store)
+  if (bearing(req) && !itself) {
+    return json(401, 'not_a_reader', 'This worker grant does not open this app')
+  }
   // Machine clients use the same login bearer as the connector. Verify it
   // at the app door too, before the cookie/page-token path, and read the
   // caller's membership live. A narrowed CLI grant never crosses spaces;
@@ -2343,6 +2373,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
       person: caller.person,
       role: await dir.role(space, caller.person),
       until: caller.until,
+      ...(caller.instrument ? { via: caller.instrument } : {}),
     }
   }
   let who = itself ?? bearer ??
@@ -2363,6 +2394,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
       store,
       who.person,
       lasting(who.until),
+      who.via,
     )}/`
     : bare
   // Rung 1½: the home app's router, where it named this path. Ahead of the app
@@ -2557,11 +2589,19 @@ let presented = async (
   let p = env.SESSION_SECRET
     ? await paged(sent, env.SESSION_SECRET, store)
     : null
-  if (!p?.person) return { ...nobody, ...(p ? { until: p.exp } : {}) }
+  if (!p) return whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
+  if (!p.person) {
+    return {
+      ...nobody,
+      until: p.exp,
+      ...(p.via ? { via: p.via } : {}),
+    }
+  }
   return {
     person: p.person,
     role: await dir.role(space, p.person),
     until: p.exp,
+    ...(p.via ? { via: p.via } : {}),
   }
 }
 

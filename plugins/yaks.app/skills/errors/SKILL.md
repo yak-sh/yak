@@ -155,11 +155,12 @@ The version number is read fresh rather than from the cache, on purpose. The
 likeliest moment for a break is right after a deploy, and it must name the
 release it happened on and not the one before.
 
-An exception has no `doc` component, and a listing leaves `exception` and
-`error` rows out unless the filter names one — `.doc` is the person's own rows
-and never the platform's crashes. Asking for the stamps is not asking for these:
-`.created` alone does not drag them in. When you want them from a query rather
-than from `app_errors`, name them: `.exception`.
+An exception has no `doc` component, and a listing leaves `exception`, `refusal`
+and `error` rows out unless the filter names that diagnostic. Asking for
+`.entry` also admits transcript `refusal` rows, but not exceptions. `.doc` is
+the person's own rows and never the platform's crashes. Asking for the stamps is
+not asking for these: `.created` alone does not drag them in. To query
+exceptions rather than use `app_errors`, name `.exception`.
 
 ## Hearing about it once
 

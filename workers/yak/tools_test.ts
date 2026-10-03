@@ -424,7 +424,9 @@ test('a deploy says how many round trips it took', async () => {
         { path: 'style.css', content: 'h1{color:teal}' },
       ],
     }),
-    { hops: 5, r2: 4 },
+    // A delta draft checks the draft, deletion marker and legacy source for
+    // each absent path, then writes its bytes and clears its deletion marker.
+    { hops: 5, r2: 10 },
   )
   let deploy = await costs('app_deploy', { space: 'ada', app: 'recipes' })
   assert(deploy.hops <= 25)

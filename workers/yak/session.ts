@@ -19,7 +19,15 @@
 // is minted as, and the renewal that makes a session slide. The doors that
 // mint one (identity.ts) and the router the renewal hangs off (index.ts) are
 // elsewhere; what a session is belongs beside who is asking.
-import { COOKIE, cookie, cookieValue, sign, verify } from './lib/token.ts'
+import {
+  COOKIE,
+  cookie,
+  cookieValue,
+  opened,
+  seal,
+  sign,
+  verify,
+} from './lib/token.ts'
 import type { Role } from './directory.ts'
 import type { Env } from './env.ts'
 import { apex, type Host } from './host.ts'
@@ -28,6 +36,8 @@ import { hostOf } from './route.ts'
 export type Who = {
   person: string | null
   role: Role | null
+  /** The instrument the kernel verified, independent of the person's level. */
+  via?: string
   /** The role above is held by a grant on the one app this request is for,
    * not by a seat on the space's roster (T-37615). A guest of one app reads
    * and writes that app's data and sees its page exactly as a member does, and
@@ -48,6 +58,8 @@ export type Who = {
  */
 export type Caller = {
   person: string
+  /** A verified instrument, independent of the authentication method below. */
+  instrument?: string
   // How they got in. `grant` is the CLI's short-lived bearer (grants.ts),
   // which the identity door mints for a caller and verifies itself.
   via: 'session' | 'oauth' | 'grant'
@@ -71,11 +83,17 @@ export let whoIs = async (
   let token = cookieValue(req.headers.get('cookie'))
   if (!token || !secret) return nobody
   let claims = await verify(token, secret)
-  if (!claims) return nobody
+  if (!claims) {
+    let browser = await browserOf(req, secret)
+    return browser
+      ? { ...nobody, via: browser.via, until: browser.exp }
+      : nobody
+  }
   return {
     person: claims.person,
     role: await roleOf(claims.person),
     until: claims.exp,
+    ...(claims.via ? { via: claims.via } : {}),
   }
 }
 
@@ -83,6 +101,7 @@ export let whoIs = async (
 export let vouched = (who: Who): Record<string, string> => ({
   ...(who.person ? { 'x-yak-person': who.person } : {}),
   ...(who.role ? { 'x-yak-role': who.role } : {}),
+  ...(who.via ? { 'x-yak-via': who.via } : {}),
 })
 
 // The header a write adds to that vouch: what to call this person, so the
@@ -114,6 +133,25 @@ export let titling = async (
 // agent's token has the provider's own, shorter life.
 export let SESSION = 90 * 24 * 60 * 60
 
+type Browser = { via: string; exp: number }
+
+/** The browser's instrument off its cookie, whether signed in or out. A
+ * browser seal authenticates no person and never opens as a session. */
+export let browserOf = async (
+  req: Request,
+  secret: string | undefined,
+): Promise<Browser | null> => {
+  let token = cookieValue(req.headers.get('cookie'))
+  if (!token || !secret) return null
+  let claims = await verify(token, secret)
+  if (claims) return claims.via ? { via: claims.via, exp: claims.exp } : null
+  let browser = await opened<Browser>('browser', token, secret)
+  return browser && typeof browser.via == 'string' && browser.via &&
+      typeof browser.exp == 'number' && browser.exp * 1000 > Date.now()
+    ? { via: browser.via, exp: browser.exp }
+    : null
+}
+
 // What this platform needs to keep a session: the secret it signs with, and
 // the apex the cookie is shared across.
 type Keeper = Host & Pick<Env, 'SESSION_SECRET'>
@@ -137,9 +175,16 @@ export let minted = (
   person: string,
   space: string | null = null,
 ) =>
-  sign(
-    { person, space, exp: Math.floor(Date.now() / 1000) + SESSION },
-    secret,
+  browserOf(req, secret).then((browser) =>
+    sign(
+      {
+        person,
+        space,
+        exp: Math.floor(Date.now() / 1000) + SESSION,
+        via: browser?.via ?? crypto.randomUUID(),
+      },
+      secret,
+    )
   ).then((token) => cookie(token, domainOf(req, env), SESSION))
 
 // Does the answer already say what this session is? Signing in and the
@@ -147,6 +192,50 @@ export let minted = (
 // that a blanket renewal does not.
 let sets = (res: Response) =>
   new RegExp(`(?:^|,\\s*)${COOKIE}=`).test(res.headers.get('set-cookie') ?? '')
+
+/** Serve an app with the browser's own vouched instrument. The same cookie
+ * holds a browser seal while signed out and a session seal while signed in;
+ * an old session gains an instrument without losing its person or standing.
+ * The request handed to the door already carries it, so the first write is
+ * stamped with the same instrument the browser receives in the answer. */
+export let browsing = async (
+  req: Request,
+  env: Keeper,
+  serve: (req: Request) => Promise<Response>,
+  remember = true,
+): Promise<Response> => {
+  let secret = env.SESSION_SECRET
+  if (!secret) return serve(req)
+  let browser = await browserOf(req, secret)
+  if (browser && browser.exp - Date.now() / 1000 > SESSION / 2) {
+    return serve(req)
+  }
+  let claims = await verify(
+    cookieValue(req.headers.get('cookie')) ?? '',
+    secret,
+  )
+  let via = browser?.via ?? crypto.randomUUID()
+  let exp = Math.floor(Date.now() / 1000) + SESSION
+  let token = claims
+    ? await sign(
+      { person: claims.person, space: claims.space, via, exp },
+      secret,
+    )
+    : await seal('browser', { via, exp } satisfies Browser, secret)
+  let headers = new Headers(req.headers)
+  let kept = (headers.get('cookie') ?? '').split(';').map((c) => c.trim())
+    .filter((c) => c && c.split('=')[0] != COOKIE)
+  headers.set('cookie', [...kept, `${COOKIE}=${token}`].join('; '))
+  let res = await serve(new Request(req, { headers }))
+  if (!remember || res.status == 101 || sets(res)) return res
+  let out = new Headers(res.headers)
+  out.append('set-cookie', cookie(token, domainOf(req, env), SESSION))
+  return new Response(res.body, {
+    status: res.status,
+    statusText: res.statusText,
+    headers: out,
+  })
+}
 
 // The session slides (T-35380). `SESSION` was always meant as a span of NOT
 // signing in — the cookie was minted once and never renewed, which made it a

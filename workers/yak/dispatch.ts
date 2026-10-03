@@ -50,6 +50,7 @@
 // namespace; we do not set it, because a test must not need the account.
 import type { Caller } from '@yaks/egress'
 import { COOKIE, opened, seal } from './lib/token.ts'
+import { sha256 } from '@yaks/graph'
 import type { App, Role, Space } from './directory.ts'
 import { appStore, storeName, url } from './directory.ts'
 import type { Env } from './env.ts'
@@ -92,7 +93,7 @@ export let SELF = 'x-yak-app-grant'
 // The app the request is for, so the shim can spell its own doors, and who
 // is looking, so the app's code can greet them. A client cannot send these
 // either.
-let VOUCH = ['x-yak-app', 'x-yak-person', 'x-yak-role']
+let VOUCH = ['x-yak-app', 'x-yak-person', 'x-yak-role', 'x-yak-via', 'x-via']
 export let COMMAND_CALL = 'x-yak-command-call'
 export let COMMAND_AT = 'x-yak-command-at'
 export let COMMAND_SOURCE = 'x-yak-command-source'
@@ -106,6 +107,7 @@ type Grant = {
   store: string
   person: string | null
   role: Role | null
+  via?: string
   exp: number
 }
 
@@ -238,6 +240,7 @@ export let granting = (secret: string, store: string, who: Who) =>
       store,
       person: who.person,
       role: who.role,
+      ...(who.via ? { via: who.via } : {}),
       exp: Math.floor(Date.now() / 1000) + LIFE,
     } satisfies Grant,
     secret,
@@ -270,8 +273,8 @@ export let bearing = (req: Request) => req.headers.has(GRANT)
 
 // Who this request is, when it is an app's own worker coming back through
 // its service binding — and null for anything else: no header, a forged or
-// expired one, or one minted for a store that is not this app's. Null means
-// "an ordinary visitor", so a failed grant never grants anything.
+// expired one, or one minted for a store that is not this app's. The app door
+// refuses a presented grant that failed, so it never falls back to a visitor.
 export let granted = async (
   req: Request,
   secret: string | undefined,
@@ -281,7 +284,11 @@ export let granted = async (
   if (!sealed || !secret) return null
   let g = await opened<Grant>('visit', sealed, secret)
   if (!g || g.store != store || !(g.exp * 1000 > Date.now())) return null
-  return { person: g.person ?? null, role: g.role ?? null }
+  return {
+    person: g.person ?? null,
+    role: g.role ?? null,
+    via: typeof g.via == 'string' && g.via ? g.via : `visit:${sha256(sealed)}`,
+  }
 }
 
 // The session cookie taken out and every other cookie left alone: the app is
@@ -316,6 +323,7 @@ let handed = async (
   headers.set('x-yak-app', app.slug)
   if (who.person) headers.set('x-yak-person', who.person)
   if (who.role) headers.set('x-yak-role', who.role)
+  if (who.via) headers.set('x-yak-via', who.via)
   if (call) headers.set(COMMAND_CALL, call)
   if (at) headers.set(COMMAND_AT, at)
   if (source) headers.set(COMMAND_SOURCE, source)

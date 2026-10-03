@@ -1,6 +1,7 @@
 import { ids } from '@yaks/id/rules'
 import { choices } from '@yaks/builders'
 import { recovering } from './models.ts'
+import { attributed } from './attribution.ts'
 import { archetypes } from '@yaks/archetype'
 import {
   backed as journalBacked,
@@ -468,22 +469,21 @@ let KV: CreateTable = {
  * platform says they hold on this app, and what to call them. */
 export type Vouch = {
   person: string | null
+  via: string | null
   level: Level | null
   title: string | null
 }
 
-/**
- * The vouch off a request. `x-via` names an instrument that named itself —
- * attribution, never a level, and never a person's name — while
- * `x-yak-person` is the kernel's own word about a caller it verified.
- */
+/** The kernel's authenticated person and verified instrument are separate:
+ * a browser's via never supplies a person or a permission level. */
 export let vouchOf = (req: Request): Vouch => {
-  let via = req.headers.get('x-via')
   let said = req.headers.get('x-yak-role')
+  let person = req.headers.get('x-yak-person')
   return {
-    person: via ?? req.headers.get('x-yak-person'),
-    level: via || !said ? null : level(said),
-    title: via ? null : req.headers.get('x-yak-title'),
+    person,
+    via: req.headers.get('x-yak-via'),
+    level: person && said ? level(said) : null,
+    title: person ? req.headers.get('x-yak-title') : null,
   }
 }
 
@@ -508,7 +508,12 @@ export let authenticating = (
 async (req) => {
   let v = vouchOf(req)
   heard(v)
-  let who = v.person ? { by: v.person } : null
+  let who = v.person || v.via
+    ? {
+      ...(v.person ? { by: v.person } : {}),
+      ...(v.via ? { via: v.via } : {}),
+    }
+    : null
   let held = app()
   if (!held) return who
   let m = await may.modeOf(held)
@@ -517,8 +522,8 @@ async (req) => {
   // Signed out, the way in is to sign in; signed in and holding nothing, it
   // is the app owner's to grant. Neither answer says more about the app than
   // the address already did.
-  if (!who) throw new Unauthorized('sign in to read this app')
-  throw new Denied(String(who.by), held, 'viewer', 'read')
+  if (!v.person) throw new Unauthorized('sign in to read this app')
+  throw new Denied(v.person, held, 'viewer', 'read')
 }
 
 // The piece of the wider platform grammar an app's store refuses by name
@@ -2333,6 +2338,7 @@ export class Store {
     await this.#sown()
     if (selected.toolsMoved) await this.#planting()
     for (let run of selected.effects) await run()
+
     return null
   }
 
@@ -2370,17 +2376,24 @@ export class Store {
     if (was?.state == 'interrupted' || was?.state == 'unreviewed') {
       return parked(seq, was.why, true)
     }
-    if (await this.#ready(request)) {
-      return this.#park(seq, this.#refused ?? 'this app could not start')
-    }
-    if (this.#stuck) {
-      return this.#park(seq, 'earlier writes to this app are still waiting')
-    }
+    // A startup effect may call this store and drain its log while #ready
+    // waits on another object. Register the live caller before yielding, so
+    // that replay delivers its answer and treats refusals as live refusals.
     let answer = new Promise<Response>((r) => {
       let other = this.#callers.get(seq)
       this.#callers.set(seq, other ? (a) => (other(a.clone()), r(a)) : r)
     })
-    void this.#drain()
+    let no = await this.#ready(request)
+    if (no || this.#stuck) {
+      let caller = this.#callers.get(seq)
+      this.#callers.delete(seq)
+      caller?.(this.#park(
+        seq,
+        no
+          ? this.#refused ?? 'this app could not start'
+          : 'earlier writes to this app are still waiting',
+      ))
+    } else void this.#drain()
     return answer
   }
 
@@ -2549,6 +2562,24 @@ export class Store {
     let kernel = request.headers.get('x-yak-kernel') == '1'
     // A release belongs to the store, not a subscription. Tell even sockets
     // whose page has not subscribed yet; the page decides when to reload.
+    if (path == '/attribute') {
+      if (!kernel || request.method != 'POST') {
+        return json({ error: 'NotFound', message: 'no route' }, 404)
+      }
+      let { via, by } = await request.json() as { via?: unknown; by?: unknown }
+      if (typeof via != 'string' || typeof by != 'string' || !via || !by) {
+        return json({
+          error: 'Refused',
+          message: 'attribution needs via and by',
+        }, 400)
+      }
+      // #asIs supplies trust and preserves the graph's journal and observers.
+      let g = {
+        ...this.#graph,
+        apply: (b: Bundle[], o?: ApplyOpts) => this.#asIs(b, o),
+      }
+      return Response.json(await attributed(g, via, by))
+    }
     if (path == '/released') {
       if (!kernel || request.method != 'POST') {
         return json({ error: 'NotFound', message: 'no route' }, 404)

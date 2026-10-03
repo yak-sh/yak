@@ -68,7 +68,7 @@
     <main class="Page Prose">
       <div class="Prose_Head">
         <h1 class="Title Title-page">Cookies</h1>
-        <p class="Prose_When">Last updated 3 September 2026</p>
+        <p class="Prose_When">Last updated 3 October 2026</p>
         <p>
           There is one cookie. That's the whole story, but here are the details.
         </p>
@@ -77,16 +77,17 @@
       <section>
         <h2>The one we set</h2>
         <p>
-          <code>yak_session</code> — set after you sign in, on yaks.app and the
-          addresses under it, so your apps know it's you. It holds a signed note
-          saying which person you are and when it runs out, and it lasts thirty
-          days. It's ours and first-party: it goes nowhere else, and it isn't
-          used to follow you around.
+          <code>yak_session</code> — set when you use an app, on yaks.app and the
+          addresses under it. Before sign-in, its signed note identifies the
+          browser that writes, so you can keep editing your own guest rows.
+          Signing in adds your identity and puts your name on those rows across
+          the apps you wrote to. It lasts ninety days of inactivity; using it
+          renews it. It is not used for visitor counts or advertising.
         </p>
         <p>
-          Clear it and you're simply signed out. Refuse it and you can't stay
-          signed in — there's no other way for us to know you between one page
-          and the next.
+          Clear it and you're signed out, and the browser loses access to guest
+          rows you have not claimed by signing in. Refuse it and you cannot stay
+          signed in or keep your guest writing identity between requests.
         </p>
       </section>
 

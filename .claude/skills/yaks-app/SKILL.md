@@ -94,6 +94,10 @@ designing words; the `data-migration` skill covers moving stored rows.
 - **Access fails closed.** A missing or unknown mode reads as private
   (packages/member/words.ts `mode()`), and the directory reports an app row
   with none. A default that opens something is a leak waiting for a stale row.
+- **A guest writes through a vouched via**, with no person (`session.ts`).
+  The same cookie holds the browser before sign-in and the person after it.
+  `attribution.ts` follows directory receipts to fill missing authors in each
+  app, preserving the original stamps. Analytics never receives this identity.
 - **What people hold keeps working**: sign-ins, links, tokens, tickets in an
   inbox (M-37923). A change to how they are made migrates them.
 - **Input is precious** (M-59093): a draft, an unsent message or a form is

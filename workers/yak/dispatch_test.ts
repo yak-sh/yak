@@ -48,7 +48,7 @@ import {
 } from './dispatch.ts'
 import { caught } from './sentry.ts'
 import type { Env } from './env.ts'
-import { nobody } from './session.ts'
+import { nobody, type Who } from './session.ts'
 
 let SECRET = 'a-probe-secret'
 
@@ -131,7 +131,9 @@ let visit = (path = '/hello', headers: Record<string, string> = {}) =>
     },
   })
 
-let who = { person: 'p1', role: 'editor' as const }
+let who = { person: 'p1', role: 'editor' as const, via: 'browser-1' }
+let standing = (who: Who | null) =>
+  who && { person: who.person, role: who.role }
 
 // A worker that answers by reporting what it was handed.
 let mirror = (status = 200) => {
@@ -176,6 +178,27 @@ test('the worker is handed who is looking, and never the cookie', async () => {
   // The session cookie is a credential for every space this person belongs
   // to; the app is owed this visit and no more. Its own cookies survive.
   assertEquals(sent.headers.get('cookie'), 'theme=dark')
+})
+
+test('the worker acts as its vouched browser without receiving the browser cookie', async () => {
+  let m = mirror()
+  let guest = { ...nobody, via: 'browser-1' }
+  await ran(
+    envOf(m.get),
+    space,
+    app,
+    visit('/hello', {
+      'x-yak-via': 'forged',
+      'x-via': 'forged',
+    }),
+    guest,
+  )
+  let sent = m.seen()
+  assertEquals(sent.headers.get('x-yak-person'), null)
+  assertEquals(sent.headers.get('x-yak-via'), guest.via)
+  assertEquals(sent.headers.get('x-via'), null)
+  assertEquals(sent.headers.get('cookie'), 'theme=dark')
+  assertEquals(await granted(sent, SECRET, 'jeff/recipes'), guest)
 })
 
 test('what the worker sends out is said to be the app’s, for this visitor', async () => {
@@ -391,22 +414,28 @@ test('a client cannot send its own grant, or say who it is', async () => {
       'x-yak-grant': 'mine',
       'x-yak-app-grant': 'mine too',
       'x-yak-app': 'photos',
+      'x-yak-via': 'forged',
+      'x-via': 'forged',
     }),
     nobody,
   )
   let sent = m.seen()
   assertEquals(sent.headers.get('x-yak-app'), 'recipes')
   assertEquals(sent.headers.get('x-yak-person'), null)
-  assertEquals(await granted(sent, SECRET, 'jeff/recipes'), nobody)
+  assertEquals(sent.headers.get('x-yak-via'), null)
+  assertEquals(sent.headers.get('x-via'), null)
+  assertEquals(standing(await granted(sent, SECRET, 'jeff/recipes')), nobody)
   // The app's own grant is the kernel's word too, and what a client sent
   // under that name is gone before the kernel wrote it.
   assertEquals(
-    await granted(
-      new Request('https://jeff.yaks.app/recipes/api/apply', {
-        headers: { 'x-yak-grant': sent.headers.get('x-yak-app-grant')! },
-      }),
-      SECRET,
-      'jeff/recipes',
+    standing(
+      await granted(
+        new Request('https://jeff.yaks.app/recipes/api/apply', {
+          headers: { 'x-yak-grant': sent.headers.get('x-yak-app-grant')! },
+        }),
+        SECRET,
+        'jeff/recipes',
+      ),
     ),
     { person: 'a1', role: 'editor' },
   )
@@ -431,7 +460,7 @@ test('a worker is handed the app itself, and only on its own store', async () =>
     )
   // The app entity, at editor — the level that carries it past its own access
   // mode and no further: an editor writes the data and not the roster.
-  assertEquals(await back(mine), { person: 'a1', role: 'editor' })
+  assertEquals(standing(await back(mine)), { person: 'a1', role: 'editor' })
   // And it opens nowhere else, exactly like the visitor's.
   assertEquals(await back(mine, 'jeff/photos'), null)
   assertEquals(

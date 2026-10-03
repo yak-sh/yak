@@ -72,6 +72,7 @@
 // `memberless`). After that the ordinary membership rule holds. It is the
 // only way that row is ever written: nothing serves the meta store at an
 // address (apps.ts), so no request can write the directory from outside.
+import { claimed } from './attribution.ts'
 import { apex, type Host, url as hostUrl } from './host.ts'
 import {
   AuthorizationError,
@@ -150,6 +151,7 @@ import { canon, mint, nameOf, personOf, spend } from './signin.ts'
 import { RETRY, source, within } from './rate.ts'
 import { type Caller, minted } from './session.ts'
 import { caught } from './sentry.ts'
+import { sha256 } from '@yaks/graph'
 
 // What a grant carries and a token gives back: the person, nothing else.
 // Membership is read from the directory at request time, never a claim.
@@ -200,6 +202,7 @@ export let asking = async (
             until: g.exp,
             grant: g.id,
             space: g.space,
+            instrument: `grant:${g.person}:${g.id}`,
           }
           : null,
         tried,
@@ -208,7 +211,14 @@ export let asking = async (
     let token = await api(env).unwrapToken<Props>(bearer[1])
     let person = token?.grant.props?.person
     return {
-      who: person ? { person, via: 'oauth', until: token?.expiresAt } : null,
+      who: person
+        ? {
+          person,
+          via: 'oauth',
+          until: token?.expiresAt,
+          instrument: `oauth:${sha256(bearer[1])}`,
+        }
+        : null,
       tried,
     }
   }
@@ -216,7 +226,12 @@ export let asking = async (
   let claims = await verify(cookied, env.SESSION_SECRET)
   return {
     who: claims
-      ? { person: claims.person, via: 'session', until: claims.exp }
+      ? {
+        person: claims.person,
+        via: 'session',
+        until: claims.exp,
+        instrument: claims.via ?? `session:${sha256(cookied)}`,
+      }
       : null,
     tried,
   }
@@ -563,6 +578,7 @@ export let handoff = async (req: Request, env: Env): Promise<Response> => {
       }`,
     )
   }
+  await claimed(req, env, person)
   return new Response(null, {
     status: 303,
     headers: {
@@ -609,6 +625,7 @@ let landed = async (
       signed_in: { at: new Date().toISOString(), via },
     }], KERNEL)
   }
+  await claimed(req, env, person)
   let set = await minted(req, env, secret(env), person)
   // See Other: the code was POSTed, and where it sends them is a page to get,
   // never that form again. A return on a customer's own hostname becomes a

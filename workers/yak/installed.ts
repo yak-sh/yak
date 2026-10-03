@@ -29,6 +29,7 @@
 // early. The role it carries is never a claim — it is read live, on every
 // call, like the cookie's.
 import { opened, seal } from './lib/token.ts'
+import { sha256 } from '@yaks/graph'
 import type { App } from './directory.ts'
 import { SESSION } from './session.ts'
 
@@ -65,7 +66,7 @@ export let walled = (res: Response) => {
   })
 }
 
-type Page = { person: string | null; store: string; exp: number }
+type Page = { person: string | null; store: string; exp: number; via?: string }
 
 let DAY = 24 * 60 * 60
 
@@ -81,7 +82,18 @@ export let paging = (
   store: string,
   person: string | null,
   exp: number,
-) => seal('page', { person, store, exp } satisfies Page, secret)
+  via?: string,
+) =>
+  seal(
+    'page',
+    {
+      person,
+      store,
+      exp,
+      ...(via ? { via } : {}),
+    } satisfies Page,
+    secret,
+  )
 
 /** Who a page token says is asking, or null for anything but a live token
  * sealed for this store. Another app's token fails here, whoever holds it. */
@@ -94,7 +106,11 @@ export let paged = async (
   let p = await opened<Page>('page', sealed, secret)
   if (!p || p.store != store || typeof p.exp != 'number') return null
   if (p.exp * 1000 <= now) return null
-  return { person: typeof p.person == 'string' ? p.person : null, exp: p.exp }
+  return {
+    person: typeof p.person == 'string' ? p.person : null,
+    exp: p.exp,
+    via: typeof p.via == 'string' && p.via ? p.via : `page:${sha256(sealed)}`,
+  }
 }
 
 /** The token segment leading an app-relative path, and the path after it.

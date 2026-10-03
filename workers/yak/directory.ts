@@ -557,7 +557,7 @@ export let FRESH = 'x-yak-fresh'
 // The headers an ordinary caller carries through to the store. The directory
 // binding is internal; its `stamp` door passes the kernel header separately
 // for platform-owned properties that an ordinary graph write cannot set.
-let VOUCH = ['x-yak-person', 'x-yak-role', 'x-via']
+let VOUCH = ['x-yak-person', 'x-yak-role', 'x-yak-via']
 
 let forwarded = (req: Request) =>
   Object.fromEntries(
@@ -702,7 +702,7 @@ let tunnelOf = (r: Row): Tunnel | null =>
     }
     : null
 
-let spaceOf = (r: Row): Space => ({
+export let spaceOf = (r: Row): Space => ({
   eid: r.entity.eid,
   slug: r.space!.slug,
   title: r.doc?.title || r.space!.slug,

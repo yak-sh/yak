@@ -427,6 +427,16 @@ test(
         JSON.parse(await agent.tool('graph_query', { q: '.doc' })),
         [],
       )
+      // Naming schema rows still reads them through this same door.
+      let catalog = JSON.parse(
+        await agent.tool('graph_query', {
+          q: '._comp.name=doc&?doc',
+        }),
+      ) as { _comp: { name: string }; doc: { title: string } }[]
+      assert(catalog.length > 0)
+      assert(
+        catalog.every((r) => r._comp.name == 'doc' && r.doc.title == 'doc'),
+      )
       // Two spaces holding the slug is the one question worth asking, and
       // the refusal says which two and why.
       await agent.tool('app_new', {

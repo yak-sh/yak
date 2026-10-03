@@ -258,10 +258,13 @@ blob — comes back null when there is none.
 
 Three things a listing leaves out unless you name them: the platform's stamps
 (`created`, `updated`, `notified`, `opened`, `quarantined` — `.created` asks for
-them back); the platform's own rows about the app (`exception` and `error`, what
-the platform recorded when something broke — `.exception` asks for those, and
-asking for the stamps is _not_ asking for these); and `person` rows, which the
-store mints for whoever writes to it and `query('.person&?doc')` lists by name.
+them back); the platform's own rows about the app (`exception`, `refusal` and
+`error`, what the platform recorded when something broke or a request was
+declined — name each diagnostic separately, such as `.exception` or `.refusal`,
+and asking for the stamps is _not_ asking for these); and `person` rows, which
+the store mints for whoever writes to it and `query('.person&?doc')` lists by
+name. Asking for `.entry` also admits transcript `refusal` rows, but not
+exceptions.
 
 ## subscribe in practice
 

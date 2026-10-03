@@ -32,8 +32,9 @@
 // What this file still owns is everything that is NOT the protocol: the
 // resources and prompts it registers on the same server through `extend`, the
 // stream, and who is asking. `initialize` returns an `Mcp-Session-Id` so a
-// client can name its stream and resume it after a drop; nothing else reads
-// that id, and every POST stays stateless.
+// client can name its stream and resume it after a drop. New ids also seal
+// the session's writer instrument for the authenticated person; every POST
+// still authenticates independently and stays stateless.
 //
 // Every tool reply for a space ends with what is unseen there (unseen.ts):
 // each open exception or error not yet reported, one line, then marked, so no
@@ -106,6 +107,7 @@ import { refuse } from './tool.ts'
 import { url as hostUrl } from './host.ts'
 import { source, within } from './rate.ts'
 import * as appAddress from './app-address.ts'
+import { opened as unseal, seal } from './lib/token.ts'
 
 type Rpc = {
   jsonrpc: '2.0'
@@ -313,17 +315,43 @@ let heard = (
 let markOf = (env: Env) => env.CF_VERSION_METADATA?.id ?? VERSION
 
 // Which client a session is: `initialize` mints the session id with the
-// client's own name in front (`claude-ai~<uuid>`), so every later POST says
+// client's own name in front (`claude-ai~<seal>`), so every later POST says
 // which client it came from without a read, and every POST stays stateless.
 // A session minted before this, or a client that named nothing, is none.
-let minted = (info: unknown): string => {
+let minted = async (
+  info: unknown,
+  person: string,
+  secret: string | undefined,
+): Promise<string> => {
   let name = String((info as { name?: unknown } | null)?.name ?? '')
     .replace(/[^\w.-]/g, '')
     .slice(0, 40)
-  return name ? `${name}~${crypto.randomUUID()}` : crypto.randomUUID()
+  let via = crypto.randomUUID()
+  let id = secret ? await seal('instrument', { person, via }, secret) : via
+  return name ? `${name}~${id}` : id
 }
 let clientOf = (session: string): string | undefined =>
   session.includes('~') ? session.split('~')[0] : undefined
+
+// A session id supplies an instrument only when the kernel sealed it for
+// this authenticated person. Old or caller-invented ids still name their
+// streams and rosters; the credential supplies their writer instrument.
+let instrumentOf = async (
+  session: string,
+  person: string,
+  secret: string | undefined,
+) => {
+  if (!secret) return null
+  let instrument = await unseal<{ person: string; via: string }>(
+    'instrument',
+    session.slice(session.indexOf('~') + 1),
+    secret,
+  )
+  return instrument?.person == person && typeof instrument.via == 'string' &&
+      instrument.via
+    ? instrument.via
+    : null
+}
 
 // The MCP server itself, built per request around the person the edge
 // verified: the caller's whole reach as one graph, the platform's tools on it
@@ -391,7 +419,10 @@ let door = async (ctx: Ctx, session: string) => {
     // And the way back out of a delete here, which the generic tier could not
     // know: a store is not a place a mistake is final (recover.ts, T-34509).
     undo: UNDO,
-    authenticate: () => ({ by: ctx.person }),
+    authenticate: () => ({
+      by: ctx.person,
+      ...(ctx.who?.instrument ? { via: ctx.who.instrument } : {}),
+    }),
     report: reporter(ctx, clientOf(session)),
     // The name, the one-line description and the picture, from the one place
     // they are written (seo.ts connector, T-34415): a client that reads
@@ -724,12 +755,14 @@ let answered = async (
   // The session id, per the transport: minted at `initialize` and sent back by
   // the client on every later request. It names which of this person's streams
   // is which (the GET above), and which roster this client cached (stream.ts
-  // `roster`). It is not required and never checked — a POST carries its own
+  // `roster`). It is not required — a POST carries its own
   // answer to who is asking, and a client that has never seen this header
   // still works, sharing the nameless session with every other such client.
   let session = rpc.method == 'initialize'
-    ? minted(rpc.params?.clientInfo)
+    ? await minted(rpc.params?.clientInfo, auth.person, env.SESSION_SECRET)
     : req.headers.get('mcp-session-id') ?? ''
+  let instrument = await instrumentOf(session, auth.person, env.SESSION_SECRET)
+  if (instrument) ctx.who = { ...auth, instrument }
   let built = await c.time('door', () => door(ctx, session))
   let out = timed(
     await built.handle(

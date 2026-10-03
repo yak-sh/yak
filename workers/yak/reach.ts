@@ -63,7 +63,13 @@ import type { Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
 import { edits, mode } from '@yaks/member'
 import { recall } from './lib/hops.ts'
-import { appKeywords, coreDocs, meant, platformDocs } from './vocab.ts'
+import {
+  appKeywords,
+  appVocab,
+  meant,
+  platformDocs,
+  platformVocab,
+} from './vocab.ts'
 import { matcher, rows } from '@yaks/match'
 import { parse } from '@yaks/query'
 import {
@@ -76,10 +82,10 @@ import { refuse, rejected } from './tool.ts'
 import { caught } from './sentry.ts'
 import { said as told } from './writes.ts'
 
-// The words the PLATFORM says in every store — core, member, edge, the twelve
-// relations. A word outside this list was declared by an app, which is what
+// The words the PLATFORM says in every store, including its vocabulary and
+// journal. A word outside this list was declared by an app, which is what
 // makes it the most specific thing said about a row.
-let CORE: Vocab = loadVocab(coreDocs, appKeywords)
+let CORE: Vocab = appVocab()
 
 // The directory has no app-owned vocab.json for `/vocab` to answer: its own
 // words are the documents shipped with the platform. Keep only the words not
@@ -99,6 +105,11 @@ let PLATFORM_WORDS: VocabDoc = {
 // a component it has no table for, so screening for a word the platform does
 // not declare would refuse the whole read instead of narrowing it.
 let SCREEN = PLATFORM.filter((k) => CORE.all.includes(k))
+// The directory's people and apps are its data. Its vocabulary's rows are
+// still bookkeeping, so a doc listing there screens only the schema words.
+let META_SCREEN = SCREEN.filter((k) =>
+  k.startsWith('_') && platformVocab().all.includes(k)
+)
 
 // One store in reach: the app, the space it is in, and who the caller is
 // there. `at` is what a bundle names as the component's home.
@@ -124,8 +135,8 @@ export let at = (r: { space: Space; app: App }) =>
 // (listing.ts `asking`), because an app's store keeps person rows as its own
 // bookkeeping — one per writer, so a byline has a name (graph.ts `#vouching`) —
 // and a person titled with what to call them matches `.doc` like any row.
-// The directory's own store is the exception: there people are the data, and
-// its reads are its own (identity.ts).
+// The directory's own store screens only schema rows: there people are the
+// data, and its reads are its own (identity.ts).
 let doorOf = (
   env: Env,
   r: Reach,
@@ -134,7 +145,7 @@ let doorOf = (
 ) =>
 async (line: string) => {
   let asked = bare(line)
-  let mine = at(r) == META_STORE ? asked : asking(asked, SCREEN)
+  let mine = asking(asked, at(r) == META_STORE ? META_SCREEN : SCREEN)
   let door = appStore(env.STORE, r.space, r.app, env)
   let bundles = await door.consume(
     `/query?q=${encodeURIComponent(mine)}${live ? '&live=1' : ''}`,
@@ -800,7 +811,7 @@ let union = (docs: VocabDoc[]): Vocab => {
       defs[name] = schema
     }
   }
-  return loadVocab([...coreDocs, { title: 'space', $defs: defs }], appKeywords)
+  return loadVocab([...CORE.docs, { title: 'space', $defs: defs }], appKeywords)
 }
 
 // Which stores declare which word — the routing table a write follows and the

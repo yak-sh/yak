@@ -11,6 +11,7 @@
 // This module is nothing but the list, on purpose: everything it imports is a
 // domain, and everything that imports it is a host, so the one file that knows
 // both sides knows nothing else.
+import { attributionPlugin } from './attribution.ts'
 import { connectionsPlugin } from './connections.ts'
 import { buildersPlugin } from './builders.ts'
 import { gitPlugin } from './git.ts'
@@ -40,4 +41,5 @@ export let PLUGINS: Plugin[] = [
   modelsPlugin,
   buildersPlugin,
   rtcPlugin,
+  attributionPlugin,
 ]

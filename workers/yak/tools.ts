@@ -261,6 +261,7 @@ import { MAX } from './apps.ts'
 import {
   APP,
   type Args,
+  asCaller,
   type Ctx,
   inApp,
   inSpace,
@@ -1440,7 +1441,7 @@ export let inReach = async (ctx: Ctx, args: Args): Promise<Reach[]> => {
   // this one (T-34986).
   let each = await Promise.all(
     seats.filter((s) => !s.space.trashed).map(async ({ space, role }) => {
-      let who: Who = { person: ctx.person, role }
+      let who = asCaller(ctx, role)
       return (await ctx.dir.apps(space))
         .filter((app) => !app.trashed && reads(mode(app.access), who.role))
         .map((app) => ({ space, app, who }))
@@ -2125,7 +2126,7 @@ let OURS: Row[] = [
             member: { space: '$space', person: ctx.person, role: 'owner' },
           },
         ],
-      }, vouched({ person: ctx.person, role: 'owner' }))
+      }, vouched(asCaller(ctx, 'owner')))
       let space = (await ctx.dir.space(s))!
       let at = `https://${spaceHost(ctx.env, s)}/`
       return {
@@ -3856,7 +3857,7 @@ let OURS: Row[] = [
       let broken = new Map(
         await Promise.all(living.map(async (app) => {
           let { space, role } = seatOf.get(app.space)!
-          let who: Who = { person: ctx.person, role }
+          let who = asCaller(ctx, role)
           return [
             app.eid,
             (await openIn(ctx.env, space, app, who, true)).length,
@@ -5110,7 +5111,7 @@ let OURS: Row[] = [
           at,
         },
       }], {
-        ...vouched({ person: ctx.person, role: null }),
+        ...vouched(asCaller(ctx, null)),
         ...await titling(ctx.dir, ctx.person),
       })
       let eid = minted(wrote).$said ?? ''

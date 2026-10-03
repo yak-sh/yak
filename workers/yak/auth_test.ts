@@ -108,13 +108,13 @@ test('the kernel vouched, so the batch is signed by that person', async () => {
   assertEquals(grant.grant.access, 'owner')
 })
 
-test('an instrument that named itself is attribution, never a level', () => {
+test('a caller’s x-via supplies neither an instrument nor a person', () => {
   let said = vouchOf(
     new Request('http://store/apply', {
       headers: { 'x-via': MALLORY, 'x-yak-role': 'owner', 'x-yak-title': 'me' },
     }),
   )
-  assertEquals(said, { person: MALLORY, level: null, title: null })
+  assertEquals(said, { person: null, via: null, level: null, title: null })
 })
 
 test('a bundle that signs itself is signed by the door instead', async () => {
@@ -151,6 +151,7 @@ test('a visitor cannot ride their own vouch into a store', async () => {
       'x-yak-role': 'owner',
       'x-yak-kernel': '1',
       'x-via': MALLORY,
+      'x-yak-via': MALLORY,
     },
   })
   await storeOf(ns, STORE, { eid: APP, access: 'open' })('/ws', forged, {})
@@ -160,6 +161,7 @@ test('a visitor cannot ride their own vouch into a store', async () => {
   assertEquals(sent.get('x-yak-role'), null)
   assertEquals(sent.get('x-yak-kernel'), null)
   assertEquals(sent.get('x-via'), null)
+  assertEquals(sent.get('x-yak-via'), null)
   // And what the kernel itself says is on it: which store, which app, and the
   // mode the directory holds for it.
   assertEquals(sent.get('x-store'), STORE)
@@ -232,7 +234,17 @@ test('a sealed grant is admitted at the level it names', async () => {
     SECRET,
     STORE,
   )
-  assertEquals(who, { person: ADA, role: 'owner' })
+  assertEquals(who?.person, ADA)
+  assertEquals(who?.role, 'owner')
+  assert(who?.via)
+  assertEquals(
+    await granted(
+      new Request('http://app/api/query', { headers: { [GRANT]: sealed } }),
+      SECRET,
+      STORE,
+    ),
+    who,
+  )
   let read = await get(store, '/query?q=.doc.title=x', vouch(who!, 'private'))
   assertEquals(read.status, 200)
   assertEquals((await read.json()).length, 1)

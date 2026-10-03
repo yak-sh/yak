@@ -14,14 +14,23 @@ import {
   assertMatch,
   assertStringIncludes,
 } from '@std/assert'
-import { COOKIE, sealedOld, sign, verify } from './lib/token.ts'
+import { COOKIE, seal, sealedOld, sign, verify } from './lib/token.ts'
 import { CUT } from './lib/token_legacy.ts'
-import { granting } from './dispatch.ts'
+import { GRANT as VISIT, granted, granting } from './dispatch.ts'
 import { GRANT, tokenOf } from './grants.ts'
-import { SESSION, slid, whoIs } from './session.ts'
+import {
+  browserOf,
+  browsing,
+  minted,
+  SESSION,
+  slid,
+  vouched,
+  whoIs,
+} from './session.ts'
+import { paged, paging } from './installed.ts'
 
 let SECRET = 'a-probe-secret'
-let ENV = { SESSION_SECRET: SECRET }
+let ENV = { SESSION_SECRET: SECRET, APEX: 'yaks.app' }
 let DAY = 24 * 60 * 60
 
 // The cookie a browser sends `days` into a ninety-day session.
@@ -136,4 +145,116 @@ test('a cookie a stranger wrote, and no cookie at all, renew nothing', async () 
     new Response('ok'),
   )
   assertEquals(bare.headers.get('set-cookie'), null)
+})
+
+test('a browser keeps its instrument when it signs in, without claiming a person before it does', async () => {
+  let req = asked('theme=dark')
+  let first = await browsing(req, ENV, async (req) => {
+    let who = await whoIs(req, SECRET, () => Promise.resolve('owner'))
+    assertEquals(who.person, null)
+    assertEquals(who.role, null)
+    assert(who.via)
+    assertEquals(vouched(who), { 'x-yak-via': who.via })
+    return Response.json(who)
+  })
+  let who = await first.json()
+  let token = value(first.headers.get('set-cookie')!)
+  assertEquals(await verify(token, SECRET), null)
+  let browser = asked(`${COOKIE}=${token}`)
+  assertEquals((await browserOf(browser, SECRET))?.via, who.via)
+  let again = await browsing(
+    browser,
+    ENV,
+    () => Promise.resolve(new Response('ok')),
+  )
+  assertEquals(again.headers.get('set-cookie'), null)
+  let set = await minted(browser, ENV, SECRET, 'p-1')
+  let claims = await verify(value(set), SECRET)
+  assertEquals([claims?.person, claims?.via], ['p-1', who.via])
+  assertEquals(
+    (await whoIs(
+      asked(`${COOKIE}=${value(set)}`),
+      SECRET,
+      () => Promise.resolve('owner'),
+    )).role,
+    'owner',
+  )
+})
+
+test('an existing session gains a browser instrument and keeps its person and standing', async () => {
+  let old = await sign({
+    person: 'p-1',
+    space: 'garden',
+    exp: Math.floor(Date.now() / 1000) + SESSION,
+  }, SECRET)
+  let first = await browsing(asked(`${COOKIE}=${old}`), ENV, async (req) => {
+    let who = await whoIs(req, SECRET, () => Promise.resolve('editor'))
+    assertEquals([who.person, who.role], ['p-1', 'editor'])
+    assert(who.via)
+    return Response.json(who)
+  })
+  let who = await first.json()
+  let claims = await verify(value(first.headers.get('set-cookie')!), SECRET)
+  assertEquals([claims?.person, claims?.space, claims?.via], [
+    'p-1',
+    'garden',
+    who.via,
+  ])
+  assertEquals((await verify(old, SECRET))?.person, 'p-1')
+})
+
+test('forged and expired browser instruments never become a writer', async () => {
+  let exp = Math.floor(Date.now() / 1000) + SESSION
+  for (
+    let token of [
+      await seal('browser', { via: 'forged', exp }, 'another-secret'),
+      await seal('browser', { via: 'expired', exp: 1 }, SECRET),
+      await seal('visit', { via: 'wrong-use', exp }, SECRET),
+    ]
+  ) {
+    let req = asked(`${COOKIE}=${token}`)
+    req.headers.set('x-via', 'claimed')
+    req.headers.set('x-yak-via', 'claimed')
+    assertEquals(await browserOf(req, SECRET), null)
+    await browsing(req, ENV, async (req) => {
+      let browser = await browserOf(req, SECRET)
+      assert(browser)
+      assert(
+        !['forged', 'expired', 'wrong-use', 'claimed'].includes(browser.via),
+      )
+      return new Response('ok')
+    })
+  }
+})
+
+test('a page and worker visit preserve a browser instrument without turning it into a person', async () => {
+  let who = { person: null, role: null, via: 'browser-1' }
+  let token = await granting(SECRET, 'eve/game', who)
+  let req = new Request('https://eve.yaks.app/game/api/apply', {
+    headers: { [VISIT]: token },
+  })
+  assertEquals(await granted(req, SECRET, 'eve/game'), who)
+  assertEquals(await granted(req, SECRET, 'eve/other'), null)
+  let exp = Math.floor(Date.now() / 1000) + SESSION
+  let page = await paging(SECRET, 'eve/game', null, exp, who.via)
+  assertEquals(await paged(page, SECRET, 'eve/game'), {
+    person: null,
+    exp,
+    via: who.via,
+  })
+  assertEquals(await paged(page, SECRET, 'eve/other'), null)
+  let old = await paging(SECRET, 'eve/game', 'p-1', exp)
+  let oldPage = await paged(old, SECRET, 'eve/game')
+  assertEquals([oldPage?.person, oldPage?.exp], ['p-1', exp])
+  assert(oldPage?.via)
+  assertEquals((await paged(old, SECRET, 'eve/game'))?.via, oldPage.via)
+  let visit = await granting(SECRET, 'eve/game', {
+    person: 'p-1',
+    role: 'owner',
+  })
+  let back = new Request(req, { headers: { [VISIT]: visit } })
+  let oldVisit = await granted(back, SECRET, 'eve/game')
+  assertEquals([oldVisit?.person, oldVisit?.role], ['p-1', 'owner'])
+  assert(oldVisit?.via)
+  assertEquals((await granted(back, SECRET, 'eve/game'))?.via, oldVisit.via)
 })

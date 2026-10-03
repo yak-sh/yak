@@ -192,10 +192,10 @@ refused with `Paced` when the same writer made or last changed a row wearing it
 less than a pace ago, by the rows' `created` and `updated` stamps, and when it
 writes two at once. `Paced` carries `comp`, `pace` and `wait`, the milliseconds
 until they may write it again. Everyone holds a pace, owners included, and
-everyone signed out counts as one writer. A `person` floor beside a pace
-refuses visitors, so every writer is signed in and has a pace of their own. A change that leaves the component as it stands is no
-write of it, so a retried write is not refused. `pacesIn(vocab)` reads the paces
-back.
+everyone signed out counts as one writer. A `person` floor beside a pace refuses
+visitors, so every writer is signed in and has a pace of their own. A change
+that leaves the component as it stands is no write of it, so a retried write is
+not refused. `pacesIn(vocab)` reads the paces back.
 
 ## A visitor to an open app adds, and changes only its own rows
 

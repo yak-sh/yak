@@ -28,7 +28,13 @@
 // `cookie`.
 import { oldUse, today } from './token_legacy.ts'
 
-export type Claims = { person: string; space: string | null; exp: number }
+export type Claims = {
+  person: string
+  space: string | null
+  exp: number
+  /** The browser this session was signed in from, when it names one. */
+  via?: string
+}
 
 // The cookie's name. Set on `Domain=yaks.app`, so every space's hostname
 // carries it and one sign-in serves the platform.
@@ -51,6 +57,8 @@ let unb64u = (s: string) =>
  * A new kind of token is a new word here, never a reuse of an old one. */
 export type Use =
   | 'session' // the platform cookie (`sign`, `verify` below)
+  | 'browser' // a signed-out browser's instrument, never a person
+  | 'instrument' // an MCP session's instrument, bound to its signed-in caller
   | 'visit' // an app's worker acting as its visitor (dispatch.ts)
   | 'grant' // the CLI's bearer (grants.ts)
   | 'link' // a sign-in link, once or standing (link.ts)
@@ -157,6 +165,7 @@ export let verify = async (
     person: c.person,
     space: c.space ?? null,
     exp: c.exp,
+    ...(typeof c.via == 'string' && c.via ? { via: c.via } : {}),
     ...(o.legacy ? { legacy: true as const } : {}),
   }
 }

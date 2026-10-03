@@ -1,3 +1,4 @@
+import { registrationDoc } from './attribution.ts'
 import { archetypeDoc } from '@yaks/archetype'
 import type { Derived } from '@yaks/sql'
 import { refuse } from './tool.ts'
@@ -551,6 +552,7 @@ let storeDocs = (own: VocabDoc[]): VocabDoc[] => [...machineDocs, ...own]
  * page speaks as, and `sfu`, the kernel's row for each Realtime session the
  * app's door opened (rtc.ts). */
 export let coreDocs: VocabDoc[] = storeDocs([
+  registrationDoc,
   docDoc,
   memberDoc,
   ...relationDocs,
