@@ -96,7 +96,7 @@ test('a bare microtask stores presence, never a supplied status', () => {
   }])
   g.apply([{ entity: { eid: 'micro' }, task: { status: 'done' } }])
   let [b] = g.read('.task&*') as import('@yaks/graph').Bundle[]
-  assertEquals(b.task, {})
+  assertEquals(b.task, { status: 'open' })
   assertEquals(b.filed, undefined)
 })
 
@@ -116,6 +116,6 @@ test('filing stores separately and a bare priority query orders filed tasks', ()
     '.filed.priority>=0 .order=filed.priority ?task',
   ) as import('@yaks/graph').Bundle[]
   assertEquals(rows.map((b) => b.entity.eid), ['first', 'later'])
-  assertEquals(rows[1].task, {})
+  assertEquals(rows[1].task, { status: 'open' })
   assertEquals(rows[1].filed, { priority: 2, domain: 'Eng' })
 })
