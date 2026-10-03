@@ -1,8 +1,8 @@
 // A fake provider sees descriptions first, asks the single loader, and receives
 // exact instructions beside its existing image context. All checkouts are ours.
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertRejects } from '@std/assert'
-import { type Bundle, type Comp, derivedEid, Refused } from '@yaks/graph'
+import { assert, assertEquals } from '@std/assert'
+import { type Bundle, type Comp, derivedEid } from '@yaks/graph'
 import { artifactStore } from '@yaks/blob'
 import type { Item, Request } from '@yaks/model'
 import { sessionTools, usingBefore } from '@yaks/session'
@@ -353,6 +353,19 @@ test('retired checkout observations supply no catalogue and never borrow fallbac
       await skillItems(h.g, { session: 'session', tools }, at.repo),
       [],
     )
+    let call: Bundle = {
+      entity: { eid: 'retired-skill-call' },
+      call: { id: 'checking' },
+      entry: { session: 'session' },
+    }
+    await h.g.apply([call])
+    let result = await tools[0].run({ skill: 'checking' }, {
+      session: 'session',
+      call,
+      entries: [call],
+    })
+    assert(result.includes('no skill checkout'))
+    assert(!result.includes('Secret instruction body'))
   } finally {
     h.close()
     await at.free()
