@@ -231,3 +231,12 @@ text. Browser sign-ins hold only OAuth tokens. `--as` is never required; it only
 reaches another account. The terminal-only `./yaks-app` subpath owns MCP
 discovery. A supplied website session in its `yaksApp` host seam is for
 migrating held sign-ins, not a command-line option.
+
+A pasted agent grant uses the same connection door, with masked input:
+
+```sh
+yak auth yaks.app --key
+```
+
+The grant never goes on the command line or into a tool-call record.
+`YAKS_TOKEN` remains the sandbox's graphless credential.

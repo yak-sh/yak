@@ -571,7 +571,7 @@ export let connect = async (
   if ('key' in given) {
     let name = String(comp(b, CONNECTION).integration)
     let i = await known(c.graph.read, name)
-    if (!i || !keyed(i)) {
+    if (!i || (!keyed(i) && name != 'yaks.app')) {
       throw new Error(`${name} is connected by signing in, not with a key`)
     }
     return c.graph.apply([{

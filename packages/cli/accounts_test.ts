@@ -116,3 +116,27 @@ test('global --as is optional and reaches a tool only if its schema names accoun
   equal(code, 0)
   equal(seen, { as: 'bot' })
 })
+
+test('a pasted yaks.app grant works beside an OAuth integration without a registered client', async () => {
+  let state = await Deno.makeTempDir()
+  try {
+    let { h, path } = await named(state, 'probe@example.test', 'agent-grant')
+    await h.graph.apply([{
+      entity: { eid: integrationEid('yaks.app') },
+      integration: {
+        token: 'https://yaks.app/oauth/token',
+        authorize: 'https://yaks.app/oauth/authorize',
+      },
+    }])
+    equal(
+      await accountToken('yaks.app', state, {
+        config: path,
+        env: () => undefined,
+      }),
+      'agent-grant',
+    )
+  } finally {
+    await closeAccounts()
+    await Deno.remove(state, { recursive: true })
+  }
+})
