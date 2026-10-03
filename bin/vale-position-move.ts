@@ -1,6 +1,8 @@
 // Rehearse the hosted mover over captured player data in a disposable SQLite file.
 import { type Bundle, graph } from '@yaks/graph'
 import { loadVocab, metaDoc } from '@yaks/vocab'
+import { archetypeDoc } from '@yaks/archetype/vocab'
+import { archetypes } from '@yaks/archetype'
 import { lenses, lensesIn, packageEid, versions } from '@yaks/lens'
 import { docs as lensDocs } from '../packages/lens/vocab.ts'
 import { open } from '@yaks/sqlite/db'
@@ -21,9 +23,16 @@ let heroes = await read('seen'),
   villagers = await read('villagers')
 let declaration = words.$defs.saved_position.ops[0].view.declaration
 let doc = { ...words, $defs: { ...words.$defs, seen: declaration } }
-let vocab = loadVocab([metaDoc, ...lensDocs, doc, core, wake])
+let vocab = loadVocab([metaDoc, archetypeDoc, ...lensDocs, doc, core, wake])
 let oldWords = JSON.parse(await Deno.readTextFile(`${dir}/old-vocab.json`))
-let oldVocab = loadVocab([metaDoc, ...lensDocs, oldWords, core, wake])
+let oldVocab = loadVocab([
+  metaDoc,
+  archetypeDoc,
+  ...lensDocs,
+  oldWords,
+  core,
+  wake,
+])
 try {
   await Deno.remove(`${dir}/rehearsal.db`)
 } catch (e) {
@@ -54,7 +63,11 @@ try {
       ]),
     ),
   })
-  let old = graph({ vocab: oldVocab, storage: storage(driver, oldVocab) })
+  let old = graph({
+    vocab: oldVocab,
+    storage: storage(driver, oldVocab),
+    plugins: [archetypes()],
+  })
   old.install()
   await old.apply([...heroes, ...requests, ...villagers].map(clean), {
     trusted: true,
@@ -68,6 +81,7 @@ try {
         vocab,
         rows: lensesIn([lensDocAt('yourname/vale', words)]),
       }),
+      archetypes(),
     ],
   })
   g.install()
