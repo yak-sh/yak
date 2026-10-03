@@ -2,13 +2,15 @@
 # Deno keys type-check results by absolute module URL. Every worktree has a
 # different URL for identical sources, so share one stable URL for this check.
 # Hold the lock through Deno's run: another worktree must not repoint the link
-# while this one is reading modules through it.
+# while this one is reading modules through it. The compiler imports the
+# workspace source catalog, so materialize it before Deno discovers modules.
 set -euo pipefail
 root=$(pwd -P)
 cache="${XDG_CACHE_HOME:-$HOME/.cache}/yak"
 mkdir -p "$cache"
 exec 9>"$cache/check-types.lock"
 flock 9
+deno run --no-lock -A "$root/bin/compiler-packages.ts"
 ln -s "$root" "$cache/typecheck.next.$$"
 mv -Tf "$cache/typecheck.next.$$" "$cache/typecheck"
 exec deno check --doc --config "$cache/typecheck/deno.json" "$cache/typecheck"
