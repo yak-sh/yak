@@ -19,7 +19,7 @@
 import type { Bundle, Comp } from '@yaks/graph'
 import { timed } from '@yaks/api'
 import { type Registered, registration } from '@yaks/connections'
-import { type And, and, eq, ge, limit, want } from '@yaks/query'
+
 import { CallError, valueIn } from '@yaks/tools'
 import { PLATFORM_STORE } from '../../workers/yak/door.ts'
 import type { Swept } from '../../workers/yak/sweep.ts'
@@ -302,63 +302,11 @@ let said = async <T>(answer: Promise<Response>): Promise<T> => {
   return body as T
 }
 
-let SUBJECT = /\b(\d{6})\b is your yaks\.app code/
-
-let prop = (b: Bundle, comp: string, name: string): unknown =>
-  (b[comp] as Comp | undefined)?.[name]
-
 // The digits out of the letters the graph holds for an address. Newest first,
 // and only letters that arrived since the ask — an old code still on file
 // would be spent against a fresh mac and fail (signin.ts keeps a mac, never
 // the digits).
-export let codeIn = (letters: Bundle[], address: string, since: number) => {
-  let seen = letters
-    .map((b) => ({
-      code: SUBJECT.exec(String(prop(b, 'doc', 'title') ?? ''))?.[1],
-      to: String(prop(b, 'mail', 'to') ?? ''),
-      at: Date.parse(String(prop(b, 'mail', 'at') ?? '')),
-    }))
-    .filter((m) => m.code && m.to == address && m.at >= since)
-    .sort((a, b) => b.at - a.at)
-  return seen[0]?.code ?? null
-}
-
-// The letters for one address since the ask. The graph holds thousands of
-// letters, so the filter names the recipient and the window: an unfiltered
-// window of the newest few reads other mail and misses this one. The code is
-// in the subject, so the letter's `doc` is asked for beside its `mail`.
-export let lettersFor = (address: string, since: number): And =>
-  and(
-    eq('mail.to', address),
-    ge('mail.at', new Date(since).toISOString()),
-    want('doc'),
-    limit(10),
-  )
-
-// @yaks/mail's pull files inbound mail each time its duty comes round, so a
-// code takes a few passes to arrive. Polls the graph rather than any mail
-// API: the graph is where the letter ends up and the only place this box can
-// read it from.
-export let codeFor = async (
-  read: (q: And) => Bundle[] | Promise<Bundle[]>,
-  address: string,
-  since: number,
-  opts: { wait?: number; poll?: number } = {},
-) => {
-  let deadline = Date.now() + (opts.wait ?? 90_000)
-  for (;;) {
-    let code = codeIn(await read(lettersFor(address, since)), address, since)
-    if (code) return code
-    if (Date.now() > deadline) {
-      throw new Error(
-        `no code for ${address} in the graph after ${
-          Math.round((opts.wait ?? 90_000) / 1000)
-        }s — is a \`yak serve\` pulling inbound mail (@yaks/mail \`pull\`)?`,
-      )
-    }
-    await new Promise((go) => setTimeout(go, opts.poll ?? 3_000))
-  }
-}
+export { codeFor, codeIn, lettersFor } from '@yaks/connections'
 
 // The connector, as JSON-RPC over one POST. Stateless: /mcp answers a
 // tools/call with no initialize handshake, which is what makes a CLI call

@@ -1,5 +1,6 @@
 // Private terminal input belongs to connections, not to a model harness.
-import type { CliCommand } from '@yaks/cli/host'
+import { type CliCommand, person } from '@yaks/cli/host'
+import { yaksApp } from './yaks-app.ts'
 import { authorize } from './authorize.ts'
 import { authorizeCLI } from './authorize_cli.ts'
 export {
@@ -31,8 +32,8 @@ export let commands: CliCommand[] = [{
         authorize({
           graph: host.graph,
           vault: host.vault,
-          owner: host.config.person,
-        }),
+          owner: await person(host),
+        }, yaksApp({ graph: host.graph, vault: host.vault })),
         typeof args.name == 'string' ? args.name : undefined,
         undefined,
         typeof args.as == 'string' ? args.as : undefined,

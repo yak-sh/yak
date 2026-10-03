@@ -20,6 +20,7 @@ export type Found = {
     name: string
     authorize: string
     token: string
+    userinfo?: string
     scopes?: string[]
     resource: string
     issuer?: string
@@ -73,6 +74,9 @@ export const discover = async (
       name: url,
       authorize: safe(meta.authorization_endpoint),
       token: safe(meta.token_endpoint),
+      ...typeof meta.userinfo_endpoint == 'string'
+        ? { userinfo: safe(meta.userinfo_endpoint) }
+        : {},
       ...scope ? { scopes: scope.split(' ') } : {},
       resource: url,
       ...meta.authorization_response_iss_parameter_supported

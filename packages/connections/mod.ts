@@ -94,3 +94,6 @@ export {
   type Callback,
 } from './authorize.ts'
 export { REDIRECT, type SignIns, signins } from './signin.ts'
+
+export { codeFor, codeIn, lettersFor } from './signin-mail.ts'
+export { botCallback, yaksApp } from './yaks-app.ts'

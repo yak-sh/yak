@@ -211,3 +211,22 @@ import { authorizeCLI } from '@yaks/connections/cli'
 let auth = authorize({ graph, vault, owner })
 console.log(await authorizeCLI(auth, 'openai'))
 ```
+
+### yaks.app
+
+`yak auth yaks.app` discovers the MCP resource at `https://yaks.app/mcp`,
+registers a public OAuth client, and uses the same masked paste-back flow. The
+account's address comes from the discovered `userinfo` endpoint.
+
+```sh
+yak auth yaks.app
+yak auth yaks.app --as probe-example@bot.yak.sh
+```
+
+A `@bot.yak.sh` sign-in needs no browser: the command asks for a code, reads it
+from this graph's mail, then grants the request through the ordinary consent
+page. This graph must receive that address's mail. The resulting connection
+holds OAuth tokens and the website session in its vault; neither reaches graph
+text. Browser sign-ins hold only OAuth tokens. `--as` is never required; it only
+reaches another account. A supplied website session in the `yaksApp` host seam
+is for migrating held sign-ins, not a command-line option.
