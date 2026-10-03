@@ -140,7 +140,7 @@ let signed = (comp: string, s: PropSchema): string[] => {
 
 // What a component declares about its own state, checked together. Each
 // keyword has its own shape, and combinations determine who takes and keeps
-// the value: a permanent peer-relayed value needs a save interval, while a
+// the value: a permanent peer-relayed value needs a save query, while a
 // component nobody is told about has nothing to pace.
 let lived = (comp: string, s: PropSchema): string[] => {
   let errs: string[] = []
@@ -161,7 +161,7 @@ let lived = (comp: string, s: PropSchema): string[] => {
   }
   if (s.save != null && !saved(s.save)) {
     errs.push(
-      `${comp} saves "${s.save}" — say a positive duration such as "5s" or "30s"`,
+      `${comp} saves "${s.save}" — say a nonempty query such as !position | .updated.at<="30s ago"`,
     )
   }
   if (s.save != null && (s.sync != 'peers' || kept(s.durable) != 'forever')) {

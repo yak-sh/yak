@@ -162,7 +162,7 @@ let relayed =
       false
 
 test('a guest peer position is saved as its vouched writer and rejects a stranger', async () => {
-  await arena('100ms', async (p) => {
+  await arena('!position | .updated.at<="1s ago"', async (p) => {
     let move = (x: number) =>
       p.writer.send({
         relay: [{
@@ -219,8 +219,8 @@ test('a guest peer position is saved as its vouched writer and rejects a strange
   })
 })
 
-test('closing a guest socket keeps its final position before the next save is due', async () => {
-  await arena('1h', async (p) => {
+test('closing a guest socket keeps its final position when its save query becomes true', async () => {
+  await arena('!position | .updated.at<="1s ago"', async (p) => {
     let move = (x: number) =>
       p.writer.send({
         relay: [{ entity: { eid: p.hero }, position: { x, z: 8 } }],
@@ -235,7 +235,7 @@ test('closing a guest socket keeps its final position before the next save is du
     p.writer.ws.close()
     await until(async () => (await p.row()).position?.x == 2, {
       timeout: 15_000,
-      label: 'socket close flushes its final position',
+      label: "the disconnected writer's final position becomes eligible",
     })
     assertEquals((await p.row()).position, { x: 2, z: 8 })
     assertEquals(idOf((await p.row()).updated?.via), p.via)

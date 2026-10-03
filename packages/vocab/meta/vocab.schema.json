@@ -293,8 +293,9 @@
         },
         "save": {
           "type": "string",
-          "pattern": "^[0-9]+(\\.[0-9]+)?(ms|s|m|h|d)$",
-          "not": { "pattern": "^0+(\\.0+)?(ms|s|m|h|d)$" }
+          "minLength": 1,
+          "pattern": "\\S",
+          "not": { "pattern": "^\\s*[+-]?[0-9]+(\\.[0-9]+)?(ms|s|m|h|d)\\s*$" }
         },
         "search": {
           "type": "array",

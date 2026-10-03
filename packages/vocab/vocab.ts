@@ -562,10 +562,9 @@ export let durableOf = (v: Vocab, comp: string): string =>
 export let paceOf = (v: Vocab, comp: string): number | null =>
   v.comp(comp)?.pace ?? null
 
-/** How often the server stores a peer-relayed entity's latest value, in
- * milliseconds — `null` for a component that declares no save interval, or
- * that this vocabulary does not know. */
-export let saveOf = (v: Vocab, comp: string): number | null =>
+/** The query a stored entity must match before saving a peer-relayed value
+ * — `null` when the component declares no query or is unknown. */
+export let saveOf = (v: Vocab, comp: string): string | null =>
   v.comp(comp)?.save ?? null
 
 export let loadVocab = (

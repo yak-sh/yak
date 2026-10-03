@@ -8,7 +8,7 @@ import { api } from './route.ts'
 import { saving } from './save.ts'
 import { type Frame, subscriptions } from './subs.ts'
 
-let fixture = () => {
+let fixture = (query = '!position | .updated.at<="1s ago"') => {
   let vocab = loadVocab([...shop.docs, {
     $defs: {
       position: {
@@ -16,7 +16,7 @@ let fixture = () => {
         type: 'object',
         sync: 'peers',
         durable: 'forever',
-        save: '1s',
+        save: query,
         properties: { x: { type: 'number' }, y: { type: 'number' } },
       },
       created: {
@@ -33,8 +33,13 @@ let fixture = () => {
       },
     },
   }])
-  let g = graph({ vocab, storage: ram(vocab) })
-  let at = 0
+  let at = Date.now()
+  let g = graph({
+    vocab,
+    storage: ram(vocab),
+    clock: () => new Date(at).toISOString(),
+  })
+  g.apply([{ entity: { eid: 'a' } }, { entity: { eid: 'b' } }])
   let timers = new Set<{ at: number; fn: () => void }>()
   let timer = (fn: () => void, after: number) => {
     let t = { at: at + after, fn }
@@ -71,15 +76,26 @@ let fixture = () => {
     x: number | null,
     id = 'a',
   ) => [{ entity: { eid: id }, position: x == null ? null : { x } }]
-  return { g, timer, tick, saved, read, write, commits, failures, timers }
+  return {
+    g,
+    timer,
+    tick,
+    saved,
+    read,
+    write,
+    commits,
+    failures,
+    timers,
+    now: () => at,
+  }
 }
 
 test('peer saving merges latest patches once an interval and settles when quiet', () => {
   let f = fixture(), writer = { actor: { by: 'Ada', via: 'browser' } }
   f.saved.write('one', f.write(1), writer)
   equal(f.read(), { x: 1 })
-  let created = (f.g.get(['a']) as Bundle[])[0].created as Comp
-  equal([created.by, created.via], ['Ada', 'browser'])
+  let updated = (f.g.get(['a']) as Bundle[])[0].updated as Comp
+  equal([updated.by, updated.via], ['Ada', 'browser'])
   f.saved.write('one', f.write(2), writer)
   f.saved.write('one', [{ entity: { eid: 'a' }, position: { y: 3 } }], writer)
   equal(f.read(), { x: 1 })
@@ -94,7 +110,7 @@ test('peer saving merges latest patches once an interval and settles when quiet'
   equal(f.commits.length, 2)
 })
 
-test('save clocks are per component and entity, and the last writer finishes them', () => {
+test('pending saves stay with the last writer after disconnect', () => {
   let f = fixture()
   f.saved.write('one', f.write(1))
   f.saved.write('one', f.write(2))
@@ -106,6 +122,8 @@ test('save clocks are per component and entity, and the last writer finishes the
   f.saved.drop('one')
   equal(f.read(), { x: 1 })
   f.saved.drop('two')
+  equal(f.read(), { x: 1 })
+  f.tick(1000)
   equal(f.read(), { x: 2, y: 3 })
   equal(
     (f.g.get(['a']) as Bundle[])[0].updated &&
@@ -120,7 +138,7 @@ test('a clear removes the saved value and its pending timer', () => {
   f.saved.write('one', f.write(1))
   f.saved.write('one', f.write(2))
   f.saved.write('one', f.write(null))
-  equal(f.read(), undefined)
+  equal(f.read(), { x: 1 })
   f.tick(1000)
   f.saved.drop('one')
   equal(f.read(), undefined)
@@ -179,13 +197,14 @@ test('a refused final save still releases the connection and its timers', async 
       },
     },
   })
-  let subs = subscriptions(f.g, { timer: f.timer })
+  let subs = subscriptions(f.g, { timer: f.timer, now: f.now })
   let writer = (frame: Frame) => {
     refused.push(frame)
   }
   await subs.relay(writer, f.write(1))
   await subs.relay(writer, f.write(2))
   permit = false
+  f.tick(1000)
   await subs.drop(writer)
   equal(f.read(), { x: 1 })
   equal(await subs.snapshot('.position'), [])
@@ -195,7 +214,8 @@ test('a refused final save still releases the connection and its timers', async 
 
 test('live peer queries use held values while ordinary graph reads retain the save', async () => {
   let f = fixture(), frames: Frame[] = []
-  let subs = subscriptions(f.g, { timer: f.timer }), writer = () => {}
+  let subs = subscriptions(f.g, { timer: f.timer, now: f.now }),
+    writer = () => {}
   await subs.relay(writer, f.write(1), { actor: { by: 'Ada' } })
   await subs.relay(writer, f.write(2), { actor: { by: 'Ada' } })
   equal(f.read(), { x: 1 })
@@ -208,6 +228,7 @@ test('live peer queries use held values while ordinary graph reads retain the sa
     '.entity&!position',
   )
   await subs.drop(writer)
+  f.tick(1000)
   equal(f.read(), { x: 2 })
   equal(await subs.snapshot('.position'), [])
   equal(
@@ -227,7 +248,8 @@ test('durable updates keep newer held positions and respect field projections', 
     frames: Frame[] = [],
     projected: Frame[] = [],
     raw: Frame[] = []
-  let subs = subscriptions(f.g, { timer: f.timer }), writer = () => {}
+  let subs = subscriptions(f.g, { timer: f.timer, now: f.now }),
+    writer = () => {}
   await subs.relay(writer, [{ entity: { eid: 'a' }, position: { x: 1, y: 3 } }])
   await subs.relay(writer, f.write(2))
   await subs.open(
@@ -291,4 +313,27 @@ test('the socket saves with its authenticated actor and vocabulary versions', as
   }])
   equal(writes.map((rows) => rows[0].$speaks), [{ garden: 1 }, { garden: 1 }])
   socket.emit('close')
+})
+
+test('save queries select stored entities, never the incoming value', () => {
+  let f = fixture('.book.status=shelved')
+  f.g.apply([{ entity: { eid: 'a' }, book: { status: 'draft' } }])
+  f.saved.write('one', f.write(7))
+  f.saved.drop('one')
+  f.tick(1000)
+  equal(f.read(), undefined)
+  f.g.apply([{ entity: { eid: 'a' }, book: { status: 'shelved' } }])
+  f.tick(1000)
+  equal(f.read(), { x: 7 })
+  equal(f.timers.size, 0)
+})
+
+test('a query that never matches never saves, including clears and disconnect', () => {
+  let f = fixture('.book.status=shelved')
+  f.saved.write('one', f.write(8))
+  f.saved.write('one', f.write(null))
+  f.saved.drop('one')
+  f.tick(1000)
+  equal(f.read(), undefined)
+  equal(f.commits.length, 0)
 })

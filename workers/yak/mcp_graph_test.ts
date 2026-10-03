@@ -11,6 +11,7 @@ import { handle, secretEid } from '@yaks/secrets'
 import {
   client,
   connector,
+  fresh,
   kernel,
   meta,
   num,
@@ -1183,45 +1184,27 @@ test('an app declares which of its own properties are searched', async () => {
   }
 })
 
-test(
-  'Plus and comped spaces can create and install more than fifty apps',
-  async () => {
-    let k = await kernel()
+for (let plan of ['Plus', 'comped']) {
+  test(`${plan} spaces can create and install more than fifty apps`, async () => {
+    let k = await fresh()
     try {
-      let { cookie, eids } = await seed(k, [
-        { slug: 'plus-limits37', apps: ['original'] },
-        { slug: 'yourname', apps: [] },
-      ])
+      let slug = plan == 'Plus' ? 'plus-limits37' : 'yourname'
+      let { cookie, eids } = await seed(k, [{ slug, apps: ['original'] }])
       let agent = connector(k, cookie)
+      let at = { space: slug, app: 'original' }
       await agent.tool('app_files', {
-        space: 'plus-limits37',
-        app: 'original',
+        ...at,
         path: 'index.html',
         content: '<h1>Original</h1>',
       })
-      await agent.tool('app_deploy', {
-        space: 'plus-limits37',
-        app: 'original',
-      })
-      await agent.tool('app_publish', {
-        space: 'plus-limits37',
-        app: 'original',
-        name: 'limits-example',
-      })
-      await onPlus(k, eids['plus-limits37'])
-      const seeded = [
-        ...['plus-limits37', 'yourname'].flatMap((slug) =>
-          Array.from({ length: 50 }, (_, i) => ({
-            entity: { eid: crypto.randomUUID() },
-            doc: { title: `App ${i}` },
-            app: {
-              slug: `app-${i}`,
-              space: eids[slug],
-              store: `${slug}/app-${i}`,
-            },
-          }))
-        ),
-      ]
+      await agent.tool('app_deploy', at)
+      await agent.tool('app_publish', { ...at, name: 'limits-example' })
+      if (plan == 'Plus') await onPlus(k, eids[slug])
+      let seeded = Array.from({ length: 50 }, (_, i) => ({
+        entity: { eid: crypto.randomUUID() },
+        doc: { title: `App ${i}` },
+        app: { slug: `app-${i}`, space: eids[slug], store: `${slug}/app-${i}` },
+      }))
       for (let i = 0; i < seeded.length; i += 10) {
         await meta(k).apply(seeded.slice(i, i + 10))
       }
@@ -1230,51 +1213,28 @@ test(
         slug: 'limits-refresh37',
         title: 'Refresh',
       })
-      await agent.tool('app_new', {
-        space: 'plus-limits37',
-        slug: 'last',
-        title: 'Last',
-      })
-      await agent.tool('app_new', {
-        space: 'plus-limits37',
-        slug: 'over',
-        title: 'Over',
-      })
-      assertStringIncludes(
-        await agent.tool('app_install', {
-          space: 'plus-limits37',
-          name: 'limits-example',
-          as: 'copy',
-        }),
-        'as plus-limits37/copy',
-      )
-      await agent.tool('app_delete', { space: 'plus-limits37', app: 'copy' })
-      await agent.tool('app_new', {
-        space: 'plus-limits37',
-        slug: 'replacement',
-        title: 'Replacement',
-      })
-      // Comped spaces also remain uncapped through both doors.
-      for (let i = 0; i < 3; i++) {
-        await agent.tool('app_new', {
-          space: 'yourname',
-          slug: `extra-${i}`,
-          title: 'Extra',
-        })
+      for (let app of ['last', 'over', 'extra']) {
+        await agent.tool('app_new', { space: slug, slug: app, title: app })
       }
       assertStringIncludes(
         await agent.tool('app_install', {
-          space: 'yourname',
+          space: slug,
           name: 'limits-example',
           as: 'copy',
         }),
-        'as yourname/copy',
+        `as ${slug}/copy`,
       )
+      await agent.tool('app_delete', { space: slug, app: 'copy' })
+      await agent.tool('app_new', {
+        space: slug,
+        slug: 'replacement',
+        title: 'Replacement',
+      })
     } finally {
       await k.stop()
     }
-  },
-)
+  })
+}
 
 // Compare-and-set, through the connector (T-37614). A batch is atomic, which
 // says nothing about the read that came before it: two callers who both read

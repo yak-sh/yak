@@ -14,7 +14,7 @@ let vocab = loadVocab({
       component: true,
       sync: 'peers',
       durable: 'forever',
-      save: '30s',
+      save: '!position | .updated.at<="30s ago"',
       pace: '100ms',
       properties: { x: { type: 'number' } },
     },

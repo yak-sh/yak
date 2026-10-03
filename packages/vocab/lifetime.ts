@@ -9,7 +9,8 @@
 //            relayed value at most once a pace (@yaks/sync pace.ts), and a
 //            store takes a stored one from each writer at most once a pace,
 //            refusing the rest (@yaks/member's guard)
-//   save     how often the server stores a relayed entity's latest value,
+//   save     the query a stored entity must match before the server stores
+//            a relayed value,
 //            keeping the last value when its writer disconnects
 //
 // `sync` and `durable` are independent. A cursor position is `sync: peers,
@@ -73,9 +74,10 @@ export let lives = (durable: string): boolean =>
 export let paced = (pace: unknown): number | null =>
   typeof pace == 'string' ? ms(pace) || null : null
 
-/** A `save` interval in milliseconds — `null` when no positive, finite
- * duration is declared, so peer-relayed values are not saved. */
-export let saved = (save: unknown): number | null => {
-  let span = typeof save == 'string' ? ms(save) : null
-  return span != null && span > 0 && Number.isFinite(span) ? span : null
-}
+/** A `save` query — `null` when absent, blank, or a duration. Query grammar
+ * is checked by the graph that evaluates the declaration. */
+export let saved = (save: unknown): string | null =>
+  typeof save == 'string' && save.trim() &&
+    !/^[+-]?\d+(?:\.\d+)?(ms|s|m|h|d)$/.test(save.trim())
+    ? save
+    : null

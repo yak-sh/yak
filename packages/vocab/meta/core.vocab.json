@@ -73,10 +73,11 @@
       "type": "string"
     },
     "save": {
-      "description": "How often the server stores each entity's latest peer-relayed value, as a positive duration (\"5s\", \"30s\"). Requires \"sync\": \"peers\" and \"durable\": \"forever\". Peers still hear values at their pace; the server stores at most once a save interval and saves the last value when the writer disconnects, applying as that writer. Absent, relayed values are not saved.",
+      "description": "The query the stored entity must match before the server stores a peer-relayed value, for example !position | .updated.at<=\"30s ago\". Requires \"sync\": \"peers\" and \"durable\": \"forever\". Peers still hear values at their pace. The server evaluates the query against stored data before the incoming write, and checks a pending last value after the writer disconnects until the query matches, applying as that writer. Absent, relayed values are not saved.",
       "type": "string",
-      "pattern": "^[0-9]+(\\.[0-9]+)?(ms|s|m|h|d)$",
-      "not": { "pattern": "^0+(\\.0+)?(ms|s|m|h|d)$" }
+      "minLength": 1,
+      "pattern": "\\S",
+      "not": { "pattern": "^\\s*[+-]?[0-9]+(\\.[0-9]+)?(ms|s|m|h|d)\\s*$" }
     },
     "computed": {
       "description": "true = derived, never stored. On a property: no column holds it, nobody writes it, a reader still sees it (a query-only rank, an aggregate, a status read off marks). On a component: no table holds it and nobody writes it; its entities are rows another package keeps, which the store reads through that package's backing (the journal's `_tx` and `_change`). Default false \u2014 what nobody declares so is stored.",

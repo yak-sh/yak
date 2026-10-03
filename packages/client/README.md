@@ -322,13 +322,13 @@ across component renders and close it when its owner disposes it.
 
 A component's `sync` and `durable` vocabulary keywords determine its storage:
 
-| Declaration                                         | Storage and synchronization                                                                                             |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `sync: server` (default)                            | Sent to the server; eligible for the local server-data cache.                                                           |
-| `sync: none`, `durable: forever` (default lifetime) | Persisted through the local `Vault`; never sent.                                                                        |
-| `sync: none`, another lifetime                      | Held in memory, without local persistence.                                                                              |
-| `sync: peers`                                       | Relayed over the WebSocket, once per `pace` if it declares one.                                                         |
-| `sync: peers`, `durable: forever`, `save: "30s"`    | Relayed as above; server saves the latest value every interval and on disconnect. Saved snapshots restore it on reload. |
+| Declaration                                          | Storage and synchronization                                                                                                     |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `sync: server` (default)                             | Sent to the server; eligible for the local server-data cache.                                                                   |
+| `sync: none`, `durable: forever` (default lifetime)  | Persisted through the local `Vault`; never sent.                                                                                |
+| `sync: none`, another lifetime                       | Held in memory, without local persistence.                                                                                      |
+| `sync: peers`                                        | Relayed over the WebSocket, once per `pace` if it declares one.                                                                 |
+| `sync: peers`, `durable: forever`, `save: ".player"` | Relayed as above; server saves the latest value when its stored entity matches the query. Saved snapshots restore it on reload. |
 
 For example, add this component to the vocabulary to persist a local draft:
 

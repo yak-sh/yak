@@ -114,15 +114,15 @@ test('a saved peer-relayed declaration survives a vocabulary bundle roundtrip', 
         sync: 'peers',
         durable: 'forever',
         pace: '100ms',
-        save: '30s',
+        save: '!position | .updated.at<="30s ago"',
         properties: { x: { type: 'number' } },
       },
     },
   }
   let back = load(fromBundles(toBundles(doc, plain)))
   assertEquals(facts(back), facts(load([doc])))
-  assertEquals(back.def('position')?.save, '30s')
-  assertEquals(saveOf(back, 'position'), 30_000)
+  assertEquals(back.def('position')?.save, '!position | .updated.at<="30s ago"')
+  assertEquals(saveOf(back, 'position'), '!position | .updated.at<="30s ago"')
 })
 
 test('the rungs another package adds to a status ladder survive', () => {

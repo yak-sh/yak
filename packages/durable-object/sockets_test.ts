@@ -135,11 +135,12 @@ test('a woken object serves the socket it inherited', () => {
 test('a woken socket saves and finishes values as its vouched writer', async () => {
   let vocab = loadVocab({
     $defs: {
+      hero: { component: true, properties: { name: { type: 'string' } } },
       position: {
         component: true,
         sync: 'peers',
         durable: 'forever',
-        save: '1h',
+        save: '.hero',
         properties: { x: { type: 'number' } },
       },
       created: {
@@ -163,7 +164,8 @@ test('a woken socket saves and finishes values as its vouched writer', async () 
   let storage = store(vocab), ctx = hibernation(), ws = wire()
   ctx.live.push(ws)
   ws.serializeAttachment({ writer: { actor: { by: 'person', via: 'tab' } } })
-  let [, first] = instance(storage, ctx, vocab)
+  let [initial, first] = instance(storage, ctx, vocab)
+  initial.apply([{ entity: { eid: 'hero' }, hero: { name: 'Hero' } }])
   first.message(ws, ask('hero', '.entity.eid=hero'))
   let [g, woken] = instance(storage, ctx, vocab)
   woken.wake()
@@ -179,8 +181,7 @@ test('a woken socket saves and finishes values as its vouched writer', async () 
   await woken.close(ws)
   let [row] = g.get(['hero']) as Bundle[]
   assertEquals(row.position, { x: 2 })
-  assertEquals((row.created as { by: string; via: string }).by, 'person')
-  assertEquals((row.created as { via: string }).via, 'tab')
+  assertEquals((row.updated as { by: string }).by, 'person')
   assertEquals((row.updated as { via: string }).via, 'tab')
 })
 
@@ -191,7 +192,7 @@ test('a legacy socket reconnects before saving but still answers existing relays
   let subs = subscriptions(g)
   let live = sockets({
     ...subs,
-    save: (comp) => comp == 'position' ? 30_000 : null,
+    save: (comp) => comp == 'position' ? '.hero' : null,
   }, ctx)
   send(live, ws, { relay: [{ entity: { eid: 'hero' }, browsing: { x: 1 } }] })
   assertEquals(ws.closed, [])

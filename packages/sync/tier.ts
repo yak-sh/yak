@@ -36,7 +36,7 @@ export let outbound = (vocab: Vocab, comp: string): boolean =>
   syncOf(vocab, comp) != 'none'
 
 /** Whether the server keeps a component, so a row it answers is the whole
- * truth about its saved value. Peer components with a save interval also ride
+ * truth about its saved value. Peer components with a save query also ride
  * stored snapshots; their live values still arrive through the relay. */
 export let stored = (vocab: Vocab, comp: string): boolean =>
   syncOf(vocab, comp) == 'server' || saveOf(vocab, comp) != null
@@ -108,7 +108,7 @@ export let outward = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
 /**
  * One committed list of bundles, reduced to what the peers should be told —
  * the `sync: peers` components, which the server relays and saves only when
- * they declare a save interval.
+ * they declare a save query.
  *
  * These are sent over the WebSocket, not to `POST /apply`. Their lifetime is
  * that socket's: `durable: connection` means the server clears them when the

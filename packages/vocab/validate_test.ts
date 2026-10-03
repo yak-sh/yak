@@ -244,16 +244,36 @@ test('a relay keeps a value forever only when the server saves it', () => {
   ])
 })
 
-test('save is a positive duration for a permanent peer-relayed component', () => {
+test('save is a query over a permanent peer-relayed component', () => {
   let one = (comp: PropSchema) => storable(doc({ presence: comp }))
   let peers = { type: 'object', sync: 'peers', durable: 'forever' }
-  assertEquals(one({ ...peers, pace: '100ms', save: '30s' }), [])
-  assertEquals(one({ type: 'object', sync: 'peers', save: '0.5s' }), [])
+  assertEquals(
+    one({
+      ...peers,
+      pace: '100ms',
+      save: '!position | .updated.at<="30s ago"',
+    }),
+    [],
+  )
+  assertEquals(
+    one({ type: 'object', sync: 'peers', save: '.position.x>5' }),
+    [],
+  )
   for (
-    let save of ['0s', '0.0ms', '-5s', 'soon', 'forever', '9'.repeat(400) + 's']
+    let save of [
+      '',
+      ' ',
+      '30s',
+      '0s',
+      '0.0ms',
+      '-5s',
+      '+5s',
+      ' 30s ',
+      '9'.repeat(400) + 's',
+    ]
   ) {
     assertEquals(one({ ...peers, save }), [
-      `presence saves "${save}" — say a positive duration such as "5s" or "30s"`,
+      `presence saves "${save}" — say a nonempty query such as !position | .updated.at<="30s ago"`,
     ])
   }
   for (
@@ -265,7 +285,7 @@ test('save is a positive duration for a permanent peer-relayed component', () =>
       { ...peers, durable: '5s' },
     ]
   ) {
-    assertEquals(one({ ...comp, save: '30s' }), [
+    assertEquals(one({ ...comp, save: '!position | .updated.at<="30s ago"' }), [
       'presence declares save — saving requires sync "peers" and durable "forever"',
     ])
   }

@@ -25,7 +25,7 @@
 //   lifetime.ts  what a component declares about its own state:
 //                `sync` (who is told about a write) and `durable` (how long a
 //                value lives), `pace` (how often a write is taken) and `save`
-//                (how often a peer-relayed value is stored)
+//                (the query allowing a peer-relayed value to be stored)
 //   rules.ts     rulesIn(docs) → the rules a vocabulary declares: a `$defs`
 //                entry marked `rule: true` is a query the graph runs, and
 //                there is no implementation to join it to

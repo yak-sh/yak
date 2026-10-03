@@ -1,5 +1,5 @@
 // Saving is independent of relay cadence: hold the latest admitted value,
-// store it once an interval, and finish a writer's pending values on close.
+// store it when its stored entity matches the query, even after disconnect.
 import { after, isPromise, over } from '@yaks/fp'
 import {
   type Actor,
@@ -11,6 +11,7 @@ import {
   signed,
 } from '@yaks/graph'
 import { saveOf } from '@yaks/vocab'
+import { and, eq, parse } from '@yaks/query'
 import type { Timer } from './relay.ts'
 
 /** The receiving door's identity and vocabulary versions, never client claims. */
@@ -23,7 +24,7 @@ type Value<C> = {
   conn: C
   writer: PeerWriter
   row: Bundle
-  at: number
+  connected: boolean
   dirty: boolean
   cancel?: () => void
 }
@@ -44,15 +45,40 @@ export let saving = <C>(
       })),
       writer.actor ?? null,
     )
-  let save = (v: Value<C>) => {
+  let forget = (key: string, v: Value<C>) => {
+    v.cancel?.()
+    v.cancel = undefined
+    if (values.get(key) === v) values.delete(key)
+  }
+  let save = (key: string, v: Value<C>) => {
     v.cancel?.()
     v.cancel = undefined
     if (!v.dirty) return
-    let row = v.row
-    return after(graph.apply(signedRows([row], v.writer)), () => {
-      v.at = now()
-      // Another admitted patch can arrive while an asynchronous store writes.
-      if (v.row === row) v.dirty = false
+    let [comp] = comps(v.row)[0]
+    let query = and(
+      eq('entity.eid', v.row.entity.eid),
+      parse(saveOf(graph.vocab, comp)!),
+    )
+    return after(graph.read(query, { now: now(), native: true }), (rows) => {
+      if (!rows.length) {
+        // Queries can change with time or another stored write. Recheck only
+        // while a value is pending, including the last one after disconnect.
+        v.cancel = timer(() => {
+          v.cancel = undefined
+          try {
+            let out = save(key, v)
+            if (isPromise(out)) return out.catch((err) => failed(v.conn, err))
+          } catch (err) {
+            failed(v.conn, err)
+          }
+        }, 1000)
+        return
+      }
+      let row = v.row
+      return after(graph.apply(signedRows([row], v.writer)), () => {
+        if (v.row === row) v.dirty = false
+        if (!v.connected || comps(row)[0][1] == null) forget(key, v)
+      })
     })
   }
   let write = (conn: C, bundles: Bundle[], writer: PeerWriter = {}) => {
@@ -75,35 +101,18 @@ export let saving = <C>(
       () =>
         after(
           over(rows, (row) => {
-            let [comp, patch] = comps(row)[0]
+            let [comp] = comps(row)[0]
             let key = row.entity.eid + ' ' + comp
             let was = values.get(key)
             let v: Value<C> = was ??
-              { conn, writer, row, at: -Infinity, dirty: false }
+              { conn, writer, row, connected: true, dirty: false }
+            v.connected = true
             v.conn = conn
             v.writer = writer
             v.row = row
             v.dirty = true
             values.set(key, v)
-            let wait = v.at + saveOf(graph.vocab, comp)! - now()
-            if (patch == null || wait <= 0) {
-              return after(save(v), () => {
-                if (patch == null && values.get(key) === v) values.delete(key)
-              })
-            }
-            if (!v.cancel) {
-              v.cancel = timer(() => {
-                v.cancel = undefined
-                try {
-                  let out = save(v)
-                  if (isPromise(out)) {
-                    return out.catch((err) => failed(v.conn, err))
-                  }
-                } catch (err) {
-                  failed(v.conn, err)
-                }
-              }, wait)
-            }
+            return save(key, v)
           }),
           () => {},
         ),
@@ -113,17 +122,15 @@ export let saving = <C>(
     after(
       over([...values], ([key, v]) => {
         if (v.conn !== conn) return
-        let forget = () => {
-          v.cancel?.()
-          if (values.get(key) === v) values.delete(key)
-        }
+        v.connected = false
+        if (!v.dirty) return forget(key, v)
         let refused = (err: unknown) => {
-          forget()
+          forget(key, v)
           failed(conn, err)
         }
         try {
-          let out = save(v)
-          return isPromise(out) ? out.then(forget, refused) : forget()
+          let out = save(key, v)
+          return isPromise(out) ? out.catch(refused) : out
         } catch (err) {
           refused(err)
         }

@@ -81,11 +81,27 @@ test('a property declares its type, and a JSON one may declare its shape', () =>
 })
 
 test('the meta-schema admits save only for permanent peer-relayed values', () => {
-  let peers = { component: true, type: 'object', sync: 'peers', save: '30s' }
+  let peers = {
+    component: true,
+    type: 'object',
+    sync: 'peers',
+    save: '!position | .updated.at<="30s ago"',
+  }
   assertEquals(ok(peers), [])
   assertEquals(ok({ ...peers, durable: 'forever', pace: '100ms' }), [])
-  assertEquals(ok({ ...peers, save: '0.005s' }), [])
-  for (let save of ['0s', '0.0ms', '-1s', 'forever', 'often']) {
+  assertEquals(ok({ ...peers, save: '.position.x>5' }), [])
+  for (
+    let save of [
+      '',
+      ' ',
+      '\t',
+      '30s',
+      '-1s',
+      '+5s',
+      ' 30s ',
+      '9'.repeat(400) + 's',
+    ]
+  ) {
     assert(ok({ ...peers, save }).length)
   }
   for (let sync of [undefined, 'none', 'server']) {

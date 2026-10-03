@@ -166,8 +166,8 @@ export type Subs = {
   ) => void | Promise<void>
   /** The vocabulary's cadence for a peer component, if it declares one. */
   pace?: (comp: string) => number | null
-  /** How often a peer component is saved, when it declares saving. */
-  save?: (comp: string) => number | null
+  /** The query deciding when a peer component is saved. */
+  save?: (comp: string) => string | null
   /** The keys one sink's relayed values are held under — small enough to
    * store somewhere that outlives this process's memory. */
   relaying: (sink: Sink) => string[]
@@ -382,6 +382,8 @@ export let subscriptions = (graph: Graph, opts: {
   /** how a `durable: "5s"` relayed value's timer is set (default:
    * setTimeout) */
   timer?: Timer
+  /** Clock used by pending save queries. */
+  now?: () => number
 } = {}): Subs => {
   let held = new Map<Sink, Map<string, Sub>>()
   let all = () => [...held.values()].flatMap((m) => [...m.values()])
@@ -463,7 +465,7 @@ export let subscriptions = (graph: Graph, opts: {
     }, ms), (sink, err) => {
     fault(err, 'peer saving')
     sink({ id: '', refused: refusal(err) })
-  })
+  }, opts.now)
   let saved = (bundles: Bundle[]) =>
     bundles.some((b) =>
       comps(b).some(([comp]) => saveOf(graph.vocab, comp) != null)

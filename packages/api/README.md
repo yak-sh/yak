@@ -377,7 +377,7 @@ const vocab = loadVocab({
       type: 'object',
       sync: 'peers',
       durable: 'forever',
-      save: '30s',
+      save: '.entity',
       properties: { x: { type: 'number' } },
     },
   },
@@ -395,6 +395,7 @@ await subs.relay(writer, [cursor])
 equal(seen[0].relay, [cursor])
 equal(await g.read('.cursor'), [])
 equal(await subs.snapshot('.cursor.x=4'), [cursor])
+await g.apply([{ entity: { eid: 'b1' } }])
 await subs.relay(writer, [{ entity: { eid: 'b1' }, position: { x: 7 } }])
 equal(await g.read('.position'), [{
   entity: { eid: 'b1' },
@@ -405,15 +406,19 @@ equal(await subs.snapshot('.cursor'), [])
 await subs.drop(reader)
 ```
 
-Without `save`, relayed values stay outside storage. A component declaring
-`sync: peers`, `durable: forever` and `save: '30s'` saves its first accepted
-value immediately, then at most once per interval, and saves a pending last
-value on disconnect. Explicit clears remove the saved component immediately;
-quiet values leave no save timer. Each input checks through
-`graph.apply(..., {check: true})` before changing the held value; each save uses
-ordinary `apply` with the connection's authenticated actor and vocabulary
-versions (`PeerWriter`). A refused input leaves the previous accepted value
-intact; a refused save is sent to its writer.
+Without `save`, relayed values stay outside storage. A component's **save
+query** selects the stored entities whose latest relayed value should be stored.
+For example, `save: '.player (!position | .updated.at<="30s ago")'` saves only
+stored players with no position yet or an update at least thirty seconds old. It
+does not inspect the incoming value. A stored entity that never matches is never
+saved, including an explicit clear.
+
+The server checks on arrival and every second while a value is pending. When a
+writer disconnects, its latest value remains pending until the query matches;
+disconnect never bypasses the query. Each input rehearses ordinary `apply`
+before replacing the pending value; each save applies as the connection's
+authenticated actor and vocabulary versions (`PeerWriter`). A refused input
+leaves the previous accepted value intact; a refused save is sent to its writer.
 
 A query can select by relayed values; moving, clearing or expiring them changes
 membership. Subscription `bundles` carry stored components, while `relay`

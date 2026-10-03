@@ -108,7 +108,7 @@ Use a JSON Schema validator with it for full document validation.
 | `identity`                            | property or component | Properties from which an eid is derived                                                                        |
 | `wire`                                | component             | `false` allows clients to read but not write it                                                                |
 | `sync`, `durable`, `pace`             | component             | Who receives writes, how long values live, how often a writer's values are taken                               |
-| `save`                                | component             | How often the server stores a permanent peer-relayed value                                                     |
+| `save`                                | component             | The query allowing the server to store a permanent peer-relayed value                                          |
 | `validate`, `tree`                    | property              | Full JSON Schema checking and flat-tree checking by a schema plugin                                            |
 | `constraints`                         | component             | Numeric bounds over the complete component                                                                     |
 
@@ -467,8 +467,12 @@ equal(v.comp('entry')?.search, ['content.body'])
 **sync** says who receives a write: `none`, `server` (default) or `peers`.
 **durable** says how long a value lives: `forever` (default), `connection` or a
 duration such as `5s`. **pace** says how often a writer's value is taken, as a
-positive duration. **save** says how often the server stores a permanent
-peer-relayed value, as a positive duration such as `30s`.
+positive duration. **save** is the query a stored entity must match before the
+server stores a permanent peer-relayed value, such as
+`!position | .updated.at<="30s ago"`. It reads the stored entity before the
+incoming write; the query can select the first value or a value old enough to
+replace. See [Time literals](../query/README.md#time-literals) for relative
+times.
 
 ```ts
 import {
@@ -498,7 +502,7 @@ const v = loadVocab({
       sync: 'peers',
       durable: 'forever',
       pace: '100ms',
-      save: '30s',
+      save: '!position | .updated.at<="30s ago"',
     },
   },
 })
@@ -508,9 +512,10 @@ equal(paceOf(v, 'cursor'), 100)
 equal(syncOf(v, 'undeclared'), 'server')
 equal(durableOf(v, 'undeclared'), 'forever')
 equal(paceOf(v, 'draft'), null)
-equal(saveOf(v, 'position'), 30_000)
+equal(saveOf(v, 'position'), '!position | .updated.at<="30s ago"')
 equal(saveOf(v, 'undeclared'), null)
-equal(saved('0s'), null)
+equal(saved('.position.x>5'), '.position.x>5')
+equal(saved('30s'), null)
 equal(storable(v.docs[0]), [])
 equal(ms('5s'), 5000)
 equal(ms('connection'), null)
@@ -522,19 +527,20 @@ equal(lives('2m'), true)
 An **event** is a component with `durable: '0s'`: rules and the applied bundles
 see it, but it is not stored. A `sync: 'none'` component cannot declare pace,
 and `sync: 'peers', durable: 'forever'` without `save` is refused by `storable`.
-`save` is refused with any other sync or lifetime. `saveOf` returns
-milliseconds, or `null` when no interval is declared or the component is
-unknown.
+`save` is refused with any other sync or lifetime. `saved` refuses blank strings
+and durations; the graph evaluating the query checks its grammar. `saveOf`
+returns the query, or `null` when none is declared or the component is unknown.
 
 [@yaks/sync](../sync/README.md) relays the latest value at most once per pace,
 including the final value, and clears immediately. For stored components,
 [@yaks/member](../member/README.md) refuses writes beyond the per-writer pace. A
 component with `sync: 'peers'` and `durable: 'forever'` declares `save`, a
-positive duration such as `30s`. The peers still hear the latest value at its
-pace; [@yaks/api](../api/README.md) also stores each entity's latest value at
-most once a save interval, and saves its last value when the writer's connection
-ends. That stored write goes through admission as the writer, with their `via`;
-the page sends nothing extra. A relay without `save` only hands values on.
+query. The peers still hear the latest value at its pace;
+[@yaks/api](../api/README.md) stores a relayed value when its stored entity
+matches that query. A pending last value remains eligible after the writer's
+connection ends; disconnect never overrides the query. That stored write goes
+through admission as the writer, with their `via`; the page sends nothing extra.
+A relay without `save` only hands values on.
 
 This package does not store, expire, relay, pace or save values.
 

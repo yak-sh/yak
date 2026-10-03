@@ -24,7 +24,7 @@ test('a declaration answers with its word, or with the default', () => {
   assertEquals(kept(undefined), 'forever')
 })
 
-test('saved relay values expose their independent storage interval in milliseconds', () => {
+test('saved relay values expose their query independently of their pace', () => {
   let v = loadVocab({
     $defs: {
       position: {
@@ -32,18 +32,37 @@ test('saved relay values expose their independent storage interval in millisecon
         sync: 'peers',
         durable: 'forever',
         pace: '100ms',
-        save: '30s',
+        save: '!position | .updated.at<="30s ago"',
         properties: { x: { type: 'number' } },
       },
       cursor: { component: true, sync: 'peers', durable: 'connection' },
     },
   })
-  assertEquals([paceOf(v, 'position'), saveOf(v, 'position')], [100, 30_000])
-  assertEquals(v.comp('position')?.save, 30_000)
+  assertEquals([paceOf(v, 'position'), saveOf(v, 'position')], [
+    100,
+    '!position | .updated.at<="30s ago"',
+  ])
+  assertEquals(v.comp('position')?.save, '!position | .updated.at<="30s ago"')
   assertEquals([saveOf(v, 'cursor'), saveOf(v, 'ghost')], [null, null])
-  assertEquals(saved('0.5s'), 500)
+  assertEquals(saved('.position.x>5'), '.position.x>5')
+  assertEquals(saved(' .position '), ' .position ')
+  assertEquals(saved('hello'), 'hello')
+})
+
+test('save refuses absent, blank and duration declarations', () => {
   for (
-    let save of [undefined, 30, '0s', '-1s', 'forever', '9'.repeat(400) + 's']
+    let save of [
+      undefined,
+      30,
+      '',
+      ' ',
+      '0s',
+      '30s',
+      '-1s',
+      '+5s',
+      ' 30s ',
+      '9'.repeat(400) + 's',
+    ]
   ) {
     assertEquals(saved(save), null)
   }
