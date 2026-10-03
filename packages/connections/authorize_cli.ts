@@ -3,18 +3,8 @@
 
 import { Refused } from '@yaks/graph'
 import { OAuthError } from '@yaks/oauth'
-import type { AuthAction, AuthReply } from './authorize.ts'
-
-export type Authorization = {
-  run: (
-    action: AuthAction,
-    name?: string,
-    callback?: string | { callback: string; session?: string },
-    as?: string,
-  ) => Promise<AuthReply>
-  returned?: (name: string) => boolean
-  close: () => Promise<void>
-}
+import type { Authorization } from './authorize.ts'
+export type { Authorization } from './authorize.ts'
 
 export type AuthIO = {
   say: (line: string) => void

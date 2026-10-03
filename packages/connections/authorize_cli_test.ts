@@ -59,7 +59,11 @@ test('private line ignores pasted line endings until paste closes', async () => 
 
 test('connection authorize sends a pasted return URL only to completion', async () => {
   let callback = 'http://localhost:8765/oauth/callback?code=private&state=s'
-  let calls: [string, string | undefined, string | undefined][] = []
+  let calls: [
+    string,
+    string | undefined,
+    Parameters<Authorization['run']>[2],
+  ][] = []
   let shown: string[] = []
   let auth: Authorization = {
     run: (action, name, value) => {

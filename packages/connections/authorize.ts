@@ -14,6 +14,16 @@ export type AuthReply = {
   url?: string
   redirectUrl?: string
 }
+export type Authorization = {
+  run: (
+    action: AuthAction,
+    name?: string,
+    callback?: string | Callback,
+    as?: string,
+  ) => Promise<AuthReply>
+  returned?: (name: string) => boolean
+  close: () => Promise<void>
+}
 export type AuthTarget = { integration: string; redirect?: string }
 export type AuthOptions = {
   /** Discover/register an unknown integration, returning its name and redirect. */
@@ -28,7 +38,7 @@ export type AuthOptions = {
 export let authorize = (
   h: { graph: Graph; vault: Vault; owner?: Eid },
   options: AuthOptions = {},
-) => {
+): Authorization & { returned: (name: string) => boolean } => {
   let signin = signins({ g: h.graph, vault: h.vault })
   let targets = new Map<string, AuthTarget>()
   let replies = new Map<string, Callback>()
