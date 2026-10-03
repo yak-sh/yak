@@ -23,13 +23,26 @@ import {
   val,
 } from '@yaks/sql'
 import memberDoc from '../member/vocab.json' with { type: 'json' }
-import { schema } from './ddl.ts'
+import { schema, tables } from './ddl.ts'
 import { open } from './db.ts'
 import { columns as cols, objects, storage } from './mod.ts'
 import { mem, shop, spy } from './testing.ts'
 
 let text = (stmts: Stmt[]) => stmts.map((s) => render(s).sql)
 let all = text(schema(shop)).join('\n')
+
+test('editing a returned table list leaves stored component reads intact', () => {
+  let vocab = loadVocab({
+    $defs: {
+      memo: { component: true, properties: { text: { type: 'string' } } },
+    },
+  })
+  let s = storage(mem(), vocab)
+  s.install()
+  s.tx((tx) => tx.patch([{ entity: { eid: 'one' }, memo: { text: 'kept' } }]))
+  tables(vocab).length = 0
+  assertEquals(s.get(['one'])[0].memo, { text: 'kept' })
+})
 
 let lookWords = (ref = false) =>
   loadVocab({

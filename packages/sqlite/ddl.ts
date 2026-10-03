@@ -301,7 +301,7 @@ export let tables = (vocab: Vocab): string[] => {
     )
     tableNames.set(vocab, names)
   }
-  return names
+  return [...names]
 }
 
 // The whole schema as an ordered list of statements: the spine, then one table
