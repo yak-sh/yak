@@ -16,7 +16,7 @@ let hero = {
   entity: { eid: HERO },
   player: {},
   created: { by: 'owner-person' },
-  seen: { level: 'mossvale', x: 10, z: 20 },
+  position: { level: 'mossvale', x: 10, z: 20 },
 }
 let look = {
   entity: { eid: 'look' },

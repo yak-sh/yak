@@ -50,9 +50,7 @@ export let CHAT = '@cf/zai-org/glm-5.3-flash'
 /** How many of a villager's newest lines a turn reads. */
 export let WINDOW = 16
 
-/** How long a hero counts as in a land after the page last said so, and how
- * often a villager there comes back to decide, as the wake's words say it. */
-export let AWAKE = '5-minutes-ago'
+/** How often a villager returns to decide while a hero is connected. */
 export let EVERY = '5m'
 
 /** How fast a villager walks, in metres a second. */
@@ -143,7 +141,7 @@ export let aboutOf = (
 /**
  * A villager as the store first holds them: a transcript, and a standing call
  * to `think` (the command whose row is `think`) that wakes every `EVERY`
- * while a hero has been seen in their land lately, and sleeps when none has.
+ * while a hero is connected in their land, and sleeps when none is.
  * Every page adds the same row, so two that add it at once add one.
  *
  * ```ts
@@ -166,7 +164,7 @@ export let born = (g: Giver, think: string) => ({
   call: { to: think, args: { villager: eidOf(g.id) } },
   wake: {
     while: [{
-      match: `.seen.level=${g.level}&.seen.at>=${AWAKE}`,
+      match: `.player&.position.level=${g.level}`,
       every: EVERY,
     }],
   },

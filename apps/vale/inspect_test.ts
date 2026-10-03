@@ -18,7 +18,7 @@ test('inspect prefers live position and summarizes a hero objective', () => {
   let [x, z] = arriveOf('tombsands')
   let hero = row('hero', {
     player: {},
-    seen: { level: 'mossvale', x: 1, z: 2 },
+    position: { level: 'mossvale', x: 1, z: 2 },
     created: { by: 'private-account' },
   })
   let text = inspectOf({
@@ -76,7 +76,7 @@ test('inspect reports saved heroes and live-only world targets', () => {
   let saved = inspectOf({
     row: row('hero', {
       player: {},
-      seen: { level: 'mossvale', x: 10, z: 20 },
+      position: { level: 'mossvale', x: 10, z: 20 },
     }),
   })
   assertStringIncludes(saved, 'Last saved position: Mossvale (10, 20)')

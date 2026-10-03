@@ -99,7 +99,7 @@ import {
 } from './rules.ts'
 import { itemLevel, type Rarity, rarityOf } from './rarity.ts'
 import { destination } from './fires.ts'
-import type { Seen } from './seen.ts'
+import type { Place } from './place.ts'
 import {
   type Body,
   inVillage,
@@ -300,8 +300,6 @@ export type Frame = {
   down: boolean
   /** an admin request placed this hero during this frame */
   teleported: string | null
-  /** the most recent request already answered on this tab or in the store */
-  teleportAck: string | undefined
   sheet: Sheet
   mobs: Mob[]
   others: Other[]
@@ -570,17 +568,18 @@ export let game = (
   // The region the hero was in last frame, to tell when they cross into
   // another.
   let was = ''
-  // Where the hero was last seen before this page, until a frame plays.
-  let lastSeen: Seen | null = null
+  // The saved place chosen before the first frame plays.
+  let saved: Place | null = null
   let travelTo: { level: string; known: ReadonlySet<string> } | null = null
-  let handled: string | undefined
-  // Where the hero stands on the first frame: back where they were last
-  // seen, when that spot lies in the region it names and they still fit
+  // Where the hero stands on the first frame: at their saved position,
+  // when that spot lies in the region it names and they still fit
   // there, or else by the fire of that region, or of home.
   let landing = (v: Vale): Body => {
-    let s = lastSeen
+    let s = saved
     if (!s) return arrival(v)
-    return (regionOf(s.x, s.z) == s.level ? resumed(v, s) : null) ??
+    return (regionOf(s.x, s.z) == s.level
+      ? resumed(v, { ...s, yaw: 0 })
+      : null) ??
       arrival(v, hearthOf(s.level) ?? arriveOf(s.level))
   }
 
@@ -749,10 +748,9 @@ export let game = (
   return {
     /** the hero's current sheet, for the stage before its first frame */
     sheet: sheetOf,
-    /** bring the hero back where they were last seen, on the first frame
-     * played */
-    resume: (s: Seen) => {
-      lastSeen = s
+    /** Bring the hero back to their saved position on the first frame. */
+    resume: (s: Place) => {
+      saved = s
     },
     /** ask to travel between village fires on the next frame */
     travel: (level: string, known: ReadonlySet<string>) => {
@@ -874,10 +872,8 @@ export let game = (
       // reload) stands where they land.
       let pos = where(row)
       let here = pos ? bodyOf(pos, motion(row)) : null
-      let recalledTeleport = lastSeen?.teleport
-      let teleportAck = str(comp(row, 'seen').teleport, recalledTeleport)
-      let body = here ? { ...here } : landing(v)
-      lastSeen = null
+      let body = saved ? landing(v) : here ? { ...here } : landing(v)
+      saved = null
       let down = here?.gait == 'down'
       if (down) body.gait = 'idle'
       let vit = vitals(row)
@@ -1006,11 +1002,8 @@ export let game = (
       let request = nextTeleport(
         net.mine('teleport_request'),
         me,
-        teleportAck,
-        handled,
       )
       if (request) {
-        handled = request.entity.eid
         let ask = comp(request, 'teleport_request')
         try {
           let to = destinationOf(v, { x: num(ask.x, NaN), z: num(ask.z, NaN) })
@@ -1023,6 +1016,8 @@ export let game = (
               doing = ''
               fought.foe = ''
               teleported = request.entity.eid
+              bundles.push({ entity: { eid: teleported }, completed: {} })
+
             }
           }
         } catch { /* a malformed request never moves a hero */ }
@@ -2078,7 +2073,6 @@ export let game = (
         vitals: vitalsNow,
         down,
         teleported,
-        teleportAck,
         sheet: s,
         mobs,
         others,

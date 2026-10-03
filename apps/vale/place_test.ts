@@ -43,11 +43,11 @@ test('where returns a live position, then the saved spot, to its owner', async (
           entity: { eid: 'hero' },
           player: {},
           created: { by: 'person' },
-          seen: {
+          position: {
             level: 'mossvale',
             x: 50,
             z: 50,
-            at: '2026-09-28T00:00:00.000Z',
+            at: Date.parse('2026-09-28T00:00:00.000Z'),
           },
         }]))
       },

@@ -11,7 +11,7 @@ import type { Bundle } from './net.ts'
 import type { Net } from './net.ts'
 import type { Intent } from './input.ts'
 import { game } from './play.ts'
-import { destinationOf, nextTeleport } from './teleport.ts'
+import { destinationOf, nextTeleport, resumed } from './teleport.ts'
 import { flat, vale } from './terrain.ts'
 import { workerOf } from './worker.js'
 import { seedDesigns } from './designs_fixture.ts'
@@ -38,7 +38,14 @@ test('teleport destinations stay in their land and refuse unsafe coordinates', (
   )
 })
 
-test('a seen acknowledgment consumes the latest admin move', () => {
+test('a saved height brings a hero back onto raised ground', () => {
+  let world = flat(5, [{ x: 50, z: 50, r: 1, top: 9 }])
+  assertEquals(resumed(world, { x: 50, z: 50, yaw: 0 }), null)
+  let body = resumed(world, { x: 50, y: 9, z: 50, yaw: 0 })!
+  assertEquals([body.x, body.y, body.z, body.yaw], [50, 9, 50, 0])
+})
+
+test('completing the latest admin move keeps older requests superseded', () => {
   let request = (eid: string, at: string): Bundle => ({
     entity: { eid },
     created: { at },
@@ -48,11 +55,12 @@ test('a seen acknowledgment consumes the latest admin move', () => {
   let newest = request('new', '2026-09-28T02:00:00Z')
   let rows = [old, newest]
   assertEquals(
-    nextTeleport(rows, 'hero', undefined, undefined)?.entity.eid,
+    nextTeleport(rows, 'hero')?.entity.eid,
     'new',
   )
-  assertEquals(nextTeleport(rows, 'hero', 'new', undefined), null)
-  assertEquals(nextTeleport(rows, 'hero', undefined, 'new'), null)
+  newest.completed = {}
+  assertEquals(nextTeleport(rows, 'hero'), null)
+  assertEquals(nextTeleport(rows, 'another'), null)
 })
 
 test('the teleport worker admits owner and refuses editor', async () => {
@@ -130,7 +138,7 @@ test('teleport targets live positions and stored companion spots', async () => {
             return Promise.resolve(Response.json([{
               entity: { eid: target },
               player: {},
-              seen: { level: 'mossvale', x: 90, z: 90 },
+              position: { level: 'mossvale', x: 90, z: 90 },
               ...(stored ? { companion: { x: 51, z: 52 } } : {}),
             }]))
           }
@@ -223,13 +231,6 @@ test('an active hero moves once and a returning hero keeps the move', () => {
   let rows = new Map<string, Bundle>([[hero, {
     entity: { eid: hero },
     player: {},
-    seen: {
-      level: 'mossvale',
-      x: 70,
-      z: 70,
-      yaw: 0,
-      at: '2026-09-28T00:00:00Z',
-    },
     position: { level: 'mossvale', x: 70, y: 5, z: 70, at: now },
     motion: { yaw: 0, gait: 'idle', vy: 0, vx: 0, vz: 0 },
   }]])
@@ -245,7 +246,10 @@ test('an active hero moves once and a returning hero keeps the move', () => {
     },
     hero,
     now: () => now,
-    mine: (name: string) => name == 'teleport_request' ? requests : [],
+    mine: (name: string) =>
+      name == 'teleport_request'
+        ? requests.map((b) => ({ ...b, ...rows.get(b.entity.eid) }))
+        : [],
     who: () => null,
     falls: () => [],
     spawned: () => [],
@@ -288,18 +292,12 @@ test('an active hero moves once and a returning hero keeps the move', () => {
   now += 100
   let second = play.frame(v, still, 0, 0.016)!
   assertEquals(second.teleported, null)
-  rows.set(hero, {
-    ...rows.get(hero)!,
-    seen: {
-      level: 'mossvale',
-      x: 50,
-      z: 50,
-      yaw: 0,
-      at: '2026-09-28T01:00:01Z',
-      teleport: request,
-    },
-  })
-  let returned = game(net).frame(v, still, 0, 0.016)!
+  assertEquals(rows.get(request)?.completed, {})
+  rows.set(hero, { ...rows.get(hero)!, motion: { yaw: 2, gait: 'idle' } })
+  let returning = game(net)
+  returning.resume({ level: 'mossvale', x: 50, z: 50 })
+  let returned = returning.frame(v, still, 0, 0.016)!
+  assertEquals(returned.body.yaw, 0)
   assertEquals([returned.body.x, returned.body.z, returned.teleported], [
     50,
     50,

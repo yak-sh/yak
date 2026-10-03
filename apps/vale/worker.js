@@ -92,7 +92,10 @@ let tick = async (req, env, v, themes) => {
   if (!row?.directive) return new Response('No directive', { status: 404 })
   let hero = row.directive.player
   let [[player], directives, items, upgraded, gathered] = await Promise.all([
-    query(env, `.entity.eid=${JSON.stringify(hero)}&?player&?created&?seen`),
+    query(
+      env,
+      `.entity.eid=${JSON.stringify(hero)}&?player&?created&?position`,
+    ),
     query(env, `.directive.player=${JSON.stringify(hero)}&?created`),
     query(env, `.item.owner=${JSON.stringify(hero)}&?gathered`),
     query(env, `.upgraded.by=${JSON.stringify(hero)}`),
@@ -195,7 +198,7 @@ let where = async (req, env, themes) => {
   let place = placeOf(current, 'position')
   let source = 'live'
   if (!place) {
-    place = placeOf(hero, 'seen')
+    place = placeOf(hero, 'position')
     source = 'saved'
   }
   return new Response(
@@ -277,7 +280,7 @@ let inspect = async (req, env, v, themes) => {
   let [stored] = await read(
     env.STORE,
     `.entity.eid=${JSON.stringify(id)}` +
-      '&?player&?villager&?directive&?item&?position&?seen&?companion&?doc&?created',
+      '&?player&?villager&?directive&?item&?position&?companion&?doc&?created',
   )
   let at = await targetPlace(env, v, id)
   let giver = GIVERS.find((g) => eidOf(g.id) == id)

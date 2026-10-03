@@ -35,10 +35,10 @@ let halt = (eid: string): Bundle => ({
 })
 
 let start = (v: Vale, hero: Bundle | undefined): [number, number, number] => {
-  let seen = comp(hero, 'seen')
+  let saved = comp(hero, 'position')
   let fire = hearthOf(HOME) ?? spotOf(HOME, LEVELS[HOME].arrive) ?? [128, 128]
   let home: [number, number] = [fire[0], fire[1] + 4]
-  let x = num(seen.x, home[0]), z = num(seen.z, home[1])
+  let x = num(saved.x, home[0]), z = num(saved.z, home[1])
   return [x, groundAt(v, x, z), z]
 }
 
@@ -113,7 +113,9 @@ export let companionTick = async (
       if (choices.length == 3) break
     }
     if (!choices.length) {
-      return [report(eid, at, now, call, 'wait', '', now, 'Waiting for a tree')]
+      return [
+        report(eid, at, now, call, 'wait', '', now, 'Waiting for a tree'),
+      ]
     }
     let picked = await choose(choices)
     return [report(

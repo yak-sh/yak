@@ -18,9 +18,9 @@ let CLIMB = 1.2
 /** Stand on this spot, if it holds a hero. */
 export let resumed = (
   v: Vale,
-  s: { x: number; z: number; yaw: number },
+  s: { x: number; y?: number; z: number; yaw: number },
 ): Body | null => {
-  let y = floorAt(v, s.x, s.z, groundAt(v, s.x, s.z) + CLIMB)
+  let y = floorAt(v, s.x, s.z, (s.y ?? groundAt(v, s.x, s.z)) + CLIMB)
   return fits(v, s.x, s.z, y)
     ? { x: s.x, y, z: s.z, vy: 0, yaw: s.yaw, speed: 0, gait: 'idle' }
     : null
@@ -69,12 +69,11 @@ export let destinationOf = (v: Vale, target: Target): Destination => {
   return { level, x, z }
 }
 
-/** The newest request this hero has not yet answered with a seen position. */
+/** The latest request, if this hero has not completed it. Older requests
+ * stay superseded even after the latest request is completed. */
 export let nextTeleport = (
   requests: Bundle[],
   player: string,
-  acknowledged: string | undefined,
-  handled: string | undefined,
 ): Bundle | null => {
   let latest =
     requests.filter((r) =>
@@ -86,8 +85,5 @@ export let nextTeleport = (
       num(b.entity.num) - num(a.entity.num) ||
       b.entity.eid.localeCompare(a.entity.eid)
     )[0] ?? null
-  return latest && latest.entity.eid != acknowledged &&
-      latest.entity.eid != handled
-    ? latest
-    : null
+  return latest && !latest.completed ? latest : null
 }

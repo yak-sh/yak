@@ -9,8 +9,8 @@
 // journal.ts, station.ts, notices.ts, menu.ts, and the deals with a
 // villager, dealbox.ts). The world is one ground of many regions, and the
 // page draws the chunks within sight of the hero (world.ts), grown and
-// meshed in the workers as they come near. A hero comes back where they were
-// last seen (seen.ts).
+// meshed in the workers as they come near. A hero returns to their last
+// saved position.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { ABILITIES, type Ability, useAbilities } from './abilities.ts'
@@ -66,7 +66,7 @@ import { HOME, levelOf, LEVELS, type Spot } from './levels.ts'
 import { connect, type Hero, type Me, vocabulary } from './net.ts'
 import { type Event, type Frame, game, type Vec3 } from './play.ts'
 import { FOES } from './soft.ts'
-import { recall, type Seen, sighting } from './seen.ts'
+import type { Place } from './place.ts'
 import { formOf, SKILLS } from './skills.ts'
 import { within } from './solid.ts'
 import { sound } from './sound.ts'
@@ -171,7 +171,6 @@ let net = opening.world()
 let v = vale(VOX)
 let deal = deals(net)
 let folk = village(net, deal)
-let seen = sighting(net)
 let camp = fires(net)
 let explored = exploration(net)
 let party = parties(net)
@@ -307,7 +306,7 @@ let feet = new THREE.Vector3()
 let voice = voices(net, h.mic)
 h.orbs.mic.addEventListener('click', () => void voice.toggle())
 // The menu: the vale's sound, camera, frame rate and ground detail. Reloading through
-// this tab keeps its hero and most recent spot (seen.ts).
+// this tab keeps its hero, and the store keeps its position.
 let frameRate: 30 | 60 = 60
 try {
   if (localStorage.getItem('mossvale.frames') == '30') frameRate = 30
@@ -368,16 +367,14 @@ let dress = () => {
   w.scene.add(preview.root)
 }
 
-// Play a hero: back where they were last seen, by this tab or the store
-// (`stored`), or a new one at Mossvale's fire.
-let begin = async (eid: string, stored: Seen | null = null) => {
+// Play a hero at their saved position, or a new one at Mossvale's fire.
+let begin = async (eid: string, stored: Place | null = null) => {
   if (starting) return
   starting = true
   try {
     net.choose(eid)
     await net.settle()
-    let back = recall(eid, stored)
-    if (back) g.resume(back)
+    if (stored) g.resume(stored)
     stage.prepare(eid, lookOf(eid), g.sheet())
     await renderer.compileAsync(w.scene, camera)
     if (preview) w.scene.remove(preview.root)
@@ -465,7 +462,7 @@ let choose = (who: Me, heroes: Hero[]) => {
     b.addEventListener('click', () => {
       let o = heroes.find((x) => x.eid == b.dataset.eid)
       if (!o) return
-      begin(o.eid, o.seen)
+      begin(o.eid, o.position)
       h.toast(`Welcome back, ${o.name}.`, 'Toast-big')
     })
   )
@@ -1081,7 +1078,6 @@ let loop = (t: number) => {
       h.mic(voice.mic, voice.input, voice.sending)
       bounty.tick(job, [f.body.x, f.body.y, f.body.z], dt, props)
       folk.tick(f)
-      seen.tick(f)
       let found = camp.tick(f)
       explored.tick(f)
       if (found) h.toast(`${LEVELS[found.level].name} fire found`, 'Toast-big')
@@ -1388,7 +1384,6 @@ let { me, heroes } = await asking
 chat.me(me)
 folk.me(me)
 party.me(me)
-seen.me(me)
 camp.me(me)
 explored.me(me)
 deal.me(me)
@@ -1403,7 +1398,7 @@ if (!me.reads) {
   look.name = me.name?.split(/\s/)[0] ?? ''
   let played = net.played()
   let o = heroes.find((o) => o.eid == played)
-  if (o) begin(o.eid, o.seen)
+  if (o) begin(o.eid, o.position)
   else if (heroes.length) choose(me, heroes)
   else make(me, null)
 } else {

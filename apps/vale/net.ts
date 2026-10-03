@@ -25,7 +25,7 @@ import { groupOf } from './party-state.ts'
 import type { Tools } from './slash.ts'
 import { SIZE } from './levels.ts'
 import { type Look, lookOf } from './make.ts'
-import { type Seen, seenOf } from './seen.ts'
+import { type Place, placeOf as savedPlace } from './place.ts'
 import { once as read } from './once.ts'
 
 export type Bundle = NonNullable<ReturnType<Client['ent']>>
@@ -43,10 +43,9 @@ export type Me = {
   signIn: string | null
 }
 
-/** A hero as the vale shows them: how they look now, and where they were
- * last seen (seen.ts), as the gate lists a person's heroes and the world and
- * the chat show anyone's. */
-export type Hero = Look & { eid: string; seen: Seen | null }
+/** A hero's look and saved position, as the gate lists a person's heroes
+ * and the world and chat show anyone's. */
+export type Hero = Look & { eid: string; position: Place | null }
 
 // The store's words include this app's vocabulary and the platform's. A
 // failed request waits for the store to recover before the page opens a client.
@@ -57,7 +56,7 @@ export let vocabulary = async (base: URL) =>
 let heroOf = (b: Bundle, look?: Bundle): Hero => ({
   eid: b.entity.eid,
   ...lookOf(comp(look, 'look')),
-  seen: seenOf(b),
+  position: savedPlace(b, 'position'),
 })
 
 // Each hero's newest look row, by hero.
@@ -228,7 +227,7 @@ export let connect = (
         `.directive.player=${q}&?created&?companion&.order=-created.at&.limit=10`,
       ),
       teleport_request: c.watch(
-        `.teleport_request.player=${q}&?created&.order=-created.at&.limit=10`,
+        `.teleport_request.player=${q}&?created&?completed&.order=-created.at&.limit=10`,
       ),
     }
   }

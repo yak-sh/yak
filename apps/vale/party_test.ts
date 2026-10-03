@@ -87,13 +87,6 @@ test('a party member has a live location, then a last known land', () => {
     player: {},
     position: { level: 'mossvale', x: 12, y: 4, z: 18, at: now },
     motion: { yaw: 1, gait: 'run' },
-    seen: {
-      level: 'birchmere',
-      x: 3,
-      z: 7,
-      yaw: 0,
-      at: new Date(now - 60_000).toISOString(),
-    },
   }
   let live = memberOf(row, 'Ada', now)
   assertEquals([live.name, live.online, live.level, live.x, live.z], [
@@ -107,16 +100,16 @@ test('a party member has a live location, then a last known land', () => {
   let away = memberOf(
     {
       ...row,
-      position: null,
+      position: { level: 'mossvale', x: 50, y: 4, z: 50, at: now - 60_000 },
     },
     'Ada',
     now,
   )
   assertEquals([away.online, away.level, away.x, away.z, away.body], [
     false,
-    'birchmere',
-    3,
-    7,
+    'mossvale',
+    50,
+    50,
     null,
   ])
 })

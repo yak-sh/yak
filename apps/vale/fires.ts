@@ -1,6 +1,5 @@
 // The village fires a hero has reached. Each discovery is one identity-keyed
-// row, so two visits to the same fire agree on one fact. A signed-out hero's
-// discoveries stay in this tab, as their last-seen spot does (seen.ts).
+// row, so two visits to the same fire agree on one fact.
 import { writer } from './chat.ts'
 import { comp } from './bundle.ts'
 import type { Bundle, Me } from './net.ts'

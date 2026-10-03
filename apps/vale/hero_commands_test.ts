@@ -28,7 +28,7 @@ let fixture = async (named = false) => {
       entity: { eid: HERO },
       player: {},
       $actor: { by: 'person' },
-      seen: { level: 'mossvale', x: 50, z: 50 },
+      position: { level: 'mossvale', x: 50, z: 50 },
     },
     {
       entity: { eid: OTHER },

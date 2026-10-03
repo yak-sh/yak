@@ -6,7 +6,7 @@
 // hero (deals.ts), their job on the notice board, how they feel and where
 // the land's people went lately; and the news of a quest handed in. What
 // keeps a level's villagers awake while somebody plays in it is where the
-// hero was last seen (seen.ts).
+// connected hero's relayed position.
 //
 // A guest reads what villagers say and is not heard by them: only a person
 // signed in speaks (chat.ts).

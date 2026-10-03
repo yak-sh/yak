@@ -85,13 +85,13 @@ export let resolveHero = async (
         JSON.stringify(
           eid(input.trim()) ? input.trim().toLowerCase() : input.trim(),
         )
-      }&.player&?created&?seen`,
+      }&.player&?created&?position`,
     )
     if (hero) return hero
     let target = await namedHero(input, query)
     if (!target) return null
     return (await query(
-      `.entity.eid=${JSON.stringify(target.eid)}&.player&?created&?seen`,
+      `.entity.eid=${JSON.stringify(target.eid)}&.player&?created&?position`,
     ))[0] ?? null
   }
   if (!person) return null

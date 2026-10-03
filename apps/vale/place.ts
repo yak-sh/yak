@@ -1,23 +1,22 @@
-// A position answered by the game's live relay or by its saved `seen` row.
-// The two sources have the same coordinates, but only `seen` survives a
-// disconnected page.
+// A world position, whether relayed by a connected page or saved in the store.
 import { levelOf } from './levels.ts'
 import { regionOf } from './regions.ts'
 
 export type Place = {
   level: string
   x: number
+  y?: number
   z: number
   at?: number
 }
 
 export let placeOf = (
   row: Record<string, unknown> | undefined,
-  source: 'position' | 'seen' | 'companion',
+  source: 'position' | 'companion',
 ): Place | null => {
   let value = row?.[source]
   if (!value || typeof value != 'object') return null
-  let { level, x, z, at } = value as Record<string, unknown>
+  let { level, x, y, z, at } = value as Record<string, unknown>
   if (
     source == 'companion' && typeof x == 'number' &&
     typeof z == 'number' && Number.isFinite(x) && Number.isFinite(z)
@@ -31,7 +30,13 @@ export let placeOf = (
     regionOf(x, z) != level
   ) return null
   let time = typeof at == 'number' ? at : Date.parse(String(at))
-  return { level, x, z, ...(Number.isFinite(time) ? { at: time } : {}) }
+  return {
+    level,
+    x,
+    z,
+    ...(typeof y == 'number' && Number.isFinite(y) ? { y } : {}),
+    ...(Number.isFinite(time) ? { at: time } : {}),
+  }
 }
 
 export let placeText = (place: Place, source: 'live' | 'saved'): string =>

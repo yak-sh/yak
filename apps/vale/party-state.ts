@@ -3,7 +3,6 @@
 // owner before an invitation, reply, or membership can count.
 import { comp, num, str } from './bundle.ts'
 import { writer } from './chat.ts'
-import { seenOf } from './seen.ts'
 import type { Bundle } from './net.ts'
 import type { Body } from './sim.ts'
 import type { Vitals } from './play.ts'
@@ -70,10 +69,8 @@ export let memberOf = (b: Bundle, name: string, now: number): Member => {
   let v = comp(b, 'vitals'), g = comp(b, 'gear')
   let online = Number.isFinite(num(p.x, NaN)) &&
     Number.isFinite(num(p.z, NaN)) && now - num(p.at) < 15_000
-  let seen = seenOf(b)
-  let x = online ? num(p.x) : seen?.x ?? NaN
-  let z = online ? num(p.z) : seen?.z ?? NaN
-  let level = online ? str(p.level) : seen?.level ?? ''
+  let x = num(p.x, NaN), z = num(p.z, NaN)
+  let level = str(p.level)
   return {
     eid: b.entity.eid,
     name,

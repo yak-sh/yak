@@ -20,7 +20,7 @@ test('a scheduled objective resumes, retries once, and credits its hero', async 
   let tree: Prop = { kind: 'oak', x: 5, z: 5, seed: 1, natural: true }
   let hero = row('hero', 'owner', {
     player: {},
-    seen: { level: 'mossvale', x: 1, z: 5, at: '2026-09-28T00:00:00Z' },
+    position: { level: 'mossvale', x: 1, y: 5, z: 5, at: 1000 },
   })
   let directive = row('order', 'owner', {
     directive: { player: 'hero', goal: 'wood', count: 1 },

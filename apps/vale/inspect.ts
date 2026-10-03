@@ -39,12 +39,10 @@ export let inspectOf = (
   }
   let { row, related = {} } = target
   let id = row.entity.eid
-  let at = related.at ?? placeOf(related.live, 'position') ??
-    placeOf(row, 'position')
+  let live = related.at ?? placeOf(related.live, 'position')
+  let at = live ?? placeOf(row, 'position')
   let current = location(at, 'Position now')
-  let saved = current
-    ? ''
-    : location(placeOf(row, 'seen'), 'Last saved position')
+  let saved = location(placeOf(row, 'position'), 'Last saved position')
   if (row.player) {
     let name = str(comp(related.look, 'look').name, 'Wanderer')
     let objective = comp(related.objective, 'directive')
@@ -53,9 +51,8 @@ export let inspectOf = (
         num(objective.count)
       }`
       : ''
-    return [heading(name, 'Hero', id), current || saved, companion].filter(
-      Boolean,
-    ).join('\n')
+    return [heading(name, 'Hero', id), live ? current : saved, companion]
+      .filter(Boolean).join('\n')
   }
   if (row.villager) {
     let v = comp(row, 'villager')
