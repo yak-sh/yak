@@ -14,7 +14,8 @@
 //      (`floor`, keywords.ts), and so may the program installing the guard
 //      (`floors`).
 //   3. Is the principal in only because the app is `open`? Then it adds rows,
-//      and changes only the rows it wrote.
+//      changes the rows it wrote, and answers a stored reference's request
+//      with a declared companion mark (`permit`).
 //   4. Does a change write a component sooner than its `pace` lets this writer
 //      (pace.ts)?
 //
@@ -47,7 +48,7 @@ import type { Vocab } from '@yaks/vocab'
 import { GOVERNED, GRANT, MEMBER } from './comp.ts'
 import { levelOn, modeOn, type Viewer, type Where } from './policy.ts'
 import { Denied } from './deny.ts'
-import { floorsIn } from './keywords.ts'
+import { floorsIn, type Permits, permitsIn } from './keywords.ts'
 import { pacesIn, pacing } from './pace.ts'
 import { edits, type Floors, type Level, stands, writes } from './words.ts'
 
@@ -57,7 +58,7 @@ export type Guard = Where & {
    * principal that holds no level */
   app: Eid
   /** the vocabulary the graph was loaded with, whose components' declared
-   * `floor` (registered with `memberKeywords`) and `pace` hold here */
+   * `floor` and `permit` (registered with `memberKeywords`) and `pace` hold here */
   vocab: Vocab
   /** components that ask a floor of their own besides the ones the vocabulary
    * declares — `{ product: 'editor' }` keeps a shop's prices its editors' on
@@ -126,16 +127,45 @@ let adding = (
   app: Eid,
   bundles: Bundle[],
   via: Eid | undefined,
+  permits: Permits,
 ) =>
   after(tx.get([...new Set(bundles.map((b) => b.entity.eid))]), (rows) => {
     let held = new Map(rows.map((r) => [r.entity.eid, r]))
-    for (let b of bundles) {
+    let foreign = bundles.filter((b) => {
       let row = held.get(b.entity.eid)
-      if (row && !mine(row, who, via) && !idle(b, row)) {
-        throw new Denied(who, app, 'editor')
+      return row && !mine(row, who, via) && !idle(b, row)
+    })
+    if (!foreign.length) return bundles
+    // Read referenced owners once, from stored requests rather than incoming
+    // patches. Every bundle is still checked, so a second patch cannot rebind
+    // or delete a request beside its permitted mark.
+    let targets = new Set<Eid>()
+    let refs = (row: Bundle, mark: string): Eid[] =>
+      Object.entries(permits).flatMap(([comp, marks]) => {
+        let ref = (row[comp] as Comp | undefined)?.[marks[mark]]
+        return typeof ref == 'string' ? [ref] : []
+      })
+    for (let b of foreign) {
+      let row = held.get(b.entity.eid)!
+      for (let [name] of comps(b)) {
+        for (let eid of refs(row, name)) targets.add(eid)
       }
     }
-    return bundles
+    return after(targets.size ? tx.get([...targets]) : [], (rows) => {
+      let owners = new Map(rows.map((r) => [r.entity.eid, r]))
+      for (let b of foreign) {
+        let row = held.get(b.entity.eid)!
+        let allowed = !dead(b) && !dead(row) && comps(b).every(([name, patch]) =>
+          patch != null && refs(row, name).some((eid) => {
+            let target = owners.get(eid)
+            return !!target && !dead(target) && mine(target, who, via) &&
+              (!row[name] || idle({ entity: b.entity, [name]: patch }, row))
+          })
+        )
+        if (!allowed) throw new Denied(who, app, 'editor')
+      }
+      return bundles
+    })
   })
 
 /**
@@ -143,8 +173,9 @@ let adding = (
  * any of it: the app (its mode decides for a principal with no level), the
  * principal's own entity (a share link's bearer is a grant), everything filed
  * about the principal — their membership rows, their grants — and the rows the
- * changes name, whose byline says whose they are. @yaks/graph fetches all of it
- * in one gather, so the steps of the check cost no round trip of their own.
+ * changes name, whose byline says whose they are. @yaks/graph fetches these in
+ * one gather; companion permissions then read the stored reference targets in
+ * one additional batch.
  */
 export let wanting = (where: Guard) => (bundles: Bundle[]): Ask[] => {
   if (!bundles.length) return []
@@ -163,6 +194,7 @@ export let wanting = (where: Guard) => (bundles: Bundle[]): Ask[] => {
  */
 export let guarding = (where: Guard): Hook => {
   let floors = held(where)
+  let permits = permitsIn(where.vocab)
   let paces = pacesIn(where.vocab)
   if (Object.keys(paces).length && !where.vocab.comp('_pace')) {
     throw new Error('stored pacing needs memberDoc in the graph vocabulary')
@@ -182,7 +214,7 @@ export let guarding = (where: Guard): Hook => {
           return after(
             writes(level)
               ? bundles
-              : adding(tx, who, where.app, bundles, writerOf(bundles).via),
+              : adding(tx, who, where.app, bundles, writerOf(bundles).via, permits),
             (b) => pacing(paces, tx, b),
           )
         }),

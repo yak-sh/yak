@@ -80,7 +80,7 @@ import {
   spineDoc,
 } from '@yaks/kernel/vocab'
 import { mailDoc } from '@yaks/mail'
-import { floored, memberDoc, memberKeywords } from '@yaks/member'
+import { floored, memberDoc, memberKeywords, permitted } from '@yaks/member'
 import { modelDoc } from '@yaks/model/vocab'
 import { personaDoc } from '@yaks/persona/vocab'
 import { platformDoc as platformWords } from '@yaks/platform/vocab'
@@ -1495,6 +1495,12 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
   for (let [word] of opens) doc = { ...doc, [word]: held[word] }
   let errs = [...storable(doc), ...floored(doc)]
   if (errs.length) throw refuse('arguments', `${file}: ${errs.join('; ')}`)
+  // A companion can be supplied by the platform, so resolve permission names
+  // in the same composed vocabulary the store will hold.
+  if (Object.values(doc.$defs ?? {}).some((s) => s.permit !== undefined)) {
+    let errors = permitted(loadVocab([...beneath(doc), doc], appKeywords))
+    if (errors.length) throw refuse('arguments', `${file}: ${errors.join('; ')}`)
+  }
   return doc
 }
 
