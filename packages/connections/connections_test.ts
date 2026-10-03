@@ -5,7 +5,7 @@
 import { test } from '@yaks/testing'
 import { kernelDoc } from '@yaks/kernel'
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { type Bundle, type Comp, graph, Stale } from '@yaks/graph'
+import { type Bundle, type Comp, graph, Stale, token } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
 import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
@@ -589,6 +589,51 @@ test(
 let identity = (email: string) =>
   `e30.${btoa(JSON.stringify({ email }))}.signature`
 
+test('signing in patches the grant without replaying read decorations, and respects its guard', async () => {
+  for (let stale of [false, true]) {
+    let { g, c, needs } = await setup([200, { access_token: 'A' }])
+    let eid = await needs()
+    let created = (await at(g, eid))?.created
+    c.graph = {
+      apply: g.apply,
+      read: async (q) =>
+        (await g.read(q)).map((b) =>
+          b.connection
+            ? {
+              ...b,
+              kind: 'connection',
+              created: { at: '2020-01-01' },
+              $was: {
+                connection: { status: token(of(b, 'connection').status) },
+              },
+            }
+            : b
+        ),
+    }
+    let { attempt } = await begin(c, eid)
+    if (stale) {
+      let fetcher = c.fetch!
+      c.fetch = async (input, init) => {
+        await g.apply([{ entity: { eid }, connection: { status: 'broken' } }])
+        return fetcher(input, init)
+      }
+    }
+    let finish = () =>
+      connect(c, eid, {
+        attempt,
+        callback: `${REDIRECT}?state=${attempt.state}&code=one`,
+      })
+    if (stale) {
+      await assertRejects(finish, Stale)
+      assertEquals(of(await at(g, eid), 'connection').status, 'broken')
+    } else {
+      await finish()
+      assertEquals(await credential(c, eid), 'A')
+      assertEquals((await at(g, eid))?.created, created)
+    }
+  }
+})
+
 test('accountOf names an account from the exchange or the authenticated userinfo door', async () => {
   assertEquals(
     await accountOf(CALENDAR, { id_token: identity('Ann@Example.com') }),
@@ -639,10 +684,15 @@ test('signing in to another account preserves the held grant, and the same accou
 })
 
 test('pick computes the own-address default then the oldest, and only explicit ambiguous names refuse', async () => {
-  let { g, c, needs } = await setup()
-  let oldest = await needs({ app: undefined, integration: 'texts' })
+  let { g, c } = await setup()
+  let make = async (now: string) =>
+    (await g.apply(
+      await need(g.read, { owner: 'space', integration: 'texts' }),
+      { now },
+    ))[0].entity.eid
+  let oldest = await make('2020-01-01T00:00:00Z')
   await connect(c, oldest, { key: 'A' }, 'ann@one.example')
-  let newer = await needs({ app: undefined, integration: 'texts' })
+  let newer = await make('2020-02-01T00:00:00Z')
   await connect(c, newer, { key: 'B' }, 'ann@two.example')
   // Pick's read door can be remote. Give it the provenance and person's
   // email a real host's vocabulary adds to the same bundles.

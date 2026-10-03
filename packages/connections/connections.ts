@@ -609,8 +609,8 @@ export let connect = async (
   let out = transient ? await links(c.graph.read, 'to', connection) : []
   return c.graph.apply([
     {
-      ...target,
       entity: { eid: target.entity.eid },
+      ...target.$was ? { $was: target.$was } : {},
       [SECRET]: { name: nameOf(target), value: JSON.stringify(tokens) },
       [CONNECTION]: {
         ...comp(target, CONNECTION),
