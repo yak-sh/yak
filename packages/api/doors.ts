@@ -22,6 +22,7 @@ import type { Actor } from '@yaks/graph'
 import { parse } from '@yaks/query'
 import { parent, peek } from '@yaks/trace'
 import { signed } from './actor.ts'
+import { readBody, receiveBody } from './body.ts'
 import { fault, json, refusal } from './refuse.ts'
 import { published } from './publish.ts'
 
@@ -49,13 +50,14 @@ export let poured = (request: Request): boolean =>
 // 10 MB import is never a 10 MB string and never one `JSON.parse`.
 let lines = async function* (
   body: ReadableStream<Uint8Array>,
+  request: Request,
 ): AsyncGenerator<[number, string]> {
   let reader = body.getReader()
   let decoder = new TextDecoder()
   let held = ''
   let at = 0
   for (;;) {
-    let { done, value } = await reader.read()
+    let { done, value } = await receiveBody(request, () => reader.read())
     let text = done ? decoder.decode() : decoder.decode(value, { stream: true })
     if (text) {
       let parts = (held + text).split('\n')
@@ -182,7 +184,7 @@ export let pour = (
       at = []
     }
     try {
-      for await (let [n, line] of lines(body)) {
+      for await (let [n, line] of lines(body, request)) {
         if (!line.trim()) continue
         blame = n
         held.push(JSON.parse(line) as Bundle)
@@ -223,7 +225,7 @@ export let write = async (
   opts?: ReadOpts,
 ): Promise<Response> => {
   if (poured(request)) return pour(graph, request, who, activity, context, opts)
-  let body = await request.json()
+  let body = JSON.parse(await readBody(request))
   if (!Array.isArray(body)) {
     throw new Refused('/apply takes a JSON array of bundles')
   }
@@ -274,7 +276,7 @@ export let ask = async (
 ): Promise<Response> => {
   let q = request.method == 'GET'
     ? new URL(request.url).searchParams.get('q')
-    : lineOf(await request.json())
+    : lineOf(JSON.parse(await readBody(request)))
   if (q == null) throw new Refused('/query needs a query: ?q=… or a body {q}')
   // Parsed once, here: both `rows()` and `read()` accept the parsed query, so
   // the string is parsed to decide which of them answers, and not parsed

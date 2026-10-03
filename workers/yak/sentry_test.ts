@@ -14,7 +14,7 @@ import { caught, defect, reporter, scrub } from './sentry.ts'
 import type { Ctx } from './tools.ts'
 import { doorOf, type Namespace, storeOf } from './door.ts'
 import { Store } from './graph.ts'
-import { KERNEL } from './meta.ts'
+import { KERNEL, metaOf } from './meta.ts'
 import { state } from './testing.ts'
 
 // A client that keeps what it would have sent.
@@ -34,6 +34,43 @@ let sentry = () => {
   client.init()
   return { seen, done: () => client.flush(1000) }
 }
+
+test('an interrupted store body leaves no rows or queued write and reports no defect', async () => {
+  let s = sentry()
+  let ctx = state()
+  using _db = ctx.storage
+  let store = new Store(ctx)
+  let door = doorOf((r) => store.fetch(r), 'ada/notes')
+  await door('/vocab', { method: 'POST', body: '{}' }, KERNEL)
+  let eid = crypto.randomUUID()
+  for (let path of ['/apply', '/apply?check=1', '/vocab']) {
+    let sent = false
+    let stream = new ReadableStream<Uint8Array>({
+      pull: (c) => {
+        if (!sent) {
+          sent = true
+          c.enqueue(new TextEncoder().encode(JSON.stringify([{
+            entity: { eid },
+            doc: { title: 'Interrupted upload' },
+          }])))
+        } else {
+          c.error(
+            new TypeError(
+              "Can't read from request stream because client disconnected.",
+            ),
+          )
+        }
+      },
+    })
+    let response = await door(path, { method: 'POST', body: stream }, KERNEL)
+    assertEquals(response.status, 400)
+    assertEquals((await response.json()).error, 'Refused')
+  }
+  assertEquals(await metaOf(door).query(`.entity.eid=${eid}`), [])
+  assertEquals(await (await door('/writes', {}, KERNEL)).json(), [])
+  await s.done()
+  assertEquals(s.seen, [])
+})
 
 test('a defect is sent with its tags and the person who hit it', async () => {
   let { seen, done } = sentry()

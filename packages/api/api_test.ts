@@ -71,6 +71,63 @@ test('expected client refusals do not log server errors', async () => {
   assertEquals(logged.calls.length, 0)
 })
 
+test('an interrupted request body is refused before reading or applying the graph', async () => {
+  for (
+    let error of [
+      new DOMException('request cancelled', 'AbortError'),
+      new TypeError(
+        "Can't read from request stream because client disconnected.",
+      ),
+      new Error('connection closed'),
+    ]
+  ) {
+    for (let path of ['/apply', '/query']) {
+      let graph = shopGraph()
+      let handler = api({ graph })
+      let stream = new ReadableStream<Uint8Array>({
+        start: (c) => c.error(error),
+      })
+      let controller = new AbortController()
+      if (error.name == 'Error') controller.abort()
+      using logged = stub(console, 'error')
+      let response = await handler(req(path, {
+        method: 'POST',
+        body: stream,
+        signal: controller.signal,
+      }))
+      assertEquals(response.status, 400)
+      assertEquals((await response.json()).error, 'Refused')
+      assertEquals(await graph.read('.book'), [])
+      assertEquals(logged.calls, [])
+    }
+  }
+})
+
+test('unrelated stream and graph TypeErrors retain their server failure reports', async () => {
+  for (let source of ['body', 'graph']) {
+    let graph = shopGraph()
+    let error = new TypeError('server read failed')
+    if (source == 'graph') {
+      graph.apply = () => {
+        throw error
+      }
+    }
+    let stream = new ReadableStream<Uint8Array>({
+      start: (c) => c.error(error),
+    })
+    using logged = stub(console, 'error')
+    let response = await api({ graph })(
+      source == 'body'
+        ? req('/apply', { method: 'POST', body: stream })
+        : post('/apply', [{ entity: { eid: 'b1' }, book: { price: 12 } }]),
+    )
+    assertEquals(response.status, 500)
+    assertEquals((await response.json()).error, 'TypeError')
+    assertEquals(logged.calls.length, 1)
+    assertEquals(logged.calls[0].args[1], error)
+  }
+})
+
 test('/apply logs failed post-commit effects while preserving its successful response', async () => {
   let graph = shopGraph()
   let error = new Error('observer failed')

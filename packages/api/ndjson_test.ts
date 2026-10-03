@@ -5,6 +5,7 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
+import { stub } from '@std/testing/mock'
 import type { Bundle } from '@yaks/graph'
 import { CHUNK } from './doors.ts'
 import { api } from './route.ts'
@@ -36,6 +37,37 @@ let ndjson = (path: string, body: string) =>
 // deno-lint-ignore no-explicit-any
 let rows = async (r: Response): Promise<any[]> =>
   (await r.text()).split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l))
+
+test('an interrupted import keeps committed chunks and refuses its unfinished chunk quietly', async () => {
+  let graph = shopGraph()
+  let sent = false
+  let stream = new ReadableStream<Uint8Array>({
+    pull: (c) => {
+      if (!sent) {
+        sent = true
+        c.enqueue(new TextEncoder().encode(`${load(CHUNK + 1).join('\n')}\n`))
+      } else {
+        c.error(
+          new TypeError(
+            "Can't read from request stream because client disconnected.",
+          ),
+        )
+      }
+    },
+  })
+  using logged = stub(console, 'error')
+  let response = await api({ graph })(req('/apply', {
+    method: 'POST',
+    body: stream,
+    headers: { 'content-type': 'application/x-ndjson' },
+  }))
+  let answered = await rows(response)
+  assertEquals(answered.length, CHUNK + 1)
+  assertEquals(answered.at(-1).error, 'Refused')
+  assertEquals(answered.at(-1).committed, CHUNK)
+  assertEquals((await graph.read('.book')).length, CHUNK)
+  assertEquals(logged.calls, [])
+})
 
 // The answer as it arrives: `take(n)` reads until n lines are in, and no
 // further — which is what makes "the body started before the load finished"

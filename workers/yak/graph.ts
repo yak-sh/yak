@@ -94,6 +94,7 @@ import {
   json,
   poured,
   published,
+  readBody,
   refuse,
   served,
   signed,
@@ -2287,7 +2288,7 @@ export class Store {
    * a batch applied by the request that woke this object still reaches the
    * sockets it inherited.
    */
-  fetch(request: Request): Promise<Response> {
+  async fetch(request: Request): Promise<Response> {
     let tally = this.#pending
     this.#pending = new Map()
     let run = () =>
@@ -2350,7 +2351,14 @@ export class Store {
           headers,
         })
       })
-    return this.#profile ? this.#profile.run(routeKind(request), run) : run()
+    try {
+      return await (this.#profile
+        ? this.#profile.run(routeKind(request), run)
+        : run())
+    } catch (error) {
+      if (error instanceof Refused) return refuse(error)
+      throw error
+    }
   }
 
   /** Everything before a door: the object brought up to date and told what
@@ -2385,7 +2393,7 @@ export class Store {
    * what that one was told, or waiting beside it.
    */
   async #write(request: Request): Promise<Response> {
-    let body = await request.text()
+    let body = await readBody(request)
     let key = request.headers.get(IDEMPOTENCY)
     let seq: number
     let was: Sent | null
@@ -2579,7 +2587,7 @@ export class Store {
       return await this.#route(request)
     }
     try {
-      let body = JSON.parse(await request.text())
+      let body = JSON.parse(await readBody(request))
       if (!Array.isArray(body)) {
         throw new Refused('/apply takes a JSON array of bundles')
       }
@@ -2639,7 +2647,10 @@ export class Store {
       if (!kernel || request.method != 'POST') {
         return json({ error: 'NotFound', message: 'no route' }, 404)
       }
-      let { via, by } = await request.json() as { via?: unknown; by?: unknown }
+      let { via, by } = JSON.parse(await readBody(request)) as {
+        via?: unknown
+        by?: unknown
+      }
       if (typeof via != 'string' || typeof by != 'string' || !via || !by) {
         return json({
           error: 'Refused',
@@ -2659,7 +2670,8 @@ export class Store {
       }
       let version
       try {
-        version = (await request.json() as { version: number }).version
+        version =
+          (JSON.parse(await readBody(request)) as { version: number }).version
         if (!Number.isSafeInteger(version) || version < 1) {
           throw new Refused('/released needs a positive version')
         }
@@ -2883,7 +2895,7 @@ export class Store {
       try {
         return await building(
           this.#stored(this.#graph).graph,
-          await request.json(),
+          JSON.parse(await readBody(request)),
         )
       } catch (e) {
         return refuse(e, request)
@@ -2892,7 +2904,7 @@ export class Store {
     if (path == '/recover' && request.method == 'POST') {
       if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
       try {
-        let { call } = await request.json() as { call?: unknown }
+        let { call } = JSON.parse(await readBody(request)) as { call?: unknown }
         if (typeof call != 'string') return json({ error: 'BadRequest' }, 400)
         return Response.json(await recovering(this.#stored(this.#graph), call))
       } catch (e) {
@@ -2904,7 +2916,7 @@ export class Store {
       try {
         return await supplying(
           this.#stored(this.#graph).graph,
-          await request.json(),
+          JSON.parse(await readBody(request)),
         )
       } catch (e) {
         return refuse(e, request)
@@ -2915,7 +2927,7 @@ export class Store {
       try {
         return await choosing(
           this.#stored(this.#graph).graph,
-          await request.json(),
+          JSON.parse(await readBody(request)),
         )
       } catch (e) {
         return refuse(e, request)
@@ -3177,7 +3189,7 @@ export class Store {
         { status: 405, headers: { allow: 'GET, POST' } },
       )
     }
-    let body = await request.text()
+    let body = await readBody(request)
     let held: unknown
     try {
       held = JSON.parse(body.trim() || '{}')
@@ -3208,7 +3220,7 @@ export class Store {
     let word = `storage:${person}` as const
     let held = JSON.parse(this.#get(word) ?? '{}') as Record<string, string>
     if (request.method == 'GET') return Response.json(held)
-    let sent = await request.json().catch(() => null) as {
+    let sent = await readBody(request).then(JSON.parse).catch(() => null) as {
       set?: Record<string, unknown>
       remove?: unknown[]
       clear?: boolean
@@ -3284,7 +3296,7 @@ export class Store {
         let to = await s.getBookmarkForTime(new Date(at))
         return Response.json({ from, to })
       }
-      let said = await request.json() as { bookmark?: string }
+      let said = JSON.parse(await readBody(request)) as { bookmark?: string }
       if (!said?.bookmark) throw new Refused('/restore takes a bookmark')
       if (!s.onNextSessionRestoreBookmark) throw new Refused(NO_PITR)
       let undo = await s.onNextSessionRestoreBookmark(said.bookmark)
@@ -3312,7 +3324,7 @@ export class Store {
       !release || !/^[a-z0-9-]+$/.test(release)
     ) return json({ error: 'NotFound', message: 'no route' }, 404)
     try {
-      let bundles = await request.json() as Bundle[]
+      let bundles = JSON.parse(await readBody(request)) as Bundle[]
       if (!Array.isArray(bundles)) {
         throw new Refused('/seed takes a JSON array of bundles')
       }
@@ -3380,7 +3392,7 @@ export class Store {
         { status: 405, headers: { allow: 'GET, POST' } },
       )
     }
-    return request.text().then((body) => {
+    return readBody(request).then((body) => {
       try {
         let was = appDoc(this.#get('vocab') ?? '{}')
         let next = unsaid(appDoc(body), was)

@@ -67,6 +67,7 @@ export { type Authenticate, signed } from './actor.ts'
 export type { PeerWriter } from './save.ts'
 export { ask, CHUNK, pour, poured, write, type WriteContext } from './doors.ts'
 export { published } from './publish.ts'
+export { readBody } from './body.ts'
 export {
   fault,
   json,
