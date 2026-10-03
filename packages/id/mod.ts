@@ -43,7 +43,7 @@
  *
  * ## Numbers are opt in A graph has numbers because it loaded this package's
  * plugin, and not otherwise. `@yaks/id/vocab` adds the `num` property to the
- * `entity` row, and `@yaks/id/rules` carries the two plugins that use it:
+ * `entity` row, and `@yaks/id/graph` carries the two plugins that use it:
  * `numbers()`, which answers `$num: true` on a bundle by allocating one, and
  * `ids()`, which resolves the `B-7` a person typed back to an eid. A graph that
  * registers neither stores no number, displays none, and refuses `$num` as a
@@ -54,7 +54,7 @@
  * - `id.ts` — the prefix table, `(prefix, num)` → id and back, and the short
  *   handle an entity shows before it has been numbered
  * - `vocab.ts` — `entity{num}`, the property the number is kept in
- * - `number.ts`, `ids.ts` — the two graph plugins, re-exported from `./rules`
+ * - `number.ts`, `ids.ts` — the two graph plugins, re-exported from `./graph`
  *
  * @module
  */

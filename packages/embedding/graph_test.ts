@@ -1,22 +1,22 @@
-// The rules facet: the vector table raised in the host's own database, and the
+// The graph facet: the vector table raised in the host's own database, and the
 // `.near` compiler a host gets without wiring one up.
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { parse } from '@yaks/query'
 import { compile, tally } from '@yaks/sql'
-import { extend, meaning, rules } from './rules.ts'
+import { extend, meaning, plugins } from './graph.ts'
 import { TABLE } from './ddl.ts'
 import { mem, none, shop, stocked } from './testing.ts'
 
 let hash = { embedder: { provider: 'hash' } }
 
-test('rules raises the vectors and adds no rule to apply()', () => {
+test('plugins raises the vectors and adds no rule to apply()', () => {
   let sql = mem()
-  assertEquals(rules({ sql }), [])
+  assertEquals(plugins({ sql }), [])
   assertEquals(tally(sql, TABLE), 0)
   // and it is idempotent, so a host that already had the table keeps it
-  rules({ sql })
+  plugins({ sql })
 })
 
 test('the extension a config builds answers .near over these vectors', async () => {

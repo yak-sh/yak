@@ -1,4 +1,4 @@
-import { ids } from '@yaks/id/rules'
+import { ids } from '@yaks/id/graph'
 import { choices } from '@yaks/builders'
 import { recovering } from './models.ts'
 import { attributed } from './attribution.ts'

@@ -12,9 +12,9 @@
 // A storage adapter may answer synchronously or not, and registering this
 // plugin must not turn every write into a promise — so the promise branch that
 // @yaks/fp's `after` usually hides is written out below. Its types are
-// restated in ./graph.ts rather than imported, for the reason given there.
+// restated in ./types.ts rather than imported, for the reason given there.
 
-import type { Bundle, Entity, Plugin } from './graph.ts'
+import type { Bundle, Entity, Plugin } from './types.ts'
 import { idDoc } from './vocab.ts'
 
 export let numbers = (

@@ -207,7 +207,7 @@ console.log(await g.read('.doc.title="Getting started"'))</code></pre>
       <thead><tr><th>Subpath<th>What it exports
       <tbody>
         <tr><td><code>./vocab</code><td>the package's words: components, tools, effects
-        <tr><td><code>./rules</code><td>graph plugins, query compilers, <code>authenticate</code>
+        <tr><td><code>./graph</code><td>graph plugins, query compilers, <code>authenticate</code>
         <tr><td><code>./tools</code><td>the code behind its declared tools
         <tr><td><code>./effects</code><td>the code behind what a commit owes
         <tr><td><code>./routes</code><td>HTTP routes, hosted by @yaks/api
@@ -220,7 +220,7 @@ console.log(await g.read('.doc.title="Getting started"'))</code></pre>
     <table class=Table>
       <thead><tr><th>Role<th>Facets<th>What the process does
       <tbody>
-        <tr><td><code>graph</code><td><code>./vocab</code>, <code>./rules</code>, <code>./tools</code><td>opens the file, admits writes, runs tool calls
+        <tr><td><code>graph</code><td><code>./vocab</code>, <code>./graph</code>, <code>./tools</code><td>opens the file, admits writes, runs tool calls
         <tr><td><code>web</code><td><code>./routes</code><td>answers HTTP with the routes @yaks/api hosts
         <tr><td><code>effects</code><td><code>./effects</code><td>claims and runs what commits owe, in a pool
         <tr><td>a plugin's name<td>its <code>./service</code><td>keeps that plugin's timer or poll running

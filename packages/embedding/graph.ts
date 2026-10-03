@@ -1,5 +1,5 @@
-// Where the vectors are kept and read: the `rules` export
-// (`@yaks/embedding/rules`) — the vector table created through the server's own
+// Where the vectors are kept and read: the `graph` export
+// (`@yaks/embedding/graph`) — the vector table created through the server's own
 // database connection, the `.near` compiler the read path consults, and the
 // reply a tool call that created something is answered with (./neighbours.ts).
 // "The server" here means whichever process opened the graph and loaded this
@@ -34,7 +34,7 @@ import { type Host, neighbours } from './neighbours.ts'
  * contributes no rule to `apply()`: nothing a client writes is a vector, and
  * what keeps the vectors in step with the text is the sweep (`./service`), off
  * the write path. */
-export let rules = (host: { sql: Driver }): Plugin[] => {
+export let plugins = (host: { sql: Driver }): Plugin[] => {
   rekey(host.sql)
   for (let statement of schema()) host.sql.query(statement)
   return []

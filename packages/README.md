@@ -556,38 +556,38 @@ that every package's words load beside every other's, and that a package's
 A program does not import a plugin as a whole. A plugin says what it
 contributes, one subpath per kind of contribution, and never where it runs. A
 process serves roles and imports only the subpaths of the roles it serves
-(`@yaks/cli` `compose`, `packages/cli`): `graph` takes `./vocab`, `./rules` and
+(`@yaks/cli` `compose`, `packages/cli`): `graph` takes `./vocab`, `./graph` and
 `./tools`; `web` takes `./routes`; `effects` takes `./effects`; a plugin's own
 role, named by its package, takes its `./service`; and rendering, a browser tab
 or the `yak` command, takes `./vocab`, `./views` and `./tui`.
 
-| subpath     | what it exports                                                                 | may import          |
-| ----------- | ------------------------------------------------------------------------------- | ------------------- |
-| `./vocab`   | `docs`, `description`, `keywords?`, `derived?`                                  | nothing server-side |
-| `./rules`   | `rules: (host, options) => Plugin[]`, `extend?` (@yaks/sql), `authenticate?`    | anything            |
-| `./tools`   | `runs: (host, options) => Runs` — the code behind its `tool: true` declarations | ajv, SQL, anything  |
-| `./effects` | `effects: (host, options) => Handlers` — the code behind its `effect: true`     | anything            |
-| `./routes`  | `routes: (host, options) => Route[]`, `handler?`                                | anything            |
-| `./service` | `service: (host, options, signal) => void \| Promise<void>`                     | anything            |
-| `./views`   | `views` — `@yaks/render` renderers                                              | nothing server-side |
-| `./tui`     | `views` — Preact components a terminal holds an answer with                     | no graph facet      |
-| `.`         | the library API and types; runtime requirements vary by package                 |                     |
+| subpath     | what it exports                                                                                               | may import          |
+| ----------- | ------------------------------------------------------------------------------------------------------------- | ------------------- |
+| `./vocab`   | `docs`, `description`, `keywords?`, `derived?`                                                                | nothing server-side |
+| `./graph`   | `plugins: (host, options) => Plugin[]`, `extend?` (@yaks/sql), `reply?`, `meaning?`, `authenticate?`, `feed?` | anything            |
+| `./tools`   | `runs: (host, options) => Runs` — the code behind its `tool: true` declarations                               | ajv, SQL, anything  |
+| `./effects` | `effects: (host, options) => Handlers` — the code behind its `effect: true`                                   | anything            |
+| `./routes`  | `routes: (host, options) => Route[]`, `handler?`                                                              | anything            |
+| `./service` | `service: (host, options, signal) => void \| Promise<void>`                                                   | anything            |
+| `./views`   | `views` — `@yaks/render` renderers                                                                            | nothing server-side |
+| `./tui`     | `views` — Preact components a terminal holds an answer with                                                   | no graph facet      |
+| `.`         | the library API and types; runtime requirements vary by package                                               |                     |
 
 Throughout this section, **host** means the process that opened the graph — a
 server, CLI command or Worker — for the roles it serves. The `host` argument is
 an object exposing that process's graph, vocabulary and other resources, not an
 operating-system process object. `options` contains the plugin configuration.
 
-Server behavior exports (`rules`, `runs`, `effects` and `routes`) are factories
-taking `(host, options)`; `service` additionally takes an `AbortSignal`. Schema
-`docs`, `keywords` and renderer `views` are values, while `derived(vocab)`
-produces computed-property definitions. A **facet** is one of these sub-module
-exports, not another kind of plugin. For example, a check that queries a
-package's own SQL table gets the connection through `host.sql`, and a threshold
-or a relation name comes from config rather than being hard-coded. Everything a
-tool needs per call arrives with the call instead: `run(call, graph)` hands it
-the call's bundle — its arguments, the caller, the process that made it — and
-the graph it runs on.
+Server behavior exports (`plugins`, `runs`, `effects` and `routes`) are
+factories taking `(host, options)`; `service` additionally takes an
+`AbortSignal`. Schema `docs`, `keywords` and renderer `views` are values, while
+`derived(vocab)` produces computed-property definitions. A **facet** is one of
+these sub-module exports, not another kind of plugin. For example, a check that
+queries a package's own SQL table gets the connection through `host.sql`, and a
+threshold or a relation name comes from config rather than being hard-coded.
+Everything a tool needs per call arrives with the call instead:
+`run(call, graph)` hands it the call's bundle — its arguments, the caller, the
+process that made it — and the graph it runs on.
 
 ### Health checks are just tools named `check`
 
@@ -661,13 +661,13 @@ skip. Each factory declares only the parts of the host it uses — for example
 `(host: { vocab: Vocab })` — so no package has to import `@yaks/cli` in order to
 state its requirements.
 
-`./rules` can export graph plugins through `rules`, and query compiler
+`./graph` can export graph plugins through `plugins`, and query compiler
 extensions through `extend`. Graph plugins need not use SQL. When a package
 maintains a SQL index, both exports can use the same host connection and
-configuration: `rules` maintains the index and `extend` compiles queries against
-it. The store receives these extensions during construction, so callers do not
-register them separately for each read. `@yaks/embedding/rules` is the worked
-example: it creates the vector table and compiles `.near`.
+configuration: `plugins` maintains the index and `extend` compiles queries
+against it. The store receives these extensions during construction, so callers
+do not register them separately for each read. `@yaks/embedding/graph` is the
+worked example: it creates the vector table and compiles `.near`.
 
 Each file is named after the subpath it is exported at. Where a package already
 uses that filename for something else, the subpath maps to a different file and
@@ -706,7 +706,7 @@ distinguish implemented behavior from remaining proposals.
   from marks. `@yaks/session/vocab` contributes computed-property rules
   including `claim` as `wip`; load it after `@yaks/task/vocab` to select that
   calculation. The schemas' status enums are combined for board validation, so
-  `@yaks/project/rules` already recognizes `wip` when session schemas are
+  `@yaks/project/graph` already recognizes `wip` when session schemas are
   loaded. `projects(vocab, marks)` remains available for an explicit status
   list; it is not required just to enable the loaded session statuses.
 - **Effects may require configuration.** Implemented: an entry in the config's
@@ -726,11 +726,11 @@ distinguish implemented behavior from remaining proposals.
   has no handler and never calls the other plugins' `routes` factories: a route
   with nothing listening is a facet the host ignores.
 - **`authenticate` is access policy, not a route.** It is exported from
-  `./rules`, because every door over a graph asks it who is writing — a command
+  `./graph`, because every door over a graph asks it who is writing — a command
   line naming its session as much as an HTTP request — and at most one plugin in
   a program may define it. Authentication identifies the caller; `@yaks/member`
   implements authorization after that identification. Its `members(where)` needs
-  an application-specific `Guard`, so it exports `./vocab` but no `./rules`.
+  an application-specific `Guard`, so it exports `./vocab` but no `./graph`.
   Plugin options can describe policy data, not executable guard functions. A
   config-expressible guard is a remaining design question, not an implemented
   authentication service.
@@ -800,7 +800,7 @@ differ in supported queries, rules and transaction guarantees:
   point — keyword matching comes from `@yaks/fts`, vector similarity from here —
   with the embedding function passed in, so nothing ties you to one model. It is
   also the clearest example of what that extension point looks like in practice:
-  its `./rules` creates the vector table and gives the store its `.near`
+  its `./graph` creates the vector table and gives the store its `.near`
   compiler (`extend`), its `./service` settles the queue of entities whose text
   moved, and the model, endpoint and API key are options the config passes to
   the plugin.

@@ -1,5 +1,5 @@
 // What a config passes to this plugin, in one place, because all four of its
-// entry points read it: `./rules` reads the domain, `./effects` reads the
+// entry points read it: `./graph` reads the domain, `./effects` reads the
 // transport, `./routes` reads the HTTP route settings, `./service` reads the
 // edge it pulls from. One options type, one file — putting the type in one of
 // those modules would give it fields it never reads.

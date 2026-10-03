@@ -26,7 +26,7 @@
 // stay synchronous — the branch @yaks/fp's `after` hides, written out as in
 // ./number.ts.
 
-import type { Bundle, Eid, Plugin, Tx } from './graph.ts'
+import type { Bundle, Eid, Plugin, Tx } from './types.ts'
 import { parse, prefixOf, SHORT } from './id.ts'
 import type { Vocab } from '@yaks/vocab'
 

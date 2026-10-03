@@ -4,7 +4,7 @@
   "exports": {
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
-    "./rules": "./rules.ts"
+    "./graph": "./graph.ts"
   },
   "license": "Apache-2.0",
   "description": "Represents an entity's identifying values as separate graph entities, with ids derived from each value and its kind to enforce uniqueness.",

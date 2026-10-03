@@ -4,7 +4,7 @@
 //
 // The vectors are this package's business; the model is not. So the config
 // names one beside the plugin, the way a session names what serves it: a
-// provider and a model, two choices. `./rules` needs the vector space the
+// provider and a model, two choices. `./graph` needs the vector space the
 // model names (a stored vector is only comparable with others in the same
 // space), `./service` needs the embedding function itself:
 //

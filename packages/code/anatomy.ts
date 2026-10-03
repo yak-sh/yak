@@ -566,7 +566,7 @@ export let anatomyPlugin = (owner: string, plugin: unknown, ordinal = ''): {
   let rules: AnatomySeed<AnatomyRule>[] = [{
     name,
     package: owner,
-    facet: 'rules',
+    facet: 'graph',
     key: ordinal,
     kind: 'plugin',
     hooks: phases,
@@ -580,7 +580,7 @@ export let anatomyPlugin = (owner: string, plugin: unknown, ordinal = ''): {
   let hooks: AnatomySeed[] = phases.map((phase) => ({
     name: `${name}:${phase}`,
     package: owner,
-    facet: 'rules',
+    facet: 'graph',
     key: ordinal,
     declared: true,
     loaded: true,
@@ -591,7 +591,7 @@ export let anatomyPlugin = (owner: string, plugin: unknown, ordinal = ''): {
     rules.push({
       name: text(r, 'name') ?? `${name}:rule:${i}`,
       package: owner,
-      facet: 'rules',
+      facet: 'graph',
       key: `${ordinal}:code:${i}`,
       kind: 'code',
       hooks: [],
@@ -609,7 +609,7 @@ export let anatomyPlugin = (owner: string, plugin: unknown, ordinal = ''): {
     rules.push({
       name: text(r, 'name') ?? `${name}:declared:${i}`,
       package: owner,
-      facet: 'rules',
+      facet: 'graph',
       key: `${ordinal}:data:${i}`,
       kind: 'data',
       hooks: [],

@@ -9,7 +9,7 @@ import type { Bundle } from '@yaks/graph'
 import { applied } from './undo.ts'
 import { follow } from './feed.ts'
 import { ddl, grown } from './log.ts'
-import { rules } from './rules.ts'
+import { plugins } from './graph.ts'
 import { mem } from '../sqlite/testing.ts'
 import { sync, wikiGraph, wikiLog } from './testing.ts'
 
@@ -113,6 +113,6 @@ test('a store an older journal made takes the host once it is opened again', () 
     db.query({ t: 'pragma', name: 'table_info', arg: 'journal_tx' })
       .map((c) => String(c.name))
   assertEquals(grown(columns()).length, 1)
-  rules({ sql: db })
+  plugins({ sql: db })
   assertEquals(grown(columns()), [])
 })

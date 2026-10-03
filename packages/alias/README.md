@@ -54,7 +54,7 @@ entity rather than creating a duplicate. The `keys` plugin must be listed before
 
 The root module exports `aliasDoc` (the schema document), `aliases()` (the graph
 plugin), and helpers for constructing and reading alias keys. `./vocab` exports
-the declarations for plugin loaders; `./rules` exports the plugin factory. This
+the declarations for plugin loaders; `./graph` exports the plugin factory. This
 package does not provide its own database: the graph's storage adapter stores
 the key entities. The example above uses memory only.
 

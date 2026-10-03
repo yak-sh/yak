@@ -4,7 +4,7 @@
   "exports": {
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
-    "./rules": "./rules.ts"
+    "./graph": "./graph.ts"
   },
   "license": "Apache-2.0",
   "description": "Creates directed links as graph entities with content-derived eids, validates writes, and follows links through storage reads and SQL queries.",

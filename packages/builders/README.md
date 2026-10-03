@@ -179,7 +179,7 @@ next input change or `builder build`.
 - `@yaks/builders`: vocabulary, `key`, `buildFor`, `outputFor`, `selected`, and
   `reconcile`.
 - `@yaks/builders/model`: `modelTool`, `modelToolEid`, and template `render`.
-- `@yaks/builders/rules`: the one-choice-per-slot invariant.
+- `@yaks/builders/graph`: the one-choice-per-slot invariant.
 - `@yaks/builders/effects`: `watches` and `effects`.
 - `@yaks/builders/tools`: the on-demand `builder build` tool, and `build`, the
   same reconciliation for a host that offers it through a door of its own.

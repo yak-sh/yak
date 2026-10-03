@@ -2,7 +2,7 @@
  * The graph a config file names, opened by a process for the roles it serves.
  *
  * A plugin says what it contributes, one facet per subpath: the components and
- * tools it declares (`@yaks/mail/vocab`), what a write means (`/rules`), the
+ * tools it declares (`@yaks/mail/vocab`), what it adds to a graph (`/graph`), the
  * functions behind its tools (`/tools`), what runs after a commit
  * (`/effects`), the work it keeps doing while a process is up (`/service`), the
  * HTTP it adds (`/routes`), its terminal controls (`/cli`), and how its
@@ -11,7 +11,7 @@
  * only the facets of the roles it serves:
  *
  * ```
- * graph       vocab, rules, tools   open the file, admit writes, run tool calls
+ * graph       vocab, graph, tools   open the file, admit writes, run tool calls
  * web         routes, ui            the HTTP a listener answers with
  * effects     effects               the code behind the effects a commit owes
  * @yaks/mail  that plugin's service the timer or poll one plugin keeps up
@@ -191,7 +191,7 @@ export type Host = {
    * answers with, and what a transport restating the tier asks for. */
   search?: Search
   /** what a direct tool call is owed beside its answer, from every plugin
-   * that offers some ({@link RulesFacet.reply}): what {@link runner} adds, and
+   * that offers some ({@link GraphFacet.reply}): what {@link runner} adds, and
    * what a runner of another's tools over this graph adds too (@yaks/harness).
    * Absent where no plugin offers any. */
   reply?: Reply
@@ -242,11 +242,11 @@ export type Host = {
   /** who is calling — the answer every door over this graph gets, a command
    * line and @yaks/api's endpoints alike, so what a caller writes is
    * attributed to it (`signed` in @yaks/api) instead of to nobody. At most one
-   * plugin answers it ({@link RulesFacet.authenticate}); where it names
+   * plugin answers it ({@link GraphFacet.authenticate}); where it names
    * nobody, the answer is this host process itself ({@link writer}). */
   who: Authenticate
   /** Every commit another host makes to this store, as the patches it applied
-   * ({@link RulesFacet.feed}): what a subscription registry or a cache over
+   * ({@link GraphFacet.feed}): what a subscription registry or a cache over
    * {@link graph} is fed so it sees the writes its graph's `effect` phase
    * never ran for. Without a plugin that offers one, nothing arrives. */
   feed: Feed
@@ -267,7 +267,7 @@ export type Host = {
  * among them: drawing an entity is the caller's, the web UI's or the `yak`
  * command's (./answer.ts), and needs no graph open. */
 export let ROLES = {
-  graph: ['vocab', 'rules', 'tools'],
+  graph: ['vocab', 'graph', 'tools'],
   web: ['routes', 'ui'],
   effects: ['effects'],
 } as const
@@ -310,8 +310,8 @@ export type VocabFacet = {
   backed?: (vocab: Vocab) => Backings
 }
 
-/** `<plugin>/rules` — what a write means, what a query may ask for, and who
- * is writing. `rules` runs while the host is being assembled and may create
+/** `<plugin>/graph` — what a write means, what a query may ask for, and who
+ * is writing. `plugins` runs while the host is being assembled and may create
  * tables of its own through `host.sql`; `extend` contributes the clause
  * compilers every read path consults (@yaks/sql `Extension`), which is how a
  * package holding an index of its own — a text search, a vector, a link table
@@ -325,8 +325,8 @@ export type VocabFacet = {
  * session it claims to speak for, which it can only do through the host's own
  * graph. It is handed the host with nothing open on it yet — keep the
  * reference, do not call it. At most one plugin may export it. */
-export type RulesFacet = {
-  rules?: (host: Host, options: Options) => Plugin[]
+export type GraphFacet = {
+  plugins?: (host: Host, options: Options) => Plugin[]
   /** Bundles owed to a caller beside the answer to a direct tool call. */
   reply?: (host: Host, options: Options) => Reply
   extend?: (host: Host, options: Options) => Extension[]
@@ -496,7 +496,7 @@ export type ServiceFacet = {
 export type Facets = {
   cli: CliFacet
   vocab: VocabFacet
-  rules: RulesFacet
+  graph: GraphFacet
   tools: ToolsFacet
   effects: EffectsFacet
   ui: Contributions
@@ -660,11 +660,11 @@ export let person = async (
 // fallback: a request no plugin claimed is this machine's own writing, not
 // nobody's.
 let doorman = (
-  ruled: [RulesFacet, Options, string][],
+  graphs: [GraphFacet, Options, string][],
   host: Host,
   self: Actor | null,
 ): Authenticate => {
-  let said = ruled.filter(([r]) => r.authenticate)
+  let said = graphs.filter(([r]) => r.authenticate)
   if (said.length > 1) {
     throw new Error(`${said.length} plugins authenticate — a door has one`)
   }
@@ -855,9 +855,9 @@ export let compose = async (
     roles.includes(role)
       ? taking(plugins, name, observedLoad)
       : Promise.resolve([])
-  let [vocabs, ruled, watched, served, dressed, running] = await Promise.all([
+  let [vocabs, graphs, watched, served, dressed, running] = await Promise.all([
     take('graph', 'vocab'),
-    take('graph', 'rules'),
+    take('graph', 'graph'),
     take('effects', 'effects'),
     take('web', 'routes'),
     take('web', 'ui'),
@@ -951,7 +951,7 @@ export let compose = async (
       me: selfEid(),
       who: (request) => authenticate(request),
       feed: (each) => {
-        let stops = ruled.flatMap(([r, options]) =>
+        let stops = graphs.flatMap(([r, options]) =>
           r.feed ? [r.feed(host, options)(each)] : []
         )
         return () => stops.forEach((stop) => stop())
@@ -1020,14 +1020,14 @@ export let compose = async (
       gone: async (holder) =>
         !!self && !!g && await gone(machine(g), holder, { me: selfEid() }),
     }
-    authenticate = doorman(ruled, host, self)
+    authenticate = doorman(graphs, host, self)
     // The clause compilers belong to the store, so they are gathered before it
     // is built: what a query may ask for is settled once, while the host is
     // assembled, and every read path — `/query`, `/ws`, a tool, the command
     // line — goes through them. A factory is handed the host with nothing open
     // on it yet, the same promise `graph` makes: keep the reference, do not
     // call it.
-    let extend = ruled.flatMap(([r, options]) =>
+    let extend = graphs.flatMap(([r, options]) =>
       r.extend?.(host, options) ?? []
     )
     store = storage(sql, vocab, {
@@ -1057,8 +1057,8 @@ export let compose = async (
           tags: { handler: job.handler },
         }),
     })
-    let rules = ruled.flatMap(([r, options, plugin]) => {
-      let made = r.rules?.(host, options) ?? []
+    let contributed = graphs.flatMap(([r, options, plugin]) => {
+      let made = r.plugins?.(host, options) ?? []
       observed.graph(plugin, made)
       return made
     })
@@ -1068,7 +1068,7 @@ export let compose = async (
     // that name. So a config that numbers entities names a plugin that
     // resolves them.
     let graphing = roles.includes('graph')
-    if (config.numbers && graphing && !rules.some((p) => p.address)) {
+    if (config.numbers && graphing && !contributed.some((p) => p.address)) {
       throw new Error(
         '`numbers` prints ids like T-7, and no plugin in this config reads ' +
           'one back — add @yaks/id to plugins',
@@ -1081,7 +1081,7 @@ export let compose = async (
       // effects, its start-up passes and the bulk loads it is handed are all
       // stored attributed to this process.
       ...(self ? { actor: self } : {}),
-      plugins: [...rules, fx],
+      plugins: [...contributed, fx],
     })
     // The code behind the plugins' effects, where this process serves
     // `effects` (their facets were never imported anywhere else). Each
@@ -1116,13 +1116,13 @@ export let compose = async (
     // After every table exists, the plugins' own included: a full-text index is
     // built over the tables it reads, and a property the graph stores under a
     // content address is read through the plugin's table — so the index is
-    // created once the rules have installed theirs. `adopt` brings the indexes
+    // created once the plugins have installed theirs. `adopt` brings the indexes
     // into line with what the vocabulary declares and rebuilds one that
     // drifted, and writes nothing on a start where nothing changed.
     if (text.length) adopt(sql, text, derived)
     // Each index owns its read. The search tool brings their ranked answers
     // together, then reads only the entities that will be returned.
-    let meanings = ruled.flatMap(([r, options]) =>
+    let meanings = graphs.flatMap(([r, options]) =>
       r.meaning ? [r.meaning(host, options)] : []
     )
     if (meanings.length > 1) {
@@ -1201,7 +1201,7 @@ export let compose = async (
         })
       ),
     ]
-    let replies = ruled.flatMap(([r, options]) =>
+    let replies = graphs.flatMap(([r, options]) =>
       r.reply ? [r.reply(host, options)] : []
     )
     replying = replies.length

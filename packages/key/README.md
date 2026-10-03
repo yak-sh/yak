@@ -97,7 +97,7 @@ again, by the same entity or another one.
 
 The root module exports `keyDoc`, `keyKeywords`, `keys(vocab)`, `keyed`,
 `unkeyed`, `keyEid`, and helpers for identifying key tags and reading key
-values. `./vocab` provides declarations and keywords, and `./rules` provides the
+values. `./vocab` provides declarations and keywords, and `./graph` provides the
 plugin factory used by package loaders. A bundle is a JSON object containing one
 entity's id and components; `keyed` and `unkeyed` return such objects for
 `g.apply()`.

@@ -1,5 +1,5 @@
 // What a call just made is near: the `reply` the rules export gives the host
-// (./rules.ts), which a direct tool call's answer carries beside the tool's
+// (./graph.ts), which a direct tool call's answer carries beside the tool's
 // own (@yaks/tools `Opts.reply`).
 //
 // An entity a call created — a task, a memory, a comment — comes back with the

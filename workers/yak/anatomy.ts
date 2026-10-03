@@ -151,7 +151,7 @@ export let workerAnatomy = (vocab: Vocab) => {
         true
     source.roles!.push({
       name: 'graph',
-      facets: ['vocab', 'rules'],
+      facets: ['vocab', 'graph'],
       declared: true,
       loaded: true,
       bound: true,
@@ -161,7 +161,7 @@ export let workerAnatomy = (vocab: Vocab) => {
       let projected = anatomyPlugin(name, p, String(i))
       source.rules!.push(...projected.rules)
       source.hooks!.push(...projected.hooks)
-      facet(name, 'rules')
+      facet(name, 'graph')
     })
     // rulesOf(domains) was passed to the actual yak/rules plugin. Record its
     // original owning declarations, not the resource values or generated patches.
@@ -172,7 +172,7 @@ export let workerAnatomy = (vocab: Vocab) => {
       if (!name) continue
       let projected = anatomyPlugin(name, { name, rules }, 'domain')
       source.rules!.push(...projected.rules)
-      facet(name, 'rules')
+      facet(name, 'graph')
     }
   }
   let commands = (declared: Tools, tools: NamedTool[]) => {

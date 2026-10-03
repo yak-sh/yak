@@ -153,7 +153,7 @@ The main module exports:
 - process operations: `dirOf()`, `paths()`, `clean()`, `launch()`, `adopt()`,
   `watch()`, `vanished()`, `gone()`, `signal()`, and `supervise()`.
 
-Additional entry points are `@yaks/process/vocab`, `@yaks/process/rules` and
+Additional entry points are `@yaks/process/vocab`, `@yaks/process/graph` and
 `@yaks/process/wind`.
 
 ## Winding down

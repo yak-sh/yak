@@ -19,7 +19,7 @@ import { argsOf, type Bundle, type Comp, Refused } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import type { Batch } from './batch.ts'
 import { applied } from './undo.ts'
-import { type Bound, logFor } from './rules.ts'
+import { type Bound, logFor } from './graph.ts'
 
 // Who wrote the transaction, when, and through what — the same stamp a graph
 // already carries for an entity's last write, reported here about a moment in

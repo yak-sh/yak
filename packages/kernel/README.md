@@ -70,7 +70,7 @@ equal(work.favorite, {})
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `@yaks/kernel`       | `kernelDoc`, `spineDoc`, `marksDoc`, `kernelKeywords`, `KERNEL_URI`, `kernel()`, `CITES`, `content()`, `status()`, `verify()`, `Status` |
 | `@yaks/kernel/vocab` | The vocabulary documents, `kernelKeywords`, `docs`, `keywords`, `description`                                                           |
-| `@yaks/kernel/rules` | `rules()`, returning `[kernel()]`                                                                                                       |
+| `@yaks/kernel/graph` | `plugins()`, returning `[kernel()]`                                                                                                     |
 | `@yaks/kernel/tools` | `runs()`, returning the `comment_new` implementation                                                                                    |
 
 ## Vocabulary documents
@@ -110,18 +110,18 @@ resolves them.
 precondition hook runs before stamping. On the first completion it uses the
 incoming `by`, if supplied by trusted server code, or the batch's actor; on
 later writes it keeps the stored `by`. Removing `completed` permits a subsequent
-completion to name another writer. `rules()` installs the same plugin.
+completion to name another writer. `plugins()` installs the same plugin.
 
 ```ts
 import { kernelDoc } from '@yaks/kernel'
-import { rules } from '@yaks/kernel/rules'
+import { plugins } from '@yaks/kernel/graph'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { equal } from '@yaks/testing'
 
 let vocab = loadVocab([kernelDoc])
-let g = graph({ vocab, storage: ram(vocab), plugins: rules() })
+let g = graph({ vocab, storage: ram(vocab), plugins: plugins() })
 await g.apply([
   { entity: { eid: 'alice' }, favorite: {} },
   { entity: { eid: 'bob' }, favorite: {} },

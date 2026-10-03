@@ -142,7 +142,7 @@ The server loader uses these separate sub-module exports:
 | Import               | Exports                                                                                 |
 | -------------------- | --------------------------------------------------------------------------------------- |
 | `@yaks/page/vocab`   | `pageDoc` and `docs`, the `web` vocabulary document and its one-item array.             |
-| `@yaks/page/rules`   | `rules()`, returning the graph plugin and its normalization hook.                       |
+| `@yaks/page/graph`   | `plugins()`, returning the graph plugin and its normalization hook.                     |
 | `@yaks/page/effects` | `effects(host, options)`, returning an archive handler when configured; also `Options`. |
 | `@yaks/page/routes`  | `routes(host, options)`, `PREFIX`, and `Filing` for `POST /page` and `GET /page/<eid>`. |
 

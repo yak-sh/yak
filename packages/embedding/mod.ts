@@ -74,7 +74,7 @@
  * early development never reach a network. `.near` reads a stored vector
  * synchronously; searching new words embeds them asynchronously.
  *
- * As a plugin, `./rules` creates the vector table, registers the `.near`
+ * As a plugin, `./graph` creates the vector table, registers the `.near`
  * compiler and answers phrase searches; `./service` settles the queue. A
  * provider and a model are named beside the plugin in the config, and a
  * provider reached over HTTP is a `provider` row serving the `model` row

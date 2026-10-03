@@ -13,7 +13,7 @@ Entry points:
 
 - `@yaks/mcp-client`: connections, discovery, calls, naming, and error types.
 - `@yaks/mcp-client/oauth`: where a server signs in, as data.
-- `@yaks/mcp-client/graph`: optional graph-backed server configuration.
+- `@yaks/mcp-client/servers`: optional graph-backed server configuration.
 - `@yaks/mcp-client/vocab`: the graph vocabulary document alone.
 
 This example talks to a server over the network, so it is not run as a test:
@@ -129,7 +129,7 @@ HTTPS except on loopback addresses. Configure only trusted MCP servers.
 
 ## Graph server definitions
 
-`@yaks/mcp-client/graph` is an optional adapter. It exports `serverOf` and
+`@yaks/mcp-client/servers` is an optional adapter. It exports `serverOf` and
 `graphToolName`; the `mcp_server` component is `mcpDoc`, from
 `@yaks/mcp-client/vocab`.
 

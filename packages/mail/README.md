@@ -464,7 +464,7 @@ The root import `@yaks/mail` provides:
 | `Options`, `Transport`, `Door`, `Pull`                                     | Plugin configuration types.                                                |
 
 Separate entry points provide `mailDoc` and `docs` from `@yaks/mail/vocab`,
-`rules()` from `@yaks/mail/rules`, `effects()` and `post()` from
+`plugins()` from `@yaks/mail/graph`, `effects()` and `post()` from
 `@yaks/mail/effects`, `routes()`, `PATH`, and `Posted` from `@yaks/mail/routes`,
 `service()` and `EVERY` from `@yaks/mail/service`, and `runs()` plus inbox and
 thread helpers from `@yaks/mail/tools`. They are not root re-exports. Their

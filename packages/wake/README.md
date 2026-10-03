@@ -18,7 +18,7 @@ Entry points:
   plugin, and `tick`.
 - `@yaks/wake/deno`: the long-running `loop` driver.
 - `@yaks/wake/cloudflare`: Cron Trigger and Durable Object alarm helpers.
-- `@yaks/wake/rules`: the `rules()` plugin list.
+- `@yaks/wake/graph`: the `plugins()` plugin list.
 - `@yaks/wake/service`: a Deno background service wrapper.
 - `@yaks/wake/vocab`: the vocabulary document without scheduler behavior.
 

@@ -54,7 +54,7 @@ RAM or SQLite without a client or transport.
 A program built from these packages is a config file and a list of plugins,
 assembled by [@yaks/cli](../cli/README.md). A plugin is a package that says what
 it contributes, one facet per subpath, and never where it runs: its words
-(`./vocab`), what a write means (`./rules`), the code behind its tools
+(`./vocab`), its graph contributions (`./graph`), the code behind its tools
 (`./tools`), the code behind the effects its words declare (`./effects`), the
 HTTP it adds (`./routes`), the timer or poll it keeps up (`./service`), and how
 its entities are drawn (`./views`, `./tui`).
@@ -63,7 +63,7 @@ A process serves roles, and imports only the facets of the roles it serves:
 
 | Role            | Facets                          | The process                                    |
 | --------------- | ------------------------------- | ---------------------------------------------- |
-| `graph`         | `./vocab`, `./rules`, `./tools` | opens the file, admits writes, runs tools      |
+| `graph`         | `./vocab`, `./graph`, `./tools` | opens the file, admits writes, runs tools      |
 | `web`           | `./routes`                      | answers HTTP (`yak serve`, @yaks/api)          |
 | `effects`       | `./effects`                     | claims and runs what commits owe, in a pool    |
 | a plugin's name | that plugin's `./service`       | keeps that plugin's timer or poll running      |

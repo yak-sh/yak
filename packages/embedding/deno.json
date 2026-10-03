@@ -5,7 +5,7 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./tools": "./tools.ts",
-    "./rules": "./rules.ts",
+    "./graph": "./graph.ts",
     "./service": "./service.ts"
   },
   "license": "Apache-2.0",

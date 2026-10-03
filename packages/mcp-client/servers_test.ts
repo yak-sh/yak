@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import { serverOf } from './graph.ts'
+import { serverOf } from './servers.ts'
 import { mcpDoc } from './vocab.ts'
 import { loadVocab } from '@yaks/vocab'
 

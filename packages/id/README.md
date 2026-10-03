@@ -62,7 +62,7 @@ deno add jsr:@yaks/id
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@yaks/id`       | `idKeywords`, `ID_URI`, `short`, `SHORT`, `prefixes`, `prefixOf`, `format`, `parse`, `idOf`, `human`; `Named`, `Parsed`, `Wearing`; `idDoc` |
 | `@yaks/id/vocab` | `idDoc`, `docs`, `idKeywords`, `keywords`, `description`                                                                                    |
-| `@yaks/id/rules` | `numbers`, `ids`, `rules`                                                                                                                   |
+| `@yaks/id/graph` | `numbers`, `ids`, `plugins`                                                                                                                 |
 
 ## Prefixes and short handles
 
@@ -110,7 +110,7 @@ refused. Eids and other strings are left to the graph's other addressing.
 ```ts
 import { graph } from '@yaks/graph'
 import { human, idDoc, idKeywords } from '@yaks/id'
-import { ids, numbers } from '@yaks/id/rules'
+import { ids, numbers } from '@yaks/id/graph'
 import { spineDoc } from '@yaks/kernel/vocab'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
@@ -146,7 +146,7 @@ equal(Object.fromEntries(await g.address(['B-1', '1', '#a3f19c024b'])), {
 Numbers are opt in. Without `numbers()`, a graph refuses `$num` unless another
 plugin declares it. A storage adapter can instead number every entity when
 writing it, as [@yaks/sqlite](../sqlite/README.md) does with `number: true`. The
-`rules(host)` factory installs `ids(host.vocab)`; it does not install an
+`plugins(host)` factory installs `ids(host.vocab)`; it does not install an
 allocator. A host using [@yaks/cli](../cli/README.md) loads the vocabulary and
 that factory when its config names `@yaks/id`.
 

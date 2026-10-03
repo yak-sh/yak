@@ -4,7 +4,7 @@ description: >
   How an @yaks package or plugin is made, wired and published in ~/code/tasks,
   and where code belongs. Use it whenever you add a package or plugin, move code
   between packages (or out of workers/yak or packages/web), change a subpath
-  export or facet (./vocab, ./rules, ./tools, ./effects, ./routes, ./service,
+  export or facet (./vocab, ./graph, ./tools, ./effects, ./routes, ./service,
   ./cli, ./views, ./tui), add a plugin to ~/.yak/yak.json, hit an import cycle,
   publish to jsr, or land with `yak land --allow-revert`, even if the task says
   "put this somewhere", "share this helper" or "make it reusable". Reading
@@ -71,14 +71,16 @@ Copy the shape of a small one, such as packages/draft:
 
 A facet is one optional subpath, and a plugin never says where it runs
 (M-39540). A process serves roles and imports only those roles' facets
-(`ROLES` in packages/cli/host.ts): `graph` takes `./vocab`, `./rules`,
+(`ROLES` in packages/cli/host.ts): `graph` takes `./vocab`, `./graph`,
 `./tools`; `web` takes `./routes`; `effects` takes `./effects`; a package with
 `./service` brings a role of its own. `./cli` adds terminal commands, `./views`
-and `./tui` draw entities. The README's table lists what each subpath exports.
+and `./tui` draw entities. `./graph` holds the package's graph contributions;
+its `plugins(host, options)` factory returns graph plugins. The README's table
+lists the facet's other exports and what each subpath provides.
 
 Consequences worth knowing:
 - An exported facet that fails to import fails composition for every process
-  that loads it, so a bad `./rules` breaks every `yak` command. An unexported
+  that loads it, so a bad `./graph` breaks every `yak` command. An unexported
   facet is simply skipped.
 - `./vocab` and `./views` run in browsers: no SQL, storage drivers or server
   APIs in them or in anything they import.

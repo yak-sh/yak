@@ -397,7 +397,7 @@ managed run's session is written first under an eid of its own, which
 
 `sessionFor()` resolves an entity ID, a human-readable session ID, or a harness
 session ID to the same entity. `speaking()` returns the actor a session writes
-as. The `@yaks/session/rules` entry point exports `authenticate()`, which reads
+as. The `@yaks/session/graph` entry point exports `authenticate()`, which reads
 the session from the `x-via` header, for every door over the graph: an HTTP
 request and a `yak` command alike. Writes use `session.actor` as `by` when
 present, otherwise the session itself; `via` identifies the session in either
@@ -429,7 +429,7 @@ The main module exports:
 - harness readers: `claude`, `subagent`, `codex`, `readers`, and `scrub()`;
 - error types including `Bounced`, `Unnamed`, and `UnknownSession`.
 
-Additional entry points are `@yaks/session/vocab`, `/rules` (with
+Additional entry points are `@yaks/session/vocab`, `/graph` (with
 `authenticate`), `/tools`, `/views`, `/service` (the duty that reads
 transcripts), and `/tail` (the importer). `/views` is `views`, the portable
 renderers, and `inspectViews`, how the inspector (@yaks/inspect) draws an entry

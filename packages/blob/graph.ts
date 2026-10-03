@@ -1,5 +1,5 @@
 // Where a stored value lives: the module a server imports from
-// `@yaks/blob/rules`. The store is the host's own (@yaks/cli `Host.blobs`, a
+// `@yaks/blob/graph`. The store is the host's own (@yaks/cli `Host.blobs`, a
 // table in the server's database); the schema declarations are in ./vocab.ts,
 // where a browser can load them without a store coming with them.
 
@@ -12,7 +12,7 @@ import type { Blobs } from './store.ts'
 /** The plugin for every body property this vocabulary marks `store: blob`,
  * storing each distinct value once in the host's blob store however many rows
  * hold the same text. */
-export let rules = (host: { vocab: Vocab; blobs: Blobs }): Plugin[] => [
+export let plugins = (host: { vocab: Vocab; blobs: Blobs }): Plugin[] => [
   blobs(host.vocab, host.blobs),
   representations(),
 ]

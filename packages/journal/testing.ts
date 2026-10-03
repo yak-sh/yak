@@ -110,7 +110,7 @@ let ACTORS = ['ada', 'bob', 'cli']
 
 /** An embedded database with the wiki's tables and the journal's, and a log
  * bound to it — what a graph and a test both read through. The driver is
- * returned beside them, because `@yaks/journal/rules` and
+ * returned beside them, because `@yaks/journal/graph` and
  * `@yaks/journal/tools` are both built from the server's own connection. */
 export let wikiLog = (): {
   g: (p?: Options['plugins']) => Graph

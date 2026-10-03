@@ -70,12 +70,12 @@ export let runs = (
     try {
       said = state(host.sql)
     } catch {
-      // No vector table: this server never composed `@yaks/embedding/rules`,
+      // No vector table: this server never composed `@yaks/embedding/graph`,
       // so there is no index and no sweep. Not a failure, and not a pass
       // either.
       return warn(
         'this host keeps no vector table, so there is no index to build — ' +
-          '@yaks/embedding/rules is what raises one',
+          '@yaks/embedding/graph is what raises one',
       )
     }
     let last = newest(host.sql)

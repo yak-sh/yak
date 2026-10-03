@@ -5,7 +5,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { parse } from '@yaks/query'
 import { compile, type Extension, Unsupported } from '@yaks/sql'
-import { extend } from './rules.ts'
+import { extend } from './graph.ts'
 import { blog } from './testing.ts'
 
 let sql = (line: string, ext: Extension[] = extend({ vocab: blog })) =>

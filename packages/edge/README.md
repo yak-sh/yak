@@ -79,7 +79,7 @@ Both endpoints are [references](../vocab/README.md#routing-and-references) with
 | `@yaks/edge`       | `edges`, `stated`: graph plugin and validation hook                                                                      |
 | `@yaks/edge`       | `walk`, `Walk`, `Dir`: storage traversal; `traverse`: SQL compiler extension                                             |
 | `@yaks/edge/vocab` | `docs`, `keywords`, `description`, `edgeDoc`, `edgeKeywords`, `relations`, `names`, `reversed`: vocabulary contributions |
-| `@yaks/edge/rules` | `rules`, `extend`: graph plugins and SQL compiler extensions for composition                                             |
+| `@yaks/edge/graph` | `plugins`, `extend`: graph plugins and SQL compiler extensions for composition                                           |
 
 ## Relation declarations
 
@@ -253,14 +253,14 @@ must fetch the requested links separately.
 ## Composition
 
 `@yaks/edge/vocab` provides vocabulary documents and keywords without importing
-storage or SQL. `@yaks/edge/rules` accepts an object with the loaded vocabulary
+storage or SQL. `@yaks/edge/graph` accepts an object with the loaded vocabulary
 and supplies both the graph plugin and SQL compiler extension.
 
 ```ts
 import { equal } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
 import { docs, keywords } from '@yaks/edge/vocab'
-import { extend, rules } from '@yaks/edge/rules'
+import { extend, plugins } from '@yaks/edge/graph'
 import { graph } from '@yaks/graph'
 import { open } from '@yaks/sqlite/db'
 import { storage } from '@yaks/sqlite'
@@ -273,7 +273,7 @@ let db = open(':memory:')
 try {
   let store = storage(db, vocab, { extend: extend(host) })
   store.install()
-  let g = graph({ storage: store, vocab, plugins: rules(host) })
+  let g = graph({ storage: store, vocab, plugins: plugins(host) })
   await g.apply([{ entity: { eid: 'p1' } }, { entity: { eid: 'p2' } }, {
     entity: { eid: '$link' },
     edge: { from: 'p1', to: 'p2' },

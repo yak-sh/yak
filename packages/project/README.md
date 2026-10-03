@@ -131,7 +131,7 @@ await g.apply([
   string or `null`), `lineage(g, eid)`, and `nesting` (the hook keeping projects
   a tree).
 - `@yaks/project/vocab`: schema documents in `docs`.
-- `@yaks/project/rules`: `rules(host)` supplies the validation plugin.
+- `@yaks/project/graph`: `plugins(host)` supplies the validation plugin.
 - `@yaks/project/tools`: `runs(host, options)` supplies the two checks above;
   `options.through` chooses containment relation tags.
 

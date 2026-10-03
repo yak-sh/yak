@@ -115,17 +115,18 @@ test("every package's words load beside every other package's", async () => {
 })
 
 test('every other facet a package exports is shaped the way a host reads it', async () => {
-  // What each facet's module has to say. `rules` has four, what a write
-  // means, what a query may ask for, who is writing and what other hosts
-  // committed (@yaks/cli `RulesFacet`). `routes` has three: the HTTP a plugin adds, the filter it
+  // What each facet's module has to say. `graph` contributes plugins, replies,
+  // query compilation, meaning search, caller attribution and other hosts'
+  // commits (@yaks/cli `GraphFacet`). `routes` has three: the HTTP a plugin adds, the filter it
   // puts in front of every route, and — for the one plugin in a host that
   // hosts them — what answers a request at all (@yaks/api). A module with any
   // of them is that facet.
   let shapes: Record<string, string[]> = {
-    rules: ['rules', 'extend', 'authenticate', 'feed'],
+    graph: ['plugins', 'reply', 'extend', 'meaning', 'authenticate', 'feed'],
     tools: ['runs'],
     effects: ['effects'],
     routes: ['routes', 'filter', 'handler'],
+    ui: ['kits', 'ux', 'themes', 'skins'],
     service: ['service'],
     views: ['views', 'inspectViews'],
   }
@@ -163,7 +164,7 @@ test('every other facet a package exports is shaped the way a host reads it', as
     }
     if (!words) continue
     // A subpath outside the facet list is a package's own business, but a
-    // facet name must mean the facet: nothing may export `./rules` meaning
+    // facet name must mean the facet: nothing may export `./graph` meaning
     // something else.
     for (let key of Object.keys(p.exports)) {
       let facet = key.slice(2)
@@ -174,10 +175,11 @@ test('every other facet a package exports is shaped the way a host reads it', as
   }
   assertEquals([...seen].sort(), [
     'effects',
+    'graph',
     'routes',
-    'rules',
     'service',
     'tools',
+    'ui',
     'views',
   ])
 })

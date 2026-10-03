@@ -4,7 +4,7 @@
   "exports": {
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
-    "./rules": "./rules.ts"
+    "./graph": "./graph.ts"
   },
   "license": "Apache-2.0",
   "description": "Identifies component-table sets by content hash, caches presence matches and transitions, and maintains each graph entity's archetype.",

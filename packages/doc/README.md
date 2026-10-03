@@ -53,24 +53,24 @@ deno add jsr:@yaks/doc
 | ----------------- | ---------------------------------------- | ------------------------------------------------------------------ |
 | `@yaks/doc`       | `docDoc`, `docs`, `DOC`, `TITLE`, `BODY` | Vocabulary document, plugin factory, and component/property names. |
 | `@yaks/doc/vocab` | `docDoc`, `docs`, `description`          | Vocabulary documents and package description for a loader.         |
-| `@yaks/doc/rules` | `rules`                                  | Plugin array factory for a loader.                                 |
+| `@yaks/doc/graph` | `plugins`                                | Plugin array factory for a loader.                                 |
 | `@yaks/doc/views` | `views`                                  | Portable `Title` and `Body` views.                                 |
 
 Root `docs()` returns a [plugin](../graph/README.md#data-model) with the
 vocabulary and no hooks. In `./vocab`, `docs` is an array of vocabulary
-documents. `rules()` returns the root plugin in an array; it contributes no
+documents. `plugins()` returns the root plugin in an array; it contributes no
 write-time rules.
 
 ```ts
 import { BODY, DOC, docs as plugin, TITLE } from '@yaks/doc'
 import { docs } from '@yaks/doc/vocab'
-import { rules } from '@yaks/doc/rules'
+import { plugins } from '@yaks/doc/graph'
 import { equal } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
 
 const vocab = loadVocab(docs)
 equal(vocab.props(DOC), [TITLE, BODY])
-equal(rules()[0], plugin())
+equal(plugins()[0], plugin())
 ```
 
 ## Views

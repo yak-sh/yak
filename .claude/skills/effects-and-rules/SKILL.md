@@ -5,7 +5,7 @@ description: >
   post-commit effects (the pool, start-up work, sweeps, retries, leases),
   process-local observers, roles, services and independent workers. Use it
   when changing an effect, rule, start-up job, sweep, lease, duty, service
-  or role, an `/effects` or `/rules` facet or `effect: true` / `rule: true`
+  or role, an `/effects` or `/graph` facet or `effect: true` / `rule: true`
   vocab entry, or debugging work after a write: loops, never fires, fires
   too often, retries forever, or runs in the wrong process. Reading composed
   anatomy and causal activity is `platform-visualize`, not changing behavior.
@@ -23,7 +23,7 @@ know about it.
 
 | | runs | can refuse the write | where it's declared |
 | --- | --- | --- | --- |
-| **rule** | inside the transaction, every door | yes | `rule: true` in vocab.json, or a plugin's `/rules` |
+| **rule** | inside the transaction, every door | yes | `rule: true` in vocab.json, or a plugin's `/graph` |
 | **effect** | after the commit, in the pool | no | `effect: true` in vocab.json; code in `/effects` |
 | **observer** | after this process's own commits | no | at runtime (`created`, `changed`, `on`) |
 
@@ -103,12 +103,12 @@ one process should run, like a poll; the effect pool needs none.
 
 ## Roles: which process runs what
 
-A plugin says what it contributes, one facet per subpath (`/vocab`, `/rules`,
+A plugin says what it contributes, one facet per subpath (`/vocab`, `/graph`,
 `/tools`, `/effects`, `/service`, `/routes`, `/views`, …), and never where it
 runs (M-39540). A process serves roles and imports only their facets
 (`ROLES` and `compose()` in packages/cli/host.ts):
 
-- `graph` (vocab, rules, tools) is in every process that opens the file;
+- `graph` (`./vocab`, `./graph`, `./tools`) is in every process that opens the file;
 - `effects` is a pool: any number of processes may work it at once;
 - `web` and each plugin's service (named by its package) are singletons.
 

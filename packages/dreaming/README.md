@@ -15,7 +15,7 @@ deno add jsr:@yaks/dreaming
 - `meta` — marks text in a transcript as a note: it is never delivered to anyone
   live, and is read later by a dream.
 
-`@yaks/dreaming/rules` adds `.order=hot` to every query: warmest first, by the
+`@yaks/dreaming/graph` adds `.order=hot` to every query: warmest first, by the
 curve a recall decays along. Each recall earns a day of stability, spacing
 multiplies it (the mean interval, in weeks), and the score falls off
 exponentially past the last recall. An entity never recalled counts its own last

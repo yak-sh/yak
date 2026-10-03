@@ -5,7 +5,7 @@
   "exports": {
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
-    "./rules": "./rules.ts"
+    "./graph": "./graph.ts"
   },
   "license": "Apache-2.0",
   "imports": {

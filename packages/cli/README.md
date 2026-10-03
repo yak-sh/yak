@@ -48,7 +48,7 @@ serves:
 
 | Role            | Facets                          | What the process does                          |
 | --------------- | ------------------------------- | ---------------------------------------------- |
-| `graph`         | `./vocab`, `./rules`, `./tools` | opens the file, admits writes, runs tool calls |
+| `graph`         | `./vocab`, `./graph`, `./tools` | opens the file, admits writes, runs tool calls |
 | `web`           | `./routes`                      | answers HTTP with the routes @yaks/api hosts   |
 | `effects`       | `./effects`                     | claims and runs what commits owe, in a pool    |
 | a plugin's name | that plugin's `./service`       | keeps that plugin's timer or poll running      |
@@ -202,23 +202,23 @@ contributes nothing to that process.
   "exports": {
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
-    "./rules": "./rules.ts",
+    "./graph": "./graph.ts",
     "./effects": "./effects.ts",
     "./routes": "./routes.ts"
   }
 }
 ```
 
-| Subpath     | Role       | Expected exports                                                                                  |
-| ----------- | ---------- | ------------------------------------------------------------------------------------------------- |
-| `./vocab`   | `graph`    | `docs?`, `keywords?`, `derived?` and `backed?` declarations, and `description?` from deno.json    |
-| `./rules`   | `graph`    | `rules?: (host, options) => Plugin[]`, query `extend?`, `reply?`, and at most one `authenticate?` |
-| `./tools`   | `graph`    | `runs?: (host, options) => Runs`, keyed by declared tool name                                     |
-| `./cli`     | `yak`      | `commands?: CliCommand[]`, direct terminal controls with a composed host                          |
-| `./effects` | `effects`  | `effects?: (host, options) => Handlers`, keyed by declared effect name                            |
-| `./routes`  | `web`      | `routes?: (host, options) => Route[]`, `filter?`, and at most one `handler?`                      |
-| `./service` | its plugin | `service?: (host, options, signal)` for a duty                                                    |
-| `.`         |            | Public types and library functions; not loaded by `compose`                                       |
+| Subpath     | Role       | Expected exports                                                                                                   |
+| ----------- | ---------- | ------------------------------------------------------------------------------------------------------------------ |
+| `./vocab`   | `graph`    | `docs?`, `keywords?`, `derived?` and `backed?` declarations, and `description?` from deno.json                     |
+| `./graph`   | `graph`    | `plugins?: (host, options) => Plugin[]`, `extend?`, `reply?`, `meaning?`, `feed?`, and at most one `authenticate?` |
+| `./tools`   | `graph`    | `runs?: (host, options) => Runs`, keyed by declared tool name                                                      |
+| `./cli`     | `yak`      | `commands?: CliCommand[]`, direct terminal controls with a composed host                                           |
+| `./effects` | `effects`  | `effects?: (host, options) => Handlers`, keyed by declared effect name                                             |
+| `./routes`  | `web`      | `routes?: (host, options) => Route[]`, `filter?`, and at most one `handler?`                                       |
+| `./service` | its plugin | `service?: (host, options, signal)` for a duty                                                                     |
+| `.`         |            | Public types and library functions; not loaded by `compose`                                                        |
 
 The web UI separately imports `./vocab` and `./views`, and `yak` imports
 `./views` to show a tool's answer. Those modules must work in a browser and must
@@ -230,13 +230,13 @@ rendering role, which needs no graph open.
 
 ```ts
 import { docs } from '@yaks/mail/vocab'
-import { rules } from '@yaks/mail/rules'
+import { plugins } from '@yaks/mail/graph'
 import { runs } from '@yaks/mail/tools'
 
 // Its options are its entry in yak.json.
 let options = { domain: 'books.example' }
 docs // [mailDoc]
-rules({}, options) // [mailbox({ domain: 'books.example' })]
+plugins({}, options) // [mailbox({ domain: 'books.example' })]
 Object.keys(runs({}, options)) // the tools it runs, by name
 ```
 
@@ -255,8 +255,8 @@ and `yak` returns exit code `1`.
 
 Factories can retain `host.storage`, `host.graph`, `host.handler`,
 `host.runner`, and `host.duties`, but must not access them before
-initialization. In particular, `rules.extend` runs before the store exists. A
-route is an `@yaks/api` `Route` with `method`, `path`, and a
+initialization. In particular, `extend` from `./graph` runs before the store
+exists. A route is an `@yaks/api` `Route` with `method`, `path`, and a
 `(Request) => Response` handler. Paths are exact unless they end in `*`; `*`
 also matches any method.
 
@@ -271,7 +271,7 @@ down: @yaks/mcp contributes it as a route, so a config that wants an agent's
 door lists that package too.
 
 Routes that write should use `host.who(request)` and `signed` from `@yaks/api`
-to attribute their changes. `authenticate` belongs to `./rules`, because every
+to attribute their changes. `authenticate` belongs to `./graph`, because every
 door asks it, a command line naming its session as much as an HTTP request, and
 at most one plugin may export it. Without an authenticated caller, writes are
 attributed to the host process.
@@ -306,8 +306,8 @@ lease instead.
 3. Opens SQLite, runs migrations, and builds storage with derived columns, the
    backings of computed components, query extensions, optional entity numbers,
    and full-text indexes for fields declared with `search: true`.
-4. Builds the graph from plugin rules and the effect registry. Every process
-   writes down the runs its commits owe, whatever roles it serves.
+4. Builds the graph from plugins and the effect registry. Every process writes
+   down the runs its commits owe, whatever roles it serves.
 5. Joins tool declarations to their `runs` implementations; a declared tool
    without an implementation is an error. Serving `effects`, it handles each
    declared effect with the one plugin `./effects` that gives it code, usually

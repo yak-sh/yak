@@ -4,7 +4,7 @@ import { local } from './local.ts'
 import { graphMCP } from './mcp_registry.ts'
 import { signins } from '@yaks/connections'
 import { fixture } from '../mcp-client/testing.ts'
-import { graphToolName } from '@yaks/mcp-client/graph'
+import { graphToolName } from '@yaks/mcp-client/servers'
 import { harness, repo } from './testing.ts'
 
 test('graph MCP definitions persist; rename keeps identity, edits and removal affect next discovery', async () => {

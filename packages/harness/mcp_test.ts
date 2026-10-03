@@ -5,7 +5,7 @@ import { remote } from './remote.ts'
 import { mcpTools } from './mcp.ts'
 import { signins } from '@yaks/connections'
 import { fixture } from '../mcp-client/testing.ts'
-import { graphToolName } from '@yaks/mcp-client/graph'
+import { graphToolName } from '@yaks/mcp-client/servers'
 import { at, harness, repo, worker } from './testing.ts'
 
 test('configured remote MCP tool publishes mockup through existing call/result transcript', async () => {

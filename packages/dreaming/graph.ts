@@ -1,4 +1,4 @@
-// `.order=hot`, the `rules` export (`@yaks/dreaming/rules`): the rank a recall
+// `.order=hot`, the `graph` export (`@yaks/dreaming/graph`): the rank a recall
 // decays along, as an @yaks/sql ORDER BY expression every read path consults.
 //
 // Every recall earns a day of stability and spacing multiplies it — the mean

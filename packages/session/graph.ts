@@ -1,5 +1,5 @@
 // What a batch means about a transcript, and who is writing it: the graph
-// plugins exported as `@yaks/session/rules` — entry sequencing, the reference
+// plugins exported as `@yaks/session/graph` — entry sequencing, the reference
 // checks a fork and a `using` must pass, the lease on any entity, and the
 // conflict row written when two sessions want the same thing — and
 // `authenticate`, which every door over the graph asks who a request is from.
@@ -25,7 +25,7 @@ import { sessions } from './plugin.ts'
 import { sessionFor, speaking } from './who.ts'
 
 /** Transcripts, leases and the audit of a bounced claim. */
-export let rules = (): Plugin[] => [sessions()]
+export let plugins = (): Plugin[] => [sessions()]
 
 /** What a direct tool call owes the session speaking through it. */
 export let reply = (host: Host) => (call: Bundle): Promise<Bundle[]> =>

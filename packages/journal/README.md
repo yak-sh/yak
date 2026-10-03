@@ -42,7 +42,7 @@ indexed history rather than stored alongside each new value.
 
 A property the store keeps in another form, such as the address @yaks/blob keeps
 in place of a body, is recorded as stored and read back through the store's read
-overrides (`log({ derived })`; `@yaks/journal/rules` binds the host's). History,
+overrides (`log({ derived })`; `@yaks/journal/graph` binds the host's). History,
 the feed and undo then hold the text a reader of the graph sees.
 
 The tables hold no rows of the entity table and are not included in graph
@@ -115,7 +115,7 @@ Add the package to a compatible `yak` plugin configuration:
 { "plugins": ["@yaks/kernel", "@yaks/journal"] }
 ```
 
-`@yaks/journal/rules` creates the SQL tables on the host's connection and
+`@yaks/journal/graph` creates the SQL tables on the host's connection and
 returns the journal plugin. `@yaks/journal/vocab` declares `_tx`, `_change` and
 the `history` tool, and `@yaks/journal/tools` implements the tool.
 
@@ -141,7 +141,7 @@ import { storage } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
 import { loadVocab } from '@yaks/vocab'
 import { ddl, journal, undo } from '@yaks/journal'
-import { logFor } from '@yaks/journal/rules'
+import { logFor } from '@yaks/journal/graph'
 
 let title = { type: 'string' }
 let vocab = loadVocab([{
@@ -216,14 +216,14 @@ next() // [{ seq, applied: [{ entity: { eid: 'p1' }, page: { title: 'Hi' } }] }]
 
 `recast(patches)` is the shape a graph's `effect` phase is handed: one bundle
 per recorded operation, a deletion as `$delete`. In a server,
-`@yaks/journal/rules` exports `feed`, which a host offers as `host.feed(each)`:
+`@yaks/journal/graph` exports `feed`, which a host offers as `host.feed(each)`:
 it looks every 200ms (`{"use": "@yaks/journal", "with": {"every": 50}}` to
 change it) and hands each commit to `each` in order. A commit `each` fails on is
 offered again at the next look, up to five times, before it is reported and
 passed over. @yaks/api feeds its `/ws` subscriptions this way.
 
 A store an older journal made gains the `host` column the next time
-`@yaks/journal/rules` opens it (`grown()`).
+`@yaks/journal/graph` opens it (`grown()`).
 
 ## Undo
 
@@ -276,7 +276,7 @@ reversible changes returns `[]`.
   not restored by undo ("Undo", above).
 - An optional `log({ cas })` configuration records selected text by a reference
   to a content store. Supply its lookup layout, selection function and writer;
-  this is not enabled automatically by `rules(host)`.
+  this is not enabled automatically by `plugins(host)`.
 - The journal records changes rather than complete snapshots. Back up its
   tables, the graph and any referenced content together when preserving history.
 
@@ -286,11 +286,11 @@ The root exports `ddl`, `log`, `journal`, `backed`, `applied`, `undone`, `undo`,
 `Final`, value encoding helpers, and types including `Log`, `LogOpts`, `Batch`,
 `Entry`, `Patch`, `Delta` and `Cas`.
 
-| Sub-module export     | Purpose                                                          |
-| --------------------- | ---------------------------------------------------------------- |
-| `@yaks/journal/vocab` | `journalDoc`, `docs` and `backed`: `_tx`, `_change`, `history`   |
-| `@yaks/journal/rules` | `rules(host)` installs tables/plugin; `logFor(host)` binds a log |
-| `@yaks/journal/tools` | `runs(host)` implements the history tool                         |
+| Sub-module export     | Purpose                                                            |
+| --------------------- | ------------------------------------------------------------------ |
+| `@yaks/journal/vocab` | `journalDoc`, `docs` and `backed`: `_tx`, `_change`, `history`     |
+| `@yaks/journal/graph` | `plugins(host)` installs tables/plugin; `logFor(host)` binds a log |
+| `@yaks/journal/tools` | `runs(host)` implements the history tool                           |
 
 ## Compatibility
 

@@ -4,7 +4,7 @@
   "exports": {
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
-    "./rules": "./rules.ts"
+    "./graph": "./graph.ts"
   },
   "license": "Apache-2.0",
   "description": "What a person has typed and not yet sent, kept in the graph per person and place, synced to every interface they use, and merged when two type at once.",

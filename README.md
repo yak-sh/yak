@@ -50,7 +50,7 @@ the entity. One query grammar filters everywhere: `.task.status=open`,
 ## Plugins and roles
 
 A config lists plugins. Each plugin is a package whose subpaths are its facets
-(`/vocab`, `/rules`, `/tools`, `/effects`, `/service`, `/routes`, `/views`) and
+(`/vocab`, `/graph`, `/tools`, `/effects`, `/service`, `/routes`, `/views`) and
 never says where it runs. A process serves roles, and imports only the facets of
 the roles it serves: a `yak` command opens the graph and runs one tool,
 `yak serve` answers HTTP, effects are worked by a pool of processes, and each

@@ -1,4 +1,4 @@
-// The write-time half: the `@yaks/mail/rules` entry point — the components
+// The write-time half: the `@yaks/mail/graph` entry point — the components
 // and, where the config names a domain, the canonicalizer that normalizes an
 // address on the way in.
 //
@@ -13,6 +13,6 @@ import { mailbox } from './plugin.ts'
 import type { Options } from './options.ts'
 
 /** The letter components, and the address canonicalizer the domain implies. */
-export let rules = (_host: unknown, options: Options = {}): Plugin[] => [
+export let plugins = (_host: unknown, options: Options = {}): Plugin[] => [
   mailbox({ domain: options.domain }),
 ]

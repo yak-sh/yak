@@ -237,7 +237,7 @@ let closing: Promise<void> | undefined
 
 /** Who a command line writes as: the answer the host's door gives a request
  * naming this line's session in `x-via`, exactly as it answers one arriving
- * over HTTP (@yaks/session/rules), so a session's writes are its own however
+ * over HTTP (@yaks/session/graph), so a session's writes are its own however
  * they reached the graph. A door that knows no such session answers this
  * process ({@link writer} in ./host.ts), and a line with no session, typed at a
  * terminal, writes as the config's `person` through it: an agent's shell always

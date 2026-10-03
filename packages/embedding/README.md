@@ -140,7 +140,7 @@ outside a Worker is such a row as well: `api: "openai"`, its base
 `key`. Two providers run in this process and need no row: `hash`, the offline
 embedder below, and `model2vec`.
 
-`@yaks/embedding/rules` creates the vector tables through the host's SQL driver.
+`@yaks/embedding/graph` creates the vector tables through the host's SQL driver.
 Its `extend()` export registers the `.near` compiler; its `meaning()` factory
 resolves the current embedder on each search, so a key arriving later is used
 without rebuilding the host. `@yaks/embedding/service` is the plugin's service,
@@ -276,7 +276,7 @@ application of its own can embed the new text and call `nearest()`.
 
 ## A write answers what it is near
 
-As a plugin, `@yaks/embedding/rules` exports `reply(host, options)`: what a
+As a plugin, `@yaks/embedding/graph` exports `reply(host, options)`: what a
 direct tool call's answer carries beside the tool's own
 ([@yaks/tools](../tools/README.md) `Reply`). For each entity the call's write
 created, up to five, it answers the three existing entities of the same kind
@@ -448,12 +448,12 @@ held in memory (`absorb`, `HELD`, `RESCORE`), `vectorOf`, `nearest`, `meaning`,
 `semantic` and supporting types such as `Rank`. The `Driver` it runs on is
 `@yaks/sql`'s.
 
-| Sub-module export         | Purpose                                                                                                                                                                                      |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/embedding/vocab`   | `embeddingDoc` and `docs`, declaring `vector_check`                                                                                                                                          |
-| `@yaks/embedding/rules`   | `rules(host)` creates SQL objects; `extend(host, options)` creates the compiler extension; `meaning(host, options)` searches words; `reply(host, options)` answers a new entity's neighbours |
-| `@yaks/embedding/service` | `service(host, options, signal)` sweeps the queue until the signal aborts                                                                                                                    |
-| `@yaks/embedding/tools`   | `runs(host, options)` implements `vector_check`; exports the options type                                                                                                                    |
+| Sub-module export         | Purpose                                                                                                                                                                                        |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/embedding/vocab`   | `embeddingDoc` and `docs`, declaring `vector_check`                                                                                                                                            |
+| `@yaks/embedding/graph`   | `plugins(host)` creates SQL objects; `extend(host, options)` creates the compiler extension; `meaning(host, options)` searches words; `reply(host, options)` answers a new entity's neighbours |
+| `@yaks/embedding/service` | `service(host, options, signal)` sweeps the queue until the signal aborts                                                                                                                      |
+| `@yaks/embedding/tools`   | `runs(host, options)` implements `vector_check`; exports the options type                                                                                                                      |
 
 ## Compatibility
 

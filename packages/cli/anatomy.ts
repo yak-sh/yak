@@ -329,7 +329,7 @@ export let nativeAnatomy = (
       for (let h of source.hooks ?? []) h.bound = true
       for (let c of source.comps ?? []) c.bound = true
       for (let owner of vocabulary) binding(owner, 'vocab')
-      for (let owner of registered) binding(owner, 'rules')
+      for (let owner of registered) binding(owner, 'graph')
     },
     tier: (tools: NamedTool[]) => {
       ownerOf('@yaks/graph')

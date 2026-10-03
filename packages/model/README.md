@@ -48,7 +48,7 @@ deno add jsr:@yaks/model
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@yaks/model`       | `Model`, `Request`, `Reply`, `Item`, `Tool`, `TextDelta`, `Question`, `Questions`, `Answer`, `Usage`, `Price`, `Mark`, `Answered`, `Listed`; `ModelError`; `models`, `modelDoc`, `addressed`, `requesting`, `confirmed`; `weigh`, `billed`; `MediaReceipt`, `MediaReceipts`, `mediaReceipts`, `receivedMedia`, `recoveredMedia`; component-name constants `PROVIDER`, `MODEL`, `TOOL`, `QUESTIONS`, `ANSWER`, `USAGE`, `PRICE`, `COST`, `RESPONSE` |
 | `@yaks/model/vocab` | `modelDoc`, `docs`, `description`                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `@yaks/model/rules` | `rules()`, returning `[models()]`                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `@yaks/model/graph` | `plugins()`, returning `[models()]`                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 ## Items and delivery
 
@@ -198,7 +198,7 @@ equal(model.anchor!({}), undefined)
 `response`, `questions` and `answer`. `models()` supplies a graph
 [plugin](../graph/README.md#data-model) with that vocabulary, name addressing
 and the `requesting` admission [hook](../graph/README.md#data-model).
-`@yaks/model/rules` exports the same plugin through `rules()`.
+`@yaks/model/graph` exports the same plugin through `plugins()`.
 
 Provider and model names are each an
 [identity](../vocab/README.md#identity-and-indexes). `addressed` resolves those

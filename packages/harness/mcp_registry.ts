@@ -4,7 +4,7 @@
 import type { Harness } from './store.ts'
 import { checkNamespaces, checkToolNames, type Server } from '@yaks/mcp-client'
 import type { Remote } from './mcp_auth.ts'
-import { graphToolName, serverOf } from '@yaks/mcp-client/graph'
+import { graphToolName, serverOf } from '@yaks/mcp-client/servers'
 import { discover } from '@yaks/mcp-client/oauth'
 import {
   INTEGRATION,

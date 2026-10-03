@@ -1,9 +1,9 @@
-// `@yaks/journal/rules` — what a server composed from a config file imports to
+// `@yaks/journal/graph` — what a server composed from a config file imports to
 // switch the journal on. It creates the three append-only tables over the
 // server's own database connection and returns the plugin that writes a row per
 // component every transaction touched.
 //
-// `logFor` is here rather than inside `rules` because `@yaks/journal/tools`
+// `logFor` is here rather than inside `plugins` because `@yaks/journal/tools`
 // reads the same tables this plugin writes, and the feed follows them: one
 // host, one log, bound in one place. One log per host is also what names the
 // host its transactions are written as, so the feed below can leave out what
@@ -34,7 +34,7 @@ export let logFor = (host: Bound): Log => {
 
 /** Record who wrote what, inside the transaction that wrote it. A store an
  * older journal made gains the columns it predates first. */
-export let rules = (host: Bound): Plugin[] => {
+export let plugins = (host: Bound): Plugin[] => {
   for (let s of ddl()) host.sql.query(s)
   let has = host.sql.query({
     t: 'pragma',

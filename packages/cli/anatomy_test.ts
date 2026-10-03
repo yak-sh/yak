@@ -4,7 +4,7 @@ import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { nativeAnatomy, secretNames } from './anatomy.ts'
 
 let roles = {
-  graph: ['vocab', 'rules', 'tools'],
+  graph: ['vocab', 'graph', 'tools'],
   effects: ['effects'],
   web: ['routes'],
 }

@@ -4,7 +4,7 @@ import { assertEquals } from '@std/assert'
 import { loadVocab, type PropSchema } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
-import { extend } from './rules.ts'
+import { extend } from './graph.ts'
 
 let at: PropSchema = { type: 'string', format: 'date-time' }
 let comp = (properties: Record<string, PropSchema>): PropSchema => ({

@@ -10,7 +10,7 @@ import {
 import { edgeDoc, edgeEid, edgeKeywords } from '@yaks/edge'
 import { effectsIn, loadVocab } from '@yaks/vocab'
 import { idDoc, idKeywords } from '@yaks/id'
-import { ids } from '@yaks/id/rules'
+import { ids } from '@yaks/id/graph'
 import { nameKeywords } from '@yaks/names'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { ram } from '@yaks/ram'

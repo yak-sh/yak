@@ -33,7 +33,7 @@ console.log(await g.read('.doc'))
 The example uses RAM; use [@yaks/sqlite](../sqlite) for persistent storage. The
 root module exports `archetypeDoc`, `archetypes()`, `Archetypes`, `canonical`,
 `eidOf`, `tablesOf`, `satisfies`, and the `Archetype` type. `./vocab` and
-`./rules` provide the declarations and plugin factory for loaders.
+`./graph` provide the declarations and plugin factory for loaders.
 
 Both the vocabulary and the plugin are opt-in. A bundle is one entity's
 components as a JSON object. `entity.archetype` appears in bundles as an eid;

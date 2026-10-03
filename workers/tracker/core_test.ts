@@ -2,6 +2,7 @@
 // and effect handlers used by Durable Objects, without a platform kernel.
 
 import { equal, ok, test } from '@yaks/testing'
+import type { Comp } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { capture } from '@yaks/tracker/report'
 import { options, platform, store, vocab } from './core.ts'
@@ -45,10 +46,10 @@ test('queue commits full bundles then acks, duplicates preserve grouping and hit
   await g.drain()
   let [bug] = await g.bugs()
   ok(bug)
-  equal(bug.bug?.hits, 1)
+  equal((bug.bug as Comp)?.hits, 1)
   await consume([message, message], () => g, async () => {})
   await g.drain()
-  equal((await g.bugs())[0].bug?.hits, 1)
+  equal(((await g.bugs())[0].bug as Comp)?.hits, 1)
   equal(acked, 3)
   equal(retry, 0)
 })
@@ -84,7 +85,7 @@ test('queue isolates platform and each space; mixed or slug scopes never commit'
   equal(retry, 2)
   for (let [scope, g] of stores) {
     let [row] = await g.graph.get([occurrence])
-    equal(row.during?.space, scope == platform ? undefined : scope)
+    equal((row.during as Comp)?.space, scope == platform ? undefined : scope)
   }
 })
 
@@ -109,9 +110,9 @@ test('failed admission retries without ack and recovers on redelivery', async ()
       await g.ingest(rows)
     },
   }
-  await consume([message], () => destination, async () => {
+  await consume([message], () => destination, () => {
     error++
-    throw Error('report unavailable')
+    return Promise.reject(Error('report unavailable'))
   })
   equal([acked, retry, error], [0, 1, 1])
   failed = false
@@ -125,6 +126,6 @@ test('same batch duplicate eids do not multiply occurrence counts', async () => 
   let rows = records()
   await g.ingest([...rows, ...rows])
   await g.drain()
-  equal((await g.bugs())[0].bug?.hits, 1)
+  equal(((await g.bugs())[0].bug as Comp)?.hits, 1)
   equal(batch(rows).scope, platform)
 })

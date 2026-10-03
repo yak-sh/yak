@@ -4,7 +4,7 @@
   "exports": {
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
-    "./rules": "./rules.ts",
+    "./graph": "./graph.ts",
     "./tools": "./tools.ts",
     "./effects": "./effects.ts",
     "./routes": "./routes.ts",

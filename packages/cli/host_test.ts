@@ -10,9 +10,9 @@ import { argsOf, type Bundle, type Comp, detached, mint } from '@yaks/graph'
 import { answerOf, toolEid } from '@yaks/tools'
 import type { VocabDoc } from '@yaks/vocab'
 import { prefixes } from '@yaks/id'
-import { ids } from '@yaks/id/rules'
+import { ids } from '@yaks/id/graph'
 import { blobKeywords, blobRead } from '@yaks/blob'
-import { rules as blobRules } from '@yaks/blob/rules'
+import { plugins as blobPlugins } from '@yaks/blob/graph'
 import { processDoc, selfEid } from '@yaks/process'
 import { effectDoc, held, leaseEid, take } from '@yaks/effects'
 import { runs as effectRuns } from '@yaks/effects/tools'
@@ -283,7 +283,7 @@ test('a config may keep a component off the human number line', async () => {
     only({
       shop: {
         // A numbered graph reads its numbers back (@yaks/id's resolver).
-        rules: { rules: (host) => [ids(host.vocab)] },
+        graph: { plugins: (host) => [ids(host.vocab)] },
         vocab: {
           docs: [{
             ...doc,
@@ -356,7 +356,7 @@ test('a host that names itself writes as itself, and a plugin may say who else',
   // nothing about the rest — which is the host's own writing.
   let ana = { by: 'ana', via: 'her-run' }
   let told: Plugged = {
-    rules: {
+    graph: {
       authenticate: () => (r) => r.headers.get('authorization') ? ana : null,
     },
   }
@@ -395,7 +395,7 @@ test('a command line writes as the session it names, through the same door as HT
   // The door knows one run by its `x-via`, as @yaks/session's does.
   let ana = { by: 'ana', via: 'her-run' }
   let told: Plugged = {
-    rules: {
+    graph: {
       authenticate: () => (r) =>
         r.headers.get('x-via') == 'her-run' ? ana : null,
     },
@@ -464,12 +464,12 @@ test('a graph with no `process` word signs nothing', async () => {
 })
 
 test('two plugins may not both say who is calling', async () => {
-  let who: Plugged = { rules: { authenticate: () => () => ({ by: 'a' }) } }
+  let who: Plugged = { graph: { authenticate: () => () => ({ by: 'a' }) } }
   await assertRejects(
     () =>
       compose(
         { db: ':memory:', plugins: ['a', 'b'] },
-        only({ a: who, b: { rules: { ...who.rules } } }),
+        only({ a: who, b: { graph: { ...who.graph } } }),
       ),
     Error,
     'a door has one',
@@ -546,7 +546,7 @@ test('a process imports the facets of the roles it serves, and no others', async
   }
   // A plugin's `./tools` comes with the first call of one of its tools, and
   // nothing here calls one.
-  let graph = ['rules', 'vocab']
+  let graph = ['graph', 'vocab']
   let of = (spec: string, names: string[]) => names.map((n) => `${spec}/${n}`)
   assertEquals(
     await asked(['graph']),
@@ -586,7 +586,7 @@ test('a facet that fails to import is loud; one that is absent is skipped', asyn
     facet: F,
   ): Promise<Facets[F] | null> => {
     if (facet == 'vocab') return Promise.resolve({ docs: [doc] } as Facets[F])
-    if (facet == 'rules') return Promise.reject(new SyntaxError('broken'))
+    if (facet == 'graph') return Promise.reject(new SyntaxError('broken'))
     return Promise.resolve(null)
   }
   await assertRejects(
@@ -601,8 +601,8 @@ test('a rule sees the graph it is part of, and an effect fires on a commit', asy
   let mod: Plugged = {
     vocab: { docs: [doc, owes] },
     tools: { runs: () => ({ book_list: () => [], book_add: () => [] }) },
-    rules: {
-      rules: (host) => [{
+    graph: {
+      plugins: (host) => [{
         name: 'watcher',
         // The graph is live by the time a hook runs, not while it is built.
         hooks: {
@@ -722,7 +722,7 @@ test('a plugin attaches reply bundles through the host runner', async () => {
     only({
       shop: {
         ...shop,
-        rules: {
+        graph: {
           reply: () => () =>
             Promise.resolve([{
               entity: { eid: 'owed' },
@@ -1220,7 +1220,7 @@ test('search joins word and meaning results, keeping the marked text', async () 
     only({
       shop,
       meaning: {
-        rules: {
+        graph: {
           meaning: () => () =>
             Promise.resolve([
               { entity: 'b1', similarity: 0.9, excerpt: 'a small traveller' },
@@ -1319,7 +1319,9 @@ test('an option written {secret} is that secret, read each time it is asked for'
         '@yaks/effects',
       ],
     },
-    only({ mail: { rules: { rules: (_, options) => (seen = options, []) } } }),
+    only({
+      mail: { graph: { plugins: (_, options) => (seen = options, []) } },
+    }),
   )
   try {
     let token = () => (seen!.sender as { token?: string }).token
@@ -1366,7 +1368,7 @@ test('a body kept in the store is still found by its own words', async () => {
     only({
       blog: {
         vocab: { docs: [post], keywords: [blobKeywords], derived: blobRead },
-        rules: { rules: blobRules },
+        graph: { plugins: blobPlugins },
       },
     }),
   )
@@ -1499,8 +1501,8 @@ test('host anatomy reads before graph readiness and tracks lazy alias runs once'
         },
       }, owes],
     },
-    rules: {
-      rules: (host) => {
+    graph: {
+      plugins: (host) => {
         let a = host.anatomy()
         assertEquals(a.scope, 'native')
         assertEquals(a.tools.find((t) => t.name == 'book_list')?.loaded, false)

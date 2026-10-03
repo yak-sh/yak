@@ -10,7 +10,7 @@
 //
 // Nothing here arms a timer. The follower is a value that answers "what is new
 // since last time"; the loop that asks it lives where a process keeps its
-// timers (./rules.ts `feed`).
+// timers (./graph.ts `feed`).
 
 import type { Bundle } from '@yaks/graph'
 import type { Patch } from './batch.ts'

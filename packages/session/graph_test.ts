@@ -6,10 +6,10 @@ import { assertEquals } from '@std/assert'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { idKeywords } from '@yaks/id'
-import { ids } from '@yaks/id/rules'
+import { ids } from '@yaks/id/graph'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { sessionDoc } from './comp.ts'
-import { authenticate, VIA } from './rules.ts'
+import { authenticate, VIA } from './graph.ts'
 
 let spine: VocabDoc = {
   $defs: {

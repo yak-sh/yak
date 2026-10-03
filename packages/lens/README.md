@@ -11,7 +11,7 @@ carrying old properties. This package owns the private
 | --------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `.`       | `document`, `documentChain`, `compile`, `lensesIn`, `described`, `versions`, `packageEid`, `history`, `timestamp`, `lenses` |
 | `./vocab` | Private `_lens{package, step, ops}` declarations                                                                            |
-| `./rules` | The graph's write normalization and read translations                                                                       |
+| `./graph` | The graph's write normalization and read translations                                                                       |
 
 JSON paths use dots, or arrays of keys for names containing dots and array
 indexes. A compiled operation list snapshots its declarations and copies only

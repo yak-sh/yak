@@ -92,11 +92,11 @@ use the same driver so their writes participate in the same transaction.
 | `Backend`, `backend`, `artifactsAt`                                                               | Configured and default artifact backends                 |
 | `valueTools`, `VALUE_LIMIT`, `ValueTool`                                                          | Bounded text-inspection tools                            |
 
-| Sub-module export   | Purpose                                                     |
-| ------------------- | ----------------------------------------------------------- |
-| `@yaks/blob/vocab`  | `docs`, `keywords`, `derived` and declaration/read helpers  |
-| `@yaks/blob/rules`  | `rules(host)`: the graph plugin over the host's blob store  |
-| `@yaks/blob/routes` | `routes(host, options)`, backend helpers and route settings |
+| Sub-module export   | Purpose                                                      |
+| ------------------- | ------------------------------------------------------------ |
+| `@yaks/blob/vocab`  | `docs`, `keywords`, `derived` and declaration/read helpers   |
+| `@yaks/blob/graph`  | `plugins(host)`: the graph plugin over the host's blob store |
+| `@yaks/blob/routes` | `routes(host, options)`, backend helpers and route settings  |
 
 ## Addresses
 
@@ -560,14 +560,14 @@ The routes use these backends:
 - `{ via: 'object', bucket, prefix? }`: an object-store binding supplied in
   code, not serializable JSON configuration.
 
-The `rules` sub-module keeps marked graph text properties in the host's blob
+The `graph` sub-module keeps marked graph text properties in the host's blob
 store (`host.blobs`, a table in the server's database). A composed host refuses
 an invalid artifact backend at startup; standalone routes log the reason and
 mount no routes.
 
 The representation plugin refuses changes and deletions to representations.
 `representation()` derives their identities; `represents()` verifies them. The
-`rules` sub-module registers this plugin alongside the body plugin.
+`graph` sub-module registers this plugin alongside the body plugin.
 
 ```ts
 import { equal } from '@yaks/testing'
@@ -596,7 +596,7 @@ import { storage } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
 import { address, blobSchema, encode, memoryBlobs } from '@yaks/blob'
 import { docs, keywords } from '@yaks/blob/vocab'
-import { rules } from '@yaks/blob/rules'
+import { plugins } from '@yaks/blob/graph'
 import { routes } from '@yaks/blob/routes'
 
 let vocab = loadVocab(docs, keywords)
@@ -604,7 +604,7 @@ let sql = open(':memory:')
 let db = storage(sql, vocab)
 for (let statement of [...db.ddl(), ...blobSchema()]) sql.query(statement)
 let bytes = memoryBlobs()
-let g = graph({ storage: db, vocab, plugins: rules({ vocab, blobs: bytes }) })
+let g = graph({ storage: db, vocab, plugins: plugins({ vocab, blobs: bytes }) })
 let table = routes({ sql, graph: g, artifacts: bytes })
 let upload = table.find((route) => route.method == 'PUT')!
 let read = table.find((route) => route.method == 'GET')!

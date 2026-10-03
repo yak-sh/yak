@@ -7,7 +7,7 @@
     "./effects": "./effects.ts",
     "./model": "./model.ts",
     "./tools": "./tools.ts",
-    "./rules": "./rules.ts"
+    "./graph": "./graph.ts"
   },
   "license": "Apache-2.0",
   "description": "Build query-selected graph inputs into stable, named output entities.",

@@ -1,5 +1,5 @@
 // The graph plugins this package contributes, exported as
-// `@yaks/project/rules` — the entry point a server imports to install them.
+// `@yaks/project/graph` — the entry point a server imports to install them.
 // They include the check over a board's saved query, which is why this entry
 // point needs the vocabulary that query is written against.
 //
@@ -13,4 +13,6 @@ import type { Vocab } from '@yaks/vocab'
 import { projects } from './plugin.ts'
 
 /** The project work is filed under, the filing, and the board over it. */
-export let rules = (host: { vocab: Vocab }): Plugin[] => [projects(host.vocab)]
+export let plugins = (
+  host: { vocab: Vocab },
+): Plugin[] => [projects(host.vocab)]

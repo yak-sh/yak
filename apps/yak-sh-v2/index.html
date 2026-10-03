@@ -21,7 +21,8 @@
   <link rel=stylesheet href=disk.css>
   <link rel=stylesheet href=man.css>
   <link rel=stylesheet href=doc.css>
-  <!-- Every @yaks package at 0.2.3, as JSR holds it, built by esm.sh. -->
+  <!-- Every @yaks package at 0.2.3, as JSR holds it, built by esm.sh.
+       TODO: pin to a JSR release exporting ./graph before pushing this app. -->
   <script type=importmap>
   {
     "imports": {
@@ -39,7 +40,7 @@
       "@yaks/project": "https://esm.sh/jsr/@yaks/project@0.2.3",
       "@yaks/id": "https://esm.sh/jsr/@yaks/id@0.2.3",
       "@yaks/id/vocab": "https://esm.sh/jsr/@yaks/id@0.2.3/vocab",
-      "@yaks/id/rules": "https://esm.sh/jsr/@yaks/id@0.2.3/rules",
+      "@yaks/id/graph": "https://esm.sh/jsr/@yaks/id@0.2.3/graph",
       "@yaks/model": "https://esm.sh/jsr/@yaks/model@0.2.3",
       "@yaks/session": "https://esm.sh/jsr/@yaks/session@0.2.3",
       "@yaks/session/views": "https://esm.sh/jsr/@yaks/session@0.2.3/views",
@@ -541,7 +542,7 @@ yak app_list                     <i># a tool on yaks.app's MCP server</i></code>
       </p>
       <table>
         <tr><th>Role<th>Facets<th>What the process does
-        <tr><td><code>graph</code><td><code>./vocab</code> <code>./rules</code> <code>./tools</code><td>opens the file, admits writes, runs tool calls
+        <tr><td><code>graph</code><td><code>./vocab</code> <code>./graph</code> <code>./tools</code><td>opens the file, admits writes, runs tool calls
         <tr><td><code>web</code><td><code>./routes</code><td>answers HTTP with the routes @yaks/api hosts
         <tr><td><code>effects</code><td><code>./effects</code><td>claims and runs what commits owe, in a pool
         <tr><td><i>a plugin's name</i><td>its <code>./service</code><td>keeps that plugin's timer or poll running
