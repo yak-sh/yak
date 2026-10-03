@@ -10,17 +10,20 @@ let fixture = () => {
   let calls: string[] = []
   let now = 0
   let hooks: Hooks = {
-    current: async () => ({ version: 'previous', hash: 'old' }),
-    deploy: async () => {
+    current: () => Promise.resolve({ version: 'previous', hash: 'old' }),
+    deploy: () => {
       calls.push('deploy')
+      return Promise.resolve()
     },
-    canary: async () => false,
-    rollback: async (version) => {
+    canary: () => Promise.resolve(false),
+    rollback: (version) => {
       calls.push(`rollback:${version}`)
+      return Promise.resolve()
     },
     now: () => now,
-    wait: async () => {
+    wait: () => {
       now += 15_000
+      return Promise.resolve()
     },
   }
   return { hooks, calls }
@@ -29,15 +32,13 @@ test('unchanged bundle does not deploy; changed bundle requires a canary', async
   let { hooks, calls } = fixture()
   equal(await deploy('old', hooks), false)
   equal(calls, [])
-  hooks.canary = async () => true
+  hooks.canary = () => Promise.resolve(true)
   equal(await deploy('new', hooks), true)
   equal(calls, ['deploy'])
 })
 test('missing or unavailable canary rolls back within one minute', async () => {
   let { hooks, calls } = fixture()
-  hooks.canary = async () => {
-    throw Error('tracker unavailable')
-  }
+  hooks.canary = () => Promise.reject(Error('tracker unavailable'))
   await throws(() => deploy('new', hooks))
   equal(calls, ['deploy', 'rollback:previous'])
   equal(hooks.now(), 60_000)
@@ -48,8 +49,9 @@ test('canary publishes only a server-minted platform error through the queue', a
   let w = worker({
     TRACKER_SECRET: secret,
     ERRORS: {
-      send: async (rows) => {
+      send: (rows) => {
         sent.push(rows)
+        return Promise.resolve()
       },
     },
     TRACKERS: {

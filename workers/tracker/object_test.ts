@@ -21,10 +21,11 @@ test('postboot failure does not poison the object and reporting never throws', a
         },
       },
       transactionSync: (body) => body(),
-      get: async () => undefined,
+      get: () => Promise.resolve(undefined),
       put: async () => {},
-      setAlarm: async (at) => {
+      setAlarm: (at) => {
         alarms.push(at)
+        return Promise.resolve()
       },
     },
   }
@@ -32,9 +33,7 @@ test('postboot failure does not poison the object and reporting never throws', a
   let object = new Tracker(state, {
     TRACKER_SECRET: secret,
     ERRORS: {
-      send: async () => {
-        throw Error('reporting unavailable')
-      },
+      send: () => Promise.reject(Error('reporting unavailable')),
     },
   })
   let ticket = await sign({

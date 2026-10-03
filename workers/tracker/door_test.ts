@@ -86,11 +86,16 @@ test('uptime and heartbeat failures group and resolve without a yak binding', as
   await monitor(
     g,
     now - 300_001,
-    async () => new Response(null, { status: 503 }),
+    () => Promise.resolve(new Response(null, { status: 503 })),
     now,
   )
   await g.drain()
   equal((await g.unseen()).length, 2)
-  await monitor(g, now, async () => new Response(null, { status: 405 }), now)
+  await monitor(
+    g,
+    now,
+    () => Promise.resolve(new Response(null, { status: 405 })),
+    now,
+  )
   equal((await g.unseen()).length, 0)
 })
