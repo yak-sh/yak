@@ -18,7 +18,7 @@ let checkup = async (name: 'board_check' | 'project_check', g: Graph) => {
   ) as Bundle[]
   return {
     body: String((said.content as Comp).body),
-    level: (said.error as Comp | undefined)?.code,
+    level: (said.finding as Comp | undefined)?.level,
   }
 }
 

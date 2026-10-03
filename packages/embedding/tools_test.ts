@@ -25,7 +25,7 @@ let checkup = async (
   ) as Bundle[]
   return {
     body: String((said.content as Comp).body),
-    level: (said.error as Comp | undefined)?.code,
+    level: (said.finding as Comp | undefined)?.level,
   }
 }
 
