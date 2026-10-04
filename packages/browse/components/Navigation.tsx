@@ -4,23 +4,14 @@ import { pagePath, storageKey } from '../hosting.ts'
 import { type Ent, vocab } from '../types.ts'
 import { signal } from '@preact/signals'
 import { derivedEid } from '@yaks/graph'
-import { useEffect, useLayoutEffect } from 'preact/hooks'
+import { useEffect } from 'preact/hooks'
 import {
   favoritePin,
   sidebarComponent,
   sidebarMatches,
   sidebarQueries,
 } from '../navigation.ts'
-import {
-  aggRead,
-  cache,
-  dropAgg,
-  ent,
-  holdAgg,
-  mode,
-  mutate,
-  owner,
-} from '../live.ts'
+import { cache, ent, mode, mutate, owner } from '../live.ts'
 import { allSessionsPath } from '../tray_query.ts'
 import { follow, navigate } from './nav.tsx'
 import { Button, Index, Panes, Rows, Section } from '@yaks/ui'
@@ -29,6 +20,8 @@ import { useInboxThreads } from './useInbox.ts'
 import { usePage } from './page.ts'
 import { fields, front } from './fields.tsx'
 import { Entity } from './Entity.tsx'
+import { useCensus } from '@yaks/inspect'
+import { inspectIo } from './inspect.tsx'
 import { Icon } from './icons.tsx'
 import { CARD_DATA, cardData } from './drag.ts'
 import { searchPath } from '../url.ts'
@@ -92,17 +85,8 @@ let InboxCount = ({ actor }: { actor: string }) => {
   )
 }
 
-let ComponentCount = ({ name }: { name: string }) => {
-  let key = `sidebar:count:${name}`
-  useLayoutEffect(() => {
-    holdAgg(key, `.${name} .count`)
-    return () => dropAgg(key)
-  }, [name])
-  let count = aggRead(key)
-  return <Section.Count>{count?.live ? count.map[''] ?? 0 : '…'}</Section.Count>
-}
-
 let Sidebar = () => {
+  let census = useCensus(inspectIo)
   let actor = owner.value
   let q = sidebarQueries(vocab, actor)
   let read = (query: string) => useQueryResult(query, true, true).eids.map(ent)
@@ -244,9 +228,12 @@ let Sidebar = () => {
                     cs.map((c) => (
                       <Index.Group key={c.eid}>
                         {tile(c)}
-                        <ComponentCount
-                          name={String(sidebarComponent(c)?.name)}
-                        />
+                        <Section.Count>
+                          {census.error ? '!' : census.ready
+                            ? census
+                              .carried[String(sidebarComponent(c)?.name)] ?? 0
+                            : '…'}
+                        </Section.Count>
                       </Index.Group>
                     ))}
                 </Index.Group>

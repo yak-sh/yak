@@ -1,7 +1,11 @@
 import { test, until } from '@yaks/testing'
 import '../testing.ts'
+import { docs as schemaDocs } from '@yaks/vocab/vocab'
+import { learn, vocab } from '../types.ts'
+learn([...vocab.docs, ...schemaDocs])
 import { assertEquals } from '@std/assert'
 import { h } from 'preact'
+import { identityEid } from '@yaks/graph'
 import { parse } from '@yaks/query'
 import { cache, useRoute } from '../live.ts'
 import { extend } from './registry.ts'
@@ -68,5 +72,44 @@ test('sidebar narrows registry entries and restores folded sections on remount',
     toggleNavigation(false)
     cache.value = {}
     useRoute(restore)
+  }
+})
+
+test('expanding a package shows its declared components through the registry', async () => {
+  let p = identityEid('_package', ['Test pack'])
+  let c = identityEid('_comp', ['task'])
+  let restore = useRoute(() => {})
+  cache.value = {
+    [p]: {
+      entity: { eid: p, num: 3 },
+      _package: { name: 'Test pack' },
+      doc: { title: 'Test pack' },
+    },
+    [c]: {
+      entity: { eid: c, num: 4 },
+      _comp: { name: 'task', package: p },
+      doc: { title: 'task' },
+    },
+  }
+  extend([{
+    view: 'Sidebar.Tile',
+    match: parse('._comp'),
+    Render: () => <span>Registry component</span>,
+  }])
+  fields.set('sidebar:query', '')
+  toggleNavigation(true)
+  let mounted = mount(h(Navigation, {}))
+  try {
+    let button = mounted.root.querySelector(
+      '[aria-label="Toggle package components"]',
+    ) as HTMLElement
+    assertEquals(!!button, true)
+    button.click()
+    await until(() => mounted.root.textContent!.includes('Registry component'))
+  } finally {
+    mounted.free()
+    cache.value = {}
+    useRoute(restore)
+    toggleNavigation(false)
   }
 })
