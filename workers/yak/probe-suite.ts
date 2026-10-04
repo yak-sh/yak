@@ -144,7 +144,9 @@ let door = (server: Harness) =>
       if (mode) headers.set('mf-sec-fetch-mode', mode)
       let res = await server
         .getWorker(
-          path.startsWith('/__script/')
+          path.startsWith('/__play_cost/')
+            ? 'probe-play-cost'
+            : path.startsWith('/__script/')
             ? 'probe-scripts'
             : path.startsWith('/__sentry/')
             ? 'probe-sentry'
@@ -196,6 +198,20 @@ export let probeSuite = async () => {
           compatibility_date: '2025-05-08',
           worker_loaders: [{ binding: 'LOADER' }],
           services: [{ binding: 'KERNEL', service: 'yak' }],
+        },
+      },
+      {
+        config: {
+          name: 'probe-play-cost',
+          main: 'play_cost_probe.ts',
+          compatibility_date: '2025-05-08',
+          compatibility_flags: kernel.compatibility_flags,
+          tsconfig: kernel.tsconfig,
+          alias: kernel.alias,
+          durable_objects: {
+            bindings: [{ name: 'PLAY', class_name: 'PlayCost' }],
+          },
+          migrations: [{ tag: 'v1', new_sqlite_classes: ['PlayCost'] }],
         },
       },
       {
