@@ -1,12 +1,9 @@
-// The tracker owns what a bug and an occurrence mean. The canvas supplies
-// its subscribed, paged query view; the domain owns the query and the faces.
-import { type ComponentChildren, h } from 'preact'
+// Portable readings of bugs and errors, through the host's hyperscript and
+// shared entity renderer. Related errors arrive as bundles from the host.
 import { parse } from '@yaks/query'
-import { define } from '@yaks/render'
-import type { ComponentRenderer } from '@yaks/preact'
+import { define, type H, type RenderContext } from '@yaks/render'
+import type { Shown } from '@yaks/render/views'
 import type { Bundle } from '@yaks/graph'
-import { Body, Head, Section, Tile } from '@yaks/ui'
-import { useHost } from '@yaks/ux'
 import { comp, type Frame, str, title } from './model.ts'
 
 /** Worst first is historical occurrence count, not the retained sample size. */
@@ -14,116 +11,73 @@ export let openBugs = '.bug.status=open * .order=-bug.hits'
 export let occurrences = (eid: string): string =>
   `.error.bug=${eid} * .order=-error.at`
 
-type Props = {
-  e: Bundle
-  queryView?: (eid: string, query: string) => ComponentChildren
+type Context<Node> = RenderContext<Node> & Partial<Shown<Node>> & {
+  errors?: Bundle[]
 }
+let shown = <Node>(ctx: RenderContext<Node>) => ctx as Context<Node>
 let frameText = (f: Frame) =>
   `${f.function ? f.function + ' · ' : ''}${f.file}${
     f.line ? ':' + f.line : ''
   }${f.column ? ':' + f.column : ''}`
-
-export let Frames = ({ frames }: { frames: Frame[] }) => (
+let frames = <Node>(h: H<Node>, fs: Frame[], ctx: Context<Node>) =>
   h(
     'ol',
     null,
-    frames.map((f) =>
-      h(
+    fs.map((f) => {
+      let eid = f.symbol || f.module
+      return h(
         'li',
         null,
         f.app ? 'in app · ' : '',
-        f.symbol || f.module
-          ? h('a', { href: `/${f.symbol || f.module}` }, frameText(f))
+        eid
+          ? h('a', { href: ctx.link?.(eid) ?? `/${eid}` }, frameText(f))
           : h('code', null, frameText(f)),
       )
-    ),
+    }),
   )
-)
-export let Bug = ({ e, queryView }: Props) => {
-  let host = useHost(), bug = comp(e, 'bug')
+let bugTile = <Node>(e: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node => {
+  let s = shown(ctx), bug = comp(e, 'bug'), id = s.id?.(e) ?? e.entity.eid
   return h(
-    Body,
-    null,
+    'a',
+    { class: 'Tile', href: s.link?.(e.entity.eid) ?? `/${id}` },
+    h('span', { class: 'Tile_Id' }, id),
+    ' ',
+    h('span', { class: 'Tile_Title' }, str(comp(e, 'doc').title)),
+    ' ',
     h(
-      Head,
-      null,
-      h(
-        Head.Title,
-        null,
-        str(comp(e, 'doc').title),
-        ' ',
-        h(Head.Id, null, host.id(e)),
-      ),
-      h(
-        Head.Facts,
-        null,
-        h(
-          'span',
-          null,
-          str(
-            bug.status ||
-              (e.archived ? 'archived' : e.resolved ? 'resolved' : 'open'),
-          ),
-        ),
-        h('span', null, `${bug.hits ?? 0} hits`),
-        h('span', null, `${bug.people ?? 0} people`),
-        h('span', null, `first ${host.when(str(bug.first))}`),
-        h('span', null, `last ${host.when(str(bug.last))}`),
-      ),
-      h(Head.Sub, null, str(bug.fault)),
+      'span',
+      { class: 'Tile_Note' },
+      `${bug.people ?? 0} people · last ${
+        s.when?.(str(bug.last)) ?? str(bug.last)
+      }`,
     ),
-    bug.culprit
-      ? h(
-        'p',
-        null,
-        'Culprit: ',
-        h('a', { href: `/${bug.culprit}` }, host.name(str(bug.culprit))),
-      )
-      : bug.spot
-      ? h('p', null, h('code', null, str(bug.spot)))
-      : null,
-    h(
-      Section,
-      null,
-      h(Section.Title, null, 'Errors · newest first'),
-      queryView?.(e.entity.eid, occurrences(e.entity.eid)),
-    ),
+    ' ',
+    h('span', { class: 'Tile_Count' }, `${bug.hits ?? 0} hits`),
   )
 }
-export let BugTile = ({ e }: Props) => {
-  let host = useHost(), bug = comp(e, 'bug')
+let occurrence = <Node>(
+  e: Bundle,
+  h: H<Node>,
+  ctx: RenderContext<Node>,
+): Node => {
+  let s = shown(ctx), error = comp(e, 'error'), x = comp(e, 'exception')
   return h(
-    Tile,
-    { href: `/${host.id(e)}` },
-    h(Tile.Id, null, host.id(e)),
-    h(Tile.Title, null, str(comp(e, 'doc').title)),
+    'section',
+    { class: 'Section' },
     h(
-      Tile.Note,
-      null,
-      `${bug.people ?? 0} people · last ${host.when(str(bug.last))}`,
-    ),
-    h(Tile.Count, null, `${bug.hits ?? 0} hits`),
-  )
-}
-export let Occurrence = ({ e }: Props) => {
-  let host = useHost(), error = comp(e, 'error'), x = comp(e, 'exception')
-  return h(
-    Section,
-    null,
-    h(
-      Section.Title,
-      null,
+      'h2',
+      { class: 'Section_Title' },
       title(e),
       ' ',
       h(
         'time',
-        { dateTime: str(error.at), title: str(error.at) },
-        host.when(str(error.at)),
+        { datetime: str(error.at), title: str(error.at) },
+        s.when?.(str(error.at)) ?? str(error.at),
       ),
     ),
     h(
-      Section.Sub,
-      null,
+      'p',
+      { class: 'Section_Sub' },
       str(error.level),
       error.commit
         ? ` · commit ${str(error.commit).slice(0, 12)}`
@@ -133,16 +87,73 @@ export let Occurrence = ({ e }: Props) => {
       error.environment ? ` · ${error.environment}` : '',
     ),
     Array.isArray(x.frames) && x.frames.length
-      ? h(Frames, { frames: x.frames as Frame[] })
+      ? frames(h, x.frames as Frame[], s)
       : x.stack
       ? h('pre', null, str(x.stack))
       : null,
   )
 }
-export let views = define<ComponentRenderer>([
-  { view: 'Full', match: parse('.bug'), Render: Bug },
-  { view: 'Tile', match: parse('.bug'), Render: BugTile },
-  { view: 'List.Tile', match: parse('.bug'), Render: BugTile },
-  { view: 'Full', match: parse('.error'), Render: Occurrence },
-  { view: 'List.Tile', match: parse('.error'), Render: Occurrence },
+let bugPage = <Node>(e: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node => {
+  let s = shown(ctx), bug = comp(e, 'bug'), id = s.id?.(e) ?? e.entity.eid
+  return h(
+    'article',
+    { class: 'Body' },
+    h(
+      'header',
+      { class: 'Head' },
+      h(
+        'h1',
+        { class: 'Head_Title' },
+        str(comp(e, 'doc').title),
+        ' ',
+        h('span', { class: 'Head_Id' }, id),
+      ),
+      h(
+        'p',
+        { class: 'Head_Facts' },
+        str(
+          bug.status ||
+            (e.archived ? 'archived' : e.resolved ? 'resolved' : 'open'),
+        ),
+        ' · ',
+        `${bug.hits ?? 0} hits · ${bug.people ?? 0} people`,
+        ' · first ',
+        s.when?.(str(bug.first)) ?? str(bug.first),
+        ' · last ',
+        s.when?.(str(bug.last)) ?? str(bug.last),
+      ),
+      h('p', { class: 'Head_Sub' }, str(bug.fault)),
+    ),
+    bug.culprit
+      ? h(
+        'p',
+        null,
+        'Culprit: ',
+        h(
+          'a',
+          { href: s.link?.(str(bug.culprit)) ?? `/${bug.culprit}` },
+          s.name?.(str(bug.culprit)) ?? str(bug.culprit),
+        ),
+      )
+      : bug.spot
+      ? h('p', null, h('code', null, str(bug.spot)))
+      : null,
+    h(
+      'section',
+      { class: 'Section' },
+      h('h2', { class: 'Section_Title' }, 'Errors · newest first'),
+      (s.errors ?? []).map((b) => s.show?.(b, 'Full')),
+    ),
+  )
+}
+export let views = define([
+  { view: 'Full', match: parse('.bug'), render: bugPage },
+  { view: 'Page', match: parse('.bug'), render: bugPage },
+  { view: 'Tile', match: parse('.bug'), render: bugTile },
+  { view: 'List.Tile', match: parse('.bug'), render: bugTile },
+  { view: 'Full', match: parse('.error'), render: occurrence },
+  { view: 'Page', match: parse('.error'), render: occurrence },
+  { view: 'Tile', match: parse('.error'), render: occurrence },
+  { view: 'List.Tile', match: parse('.error'), render: occurrence },
 ])
+export { inspectViews } from './inspect.ts'

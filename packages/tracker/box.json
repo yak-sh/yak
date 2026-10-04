@@ -29,7 +29,15 @@
     },
     "@yaks/fts",
     "@yaks/ui",
-    "@yaks/web",
+    {
+      "use": "@yaks/web",
+      "with": {
+        "home": {
+          "title": "Open bugs \u00b7 worst first",
+          "query": ".bug.status=open * .order=-bug.hits"
+        }
+      }
+    },
     "@yaks/inspect"
   ],
   "numbers": {

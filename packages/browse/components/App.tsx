@@ -1,4 +1,3 @@
-import { openBugs } from '@yaks/tracker/views'
 import { door, hosting, pagePath } from '../hosting.ts'
 import { vocab } from '../types.ts'
 import { searchAt } from '../url.ts'
@@ -266,11 +265,11 @@ export let App = () => {
             ? (
               <>
                 <h1>
-                  {vocab.comp('bug') ? 'Open bugs · worst first' : 'Browse'}
+                  {hosting().home?.title ?? 'Browse'}
                 </h1>
                 <QueryList
                   eid='app-browse'
-                  query={vocab.comp('bug') ? openBugs : '.doc'}
+                  query={hosting().home?.query ?? '.doc'}
                 />
               </>
             )

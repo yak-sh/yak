@@ -1,17 +1,19 @@
 // Domain faces and queries are checked with graph bundles, not a fleet boot.
 import { equal, ok, test } from '@yaks/testing'
-import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
-import { type Host, Ux } from '@yaks/ux'
-import { Bug, BugTile, Occurrence, occurrences, openBugs } from './views.ts'
+import { render as preact } from '@yaks/preact'
+import { render as text, tree } from '@yaks/text'
+import { occurrences, openBugs, views } from './views.ts'
+import { inspectViews } from './inspect.ts'
 import { fixture } from './fixture_test.ts'
 import { runs } from './tools.ts'
 
 let host = {
   id: () => 'B-7',
   name: (id: string) => id == 'symbol' ? 'group' : id,
+  link: (id: string) => `/${id == 'bug' ? 'B-7' : id}`,
   when: (at: string) => at,
-} as Host
+}
 let bug = {
   entity: { eid: 'bug', num: 7 },
   doc: { title: 'TypeError: no row' },
@@ -24,52 +26,52 @@ let bug = {
     last: '2026-10-03',
   },
 }
-test('bug reads its doc title, number and history; occurrence frames link resolved code', () => {
-  let query = ''
-  let html = renderToString(h(
-    Ux,
-    { host },
-    h(Bug, {
-      e: bug,
-      queryView: (_eid, line) => {
-        query = line
-        return h('p', null, 'retained errors')
-      },
-    }),
-  ))
-  ok(html.includes('TypeError: no row'))
-  ok(html.includes('B-7'))
-  ok(html.includes('5 hits'))
+test('the same bug and error readings work in text and Preact, with related rows through the registry', () => {
+  let vocab = fixture().vocab
+  let error = {
+    entity: { eid: 'error' },
+    error: { at: '2026-10-03', level: 'fatal', message: 'no row' },
+    exception: {
+      frames: [{
+        file: 'group.ts',
+        line: 42,
+        column: 3,
+        function: 'group',
+        app: true,
+        module: 'module',
+        symbol: 'symbol',
+      }, { file: 'dep.ts', line: 2 }],
+    },
+  }
+  let txt = text(views, bug, 'Full', vocab, {
+    ...host,
+    errors: [error],
+    show: (b: typeof error, view: string) => tree(views, b, view, vocab, host),
+  }, 'plain')
+  let html = renderToString(preact(views, bug, 'Full', vocab, {
+    ...host,
+    errors: [error],
+    show: (b: typeof error, view: string) =>
+      preact(views, b, view, vocab, host),
+  }))
+  for (let output of [txt, html]) {
+    for (
+      let part of [
+        'TypeError: no row',
+        'B-7',
+        '5 hits',
+        'fatal',
+        'group.ts:42:3',
+        'dep.ts:2',
+      ]
+    ) ok(output.includes(part), part)
+  }
   ok(html.includes('href="/symbol"'))
-  ok(html.includes('retained errors'))
-  equal(query, occurrences('bug'))
-  let tile = renderToString(h(Ux, { host }, h(BugTile, { e: bug })))
+  let tile = renderToString(preact(views, bug, 'List.Tile', vocab, host))
   ok(tile.includes('href="/B-7"'))
-  let error = renderToString(h(
-    Ux,
-    { host },
-    h(Occurrence, {
-      e: {
-        entity: { eid: 'e' },
-        error: { at: '2026-10-03', level: 'fatal', message: 'no row' },
-        exception: {
-          frames: [{
-            file: 'group.ts',
-            line: 42,
-            column: 3,
-            function: 'group',
-            app: true,
-            module: 'module',
-            symbol: 'symbol',
-          }, { file: 'dep.ts', line: 2 }],
-        },
-      },
-    }),
-  ))
-  ok(error.includes('href="/symbol"'))
-  ok(error.includes('group.ts:42:3'))
-  ok(error.includes('dep.ts:2'))
-  ok(error.includes('fatal'))
+  equal(inspectViews[0].asks!(bug, {} as never, {}), {
+    errors: occurrences('bug'),
+  })
 })
 test('open list and tools take worst first, and bug errors newest first', async () => {
   let g = fixture()

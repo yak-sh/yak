@@ -58,14 +58,17 @@ commit (or version without a commit).
 
 The tracker writes the first error's type and value (or message) to `doc.title`.
 `bug.fault` is the grouping key, shown beneath the title. The `./views` facet
-owns the bug page and its list row; the host supplies its paged query view. The
-page lists retained errors newest first, displaying resolved code frames and
-unresolved text frames. The count includes trimmed errors.
+exports portable bug and error readings, and inspector views whose `asks`
+request the bug’s errors. The host answers those asks and draws each error
+through the same registry. The page lists retained errors newest first,
+displaying resolved code frames and unresolved text frames. The count includes
+trimmed errors.
 
-The web home lists open bugs by descending `bug.hits` (worst first); resolved
-and archived bugs remain addressable but leave that list. The box config enables
-human ids, so each bug has an address such as `/B-7`. The same list is available
-through `yak --config ~/.yak/tracker.json bug list`.
+The box config sets `@yaks/web`’s `with.home` (`title` and `query`) to list open
+bugs by descending `bug.hits` (worst first); resolved and archived bugs remain
+addressable but leave that list. The box config enables human ids, so each bug
+has an address such as `/B-7`. The same list is available through
+`yak --config ~/.yak/tracker.json bug list`.
 
 ```ts
 import { equal } from '@yaks/testing'

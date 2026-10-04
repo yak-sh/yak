@@ -23,7 +23,8 @@ import { everforest, kits, stylesheet } from '@yaks/ui'
 import type { Vocab } from '@yaks/vocab'
 import { type Body, bundle, kept } from '@yaks/cli/page'
 import { person } from '@yaks/cli/host'
-import type { Config } from '@yaks/cli/config'
+import { type Config, located, subpath, used } from '@yaks/cli/config'
+import type { Registry } from '@yaks/render'
 import { addressId } from '@yaks/browse'
 
 /** What this facet reads off the host it is composing into: the vocabulary
@@ -94,7 +95,9 @@ let names = async (graph: Graph, path: string): Promise<boolean> => {
 }
 
 /** The page at every entity's address, and `/web/*`. */
-export let routes = (host: Hosting): Route[] => {
+export type Options = { home?: { title: string; query: string } }
+
+export let routes = (host: Hosting, options: Options = {}): Route[] => {
   let page = kept('/', 'text/html; charset=utf-8', text('./index.html'))
   let app = entry
   let named = async (request: Request) => {
@@ -148,7 +151,29 @@ export let routes = (host: Hosting): Route[] => {
       handle: kept(
         '/web/app.js',
         'text/javascript; charset=utf-8',
-        (signal) => bundle(app, signal),
+        async (signal) => {
+          let specs: string[] = []
+          for (let plug of host.config?.plugins ?? []) {
+            let plugin = used(plug)
+            let facet = await subpath<
+              { views?: Registry; inspectViews?: unknown[] }
+            >(plugin, 'views')
+            if (facet?.views || facet?.inspectViews) {
+              specs.push(import.meta.resolve(located(`${plugin}/views`)))
+            }
+          }
+          let main = new URL('./mount.tsx', app)
+          let code = [
+            `import { mount } from ${JSON.stringify(main.href)}`,
+            ...specs.map((s, i) =>
+              `import * as f${i} from ${JSON.stringify(s)}`
+            ),
+            `await mount([${specs.map((_, i) => `f${i}`).join(',')}], ${
+              JSON.stringify(options.home) ?? 'undefined'
+            })`,
+          ].join('\n')
+          return bundle({ code, at: app }, signal)
+        },
         { early: true, closing: host.stopping },
       ),
     },

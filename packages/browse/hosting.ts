@@ -1,6 +1,7 @@
 // The page host declares its mount and transport. The box needs no declaration;
 // an app's web door names its own address and its store's existing API wire.
 export type Hosting = {
+  home?: { title: string; query: string }
   page: string
   api: string
   apply: string

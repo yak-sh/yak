@@ -151,17 +151,20 @@ export let inspectIo: Io = {
 
 // The app's registry selects the inspector's parts too: a package's more
 // specific reading wins, and io.show comes back through this same registry.
-export let inspectViews: Entry[] = [
+export let adaptViews = (views: import('@yaks/inspect').View[]): Entry[] =>
+  views
+    .map((r) => ({
+      ...r,
+      Render: ({ e, ...ctx }) => {
+        let b = bundle(e)
+        let got = useAnswers(r.asks?.(b, inspectIo, ctx) ?? {})
+        return h(r.Render, { e: b, io: inspectIo, ctx, got })
+      },
+    }))
+
+export let inspectViews: Entry[] = adaptViews([
   ...memoryViews,
   ...sessionViews,
   ...taskViews,
   ...all,
-].filter((r) => r.view != 'Inspect.Page')
-  .map((r) => ({
-    ...r,
-    Render: ({ e, ...ctx }) => {
-      let b = bundle(e)
-      let got = useAnswers(r.asks?.(b, inspectIo, ctx) ?? {})
-      return h(r.Render, { e: b, io: inspectIo, ctx, got })
-    },
-  }))
+].filter((r) => r.view != 'Inspect.Page'))

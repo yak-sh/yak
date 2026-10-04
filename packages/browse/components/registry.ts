@@ -164,8 +164,18 @@ let applyPatch = (eid: string, patch: Patch) =>
   mutate(...Object.entries(patch).map(([name, comp]) => ({ eid, name, comp })))
 
 /** All app views share the same host callbacks, including portable controls. */
-export let renderView = (e: Ent, view?: string, ctx: Context & Events = {}) => {
+export let renderView = (
+  e: Ent,
+  view?: string,
+  ctx: Context & Events = {},
+): ReturnType<typeof render<Ent>> => {
   let context: Context & Events = {
+    id: ux.id,
+    kind: ux.kind,
+    name: ux.name,
+    when: ux.when,
+    link: (eid: string) => `/${idOf(ent(eid))}`,
+    show: (b: Bundle, view: string) => renderView(ent(b.entity.eid), view),
     onPatch: (patch) => applyPatch(e.eid, patch),
     onError: (error) => {
       problem.value = error instanceof Error ? error.message : String(error)

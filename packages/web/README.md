@@ -61,3 +61,20 @@ The script is built with `deno bundle`. From a checkout it resolves the
 workspace; from JSR it resolves the matching release through @yaks/cli's bundle
 machinery. Terminal rendering belongs to @yaks/tui, and the terminal app belongs
 to browse.
+
+## Home query and plugin views
+
+A **home query** is the query the box lists at `/` when it has no inbox root.
+The `@yaks/web` plugin's options name its heading and query:
+
+```json
+{
+  "use": "@yaks/web",
+  "with": { "home": { "title": "Documents", "query": ".doc" } }
+}
+```
+
+Without `home`, the heading is `Browse` and the query is `.doc`. The browser
+bundle imports the configured plugins' `/views` facets; their portable `views`
+and query-backed `inspectViews` enter the browsing app's shared registry. Domain
+packages own the queries and readings, not the web door.
