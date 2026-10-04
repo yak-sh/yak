@@ -145,9 +145,11 @@ grouped approximately by function, **not** by dependency order.
   preserving headings, lists, links, code and emphasis while stripping control
   bytes from every text leaf and destination.
 
-- **[@yaks/web](./web)** — The web door for `yak serve`: a graph's canvas,
-  cards, boards and editing in a browser, with every entity at its own address
-  (`/T-9`) and every card live over the socket.
+- **[@yaks/web](./web)** — The browser door: the page, bundle, stylesheet and
+  assets that run @yaks/browse through @yaks/api.
+- **[@yaks/browse](./browse)** — The graph browsing app: domain views, editing
+  and navigation painted through @yaks/ui in browsers and terminals. Its browser
+  entry is served by @yaks/web; @yaks/tui paints its terminal.
 - **[@yaks/markdown](./markdown)** — Parse GitHub Flavored Markdown into
   structural nodes, not an HTML string or terminal control sequence. Its link
   filter permits relative URLs and explicit `http`, `https` and `mailto`

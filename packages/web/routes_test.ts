@@ -1,5 +1,5 @@
 import { test } from '@yaks/testing'
-import './testing.ts'
+import '../browse/testing.ts'
 import { assertEquals, assertRejects } from '@std/assert'
 import { type Route, routed } from '@yaks/api'
 import { handler } from '@yaks/api/routes'

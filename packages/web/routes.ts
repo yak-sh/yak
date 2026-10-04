@@ -1,3 +1,4 @@
+import { entry, styles as appStyles } from '@yaks/browse/app'
 // The routes facet, exported as `@yaks/web/routes`: the addresses a person
 // opens in a browser. `/` is the root canvas, and each entity is at its own id — `/T-9`, or `/%23abc123` for one the
 // store has not numbered. Every one of them answers the same page, and the app
@@ -23,7 +24,7 @@ import type { Vocab } from '@yaks/vocab'
 import { type Body, bundle, kept } from '@yaks/cli/page'
 import { person } from '@yaks/cli/host'
 import type { Config } from '@yaks/cli/config'
-import { addressId } from './url.ts'
+import { addressId } from '@yaks/browse'
 
 /** What this facet reads off the host it is composing into: the vocabulary
  * its plugins loaded, and the graph a name is resolved in. */
@@ -51,7 +52,7 @@ let bytes = (path: string) => () =>
 let styles = async () =>
   (await Promise.all([
     stylesheet({ kits, theme: everforest }),
-    text('./styles.css')(),
+    fetch(appStyles).then((r) => r.text()),
   ]))
     .join('\n')
 
@@ -95,7 +96,7 @@ let names = async (graph: Graph, path: string): Promise<boolean> => {
 /** The page at every entity's address, and `/web/*`. */
 export let routes = (host: Hosting): Route[] => {
   let page = kept('/', 'text/html; charset=utf-8', text('./index.html'))
-  let app = new URL('./main.tsx', import.meta.url)
+  let app = entry
   let named = async (request: Request) => {
     if (await names(host.graph, new URL(request.url).pathname)) {
       return page(request)

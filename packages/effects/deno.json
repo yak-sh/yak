@@ -4,7 +4,8 @@
   "exports": {
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
-    "./tools": "./tools.ts"
+    "./tools": "./tools.ts",
+    "./lease": "./lease.ts"
   },
   "license": "Apache-2.0",
   "description": "Runs application code after graph changes commit, with isolated failures, an optional pool for persisted runs, and leases for work held by one process.",

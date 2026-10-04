@@ -1,3 +1,4 @@
+import { entry, styles as appStyles } from '@yaks/browse/app'
 // Build the same page and stylesheet the routes facet serves, into a static
 // host's asset directory. The runtime only supplies mounts and authentication.
 import { bundle } from '@yaks/cli/page'
@@ -9,12 +10,14 @@ export let assets = async (to: string) => {
   await Promise.all([
     Deno.writeTextFile(
       `${to}/app.js`,
-      await bundle(new URL('main.tsx', here)) as string,
+      await bundle(entry) as string,
     ),
     Deno.writeTextFile(
       `${to}/styles.css`,
       (await stylesheet({ kits, theme: everforest })) + '\n' +
-        await Deno.readTextFile(new URL('styles.css', here)),
+        await Deno.readTextFile(
+          appStyles,
+        ),
     ),
     ...[
       'index.html',

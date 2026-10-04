@@ -2,8 +2,8 @@
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
-  "title": "web front",
-  "description": "The web door's own state in the page graph, never synced.",
+  "title": "browse front",
+  "description": "The browsing app's own state in the page graph, never synced.",
   "$defs": {
     "inboxView": {
       "component": true,

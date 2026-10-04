@@ -9,7 +9,7 @@ export type Hosting = {
   storage?: string
 }
 let declared = () => (globalThis as { YAK_WEB?: Hosting }).YAK_WEB
-export let hosting = () =>
+export let hosting = (): Hosting =>
   declared() ?? {
     page: '',
     api: '',
@@ -17,23 +17,23 @@ export let hosting = () =>
     owner: '/web/owner',
     inspect: '/inspect',
   }
-export let pagePath = (path: string) => hosting().page + path
-export let localPath = (path: string) => {
+export let pagePath = (path: string): string => hosting().page + path
+export let localPath = (path: string): string => {
   let mount = hosting().page
   return mount && (path == mount || path.startsWith(mount + '/'))
     ? path.slice(mount.length) || '/'
     : path
 }
-export let apiPath = (path: string) => hosting().api + path
-export let webOrigin = () =>
+export let apiPath = (path: string): string => hosting().api + path
+export let webOrigin = (): string =>
   declared() ? globalThis.location.origin : 'https://tasks.yak.sh'
 /** Host-only operations are never inferred from app data words. */
-export let door = (name: 'freeze' | 'inspect') =>
+export let door = (name: 'freeze' | 'inspect'): boolean =>
   name == 'inspect' && !!hosting().inspect
 
 // New app mounts have no legacy browser state. Box keys stay unchanged; an
 // app/account never replays another store's cached rows, drafts or writes.
-export let storageKey = (key: string) =>
+export let storageKey = (key: string): string =>
   hosting().storage ? `${key}:${hosting().storage}` : key
 export let scopedStorage = (store: Storage): Storage => {
   let scope = hosting().storage

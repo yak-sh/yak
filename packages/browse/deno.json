@@ -1,12 +1,14 @@
 {
-  "name": "@yaks/web",
+  "name": "@yaks/browse",
   "version": "0.2.10",
   "exports": {
     ".": "./mod.ts",
-    "./routes": "./routes.ts"
+    "./main": "./main.tsx",
+    "./hosting": "./hosting.ts",
+    "./app": "./app.ts"
   },
   "license": "Apache-2.0",
-  "description": "The browser door: page, bundle, styles and assets for @yaks/browse, served through @yaks/api.",
+  "description": "The graph browsing app: domain views, editing and navigation, painted through @yaks/ui in browsers and terminals.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "preact": "npm:preact@^10.29.1",

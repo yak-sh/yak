@@ -125,7 +125,7 @@ export let standalone: Registration[] = [
     'status by identity beside 2,700 other calls',
     'status by query beside 2,700 other calls',
   ]),
-  deno('web-client', 'packages/web/client_bench.ts', [
+  deno('web-client', 'packages/browse/client_bench.ts', [
     'rows: 2k-task snapshot',
     'query: filter 2k rows (a board render)',
     'contextDigest: 2k-task graph',

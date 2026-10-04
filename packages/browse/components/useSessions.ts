@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
-import { leaseEid } from '../../effects/lease.ts'
+import { leaseEid } from '@yaks/effects/lease'
 import { ent } from '../live.ts'
 import { type RunnerLease, trayLive, traySessions } from '../sessions.ts'
 import { type Ent, vocab } from '../types.ts'

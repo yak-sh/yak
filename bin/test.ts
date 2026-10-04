@@ -46,7 +46,7 @@ export let workerd = (file: string) => /_workerd_test\.tsx?$/.test(file)
 
 /// platform('packages/graph/graph_test.ts') -> 'deno'
 /// platform('packages/web/live_test.ts') -> 'browser'
-/// platform('packages/web/tui/run_test.tsx') -> 'terminal'
+/// platform('packages/browse/tui/run_test.tsx') -> 'terminal'
 /// platform('workers/yak/mail_workerd_test.ts') -> 'workerd'
 /**
  * The platform a test file runs on. The web app's files set up a browser tab
@@ -56,9 +56,9 @@ export let workerd = (file: string) => /_workerd_test\.tsx?$/.test(file)
 export let platform = (file: string) =>
   workerd(file)
     ? 'workerd'
-    : file.includes('packages/web/tui/')
+    : file.includes('packages/browse/tui/')
     ? 'terminal'
-    : file.includes('packages/web/')
+    : (file.includes('packages/web/') || file.includes('packages/browse/'))
     ? 'browser'
     : 'deno'
 

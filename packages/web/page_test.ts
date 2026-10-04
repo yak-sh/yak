@@ -32,7 +32,7 @@ test('page code mints uuids outside a secure context', async () => {
       }
     }
   }
-  await walk(here)
+  await walk(new URL('../browse/', here))
   assert(
     !gated.length,
     `${gated.join(', ')} name crypto.randomUUID(), which is absent on plain ` +

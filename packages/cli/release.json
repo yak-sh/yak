@@ -71,6 +71,7 @@
   "@yaks/vocab",
   "@yaks/wake",
   "@yaks/web",
+  "@yaks/browse",
   "@yaks/workerd",
   "@yaks/workers-ai",
   "@yaks/yaml"

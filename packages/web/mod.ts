@@ -1,15 +1,7 @@
 /**
- * @yaks/web — the web door: a graph's canvas, cards, boards and editing in a
- * browser. A host whose config names this package answers `/` and every
- * entity's id (`/T-9`) with the app, served beside @yaks/api's doors,
- * which it reads and writes through @yaks/client.
- *
- * - `./routes` — the facet a host composes: the page, the bundled app, its
- *   stylesheet and icons (routes.ts).
- * - `.` — the vocabulary the app speaks, learned from the host's documents
- *   (types.ts `learn`).
- *
+ * The browser door: the page, bundle, styles and assets that run a browsing app
+ * through @yaks/api. The app itself lives in @yaks/browse.
  * @module
  */
-
-export { learn, vocab } from './types.ts'
+export { letters, routes } from './routes.ts'
+export type { Hosting } from './routes.ts'

@@ -14,7 +14,7 @@ export let entityUrl = (id: string) => `${origin()}${entityPath(id)}`
 
 // A copied short handle may arrive as a bare path segment after a person
 // drops the # that a browser treats as a fragment. It still names that eid.
-export let addressId = (id: string) =>
+export let addressId = (id: string): string =>
   /^[0-9a-f]{10}$/i.test(id) ? `#${id}` : id
 
 // entityUrl's inverse: the id token a graph entity link names — undefined for

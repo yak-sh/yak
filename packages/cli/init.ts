@@ -34,6 +34,7 @@ export let STARTER = [
   '@yaks/api',
   '@yaks/mcp',
   '@yaks/web',
+  '@yaks/browse',
   '@yaks/canvas',
 ]
 

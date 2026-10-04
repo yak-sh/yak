@@ -1998,6 +1998,16 @@
           "npm:file-type@21.3.4"
         ]
       },
+      "packages/browse": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "npm:@preact/signals@^2.9.0",
+          "npm:highlight.js@11.11.1",
+          "npm:lucide@1.31.0",
+          "npm:marked@18.0.6",
+          "npm:preact@^10.29.1"
+        ]
+      },
       "packages/builders": {
         "dependencies": [
           "jsr:@std/assert@1"

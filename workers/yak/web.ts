@@ -1,7 +1,7 @@
 // The app-scoped @yaks/web page. Assets are built from the package at deploy;
 // this door only mounts that page onto the app's existing API and identity.
 import type { Env } from './env.ts'
-import type { Hosting } from '../../packages/web/hosting.ts'
+import type { Hosting } from '../../packages/browse/hosting.ts'
 
 export let webPath = (path: string) =>
   path == '/_web' || path.startsWith('/_web/')
