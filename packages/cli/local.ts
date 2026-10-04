@@ -272,6 +272,7 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
     for (let o of loadedViews) host.observe?.(o)
     return made
   }
+  await facet.together?.(plugins().map((p) => [p, 'cli'] as const))
   let loaded = await Promise.all(
     plugins().map(async (plugin) => ({
       plugin,

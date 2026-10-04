@@ -324,6 +324,26 @@ the host it was composed into, reconciling interrupted calls, and taking over
 the duties for as long as it listens. `words(config)` reads the plugins'
 `./vocab` alone: the vocabulary and the tools it declares, with nothing opened.
 
+Selected file-backed facets are loaded together as one module graph, so the
+runtime traverses their shared dependencies once rather than once per dynamic
+import. This happens for vocabulary discovery, composition, command discovery,
+and portable views. It imports only the selected subpaths; tools stay lazy.
+Unmapped packages use the ordinary JSR loader. An absent optional facet remains
+absent; an exported facet that fails still fails the load. No generated file or
+persistent module cache is kept.
+
+```ts
+import { subpaths } from './config.ts'
+import { equal } from '@yaks/testing'
+
+let [words, absent] = await subpaths([
+  ['@yaks/doc', 'vocab'],
+  ['@yaks/doc', 'routes'],
+])
+equal(typeof words, 'object')
+equal(absent, null)
+```
+
 ## Duties: the work nobody is asking for
 
 Working the effect pool and each plugin's `./service` export are duties: the

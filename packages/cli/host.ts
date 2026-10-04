@@ -103,7 +103,14 @@ import {
   blobSchema,
   sqliteBlobs,
 } from '@yaks/blob'
-import { type Config, given, type Options, subpath, used } from './config.ts'
+import {
+  type Config,
+  given,
+  type Options,
+  subpath,
+  subpaths,
+  used,
+} from './config.ts'
 import { drain } from './drain.ts'
 import { stateDir } from './store.ts'
 import { understood } from './keywords.ts'
@@ -508,13 +515,20 @@ export type Facets = {
 /** How one of a plugin's subpaths becomes a module. `null` means the package
  * does not export that subpath. Injectable, so a test can assemble a host from
  * modules it wrote inline rather than files on disk. */
-export type Load = <F extends FacetName>(
-  plugin: string,
-  facet: F,
-) => Promise<Facets[F] | null>
+export type Load = {
+  <F extends FacetName>(plugin: string, facet: F): Promise<Facets[F] | null>
+  /** Import exactly the selected facets in one dependency graph, if supported. */
+  together?: (
+    requests: readonly (readonly [string, FacetName])[],
+  ) => Promise<unknown>
+}
 
 /** The default {@link Load}: {@link subpath}. */
-export let facet: Load = (plugin, name) => subpath(plugin, name)
+export let facet: Load = Object.assign(
+  <F extends FacetName>(plugin: string, name: F) =>
+    subpath<Facets[F]>(plugin, name),
+  { together: subpaths },
+)
 
 /** An assembled host: everything a plugin factory was given, plus what only
  * the caller of {@link compose} needs. */
@@ -788,7 +802,11 @@ let named = (config: Config, vault?: Local): [string, Options][] =>
 export let words = async (
   config: Config,
   load: Load = facet,
-): Promise<Words> => wordsOf(await taking(named(config), 'vocab', load))
+): Promise<Words> => {
+  let plugins = named(config)
+  await load.together?.(plugins.map(([p]) => [p, 'vocab'] as const))
+  return wordsOf(await taking(plugins, 'vocab', load))
+}
 
 /**
  * Open the graph a config names, for the roles this process serves: import
@@ -898,6 +916,14 @@ let composed = async (
       ? taking(plugins, name, observedLoad)
       : Promise.resolve([])
   part?.('facets')
+  await load.together?.(plugins.flatMap(([plugin]) =>
+    [
+      ...roles.includes('graph') ? ['vocab', 'graph'] as const : [],
+      ...roles.includes('effects') ? ['effects'] as const : [],
+      ...roles.includes('web') ? ['routes', 'ui'] as const : [],
+      ...services.includes(plugin) ? ['service'] as const : [],
+    ].map((name) => [plugin, name] as const)
+  ))
   let [vocabs, graphs, watched, served, dressed, running] = await Promise.all([
     take('graph', 'vocab'),
     take('graph', 'graph'),

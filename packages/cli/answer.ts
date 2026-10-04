@@ -43,7 +43,7 @@ import {
   type Shown,
   views as generic,
 } from '@yaks/render/views'
-import { subpath } from './config.ts'
+import { subpath, subpaths } from './config.ts'
 import type { AnatomyObserver } from '@yaks/code/anatomy'
 import { understood } from './keywords.ts'
 import type { Tty } from './run.ts'
@@ -139,13 +139,16 @@ let hit = <Node>(
 
 let search: Renderer = { view: 'Search.Tile', match: true, render: hit }
 
+let portable: Views = (plugin) => subpath(plugin, 'views')
+
 /** Every view the `yak` command draws with, most knowing first. */
 export let registry = async (
   plugins: string[],
-  load: Views = (plugin) => subpath(plugin, 'views'),
+  load: Views = portable,
   observe?: AnatomyObserver,
 ): Promise<Registry> => {
   let named = [...new Set([...plugins, '@yaks/tools'])]
+  if (load == portable) await subpaths(named.map((p) => [p, 'views'] as const))
   let found = await Promise.all(named.map(async (plugin) => {
     let m = await load(plugin)
     observe?.({

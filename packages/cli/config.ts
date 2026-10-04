@@ -197,6 +197,54 @@ export let subpath = <M>(plugin: string, name: string): Promise<M | null> => {
   asked.catch(() => imported.delete(key))
   return asked
 }
+/** Load selected subpaths as one module graph where the resolver already
+ * knows their exports. Deno otherwise builds a separate dependency graph per
+ * concurrent dynamic import, rediscovering shared dependencies for each.
+ * Unmapped JSR packages still use the ordinary loader, which alone can say
+ * whether their optional export exists. Nothing is written to disk. */
+export let subpaths = async (
+  requests: readonly (readonly [plugin: string, name: string])[],
+): Promise<unknown[]> => {
+  let pending: { key: string; name: string; spec: string; slot: string }[] = []
+  for (let [plugin, name] of requests) {
+    let key = `${plugin}/${name}`
+    if (imported.has(key) || pending.some((p) => p.key == key)) continue
+    try {
+      let spec = import.meta.resolve(key)
+      if (!spec.startsWith('file:') || !/\.[cm]?[jt]sx?$/.test(spec)) continue
+      pending.push({ key, name, spec, slot: `m${pending.length}` })
+    } catch (error) {
+      if (unexported(error, key, name)) imported.set(key, Promise.resolve(null))
+      // An unmapped package is resolved by located() in subpath(), not here.
+    }
+  }
+  if (pending.length) {
+    let source = pending.map(({ spec, slot }) =>
+      `export * as ${slot} from ${JSON.stringify(spec)};`
+    ).join('\n')
+    let loading: Promise<Record<string, unknown>> = import(
+      `data:application/javascript,${encodeURIComponent(source)}`
+    )
+    for (let { key, slot } of pending) {
+      let name = requests.find(([plugin, name]) =>
+        `${plugin}/${name}` == key
+      )![1]
+      // The batch cannot distinguish an absent file facet from a broken one.
+      // Let the ordinary loader classify each on failure, preserving its
+      // optional-export semantics and leaving unrelated modules usable.
+      let asked = loading.then(
+        (modules) => modules[slot],
+        () => importing(key, name),
+      )
+      imported.set(key, asked)
+      asked.catch(() => imported.delete(key))
+    }
+  }
+  return await Promise.all(
+    requests.map(([plugin, name]) => subpath(plugin, name)),
+  )
+}
+
 let imported = new Map<string, Promise<unknown>>()
 let importing = async <M>(key: string, name: string): Promise<M | null> => {
   let spec = located(key)
