@@ -95,3 +95,4 @@ export type {
 } from './theme.ts'
 
 export { ledger } from './ledger.ts'
+export { installViewport, Viewport, type ViewportProps } from './viewport.ts'

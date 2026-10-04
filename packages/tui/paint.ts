@@ -120,6 +120,7 @@ let own = (el: TElement, sheet: Sheet): Style =>
   Object.assign(
     semantic(el, sheet),
     ...el.className.split(/\s+/).filter(Boolean).map((c) => sheet[c] ?? {}),
+    el.attr('data-terminal-focus') != null ? { inverse: true } : {},
     el.localName == 'a' && el.attr('href')
       ? { href: safeHref(el.attr('href')!) }
       : {},
@@ -579,6 +580,9 @@ let layout = (
   if (el.viewport) return el.viewport(w, h ?? 0, st, c.sheet)
   let o = own(el, c.sheet)
   let s = inherit(st, o)
+  if (el.localName == 'svg') {
+    return o.glyph ? [[{ text: o.glyph, style: s, owner: el }]] : []
+  }
   let wraps = el.attr('wrap') != null || !!o.wrap
   let outer = num(el, 'height') ?? h
   // Borders consume real layout space; descendants measure the inner width.

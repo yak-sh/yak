@@ -6,7 +6,7 @@ import { render } from 'preact'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { ansi, TElement } from '@yaks/tui'
 import { Md } from './md.tsx'
-import { pane } from './paint.ts'
+import { pane } from './testing.ts'
 
 let painted = (text: string) => {
   let root = new TElement('root')

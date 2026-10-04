@@ -86,7 +86,7 @@ Tests divide by where they run, never by speed, and each platform's
 environment starts once per run (M-39441):
 
 - **deno**: every `*_test.ts` and every example.
-- **browser** and **terminal**: packages/web and packages/web/tui, each host
+- **browser** and **terminal**: packages/browse and packages/browse/tui, each host
   setting up its own kind of document.
 - **workerd**: every `*_workerd_test.ts`, against the one kernel
   workers/yak/probe-suite.ts starts for the run. Only what the runtime alone

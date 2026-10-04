@@ -104,12 +104,13 @@ tmux capture-pane -p -t <task>
 
 - `yak inspect` and `yak ui`: run them through your worktree's CLI with
   `--config $D/yak.json`.
-- The web TUI (`deno task tui`, from your worktree) ignores `--config` and
-  `$YAK_CONFIG`: it reads `TASKS_HOST` and otherwise connects to the live server
-  on 5173 (packages/web/tui/main.tsx, T-59091). Always run it as
-  `TASKS_HOST=127.0.0.1:<port> TASKS_TUI_STATE=$D/tui.json deno task tui`.
-  `TASKS_TUI_STATE` keeps the probe's browsing position in scratch instead of
-  writing the person's `~/.yak/tui.json`.
+- `yak browse` and `yak inspect` use the server named by `$D/yak.json`, never
+  `TASKS_HOST` or a default live address. Run the worktree's CLI with
+  `--config $D/yak.json` and set `TASKS_TUI_STATE=$D/tui.json` so terminal
+  history stays in the probe. Give `HARNESS_HOME` and `TASKS_HOME` scratch
+  homes too. Both commands mount `packages/browse/components/App.tsx` through
+  @yaks/tui; a terminal probe proves navigation and a write by native events,
+  not a fixture printer.
 
 ## yaks.app
 

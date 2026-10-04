@@ -85,7 +85,7 @@ export let usePlaceAt = (
 ): void =>
   useLayoutEffect(() => {
     let el = ref.current
-    if (!el || !at) return
+    if (!el || !at || typeof ResizeObserver != 'function') return
     let put = () => placeAt(el, at.x, at.y, at.align)
     put()
     let ro = new ResizeObserver(put)
@@ -124,9 +124,9 @@ export type FloatProps = {
 export let Float: FunctionComponent<FloatProps> = (
   { anchor, side = 'above', children },
   context,
-): null => {
-  // No real browser (a terminal's document has no <body>) → a no-op: the
-  // hooks still run (rules of hooks), but there's nothing to portal into.
+): ReturnType<typeof h> | null => {
+  // A terminal's document has no body: children stay in the flow. Hooks
+  // still run in either host, but only the browser attaches a portal.
   let host = useRef<HTMLDivElement>()
   if (!host.current && globalThis.document?.body) {
     host.current = document.createElement('div')
@@ -167,7 +167,7 @@ export let Float: FunctionComponent<FloatProps> = (
     put(el)
   })
 
-  return null
+  return globalThis.document?.body ? null : h(Fragment, null, children)
 }
 
 /** The house tooltip, one portaled `Tip` instead of a ::before on every

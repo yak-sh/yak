@@ -20,7 +20,16 @@
  * @module
  */
 
-export { doc, install, onPaint, TElement, TNode, touch, TText } from './dom.ts'
+export {
+  dispatch,
+  doc,
+  install,
+  onPaint,
+  TElement,
+  TNode,
+  touch,
+  TText,
+} from './dom.ts'
 export { decode, feed, type Key, type Name } from './input.ts'
 export {
   ansi,

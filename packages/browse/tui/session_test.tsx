@@ -19,7 +19,7 @@ import { onMarkdown } from '../components/Markdown.tsx'
 // order Session_test.tsx relies on).
 import '../components/Entity.tsx'
 import { EntryBody, type EntryLine } from '../components/views/Entry.tsx'
-import { pane } from './paint.ts'
+import { pane } from './testing.ts'
 import { Branches } from '@yaks/kernel/Comments'
 import { cache, ent } from '../live.ts'
 

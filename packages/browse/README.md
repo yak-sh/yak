@@ -57,12 +57,20 @@ answer a decision or reply within the conversation's branches. Archive hides it
 until new activity. Search filters said or received words and can include
 archived threads. Reply, decision and search drafts stay shared across web and
 terminal. Expansion and search switches live in the page graph; the UI kit
-provides the inbox's visual parts for both doors. The TUI opens on the same
-Inbox: j/k read, Enter expands a row or uses a button, Enter or i on a field
-types, Enter submits, Shift+Enter adds a reply line, and Esc keeps the draft. l
-follows an entity link and h returns home. `TASKS_HOST` points the TUI at its
-server; `TASKS_TUI_STATE` can name a separate file for its browsing position
-when probing another graph.
+provides the inbox's visual parts for both doors. `yak browse` opens the same
+App in a terminal. Tab/Shift+Tab and j/k focus controls; Enter follows links or
+uses buttons, typing changes a focused field, Enter submits and Shift+Enter adds
+a line. Escape leaves a field without spending its draft. `f` focuses the
+sidebar query and `i` the first page field. Ctrl-O goes back, Ctrl-F forward,
+and q quits. `TASKS_TUI_STATE` names the terminal history file; the configured
+server supplies the graph, never a guessed host.
+
+```sh
+yak browse --config /path/to/yak.json
+yak inspect --config /path/to/yak.json
+yak inspect T-9 --config /path/to/yak.json
+yak inspect '.task .count' --config /path/to/yak.json
+```
 
 With @yaks/canvas installed, canvas entities remain reachable by their ids.
 Without it, canvas views, actions and screen subscriptions are omitted; stored
@@ -93,7 +101,7 @@ handlers.
 - **Vocabulary.** The page learns the host's documents from @yaks/api's `/vocab`
   before any module reads them (types.ts ends with the fetch), so the browser
   and the server speak one set of components. Tests learn the same plugin
-  documents by importing testing.ts first; the TUI's main.tsx fetches them from
+  documents by importing testing.ts first; the terminal door fetches them from
   its host.
 - **Reads.** Each named subscription in live.ts is a server-evaluated watch on a
   @yaks/client box (live_client.ts) over @yaks/api's `/ws`. @yaks/sync owns the
@@ -108,8 +116,9 @@ handlers.
   or a 5xx is redelivered.
 - **Rendering.** components/registry.ts selects renderers through @yaks/render
   and mounts them with @yaks/preact; Entity.tsx holds the curated list, and
-  components/views holds the views. The TUI (tui/, `deno task tui`) mounts the
-  same registry through @yaks/tui's fake DOM and layout.
+  components/views holds the views. The terminal door (`terminal.ts`) mounts
+  that same App and registry through @yaks/tui's fake DOM, native interaction
+  adapter and kit sheets.
 
 ## Limits
 
@@ -125,6 +134,7 @@ handlers.
 | `.`              | vocabulary learning and graph address normalization      |
 | `./hosting`      | the app's page mount, transport and storage declarations |
 | `./app`, `./web` | source assets contributed to a browser door              |
+| `./cli`          | `yak browse` and `yak inspect`, the terminal door        |
 | `./main`         | browser entry served by the browser door                 |
 
 The source URLs let a door bundle the app without importing its page state into

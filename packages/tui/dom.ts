@@ -77,6 +77,10 @@ export class TElement extends TNode {
   oninput = null
   onkeydown = null
   onsubmit = null
+  onfocus = null
+  onblur = null
+  onselect = null
+  onkeyup = null
   selectionStart = 0
   selectionEnd = 0
   /** Forms share their value and selection with browser components. */
@@ -91,9 +95,11 @@ export class TElement extends TNode {
   }
   focus() {
     doc.activeElement = this
+    this.dispatchEvent(new Event('focus'))
   }
   blur() {
     if (doc.activeElement == this) doc.activeElement = null
+    this.dispatchEvent(new Event('blur'))
   }
   setSelectionRange(start: number, end: number) {
     this.selectionStart = start
@@ -120,8 +126,78 @@ export class TElement extends TNode {
       this[k] = v
     },
   }
+  get textContent(): string {
+    return this.childNodes.map((n) =>
+      n instanceof TText ? n.data : (n as TElement).textContent
+    ).join('')
+  }
+  getAttribute(k: string): string | null {
+    return this.attr(k) ?? null
+  }
+  hasAttribute(k: string): boolean {
+    return this.attr(k) != null
+  }
+  get tagName(): string {
+    return this.localName.toUpperCase()
+  }
+  get parentElement(): TElement | null {
+    return this.parentNode
+  }
+  get isContentEditable(): boolean {
+    return this.attr('contenteditable') == 'true'
+  }
+  get href(): string {
+    return this.attr('href') ?? ''
+  }
+  get target(): string {
+    return this.attr('target') ?? ''
+  }
+  contains(n: TNode | null): boolean {
+    for (; n; n = n.parentNode) if (n == this) return true
+    return false
+  }
+  matches(selector: string): boolean {
+    return selector.split(',').some((s) => {
+      s = s.trim()
+      let m = s.match(/^([\w-]+)?(?:\[([\w-]+)(?:=["']?([^"'\]]+)["']?)?\])?$/)
+      if (m && (m[1] || m[2])) {
+        return (!m[1] || m[1] == this.localName) &&
+          (!m[2] ||
+            (m[3] == null ? this.hasAttribute(m[2]) : this.attr(m[2]) == m[3]))
+      }
+      if (s.startsWith('.')) {
+        return this.className.split(' ').includes(s.slice(1))
+      }
+      if (s.startsWith('#')) return this.attr('id') == s.slice(1)
+      return s == '*'
+    })
+  }
+  closest(selector: string): TElement | null {
+    return this.matches(selector)
+      ? this
+      : this.parentNode?.closest(selector) ?? null
+  }
+  querySelectorAll(selector: string): TElement[] {
+    return this.childNodes.filter((n) => n instanceof TElement).flatMap((n) => {
+      let el = n as TElement
+      return [
+        ...el.matches(selector) ? [el] : [],
+        ...el.querySelectorAll(selector),
+      ]
+    })
+  }
+  querySelector(selector: string): TElement | null {
+    return this.querySelectorAll(selector)[0] ?? null
+  }
+  dispatchEvent(event: Event): boolean {
+    return dispatch(this, event)
+  }
   private attrs = new Map<string, string>()
   handlers: Map<string, unknown> = new Map()
+  listeners: Map<string, Set<EventListener>> = new Map<
+    string,
+    Set<EventListener>
+  >()
   constructor(public localName: string) {
     super()
   }
@@ -171,24 +247,90 @@ export class TElement extends TNode {
   }
   /** Record a listener. Pointer events bubble here; keys go through `screen`. */
   addEventListener(t: string, fn: unknown) {
-    this.handlers.set(t, fn)
+    let set = this.listeners.get(t) ?? new Set<EventListener>()
+    set.add(fn as EventListener)
+    this.listeners.set(t, set)
+    this.handlers.set(t, (e: Event) => {
+      let consumed = false
+      for (let handler of [...this.listeners.get(t) ?? []].reverse()) {
+        if (
+          (handler as unknown as (e: Event) => unknown).call(this, e) === true
+        ) consumed = true
+        if (e.cancelBubble) break
+      }
+      return consumed
+    })
   }
   /** Forget a listener. */
-  removeEventListener(t: string) {
-    this.handlers.delete(t)
+  removeEventListener(t: string, fn?: unknown) {
+    if (fn) this.listeners.get(t)?.delete(fn as EventListener)
+    else this.listeners.delete(t)
+    if (!this.listeners.get(t)?.size) this.handlers.delete(t)
   }
 }
 
+/** Deliver DOM events through capture, target, bubble and the host window. */
+export let dispatch = (target: TElement, event: Event): boolean => {
+  Object.defineProperty(event, 'target', { value: target, configurable: true })
+  let path: TElement[] = []
+  for (let n: TElement | null = target; n; n = n.parentNode) path.push(n)
+  let call = (node: TElement, capture = false) => {
+    Object.defineProperty(event, 'currentTarget', {
+      value: node,
+      configurable: true,
+    })
+    let handler = node.handlers.get(event.type + (capture ? 'Capture' : ''))
+    if (typeof handler == 'function') handler.call(node, event)
+  }
+  for (let n of [...path].reverse()) {
+    call(n, true)
+    if (event.cancelBubble) return !event.defaultPrevented
+  }
+  for (let n of path) {
+    call(n)
+    if (event.cancelBubble) return !event.defaultPrevented
+  }
+  Object.defineProperty(event, 'currentTarget', {
+    value: null,
+    configurable: true,
+  })
+  globalThis.dispatchEvent(event)
+  return !event.defaultPrevented
+}
+
 /** The document Preact reaches for globally, over these node types. */
-export let doc = {
+export let doc: {
+  createElement: (t: string) => TElement
+  createElementNS: (ns: string, t: string) => TElement
+  createTextNode: (d: string) => TText
+  activeElement: TElement | null
+  addEventListener: typeof globalThis.addEventListener
+  removeEventListener: typeof globalThis.removeEventListener
+  getSelection: () => null
+  querySelector: (s: string) => null
+} = {
   createElement: (t: string): TElement => new TElement(t),
   createElementNS: (_ns: string, t: string): TElement => new TElement(t),
   createTextNode: (d: string): TText => new TText(d),
   activeElement: null as TElement | null,
+  addEventListener: globalThis.addEventListener.bind(globalThis),
+  removeEventListener: globalThis.removeEventListener.bind(globalThis),
+  getSelection: () => null,
+  querySelector: (_s: string) => null,
 }
 
 /** Install that document, returning a fresh render root and the restore. */
 export let install = (): { root: TElement; free: () => void } => {
+  let priorElement = Object.getOwnPropertyDescriptor(globalThis, 'Element')
+  let priorHtml = Object.getOwnPropertyDescriptor(globalThis, 'HTMLElement')
+  Object.defineProperty(globalThis, 'Element', {
+    value: TElement,
+    configurable: true,
+  })
+  Object.defineProperty(globalThis, 'HTMLElement', {
+    value: TElement,
+    configurable: true,
+  })
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   Object.defineProperty(globalThis, 'document', {
     value: doc,
@@ -197,6 +339,15 @@ export let install = (): { root: TElement; free: () => void } => {
   return {
     root: new TElement('root'),
     free: () => {
+      for (
+        let [name, descriptor] of [['Element', priorElement], [
+          'HTMLElement',
+          priorHtml,
+        ]] as const
+      ) {
+        if (descriptor) Object.defineProperty(globalThis, name, descriptor)
+        else Reflect.deleteProperty(globalThis, name)
+      }
       if (prior) Object.defineProperty(globalThis, 'document', prior)
       else delete (globalThis as { document?: unknown }).document
     },

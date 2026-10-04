@@ -54,6 +54,7 @@ export let quit = (): void => stop.fn()
 export let run = async (
   App: ComponentType,
   opts: {
+    screen?: ReturnType<typeof install>
     backend?: Backend
     sheet?: Sheet | (() => Sheet)
     graphics?: 'kitty' | 'none'
@@ -69,7 +70,7 @@ export let run = async (
         (Deno.env.get('HARNESS_GRAPHICS') == 'kitty' ? 'kitty' : 'none'),
       tmux: opts.tmux ?? !!Deno.env.get('TMUX'),
     })
-  let screen = install()
+  let screen = opts.screen ?? install()
   let host = screen.root as unknown as Parameters<typeof render>[1]
   let cancelRead: (() => Promise<void>) | undefined
   let done = false
@@ -99,7 +100,10 @@ export let run = async (
   let unlisten = listen()
   let interrupt = () => wind.interrupt(130)
   let escapeTimer: ReturnType<typeof setTimeout> | undefined
-  stop.fn = () => done = true
+  stop.fn = () => {
+    done = true
+    ending.resolve()
+  }
 
   let resize = () => {
     size.value = backend.size()

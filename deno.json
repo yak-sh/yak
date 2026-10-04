@@ -80,7 +80,6 @@
     "app-deploy:time": "deno run -A bench/run.ts app-deploy time",
     "app-deploy:gate": "deno run -A bench/run.ts app-deploy check",
     "tui:demo": "deno run -A packages/tui/demo.ts",
-    "tui": "sh -c 'while :; do deno run -A packages/browse/tui/main.tsx && break; [ $? -eq 42 ] || break; done'",
     "install": "bin/install",
     "app-grep": "deno run --allow-net=api.cloudflare.com --allow-read --allow-write --allow-env=HOME,XDG_CACHE_HOME --allow-run=op,rg bin/app-grep.ts",
     "jsr": "deno run --allow-read --allow-net=api.jsr.io --allow-env=JSR_TOKEN bin/jsr.ts",

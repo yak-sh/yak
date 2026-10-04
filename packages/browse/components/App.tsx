@@ -10,7 +10,7 @@ import { entityPath } from '../url.ts'
 import { useEffect, useLayoutEffect } from 'preact/hooks'
 import { idOf } from '../types.ts'
 import { ent, mode, routeSub } from '../live.ts'
-import { block, Tabs } from '@yaks/ui'
+import { block, Tabs, Viewport } from '@yaks/ui'
 import { filterable, FilterInput } from './Filter.tsx'
 import { applicable } from './registry.ts'
 import { TabFace } from './Card.tsx'
@@ -42,7 +42,7 @@ let Frame = block('main', 'App', {
   Main: 'div',
   Body: 'div',
 })
-let { Bar, Brand, Main, Body } = Frame
+let { Bar, Brand, Main } = Frame
 let { Tab } = Tabs
 
 // The URL named nothing the cache can resolve — a typo'd id, a dead
@@ -94,7 +94,7 @@ let Resolving = ({ at = route.value }: { at?: string }) => {
 // statusbar keeps the floor.
 // A page is the top frame's content. Inspect query/map pages extend this
 // renderer; Stack owns only the strips and restoring its controlled bundle.
-export let Page = ({ pane }: PaneProps) => {
+export let Page = ({ pane, top, onScroll }: PaneProps) => {
   // Hold a route sub for the fullscreen root while it's this one — under a
   // partial cache an entity reached by direct URL is in no
   // defining set, so this is what loads it; a no-op under a whole-graph cache.
@@ -115,6 +115,8 @@ export let Page = ({ pane }: PaneProps) => {
   let coarse = globalThis.matchMedia?.('(pointer: coarse)').matches
   let view = t?.view && tabs.includes(t.view)
     ? t.view
+    : e && (e._comp || e._package || e._prop) && tabs.includes('Inspect.Page')
+    ? 'Inspect.Page'
     : coarse && tabs[0] == 'Canvas' && tabs.includes('List')
     ? 'List'
     : tabs[0]
@@ -187,7 +189,12 @@ export let Page = ({ pane }: PaneProps) => {
             </>
           )}
       </Bar>
-      <Body>
+      <Viewport
+        id={`browse:${pane}`}
+        class='App_Body'
+        top={top}
+        onScroll={onScroll}
+      >
         {url.searchParams.has('map')
           ? <InspectPage map />
           : search != null
@@ -221,7 +228,7 @@ export let Page = ({ pane }: PaneProps) => {
           : screenResolving(pane)
           ? <Resolving at={pane} />
           : <Lost at={pane} />}
-      </Body>
+      </Viewport>
     </>
   )
 }
