@@ -1113,12 +1113,15 @@ let composed = async (
     store.install()
     part?.('effects')
 
-    // The registry, in every process: a commit owes only the declared effects
-    // this process handles. Their runs are written down with it
-    // (@yaks/effects), for any process working the pool. An effect
-    // writes through the graph's own `apply()`, trusted: what it writes comes
-    // from the host, never from a client.
+    // The registry, in every process. A process serving `effects` owes runs
+    // only for the declared effects it has code for; any other process (the
+    // CLI, a server without duties) cannot see that code, so it owes a run for
+    // every declared effect, left for the process that has it. The runs are
+    // written down with the commit (@yaks/effects), for any process working
+    // the pool. An effect writes through the graph's own `apply()`, trusted:
+    // what it writes comes from the host, never from a client.
     let fx = watching = effects(vocab, {
+      owes: roles.includes('effects') ? 'handled' : 'declared',
       write: (b) => host.graph.apply(b, { trusted: true }),
       owner: host.me,
       lease: config.lease,

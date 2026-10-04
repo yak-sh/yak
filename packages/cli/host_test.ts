@@ -855,6 +855,27 @@ test('a declared effect with no handler owes no run in a composed host', async (
   }
 })
 
+test('a process that runs no effects owes a run for each declared effect it writes', async () => {
+  // The CLI and a server without duties never load the effects' code, so
+  // what they write is owed to whichever process does.
+  let host = await composing(
+    { db: ':memory:', plugins: ['shop'] },
+    ['graph'],
+    only({ shop: pooled({ effects: () => ({ book_seen: () => {} }) }) }),
+  )
+  try {
+    await host.graph.apply([{ entity: { eid: 'b1' }, book: { title: 'One' } }])
+    let rows = await host.graph.read('.effect')
+    assertEquals(
+      rows.map((b) => [(b.effect as Comp).handler, (b.effect as Comp).state])
+        .sort(),
+      [['book_priced', 'pending'], ['book_seen', 'pending']],
+    )
+  } finally {
+    await host.close()
+  }
+})
+
 test('a process coming up owes again what a declared sweep selects', async () => {
   let ran: string[] = []
   let host = await compose(

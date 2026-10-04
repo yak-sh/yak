@@ -8,10 +8,12 @@
 //   `effectsIn`), so every process that loads the vocabulary knows what a
 //   write can owe. The code that runs one is registered under its name, by a
 //   process that runs effects (`handle`). Where the vocabulary declares the
-//   `effect` component, a commit writes runs only for registered handlers into
-//   the graph in its own transaction, and any process working the pool claims
-//   it and runs it (./pool.ts). Where it does not, there is no
-//   pool to hand one to, and a handled effect runs here after the commit.
+//   `effect` component, a commit writes runs only for registered handlers (or,
+//   in a process that writes for another to run, `owes: 'declared'`, for every
+//   declared effect) into the graph in its own transaction, and any process
+//   working the pool claims it and runs it (./pool.ts). Where it does not,
+//   there is no pool to hand one to, and a handled effect runs here after the
+//   commit.
 //
 //   An observer is registered at runtime (`created`, `changed`, `removed`,
 //   `on`), so only the process that registered it knows it: it runs in that
@@ -156,6 +158,11 @@ export type Opts = Partial<PoolOpts> & {
    * here: how a thread working the pool beside this one is told to look now,
    * rather than at its next pass */
   nudge?: () => void
+  /** which declared effects a commit owes runs for: only those this process
+   * handles (`handled`, the default: a process that runs every effect itself,
+   * as a yaks.app store does), or every declared one (`declared`: a process
+   * that writes for another to run, and cannot see the code that one holds) */
+  owes?: 'handled' | 'declared'
   /** how many generations of effect-written batches still owe runs (default:
    * `2`). A batch from a client is generation 0 and an effect's own write is
    * 1. The default lets an output effect write an entity, its change effect
@@ -621,10 +628,11 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
   let left = new WeakSet<Bundle>()
 
   // Inside the transaction: the runs this batch owes, written down.
+  let owesAll = opts.owes == 'declared'
   let owe: Hook = (bundles, tx, _err, context) => {
     if (generation(bundles) > depth) return bundles
     return after(
-      matched(bundles, tx, (s) => !!s.effect && !!s.run),
+      matched(bundles, tx, (s) => !!s.effect && (owesAll || !!s.run)),
       (found) =>
         !found.length ? bundles : after(
           pooled!.owe(tx, found, generation(bundles)),
