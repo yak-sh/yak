@@ -495,6 +495,17 @@ let mark = (
   trashed: Record<string, never> | null,
 ) => dir.apply({ entities: [{ entity: { eid }, trashed }] }, vouched(who))
 
+// The directory commits first; a missed notification is reconciled at wake.
+let dormancy = async (env: Env, space: Space, app: App, asleep: boolean) => {
+  let r = await storeOf(env.STORE, storeName(space, app))(
+    asleep ? '/dormant' : '/revive',
+    { method: 'POST' },
+    KERNEL,
+  )
+  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`)
+  await r.body?.cancel()
+}
+
 // Into the trash: the mark, then the roster. Nothing else — the bytes, the
 // store, the deploys and the slug are all exactly where they were.
 export let trash = async (
@@ -505,6 +516,7 @@ export let trash = async (
   who: Who,
 ) => {
   await mark(dir, app.eid, who, {})
+  await dormancy(env, space, app, true)
   await rostered(env, dir, space, app)
 }
 
@@ -540,6 +552,7 @@ export let untrash = async (
   who: Who,
 ) => {
   await mark(dir, app.eid, who, null)
+  await dormancy(env, space, app, false)
   await rostered(env, dir, space, app)
   await woken(env, space, app)
 }
@@ -565,6 +578,7 @@ export let trashSpace = async (
   who: Who,
 ) => {
   await mark(dir, space.eid, who, {})
+  for (let app of await dir.apps(space)) await dormancy(env, space, app, true)
   await reachMoved(env, dir, space)
 }
 
@@ -577,7 +591,10 @@ export let untrashSpace = async (
   await mark(dir, space.eid, who, null)
   await reachMoved(env, dir, space)
   for (let app of await dir.apps(space)) {
-    if (!app.trashed) await woken(env, space, app)
+    if (!app.trashed) {
+      await dormancy(env, space, app, false)
+      await woken(env, space, app)
+    }
   }
 }
 

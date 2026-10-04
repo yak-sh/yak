@@ -1090,6 +1090,22 @@ export let directory = (via: Fetcher, now = false) => {
       let row = await one(`.entity.eid=${eid}`)
       return row?.space ? spaceOf(row) : null
     },
+    // Only the directory is read to reconcile a store that missed trashing.
+    trashedStores: async (): Promise<string[]> => {
+      let names = new Set<string>()
+      for (let row of await query(`.app&.trashed&${ABOUT}`, true)) {
+        let app = appOf(row)
+        let space = await self.at(app.space)
+        if (space) names.add(storeName(space, app))
+      }
+      let spaces = (await query(`.space&.trashed&${SPACE_ABOUT}`, true)).map(
+        spaceOf,
+      )
+      for (let space of spaces) {
+        for (let app of await self.apps(space)) names.add(storeName(space, app))
+      }
+      return [...names]
+    },
     // One app by eid, with the space it belongs to — what an installed app's
     // pin names (`installed.of`), and how an offer is read back.
     appAt: async (eid: string) => {

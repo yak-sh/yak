@@ -1,0 +1,117 @@
+import { equal, test } from '@yaks/testing'
+import { directory, fetch as directoryFetch, storeName } from './directory.ts'
+import { trash, untrash } from './erase.ts'
+import { Store } from './graph.ts'
+import { storeOf } from './door.ts'
+import { KERNEL } from './meta.ts'
+import { platform } from './testing.ts'
+import type { Wire } from '@yaks/durable-object'
+
+test('trash makes a store dormant across every wake and restore keeps its data', async () => {
+  using p = platform('dormant probe')
+  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) }, true)
+  let space = await dir.own('dormant-owner', 'dormant')
+  await dir.apply({
+    entities: [{
+      entity: { eid: '$app' },
+      app: {
+        slug: 'held',
+        space: space.eid,
+        store: 'dormant/held.123456',
+        access: 'public',
+      },
+      doc: { title: 'Held' },
+    }],
+  })
+  let app = (await dir.app(space, 'held'))!
+  let name = storeName(space, app)
+  let ask = storeOf(p.env.STORE, name, {
+    eid: app.eid,
+    access: 'public',
+  })
+  let eid = crypto.randomUUID()
+  let written = await ask('/apply', {
+    method: 'POST',
+    body: JSON.stringify([{ entity: { eid }, doc: { title: 'Keep me' } }]),
+  }, KERNEL)
+  equal(written.status, 200, await written.text())
+  let ctx = p.states.get(name)!
+  let closed = 0
+  let ws = {
+    send() {},
+    close() {
+      closed++
+    },
+    serializeAttachment() {},
+    deserializeAttachment() {
+      return null
+    },
+  } as unknown as Wire
+  ctx.live.push(ws)
+  await ctx.storage.setAlarm(Date.now() + 60000)
+  let statements = 0
+  let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
+  ctx.storage.sql.exec = (sql, ...args) => {
+    statements++
+    return exec(sql, ...args)
+  }
+  let who = { person: 'dormant-owner', role: 'owner' as const }
+  await trash(p.env, dir, space, app, who)
+  equal(statements, 0)
+  equal(await ctx.storage.getAlarm(), null)
+  equal(closed > 0, true)
+  statements = 0
+  let store = p.object(name)
+  for (let incarnation of [store, new Store(ctx, p.env)]) {
+    equal(
+      (await incarnation.fetch(new Request('http://store/vocab'))).status,
+      404,
+    )
+    await incarnation.alarm()
+    await incarnation.webSocketMessage(ws, '{}')
+    await incarnation.webSocketClose(ws)
+    await incarnation.webSocketError(ws, new Error('gone'))
+  }
+  equal(statements, 0)
+  await untrash(p.env, dir, space, app, who)
+  let response = await ask(
+    `/query?q=${encodeURIComponent(`.entity.eid=${eid}&.doc`)}`,
+    undefined,
+    KERNEL,
+  )
+  equal(response.status, 200)
+  equal((await response.json())[0].doc.title, 'Keep me')
+})
+
+test('a store trashed before notification becomes dormant before boot', async () => {
+  using p = platform('missed trash probe')
+  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) }, true)
+  let space = await dir.own('missed-owner', 'missed')
+  await dir.apply({
+    entities: [{
+      entity: { eid: '$app' },
+      app: {
+        slug: 'held',
+        space: space.eid,
+        store: 'missed/held.123456',
+        access: 'public',
+      },
+      trashed: { at: new Date().toISOString() },
+    }],
+  })
+  let name = 'missed/held.123456'
+  p.object(name)
+  let ctx = p.states.get(name)!
+  await ctx.storage.setAlarm(Date.now() + 60000)
+  let statements = 0
+  let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
+  ctx.storage.sql.exec = (sql, ...args) => {
+    statements++
+    return exec(sql, ...args)
+  }
+  let store = new Store(ctx, p.env)
+  await store.alarm()
+  equal(await ctx.storage.getAlarm(), null)
+  equal(statements, 0)
+  equal((await store.fetch(new Request('http://store/vocab'))).status, 404)
+})

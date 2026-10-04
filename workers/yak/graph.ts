@@ -404,6 +404,7 @@ let shapeOf = (name: string, declared: string | null): Shape => {
  * leaves metadata behind, and an object whose storage is empty ceases to exist.
  */
 export type State = Hibernation & {
+  id?: { toString(): string }
   storage: DurableStorage & {
     sql: DurableSql & { databaseSize: number }
     deleteAll(): Promise<void>
@@ -421,6 +422,9 @@ export type State = Hibernation & {
     // is what the runtime is asked to come back for. Optional like the
     // bookmarks — a stand-in that schedules nothing need not offer them, and a
     // store without them simply never wakes itself.
+    get?<T>(key: string): Promise<T | undefined>
+    put?(key: string, value: unknown): Promise<void>
+    deleteAlarm?(): Promise<void>
     getAlarm?(): Promise<number | null>
     setAlarm?(at: number): Promise<void>
   }
@@ -759,6 +763,17 @@ export class Store {
         setAlarm: (at) => setAlarm.call(ctx.storage, at),
       }
     }
+    // Stand-ins without persistent object metadata keep their synchronous door.
+    if (!ctx.storage.get && !bind.STORE) this.#ensureStarted()
+  }
+
+  #started = false
+  #dormant: boolean | null = null
+  #checking: Promise<boolean> | null = null
+
+  #ensureStarted() {
+    if (this.#started) return
+    this.#started = true
     tallying(this.#pending, () => {
       try {
         this.#start()
@@ -766,6 +781,49 @@ export class Store {
         this.#failed(e)
       }
     })
+  }
+
+  // Object metadata, not graph rows: a dormant incarnation never opens SQL.
+  #awake(): boolean | Promise<boolean> {
+    if (this.#dormant != null) return !this.#dormant
+    if (!this.#ctx.storage.get && !this.#bind.STORE) {
+      this.#dormant = false
+      return true
+    }
+    return this.#checking ??= (async () => {
+      let dormant = await this.#ctx.storage.get<boolean>?.('dormant')
+      if (!dormant) {
+        let id = this.#ctx.id?.toString()
+        let ns = this.#bind.STORE
+        if (
+          id && ns &&
+          ![PLATFORM_STORE, GIT_STORE].some((name) =>
+            String(ns.idFromName(name)) == id
+          )
+        ) {
+          let names = await directoryOf(ns).trashedStores()
+          dormant = names.some((name) => String(ns.idFromName(name)) == id)
+        }
+      }
+      if (dormant) await this.#sleep()
+      else this.#dormant = false
+      return !this.#dormant
+    })().finally(() => this.#checking = null)
+  }
+
+  async #sleep() {
+    this.#dormant = true
+    await this.#ctx.storage.put?.('dormant', true)
+    await this.#ctx.storage.deleteAlarm?.()
+    for (let ws of this.#ctx.getWebSockets() as Closable[]) {
+      try {
+        ws.close?.(1000, 'trashed')
+      } catch { /* already gone */ }
+    }
+  }
+
+  #missing() {
+    return json({ error: 'NotFound', message: 'app is in the trash' }, 404)
   }
 
   #start() {
@@ -1196,6 +1254,7 @@ export class Store {
     calls: Graph
     anatomy: () => Anatomy
   } {
+    this.#ensureStarted()
     return {
       graph: this.#graph,
       authenticate: this.#auth,
@@ -1772,7 +1831,7 @@ export class Store {
     at: string | null | undefined,
     reason = 'wake',
   ): Promise<unknown> => {
-    if (!this.#alarm || !at) return
+    if (this.#dormant || !this.#alarm || !at) return
     let result = await arm(this.#alarm, { at })
     if (this.#profile) {
       let held = await this.#alarm.getAlarm()
@@ -1853,7 +1912,9 @@ export class Store {
    * stretch nobody was there for is. A directory that cannot say is asked
    * again in a minute, never guessed at.
    */
-  tick(now = Date.now()): Promise<Ticked> {
+  async tick(now = Date.now()): Promise<Ticked> {
+    if (!await this.#awake()) return { fired: [], refused: [] }
+    this.#ensureStarted()
     let run = async () => {
       let leave = await this.#enter(false)
       try {
@@ -1890,7 +1951,11 @@ export class Store {
    * The runtime retries an alarm whose run failed. One that threw was reported
    * where it threw; one the runtime killed for its limits left nothing behind
    * that could report it, so its retry does (M-37965). */
-  alarm(info?: { isRetry?: boolean; retryCount?: number }): Promise<void> {
+  async alarm(
+    info?: { isRetry?: boolean; retryCount?: number },
+  ): Promise<void> {
+    if (!await this.#awake()) return
+    this.#ensureStarted()
     if (info?.isRetry && !this.#threw) {
       defect(new Error("a store's alarm was cut off before it finished"), {
         request: 'alarm',
@@ -2086,10 +2151,11 @@ export class Store {
   // A few batches, yielding the object between them, then the alarm again for
   // whatever is left.
   #moving = async (): Promise<void> => {
+    if (this.#dormant) return
     let left = BATCHES
     let name = this.#get('name') ?? ''
     for (let rule of this.#owing()) {
-      while (left-- > 0 && !this.#refused) {
+      while (left-- > 0 && !this.#refused && !this.#dormant) {
         let held: (() => void | Promise<void>)[] = []
         let was = this.#stamp(rule)
         let now = new Date().toISOString()
@@ -2167,6 +2233,7 @@ export class Store {
   }
 
   #workingEffects = () => {
+    if (this.#dormant) return
     if (!this.#vocab.comp('effect')) return
     if (!this.#effectsReady) {
       this.#effectAgain = true
@@ -2180,7 +2247,8 @@ export class Store {
       do {
         this.#effectAgain = false
         await this.#effects.work(this.#stored(this.#graph).graph)
-      } while (this.#effectAgain)
+      } while (this.#effectAgain && !this.#dormant)
+      if (this.#dormant) return
       let handlers = [
         ...new Set(
           this.#effects.slots().filter((s) => s.effect && s.run).map((s) =>
@@ -2255,6 +2323,7 @@ export class Store {
     !!this.#texts && !!this.#get('schema') && unembedded(this.#texts.sql) > 0
 
   #embedding = () => {
+    if (this.#dormant) return
     let model = embedder(this.#bind)
     if (this.#refused || !this.#texts || !this.#get('schema') || !model) return
     if (this.#vectorWork) {
@@ -2279,6 +2348,7 @@ export class Store {
         let done = await drain(sql, fields, model, {
           signal: AbortSignal.timeout(Store.EMBED),
         })
+        if (this.#dormant) return
         // A text the model will not take is the text's, not the store's: it
         // has no vector, and ranks by its words alone.
         for (let r of done.refused) {
@@ -2400,6 +2470,30 @@ export class Store {
    * sockets it inherited.
    */
   async fetch(request: Request): Promise<Response> {
+    let path = new URL(request.url).pathname
+    let kernel = request.headers.get('x-yak-kernel') == '1'
+    if (kernel && path == '/dormant' && request.method == 'POST') {
+      await this.#sleep()
+      return json({ ok: true })
+    }
+    if (kernel && path == '/revive' && request.method == 'POST') {
+      await this.#ctx.storage.put?.('dormant', false)
+      this.#dormant = null
+    }
+    if (!await this.#awake()) {
+      if (kernel && path == '/revive' && request.method == 'POST') {
+        return json({ ok: true })
+      }
+      if (kernel && path == '/' && request.method == 'DELETE') {
+        await this.#ctx.storage.deleteAll()
+        return json({ ok: true })
+      }
+      return this.#missing()
+    }
+    this.#ensureStarted()
+    if (kernel && path == '/revive' && request.method == 'POST') {
+      return json({ ok: true })
+    }
     let tally = this.#pending
     this.#pending = new Map()
     let run = () =>
@@ -3626,6 +3720,7 @@ export class Store {
     data: string | ArrayBuffer,
   ): void | Promise<void> {
     let run = (): void | Promise<void> => {
+      this.#ensureStarted()
       if (this.#draft) {
         return this.#draft.then(() => this.webSocketMessage(ws, data))
       }
@@ -3643,16 +3738,27 @@ export class Store {
         this.#profile?.flush()
       }
     }
-    return run()
+    return after(this.#awake(), (awake) => awake ? run() : undefined)
   }
 
   /** That client went away. */
   webSocketClose(ws: Wire): void | Promise<void> {
     let run = (): void | Promise<void> => {
+      this.#ensureStarted()
       if (this.#draft) return this.#draft.then(() => this.webSocketClose(ws))
       if (!this.#unbuilt) return this.#live.close(ws)
     }
-    return this.#profile ? this.#profile.run('ws close', run) : run()
+    return after(
+      this.#awake(),
+      (awake) =>
+        awake
+          ? (this.#profile ? this.#profile.run('ws close', run) : run())
+          : undefined,
+    )
+  }
+
+  webSocketError(ws: Wire, _error: unknown): void | Promise<void> {
+    return this.webSocketClose(ws)
   }
 
   /** Whether the boot refused, so nothing above the storage was raised. */

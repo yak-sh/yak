@@ -121,7 +121,7 @@ export let state = () => {
     return Promise.resolve(name)
   }
   return {
-    storage: Object.assign(durable(), {
+    storage: Object.assign(durable(), kvStorage(), {
       getCurrentBookmark: () => bookmark(`at-${pitr.marks.length}`),
       getBookmarkForTime: (at: number | Date) => {
         let t = at instanceof Date ? at.getTime() : at
@@ -661,7 +661,7 @@ export let platform = (secret: string, vars: Partial<Env> = {}) => {
   let object = (name: string) => {
     let held = objects.get(name)
     if (!held) {
-      let ctx = ownedState()
+      let ctx = Object.assign(ownedState(), { id: { toString: () => name } })
       sockets.set(name, ctx.live)
       recovery.set(name, ctx.pitr)
       states.set(name, ctx)
