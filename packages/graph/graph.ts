@@ -309,7 +309,7 @@ export type Access =
 // out.
 type Step = (bundles: Bundle[]) => Bundle[] | Promise<Bundle[]>
 type Timing = <T>(
-  name: Phase | 'gather' | 'transaction' | 'compose',
+  name: Phase | 'gather' | 'transaction' | 'compose' | 'flush',
   run: () => T | Promise<T>,
   plugin?: string,
 ) => T | Promise<T>
@@ -649,11 +649,7 @@ export let graph = (opts: Options): Graph => {
     // One registry for the whole apply, so `#Now` is one instant however many
     // phases and rules read it.
     let resources = resourced(() => instant ??= o.now ?? opts.clock?.() ?? now)
-    let timed = <T>(
-      name: Phase | 'gather' | 'transaction' | 'compose',
-      run: () => T | Promise<T>,
-      plugin?: string,
-    ): T | Promise<T> => {
+    let timed: Timing = (name, run, plugin) => {
       let c = tracing && live(tracing) && peek(g)
       if (!c) return run()
       let before = current
@@ -865,7 +861,8 @@ export let graph = (opts: Options): Graph => {
             trackers.push(tracker)
             tx = tracker.tx
           }
-          let flush: Step = (b) => each(trackers, b, (out, t) => t.flush(out))
+          let flush: Step = (b) =>
+            timed('flush', () => each(trackers, b, (out, t) => t.flush(out)))
           let held = holding(tx, vocab, snap)
           // What the graph holds for one entity, with every patch this batch
           // has made already folded in — what a rule is evaluated against
@@ -978,6 +975,8 @@ export let graph = (opts: Options): Graph => {
                 // holds for an entity: a newly created entity is one with no
                 // `created` component.
                 phase('stamp', tx, (b) => births(b, st), holds),
+                // Journal and commit hooks read the classified writes. Their
+                // own writes need the second flush after those hooks finish.
                 flush,
                 (b: Bundle[]) => {
                   if (checking && !certified(b)) {

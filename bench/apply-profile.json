@@ -1945,5 +1945,872 @@
         }
       ]
     }
+  },
+  "T-64970": {
+    "box": {
+      "environment": {
+        "kind": "environment",
+        "deno": "2.9.1",
+        "load": "3.38 2.89 3.24 5/1611 3267140",
+        "plugins": [
+          "@yaks/kernel",
+          "ids",
+          "@yaks/secrets",
+          "@yaks/key",
+          "@yaks/alias",
+          "@yaks/edge",
+          "@yaks/blob",
+          "representations",
+          "@yaks/doc",
+          "@yaks/archetype",
+          "@yaks/journal",
+          "@yaks/task",
+          "@yaks/project",
+          "@yaks/session",
+          "@yaks/model",
+          "@yaks/process",
+          "@yaks/builders",
+          "@yaks/mail",
+          "@yaks/wake",
+          "@yaks/page",
+          "@yaks/draft",
+          "@yaks/effects"
+        ],
+        "scratch": "file on same filesystem as configured box database"
+      },
+      "edit_1": {
+        "kind": "sample",
+        "work": "edit",
+        "n": 1,
+        "rounds": 101,
+        "wall_us_per_bundle": 2900.101999999947,
+        "samples_us_per_bundle": [
+          9218.449000000077,
+          5836.852000000022,
+          5860.017999999968,
+          5459.180999999944,
+          4996.982000000003,
+          4542.80499999993,
+          4474.709999999959,
+          5050.331000000028,
+          5841.064999999958,
+          3506.923000000029,
+          3360.467000000085,
+          3483.1269999999677,
+          3247.2000000000207,
+          3436.561999999981,
+          3438.8750000000528,
+          3434.9169999999276,
+          3928.5619999999426,
+          23723.17899999996,
+          5496.440000000007,
+          3349.517999999989,
+          4868.251999999984,
+          5159.750000000031,
+          7110.0340000000415,
+          3534.0380000000096,
+          3057.027000000062,
+          3059.0960000000678,
+          3104.443999999944,
+          2898.6030000000937,
+          2897.0390000000634,
+          2820.598999999902,
+          2838.4889999999814,
+          2657.791999999972,
+          2860.048000000006,
+          2900.101999999947,
+          2772.3459999999704,
+          2910.6500000000324,
+          4463.729999999941,
+          3059.4300000000203,
+          2898.7750000000005,
+          2914.973000000032,
+          2960.880999999972,
+          2737.9640000000336,
+          2613.3459999999786,
+          2525.021000000038,
+          2772.611999999981,
+          2763.146000000006,
+          2942.953999999986,
+          2787.4160000000074,
+          2635.974000000033,
+          3834.306999999967,
+          2764.7869999999557,
+          2738.6619999999766,
+          2623.527999999965,
+          2691.059999999993,
+          2765.0409999999965,
+          2719.0540000000283,
+          2777.832999999987,
+          2703.530999999998,
+          2777.3610000000417,
+          17648.24500000009,
+          5450.813000000039,
+          3020.4250000000457,
+          3851.3730000000805,
+          2654.205000000047,
+          2510.6060000000525,
+          2497.0759999999927,
+          2728.636999999935,
+          2772.557000000006,
+          2788.7660000000096,
+          2649.2230000000063,
+          2681.9639999999936,
+          2886.0260000000153,
+          2800.689000000034,
+          3057.331999999974,
+          3086.9250000000648,
+          3932.5260000000526,
+          3139.548999999988,
+          2769.9069999999892,
+          2623.08900000005,
+          2548.3319999999594,
+          2645.7980000000134,
+          2606.638999999973,
+          2622.6930000000266,
+          2972.020000000043,
+          2650.9360000000015,
+          2428.0559999999696,
+          2563.496999999984,
+          2784.691000000066,
+          3914.8919999998952,
+          2813.5489999999663,
+          2647.0760000000837,
+          2610.4029999999057,
+          2721.914999999967,
+          2624.0430000000288,
+          3561.9800000000623,
+          2977.927999999906,
+          3300.434999999993,
+          2950.8460000000696,
+          2759.082000000035,
+          19994.826000000103,
+          6069.4930000000795
+        ],
+        "wall": 2900.101999999947,
+        "phases": {
+          "phase/normalize": {
+            "us_per_bundle": 64.214,
+            "calls_per_apply": 1
+          },
+          "phase/admit": {
+            "us_per_bundle": 21.725,
+            "calls_per_apply": 1
+          },
+          "phase/mint": {
+            "us_per_bundle": 31.802,
+            "calls_per_apply": 1
+          },
+          "phase/prepare": {
+            "us_per_bundle": 4.01,
+            "calls_per_apply": 1
+          },
+          "phase/transaction": {
+            "us_per_bundle": 2601.964,
+            "calls_per_apply": 1
+          },
+          "phase/gather": {
+            "us_per_bundle": 147.527,
+            "calls_per_apply": 1
+          },
+          "phase/precondition": {
+            "us_per_bundle": 60.319,
+            "calls_per_apply": 1
+          },
+          "phase/rules": {
+            "us_per_bundle": 245.203,
+            "calls_per_apply": 1
+          },
+          "phase/mutate": {
+            "us_per_bundle": 293.101,
+            "calls_per_apply": 1
+          },
+          "phase/cascade": {
+            "us_per_bundle": 12.46,
+            "calls_per_apply": 1
+          },
+          "phase/stamp": {
+            "us_per_bundle": 392.27,
+            "calls_per_apply": 1
+          },
+          "phase/flush": {
+            "us_per_bundle": 368.398,
+            "calls_per_apply": 2
+          },
+          "phase/journal": {
+            "us_per_bundle": 144.719,
+            "calls_per_apply": 1
+          },
+          "phase/commit": {
+            "us_per_bundle": 731.748,
+            "calls_per_apply": 1
+          },
+          "phase/effect": {
+            "us_per_bundle": 44.7,
+            "calls_per_apply": 1
+          },
+          "phase/compose": {
+            "us_per_bundle": 11.967,
+            "calls_per_apply": 1
+          }
+        },
+        "sql": {},
+        "trace": {
+          "transaction_us": 2601.9640000000663,
+          "children_us": 2545.5130000002555,
+          "coverage_percent": 97.83044653962125,
+          "phases_us": 2395.745000000261,
+          "phase_coverage_percent": 92.07448681073988,
+          "flushes": [
+            {
+              "start_us": 1227.7599999999893,
+              "duration_us": 3.6290000000462896,
+              "sql_statements": 0
+            },
+            {
+              "start_us": 2118.047000000047,
+              "duration_us": 364.7690000000239,
+              "sql_statements": 7
+            }
+          ],
+          "sql_outside_phases": {
+            "schema_version pragma": {
+              "us_per_bundle": 25.609,
+              "calls_per_apply": 1
+            },
+            "begin": {
+              "us_per_bundle": 12.034,
+              "calls_per_apply": 1
+            },
+            "commit": {
+              "us_per_bundle": 112.125,
+              "calls_per_apply": 1
+            }
+          }
+        },
+        "load": "3.38 2.89 3.24 7/1612 3267222"
+      }
+    },
+    "bench": {
+      "environment": {
+        "kind": "environment",
+        "deno": "2.9.1",
+        "load": "3.38 2.89 3.24 7/1614 3267299",
+        "plugins": [
+          "@yaks/kernel",
+          "@yaks/doc",
+          "@yaks/edge",
+          "@yaks/task",
+          "@yaks/session",
+          "@yaks/archetype",
+          "@yaks/effects",
+          "@yaks/journal"
+        ],
+        "scratch": "file in apply-benchmark fixture"
+      },
+      "edit_1": {
+        "kind": "sample",
+        "work": "edit",
+        "n": 1,
+        "rounds": 101,
+        "wall_us_per_bundle": 1486.1949999999524,
+        "samples_us_per_bundle": [
+          2500.427999999829,
+          2468.360000000075,
+          1787.6920000001064,
+          1741.788999999926,
+          1632.0429999998396,
+          1561.194999999998,
+          1825.9729999999763,
+          1814.3629999999575,
+          1529.553999999962,
+          1534.3090000001212,
+          1679.7320000000582,
+          1553.921000000173,
+          1533.7770000001,
+          1518.2600000000548,
+          1502.8350000000046,
+          1529.8290000000634,
+          1565.5840000001717,
+          1456.2939999998434,
+          1624.4080000001304,
+          1579.6140000002197,
+          1541.2400000000162,
+          1679.6970000000329,
+          1525.0599999999395,
+          1631.21000000001,
+          1563.2179999997788,
+          1539.9829999998929,
+          1553.7419999998292,
+          1574.7989999999845,
+          1532.7310000000125,
+          1514.4740000000638,
+          1652.180000000044,
+          1751.329000000169,
+          1389.9149999997462,
+          1370.2100000000428,
+          1422.16099999996,
+          1433.8500000001204,
+          1346.5469999998732,
+          1253.045999999813,
+          1248.5560000000078,
+          1399.8780000001716,
+          1508.5920000001352,
+          1547.4530000001323,
+          1352.8599999999642,
+          1422.0260000001872,
+          1309.8289999998087,
+          1272.7350000000115,
+          1253.451000000041,
+          1246.2730000002011,
+          1314.5959999999377,
+          1254.5789999999215,
+          1219.724000000042,
+          1262.6199999999699,
+          1274.733999999853,
+          1257.7759999999216,
+          3021.7079999999896,
+          1447.257000000036,
+          1323.0050000001938,
+          1286.5309999999681,
+          1311.8979999999283,
+          1261.1980000001495,
+          1377.3149999999532,
+          1441.5070000000014,
+          1509.3419999998332,
+          1422.516000000087,
+          1296.7780000001312,
+          1346.5939999998682,
+          1459.036999999853,
+          1869.275000000016,
+          1486.1949999999524,
+          1441.4099999999053,
+          1373.638999999912,
+          1446.43300000007,
+          1257.6480000002448,
+          1283.194000000094,
+          1402.6359999998022,
+          1324.5099999999184,
+          1447.6170000000366,
+          1554.9940000000788,
+          1346.66500000003,
+          1478.0809999999747,
+          1583.6100000001352,
+          15757.34999999986,
+          3966.6330000000016,
+          1626.7800000000534,
+          1374.7920000000704,
+          1342.675999999983,
+          1399.1260000000239,
+          2103.7209999999504,
+          2449.126999999862,
+          1801.920999999993,
+          1434.8599999998441,
+          1498.7609999998313,
+          1560.3399999999965,
+          1587.6329999998688,
+          1456.237000000101,
+          1310.739999999896,
+          1488.9439999997194,
+          1495.8150000002206,
+          1371.7530000001261,
+          1499.118999999837,
+          1445.3989999997248
+        ],
+        "wall": 1486.1949999999524,
+        "phases": {
+          "phase/normalize": {
+            "us_per_bundle": 19.614,
+            "calls_per_apply": 1
+          },
+          "phase/admit": {
+            "us_per_bundle": 15.537,
+            "calls_per_apply": 1
+          },
+          "phase/mint": {
+            "us_per_bundle": 18.017,
+            "calls_per_apply": 1
+          },
+          "phase/prepare": {
+            "us_per_bundle": 1.572,
+            "calls_per_apply": 1
+          },
+          "phase/transaction": {
+            "us_per_bundle": 1310.297,
+            "calls_per_apply": 1
+          },
+          "phase/gather": {
+            "us_per_bundle": 151.79,
+            "calls_per_apply": 1
+          },
+          "phase/precondition": {
+            "us_per_bundle": 33.25,
+            "calls_per_apply": 1
+          },
+          "phase/rules": {
+            "us_per_bundle": 324.165,
+            "calls_per_apply": 1
+          },
+          "phase/mutate": {
+            "us_per_bundle": 193.858,
+            "calls_per_apply": 1
+          },
+          "phase/cascade": {
+            "us_per_bundle": 7.466,
+            "calls_per_apply": 1
+          },
+          "phase/stamp": {
+            "us_per_bundle": 302.226,
+            "calls_per_apply": 1
+          },
+          "phase/flush": {
+            "us_per_bundle": 5.931,
+            "calls_per_apply": 2
+          },
+          "phase/journal": {
+            "us_per_bundle": 114.976,
+            "calls_per_apply": 1
+          },
+          "phase/commit": {
+            "us_per_bundle": 26.992,
+            "calls_per_apply": 1
+          },
+          "phase/effect": {
+            "us_per_bundle": 14.372,
+            "calls_per_apply": 1
+          },
+          "phase/compose": {
+            "us_per_bundle": 9.574,
+            "calls_per_apply": 1
+          }
+        },
+        "sql": {},
+        "trace": {
+          "transaction_us": 1310.2969999999914,
+          "children_us": 1259.2670000001362,
+          "coverage_percent": 96.10546311257254,
+          "phases_us": 1160.6540000000223,
+          "phase_coverage_percent": 88.57945946606227,
+          "flushes": [
+            {
+              "start_us": 1086.4599999999882,
+              "duration_us": 3.513999999995576,
+              "sql_statements": 0
+            },
+            {
+              "start_us": 1238.3409999999913,
+              "duration_us": 2.416999999923064,
+              "sql_statements": 0
+            }
+          ],
+          "sql_outside_phases": {
+            "schema_version pragma": {
+              "us_per_bundle": 24.155,
+              "calls_per_apply": 1
+            },
+            "begin": {
+              "us_per_bundle": 10.947,
+              "calls_per_apply": 1
+            },
+            "commit": {
+              "us_per_bundle": 63.511,
+              "calls_per_apply": 1
+            }
+          }
+        },
+        "load": "3.38 2.89 3.24 6/1615 3267317"
+      }
+    },
+    "wrapped": {
+      "environment": {
+        "kind": "environment",
+        "deno": "2.9.1",
+        "load": "3.59 2.94 3.26 6/1618 3267377",
+        "plugins": [
+          "@yaks/kernel",
+          "ids",
+          "@yaks/secrets",
+          "@yaks/key",
+          "@yaks/alias",
+          "@yaks/edge",
+          "@yaks/blob",
+          "representations",
+          "@yaks/doc",
+          "@yaks/archetype",
+          "@yaks/journal",
+          "@yaks/task",
+          "@yaks/project",
+          "@yaks/session",
+          "@yaks/model",
+          "@yaks/process",
+          "@yaks/builders",
+          "@yaks/mail",
+          "@yaks/wake",
+          "@yaks/page",
+          "@yaks/draft",
+          "@yaks/effects"
+        ],
+        "scratch": "file on same filesystem as configured box database"
+      },
+      "edit_1": {
+        "kind": "sample",
+        "work": "edit",
+        "n": 1,
+        "rounds": 101,
+        "wall_us_per_bundle": 3081.0760000000528,
+        "samples_us_per_bundle": [
+          9040.630999999961,
+          6081.131000000028,
+          6232.544999999959,
+          5293.845000000033,
+          4824.838999999997,
+          4563.156000000049,
+          4795.093999999949,
+          5025.28899999993,
+          4906.776000000036,
+          3415.448999999967,
+          3359.154000000103,
+          3334.465000000023,
+          3419.106000000056,
+          3507.0610000000215,
+          3403.1459999999925,
+          3255.794000000037,
+          3470.730000000003,
+          22422.121999999945,
+          5405.173999999988,
+          3224.222999999938,
+          4845.377999999982,
+          4265.52700000002,
+          3744.1179999999576,
+          5869.952000000012,
+          3241.5429999999787,
+          3109.599000000003,
+          3013.2619999999406,
+          2728.670000000079,
+          2740.6060000000707,
+          2934.7139999999854,
+          2998.730000000023,
+          2874.5349999999235,
+          2903.5100000000966,
+          2975.221999999917,
+          3021.517000000017,
+          3050.5110000000286,
+          4544.443000000001,
+          2928.7400000000616,
+          3011.167999999998,
+          3178.6449999999604,
+          3071.8519999999216,
+          2921.519999999987,
+          2798.4069999999974,
+          2830.9549999999035,
+          2883.79800000007,
+          2806.0879999999315,
+          2759.40700000001,
+          2832.785999999942,
+          4064.179000000081,
+          2869.5280000000594,
+          2703.4999999999627,
+          2890.8709999999473,
+          2775.299000000018,
+          2739.315999999917,
+          2879.0440000000217,
+          2850.0300000000607,
+          2908.1109999999626,
+          2927.9960000000074,
+          15831.807000000026,
+          4568.251999999916,
+          2947.9409999999007,
+          4462.835000000041,
+          2854.4050000000425,
+          2814.777999999933,
+          2820.1230000000805,
+          2958.1759999999804,
+          2897.918000000004,
+          2826.6479999999774,
+          4806.648999999993,
+          4233.218999999963,
+          3087.6159999999118,
+          2934.981999999991,
+          2935.6950000000097,
+          3037.7070000000685,
+          4312.41,
+          2857.507000000055,
+          4279.447000000005,
+          3696.0160000000997,
+          3055.8039999999664,
+          3264.906999999994,
+          4066.5480000000116,
+          2829.306000000088,
+          2648.935999999935,
+          3153.493000000026,
+          2721.1149999999407,
+          3059.6969999999146,
+          4207.433999999921,
+          4565.1869999999235,
+          3081.0760000000528,
+          2978.1900000000405,
+          2786.7630000000645,
+          2680.2579999999807,
+          2766.849000000093,
+          4244.3250000000035,
+          3982.3860000000195,
+          4269.623000000024,
+          3141.946999999959,
+          3014.23699999998,
+          17160.449000000084,
+          7950.085000000058,
+          5205.557999999883
+        ],
+        "wall": 3081.0760000000528,
+        "phases": {
+          "tracker/@yaks/archetype/make": {
+            "us_per_bundle": 2.576,
+            "calls_per_apply": 1
+          },
+          "tracker/@yaks/archetype/flush": {
+            "us_per_bundle": 363.287,
+            "calls_per_apply": 2
+          },
+          "storage-head": {
+            "us_per_bundle": 51.186,
+            "calls_per_apply": 1
+          },
+          "storage-tail": {
+            "us_per_bundle": 142.113,
+            "calls_per_apply": 1
+          },
+          "phase/normalize": {
+            "us_per_bundle": 55.278,
+            "calls_per_apply": 1
+          },
+          "phase/admit": {
+            "us_per_bundle": 21.355,
+            "calls_per_apply": 1
+          },
+          "phase/mint": {
+            "us_per_bundle": 32.598,
+            "calls_per_apply": 1
+          },
+          "phase/prepare": {
+            "us_per_bundle": 4.4,
+            "calls_per_apply": 1
+          },
+          "phase/transaction": {
+            "us_per_bundle": 2737.763,
+            "calls_per_apply": 1
+          },
+          "phase/gather": {
+            "us_per_bundle": 145.816,
+            "calls_per_apply": 1
+          },
+          "phase/precondition": {
+            "us_per_bundle": 61.973,
+            "calls_per_apply": 1
+          },
+          "phase/rules": {
+            "us_per_bundle": 254.681,
+            "calls_per_apply": 1
+          },
+          "phase/mutate": {
+            "us_per_bundle": 290.823,
+            "calls_per_apply": 1
+          },
+          "phase/cascade": {
+            "us_per_bundle": 13.761,
+            "calls_per_apply": 1
+          },
+          "phase/stamp": {
+            "us_per_bundle": 428.682,
+            "calls_per_apply": 1
+          },
+          "phase/flush": {
+            "us_per_bundle": 375.188,
+            "calls_per_apply": 2
+          },
+          "phase/journal": {
+            "us_per_bundle": 163.103,
+            "calls_per_apply": 1
+          },
+          "phase/commit": {
+            "us_per_bundle": 757.345,
+            "calls_per_apply": 1
+          },
+          "phase/effect": {
+            "us_per_bundle": 31.34,
+            "calls_per_apply": 1
+          },
+          "phase/compose": {
+            "us_per_bundle": 24.281,
+            "calls_per_apply": 1
+          }
+        },
+        "sql": {
+          "storage-head/pragma/schema_version": {
+            "us_per_bundle": 28.27,
+            "calls_per_apply": 1
+          },
+          "storage-head/begin/": {
+            "us_per_bundle": 13.284,
+            "calls_per_apply": 1
+          },
+          "body/raw/": {
+            "us_per_bundle": 182.394,
+            "calls_per_apply": 3
+          },
+          "body/select/entity": {
+            "us_per_bundle": 354.844,
+            "calls_per_apply": 7
+          },
+          "body/select/": {
+            "us_per_bundle": 40.371,
+            "calls_per_apply": 1
+          },
+          "body/update/doc": {
+            "us_per_bundle": 54.569,
+            "calls_per_apply": 1
+          },
+          "body/update/updated": {
+            "us_per_bundle": 36.875,
+            "calls_per_apply": 1
+          },
+          "body/insert/journal_tx": {
+            "us_per_bundle": 60.931,
+            "calls_per_apply": 1
+          },
+          "body/insert/journal_change": {
+            "us_per_bundle": 39.046,
+            "calls_per_apply": 1
+          },
+          "body/insert/journal_field": {
+            "us_per_bundle": 21.292,
+            "calls_per_apply": 1
+          },
+          "body/insert/entity": {
+            "us_per_bundle": 122.194,
+            "calls_per_apply": 2
+          },
+          "body/pragma/table_info": {
+            "us_per_bundle": 48.109,
+            "calls_per_apply": 1
+          },
+          "body/insert/effect": {
+            "us_per_bundle": 105.934,
+            "calls_per_apply": 2
+          },
+          "flush/@yaks/archetype/raw/": {
+            "us_per_bundle": 38.525,
+            "calls_per_apply": 1
+          },
+          "flush/@yaks/archetype/select/entity": {
+            "us_per_bundle": 113.044,
+            "calls_per_apply": 2
+          },
+          "flush/@yaks/archetype/update/entity": {
+            "us_per_bundle": 99.281,
+            "calls_per_apply": 4
+          },
+          "storage-tail/commit/": {
+            "us_per_bundle": 134.13,
+            "calls_per_apply": 1
+          }
+        },
+        "presence_statements_per_apply": 3,
+        "trace": {
+          "transaction_us": 2737.7629999999726,
+          "children_us": 2663.954000000217,
+          "coverage_percent": 97.30403983106805,
+          "phases_us": 2491.372000000183,
+          "phase_coverage_percent": 91.00028015574057,
+          "flushes": [
+            {
+              "start_us": 1286.1279999999624,
+              "duration_us": 7.300999999984015,
+              "sql_statements": 0
+            },
+            {
+              "start_us": 2224.653999999987,
+              "duration_us": 367.8869999999961,
+              "sql_statements": 7
+            }
+          ],
+          "sql_outside_phases": {
+            "schema_version pragma": {
+              "us_per_bundle": 27.159,
+              "calls_per_apply": 1
+            },
+            "begin": {
+              "us_per_bundle": 12.44,
+              "calls_per_apply": 1
+            },
+            "commit": {
+              "us_per_bundle": 132.983,
+              "calls_per_apply": 1
+            }
+          }
+        },
+        "load": "3.59 2.94 3.26 7/1616 3267471"
+      }
+    },
+    "ratchet": {
+      "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+      "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+      "load": [
+        3.59423828125,
+        2.9404296875,
+        3.259765625
+      ],
+      "rounds": 7,
+      "verdict": "passed",
+      "benches": [
+        {
+          "name": "apply/file/edit-alone-200",
+          "unit": "ns/bundle",
+          "median": 1518087.87,
+          "baseline": 1519469.455,
+          "T-64969": 1452939.35,
+          "samples": [
+            1637613.17,
+            1593456.445,
+            1518087.87,
+            1320777.085,
+            1430740.045,
+            1526434.095,
+            1318001.075
+          ]
+        },
+        {
+          "name": "apply/file/edit-alone-1000",
+          "unit": "ns/bundle",
+          "median": 1351983.746,
+          "baseline": 1335211.117,
+          "T-64969": 1364359.929,
+          "samples": [
+            1642470.508,
+            1409014.271,
+            1441896.028,
+            1264155.963,
+            1249758.734,
+            1329221.346,
+            1351983.746
+          ]
+        },
+        {
+          "name": "apply/file/edit-alone-200/sqlPerApply",
+          "unit": "statements",
+          "median": 44.63,
+          "baseline": 44.63,
+          "T-64969": 44.63,
+          "samples": [
+            44.63,
+            44.63,
+            44.63,
+            44.63,
+            44.63,
+            44.63,
+            44.63
+          ]
+        }
+      ]
+    }
   }
 }

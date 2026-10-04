@@ -5,7 +5,7 @@ import { compose, facet } from '@yaks/cli/host'
 import { configPath, read } from '@yaks/cli'
 import { type Bundle, type Graph, signed, type Storage } from '@yaks/graph'
 import type { Expr, Stmt } from '@yaks/sql'
-import { record as capture } from '@yaks/trace'
+import { type Event, record as capture } from '@yaks/trace'
 import { applyBundles, applyFixture } from './apply-fixture.ts'
 
 const config = read(configPath()!)
@@ -20,6 +20,9 @@ let attribution: {
   transaction_us: number
   children_us: number
   coverage_percent: number
+  phases_us: number
+  phase_coverage_percent: number
+  flushes: { start_us: number; duration_us: number; sql_statements: number }[]
   sql_outside_phases: ReturnType<typeof summary>
 } | undefined
 const actor = traceBench
@@ -30,6 +33,17 @@ const eid = () =>
   `f6465700-0000-4000-8000-${String(++serial).padStart(12, '0')}`
 const median = (values: number[]) =>
   [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)]
+const coverage = (spans: Event[]): number => {
+  const intervals = spans.map((s) => [s.start!, s.time]).sort((a, b) =>
+    a[0] - b[0]
+  )
+  let covered = 0, end = -Infinity
+  for (const [start, stop] of intervals) {
+    covered += Math.max(0, stop - Math.max(start, end))
+    end = Math.max(end, stop)
+  }
+  return covered
+}
 type Cost = { ms: number; calls: number }
 let costs = new Map<string, Cost>()
 let active = false
@@ -199,13 +213,18 @@ try {
         s.name == 'transaction' && s.kind == 'phase'
       )!
       const children = captured.spans.filter((s) => s.parent == transaction.id)
-      const intervals = children.map((s) => [s.start!, s.time]).sort((a, b) =>
-        a[0] - b[0]
-      )
-      let covered = 0, end = transaction.start!
-      for (const [start, stop] of intervals) {
-        covered += Math.max(0, stop - Math.max(start, end))
-        end = Math.max(end, stop)
+      const covered = coverage(children)
+      const phases = children.filter((s) => s.kind == 'phase')
+      const phasesCovered = coverage(phases)
+      const byId = new Map(captured.spans.map((s) => [s.id, s]))
+      const within = (s: Event, parent: string): boolean => {
+        while (s.parent) {
+          if (s.parent == parent) return true
+          const next = byId.get(s.parent)
+          if (!next) break
+          s = next
+        }
+        return false
       }
       const outside = new Map<string, Cost>()
       for (const s of children.filter((s) => s.kind == 'sql')) {
@@ -215,13 +234,24 @@ try {
         transaction_us: transaction.duration! * 1000,
         children_us: covered * 1000,
         coverage_percent: covered / transaction.duration! * 100,
+        phases_us: phasesCovered * 1000,
+        phase_coverage_percent: phasesCovered / transaction.duration! * 100,
+        flushes: phases.filter((s) => s.name == 'flush').map((s) => ({
+          start_us: (s.start! - transaction.start!) * 1000,
+          duration_us: s.duration! * 1000,
+          sql_statements: captured.spans.filter((sql) =>
+            sql.kind == 'sql' && within(sql, s.id)
+          ).length,
+        })),
         sql_outside_phases: summary(outside, bundles.length),
       }
       for (const span of captured.spans) {
         if (
           span.kind == 'phase' && span.stage == 'end' &&
           span.package == '@yaks/graph' && !span.plugin
-        ) record(costs, `phase/${span.name}`, span.duration!)
+        ) {
+          record(costs, `phase/${span.name}`, span.duration!)
+        }
       }
     }
     return captured.result

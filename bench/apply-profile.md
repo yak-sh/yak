@@ -4,11 +4,10 @@
 an owned scratch SQLite file beside the configured database. It records the
 ordinary apply trace, tracker construction and flushes, the storage callback's
 entry and exit, and SQL calls through the driver. These observers add overhead;
-the unprofiled ratchet supplies baseline timings. Production modules are
-unchanged. [Retained samples](apply-profile.json) include the load averages,
-phase timings, statement counts and scan counts.
-[SQL span samples](apply-trace.json) retain the box profile and the
-apply-benchmark fixture recording.
+the unprofiled ratchet supplies baseline timings.
+[Retained samples](apply-profile.json) include the load averages, phase timings,
+statement counts and scan counts. [SQL span samples](apply-trace.json) retain
+the box profile and the apply-benchmark fixture recording.
 
 Reproduce from the checkout:
 
@@ -26,10 +25,12 @@ The `spans` mode uses `record()` alone, without the storage, driver or tracker
 wrappers. Its `trace.coverage_percent` measures the union of the transaction's
 direct child intervals divided by its duration. Nested SQL is counted inside its
 phase once; SQL outside phases is counted directly under the transaction.
-`trace.sql_outside_phases` reports the table and verb for those statements. The
-`bench` mode uses the file fixture from `apply_bench.ts`, including its fleet
-corpus, vocabulary, plugins and numbering policy, with those same observers
-disabled.
+`trace.sql_outside_phases` reports the table and verb for those statements.
+`trace.phases_us` and `trace.phase_coverage_percent` count named phases alone.
+`trace.flushes` retains each flush interval and its nested SQL statement count.
+The `bench` mode uses the file fixture from `apply_bench.ts`, including its
+fleet corpus, vocabulary, plugins and numbering policy, with those same
+observers disabled.
 
 ## Batched numbering-exception presence (T-64969)
 
@@ -51,12 +52,58 @@ samples establish attribution, rather than isolating a latency delta.
 The file apply-benchmark fixture uses `number: true`, so it has no numbering
 exceptions. Its statements per lone edit therefore measure the ordinary
 pipeline, while the configured-box profile exercises this optimization. The
-seven-round ratchet measurements are recorded below after verification. The
-batching regression also patches 152 existing entities across three exception
-tables with two SELECTs total (identity and presence), versus 457 with the
-single-table loop, under the 100-bound-parameter limit.
+seven-round `deno task bench:check` passes against the preserved baseline.
+`apply/file/edit-alone-200` measures **44.63 → 44.63 statements/apply** and
+**1,519.5 → 1,452.9 µs/apply**; the 1,000-edit case measures 1,335.2 → 1,364.4
+µs/apply. The profile's structural counter confirms **3 presence
+statements/apply**. The profile and the ratchet's seven samples are retained in
+[apply-profile.json](apply-profile.json). The batching regression also patches
+152 existing entities across three exception tables with two SELECTs total
+(identity and presence), versus 457 with the single-table loop, under the
+100-bound-parameter limit.
 
-## Time outside named transaction phases
+## Named tracker flushes (T-64970)
+
+Both tracker drains run inside a `flush` trace phase. The first must precede
+journaling so descriptor creation and pointer assignments join the journal's
+bundles, and commit hooks can read classified writes. The second classifies rows
+written by journal and commit hooks, including pooled effects. One final drain
+would miss derived journal bundles; one earlier drain would leave those late
+writes to storage's fallback classification. Keeping both also preserves
+classification for adapters without that fallback. The named phases cover
+tracker construction of statements as well as their execution.
+
+The 101-sample configured-box `spans` recording has a median lone apply of
+2,900.1 µs at one-minute load 3.38. Its selected transaction is 2,602.0 µs:
+
+| Transaction work                     | µs/apply |
+| ------------------------------------ | -------: |
+| Named phases other than flush        |  2,027.3 |
+| Two flush phases                     |    368.4 |
+| Schema-version, BEGIN and COMMIT SQL |    149.8 |
+| Uncovered work                       |     56.5 |
+| Total transaction                    |  2,602.0 |
+
+The first flush takes 3.6 µs with no SQL; the second takes 364.8 µs and encloses
+all seven classification statements. **No classification SQL remains outside
+named phases.** Named phases cover **92.07%** of the transaction; their union
+with the remaining direct SQL spans covers **97.83%**. The file fixture's
+recorded lone apply covers **96.11%**; both of its warmed flushes have no SQL.
+Recordings and their intervals are retained in
+[apply-profile.json](apply-profile.json), including a separate wrapped box
+sample. These are separate shared-box samples, not an isolated latency delta.
+
+The regression verifies journal and commit hook presence reads, late component
+changes, new rows, drift, and the flush ancestors of classification SQL through
+an asynchronous commit hook. It fails on the unphased code and when either flush
+is removed; removing the first also fails the descriptor-journaling test. The
+seven-round `deno task bench:check` passes against the preserved baseline.
+Relative to T-64969, `apply/file/edit-alone-200` measures **1,452.9 → 1,518.1
+µs/apply**; the 1,000-edit case measures 1,364.4 → 1,352.0 µs/apply. Statements
+remain **44.63/apply** in the 200-edit case. The ratchet's seven samples are
+retained alongside the recordings in [apply-profile.json](apply-profile.json).
+
+## Retained baseline outside named transaction phases
 
 The 101-sample lone-edit median was 3,563 µs on Deno 2.9.1 at a one-minute load
 average of 5.96. Its transaction took 3,378 µs; named phases inside it totalled
@@ -72,19 +119,21 @@ average of 5.96. Its transaction took 3,378 µs; named phases inside it totalled
 
 The SQL COMMIT itself took 92 µs. The design's absolute 2.3 ms residual is not a
 stable constant on this shared box; its suspected location is resolved: tracker
-flushes account for most of the untraced work, while COMMIT is a small part.
-Graph runs the first flush after stamping and the second after commit hooks,
-outside `phase(...)` in `packages/graph/graph.ts`. Storage then settles its own
-ledger and commits in `packages/sqlite/mod.ts` and `unit.ts`.
+flushes account for most of the untraced work, while COMMIT is a small part. In
+this retained sample, graph ran the first flush after stamping and the second
+after commit hooks, outside named phases in `packages/graph/graph.ts`. Storage
+settled its own ledger and committed in `packages/sqlite/mod.ts` and `unit.ts`.
+The T-64970 recording above attributes both flushes explicitly.
 
-The warmed edit issues 84 individual presence SELECTs for numbering exceptions:
-21 excluded component tables twice inside named phases, then the same 21 tables
-twice in tracker flushes. `patch()` in `packages/sqlite/write.ts` calls
-`wears()` separately for every excluded table and every existing entity. The
-second flush classifies the effect rows written by commit hooks; the first
-normally has no dirty entity once the initial `updated` component exists.
+The retained warm-edit profile issues 84 individual presence SELECTs for
+numbering exceptions: 21 excluded component tables twice inside named phases,
+then the same 21 tables twice in tracker flushes. `patch()` in
+`packages/sqlite/write.ts` calls `wears()` separately for every excluded table
+and every existing entity in that revision. The second flush classifies the
+effect rows written by commit hooks; the first normally has no dirty entity once
+the initial `updated` component exists.
 
-## SQL statement attribution
+## Retained SQL statement attribution
 
 A recording of 101 lone edits on the file apply-benchmark fixture has a median
 transaction of 1,034.0 µs. Its direct children cover 997.6 µs: **96.48%**, above
@@ -109,10 +158,10 @@ This box trace covers **94.12%**. SQL names expose the individual presence
 SELECTs and entity updates inside the flushes; the remaining 210.3 µs includes
 statement construction and control work outside phases. A separate wrapped
 profile measured 121.8 µs of flush construction/control outside driver calls.
-T-64970 moves those flushes into phases. The previous 651 µs of flush time is
-therefore attributed by table and verb, while the remaining non-SQL work is
-visible as a residual. These are separate samples on a shared box, rather than
-an absolute before/after latency comparison.
+T-64970 records those flushes inside named phases. The previous 651 µs of flush
+time is therefore attributed by table and verb, while the remaining non-SQL work
+is visible as a residual. These are separate samples on a shared box, rather
+than an absolute before/after latency comparison.
 
 The unsubscribed seven-round throughput check passed against the preserved
 `throughput.baseline.json`: file-apply time deltas have a median of +2.16%,
@@ -121,14 +170,14 @@ and the recording samples are retained in [apply-trace.json](apply-trace.json).
 `deno task bench:check` now runs this check under the same box-wide lock;
 T-64924 replaced `bin/bench.sh` without rebanking its baseline.
 
-## Create growth
+## Retained create-growth attribution
 
-There is a quadratic scan in `packages/effects/registry.ts`, `matched()`'s
-`inPool`: for each eligible event it asks `bundles.some(...)` whether that
-entity carries an effect component. A normal task create has no such component,
-so the scan traverses the entire phase batch, including birth, stamp and
-archetype patches. The counted hook preserves the same array operations and
-counts predicate visits:
+The retained profile identifies a quadratic scan in
+`packages/effects/registry.ts`, `matched()`'s `inPool`: for each eligible event
+it asks `bundles.some(...)` whether that entity carries an effect component. A
+normal task create has no such component, so the scan traverses the entire phase
+batch, including birth, stamp and archetype patches. The counted hook preserves
+the same array operations and counts predicate visits:
 
 | Task creates | Calls to bundles.some | Predicate visits |
 | -----------: | --------------------: | ---------------: |
@@ -137,9 +186,10 @@ counts predicate visits:
 
 This composition performs exactly 4N² visits: five times as many creates makes
 25 times as much scanning. The V8 CPU report at N=1,000 attributes 11.0% self
-time and 14.3% inclusive time to `inPool`. The larger linear cost remains SQLite
-calls, especially numbering-exception reads: 21N SELECTs during stamps plus 21N
-during archetype flushes. These statement counts grow linearly.
+time and 14.3% inclusive time to `inPool`. The larger linear cost in this
+profile is SQLite calls, especially numbering-exception reads: 21N SELECTs
+during stamps plus 21N during archetype flushes. These statement counts grow
+linearly.
 
 Repeated warmed medians did not reproduce the design's single-run 681 → 1,259
 µs/create magnitude: nine samples gave 782 µs at N=200 and 756 µs at N=1,000,

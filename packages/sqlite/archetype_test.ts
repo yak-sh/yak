@@ -4,6 +4,8 @@ import { archetypeDoc, archetypes, eidOf } from '@yaks/archetype'
 import { after } from '@yaks/fp'
 import { type Bundle, detached, graph, type Plugin, token } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
+import { parse } from '@yaks/query'
+import { record } from '@yaks/trace'
 import { ddl, journal, log } from '@yaks/journal'
 import {
   among,
@@ -312,6 +314,51 @@ test('archetype: the journal sees a descriptor creation, once', () => {
   // writes nothing new about it.
   g.apply([{ entity: { eid: 'a' }, task: {} }])
   assertEquals(descriptors(), before)
+})
+
+test('archetype: traced flushes cover classification around commit hooks', async () => {
+  let tasks = (rows: Bundle[]) => rows.map((b) => b.entity.eid).sort()
+  let { g, driver, get } = setup([{
+    name: 'late writes',
+    hooks: {
+      journal: async (bundles, tx) => {
+        assertEquals(tasks(await tx.read(parse('.task')) as Bundle[]), ['a'])
+        return bundles
+      },
+      commit: async (bundles, tx) => {
+        assertEquals(tasks(await tx.read(parse('.task')) as Bundle[]), ['a'])
+        let late = [
+          { entity: { eid: 'a' }, task: null, doc: { title: 'After commit' } },
+          { entity: { eid: 'late' }, task: {} },
+        ]
+        await tx.patch(late)
+        return [...bundles, ...late]
+      },
+    },
+  }])
+  let captured = await record(
+    g,
+    () => g.apply([{ entity: { eid: 'a' }, task: {} }]),
+  )
+  assertEquals(get('a').entity.archetype, eidOf(['doc']))
+  assertEquals(get('late').entity.archetype, eidOf(['task']))
+  assertEquals(tasks(await g.read('.task') as Bundle[]), ['late'])
+  assertEquals(drift(driver).drifted, 0)
+  // Pointer writes from both drains must belong to named flush phases,
+  // including writes after an asynchronous commit hook.
+  let byId = new Map(captured.spans.map((s) => [s.id, s]))
+  let writes = captured.spans.filter((s) =>
+    s.kind == 'sql' && s.name == 'entity update'
+  )
+  assert(writes.length > 0)
+  let drains = new Set<string>()
+  for (let write of writes) {
+    let parent = byId.get(write.parent!)
+    while (parent && parent.kind != 'phase') parent = byId.get(parent.parent!)
+    assertEquals(parent?.name, 'flush')
+    drains.add(parent!.id)
+  }
+  assertEquals(drains.size, 2)
 })
 
 test('archetype: additive boot, physical hidden table, idempotent backfill, retirement', () => {
