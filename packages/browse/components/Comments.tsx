@@ -11,7 +11,7 @@ import { bundlesOf } from '../wire.ts'
 import { useCommentsOn, useCommitsOn } from './useQuery.ts'
 import { vocab } from '../types.ts'
 import { subject } from '../client.ts'
-import { block, Button, Notes } from '@yaks/ui'
+import { block, Button, Field, Notes, Say } from '@yaks/ui'
 import { ago } from './Stamp.tsx'
 import { pretty } from '../time.ts'
 import { useDraft } from './drafts.ts'
@@ -35,21 +35,14 @@ let Frame = block('div', 'Comments', {
   When: 'a',
   Body: 'div',
   Box: 'div',
-  New: 'textarea',
-  Send: 'button',
   Hints: 'div',
   Hint: 'div',
   Name: 'span',
   Args: 'span',
   About: 'span',
 })
-let { Item, Who, Via, Verdict, When, Body, Box, New, Send } = Frame
+let { Item, Who, Via, Verdict, When, Body, Box } = Frame
 let { Hints, Hint, Name, Args, About } = Frame
-
-// Every composer starts with the same sunken writing surface. Export the
-// primitive so a specialized composer keeps that vocabulary without copying
-// its class or its CSS.
-export let ComposerInput = New
 
 // An instrument's face: browsers by a short client handle, anything else
 // by its chip id (S-31, never the raw session uuid).
@@ -254,27 +247,33 @@ export let Composer = (
           ))}
         </Hints>
       )}
-      <New
-        elRef={box}
-        data-eid={eid}
-        rows={1}
-        onInput={(e: InputEvent) => {
-          let el = e.currentTarget as HTMLTextAreaElement
-          sync(el)
-          setLine(el.value)
-          setPick(0)
+      <Say
+        onSubmit={(event: Event) => {
+          event.preventDefault()
+          post()
         }}
-        placeholder={replyTo ? 'reply…' : prompt(ent(eid), entry, model)}
-        onKeyDown={key}
-      />
-      <Send
-        type='button'
-        mod={line.trim() && 'on'}
-        disabled={!line.trim()}
-        onClick={post}
       >
-        send
-      </Send>
+        <Field
+          lines
+          elRef={box}
+          data-eid={eid}
+          rows={1}
+          onInput={(e: InputEvent) => {
+            let el = e.currentTarget as HTMLTextAreaElement
+            sync(el)
+            setLine(el.value)
+            setPick(0)
+          }}
+          placeholder={replyTo ? 'reply…' : prompt(ent(eid), entry, model)}
+          onKeyDown={key}
+        />
+        <Button
+          type='submit'
+          disabled={!line.trim()}
+        >
+          send
+        </Button>
+      </Say>
     </Box>
   )
 }

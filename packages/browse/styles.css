@@ -683,23 +683,6 @@ html {
   text-decoration: underline;
 }
 /* The input is an ordinary sunken box at the rail's foot. */
-.Comments_New {
-  font: inherit;
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) - 2px);
-  padding: var(--half-gap);
-  resize: none;
-  outline: none;
-}
-.Comments_New::placeholder {
-  color: var(--dim);
-}
-/* The composer's command completion: the vocabulary, offered where the
-   typing already happens. It sits ABOVE the box (the rail grows down, so
-   below would push the box off the read) and only exists while the first
-   line is a `:` line. */
 .Comments_Box {
   display: grid;
   gap: var(--half-gap);
@@ -738,26 +721,6 @@ html {
   color: var(--dim);
   margin-left: auto;
 }
-/* The composer button is a thumb sized way to post a draft. */
-.Comments_Send {
-  justify-self: start;
-  font: inherit;
-  font-size: 11px;
-  color: var(--dim);
-  background: none;
-  border: 1px solid var(--border2);
-  border-radius: 4px;
-  padding: 1px 7px;
-  cursor: pointer;
-}
-.Comments_Send-on {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-.Comments_New:focus {
-  border-color: var(--accent);
-}
-
 /* The one scrolling element — padding scrolls away WITH the content. */
 .Card_Scroll {
   flex: 1;
@@ -2350,6 +2313,10 @@ a[data-ref]:hover {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--half-gap);
+  /* The composer occupies its own row beneath model selection. */
+  & > .Comments_Box {
+    grid-column: 1 / -1;
+  }
 }
 .SessionManage_Label {
   display: flex;
@@ -2365,17 +2332,6 @@ a[data-ref]:hover {
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-}
-.SessionManage_Input .Comments_Box {
-  grid-column: 1 / -1;
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-.SessionManage_Input .Comments_Hints {
-  grid-column: 1 / -1;
-}
-.SessionManage_Input .Comments_Send {
-  min-height: var(--tap);
-  align-self: stretch;
 }
 .Session_Body {
   grid-area: body;

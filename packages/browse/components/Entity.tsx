@@ -392,7 +392,7 @@ defineActions([
           if (typeof document != 'undefined') {
             setTimeout(() =>
               document.querySelector<HTMLElement>(
-                `.Comments_New[data-eid="${e.eid}"]`,
+                `.Field[data-eid="${e.eid}"]`,
               )?.focus(), 0)
           }
         },

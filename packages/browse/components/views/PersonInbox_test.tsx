@@ -80,7 +80,7 @@ test('person inbox groups policy threads, shows newest words and answers in plac
       ),
       true,
     )
-    assertEquals(seen.root.querySelector('.Comments_New') != null, true)
+    assertEquals(seen.root.querySelector('textarea.Field') != null, true)
     let buttons = [...seen.root.querySelectorAll('button')]
     await act(() =>
       (buttons.find((b) => b.textContent == '2. Bus') as HTMLButtonElement)
@@ -165,7 +165,7 @@ test('an expanded ask shows its full body and resumes its page state and preciou
       'true',
     )
     assertEquals(
-      (seen.root.querySelector('.Comments_New') as HTMLTextAreaElement).value,
+      (seen.root.querySelector('textarea.Field') as HTMLTextAreaElement).value,
       'Precious unsent words',
     )
     assertEquals(
@@ -241,7 +241,12 @@ test('new conversation keeps its exact draft across remount, rejects blank words
     assertEquals(box().value, words)
 
     await act(() =>
-      (seen.root.querySelector('button') as HTMLButtonElement).click()
+      seen.root.querySelector('form')!.dispatchEvent(
+        new (box().ownerDocument.defaultView!.Event)('submit', {
+          bubbles: true,
+          cancelable: true,
+        }),
+      )
     )
     let calls = sent.filter((c) =>
       c.name == 'call' && c.comp?.to == identityEid('tool', ['inbox_new'])
@@ -390,7 +395,7 @@ test('inbox roots and newest messages select contextual shared renderers without
       seen.root.querySelectorAll('.Inbox_Detail section').length > 0,
       true,
     )
-    assertEquals(seen.root.querySelectorAll('.Comments_New').length, 1)
+    assertEquals(seen.root.querySelectorAll('textarea.Field').length, 1)
   } finally {
     seen.free()
     registry.renderers = prior

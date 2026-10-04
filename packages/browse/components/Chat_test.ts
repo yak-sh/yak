@@ -86,9 +86,9 @@ test('a new chat reuses the composer input with a terse prompt', () => {
     h(Starter, { e: ent('target'), actor: 'actor', done() {} }),
   )
   try {
-    let box = mounted.root.querySelector('.Comments_New')
+    let box = mounted.root.querySelector('textarea.Field')
     assertEquals(box?.getAttribute('placeholder'), 'start a chat…')
-    assertEquals(box?.getAttribute('class'), 'Comments_New')
+    assertEquals(box?.getAttribute('class'), 'Field')
   } finally {
     mounted.free()
     cache.value = {}

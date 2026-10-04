@@ -3,7 +3,9 @@
 import { test } from '@yaks/testing'
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
-import { cache, ent } from '../live.ts'
+import { cache, ent, useRoute } from '../live.ts'
+import { act } from 'preact/test-utils'
+import { drafts } from './drafts.ts'
 import { h } from 'preact'
 import { derivedEid } from '@yaks/graph'
 import { mount } from './mount.ts'
@@ -12,6 +14,7 @@ import {
   Branches,
   byline,
   commentPlace,
+  Composer,
   composerChanges,
   prompt,
   viaName,
@@ -146,6 +149,76 @@ test('a thread shows answers under their question, not under unrelated notes', (
     })
   } finally {
     free()
+    cache.value = {}
+  }
+})
+
+test('shared comment send line keeps drafts, sends by submit or Enter once and leaves Shift+Enter alone', async () => {
+  let eid = 'dddddddd-3333-4333-8333-dddddddddddd'
+  cache.value = {
+    [eid]: {
+      entity: { eid, num: 19 },
+      doc: { title: 'Comment target' },
+      task: {},
+    },
+  }
+  let sent: import('../types.ts').Change[] = []
+  let restore = useRoute((frame) => {
+    if (
+      frame && typeof frame == 'object' && 'apply' in frame &&
+      Array.isArray(frame.apply)
+    ) sent.push(...frame.apply)
+  })
+  let seen = mount(h(Composer, { eid }))
+  let input = () => seen.root.querySelector('textarea') as HTMLTextAreaElement
+  let type = (words: string) => {
+    input().value = words
+    input().dispatchEvent(
+      new (input().ownerDocument.defaultView!.Event)('input', {
+        bubbles: true,
+      }),
+    )
+  }
+  try {
+    assertEquals(seen.root.querySelector('form')?.contains(input()), true)
+    assertEquals(seen.root.querySelector('button')?.disabled, true)
+    await act(() => type('Draft kept across remount'))
+    seen.free()
+    seen = mount(h(Composer, { eid }))
+    assertEquals(input().value, 'Draft kept across remount')
+    await act(() =>
+      seen.root.querySelector('form')!.dispatchEvent(
+        new (input().ownerDocument.defaultView!.Event)('submit', {
+          bubbles: true,
+          cancelable: true,
+        }),
+      )
+    )
+    assertEquals(
+      sent.filter((c) => c.name == 'comment').length,
+      1,
+      JSON.stringify(sent),
+    )
+    assertEquals(drafts.text(commentPlace(eid)), '')
+    await act(() => type('Second words'))
+    let key = (shift: boolean) =>
+      Object.assign(
+        new (input().ownerDocument.defaultView!.Event)('keydown', {
+          bubbles: true,
+          cancelable: true,
+        }),
+        { key: 'Enter', shiftKey: shift },
+      )
+    let newline = key(true)
+    await act(() => input().dispatchEvent(newline))
+    assertEquals(newline.defaultPrevented, false)
+    assertEquals(sent.filter((c) => c.name == 'comment').length, 1)
+    await act(() => input().dispatchEvent(key(false)))
+    assertEquals(sent.filter((c) => c.name == 'comment').length, 2)
+    assertEquals(input().value, '')
+  } finally {
+    useRoute(restore)
+    seen.free()
     cache.value = {}
   }
 })

@@ -6,8 +6,7 @@ import { sessionFrames } from '../client.ts'
 import { mutate, myActor, rowsSub, uuid } from '../live.ts'
 import { catalog, type Provider, usingOf } from '../providers.ts'
 import type { Change, Ent } from '../types.ts'
-import { block } from '@yaks/ui'
-import { ComposerInput } from './Comments.tsx'
+import { block, Field } from '@yaks/ui'
 import { Entity } from './Entity.tsx'
 import { ListFrame } from './ListFrame.tsx'
 import { liveBlocked, load, providers } from './Run.tsx'
@@ -127,7 +126,8 @@ export let Starter = (
   }
   return (
     <Start>
-      <ComposerInput
+      <Field
+        lines
         elRef={box}
         rows={3}
         placeholder='start a chat…'

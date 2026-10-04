@@ -2,13 +2,13 @@
 import { type ComponentChild } from 'preact'
 import { attention, lanes, type Search, type Thread } from '@yaks/inbox'
 import { useRef, useState } from 'preact/hooks'
-import { Button, Inbox as Frame, Tabs } from '@yaks/ui'
+import { Button, Field, Inbox as Frame, Say, Tabs } from '@yaks/ui'
 import { type Bundle, identityEid } from '@yaks/graph'
 import { useLayoutEffect } from 'preact/hooks'
 import { type Row } from '../../client.ts'
 import { apply, ent, rowsSub, uuid } from '../../live.ts'
 import { type Ent, idOf, vocab } from '../../types.ts'
-import { Branches, Composer, ComposerInput } from '../Comments.tsx'
+import { Branches, Composer } from '../Comments.tsx'
 import { Dot } from '../Dot.tsx'
 import { Entity } from '../Entity.tsx'
 import { drafts, useDraft } from '../drafts.ts'
@@ -42,10 +42,17 @@ export let NewConversation = ({ actor }: { actor: string }) => {
     setText('')
   }
   return (
-    <section aria-label='New conversation'>
-      <ComposerInput
+    <Say
+      aria-label='New conversation'
+      onSubmit={(event: Event) => {
+        event.preventDefault()
+        post()
+      }}
+    >
+      <Field
+        lines
         elRef={input}
-        rows={2}
+        rows={1}
         aria-label='New conversation'
         placeholder='New conversation…'
         onInput={(event: Event) =>
@@ -56,10 +63,10 @@ export let NewConversation = ({ actor }: { actor: string }) => {
           post()
         }}
       />
-      <Button type='button' disabled={!text.trim()} onClick={post}>
+      <Button type='submit' disabled={!text.trim()}>
         Start conversation
       </Button>
-    </section>
+    </Say>
   )
 }
 
@@ -242,7 +249,7 @@ export let PersonInbox = ({ e, limit }: { e: Ent; limit?: number }) => {
         onSearch={setSearch}
         limit={limit}
         find={
-          <Frame.Search
+          <Field
             elRef={input}
             type='search'
             aria-label='Search inbox'

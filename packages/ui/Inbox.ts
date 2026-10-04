@@ -1,6 +1,7 @@
 /** Thread rows grouped into attention lanes, with an expandable detail. */
 import { h } from 'preact'
 import { block, type Part, type Props } from './el.ts'
+import { Field } from './Field.ts'
 import { Tabs } from './Tabs.ts'
 import type { Sheet } from '@yaks/tui/theme'
 import type { Colors, Specimen } from './theme.ts'
@@ -10,7 +11,6 @@ export let Inbox:
   & Part
   & Record<
     | 'Tools'
-    | 'Search'
     | 'Mode'
     | 'Lane'
     | 'Heading'
@@ -22,7 +22,6 @@ export let Inbox:
   > = Object.assign(
     block('section', 'Inbox', {
       Tools: 'div',
-      Search: 'input',
       Lane: 'section',
       Heading: 'h2',
       Thread: 'article',
@@ -55,14 +54,14 @@ export let sheet = (c: Colors): Sheet => ({
 /** Needs, replies, an expanded conversation and an empty lane. */
 export let specimens = (): Specimen[] => [
   [
-    'Inbox, Tools, Search, Mode, Lane, Heading, Thread-unread, Reason, Detail, Empty',
+    'Inbox, Tools, Mode, Lane, Heading, Thread-unread, Reason, Detail, Empty',
     h(
       Inbox,
       {},
       h(
         Inbox.Tools,
         {},
-        h(Inbox.Search, { placeholder: 'Search your threads…' }),
+        h(Field, { placeholder: 'Search your threads…' }),
         h(Inbox.Mode, { mod: 'on', type: 'button' }, 'Both'),
         h(Inbox.Mode, { type: 'button' }, 'Said'),
         h(Inbox.Mode, { type: 'button' }, 'Received'),
