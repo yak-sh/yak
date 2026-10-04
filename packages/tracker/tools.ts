@@ -2,7 +2,16 @@
 
 import { argsOf, type Bundle, type Graph } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
-import { and, eq, every, limit, order, parse, present } from '@yaks/query'
+import {
+  and,
+  eq,
+  every,
+  limit,
+  order,
+  orderOf,
+  parse,
+  present,
+} from '@yaks/query'
 import { CallError } from '@yaks/tools'
 import { str } from './model.ts'
 
@@ -19,12 +28,13 @@ let mark =
 export let runs = (): Runs => ({
   bug_list: (call, g) => {
     let args = argsOf(call)
+    let query = parse(str(args.query) || '.bug.status=open')
     return g.read(
       and(
         present('bug'),
-        parse(str(args.query) || '.bug.status=open'),
+        query,
         every(),
-        ...str(args.query).includes('.order=') ? [] : [order('-bug.hits')],
+        ...orderOf(query) ? [] : [order('-bug.hits')],
         limit(Number(args.limit ?? 50)),
       ),
     )
