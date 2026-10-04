@@ -674,7 +674,7 @@ test('the page wire: apply, query and search round-trip', async () => {
   assertEquals((await page.query('.person')).length, 1)
 })
 
-test('a store tells the directory what it holds once a write moves it', async () => {
+test('a store tells the directory its size within the storage allowance step', async () => {
   using scenario = platform()
   let { env, states } = scenario
   let { dir, space, app } = await seeded(env)
@@ -685,12 +685,12 @@ test('a store tells the directory what it holds once a write moves it', async ()
     doc: { title: 'Lemon cake', body: 'lemons '.repeat(4_000) },
   }])
   // Nobody asked the store: it said so itself, after the write committed
-  // (graph.ts `#tell`), and what it said is what it weighs.
+  // (graph.ts `#tell`). Sub-MiB movement is below the allowance step.
   let held = () => states.get(storeName(space, app))!.storage.sql.databaseSize
   let told = await until(async () =>
     (await dir.app(space, 'cookbook'))!.meter?.bytes
   )
-  assertEquals(told, held())
+  assert(Math.abs(Number(told) - held()) < 1024 ** 2)
   assert(held() > 0)
 })
 

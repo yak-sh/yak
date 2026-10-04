@@ -2378,12 +2378,13 @@ export class Store {
 
   // ---- the bytes it holds (meter.ts `weighed`) -----------------------------
   //
-  // Nothing outside this object can see how much it holds, so it says so
-  // itself, to the directory, whenever a committed write moved the figure.
-  // One report is in flight at a time: a burst of writes tells the size it came
-  // to, not one size per write. A report that fails waits for the next write
-  // rather than retrying on its own, so a directory that is down is not called
-  // in a loop.
+  // Nothing outside this object can see how much it holds. Tell the directory
+  // on the first write, then only after a MiB of movement: 0.1% of the free
+  // space's 1 GiB allowance (at most 0.5% across its five apps), and 0.01%
+  // of Plus's 10 GiB. No timer or alarm is owed by an idle store.
+  // One report per turn, with no catch-up loop: writes arriving while it is
+  // in flight are folded into the next qualifying write. A failed report
+  // likewise waits for a write, never retries on its own.
   #weighing: Promise<void> | null = null
 
   #weigh = (bundles: Bundle[]): Bundle[] => {
@@ -2395,18 +2396,16 @@ export class Store {
     this.#weighing ??= this.#telling().finally(() => (this.#weighing = null))
   }
 
-  // Until what it last told is what it holds: a write that lands while a
-  // report is on its way is told on the next turn.
   async #telling(): Promise<void> {
     try {
-      for (;;) {
-        let app = this.#get('app')
-        let ns = this.#bind.STORE
-        let bytes = this.#ctx.storage.sql.databaseSize
-        if (!app || !ns || String(bytes) == this.#get('weighed')) return
-        await weighed({ STORE: ns }, app, bytes)
-        this.#put('weighed', String(bytes))
-      }
+      let app = this.#get('app')
+      let ns = this.#bind.STORE
+      if (!app || !ns) return
+      let bytes = this.#ctx.storage.sql.databaseSize
+      let told = this.#get('weighed')
+      if (told != null && Math.abs(bytes - Number(told)) < 1024 ** 2) return
+      await weighed({ STORE: ns }, app, bytes)
+      this.#put('weighed', String(bytes))
     } catch (e) {
       defect(e, { request: 'meter bytes', store: this.#name() })
     }

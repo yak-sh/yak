@@ -1,0 +1,21 @@
+// Test-only workerd door: real Store applies and SQL row counters.
+import { storeCost } from './store_cost_fixture.ts'
+import type { Namespace } from './door.ts'
+
+export class StoreCost {
+  constructor(private ctx: { storage: Parameters<typeof storeCost>[0] }) {}
+  alarm(): void {}
+  async fetch(req: Request): Promise<Response> {
+    return Response.json(
+      await storeCost(
+        this.ctx.storage,
+        new URL(req.url).searchParams.get('kind') ?? 'directory',
+      ),
+    )
+  }
+}
+export default {
+  fetch(req: Request, env: { COST: Namespace }): Promise<Response> {
+    return env.COST.get(env.COST.idFromName(crypto.randomUUID())).fetch(req)
+  },
+}
