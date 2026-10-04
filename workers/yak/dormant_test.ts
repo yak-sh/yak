@@ -4,6 +4,7 @@ import { trash, untrash } from './erase.ts'
 import { Store } from './graph.ts'
 import { storeOf } from './door.ts'
 import { KERNEL } from './meta.ts'
+import { openIn } from './unseen.ts'
 import { platform } from './testing.ts'
 import type { Wire } from '@yaks/durable-object'
 
@@ -16,6 +17,7 @@ test('trash makes a store dormant across every wake and restore keeps its data',
       entity: { eid: '$app' },
       app: {
         slug: 'held',
+        version: 1,
         space: space.eid,
         store: 'dormant/held.123456',
         access: 'public',
@@ -60,6 +62,14 @@ test('trash makes a store dormant across every wake and restore keeps its data',
   equal(statements, 0)
   equal(await ctx.storage.getAlarm(), null)
   equal(closed > 0, true)
+  equal(
+    await openIn(p.env, space, {
+      ...app,
+      trashed: { at: new Date().toISOString(), by: who.person },
+    }, who),
+    [],
+  )
+  equal(statements, 0)
   statements = 0
   let store = p.object(name)
   for (let incarnation of [store, new Store(ctx, p.env)]) {

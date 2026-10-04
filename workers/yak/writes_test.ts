@@ -41,6 +41,7 @@ let object = () => {
     writes,
     query,
     title,
+    boot: () => store.door,
     alarm: () => store.alarm(),
   }
 }
@@ -69,6 +70,9 @@ let resetting = (o: ReturnType<typeof object>): Namespace => {
 // What breaking a deploy looks like from inside: the vocabulary the object
 // boots from no longer loads, so it refuses to start.
 let broken = (o: ReturnType<typeof object>) => {
+  // Boot the isolated fixture explicitly before installing a broken deploy.
+  // Runtime entry points now defer SQL until their dormancy gate has passed.
+  o.boot()
   keep(o.ctx, 'vocab', 'not json')
   o.wake()
 }

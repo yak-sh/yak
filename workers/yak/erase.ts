@@ -517,7 +517,9 @@ export let trash = async (
 ) => {
   await mark(dir, app.eid, who, {})
   await dormancy(env, space, app, true)
-  await rostered(env, dir, space, app)
+  // A dormant store cannot describe its views. Tell the directory's members
+  // directly, without asking the app for the declaration it stopped serving.
+  await viewsMoved({ env, dir }, space)
 }
 
 // A store out of the trash, told to come back now for what its wakes are owed

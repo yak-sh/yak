@@ -309,6 +309,8 @@ export let openIn = async (
   who: Who,
   all = false,
 ) => {
+  // A trashed store is dormant; its errors return with the app on restore.
+  if (app.trashed || space.trashed) return []
   let seen = all ? '' : '&!notified'
   let at = graphAt(env, space, app, who)
   try {
