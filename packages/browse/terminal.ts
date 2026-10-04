@@ -101,7 +101,7 @@ export let open = async (url: string, opts: {
   let Terminal = () => {
     useKeys((k) => {
       if (
-        k.name == 'char' && k.text == 'f' &&
+        k.name == 'char' && !k.ctrl && !k.alt && k.text == 'f' &&
         !screen.root.querySelector('[data-caret]')
       ) {
         let field = screen.root.querySelector('.Navigation')?.querySelector(
@@ -113,7 +113,7 @@ export let open = async (url: string, opts: {
         }
       }
       if (
-        k.name == 'char' && k.text == 'i' &&
+        k.name == 'char' && !k.ctrl && !k.alt && k.text == 'i' &&
         !screen.root.querySelector('[data-caret]')
       ) {
         let field = screen.root.querySelector('.App_Body')?.querySelector(
