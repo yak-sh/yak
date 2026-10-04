@@ -36,15 +36,25 @@ lets the style guide show every part on its own.
 
 ## First, look for it
 
-packages/web already has most of what a new screen needs: editing, pickers,
-popouts, lists, menus, entity chips (packages/web/components,
-components/views). @yaks/ux's `Edit` came from there. Re-inventing a part that
-exists gives two looks and two behaviors for one thing.
+Look in the kit first. `yak ui` in a terminal, or `/ui` in a browser, shows
+every part in every variant, and packages/ui/kit.ts lists them by group (Prose,
+Marks, Controls, Navigation, Lists, Page). A text box is `Field`, a box and its
+send button on one line is `Say`, a set of choices is `Choices`. A screen that
+needs one of those uses it, and a screen that needs a part the kit lacks adds
+the part to a kit, never markup styled where it is used. An entity is never
+drawn by a part: its renderer draws it (below).
 
-Moving a part is a refactor, not a copy. Split it along the three kinds: its
-look into a kit, its behavior into @yaks/ux, its data access behind the host's
-interface, its meaning in the domain package. Then delete web's copy and move
-web onto the moved one in the same change.
+packages/web still has parts from before the kits: `block` parts defined in its
+components and styled in packages/web/styles.css, such as `Comments` (its
+composer is `Comments_New`), `Search` and `Filter`. The pull is to reuse one,
+since it sits beside the screen being changed, is already imported, and
+reusing it feels like looking first. It is not a kit part. Where the kit has
+the same part, use the kit's and delete web's; where it does not, port it
+first. Moving a part is a refactor, not a copy: split it along the three kinds
+(its look into a kit, its behavior into @yaks/ux, its data access behind the
+host's interface, its meaning in the domain package), then delete web's copy
+and move web onto the moved one in the same change. Two copies of one part
+give two looks and two behaviors for one thing.
 
 ## A UI part
 
