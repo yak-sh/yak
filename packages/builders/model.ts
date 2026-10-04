@@ -101,8 +101,10 @@ export let render = (template: string, binding: Binding): string => {
 let contract =
   'Answer with JSON: {"outputs": [...]}, one output for each the ' +
   'request asks for, each {"slot":"stable-name",' +
-  '"inputs":["input-id"],"components":{"doc":{"body":"text"}}}, ' +
+  '"inputs":["input-id"],"components":{}}, ' +
   'or {"outputs": []} where it asks for none. ' +
+  'Fill components with the component names and property values the request ' +
+  'asks for, directly as JSON objects. ' +
   'Cite only selected input ids.'
 
 let instructions = (base: unknown): string => {
@@ -120,7 +122,7 @@ let request = (template: string, binding: Binding): string =>
 export let modelTool = (desk: Desk = {}): Tool => ({
   name: MODEL,
   description: 'Build one query binding through an ordinary model session',
-  revision: '2',
+  revision: '3',
   inputSchema: {
     type: 'object',
     properties: {

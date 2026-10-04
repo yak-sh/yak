@@ -117,6 +117,45 @@ test('a worker clearing a backlog lets its host answer between passes', async ()
   assert(heard[0] < 3, `answered after ${heard[0]} of 3 runs`)
 })
 
+test('a worker refills a freed slot while another handler is still running', async () => {
+  let a = proc(store(), { max: 2, defer: true })
+  let slow = Promise.withResolvers<void>()
+  let fast = Promise.withResolvers<void>()
+  let active = 0, peak = 0, ended = false
+  a.fx.handle({
+    post_note: async (e) => {
+      peak = Math.max(peak, ++active)
+      a.ran.push(e.entity.eid)
+      try {
+        if (e.entity.eid == 'slow') await slow.promise
+        if (e.entity.eid == 'fast') {
+          await fast.promise
+          await a.g.apply([post('next')])
+        }
+      } finally {
+        active--
+      }
+    },
+  })
+  await a.g.apply([post('slow'), post('fast')])
+  let work = a.fx.work(a.g).then(() => ended = true)
+  try {
+    await until(() => a.ran.length == 2)
+    assertEquals(peak, 2)
+    fast.resolve()
+    await until(() => a.ran.includes('next'), { timeout: 500 })
+    assertEquals(peak, 2)
+    assertEquals(ended, false)
+  } finally {
+    slow.resolve()
+    fast.resolve()
+    await work
+  }
+  assertEquals(active, 0)
+  assertEquals((await run(a.g, 'post_note', 'next')).state, 'done')
+  assertEquals(a.oops, [])
+})
+
 test('a run that throws comes back due, and rests failed once its tries are spent', async () => {
   let t = 0
   let a = proc(store(), { now: () => t })

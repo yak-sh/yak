@@ -745,8 +745,19 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         await join(g)
         for (let n = 0; n < passes; n++) {
           let started = await pass(g)
-          if (!started.length) break
-          await Promise.all(started)
+          if (!started.length && (passes != Infinity || !running.size)) break
+          // A drain refills a slot as soon as its run ends, even while a
+          // slower run still holds another. A finite pass settles its batch
+          // and leaves newly owed work for the next wake.
+          let pending = passes == Infinity
+            ? [...started, ...[...running.values()].map((h) => h.run)]
+            : started
+          if (pending.length) {
+            let settled = passes == Infinity
+              ? Promise.race(pending)
+              : Promise.all(pending)
+            while (await still(settled, beat)) await renew(g)
+          }
           await sleep(0)
         }
         return
