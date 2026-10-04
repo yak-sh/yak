@@ -1094,11 +1094,17 @@ let rungs = (ctx: Ctx, c: Clause): Clause | null => {
 // variables and V8's argument limit for a spread (`task list memory yaks`,
 // T-37437). Compiled together it binds at most one id per archetype. A status
 // filter on a ladder joins in as the presence tests it means (`rungs`).
+// AND boundaries do not change scope. A caller can wrap an already-built
+// query in another conjunction, so expose its siblings before carrying an
+// entity address into every disjunction below it.
+let flattened = (clauses: Clause[]): Clause[] =>
+  clauses.flatMap((c) => c.kind == 'and' ? flattened(c.clauses) : [c])
+
 let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   let all: string[] = []
   let none: string[] = []
   let rest: Clause[] = []
-  let cs = clauses.flatMap((c) => {
+  let cs = addressed(ctx, flattened(clauses)).flatMap((c) => {
     let x = rungs(ctx, c)
     return x?.kind == 'and' ? x.clauses : [x ?? c]
   })
@@ -1116,7 +1122,9 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
 
 // An OR's indexed arms are selected before the outer WHERE is applied. Carry
 // an exact entity address into each arm so a scoped query seeks that entity
-// instead of running every arm over the whole graph first.
+// instead of running every arm over the whole graph first. This runs for every
+// conjunction, including the ones made here for an OR arm; nested disjunctions
+// inherit the address as well.
 let addressed = (ctx: Ctx, cs: Clause[]): Clause[] => {
   let eid = cs.find((c): c is Pred =>
     c.kind == 'pred' && c.path.join('.') == 'entity.eid' && c.op == '=' &&
@@ -1361,7 +1369,7 @@ export let bound = (
   }
   let filters = cs.filter((c) => !directive(c) || claims(ctx, c.kind))
   let where = and(
-    ...conjuncts(ctx, addressed(ctx, filters)),
+    ...conjuncts(ctx, filters),
     cond(ctx.d.live()),
   )
   // Callers that read columns beside the filter ask for their joins here. A

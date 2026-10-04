@@ -16,6 +16,7 @@ import { loadVocab } from '@yaks/vocab'
 import { mem, shop, spy } from './testing.ts'
 import { backfill, rows, storage } from './mod.ts'
 import { open, type Opened } from './db.ts'
+import { catalog } from './catalog.ts'
 
 let vocab = loadVocab([...shop.docs, archetypeDoc, {
   $defs: {
@@ -313,4 +314,74 @@ test('archetype plans and gathers observe commits from another SQLite handle', (
     second.close()
     Deno.removeSync(dir, { recursive: true })
   }
+})
+
+// A save condition rechecks only the peer entity that changed. Its scope is
+// wrapped around the already-built save query, rather than a flat string.
+// The missing-property arm must not enumerate unrelated entities first.
+test('an eid scope reaches disjunctions inside nested conjunctions', () => {
+  let v = loadVocab([archetypeDoc, {
+    $defs: {
+      player: { component: true, type: 'object' },
+      position: {
+        component: true,
+        type: 'object',
+        properties: { at: { type: 'string', format: 'date-time' } },
+      },
+    },
+  }])
+  let d = mem()
+  let s = storage(d, v)
+  s.install()
+  let g = graph({ storage: s, vocab: v, plugins: [archetypes()] })
+  let ids = Array.from({ length: 1000 }, (_, i) => `candidate${i}`)
+  let now = Date.parse('2026-10-04T12:00:00Z')
+  g.apply(ids.map((eid, i) => ({
+    entity: { eid },
+    ...i < 3 || i == 999 ? { player: {} } : {},
+    ...i < 7
+      ? {
+        position: i == 0
+          ? {}
+          : { at: new Date(now - (i == 1 ? 60_000 : 0)).toISOString() },
+      }
+      : {},
+  })))
+  let scope = parse(`.entity.eid=${ids[0]},${ids[1]},${ids[2]},${ids[999]}`)
+  // Vale's save condition (T-65211). Four of its seven position entities have
+  // no player, so this is also exercised with a scoped entity that cannot save.
+  let original = parse('.player (!position.at | .position.at<="30s ago")')
+  for (
+    let q of [
+      and(scope, original),
+      and(and(scope), and(original)),
+      and(original, scope),
+      and(
+        scope,
+        parse(
+          '.player ((!position.at | .position.at<="30s ago") | .position.at>now)',
+        ),
+      ),
+      parse(
+        `.player (!position.at | .position.at<="30s ago") .entity.eid=${
+          ids[0]
+        },${ids[1]},${ids[2]},${ids[999]}`,
+      ),
+    ]
+  ) {
+    assertEquals(s.rows(q, { now }), [{ eid: ids[0] }, { eid: ids[1] }, {
+      eid: ids[999],
+    }])
+    let statement = compile(q, v, { archetypes: catalog(d), now })
+    let plan = d.query({ t: 'explain query plan', of: statement })
+      .map((r) => String(r.detail)).join('\n')
+    assert(!plan.includes('SCAN entity'), plan)
+    // Checking just the outer seek misses the unscoped UNION arms: they
+    // materialize before the outer filter, and each reads the whole store.
+    assert((plan.match(/SEARCH entity .*\(eid=\?\)/g) ?? []).length >= 2, plan)
+  }
+  assertEquals(
+    s.rows(and(parse(`.entity.eid=${ids[3]}`), original), { now }),
+    [],
+  )
 })
