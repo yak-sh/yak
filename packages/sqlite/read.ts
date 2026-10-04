@@ -20,6 +20,7 @@ import {
   as,
   type Backings,
   type BindOpts,
+  call,
   col,
   compile,
   cross,
@@ -317,6 +318,21 @@ export let spine = (vocab: Vocab, which: Expr): Select => {
   })
 }
 
+// Drive identity reads from the requested set. SQLite estimates json_each at
+// a fixed cardinality; an IN subquery can therefore choose a table scan when
+// statistics remember a small component (even after its history grows). CROSS
+// JOIN keeps the requested owners outside the indexed spine/component probes.
+let ownerSet = (ids: readonly (string | number)[]): Source =>
+  call('json_each', [val(JSON.stringify(ids))], '@owners')
+let namedSpine = (vocab: Vocab, eids: string[]): Select => {
+  let base = spine(vocab, eq(col('eid', 'e'), col('value', '@owners')))
+  return select({
+    ...base,
+    from: ownerSet(eids),
+    joins: [cross(table('entity', 'e')), ...base.joins!],
+  })
+}
+
 // Which tables hold a row for any owner. VALUES has no compound-SELECT arm
 // limit, so a wide sparse vocabulary still takes one presence statement.
 // Globally empty tables short-circuit before the owners are walked.
@@ -431,7 +447,7 @@ let joinedPlan = (
   )
   let key = JSON.stringify(names)
   if (cache.has(key)) return cache.get(key)!
-  let base = spine(vocab, among(col('eid', 'e'), each([])))
+  let base = namedSpine(vocab, [])
   let columns = [...base.cols!]
   let joins = [...base.joins!]
   let props: string[][] = []
@@ -482,8 +498,8 @@ let joinedGet = (
 ): Bundle[] | { spine: Row[] } | undefined => {
   let plan = joinedPlan(vocab, names, opts)
   if (!plan) return
-  // The owners' JSON array is the final bind in this SELECT. All projection
-  // expressions precede its WHERE, so their own parameters stay in place.
+  // The owners' JSON array is the final bind: projection expressions come
+  // before FROM and the following spine/reference joins bind no parameters.
   let rows: Row[]
   try {
     rows = driver.query({
@@ -603,7 +619,7 @@ export let get = (
     let groups = new Map<string, number[]>()
     for (
       let row of initial ??
-        driver.query(spine(vocab, among(col('eid', 'e'), each(ids))))
+        driver.query(namedSpine(vocab, ids))
     ) {
       let eid = String(row.eid)
       let entity = {
@@ -667,9 +683,9 @@ export let get = (
       for (
         let row of driver.query(select({
           cols: [as(col('entity', comp), '@id'), ...sel],
-          from: table(comp),
-          joins,
-          where: among(col('entity', comp), each(ids)),
+          from: ownerSet(ids),
+          joins: [cross(table(comp)), ...joins],
+          where: eq(col('entity', comp), col('value', '@owners')),
         }))
       ) {
         let { '@id': owner, ...value } = row

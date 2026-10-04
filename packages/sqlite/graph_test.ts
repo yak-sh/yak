@@ -32,14 +32,14 @@ test('a projected read fetches only the components it returns', () => {
 
   seen.length = 0
   assertEquals((g.read('.product') as Bundle[])[0].doc, undefined)
-  assert(!seen.some((sql) => sql.includes('from "doc"')))
+  assert(!seen.some((sql) => /(?:from|join) "doc"/.test(sql)))
 
   seen.length = 0
   assertEquals((g.read('.product&*') as Bundle[])[0].doc, {
     title: 'Mug',
     body: 'large body',
   })
-  assert(seen.some((sql) => sql.includes('from "doc"')))
+  assert(seen.some((sql) => /(?:from|join) "doc"/.test(sql)))
 })
 
 test('an optional component keeps its name beside a property with that name', () => {
