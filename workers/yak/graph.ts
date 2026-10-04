@@ -1768,8 +1768,26 @@ export class Store {
   // set for something sooner, since the object has one alarm and may hold many
   // wakes, and it serializes the read-compare-write per storage it is handed —
   // so the adapter below is built once and kept.
-  #arming = (at: string | null | undefined): Promise<unknown> =>
-    this.#alarm && at ? arm(this.#alarm, { at }) : Promise.resolve()
+  #arming = async (
+    at: string | null | undefined,
+    reason = 'wake',
+  ): Promise<unknown> => {
+    if (!this.#alarm || !at) return
+    let result = await arm(this.#alarm, { at })
+    if (this.#profile) {
+      let held = await this.#alarm.getAlarm()
+      console.log(
+        'yak store alarm',
+        JSON.stringify({
+          store: this.#name(),
+          reason,
+          requested: at,
+          held: held == null ? null : new Date(held).toISOString(),
+        }),
+      )
+    }
+    return result
+  }
 
   // The graph as the clock writes it. A firing is the server's write, not a
   // person's: a wake is the object's own business, and @yaks/member's guard
@@ -2014,7 +2032,7 @@ export class Store {
     this.#embedding()
     // Rows a rule still owes here are moved from the alarm, never by the wake
     // that found them owing (mover.ts).
-    if (this.#owing().length) await this.#arming(this.#soon())
+    if (this.#owing().length) await this.#arming(this.#soon(), 'mover')
   }
 
   // ---- the mover (mover.ts, D-45640) ---------------------------------------
@@ -2108,7 +2126,7 @@ export class Store {
         await new Promise((r) => setTimeout(r, 0))
       }
     }
-    if (this.#owing().length) await this.#arming(this.#soon())
+    if (this.#owing().length) await this.#arming(this.#soon(), 'mover')
   }
 
   // Before this store kept effect rows, a prompt could have left on the wire
@@ -2171,11 +2189,28 @@ export class Store {
           return Date.parse(String(e.next ?? e.lease_expiry ?? '')) ||
             now + 60_000
         }))
-        await this.#arming(new Date(Math.max(now + 1000, next)).toISOString())
+        if (this.#profile) {
+          let handlers: Record<string, number> = {}
+          for (let b of pending) {
+            let handler = String((b.effect as Comp).handler)
+            handlers[handler] = (handlers[handler] ?? 0) + 1
+          }
+          console.log(
+            'yak store pending',
+            JSON.stringify({ store: this.#name(), handlers }),
+          )
+        }
+        await this.#arming(
+          new Date(Math.max(now + 1000, next)).toISOString(),
+          'effects',
+        )
       }
     })().catch(async (error) => {
       defect(error, { request: 'effect pool', store: this.#name() })
-      await this.#arming(new Date(Date.now() + Store.RETRY).toISOString())
+      await this.#arming(
+        new Date(Date.now() + Store.RETRY).toISOString(),
+        'effects retry',
+      )
         .catch((e) =>
           defect(e, { request: 'effect retry', store: this.#name() })
         )
@@ -2222,6 +2257,7 @@ export class Store {
       if (this.#owes()) {
         await this.#arming(
           new Date(Date.now() + Store.EMBED + Store.RETRY).toISOString(),
+          'embedding recovery',
         )
       }
       do {
@@ -2241,10 +2277,15 @@ export class Store {
           )
         }
       } while (this.#vectorAgain)
-      if (this.#owes()) await this.#arming(this.#soon())
+      if (this.#owes()) {
+        await this.#arming(this.#soon(), 'embedding continuation')
+      }
     })().catch(async (error) => {
       defect(error, { request: 'embedding', store: name })
-      await this.#arming(new Date(Date.now() + Store.RETRY).toISOString())
+      await this.#arming(
+        new Date(Date.now() + Store.RETRY).toISOString(),
+        'embedding retry',
+      )
         .catch((e) => defect(e, { request: 'embedding retry', store: name }))
     }).finally(() => {
       this.#vectorWork = null

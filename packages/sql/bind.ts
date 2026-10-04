@@ -449,7 +449,9 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     op == EXISTS && hop.comp != 'entity' && stored && !stored.computed &&
     !computed(ctx.v, hop.comp) && !ctx.derived[`${hop.comp}.${hop.prop}`]
   ) {
-    let value = ctx.d.col(hop.comp, hop.prop, ctx.v)
+    let value = stored.category == 'ref' && ctx.d.refCol
+      ? ctx.d.refCol(hop.comp, hop.prop)
+      : ctx.d.col(hop.comp, hop.prop, ctx.v)
     if (value) return owned(ctx, hop.comp, `${value} is not null`)
   }
   if (hop.comp != 'entity') ctx.tables.add(hop.comp)
@@ -1109,7 +1111,41 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   let all: string[] = []
   let none: string[] = []
   let rest: Clause[] = []
+  // Conjoined reference presence/absence tests must share one owning-set
+  // selection. Separate sets scan the broad presence index before the narrow
+  // NULL reference can seek its index (guest attribution on every alarm).
+  let grouped = new Map<
+    string,
+    { clause: Pred; sql: string; required: boolean }[]
+  >()
   let siblings = flattened(clauses)
+  for (let c of siblings) {
+    if (
+      c.kind != 'pred' || c.not || c.where || c.path.length != 2 ||
+      claims(ctx, 'pred')
+    ) continue
+    let [comp, prop] = c.path, op = opOf(c)
+    let p = ctx.v.prop(comp, prop)
+    if (
+      comp == 'entity' || p?.category != 'ref' || p.computed ||
+      ctx.derived[`${comp}.${prop}`] || !ctx.d.refCol ||
+      !(op == EXISTS || op == '' && c.value == null)
+    ) continue
+    let entries = grouped.get(comp) ?? []
+    entries.push({
+      clause: c,
+      sql: `${ctx.d.refCol(comp, prop)} is ${op == EXISTS ? 'not ' : ''}null`,
+      required: op == EXISTS,
+    })
+    grouped.set(comp, entries)
+  }
+  let narrow: Cond[] = []
+  for (let [comp, entries] of grouped) {
+    if (entries.length < 2 || !entries.some((e) => e.required)) continue
+    let selected = new Set(entries.map((e) => e.clause))
+    siblings = siblings.filter((c) => !selected.has(c as Pred))
+    narrow.push(owned(ctx, comp, entries.map((e) => e.sql).join(' and ')))
+  }
   // Value tests imply component presence too. Only disjunctions need this
   // explicit sibling: direct predicates already narrow their own selection.
   let scopes = siblings.some((c) => c.kind == 'or')
@@ -1135,8 +1171,8 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   let shape = all.length + none.length > 1
     ? byArchetype(ctx, { all, none })
     : null
-  if (!shape) return cs.map((x) => clause(ctx, x))
-  return [shape, ...rest.map((x) => clause(ctx, x))]
+  if (!shape) return [...narrow, ...cs.map((x) => clause(ctx, x))]
+  return [...narrow, shape, ...rest.map((x) => clause(ctx, x))]
 }
 
 // An OR's indexed arms are selected before the outer WHERE is applied. Carry
