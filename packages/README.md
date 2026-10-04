@@ -146,7 +146,8 @@ grouped approximately by function, **not** by dependency order.
   bytes from every text leaf and destination.
 
 - **[@yaks/web](./web)** — The browser door: the page, bundle, stylesheet and
-  assets that run @yaks/browse through @yaks/api.
+  assets that run configured applications through @yaks/api. An application
+  contributes source assets through its `./web` facet.
 - **[@yaks/browse](./browse)** — The graph browsing app: domain views, editing
   and navigation painted through @yaks/ui in browsers and terminals. Its browser
   entry is served by @yaks/web; @yaks/tui paints its terminal.
