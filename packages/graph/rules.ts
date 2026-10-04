@@ -372,6 +372,14 @@ let resolved = (p: Patch): Patch => {
 // keys.
 let wrote = (p: Patch): string[] => Object.keys(p).filter((k) => !reserved(k))
 
+// An effect with a declared write set cannot observe an unrelated edit.
+// This is only read planning: fire still validates every rule/resource and
+// decides matches from its frozen view.
+export let observes = (rule: Rule, vocab: Vocab, bundle: Bundle): boolean => {
+  let ready = compile(rule, vocab)
+  return !ready.checked || ready.writes.some((name) => name in bundle)
+}
+
 /**
  * Run the rules of one phase over a batch: the bundles in, the bundles plus
  * what the rules produced out.

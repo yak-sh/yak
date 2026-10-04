@@ -163,8 +163,8 @@ import {
 import { admitSchema } from '@yaks/graph/schema'
 import {
   drain,
+  due as unembedded,
   type Field as Text,
-  left as unembedded,
   meaning,
   schema as vectorSchema,
   semantic,
@@ -1099,7 +1099,7 @@ export class Store {
         },
         // A text the write changed, embedded once it has committed
         // (`#embedding`). Its triggers queued it in the write's own statement,
-        // so a write that queued nothing costs one count.
+        // so finding whether anything is owed is a single-row seek.
         {
           name: 'yak/embed',
           hooks: {
@@ -2196,10 +2196,11 @@ export class Store {
   // ranks whatever is stored meanwhile.
   static EMBED = 10_000
 
-  // Whether a text is owed its vector, which asks one count. An object whose
+  // Whether a text is owed its vector, which seeks one queued row. An object whose
   // schema is not standing yet owes nothing: it has no table to owe it in.
   #owes = () =>
-    !!this.#texts && !!this.#get('schema') && unembedded(this.#texts.sql) > 0
+    !!this.#texts && !!this.#get('schema') &&
+    unembedded(this.#texts.sql, 1).length > 0
 
   #embedding = () => {
     if (this.#dormant) return

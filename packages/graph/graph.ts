@@ -106,7 +106,14 @@ import {
   signed,
   type StampPolicy,
 } from './stamp.ts'
-import { fire, registry, type Resource, type Rule, stands } from './rules.ts'
+import {
+  fire,
+  observes,
+  registry,
+  type Resource,
+  type Rule,
+  stands,
+} from './rules.ts'
 import { own, type Ready, ready, settle } from './declared.ts'
 import { state } from './state.ts'
 import { addressing } from './said.ts'
@@ -752,7 +759,13 @@ export let graph = (opts: Options): Graph => {
       // starting state.
       let run = () =>
         after(
-          outside.get([...new Set(applied.map((b) => b.entity.eid))]),
+          outside.get([
+            ...new Set(
+              applied.filter((b) =>
+                rules.some(([, rule]) => observes(rule, vocab, b))
+              ).map((b) => b.entity.eid),
+            ),
+          ]),
           (rows) => {
             let held = new Map(rows.map((b) => [b.entity.eid, b]))
             let values = new Map<string, unknown>()

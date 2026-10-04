@@ -159,3 +159,53 @@ test('effect rules do not observe checks or refused writes', () => {
   assertEquals(seen, [])
   assertEquals(held(one), undefined)
 })
+
+test('unrelated edits do not load stored views for checked effect rules', () => {
+  let base = memory()
+  let reads = 0
+  let one = graph({
+    vocab: books,
+    storage: {
+      ...base,
+      get: (eids, names) => {
+        if (eids.length) reads++
+        return base.get(eids, names)
+      },
+      tx: (body) =>
+        base.tx((tx) =>
+          body({
+            ...tx,
+            get: (eids, names) => {
+              if (eids.length) reads++
+              return tx.get(eids, names)
+            },
+          })
+        ),
+    },
+  })
+  one.apply([{
+    entity: { eid: 'b1' },
+    book: { pages: 412 },
+    doc: { title: 'Dune' },
+  }])
+  reads = 0
+  one.apply([{ entity: { eid: 'b1' }, doc: { title: 'First edit' } }])
+  let ordinary = reads
+  let observed = 0
+  one.use({
+    name: 'shelf',
+    rules: [{
+      phase: 'effect',
+      match: '.book, *bookmark',
+      run: () => {
+        observed++
+      },
+    }],
+  })
+  reads = 0
+  one.apply([{ entity: { eid: 'b1' }, doc: { title: 'Second edit' } }])
+  assertEquals(reads, ordinary)
+  assertEquals(observed, 0)
+  one.apply([{ entity: { eid: 'b1' }, bookmark: { of: 'b1' } }])
+  assertEquals(observed, 1)
+})

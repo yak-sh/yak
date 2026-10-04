@@ -15,7 +15,7 @@ for (let kind of ['directory', 'app']) {
     if (kind == 'directory') {
       let total = report.samples[0].total
       assert(
-        total.rowsRead <= 70,
+        total.rowsRead <= 55,
         `one meter property read ${total.rowsRead} rows`,
       )
       assert(

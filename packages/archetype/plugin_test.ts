@@ -26,7 +26,7 @@ let fixture = (stamped = false) => {
     },
   }])
   let storage = ram(vocab)
-  let writes = 0, reads = 0
+  let writes = 0, reads = 0, owners = 0
   let g = graph({
     vocab,
     storage: {
@@ -37,6 +37,7 @@ let fixture = (stamped = false) => {
             ...tx,
             get: (eids, comps) => {
               reads++
+              owners += eids.length
               return tx.get(eids, comps)
             },
             patch: (bundles) => {
@@ -48,7 +49,13 @@ let fixture = (stamped = false) => {
     },
     plugins: [archetypes()],
   })
-  return { g, storage, writes: () => writes, reads: () => reads }
+  return {
+    g,
+    storage,
+    writes: () => writes,
+    reads: () => reads,
+    owners: () => owners,
+  }
 }
 
 test('archetype admission gathers warmed descriptors with their owners', () => {
@@ -71,6 +78,18 @@ test('archetype edits validate freshly gathered descriptors without rereading th
   g.apply([{ entity: { eid: 'a' }, note: { text: 'changed' } }])
   assertEquals(reads() - before, 1)
   assertEquals((g.get(['a']) as Bundle[])[0].note, { text: 'changed' })
+})
+
+test('same-shape edits read only their owner and current descriptor', () => {
+  let { g, owners } = fixture()
+  g.apply([{ entity: { eid: 'a' }, note: { text: 'kept' } }])
+  // The original creation needed the self-classifying descriptor as well.
+  // Subsequent edits must still validate their current shape, but do not
+  // need to read the creation's unrelated descriptor history.
+  g.apply([{ entity: { eid: 'a' }, note: { text: 'first edit' } }])
+  let before = owners()
+  g.apply([{ entity: { eid: 'a' }, note: { text: 'changed' } }])
+  assertEquals(owners() - before, 2)
 })
 
 test('archetype read hints follow a foreign shape change and ignore old descriptors', () => {

@@ -92,7 +92,60 @@ export let storeCost = async (storage: Storage, kind: string) => {
     return response.json()
   }
   if (kind == 'directory') {
-    await post('/apply', [{ entity: { eid: app }, meter: { bytes: 1 } }], true)
+    let space = crypto.randomUUID()
+    await post('/apply', [
+      {
+        entity: { eid: space },
+        space: { slug: 'cost' },
+        doc: { title: 'Cost' },
+      },
+      {
+        entity: { eid: app },
+        app: {
+          slug: 'cost',
+          space,
+          version: 1,
+          access: 'private',
+          store: 'cost/cost',
+        },
+        doc: { title: 'Cost app' },
+        meter: { bytes: 1 },
+      },
+    ], true)
+    // Twenty paying-account shapes and their app/deploy/member rows: the
+    // measured update must be independent of unrelated directory data.
+    for (let i = 0; i < 20; i++) {
+      let account = crypto.randomUUID(),
+        owner = crypto.randomUUID(),
+        other = crypto.randomUUID()
+      await post('/apply', [
+        { entity: { eid: owner }, person: {}, doc: { title: `Owner ${i}` } },
+        {
+          entity: { eid: account },
+          space: { slug: `account${i}` },
+          plan: { tier: 'plus' },
+        },
+        {
+          entity: { eid: crypto.randomUUID() },
+          member: { person: owner, space: account, role: 'owner' },
+        },
+        {
+          entity: { eid: other },
+          app: {
+            slug: 'app',
+            space: account,
+            version: 1,
+            access: 'private',
+            store: `account${i}/app`,
+          },
+          meter: { bytes: 1 },
+        },
+        {
+          entity: { eid: crypto.randomUUID() },
+          deploy: { app: other, version: 1 },
+        },
+      ], true)
+    }
     for (let i = 0; i < 1000; i++) {
       await post(
         '/apply',

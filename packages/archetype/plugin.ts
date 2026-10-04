@@ -53,7 +53,6 @@ export function archetypes(cache: Archetypes = new Archetypes()): Plugin {
         let plan = plans.get(b.entity.eid)
         if (!plan) continue
         eids.add(plan.set.eid)
-        for (let eid of plan.reads) eids.add(eid)
         let set = moved.get(b.entity.eid) ?? plan.set
         set = dead(b) ? cache.intern(['tombstone']) : comps(b).reduce(
           (set, [table, patch]) => cache.move(set, table, patch != null),
@@ -61,9 +60,12 @@ export function archetypes(cache: Archetypes = new Archetypes()): Plugin {
         )
         moved.set(b.entity.eid, set)
         eids.add(set.eid)
+        if (set.eid != plan.set.eid) {
+          for (let eid of plan.reads) eids.add(eid)
+          eids.add(meta.eid)
+        }
       }
       if (!eids.size) return []
-      eids.add(meta.eid)
       return [{ eids: [...eids], hint: true }]
     },
     hooks: {
