@@ -62,6 +62,30 @@
           "type": "boolean"
         }
       }
+    },
+    "Sidebar": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "the browse sidebar: sections and packages folded on this page; its query words live in the shared filter draft",
+      "properties": {
+        "closed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "section names or package eids the reader folded"
+        },
+        "hover": {
+          "type": "boolean",
+          "description": "a draggable entity is over the sidebar"
+        },
+        "open": {
+          "type": "boolean",
+          "description": "the sidebar is visible"
+        }
+      }
     }
   }
 }

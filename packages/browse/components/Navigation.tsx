@@ -1,34 +1,60 @@
+// The sidebar owns its labels, folding and counts; every entry is a registry
+// view, including described vocabulary entities. No second kind renderer here.
 import { pagePath, storageKey } from '../hosting.ts'
-import { vocab } from '../types.ts'
+import { type Ent, vocab } from '../types.ts'
 import { signal } from '@preact/signals'
-import { useEffect, useState } from 'preact/hooks'
-import { favoritePin, navigationQuery, navigationView } from '../navigation.ts'
-import { cache, ent, mode, mutate } from '../live.ts'
-import { allSessionsPath, sessionQueries } from '../tray_query.ts'
-import { useSessions } from './useSessions.ts'
-import { follow } from './nav.tsx'
-import { block } from '@yaks/ui'
-import { useQuery, useQueryResult } from './useQuery.ts'
+import { derivedEid } from '@yaks/graph'
+import { useEffect, useLayoutEffect } from 'preact/hooks'
+import {
+  favoritePin,
+  sidebarComponent,
+  sidebarMatches,
+  sidebarQueries,
+} from '../navigation.ts'
+import {
+  aggRead,
+  cache,
+  dropAgg,
+  ent,
+  holdAgg,
+  mode,
+  mutate,
+  owner,
+} from '../live.ts'
+import { allSessionsPath } from '../tray_query.ts'
+import { follow, navigate } from './nav.tsx'
+import { Button, Index, Panes, Rows, Section } from '@yaks/ui'
+import { useQueryResult } from './useQuery.ts'
+import { useInboxThreads } from './useInbox.ts'
+import { usePage } from './page.ts'
+import { fields, front } from './fields.tsx'
 import { Entity } from './Entity.tsx'
 import { Icon } from './icons.tsx'
 import { CARD_DATA, cardData } from './drag.ts'
+import { searchPath } from '../url.ts'
+import { type ComponentChildren } from 'preact'
 
 let narrow = () => globalThis.matchMedia?.('(max-width: 700px)').matches
 let remembered = globalThis.localStorage?.getItem(
   storageKey('tasks-navigation'),
 )
-export let navigationOpen = signal(
-  remembered ? remembered == 'open' : !narrow(),
-)
-
+let sidebarEid = derivedEid('Sidebar|browse')
+let view = front.watch(`.Sidebar .entity.eid=${sidebarEid}`)
+let held = signal(view.value)
+view.subscribe((rows) => held.value = rows)
+export let navigationOpen = {
+  get value(): boolean {
+    return (held.value[0]?.Sidebar as { open?: boolean })?.open ??
+      (remembered ? remembered == 'open' : !narrow())
+  },
+}
 export let toggleNavigation = (open = !navigationOpen.value) => {
-  navigationOpen.value = open
+  void front.mutate([{ entity: { eid: sidebarEid }, Sidebar: { open } }])
   globalThis.localStorage?.setItem(
     storageKey('tasks-navigation'),
     open ? 'open' : 'shut',
   )
 }
-
 export let navigationKey = (
   key: string,
   repeat = false,
@@ -42,40 +68,220 @@ export let navigationKey = (
   return true
 }
 
-let Frame = block('aside', 'Navigation', {
-  Shade: 'button',
-  Head: 'header',
-  Title: 'span',
-  Empty: 'p',
-  Items: 'nav',
-  All: 'a',
-})
-let { Shade, Head, Title, Empty, Items, All } = Frame
-
 export let NavigationToggle = () => (
-  <button
-    class='NavigationToggle Tab'
+  <Button
     type='button'
+    mod='quiet'
     aria-label={navigationOpen.value ? 'Close navigation' : 'Open navigation'}
     aria-expanded={navigationOpen.value}
     onClick={() => toggleNavigation()}
   >
     <Icon name='menu' />
-  </button>
+  </Button>
 )
 
-export let Navigation = () => {
-  let favorites = useQuery(vocab.comp('favorite') ? navigationQuery : '')
-  let { rows } = useSessions(navigationOpen.value)
-  let sessions = rows.map(([eid]) => eid)
-  useQueryResult(
-    sessions.length
-      ? `${sessionQueries(vocab).detail}&.entity.eid=${sessions.join(',')}`
-      : '',
-    navigationOpen.value && sessions.length > 0,
-    true,
+let InboxCount = ({ actor }: { actor: string }) => {
+  let found = useInboxThreads(actor)
+  let count = found.ready
+    ? found.threads.filter((t) => t.lane == 'Needs you').length
+    : undefined
+  return (
+    <Section.Count aria-label='Needs you'>
+      {count ?? '…'} Needs you
+    </Section.Count>
   )
-  let [over, setOver] = useState(false)
+}
+
+let ComponentCount = ({ name }: { name: string }) => {
+  let key = `sidebar:count:${name}`
+  useLayoutEffect(() => {
+    holdAgg(key, `.${name} .count`)
+    return () => dropAgg(key)
+  }, [name])
+  let count = aggRead(key)
+  return <Section.Count>{count?.live ? count.map[''] ?? 0 : '…'}</Section.Count>
+}
+
+let Sidebar = () => {
+  let actor = owner.value
+  let q = sidebarQueries(vocab, actor)
+  let read = (query: string) => useQueryResult(query, true, true).eids.map(ent)
+  let favorites = read(q.favorites)
+  let packages = read(q.packages)
+  let components = read(q.components)
+  let searches = read(q.searches)
+  let recent = read(q.recent)
+  let personal = read(q.sessions)
+  let running = read(q.running)
+  let sessions = [
+    ...new Set([...running.map((e) => e.eid), ...personal.map((e) => e.eid)]),
+  ]
+  let state = usePage<{ closed: string[] }>('Sidebar', 'browse')
+  let closed = state.value?.closed ?? packages.map((p) => p.eid)
+  let fold = (key: string) =>
+    state.set({
+      closed: closed.includes(key)
+        ? closed.filter((k) => k != key)
+        : [...closed, key],
+    })
+  let field = 'sidebar:query'
+  let text = fields.row(field)?.text ?? ''
+  let matches = (e: Ent) => sidebarMatches(e, text)
+  let close = () => narrow() && toggleNavigation(false)
+  let tile = (e: Ent) => {
+    let href = '/' + e.eid
+    return (
+      <Index.Item
+        key={e.eid}
+        href={pagePath(href)}
+        onClickCapture={(ev: MouseEvent) => {
+          follow(href)(ev)
+          if (ev.defaultPrevented) close()
+        }}
+      >
+        <Entity eid={e.eid} view='Sidebar.Tile' onOpen={close} />
+      </Index.Item>
+    )
+  }
+  let list = (items: Ent[]) => items.filter(matches).map(tile)
+  let section = (
+    name: string,
+    children: ComponentChildren,
+    count?: ComponentChildren,
+  ) => (
+    <Index.Group key={name} aria-label={name}>
+      <Index.Head
+        role='button'
+        tabIndex={0}
+        aria-expanded={!closed.includes(name)}
+        onClick={() => fold(name)}
+        onKeyDown={(ev: KeyboardEvent) => {
+          if (ev.key == 'Enter' || ev.key == ' ') {
+            ev.preventDefault()
+            fold(name)
+          }
+        }}
+      >
+        {closed.includes(name) ? '▸' : '▾'} {name}
+        {count != null && <Section.Count>{count}</Section.Count>}
+      </Index.Head>
+      {!closed.includes(name) && children}
+    </Index.Group>
+  )
+  // Described rows can be outside a partial working set. Own their one batch
+  // while they are visible, rather than one full addressed read per component.
+  let packs = packages.filter((p) =>
+    matches(p) ||
+    components.some((c) => sidebarComponent(c)?.package == p.eid && matches(c))
+  )
+  return (
+    <>
+      <Panes.Top>
+        <fields.Filter
+          id={field}
+          placeholder='Filter sidebar or run a query…'
+          aria-label='Filter sidebar'
+          onKey={(ev: KeyboardEvent) => {
+            if (ev.key != 'Enter') return
+            ev.preventDefault()
+            navigate(searchPath(fields.row(field)?.text ?? ''))
+            close()
+          }}
+        />
+      </Panes.Top>
+      <Panes.Body class='Navigation-body'>
+        <Index>
+          {section(
+            'Inbox',
+            actor && (
+              <Index.Item
+                href={pagePath('/')}
+                onClick={(ev: MouseEvent) => {
+                  follow('/')(ev)
+                  if (ev.defaultPrevented) close()
+                }}
+              >
+                Open inbox
+              </Index.Item>
+            ),
+            actor && <InboxCount actor={actor} />,
+          )}
+          {section(
+            'Favorites',
+            <>
+              {list(favorites)}
+              {!favorites.length && (
+                <Rows.More>Drop an entity here to favorite it.</Rows.More>
+              )}
+            </>,
+            favorites.length,
+          )}
+          {section(
+            'Packages',
+            packs.map((p) => {
+              let cs = components.filter((c) =>
+                sidebarComponent(c)?.package == p.eid &&
+                (matches(p) || matches(c))
+              )
+              return (
+                <Index.Group key={p.eid}>
+                  <Button
+                    mod='quiet'
+                    type='button'
+                    aria-label='Toggle package components'
+                    aria-expanded={!closed.includes(p.eid)}
+                    onClick={() => fold(p.eid)}
+                  >
+                    {closed.includes(p.eid) ? '▸' : '▾'}
+                  </Button>
+                  {tile(p)}
+                  <Section.Count>
+                    {components.filter((c) =>
+                      sidebarComponent(c)?.package == p.eid
+                    ).length}
+                  </Section.Count>
+                  {!closed.includes(p.eid) &&
+                    cs.map((c) => (
+                      <Index.Group key={c.eid}>
+                        {tile(c)}
+                        <ComponentCount
+                          name={String(sidebarComponent(c)?.name)}
+                        />
+                      </Index.Group>
+                    ))}
+                </Index.Group>
+              )
+            }),
+            packages.length,
+          )}
+          {section('Saved searches', list(searches), searches.length)}
+          {section('Recent', list(recent), recent.length)}
+          {section(
+            'Sessions',
+            <>
+              <Index.Item
+                href={pagePath(allSessionsPath)}
+                onClick={(ev: MouseEvent) => {
+                  follow(allSessionsPath)(ev)
+                  if (ev.defaultPrevented) close()
+                }}
+              >
+                All sessions
+              </Index.Item>
+              {list(sessions.map(ent))}
+            </>,
+            sessions.length,
+          )}
+        </Index>
+      </Panes.Body>
+    </>
+  )
+}
+
+export let Navigation = () => {
+  let view = usePage<{ hover: boolean }>('Sidebar', 'browse')
+  let over = view.value?.hover
+  let setOver = (hover: boolean) => view.set({ hover })
   useEffect(() => {
     let key = (e: KeyboardEvent) => {
       let typing = e.target instanceof HTMLElement &&
@@ -93,86 +299,41 @@ export let Navigation = () => {
     return () => removeEventListener('keydown', key)
   }, [])
   if (!navigationOpen.value) return null
-  let closeMobile = () => narrow() && toggleNavigation(false)
   let accepts = (ev: DragEvent) =>
     !!ev.dataTransfer && Array.from(ev.dataTransfer.types).includes(CARD_DATA)
-  let drop = (ev: DragEvent) => {
-    let data = cardData(ev.dataTransfer?.getData(CARD_DATA) ?? '')
-    setOver(false)
-    if (!data || !cache.peek()[data.target]) return
-    ev.preventDefault()
-    ev.stopPropagation()
-    if (!vocab.comp('favorite')) return
-    let change = favoritePin(ent(data.target))
-    if (change) mutate(change)
-  }
   return (
     <>
-      <Shade
+      <Button
+        class='Navigation-shade'
         type='button'
         aria-label='Close navigation'
-        onClick={closeMobile}
+        onClick={() => toggleNavigation(false)}
       />
-      <Frame
-        mod={over && 'drop'}
+      <Panes.Pane
+        mod='nav'
+        class='Navigation'
+        aria-label='Browse sidebar'
+        data-drop={over || undefined}
         onDragOver={(ev: DragEvent) => {
-          if (!accepts(ev)) return
-          ev.preventDefault()
-          ev.dataTransfer!.dropEffect = 'link'
-          setOver(true)
-        }}
-        onDragLeave={(ev: DragEvent) => {
-          let to = ev.relatedTarget
-          let from = ev.currentTarget as Node | null
-          if (!(to instanceof Node) || !from?.contains(to)) {
-            setOver(false)
+          if (accepts(ev)) {
+            ev.preventDefault()
+            setOver(true)
           }
         }}
-        onDrop={drop}
+        onDragLeave={() => setOver(false)}
+        onDrop={(ev: DragEvent) => {
+          setOver(false)
+          let data = cardData(ev.dataTransfer?.getData(CARD_DATA) ?? '')
+          if (
+            !data || !cache.peek()[data.target] || !vocab.comp('favorite')
+          ) return
+          ev.preventDefault()
+          let change = favoritePin(ent(data.target))
+          if (change) mutate(change)
+        }}
       >
-        <Head>
-          <Title>Navigation</Title>
-        </Head>
-        <Items>
-          {favorites.map((e) => (
-            <Entity
-              key={e.eid}
-              eid={e.eid}
-              view={navigationView}
-              onOpen={closeMobile}
-            />
-          ))}
-          {!favorites.length && (
-            <Empty>
-              Drop an entity here, or right-click it and choose show in
-              navigation.
-            </Empty>
-          )}
-          {vocab.comp('session') && (
-            <>
-              <Title>Sessions</Title>
-              <All
-                href={pagePath(allSessionsPath)}
-                onClick={(ev: MouseEvent) => {
-                  follow(allSessionsPath)(ev)
-                  if (ev.defaultPrevented) closeMobile()
-                }}
-              >
-                All sessions
-              </All>
-              {sessions.map((eid) => (
-                <Entity
-                  key={eid}
-                  eid={eid}
-                  view='Navigation.List.Tile'
-                  onOpen={closeMobile}
-                />
-              ))}
-              {!sessions.length && <Empty>No sessions yet.</Empty>}
-            </>
-          )}
-        </Items>
-      </Frame>
+        <Sidebar />
+      </Panes.Pane>
     </>
   )
 }
