@@ -1,3 +1,4 @@
+import { inspectViews } from './inspect.tsx'
 import { views as secretViews } from '@yaks/secrets/views'
 // The curated views and verbs, with the app's quarantine, failure and memo
 // boundaries.
@@ -63,12 +64,7 @@ import { BoardList, List, ListTile } from './views/List.tsx'
 import { Canvas } from './Canvas.tsx'
 import { Inline, TaskInline } from './views/Inline.tsx'
 import { Dependency } from './views/Dependency.tsx'
-import {
-  Debug,
-  DebugAnyItem,
-  DebugTaskItem,
-  ProjectDebug,
-} from './views/Debug.tsx'
+import { InspectFull, ProjectInspectFull } from './views/InspectFull.tsx'
 import { Json } from './views/Json.tsx'
 import { Md, mdText } from './views/Md.tsx'
 import { Web } from './views/Web.tsx'
@@ -106,6 +102,7 @@ export { applicable, extend, has, type Renderer, resolve } from './registry.ts'
 // an entry here, and — if it should appear as a card tab — a name in the
 // tabs list plus an icon in Card.tsx.
 define([
+  ...inspectViews,
   // Canvas and List render child entities through this registry. Defer their
   // bindings until render so either module can be imported first.
   {
@@ -220,9 +217,9 @@ define([
   { view: 'Full', match: parse('.entry .result'), Render: ResultFull },
   { view: 'Full', match: parse('.entry .content'), Render: MessageFull },
   {
-    view: 'Entry.Debug',
+    view: 'Entry.Inspect.Full',
     match: parse('.entry'),
-    Render: ({ e }) => <Debug e={e} tabs={false} />,
+    Render: ({ e }) => <InspectFull e={e} tabs={false} />,
   },
   // The sections — Full's legos, internal views like Inline and Dependency.
   // Catch-all matchers on purpose: each renders nothing when its data is
@@ -269,10 +266,12 @@ define([
       text: (e) => JSON.stringify(e, null, 2),
     },
   },
-  { view: 'Debug', match: parse('.project'), Render: ProjectDebug },
-  { view: 'Debug', match: and(), Render: Debug },
-  { view: 'Debug.Tile', match: parse('.task'), Render: DebugTaskItem },
-  { view: 'Debug.Tile', match: and(), Render: DebugAnyItem },
+  {
+    view: 'Inspect.Full',
+    match: parse('.project'),
+    Render: ProjectInspectFull,
+  },
+  { view: 'Inspect.Full', match: and(), Render: InspectFull },
   { view: 'Inline', match: parse('.doc .task'), Render: TaskInline },
   { view: 'Inline', match: and(), Render: Inline },
   { view: 'Dependency', match: and(), Render: Dependency },
@@ -295,7 +294,7 @@ define([
   'Full',
   'Web',
   'Media',
-  'Debug',
+  'Inspect.Full',
 ])
 
 // The context-menu verbs, contributed per component (union — see

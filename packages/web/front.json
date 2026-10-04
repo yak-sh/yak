@@ -1,5 +1,7 @@
 {
-  "$vocabulary": { "https://yak.sh/vocab/core": true },
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
   "title": "web front",
   "description": "The web door's own state in the page graph, never synced.",
   "$defs": {
@@ -10,9 +12,22 @@
       "durable": "connection",
       "description": "the inbox's expanded threads and search switches; words remain synced drafts",
       "properties": {
-        "open": { "type": "boolean", "description": "the thread is expanded" },
-        "direction": { "type": "string", "enum": ["both", "said", "received"] },
-        "all": { "type": "boolean", "description": "include archived threads" }
+        "open": {
+          "type": "boolean",
+          "description": "the thread is expanded"
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "both",
+            "said",
+            "received"
+          ]
+        },
+        "all": {
+          "type": "boolean",
+          "description": "include archived threads"
+        }
       }
     },
     "commentBox": {
@@ -25,6 +40,26 @@
         "open": {
           "type": "boolean",
           "description": "the reply composer is open"
+        }
+      }
+    },
+    "inspectFull": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "The full inspection\u2019s chosen file format and component picker in the page graph.",
+      "properties": {
+        "format": {
+          "type": "string",
+          "enum": [
+            "Inspect.Full",
+            "Markdown",
+            "JSON"
+          ]
+        },
+        "adding": {
+          "type": "boolean"
         }
       }
     }

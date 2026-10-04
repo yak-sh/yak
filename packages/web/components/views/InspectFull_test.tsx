@@ -1,4 +1,4 @@
-// The Debug inspector exposes every component and gives its editing controls
+// The InspectFull inspector exposes every component and gives its editing controls
 // the same component vocabulary as its stored rows.
 import { test } from '@yaks/testing'
 import '../../testing.ts'
@@ -12,11 +12,11 @@ import { applicable, ux } from '../registry.ts'
 import { Ux } from '@yaks/ux'
 
 // Each case imports Entity.tsx — the whole component registry — and mounts a
-// Debug view through preact; the first pays that registry import (and hljs to
+// InspectFull view through preact; the first pays that registry import (and hljs to
 // render the Markdown/JSON tabs), the rest the mount.
-test('raw formats are nested under Debug', async () => {
+test('raw formats are nested under InspectFull', async () => {
   await import('../Entity.tsx')
-  let { DebugTabs } = await import('./Debug.tsx')
+  let { InspectFullTabs } = await import('./InspectFull.tsx')
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
@@ -41,15 +41,20 @@ test('raw formats are nested under Debug', async () => {
     assertEquals(applicable(e).includes('JSON'), false)
     render(
       h(
-        DebugTabs,
+        InspectFullTabs,
         { e, head: h('i', {}, 'summary') },
         h('i', {}, 'components'),
       ),
       root,
     )
-    assertEquals(root.querySelector('.Debug_Head')?.textContent, 'summary')
+    assertEquals(
+      root.querySelector('[data-formats-head]')?.textContent,
+      'summary',
+    )
     let tabs = [
-      ...root.querySelectorAll<HTMLButtonElement>('.Debug_Tabs .Tabs_Tab'),
+      ...root.querySelectorAll<HTMLButtonElement>(
+        '[data-formats] .Tabs_Tab',
+      ),
     ]
     assertEquals(tabs.map((tab) => tab.getAttribute('aria-label')), [
       'Components',
@@ -77,7 +82,7 @@ test('raw formats are nested under Debug', async () => {
 
 test('addable components keep their component tones', async () => {
   await import('../Entity.tsx')
-  let { AddComp } = await import('./Debug.tsx')
+  let { AddComp } = await import('./InspectFull.tsx')
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
@@ -94,13 +99,17 @@ test('addable components keep their component tones', async () => {
   }
   try {
     render(h(AddComp, { e }), root)
-    root.querySelector<HTMLButtonElement>('.Debug_AddBtn')!.click()
+    root.querySelector<HTMLButtonElement>('[data-add-component]')!.click()
     await Promise.resolve()
-    let labels = [...root.querySelectorAll('.Debug_AddItem .Debug_Comp')]
+    let labels = [
+      ...root.querySelectorAll('[data-add-choice] .Chip'),
+    ]
     assertEquals(labels.length > 1, true)
     for (let label of labels) {
       assertEquals(
-        label.classList.contains(`Debug_Comp-${compTone(label.textContent!)}`),
+        label.classList.contains(
+          `Chip-${compTone(label.textContent!)}`,
+        ),
         true,
       )
     }
@@ -113,7 +122,7 @@ test('addable components keep their component tones', async () => {
 
 test('a reference reads as one association row, eid and all', async () => {
   await import('../Entity.tsx')
-  let { Debug } = await import('./Debug.tsx')
+  let { InspectFull } = await import('./InspectFull.tsx')
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
@@ -135,19 +144,19 @@ test('a reference reads as one association row, eid and all', async () => {
     },
   }
   let root = document.querySelector('main')!
-  // Debug holds a backlink query even when only its reference cells matter.
+  // InspectFull holds a backlink query even when only its reference cells matter.
   // This complete cache fixture needs no server; intercept the transport, not
   // the query, so the real resolver and hook lifetime still run.
   let priorRoute = useRoute(() => {})
   try {
-    act(() => render(h(Ux, { host: ux }, h(Debug, { e: ent(job) })), root))
-    let keys = [...root.querySelectorAll('.Debug_Props .Debug_Key')]
+    act(() =>
+      render(h(Ux, { host: ux }, h(InspectFull, { e: ent(job) })), root)
+    )
+    let keys = [...root.querySelectorAll('[data-raw-properties] .Pairs_Key')]
       .map((k) => k.textContent)
     assertEquals(keys.filter((k) => k == 'filed.assignee').length, 1)
     // The row carries the target and the eid it stored.
-    let ids = [...root.querySelectorAll('.Debug_Val-id')].map((v) =>
-      v.textContent
-    )
+    let ids = [...root.querySelectorAll('.Value-id')].map((v) => v.textContent)
     assertEquals(ids.includes(owner), true)
     assertEquals(root.textContent.includes('Owner'), true)
   } finally {
@@ -161,7 +170,7 @@ test('a reference reads as one association row, eid and all', async () => {
 
 test('project backlinks omit attribution and cap associations', async () => {
   await import('../Entity.tsx')
-  let { ProjectDebug } = await import('./Debug.tsx')
+  let { ProjectInspectFull } = await import('./InspectFull.tsx')
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
@@ -214,14 +223,17 @@ test('project backlinks omit attribution and cap associations', async () => {
   let priorRoute = useRoute(() => {})
   try {
     act(() =>
-      render(h(Ux, { host: ux }, h(ProjectDebug, { e: ent(project) })), root)
+      render(
+        h(Ux, { host: ux }, h(ProjectInspectFull, { e: ent(project) })),
+        root,
+      )
     )
     assertEquals(root.textContent.includes('created.by'), false)
     assertEquals(root.textContent.includes('Action 1'), false)
     assertEquals(root.textContent.includes('Task 5'), true)
     assertEquals(root.textContent.includes('Task 2'), false)
     let more = [...root.querySelectorAll<HTMLAnchorElement>(
-      '.Debug_Linked[href]',
+      '[data-more-links]',
     )]
     // Reverse-index traversal need not follow fixture insertion order. Check
     // each group's cap and query together, independent of group order.
@@ -236,6 +248,91 @@ test('project backlinks omit attribution and cap associations', async () => {
         ],
       ],
     )
+  } finally {
+    act(() => render(null, root))
+    useRoute(priorRoute)
+    cache.value = {}
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
+})
+
+test('Inspect.Full combines the entity reading, raw properties and registered links', async () => {
+  let { Entity } = await import('../Entity.tsx')
+  let { icons } = await import('../Card.tsx')
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let root = document.querySelector('main')!
+  let eid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  let who = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  cache.value = {
+    [eid]: {
+      entity: { eid, num: 51 },
+      doc: { title: 'Read this entity', body: '**Its words in full**' },
+      task: {},
+      filed: { assignee: who, priority: 2 },
+      created: { at: '2026-10-01T00:00:00Z', by: who },
+      unknown: { nested: { keep: true }, absent: null, empty: '' },
+    },
+    [who]: { entity: { eid: who, num: 52 }, doc: { title: 'The author' } },
+  }
+  let asks: string[] = []
+  let priorRoute = useRoute((body) => {
+    if ('subscribe' in body) asks.push(String(body.subscribe))
+  })
+  try {
+    assertEquals(applicable(ent(eid)).includes('Inspect.Full'), true)
+    assertEquals(applicable(ent(eid)).includes('Debug'), false)
+    assertEquals(icons['Inspect.Full'], 'scan-search')
+    act(() =>
+      render(
+        h(Ux, { host: ux }, h(Entity, { eid, view: 'Inspect.Full' })),
+        root,
+      )
+    )
+    assertEquals(
+      root.querySelector('.Head_Title')?.textContent.includes(
+        'Read this entity',
+      ),
+      true,
+    )
+    assertEquals(root.querySelector('.Head_Kind')?.textContent, 'task')
+    assertEquals(
+      root.querySelector('.Head_Facts')?.textContent.includes('The author'),
+      true,
+    )
+    assertEquals(
+      root.querySelector('[data-body] strong')?.textContent,
+      'Its words in full',
+    )
+    assertEquals(
+      root.querySelector('[data-facts]')?.textContent.includes('filed'),
+      true,
+    )
+    let raw = root.querySelector('[data-raw-properties]')!.textContent
+    for (
+      let value of [
+        'eid',
+        eid,
+        'num',
+        '51',
+        'unknown.nested',
+        '{"keep":true}',
+        'unknown.absent',
+        'null',
+        'unknown.empty',
+        '""',
+      ]
+    ) {
+      assertEquals(raw.includes(value), true, value)
+    }
+    assertEquals(root.textContent.includes('History'), true)
+    assertEquals(asks.some((q) => q.includes(`._change.target=${eid}`)), true)
+    assertEquals(asks.some((q) => q.includes(`.refs=${eid}`)), true)
   } finally {
     act(() => render(null, root))
     useRoute(priorRoute)

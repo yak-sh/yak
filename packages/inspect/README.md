@@ -194,3 +194,8 @@ one thing.
   whole.
 - A terminal's pane cannot yet scroll to an element, so walking past the bottom
   of a pane does not bring the row into view.
+
+`Inspect.Full` is the app’s full entity reading. It combines `Inspect.Head`,
+`Inspect.Body`, `Inspect.Facts`, `Inspect.Links` and `Inspect.History` with
+every raw property. The app binds those parts through its own registry; linked
+entities use its registered `List.Tile` views.

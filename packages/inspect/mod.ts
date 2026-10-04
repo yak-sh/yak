@@ -66,3 +66,5 @@ export {
   stackOf,
   stackPath,
 } from './where.ts'
+
+export { called } from './read.ts'

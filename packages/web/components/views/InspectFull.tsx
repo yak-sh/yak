@@ -1,23 +1,15 @@
 import { type ComponentChildren, Fragment } from 'preact'
-import { useState } from 'preact/hooks'
-import { formatProp, isRef, propAt } from '../../props.ts'
-import {
-  comps as vocab,
-  type Ent,
-  idOf,
-  plural,
-  statusOf,
-} from '../../types.ts'
+import { isRef } from '../../props.ts'
+import { comps as vocab, type Ent, idOf, plural } from '../../types.ts'
 import { ent, mutate, parents } from '../../live.ts'
 import { useBacklinks } from '../useQuery.ts'
 import { up } from './Dependency.tsx'
 import * as ui from '@yaks/ui'
 import { Edit } from '@yaks/ux'
+import { usePage } from '../page.ts'
 import { bundle } from '../registry.ts'
 import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
-import { viaName } from '../Comments.tsx'
-import { title } from '../title.tsx'
 import { follow } from '../nav.tsx'
 import { compTone } from '../comp.ts'
 import { Icon } from '../icons.tsx'
@@ -25,99 +17,63 @@ import { dragData } from '../drag.ts'
 import { Md } from './Md.tsx'
 import { Json } from './Json.tsx'
 
-// Adding/removing comps is a browser power tool — the TUI paints Debug as
+// Adding/removing comps is a browser power tool — the TUI paints InspectFull as
 // static lines with no live events, so the controls stay web-only. typeof
 // Deno is the seam: undefined in the browser bundle, set in the TUI's Deno
 // process.
 let browser = typeof Deno == 'undefined'
-let priority = propAt('filed', 'priority')!
 
-// The Debug view: one full inspector for the entity itself — EVERY prop,
-// nothing hidden — with contained children as one linked Debug.Tile row
+// Inspect.Full: one full inspector for the entity itself — EVERY prop,
+// nothing hidden — with contained children as one linked List.Tile row
 // each (a board full of tasks stays a list, not an explosion). The per-kind
-// dispatch lives in Debug.Tile: tasks get the status row, everything
+// dispatch lives in List.Tile: tasks get the status row, everything
 // else the generic one; the inspector's own head is its ListTile too.
 
-let Frame = ui.block('div', 'Debug', {
-  Lens: 'div',
-  Head: 'div',
-  Props: 'div',
-  Tabs: 'div',
-  Key: 'span',
-  Comp: 'span',
-  Val: 'span',
-  Rm: 'button',
-  Add: 'div',
-  AddBtn: 'button',
-  AddList: 'div',
-  AddItem: 'button',
-  Item: 'div',
-  Kind: 'span',
-  Title: 'span',
-  Status: 'span',
-  Claim: 'span',
-  Prio: 'span',
-  Kids: 'div',
-  Linked: 'div',
-  Via: 'span',
-})
-let {
-  Lens,
-  Head,
-  Props: Grid,
-  Tabs,
-  Key,
-  Comp,
-  Val,
-  Rm,
-  Add,
-  AddBtn,
-  AddList,
-  AddItem,
-  Item,
-  Kind,
-  Title,
-  Status,
-  Claim,
-  Prio,
-  Kids,
-  Linked,
-  Via,
-} = Frame
+let Frame = ({ children }: { children?: ComponentChildren }) => (
+  <div class='InspectFull'>{children}</div>
+)
+let Lens = ui.Section, Head = ui.Section, Grid = ui.Pairs, Tabs = ui.Tabs
+let Key = ui.Pairs.Key, Comp = ui.Chip, Val = ui.Value, Rm = ui.Button
+let Add = ui.Section,
+  AddBtn = ui.Button,
+  AddList = ui.Choices,
+  AddItem = ui.Choices.Item
+let Kids = ui.Section, Linked = ui.Tile, Via = ui.Value
 let { Tab } = ui.Tabs
 
 // Raw file forms belong to the inspector, not every card's primary tab row.
 // They remain draggable here because the same gesture is how a browser hands
 // the serialized bytes to the desktop.
-export let DebugTabs = (
+export let InspectFullTabs = (
   { e, head, children }: {
     e: Ent
     head?: ComponentChildren
     children?: ComponentChildren
   },
 ) => {
-  let [view, setView] = useState('Debug')
-  let views = ['Debug', ...(e.doc ? ['Markdown'] : []), 'JSON']
+  let page = usePage<{ format?: string }>('inspectFull', e.eid)
+  let view = page.value?.format ?? 'Inspect.Full'
+  let views = ['Inspect.Full', ...(e.doc ? ['Markdown'] : []), 'JSON']
   return (
     <Lens>
-      <Head>
+      <Head data-formats-head=''>
         {head}
-        <Tabs>
+        <Tabs data-formats=''>
           <ui.Tabs>
             {views.map((v) => (
               <Tab
                 key={v}
                 type='button'
                 mod={v == view && 'on'}
-                draggable={v != 'Debug'}
+                draggable={v != 'Inspect.Full'}
                 onDragStart={(ev: DragEvent) => dragData(ev, e.eid, v)}
-                onClick={() => setView(v)}
-                aria-label={v == 'Debug' ? 'Components' : v}
-                data-tip={v == 'Debug' ? 'Components' : v}
+                onClick={() => page.set({ format: v })}
+                aria-label={v == 'Inspect.Full' ? 'Components' : v}
+                data-tip={v == 'Inspect.Full' ? 'Components' : v}
               >
                 <Icon
-                  name={v == 'Debug'
-                    ? 'bug'
+                  name={v == 'Inspect.Full'
+                    ? 'scan-search'
                     : v == 'Markdown'
                     ? 'hash'
                     : 'braces'}
@@ -138,7 +94,7 @@ export let DebugTabs = (
 
 // The comps an entity actually carries, minus the spine — the raw payload.
 // Provenance (created/updated) rides in `rest` now like any component, so
-// Debug renders each as its own key→value row (T-6670).
+// InspectFull renders each as its own key→value row (T-6670).
 let comps = (e: Ent) => {
   let {
     eid: _e,
@@ -172,7 +128,11 @@ let Row = ({ comp, k, v }: { comp?: string; k: string; v: unknown }) => (
     </Key>
     {v == null || v === ''
       ? <Val mod='nil'>{v === '' ? '""' : 'null'}</Val>
-      : <Val mod={shape(v)}>{String(v)}</Val>}
+      : (
+        <Val mod={shape(v)}>
+          {typeof v == 'object' ? JSON.stringify(v) : String(v)}
+        </Val>
+      )}
   </>
 )
 
@@ -185,7 +145,7 @@ let refFace = (v: unknown) =>
   v == null || v === '' ? null : (
     <>
       <Id e={ent(String(v))} /> {ent(String(v)).doc?.title ?? ''}{' '}
-      <Val mod='id'>{String(v)}</Val>
+      <Val mod='id'>{typeof v == 'object' ? JSON.stringify(v) : String(v)}</Val>
     </>
   )
 
@@ -242,14 +202,18 @@ let cells = (e: Ent, name: string, comp: Record<string, unknown>) => {
           ? <Edit e={bundle(e)} comp={name} prop={k} editable />
           : v == null || v === ''
           ? <Val mod='nil'>{v === '' ? '""' : 'null'}</Val>
-          : <Val mod={shape(v)}>{String(v)}</Val>}
+          : (
+            <Val mod={shape(v)}>
+              {typeof v == 'object' ? JSON.stringify(v) : String(v)}
+            </Val>
+          )}
       </Fragment>
     )
   })
 }
 
 let AllProps = ({ e }: { e: Ent }) => (
-  <Grid>
+  <Grid data-raw-properties=''>
     <Row k='eid' v={e.eid} />
     <Row k='num' v={e.num} />
     {comps(e).flatMap(([name, comp]) => cells(e, name, comp))}
@@ -264,24 +228,34 @@ let AllProps = ({ e }: { e: Ent }) => (
 // above. The spine and `entity` are never comps here, so they can't be
 // added; deleting the entity stays the verb menu's job.
 export let AddComp = ({ e }: { e: Ent }) => {
-  let [open, setOpen] = useState(false)
+  let page = usePage<{ adding?: boolean }>('inspectFull', e.eid)
+  let open = page.value?.adding ?? false
   let present = new Set(comps(e).map(([n]) => n))
   let addable = Object.keys(vocab).filter((n) => !present.has(n)).sort()
   let add = (name: string) => {
     mutate({ eid: e.eid, name, comp: {} })
-    setOpen(false)
+    page.set({ adding: false })
   }
   return (
     <Add>
-      <AddBtn type='button' onClick={() => setOpen((o) => !o)}>
+      <AddBtn
+        data-add-component=''
+        type='button'
+        onClick={() => page.set({ adding: !open })}
+      >
         + component
       </AddBtn>
       {open && (
         <AddList>
           {addable.map((n) => (
             <AddItem
+              data-add-choice=''
               key={n}
-              type='button'
+              role='button'
+              tabIndex={0}
+              onKeyDown={(ev: KeyboardEvent) => {
+                if (ev.key == 'Enter' || ev.key == ' ') add(n)
+              }}
               onClick={() => add(n)}
             >
               <Comp mod={compTone(n)}>{n}</Comp>
@@ -293,19 +267,23 @@ export let AddComp = ({ e }: { e: Ent }) => {
   )
 }
 
-export let Debug = (
+export let InspectFull = (
   { e, project, tabs = true }: { e: Ent; project?: boolean; tabs?: boolean },
 ) => {
   // Incoming references too: whatever points here, said by which prop
   // brought it (useBacklinks — the held eid-keyed reverse sub, derived from
   // the typed vocabulary: sessions on their task, cards on their target, …).
-  let links = useBacklinks(e.eid)
-  let head = <Entity eid={e.eid} view='Debug.Tile' />
+  let head = <Entity eid={e.eid} view='Inspect.Head' />
   let body = (
     <>
-      <AllProps e={e} />
+      <Entity eid={e.eid} view='Inspect.Body' />
+      <Entity eid={e.eid} view='Inspect.Facts' />
+      <ui.Section data-properties=''>
+        <AllProps e={e} />
+      </ui.Section>
       {browser && <AddComp e={e} />}
-      {parents(e.eid).map((d) => (
+      {!project && <Entity eid={e.eid} view='Inspect.Links' />}
+      {project && parents(e.eid).map((d) => (
         <Entity
           key={d.parent + d.type}
           eid={d.parent}
@@ -314,32 +292,25 @@ export let Debug = (
           label={up(d.type)}
         />
       ))}
-      {e.refs.map((r) => (
-        <Entity key={r.child} eid={r.child} view='Dependency' type={r.type} />
-      ))}
+      {project &&
+        e.refs.map((r) => (
+          <Entity key={r.child} eid={r.child} view='Dependency' type={r.type} />
+        ))}
       {e.kids.length > 0 && (
         <Kids>
           {e.kids.map((k) => (
-            <Entity key={k.eid} eid={k.eid} view='Debug.Tile' />
+            <Entity key={k.eid} eid={k.eid} view='List.Tile' />
           ))}
         </Kids>
       )}
-      {project ? <ProjectIncoming e={e} /> : links.length > 0 && (
-        <Kids>
-          {links.map((b) => (
-            <Linked key={b.from + b.via}>
-              <Via>← {b.via}</Via>
-              <Entity eid={b.from} view='Debug.Tile' />
-            </Linked>
-          ))}
-        </Kids>
-      )}
+      {project && <ProjectIncoming e={e} />}
+      <Entity eid={e.eid} view='Inspect.History' />
     </>
   )
   return (
     <Frame>
       {browser && tabs
-        ? <DebugTabs e={e} head={head}>{body}</DebugTabs>
+        ? <InspectFullTabs e={e} head={head}>{body}</InspectFullTabs>
         : <>{head}{body}</>}
     </Frame>
   )
@@ -376,12 +347,13 @@ let ProjectIncoming = ({ e }: { e: Ent }) => {
           ...shown.map((eid) => (
             <Linked key={group.via + eid}>
               <Via>← {group.via}</Via>
-              <Entity eid={eid} view='Debug.Tile' />
+              <Entity eid={eid} view='List.Tile' />
             </Linked>
           )),
           ...(more
             ? [
               <Linked
+                data-more-links=''
                 key={group.via + group.kind}
                 href={href}
                 onClick={follow(href)}
@@ -400,23 +372,6 @@ let ProjectIncoming = ({ e }: { e: Ent }) => {
 // A project is an actor and a home, so its complete backlink set is an
 // activity ledger. Attribution belongs in history; associations stay here,
 // capped per relation with a filtered census link for the remainder.
-export let ProjectDebug = ({ e }: { e: Ent }) => <Debug e={e} project />
-
-export let DebugTaskItem = ({ e }: { e: Ent }) => (
-  <Item>
-    <Id e={e} />
-    <Kind>{e.kind}</Kind>
-    <Title {...title(e.doc?.title ?? '')} />
-    {e.claim && <Claim>⚑ {viaName(e.claim.session)}</Claim>}
-    <Prio>{formatProp(priority, e.filed?.priority ?? 0)}</Prio>
-    <Status mod={statusOf(e)}>{statusOf(e)}</Status>
-  </Item>
-)
-
-export let DebugAnyItem = ({ e }: { e: Ent }) => (
-  <Item>
-    <Id e={e} />
-    <Kind>{e.kind}</Kind>
-    {e.doc?.title && <Title {...title(e.doc.title)} />}
-  </Item>
+export let ProjectInspectFull = ({ e }: { e: Ent }) => (
+  <InspectFull e={e} project />
 )
