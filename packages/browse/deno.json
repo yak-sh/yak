@@ -6,7 +6,7 @@
     "./main": "./main.tsx",
     "./hosting": "./hosting.ts",
     "./app": "./app.ts",
-    "./nav": "./components/nav.tsx"
+    "./web": "./app.ts"
   },
   "license": "Apache-2.0",
   "description": "The graph browsing app: domain views, editing and navigation, painted through @yaks/ui in browsers and terminals.",

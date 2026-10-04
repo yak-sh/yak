@@ -1,6 +1,13 @@
 // A terminal's history: entries and a cursor, independent of the app it runs.
 // The caller persists snapshot() in its private state file between runs.
-import type { HistoryEntry, HistoryPort } from '@yaks/ui/history'
+export type HistoryEntry = { path: string; state: unknown }
+export interface HistoryPort {
+  read(): HistoryEntry
+  write(entry: HistoryEntry, replace?: boolean): void
+  listen(fn: (entry: HistoryEntry) => void): () => void
+  back(): void
+  forward(): void
+}
 
 export type HistorySnapshot = { entries: HistoryEntry[]; at: number }
 export type TerminalHistory = HistoryPort & {

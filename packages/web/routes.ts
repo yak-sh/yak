@@ -1,5 +1,4 @@
-import { styles as appStyles } from '@yaks/browse/app'
-let entry = new URL('./main.ts', import.meta.url)
+import { type Application, application } from './app.ts'
 // The routes facet, exported as `@yaks/web/routes`: the addresses a person
 // opens in a browser. `/` is the root canvas, and each entity is at its own id — `/T-9`, or `/%23abc123` for one the
 // store has not numbered. Every one of them answers the same page, and the app
@@ -19,14 +18,13 @@ let entry = new URL('./main.ts', import.meta.url)
 
 import { type Authenticate, type Route, write } from '@yaks/api'
 import { dead, type Graph } from '@yaks/graph'
-import { prefixOf } from '@yaks/id'
+import { addressId, prefixOf } from '@yaks/id'
 import { everforest, kits, stylesheet } from '@yaks/ui'
 import type { Vocab } from '@yaks/vocab'
 import { type Body, bundle, kept } from '@yaks/cli/page'
 import { person } from '@yaks/cli/host'
 import { type Config, located, subpath, used } from '@yaks/cli/config'
 import type { Registry } from '@yaks/render'
-import { addressId } from '@yaks/browse'
 
 /** What this facet reads off the host it is composing into: the vocabulary
  * its plugins loaded, and the graph a name is resolved in. */
@@ -51,15 +49,14 @@ let text = (path: string) => () => fetch(here(path)).then((r) => r.text())
 let bytes = (path: string) => () =>
   fetch(here(path)).then(async (r) => new Uint8Array(await r.arrayBuffer()))
 
-let styles = async () =>
+let styles = async (app: Application) =>
   (await Promise.all([
     stylesheet({ kits, theme: everforest }),
-    fetch(appStyles).then((r) => r.text()),
+    app.styles ? fetch(app.styles).then((r) => r.text()) : '',
   ]))
     .join('\n')
 
 let files: [string, string, () => Promise<Body>][] = [
-  ['styles.css', 'text/css; charset=utf-8', styles],
   [
     'manifest.webmanifest',
     'application/manifest+json',
@@ -96,11 +93,11 @@ let names = async (graph: Graph, path: string): Promise<boolean> => {
 }
 
 /** The page at every entity's address, and `/web/*`. */
-export type Options = { home?: { title: string; query: string } }
+export type Options = { home?: { title: string; query: string }; app?: string }
 
 export let routes = (host: Hosting, options: Options = {}): Route[] => {
   let page = kept('/', 'text/html; charset=utf-8', text('./index.html'))
-  let app = entry
+  let app = () => application(host.config?.plugins ?? [], options.app)
   let named = async (request: Request) => {
     if (await names(host.graph, new URL(request.url).pathname)) {
       return page(request)
@@ -163,13 +160,11 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
               specs.push(import.meta.resolve(located(`${plugin}/views`)))
             }
           }
-          let main = new URL('../browse/mount.tsx', import.meta.url)
+          let chosen = await app()
+          let main = chosen.mount
           let code = [
             `import ${
               JSON.stringify(new URL('./browser.ts', import.meta.url).href)
-            }`,
-            `import ${
-              JSON.stringify(new URL('./links.ts', import.meta.url).href)
             }`,
             `import { mount } from ${JSON.stringify(main.href)}`,
             ...specs.map((s, i) =>
@@ -179,9 +174,18 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
               JSON.stringify(options.home) ?? 'undefined'
             })`,
           ].join('\n')
-          return bundle({ code, at: app }, signal)
+          return bundle({ code, at: chosen.entry }, signal)
         },
         { early: true, closing: host.stopping },
+      ),
+    },
+    {
+      method: 'GET',
+      path: '/web/styles.css',
+      handle: kept(
+        '/web/styles.css',
+        'text/css; charset=utf-8',
+        async () => styles(await app()),
       ),
     },
     ...files.map(([name, type, make]): Route => ({

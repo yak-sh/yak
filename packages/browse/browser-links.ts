@@ -1,6 +1,6 @@
 // Browser anchors keep shared addresses and follow the app in place.
-import { appRoute, navigate } from '@yaks/browse/nav'
-import { localPath } from '@yaks/browse/hosting'
+import { appRoute, navigate } from './components/nav.tsx'
+import { localPath } from './hosting.ts'
 // Internal anchors retain their native shared-link/new-tab address, while a
 // plain click follows the app's controlled navigation in this tab.
 addEventListener('click', (event) => {

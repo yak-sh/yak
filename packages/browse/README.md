@@ -120,12 +120,12 @@ handlers.
 
 ## Exports
 
-| export      | provides                                                 |
-| ----------- | -------------------------------------------------------- |
-| `.`         | vocabulary learning and graph address normalization      |
-| `./hosting` | the app's page mount, transport and storage declarations |
-| `./app`     | source URLs for the browser entry and stylesheet         |
-| `./main`    | browser entry served by the browser door                 |
+| export           | provides                                                 |
+| ---------------- | -------------------------------------------------------- |
+| `.`              | vocabulary learning and graph address normalization      |
+| `./hosting`      | the app's page mount, transport and storage declarations |
+| `./app`, `./web` | source assets contributed to a browser door              |
+| `./main`         | browser entry served by the browser door                 |
 
 The source URLs let a door bundle the app without importing its page state into
 the server process:
@@ -148,3 +148,6 @@ rather than adding a strip.
 
 The terminal door keeps history snapshots in `TASKS_TUI_STATE`. Ctrl-O goes back
 and Ctrl-F goes forward.
+
+The configured `./web` facet contributes `app` to the browser door. The door
+imports that facet from the plugin config, never imports browse by name.

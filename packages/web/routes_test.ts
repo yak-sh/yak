@@ -37,7 +37,11 @@ await graph.apply([
   },
   { entity: { eid: 'kindless' }, favorite: {} },
 ])
-let table = routes({ vocab, graph })
+let table = routes({
+  vocab,
+  graph,
+  config: { db: ':memory:', plugins: ['@yaks/browse'] },
+})
 
 let reached = (path: string): Route | undefined =>
   table.find((r) => routed(r, 'GET', path) && r.path != '/*')
@@ -114,7 +118,7 @@ test('the page learns the configured owner by the graph address interface', asyn
   let rs = routes({
     vocab,
     graph,
-    config: { db: ':memory:', plugins: [], person: 'lemon-cake' },
+    config: { db: ':memory:', plugins: ['@yaks/browse'], person: 'lemon-cake' },
   })
   let owner = rs.find((r) => r.path == '/web/owner')!
   let response = await owner.handle(new Request('http://x/web/owner'))
@@ -126,7 +130,7 @@ test('web and terminal writes are attributed to the configured owner through API
   let rs = routes({
     vocab,
     graph,
-    config: { db: ':memory:', plugins: [], person: 'lemon-cake' },
+    config: { db: ':memory:', plugins: ['@yaks/browse'], person: 'lemon-cake' },
     who: () => ({ by: 'server', via: 'terminal' }),
   })
   let post = rs.find((r) => r.path == '/web/apply')!

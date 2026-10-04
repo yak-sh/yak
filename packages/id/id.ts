@@ -104,3 +104,7 @@ export let human = (v: Vocab): (b: Wearing) => string => {
   let id = idOf(v)
   return (b) => id({ eid: b.entity.eid, kind: v.kindOf(b), num: b.entity.num })
 }
+
+/** A copied short handle, normalized before resolving it through the graph. */
+export let addressId = (id: string): string =>
+  /^[0-9a-f]{10}$/i.test(id) ? `#${id}` : id

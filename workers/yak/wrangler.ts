@@ -124,6 +124,7 @@ export let ready = async (root = dir, timeout = 600_000) => {
       '-A',
       join(repo, 'packages/web/assets.ts'),
       join(root, 'public/_web'),
+      '@yaks/browse/web',
     ],
     stdin: 'null',
   }).spawn().status

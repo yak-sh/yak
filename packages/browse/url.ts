@@ -2,7 +2,7 @@ import { localPath, pagePath, webOrigin } from './hosting.ts'
 // Human-facing graph addresses. Transport stays local through TASKS_HOST;
 // anything handed to a person uses the board's stable public door.
 
-import { SHORT } from '@yaks/id'
+import { addressId, SHORT } from '@yaks/id'
 import { EID } from './types.ts'
 
 let origin = webOrigin
@@ -12,10 +12,7 @@ let origin = webOrigin
 export let entityPath = (id: string) => pagePath(`/${encodeURIComponent(id)}`)
 export let entityUrl = (id: string) => `${origin()}${entityPath(id)}`
 
-// A copied short handle may arrive as a bare path segment after a person
-// drops the # that a browser treats as a fragment. It still names that eid.
-export let addressId = (id: string): string =>
-  /^[0-9a-f]{10}$/i.test(id) ? `#${id}` : id
+export { addressId } from '@yaks/id'
 
 // entityUrl's inverse: the id token a graph entity link names — undefined for
 // any other address. Only id-shaped path segments count (prefix-num, short

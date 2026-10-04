@@ -1,8 +1,9 @@
 # @yaks/web
 
-The browser door: the page, bundle, styles and assets that run
-[@yaks/browse](../browse) through [@yaks/api](../api). Browse owns the app's
-views, editing and navigation; web owns serving it in a tab.
+The browser door serves configured applications over [@yaks/api](../api). A
+**web facet** is an application's `./web` contribution: source URLs for its
+entry, mounting module and optional stylesheet. Web discovers those facets from
+the plugin config; it imports no application.
 
 ## Use
 
@@ -48,7 +49,7 @@ more-specific routes.
 host's asset directory:
 
 ```sh
-deno run -A packages/web/assets.ts /tmp/yak-web-assets
+deno run -A packages/web/assets.ts /tmp/yak-web-assets @yaks/browse/web
 ```
 
 A yaks.app host mounts those assets under its app's `/_web` address and supplies
@@ -85,3 +86,23 @@ Web installs the `@yaks/ui/history` port before mounting browse. The port owns
 `pushState`, `replaceState` and `popstate`; browse supplies the top-page path
 and its controlled Stack snapshot. Ordinary internal anchors follow that port,
 while modified clicks keep their native new-tab behavior.
+
+## Application contributions
+
+An application exports `app` through `./web`:
+
+```ts
+import { application } from '@yaks/web/app'
+import { equal } from '@yaks/testing'
+const app = {
+  entry: new URL('file:///example/main.ts'),
+  mount: new URL('file:///example/mount.ts'),
+}
+equal(await application(['example'], undefined, async () => ({ app })), app)
+```
+
+The door loads the configured plugins' `/views` facets and passes them, with its
+`home` option, to that application's `mount`. With several applications, set
+web's `app` option to the chosen plugin name. No contribution or an ambiguous
+choice fails explicitly. Static hosts pass an application's facet to
+`assets.ts`; the browser history primitive is installed before its entry.

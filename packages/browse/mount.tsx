@@ -1,3 +1,4 @@
+import './browser-links.ts'
 import { bindHistory } from './history.ts'
 import { historyPort } from '@yaks/ui/history'
 import { front } from './components/fields.tsx'

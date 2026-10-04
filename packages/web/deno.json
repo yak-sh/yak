@@ -3,10 +3,11 @@
   "version": "0.2.10",
   "exports": {
     ".": "./mod.ts",
-    "./routes": "./routes.ts"
+    "./routes": "./routes.ts",
+    "./app": "./app.ts"
   },
   "license": "Apache-2.0",
-  "description": "The browser door: page, bundle, styles and assets for @yaks/browse, served through @yaks/api.",
+  "description": "The browser door: serves configured applications contributed through their web facet, with page, bundles, styles and assets over @yaks/api.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "preact": "npm:preact@^10.29.1",
