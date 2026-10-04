@@ -124,8 +124,19 @@ function tracking(
           return id && !validated.has(id) ? [id] : []
         })),
       ]
-      return after(ids.length ? tx.get(ids) : [], (defs) => {
-        for (let b of defs) if (b.archetype != null) descriptor(b)
+      // The gather's hints are freshly read for this transaction, not cached
+      // descriptor values. Validate those exact bundles; only an unexpected
+      // shape or a projection that omitted its descriptor needs another read.
+      let gathered = ids.flatMap((id) => {
+        let b = found(id)
+        return b?.archetype != null ? [b] : []
+      })
+      let have = new Set(gathered.map((b) => b.entity.eid))
+      let unread = ids.filter((id) => !have.has(id))
+      return after(unread.length ? tx.get(unread) : [], (defs) => {
+        for (let b of [...gathered, ...defs]) {
+          if (b.archetype != null) descriptor(b)
+        }
         for (let i = 0; i < missing.length; i++) {
           let b = before[i]
           let assigned = b?.entity.archetype

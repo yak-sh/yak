@@ -62,6 +62,17 @@ test('archetype admission gathers warmed descriptors with their owners', () => {
   assertEquals((g.get(['a']) as Bundle[])[0].note, { text: 'kept' })
 })
 
+test('archetype edits validate freshly gathered descriptors without rereading them', () => {
+  let { g, reads } = fixture()
+  g.apply([{ entity: { eid: 'a' }, note: { text: 'kept' } }])
+  // The owner and its descriptor are read again on every apply. A stable
+  // shape needs that current validation, not another read of the descriptor.
+  let before = reads()
+  g.apply([{ entity: { eid: 'a' }, note: { text: 'changed' } }])
+  assertEquals(reads() - before, 1)
+  assertEquals((g.get(['a']) as Bundle[])[0].note, { text: 'changed' })
+})
+
 test('archetype read hints follow a foreign shape change and ignore old descriptors', () => {
   let { g, storage } = fixture()
   g.apply([{ entity: { eid: 'a' }, note: { text: 'kept' } }])
@@ -129,6 +140,11 @@ test('a cached table set cannot hide an invalid stored archetype', () => {
   )
   assertThrows(
     () => g.apply(patch, { check: true }),
+    Refused,
+    'Invalid stored archetype identity',
+  )
+  assertThrows(
+    () => g.apply(patch),
     Refused,
     'Invalid stored archetype identity',
   )
