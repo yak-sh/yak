@@ -69,8 +69,8 @@ test('following an entity stacks its main page on either pointer kind', () => {
   let priorMedia = Object.getOwnPropertyDescriptor(globalThis, 'matchMedia')
   let prior = cache.peek()
   cache.value = {
-    task: { entity: { eid: 'task', num: 7 }, task: {} },
-    other: { entity: { eid: 'other', num: 8 }, task: {} },
+    task: { entity: { eid: 'task', num: 7 }, task: { eid: 'task' } },
+    other: { entity: { eid: 'other', num: 8 }, task: { eid: 'other' } },
   }
   try {
     Object.defineProperty(globalThis, 'matchMedia', {

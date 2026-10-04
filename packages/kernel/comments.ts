@@ -12,7 +12,8 @@ export type Branch = { row: CommentRow; children: Branch[] }
 export let branches = (rows: CommentRow[]): Branch[] => {
   let ordered = [...rows].sort((a, b) =>
     String(a.created?.at ?? '').localeCompare(String(b.created?.at ?? '')) ||
-    (a.entity.num ?? 0) - (b.entity.num ?? 0) || a.entity.eid.localeCompare(b.entity.eid)
+    (a.entity.num ?? 0) - (b.entity.num ?? 0) ||
+    a.entity.eid.localeCompare(b.entity.eid)
   )
   let nodes = new Map<string, Branch>(
     ordered.map((row) => [row.entity.eid, { row, children: [] }]),

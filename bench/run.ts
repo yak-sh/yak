@@ -36,10 +36,16 @@ export let main = async (args = Deno.args): Promise<number> => {
     console.log(`${name}: ${current?.verdict ?? 'no data (bootstrap)'}`)
     return 0
   }
+  let recording = name == 'throughput' && rest.includes('--recording')
   let definition
   let rounds = 3
   if (name == 'throughput') {
-    definition = throughput()
+    definition = throughput({
+      recording,
+      filter: recording
+        ? rest.find((a) => a.startsWith('--filter='))?.slice('--filter='.length)
+        : undefined,
+    })
     rounds = 7
   } else {
     let { standalone } = await import('./standalone.ts')
@@ -60,6 +66,10 @@ export let main = async (args = Deno.args): Promise<number> => {
   }
   let current = await run(definition, {
     ...options(name, action, rounds),
+    coverage: recording ? 'subset' : 'exact',
+    output: recording
+      ? 'bench/apply-recording.results.json'
+      : `bench/${name}.results.json`,
     lock: '/tmp/yaks-throughput-bench.lock',
   })
   for (let b of current.benches) console.log(`${b.name}: ${b.median} ${b.unit}`)

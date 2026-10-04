@@ -19,11 +19,15 @@ test('sidebar narrows registry entries and restores folded sections on remount',
   let b = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
   let restore = useRoute(() => {})
   cache.value = {
-    [a]: { entity: { eid: a, num: 1 }, favorite: {}, doc: { title: 'Alpha' } },
+    [a]: {
+      entity: { eid: a, num: 1 },
+      favorite: { eid: a },
+      doc: { eid: a, title: 'Alpha' },
+    },
     [b]: {
       entity: { eid: b, num: 2 },
-      favorite: {},
-      board: { query: '.task' },
+      favorite: { eid: b },
+      board: { eid: b, query: '.task' },
     },
   }
   extend([{
@@ -83,12 +87,12 @@ test('expanding a package shows its declared components through the registry', a
     [p]: {
       entity: { eid: p, num: 3 },
       _package: { name: 'Test pack' },
-      doc: { title: 'Test pack' },
+      doc: { eid: p, title: 'Test pack' },
     },
     [c]: {
       entity: { eid: c, num: 4 },
       _comp: { name: 'task', package: p },
-      doc: { title: 'task' },
+      doc: { eid: c, title: 'task' },
     },
   }
   extend([{

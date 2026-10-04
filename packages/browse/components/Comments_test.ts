@@ -167,8 +167,8 @@ test('shared comment send line keeps drafts, sends by submit or Enter once and l
   cache.value = {
     [eid]: {
       entity: { eid, num: 19 },
-      doc: { title: 'Comment target' },
-      task: {},
+      doc: { eid, title: 'Comment target' },
+      task: { eid },
     },
   }
   let sent: import('../types.ts').Change[] = []
@@ -195,14 +195,14 @@ test('shared comment send line keeps drafts, sends by submit or Enter once and l
     seen.free()
     seen = mount(h(Composer, { eid }))
     assertEquals(input().value, 'Draft kept across remount')
-    await act(() =>
+    await act(() => {
       seen.root.querySelector('form')!.dispatchEvent(
         new (input().ownerDocument.defaultView!.Event)('submit', {
           bubbles: true,
           cancelable: true,
         }),
       )
-    )
+    })
     assertEquals(
       sent.filter((c) => c.name == 'comment').length,
       1,
@@ -219,10 +219,14 @@ test('shared comment send line keeps drafts, sends by submit or Enter once and l
         { key: 'Enter', shiftKey: shift },
       )
     let newline = key(true)
-    await act(() => input().dispatchEvent(newline))
+    await act(() => {
+      input().dispatchEvent(newline)
+    })
     assertEquals(newline.defaultPrevented, false)
     assertEquals(sent.filter((c) => c.name == 'comment').length, 1)
-    await act(() => input().dispatchEvent(key(false)))
+    await act(() => {
+      input().dispatchEvent(key(false))
+    })
     assertEquals(sent.filter((c) => c.name == 'comment').length, 2)
     assertEquals(input().value, '')
   } finally {

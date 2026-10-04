@@ -92,6 +92,31 @@ separate process so the observer adds no timing overhead. RAM has zero SQL
 statements. `deno run -A bench/apply-fixture.ts` independently verifies these
 counts.
 
+## Recording overhead
+
+`deno task bench:check throughput -- --recording` compares unsubscribed applies
+with a graph channel subscribed to `@yaks/timing`'s `summarize` and `sample`. It
+measures the same edit/create, alone/batch, SQLite/RAM and 200/1,000-bundle
+cases. The two modes run in separate Deno processes so recording cannot alter
+the unsubscribed process’s JIT feedback. Process order alternates each round.
+Each recording invocation groups five fresh fixture workloads into a finite
+minute with a shared ordinary-sample quota and summary buffer. Two measured
+invocations and one warmup preserve ten measured workloads and five warmups per
+case. It buffers all completed events by minute and assembles root-first trees,
+including SQL and both tracker flush phases. It samples every completed tree
+with the default slow thresholds and a shared ordinary-sample quota, then
+summarizes closed minutes. The finite minute is closed inside timing so summary
+cost is included without waiting for the clock. No tracker writes run.
+
+Use `--filter='-200|batch-1000'` after `--recording` to select a subset by
+regular expression.
+
+The comparison uses subset coverage against the throughput baseline: banked
+unsubscribed cases still fail on regressions; unbanked subscribed cases make the
+verdict `measured`. It writes `bench/apply-recording.results.json` and leaves
+the baseline unchanged. The normal throughput check retains exact coverage. The
+recording run takes the same box-wide lock and seven rounds.
+
 ## Relay admission
 
 `bench/relay_bench.ts` reuses T-64601's fixture retained by T-64638:

@@ -15,6 +15,7 @@ import {
   applyBenchmarkNames,
   benchmarkNames,
   bundlesPerOp,
+  RECORDING_BATCHES,
   relayBenchmarkNames,
 } from './names.ts'
 
@@ -35,18 +36,25 @@ export let countNames = () => [
   ),
 ]
 type Input = {
+  recording?: boolean
+  filter?: string
   measure?: (mode: string) => Promise<DenoReport>
   counts?: () => Promise<Record<string, Sample>>
   host?: () => Promise<Host>
 }
 export let throughput = (input: Input = {}): CollectedSuite => {
+  let recording = input.recording ?? false
+  let selected = input.filter ? new RegExp(input.filter) : undefined
+  let applyNames = applyBenchmarkNames(recording).filter((name) =>
+    !selected || selected.test(name)
+  )
   let counts: Record<string, Sample> | undefined
   return {
     name: 'throughput',
     metric: 'median-of-7-deno-avg-ns',
     workload: WORKLOAD_VERSION,
     benches: [
-      ...benchmarkNames().map((name) => ({
+      ...(recording ? applyNames : benchmarkNames()).map((name) => ({
         name,
         unit: name.startsWith('apply/')
           ? 'ns/bundle'
@@ -54,32 +62,50 @@ export let throughput = (input: Input = {}): CollectedSuite => {
           ? 'ns/value'
           : 'ns/op',
       })),
-      ...countNames().map((name) => ({ name, unit: 'statements' })),
+      ...(recording ? [] : countNames()).map((name) => ({
+        name,
+        unit: 'statements',
+      })),
     ],
     collect: async (round) => {
       let machine = await (input.host ?? host)()
       let out: Record<string, Sample> = {}
-      for (let mode of [...MODES, 'pipeline']) {
+      let modes = recording
+        ? ['recording-unsubscribed', 'recording-subscribed']
+        : [...MODES, 'pipeline']
+      if (recording && round % 2) modes.reverse()
+      for (let mode of modes) {
         console.error(`throughput: round ${round + 1}/7, ${mode}`)
-        let report = await (input.measure ?? measure)(mode)
+        let report = await (input.measure ?? ((mode) =>
+          measure(mode, input.filter)))(
+            mode,
+          )
         if (report.runtime != machine.runtime || report.cpu != machine.cpu) {
           throw new Error('Runtime/CPU changed between samples')
         }
-        let names = mode == 'pipeline'
+        let names = mode.startsWith('recording-')
+          ? applyNames.filter((name) =>
+            name.endsWith('/subscribed') == (mode == 'recording-subscribed')
+          )
+          : mode == 'pipeline'
           ? [...applyBenchmarkNames(), ...relayBenchmarkNames()]
           : storageNames().filter((name) => name.split('/')[1] == mode)
         Object.assign(out, extract(report, names))
       }
       for (let [name, sample] of Object.entries(out)) {
-        sample.value /= bundlesPerOp(name)
+        sample.value /= bundlesPerOp(name) * (recording ? RECORDING_BATCHES : 1)
       }
+      if (recording) return out
       counts ??= await (input.counts ?? measureCounts)()
       return { ...out, ...counts }
     },
   }
 }
-let measure = async (mode: string): Promise<DenoReport> => {
+let measure = async (mode: string, filter?: string): Promise<DenoReport> => {
   let env: Record<string, string> = {
+    BENCH_RECORDING: mode.startsWith('recording-')
+      ? mode.slice('recording-'.length)
+      : '0',
     DB_PATH: ':memory:',
     BENCH_STORAGE: mode,
     TASKS_SYNC: 'off',
@@ -94,7 +120,12 @@ let measure = async (mode: string): Promise<DenoReport> => {
       'bench',
       '-A',
       '--json',
-      ...(mode == 'pipeline'
+      ...(mode.startsWith('recording-') && filter
+        ? ['--filter', `/${filter}/`]
+        : []),
+      ...(mode.startsWith('recording-')
+        ? ['bench/apply_bench.ts']
+        : mode == 'pipeline'
         ? ['bench/apply_bench.ts', 'bench/relay_bench.ts']
         : files),
     ],

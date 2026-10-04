@@ -89,7 +89,10 @@ test('an entity with no title and no number is called by its handle', () => {
 // caller of the shared Id, without the caller knowing the entity's kind.
 test('shared Id resolves a contributed identity instead of drawing its own chip', () => {
   cache.value = {
-    named: { entity: { eid: 'named', num: 1 }, doc: { title: 'Not the chip' } },
+    named: {
+      entity: { eid: 'named', num: 1 },
+      doc: { eid: 'named', title: 'Not the chip' },
+    },
   }
   let prior = registry.renderers
   registry.renderers = [

@@ -4,7 +4,7 @@ import { equal, test } from '@yaks/testing'
 import { client } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
 import { docs } from '@yaks/ux/vocab'
-import { cut, panesOf, scrolledPane } from '@yaks/ux'
+import { cut, panesOf, scrolledPane, scrollOf } from '@yaks/ux'
 import type { HistoryEntry, HistoryPort } from '@yaks/ui/history'
 import { frameHistory, restoredFrames } from './history.ts'
 
@@ -81,7 +81,7 @@ test('reload restores stack and scroll; a shared top address opens one page', ()
   h = frameHistory(g, door(snapshot))
   try {
     equal(panesOf(h.frames.value), ['/T-1', '/T-2'])
-    equal(h.frames.value.Stack?.scroll, { '/T-1': 87 })
+    equal(scrollOf(h.frames.value, '/T-1'), 87)
     equal(panesOf(restoredFrames({ path: snapshot.path, state: null })), [
       '/T-2',
     ])

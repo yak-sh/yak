@@ -29,4 +29,4 @@ export { all, composed, views } from './views.ts'
 
 export { called } from './read.ts'
 
-export { useCensus, type Census } from './census.ts'
+export { type Census, useCensus } from './census.ts'

@@ -6,6 +6,7 @@ import { countNames, throughput } from '../../bench/throughput.ts'
 import {
   applyBenchmarkNames,
   bundlesPerOp,
+  RECORDING_BATCHES,
   relayBenchmarkNames,
 } from '../../bench/names.ts'
 
@@ -90,4 +91,46 @@ test('throughput collects each storage report separately from normalized apply a
     equal((collected['sqlite/file/point'] as { value: number }).value, 100)
   }
   equal(counts, 1)
+})
+
+test('recording comparison normalizes both modes per bundle without a statement observer', async () => {
+  let suite = throughput({
+    recording: true,
+    filter: '-200|batch-1000',
+    host: () => Promise.resolve(context),
+    measure: (mode) =>
+      Promise.resolve({
+        version: 1,
+        runtime: context.runtime,
+        cpu: context.cpu,
+        benches: applyBenchmarkNames(true).filter((name) =>
+          /-200|batch-1000/.test(name)
+        ).filter((name) =>
+          name.endsWith('/subscribed') == (mode == 'recording-subscribed')
+        ).map((name) => ({
+          name,
+          results: [{ ok: { avg: name.endsWith('/subscribed') ? 120 : 100 } }],
+        })),
+      }),
+    counts: () => {
+      throw new Error('Statement counting must stay outside timing')
+    },
+  })
+  let collected = await suite.collect(0)
+  equal(
+    Object.keys(collected).sort(),
+    suite.benches.map((b) => b.name).sort(),
+  )
+  ok(!Object.hasOwn(collected, 'apply/file/edit-alone-1000'))
+  for (let n of [200, 1000]) {
+    let name = `apply/file/edit-batch-${n}`
+    equal(
+      (collected[name] as { value: number }).value,
+      100 / (n * RECORDING_BATCHES),
+    )
+    equal(
+      (collected[`${name}/subscribed`] as { value: number }).value,
+      120 / (n * RECORDING_BATCHES),
+    )
+  }
 })

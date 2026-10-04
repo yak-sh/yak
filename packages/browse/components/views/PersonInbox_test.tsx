@@ -240,14 +240,14 @@ test('new conversation keeps its exact draft across remount, rejects blank words
     })
     assertEquals(box().value, words)
 
-    await act(() =>
+    await act(() => {
       seen.root.querySelector('form')!.dispatchEvent(
         new (box().ownerDocument.defaultView!.Event)('submit', {
           bubbles: true,
           cancelable: true,
         }),
       )
-    )
+    })
     let calls = sent.filter((c) =>
       c.name == 'call' && c.comp?.to == identityEid('tool', ['inbox_new'])
     )
@@ -343,14 +343,14 @@ test('inbox roots and newest messages select contextual shared renderers without
     [eid]: {
       entity: { eid, num: 21 },
       conversation: {},
-      doc: { title: 'Conversation root', body: 'Exact root words' },
-      created: { by: 'person' },
+      doc: { eid, title: 'Conversation root', body: 'Exact root words' },
+      created: { eid, by: 'person' },
     },
     [reply]: {
       entity: { eid: reply, num: 22 },
-      comment: { target: eid },
-      doc: { body: 'Newest reply' },
-      created: { at: '2026-10-04T01:00:00Z' },
+      comment: { eid: reply, target: eid },
+      doc: { eid: reply, title: '', body: 'Newest reply' },
+      created: { eid: reply, at: '2026-10-04T01:00:00Z' },
     },
   }
   let prior = registry.renderers
@@ -405,10 +405,13 @@ test('inbox roots and newest messages select contextual shared renderers without
 
 test('shared Full and Tile fallbacks identify a session without a doc and a decision without a doc', () => {
   cache.value = {
-    session: { entity: { eid: 'session', num: 23 }, session: {} },
+    session: {
+      entity: { eid: 'session', num: 23 },
+      session: { eid: 'session', id: 'session' },
+    },
     decision: {
       entity: { eid: 'decision', num: 24 },
-      task: {},
+      task: { eid: 'decision' },
       decision: { question: 'Which route?' },
     },
   }

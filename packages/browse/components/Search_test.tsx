@@ -110,8 +110,8 @@ test('query page draws the inspector table through the shared registry', async (
   cache.value = {
     sample: {
       entity: { eid: 'sample', num: 1 },
-      task: {},
-      doc: { title: 'A shared task' },
+      task: { eid: 'sample' },
+      doc: { eid: 'sample', title: 'A shared task' },
     },
   }
   let seen = mount(h(SearchPage, { query: '.task' }))

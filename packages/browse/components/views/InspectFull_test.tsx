@@ -275,17 +275,22 @@ test('Inspect.Full combines the entity reading, raw properties and registered li
   cache.value = {
     [eid]: {
       entity: { eid, num: 51 },
-      doc: { title: 'Read this entity', body: '**Its words in full**' },
-      task: {},
-      filed: { assignee: who, priority: 2 },
-      created: { at: '2026-10-01T00:00:00Z', by: who },
+      doc: { eid, title: 'Read this entity', body: '**Its words in full**' },
+      task: { eid },
+      filed: { eid, assignee: who, priority: 2 },
+      created: { eid, at: '2026-10-01T00:00:00Z', by: who },
       unknown: { nested: { keep: true }, absent: null, empty: '' },
     },
-    [who]: { entity: { eid: who, num: 52 }, doc: { title: 'The author' } },
+    [who]: {
+      entity: { eid: who, num: 52 },
+      doc: { eid: who, title: 'The author' },
+    },
   }
   let asks: string[] = []
   let priorRoute = useRoute((body) => {
-    if ('subscribe' in body) asks.push(String(body.subscribe))
+    if (body && typeof body == 'object' && 'subscribe' in body) {
+      asks.push(String(body.subscribe))
+    }
   })
   try {
     assertEquals(applicable(ent(eid)).includes('Inspect.Full'), true)
@@ -349,13 +354,13 @@ test('Inspect.Full reference cells honor the referenced entity renderer', () => 
   cache.value = {
     task: {
       entity: { eid: 'task', num: 1 },
-      task: {},
-      filed: { project: 'project' },
+      task: { eid: 'task' },
+      filed: { eid: 'task', project: 'project' },
     },
     project: {
       entity: { eid: 'project', num: 2 },
-      project: {},
-      doc: { title: 'Plain doc title' },
+      project: { eid: 'project' },
+      doc: { eid: 'project', title: 'Plain doc title' },
     },
   }
   let prior = registry.renderers

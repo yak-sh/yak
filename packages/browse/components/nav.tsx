@@ -1,4 +1,4 @@
-import { hosting, localPath } from '../hosting.ts'
+import { localPath } from '../hosting.ts'
 import { addressId, entityPath, searchAt } from '../url.ts'
 import { signal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
