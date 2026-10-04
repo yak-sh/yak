@@ -1,7 +1,7 @@
-import { test } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { CallError } from '@yaks/tools'
-import { duration, errors, eventLine, faultsOf, records } from './logs.ts'
+import { duration, errors, eventLine, faultsOf, records, tail } from './logs.ts'
 
 let event = (over: Record<string, unknown> = {}) => ({
   eventTimestamp: 1000,
@@ -221,4 +221,63 @@ test('a token Sentry refuses is answered with the same fix', async () => {
     'Sentry refused the sentry token (401)',
   )
   assertEquals(/op:\/\/<vault>/.test(refusal.message), true)
+})
+
+test('tail follows the local Wrangler stream without polling MCP', async () => {
+  let was = globalThis.fetch
+  let requests: string[] = [], lines: string[] = []
+  globalThis.fetch = ((input: unknown) => {
+    requests.push(String(input))
+    throw new Error('tail must not fetch an HTTP door')
+  }) as typeof fetch
+  let controller: ReadableStreamDefaultController<Uint8Array>
+  let stdout = new ReadableStream<Uint8Array>({
+    start(c) {
+      controller = c
+    },
+  })
+  let status = { success: true, code: 0, signal: null }
+  let stopped = false, finished = false
+  try {
+    let following = tail(
+      '/scratch',
+      (line) => lines.push(line),
+      () => {},
+      new AbortController().signal,
+      (_command, options) => {
+        assertEquals(options.args?.slice(-3), ['tail', '--format', 'json'])
+        assertEquals(options.cwd, '/scratch/workers/yak')
+        return {
+          child: {
+            stdout,
+            status: Promise.resolve(status),
+          } as Deno.ChildProcess,
+          stopped: () => false,
+          stop: () => {
+            stopped = true
+          },
+          finish: () => {
+            finished = true
+            return Promise.resolve()
+          },
+        }
+      },
+    )
+    controller!.enqueue(
+      new TextEncoder().encode(JSON.stringify(event()) + '\n'),
+    )
+    await until(() => lines.length == 1, { label: 'first local tail event' })
+    controller!.enqueue(
+      new TextEncoder().encode(
+        JSON.stringify(event({ eventTimestamp: 2000 })) + '\n',
+      ),
+    )
+    await until(() => lines.length == 2, { label: 'next local tail event' })
+    controller!.close()
+    assertEquals(await following, 0)
+    assertEquals(requests, [])
+    assertEquals(stopped && finished, true)
+  } finally {
+    globalThis.fetch = was
+  }
 })

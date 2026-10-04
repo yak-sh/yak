@@ -182,13 +182,14 @@ let live = async (
   receive: (row: Row) => void,
   note: Note,
   signal: AbortSignal,
+  start = spawn,
 ) => {
   // npx starts Wrangler as a child of its own, so stopping npx alone leaves
   // Wrangler alive with the pipe open. The tail is a process group of its own
   // (`detached`), and stopping it signals the whole group: SIGINT, so Wrangler
   // can close its tail session, then SIGKILL for whatever is still there after
   // GRACE. It runs until the command stops (the host's `stopping`).
-  let run = spawn(WRANGLER[0], {
+  let run = start(WRANGLER[0], {
     args: [...WRANGLER.slice(1), 'tail', '--format', 'json'],
     cwd: `${root}/workers/yak`,
     stdin: 'null',
@@ -222,7 +223,9 @@ export let tail = (
   out: Note,
   note: Note,
   signal: AbortSignal,
-): Promise<number> => live(root, (row) => out(eventLine(row)), note, signal)
+  start = spawn,
+): Promise<number> =>
+  live(root, (row) => out(eventLine(row)), note, signal, start)
 
 /** Where yaks.app's failures go: workers/yak/sentry.ts's org and project. */
 export let SENTRY = {
