@@ -120,7 +120,14 @@ export let HomePage = ({ io }: { io: Io }): JSX.Element => {
             name: 'package',
             value: (b) => b.entity.eid,
             cell: (b) =>
-              h('a', { href: io.link(packEid(b.entity.eid)) }, b.entity.eid),
+              io.show(
+                io.get(packEid(b.entity.eid)) ??
+                  {
+                    entity: { eid: packEid(b.entity.eid) },
+                    _package: { name: b.entity.eid },
+                  },
+                'Inspect.Reference.Inline',
+              ),
           },
           {
             name: 'what it is',

@@ -10,9 +10,7 @@
 
 import { h, type JSX } from 'preact'
 import { identityEid } from '@yaks/graph'
-import { Chip } from '@yaks/ui'
 import type { Io } from './host.ts'
-import { tone } from './read.ts'
 
 /** The eid of the package named `name`. */
 export let packEid = (name: string): string => identityEid('_package', [name])
@@ -25,8 +23,11 @@ export let propEid = (name: string, prop: string): string =>
   identityEid('_prop', [compEid(name), prop])
 
 /** A component's name in its hue, linked to its page. */
-export let chip = (io: Io, name: string): JSX.Element =>
-  h(Chip, { mod: tone(name), href: io.link(compEid(name)) }, name)
+export let chip = (io: Io, name: string): JSX.Element => {
+  let eid = compEid(name)
+  let b = io.get(eid) ?? { entity: { eid }, _comp: { name } }
+  return io.show(b, 'Inspect.Reference.Inline') as JSX.Element
+}
 
 /** The components a vocabulary marks as edge relations (@yaks/edge). */
 export let relations = (io: Io): string[] =>

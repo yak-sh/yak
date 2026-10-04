@@ -150,7 +150,11 @@ export let inspectIo: Io = {
   set: (bs) => {
     void front.mutate(bs)
   },
-  show: (b, view, ctx = {}) => renderView(ent(b.entity.eid), view, ctx),
+  show: (b, view, ctx = {}) => {
+    let e = ent(b.entity.eid)
+    let supplied = { ...e, ...b, eid: b.entity.eid, entity: b.entity }
+    return renderView(supplied as import('../types.ts').Ent, view, ctx)
+  },
   can: (b, view) => !!resolve(registry, b, view, vocab),
 }
 

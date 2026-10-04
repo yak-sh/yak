@@ -360,7 +360,7 @@ let Entities = ({ e, io, notes, census }: Part_ & { census: Census }) => {
       columns: [
         {
           name: 'id',
-          cell: (b) => h('a', { href: io.link(b.entity.eid) }, io.id(b)),
+          cell: (b) => io.show(b, 'Inspect.Reference.Inline'),
         },
         ...[...title.values()].some(Boolean)
           ? [{
