@@ -520,6 +520,25 @@ and commit its row recorded, so run `discover` on it before taking it back.
 `linked(common)` names a repository's linked worktrees, and `idleFor(path)` says
 how long since Git last wrote one's HEAD, index or reflog.
 
+`processCwds()` reads the working directories of this user's live Linux
+processes. An unreadable directory refuses collection, so agents outside the
+graph also keep their worktrees. Non-dumpable processes require a privileged
+read through a root-owned helper, launched by the systemd user manager. The
+helper accepts one positive PID and checks that it belongs to the sudo caller.
+Install it from this package as root:
+
+```sh
+install -D -o root -g root -m 0755 packages/git/process-cwd.py /usr/local/libexec/yak-process-cwd
+```
+
+Grant the collecting user passwordless sudo for exactly that helper, with a
+trailing `*` for its argument. For a user named `collector`, the sudoers entry
+is `collector ALL=(root) NOPASSWD: /usr/local/libexec/yak-process-cwd *`. The
+helper refuses additional arguments, other users' processes and path traversal.
+Enable the user's systemd manager with `loginctl enable-linger
+collector`.
+Collection retains every checkout if the helper or manager fails.
+
 `@yaks/git/service` is the caller for every worktree nobody else takes back.
 Once an hour it runs `collect` on each repository the graph knows that is on
 this machine: every linked worktree Git has left alone for six hours and that is

@@ -180,12 +180,21 @@ test('an opaque local process directory still protects its worktree', async () =
     stdout: 'piped',
     stderr: 'null',
   }).spawn()
+  let manager = ['XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS']
+  let before = manager.map((name) => Deno.env.get(name))
   try {
+    // A service need not inherit a login session's bus environment.
+    for (let name of manager) Deno.env.set(name, '/missing-user-manager')
     let ready = child.stdout.getReader()
     await ready.read()
     ready.releaseLock()
     assert(inUse(await Deno.realPath(dir), await processCwds()))
   } finally {
+    for (let [i, name] of manager.entries()) {
+      let value = before[i]
+      if (value === undefined) Deno.env.delete(name)
+      else Deno.env.set(name, value)
+    }
     await child.stdin.close()
     await child.status
     await Deno.remove(dir, { recursive: true })

@@ -404,9 +404,10 @@ export type Held = 'dirty' | 'unlanded' | 'failed'
 
 // Linux's ptrace checks can hide even a same-user cwd (a capability-bearing
 // manager or a non-dumpable PAM helper). Ask the user manager for a privileged
-// readlink child. Its only operation reads this link: no shell, no signal
-// to the observed PID, and no filesystem mutation. A box without this existing
-// sudo permission refuses collection rather than guessing the hidden cwd.
+// cwd reader. Its only operation reads this same-user link: no signal to
+// the observed PID and no filesystem mutation. The root-owned helper and sudo
+// permission are installed as described in README.md. Without them collection
+// refuses rather than guessing the hidden cwd.
 let processCwd = async (pid: string): Promise<string> => {
   let path = `/proc/${pid}/cwd`
   try {
@@ -422,18 +423,25 @@ let processCwd = async (pid: string): Promise<string> => {
         '--collect',
         '/usr/bin/sudo',
         '-n',
-        '/usr/bin/readlink',
-        '-e',
-        path,
+        '/usr/local/libexec/yak-process-cwd',
+        pid,
       ],
+      env: {
+        XDG_RUNTIME_DIR: `/run/user/${Deno.uid()}`,
+        DBUS_SESSION_BUS_ADDRESS: `unix:path=/run/user/${Deno.uid()}/bus`,
+      },
       stdout: 'piped',
-      stderr: 'null',
+      stderr: 'piped',
     }).output()
     let cwd = new TextDecoder().decode(read.stdout).trimEnd()
     if (!read.success || !cwd.startsWith('/')) {
       // A process may have exited while the helper was starting.
       await Deno.stat(`/proc/${pid}`)
-      throw error
+      throw new Error(
+        `Worktree collection cannot inspect ${path}: ` +
+          new TextDecoder().decode(read.stderr).trim(),
+        { cause: error },
+      )
     }
     return cwd
   }
