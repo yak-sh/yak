@@ -1,71 +1,93 @@
-/** Ratchet equivalence on the throughput suite, without executing its benches.
- * Measured-box equivalence is checked separately against the JSON artifact. */
-import { equal, test, throws } from '@yaks/testing'
-import { baseline, compare, type Run } from './mod.ts'
-import { type Measurement, regressions } from '../../bin/bench.ts'
-import old from '../../bench/baseline.json' with { type: 'json' }
+/** The committed throughput suite rejects slower operations and extra SQL. */
+import { equal, ok, test, throws } from '@yaks/testing'
+import { type Host, Regressed, run } from './mod.ts'
+import bank from '../../bench/throughput.baseline.json' with { type: 'json' }
+import { countNames, throughput } from '../../bench/throughput.ts'
+import {
+  applyBenchmarkNames,
+  bundlesPerOp,
+  relayBenchmarkNames,
+} from '../../bench/names.ts'
 
-// The dismantled fleet server has no workload files. Compare the available
-// workloads, including any additional benches registered by the legacy suite.
-let reference: Measurement = {
-  ...old,
-  ns: Object.fromEntries(
-    Object.entries(old.ns).filter(([name]) => !name.startsWith('fleet/')),
-  ),
-}
-
-let measurement = (): Run => ({
-  version: 1,
-  suite: 'throughput',
-  metric: old.metric,
-  workload: old.workload,
-  runtime: old.runtime,
-  cpu: old.cpu,
-  at: '',
+let context: Host = {
+  config: {},
+  configURL: null,
   commit: null,
+  runtime: bank.runtime,
+  cpu: bank.cpu,
   load: [0, 0, 0],
-  rounds: 3,
-  tolerance: null,
-  verdict: 'measured',
-  regressions: [],
-  benches: Object.entries(reference.ns).map(([name, median]) => ({
-    name,
-    unit: name.startsWith('apply/')
-      ? 'ns/bundle'
-      : name.startsWith('relay/')
-      ? 'ns/value'
-      : 'ns/op',
-    better: 'lower',
-    median,
-    samples: [],
-    rounds: [],
-    spans: null,
-  })),
-})
-let legacy = (current: Run): Measurement => ({
-  ...old,
-  ns: Object.fromEntries(current.benches.map((b) => [b.name, b.median])),
+}
+test('throughput refuses synthetic 30% timing and statement regressions without banking them', async () => {
+  let suite = throughput()
+  let directory = await Deno.makeTempDir()
+  try {
+    let values = Object.fromEntries(bank.benches.map((b) => [b.name, b.median]))
+    let options = {
+      rounds: 7,
+      mode: 'check' as const,
+      output: directory + '/results.json',
+      baseline: 'bench/throughput.baseline.json',
+      host: () => context,
+    }
+    let collected = { ...suite, collect: () => values }
+    equal((await run(collected, options)).verdict, 'passed')
+    for (let b of bank.benches) {
+      let original = values[b.name]
+      values[b.name] = original ? original * 1.3 : 1
+      let error = await throws(() => run(collected, options))
+      ok(error instanceof Regressed)
+      equal((error as Regressed).result.regressions.map((r) => r.name), [
+        b.name,
+      ])
+      values[b.name] = original
+    }
+    equal(bundlesPerOp('apply/file/edit-alone-1000'), 1000)
+    equal(bundlesPerOp('relay/store/entities-100'), 1000)
+  } finally {
+    await Deno.remove(directory, { recursive: true })
+  }
 })
 
-test('throughput baseline and verdicts equal the existing runner, including 30% slowdown', async () => {
-  let current = measurement()
-  let base = baseline(current, .2)
-  for (let factor of [1, 1.2, 1.3]) {
-    current = measurement()
-    current.benches[0].median *= factor
-    equal(
-      compare(base, current).map((r) => r.name),
-      regressions(reference, legacy(current)),
-    )
-  }
-  equal(compare(base, current).length, 1)
-  for (let key of ['metric', 'workload', 'runtime', 'cpu'] as const) {
-    await throws(() => compare(base, { ...current, [key]: 'changed' }))
-    await throws(() =>
-      regressions(
-        reference,
-        { ...legacy(current), [key]: 'changed' } as Measurement,
+test('throughput collects each storage report separately from normalized apply and relay reports', async () => {
+  let { benchmarkNames: storageNames } = await import(
+    '../sqlite/fixtures/fleet.ts'
+  )
+  let counts = 0
+  let suite = throughput({
+    host: () => Promise.resolve(context),
+    measure: (mode) =>
+      Promise.resolve({
+        version: 1,
+        runtime: context.runtime,
+        cpu: context.cpu,
+        benches: (mode == 'pipeline'
+          ? [...applyBenchmarkNames(), ...relayBenchmarkNames()]
+          : storageNames().filter((n) => n.split('/')[1] == mode)).map(
+            (name) => ({ name, results: [{ ok: { avg: 100 } }] }),
+          ),
+      }),
+    counts: () => {
+      counts++
+      return Promise.resolve(
+        Object.fromEntries(countNames().map((n) => [n, { value: 1 }])),
       )
+    },
+  })
+  for (let round = 0; round < 2; round++) {
+    let collected = await suite.collect(round)
+    equal(
+      Object.keys(collected).sort(),
+      suite.benches.map((b) => b.name).sort(),
     )
+    equal(
+      (collected['apply/file/edit-alone-1000'] as { value: number }).value,
+      .1,
+    )
+    equal(
+      (collected['relay/store/entities-100'] as { value: number }).value,
+      .1,
+    )
+    equal((collected['sqlite/file/point'] as { value: number }).value, 100)
   }
+  equal(counts, 1)
 })

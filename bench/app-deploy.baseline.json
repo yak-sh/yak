@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "suite": "app-deploy",
+  "metric": "latest-host-medians",
+  "workload": 1,
+  "runtime": "Cloudflare Workers",
+  "cpu": "Cloudflare",
+  "tolerance": 0.25,
+  "benches": [
+    {
+      "name": "yaks.app/files → live",
+      "unit": "ms",
+      "resolution": 1,
+      "better": "lower",
+      "median": 2106
+    },
+    {
+      "name": "yaks.app/deploy",
+      "unit": "ms",
+      "resolution": 1,
+      "better": "lower",
+      "median": 2730
+    },
+    {
+      "name": "yaks.app/one file → live",
+      "unit": "ms",
+      "resolution": 1,
+      "better": "lower",
+      "median": 1684
+    }
+  ]
+}

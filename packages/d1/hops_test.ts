@@ -6,7 +6,7 @@
 // here, against the counting stand-in (testing.ts `counting`), and held to a
 // number.
 //
-// The numbers only go down. This table works like bench/baseline.json: a case
+// The numbers only go down. This table works like bench/throughput.baseline.json: a case
 // that comes in under its pin is re-pinned in the same commit that earned it
 // (the test says so on the console), and a case that comes in over its pin is a
 // regression to fix, never a pin to raise. Raising one is a decision, with a

@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "suite": "suite/test",
+  "metric": "wall-seconds / mean-concurrent-8M-LCG-seconds",
+  "workload": 1,
+  "runtime": "control-v1",
+  "cpu": "load-normalized",
+  "tolerance": 0.25,
+  "benches": [
+    {
+      "name": "wall/control",
+      "unit": "ratio",
+      "better": "lower",
+      "median": 738.614673431059
+    }
+  ],
+  "controlFloorSeconds": 0.05178629543076968,
+  "provenance": {
+    "seconds": 43.901683555
+  }
+}

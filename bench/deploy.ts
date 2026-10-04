@@ -1,6 +1,11 @@
-#!/usr/bin/env -S deno run --allow-read --allow-env
-// The box records deploys; Actions only reads the committed measurements.
-// Like bench-gate, the minimum ratchets down and a 25% margin absorbs noise.
+/** Verified push-to-live measurements, imported without retiming the deploy. */
+import {
+  type CollectedSuite,
+  host,
+  type Options,
+  run as benchmark,
+} from '@yaks/benchmark'
+
 export type Deploy = {
   sha: string
   pushed: string
@@ -14,7 +19,7 @@ export type Deploy = {
   probe?: string
 }
 
-export let RECORD = new URL('../bench/deploys.jsonl', import.meta.url)
+export let RECORD = new URL('./deploys.jsonl', import.meta.url)
 let stamp = (s: unknown): s is string =>
   typeof s == 'string' && Number.isFinite(Date.parse(s))
 
@@ -78,76 +83,70 @@ export let readRecords = async (path: string | URL = RECORD) => {
   }
 }
 
-export let gate = (rows: Deploy[], margin = 0.25) => {
-  if (!Number.isFinite(margin) || margin < 0) {
-    throw new Error('BENCH_TOL must be a finite nonnegative number')
-  }
-  // Backfills cannot reconstruct the first live response. Never ratchet on
-  // their much later observation, or quietly substitute upload for live.
-  // A later successful probe may complete a timed-out observation. Appending
-  // that completion preserves history; each deploy still counts only once.
-  let measured = [
+// A completed observation replaces the failed one for the same deploy. A
+// historical backfill cannot reconstruct the first live response.
+export let latest = (rows: Deploy[]) =>
+  [
     ...new Map(
-      rows.filter((r) => !r.backfill).map((r) => [`${r.sha}/${r.uploaded}`, r]),
+      rows.filter((r) => !r.backfill)
+        .map((r) => [`${r.sha}/${r.uploaded}`, r]),
     ).values(),
-  ].sort((a, b) => Date.parse(a.uploaded) - Date.parse(b.uploaded))
-  let latest = measured.at(-1)
-  let times = measured.flatMap((r) => r.seconds == null ? [] : [r.seconds])
-  let floor = times.length ? Math.min(...times) : null
-  let limit = floor == null ? 60 : Math.min(60, floor * (1 + margin))
-  if (!latest) {
-    return {
-      code: 0,
-      floor,
-      limit,
-      message: 'no live timing data — pass (bootstrap)',
-    }
+  ].sort((a, b) => Date.parse(a.uploaded) - Date.parse(b.uploaded)).at(-1)
+
+export let overBudget = (seconds: number) => seconds >= 60
+
+export let suite = (rows: Deploy[]): CollectedSuite | null => {
+  let row = latest(rows)
+  if (!row) return null
+  if (row.seconds == null) {
+    throw new Error(
+      `${row.sha.slice(0, 8)}: no verified live response (${split(row)})`,
+    )
   }
-  if (latest.seconds == null) {
-    return {
-      code: 1,
-      floor,
-      limit,
-      message: `${latest.sha.slice(0, 8)}: no verified live response (${
-        split(latest)
-      })`,
-    }
-  }
-  let detail = `${latest.sha.slice(0, 8)}: ${latest.seconds.toFixed(3)}s (${
-    split(latest)
-  }); floor ${floor!.toFixed(3)}s, limit ${limit.toFixed(3)}s`
-  if (times.length == 1) {
-    return {
-      code: 0,
-      floor,
-      limit,
-      message: `${detail} — first measurement, pass (bootstrap)`,
-    }
-  }
-  let failed = latest.seconds >= 60 || latest.seconds > limit
   return {
-    code: failed ? 1 : 0,
-    floor,
-    limit,
-    message: `${detail} — ${failed ? 'REGRESSION' : 'pass'}`,
+    name: 'deploy',
+    metric: 'latest-verified-live',
+    workload: 1,
+    benches: [
+      { name: 'push → live', unit: 's' },
+      { name: '60s budget exceeded', unit: 'violations' },
+    ],
+    collect: () => ({
+      'push → live': {
+        value: row.seconds!,
+        source: 'verified-live',
+        details: row,
+      },
+      // The old gate also enforces a strict 60s budget. Encoding its violation
+      // as a sample keeps the shared ratchet as the only verdict mechanism.
+      '60s budget exceeded': {
+        value: overBudget(row.seconds!) ? 1 : 0,
+        source: '60s-budget',
+      },
+    }),
   }
 }
 
-export let main = async (args = Deno.args) => {
-  if (args.length > 1) throw new Error('usage: deploy-gate.ts [record.jsonl]')
-  let result = gate(
-    await readRecords(args[0] ?? RECORD),
-    +(Deno.env.get('BENCH_TOL') ?? '0.25'),
-  )
-  console.log(`deploy-gate: ${result.message}`)
-  return result.code
-}
-
-if (import.meta.main) {
-  try {
-    Deno.exit(await main())
-  } catch (e) {
-    console.error(`deploy-gate: ${e instanceof Error ? e.message : e}`)
-    Deno.exit(1)
+export let run = async (options: Options, rows?: Deploy[]) => {
+  let measured = rows ?? await readRecords()
+  let work = suite(measured)
+  if (
+    options.mode == 'accept' && work && overBudget(latest(measured)!.seconds!)
+  ) {
+    throw new Error('Cannot accept a deploy exceeding the strict 60s budget')
   }
+  if (!work) {
+    console.log('deploy: no live timing data — pass (bootstrap)')
+    return null
+  }
+  let context = options.host ?? host
+  return await benchmark(work, {
+    ...options,
+    rounds: 1,
+    host: async () => ({
+      ...await context(),
+      runtime: 'Cloudflare Workers',
+      cpu: 'Cloudflare',
+    }),
+  })
 }

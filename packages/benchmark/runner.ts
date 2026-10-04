@@ -15,7 +15,14 @@ import {
   type Suite,
   workload,
 } from './result.ts'
-import { baseline, compare, tolerance, validate } from './ratchet.ts'
+import {
+  baseline,
+  compare,
+  type Coverage,
+  covered,
+  tolerance,
+  validate,
+} from './ratchet.ts'
 
 export type Files = {
   read: (path: string) => Promise<string>
@@ -53,6 +60,10 @@ export type Options = {
   files?: Files
   /** A box-wide flock, compatible with shell flock. Never unlink this file. */
   lock?: string
+  /** Scoped observations may measure only part of a suite, including new work.
+   * Unbanked measurements are reported as measured; acceptance retains the
+   * other workloads in the suite's baseline. Exact coverage is the default. */
+  coverage?: Coverage
 }
 export class Regressed extends Error {
   constructor(public result: Run) {
@@ -98,6 +109,9 @@ let execute = async (
   if (!['run', 'check', 'accept'].includes(mode)) {
     throw new Error(`Unknown mode: ${mode}`)
   }
+  if (options.coverage && !['exact', 'subset'].includes(options.coverage)) {
+    throw new Error(`Unknown benchmark coverage: ${options.coverage}`)
+  }
   if (
     typeof suite.name != 'string' || !suite.name ||
     typeof suite.metric != 'string' || !suite.metric ||
@@ -132,14 +146,22 @@ let execute = async (
     throw new Error('Checks use the baseline tolerance')
   }
   let store = options.files ?? files
-  let base: Baseline | undefined = mode == 'check'
-    ? JSON.parse(await store.read(options.baseline!))
-    : undefined
-  if (mode == 'check') validate(base!)
+  let base: Baseline | undefined
+  if (mode == 'check' || mode == 'accept' && options.coverage == 'subset') {
+    try {
+      base = JSON.parse(await store.read(options.baseline!))
+    } catch (error) {
+      if (mode == 'check' || !(error instanceof Deno.errors.NotFound)) {
+        throw error
+      }
+    }
+    if (mode == 'check' || base !== undefined) validate(base!)
+  }
   let context = await (options.host ?? host)()
   let benches: Result[] = suite.benches.map((b) => ({
     name: b.name,
     unit: b.unit,
+    ...(b.resolution !== undefined ? { resolution: b.resolution } : {}),
     better: b.better ?? 'lower',
     samples: [],
     rounds: [],
@@ -190,18 +212,27 @@ let execute = async (
     load: [...context.load],
     rounds,
     benches,
-    tolerance: base?.tolerance ??
-      (mode == 'accept' ? options.tolerance! : null),
+    tolerance: mode == 'accept' ? options.tolerance! : base?.tolerance ?? null,
     verdict: mode == 'accept' ? 'accepted' : 'measured',
     regressions: [],
   }
-  if (base) {
-    current.regressions = compare(base, current)
-    current.verdict = current.regressions.length ? 'regressed' : 'passed'
+  if (base && mode == 'check') {
+    current.regressions = compare(base, current, options.coverage)
+    current.verdict = current.regressions.length
+      ? 'regressed'
+      : covered(base, current)
+      ? 'passed'
+      : 'measured'
   }
+  let accepted = mode == 'accept'
+    ? baseline(current, options.tolerance!, base)
+    : undefined
   await store.write(options.output, current)
   if (mode == 'accept') {
-    await store.write(options.baseline!, baseline(current, options.tolerance!))
+    await store.write(
+      options.baseline!,
+      accepted!,
+    )
   }
   // Reporting owns an immutable snapshot, never the ratchet's mutable result.
   let snapshot = freeze(JSON.parse(JSON.stringify(current)) as Run)

@@ -208,6 +208,96 @@ test('ratchets reject incompatible comparisons and support both directions', asy
   }
 })
 
+test('scoped observations compare banked work and retain other workloads on acceptance', async () => {
+  let work = (name: string, cost = 100): Bench => ({
+    name,
+    unit: 'ms',
+    sample: () => cost,
+  })
+  let f = fixture([work('production'), work('staging', 200)])
+  await run(f.suite, { ...f.options, mode: 'accept', tolerance: .2 })
+  let scoped = { ...f.options, coverage: 'subset' as const }
+  let production = { ...f.suite, benches: [work('production', 90)] }
+  await throws(
+    () => run(production, { ...f.options, mode: 'check' }),
+    'Benchmark set changed',
+  )
+  equal((await run(production, { ...scoped, mode: 'check' })).verdict, 'passed')
+  await throws(
+    () =>
+      run({ ...production, benches: [work('production', 130)] }, {
+        ...scoped,
+        mode: 'check',
+      }),
+    'exceeded tolerance',
+  )
+  let newWork = { ...f.suite, benches: [work('development', 300)] }
+  equal((await run(newWork, { ...scoped, mode: 'check' })).verdict, 'measured')
+  await run(production, { ...scoped, mode: 'accept', tolerance: .2 })
+  await run(newWork, { ...scoped, mode: 'accept', tolerance: .2 })
+  equal(
+    Object.fromEntries(
+      JSON.parse(f.saved.get('baseline')!).benches.map((b: {
+        name: string
+        median: number
+      }) => [b.name, b.median]),
+    ),
+    { production: 90, staging: 200, development: 300 },
+  )
+  equal((await run(newWork, { ...scoped, mode: 'check' })).verdict, 'passed')
+  await throws(
+    () => run({ ...newWork, workload: 2 }, { ...scoped, mode: 'check' }),
+    'Incomparable workload',
+  )
+})
+
+test('sample resolution rounds tolerance boundaries and must match the baseline', async () => {
+  for (let better of ['lower', 'higher'] as const) {
+    let cost = 2106
+    let workload: Bench = {
+      name: 'work',
+      unit: 'ms',
+      better,
+      resolution: 1,
+      sample: () => cost,
+    }
+    let f = fixture([workload])
+    await run(f.suite, { ...f.options, mode: 'accept', tolerance: .25 })
+    equal(JSON.parse(f.saved.get('baseline')!).benches[0].resolution, 1)
+    cost = better == 'lower' ? 2633 : 1580
+    equal(
+      (await run(f.suite, { ...f.options, mode: 'check' })).verdict,
+      'passed',
+    )
+    cost += better == 'lower' ? 1 : -1
+    await throws(
+      () => run(f.suite, { ...f.options, mode: 'check' }),
+      'exceeded tolerance',
+    )
+    for (let resolution of [undefined, 2]) {
+      workload.resolution = resolution
+      await throws(
+        () => run(f.suite, { ...f.options, mode: 'check' }),
+        'resolution',
+      )
+    }
+    for (let resolution of [0, -1, Infinity, NaN]) {
+      workload.resolution = resolution
+      await throws(
+        () => run(f.suite, { ...f.options, mode: 'check' }),
+        'resolution',
+      )
+    }
+  }
+  let f = fixture([{ name: 'work', unit: 'ms', sample: () => 2106 }])
+  await run(f.suite, { ...f.options, mode: 'accept', tolerance: .25 })
+  f.suite.benches[0].sample = () => 2633
+  await throws(
+    () => run(f.suite, { ...f.options, mode: 'check' }),
+    'exceeded tolerance',
+  )
+})
+
 test('timed benches sample sync and async work with untimed setup and cleanup', async () => {
   for (let async of [false, true]) {
     let calls: string[] = []

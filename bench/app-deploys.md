@@ -22,12 +22,27 @@ space, read from `TOKEN_FILE` and never printed. Staging (`HOST=yaks.fyi`) is
 the right host once it can sign someone in; until it can mail (T-34979) it
 cannot, so production with a throwaway app is the default.
 
-`app-deploy:gate` reads the committed rows and gates three medians on the latest
-row: files → live, deploy, and one file → live. Each may only fall: the floor is
-the minimum of every earlier row from the same host, the limit is `floor × 1.25`
-(`BENCH_TOL`), and a latest row above any limit fails. Rows from different hosts
-are never compared. No rows, or a host's first row, pass as bootstrap. Corrupt
-rows fail rather than reset a floor.
+`app-deploy:gate` reads the committed rows through
+[@yaks/benchmark](../packages/benchmark/README.md), checking the latest row
+against that host's entries in `bench/app-deploy.baseline.json`. It checks three
+medians: files → live, deploy, and one file → live. The baseline preserves each
+host's banked minimum with a 25% tolerance; host names are part of the bench
+names, so rows from different hosts are never compared. A check writes
+`bench/app-deploy.results.json` and never changes the baseline. No rows pass as
+bootstrap. Corrupt rows fail. A host without a banked baseline passes as an
+unbanked measurement until explicit acceptance.
+
+App deploy medians have a 1 ms resolution. The ratchet rounds the tolerance
+boundary to whole milliseconds, so a 2106 ms floor permits 2633 ms at 25%.
+
+Accept reviewed observations explicitly:
+
+```sh
+deno task bench:ratchet app-deploy
+```
+
+Acceptance reads the recorded rows; it does not mint an app or run a deploy. It
+retains baseline entries for other hosts. Review and commit the baseline diff.
 
 ## Baseline
 

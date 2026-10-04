@@ -1,26 +1,51 @@
-# Throughput ratchet
+# Bench suites
 
-`deno task bench` measures storage reads and patches, `graph.apply`, and warmed
-relay admission. `deno task bench:check` takes fresh measurements and refuses
-metrics more than **20% higher** than `bench/baseline.json`. It checks statement
-counts as well as elapsed time. `deno task bench:ratchet` explicitly accepts a
-fresh baseline; review and commit its diff. Measurements and metadata are also
-written to `bench/results.json`.
+The repository's benchmarks run through
+[@yaks/benchmark](../packages/benchmark/README.md), with one committed baseline
+file per suite. `deno task bench` measures the throughput suite's storage reads
+and patches, `graph.apply`, and warmed relay admission. `deno task bench:check`
+takes fresh measurements and refuses metrics more than **20% higher** than
+`bench/throughput.baseline.json`, including statement counts.
+`deno task bench:ratchet` explicitly accepts a fresh baseline; review and commit
+its diff. Runs retain raw samples, round medians, commit, runtime, CPU and load
+average in `bench/throughput.results.json`.
 
 Benches run separately from `deno task test` and `deno task check`. The fast
-suite only checks fixture correctness and the ratchet's comparison logic.
+suite checks fixture correctness and the ratchet's comparison logic. The
+[command wall clocks](suites.md), [platform deploy](deploys.md) and
+[app deploy](app-deploys.md) use the same runner and ratchet with their own
+baselines.
 
-## Benchmark package runner
+## Other suites
 
-`deno task benchmark:throughput` runs the 40 storage-layer and archetype
-workloads through [@yaks/benchmark](../packages/benchmark/README.md), retaining
-three raw Deno averages per bench, their statistics, round medians, commit and
-load average in `bench/throughput.results.json`. It shares the box-wide
-throughput lock below. `deno task benchmark:check` checks
-`bench/throughput.baseline.json` at its committed 20% tolerance.
-`deno task benchmark:accept` explicitly accepts that suite's baseline; review
-and commit the diff. The `bench:*` commands above use their own baseline and
-results files.
+Select a suite with the same three commands:
+
+```sh
+deno task bench client-frame
+deno task bench:check client-frame
+deno task bench:ratchet client-frame
+```
+
+The suites are `client-frame`, `client-rules`, `harness-startup`,
+`harness-streaming`, `harness-worker`, `harness-window`, `harness-switch`,
+`graph-activity`, `session-status`, `web-client`, and `relay-admission`. Each
+writes `bench/<suite>.results.json` and checks `bench/<suite>.baseline.json`. A
+suite without a banked baseline can run; a check refuses until its baseline has
+been explicitly accepted. Take that measurement on an idle box, then review and
+commit its baseline. Do not bank numbers taken on a loaded box.
+
+Arguments after `--` reach the selected suite. For example, compare relay
+admission in a checkout over 200 ticks with:
+
+```sh
+deno task bench relay-admission -- /path/to/checkout 200
+```
+
+`bench/peer-capacity.ts` is a one-off populated-peer investigation for the Vale
+app, including joins, simulated clients and four paced movement ticks. Its
+capacity observations remain outside the ratchet; see
+[populated peer capacity](peer-capacity.md). The apply profile and workerd
+microtask probes below also remain separate from benchmark suites.
 
 ## Fleet corpus and storage
 
@@ -84,7 +109,7 @@ fanout.
 comparative CLI remains available:
 
 ```sh
-deno run -A bench/relay-admission.ts /path/to/checkout 200
+deno task bench relay-admission -- /path/to/checkout 200
 ```
 
 It reports relay and ordinary `graph.apply(check)` costs from three rounds at
@@ -102,22 +127,20 @@ in separate processes, followed by the graph/relay cases. Allow several minutes.
 
 Missing or renamed cases, failed runs, invalid timings or counts, and different
 runtime/CPU/workload metadata fail closed. Changes to a workload or timed
-boundary need an explicit fresh baseline. `revision` records HEAD; uncommitted
+boundary need an explicit fresh baseline. `commit` records HEAD; uncommitted
 source changes are included, so retain the diff when comparing revisions.
 Inspect the raw samples and load averages when investigating a noisy result.
 
 ## Box-wide serialization
 
-The three tasks use `bin/bench.sh` to acquire an exclusive `flock` on
-`${TMPDIR:-/tmp}/yaks-throughput-bench.lock`. Use the same TMPDIR across
-worktrees. A second invocation reports the holder's PID and waits up to 1,800
-seconds. The kernel releases the lock when its process exits. Never delete the
-lock file: waiters retain its inode.
+Throughput and standalone suites acquire an exclusive `flock` on
+`/tmp/yaks-throughput-bench.lock`, shared across worktrees. The kernel releases
+the lock when its process exits. Never delete the lock file: waiters retain its
+inode.
 
-The runner warns if it finds other Deno bench/test processes at startup. This is
-not a CPU-idleness guarantee: direct bench commands and tests bypass the lock.
-Profile/probe commands should acquire the same lock. Calling `bin/bench.ts`
-directly also bypasses it.
+Direct `deno bench` commands and tests bypass the lock. Profile/probe commands
+should acquire the same lock. Serialization cannot guarantee that other programs
+leave the CPU idle; inspect the run's load averages before accepting a baseline.
 
 [Apply profiling](apply-profile.md) records the box composition's transaction
 residual and create-scaling investigation.

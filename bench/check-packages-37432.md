@@ -141,7 +141,7 @@ Full gates on the fixed tree:
 - `deno task check`: exit 0, 23.618 seconds (including the unchanged package
   gate at default concurrency).
 - `DB_PATH=:memory: deno task test`: exit 0, 45.259 seconds.
-- Both suite-time reports were HELD; no timing baselines were loosened.
+- Both suite timing reports were HELD; no timing baselines were loosened.
 
 Post-fix logs, per-run exit/duration/RSS measurements, and cgroup counter
 snapshots are in `/tmp/T-37432-after/`.

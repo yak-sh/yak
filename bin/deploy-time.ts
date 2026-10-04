@@ -2,11 +2,11 @@
 // Run on the credentialed box as soon as a push starts its build:
 //   deno task deploy:time [sha]
 // Historical uploads: deno task deploy:time --backfill 3
-// The gate workflow runs this before deploy-gate judges, so every push times
+// The gate workflow runs this before the deploy suite checks, so every push times
 // its own deploy (T-35336). `gh` reads GitHub as whoever runs it (the job's
 // own GH_TOKEN in the gate) and wrangler reads versions with whatever
 // Cloudflare credential it finds (the runner's read-only CLOUDFLARE_API_TOKEN
-// in the gate); never an Actions secret. deploy-gate itself stays
+// in the gate); never an Actions secret. The suite check stays
 // credential-free and makes no live call.
 import {
   type Deploy,
@@ -14,7 +14,7 @@ import {
   RECORD,
   records,
   split,
-} from './deploy-gate.ts'
+} from '../bench/deploy.ts'
 import { WRANGLER } from '../workers/yak/wrangler.ts'
 import type { Version } from '../packages/admin/deploys.ts'
 
@@ -143,8 +143,8 @@ let pause = () => new Promise((ok) => setTimeout(ok, 1000))
 // In the gate the recorder measures the commit under test, and the row lives
 // only in that run's checkout: no workflow here pushes, and a bench-row commit
 // on main would start another Workers Build and another gate. So the row rides
-// the job summary the way bench-gate's baseline rides its log — copy it into
-// bench/deploys.jsonl with the next change and the floor keeps ratcheting.
+// the job summary — copy it into
+// bench/deploys.jsonl with the next change; baseline acceptance is explicit.
 export let summary = (rows: Deploy[]) =>
   `### deploy timing\n\nAppend to \`bench/deploys.jsonl\`:\n\n\`\`\`\n${
     rows.map((r) => JSON.stringify(r)).join('\n')

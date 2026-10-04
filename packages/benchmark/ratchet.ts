@@ -35,7 +35,13 @@ export let validate = (base: Baseline): void => {
     }
   }
 }
-export let baseline = (current: Run, allowed: number): Baseline => {
+/** A scoped acceptance retains workloads outside the current observation. */
+export let baseline = (
+  current: Run,
+  allowed: number,
+  previous?: Baseline,
+): Baseline => {
+  if (previous) compare(previous, current, 'subset')
   let out: Baseline = {
     version: current.version,
     suite: current.suite,
@@ -44,17 +50,40 @@ export let baseline = (current: Run, allowed: number): Baseline => {
     runtime: current.runtime,
     cpu: current.cpu,
     tolerance: tolerance(allowed),
-    benches: current.benches.map(({ name, unit, better, median }) => ({
+    benches: current.benches.map((
+      { name, unit, better, median, resolution },
+    ) => ({
       name,
       unit,
       better,
       median,
+      ...(resolution !== undefined ? { resolution } : {}),
     })),
+  }
+  if (previous) {
+    let measured = new Set(out.benches.map((b) => b.name))
+    out.benches = [
+      ...previous.benches.filter((b) => !measured.has(b.name)),
+      ...out.benches,
+    ]
   }
   validate(out)
   return out
 }
-export let compare = (base: Baseline, current: Run): Regression[] => {
+export type Coverage = 'exact' | 'subset'
+/** Whether every measured workload already has a banked reference. */
+export let covered = (base: Baseline, current: Run): boolean => {
+  let banked = new Set(base.benches.map((b) => b.name))
+  return current.benches.every((b) => banked.has(b.name))
+}
+export let compare = (
+  base: Baseline,
+  current: Run,
+  coverage: Coverage = 'exact',
+): Regression[] => {
+  if (!['exact', 'subset'].includes(coverage)) {
+    throw new Error(`Unknown benchmark coverage: ${coverage}`)
+  }
   validate(base)
   for (
     let key of [
@@ -72,18 +101,26 @@ export let compare = (base: Baseline, current: Run): Regression[] => {
       )
     }
   }
-  sameNames(base.benches, current.benches)
+  if (coverage == 'exact') sameNames(base.benches, current.benches)
+  else sameNames(current.benches, current.benches)
   let prior = new Map(base.benches.map((b) => [b.name, b]))
   let out: Regression[] = []
   for (let b of current.benches) {
-    let old = prior.get(b.name)!
     value(b.median)
-    if (b.unit != old.unit || b.better != old.better) {
-      throw new Error(`Incomparable unit/direction: ${b.name}`)
+    let old = prior.get(b.name)
+    if (!old) continue
+    if (
+      b.unit != old.unit || b.better != old.better ||
+      b.resolution !== old.resolution
+    ) {
+      throw new Error(`Incomparable unit/direction/resolution: ${b.name}`)
     }
-    let failed = b.better == 'lower'
-      ? b.median > old.median * (1 + base.tolerance)
-      : b.median < old.median * (1 - base.tolerance)
+    let limit = old.median *
+      (b.better == 'lower' ? 1 + base.tolerance : 1 - base.tolerance)
+    if (b.resolution !== undefined) {
+      limit = Math.round(limit / b.resolution) * b.resolution
+    }
+    let failed = b.better == 'lower' ? b.median > limit : b.median < limit
     if (failed) {
       out.push({
         name: b.name,

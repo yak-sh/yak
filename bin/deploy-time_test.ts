@@ -1,5 +1,5 @@
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertThrows } from '@std/assert'
 import {
   append,
   built,
@@ -8,7 +8,13 @@ import {
   summary,
   versionFor,
 } from './deploy-time.ts'
-import { type Deploy, gate, readRecords, records } from './deploy-gate.ts'
+import {
+  type Deploy,
+  latest,
+  readRecords,
+  records,
+  suite,
+} from '../bench/deploy.ts'
 import type { Version } from '../packages/admin/deploys.ts'
 
 let SHA = 'a'.repeat(40)
@@ -142,9 +148,8 @@ test('deploy timing: the commit under test is judged, not the last hand-recorded
   // row stayed "the latest deploy" and failed every later commit. The gate step
   // records this commit's own deploy first, which puts it last by upload.
   let stale = [deploy(1, 40), deploy(2, 74)]
-  assertEquals(gate(stale).code, 1)
-  let fresh = gate([...stale, deploy(3, 47)])
-  assertEquals([fresh.code, fresh.floor, fresh.limit], [0, 40, 50])
+  assertEquals(latest(stale)?.seconds, 74)
+  assertEquals(latest([...stale, deploy(3, 47)])?.seconds, 47)
 })
 
 test('deploy timing: a commit Cloudflare never built has nothing to time', () => {
@@ -181,7 +186,11 @@ test('deploy record: concurrent append is idempotent, and a failed probe can com
     ])
     let failed = { ...row, backfill: false }
     assertEquals(await append(failed, path), true)
-    assertEquals(gate(await readRecords(path)).code, 1)
+    assertThrows(
+      () => suite(records(Deno.readTextFileSync(path))),
+      Error,
+      'no verified live response',
+    )
     let live = { ...failed, live: '2026-09-07T19:00:25Z', seconds: 25 }
     assertEquals(await append(live, path), true)
     assertEquals(
@@ -192,8 +201,7 @@ test('deploy record: concurrent append is idempotent, and a failed probe can com
       false,
     )
     assertEquals(await append(row, path), false)
-    assertEquals(gate(await readRecords(path)).code, 0)
-    assertEquals(gate(await readRecords(path)).floor, 25)
+    assertEquals(latest(await readRecords(path))?.seconds, 25)
     assertEquals((await readRecords(path)).length, 3)
   } finally {
     await Deno.remove(dir, { recursive: true })

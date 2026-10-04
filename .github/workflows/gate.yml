@@ -49,7 +49,7 @@ jobs:
       checks: read
     defaults:
       run:
-        shell: deno run -A bin/suite-time.ts --ci bash --noprofile --norc -eo pipefail {0}
+        shell: deno run -A bench/run.ts command --ci bash --noprofile --norc -eo pipefail {0}
     steps:
       - uses: actions/checkout@v4
 
@@ -68,7 +68,7 @@ jobs:
       # and wrangler reads versions with the runner's read-only
       # CLOUDFLARE_API_TOKEN. Nothing here pushes, so the row lands in
       # this run's checkout and in the job summary; commit it with the next
-      # change, like bench-gate's baseline. A bench-row commit on main would
+      # change, like the benchmark baseline. A bench-row commit on main would
       # start another Workers Build and another gate.
       - name: deploy time
         if: github.event_name == 'push'
@@ -108,18 +108,11 @@ jobs:
           SUITE_STEP: app deploy gate
         run: deno task app-deploy:gate
 
-      # Reports a regression against the committed floor; it does not block.
-      - name: bench gate
-        continue-on-error: true
-        env:
-          SUITE_STEP: bench gate
-        run: deno task bench:gate
-
       - name: retain suite timings
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: suite-timings
           path: |
-            bench/results.json
-            bench/suite.baseline.json
+            bench/*.results.json
+            bench/*.baseline.json

@@ -8,35 +8,40 @@ import { toolsDoc } from '@yaks/tools/vocab'
 import { modelDoc } from '@yaks/model/vocab'
 import { sessionDoc } from './comp.ts'
 import { sessionDerived } from './status.ts'
+import { standaloneMain } from '../../bench/standalone.ts'
 
-let vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
-let store = storage(mem(), vocab, { derived: sessionDerived(vocab) })
-store.install()
-let g = graph({ storage: store, vocab })
-store.tx((tx) =>
-  tx.patch([
-    { entity: { eid: 'target' }, session: { id: 'target' } },
-    { entity: { eid: 'other' }, session: { id: 'other' } },
-  ])
-)
-for (let from = 0; from < 48_000; from += 1000) {
-  let rows: Bundle[] = []
-  for (let i = from; i < Math.min(from + 1000, 48_000); i++) {
-    rows.push({
-      entity: { eid: `e${i}` },
-      entry: { session: i == 0 ? 'target' : 'other', seq: i },
-      ...(i > 0 && i <= 2700
-        ? { call: {}, execution: { state: 'done' } }
-        : { content: { body: 'line' } }),
-    })
+if (import.meta.main) {
+  await standaloneMain('session-status')
+} else {
+  let vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
+  let store = storage(mem(), vocab, { derived: sessionDerived(vocab) })
+  store.install()
+  let g = graph({ storage: store, vocab })
+  store.tx((tx) =>
+    tx.patch([
+      { entity: { eid: 'target' }, session: { id: 'target' } },
+      { entity: { eid: 'other' }, session: { id: 'other' } },
+    ])
+  )
+  for (let from = 0; from < 48_000; from += 1000) {
+    let rows: Bundle[] = []
+    for (let i = from; i < Math.min(from + 1000, 48_000); i++) {
+      rows.push({
+        entity: { eid: `e${i}` },
+        entry: { session: i == 0 ? 'target' : 'other', seq: i },
+        ...(i > 0 && i <= 2700
+          ? { call: {}, execution: { state: 'done' } }
+          : { content: { body: 'line' } }),
+      })
+    }
+    store.tx((tx) => tx.patch(rows))
   }
-  store.tx((tx) => tx.patch(rows))
+
+  Deno.bench('status by identity beside 2,700 other calls', () => {
+    g.get(['target'])
+  })
+
+  Deno.bench('status by query beside 2,700 other calls', () => {
+    g.read('.entity.eid=target&*')
+  })
 }
-
-Deno.bench('status by identity beside 2,700 other calls', () => {
-  g.get(['target'])
-})
-
-Deno.bench('status by query beside 2,700 other calls', () => {
-  g.read('.entity.eid=target&*')
-})

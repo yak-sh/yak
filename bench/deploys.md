@@ -6,10 +6,10 @@ the workflow's FIRST step, right after the checkout, because `live` is the
 recorder's own first successful probe — anything the job does before it is
 measured as deploy latency (T-35426, below). The workflow runs on the box, so
 the recorder reads the same GitHub and Wrangler logins under `$HOME` that a hand
-run does; no Actions secret is added, and `deploy-gate` still makes no live
-call. A pull request has no main push to time, so the step is push-only and a PR
-judges the committed rows alone. A push that touches none of the Worker's build
-watch paths deploys nothing at all: the recorder waits for the version, finds no
+run does; no Actions secret is added, and the check still makes no live call. A
+pull request has no main push to time, so the step is push-only and a PR judges
+the committed rows alone. A push that touches none of the Worker's build watch
+paths deploys nothing at all: the recorder waits for the version, finds no
 Cloudflare build check for the commit, says
 `no Workers Build — nothing to time`, and the gate judges the rows already
 recorded.
@@ -26,14 +26,20 @@ Without a SHA it follows the newest main push in the gate workflow. It waits up
 to two minutes for an upload, then up to two minutes for a verified response.
 This command records observations; it never deploys, commits, or pushes.
 
-Nothing in Actions pushes, and a bench-row commit on main would start another
-Workers Build and another gate, so the row the workflow measures lives only in
-that run's checkout — enough for the gate, which reads the latest row by upload
-and therefore judges the commit under test. The run also prints the row to its
-job summary; append it to `bench/deploys.jsonl` with the next change, the way
-`bin/bench-gate.ts` asks for its baseline, and the floor ratchets on it. Before
-T-35336 the file was the only source, so one unlucky Workers Builds row (39–71s
-run to run, Cloudflare-side) stayed "the latest deploy" and failed every later
+The workflow records a row only in its checkout, then checks it through
+[@yaks/benchmark](../packages/benchmark/README.md) against
+`bench/deploy.baseline.json`. It prints the row to its job summary. Append the
+observation to `bench/deploys.jsonl` with the next change so its provenance is
+retained. Recording and checking never change the committed baseline.
+
+Accept a reviewed floor explicitly:
+
+```sh
+deno task bench:ratchet deploy
+```
+
+Acceptance reads the recorded deploys; it does not initiate a deployment. Review
+and commit the baseline diff. Nothing in Actions pushes a baseline or a record
 commit.
 
 Timing is a box command. An unattended caller must start it on each push; late
@@ -73,7 +79,7 @@ from the ratchet.
 Every line that prints a total prints the split beside it: `upload` is
 `uploaded - pushed`, Cloudflare's half — build queue, clone, cache restore,
 bundle, version create — and `propagate` is `live - uploaded`, that version to
-the first verified 200. `stages()` and `split()` in `bin/deploy-gate.ts` derive
+the first verified 200. `stages()` and `split()` in `bench/deploy.ts` derive
 both from the three stamps a row already carries, so a row written before the
 split existed reads the same way as one written after; nothing derived is
 stored. Splitting Cloudflare's queue back out of `upload` would take the
@@ -82,14 +88,14 @@ which needs a user-scoped API token minted in the dashboard: the box's wrangler
 OAuth login has no builds scope and every `/builds/` path answers 403, so the
 build's own queued/started/finished stamps are not readable from here.
 
-The floor is the minimum recorded prospective live time, so recomputing it from
-the append-only history only moves it down. Like `bin/bench-gate.ts`, the margin
-is 25%, configurable through `BENCH_TOL`. The limit is the smaller of
-`floor * (1 + margin)` and 60 seconds; exactly 60 seconds fails. No data and the
-first measured deploy pass with an explicit bootstrap message. Corrupt records
-fail instead of resetting the floor. A prospective estimated SHA match
-participates but remains labeled; requiring annotations before banking a floor
-is a possible stricter policy.
+The baseline preserves the minimum recorded prospective live time. Its 25%
+tolerance permits up to `floor × 1.25`; an independent strict 60-second ceiling
+also applies, so exactly 60 seconds fails. Both comparisons use the same
+benchmark ratchet. Explicit acceptance can lower the floor from reviewed
+observations; a check only compares and writes its result to
+`bench/deploy.results.json`. No recorded rows pass as bootstrap. Corrupt rows
+and an unverified latest deploy fail. Historical backfills stay outside the
+ratchet.
 
 ## Initial observations
 

@@ -1,13 +1,12 @@
 /** Timed sync or async workloads. Setup and teardown are outside each sample;
  * operations normalizes a batch, while iterations keeps individual samples. */
-import type { Bench, Sample } from './result.ts'
+import type { Bench, Sample, Workload } from './result.ts'
 import { during, peek, record } from '@yaks/trace'
 
 type DurationUnit = 'ns' | 'us' | 'ms' | 's'
 export type TimeUnit = DurationUnit | `${DurationUnit}/${string}`
 export type Iteration = { round: number; iteration: number }
-export type TimedBench = {
-  name: string
+export type TimedBench = Pick<Workload, 'name' | 'resolution'> & {
   unit: TimeUnit
   run: (iteration: Iteration) => unknown
   /** How many independent timed invocations to keep in each round. */
@@ -40,6 +39,9 @@ export let bench = (options: TimedBench): Bench => {
   return {
     name: options.name,
     unit: options.unit,
+    ...(options.resolution !== undefined
+      ? { resolution: options.resolution }
+      : {}),
     better: 'lower',
     sample: async (round) => {
       let out: Sample[] = []

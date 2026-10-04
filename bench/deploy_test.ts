@@ -1,6 +1,16 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
-import { type Deploy, gate, records, split, stages } from './deploy-gate.ts'
+import {
+  type Deploy,
+  latest,
+  records,
+  run,
+  split,
+  stages,
+  suite,
+} from './deploy.ts'
+import { type Baseline, Regressed } from '@yaks/benchmark'
+import { assertRejects } from '@std/assert'
 
 let row = (seconds: number, n = 0): Deploy => ({
   sha: `${n}`.padStart(40, 'a'),
@@ -64,61 +74,75 @@ test('deploy stages: the split is arithmetic on the stamps every row already has
   assertEquals(split(unverified), 'upload 30.000s')
 })
 
-test('deploy gate: every verdict carries the split, verified or not', () => {
-  assertEquals(
-    gate(history(40, 60)).message,
-    'aaaaaaaa: 60.000s (upload 30.000s + propagate 30.000s); ' +
-      'floor 40.000s, limit 50.000s — REGRESSION',
+let options = (base: Baseline) => ({
+  mode: 'check' as const,
+  output: 'deploy.results.json',
+  baseline: 'deploy.baseline.json',
+  host: () => ({
+    config: {},
+    configURL: null,
+    commit: null,
+    runtime: 'test',
+    cpu: 'test',
+    load: [],
+  }),
+  files: {
+    read: () => Promise.resolve(JSON.stringify(base)),
+    write: () => Promise.resolve(),
+  },
+})
+
+let bank = (): Promise<Baseline> =>
+  Deno.readTextFile(new URL('./deploy.baseline.json', import.meta.url)).then(
+    JSON.parse,
   )
+
+test('deploy suite: banked push-to-live floor refuses a synthetic regression', async () => {
+  let base = await bank()
+  let floor = base.benches[0].median
+  let check = options(base)
   assertEquals(
-    gate([...history(40), { ...row(60, 1), live: null, seconds: null }])
-      .message,
-    'aaaaaaaa: no verified live response (upload 30.000s)',
+    (await run(check, history(floor, floor * 1.25)))?.verdict,
+    'passed',
   )
+  await assertRejects(
+    () => run(check, history(floor, floor * 1.251)),
+    Regressed,
+  )
+  assertEquals(base.benches[0].median, floor)
 })
 
-test('deploy gate: no data and the first measurement bootstrap without blocking', () => {
-  assertEquals(gate([]).code, 0)
-  assertEquals(gate([]).floor, null)
-  assertEquals(gate(history(80)).code, 0)
-  assertEquals(gate(history(80)).limit, 60)
+test('deploy suite: the strict 60s ceiling uses the same ratchet', async () => {
+  let base = await bank()
+  base.benches[0].median = 50
+  let check = options(base)
+  assertEquals((await run(check, history(50, 59.999)))?.verdict, 'passed')
+  let error = await assertRejects(() => run(check, history(50, 60)), Regressed)
+  assertEquals((error as Regressed).result.regressions.map((r) => r.name), [
+    '60s budget exceeded',
+  ])
 })
 
-test('deploy gate: the bench margin is inclusive, regressions never raise the floor', () => {
-  for (
-    let [times, floor, code] of [
-      [[40, 50], 40, 0],
-      [[40, 50.001], 40, 1],
-      [[40, 20], 20, 0],
-      [[40, 20, 25], 20, 0],
-      [[40, 20, 40], 20, 1],
-      [[40, 20, 40, 21], 20, 0],
-      [[50, 59.999], 50, 0],
-      [[50, 60], 50, 1],
-    ] as [number[], number, number][]
-  ) {
-    let result = gate(history(...times))
-    assertEquals([result.floor, result.code], [floor, code], `${times}`)
-  }
-  assertEquals(gate(history(20, 23), 0.1).code, 1)
-  for (let margin of [-1, NaN, Infinity]) assertThrows(() => gate([], margin))
-})
-
-test('deploy gate: upload order matters; historical observations cannot ratchet or hide failures', () => {
-  assertEquals(gate(history(40, 20, 30).reverse()).code, 1)
+test('deploy suite: upload order, completed observations and backfills choose the checked deploy', () => {
+  let measured = history(40, 20, 30)
   let historical = { ...row(900, 3), backfill: true }
-  assertEquals(gate([historical]).floor, null)
-  assertEquals(gate([...history(40, 20, 30), historical]).code, 1)
+  assertEquals(latest([...measured.reverse(), historical])?.seconds, 30)
+  assertEquals(suite([historical]), null)
   let failed = { ...row(40, 4), seconds: null, live: null }
-  assertEquals(gate([...history(40, 20), failed]).code, 1)
-  assertEquals(gate([failed]).code, 1)
-  // An older push may finish after a newer one: the last upload is gated.
-  let late = { ...row(80), uploaded: '1970-01-01T00:00:40Z' }
-  let early = {
-    ...row(20, 1),
-    pushed: '1970-01-01T00:00:05Z',
-    uploaded: '1970-01-01T00:00:15Z',
-    live: '1970-01-01T00:00:25Z',
-  }
-  assertEquals(gate([late, early]).code, 1)
+  assertThrows(
+    () => suite([...measured, failed]),
+    Error,
+    'no verified live response',
+  )
+  assertEquals(latest([...measured, failed, row(40, 4)])?.seconds, 40)
+})
+
+test('deploy acceptance cannot weaken the strict 60s budget', async () => {
+  let base = await bank()
+  await assertRejects(
+    () =>
+      run({ ...options(base), mode: 'accept', tolerance: .25 }, history(60)),
+    Error,
+    'Cannot accept',
+  )
 })

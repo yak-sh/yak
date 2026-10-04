@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "suite": "deploy",
+  "metric": "latest-verified-live",
+  "workload": 1,
+  "runtime": "Cloudflare Workers",
+  "cpu": "Cloudflare",
+  "tolerance": 0.25,
+  "benches": [
+    {
+      "name": "push → live",
+      "unit": "s",
+      "better": "lower",
+      "median": 47.478
+    },
+    {
+      "name": "60s budget exceeded",
+      "unit": "violations",
+      "better": "lower",
+      "median": 0
+    }
+  ]
+}

@@ -17,6 +17,8 @@ export type Workload = {
   name: string
   unit: string
   better?: Direction
+  /** Precision in this workload's unit, used to round the tolerance boundary. */
+  resolution?: number
 }
 export type Bench = Workload & {
   sample: (round: number) => Samples | Promise<Samples>
@@ -129,6 +131,12 @@ export let names = (benches: readonly Workload[]): void => {
     }
     if (b.better != null && !['lower', 'higher'].includes(b.better)) {
       throw new Error(`Unknown direction: ${b.better}`)
+    }
+    if (
+      b.resolution !== undefined &&
+      (!Number.isFinite(b.resolution) || b.resolution <= 0)
+    ) {
+      throw new Error(`Expected a finite, positive resolution: ${b.name}`)
     }
     seen.add(b.name)
   }

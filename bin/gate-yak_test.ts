@@ -26,7 +26,7 @@ let steps = workflow.jobs.gate.steps
 test('every CI run step has a stable timing label and failures retain the artifact', () => {
   assertEquals(
     workflow.jobs.gate.defaults.run.shell,
-    'deno run -A bin/suite-time.ts --ci bash --noprofile --norc -eo pipefail {0}',
+    'deno run -A bench/run.ts command --ci bash --noprofile --norc -eo pipefail {0}',
   )
   for (let step of steps.filter((s) => s.run)) {
     assertEquals(step.env?.SUITE_STEP, step.name)
@@ -41,7 +41,7 @@ test('every CI run step has a stable timing label and failures retain the artifa
   for (let name of ['check', 'test']) {
     assertEquals(
       tasks[name],
-      `deno run -A bin/suite-time.ts ${name} deno task ${name}:run`,
+      `deno run -A bench/run.ts command ${name} deno task ${name}:run`,
     )
   }
 })

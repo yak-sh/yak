@@ -3,7 +3,7 @@
 // an app_files write of a small app until its bytes answer live at the app URL,
 // an app_deploy, and a one-file update until live. RUNS of each, medians and
 // p95 appended as one row to bench/app-deploys.jsonl, which
-// bin/app-deploy-gate.ts ratchets. Every answer's `Server-Timing` is kept too
+// the app-deploy suite checks. Every answer's `Server-Timing` is kept too
 // (median per stage), so a row that moved says which hop moved it.
 //
 //   TOKEN_FILE=/path/to/grant deno task app-deploy:time
@@ -13,7 +13,7 @@
 // sign anyone in until it can mail (T-34979); pass HOST=yaks.fyi once it can.
 // The app is a throwaway, deleted forever at the end — this records; it never
 // commits or pushes.
-import { RECORD, type Row, type Stat } from './app-deploy-gate.ts'
+import { RECORD, type Row, type Stat } from '../bench/app-deploy.ts'
 
 // Read when the bench runs, not when a test imports the helpers below.
 let token = async () => {
@@ -129,7 +129,7 @@ let table = (row: Row) =>
     ]),
   ].join('\n')
 
-if (import.meta.main) {
+export let main = async () => {
   console.log(`app ${space}.${host}/${app}/ runs=${runs}`)
   await call('app_new', { slug: app, title: 'bench (throwaway)', space })
   let version = (await fetch(`https://${host}/`, { method: 'HEAD' })).headers
@@ -199,3 +199,5 @@ if (import.meta.main) {
   console.log(table(row))
   console.log(`recorded → ${record}`)
 }
+
+if (import.meta.main) await main()

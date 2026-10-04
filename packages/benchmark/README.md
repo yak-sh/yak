@@ -157,15 +157,58 @@ try {
     JSON.parse(await Deno.readTextFile(options.baseline)).benches[0].median,
     100,
   )
+  let scoped = {
+    ...suite,
+    benches: [{ name: 'read', unit: 'ms', sample: () => 50 }],
+  }
+  let subset = { ...options, coverage: 'subset' as const }
+  equal((await run(scoped, { ...subset, mode: 'check' })).verdict, 'measured')
+  await run(scoped, { ...subset, mode: 'accept', tolerance: 0.2 })
+  equal(
+    JSON.parse(await Deno.readTextFile(options.baseline)).benches.map((b: {
+      name: string
+    }) => b.name),
+    ['write', 'read'],
+  )
+  let duration = 2106
+  let rounded = {
+    ...suite,
+    benches: [{
+      name: 'deploy',
+      unit: 'ms',
+      resolution: 1,
+      sample: () => duration,
+    }],
+  }
+  let precise = { ...options, baseline: directory + '/rounded.baseline.json' }
+  await run(rounded, { ...precise, mode: 'accept', tolerance: 0.25 })
+  duration = 2633
+  equal((await run(rounded, { ...precise, mode: 'check' })).verdict, 'passed')
 } finally {
   await Deno.remove(directory, { recursive: true })
 }
 ```
 
 Compatibility includes suite, metric, workload version, runtime, CPU, bench
-names, units and directions. Equality at the tolerance boundary passes. Change
-the workload version when the corpus or timed boundary changes. `baseline()` and
-`compare()` expose the same ratchet as pure functions.
+names, units, directions and resolution. Equality at the tolerance boundary
+passes. Change the workload version when the corpus or timed boundary changes.
+`baseline()` and `compare()` expose the same ratchet as pure functions.
+
+A bench's optional **resolution** declares its sample precision in the bench's
+unit. It must be finite and positive. The ratchet rounds the tolerance boundary
+to the nearest multiple of that resolution, leaving samples and banked medians
+unchanged. For example, `resolution: 1` with `unit: 'ms'` rounds a 2632.5 ms
+limit to 2633 ms. Without a resolution the boundary is unrounded. Baseline and
+current bench resolutions must match.
+
+`coverage: 'subset'` permits a run to observe only part of a suite, such as one
+host's deployment measurements. It compares the measured benches that have a
+baseline; if any measured bench is unbanked, a run without regressions is
+`measured` rather than `passed`. Acceptance retains baseline benches outside the
+observation, with matching suite, metric, workload, runtime and CPU. Exact
+coverage is the default and rejects any changed bench set. `baseline()` accepts
+an optional previous baseline to retain unmeasured benches; `compare()` accepts
+the coverage as its third argument.
 
 `lock` optionally names a box-wide flock file, shared across worktrees and
 compatible with shell `flock`. Never unlink it. Measurements run sequentially;
@@ -260,7 +303,7 @@ try {
 | Subpath  | Exports                                                                                                                                                                                                                                         | Purpose                                            |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
 | `.`      | `bench`, `run`, `Regressed`                                                                                                                                                                                                                     | Timed callbacks and JSON runner.                   |
-| `.`      | `median`, `baseline`, `compare`                                                                                                                                                                                                                 | Pure aggregation and ratchet.                      |
+| `.`      | `median`, `baseline`, `compare`, `Coverage`                                                                                                                                                                                                     | Pure aggregation and ratchet.                      |
 | `.`      | `configure`, `host`                                                                                                                                                                                                                             | Process reporter factory and current host context. |
 | `.`      | `Bench`, `TimedBench`, `Iteration`, `TimeUnit`, `Suite`, `CollectedSuite`, `Workload`, `Direction`, `Sample`, `Samples`, `Round`, `Result`, `Run`, `Baseline`, `Regression`, `Host`, `Reporter`, `ReportedRun`, `Reporters`, `Options`, `Files` | Authoring, result, host and effect-boundary types. |
 | `./deno` | `extract`, `DenoReport`                                                                                                                                                                                                                         | Deno JSON import with provenance.                  |
