@@ -9,15 +9,11 @@ import { type Row } from '../../client.ts'
 import { apply, ent, rowsSub, uuid } from '../../live.ts'
 import { type Ent, idOf, vocab } from '../../types.ts'
 import { Branches, Composer, ComposerInput } from '../Comments.tsx'
-import { Decision } from '../Decision.tsx'
 import { Dot } from '../Dot.tsx'
 import { Entity } from '../Entity.tsx'
 import { drafts, useDraft } from '../drafts.ts'
-import { linkProps } from '../nav.tsx'
 import { Stamp } from '../Stamp.tsx'
-import { Markdown } from '../Markdown.tsx'
 import { usePage } from '../page.ts'
-import { pending, repoUrl } from '../../live.ts'
 import { useInboxThreads } from '../useInbox.ts'
 import { useQuery } from '../useQuery.ts'
 
@@ -81,46 +77,27 @@ export let AnsweringSessions = ({ root }: { root: string }) => {
   return ids.length
     ? (
       <section aria-label='Answering sessions'>
-        {ids.map((eid) => {
-          let session = ent(eid)
-          let status = session.session?.status
-          return (
-            <p key={eid}>
-              <a {...linkProps(session)}>
-                {status && <Dot status={status} />} answering ·{' '}
-                {session.doc?.title || idOf(session)} ·{' '}
-                {status || 'Loading session…'}
-              </a>
-            </p>
-          )
-        })}
+        {ids.map((eid) => (
+          <Entity
+            key={eid}
+            eid={eid}
+            view='Inbox.List.Tile'
+          />
+        ))}
       </section>
     )
     : null
 }
 
-let preview = (r: Row) =>
-  [
-    r.comps.content?.body,
-    r.comps.doc?.body,
-    r.comps.commit?.message,
-    r.comps.decision?.question,
-    r.comps.doc?.title,
-  ].map((v) => String(v ?? '').replace(/\s+/g, ' ').trim())
-    .find(Boolean)?.slice(0, 240) ?? ''
-
 let Conversation = ({ thread: t }: { thread: Thread<Row> }) => {
-  let e = ent(t.eid)
   let notes = t.messages.filter((r) => r.comps.comment).map((r) => ent(r.eid))
-  let other = t.messages.filter((r) => !r.comps.comment)
+  let other = t.messages.filter((r) =>
+    !r.comps.comment && r.eid != t.eid && r.comps.entry?.session != t.eid
+  )
   return (
     <Frame.Detail>
-      <a {...linkProps(e)}>open {e.doc?.title || 'thread'}</a>
+      <Entity eid={t.eid} view='Inbox.Full' talkback={false} />
       <AnsweringSessions root={t.eid} />
-      {e.decision && <Decision e={e} />}
-      {e.doc && !t.messages.some((r) => r.eid == e.eid) && (pending(e)
-        ? <p>Loading thread…</p>
-        : e.doc.body && <Markdown text={e.doc.body} repo={repoUrl(e)} />)}
       {other.map((r) => <Entity key={r.eid} eid={r.eid} view='Full' />)}
       <Branches rows={notes} />
       <Composer eid={t.eid} />
@@ -134,27 +111,33 @@ let ThreadRow = ({ thread: t }: { thread: Thread<Row> }) => {
   let e = ent(t.eid)
   return (
     <Frame.Thread data-thread={t.eid} mod={t.unread && 'unread'}>
-      <Frame.Open
-        type='button'
-        aria-expanded={open}
-        onClick={() => {
-          if (!open) markThread(t.eid, 'opened')
-          view.set({ open: !open })
-        }}
-      >
-        <Dot status={t.unread ? 'unread' : 'read'} />
-        <Frame.Title>{e.doc?.title || 'Thread'}</Frame.Title>
+      <div>
+        <Entity eid={t.eid} view='Inbox.List.Tile' />
+        <Button
+          type='button'
+          mod='quiet'
+          aria-expanded={open}
+          onClick={() => {
+            if (!open) markThread(t.eid, 'opened')
+            view.set({ open: !open })
+          }}
+        >
+          <Dot status={t.unread ? 'unread' : 'read'} />
+          {open ? 'Collapse thread' : 'Expand thread'}
+        </Button>
         <Frame.Reason>
           {t.blocking ? 'blocking · ' : ''}
           {t.reason}
         </Frame.Reason>
         <Stamp at={t.at} />
-        <Frame.Preview>{preview(t.latest)}</Frame.Preview>
-      </Frame.Open>
+        {t.latest.eid != t.eid && (
+          <Entity eid={t.latest.eid} view='Inbox.List.Tile' />
+        )}
+      </div>
       <Button
         type='button'
         mod='quiet'
-        aria-label={`Archive ${e.doc?.title || 'thread'}`}
+        aria-label={`Archive ${idOf(e)}`}
         onClick={() => markThread(t.eid, 'archived')}
       >
         archive

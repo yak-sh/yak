@@ -7,6 +7,8 @@ import { cache, ent, rows } from '../../live.ts'
 import { mount } from '../mount.ts'
 import { drafts } from '../drafts.ts'
 import { commentPlace } from '../Comments.tsx'
+import { parse } from '@yaks/query'
+import { extend, registry, resolve } from '../registry.ts'
 import { InboxThreads, PersonInbox } from './PersonInbox.tsx'
 
 test('person inbox groups policy threads, shows newest words and answers in place', async () => {
@@ -60,7 +62,7 @@ test('person inbox groups policy threads, shows newest words and answers in plac
     )
     assertEquals(seen.root.querySelectorAll('[data-thread]').length, 1)
     assertEquals(
-      seen.root.querySelector('.Inbox_Preview')?.textContent,
+      seen.root.querySelector('.ListTile_Title')?.textContent,
       'Take the train.',
     )
     assertEquals(
@@ -68,7 +70,8 @@ test('person inbox groups policy threads, shows newest words and answers in plac
       'blocking · decision',
     )
     await act(() =>
-      (seen.root.querySelector('.Inbox_Open') as HTMLButtonElement).click()
+      (seen.root.querySelector('button[aria-expanded]') as HTMLButtonElement)
+        .click()
     )
     assertEquals(seen.root.querySelector('[data-decision]') != null, true)
     assertEquals(
@@ -143,7 +146,8 @@ test('an expanded ask shows its full body and resumes its page state and preciou
   let seen = mount(node())
   try {
     await act(() =>
-      (seen.root.querySelector('.Inbox_Open') as HTMLButtonElement).click()
+      (seen.root.querySelector('button[aria-expanded]') as HTMLButtonElement)
+        .click()
     )
     assertEquals(
       seen.root.querySelector('.Inbox_Detail')?.textContent?.includes(
@@ -155,7 +159,9 @@ test('an expanded ask shows its full body and resumes its page state and preciou
     seen.free()
     seen = mount(node())
     assertEquals(
-      seen.root.querySelector('.Inbox_Open')?.getAttribute('aria-expanded'),
+      seen.root.querySelector('button[aria-expanded]')?.getAttribute(
+        'aria-expanded',
+      ),
       'true',
     )
     assertEquals(
@@ -304,7 +310,7 @@ test('answering session links follow answers edges and repaint the session statu
   try {
     assertEquals(seen.root.querySelectorAll('a').length, 1)
     assertEquals(
-      seen.root.textContent?.includes('Thread worker · running'),
+      seen.root.querySelector('.Dot')?.getAttribute('title') == 'running',
       true,
     )
     assertEquals(seen.root.querySelector('a')?.getAttribute('href'), '/S-42')
@@ -316,11 +322,99 @@ test('answering session links follow answers edges and repaint the session statu
       })
     )
     assertEquals(
-      seen.root.textContent?.includes('Thread worker · completed'),
+      seen.root.querySelector('.Dot')?.getAttribute('title') == 'completed',
       true,
     )
   } finally {
     seen.free()
+    cache.value = {}
+  }
+})
+
+test('inbox roots and newest messages select contextual shared renderers without nested controls or duplicate roots', async () => {
+  let eid = 'cccccccc-1111-4111-8111-cccccccccccc'
+  let reply = 'cccccccc-2222-4222-8222-cccccccccccc'
+  cache.value = {
+    [eid]: {
+      entity: { eid, num: 21 },
+      conversation: {},
+      doc: { title: 'Conversation root', body: 'Exact root words' },
+      created: { by: 'person' },
+    },
+    [reply]: {
+      entity: { eid: reply, num: 22 },
+      comment: { target: eid },
+      doc: { body: 'Newest reply' },
+      created: { at: '2026-10-04T01:00:00Z' },
+    },
+  }
+  let prior = registry.renderers
+  extend([
+    {
+      view: 'Inbox.List.Tile',
+      match: parse('.conversation'),
+      Render: () => <a href='/root'>Contextual conversation tile</a>,
+    },
+    {
+      view: 'Inbox.Full',
+      match: parse('.conversation'),
+      Render: () => <section>Contextual conversation full</section>,
+    },
+  ])
+  let seen = mount(
+    <InboxThreads
+      threads={threads(rows(), { actor: 'person', operator: true })}
+      ready
+      search={{}}
+      onSearch={() => {}}
+    />,
+  )
+  try {
+    assertEquals(
+      seen.root.textContent?.includes('Contextual conversation tile'),
+      true,
+    )
+    assertEquals(seen.root.textContent?.includes('Newest reply'), true)
+    assertEquals(seen.root.querySelector('button a, button button'), null)
+    await act(() =>
+      (seen.root.querySelector('button[aria-expanded]') as HTMLButtonElement)
+        .click()
+    )
+    assertEquals(
+      seen.root.querySelector('.Inbox_Detail')?.textContent?.includes(
+        'Contextual conversation full',
+      ),
+      true,
+    )
+    assertEquals(
+      seen.root.querySelectorAll('.Inbox_Detail section').length > 0,
+      true,
+    )
+    assertEquals(seen.root.querySelectorAll('.Comments_New').length, 1)
+  } finally {
+    seen.free()
+    registry.renderers = prior
+    cache.value = {}
+  }
+})
+
+test('shared Full and Tile fallbacks identify a session without a doc and a decision without a doc', () => {
+  cache.value = {
+    session: { entity: { eid: 'session', num: 23 }, session: {} },
+    decision: {
+      entity: { eid: 'decision', num: 24 },
+      task: {},
+      decision: { question: 'Which route?' },
+    },
+  }
+  try {
+    assertEquals(
+      resolve(ent('session'), 'Inbox.List.Tile').Render,
+      resolve(ent('session'), 'Tile').Render,
+    )
+    assertEquals(resolve(ent('session'), 'Inbox.Full').view, 'Full')
+    assertEquals(resolve(ent('decision'), 'Inbox.Full').view, 'Full')
+  } finally {
     cache.value = {}
   }
 })

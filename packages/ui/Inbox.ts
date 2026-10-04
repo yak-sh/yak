@@ -15,10 +15,7 @@ export let Inbox:
     | 'Lane'
     | 'Heading'
     | 'Thread'
-    | 'Open'
-    | 'Title'
     | 'Reason'
-    | 'Preview'
     | 'Detail'
     | 'Empty',
     Part
@@ -29,10 +26,7 @@ export let Inbox:
       Lane: 'section',
       Heading: 'h2',
       Thread: 'article',
-      Open: 'button',
-      Title: 'span',
       Reason: 'span',
-      Preview: 'span',
       Detail: 'div',
       Empty: 'p',
     }),
@@ -52,10 +46,7 @@ export let description =
 /** Compact rows, with each control on a line the terminal can select. */
 export let sheet = (c: Colors): Sheet => ({
   Inbox_Heading: { fg: c.heading, bold: true, gap: true },
-  Inbox_Open: { block: true },
-  Inbox_Title: { bold: true },
   Inbox_Reason: { fg: c.dim },
-  Inbox_Preview: { fg: c.dim, ellipsis: true },
   Inbox_Detail: { indent: 2 },
   Inbox_Empty: { fg: c.dim },
   Inbox_Mode: { block: true },
@@ -64,7 +55,7 @@ export let sheet = (c: Colors): Sheet => ({
 /** Needs, replies, an expanded conversation and an empty lane. */
 export let specimens = (): Specimen[] => [
   [
-    'Inbox, Tools, Search, Mode, Lane, Heading, Thread-unread, Open, Title, Reason, Preview, Detail, Empty',
+    'Inbox, Tools, Search, Mode, Lane, Heading, Thread-unread, Reason, Detail, Empty',
     h(
       Inbox,
       {},
@@ -84,11 +75,10 @@ export let specimens = (): Specimen[] => [
           Inbox.Thread,
           { mod: 'unread' },
           h(
-            Inbox.Open,
-            { type: 'button', 'aria-expanded': true },
-            h(Inbox.Title, {}, 'Choose a route'),
+            'div',
+            {},
+            'A shared entity renderer goes here.',
             h(Inbox.Reason, {}, 'blocking · decision'),
-            h(Inbox.Preview, {}, 'Train or bus?'),
           ),
           h(Inbox.Detail, {}, 'A conversation and its answer controls.'),
         ),
@@ -101,11 +91,10 @@ export let specimens = (): Specimen[] => [
           Inbox.Thread,
           {},
           h(
-            Inbox.Open,
-            { type: 'button', 'aria-expanded': false },
-            h(Inbox.Title, {}, 'Trip conversation'),
+            'div',
+            {},
+            'A shared entity renderer goes here.',
             h(Inbox.Reason, {}, 'reply to your words'),
-            h(Inbox.Preview, {}, 'Platform seven.'),
           ),
         ),
       ),

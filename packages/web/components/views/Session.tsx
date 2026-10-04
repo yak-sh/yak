@@ -537,7 +537,9 @@ let useTranscript = (
   return { frame, start, older }
 }
 
-export let Session = ({ e }: { e: Ent }) => {
+export let Session = (
+  { e, talkback = true }: { e: Ent; talkback?: boolean },
+) => {
   let s = e.session!
   let repo = useRepoUrl(e)
   let web = typeof document != 'undefined' &&
@@ -713,9 +715,11 @@ export let Session = ({ e }: { e: Ent }) => {
         /* the one composer, pinned like the bar: comment about it, or say
           TO it (Comments.tsx knows which sessions can take words) */
       }
-      <Foot>
-        <SessionInput e={e} />
-      </Foot>
+      {talkback && (
+        <Foot>
+          <SessionInput e={e} />
+        </Foot>
+      )}
     </Frame>
   )
 }

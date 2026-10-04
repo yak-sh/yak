@@ -15,7 +15,7 @@ test('inbox specimens carry their words and controls in both themes and both doo
       let text of [
         'Needs you',
         'blocking · decision',
-        'Platform seven.',
+        'A shared entity renderer goes here.',
         'Said',
         'Received',
       ]
@@ -24,7 +24,6 @@ test('inbox specimens carry their words and controls in both themes and both doo
       assertStringIncludes(terminal, text)
     }
     let css = await stylesheet(composition)
-    assertStringIncludes(css, '.Inbox_Open:focus-visible')
-    assertStringIncludes(css, '.Inbox_Preview')
+    assertStringIncludes(css, '.Inbox_Detail')
   }
 })

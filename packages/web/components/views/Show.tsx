@@ -700,7 +700,9 @@ let stack = [
 // first line and the meta chips in a quiet row beneath (id included; the
 // App bar's compact title stays hidden until this h1 scrolls away — the
 // view-timeline in styles.css).
-export let Show = ({ e }: { e: Ent }) => (
+export let Show = (
+  { e, talkback = true }: { e: Ent; talkback?: boolean },
+) => (
   <Frame>
     <Main>
       <Heading>
@@ -713,9 +715,11 @@ export let Show = ({ e }: { e: Ent }) => (
       <Entity eid={e.eid} view='Mail' />
       <Decision e={e} />
       <Entity eid={e.eid} view='Body' />
-      {stack.map((v) => <Entity key={v} eid={e.eid} view={v} />)}
+      {stack.filter((v) => talkback || v != 'Comments').map((v) => (
+        <Entity key={v} eid={e.eid} view={v} />
+      ))}
     </Main>
-    <Chat e={e} />
+    {talkback && <Chat e={e} />}
   </Frame>
 )
 
