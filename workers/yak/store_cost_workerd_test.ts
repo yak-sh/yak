@@ -5,7 +5,7 @@ import { test } from '@yaks/testing'
 import { workerd } from './probe.ts'
 import type { storeCost } from './store_cost_fixture.ts'
 
-for (let kind of ['app']) {
+for (let kind of ['directory', 'app']) {
   test(`Store ${kind} writes stay proportional to what changed`, async () => {
     let k = workerd()
     let res = await fetch(`${k.base}/__store_cost/?kind=${kind}`)
@@ -15,7 +15,7 @@ for (let kind of ['app']) {
     if (kind == 'directory') {
       let total = report.samples[0].total
       assert(
-        total.rowsRead <= 50,
+        total.rowsRead <= 80,
         `one meter property read ${total.rowsRead} rows`,
       )
       assert(

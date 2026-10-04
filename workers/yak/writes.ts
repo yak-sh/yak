@@ -110,6 +110,24 @@ export let raise = (db: Driver) => {
     unique: true,
     ifNot: true,
   })
+  // Successful keyed writes keep their receipt for ten minutes. Neither
+  // finding pending work nor expiring receipts may scan that retained log.
+  db.query({
+    t: 'create index',
+    name: `${LOG}_pending`,
+    on: LOG,
+    cols: [col('seq')],
+    where: eq(col('state'), lit('pending')),
+    ifNot: true,
+  })
+  db.query({
+    t: 'create index',
+    name: `${LOG}_expiry`,
+    on: LOG,
+    cols: [col('at')],
+    where: and(eq(col('state'), lit('applied')), not(eq(col('audit'), lit(1)))),
+    ifNot: true,
+  })
   db.query({
     t: 'create index',
     name: `${ANSWERS}_seq_part`,

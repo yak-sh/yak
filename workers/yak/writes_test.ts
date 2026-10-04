@@ -131,6 +131,7 @@ test('inspection dry-runs a held write without changing it or the graph', async 
     'cascade',
     'commit',
     'compose',
+    'flush',
     'gather',
     'journal',
     'mint',
