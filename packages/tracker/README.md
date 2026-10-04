@@ -1,9 +1,9 @@
 # @yaks/tracker
 
-Errors are occurrences, bugs are groups. Intake keeps a reporter's UUID so a
-queue or spool resend is the same occurrence. Grouping runs downstream and
-atomically links and counts it. All references may name entities in other
-stores.
+An **error** is one occurrence of a mistake; a **bug** groups errors with the
+same fault. Intake keeps a reporter's UUID so a queue or spool resend is the
+same occurrence. Grouping runs downstream and atomically links and counts it.
+All references may name entities in other stores.
 
 | Export      | Owns                                                        |
 | ----------- | ----------------------------------------------------------- |
@@ -12,6 +12,7 @@ stores.
 | `./report`  | `report`, `caught`, `capture`, `queue`, `spool`, `post`     |
 | `./page`    | Classic browser capture script and twenty breadcrumbs       |
 | `./effects` | `error_group`, `bug_notify`, `error_trim`                   |
+| `./views`   | Bug pages, list rows and retained error frames              |
 | `./tools`   | `bug_list`, `bug_show`, `bug_resolve`, `bug_archive`        |
 | `./service` | Spool record admission and acknowledgement                  |
 
@@ -52,6 +53,27 @@ scheduled by a graph wake; bugs become notified only after its `delivered` mark.
 Space replies own their own notified mark. Archived bugs still count but never
 notify. Retention keeps the newest hundred plus the first occurrence of each
 commit (or version without a commit).
+
+## Browsing
+
+The tracker writes the first error's type and value (or message) to `doc.title`.
+`bug.fault` is the grouping key, shown beneath the title. The `./views` facet
+owns the bug page and its list row; the host supplies its paged query view. The
+page lists retained errors newest first, displaying resolved code frames and
+unresolved text frames. The count includes trimmed errors.
+
+The web home lists open bugs by descending `bug.hits` (worst first); resolved
+and archived bugs remain addressable but leave that list. The box config enables
+human ids, so each bug has an address such as `/B-7`. The same list is available
+through `yak --config ~/.yak/tracker.json bug list`.
+
+```ts
+import { equal } from '@yaks/testing'
+import { occurrences, openBugs } from '@yaks/tracker/views'
+
+equal(openBugs, '.bug.status=open * .order=-bug.hits')
+equal(occurrences('bug'), '.error.bug=bug * .order=-error.at')
+```
 
 ## The box role
 

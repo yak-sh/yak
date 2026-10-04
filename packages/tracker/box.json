@@ -5,6 +5,8 @@
   },
   "plugins": [
     "@yaks/kernel",
+    "@yaks/id",
+    "@yaks/archetype",
     "@yaks/doc",
     "@yaks/tools",
     "@yaks/api",
@@ -24,6 +26,18 @@
           ]
         }
       }
-    }
-  ]
+    },
+    "@yaks/fts",
+    "@yaks/ui",
+    "@yaks/web",
+    "@yaks/inspect"
+  ],
+  "numbers": {
+    "except": [
+      "archetype"
+    ]
+  },
+  "port": 5175,
+  "name": "tracker",
+  "hostname": "0.0.0.0"
 }

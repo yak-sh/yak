@@ -1,4 +1,6 @@
 import { inspectViews } from './inspect.tsx'
+import { views as trackerViews } from '@yaks/tracker/views'
+import { bundle } from './registry.ts'
 import { views as secretViews } from '@yaks/secrets/views'
 // The curated views and verbs, with the app's quarantine, failure and memo
 // boundaries.
@@ -60,7 +62,7 @@ import { Inbox } from './views/Inbox.tsx'
 import { MemoryTile } from './views/Memory.tsx'
 import { TaskTile } from './views/TaskTile.tsx'
 import { BoardMeta, BoardTile } from './views/BoardTile.tsx'
-import { BoardList, List, ListTile } from './views/List.tsx'
+import { BoardList, List, ListTile, QueryList } from './views/List.tsx'
 import { Canvas } from './Canvas.tsx'
 import { Inline, TaskInline } from './views/Inline.tsx'
 import { Dependency } from './views/Dependency.tsx'
@@ -122,6 +124,19 @@ define([
     match: parse('.board'),
     Render: (props) => <BoardList {...props} />,
   },
+  ...trackerViews.renderers.map((entry) => ({
+    ...entry,
+    plugin: 'tracker',
+    Render: ({ e, ...ctx }: { e: Ent }) => (
+      <entry.Render
+        {...ctx}
+        e={bundle(e)}
+        queryView={(eid: string, query: string) => (
+          <QueryList eid={eid} query={query} />
+        )}
+      />
+    ),
+  })),
   ...secretViews.renderers,
   { view: 'Tile', match: parse('.memory'), Render: MemoryTile },
   // TaskTile walks back through Entity for its Meta row; defer the binding

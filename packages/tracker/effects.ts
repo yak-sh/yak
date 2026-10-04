@@ -81,7 +81,7 @@ export let notify = async (
     entity: { eid: letter },
     doc: {
       title: 'Bugs need attention',
-      body: batch.map((b) => `${b.entity.eid}: ${str(comp(b, 'bug').title)}`)
+      body: batch.map((b) => `${b.entity.eid}: ${str(comp(b, 'doc').title)}`)
         .join('\n'),
     },
     mail: { at: openedAt(row), ...options.from ? { from: options.from } : {} },

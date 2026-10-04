@@ -1,3 +1,4 @@
+import { docDoc } from '@yaks/doc'
 import { equal, test } from '@yaks/testing'
 import { type Graph, graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
@@ -11,7 +12,9 @@ import { effects } from './effects.ts'
 import { comp } from './model.ts'
 
 test('declared effects group intake and retain occurrences downstream', async () => {
-  let vocab = loadVocab([kernelDoc, toolsDoc, trackerDoc], [kernelKeywords])
+  let vocab = loadVocab([kernelDoc, toolsDoc, docDoc, trackerDoc], [
+    kernelKeywords,
+  ])
   let g: Graph
   let fx = registry(vocab, { write: (b) => g.apply(b, { trusted: true }) })
   g = graph({ vocab, storage: ram(vocab, { computed }), plugins: [fx] })

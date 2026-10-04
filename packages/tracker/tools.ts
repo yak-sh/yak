@@ -2,7 +2,7 @@
 
 import { argsOf, type Bundle, type Graph } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
-import { and, eq, every, limit, parse, present } from '@yaks/query'
+import { and, eq, every, limit, order, parse, present } from '@yaks/query'
 import { CallError } from '@yaks/tools'
 import { str } from './model.ts'
 
@@ -24,13 +24,19 @@ export let runs = (): Runs => ({
         present('bug'),
         parse(str(args.query) || '.bug.status=open'),
         every(),
+        ...str(args.query).includes('.order=') ? [] : [order('-bug.hits')],
         limit(Number(args.limit ?? 50)),
       ),
     )
   },
   bug_show: async (call, g) => {
     let bug = await one(g, str(argsOf(call).bug))
-    return [bug, ...await g.read(and(eq('error.bug', bug.entity.eid), every()))]
+    return [
+      bug,
+      ...await g.read(
+        and(eq('error.bug', bug.entity.eid), every(), order('-error.at')),
+      ),
+    ]
   },
   bug_resolve: mark('resolved'),
   bug_archive: mark('archived'),

@@ -1,3 +1,4 @@
+import { openBugs } from '@yaks/tracker/views'
 import { door, hosting, pagePath } from '../hosting.ts'
 import { vocab } from '../types.ts'
 import { searchAt } from '../url.ts'
@@ -264,8 +265,13 @@ export let App = () => {
             : url.pathname == '/' && !vocab.comp('subscription')
             ? (
               <>
-                <h1>Browse</h1>
-                <QueryList eid='app-browse' query='.doc' />
+                <h1>
+                  {vocab.comp('bug') ? 'Open bugs · worst first' : 'Browse'}
+                </h1>
+                <QueryList
+                  eid='app-browse'
+                  query={vocab.comp('bug') ? openBugs : '.doc'}
+                />
               </>
             )
             : url.pathname == '/'

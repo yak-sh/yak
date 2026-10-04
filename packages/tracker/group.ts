@@ -52,12 +52,12 @@ export let grouped = (
         bug: { hits: token(old.hits) },
         resolved: { at: token(comp(bug, 'resolved').at) },
       },
+      ...!bug ? { doc: { title: title(row) } } : {},
       bug: {
         ...!bug
           ? {
             fault,
             ...(app ? { app } : {}),
-            title: title(row),
             first: at,
             ...culprit ? { culprit, spot: null } : top
               ? {

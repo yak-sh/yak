@@ -1,7 +1,17 @@
 {
   "_": "Portable tracker vocabulary, grouping and reporting; no runtime-specific sinks.",
-  "compilerOptions": { "lib": ["dom", "esnext"], "strict": true },
-  "entries": [".", "./report"],
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "esnext"
+    ],
+    "strict": true
+  },
+  "entries": [
+    ".",
+    "./report",
+    "./views"
+  ],
   "imports": {
     "@yaks/tracker": "./mod.ts",
     "@yaks/tracker/vocab": "./vocab.ts",
@@ -12,6 +22,21 @@
     "@yaks/match": "../match/mod.ts",
     "@yaks/query": "../query/mod.ts",
     "@yaks/sql": "../sql/mod.ts",
-    "@yaks/vocab": "../vocab/mod.ts"
+    "@yaks/vocab": "../vocab/mod.ts",
+    "@yaks/preact": "../preact/mod.ts",
+    "@yaks/render": "../render/mod.ts",
+    "@yaks/ui": "../ui/mod.ts",
+    "@yaks/ux": "../ux/mod.ts",
+    "@yaks/id": "../id/mod.ts",
+    "@yaks/names": "../names/mod.ts",
+    "@yaks/client": "../client/mod.ts",
+    "@yaks/sync": "../sync/mod.ts",
+    "@yaks/ram": "../ram/mod.ts",
+    "@yaks/edge": "../edge/mod.ts",
+    "@yaks/filter": "../filter/mod.ts",
+    "@yaks/ux/completion": "../ux/completion.ts",
+    "preact": "npm:preact@^10.29.1",
+    "preact/hooks": "npm:preact@^10.29.1/hooks",
+    "@preact/signals": "npm:@preact/signals@^2.9.0"
   }
 }

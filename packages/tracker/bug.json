@@ -18,11 +18,6 @@
           "stamped": true,
           "description": "The stable grouping key."
         },
-        "title": {
-          "type": "string",
-          "stamped": true,
-          "description": "The first error\u2019s type and value, or message."
-        },
         "culprit": {
           "type": "string",
           "ref": "entity",

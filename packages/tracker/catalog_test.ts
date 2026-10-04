@@ -2,6 +2,7 @@
 // tracker text, but cannot recursively ask the failed catalog to enrich it.
 
 import { equal, test } from '@yaks/testing'
+import { docDoc } from '@yaks/doc'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
@@ -21,6 +22,7 @@ for (let recover of [true, false]) {
     let vocab = loadVocab([
       kernelDoc,
       toolsDoc,
+      docDoc,
       trackerDoc,
       effectDoc,
     ], [kernelKeywords])

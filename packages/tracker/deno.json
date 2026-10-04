@@ -11,7 +11,8 @@
     "./effects": "./effects.ts",
     "./tools": "./tools.ts",
     "./service": "./service.ts",
-    "./file": "./file.ts"
+    "./file": "./file.ts",
+    "./views": "./views.ts"
   },
   "license": "Apache-2.0",
   "description": "Groups tracked errors into bugs, reports without interrupting callers, and retains and notifies their occurrences.",
@@ -20,5 +21,9 @@
       "**/*_test.ts",
       "./browser.json"
     ]
+  },
+  "imports": {
+    "preact": "npm:preact@^10.29.1",
+    "preact-render-to-string": "npm:preact-render-to-string@^6.6.3"
   }
 }
