@@ -12,6 +12,7 @@
         "at": {
           "type": "string",
           "format": "date-time",
+          "index": true,
           "description": "when it is next due; absent once a one-shot has fired, or once a recurrence has ended"
         },
         "target": {

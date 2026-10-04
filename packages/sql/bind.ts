@@ -1409,6 +1409,58 @@ export let bound = (
     archetypes: spine ? undefined : opts.archetypes,
     spine,
   }
+  // A required indexed scalar selects component owners before the entity
+  // spine. CROSS JOIN fixes that driving order even when statistics still
+  // describe the tiny graph from before history grew. INDEXED BY keeps a
+  // sparse/empty range a seek rather than a scan of historical component rows.
+  // Only mandatory conjunctions qualify; optional and OR arms must retain
+  // their outer joins, as must derived values and alternate backing sources.
+  let root: { comp: string; index: string } | undefined
+  if (!spine && !claims(ctx, 'pred') && d.indexed) {
+    for (let c of flattened(ast.clauses)) {
+      if (c.kind != 'pred' || c.not || c.where || c.path.length != 2) continue
+      let [comp, prop] = c.path
+      let p = vocab.prop(comp, prop)
+      if (
+        comp == 'entity' || !p || p.computed || computed(vocab, comp) ||
+        ctx.derived[`${comp}.${prop}`] || !needs(opOf(c), flat(c.value)) ||
+        opOf(c) == EXISTS || opOf(c) == '~'
+      ) continue
+      let index = vocab.indexes(comp).find((i) =>
+        i.props[0] == prop && !i.present
+      )
+      if (
+        !index || ctx.d.table(comp) != `"${comp}"` ||
+        source(ctx, comp) != `"${comp}"`
+      ) continue
+      root = { comp, index: `${comp}_${index.props.join('_')}` }
+      break
+    }
+  }
+  let relation = (from: string, o: Parameters<typeof rel>[1]): Select => {
+    let s = rel(from, o)
+    if (!root) return s
+    let src = ctx.d.indexed?.(root.comp, root.index)
+    if (!src) return s
+    return {
+      ...s,
+      from: raw(src),
+      joins: [
+        {
+          how: 'cross',
+          src: raw(from, [], 'entity'),
+          on: raw(ctx.d.joinOn(root.comp, 'entity')),
+        },
+        ...o.joins.filter((j) => j.source != ctx.d.table(root!.comp)).map((
+          j,
+        ): Join => ({
+          how: 'left',
+          src: raw(j.source),
+          on: raw(j.on),
+        })),
+      ],
+    }
+  }
   // A new query, and what the rest of it selects. An extension that remembers
   // what it resolved for one query is told here, before any clause compiles, so
   // that what a long-lived extension remembers is always this query's; one that
@@ -1437,7 +1489,7 @@ export let bound = (
   // `.count`: how many entities the filter selects, returned under an empty
   // key so that every aggregate comes back in the same value-and-count shape.
   if (count) {
-    return rel(ctx.d.spine, {
+    return relation(ctx.d.spine, {
       cols: [`'' as value`, 'count(*) as n'],
       joins: joinsOf(ctx),
       where,
@@ -1465,7 +1517,7 @@ export let bound = (
       : counted == 'number'
       ? `${expr} is not null`
       : `${expr} is not null and ${value} != ''`
-    return rel(ctx.d.spine, {
+    return relation(ctx.d.spine, {
       cols: [`${value} as value`, ...tally ? ['count(*) as n'] : []],
       joins: joinsOf(ctx),
       where: and(cond({ sql: held, params: [] }), where),
@@ -1544,7 +1596,7 @@ export let bound = (
   // takes 11 this way.
   if (limit && fields) {
     let page = render({
-      ...rel(ctx.d.spine, {
+      ...relation(ctx.d.spine, {
         cols: [owner],
         joins: paged,
         where: windowed,
@@ -1552,7 +1604,7 @@ export let bound = (
       }),
       limit: val(limit.n),
     })
-    return rel(ctx.d.spine, {
+    return relation(ctx.d.spine, {
       cols,
       joins: joinsOf(ctx),
       where: cond({ sql: `${owner} in (${page.sql})`, params: page.params }),
@@ -1560,7 +1612,7 @@ export let bound = (
     })
   }
   return {
-    ...rel(ctx.d.spine, {
+    ...relation(ctx.d.spine, {
       cols,
       joins: joinsOf(ctx),
       where: windowed,
