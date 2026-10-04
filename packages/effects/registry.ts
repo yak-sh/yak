@@ -483,6 +483,13 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
   ): [Slot, Event][] | Promise<[Slot, Event][]> => {
     let chosen = slots.filter(which)
     if (!chosen.length) return []
+    let byComp = new Map<string, Slot[]>()
+    for (let s of chosen) {
+      if (s.kind == 'matched') continue
+      let group = byComp.get(s.comp) ?? []
+      group.push(s)
+      byComp.set(s.comp, group)
+    }
     let seen = events(bundles)
     let prior = (bundles.find((b) => b[BEFORE])?.[BEFORE] ?? {}) as Before
     // A run is owed for what happened in the graph, never for the pool's own
@@ -490,14 +497,28 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     // declared effect a run. Otherwise a mark a settle writes (`completed`)
     // would owe the runs that mark triggers, each of those would settle and
     // owe more, and the depth never stops it, since a settle is generation 0.
-    let inPool = (eid: Eid) =>
-      prior[eid]?.includes(EFFECT) ||
-      bundles.some((b) => b.entity.eid == eid && b[EFFECT] != null)
+    let poolEids: Set<Eid> | undefined
+    let inPool = (eid: Eid) => {
+      if (!poolEids) {
+        poolEids = new Set<Eid>()
+        for (let [eid, comps] of Object.entries(prior)) {
+          if (comps.includes(EFFECT)) poolEids.add(eid)
+        }
+        for (let b of bundles) {
+          if (b[EFFECT] != null) poolEids.add(b.entity.eid)
+        }
+      }
+      return poolEids.has(eid)
+    }
     let allowed = (s: Slot, e: Event) => !s.effect || !inPool(e.entity.eid)
-    let found = seen.flatMap((e) =>
-      chosen.filter((s) => watching(s, e) && allowed(s, e))
-        .map((s) => [s, e] as [Slot, Event])
-    )
+    let found: [Slot, Event][] = []
+    for (let e of seen) {
+      let group = byComp.get(e.name)
+      if (!group) continue
+      for (let s of group) {
+        if (watching(s, e) && allowed(s, e)) found.push([s, e])
+      }
+    }
     let asking = chosen.filter((s) =>
       s.kind == 'matched' && s.plan && stirred(s, seen)
     )
@@ -515,11 +536,10 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
         try {
           return after(
             hits(s, bundles, tx),
-            (evs) => [
-              ...out,
-              ...evs.filter((e) => allowed(s, e))
-                .map((e) => [s, e] as [Slot, Event]),
-            ],
+            (evs) => {
+              for (let e of evs) if (allowed(s, e)) out.push([s, e])
+              return out
+            },
           )
         } catch (err) {
           report(err, {
@@ -536,7 +556,10 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
           hits,
           kept,
           (out, pair) =>
-            after(enabled(pair[0]), (yes) => yes ? [...out, pair] : out),
+            after(enabled(pair[0]), (yes) => {
+              if (yes) out.push(pair)
+              return out
+            }),
         )
       },
     )

@@ -108,6 +108,7 @@ export let after = <A, B>(
 /// each(['a', 'b', 'c'], '', (s, c) => s + c) -> 'abc'
 /// each(['a', 'b', 'c'], '', (s, c) =>
 ///   c == 'b' ? Promise.resolve(s + c) : s + c) ~> 'abc'
+/// each([1, 2, 3], 0, (s, n) => Promise.resolve(s + n)) ~> 6
 /**
  * `items` folded one at a time from `seed`, a step awaited only when it
  * answers a promise. While every step is synchronous this is a plain loop;
@@ -123,7 +124,13 @@ export let each = <T, A>(
   for (let i = 0; i < items.length; i++) {
     if (isPromise(acc)) {
       let rest = items.slice(i)
-      return acc.then((a) => each(rest, a, step))
+      return acc.then(async (a) => {
+        for (let j = 0; j < rest.length; j++) {
+          let next = step(a, rest[j])
+          a = isPromise(next) ? await next : next
+        }
+        return a
+      })
     }
     acc = step(acc, items[i])
   }

@@ -7,7 +7,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle, Storage } from '@yaks/graph'
-import { isPromise } from '@yaks/fp'
+import { after, isPromise } from '@yaks/fp'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
@@ -360,6 +360,37 @@ let declaring = ($defs: VocabDoc['$defs']) => {
   let vocab = loadVocab([...blog.docs, effectDoc, { $defs }])
   return blogGraph([effects(vocab)], vocab)
 }
+
+test('matching a create batch visits its bundles linearly', () => {
+  let vocab = loadVocab([...blog.docs, effectDoc, {
+    $defs: { noticed: { effect: true, created: ['post'] } },
+  }])
+  let fx = effects(vocab)
+  let commit = fx.hooks!.commit!
+  let visits = 0
+  let size = 0
+  fx.hooks!.commit = (bundles, ...args) => {
+    size = bundles.length
+    let reads = 0
+    // Count input visits through the hook interface, regardless of which
+    // array operations matching uses.
+    let counted = new Proxy(bundles, {
+      get: (target, key, receiver) => {
+        if (typeof key == 'string' && /^\d+$/.test(key)) reads++
+        return Reflect.get(target, key, receiver)
+      },
+    })
+    return after(commit(counted, ...args), (out) => {
+      visits = reads
+      return out
+    })
+  }
+  let g = blogGraph([fx], vocab)
+  let n = 64
+  sync(g.apply(Array.from({ length: n }, (_, i) => post(`p${i}`))))
+  assertEquals(sync(g.read('.effect')).length, n)
+  assert(visits <= 8 * size, `${visits} visits for ${size} bundles`)
+})
 
 test('a declared effect is owed only while its active query matches', async () => {
   let g = declaring({
