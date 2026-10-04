@@ -221,6 +221,36 @@ test('a transaction rolls back on a throw, and nests', () => {
   assertEquals((s.tx((tx) => tx.get(['p1'])) as Bundle[]).length, 1)
 })
 
+test('numbering exceptions ask once across tables and entities', () => {
+  let selects = 0
+  let driver = spy(mem(), (sql, params) => {
+    if (sql.trimStart().startsWith('select')) selects++
+    assert(params.length <= 100)
+  })
+  let s = storage(driver, shop, {
+    number: { except: ['shelf', 'bookmark', 'review', 'undeclared'] },
+  })
+  s.install()
+  let products = Array.from({ length: 150 }, (_, i) => ({
+    entity: { eid: `p${i}` },
+    product: { price: i },
+  }))
+  write(s, [
+    ...products,
+    { entity: { eid: 's' }, shelf: { aisle: 'A', slot: 1 } },
+    { entity: { eid: 'r' }, review: { stars: 5 } },
+  ])
+  selects = 0
+  write(s, [
+    ...products,
+    { entity: { eid: 's' }, doc: { title: 'Shelf' } },
+    { entity: { eid: 'r' }, doc: { title: 'Review' } },
+  ])
+  assertEquals(selects, 2) // Identity and exception presence, for the batch.
+  let rows = s.tx((tx) => tx.get(['p0', 'p149', 's', 'r']))
+  assertEquals(rows.map((b) => b.entity.num ?? null), [1, 150, null, null])
+})
+
 test('number:false reports explicit unnumbered births without consuming numbers', () => {
   let driver = mem()
   let s = storage(driver, shop, { number: false })

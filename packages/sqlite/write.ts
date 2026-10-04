@@ -60,12 +60,12 @@ import {
   type Expr,
   type Insert,
   isNull,
-  join,
   left,
   lit,
   not,
   notNull,
   op,
+  or,
   type Param,
   type Row,
   select,
@@ -402,14 +402,27 @@ export let touched = (v: Vocab, bundles: Bundle[]): string[] =>
     ),
   ])
 
-// Whether an entity already wears a component, asked of its row.
-let wears = (driver: Driver, comp: string, eid: string): boolean =>
-  driver.query(select({
-    cols: [lit(1)],
-    from: table(comp, 'c'),
-    joins: [join(table('entity', 'e'), eq(col('id', 'e'), col('entity', 'c')))],
-    where: eq(col('eid', 'e'), val(eid)),
-  })).length > 0
+// Which entities wear any of these components. One statement answers the
+// whole batch, with indexed presence probes and one bound eid list.
+let wears = (driver: Driver, tables: string[], eids: string[]): Set<string> => {
+  if (!tables.length || !eids.length) return new Set()
+  return new Set(
+    driver.query(select({
+      cols: [col('eid', 'e')],
+      from: table('entity', 'e'),
+      where: and(
+        among(col('eid', 'e'), each(eids)),
+        or(...tables.map((comp) =>
+          exists(select({
+            cols: [lit(1)],
+            from: table(comp, 'c'),
+            where: eq(col('entity', 'c'), col('id', 'e')),
+          }))
+        )),
+      ),
+    })).map((r) => String(r.eid)),
+  )
+}
 
 /**
  * Patch a batch of bundles in, in order, and return the spines this patch
@@ -457,11 +470,11 @@ export let patch = (
   if (typeof number == 'object') {
     // A component no plugin here declares is worn by nothing: a config names
     // its exceptions once, for every graph it opens.
-    for (let name of number.except.filter((n) => vocab.comp(n))) {
-      for (let b of alive) {
-        if (!known.has(b.entity.eid)) continue
-        if (wears(driver, name, b.entity.eid)) excluded.add(b.entity.eid)
-      }
+    let tables = [...new Set(number.except.filter((n) => vocab.comp(n)))]
+    let eids = [...new Set(alive.map((b) => b.entity.eid))]
+      .filter((eid) => known.has(eid))
+    excluded = wears(driver, tables, eids)
+    for (let name of tables) {
       for (let b of alive) if (b[name] != null) excluded.add(b.entity.eid)
     }
     for (let eid of excluded) {

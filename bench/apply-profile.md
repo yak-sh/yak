@@ -31,6 +31,31 @@ phase once; SQL outside phases is counted directly under the transaction.
 corpus, vocabulary, plugins and numbering policy, with those same observers
 disabled.
 
+## Batched numbering-exception presence (T-64969)
+
+`patch()` answers numbering-exception presence for every declared table and
+existing entity in its live batch with one statement. It binds the eid list as
+one JSON parameter and probes each component's indexed owner column. Undeclared
+exceptions are ignored; components supplied in the batch still exclude their
+entities before any identity is minted. Existing excluded entities keep their
+numbering behavior, including when a patch removes their excluded component.
+
+The configured box composition's 21 exceptions require three batch presence
+statements per warm lone edit, replacing the 84 single-table statements in the
+retained profile. The 101-sample wrapped profile has a median of **2,837.6 µs**
+per apply at a one-minute load average of 2.18. Its transaction is 2,565.6 µs;
+the two tracker flushes total 527.0 µs. The retained wrapped sample measured
+3,563 µs/apply and 651 µs in flushes at load 5.96. These separate shared-box
+samples establish attribution, rather than isolating a latency delta.
+
+The file apply-benchmark fixture uses `number: true`, so it has no numbering
+exceptions. Its statements per lone edit therefore measure the ordinary
+pipeline, while the configured-box profile exercises this optimization. The
+seven-round ratchet measurements are recorded below after verification. The
+batching regression also patches 152 existing entities across three exception
+tables with two SELECTs total (identity and presence), versus 457 with the
+single-table loop, under the 100-bound-parameter limit.
+
 ## Time outside named transaction phases
 
 The 101-sample lone-edit median was 3,563 µs on Deno 2.9.1 at a one-minute load
@@ -125,6 +150,7 @@ single run cannot distinguish, such as warm-up, shared load and schema cache
 state. It should not be treated as a measured doubling of steady-state
 per-bundle cost.
 
-Two candidates for later tasks are building the effect-entity set once per
-`matched()` call, and answering numbering-exception presence in one batch
-instead of 21 queries per entity. Neither optimization is implemented here.
+The effect-entity set is built once per `matched()` call (T-64968), and
+numbering-exception presence is answered in one batch (T-64969). The scan and
+individual-statement measurements above retain the attribution behind those
+changes.

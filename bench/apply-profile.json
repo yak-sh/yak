@@ -1450,5 +1450,500 @@
     "Timing wrappers add overhead: these numbers attribute costs, ratchet numbers come from unprofiled benches.",
     "box_samples used SQL labels grouped as rows and rendered SELECT twice; lone_edit labels read AST directly and records driver time only.",
     "Original single-run 681\u21921259 us/create magnitude is not reproduced; repeated warmed box creates 782\u2192756 us/bundle; operation count proves a quadratic term still exists."
-  ]
+  ],
+  "T-64969": {
+    "environment": {
+      "kind": "environment",
+      "deno": "2.9.1",
+      "load": "2.18 2.90 3.54 2/1463 3243668",
+      "plugins": [
+        "@yaks/kernel",
+        "ids",
+        "@yaks/secrets",
+        "@yaks/key",
+        "@yaks/alias",
+        "@yaks/edge",
+        "@yaks/blob",
+        "representations",
+        "@yaks/doc",
+        "@yaks/archetype",
+        "@yaks/journal",
+        "@yaks/task",
+        "@yaks/project",
+        "@yaks/session",
+        "@yaks/model",
+        "@yaks/process",
+        "@yaks/builders",
+        "@yaks/mail",
+        "@yaks/wake",
+        "@yaks/page",
+        "@yaks/draft",
+        "@yaks/effects"
+      ],
+      "scratch": "file on same filesystem as configured box database"
+    },
+    "edit_1": {
+      "kind": "sample",
+      "work": "edit",
+      "n": 1,
+      "rounds": 101,
+      "wall_us_per_bundle": 2837.5760000000128,
+      "samples_us_per_bundle": [
+        8107.010000000002,
+        5670.814000000008,
+        5370.917999999961,
+        5276.150999999971,
+        4697.439999999971,
+        4621.84000000002,
+        5129.302999999936,
+        5844.40399999994,
+        6061.880999999971,
+        2919.0770000000157,
+        2808.954000000085,
+        2688.4360000000243,
+        2700.3100000000586,
+        2736.3300000000663,
+        2701.9339999999374,
+        2635.992999999985,
+        3423.577000000023,
+        42355.678000000014,
+        7104.426999999987,
+        5131.340000000023,
+        4941.861000000017,
+        4662.689999999998,
+        7008.575000000064,
+        3002.00099999995,
+        3143.92399999997,
+        2777.738999999997,
+        3078.8649999999507,
+        2837.5760000000128,
+        2973.969000000011,
+        2630.011999999965,
+        2450.1980000000003,
+        2412.270000000035,
+        2573.4330000000227,
+        2866.755000000012,
+        3225.5519999999933,
+        4112.063999999918,
+        3573.158000000035,
+        2407.4920000000475,
+        2452.109000000064,
+        2589.7930000000997,
+        2462.329000000068,
+        2378.62999999993,
+        2261.306999999988,
+        2284.312,
+        2561.142000000018,
+        2569.8149999999487,
+        2627.0749999999907,
+        2700.9630000000016,
+        4073.39300000001,
+        2453.1509999999344,
+        2370.4760000000533,
+        2445.367000000033,
+        2395.6940000000486,
+        2430.7549999999765,
+        3555.1269999999704,
+        2498.100000000022,
+        3000.748000000044,
+        2559.0279999998984,
+        33672.639,
+        4462.571000000025,
+        2815.8750000000055,
+        4662.453000000028,
+        2701.7009999999573,
+        2498.2669999999416,
+        2393.493000000035,
+        2420.0850000000855,
+        2946.6959999999744,
+        3556.0050000000274,
+        4023.2280000000173,
+        3158.4419999999227,
+        2693.3010000000195,
+        2738.5719999999765,
+        2883.4039999999277,
+        2800.9819999999763,
+        4118.579000000068,
+        2444.8660000000473,
+        2615.064000000075,
+        2643.3880000000727,
+        2749.4879999999284,
+        3408.7279999999964,
+        3376.7629999999826,
+        2660.0619999999253,
+        2850.996000000009,
+        3070.954000000029,
+        2615.6670000000304,
+        3346.165000000042,
+        3037.618000000066,
+        3933.021999999937,
+        2699.100000000044,
+        2552.964999999972,
+        2583.769000000075,
+        2571.867999999995,
+        2734.813000000031,
+        2966.562999999951,
+        2762.4459999999544,
+        3265.929999999912,
+        2874.174999999923,
+        2727.424000000042,
+        32387.434999999983,
+        7726.91199999997,
+        5124.074999999948
+      ],
+      "wall": 2837.5760000000128,
+      "phases": {
+        "tracker/@yaks/archetype/make": {
+          "us_per_bundle": 1.298,
+          "calls_per_apply": 1
+        },
+        "tracker/@yaks/archetype/flush": {
+          "us_per_bundle": 526.986,
+          "calls_per_apply": 2
+        },
+        "storage-head": {
+          "us_per_bundle": 44.54,
+          "calls_per_apply": 1
+        },
+        "storage-tail": {
+          "us_per_bundle": 105.352,
+          "calls_per_apply": 1
+        },
+        "phase/normalize": {
+          "us_per_bundle": 43.336,
+          "calls_per_apply": 1
+        },
+        "phase/admit": {
+          "us_per_bundle": 18.674,
+          "calls_per_apply": 1
+        },
+        "phase/mint": {
+          "us_per_bundle": 35.421,
+          "calls_per_apply": 1
+        },
+        "phase/prepare": {
+          "us_per_bundle": 3.928,
+          "calls_per_apply": 1
+        },
+        "phase/transaction": {
+          "us_per_bundle": 2565.552,
+          "calls_per_apply": 1
+        },
+        "phase/gather": {
+          "us_per_bundle": 132.546,
+          "calls_per_apply": 1
+        },
+        "phase/precondition": {
+          "us_per_bundle": 49.125,
+          "calls_per_apply": 1
+        },
+        "phase/rules": {
+          "us_per_bundle": 209.472,
+          "calls_per_apply": 1
+        },
+        "phase/mutate": {
+          "us_per_bundle": 262.917,
+          "calls_per_apply": 1
+        },
+        "phase/cascade": {
+          "us_per_bundle": 10.525,
+          "calls_per_apply": 1
+        },
+        "phase/stamp": {
+          "us_per_bundle": 407.554,
+          "calls_per_apply": 1
+        },
+        "phase/journal": {
+          "us_per_bundle": 135.124,
+          "calls_per_apply": 1
+        },
+        "phase/commit": {
+          "us_per_bundle": 637.174,
+          "calls_per_apply": 1
+        },
+        "phase/effect": {
+          "us_per_bundle": 26.927,
+          "calls_per_apply": 1
+        },
+        "phase/compose": {
+          "us_per_bundle": 11.507,
+          "calls_per_apply": 1
+        }
+      },
+      "sql": {
+        "storage-head/pragma/schema_version": {
+          "us_per_bundle": 25.519,
+          "calls_per_apply": 1
+        },
+        "storage-head/begin/": {
+          "us_per_bundle": 12.329,
+          "calls_per_apply": 1
+        },
+        "body/raw/": {
+          "us_per_bundle": 159.481,
+          "calls_per_apply": 3
+        },
+        "body/select/entity": {
+          "us_per_bundle": 335.286,
+          "calls_per_apply": 7
+        },
+        "body/select/": {
+          "us_per_bundle": 38.55,
+          "calls_per_apply": 1
+        },
+        "body/update/doc": {
+          "us_per_bundle": 44.946,
+          "calls_per_apply": 1
+        },
+        "body/update/updated": {
+          "us_per_bundle": 36.007,
+          "calls_per_apply": 1
+        },
+        "body/insert/journal_tx": {
+          "us_per_bundle": 51.292,
+          "calls_per_apply": 1
+        },
+        "body/insert/journal_change": {
+          "us_per_bundle": 34.517,
+          "calls_per_apply": 1
+        },
+        "body/insert/journal_field": {
+          "us_per_bundle": 20.664,
+          "calls_per_apply": 1
+        },
+        "body/insert/entity": {
+          "us_per_bundle": 67.229,
+          "calls_per_apply": 2
+        },
+        "body/pragma/table_info": {
+          "us_per_bundle": 39.976,
+          "calls_per_apply": 1
+        },
+        "body/insert/effect": {
+          "us_per_bundle": 151.486,
+          "calls_per_apply": 2
+        },
+        "flush/@yaks/archetype/raw/": {
+          "us_per_bundle": 106.856,
+          "calls_per_apply": 1
+        },
+        "flush/@yaks/archetype/select/entity": {
+          "us_per_bundle": 166.24,
+          "calls_per_apply": 2
+        },
+        "flush/@yaks/archetype/update/entity": {
+          "us_per_bundle": 140.796,
+          "calls_per_apply": 4
+        },
+        "storage-tail/commit/": {
+          "us_per_bundle": 99.747,
+          "calls_per_apply": 1
+        }
+      },
+      "presence_statements_per_apply": 3,
+      "trace": {
+        "transaction_us": 2565.552000000025,
+        "children_us": 2376.1389999999665,
+        "coverage_percent": 92.61706642468923,
+        "sql_outside_phases": {
+          "schema_version pragma": {
+            "us_per_bundle": 24.215,
+            "calls_per_apply": 1
+          },
+          "begin": {
+            "us_per_bundle": 11.313,
+            "calls_per_apply": 1
+          },
+          "entity select": {
+            "us_per_bundle": 265.534,
+            "calls_per_apply": 3
+          },
+          "entity update": {
+            "us_per_bundle": 132.857,
+            "calls_per_apply": 4
+          },
+          "commit": {
+            "us_per_bundle": 97.783,
+            "calls_per_apply": 1
+          }
+        }
+      },
+      "load": "2.18 2.90 3.54 5/1463 3243717"
+    },
+    "ratchet": {
+      "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+      "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+      "load": [
+        3.6015625,
+        4.46533203125,
+        4.3701171875
+      ],
+      "rounds": 7,
+      "verdict": "passed",
+      "benches": [
+        {
+          "name": "apply/file/edit-alone-200",
+          "unit": "ns/bundle",
+          "better": "lower",
+          "samples": [
+            1547871.945,
+            1452939.35,
+            1515956.31,
+            1490713.895,
+            1393629.275,
+            1449791.58,
+            1335918.655
+          ],
+          "rounds": [
+            {
+              "index": 0,
+              "median": 1547871.945,
+              "spans": null
+            },
+            {
+              "index": 1,
+              "median": 1452939.35,
+              "spans": null
+            },
+            {
+              "index": 2,
+              "median": 1515956.31,
+              "spans": null
+            },
+            {
+              "index": 3,
+              "median": 1490713.895,
+              "spans": null
+            },
+            {
+              "index": 4,
+              "median": 1393629.275,
+              "spans": null
+            },
+            {
+              "index": 5,
+              "median": 1449791.58,
+              "spans": null
+            },
+            {
+              "index": 6,
+              "median": 1335918.655,
+              "spans": null
+            }
+          ],
+          "median": 1452939.35,
+          "spans": null,
+          "baseline": 1519469.455
+        },
+        {
+          "name": "apply/file/edit-alone-1000",
+          "unit": "ns/bundle",
+          "better": "lower",
+          "samples": [
+            1375130.516,
+            1339649.33,
+            1400760.334,
+            1364359.929,
+            1311273.12,
+            1373700.977,
+            1204490.684
+          ],
+          "rounds": [
+            {
+              "index": 0,
+              "median": 1375130.516,
+              "spans": null
+            },
+            {
+              "index": 1,
+              "median": 1339649.33,
+              "spans": null
+            },
+            {
+              "index": 2,
+              "median": 1400760.334,
+              "spans": null
+            },
+            {
+              "index": 3,
+              "median": 1364359.929,
+              "spans": null
+            },
+            {
+              "index": 4,
+              "median": 1311273.12,
+              "spans": null
+            },
+            {
+              "index": 5,
+              "median": 1373700.977,
+              "spans": null
+            },
+            {
+              "index": 6,
+              "median": 1204490.684,
+              "spans": null
+            }
+          ],
+          "median": 1364359.929,
+          "spans": null,
+          "baseline": 1335211.117
+        },
+        {
+          "name": "apply/file/edit-alone-200/sqlPerApply",
+          "unit": "statements",
+          "better": "lower",
+          "samples": [
+            44.63,
+            44.63,
+            44.63,
+            44.63,
+            44.63,
+            44.63,
+            44.63
+          ],
+          "rounds": [
+            {
+              "index": 0,
+              "median": 44.63,
+              "spans": null
+            },
+            {
+              "index": 1,
+              "median": 44.63,
+              "spans": null
+            },
+            {
+              "index": 2,
+              "median": 44.63,
+              "spans": null
+            },
+            {
+              "index": 3,
+              "median": 44.63,
+              "spans": null
+            },
+            {
+              "index": 4,
+              "median": 44.63,
+              "spans": null
+            },
+            {
+              "index": 5,
+              "median": 44.63,
+              "spans": null
+            },
+            {
+              "index": 6,
+              "median": 44.63,
+              "spans": null
+            }
+          ],
+          "median": 44.63,
+          "spans": null,
+          "baseline": 44.63
+        }
+      ]
+    }
+  }
 }

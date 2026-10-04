@@ -4,7 +4,7 @@
 import { compose, facet } from '@yaks/cli/host'
 import { configPath, read } from '@yaks/cli'
 import { type Bundle, type Graph, signed, type Storage } from '@yaks/graph'
-import type { Stmt } from '@yaks/sql'
+import type { Expr, Stmt } from '@yaks/sql'
 import { record as capture } from '@yaks/trace'
 import { applyBundles, applyFixture } from './apply-fixture.ts'
 
@@ -36,6 +36,9 @@ let active = false
 let location = 'body'
 let sql = new Map<string, Cost>()
 let scans = { calls: 0, visits: 0 }
+let presence = 0
+const hasPresence = (e: Expr): boolean =>
+  e.t == 'exists' || e.t == 'op' && e.parts.some(hasPresence)
 const record = (map: Map<string, Cost>, key: string, ms: number) => {
   const old = map.get(key) ?? { ms: 0, calls: 0 }
   map.set(key, { ms: old.ms + ms, calls: old.calls + 1 })
@@ -91,6 +94,11 @@ try {
       const start = performance.now()
       const rows = query(stmt)
       const ms = performance.now() - start
+      if (
+        stmt.t == 'select' && stmt.where && hasPresence(stmt.where) &&
+        stmt.cols?.length == 1 && stmt.cols[0].t == 'col' &&
+        stmt.cols[0].name == 'eid'
+      ) presence++
       const label = stmt.t == 'insert'
         ? stmt.into
         : stmt.t == 'update'
@@ -237,6 +245,7 @@ try {
         wall: number
         phases: ReturnType<typeof summary>
         sql: ReturnType<typeof summary>
+        presence_statements_per_apply?: number
         trace: typeof attribution
       }[] = []
       for (let round = 0; round < rounds; round++) {
@@ -247,6 +256,7 @@ try {
         costs = new Map()
         sql = new Map()
         scans = { calls: 0, visits: 0 }
+        presence = 0
         active = true
         const start = performance.now()
         await apply(bundles)
@@ -256,6 +266,7 @@ try {
           wall,
           phases: summary(costs, n),
           sql: summary(sql, n),
+          presence_statements_per_apply: traceOnly ? undefined : presence,
           trace: attribution,
         })
       }
