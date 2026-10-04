@@ -63,3 +63,30 @@ unknown, typing is kept and written once it is.
 
 Deno, browsers and Workers: the package reaches no runtime API beyond
 `setTimeout` and the Web Storage a caller passes it.
+
+## Interface drafts
+
+`./ui` owns the interface's `drafts`, `lone` and `useDraft` hook. Its **draft
+host** supplies the desk's watch/write client, actor, person query and storage
+through `configureDrafts`; it has no dependency on the application.
+`useDraft(place, ref)` mirrors durable text into a kit `Field`, and its
+`spend(bundles)` clears that text in the same write as what it became.
+
+Binding needs the interface's client and identity; this sketch is not run
+because it stands in for a connected interface:
+
+```ts ignore
+import { configureDrafts, drafts } from '@yaks/draft/ui'
+configureDrafts({
+  client,
+  by: () => actor,
+  people: () => people(),
+  stash: () => storage,
+})
+drafts.type('task.comment', 'Please check the result')
+drafts.spend('task.comment', [{
+  entity: { eid: 'note' },
+  comment: { target: 'task' },
+  doc: { body: drafts.text('task.comment') },
+}])
+```

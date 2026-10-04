@@ -5,12 +5,19 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./graph": "./graph.ts",
-    "./tools": "./tools.ts"
+    "./tools": "./tools.ts",
+    "./Comments": "./Comments.tsx",
+    "./comment-host": "./comment-host.ts",
+    "./comments": "./comments.ts",
+    "./views": "./views.tsx"
   },
   "license": "Apache-2.0",
   "description": "Shared identity, marks and relationship components for graphs of work, with vocabulary documents, a completion plugin, citation helpers and a comment tool.",
   "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "preact": "npm:preact@^10.29.1",
+    "preact/hooks": "npm:preact@^10.29.1/hooks",
+    "preact/jsx-runtime": "npm:preact@^10.29.1/jsx-runtime"
   },
   "publish": {
     "exclude": [

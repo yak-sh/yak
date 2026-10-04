@@ -48,10 +48,6 @@ let own = (c: Colors): Sheet => ({
   Task_Title: { bold: true },
   Task_Body: { fg: c.muted },
   Task_Claim: { fg: c.special },
-  Comments_Who: { fg: c.who },
-  'Comments_Verdict-approved': { fg: c.positive },
-  'Comments_Verdict-rejected': { fg: c.negative },
-  'Comments_Verdict-changes-requested': { fg: c.caution },
   Task_Prio: { fg: c.dim },
   Dependency: { fg: c.muted },
   'Dependency_Type-requires': { fg: c.hues[5] }, // the edges, as styles.css

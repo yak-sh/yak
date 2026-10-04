@@ -303,3 +303,30 @@ and browsers. This package provides no persistence; choose a
 [storage adapter](../graph/README.md#data-model), such as
 [@yaks/ram](../ram/README.md) for memory. Human ids belong to @yaks/id,
 archetype maintenance to @yaks/archetype, and text to @yaks/doc.
+
+## Comment views
+
+`./views` contributes `Thread.Note` renderers for comments and commits.
+`./Comments` supplies `Comments`, `Branches`, `Composer` and `Reply`; every
+branch asks the registry to draw its note. The composer uses the kit's `Say`,
+`Field`, `Button` and `Choices`, and keeps words through
+[drafts](../draft/README.md).
+
+An interface binds `configureComments` from `./comment-host` before mounting
+these components. Its **comment host** supplies subscriptions, the page graph,
+registry rendering, navigation and markdown; the domain imports no application.
+
+The thread grouping function works on bundles without a host:
+
+```ts
+import { branches } from '@yaks/kernel/comments'
+import { equal } from '@yaks/testing'
+let roots = branches([
+  {
+    entity: { eid: 'reply', num: 2 },
+    comment: { target: 'task', reply_to: 'ask' },
+  },
+  { entity: { eid: 'ask', num: 1 }, comment: { target: 'task' } },
+])
+equal(roots[0].children[0].row.entity.eid, 'reply')
+```

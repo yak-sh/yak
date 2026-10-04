@@ -1,8 +1,7 @@
 // Thread grouping preserves independent branches, nesting and every word.
 import { test } from '@yaks/testing'
-import './testing.ts'
 import { assertEquals } from '@std/assert'
-import type { Ent } from './types.ts'
+import type { CommentRow } from './comments.ts'
 import { type Branch, branches } from './comments.ts'
 
 let note = (
@@ -10,16 +9,12 @@ let note = (
   num: number,
   reply_to?: string,
   target = 'task',
-): Ent => ({
-  eid,
-  num,
-  kind: 'comment',
-  refs: [],
-  kids: [],
-  comment: { eid, target, reply_to },
+): CommentRow => ({
+  entity: { eid, num },
+  comment: { target, reply_to },
 })
 let shape = (nodes: Branch[]): unknown[] =>
-  nodes.map(({ row, children }) => [row.eid, shape(children)])
+  nodes.map(({ row, children }) => [row.entity.eid, shape(children)])
 
 test('replies nest under the answered comment, unrelated comments stay roots', () => {
   assertEquals(

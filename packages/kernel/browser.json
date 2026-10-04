@@ -5,9 +5,18 @@
       "dom",
       "esnext"
     ],
-    "strict": true
+    "strict": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact"
   },
   "imports": {
     "@yaks/vocab": "../vocab/mod.ts"
-  }
+  },
+  "entries": [
+    ".",
+    "./Comments",
+    "./comment-host",
+    "./comments",
+    "./views"
+  ]
 }

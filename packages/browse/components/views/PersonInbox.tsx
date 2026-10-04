@@ -1,3 +1,4 @@
+import { domainBundle } from '../../domain-host.tsx'
 // The person sees threads; membership, lanes and ordering belong to @yaks/inbox.
 import { type ComponentChild } from 'preact'
 import { attention, lanes, type Search, type Thread } from '@yaks/inbox'
@@ -8,10 +9,10 @@ import { useLayoutEffect } from 'preact/hooks'
 import { type Row } from '../../client.ts'
 import { apply, ent, rowsSub, uuid } from '../../live.ts'
 import { type Ent, idOf, vocab } from '../../types.ts'
-import { Branches, Composer } from '../Comments.tsx'
+import { Branches, Composer } from '@yaks/kernel/Comments'
 import { Dot } from '../Dot.tsx'
 import { Entity } from '../Entity.tsx'
-import { drafts, useDraft } from '../drafts.ts'
+import { drafts, useDraft } from '@yaks/draft/ui'
 import { Stamp } from '../Stamp.tsx'
 import { usePage } from '../page.ts'
 import { useInboxThreads } from '../useInbox.ts'
@@ -106,7 +107,7 @@ let Conversation = ({ thread: t }: { thread: Thread<Row> }) => {
       <Entity eid={t.eid} view='Inbox.Full' talkback={false} />
       <AnsweringSessions root={t.eid} />
       {other.map((r) => <Entity key={r.eid} eid={r.eid} view='Full' />)}
-      <Branches rows={notes} />
+      <Branches rows={notes.map(domainBundle)} />
       <Composer eid={t.eid} />
     </Frame.Detail>
   )

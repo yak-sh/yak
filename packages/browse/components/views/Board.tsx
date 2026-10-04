@@ -16,7 +16,7 @@ import {
 } from '../../live.ts'
 import { spec, taskChanges } from '../../client.ts'
 import { adopt, fieldsOf, orderOf, parseQuery, windowOf } from '../../query.ts'
-import { drafts, useDraft } from '../drafts.ts'
+import { drafts, useDraft } from '@yaks/draft/ui'
 import { bundlesOf } from '../../wire.ts'
 import { useBoardTally } from '../subscriptions.ts'
 import { SubscriptionFailure } from '../SubscriptionFailure.tsx'

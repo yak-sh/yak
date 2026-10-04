@@ -49,7 +49,7 @@ html {
 /* The mono keepers: badges, edge verbs, and every command, inspector and
    log surface. Prose everywhere else is var(--font) via body. :where keeps
    this overridable. */
-:where(.Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Show_Mail, .Dependency_Type, .Relate_Verb, .Comments_When, .Comments_Who, .Comments_Via, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Id, .SessionRow, .Session_Facts, .Entry_Turn, .Entry_Raw, .Session_When, .Session_Err) {
+:where(.Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Show_Mail, .Dependency_Type, .Relate_Verb, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Id, .SessionRow, .Session_Facts, .Entry_Turn, .Entry_Raw, .Session_When, .Session_Err) {
   font-family: var(--mono);
 }
 
@@ -582,93 +582,7 @@ html {
 
 /* The comment rail — quiet, left-ruled, under any entity's view. The
    textarea is the rail's last row: borderless until it's spoken to. */
-.Comments {
-  margin-top: var(--gap);
-  display: grid;
-  gap: var(--half-gap);
-}
-.Comments_Item {
-  border-left: 2px solid var(--border2);
-  padding-left: var(--half-gap);
-}
-/* Both are links now — the name to its author, the age to the comment —
-   in their old dress: underline only on hover says so. */
-.Comments_When {
-  color: var(--dim);
-  font-size: 11px;
-  margin-left: var(--half-gap); /* air between author and age */
-}
-.Comments_Who {
-  font-size: 11px;
-  color: var(--who);
-}
-/* The instrument, dimmed behind its actor: "the owner · via S-3704". */
-.Comments_Via {
-  color: var(--dim);
-  font-size: 11px;
-  margin-left: var(--half-gap);
-}
-.Comments_Verdict {
-  --verdict: var(--caution);
-  color: var(--verdict);
-  font-size: 11px;
-  margin-left: var(--half-gap);
-}
-.Comments_Verdict-approved {
-  --verdict: var(--positive);
-}
-.Comments_Verdict-rejected {
-  --verdict: var(--negative);
-}
-.Comments_Who,
-.Comments_Via,
-.Comments_When {
-  text-decoration: none;
-}
-.Comments_Who:hover,
-.Comments_Via:hover,
-.Comments_When:hover {
-  text-decoration: underline;
-}
-/* The input is an ordinary sunken box at the rail's foot. */
-.Comments_Box {
-  display: grid;
-  gap: var(--half-gap);
-  position: sticky;
-  bottom: var(--half-gap);
-}
-.Comments_Hints {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) - 2px);
-  padding: var(--half-gap);
-  max-height: 40vh;
-  overflow-y: auto;
-}
-.Comments_Hint {
-  display: flex;
-  align-items: baseline;
-  gap: var(--half-gap);
-  padding: 2px var(--half-gap);
-  border-radius: var(--radius);
-  cursor: pointer;
-}
-.Comments_Hint-pick {
-  background: var(--soft);
-}
-.Comments_Name {
-  color: var(--text);
-}
-.Comments_Args {
-  color: var(--muted);
-}
-.Comments_About {
-  color: var(--dim);
-  margin-left: auto;
-}
+
 /* The one scrolling element — padding scrolls away WITH the content. */
 .Card_Scroll {
   flex: 1;
@@ -2262,7 +2176,7 @@ a[data-ref]:hover {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--half-gap);
   /* The composer occupies its own row beneath model selection. */
-  & > .Comments_Box {
+  & > .Say {
     grid-column: 1 / -1;
   }
 }

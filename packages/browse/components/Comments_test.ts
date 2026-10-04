@@ -1,3 +1,7 @@
+import './Entity.tsx'
+import { changesOf } from '../wire.ts'
+import { domainBundle } from '../domain-host.tsx'
+import '../domain-host.tsx'
 // Human-facing instruments use graph ids; browser clients keep their short
 // handles.
 import { test } from '@yaks/testing'
@@ -5,7 +9,7 @@ import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { cache, ent, useRoute } from '../live.ts'
 import { act } from 'preact/test-utils'
-import { drafts } from './drafts.ts'
+import { drafts } from '@yaks/draft/ui'
 import { h } from 'preact'
 import { derivedEid } from '@yaks/graph'
 import { mount } from './mount.ts'
@@ -15,10 +19,13 @@ import {
   byline,
   commentPlace,
   Composer,
-  composerChanges,
+  composerBundles,
   prompt,
   viaName,
-} from './Comments.tsx'
+} from '@yaks/kernel/Comments'
+
+let composerChanges = (...args: Parameters<typeof composerBundles>) =>
+  changesOf(composerBundles(...args)).filter((c) => c.name != 'entity')
 
 test('viaName names a session by its chip id, never its harness uuid', () => {
   cache.value = {
@@ -80,7 +87,7 @@ test('byline reads actor and instrument from the created stamp', () => {
       comment: { eid: 'comment', target: 'target' },
     },
   }
-  assertEquals(byline(ent('comment')), 'jeff · via S-31')
+  assertEquals(byline(domainBundle(ent('comment'))), 'jeff · via S-31')
   cache.value = {}
 })
 
@@ -91,7 +98,10 @@ test('composer names an unnamed session by its chip id', () => {
       session: { eid: 'session', id: 'raw-session-uuid', status: 'settled' },
     },
   }
-  assertEquals(prompt(ent('session')), 'send to S-31… (resumes the session)')
+  assertEquals(
+    prompt(domainBundle(ent('session'))),
+    'send to S-31… (resumes the session)',
+  )
   cache.value = {}
 })
 
@@ -103,7 +113,6 @@ test('a reply composer keeps its thread and its own draft place', () => {
       {
         eid: 'reply',
         name: 'comment',
-        $num: true,
         comp: { target: 'task', reply_to: 'ask' },
       },
     ],
@@ -132,7 +141,7 @@ test('a thread shows answers under their question, not under unrelated notes', (
     },
   }
   let { root, free } = mount(h(Branches, {
-    rows: ['answer', 'other', 'ask'].map(ent),
+    rows: ['answer', 'other', 'ask'].map(ent).map(domainBundle),
   }))
   try {
     let children = root.querySelector('.Notes_Children')!

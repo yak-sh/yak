@@ -21,7 +21,7 @@ await import('../Entity.tsx')
 let { Board, columnLine, QuickAdd } = await import('./Board.tsx')
 let { mount } = await import('../mount.ts')
 let { tick, until } = await import('../../testing.ts')
-let { drafts } = await import('../drafts.ts')
+let { drafts } = await import('@yaks/draft/ui')
 
 test('board columns request a projected, priority-ordered screenful', () => {
   let q = columnLine('.task', 'open', 8)

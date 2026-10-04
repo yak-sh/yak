@@ -1,6 +1,6 @@
 // Recent reads the kernel's opened mark. Only a page opened by a known
 // person writes one; repeated renders of that page do not churn provenance.
-import { currentPerson } from './components/drafts.ts'
+import { currentPerson } from '@yaks/draft/ui'
 import { apply, row } from './live.ts'
 import { vocab } from './types.ts'
 let last: string | undefined

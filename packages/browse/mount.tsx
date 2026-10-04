@@ -1,3 +1,4 @@
+import './domain-host.tsx'
 import './browser-links.ts'
 import { bindHistory } from './history.ts'
 import { historyPort } from '@yaks/ui/history'
@@ -13,7 +14,7 @@ import { adaptViews } from './components/inspect.tsx'
 import type { Registry } from '@yaks/render'
 import type { View } from '@yaks/inspect'
 import type { Hosting } from './hosting.ts'
-import { lone } from './components/drafts.ts'
+import { lone } from '@yaks/draft/ui'
 import { Ux } from '@yaks/ux'
 
 export let mount = async (

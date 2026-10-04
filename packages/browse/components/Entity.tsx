@@ -1,3 +1,6 @@
+import '../domain-host.tsx'
+import { views as commentViews } from '@yaks/kernel/views'
+import { domainBundle } from '../domain-host.tsx'
 import { inspectViews } from './inspect.tsx'
 import { views as secretViews } from '@yaks/secrets/views'
 // The curated views and verbs, with the app's quarantine, failure and memo
@@ -86,7 +89,7 @@ import {
 import { Role } from './views/Role.tsx'
 import { Wake, WakeTitle } from './views/Wake.tsx'
 import { openRun } from './Run.tsx'
-import { viaName } from './Comments.tsx'
+import { viaName } from '@yaks/kernel/Comments'
 import { block } from '@yaks/ui'
 import { Ux } from '@yaks/ux'
 import { favoriteChange, favoriteLabel } from '../navigation.ts'
@@ -127,6 +130,12 @@ define([
     Render: (props) => <BoardList {...props} />,
   },
   ...secretViews.renderers,
+  ...commentViews.renderers.map((r) => ({
+    ...r,
+    Render: ({ e, ...ctx }: { e: Ent }) => (
+      <r.Render {...ctx} e={domainBundle(e)} />
+    ),
+  })),
   { view: 'Tile', match: parse('.memory'), Render: MemoryTile },
   // TaskTile walks back through Entity for its Meta row; defer the binding
   // for the same reason as Canvas above.

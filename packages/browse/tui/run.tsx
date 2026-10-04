@@ -1,3 +1,4 @@
+import '../domain-host.tsx'
 // The terminal, once main.tsx has learned the vocabulary: same cache, same
 // sync, same view registry as the browser — a different document and a
 // different painter. Edits made elsewhere appear live; this is another client
@@ -7,7 +8,7 @@ import { onPaint, touch } from '@yaks/tui'
 import { render } from 'preact'
 import { effect } from '@preact/signals'
 import { boot, config } from '../live.ts'
-import { lone } from '../components/drafts.ts'
+import { lone } from '@yaks/draft/ui'
 import { extend } from '../components/registry.ts'
 import { onMarkdown } from '../components/Markdown.tsx'
 import { Md } from './md.tsx'

@@ -17,7 +17,7 @@ import { useBoardSub, useEntity } from '../components/subscriptions.ts'
 import { useCommentsOn } from '../components/useQuery.ts'
 import { tuiKeys } from '../keybindings.ts'
 import { formatProp, propAt } from '../props.ts'
-import { type Ent, type Hit, idOf, statusOf, verdictName } from '../types.ts'
+import { type Ent, type Hit, idOf, statusOf } from '../types.ts'
 import {
   apply,
   applyLocal,
@@ -55,7 +55,7 @@ import {
   ux,
 } from '../components/registry.ts'
 import { Entity } from '../components/Entity.tsx'
-import { byline, viaName } from '../components/Comments.tsx'
+import { viaName } from '@yaks/kernel/Comments'
 import { Dot } from '../components/Dot.tsx'
 import { Id } from '../components/views/Inline.tsx'
 import { eidOf } from '../components/nav.tsx'
@@ -82,7 +82,7 @@ import {
   stacked,
   useHits,
 } from '@yaks/ux'
-import { currentPerson, drafts } from '../components/drafts.ts'
+import { currentPerson, drafts } from '@yaks/draft/ui'
 import { hits } from '../components/hits.ts'
 import { group } from '../components/Search.tsx'
 import { editing, named } from './keys.ts'
@@ -541,19 +541,7 @@ let TuiTask = ({ e }: { e: Ent }) => (
       <Entity key={r.child} eid={r.child} view='Dependency' type={r.type} />
     ))}
     {useCommentsOn(e.eid).map((c) => (
-      <div class='TComment'>
-        <span class='Comments_Who'>{byline(c)}</span> {c.review && (
-          <span
-            class={`Comments_Verdict-${c.review.verdict.replaceAll('_', '-')}`}
-          >
-            [{verdictName(c.review.verdict)}]{' '}
-          </span>
-        )}
-        <Md
-          text={pending(c) ? '…' : c.doc?.body ?? ''}
-          repo={repoUrl(c)}
-        />
-      </div>
+      <Entity key={c.eid} eid={c.eid} view='Thread.Note' />
     ))}
   </div>
 )

@@ -1,3 +1,4 @@
+import { domainBundle } from '../../domain-host.tsx'
 import { useModel, useReference, useRepoUrl } from '../subscriptions.ts'
 import {
   useEffect,
@@ -22,8 +23,8 @@ import { block } from '@yaks/ui'
 import { ago, Stamp } from '../Stamp.tsx'
 import { pretty } from '../../time.ts'
 import { Dot } from '../Dot.tsx'
-import { Twig } from '../Comments.tsx'
-import { branches } from '../../comments.ts'
+import { Twig } from '@yaks/kernel/Comments'
+import { branches } from '@yaks/kernel/comments'
 import { Entity, resolve } from '../Entity.tsx'
 import { mdMentions, type Mention } from '../../md.ts'
 import { useCommentsOn, useQueryResult, useReferences } from '../useQuery.ts'
@@ -586,9 +587,12 @@ export let Session = (
   })
   let heard = (c: Ent) => c.created?.via == e.eid || cited.has(c.eid)
   let heardCs = cs.filter(heard)
-  let trees = branches(cs)
-  let nodes = new Map(trees.map((node) => [node.row.eid, node]))
-  let thread = weave(rows, trees.map((node) => node.row).filter(heard))
+  let trees = branches(cs.map(domainBundle))
+  let nodes = new Map(trees.map((node) => [node.row.entity.eid, node]))
+  let thread = weave(
+    rows,
+    trees.map((node) => ent(node.row.entity.eid)).filter(heard),
+  )
   // Windowed from the tail on the web; the whole thread in the TUI.
   let { frame, start, older } = useTranscript(
     thread.length,
@@ -601,7 +605,7 @@ export let Session = (
     () => setTake((n) => n + WINDOW),
   )
   let windowed = start > 0 ? thread.slice(start) : thread
-  let unsent = trees.filter((node) => !heard(node.row))
+  let unsent = trees.filter((node) => !heard(ent(node.row.entity.eid)))
   // The mention scan (mdMentions over the whole thread) is a per-render scan we
   // can't pay — a 14M-log session stalled first paint on it. Parse once,
   // memoized on the cheap content signature; resolve+dedup stays per render so a
@@ -706,7 +710,9 @@ export let Session = (
         <SessionDiagnostics exit={e.exit?.code} open={status == 'failed'} />
         {unsent.length > 0 && (
           <Unsent>
-            {unsent.map((node) => <Twig key={node.row.eid} node={node} />)}
+            {unsent.map((node) => (
+              <Twig key={node.row.entity.eid} node={node} />
+            ))}
           </Unsent>
         )}
       </Panel>

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'preact/hooks'
 import { catalog, transport, usingOf } from '../../providers.ts'
 import { type Ent } from '../../types.ts'
-import { Composer } from '../Comments.tsx'
+import { Composer } from '@yaks/kernel/Comments'
 import { Entity } from '../Entity.tsx'
 import { load, providers } from '../Run.tsx'
 import { useModel } from '../subscriptions.ts'

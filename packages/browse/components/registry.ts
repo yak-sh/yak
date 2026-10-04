@@ -31,7 +31,7 @@ import { mdInline } from '../md.ts'
 import { Dot } from './Dot.tsx'
 import { ago } from './Stamp.tsx'
 import { fields, front } from './fields.tsx'
-import { drafts } from './drafts.ts'
+import { drafts } from '@yaks/draft/ui'
 import { rows } from './hits.ts'
 import { wells } from './wells.ts'
 

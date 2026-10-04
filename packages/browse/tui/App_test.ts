@@ -1,3 +1,4 @@
+import '../domain-host.tsx'
 // TUI-only renderers keep the shared scalar language in their visible labels.
 import { test } from '@yaks/testing'
 import '../testing.ts' // learns the vocabulary
@@ -19,7 +20,7 @@ import {
   TStatus,
 } from './App.tsx'
 import { TElement } from '@yaks/tui'
-import { drafts } from '../components/drafts.ts'
+import { drafts } from '@yaks/draft/ui'
 import { answerPlace } from '@yaks/task/views'
 import { pane } from './paint.ts'
 

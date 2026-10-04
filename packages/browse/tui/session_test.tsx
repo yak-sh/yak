@@ -1,3 +1,5 @@
+import { domainBundle } from '../domain-host.tsx'
+import '../domain-host.tsx'
 // A graph-native Session's durable bodies must PAINT in the terminal. The fake
 // DOM drops the shared Markdown door's dangerouslySetInnerHTML, so without the
 // terminal painter an agent's say body renders blank — the ordered rows show,
@@ -18,7 +20,7 @@ import { onMarkdown } from '../components/Markdown.tsx'
 import '../components/Entity.tsx'
 import { EntryBody, type EntryLine } from '../components/views/Entry.tsx'
 import { pane } from './paint.ts'
-import { Branches } from '../components/Comments.tsx'
+import { Branches } from '@yaks/kernel/Comments'
 import { cache, ent } from '../live.ts'
 
 // The same injection tui/main.tsx makes at boot: the one markdown door paints
@@ -109,7 +111,7 @@ test('comment replies paint as nested branches in the terminal', () => {
   let root = new TElement('root')
   try {
     render(
-      <Branches rows={['ask', 'other', 'answer'].map(ent)} />,
+      <Branches rows={['ask', 'other', 'answer'].map(ent).map(domainBundle)} />,
       root as unknown as Parameters<typeof render>[1],
     )
     let { lines, status } = pane(root)

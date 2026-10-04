@@ -2059,7 +2059,8 @@
       "packages/draft": {
         "dependencies": [
           "jsr:@std/assert@1",
-          "npm:@preact/signals@^2.9.0"
+          "npm:@preact/signals@^2.9.0",
+          "npm:preact@^10.29.1"
         ]
       },
       "packages/dreaming": {
@@ -2176,7 +2177,8 @@
       },
       "packages/kernel": {
         "dependencies": [
-          "jsr:@std/assert@1"
+          "jsr:@std/assert@1",
+          "npm:preact@^10.29.1"
         ]
       },
       "packages/key": {
