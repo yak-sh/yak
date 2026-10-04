@@ -10,6 +10,7 @@ import { doorOf } from './door.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { dispatchMove, dispatchRule } from './mover.ts'
+import { deadMailInboxMove, deadMailInboxRule } from './migrate.ts'
 import { type Rehearsal, type Rule, type Standing } from './mover.ts'
 import { state } from './testing.ts'
 import { driver } from '@yaks/durable-object'
@@ -136,6 +137,10 @@ test('a rule reading words a store does not speak is done there', async () => {
 let dispatchStore = async () => {
   let s = await store(0, dispatchRule)
   await s.declare(pick(kernelDoc, ['admitted', 'waiting']))
+  await s.apply(['actor', 'run', 'other', 'another'].map((eid) => ({
+    entity: { eid },
+    doc: { title: eid },
+  })))
   return s
 }
 
@@ -388,4 +393,141 @@ test('a refused contraction unwinds its data batch and retries after wake', asyn
   await s.alarm()
   assertEquals(await count(s, '.now'), 1)
   assert(!s.columns('was').includes('word'))
+})
+
+// Synthetic only: 141 matches is the owner's measured count, not a read of
+// Vale. Near misses deliberately include work that could still be legitimate.
+let deadMail = (eid: string, props: Comp = {}): Bundle => ({
+  entity: { eid },
+  effect: {
+    handler: 'mail_inbox',
+    target: 'archive-target',
+    state: 'pending',
+    kind: 'changed',
+    comp: 'archived',
+    attempts: 0,
+    at: '2026-10-03T21:38:00.000Z',
+    generation: 0,
+    touched: ['archived'],
+    ...props,
+  },
+})
+
+let deadEid = (i: number) =>
+  `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`
+
+let deadMailStore = async () => {
+  let s = await store(0, deadMailInboxRule)
+  let dead = Array.from(
+    { length: 141 },
+    (_, i) => deadMail(deadEid(i)),
+  )
+  // A run carrying another component keeps it; only effect is removed.
+  dead[0].doc = { title: 'preserve attached data' }
+  let kept = [
+    deadMail('other-handler', { handler: 'other' }),
+    deadMail('done', { state: 'done' }),
+    deadMail('failed', { state: 'failed' }),
+    deadMail('created', { kind: 'created' }),
+    deadMail('other-comp', { comp: 'comment' }),
+    deadMail('attempted', { attempts: 1 }),
+    deadMail('claimed', { lease_owner: 'worker' }),
+    deadMail('claim-token', { lease_token: 'claim' }),
+    deadMail('claim-expiry', { lease_expiry: '2026-10-04T20:00:00.000Z' }),
+    deadMail('new', { at: '2026-10-04T19:07:36.001Z' }),
+    deadMail('cutoff', { at: '2026-10-04T19:07:36.000Z' }),
+    deadMail('no-time', { at: null }),
+    deadMail('no-attempts', { attempts: null }),
+    {
+      entity: { eid: 'archive-target' },
+      doc: { title: 'Do not touch the archived target' },
+      archived: {},
+    },
+    { entity: { eid: 'other-target' }, doc: { title: 'Do not touch' } },
+  ]
+  for (let rows of [kept, dead.slice(0, 100), dead.slice(100)]) {
+    await s.apply(rows)
+  }
+  return s
+}
+
+let remainingEffects = async (s: Awaited<ReturnType<typeof store>>) =>
+  await count(s, '.effect')
+
+test('dead mail rehearsal rolls back 141 rows and never activates cleanup', async () => {
+  let s = await deadMailStore()
+  let before = await s.query('*')
+  let [r] = await s.rehearse()
+  assertEquals([r.rows, r.moved, r.batches, r.failed], [141, 141, 3, undefined])
+  assertEquals(await s.query('*'), before)
+  assertEquals(await remainingEffects(s), 154)
+  assertEquals(await count(s, '.effect.state=pending'), 152)
+  await s.alarm()
+  assertEquals(await s.query('*'), before)
+  assertEquals((await s.moves())[0].live, false)
+})
+
+test('synthetic cleanup removes 141 dead runs only and a second pass moves zero', async () => {
+  let s = await deadMailStore()
+  let candidates = await s.query(deadMailInboxRule.find)
+  assertEquals(candidates.length, 141)
+  let ids = new Set(candidates.map((b) => b.entity.eid))
+  let before = (await s.query('*')).filter((b) => !ids.has(b.entity.eid))
+  let preserved = new Set(before.map((b) => b.entity.eid))
+  let [attached] = await s.query(`.entity.eid=${deadEid(0)}&*`)
+  // Only this synthetic Store is given a live copy of the rule; the shipped
+  // rule remains rehearsal-only, and no hosted admin/mover door is invoked.
+  s.wake({ ...deadMailInboxRule, live: 'apps' })
+  await s.alarm()
+  assertEquals(await s.query(deadMailInboxRule.find), [])
+  assertEquals(await remainingEffects(s), 13)
+  assertEquals(await count(s, '.effect.state=pending'), 11)
+  assertEquals(
+    (await s.query('*')).filter((b) => preserved.has(b.entity.eid)),
+    before,
+  )
+  let [after] = await s.query(`.entity.eid=${deadEid(0)}&*`)
+  assertEquals(after.doc, attached.doc)
+  assertEquals(after.effect, undefined)
+  assertEquals([(await s.moves())[0].moved, !!(await s.moves())[0].done], [
+    141,
+    true,
+  ])
+  let once = await s.query('*')
+  assertEquals((await s.rehearse())[0].rows, 0)
+  assertEquals((await s.rehearse())[0].moved, 0)
+  await s.alarm()
+  assertEquals(await s.query('*'), once)
+})
+
+test('dead mail cleanup refuses a claim or changed selection after reading', async () => {
+  let s = await store(0, deadMailInboxRule)
+  await s.apply([{
+    entity: { eid: 'archive-target' },
+    doc: { title: 'Target' },
+  }])
+  for (
+    let [prop, value] of Object.entries({
+      handler: 'other',
+      state: 'done',
+      kind: 'created',
+      comp: 'comment',
+      at: '2026-10-04T19:07:36.001Z',
+      attempts: 1,
+      lease_owner: 'worker',
+      lease_token: 'claim',
+      lease_expiry: '2026-10-04T20:00:00.000Z',
+    })
+  ) {
+    let eid = `race-${prop}`
+    await s.apply([deadMail(eid), deadMail('batch-peer')])
+    let rows = await s.query(deadMailInboxRule.find)
+    let patch = rows.flatMap(deadMailInboxMove)
+    await s.apply([{ entity: { eid }, effect: { [prop]: value } }])
+    let before = await s.query('*')
+    await assertRejects(() => s.apply(patch), Stale, `effect.${prop}`)
+    assertEquals(await s.query('*'), before)
+  }
+  assertEquals(deadMailInboxMove({ entity: { eid: 'absent' } }), [])
+  assertEquals(deadMailInboxMove(deadMail('new', { attempts: 1 })), [])
 })

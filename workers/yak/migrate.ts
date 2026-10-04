@@ -27,6 +27,58 @@ import {
 import { backfill, fit, indexed, mend, retired, tabled } from '@yaks/sqlite'
 import type { Index, Vocab } from '@yaks/vocab'
 
+import { type Bundle, type Comp, token } from '@yaks/graph'
+import type { Rule } from './mover.ts'
+
+// T-65228: app stores never composed mail_inbox. T-65357 stopped owing new
+// runs and ignores these old ones when arming alarms. This is only a prepared
+// cleanup: the owner said to leave Vale's stored rows alone. No live flag and
+// no BOUNDARIES entry; any hosted rehearsal/activation needs owner action.
+// Restrict it to the reported archive-change shape, never-started/unclaimed,
+// recorded before the owner-confirmed T-65357 deployment on October 4, 2026.
+let DEAD_MAIL_BEFORE = '2026-10-04T19:07:36.000Z'
+let deadMailFind = '.effect.handler=mail_inbox&.effect.state=pending' +
+  '&.effect.kind=changed&.effect.comp=archived&.effect.attempts=0' +
+  `&.effect.at<${DEAD_MAIL_BEFORE}` +
+  '&!effect.lease_owner&!effect.lease_token&!effect.lease_expiry'
+
+/** Remove only the dead run component, not its entity or its target/archive.
+ * Guards also protect an attempt/claim made after selection. Keeping other
+ * components avoids deleting unrelated data attached to the run entity. */
+export let deadMailInboxMove = (row: Bundle): Bundle[] => {
+  let e = row.effect as Comp | undefined
+  if (
+    !e || e.handler != 'mail_inbox' || e.state != 'pending' ||
+    e.kind != 'changed' || e.comp != 'archived' || e.attempts !== 0 ||
+    typeof e.at != 'string' || e.at >= DEAD_MAIL_BEFORE ||
+    ['lease_owner', 'lease_token', 'lease_expiry'].some((p) => e[p] != null)
+  ) return []
+  return [{
+    entity: row.entity,
+    effect: null,
+    $was: {
+      effect: Object.fromEntries([
+        'handler',
+        'state',
+        'kind',
+        'comp',
+        'at',
+        'attempts',
+        'lease_owner',
+        'lease_token',
+        'lease_expiry',
+      ].map((p) => [p, token(e[p] ?? null)])),
+    },
+  }]
+}
+
+/** Rehearsal-only; no automatic cleanup on app boot/alarm. */
+export let deadMailInboxRule: Rule & { find: string } = {
+  mark: 'yak/store/dead-mail-inbox/1',
+  find: deadMailFind + '&*',
+  move: deadMailInboxMove,
+}
+
 /** The five type words the short manifest used, and the JSON Schema each
  * meant. Frozen here rather than read off vocab.ts: what a stored slot meant is
  * history, and history does not move when the platform's words do. */

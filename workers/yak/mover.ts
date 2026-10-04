@@ -37,6 +37,7 @@ import { isPromise } from '@yaks/fp'
 import { and, conjoin, parse, type Query } from '@yaks/query'
 import { Unknown } from '@yaks/vocab'
 import { GIT_STORE, PLATFORM_STORE } from './door.ts'
+import { deadMailInboxRule } from './migrate.ts'
 /** A rule's name: where its stamp is kept in a store's memory, and the
  * `BOUNDARIES` entry its live release adds. */
 export type Mark = `yak/store/${string}`
@@ -102,7 +103,7 @@ export let dispatchRule: Rule & { find: string } = {
 
 /** Every rule a release carries. A rule leaves in the release after the sweep
  * reports every store done with it, with the old words it moved out of. */
-export let RULES: Rule[] = []
+export let RULES: Rule[] = [deadMailInboxRule]
 
 /** How far one rule got in one store. `after` is the last row it moved past;
  * `unspoken` is a word the rule reads that this store does not declare, so
