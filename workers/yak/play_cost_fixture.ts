@@ -174,8 +174,10 @@ export let playMinute = async (
         headers: { ...headers, 'x-yak-kernel': '1' },
       }),
     )
-    let held = await res.json() as { rules: { done?: string }[] }
-    if (held.rules.every((r) => r.done)) break
+    let held = await res.json() as {
+      rules: { done?: string; live?: boolean }[]
+    }
+    if (held.rules.every((r) => !r.live || r.done)) break
     if (i == 99) throw new Error('lens fixture did not settle')
   }
   measured = true
@@ -430,8 +432,10 @@ export let idleWake = async (
         headers: { ...headers, 'x-yak-kernel': '1' },
       }),
     )
-    let held = await res.json() as { rules: { done?: string }[] }
-    if (held.rules.every((r) => r.done)) break
+    let held = await res.json() as {
+      rules: { done?: string; live?: boolean }[]
+    }
+    if (held.rules.every((r) => !r.live || r.done)) break
     if (i == 99) throw new Error('idle fixture did not settle')
   }
   await db.deleteAlarm()
@@ -461,14 +465,17 @@ export let idleWake = async (
     }
   }
   try {
-    for (let path of ['/tools', '/vocab']) {
+    for (let path of ['/tools', '/vocab', 'alarm']) {
       current = requests[path] = empty()
       store = new Store(context)
-      let res = await store.fetch(
-        new Request(`http://store${path}`, { headers }),
-      )
-      if (!res.ok) throw new Error(`${path}: ${await res.text()}`)
-      await res.body?.cancel()
+      if (path == 'alarm') await store.alarm()
+      else {
+        let res = await store.fetch(
+          new Request(`http://store${path}`, { headers }),
+        )
+        if (!res.ok) throw new Error(`${path}: ${await res.text()}`)
+        await res.body?.cancel()
+      }
       // Drain the asynchronous pool work started by the request, not just its response.
       for (let i = 0; i < 100; i++) await Promise.resolve()
       if (await db.getAlarm() != null) {

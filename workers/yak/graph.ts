@@ -168,6 +168,7 @@ import {
   meaning,
   schema as vectorSchema,
   semantic,
+  watch as watchEmbedding,
 } from '@yaks/embedding'
 import { after, isPromise } from '@yaks/fp'
 import { type Event, record } from '@yaks/trace'
@@ -209,7 +210,7 @@ import { type Runner, runner } from '@yaks/tools'
 import { commands } from '@yaks/tools/declared'
 import { readTools } from './tool-grammar.ts'
 import { rouse, soonest, tick, type Ticked, wakes } from '@yaks/wake'
-import { type Alarm, arm, armed } from '@yaks/wake/cloudflare'
+import { type Alarm, arm } from '@yaks/wake/cloudflare'
 import {
   asking,
   mentions,
@@ -228,7 +229,7 @@ import {
 import { PLUGINS } from './plugins.ts'
 import { builderModelTool, building, choosing, supplying } from './builders.ts'
 import type { Env } from './env.ts'
-import { resumed, seeded } from './wake.ts'
+import { seeded } from './wake.ts'
 import type { Binding } from './post.ts'
 import { ledger } from './ledger.ts'
 import {
@@ -462,6 +463,7 @@ type Word =
   | 'access'
   | 'mail'
   | 'schema'
+  | 'schema-ready'
   | 'wakes'
   | 'planted'
   | 'effect-migrated'
@@ -718,14 +720,6 @@ export class Store {
   }
   #vectorWork: Promise<void> | null = null
   #vectorAgain = false
-  // The schedules this object was born with, planted once (`#sown`), and
-  // how long the ground lies fallow after a planting that threw: until when,
-  // and how many throws the wait has doubled for.
-  #sowing: Promise<void> | null = null
-  #fallow = { until: 0, throws: 0 }
-  // When this incarnation began: a job marked begun before it was begun by
-  // one that is gone (wake.ts `resumed`).
-  #born = Date.now()
   // The app's own commands, as a runner over this store (T-37605), beside the
   // manifest they were built from. A deploy is the only thing that moves that
   // manifest, and a new one is a new runner.
@@ -903,12 +897,13 @@ export class Store {
     let unfit = install(this.#sql, vocab, blobRead(vocab))
     for (let e of unfit) defect(e, { request: 'schema fit', store: name })
     if (held) rebuild(this.#sql)
-    if (!unfit.length) this.#put('schema', stamp)
+    if (!unfit.length) {
+      watchEmbedding(this.#sql, texts(vocab, blobRead(vocab)))
+      this.#put('schema', stamp)
+    }
   }
 
   #build() {
-    // A newly loaded declaration must refresh its described schema too.
-    this.#sowing = null
     let ctx = this.#ctx
     this.#people.clear()
     // Which words this object speaks is a question of which object it is
@@ -951,6 +946,7 @@ export class Store {
         // minted, while an app's entities are pointed at by the eid its client
         // minted and never by a number, so nothing mints one for them.
         number: numbered(vocab),
+        schemaReady: () => this.#get('schema-ready') == stamp,
         // The vocabulary says which prose is searched — @yaks/doc declares its
         // title and body, and an app's own vocab.json declares `"search": true`
         // on whatever of its words it wants found. sqlite owns no index. The
@@ -1002,6 +998,7 @@ export class Store {
     let fx = effects(vocab, {
       write: (b) => this.#trust(b, null),
       defer: true,
+      singleOwner: true,
       // A builder output (2) starts a downstream builder call (3). The
       // registered tool then opens its ordinary session through the runner.
       // Keep the chain bounded, but let that owed call run.
@@ -1877,11 +1874,10 @@ export class Store {
   // The next instant this object owes, off its own rows: what a tick arms
   // after it has fired, and what a request re-arms when the runtime lost the
   // alarm. `soonest` reads the earliest wake still ahead; a planting that
-  // threw is owed when its fallow ends (`#sown`).
+  // is recovered from recorded rows, never re-derived on an incarnation.
   #owed = async (now: number, floor = Infinity): Promise<void> => {
     let next = await soonest(this.#graph, now)
-    let replant = this.#sowing ? Infinity : this.#fallow.until || Infinity
-    let at = Math.min(next ?? Infinity, floor, replant)
+    let at = Math.min(next ?? Infinity, floor)
     if (Number.isFinite(at)) await this.#arming(new Date(at).toISOString())
   }
 
@@ -1979,7 +1975,6 @@ export class Store {
           this.#stuck = false
           await this.#drain()
         }
-        if (this.#get('name') == PLATFORM_STORE) await this.#sown()
         await this.#tick(Date.now())
         this.#workingEffects()
         this.#embedding()
@@ -1996,40 +1991,12 @@ export class Store {
     })
   }
 
-  // Planted once per incarnation, by the first request or alarm to find the
-  // ground ready. A planting that throws is noted and let go, and the object
-  // serves without it: its effects wait in their rows, and the ground lies
-  // fallow for a second, then two, doubling to an hour, before a request or
-  // the alarm set for that instant plants again. A store whose trouble has
-  // passed heals without a deploy, and one that still cannot plant is not
-  // asked to on every request.
-  #sown = (): Promise<void> => {
-    if (!this.#sowing && Date.now() < this.#fallow.until) {
-      return Promise.resolve()
-    }
-    return this.#sowing ??= this.#sow().catch(this.#unsown)
-  }
-
-  #unsown = async (e: unknown) => {
-    let wait = Math.min(1000 * 2 ** this.#fallow.throws++, Store.FALLOW)
-    this.#fallow.until = Date.now() + wait
-    this.#sowing = null
-    await this.#broke('wake seed', e)
-    await this.#arming(new Date(this.#fallow.until).toISOString())
-      .catch((why) =>
-        defect(why, { request: 'wake seed alarm', store: this.#name() })
-      )
-  }
-
-  // The longest the ground lies fallow after a planting that threw (`#sown`).
-  static FALLOW = 60 * 60_000
-
-  // What this object was born owing: the rows its plugins declare — the
-  // directory's sweeps — planted if they are missing, and the alarm set again
-  // if the runtime has none. `seeded` never rewinds a wake somebody moved or
-  // resumes one they paused, and the stamp means a store that already holds
-  // them asks its storage once rather than its graph three times.
-  #sow = async (): Promise<void> => {
+  // Deployment materializes descriptions and shipped rows. Loading an
+  // incarnation does not derive work, sweep history or inspect owed targets.
+  #deployed = async (): Promise<void> => {
+    this.#graph.storage.install()
+    watchEmbedding(this.#sql, this.#texts.fields)
+    this.#put('schema-ready', this.#get('schema')!)
     // Schema pages are ordinary entities, made by the package that owns
     // their identities. Describe after boot, in bounded writes, with the
     // hash last so an interrupted pass resumes on the next request.
@@ -2065,23 +2032,11 @@ export class Store {
         await this.#broke('install', e)
       }
     }
-    await this.#migrateEffects()
     let rows = this.#get('name') == PLATFORM_STORE ? wakesOf(PLUGINS) : []
     let stamp = sha256(rows.map((r) => r.entity.eid).join('\n'))
     if (rows.length && this.#get('wakes') != stamp) {
       await seeded(this.#graph, rows, Date.now())
       this.#put('wakes', stamp)
-    }
-    // And any of them the last incarnation died in the middle of.
-    if (rows.length) {
-      await resumed(
-        this.#clock,
-        this.#born,
-        (job, e) => this.#broke(`wake ${job}`, e),
-      )
-    }
-    if (this.#alarm && (await armed(this.#alarm)) == null) {
-      await this.#owed(Date.now())
     }
     // A deployment stands up command identities. Recovery drains recorded
     // call_ready/call_woken effects, not a second derivation over all calls.
@@ -2089,9 +2044,6 @@ export class Store {
       await this.#planting()
     }
     this.#effectsReady = true
-    if (this.#get('name') == PLATFORM_STORE) this.#workingEffects()
-    // Whatever text is owed its vector, and, the first time, every text this
-    // store holds.
     this.#embedding()
     // Rows a rule still owes here are moved from the alarm, never by the wake
     // that found them owing (mover.ts).
@@ -2193,43 +2145,6 @@ export class Store {
     if (this.#owing().length) await this.#arming(this.#soon(), 'mover')
   }
 
-  // Before this store kept effect rows, a prompt could have left on the wire
-  // with no ask recorded. Those older requests have an unknown outcome. Mark
-  // them interrupted once, before the effect pool's sweep can dispatch them
-  // again. The person can inspect and explicitly ask anew.
-  #migrateEffects = async () => {
-    if (!this.#vocab.comp('effect') || this.#get('effect-migrated')) return
-    let rows = await this.#graph.read(
-      '.session.status=pending,running,queued (.entries.using|.entries.ask)',
-    )
-    for (let row of rows) {
-      let session = row.entity.eid
-      let inflight = await this.#graph.read(
-        `.entry.session=${session}&.attempt.state=inflight&*`,
-      )
-      await this.#trust([
-        ...inflight.map((b) => ({
-          entity: b.entity,
-          attempt: { by: null },
-          interrupted: { code: 'restart' },
-          failed: {
-            reason: 'Unfinished dispatched request; inspect before retry',
-          },
-        })),
-        {
-          entity: { eid: crypto.randomUUID() },
-          entry: { session },
-          notice: {},
-          content: {
-            body: 'The previous model request may have completed at the ' +
-              'provider. Inspect it before asking again.',
-          },
-        },
-      ], null)
-    }
-    this.#put('effect-migrated', '1')
-  }
-
   #workingEffects = () => {
     if (this.#dormant) return
     if (!this.#vocab.comp('effect')) return
@@ -2258,14 +2173,14 @@ export class Store {
         ? await this.#graph.read(and(
           equals('effect.state', 'pending'),
           equals('effect.handler', list(...handlers)),
-          project('effect.handler', 'effect.next', 'effect.lease_expiry'),
+          project('effect.handler', 'effect.next'),
         ))
         : []
       if (pending.length) {
         let now = Date.now()
         let next = Math.min(...pending.map((b) => {
           let e = b.effect as Comp
-          return Date.parse(String(e.next ?? e.lease_expiry ?? '')) ||
+          return Date.parse(String(e.next ?? '')) ||
             now + 60_000
         }))
         if (this.#profile) {
@@ -2330,16 +2245,6 @@ export class Store {
     }
     let name = this.#name()
     this.#vectorWork = (async () => {
-      // Recover a pass killed in provider I/O after its timeout plus the
-      // retry interval. An earlier crash alarm would also survive a provider
-      // failure: arm() preserves earlier duties, bypassing the catch's retry.
-      // A successful incomplete slice explicitly schedules its continuation.
-      if (this.#owes()) {
-        await this.#arming(
-          new Date(Date.now() + Store.EMBED + Store.RETRY).toISOString(),
-          'embedding recovery',
-        )
-      }
       do {
         this.#vectorAgain = false
         let { sql, fields } = this.#texts
@@ -2574,9 +2479,7 @@ export class Store {
     await this.#live.wake()
     // A read does not owe deployment work. App declarations, descriptions and
     // shipped rows are installed by deployment POSTs, never by an eviction.
-    // The directory still seeds its standing platform schedules here.
-    if (this.#get('name') == PLATFORM_STORE) await this.#sown()
-    if (selected.toolsMoved) await this.#sown()
+    if (selected.toolsMoved) await this.#deployed()
     for (let run of selected.effects) await run()
 
     return null
@@ -3672,7 +3575,7 @@ export class Store {
             prepare()
           })
           if (this.#refused) return this.#stalled()
-          await this.#sown()
+          await this.#deployed()
         }
         return Response.json({
           ok: true,

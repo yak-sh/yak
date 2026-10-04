@@ -17,7 +17,7 @@ import { GRAPHQL } from './usage.ts'
 import { GIT_STORE, PLATFORM_STORE, storeOf } from './door.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import type { Env } from './env.ts'
-import { reporting, STUCK } from './wake.ts'
+import { reporting } from './wake.ts'
 import { appStore, storeName } from './directory.ts'
 import { trash, trashSpace, untrash, untrashSpace } from './erase.ts'
 import { ADA, platform as probe, seeded } from './serving-probe.ts'
@@ -29,6 +29,13 @@ let wake = async (env: ReturnType<typeof platform>['env'], eid: string) =>
 // The directory's own object, awake: a store learns which one it is from a
 // request, so one read is what makes its vocabulary the platform's.
 let directory = async (p: ReturnType<typeof platform>) => {
+  await p.object(PLATFORM_STORE).fetch(
+    new Request('http://store/vocab', {
+      method: 'POST',
+      headers: { 'x-store': PLATFORM_STORE, 'x-yak-kernel': '1' },
+      body: '{}',
+    }),
+  )
   await meta(p.env).query('.wake')
   return p.object(PLATFORM_STORE)
 }
@@ -143,46 +150,6 @@ test('a job is marked begun on its row while it runs, and cleared after', async 
 
 // A deploy resets the object under whatever job it is running: the job's own
 // catch never runs, so the incarnation after it is what can tell. A reset is
-// expected, so the run is fired again quietly; only a job that has not
-// finished for `STUCK` is reported.
-let died = async (began: string, since?: string) => {
-  let p = platform('wake resumed')
-  await directory(p)
-  await meta(p.env).apply([{
-    entity: { eid: 'yak-trash' },
-    sweep: { began, since },
-  }], KERNEL)
-  let store = new Store(p.states.get(PLATFORM_STORE)!, p.env)
-  p.env.STORE = {
-    idFromName: (n) => n,
-    get: () => ({ fetch: (req: Request) => store.fetch(req) }),
-  } as typeof p.env.STORE
-  let row = await wake(p.env, 'yak-trash')
-  assert(Date.parse(row.wake.at!) <= Date.now(), 'the job is due again')
-  let broke = await meta(p.env).query('.exception')
-  return { sweep: row.sweep, broke: broke.map((b) => b.exception) }
-}
-let ago = (ms: number) => new Date(Date.now() - ms).toISOString()
-
-test('a job its object died under is fired again by the next one, unreported', async () => {
-  let began = ago(60_000)
-  let { sweep, broke } = await died(began)
-  assertEquals(sweep, { kind: 'trash', began: null, since: began })
-  assertEquals(broke, [])
-})
-
-test('a job with no run finished for STUCK is reported at each death', async () => {
-  let began = ago(60_000), since = ago(STUCK)
-  let { sweep, broke } = await died(began, since)
-  assertEquals(sweep, { kind: 'trash', began: null, since })
-  assertEquals(broke, [{
-    ...broke[0] as object,
-    request: 'wake trash',
-    message: `wake trash: no run has finished since ${since}; ` +
-      `the run begun ${began} died unfinished`,
-  }])
-})
-
 test('the meter wake runs its job at the supplied hour', async () => {
   let asked: Record<string, unknown>[] = []
   let fetch = globalThis.fetch

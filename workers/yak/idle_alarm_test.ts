@@ -39,8 +39,10 @@ let idle = async (ctx: ReturnType<typeof state>) => {
         headers: { ...headers, 'x-yak-kernel': '1' },
       }),
     )
-    let held = await res.json() as { rules: { done?: string }[] }
-    return held.rules.every((r) => r.done)
+    let held = await res.json() as {
+      rules: { done?: string; live?: boolean }[]
+    }
+    return held.rules.every((r) => !r.live || r.done)
   })
   await ctx.storage.deleteAlarm()
   await alarm(store)

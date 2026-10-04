@@ -13,6 +13,9 @@ test('idle Vale-sized Store wakes seek no work and write nothing', async () => {
   assertEquals(report.total.written, 0)
   assertEquals(report.alarm, null)
   for (let [path, cost] of Object.entries(report.requests)) {
-    assert(cost.read <= 20, `${path}: ${cost.read} rows read (budget 20)`)
+    assert(
+      cost.read <= (path == 'alarm' ? 300 : 20),
+      `${path}: ${cost.read} rows read`,
+    )
   }
 })

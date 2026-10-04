@@ -63,7 +63,7 @@ test('words rank by meaning among what a line selects', async () => {
   assertEquals(none.map((h) => h.entity), ['kitchen'])
 })
 
-test('a store woken with its vectors in another space re-embeds them all', async () => {
+test('deployment of vectors in another space re-embeds them all', async () => {
   let st = state()
   await notes(st)
   let sql = driver(st.storage)
@@ -76,6 +76,14 @@ test('a store woken with its vectors in another space re-embeds them all', async
       vec: val(pack(unit(new Float32Array(256).fill(1)))),
     },
   })
+  let deployment = new Store(st, { AI })
+  await deployment.fetch(
+    new Request('http://store/vocab', {
+      method: 'POST',
+      headers: { 'x-store': 'ada/notes', 'x-yak-kernel': '1' },
+      body: '{}',
+    }),
+  )
   let door = open(st)
   let near = (q: string) =>
     door.query(`${NOTES}&${q}`).then((rows) => rows.map((b) => b.entity.eid))
