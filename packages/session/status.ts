@@ -335,7 +335,10 @@ export let sessionStatus = {
       : []
     let wears = (comp: string) =>
       gt(fn('instr', col('tables', 'shape'), lit(JSON.stringify(comp))), lit(0))
-    let fields: Expr[] = [col('entity', 'e'), col('seq', 'e')]
+    let fields: Expr[] = [
+      col('entity', 'e'),
+      col('seq', 'e'),
+    ]
     let read = (comp: string, props: string[] = []) => {
       if (!declared(comp)) {
         fields.push(
@@ -549,7 +552,7 @@ export let sessionStatus = {
     let anchor = (name: string) => col(name, 'anchor')
     let start = fn(
       'min',
-      fn('coalesce', anchor('asked_seq'), anchor('newest_seq')),
+      fn('coalesce', anchor('asked_seq'), lit(0)),
       fn(
         'coalesce',
         op('+', anchor('boundary_seq'), lit(1)),
@@ -561,7 +564,7 @@ export let sessionStatus = {
         anchor('newest_seq'),
       ),
     )
-    let turn = select({
+    let turnRows = select({
       cols: [
         ...fields,
         as(anchor('boundary_seq'), 'boundary_seq'),
@@ -572,7 +575,7 @@ export let sessionStatus = {
         as(
           ge(
             col('seq', 'e'),
-            fn('coalesce', anchor('asked_seq'), anchor('newest_seq')),
+            fn('coalesce', anchor('asked_seq'), lit(0)),
           ),
           'current',
         ),
@@ -587,6 +590,7 @@ export let sessionStatus = {
         ge(col('seq', 'e'), start),
       ),
     })
+    let turn = turnRows
     let input = and(
       has('content'),
       ...[
@@ -711,16 +715,8 @@ export let sessionStatus = {
     // Before the first ask, a model selection on the original request still
     // makes a later input owed by this runner. Once asked, the turn itself is
     // the proof of service and no historical request is read.
-    let requested = exists(select({
-      cols: [lit(1)],
-      from: table('entry', 'r'),
-      joins: [
-        join(table(USING, 'u'), eq(col('entity', 'u'), col('entity', 'r'))),
-      ],
-      where: and(mine('r'), not(noticed('r'))),
-    }))
     let owed = iff(
-      or(f('served'), notNull(col('a_entity', 'f')), requested),
+      or(f('served'), notNull(col('a_entity', 'f'))),
       lit('pending'),
       lit('running'),
     )
@@ -772,6 +768,31 @@ export let sessionStatus = {
       from: from(facts, 'f'),
       where: notNull(col('any', 'f')),
     })
+    let legacyFacts = select({
+      ...facts,
+      from: from(
+        select({
+          ...turnRows,
+          where: and(
+            mine('e'),
+            isNull(col('seq', 'e')),
+            eq(col('entity', 'e'), anchor('newest')),
+          ),
+        }),
+        't',
+      ),
+    })
+    let legacyDecision = select({ ...decision, from: from(legacyFacts, 'f') })
+    let legacy = sub(
+      select({ cols: [col('v', 'x')], from: from(legacyDecision, 'x') }),
+    )
+    let unsequenced = exists(
+      select({
+        cols: [lit(1)],
+        from: from(latest, 'n'),
+        where: isNull(col('seq', 'n')),
+      }),
+    )
     let ended = sub(
       select({
         cols: [col('ended', 's')],
@@ -784,7 +805,11 @@ export let sessionStatus = {
       lit('stopped'),
       fn(
         'coalesce',
-        sub(select({ cols: [col('v', 'x')], from: from(decision, 'x') })),
+        iff(
+          unsequenced,
+          legacy,
+          sub(select({ cols: [col('v', 'x')], from: from(decision, 'x') })),
+        ),
         lit('empty'),
       ),
     )

@@ -1598,6 +1598,39 @@ test('a claimed older call still fails for manual inspection', async () => {
   assertEquals(asked.length, 1)
 })
 
+test('legacy older calls are recovered even after a newer turn settled', async () => {
+  for (let claimed of [false, true]) {
+    let g = world()
+    let { model, asked } = scripted([calls(['older', 'hi'])])
+    await react(g, ids.s, { model, tools: [echo] })
+    let call = (await transcript(g, ids.s)).find((b) => b.call)!
+    await g.apply([
+      ...claimed ? [{ entity: call.entity, execution: { by: ids.s } }] : [],
+      {
+        entity: { eid: 'newer-ask' },
+        entry: { session: ids.s },
+        ask: { to: ids.m, through: 'e1' },
+        attempt: {},
+      },
+      {
+        entity: { eid: 'newer-output' },
+        entry: { session: ids.s },
+        output: { source: 'newer-ask' },
+        content: { body: 'done' },
+      },
+    ], { trusted: true })
+    assertEquals(statusOf(await transcript(g, ids.s)), 'settled')
+    let recovered = await react(g, ids.s, { model, tools: [echo] })
+    assertEquals(recovered.did, claimed ? 'asked' : 'ran')
+    assertEquals(recovered.added.some((b) => !!b.exception), claimed)
+    assertEquals(
+      recovered.added.filter((b) => b.result).length,
+      claimed ? 0 : 1,
+    )
+    assertEquals(asked.length, 1)
+  }
+})
+
 test('typed questions are asked once and answered one entry each', async () => {
   let g = world()
   let questions = {

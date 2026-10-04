@@ -248,12 +248,33 @@ let selectComp = (
  * and they must all read a property the same way: @yaks/d1 sends these
  * statements as one batch instead of one at a time, and nothing else differs.
  */
+// Remote adapters already explicitly plan their component projections. Keep
+// their established gather contract; SQLite's own get/read uses the opted-out
+// projection above. An adapter can opt in through the property registry.
+let complete = new WeakMap<Derived, Derived>()
+let completeDerived = (derived: Derived): Derived =>
+  at(complete, derived, () => ({
+    ...derived,
+    ...Object.fromEntries(
+      Object.entries(derived).filter(([, d]) => d.whole === false).map((
+        [p, d],
+      ) => [p, { ...d, whole: true }]),
+    ),
+  }))
+
 export let compSql = (
   v: Vocab,
   comp: string,
   eid: string,
   derived: Derived = {},
-): Select => selectComp(v, comp, derived, [], eq(col('eid', 'o'), val(eid)))
+): Select =>
+  selectComp(
+    v,
+    comp,
+    completeDerived(derived),
+    [],
+    eq(col('eid', 'o'), val(eid)),
+  )
 
 /**
  * The column a set-shaped read keys its rows by. Not a component prop — a prop
@@ -279,7 +300,7 @@ export let setSql = (
   selectComp(
     v,
     comp,
-    derived,
+    completeDerived(derived),
     [as(col('eid', 'o'), OWNER)],
     among(col('eid', 'o'), owners),
   )

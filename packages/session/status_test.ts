@@ -268,6 +268,16 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
     entry(6, { ask: { through: 'e5' }, attempt: {} }),
     said(7, 'e6'),
   ], 'settled'],
+  ['an askless call remains open after prose', [
+    input(1),
+    entry(2, { call: { to: T } }),
+    said(3, S),
+  ], 'running'],
+  ['an askless request remains in flight after prose', [
+    input(1),
+    entry(2, { attempt: { by: S } }),
+    said(3, S),
+  ], 'running'],
   ['nothing', [], 'empty'],
   ['a request', [request(1)], 'pending'],
   // Nothing here asked the runner: a harness runs it, and its hooks record
@@ -624,4 +634,16 @@ test('a finished session status seeks its newest turn with bounded engine work',
     db.close()
     lib.close()
   }
+})
+
+test('an unsequenced request written before the append hook is still owed', () => {
+  let g = store()
+  g.apply([{
+    entity: { eid: 'unsequenced' },
+    entry: { session: S },
+    content: { body: 'hi' },
+    using: { model: M },
+  }], { trusted: true })
+  let [row] = g.get([S]) as Bundle[]
+  assertEquals((row.session as { status: string }).status, 'pending')
 })

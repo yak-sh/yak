@@ -54,6 +54,8 @@ import { CLAIM } from './comp.ts'
 import { STOP_ENTRY } from './native.ts'
 import { type Deps, react, type Step, transcript } from './react.ts'
 import {
+  newestAsk,
+  openCalls,
   seqOf,
   statusOf,
   type TranscriptStatus,
@@ -302,7 +304,11 @@ let step = async (g: Graph, session: Eid, r: Runner): Promise<Step> => {
 // Answers the newest seq it saw.
 let turns = async (g: Graph, session: Eid, r: Runner): Promise<number> => {
   let entries = await quit(g, session, await transcript(g, session))
-  if (ENDED.includes(statusOf(entries))) {
+  let status = statusOf(entries)
+  let older = openCalls(entries).some((b) =>
+    (b.call as Comp)?.source != newestAsk(entries)?.entity.eid
+  )
+  if (ENDED.includes(status) && !(status == 'settled' && older)) {
     await ended(g, session, r)
     return newest(g, session)
   }

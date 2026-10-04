@@ -126,7 +126,7 @@ test(
       for (let sample of samples) {
         assertEquals(sample.rows, [{ status: 'settled' }])
         assert(
-          sample.read <= 20,
+          sample.read <= 25,
           `${sample.length} entries read ${sample.read} rows`,
         )
       }

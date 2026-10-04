@@ -574,7 +574,12 @@ export let react = async (
   let status = statusOf(entries)
   let nothing: Step = { did: 'nothing', status, added: [] }
   let newest = entries.at(-1)
-  if (!newest || status == 'settled' || status == 'stopped') return nothing
+  let older = openCalls(entries).some((b) =>
+    (b.call as Comp)?.source != newestAsk(entries)?.entity.eid
+  )
+  if (!newest || status == 'stopped' || status == 'settled' && !older) {
+    return nothing
+  }
   if (status == 'failed') return nothing
   let mint = deps.mint ?? (() => crypto.randomUUID() as Eid)
   // Who a line of this turn is written by. The pair is the one the fleet
