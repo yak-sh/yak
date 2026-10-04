@@ -7,6 +7,8 @@ entry and exit, and SQL calls through the driver. These observers add overhead;
 the unprofiled ratchet supplies baseline timings. Production modules are
 unchanged. [Retained samples](apply-profile.json) include the load averages,
 phase timings, statement counts and scan counts.
+[SQL span samples](apply-trace.json) retain the box profile and the
+apply-benchmark fixture recording.
 
 Reproduce from the checkout:
 
@@ -14,6 +16,7 @@ Reproduce from the checkout:
 flock /tmp/yaks-throughput-bench.lock deno run -A bench/apply-profile.ts 9
 flock /tmp/yaks-throughput-bench.lock deno run -A bench/apply-profile.ts 101 edit-1
 flock /tmp/yaks-throughput-bench.lock deno run -A bench/apply-profile.ts 101 edit-1 spans
+flock /tmp/yaks-throughput-bench.lock deno run -A bench/apply-profile.ts 101 edit-1 bench
 flock /tmp/yaks-throughput-bench.lock deno run -A bench/apply-profile.ts 1 create-200 counts
 flock /tmp/yaks-throughput-bench.lock deno run -A bench/apply-profile.ts 1 create-1000 counts
 flock /tmp/yaks-throughput-bench.lock deno run -A --cpu-prof --cpu-prof-md --cpu-prof-interval=200 --cpu-prof-dir=/tmp/apply-profile-cpu --cpu-prof-name=create.cpuprofile bench/apply-profile.ts 12 create-1000
@@ -23,7 +26,10 @@ The `spans` mode uses `record()` alone, without the storage, driver or tracker
 wrappers. Its `trace.coverage_percent` measures the union of the transaction's
 direct child intervals divided by its duration. Nested SQL is counted inside its
 phase once; SQL outside phases is counted directly under the transaction.
-`trace.sql_outside_phases` reports the table and verb for those statements.
+`trace.sql_outside_phases` reports the table and verb for those statements. The
+`bench` mode uses the file fixture from `apply_bench.ts`, including its fleet
+corpus, vocabulary, plugins and numbering policy, with those same observers
+disabled.
 
 ## Time outside named transaction phases
 
@@ -52,6 +58,43 @@ twice in tracker flushes. `patch()` in `packages/sqlite/write.ts` calls
 `wears()` separately for every excluded table and every existing entity. The
 second flush classifies the effect rows written by commit hooks; the first
 normally has no dirty entity once the initial `updated` component exists.
+
+## SQL statement attribution
+
+A recording of 101 lone edits on the file apply-benchmark fixture has a median
+transaction of 1,034.0 µs. Its direct children cover 997.6 µs: **96.48%**, above
+the design's 95% requirement. This records the ordinary statement spans without
+adding a phase around tracker flushes. The selected sample is the median by
+transaction duration; the profile command selects its sample by apply wall time.
+
+The configured box composition has 21 numbering exceptions. Its 101-sample
+`spans`-mode median attributes the transaction as follows:
+
+| Transaction work                         | µs/apply |
+| ---------------------------------------- | -------: |
+| Named phases, including their nested SQL |  2,420.4 |
+| SQL in the two archetype tracker flushes |    740.5 |
+| Schema-version SQL                       |     23.8 |
+| BEGIN SQL                                |     10.8 |
+| COMMIT SQL                               |    172.0 |
+| Uncovered work                           |    210.3 |
+| Total transaction                        |  3,577.8 |
+
+This box trace covers **94.12%**. SQL names expose the individual presence
+SELECTs and entity updates inside the flushes; the remaining 210.3 µs includes
+statement construction and control work outside phases. A separate wrapped
+profile measured 121.8 µs of flush construction/control outside driver calls.
+T-64970 moves those flushes into phases. The previous 651 µs of flush time is
+therefore attributed by table and verb, while the remaining non-SQL work is
+visible as a residual. These are separate samples on a shared box, rather than
+an absolute before/after latency comparison.
+
+The unsubscribed seven-round throughput check passed against the preserved
+`throughput.baseline.json`: file-apply time deltas have a median of +2.16%,
+ranging from −0.10% to +13.65%, within the suite’s tolerance. Per-case numbers
+and the recording samples are retained in [apply-trace.json](apply-trace.json).
+`deno task bench:check` now runs this check under the same box-wide lock;
+T-64924 replaced `bin/bench.sh` without rebanking its baseline.
 
 ## Create growth
 

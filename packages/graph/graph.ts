@@ -601,7 +601,7 @@ export let graph = (opts: Options): Graph => {
           let at = owner()
           let inside = context(at.parent)
           return scope(
-            inside?.channel == at.channel ? inside : at,
+            inside?.channel == at.channel && live(at) ? inside : at,
             () => Reflect.apply(method, tx, args),
           )
         },

@@ -61,7 +61,7 @@ export type Channel = {
 }
 
 let channels = new WeakMap<object, Channel>()
-type Scope = Context & { outer?: Scope }
+type Scope = Context & { outer?: Scope; ancestor?: string }
 let scopes = new WeakMap<Span, Scope>()
 let current: Scope | undefined
 let capacity = 256
@@ -183,6 +183,7 @@ let create = (): Channel => {
         channel: out,
         parent: id,
         recording,
+        ancestor: a.parent,
         outer: current?.channel == out && current.parent == a.parent
           ? current
           : undefined,
@@ -332,7 +333,7 @@ export let context = (ancestor?: string): Context | undefined => {
   if (!current || !live(current)) return
   if (!ancestor) return current
   for (let at: Scope | undefined = current; at; at = at.outer) {
-    if (at.parent == ancestor) return current
+    if (at.parent == ancestor || at.ancestor == ancestor) return current
   }
 }
 

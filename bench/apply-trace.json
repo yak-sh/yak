@@ -1,0 +1,902 @@
+{
+  "box": {
+    "environment": {
+      "kind": "environment",
+      "deno": "2.9.1",
+      "load": "3.44 3.98 4.21 4/1651 2949377",
+      "plugins": [
+        "@yaks/kernel",
+        "ids",
+        "@yaks/secrets",
+        "@yaks/key",
+        "@yaks/alias",
+        "@yaks/edge",
+        "@yaks/blob",
+        "representations",
+        "@yaks/doc",
+        "@yaks/archetype",
+        "@yaks/journal",
+        "@yaks/task",
+        "@yaks/project",
+        "@yaks/session",
+        "@yaks/model",
+        "@yaks/process",
+        "@yaks/builders",
+        "@yaks/mail",
+        "@yaks/wake",
+        "@yaks/page",
+        "@yaks/draft",
+        "@yaks/effects"
+      ],
+      "scratch": "file on same filesystem as configured box database"
+    },
+    "sample": {
+      "kind": "sample",
+      "work": "edit",
+      "n": 1,
+      "rounds": 101,
+      "wall_us_per_bundle": 3983.4150000000363,
+      "samples_us_per_bundle": [
+        10238.26699999995,
+        7012.83699999999,
+        6535.684999999944,
+        5180.211999999983,
+        5027.065999999991,
+        4637.392000000091,
+        5967.804000000001,
+        4830.287999999996,
+        6317.315000000008,
+        4240.977999999927,
+        3801.193000000012,
+        3750.0769999999193,
+        3759.042000000022,
+        3787.586000000033,
+        3807.8469999999243,
+        4034.084999999891,
+        3948.229999999967,
+        27509.869999999977,
+        5698.962000000051,
+        3818.1660000000193,
+        3814.807999999971,
+        4135.089999999991,
+        3899.3689999999788,
+        3855.152999999973,
+        3888.3749999999964,
+        5627.799999999979,
+        4343.128999999976,
+        4964.285000000018,
+        3539.6200000000135,
+        3596.211999999923,
+        3630.241999999953,
+        3713.810999999964,
+        3869.999000000007,
+        5635.699000000045,
+        4334.052000000042,
+        4604.1589999999815,
+        5543.113999999946,
+        4005.0529999999753,
+        3927.6929999999766,
+        3726.7859999999473,
+        3746.099000000072,
+        3982.9879999999775,
+        3658.885000000055,
+        3750.293000000056,
+        3733.7640000000647,
+        3657.793999999967,
+        5186.622000000057,
+        3624.889000000053,
+        3825.706999999966,
+        3642.994999999928,
+        3790.2559999999994,
+        4667.230000000018,
+        5062.073000000055,
+        4347.182999999973,
+        4827.0140000000765,
+        3502.7189999999564,
+        4963.602000000037,
+        3983.4150000000363,
+        18280.818999999952,
+        5540.564000000018,
+        3712.003999999979,
+        3811.862000000019,
+        3633.6430000000064,
+        3781.217999999967,
+        3973.3260000000428,
+        3794.387000000029,
+        5163.657000000057,
+        3604.3280000000095,
+        3832.6889999999594,
+        3866.286000000059,
+        3672.470999999973,
+        3706.4699999999675,
+        3596.145999999976,
+        3694.72200000007,
+        3537.27200000003,
+        3442.8559999998924,
+        5100.590000000011,
+        3675.36199999995,
+        3578.036000000111,
+        3547.499000000016,
+        3731.446999999889,
+        3712.1649999999136,
+        4041.8389999999818,
+        5034.926000000041,
+        4023.2710000000225,
+        3848.754999999983,
+        4194.702000000007,
+        4898.736999999983,
+        4796.9909999999345,
+        4905.183000000079,
+        4600.353000000041,
+        4836.360000000013,
+        4825.589000000036,
+        5141.405000000077,
+        4489.914999999883,
+        4451.898000000028,
+        4796.837000000096,
+        5328.445000000102,
+        20279.927999999927,
+        5387.551999999914,
+        4148.903000000018
+      ],
+      "wall": 3983.4150000000363,
+      "phases": {
+        "phase/normalize": {
+          "us_per_bundle": 50.505,
+          "calls_per_apply": 1
+        },
+        "phase/admit": {
+          "us_per_bundle": 21.485,
+          "calls_per_apply": 1
+        },
+        "phase/mint": {
+          "us_per_bundle": 29.925,
+          "calls_per_apply": 1
+        },
+        "phase/prepare": {
+          "us_per_bundle": 3.384,
+          "calls_per_apply": 1
+        },
+        "phase/transaction": {
+          "us_per_bundle": 3577.777,
+          "calls_per_apply": 1
+        },
+        "phase/gather": {
+          "us_per_bundle": 162.497,
+          "calls_per_apply": 1
+        },
+        "phase/precondition": {
+          "us_per_bundle": 80.23,
+          "calls_per_apply": 1
+        },
+        "phase/rules": {
+          "us_per_bundle": 284.338,
+          "calls_per_apply": 1
+        },
+        "phase/mutate": {
+          "us_per_bundle": 508.098,
+          "calls_per_apply": 1
+        },
+        "phase/cascade": {
+          "us_per_bundle": 10.823,
+          "calls_per_apply": 1
+        },
+        "phase/stamp": {
+          "us_per_bundle": 602.894,
+          "calls_per_apply": 1
+        },
+        "phase/journal": {
+          "us_per_bundle": 148.16,
+          "calls_per_apply": 1
+        },
+        "phase/commit": {
+          "us_per_bundle": 623.336,
+          "calls_per_apply": 1
+        },
+        "phase/effect": {
+          "us_per_bundle": 53.841,
+          "calls_per_apply": 1
+        },
+        "phase/compose": {
+          "us_per_bundle": 23.428,
+          "calls_per_apply": 1
+        }
+      },
+      "sql": {},
+      "trace": {
+        "transaction_us": 3577.776999999969,
+        "children_us": 3367.5109999993538,
+        "coverage_percent": 94.12299872237378,
+        "sql_outside_phases": {
+          "schema_version pragma": {
+            "us_per_bundle": 23.808,
+            "calls_per_apply": 1
+          },
+          "begin": {
+            "us_per_bundle": 10.781,
+            "calls_per_apply": 1
+          },
+          "entity select": {
+            "us_per_bundle": 67.3,
+            "calls_per_apply": 2
+          },
+          "archetype select": {
+            "us_per_bundle": 39.553,
+            "calls_per_apply": 2
+          },
+          "key select": {
+            "us_per_bundle": 29.992,
+            "calls_per_apply": 2
+          },
+          "entry select": {
+            "us_per_bundle": 24.621,
+            "calls_per_apply": 2
+          },
+          "effect select": {
+            "us_per_bundle": 26.736,
+            "calls_per_apply": 2
+          },
+          "edge select": {
+            "us_per_bundle": 24.362,
+            "calls_per_apply": 2
+          },
+          "symbol select": {
+            "us_per_bundle": 25.406,
+            "calls_per_apply": 2
+          },
+          "module select": {
+            "us_per_bundle": 26.065,
+            "calls_per_apply": 2
+          },
+          "file select": {
+            "us_per_bundle": 24.281,
+            "calls_per_apply": 2
+          },
+          "package select": {
+            "us_per_bundle": 24.556,
+            "calls_per_apply": 2
+          },
+          "tool select": {
+            "us_per_bundle": 27.236,
+            "calls_per_apply": 2
+          },
+          "call select": {
+            "us_per_bundle": 24.733,
+            "calls_per_apply": 2
+          },
+          "execution select": {
+            "us_per_bundle": 28.208,
+            "calls_per_apply": 2
+          },
+          "result select": {
+            "us_per_bundle": 24.361,
+            "calls_per_apply": 2
+          },
+          "output select": {
+            "us_per_bundle": 23.704,
+            "calls_per_apply": 2
+          },
+          "lease select": {
+            "us_per_bundle": 25.764,
+            "calls_per_apply": 2
+          },
+          "secret select": {
+            "us_per_bundle": 23.543,
+            "calls_per_apply": 2
+          },
+          "process select": {
+            "us_per_bundle": 23.69,
+            "calls_per_apply": 2
+          },
+          "ref select": {
+            "us_per_bundle": 24.993,
+            "calls_per_apply": 2
+          },
+          "_package select": {
+            "us_per_bundle": 27.846,
+            "calls_per_apply": 2
+          },
+          "_comp select": {
+            "us_per_bundle": 24.104,
+            "calls_per_apply": 2
+          },
+          "_prop select": {
+            "us_per_bundle": 24.212,
+            "calls_per_apply": 2
+          },
+          "entity update": {
+            "us_per_bundle": 125.278,
+            "calls_per_apply": 4
+          },
+          "commit": {
+            "us_per_bundle": 172.002,
+            "calls_per_apply": 1
+          }
+        }
+      },
+      "load": "3.44 3.98 4.21 3/1651 2949383"
+    }
+  },
+  "apply_bench": {
+    "rounds": 101,
+    "selection": "median transaction duration",
+    "source": "record(applyFixture(file).g, one edit)",
+    "report": {
+      "median": {
+        "transaction_us": 1033.9850000000297,
+        "children_us": 997.5960000003852,
+        "coverage_percent": 96.48070329843823
+      },
+      "samples": [
+        {
+          "transaction_us": 881.1590000000251,
+          "children_us": 849.1320000000542,
+          "coverage_percent": 96.3653551742682
+        },
+        {
+          "transaction_us": 884.0069999998832,
+          "children_us": 851.4630000001944,
+          "coverage_percent": 96.31858118774024
+        },
+        {
+          "transaction_us": 884.2489999999543,
+          "children_us": 852.4090000003071,
+          "coverage_percent": 96.39920429656705
+        },
+        {
+          "transaction_us": 885.3300000000672,
+          "children_us": 851.9500000002154,
+          "coverage_percent": 96.22965447913779
+        },
+        {
+          "transaction_us": 887.3790000000099,
+          "children_us": 854.6599999999671,
+          "coverage_percent": 96.31284941383079
+        },
+        {
+          "transaction_us": 893.2079999999587,
+          "children_us": 860.6869999989613,
+          "coverage_percent": 96.35907873630791
+        },
+        {
+          "transaction_us": 896.351999999979,
+          "children_us": 863.7200000000576,
+          "coverage_percent": 96.35946592410993
+        },
+        {
+          "transaction_us": 907.3170000001483,
+          "children_us": 873.7799999996696,
+          "coverage_percent": 96.30371744379603
+        },
+        {
+          "transaction_us": 915.4420000002119,
+          "children_us": 878.7540000002991,
+          "coverage_percent": 95.99231846475207
+        },
+        {
+          "transaction_us": 948.9849999999933,
+          "children_us": 916.5799999998399,
+          "coverage_percent": 96.58529903000009
+        },
+        {
+          "transaction_us": 951.345000000174,
+          "children_us": 917.1339999998054,
+          "coverage_percent": 96.40393337849441
+        },
+        {
+          "transaction_us": 957.4570000002041,
+          "children_us": 921.947999999702,
+          "coverage_percent": 96.29132169899071
+        },
+        {
+          "transaction_us": 960.213000000067,
+          "children_us": 925.1370000004044,
+          "coverage_percent": 96.34706049598786
+        },
+        {
+          "transaction_us": 961.9400000001406,
+          "children_us": 927.4800000000596,
+          "coverage_percent": 96.417655986852
+        },
+        {
+          "transaction_us": 962.3139999998784,
+          "children_us": 927.0349999997052,
+          "coverage_percent": 96.33394089661195
+        },
+        {
+          "transaction_us": 962.5270000001365,
+          "children_us": 927.758000000722,
+          "coverage_percent": 96.38773769469225
+        },
+        {
+          "transaction_us": 962.6699999998891,
+          "children_us": 928.3700000000863,
+          "coverage_percent": 96.4369929467204
+        },
+        {
+          "transaction_us": 963.271000000077,
+          "children_us": 928.8670000003094,
+          "coverage_percent": 96.42841941678252
+        },
+        {
+          "transaction_us": 964.326999999912,
+          "children_us": 928.407999999763,
+          "coverage_percent": 96.27522614215383
+        },
+        {
+          "transaction_us": 964.9680000002263,
+          "children_us": 930.892999999287,
+          "coverage_percent": 96.4687948200426
+        },
+        {
+          "transaction_us": 966.787999999724,
+          "children_us": 932.1579999998448,
+          "coverage_percent": 96.41803580517248
+        },
+        {
+          "transaction_us": 967.3330000000533,
+          "children_us": 932.2340000001077,
+          "coverage_percent": 96.37157007980255
+        },
+        {
+          "transaction_us": 968.8379999997778,
+          "children_us": 935.2959999996528,
+          "coverage_percent": 96.5379144913667
+        },
+        {
+          "transaction_us": 969.4429999999556,
+          "children_us": 934.8769999992328,
+          "coverage_percent": 96.43444740941712
+        },
+        {
+          "transaction_us": 969.557999999779,
+          "children_us": 934.3099999994138,
+          "coverage_percent": 96.3645289915226
+        },
+        {
+          "transaction_us": 973.1899999999314,
+          "children_us": 938.3140000002186,
+          "coverage_percent": 96.41632158163202
+        },
+        {
+          "transaction_us": 973.5529999998107,
+          "children_us": 938.3620000000974,
+          "coverage_percent": 96.38530208425014
+        },
+        {
+          "transaction_us": 974.5720000000802,
+          "children_us": 939.689000000044,
+          "coverage_percent": 96.42068518282557
+        },
+        {
+          "transaction_us": 975.6609999999455,
+          "children_us": 940.5309999999645,
+          "coverage_percent": 96.39936412340117
+        },
+        {
+          "transaction_us": 976.1690000000272,
+          "children_us": 941.0509999993337,
+          "coverage_percent": 96.40246719567078
+        },
+        {
+          "transaction_us": 986.8830000000344,
+          "children_us": 951.0349999995924,
+          "coverage_percent": 96.3675531952176
+        },
+        {
+          "transaction_us": 994.2519999999604,
+          "children_us": 941.0700000003089,
+          "coverage_percent": 94.65105425992067
+        },
+        {
+          "transaction_us": 994.5709999999508,
+          "children_us": 959.6589999998741,
+          "coverage_percent": 96.48974281372789
+        },
+        {
+          "transaction_us": 995.296000000053,
+          "children_us": 959.3949999998586,
+          "coverage_percent": 96.39293235377289
+        },
+        {
+          "transaction_us": 995.6419999998616,
+          "children_us": 960.6359999997949,
+          "coverage_percent": 96.48407761021818
+        },
+        {
+          "transaction_us": 998.3409999999822,
+          "children_us": 953.7069999994401,
+          "coverage_percent": 95.5291829144007
+        },
+        {
+          "transaction_us": 998.7900000000991,
+          "children_us": 964.0049999998155,
+          "coverage_percent": 96.51728591593026
+        },
+        {
+          "transaction_us": 999.3859999999586,
+          "children_us": 963.7659999998505,
+          "coverage_percent": 96.43581158830426
+        },
+        {
+          "transaction_us": 999.449999999797,
+          "children_us": 963.3470000001125,
+          "coverage_percent": 96.38771324231409
+        },
+        {
+          "transaction_us": 1000.4129999999805,
+          "children_us": 964.0690000001086,
+          "coverage_percent": 96.36710038755268
+        },
+        {
+          "transaction_us": 1005.4619999998522,
+          "children_us": 969.7040000005472,
+          "coverage_percent": 96.44362492075183
+        },
+        {
+          "transaction_us": 1006.612000000132,
+          "children_us": 971.9660000002932,
+          "coverage_percent": 96.55815746287207
+        },
+        {
+          "transaction_us": 1009.7960000000512,
+          "children_us": 974.3969999992714,
+          "coverage_percent": 96.49444046116463
+        },
+        {
+          "transaction_us": 1010.2730000000975,
+          "children_us": 973.7250000000586,
+          "coverage_percent": 96.3823639748825
+        },
+        {
+          "transaction_us": 1011.4389999998821,
+          "children_us": 975.3189999994447,
+          "coverage_percent": 96.42885038045384
+        },
+        {
+          "transaction_us": 1013.2609999998294,
+          "children_us": 977.9690000000301,
+          "coverage_percent": 96.51698821924407
+        },
+        {
+          "transaction_us": 1021.6570000002321,
+          "children_us": 985.920000000533,
+          "coverage_percent": 96.5020549950041
+        },
+        {
+          "transaction_us": 1023.2879999998659,
+          "children_us": 988.4400000005371,
+          "coverage_percent": 96.5945071182958
+        },
+        {
+          "transaction_us": 1024.2079999998168,
+          "children_us": 988.8150000001588,
+          "coverage_percent": 96.5443542718213
+        },
+        {
+          "transaction_us": 1029.5730000000276,
+          "children_us": 994.2300000002433,
+          "coverage_percent": 96.56721767181313
+        },
+        {
+          "transaction_us": 1033.9850000000297,
+          "children_us": 997.5960000003852,
+          "coverage_percent": 96.48070329843823
+        },
+        {
+          "transaction_us": 1035.325999999941,
+          "children_us": 997.7289999997083,
+          "coverage_percent": 96.36858342201057
+        },
+        {
+          "transaction_us": 1049.2439999998169,
+          "children_us": 1013.5010000003604,
+          "coverage_percent": 96.59345204743008
+        },
+        {
+          "transaction_us": 1051.0209999997642,
+          "children_us": 998.4380000000783,
+          "coverage_percent": 94.99696009882793
+        },
+        {
+          "transaction_us": 1054.4919999997546,
+          "children_us": 1017.9269999998724,
+          "coverage_percent": 96.53245354162091
+        },
+        {
+          "transaction_us": 1057.7140000000327,
+          "children_us": 1017.5710000003164,
+          "coverage_percent": 96.2047396555482
+        },
+        {
+          "transaction_us": 1061.4370000002964,
+          "children_us": 1024.8610000003282,
+          "coverage_percent": 96.55410542500799
+        },
+        {
+          "transaction_us": 1069.5210000001225,
+          "children_us": 1027.6010000000042,
+          "coverage_percent": 96.08048836814672
+        },
+        {
+          "transaction_us": 1070.4030000001694,
+          "children_us": 1028.079999999818,
+          "coverage_percent": 96.04606863019399
+        },
+        {
+          "transaction_us": 1072.1200000000408,
+          "children_us": 1021.2059999996654,
+          "coverage_percent": 95.25109129571564
+        },
+        {
+          "transaction_us": 1090.1460000000043,
+          "children_us": 1053.6399999998594,
+          "coverage_percent": 96.65127423297936
+        },
+        {
+          "transaction_us": 1090.8739999999852,
+          "children_us": 1054.421999999704,
+          "coverage_percent": 96.65845918041114
+        },
+        {
+          "transaction_us": 1092.2770000001947,
+          "children_us": 1049.8100000006616,
+          "coverage_percent": 96.11206681093482
+        },
+        {
+          "transaction_us": 1097.678999999971,
+          "children_us": 1057.7909999997246,
+          "coverage_percent": 96.36615075989907
+        },
+        {
+          "transaction_us": 1099.5710000001964,
+          "children_us": 1050.568000000112,
+          "coverage_percent": 95.54344376124183
+        },
+        {
+          "transaction_us": 1101.6270000000077,
+          "children_us": 1065.4359999998633,
+          "coverage_percent": 96.71476824731565
+        },
+        {
+          "transaction_us": 1103.4769999998844,
+          "children_us": 1055.583999999726,
+          "coverage_percent": 95.6598098555599
+        },
+        {
+          "transaction_us": 1115.3300000000854,
+          "children_us": 1055.3180000001703,
+          "coverage_percent": 94.61935032681713
+        },
+        {
+          "transaction_us": 1134.5179999998436,
+          "children_us": 1084.6879999996872,
+          "coverage_percent": 95.60782640732334
+        },
+        {
+          "transaction_us": 1134.9810000001526,
+          "children_us": 1098.0060000001686,
+          "coverage_percent": 96.74223621364771
+        },
+        {
+          "transaction_us": 1140.9470000000965,
+          "children_us": 1098.4530000000632,
+          "coverage_percent": 96.27555004745797
+        },
+        {
+          "transaction_us": 1144.5769999997992,
+          "children_us": 1099.9429999999393,
+          "coverage_percent": 96.10039342046295
+        },
+        {
+          "transaction_us": 1146.2330000001657,
+          "children_us": 1103.358999999955,
+          "coverage_percent": 96.25957375156669
+        },
+        {
+          "transaction_us": 1149.4800000000396,
+          "children_us": 937.3010000006161,
+          "coverage_percent": 81.54130563390261
+        },
+        {
+          "transaction_us": 1159.3669999997473,
+          "children_us": 1114.1719999998259,
+          "coverage_percent": 96.10175207678576
+        },
+        {
+          "transaction_us": 1167.2750000000178,
+          "children_us": 1125.850999999784,
+          "coverage_percent": 96.45122186286581
+        },
+        {
+          "transaction_us": 1169.0349999998944,
+          "children_us": 1124.688000000333,
+          "coverage_percent": 96.20652931695241
+        },
+        {
+          "transaction_us": 1170.4469999999674,
+          "children_us": 1131.3350000002629,
+          "coverage_percent": 96.65837069088087
+        },
+        {
+          "transaction_us": 1188.2739999998648,
+          "children_us": 1143.6660000001666,
+          "coverage_percent": 96.24598367045787
+        },
+        {
+          "transaction_us": 1190.3909999998632,
+          "children_us": 1147.0700000002125,
+          "coverage_percent": 96.36077557712922
+        },
+        {
+          "transaction_us": 1193.7199999997574,
+          "children_us": 1133.0980000000181,
+          "coverage_percent": 94.92158965253563
+        },
+        {
+          "transaction_us": 1241.9210000000476,
+          "children_us": 1201.012000000219,
+          "coverage_percent": 96.70599015558743
+        },
+        {
+          "transaction_us": 1255.8549999998831,
+          "children_us": 1198.5279999994418,
+          "coverage_percent": 95.43522142281978
+        },
+        {
+          "transaction_us": 1256.7850000000362,
+          "children_us": 1204.0769999996428,
+          "coverage_percent": 95.80612435695907
+        },
+        {
+          "transaction_us": 1258.7210000001505,
+          "children_us": 1213.3580000013353,
+          "coverage_percent": 96.39610366405186
+        },
+        {
+          "transaction_us": 1259.1609999999491,
+          "children_us": 1200.6080000003294,
+          "coverage_percent": 95.34984009196424
+        },
+        {
+          "transaction_us": 1259.8629999999957,
+          "children_us": 1214.867000000595,
+          "coverage_percent": 96.42850055923535
+        },
+        {
+          "transaction_us": 1332.1840000000975,
+          "children_us": 1286.1599999998816,
+          "coverage_percent": 96.54522198133196
+        },
+        {
+          "transaction_us": 1340.991000000031,
+          "children_us": 1273.5210000003008,
+          "coverage_percent": 94.96864632203135
+        },
+        {
+          "transaction_us": 1439.1379999999572,
+          "children_us": 1395.7179999995333,
+          "coverage_percent": 96.98291616228428
+        },
+        {
+          "transaction_us": 1446.0320000000593,
+          "children_us": 1401.6060000005837,
+          "coverage_percent": 96.92773050669184
+        },
+        {
+          "transaction_us": 1500.3139999998893,
+          "children_us": 1427.8569999999036,
+          "coverage_percent": 95.17054429939392
+        },
+        {
+          "transaction_us": 1549.7000000000298,
+          "children_us": 1439.2569999993157,
+          "coverage_percent": 92.87326579333342
+        },
+        {
+          "transaction_us": 1571.3409999998476,
+          "children_us": 1533.6320000003525,
+          "coverage_percent": 97.6002026295057
+        },
+        {
+          "transaction_us": 1864.093000000139,
+          "children_us": 1776.7079999998714,
+          "coverage_percent": 95.31219740644586
+        },
+        {
+          "transaction_us": 2231.7199999999957,
+          "children_us": 2193.880999999692,
+          "coverage_percent": 98.30449160287564
+        },
+        {
+          "transaction_us": 2927.8880000001664,
+          "children_us": 2679.6520000004875,
+          "coverage_percent": 91.52167022783438
+        },
+        {
+          "transaction_us": 3042.4259999999776,
+          "children_us": 2993.2990000002064,
+          "coverage_percent": 98.38526886110716
+        },
+        {
+          "transaction_us": 7655.7920000000195,
+          "children_us": 7585.858000000371,
+          "coverage_percent": 99.08652168188937
+        },
+        {
+          "transaction_us": 55054.0289999999,
+          "children_us": 55017.07200000033,
+          "coverage_percent": 99.93287139802325
+        },
+        {
+          "transaction_us": 60179.079999999885,
+          "children_us": 60117.10500000004,
+          "coverage_percent": 99.89701570711973
+        }
+      ],
+      "load": "2.41 2.68 3.43 1/1588 2999357"
+    }
+  },
+  "unsubscribed_throughput": {
+    "command": "deno task bench:check",
+    "baseline": "throughput.baseline.json",
+    "verdict": "passed",
+    "rounds": 7,
+    "load": [
+      2.40625,
+      2.6826171875,
+      3.4306640625
+    ],
+    "median_delta_percent": 2.157372393139134,
+    "cases": [
+      {
+        "name": "apply/file/edit-alone-200",
+        "baseline_ns": 1519469.455,
+        "median_ns": 1726943.395,
+        "delta_percent": 13.654367273871904
+      },
+      {
+        "name": "apply/file/edit-batch-200",
+        "baseline_ns": 262100.23,
+        "median_ns": 272323.23,
+        "delta_percent": 3.9004162644191487
+      },
+      {
+        "name": "apply/file/edit-alone-1000",
+        "baseline_ns": 1335211.117,
+        "median_ns": 1362901.808,
+        "delta_percent": 2.0738810999579194
+      },
+      {
+        "name": "apply/file/edit-batch-1000",
+        "baseline_ns": 152423.916,
+        "median_ns": 167145.7,
+        "delta_percent": 9.658447562782735
+      },
+      {
+        "name": "apply/file/create-alone-200",
+        "baseline_ns": 1548565.02,
+        "median_ns": 1546939.48,
+        "delta_percent": -0.10497072961134224
+      },
+      {
+        "name": "apply/file/create-batch-200",
+        "baseline_ns": 329990.175,
+        "median_ns": 337384.805,
+        "delta_percent": 2.240863686320349
+      },
+      {
+        "name": "apply/file/create-alone-1000",
+        "baseline_ns": 1498482.043,
+        "median_ns": 1502348.474,
+        "delta_percent": 0.25802317872687386
+      },
+      {
+        "name": "apply/file/create-batch-1000",
+        "baseline_ns": 236177.979,
+        "median_ns": 236961.414,
+        "delta_percent": 0.3317138216344828
+      }
+    ]
+  }
+}

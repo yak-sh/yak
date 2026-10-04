@@ -1,11 +1,12 @@
-// Profile graph.apply on the box's plugin composition, on an owned scratch
-// SQLite file beside its database. Wrappers observe the public driver, storage
-// and tracker interfaces; production modules are left unchanged.
+// Profile graph.apply on the box's plugin composition or the apply-benchmark
+// fixture. Optional wrappers observe the public driver, storage and tracker
+// interfaces; spans-only modes use the ordinary recording.
 import { compose, facet } from '@yaks/cli/host'
 import { configPath, read } from '@yaks/cli'
 import { type Bundle, type Graph, signed, type Storage } from '@yaks/graph'
 import type { Stmt } from '@yaks/sql'
 import { record as capture } from '@yaks/trace'
+import { applyBundles, applyFixture } from './apply-fixture.ts'
 
 const config = read(configPath()!)
 const parent = config.db!.slice(0, config.db!.lastIndexOf('/'))
@@ -13,14 +14,17 @@ const dir = Deno.makeTempDirSync({ dir: parent, prefix: 'apply-profile-' })
 const rounds = Number(Deno.args[0] ?? 5)
 const only = Deno.args[1]
 const countScans = Deno.args[2] == 'counts'
-const traceOnly = Deno.args[2] == 'spans'
+const traceBench = Deno.args[2] == 'bench'
+const traceOnly = Deno.args[2] == 'spans' || traceBench
 let attribution: {
   transaction_us: number
   children_us: number
   coverage_percent: number
   sql_outside_phases: ReturnType<typeof summary>
 } | undefined
-const actor = 'f6465700-0000-4000-8000-000000000001'
+const actor = traceBench
+  ? applyBundles('edit', 1)[0].$actor!.by!
+  : 'f6465700-0000-4000-8000-000000000001'
 let serial = 1
 const eid = () =>
   `f6465700-0000-4000-8000-${String(++serial).padStart(12, '0')}`
@@ -64,16 +68,25 @@ const summary = (map: Map<string, Cost>, n: number) =>
   }]))
 
 try {
-  const host = await compose(
-    { ...config, db: `${dir}/graph.sqlite`, tracker: undefined, duties: false },
-    ['graph'],
-    facet,
-    { process: false },
-  )
+  const fixture = traceBench ? applyFixture('file') : undefined
+  const host = fixture
+    ? { graph: fixture.g, close: fixture.close, sql: undefined }
+    : await compose(
+      {
+        ...config,
+        db: `${dir}/graph.sqlite`,
+        tracker: undefined,
+        duties: false,
+      },
+      ['graph'],
+      facet,
+      { process: false },
+    )
   const g: Graph = host.graph
-  if (!traceOnly) {
-    const query = host.sql.query
-    host.sql.query = (stmt: Stmt) => {
+  const driver = host.sql
+  if (!traceOnly && driver) {
+    const query = driver.query
+    driver.query = (stmt: Stmt) => {
       if (!active) return query(stmt)
       const start = performance.now()
       const rows = query(stmt)
@@ -164,7 +177,9 @@ try {
     deno: Deno.version.deno,
     load: Deno.readTextFileSync('/proc/loadavg').trim(),
     plugins: g.plugins.map((p) => p.name),
-    scratch: 'file on same filesystem as configured box database',
+    scratch: traceBench
+      ? 'file in apply-benchmark fixture'
+      : 'file on same filesystem as configured box database',
   }))
   const apply = async (bundles: Bundle[]) => {
     const captured = await capture(
@@ -192,7 +207,7 @@ try {
         transaction_us: transaction.duration! * 1000,
         children_us: covered * 1000,
         coverage_percent: covered / transaction.duration! * 100,
-        sql_outside_phases: summary(outside, 1),
+        sql_outside_phases: summary(outside, bundles.length),
       }
       for (const span of captured.spans) {
         if (
@@ -214,7 +229,9 @@ try {
   for (const n of [1, 200, 1000]) {
     for (const work of ['create', 'edit']) {
       if (only && only != `${work}-${n}`) continue
-      const held = fresh(n)
+      const held = traceBench && work == 'edit'
+        ? applyBundles('edit', n)
+        : fresh(n)
       await apply(held)
       const reports: {
         wall: number

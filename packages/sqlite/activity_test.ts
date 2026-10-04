@@ -64,6 +64,10 @@ test('SQL spans count returned and affected rows without values or SQL text', ()
             ),
           }),
         )
+        db.query(render(unionAll(
+          select({ from: table('sample') }),
+          select({ from: table('sample') }),
+        )))
         db.query({
           t: 'delete',
           from: 'sample',
@@ -83,6 +87,7 @@ test('SQL spans count returned and affected rows without values or SQL text', ()
     equal(sql.map((s) => [s.name, s.counts?.rows, s.outcome]), [
       ['sample insert', 2, 'ok'],
       ['sample update', 1, 'ok'],
+      ['sample select', 4, 'ok'],
       ['sample select', 4, 'ok'],
       ['sample delete', 1, 'ok'],
       ['table_info pragma', 1, 'ok'],
@@ -280,6 +285,42 @@ test('SQL remains under read spans after asynchronous query rewriting', async ()
       ok(sql.length > 0)
       ok(sql.every((s) => s.parent == captured.spans[0].id))
     }
+  } finally {
+    db.close()
+  }
+})
+
+test('a span begun after an await stays above the retained transaction SQL', async () => {
+  let db = open(':memory:')
+  let store = storage(db, shop)
+  store.install()
+  let g = graph({
+    storage: store,
+    vocab: shop,
+    plugins: [{
+      name: 'shop',
+      hooks: {
+        prepare: async (b, tx, _err, at) => {
+          await Promise.resolve()
+          let c = ok(peek(g))
+          return during(
+            c.begin({ kind: 'rule', name: 'lookup', parent: at?.parent }),
+            () => {
+              tx.read('.product')
+              return b
+            },
+          )
+        },
+      },
+    }],
+  })
+  try {
+    let captured = await record(
+      g,
+      () => g.apply([{ entity: { eid: 'sample' }, doc: { title: 'sample' } }]),
+    )
+    let rule = ok(captured.spans.find((s) => s.kind == 'rule'))
+    ok(captured.spans.some((s) => s.kind == 'sql' && s.parent == rule.id))
   } finally {
     db.close()
   }

@@ -43,7 +43,7 @@ let relation = (s: Stmt): string => {
 export let statement = (s: Stmt): string => {
   if (s.t == 'raw' && s.origin) return statement(s.origin)
   if (s.t == 'pragma') return `${s.name} pragma`
-  let verb = s.t == 'raw' ? 'select' : s.t
+  let verb = s.t == 'raw' || s.t == 'compound' ? 'select' : s.t
   let table = relation(s)
   return table ? `${table} ${verb}` : verb
 }
