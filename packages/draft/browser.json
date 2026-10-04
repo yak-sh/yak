@@ -5,9 +5,7 @@
       "dom",
       "esnext"
     ],
-    "strict": true,
-    "jsx": "react-jsx",
-    "jsxImportSource": "preact"
+    "strict": true
   },
   "imports": {
     "@yaks/archetype": "../archetype/mod.ts",

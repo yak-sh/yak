@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import type { JSX } from 'preact'
 // Comments and reply branches, rendered through the registry on every host.
 // The composer is a Say line with a Field; its words are durable drafts.

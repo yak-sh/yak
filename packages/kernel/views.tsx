@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 // Comment and commit faces contributed to the shared renderer registry.
 import { parse } from '@yaks/query'
 import type { ComponentRenderer } from '@yaks/preact'
