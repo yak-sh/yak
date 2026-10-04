@@ -11,6 +11,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import {
   type Bundle,
   type Comp,
+  type Graph,
   graph,
   identityEid,
   Refused,
@@ -65,18 +66,22 @@ let P = identityEid('provider', ['fake'])
 let CLI = identityEid('provider', ['claude'])
 let M = identityEid('model', ['fake-1'])
 
+// Each worker the pool and runner name stands in the fixture's graph.
+let seedWorkers = (g: Graph) =>
+  g.apply(['w1', 'w2'].map((eid) => ({ entity: { eid }, worker: {} })))
+
 let store = (): Storage => {
   let s = storage(mem(), vocab, { derived: sessionDerived(vocab) })
   s.install()
-  graph({ storage: s, vocab }).apply([
+  let g = graph({ storage: s, vocab })
+  seedWorkers(g)
+  g.apply([
     { entity: { eid: P }, provider: { name: 'fake' } },
     {
       entity: { eid: CLI },
       provider: { name: 'claude', transport: 'process' },
     },
     { entity: { eid: M }, model: { name: 'fake-1' } },
-    { entity: { eid: 'w1' }, worker: {} },
-    { entity: { eid: 'w2' }, worker: {} },
   ], { trusted: true })
   return s
 }
@@ -527,12 +532,14 @@ test('a graph with tasks and no claims runs its transcripts', async () => {
     pick(kernelDoc, ['completed']),
     toolsDoc,
     modelDoc,
+    worker,
   ])
   let s = storage(mem(), words, { derived: sessionDerived(words) })
   s.install()
   let reported: unknown[] = []
   let fx = effects(words, { report: (e) => void reported.push(e) })
   let g = graph({ storage: s, vocab: words, plugins: [sessions(), fx] })
+  await seedWorkers(g)
   let { model, asked } = fake()
   fx.handle(running(g, { holder: 'w1', model, tools: [] }))
   await g.apply([
@@ -599,6 +606,11 @@ test('retryable errors keep a claim until the transcript fails', async () => {
   await p.g.apply([
     { entity: { eid: 's1' }, session: { id: 's1' } },
     { entity: { eid: 'work' }, claim: { session: 's1' } },
+    {
+      entity: { eid: 'input' },
+      entry: { session: 's1' },
+      content: { body: 'go' },
+    },
   ])
   for (let i of [1, 2, 3]) {
     await p.g.apply([{
@@ -790,14 +802,15 @@ test('a ready replacement continues a drained multi-step turn without a nudge', 
   let second: Promise<void> | undefined
   try {
     await until(() => asks == 1)
-    let swept = false, read = b.g.read.bind(b.g)
-    b.g.read = async (...args) => {
-      let rows = await read(...args)
+    let swept = false, rows = b.g.rows.bind(b.g)
+    b.g.rows = async (...args) => {
+      let found = await rows(...args)
       if (String(args[0]).includes('.session.status=')) swept = true
-      return rows
+      return found
     }
     second = b.fx.work(b.g, nextStop.signal)
-    // The replacement's initial sweep runs while the old lease is held.
+    // Sweeps project identities through rows(); wait until the replacement
+    // has seen the transcript while the old lease is held.
     await until(() => swept)
     await b.fx.idle()
     await settle(b.g, 's1', b.r) // already tried: old still holds it

@@ -13,7 +13,7 @@ import {
 } from '@yaks/sql'
 import { absent, and, or, parse, present } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
-import { mem, shop, spy } from './testing.ts'
+import { mem, seedIdentities, shop, spy } from './testing.ts'
 import { backfill, rows, storage } from './mod.ts'
 import { open, type Opened } from './db.ts'
 import { catalog } from './catalog.ts'
@@ -32,6 +32,7 @@ test('archetype query golden: presence/kind, value joins, boolean, paths, revers
   let s = storage(driver, vocab, { number: true })
   s.install()
   let g = graph({ storage: s, vocab, plugins: [archetypes()] })
+  seedIdentities(g, 'stub')
   g.apply([
     { entity: { eid: 'a' }, doc: {}, marker: {} },
     {

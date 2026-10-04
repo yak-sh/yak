@@ -34,7 +34,7 @@ import {
   schema,
   storage,
 } from './mod.ts'
-import { mem, spy } from './testing.ts'
+import { mem, seedIdentities, spy } from './testing.ts'
 
 // A table as a file an older install, or a writer outside the vocabulary,
 // raised it.
@@ -134,13 +134,16 @@ test('archetype: two writers, create, value-only, add/remove, same-batch net mov
 
 test('archetype: reference-only births, release/cascade and tombstones', () => {
   let { g, get } = setup()
+  // A generated eid is an identity even before it has a component; a word
+  // would have to name a live target instead of bringing this stub into being.
+  let bare = '00000000-0000-4000-8000-000000000001'
   g.apply([
-    { entity: { eid: 'ref' }, link: { to: 'bare' } },
-    { entity: { eid: 'child' }, child: { of: 'bare' } },
+    { entity: { eid: 'ref' }, link: { to: bare } },
+    { entity: { eid: 'child' }, child: { of: bare } },
   ])
-  assertEquals(get('bare').entity.archetype, eidOf([]))
-  g.apply([{ entity: { eid: 'bare' }, $delete: true }])
-  assertEquals(get('bare').entity.archetype, eidOf(['tombstone']))
+  assertEquals(get(bare).entity.archetype, eidOf([]))
+  g.apply([{ entity: { eid: bare }, $delete: true }])
+  assertEquals(get(bare).entity.archetype, eidOf(['tombstone']))
   assertEquals(get('child').entity.archetype, eidOf(['tombstone']))
   assertEquals(get('ref').entity.archetype, eidOf([]))
   assertEquals(get('ref').link, undefined)
@@ -457,6 +460,7 @@ test('archetype: stamps join the final set and value-only writes do not assign a
   let s = storage(d, v)
   s.install()
   let g = graph({ storage: s, vocab: v, plugins: [archetypes()] })
+  seedIdentities(g, 'b')
   g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' }, task: {} }])
   assertEquals(
     s.tx((tx) => tx.get(['a']))[0].entity.archetype,

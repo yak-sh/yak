@@ -6,9 +6,9 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { isPromise } from '@yaks/fp'
-import { type Bundle, graph, Stale, token } from '@yaks/graph'
+import { type Bundle, graph, Refused, Stale, token } from '@yaks/graph'
 import { storage } from './mod.ts'
-import { mem, shop, shopGraph, spy } from './testing.ts'
+import { mem, seedIdentities, shop, shopGraph, spy } from './testing.ts'
 
 let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
   assert(!isPromise(out), 'apply() went async over an embedded database')
@@ -44,6 +44,7 @@ test('a projected read fetches only the components it returns', () => {
 
 test('an optional component keeps its name beside a property with that name', () => {
   let g = shopGraph()
+  seedIdentities(g, 'p1')
   g.apply([
     {
       entity: { eid: 'r1' },
@@ -86,18 +87,22 @@ test('apply lands a batch and stamps it, synchronously', () => {
   )
 })
 
-test('a reference to nothing brings nothing into being', () => {
+test('an unresolved word reference refuses the whole write', () => {
   let g = shopGraph()
-  let out = sync(g.apply([
+  assertThrows(
+    () =>
+      sync(g.apply([
+        { entity: { eid: 'p1' }, product: { price: 1, maker: 'm1' } },
+      ])),
+    Refused,
+    'm1 names nothing',
+  )
+  assertEquals(g.get(['p1', 'm1']), [])
+  seedIdentities(g, 'm1')
+  sync(g.apply([
     { entity: { eid: 'p1' }, product: { price: 1, maker: 'm1' } },
   ]))
-  assertEquals(out.map((b) => b.entity), [{ eid: 'p1', num: 1 }])
-  assertEquals(g.get(['m1']), [{
-    entity: { eid: 'm1' },
-  }])
-  out = sync(g.apply([{ entity: { eid: 'm1' }, doc: { title: 'Acme' } }]))
-  assertEquals(out[0].entity, { eid: 'm1', num: 2 })
-  assert(out[0].created)
+  assertEquals((one(g, '.product').product as { maker: string }).maker, 'm1')
 })
 
 test('admission refuses an unknown property through the whole stack', () => {

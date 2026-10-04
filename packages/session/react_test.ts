@@ -1,4 +1,5 @@
 import { test } from '@yaks/testing'
+import { seedIdentities } from './testing.ts'
 // The runner's step over a fake model, on @yaks/ram: an input is asked, a tool
 // call is run, the transcript settles; a stop is obeyed; a fork continues from
 // its anchor with only what followed; failed provider asks stop;
@@ -98,8 +99,9 @@ let echo = {
 let n = 0
 let mint = () => `x${++n}`
 
-let seed = (g: Graph) =>
-  g.apply([
+let seed = (g: Graph) => {
+  seedIdentities(g, 'runner', 'here')
+  return g.apply([
     { entity: { eid: ids.p }, provider: { name: 'fake' } },
     { entity: { eid: ids.m }, model: { name: 'fake-1' } },
     {
@@ -114,6 +116,7 @@ let seed = (g: Graph) =>
       using: { provider: ids.p, model: ids.m, effort: 'low' },
     },
   ])
+}
 
 let world = (): Graph => {
   let g = graph({

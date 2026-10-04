@@ -8,11 +8,19 @@ let AT = '2026-03-04T05:06:07.000Z'
 let opts = { now: () => AT, mint: () => 'c1' }
 
 // The bounce every test here starts from: run1 holds page1, run2 wants it.
-let collide = (s: ReturnType<typeof store>, loser = ids.run2) => {
+let collide = (
+  s: ReturnType<typeof store>,
+  loser = ids.run2,
+  ...bundles: Bundle[]
+) => {
   let g = locked(s, opts)
   g.apply([{ entity: { eid: ids.p1 }, claim: { session: ids.run1 } }])
   assertThrows(
-    () => g.apply([{ entity: { eid: ids.p1 }, claim: { session: loser } }]),
+    () =>
+      g.apply([
+        ...bundles,
+        { entity: { eid: ids.p1 }, claim: { session: loser } },
+      ]),
     Bounced,
   )
   return (s.tx((tx) => tx.get(['c1'])) as Bundle[])[0]
@@ -45,7 +53,10 @@ test('a side that does not exist is written null', () => {
   // it would mint an identity for an entity that was never committed.
   let s = store()
   assertEquals(
-    (collide(s, 'never-committed').conflict as Record<string, unknown>).loser,
+    (collide(s, 'never-committed', {
+      entity: { eid: 'never-committed' },
+      session: {},
+    }).conflict as Record<string, unknown>).loser,
     null,
   )
 })

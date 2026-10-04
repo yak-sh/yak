@@ -16,7 +16,7 @@ import {
 } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import { get, storage } from './mod.ts'
-import { mem, shop, spy, unit } from './testing.ts'
+import { mem, seedIdentities, shop, spy, unit } from './testing.ts'
 import { get as census } from './fixtures/census.ts'
 
 let vocab = loadVocab([...shop.docs, archetypeDoc, {
@@ -41,6 +41,7 @@ test('a warmed identity gather reads fresh ownership, shape, values and lifecycl
   let s = storage(driver, vocab)
   s.install()
   let g = graph({ storage: s, vocab, plugins: [archetypes()] })
+  seedIdentities(g, 'one', 'two')
   let patch = (row: Record<string, unknown>) =>
     g.apply([{ entity: { eid: 'p' }, ...row }], { trusted: true })
   patch({
@@ -140,6 +141,7 @@ test('joined projections keep reference scopes, bound derived values and request
   let s = storage(driver, vocab, opts)
   s.install()
   let g = graph({ storage: s, vocab, plugins: [archetypes()] })
+  seedIdentities(g, 'one', 'two')
   g.apply([{
     entity: { eid: 'p' },
     doc: {},

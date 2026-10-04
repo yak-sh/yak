@@ -4,6 +4,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { graph } from '@yaks/graph'
+import { docDoc } from '@yaks/doc'
 import { ram } from '@yaks/ram'
 import { idKeywords } from '@yaks/id'
 import { ids } from '@yaks/id/graph'
@@ -22,14 +23,15 @@ let spine: VocabDoc = {
   },
 }
 
-let vocab = loadVocab([sessionDoc, spine], [idKeywords])
+let vocab = loadVocab([sessionDoc, spine, docDoc], [idKeywords])
 
 let host = () => {
   let s = ram(vocab, { number: true })
   let g = graph({ storage: s, vocab, plugins: [ids(vocab)] })
-  g.apply([{ entity: { eid: 's1' }, session: { id: 'abc', actor: 'p1' } }], {
-    trusted: true,
-  })
+  g.apply([
+    { entity: { eid: 's1' }, session: { id: 'abc', actor: 'p1' } },
+    { entity: { eid: 'p1' }, doc: {} },
+  ], { trusted: true })
   return { graph: g }
 }
 

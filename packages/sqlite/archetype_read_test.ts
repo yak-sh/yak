@@ -4,7 +4,7 @@ import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { graph } from '@yaks/graph'
 import { by, col, fn, insert, lit, scan } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
-import { mem, shop, spy, unit } from './testing.ts'
+import { mem, seedIdentities, shop, spy, unit } from './testing.ts'
 import { get, storage } from './mod.ts'
 import { get as census } from './fixtures/census.ts'
 
@@ -27,6 +27,7 @@ test('archetype gather golden: nulls, tags, refs, derived, stubs, graves, order 
   let s = storage(driver, vocab)
   s.install()
   let g = graph({ storage: s, vocab, plugins: [archetypes()] })
+  seedIdentities(g, 'stub')
   g.apply([
     { entity: { eid: 'a' }, doc: {}, marker: {}, sample: { present: 'real' } },
     { entity: { eid: 'b' }, product: { maker: 'a', price: 4 } },

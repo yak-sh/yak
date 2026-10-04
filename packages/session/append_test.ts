@@ -3,7 +3,7 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { appendEntry } from './append.ts'
 import { locked, seed, store } from './testing.ts'
 import { transcript } from './react.ts'
-import { type Bundle, type Comp, status } from '@yaks/graph'
+import { type Bundle, type Comp, Refused, status } from '@yaks/graph'
 
 let positions = (rows: Bundle[]) => rows.map((b) => (b.entry as Comp).seq)
 
@@ -143,10 +143,10 @@ test("an entry naming no session is refused as its writer's mistake", async () =
   let e = await assertRejects(
     async () =>
       await g.apply([{ entity: { eid: 'e' }, entry: { session: 'nobody' } }]),
-    Error,
+    Refused,
   )
   assertEquals([status(e), e.message], [
     400,
-    'unknown session nobody',
+    'nobody names no session',
   ])
 })

@@ -222,6 +222,7 @@ const model: Model = async (request) => ({
   items: [{ kind: 'assistant', text: 'pong' }],
 })
 await g.apply([
+  { entity: { eid: 'here' }, content: {} },
   { entity: { eid: '$provider' }, provider: { name: 'local' } },
   { entity: { eid: '$model' }, model: { name: 'example' } },
   { entity: { eid: 'session' }, session: {} },

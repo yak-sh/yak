@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import type { Comp, Graph } from '@yaks/graph'
+import { type Comp, type Graph, identityEid } from '@yaks/graph'
 import { ids, locked, lockOn, seed, store } from './testing.ts'
 import { look, type Seen, service, stale, strip } from './service.ts'
 import { callOf } from './tail.ts'
@@ -196,11 +196,12 @@ test("a subagent's transcript is a session of its own, started by its parent's c
 test('a managed run is read from its own output, not its transcript file', () =>
   projects({ run1: { text: lines('asked') } }, async (dir) => {
     let s = store()
-    seed(s, {
+    let provider = identityEid('provider', ['claude'])
+    seed(s, { entity: { eid: provider }, provider: { name: 'claude' } }, {
       entity: { eid: 'request' },
       entry: { session: ids.run1 },
       content: { body: 'do it' },
-      using: { provider: 'claude' },
+      using: { provider },
     })
     let g = locked(s)
     await look(g, dir, { tails: new Map(), done: new Set() })

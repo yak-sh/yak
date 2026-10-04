@@ -72,7 +72,7 @@ export let ids = {
   bo: 'bo',
   run1: 'run1', // Ada's run
   run2: 'run2', // Bo's run
-  gone: 'gone', // a run no entity stands for
+  gone: '51f8a79e-249f-4408-9d4a-72f55fcb8ad1', // an absent minted run
   p1: 'page1',
   p2: 'page2',
 }
@@ -116,3 +116,7 @@ export let lockOn = (
   (s.tx((tx) => tx.get([page])) as Bundle[])[0]?.claim as
     | Record<string, unknown>
     | undefined
+
+/** Seed the identities a fixture names without giving them domain components. */
+export let seedIdentities = (g: Graph, ...eids: string[]) =>
+  g.apply(eids.map((eid) => ({ entity: { eid } })))

@@ -233,6 +233,13 @@ export let seed = (s: Store, bundles: Bundle[]): void => {
 // uses this package (the adapter owns the bytes, the graph owns the rules).
 export let shopGraph = (): Graph => graph({ storage: store(), vocab: shop })
 
+// Word-shaped references must name live identities, even when a read fixture
+// gives its target no domain components. Seed those targets once before
+// the fixture writes references to them, through normal graph admission.
+export let seedIdentities = (g: Graph, ...eids: string[]): void => {
+  g.apply(eids.map((eid) => ({ entity: { eid } })))
+}
+
 // A statement as SQLite receives it: its text and the values it binds.
 /** Whether a statement opens, closes or marks a unit (unit.ts) rather than
  * reading or writing. */
