@@ -25,7 +25,7 @@
 // effects handles both with `run.due` (@yaks/effects `handle`), one line each,
 // nothing more. A call written claimed owes neither: the caller is running it.
 // `drive()` runs those same two queries once, and asks for every claimed call
-// with no answer besides, which is what a boot sweep is.
+// with no answer besides, for explicit recovery without a durable effect pool.
 //
 // At most once, and how a crash is recovered: `execution{state, by}` on the
 // call is the claim. The runner writes `running` with a `$was` precondition
@@ -36,8 +36,9 @@
 // tool runs where it asked, and every other runner (an effect of the same
 // commit, another thread of the process, another process) finds the call held
 // from the moment it exists. A call left `running` by a process that died has
-// no result, so the same rules still select it, and `reconcile()` at boot runs
-// it again, claiming over the stale `running`. `by` records whose claim it is:
+// no result. Its recorded effect retries `due`; an explicitly requested
+// `reconcile()` also finds claimed calls, including ones written already
+// claimed that owed no effect. `by` records whose claim it is:
 // a runner leaves a live process's claim alone, its own owner's included,
 // since a claim this runner is not running is running in another runner under
 // the same name. That is also what a transcript imported from another
@@ -104,9 +105,9 @@ export class UnfinishedCall extends Error {
 export let RULES: Declared[] = effectsIn(toolsDoc)
   .flatMap((e) => e.match ? [{ name: e.name, match: e.match }] : [])
 
-/** Every call claimed and not yet answered, whole: what a boot sweep asks for
- * beside the rules, which owe nothing for a claimed call. */
-export let HELD = '.call&.execution&!results&*'
+/** Every call claimed and not yet answered: the identities explicit recovery
+ * asks for beside the rules, which owe nothing for a claimed call. */
+export let HELD = '.call&.execution&!results'
 
 /** The rule that selects a call due now — the one whose emit names the result
  * entity. */
@@ -224,8 +225,8 @@ export type Runner = {
    * effect handler calls. A call somebody holds, in flight here included, is
    * left to them rather than awaited or refused. */
   due: (call: Eid, opts?: { redrive?: boolean }) => Promise<Bundle[]>
-  /** run every call the rules select: one sweep, which is what a boot pass
-   * does with `redrive` set, for the calls a crash left claimed */
+  /** Explicit recovery over eligible call identities, including unanswered
+   * claims. Durable effect hosts recover recorded runs instead of sweeping. */
   drive: (opts?: { redrive?: boolean }) => Promise<Bundle[]>
   /** end every call this runner claimed and is still running, as
    * `interrupted{code}` saying `why`: what a process that is ending
@@ -457,8 +458,9 @@ export let answerOf = (landed: Bundle[], call: Eid): Bundle[] =>
  *
  * Nothing polls the graph for calls. A server that wants the deferred ones too
  * handles the two effects ./vocab.json declares — `fx.handle({ [r.rule.name]:
- * (e) => run.due(e.entity.eid) })` for each of `run.rules` — and calls
- * `reconcile()` at boot for whatever a crash left claimed.
+ * (e) => run.due(e.entity.eid) })` for each of `run.rules`. A durable effect
+ * pool recovers recorded runs after a crash; it needs no startup reconcile.
+ * `reconcile()` is explicit recovery for calls without a recorded effect.
  */
 export let runner = (g: Graph, opts: Opts): Runner => {
   let tools = opts.tools.map(namedTool)
@@ -806,33 +808,30 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       ? []
       : await tracked(id, () => perform(id, { ...o, due: true }))
 
-  // The queue: every call either rule selects, queried once. A rule's match IS
-  // the query — its first pattern is the call — so this asks storage the same
-  // question an effect registered on that pattern would. The rules owe nothing
-  // for a claimed call, so the claims with no answer are asked for besides:
-  // `whose` says which of them have lapsed.
-  let queued = async (): Promise<Bundle[]> => {
-    let out = new Map<Eid, Bundle>()
+  // Explicit recovery selects identities only. A due call is read in perform;
+  // projecting it here would load its components and computed lifecycle twice.
+  // Durable hosts instead recover their recorded effect rows, without drive.
+  let queued = async (): Promise<Eid[]> => {
+    let out = new Set<Eid>()
     for (let p of plans) {
-      // Whole (`*`): a call is run as it stands, not as the pattern names it.
       let { filter } = p.plan.patterns[0]
-      let clauses = [...filter.clauses, { kind: 'every' as const }]
-      for (let b of await g.read({ ...filter, clauses })) {
-        out.set(b.entity.eid, b)
-      }
+      for (let b of await g.rows(filter)) out.add(b.eid as Eid)
     }
-    for (let b of await g.read(HELD)) out.set(b.entity.eid, b)
-    return [...out.values()]
+    for (let b of await g.rows(HELD)) out.add(b.eid as Eid)
+    return [...out]
   }
 
   let drive = async (o: { redrive?: boolean } = {}): Promise<Bundle[]> => {
     let out: Bundle[] = []
-    for (let call of await queued()) {
+    for (let id of await queued()) {
       try {
-        out.push(...await due(call.entity.eid, o))
+        out.push(...await due(id, o))
       } catch (error) {
-        let to = String((call.call as Comp | undefined)?.to)
-        await opts.report?.(error, call, by.get(to)?.name)
+        if (opts.report) {
+          let [call] = await g.get([id])
+          let to = String((call?.call as Comp | undefined)?.to)
+          await opts.report(error, call, by.get(to)?.name)
+        }
       }
     }
     return out
@@ -941,8 +940,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   }
 }
 
-/** Recover what a crash left behind: every call the rules still select, run
- * once more, stale claim and all. Call it at boot, after the tools are
- * registered. */
+/** Explicitly recover eligible calls and unanswered claims. A durable effect
+ * host recovers its recorded runs instead; it needs no startup scan. */
 export let reconcile = (r: Runner): Promise<Bundle[]> =>
   r.drive({ redrive: true })

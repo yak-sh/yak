@@ -15,7 +15,7 @@ import {
   Refused,
   type Tool,
 } from '@yaks/graph'
-import { effects } from '@yaks/effects'
+import { effectDoc, effects } from '@yaks/effects'
 import { ram } from '@yaks/ram'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { executionComputed } from './state.ts'
@@ -104,6 +104,116 @@ let called = (
 })
 
 let body = (b: Bundle | undefined) => String((b?.content as Comp)?.body ?? '')
+
+test('explicit reconciliation selects owed identities without projecting targets', async () => {
+  let vocab = words({
+    session: {
+      component: true,
+      properties: { ended: { type: 'boolean' } },
+    },
+  })
+  let storage = ram(vocab, { computed: executionComputed })
+  let read = storage.read
+  let projections: string[] = []
+  storage.read = (...args) => {
+    let found = read(...args)
+    projections.push(
+      ...found.filter((b) => b.call || b.session)
+        .map((b) => b.entity.eid),
+    )
+    return found
+  }
+  let g = graph({ vocab, storage })
+  let r = runner(g, { tools: [echo], report: () => {} })
+  await r.ensure()
+  await g.apply(
+    Array.from({ length: 61 }, (_, i) => [
+      { entity: { eid: `ended-${i}` }, session: { ended: true } },
+      {
+        entity: { eid: `answered-${i}` },
+        call: { to: toolEid('example_echo'), args: { value: 'history' } },
+        execution: {},
+      },
+      { entity: { eid: `result-${i}` }, result: { call: `answered-${i}` } },
+    ]).flat(),
+  )
+  projections.length = 0
+  assertEquals(await r.drive(), [])
+  assertEquals(projections, [])
+  await g.apply([{
+    entity: { eid: 'owed' },
+    call: { to: toolEid('example_echo'), args: { value: 'due' } },
+  }])
+  projections.length = 0
+  assertEquals(body((await r.drive()).find((b) => b.result)), 'due 2')
+  assertEquals(projections, [])
+})
+
+test('recorded call effects recover pending and crashed calls without reconciliation', async () => {
+  let vocab = words(effectDoc.$defs)
+  let storage = ram(vocab, { computed: executionComputed })
+  let process = (owner: string) => {
+    let errors: unknown[] = []
+    let fx = effects(vocab, {
+      defer: true,
+      write: (b) => g.apply(b, { trusted: true }),
+      report: (e) => void errors.push(e),
+    })
+    let g = graph({ vocab, storage, plugins: [fx] })
+    let r = runner(g, { tools: [echo], owner, report: () => {} })
+    fx.handle(Object.fromEntries(r.rules.map((p) => [
+      p.rule.name,
+      (e: { entity: { eid: string } }) => r.due(e.entity.eid),
+    ])))
+    return { g, r, fx, errors }
+  }
+  let first = process('old-worker')
+  await first.r.ensure()
+  await first.g.apply([
+    { entity: { eid: 'old-worker' }, process: { pid: 1 } },
+    ...['pending', 'crashed'].map((eid) => ({
+      entity: { eid },
+      call: { to: toolEid('example_echo'), args: { value: eid } },
+    })),
+  ])
+  let owed = await first.g.read('.effect')
+  assertEquals(owed.length, 2)
+  // The old worker claimed both the effect and the call, then disappeared
+  // before answering. The durable effect survives, even though call_ready
+  // no longer matches the call's current execution mark.
+  let crashed = owed.find((b) => (b.effect as Comp).target == 'crashed')!
+  await first.g.apply([
+    { entity: { eid: 'crashed' }, execution: { by: 'old-worker' } },
+    { entity: { eid: 'old-worker' }, exit: { code: 1 } },
+    {
+      entity: crashed.entity,
+      effect: {
+        state: 'running',
+        lease_owner: 'old-worker',
+        lease_token: 'abandoned',
+        lease_expiry: '2000-01-01T00:00:00.000Z',
+      },
+    },
+  ])
+  let next = process('new-worker')
+  await next.g.apply([{
+    entity: { eid: 'new-worker' },
+    process: { pid: 2 },
+  }])
+  await next.fx.work(next.g, AbortSignal.abort(), 1)
+  await next.fx.idle()
+  assertEquals(next.errors, [])
+  assertEquals((await next.g.read('.result')).length, 2)
+  assertEquals(
+    (await next.g.read('.effect')).map((b) => (b.effect as Comp).state),
+    [
+      'done',
+      'done',
+    ],
+  )
+  await next.fx.work(next.g, AbortSignal.abort(), 1)
+  assertEquals((await next.g.read('.result')).length, 2)
+})
 
 test('a call is the transcript: the ask, the answer, the result beside it', async () => {
   let { g, r } = world()
