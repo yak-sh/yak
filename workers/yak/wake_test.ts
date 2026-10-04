@@ -645,7 +645,7 @@ test('a condition naming a word the app does not speak is refused when written',
 })
 
 // An app in the trash fires nothing (T-40596), and neither does any app in a
-// trashed space: its store asks the directory at each firing, so nothing
+// trashed space: the directory durably delivers dormancy, so nothing
 // fires and no alarm is left. A restore tells the store to come back, and the
 // stretch it sat out is one catch-up firing before the cadence goes on.
 type Seeded = Awaited<ReturnType<typeof seeded>> & { env: Env }
@@ -675,11 +675,20 @@ for (let [what, [out, back]] of Object.entries(binned)) {
       (await p.object(name).tick(at(time))).fired.length
     assertEquals(await fired('09:05'), 1)
     await out(k)
+    await until(async () => await storage.get<boolean>('dormant') == true, {
+      label: 'trash delivered',
+    })
     await storage.deleteAlarm()
     assertEquals(await fired('09:10'), 0)
     assertEquals(await fired('09:40'), 0)
     assertEquals(await storage.getAlarm(), null)
     await back(k)
+    await until(
+      async () =>
+        await storage.get<boolean>('dormant') == false &&
+        await storage.getAlarm() != null,
+      { label: 'restore delivered' },
+    )
     assert((await storage.getAlarm())! <= Date.now())
     assertEquals(await fired('10:00'), 1)
     assertEquals(await fired('10:01'), 0)

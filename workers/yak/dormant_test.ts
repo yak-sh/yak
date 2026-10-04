@@ -5,7 +5,7 @@ import { Store } from './graph.ts'
 import { storeOf } from './door.ts'
 import { KERNEL } from './meta.ts'
 import { openIn } from './unseen.ts'
-import { platform } from './testing.ts'
+import { platform, slot } from './testing.ts'
 import type { Wire } from '@yaks/durable-object'
 
 test('trash makes a store dormant across every wake and restore keeps its data', async () => {
@@ -38,6 +38,11 @@ test('trash makes a store dormant across every wake and restore keeps its data',
   }, KERNEL)
   equal(written.status, 200, await written.text())
   let ctx = p.states.get(name)!
+  // The initial write's size receipt is unrelated to trash delivery. Let its
+  // asynchronous acknowledgement finish before measuring trash's SQL.
+  await until(() => slot(ctx, 'weighed') != null, {
+    label: 'initial size receipt',
+  })
   let closed = 0
   let ws = {
     send() {},
