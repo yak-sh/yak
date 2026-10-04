@@ -1,7 +1,10 @@
 {
-  "_": "The browser check: @yaks/client must type-check with only the web platform in scope — no Deno namespace, no Node types. The command is `deno check --config packages/client/browser.json packages/client/mod.ts`, and it is part of `deno task check`.",
+  "_": "The browser check: @yaks/client must type-check with only the web platform in scope \u2014 no Deno namespace, no Node types. The command is `deno check --config packages/client/browser.json packages/client/mod.ts`, and it is part of `deno task check`.",
   "compilerOptions": {
-    "lib": ["dom", "esnext"],
+    "lib": [
+      "dom",
+      "esnext"
+    ],
     "strict": true
   },
   "imports": {
@@ -14,6 +17,11 @@
     "@yaks/trace": "../trace/mod.ts",
     "@yaks/match": "../match/mod.ts",
     "@yaks/ram": "../ram/mod.ts",
-    "@yaks/sync": "../sync/mod.ts"
-  }
+    "@yaks/sync": "../sync/mod.ts",
+    "@preact/signals": "npm:@preact/signals@^2.9.0"
+  },
+  "entries": [
+    ".",
+    "./named"
+  ]
 }

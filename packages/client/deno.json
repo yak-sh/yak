@@ -1,7 +1,10 @@
 {
   "name": "@yaks/client",
   "version": "0.2.10",
-  "exports": "./mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./named": "./named.ts"
+  },
   "license": "Apache-2.0",
   "description": "Assembles a browser graph with server synchronization, reactive queries, and IndexedDB persistence for local components and retained server data.",
   "imports": {

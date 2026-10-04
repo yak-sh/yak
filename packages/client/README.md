@@ -725,3 +725,28 @@ both in-memory and simulated IndexedDB storage.
 ## License
 
 Apache-2.0
+
+## Named server watches
+
+`@yaks/client/named` gives a host names for server-evaluated watches. Watches on
+the same query share one wire; a landed frame is reported with every name
+holding it. The host supplies its vocabulary, socket and optional wire vault, so
+the client knows no application's kinds, status or storage identity.
+
+```ts
+import { namedClient, quiet } from '@yaks/client/named'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+const replica = namedClient({
+  vocab: loadVocab([]),
+  url: 'http://example.invalid',
+  connect: quiet,
+  changed: () => {},
+  ready: () => {},
+  frame: () => {},
+})
+equal(replica.active(), 0)
+```
+
+Application patch formats are adapted to bundles by the application; `patch` and
+`receive` accept the graph and sync interfaces, not an app's data shape.
