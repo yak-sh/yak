@@ -1,3 +1,6 @@
+import { installHistory } from '@yaks/ui/history'
+import { bindHistory } from '../history.ts'
+import type { HistoryEntry, HistoryPort } from '@yaks/ui/history'
 // The cursor: navigation as graph data (T-12788). A browsing context is faked
 // whole for each test the way restore_test does — location/history and the web
 // stores — plus a WebSocket stub so mark()'s wire send lands nowhere instead of
@@ -15,6 +18,23 @@ let CANVAS = '00000000-0000-4000-8000-000000000001'
 let TASK = '00000000-0000-4000-8000-000000000007'
 
 let place = { pathname: '/', search: '' }
+let listeners = new Set<(e: HistoryEntry) => void>()
+let port: HistoryPort = {
+  read: () => ({ path: place.pathname + place.search, state: null }),
+  write: ({ path }, replace) => {
+    if (replace) entries[entries.length - 1] = path
+    else entries.push(path)
+    at(path)
+  },
+  listen: (fn) => {
+    listeners.add(fn)
+    return () => {
+      listeners.delete(fn)
+    }
+  },
+  back: () => {},
+  forward: () => {},
+}
 let entries: string[] = ['/']
 let at = (url: string) => {
   let u = new URL(url, 'http://x')
@@ -87,7 +107,8 @@ let graph = () => {
 let go = (url: string) => {
   entries = [url]
   at(url)
-  route.value = place.pathname + place.search
+  installHistory(port)
+  bindHistory(port)
 }
 
 test('navigating writes this client’s cursor into the graph', () => {

@@ -242,3 +242,28 @@ test('TUI search can open its query as a page and return with h', async () => {
   key('h')
   assertEquals(searchPage.value, null)
 })
+
+test('terminal main frames restore entity and search pages with back and forward', async () => {
+  let { frames, history, searchPage } = await import('./App.tsx')
+  let { panesOf } = await import('@yaks/ux')
+  mode.value = 'normal'
+  trail.value = []
+  trail.value = ['one']
+  trail.value = ['one', 'two']
+  key('h')
+  assertEquals(trail.value, ['one'])
+  key('\x06')
+  assertEquals(trail.value, ['one', 'two'])
+  key('\x0f')
+  assertEquals(trail.value, ['one'])
+  searchPage.value = '.task'
+  assertEquals(searchPage.value, '.task')
+  assertEquals(panesOf(frames.value).at(-1), '/?q=.task')
+  let saved = history.snapshot()
+  key('h')
+  assertEquals(searchPage.value, null)
+  history.restore(JSON.parse(JSON.stringify(saved)))
+  assertEquals(searchPage.value, '.task')
+  assertEquals(trail.value, ['one'])
+  trail.value = []
+})

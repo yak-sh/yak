@@ -15,6 +15,8 @@ import { Ux } from '@yaks/ux'
 import {
   App,
   fit,
+  frames,
+  history,
   key,
   overrides,
   quit,
@@ -52,16 +54,18 @@ let stateFile = Deno.env.get('TASKS_TUI_STATE') ??
 try {
   let s = JSON.parse(Deno.readTextFileSync(stateFile))
   sel.value = s.sel ?? sel.value
-  trail.value = s.trail ?? trail.value
   views.value = s.views ?? views.value
   spots.value = s.spots ?? spots.value
+  if (s.history) history.restore(s.history)
+  else trail.value = s.trail ?? trail.value
 } catch { /* first run */ }
 effect(() => {
-  Deno.writeTextFile(
+  frames.value // subscribe to the page graph
+  Deno.writeTextFileSync(
     stateFile,
     JSON.stringify({
       sel: sel.value,
-      trail: trail.value,
+      history: history.snapshot(),
       views: views.value,
       spots: spots.value,
     }),

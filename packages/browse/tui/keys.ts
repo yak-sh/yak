@@ -17,6 +17,8 @@ let token = (k: Input): string[] => {
   if (k.name == 'char') {
     if (k.ctrl && k.text == 'c') return ['\x03']
     if (k.ctrl && k.text == 'd') return ['\x04']
+    if (k.ctrl && k.text == 'o') return ['\x0f']
+    if (k.ctrl && k.text == 'f') return ['\x06']
     return k.ctrl || k.alt ? [] : [...k.text ?? '']
   }
   if (k.name == 'paste') return [...k.text ?? '']

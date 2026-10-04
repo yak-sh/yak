@@ -21,6 +21,7 @@ import {
   menu,
   openAt,
   peek,
+  route,
   screenResolving,
   screenTarget,
 } from './nav.tsx'
@@ -35,7 +36,8 @@ let e: Ent = {
   kids: [],
 }
 
-let from = () => peek.value.at(-1)?.from
+import { frames } from '../history.ts'
+import { panesOf } from '@yaks/ux'
 
 test('numeric routes resolve confirmed retained rows before a reopen frame', () => {
   cache.value = {}
@@ -63,83 +65,32 @@ test('peek state lives above the hot-swap boundary', () => {
   assertStrictEquals(peek, shellPeek)
 })
 
-test('only the same opener toggles its peek closed', () => {
+test('following an entity stacks its main page on either pointer kind', () => {
   let priorMedia = Object.getOwnPropertyDescriptor(globalThis, 'matchMedia')
-  let priorElement = Object.getOwnPropertyDescriptor(globalThis, 'Element')
-  let { document, window } = parseHTML('<a id="a"></a><a id="b"></a>')
-  Object.defineProperties(globalThis, {
-    matchMedia: {
-      value: () => ({ matches: true }),
-      configurable: true,
-    },
-    Element: { value: window.Element, configurable: true },
-  })
-  let a = document.querySelector('#a')!
-  let b = document.querySelector('#b')!
-  let ev = (from: Element) =>
-    ({
-      currentTarget: from,
-      target: from,
-      clientX: 12,
-      clientY: 34,
-    }) as unknown as MouseEvent
-
-  try {
-    peek.value = []
-    openAt(e.eid, ev(a))
-    assertEquals(from(), a)
-
-    openAt(e.eid, ev(b))
-    assertEquals(from(), b)
-    assertEquals(peek.value.length, 2)
-
-    openAt(e.eid, ev(b))
-    assertEquals(peek.value.length, 1)
-    assertEquals(from(), a)
-  } finally {
-    peek.value = []
-    if (priorMedia) Object.defineProperty(globalThis, 'matchMedia', priorMedia)
-    else delete (globalThis as { matchMedia?: unknown }).matchMedia
-    if (priorElement) {
-      Object.defineProperty(globalThis, 'Element', priorElement)
-    } else delete (globalThis as { Element?: unknown }).Element
+  let prior = cache.peek()
+  cache.value = {
+    task: { entity: { eid: 'task', num: 7 }, task: {} },
+    other: { entity: { eid: 'other', num: 8 }, task: {} },
   }
-})
-
-test('the current peek id stays mounted for double-click navigation', () => {
-  let priorMedia = Object.getOwnPropertyDescriptor(globalThis, 'matchMedia')
-  let priorElement = Object.getOwnPropertyDescriptor(globalThis, 'Element')
-  let { document, window } = parseHTML(
-    '<a id="from"></a><div class="Peek"><a id="id"></a></div>',
-  )
-  Object.defineProperties(globalThis, {
-    matchMedia: {
+  try {
+    Object.defineProperty(globalThis, 'matchMedia', {
       value: () => ({ matches: true }),
       configurable: true,
-    },
-    Element: { value: window.Element, configurable: true },
-  })
-  let opener = document.querySelector('#from')!
-  let id = document.querySelector('#id')!
-  let ev = {
-    currentTarget: id,
-    target: id,
-    clientX: 12,
-    clientY: 34,
-  } as unknown as MouseEvent
-
-  try {
-    peek.value = [{ eid: e.eid, x: 1, y: 2, from: opener }]
-    openAt(e.eid, ev)
-    openAt(e.eid, ev)
-    assertEquals(peek.value.at(-1)?.from, opener)
+    })
+    openAt('task', {} as MouseEvent)
+    assertEquals(route.value, '/T-7')
+    Object.defineProperty(globalThis, 'matchMedia', {
+      value: () => ({ matches: false }),
+      configurable: true,
+    })
+    openAt('other', {} as MouseEvent)
+    assertEquals(route.value, '/T-8')
+    assertEquals(panesOf(frames.value).slice(-2), ['/T-7', '/T-8'])
+    assertEquals(peek.value, [])
   } finally {
-    peek.value = []
+    cache.value = prior
     if (priorMedia) Object.defineProperty(globalThis, 'matchMedia', priorMedia)
     else delete (globalThis as { matchMedia?: unknown }).matchMedia
-    if (priorElement) {
-      Object.defineProperty(globalThis, 'Element', priorElement)
-    } else delete (globalThis as { Element?: unknown }).Element
   }
 })
 

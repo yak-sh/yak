@@ -1,3 +1,4 @@
+import { vocab } from '../types.ts'
 import { searchAt, searchPath } from '../url.ts'
 // The TUI app: browse the first board with vim keys. Everything
 // below this file is shared with the web — same cache, same registry, same
@@ -9,6 +10,7 @@ import { answer, type Decision as Question } from '@yaks/task'
 import { answerPlace } from '@yaks/task/views'
 import { Decision } from '../components/Decision.tsx'
 import { signal } from '@preact/signals'
+import { useEffect } from 'preact/hooks'
 import { parse } from '@yaks/query'
 import { edit as editLine, touch } from '@yaks/tui'
 import { useBoardSub, useEntity } from '../components/subscriptions.ts'
@@ -64,10 +66,23 @@ import { spawnOf } from '../components/Run.tsx'
 import { useQuery } from '../components/useQuery.ts'
 import { navigationQuery, navigationView } from '../navigation.ts'
 import { Guide } from '@yaks/ui'
-import { bind } from '../components/fields.tsx'
+import { bind, front } from '../components/fields.tsx'
+import { terminalHistory } from '@yaks/tui/history'
+import type { Bundle } from '@yaks/graph'
+import { opened } from '../opened.ts'
 import { filterField, usePassOf } from '../components/Filter.tsx'
-import { type Host, place, useHits } from '@yaks/ux'
-import { drafts } from '../components/drafts.ts'
+import {
+  type Host,
+  LIMIT,
+  panesOf,
+  place,
+  scrolledPane,
+  Stack,
+  stackAt,
+  stacked,
+  useHits,
+} from '@yaks/ux'
+import { currentPerson, drafts } from '../components/drafts.ts'
 import { hits } from '../components/hits.ts'
 import { group } from '../components/Search.tsx'
 import { editing, named } from './keys.ts'
@@ -85,7 +100,7 @@ let priority = propAt('filed', 'priority')!
 // The first board is the one we browse — v0 has exactly one. Membership reads
 // the query door (T-17064); the num sort peeks rows without re-subscribing.
 let boardEid = () =>
-  queryEids(parseQuery('.board'))
+  !vocab.comp('board') ? undefined : queryEids(parseQuery('.board'))
     .value
     .toSorted((a, b) =>
       (cache.peek()[a]?.entity?.num ?? 0) - (cache.peek()[b]?.entity?.num ?? 0)
@@ -131,7 +146,59 @@ export let selected = () => {
 
 // Where we are: a trail of entities entered with l/Enter; empty = the
 // board. h (or Ctrl-d, from any mode) pops back out.
-export let trail = signal<string[]>([])
+export let FRAME = stackAt('browse-terminal')
+let initial: Bundle = { entity: { eid: FRAME }, Stack: { panes: ['/'] } }
+front.mutate([initial])
+let stackRows = front.watch(`.entity.eid=${FRAME} .Stack`)
+export let frames = signal<Bundle>(initial)
+stackRows.subscribe((rows) => {
+  frames.value = rows[0] ?? initial
+})
+export let history = terminalHistory({ path: '/', state: { browse: initial } })
+
+// The old terminal commands speak a trail of entity eids. Its value now comes
+// from the controlled Stack in the page's graph, not a second navigation tree.
+export let trail = {
+  get value(): string[] {
+    return panesOf(frames.value).filter((pane) =>
+      pane != '/' && searchAt(pane) == null
+    )
+  },
+  set value(panes: string[]) {
+    changeFrames({
+      ...frames.peek(),
+      Stack: {
+        ...(frames.peek().Stack as object),
+        panes: ['/', ...panes].slice(-LIMIT),
+      },
+    })
+  },
+}
+
+export let changeFrames = (b: Bundle, replace = false) => {
+  let pane = panesOf(b).at(-1) ?? '/'
+  let path = pane == '/' || searchAt(pane) != null
+    ? pane
+    : `/${idOf(ent(pane))}`
+  if (pane != '/' && searchAt(pane) == null && views.peek()[pane]) {
+    path += `?v=${encodeURIComponent(views.peek()[pane])}`
+  }
+  history.write({ path, state: { browse: b, views: views.peek() } }, replace)
+}
+
+history.listen(({ state }) => {
+  let saved = state as
+    | { browse?: Bundle; views?: Record<string, string> }
+    | null
+  let b = saved?.browse
+  if (!b?.Stack) return
+  front.mutate([{ ...b, entity: { eid: FRAME } }])
+  if (saved?.views) views.value = saved.views
+  let scroll = (b.Stack as { scroll?: Record<string, number> }).scroll
+  if (scroll) spots.value = { ...spots.peek(), ...scroll }
+  let pane = panesOf(b).at(-1)
+  if (pane && pane != '/' && searchAt(pane) == null) opened(pane)
+})
 
 // HOW we're looking at it. The web gives every entity a row of tabs and
 // names the choice in `?v=`; the terminal reached none of it, so an
@@ -160,22 +227,30 @@ export let guide = signal<number | null>(null)
 
 // -1 at the board: its j/k move a cursor over the QUERY (sel), which is a
 // different thing — a query cursor can be entered, a line can only be read.
+let topPane = () => panesOf(frames.value).at(-1) ?? '/'
+
 export let spot = () =>
   guide.value ??
-    (trail.value.length
+    (searchAt(topPane()) != null
+      ? spots.value[topPane()] ?? 0
+      : trail.value.length
       ? spots.value[trail.value.at(-1)!] ?? 0
       : owner.value
       ? spots.value[owner.value] ?? 0
       : -1)
 
 let jump = (to: number) => {
-  let here = trail.value.at(-1) ?? owner.value
+  let here = searchAt(topPane()) != null
+    ? topPane()
+    : trail.value.at(-1) ?? owner.value
   to = Math.max(0, to)
   // Unmoved is no repaint: the painter calls back here after every paint.
   if (spot() == to) return
   if (guide.value != null) guide.value = to
-  else if (here) spots.value = { ...spots.value, [here]: to }
-  else return
+  else if (here) {
+    spots.value = { ...spots.value, [here]: to }
+    changeFrames(scrolledPane(frames.peek(), here, to), true)
+  } else return
   touch() // a scroll moves no nodes; the screen changed anyway
 }
 
@@ -211,6 +286,7 @@ let cycle = (d: number) => {
     ...views.value,
     [here]: tabs[(at + d + tabs.length) % tabs.length],
   }
+  changeFrames(frames.peek(), true)
   jump(0) // another view is other content — land at its top, not mid-pane
 }
 
@@ -240,9 +316,8 @@ let pointed = () => {
 
 // One step further along the trail, unless it is already there.
 let step = (eid: string): boolean => {
-  searchPage.value = null
-  if (trail.value.at(-1) == eid) return false
-  trail.value = [...trail.value, eid]
+  if (panesOf(frames.peek()).at(-1) == eid) return false
+  changeFrames(stacked(frames.peek(), eid))
   return true
 }
 
@@ -254,11 +329,7 @@ let enter = (): boolean => {
 }
 
 let back = () => {
-  if (searchPage.value != null) {
-    searchPage.value = null
-    return
-  }
-  trail.value = trail.value.slice(0, -1)
+  history.back()
   mode.value = 'normal'
 }
 
@@ -628,6 +699,14 @@ export let key = (k: string) => {
     return
   }
   if (navigationKey(k)) return
+  if (k == '\x06' && mode.value == 'normal') {
+    history.forward()
+    return
+  }
+  if (k == '\x0f' && mode.value == 'normal' && !searching.value) {
+    back()
+    return
+  }
   if (k == '\x04') {
     if (mode.value == 'insert') endEdit() // commit, then out — no data loss
     return back()
@@ -701,7 +780,17 @@ export let key = (k: string) => {
 // under it. The arrows walk the hits once the field's list is closed; Enter
 // opens the picked one.
 export let searching = signal(false)
-export let searchPage = signal<string | null>(null)
+export let searchPage = {
+  get value(): string | null {
+    return searchAt(panesOf(frames.value).at(-1) ?? '/')
+  },
+  set value(query: string | null) {
+    if (query != null) changeFrames(stacked(frames.peek(), searchPath(query)))
+    else if (searchAt(panesOf(frames.peek()).at(-1) ?? '/') != null) {
+      history.back()
+    }
+  },
+}
 let hitPick = signal(0)
 let SEARCH = 'search'
 let found: Hit[] = []
@@ -862,51 +951,53 @@ export let TStatus = () => {
 }
 
 // Home is the person's inbox. Boards remain reachable through navigation.
-export let App = () => {
-  let here = trail.value.at(-1)
-  // The entered entity is held for as long as it is on screen — it carries the
-  // edges the refs list paints (T-22371), which used to ride the boot as the
-  // graph's whole edge table.
-  useEntity(here ?? owner.value)
-  // The trail persists across runs; entities don't have to. Drop any
-  // entries the graph no longer knows (deleted while we were away).
-  if (here && !cache.value[here] && !pending(ent(here))) {
-    trail.value = trail.value.filter((eid) => cache.value[eid])
-    here = trail.value.at(-1)
-  }
-  let crumbs = [
-    'Inbox',
-    // the view rides the breadcrumb when it isn't the one the pane would
-    // paint anyway, the way `?v=` rides the URL — otherwise there is no
-    // way to tell which of two look-alike panes you are on
-    ...trail.value.map((eid) => {
-      let e = ent(eid)
-      let v = views.value[eid]
-      return idOf(e) + (v && v != resolve(e).view ? ` · ${v}` : '')
-    }),
-  ]
-  return (
-    <div class='TApp'>
-      <div class='TTitle'>{['tasks', ...crumbs].join(' · ')}</div>
-      {help.value
-        ? <TKeys />
-        : searching.value
-        ? <TSearch />
-        : guide.value != null
-        ? <Guide />
-        : navigationOpen.value
-        ? <TNavigation />
-        : searchPage.value != null
-        ? <TSearchPage query={searchPage.value} />
-        : here
-        ? <Entity eid={here} view={viewOf(here)} />
-        : owner.value
-        ? <Entity eid={owner.value} view='Inbox' />
-        : <div>Inbox needs a configured owner.</div>}
-      <TStatus />
-    </div>
-  )
+let MainPane = ({ pane }: { pane: string }) => {
+  let query = searchAt(pane)
+  let eid = pane == '/' ? owner.value : query != null ? undefined : pane
+  useEntity(eid)
+  let person = currentPerson()
+  useEffect(() => {
+    if (eid) opened(eid)
+  }, [eid, person])
+  return query != null
+    ? <TSearchPage query={query} />
+    : eid
+    ? <Entity eid={eid} view={pane == '/' ? 'Inbox' : viewOf(eid)} />
+    : <div>Inbox needs a configured owner.</div>
 }
+
+let MainStrip = ({ pane }: { pane: string }) => {
+  let query = searchAt(pane)
+  let eid = pane == '/' ? owner.value : query != null ? undefined : pane
+  useEntity(eid)
+  return eid
+    ? <Entity eid={eid} view='Card.Title' />
+    : <span>{query != null ? `Search: ${query}` : 'Inbox'}</span>
+}
+
+export let App = () => (
+  <div class='TApp'>
+    <div class='TTitle'>Browse</div>
+    {help.value
+      ? <TKeys />
+      : searching.value
+      ? <TSearch />
+      : guide.value != null
+      ? <Guide />
+      : navigationOpen.value
+      ? <TNavigation />
+      : (
+        <Stack
+          e={frames.value}
+          onChange={changeFrames}
+          Pane={MainPane}
+          Strip={MainStrip}
+          on
+        />
+      )}
+    <TStatus />
+  </div>
+)
 
 export let TSearchPage = ({ query }: { query: string }) => {
   let found = group(useHits(query, 20, hits), query)
@@ -916,8 +1007,7 @@ export let TSearchPage = ({ query }: { query: string }) => {
       <a href={searchPath(query)}>{searchPath(query)}</a>
       {found.map((h) => (
         <div class='TRow' key={h.eid}>
-          <a href={`/${idOf(h)}`}>{idOf(h)} {h.title || '(untitled)'}</a>{' '}
-          {h.kind}
+          <Entity eid={h.eid} view='Search.List.Tile' />
         </div>
       ))}
     </div>

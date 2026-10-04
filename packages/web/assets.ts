@@ -1,4 +1,5 @@
-import { entry, styles as appStyles } from '@yaks/browse/app'
+import { styles as appStyles } from '@yaks/browse/app'
+let entry = new URL('./main.ts', import.meta.url)
 // Build the same page and stylesheet the routes facet serves, into a static
 // host's asset directory. The runtime only supplies mounts and authentication.
 import { bundle } from '@yaks/cli/page'

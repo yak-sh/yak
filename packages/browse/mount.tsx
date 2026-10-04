@@ -1,3 +1,6 @@
+import { bindHistory } from './history.ts'
+import { historyPort } from '@yaks/ui/history'
+import { front } from './components/fields.tsx'
 // Mount the browsing app with the configured plugins’ shared views and home
 // query. The door chooses the facets; domains own their queries and readings.
 import { render } from 'preact'
@@ -43,11 +46,8 @@ export let mount = async (
   // person (components/drafts.ts).
   void lone()
 
-  // A cold launch at `/` — the manifest's start_url, so every app launch —
-  // resumes the card and view this device left off on, with the canvas
-  // seeded under it for the back gesture, and a legacy `?task=` link lands on
-  // its card once the id resolves. Here because nothing has painted yet, and
-  // nothing here waits on the wire.
+  // The door retains the history snapshot; the page graph controls Stack.
+  bindHistory(historyPort(), front)
   restore()
 
   // The cursor is update-only: nav.tsx publishes where this client

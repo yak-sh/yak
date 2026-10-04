@@ -78,3 +78,10 @@ Without `home`, the heading is `Browse` and the query is `.doc`. The browser
 bundle imports the configured plugins' `/views` facets; their portable `views`
 and query-backed `inspectViews` enter the browsing app's shared registry. Domain
 packages own the queries and readings, not the web door.
+
+## Browser history
+
+Web installs the `@yaks/ui/history` port before mounting browse. The port owns
+`pushState`, `replaceState` and `popstate`; browse supplies the top-page path
+and its controlled Stack snapshot. Ordinary internal anchors follow that port,
+while modified clicks keep their native new-tab behavior.

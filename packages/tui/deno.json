@@ -4,7 +4,8 @@
   "exports": {
     ".": "./mod.ts",
     "./print": "./print.ts",
-    "./theme": "./theme.ts"
+    "./theme": "./theme.ts",
+    "./history": "./history.ts"
   },
   "license": "Apache-2.0",
   "description": "Renders Preact trees in a terminal through a replaceable backend, with a diffing ANSI painter and scrolling, input, and layout widgets.",

@@ -136,3 +136,15 @@ import { equal } from '@yaks/testing'
 equal(entry.pathname.endsWith('/main.tsx'), true)
 equal(styles.pathname.endsWith('/styles.css'), true)
 ```
+
+## Stacked pages
+
+Following a page link stacks it in the main area. The UX `Stack` controls panes
+in the page graph; pressing a strip returns to that page. The browser door keeps
+snapshots in `history.state`, so back, forward and reload restore the stack and
+its scroll offsets. The address names only the top page: opening that address in
+another tab starts with one page. Changing the top page's view replaces it
+rather than adding a strip.
+
+The terminal door keeps history snapshots in `TASKS_TUI_STATE`. Ctrl-O goes back
+and Ctrl-F goes forward.

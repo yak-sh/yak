@@ -1,4 +1,4 @@
-import { hosting, localPath, pagePath } from '../hosting.ts'
+import { hosting, localPath } from '../hosting.ts'
 import { addressId, entityPath, searchAt } from '../url.ts'
 import { signal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
@@ -29,48 +29,19 @@ import { allSessionsAt } from '../tray_query.ts'
 
 export { peek, trail }
 
-// The URL is the root card: `/` shows the owner inbox, `/T-123` (or any
-// id form) shows that entity fullscreened, `?v=List` picks its view.
-// Navigation is therefore ordinary anchors — cmd/middle-click opens a
-// tab natively — plus pushState for the rare in-place root change.
-// Everything is guarded for hosts without a location (the TUI), and both are
-// the host's as it stands when asked, never as it stood when this loaded.
-let loc = () => (globalThis as { location?: Location }).location
-let his = () => (globalThis as { history?: History }).history
-let address = (l: Location) =>
-  localPath(l.pathname) == '/' && SHORT.test(l.hash)
-    ? localPath(entityPath(l.hash)) + l.search
-    : localPath(l.pathname) + l.search
+// The door keeps history; browse writes the controlled Stack through it.
+export { route } from '../history.ts'
+import { go, route } from '../history.ts'
+import { historyPort } from '@yaks/ui/history'
 
-export let route = signal(loc() ? address(loc()!) : '/')
-if (loc() && localPath(loc()!.pathname) == '/' && SHORT.test(loc()!.hash)) {
-  his()?.replaceState(null, '', pagePath(address(loc()!)))
-}
-globalThis.addEventListener?.('popstate', () => {
-  let was = screenTarget()?.eid
-  route.value = address(loc()!)
-  track(was)
-  mark()
-})
-
-// The root change itself, minus history: navigate() pushes an entry first;
-// the navigation interceptor below arrives WITHOUT pushing, because an
-// intercepted navigation's history entry is the browser's to mint.
-let arrive = (to: string) => {
-  peek.value = [] // a real root change dismisses every floating peek
-  let was = screenTarget()?.eid
-  route.value = to
-  track(was)
-  mark()
-}
-
-export let navigate = (to: string) => {
-  let h = his()
-  if (!h) return
+export let navigate = (to: string, options: { replace?: boolean } = {}) => {
   let url = new URL(to, 'http://x')
   let target = localPath(url.pathname) + url.search + url.hash
-  h.pushState(null, '', pagePath(target))
-  arrive(target)
+  let was = screenTarget()?.eid
+  peek.value = []
+  go(target, options.replace)
+  track(was)
+  mark()
 }
 
 // Whether a path is the app's own route shape — `/` or ONE extensionless
@@ -80,70 +51,9 @@ export let appRoute = (path: string) =>
   /^\/[^/?#.]*$/.test(path) &&
   path != localPath(hosting().inspect ?? '/inspect')
 
-// The whole class of in-app links intercepted at the NAVIGATION layer: any
-// click that would LEAVE the document for an app route — an md-rendered
-// anchor, an Id chip whose per-element handler fell through (eidOf's server
-// fallback resolves async, so the first click on an unloaded ref used to
-// full-load the page: a fresh boot, a new socket, a whole working-set reset
-// per click), any future render path — routes in place instead. The API's own
-// preconditions keep what must stay native: modified clicks and middle-click
-// never set canIntercept, downloads and hash moves are skipped, cross-origin
-// cannot intercept, and our own pushState arrivals are same-document. Only
-// `push` navigations are taken — back/forward stays native, popstate above
-// already owns the same-document form. Feature-detected: the TUI's fake DOM
-// and non-supporting browsers keep the per-element handlers (which stay
-// wired regardless — they also own the fine-pointer peek).
-type NavigateEvent = {
-  canIntercept: boolean
-  hashChange: boolean
-  downloadRequest: string | null
-  navigationType: string
-  formData: unknown
-  destination: { url: string; sameDocument: boolean }
-  intercept: (opts: { handler: () => Promise<void> }) => void
-}
-let navApi = (globalThis as { navigation?: EventTarget }).navigation
-navApi?.addEventListener?.('navigate', (e) => {
-  let ev = e as unknown as NavigateEvent
-  if (!ev.canIntercept || ev.hashChange || ev.downloadRequest != null) return
-  if (ev.navigationType != 'push' || ev.destination.sameDocument) return
-  if (ev.formData != null) return
-  let url = new URL(ev.destination.url)
-  if (!appRoute(localPath(url.pathname))) return
-  ev.intercept({
-    handler: () => {
-      arrive(localPath(url.pathname) + url.search)
-      return Promise.resolve()
-    },
-  })
-})
-
-let linkAt = (ev: MouseEvent) => {
-  let el = (v: EventTarget | null) =>
-    typeof Element != 'undefined' && v instanceof Element ? v : null
-  let current = el(ev.currentTarget)
-  return current?.matches('a, [role="link"]')
-    ? current
-    : el(ev.target)?.closest('a, [role="link"]') ?? undefined
-}
-
-// One opener for every entity click: a fine pointer peeks, a coarse one
-// navigates — fullscreen IS the phone's right answer. navigate() stays
-// the deliberate root change (:open, "open here", direct urls).
-export let openAt = (eid: string, ev: MouseEvent) => {
-  if (globalThis.matchMedia?.('(pointer: fine)').matches) {
-    let from = linkAt(ev)
-    let stack = peek.peek()
-    let current = stack.at(-1)
-    // The peek already shows this entity. Its own id's clicks must leave
-    // it mounted long enough for the deliberate double-click to navigate.
-    if (current?.eid == eid && from?.closest('.Peek')) return
-    let same = current?.eid == eid && current.from == from
-    peek.value = same
-      ? stack.slice(0, -1)
-      : [...stack, { eid, x: ev.clientX, y: ev.clientY, from }]
-  } else navigate(entityPath(idOf(ent(eid))))
-}
+// Following an entity link stacks its page, on either pointer kind.
+export let openAt = (eid: string, _ev: MouseEvent) =>
+  navigate(entityPath(idOf(ent(eid))))
 
 // An id in the wild — T-num, bare num, raw eid, a sigilled eid fragment, or
 // an alias — resolved in the host's order; undefined while unloaded or dead.
@@ -308,25 +218,15 @@ let track = (was?: string) => {
 // Home always opens the inbox. An explicit entity URL stays put; old ?task=
 // links still resolve through their original door.
 export let restore = () => {
-  let l = loc()
-  if (!l || !his()) return
-  let legacy = new URLSearchParams(l.search).get('task')
+  let legacy = new URL(route.peek(), 'http://x').searchParams.get('task')
   if (legacy) void grandfather(legacy)
 }
-
-// The grandfather door: tasks-v1 linked '?task=<alias>', and old guidance also
-// used human ids there. The page paints the canvas at once and never waits on
-// the wire; once the id resolves, its card REPLACES the legacy address, which
-// should not linger in history, and becomes a place you were. One that never
-// resolves leaves the canvas and no memory: a dead old link is not a crash.
-// Someone who moved on before the answer keeps where they went.
 let grandfather = async (legacy: string) => {
   let at = route.peek()
   let eid = await resolveEid(legacy)
-  if (!eid || route.peek() != at) return
-  let to = entityPath(idOf(ent(eid)))
-  his()?.replaceState(null, '', to)
-  arrive(localPath(to))
+  if (eid && route.peek() == at) {
+    navigate(entityPath(idOf(ent(eid))), { replace: true })
+  }
 }
 
 // The cursor: publish WHERE this client now looks into the
@@ -339,8 +239,8 @@ let grandfather = async (legacy: string) => {
 // write naming where the cursor already points is skipped, so a re-render never
 // churns the row. Guarded for the TUI (no client, no localStorage) via loc/his.
 let mark = () => {
-  if (!capable('canvas') || !loc() || !his()) return
   let t = screenTarget()
+  if (!capable('canvas') || !historyPort()) return
   if (!t) return // chrome and dead ends are not places
   let client = clientId()
   let cur = myCursor(client)
@@ -508,3 +408,4 @@ export let Menu = () => {
     </ui.Menu>
   )
 }
+

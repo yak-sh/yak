@@ -1,3 +1,5 @@
+import { bindHistory } from '../history.ts'
+import type { HistoryEntry, HistoryPort } from '@yaks/ui/history'
 // Home is always the inbox, including devices with an old canvas position.
 import { test } from '@yaks/testing'
 import { faked, tick, until } from '../testing.ts'
@@ -7,6 +9,23 @@ import { navigate, restore, route, screenTarget } from './nav.tsx'
 import { allSessionsPath } from '../tray_query.ts'
 
 let place = { pathname: '/', search: '' }
+let listeners = new Set<(e: HistoryEntry) => void>()
+let port: HistoryPort = {
+  read: () => ({ path: place.pathname + place.search, state: null }),
+  write: ({ path }, replace) => {
+    if (replace) entries[entries.length - 1] = path
+    else entries.push(path)
+    at(path)
+  },
+  listen: (fn) => {
+    listeners.add(fn)
+    return () => {
+      listeners.delete(fn)
+    }
+  },
+  back: () => {},
+  forward: () => {},
+}
 let entries: string[] = []
 let at = (url: string) => {
   let u = new URL(url, 'http://x')
@@ -16,7 +35,7 @@ let at = (url: string) => {
 let launch = (url: string) => {
   entries = [url]
   at(url)
-  route.value = url
+  bindHistory(port)
   restore()
 }
 let context = (
@@ -81,7 +100,7 @@ test('deep links keep their entity view and browser back returns to the inbox', 
   navigate('/T-7')
   assertEquals(entries, ['/', '/T-7'])
   at('/')
-  dispatchEvent(new Event('popstate'))
+  listeners.forEach((fn) => fn(port.read()))
   assertEquals(screenTarget(), { eid: 'person', view: 'Inbox' })
 })
 

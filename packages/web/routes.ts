@@ -1,4 +1,5 @@
-import { entry, styles as appStyles } from '@yaks/browse/app'
+import { styles as appStyles } from '@yaks/browse/app'
+let entry = new URL('./main.ts', import.meta.url)
 // The routes facet, exported as `@yaks/web/routes`: the addresses a person
 // opens in a browser. `/` is the root canvas, and each entity is at its own id — `/T-9`, or `/%23abc123` for one the
 // store has not numbered. Every one of them answers the same page, and the app
@@ -162,8 +163,14 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
               specs.push(import.meta.resolve(located(`${plugin}/views`)))
             }
           }
-          let main = new URL('./mount.tsx', app)
+          let main = new URL('../browse/mount.tsx', import.meta.url)
           let code = [
+            `import ${
+              JSON.stringify(new URL('./browser.ts', import.meta.url).href)
+            }`,
+            `import ${
+              JSON.stringify(new URL('./links.ts', import.meta.url).href)
+            }`,
             `import { mount } from ${JSON.stringify(main.href)}`,
             ...specs.map((s, i) =>
               `import * as f${i} from ${JSON.stringify(s)}`

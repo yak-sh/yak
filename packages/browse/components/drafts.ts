@@ -36,7 +36,8 @@ export let lone = (): Promise<void> =>
     only.value = people.length == 1 ? people[0].entity.eid : undefined
   }).catch(() => {})
 
-let me = () => capable('draft') ? myActor() ?? only.value : undefined
+export let currentPerson = () => myActor() ?? only.value
+let me = () => capable('draft') ? currentPerson() : undefined
 
 // The host's graph, as a desk reads and writes it: the person's drafts held
 // by a subscription, each row as the cache has it.
