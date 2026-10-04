@@ -199,20 +199,22 @@ test('dispatch conversion creates missing marks without changing empty envelopes
     dispatch: { state, args: '', order: 0 },
   })))
   let rows = await s.query(dispatchRule.find)
-  await s.apply(rows.flatMap(dispatchMove))
+  let applied = await s.apply(rows.flatMap(dispatchMove))
   for (let state of states) {
+    if (state == 'settled') {
+      assert(applied.find((b) => b.entity.eid == state)?.tombstone)
+      assertEquals(await s.query('.entity.eid=settled&*'), [])
+      continue
+    }
     let [row] = await s.query(`.entity.eid=${state}&*`)
     assertEquals(!!row.admitted, state == 'active')
     assertEquals(!!row.waiting, state == 'waiting')
-    if (state == 'settled') assertEquals(row.dispatch, undefined)
-    else {
-      let dispatch = row.dispatch as Comp
-      assertEquals([dispatch.state, dispatch.args, dispatch.order], [
-        null,
-        '',
-        0,
-      ])
-    }
+    let dispatch = row.dispatch as Comp
+    assertEquals([dispatch.state, dispatch.args, dispatch.order], [
+      null,
+      '',
+      0,
+    ])
   }
 })
 

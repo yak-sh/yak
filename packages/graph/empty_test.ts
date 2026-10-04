@@ -35,6 +35,34 @@ let vocab = loadVocab([{
 }])
 
 for (let async of [false, true]) {
+  test(`an unstamped identity stays live after a release or removal (${async})`, async () => {
+    let words = loadVocab([{
+      $defs: {
+        item: { component: true },
+        link: {
+          component: true,
+          properties: {
+            to: { type: 'string', ref: 'entity', death: 'release' },
+          },
+        },
+      },
+    }])
+    let storage = ram(words)
+    let g = graph({ vocab: words, storage: async ? slow(storage) : storage })
+    await g.apply([
+      { entity: { eid: 'bare' } },
+      { entity: { eid: 'root' }, item: {} },
+      { entity: { eid: 'owner' }, link: { to: 'root' } },
+    ])
+    await g.apply([{ entity: { eid: 'root' }, $delete: true }])
+    equal(await g.get(['bare', 'owner']), [
+      { entity: { eid: 'bare' } },
+      { entity: { eid: 'owner' } },
+    ])
+    await g.apply([{ entity: { eid: 'bare' }, item: {} }])
+    await g.apply([{ entity: { eid: 'bare' }, item: null }])
+    equal(await g.get(['bare']), [{ entity: { eid: 'bare' } }])
+  })
   let make = (plugins: Plugin[] = []) =>
     graph({
       vocab,

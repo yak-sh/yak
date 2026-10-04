@@ -239,6 +239,24 @@ test('a guest changes and deletes only rows made through its via', () => {
   assertEquals(titleOf(s, 'guest'), undefined)
   as(s, guest, { entity: { eid: 'guest' }, $delete: true })
   assertEquals(s.read('.entity.eid=guest'), [])
+  assertEquals(
+    as(s, { via: 'other-browser' }, {
+      entity: { eid: 'guest' },
+      $delete: true,
+    }),
+    [],
+  )
+  assertEquals(
+    as(s, { via: 'other-browser' }, { entity: { eid: 'guest' } }),
+    [],
+  )
+  assert((s.get(['guest']) as Bundle[])[0].tombstone)
+  denied(() =>
+    as(s, { via: 'other-browser' }, {
+      entity: { eid: 'guest' },
+      pick: { title: 'revived' },
+    })
+  )
 })
 
 test('a signed-in row belongs to its by even when a guest has its via', () => {

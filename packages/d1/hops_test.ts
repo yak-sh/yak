@@ -36,7 +36,7 @@
 //   ──────────────────────────────────────────────────
 //   a plain write              2 (3)   2     0     11
 //   a write with $was          2 (2)   2     0     10
-//   a $delete with a cascade   4 (12)  4     0     35
+//   a $delete with a cascade   5 (12)  5     0     44
 //   a member-guarded write     3 (9)   3     0     44
 //   a batch of 50 bundles      2 (3)   2     0    550
 //   a .refs= read              2       1     1     21
@@ -57,6 +57,9 @@
 //                             survivor whose reference is let go — an entity
 //                             nothing had read — and the flush. A cascade with
 //                             no soft reference to let go costs one less.
+//                             If that release leaves only provenance, its
+//                             owner dies too: another reverse read checks what
+//                             points at that owner before the atomic flush.
 //   a member-guarded write    the gather — the entities the ladder names, then
 //                             everything filed about the actor, which is the
 //                             roster and the grants in one — then the flush.
@@ -78,11 +81,11 @@ import { members } from '@yaks/member'
 import { club, ids } from '../member/testing.ts'
 import { counted, type Hops, shop } from './testing.ts'
 
-/** The pinned round trips per apply. Only ever revised downward — see above. */
+/** Round trips per operation; performance improvements revise them downward. */
 let PINS: Record<string, number> = {
   'a plain write': 2,
   'a write with $was': 2,
-  'a $delete with a cascade': 4,
+  'a $delete with a cascade': 5,
   'a member-guarded write': 3,
   'a batch of 50 bundles': 2,
   'a .refs= read over a wide vocabulary': 2,
@@ -111,12 +114,14 @@ let holds = (name: string, h: Hops) => {
 let shopHops = async (
   arrange: Bundle[],
   measured: Bundle[],
+  applied?: (out: Bundle[]) => void,
 ): Promise<Hops> => {
   let { store, hops, reset } = await counted()
   let g = graph({ storage: store, vocab: shop })
   if (arrange.length) await g.apply(arrange)
   reset()
-  await g.apply(measured)
+  let out = await g.apply(measured)
+  applied?.(out)
   return hops()
 }
 
@@ -151,11 +156,20 @@ test('a $delete with a cascade', async () => {
   // survivor the release patches, whom nothing had read.
   holds(
     name,
-    await shopHops([
-      { entity: { eid: 'p1' }, product: { sku: 'MUG', price: 12 } },
-      { entity: { eid: 'r1' }, review: { stars: 5, product: 'p1' } },
-      { entity: { eid: 'k1' }, bookmark: { of: 'p1' } },
-    ], [{ entity: { eid: 'p1' }, $delete: true }]),
+    await shopHops(
+      [
+        { entity: { eid: 'p1' }, product: { sku: 'MUG', price: 12 } },
+        { entity: { eid: 'r1' }, review: { stars: 5, product: 'p1' } },
+        { entity: { eid: 'k1' }, bookmark: { of: 'p1' } },
+      ],
+      [{ entity: { eid: 'p1' }, $delete: true }],
+      (out) => {
+        assertEquals(
+          out.filter((b) => b.tombstone).map((b) => b.entity.eid),
+          ['p1', 'r1', 'k1'],
+        )
+      },
+    ),
   )
 })
 

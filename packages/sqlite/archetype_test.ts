@@ -27,6 +27,7 @@ import {
   columns,
   componentTables,
   drift,
+  ledger,
   reclassify,
   schema,
   storage,
@@ -141,6 +142,80 @@ test('archetype: reference-only births, release/cascade and tombstones', () => {
   assertEquals(get('child').entity.archetype, eidOf(['tombstone']))
   assertEquals(get('ref').entity.archetype, eidOf([]))
   assertEquals(get('ref').link, undefined)
+})
+
+test('identity reads see pending component changes before classification', () => {
+  for (let count of [3, 40]) {
+    let { g, store } = setup()
+    let stable = Array.from({ length: count }, (_, i) => `stable${i}`)
+    g.apply([
+      ...stable.map((eid) => ({ entity: { eid }, doc: { title: eid } })),
+      { entity: { eid: 'changed' }, doc: { title: 'before' } },
+      { entity: { eid: 'emptied' }, task: {} },
+    ])
+    store.tx((tx) => {
+      tx.patch([
+        { entity: { eid: 'changed' }, doc: null, task: {} },
+        { entity: { eid: 'emptied' }, task: null },
+      ])
+      assertEquals((tx.read('.task') as Bundle[]).map((b) => b.entity.eid), [
+        'changed',
+      ])
+      assertEquals((tx.read('.task') as Bundle[]).map((b) => b.entity.eid), [
+        'changed',
+      ])
+      tx.patch([{
+        entity: { eid: 'changed' },
+        task: null,
+        doc: { title: 'after' },
+      }])
+      assertEquals(tx.read('.task'), [])
+      assertEquals(
+        (tx.read('.doc') as Bundle[]).find((b) => b.entity.eid == 'changed')
+          ?.doc,
+        { title: 'after' },
+      )
+      tx.patch([
+        { entity: { eid: 'changed' }, doc: null, task: {} },
+        { entity: { eid: 'new' }, doc: { title: 'new' } },
+      ])
+      let ids = ['new', ...stable, 'changed', 'emptied', 'missing', 'changed']
+      let read = (names?: string[]) => tx.get(ids, names) as Bundle[]
+      assertEquals(read().map((b) => [b.entity.eid, b.doc, b.task]), [
+        ['new', { title: 'new' }, undefined],
+        ...stable.map((eid) => [eid, { title: eid }, undefined]),
+        ['changed', undefined, {}],
+        ['emptied', undefined, undefined],
+        ['changed', undefined, {}],
+      ])
+      assertEquals(read(['task']).map((b) => [b.entity.eid, b.doc, b.task]), [
+        ...['new', ...stable].map((eid) => [eid, undefined, undefined]),
+        ['changed', undefined, {}],
+        ['emptied', undefined, undefined],
+        ['changed', undefined, {}],
+      ])
+      tx.remove([{ eid: 'changed' }])
+      assert((tx.get(['changed']) as Bundle[])[0].tombstone)
+      tx.revive(['changed'])
+      tx.patch([{ entity: { eid: 'changed' }, doc: { title: 'back' } }])
+      assertEquals((tx.get(['changed']) as Bundle[])[0].doc, { title: 'back' })
+    })
+  }
+})
+
+test('classification begins the next presence comparison in a ledger', () => {
+  let l = ledger()
+  l.moved('a', 'doc', false)
+  assertEquals(l.owed(), ['a'])
+  l.pointed('a')
+  assertEquals(l.owed(), [])
+  assertEquals(l.owed(), [])
+  l.moved('a', 'doc', true)
+  assertEquals(l.owed(), ['a'])
+  l.pointed('a')
+  l.moved('a', 'doc', false)
+  l.moved('a', 'doc', true)
+  assertEquals(l.owed(), [])
 })
 
 test('archetype: a removal past the graph leaves its archetype, and its tombstone still swallows a racing write', () => {

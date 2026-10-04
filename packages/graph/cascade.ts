@@ -204,6 +204,7 @@ export let cascade = (
   // Provenance records writes, not a reason for an entity to exist. Marks
   // such as completed/archived do record an act and remain substantive.
   let empty = (changed: Bundle[]): Eid[] | Promise<Eid[]> => {
+    if (!vocab.comp('created') && !vocab.comp('updated')) return []
     let eids = [
       ...new Set(
         changed.filter((b) =>
@@ -222,6 +223,9 @@ export let cascade = (
       (rows) =>
         rows.filter((b) =>
           !dead(b) &&
+          comps(b).some(([c, v]) =>
+            v != null && (c == 'created' || c == 'updated')
+          ) &&
           !comps(b).some(([c, v]) =>
             v != null && c != 'created' && c != 'updated'
           )

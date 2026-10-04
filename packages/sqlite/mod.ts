@@ -351,9 +351,21 @@ export let storage = (
   // set itself.
   let tracked = (): { tx: Tx; settle: () => void } => {
     let l = ledger()
+    let settle = () => {
+      let owed = l.owed()
+      if (!owed.length) return
+      reclassify(driver, owed, numbered)
+      for (let eid of owed) l.pointed(eid)
+    }
     return {
       tx: {
         ...tx,
+        get: (eids, comps) => get(driver, vocab, eids, opts(), comps, l.owed()),
+        // Indexed queries need current pointers as well as current rows.
+        read: (query, o) => {
+          settle()
+          return tx.read(query, o)
+        },
         patch: (bundles) => {
           let born = patch(
             driver,
@@ -375,10 +387,7 @@ export let storage = (
         },
         revive: (eids) => revive(driver, eids, l.moved),
       },
-      settle: () => {
-        let owed = l.owed()
-        if (owed.length) reclassify(driver, owed, numbered)
-      },
+      settle,
     }
   }
   // The file's schema version as this store last looked, and how its own

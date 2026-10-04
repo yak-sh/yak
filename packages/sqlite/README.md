@@ -579,7 +579,10 @@ rollback, other writers, and schema changes to remain visible.
 Every `Store.tx(body)` maintains archetype pointers for patches, removals, and
 revivals made through its `Tx`. Its **ledger** records component-table presence
 changes and which entities have already been classified; `ledger().owed()` names
-those still needing classification when the callback finishes.
+those still needing classification when the callback finishes. Within the
+transaction, `Tx.get` reads pending component changes from their physical rows.
+`Tx.read` classifies pending changes before querying the archetype index; later
+patches continue from that classified shape.
 
 A raw SQL writer, past the store, must call `reclassify(driver, eids)` inside
 its transaction after changing component rows. It returns changed pointers and

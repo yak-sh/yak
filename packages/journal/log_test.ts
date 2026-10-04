@@ -101,9 +101,10 @@ test('a component dropped is recorded whole, and a property cleared is not', () 
   // The cleared property is still a property the component held — the log
   // records its after-image as null rather than forgetting it, so the state it
   // hands back names it too.
-  assertEquals(lines(f, 'p1').slice(-2), [
+  assertEquals(lines(f, 'p1').slice(-3), [
     '2 null page.text "body"→null',
     '3 null page {"title":"One","text":null}→null',
+    '3 null tombstone null→{}',
   ])
 })
 

@@ -447,24 +447,25 @@ export let ledger = (): Ledger => {
   // write to it, and whether it holds one now.
   let rows = new Map<string, Map<string, [boolean, boolean]>>()
   let born = new Set<string>()
-  let pointed = new Set<string>()
   return {
     moved: (eid: string, table: string, held: boolean) => {
       let of = rows.get(eid) ?? new Map<string, [boolean, boolean]>()
       rows.set(eid, of)
       of.set(table, [of.get(table)?.[0] ?? !held, held])
-      pointed.delete(eid)
     },
     born: (eid: string) => {
       born.add(eid)
-      pointed.delete(eid)
     },
-    pointed: (eid: string) => void pointed.add(eid),
+    // A pointer establishes the next presence comparison's starting shape.
+    // Later changes owe classification against that shape, not the unit's
+    // initial one, including when a query settled an intermediate patch.
+    pointed: (eid: string) => {
+      rows.delete(eid)
+      born.delete(eid)
+    },
     owed: (): string[] =>
-      [...new Set([...born, ...rows.keys()])].filter((eid) =>
-        !pointed.has(eid) &&
-        (born.has(eid) ||
-          [...rows.get(eid)!.values()].some(([was, now]) => was != now))
+      [...new Set([...born, ...rows.keys()])].filter((eid) => (born.has(eid) ||
+        [...rows.get(eid)!.values()].some(([was, now]) => was != now))
       ),
   }
 }

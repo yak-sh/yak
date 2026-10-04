@@ -117,7 +117,7 @@ let mine = (row: Bundle, who: Viewer, via: Eid | undefined) => {
 
 // Nothing this bundle says differs from the row it names.
 let idle = (b: Bundle, row: Bundle) =>
-  !dead(b) && comps(b).every(([name, comp]) => {
+  dead(b) ? dead(row) : comps(b).every(([name, comp]) => {
     let held = row[name] as Comp | null | undefined
     if (!comp) return held == null
     return !!held && Object.entries(comp).every(([prop, v]) => held[prop] == v)

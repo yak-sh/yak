@@ -478,6 +478,7 @@ let joinedGet = (
   opts: BindOpts,
   names: string[],
   wanted?: string[],
+  pending: Set<string> = new Set(),
 ): Bundle[] | { spine: Row[] } | undefined => {
   let plan = joinedPlan(vocab, names, opts)
   if (!plan) return
@@ -509,7 +510,7 @@ let joinedGet = (
     let bundle: Bundle = row.dead == null ? { entity } : tombstoned(entity)
     found.set(entity.eid, bundle)
     if (row.dead != null) continue
-    let current = row['@tables'] == null
+    let current = row['@tables'] == null || pending.has(entity.eid)
       ? undefined
       : descriptor(driver, String(row['@tables'])).tables
     if (
@@ -542,7 +543,9 @@ let joinedGet = (
  * eid no entity has is simply absent. Each carries the components `comps`
  * names, and no other table is read; left out, it carries every one. This is
  * the read `apply()` uses for its precondition guard, where a query would be
- * the wrong question.
+ * the wrong question. `unclassified` names entities whose component rows moved
+ * inside the transaction before their archetype pointer was assigned; these
+ * are gathered from their physical rows rather than the stored descriptor.
  */
 export let get = (
   driver: Driver,
@@ -550,7 +553,9 @@ export let get = (
   eids: string[],
   opts: BindOpts = {},
   comps?: string[],
+  unclassified: string[] = [],
 ): Bundle[] => {
+  let pending = new Set(unclassified)
   // The tables this read may touch: every component's, or the named ones'.
   let names = comps
     ? [...new Set(comps)].filter((c) => readable(vocab).has(c))
@@ -571,7 +576,7 @@ export let get = (
       ? [...new Set(eids.flatMap((eid) => [...remembered.get(eid)!]))].sort()
       : undefined
     if (guess) {
-      let rows = joinedGet(driver, vocab, eids, opts, guess, comps)
+      let rows = joinedGet(driver, vocab, eids, opts, guess, comps, pending)
       if (Array.isArray(rows)) return rows
       initial = rows?.spine
     }
@@ -613,7 +618,7 @@ export let get = (
         bounded(remembered, eid, [], 2048)
         continue
       }
-      if (row['@tables'] == null) {
+      if (row['@tables'] == null || pending.has(eid)) {
         owners.push(Number(row.id))
       } else {
         let key = String(row['@tables'])

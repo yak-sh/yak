@@ -42,6 +42,7 @@ test('dispatch transitions preserve legacy authority and settle converted envelo
     assertEquals(await swap(g, eid, 'queued', { state: 'settled' }), true)
     b = (await g.get([eid]))[0]
     assertEquals(dispatchStatus(b), eid == 'old' ? 'settled' : null)
+    assertEquals(b.tombstone, eid == 'new' ? {} : undefined)
     assertEquals(b.admitted, undefined)
     assertEquals(b.waiting, undefined)
   }
@@ -49,7 +50,11 @@ test('dispatch transitions preserve legacy authority and settle converted envelo
 
 test('a terminal entry and settlement are one transaction even when the entry is refused', async () => {
   let g = store()
-  await g.apply([{ entity: { eid: 'child' }, dispatch: { order: 1 } }], {
+  await g.apply([{
+    entity: { eid: 'child' },
+    session: {},
+    dispatch: { order: 1 },
+  }], {
     trusted: true,
   })
   await assertRejects(() =>

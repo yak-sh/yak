@@ -262,7 +262,8 @@ A write that removes an entity's last component other than the provenance stamps
 `created` and `updated` deletes the entity in the same transaction. Removing a
 component through `release` follows this rule too, including the reference
 consequences of that deletion. Marks such as `completed` and `archived` record
-an act and are not provenance stamps.
+an act and are not provenance stamps. Bare identities with no provenance remain
+live, including identities reserved by references in an unstamped graph.
 
 ```ts
 import { graph } from '@yaks/graph'
