@@ -379,21 +379,6 @@
       ],
       "description": "adapt a model session's reply to a builder tool output once its ask completes"
     },
-    "builder_change": {
-      "effect": true,
-      "active": ".builder.immediate=true&.limit=1",
-      "created": [
-        "created",
-        "updated"
-      ],
-      "changed": [
-        "updated"
-      ],
-      "removed": [
-        "created"
-      ],
-      "description": "check immediate builders when an entity enters, changes or leaves their query"
-    },
     "builder_supply": {
       "tool": true,
       "noun": "builder",

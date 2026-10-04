@@ -18,7 +18,7 @@ import { storage } from '@yaks/sqlite'
 import { mem } from '../sqlite/testing.ts'
 import { builderDoc, derived } from './vocab.ts'
 import { type Options } from './build.ts'
-import { choices } from './choice.ts'
+import { plugins } from './graph.ts'
 import { watches } from './effects.ts'
 import { modelTool } from './model.ts'
 
@@ -111,7 +111,7 @@ export let shop = async (
   let g = graph({
     storage: db,
     vocab,
-    plugins: [choices(), fx, docs(), edges(vocab), keys(vocab), sessions()],
+    plugins: [...plugins(), fx, docs(), edges(vocab), keys(vocab), sessions()],
   })
   let run = runner(g, { tools: [modelTool(), ...tools] })
   fx.handle(watches({ ...o, vocab }))

@@ -12,6 +12,7 @@ import {
 } from '@yaks/graph'
 import { after } from '@yaks/fp'
 import { CallError } from '@yaks/tools'
+import { changing } from './change.ts'
 
 export let choosing: Hook = (bundles, tx) => {
   let marked = bundles.filter((row) => row.chosen != null)
@@ -50,7 +51,11 @@ export let choosing: Hook = (bundles, tx) => {
 export let choices = (): Plugin => ({
   name: '@yaks/builders',
   admission: () => true,
-  hooks: { precondition: choosing },
+  hooks: {
+    precondition: choosing,
+    stamp: (bundles, tx, _err, context) =>
+      changing((context!.graph as Graph).vocab)(bundles, tx),
+  },
 })
 
 export let choose = async (

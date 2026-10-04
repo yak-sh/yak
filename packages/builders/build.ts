@@ -1,3 +1,4 @@
+import { step, steps } from './steps.ts'
 // A builder is a query-to-tool definition. Each outer binding has one stable
 // build; its changing content asks the tool through a fresh recorded call.
 
@@ -152,31 +153,38 @@ let prune = (
     : undefined
 
 /** Read the complete binding tree and the content of every entity it names. */
-export let selected = async (
+export let selected = (
   tx: ReadTx,
   builder: Bundle,
   vocab: Vocab,
-): Promise<{ binding: Binding; rows: Map<Eid, Bundle> }[]> => {
-  let query = str(comp(builder, BUILDER), 'query')
-  if (!query) return [{ binding: { entities: [], vars: {} }, rows: new Map() }]
-  if (!tx.bindings) throw new Error('builder storage cannot evaluate bindings')
-  let plan = match(query)
-  let [found] = await tx.bindings([plan], [], reads(plan, vocab))
-  let all = [...new Set(found.flatMap(ids))]
-  let rows = new Map((await tx.get(all)).map((b) => [b.entity.eid, b]))
-  let builds = [
-    ...new Set(
-      [...rows.values()].map((b) => str(comp(b, BUILT), 'build')).filter(
-        Boolean,
+):
+  | { binding: Binding; rows: Map<Eid, Bundle> }[]
+  | Promise<{ binding: Binding; rows: Map<Eid, Bundle> }[]> =>
+  steps(function* () {
+    let query = str(comp(builder, BUILDER), 'query')
+    if (!query) {
+      return [{ binding: { entities: [], vars: {} }, rows: new Map() }]
+    }
+    if (!tx.bindings) {
+      throw new Error('builder storage cannot evaluate bindings')
+    }
+    let plan = match(query)
+    let [found] = yield* step(tx.bindings([plan], [], reads(plan, vocab)))
+    let all = [...new Set(found.flatMap(ids))]
+    let rows = new Map((yield* step(tx.get(all))).map((b) => [b.entity.eid, b]))
+    let builds = [
+      ...new Set(
+        [...rows.values()].map((b) => str(comp(b, BUILT), 'build')).filter(
+          Boolean,
+        ),
       ),
-    ),
-  ]
-  for (let b of await tx.get(builds)) rows.set(b.entity.eid, b)
-  return found.flatMap((binding) => {
-    let kept = prune(binding, rows, builder.entity.eid)
-    return kept ? [{ binding: kept, rows }] : []
+    ]
+    for (let b of (yield* step(tx.get(builds)))) rows.set(b.entity.eid, b)
+    return found.flatMap((binding) => {
+      let kept = prune(binding, rows, builder.entity.eid)
+      return kept ? [{ binding: kept, rows }] : []
+    })
   })
-}
 
 /** The bindings a partial run builds: those whose outer entities include one
  * `only` names, then the first `limit` of them. Every binding without either. */
@@ -246,138 +254,143 @@ export let start = (
  * of them builds it until the mark is removed. A partial run (`only`,
  * `limit`) builds some bindings and leaves every other build as it is, never
  * stale, since a binding it skipped has not vanished. */
-export let reconcile = async (
+export let reconcile = (
   tx: ReadTx,
   builder: Bundle,
   o: Options,
   at: string = (o.now ?? clock)(),
   scheduled = true,
   retry = false,
-): Promise<{ plans: Plan[]; writes: Bundle[] }> => {
-  let definition = comp(builder, BUILDER)
-  if (!definition || builder.archived) return { plans: [], writes: [] }
-  let to = str(definition, 'to')
-  let immediate = definition.immediate == true
-  let ready = !scheduled || due(definition, at)
-  let chosen = immediate || ready && to
-    ? await selected(tx, builder, o.vocab)
-    : undefined
-  let dep = await sync(
-    tx,
-    builder.entity.eid,
-    immediate
-      ? [
-        ...queried(str(definition, 'query'), o.vocab),
-        ...inputs(chosen?.map((row) => row.binding) ?? []),
-      ]
-      : [],
-  )
-  if (!ready || !to) return { plans: [], writes: dep }
-  let [tool] = await tx.get([to])
-  if (!tool?.tool) throw new Error(`builder tool ${to} is missing`)
-  let variant = o.variant ?? 'main'
-  chosen ??= await selected(tx, builder, o.vocab)
-  let partial = o.only != null || o.limit != null
-  let prior = partial ? [] : await tx.read(
-    `.build.builder=${builder.entity.eid}&.build.variant=${
-      encodeURIComponent(variant)
-    }&*`,
-  )
-  let left = new Map(prior.map((b) => [b.entity.eid, b]))
-  // The build each outer tuple already has. A new one is written under an
-  // alias beside its key, so a reconciliation racing this one to the same
-  // tuple resolves onto the build that committed first (@yaks/key).
-  let wanted = narrow(chosen, o.only, o.limit)
-  let values = wanted.map(({ binding }) =>
-    buildOf(builder.entity.eid, JSON.stringify(binding.entities), variant)
-  )
-  let owners = await held(tx, BUILD_OF, values)
-  let have = new Map(
-    (await tx.get([...new Set(owners.values())])).map((b) => [b.entity.eid, b]),
-  )
-  let plans: Plan[] = []
-  let latest = definitionKey(builder, tool)
-  let writes: Bundle[] = [...dep]
-  if (definition.definition != latest) {
-    writes.push({
-      entity: builder.entity,
-      builder: { definition: latest },
-    })
-  }
-  for (let { binding, rows } of wanted) {
-    let entities = binding.entities
-    let match = JSON.stringify(entities)
-    let build = owners.get(buildOf(builder.entity.eid, match, variant)) ??
-      `$build${plans.length}`
-    let p: Plan = {
-      builder: builder.entity.eid,
-      build,
-      match,
-      variant,
-      binding,
-      inputs: inputKey(binding, rows, o.vocab),
-      definition: definitionKey(builder, tool, o.template, {
-        ...comp(builder, 'using'),
-        ...o.using,
-      }),
-      key: key(builder, tool, binding, rows, o.vocab, o.template, {
-        ...comp(builder, 'using'),
-        ...o.using,
-      }),
-      to,
-      template: o.template ?? str(comp(builder, 'content'), 'body'),
-      using: { ...comp(builder, 'using'), ...o.using },
-    }
-    plans.push(p)
-    let before = comp(have.get(build), BUILD)
-    left.delete(build)
-    let same = before?.key != null && before.inputs == p.inputs
-    if (same) p.key = String(before?.key)
-    if (same && before?.stale) {
+):
+  | { plans: Plan[]; writes: Bundle[] }
+  | Promise<{ plans: Plan[]; writes: Bundle[] }> =>
+  steps(function* () {
+    let definition = comp(builder, BUILDER)
+    if (!definition || builder.archived) return { plans: [], writes: [] }
+    let to = str(definition, 'to')
+    let immediate = definition.immediate == true
+    let ready = !scheduled || due(definition, at)
+    let chosen = immediate || ready && to
+      ? (yield* step(selected(tx, builder, o.vocab)))
+      : undefined
+    let dep = yield* step(sync(
+      tx,
+      builder.entity.eid,
+      immediate
+        ? [
+          ...queried(str(definition, 'query'), o.vocab),
+          ...inputs(chosen?.map((row) => row.binding) ?? []),
+        ]
+        : [],
+    ))
+    if (!ready || !to) return { plans: [], writes: dep }
+    let [tool] = yield* step(tx.get([to]))
+    if (!tool?.tool) throw new Error(`builder tool ${to} is missing`)
+    let variant = o.variant ?? 'main'
+    chosen ??= yield* step(selected(tx, builder, o.vocab))
+    let partial = o.only != null || o.limit != null
+    let prior = partial ? [] : (yield* step(tx.read(
+      `.build.builder=${builder.entity.eid}&.build.variant=${
+        encodeURIComponent(variant)
+      }&*`,
+    )))
+    let left = new Map(prior.map((b) => [b.entity.eid, b]))
+    // The build each outer tuple already has. A new one is written under an
+    // alias beside its key, so a reconciliation racing this one to the same
+    // tuple resolves onto the build that committed first (@yaks/key).
+    let wanted = narrow(chosen, o.only, o.limit)
+    let values = wanted.map(({ binding }) =>
+      buildOf(builder.entity.eid, JSON.stringify(binding.entities), variant)
+    )
+    let owners = yield* step(held(tx, BUILD_OF, values))
+    let have = new Map(
+      (yield* step(tx.get([...new Set(owners.values())]))).map((
+        b,
+      ) => [b.entity.eid, b]),
+    )
+    let plans: Plan[] = []
+    let latest = definitionKey(builder, tool)
+    let writes: Bundle[] = [...dep]
+    if (definition.definition != latest) {
       writes.push({
-        entity: { eid: build },
-        [BUILD]: { stale: false },
-        $was: { [BUILD]: { stale: token(true) } },
+        entity: builder.entity,
+        builder: { definition: latest },
       })
     }
-    let failed = false
-    if (retry && same && before?.call) {
-      let [call] = await tx.get([String(before.call)])
-      failed = comp(call, 'execution')?.state == 'failed'
-    }
-    let redo = o.rebuild || o.outdated && before?.definition != p.definition
-    if (!same || failed || redo) {
-      // Every attempt gets a distinct key, even when nothing changed.
-      p.key = key(
-        builder,
-        tool,
+    for (let { binding, rows } of wanted) {
+      let entities = binding.entities
+      let match = JSON.stringify(entities)
+      let build = owners.get(buildOf(builder.entity.eid, match, variant)) ??
+        `$build${plans.length}`
+      let p: Plan = {
+        builder: builder.entity.eid,
+        build,
+        match,
+        variant,
         binding,
-        rows,
-        o.vocab,
-        o.template,
-        p.using,
-        (o.eid ?? mint)(),
-      )
-      writes.push(...start(p, before, o.eid))
+        inputs: inputKey(binding, rows, o.vocab),
+        definition: definitionKey(builder, tool, o.template, {
+          ...comp(builder, 'using'),
+          ...o.using,
+        }),
+        key: key(builder, tool, binding, rows, o.vocab, o.template, {
+          ...comp(builder, 'using'),
+          ...o.using,
+        }),
+        to,
+        template: o.template ?? str(comp(builder, 'content'), 'body'),
+        using: { ...comp(builder, 'using'), ...o.using },
+      }
+      plans.push(p)
+      let before = comp(have.get(build), BUILD)
+      left.delete(build)
+      let same = before?.key != null && before.inputs == p.inputs
+      if (same) p.key = String(before?.key)
+      if (same && before?.stale) {
+        writes.push({
+          entity: { eid: build },
+          [BUILD]: { stale: false },
+          $was: { [BUILD]: { stale: token(true) } },
+        })
+      }
+      let failed = false
+      if (retry && same && before?.call) {
+        let [call] = yield* step(tx.get([String(before.call)]))
+        failed = comp(call, 'execution')?.state == 'failed'
+      }
+      let redo = o.rebuild || o.outdated && before?.definition != p.definition
+      if (!same || failed || redo) {
+        // Every attempt gets a distinct key, even when nothing changed.
+        p.key = key(
+          builder,
+          tool,
+          binding,
+          rows,
+          o.vocab,
+          o.template,
+          p.using,
+          (o.eid ?? mint)(),
+        )
+        writes.push(...start(p, before, o.eid))
+      }
     }
-  }
-  for (let old of partial ? [] : left.values()) {
-    let b = comp(old, BUILD)
-    if (b?.stale) continue
-    writes.push({
-      entity: old.entity,
-      [BUILD]: { stale: true },
-      $was: { [BUILD]: { stale: token(b?.stale) } },
-    })
-  }
-  let floor = o.rest && writes.some((b) => b.call)
-    ? next(o.rest, Date.parse(at))
-    : null
-  if (floor) {
-    writes.push({
-      entity: builder.entity,
-      [BUILDER]: { floor },
-    })
-  }
-  return { plans, writes }
-}
+    for (let old of partial ? [] : left.values()) {
+      let b = comp(old, BUILD)
+      if (b?.stale) continue
+      writes.push({
+        entity: old.entity,
+        [BUILD]: { stale: true },
+        $was: { [BUILD]: { stale: token(b?.stale) } },
+      })
+    }
+    let floor = o.rest && writes.some((b) => b.call)
+      ? next(o.rest, Date.parse(at))
+      : null
+    if (floor) {
+      writes.push({
+        entity: builder.entity,
+        [BUILDER]: { floor },
+      })
+    }
+    return { plans, writes }
+  })

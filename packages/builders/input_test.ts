@@ -1,7 +1,7 @@
 // Native input overrides use a shadow without changing supplied main outputs.
 import { assert, assertEquals, assertNotEquals } from '@std/assert'
 import { test } from '@yaks/testing'
-import { type Comp, graph } from '@yaks/graph'
+import { type Comp, graph, identityEid } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { keys } from '@yaks/key'
 import { edges } from '@yaks/edge'
@@ -22,22 +22,29 @@ test('native input shadows preserve main and reach recorded calls and sessions',
   let builder = crypto.randomUUID(), source = crypto.randomUUID()
   let artifact = crypto.randomUUID()
   let tool = modelTool()
-  await g.apply([toolRow(tool), {
-    entity: { eid: source },
-    doc: { title: 'Song' },
-  }, {
-    entity: { eid: artifact },
-    artifact: { address: 'existing', media_type: 'audio/mpeg', size: 4 },
-  }, {
-    entity: { eid: builder },
-    builder: { query: '$song .doc.title=Song', to: modelToolEid() },
-    content: { body: 'Compose $song' },
-    using: {
-      model: 'music-model',
-      input: { lyrics: 'old', audio_setting: { format: 'mp3' } },
+  let model = identityEid('model', ['music-model'])
+  await g.apply([
+    { entity: { eid: model }, model: { name: 'music-model' } },
+    toolRow(tool),
+    {
+      entity: { eid: source },
+      doc: { title: 'Song' },
     },
-    staged: {},
-  }])
+    {
+      entity: { eid: artifact },
+      artifact: { address: 'existing', media_type: 'audio/mpeg', size: 4 },
+    },
+    {
+      entity: { eid: builder },
+      builder: { query: '$song .doc.title=Song', to: modelToolEid() },
+      content: { body: 'Compose $song' },
+      using: {
+        model,
+        input: { lyrics: 'old', audio_setting: { format: 'mp3' } },
+      },
+      staged: {},
+    },
+  ])
   let output = await supply(g, vocab, {
     builder,
     for: source,
@@ -55,7 +62,7 @@ test('native input shadows preserve main and reach recorded calls and sessions',
   let [call] = await g.get([String((shadow.build as Comp).call)])
   let effective = { audio_setting: { format: 'mp3' }, ...input }
   assertEquals(((call.call as Comp).args as Comp).using, {
-    model: 'music-model',
+    model,
     input: effective,
   })
   await g.apply(await tool.run(call, g), { trusted: true })

@@ -9,10 +9,10 @@ deno add jsr:@yaks/builders
 ```
 
 - `builder{query,to,immediate,floor}` is the definition. `to` references a
-  `tool` entity. `immediate` reconciles after selected graph changes; `floor` is
-  the earliest scheduled reconciliation. `content.body` is an optional `$var`
-  template; `using{provider,model,effort}` chooses model details. `doc.body` is
-  documentation.
+  `tool` entity. `immediate` reconciles selected changes in their write
+  transaction; `floor` is the earliest scheduled reconciliation. `content.body`
+  is an optional `$var` template; `using{provider,model,effort}` chooses model
+  details. `doc.body` is documentation.
 - `build{builder,match,variant,for,key,inputs,definition,call,stale}` is one
   instance per outer entity-ID tuple and variant. `match` stores that tuple as
   JSON; `for` names the entity it was built for, the first the tuple holds, as a
@@ -179,7 +179,8 @@ next input change or `builder build`.
 - `@yaks/builders`: vocabulary, `key`, `buildFor`, `outputFor`, `selected`, and
   `reconcile`.
 - `@yaks/builders/model`: `modelTool`, `modelToolEid`, and template `render`.
-- `@yaks/builders/graph`: the one-choice-per-slot invariant.
+- `@yaks/builders/graph`: output choice and transactional immediate-builder
+  reconciliation.
 - `@yaks/builders/effects`: `watches` and `effects`.
 - `@yaks/builders/tools`: the on-demand `builder build` tool, and `build`, the
   same reconciliation for a host that offers it through a door of its own.

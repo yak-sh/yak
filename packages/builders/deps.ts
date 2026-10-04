@@ -1,3 +1,4 @@
+import { step, steps } from './steps.ts'
 // Builder dependencies are graph rows: query components find new matches,
 // selected entity ids find content changes, and both survive effect workers.
 
@@ -52,53 +53,59 @@ let ids = (binding: Binding): string[] => [
 export let inputs = (bindings: Binding[]): string[] =>
   [...new Set(bindings.flatMap(ids))].map((eid) => `entity:${eid}`)
 
-export let sync = async (
+export let sync = (
   tx: ReadTx,
   builder: string,
   sources: string[],
-): Promise<Bundle[]> => {
-  let prior = await tx.read(and(eq(`${DEP}.builder`, builder)))
-  let want = new Set(sources)
-  let source = (b: Bundle): string =>
-    String((b[DEP] as { source: string }).source)
-  let state = prior.find((b) => source(b) == 'state')
-  let have = new Set(prior.map(source))
-  let bundles: Bundle[] = [
-    ...prior.filter((b) => source(b) != 'state' && !want.has(source(b)))
-      .map((b): Bundle => ({ entity: b.entity, $delete: true, $quiet: true })),
-    ...[...want].filter((source) => !have.has(source)).map((
-      source,
-    ): Bundle => ({
-      entity: { eid: identityEid(DEP, [builder, source]) },
-      [DEP]: { builder, source },
+): Bundle[] | Promise<Bundle[]> =>
+  steps(function* () {
+    let prior = yield* step(tx.read(and(eq(`${DEP}.builder`, builder))))
+    let want = new Set(sources)
+    let source = (b: Bundle): string =>
+      String((b[DEP] as { source: string }).source)
+    let state = prior.find((b) => source(b) == 'state')
+    let have = new Set(prior.map(source))
+    let bundles: Bundle[] = [
+      ...prior.filter((b) => source(b) != 'state' && !want.has(source(b)))
+        .map((b): Bundle => ({
+          entity: b.entity,
+          $delete: true,
+          $quiet: true,
+        })),
+      ...[...want].filter((source) => !have.has(source)).map((
+        source,
+      ): Bundle => ({
+        entity: { eid: identityEid(DEP, [builder, source]) },
+        [DEP]: { builder, source },
+        $quiet: true,
+      })),
+    ]
+    if (!bundles.length) return []
+    let version = (state?.[DEP] as { version?: string } | undefined)?.version
+    return [{
+      entity: { eid: identityEid(DEP, [builder, 'state']) },
+      [DEP]: { builder, source: 'state', version: crypto.randomUUID() },
+      $was: { [DEP]: { version: token(version) } },
       $quiet: true,
-    })),
-  ]
-  if (!bundles.length) return []
-  let version = (state?.[DEP] as { version?: string } | undefined)?.version
-  return [{
-    entity: { eid: identityEid(DEP, [builder, 'state']) },
-    [DEP]: { builder, source: 'state', version: crypto.randomUUID() },
-    $was: { [DEP]: { version: token(version) } },
-    $quiet: true,
-  }, ...bundles]
-}
+    }, ...bundles]
+  })
 
-export let candidates = async (
+export let candidates = (
   tx: ReadTx,
   eid: string,
   touched: string[],
-): Promise<Bundle[]> => {
-  let sources = [
-    `entity:${eid}`,
-    'component:*',
-    ...touched.map((name) => `component:${name}`),
-  ]
-  let deps = await tx.read(and(eq(`${DEP}.source`, list(...sources))))
-  let ids = [
-    ...new Set(
-      deps.map((b) => String((b[DEP] as { builder: string }).builder)),
-    ),
-  ]
-  return await tx.get(ids)
-}
+): Bundle[] | Promise<Bundle[]> =>
+  steps(function* () {
+    let sources = [
+      `entity:${eid}`,
+      'component:*',
+      ...touched.map((name) => `component:${name}`),
+    ]
+    let deps = yield* step(tx.read(and(eq(`${DEP}.source`, list(...sources)))))
+    let ids = [
+      ...new Set(
+        deps.map((b) => String((b[DEP] as { builder: string }).builder)),
+      ),
+    ]
+    return (yield* step(tx.get(ids)))
+  })

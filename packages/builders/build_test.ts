@@ -252,6 +252,10 @@ test('an answer reuses keyed slot owners outside output history and resolves sib
   await g.apply([source('a'), { ...builder(), staged: {} }])
   let [run] = await build(g, vocab, { builder: ids.builder }, null)
   let latestCall = String(comp(await one(g, run), 'build')?.call)
+  await g.apply([
+    { entity: { eid: 'older-build' }, build: { builder: ids.builder } },
+    { entity: { eid: 'older-call' }, call: { to: toolEid('code') } },
+  ], { trusted: true })
   await g.apply(
     ['main', 'note'].flatMap((slot): Bundle[] => [
       {

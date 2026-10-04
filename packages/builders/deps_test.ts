@@ -8,6 +8,7 @@ import { candidates, sync } from './deps.ts'
 test('a client cannot patch builder dependencies', async () => {
   let vocab = workshop()
   let g = graph({ storage: ram(vocab), vocab })
+  await g.apply([{ entity: { eid: 'builder' }, builder: {} }])
   let eid = identityEid('builder_dep', ['builder', 'component:doc'])
   await g.apply([{
     entity: { eid },

@@ -10,12 +10,10 @@
 import { type Bundle, type Comp, type ReadTx, Stale, token } from '@yaks/graph'
 import type { Handler, Handlers } from '@yaks/effects'
 import type { Vocab } from '@yaks/vocab'
-import { and, eq } from '@yaks/query'
 import { next, WAKE } from '@yaks/wake'
 import { BUILD, clock, type Options, reconcile } from './build.ts'
 import { answer, spent } from './answer.ts'
 import { adapted } from './model.ts'
-import { candidates } from './deps.ts'
 import { preserve } from './preserve.ts'
 
 let str = (c: Comp | undefined, prop: string): string =>
@@ -76,49 +74,6 @@ export let ringing = (o: Options): Handler => async (event, tx, write) => {
     tx,
     write,
   )
-}
-
-export let changing = (o: Options): Handler => async (event, tx, write) => {
-  let [changed] = await tx.get([event.entity.eid])
-  if (
-    changed?.build || changed?.call || changed?.result ||
-    changed?.execution ||
-    changed?.interrupted || changed?.failed || changed?.refusal ||
-    comp(changed, 'output')?.value != null
-  ) {
-    return
-  }
-  // A shadow is review-only. It must not start downstream sound/figure
-  // builders simply because its output wears their input components.
-  let made = comp(changed, 'built')
-  if (made?.build) {
-    let [build] = await tx.get([String(made.build)])
-    if (comp(build, BUILD)?.variant != 'main') return
-  }
-  // TODO: Drop the broad path after pending effects written before touched
-  // was recorded have drained; those runs lost the changed component names.
-  let builders = event.touched
-    ? await candidates(tx, event.entity.eid, event.touched)
-    : await tx.read(and(eq('builder.immediate', 'true')))
-  if (changed?.tool || event.touched?.includes('tool')) {
-    builders.push(
-      ...await tx.read(and(
-        eq('builder.immediate', 'true'),
-        eq('builder.to', event.entity.eid),
-      )),
-    )
-  }
-  let seen = new Set<string>()
-  for (let builder of builders) {
-    if (
-      builder.entity.eid == event.entity.eid ||
-      !comp(builder, 'builder')?.immediate || seen.has(builder.entity.eid)
-    ) {
-      continue
-    }
-    seen.add(builder.entity.eid)
-    await settle(builder.entity.eid, tx, write, o, false)
-  }
 }
 
 /** A model's reply becomes the same output.value a code tool would answer,
@@ -190,7 +145,6 @@ export let watches = (o: Options): Handlers => ({
   builder_ring: ringing(o),
   builder_model_answer: modeling(),
   builder_answer: answering(o.vocab),
-  builder_change: changing(o),
 })
 
 export let effects = (
