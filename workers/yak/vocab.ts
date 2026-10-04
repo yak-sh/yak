@@ -469,7 +469,6 @@ let hostedBuilderDoc = pick(builderDoc, [
   'builder_ring',
   'builder_answer',
   'builder_model_answer',
-  'builder_change',
 ])
 
 /**
