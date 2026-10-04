@@ -123,7 +123,7 @@ let asked = (err: unknown): number => {
   return typeof after == 'number' && after > 0 ? after : 0
 }
 
-/** A run the pool claimed, as its handler sees it. */
+/** A run the pool started, as its handler sees it. */
 export type Attempt = {
   /** Whether this attempt is the run's last: if it fails now, it is left
    * failed, so what the handler records about the failure is what stands. */
@@ -133,7 +133,7 @@ export type Attempt = {
    * should give the next failure its full tries back. */
   progressed: () => Promise<void>
   /** Retry a local completion without replaying the handler's external work.
-   * Uses this run's remaining tries and backoff, retaining its lease. */
+   * Uses this run's remaining tries and backoff without releasing the run. */
   retry?: <T>(body: () => Promise<T>) => Promise<T>
 }
 
@@ -146,6 +146,11 @@ export let POOL = '@yaks/effects'
 
 /** How a pool is worked. */
 export type PoolOpts = {
+  /** One process exclusively owns this store (for example a Durable Object).
+   * Drain recorded runs without claims, presence leases, start-up effects,
+   * sweeps, or expiration duties. Persist attempts and outcomes for crash
+   * recovery and retries. Never enable this for a shared box store. */
+  singleOwner?: boolean
   /** who this process is: what its claims and its presence lease name. A
    * worker that names nobody claims under a fresh id and holds no presence
    * lease, since a lease's holder is an entity */
@@ -295,14 +300,17 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   let running = new Map<Eid, Held>()
   let loop: { done: Promise<void>; signal: AbortSignal } | undefined
 
-  let claim = () => ({
-    lease_owner: me,
-    lease_token: mint(),
-    lease_expiry: stamp(clock() + hold),
-  })
-  // A released claim. Every ending writes it, because a row nobody is running
-  // must not look like a row somebody is.
-  let free = { lease_owner: null, lease_token: null, lease_expiry: null }
+  let claim = () =>
+    opts.singleOwner ? {} : ({
+      lease_owner: me,
+      lease_token: mint(),
+      lease_expiry: stamp(clock() + hold),
+    })
+  // Shared workers release their claims on every ending. A single-owner
+  // store never writes claim fields, even when draining a legacy row.
+  let free = opts.singleOwner
+    ? {}
+    : { lease_owner: null, lease_token: null, lease_expiry: null }
 
   // Compare and set: the patch lands only if the row's claim and attempt count
   // are still the ones read — the graph's own precondition, riding on the
@@ -319,7 +327,9 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         [EFFECT]: patch,
         $was: {
           [EFFECT]: {
-            lease_token: token(was.lease_token ?? null),
+            ...(opts.singleOwner ? {} : {
+              lease_token: token(was.lease_token ?? null),
+            }),
             attempts: token(was.attempts ?? null),
           },
         },
@@ -350,7 +360,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       handler: String(row.handler),
       target: String(row.target),
       since: clock(),
-      token: String(row.lease_token),
+      token: row.lease_token as string,
       attempts: Number(row.attempts),
       expiry: Date.parse(String(row.lease_expiry)),
       run: Promise.resolve(),
@@ -455,7 +465,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
 
   // One pass over what is owed: every row this process can run that nobody
   // holds and whose backoff is up, claimed and started. Returns the runs.
-  let pass = async (g: Access): Promise<Promise<void>[]> => {
+  let due = async (g: Access): Promise<Promise<void>[]> => {
     let now = clock()
     let started: Promise<void>[] = []
     // Asked once a pass per owner: a process that ended without letting go
@@ -479,7 +489,8 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       if (!s || running.has(eid)) continue
       let expiry = row.lease_expiry ? Date.parse(String(row.lease_expiry)) : 0
       if (
-        row.lease_owner && expiry > now && !await gone(String(row.lease_owner))
+        !opts.singleOwner && row.lease_owner && expiry > now &&
+        !await gone(String(row.lease_owner))
       ) continue
       if (row.next && Date.parse(String(row.next)) > now) continue
       let attempts = Number(row.attempts ?? 0)
@@ -503,8 +514,20 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     return started
   }
 
+  // Single-owner drains may overlap on the same registry. Serialize selection
+  // through attempt persistence and local admission: another pass must see the
+  // running set before reading an attempt just written by this pass.
+  let passing: Promise<unknown> = Promise.resolve()
+  let pass = (g: Access): Promise<Promise<void>[]> => {
+    if (!opts.singleOwner) return due(g)
+    let next = passing.then(() => due(g))
+    passing = next.catch(() => {})
+    return next
+  }
+
   // The claims this process is running, pushed out before they lapse.
   let renew = async (g: Access) => {
+    if (opts.singleOwner) return
     let now = clock()
     for (let [eid, held] of running) {
       if (held.expiry - now > hold / 2) continue
@@ -596,7 +619,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   // Its presence lease goes with it, so nobody waits out its expiry.
   let stay = async (g: Access, signal: AbortSignal) => {
     let seat = `${POOL}/${me}`
-    let present = !!opts.owner && !!g.vocab.comp(LEASE) &&
+    let present = !opts.singleOwner && !!opts.owner && !!g.vocab.comp(LEASE) &&
       ctx.slots().every((s) => !s.effect || !!s.run)
     let until = 0
     let expires = 0
@@ -610,7 +633,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           }
           await pass(g)
           await renew(g)
-          if (clock() >= expires) {
+          if (!opts.singleOwner && clock() >= expires) {
             await expireDaily(g, { owner: me, now: clock, signal })
             expires = clock() + (g.vocab.comp(LEASE) ? HOLD : DAY)
           }
@@ -671,6 +694,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     member = true
     if (joined) return
     joined = true
+    if (opts.singleOwner) return
     await begin(g)
     await sweep(g)
   }
@@ -687,6 +711,10 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         stopping,
         ...[...running.values()].map((h) => h.run),
       ])
+      if (opts.singleOwner) {
+        await settled
+        continue
+      }
       while (await still(settled, beat)) {
         if (!graph) continue
         await renew(graph).catch((err) =>
@@ -739,7 +767,10 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     work: async (g, signal = AbortSignal.abort(), passes = Infinity) => {
       graph = g
       if (signal.aborted) {
-        if (await working(g, { except: me, now: clock(), gone: opts.gone })) {
+        if (
+          !opts.singleOwner &&
+          await working(g, { except: me, now: clock(), gone: opts.gone })
+        ) {
           return
         }
         await join(g)
@@ -756,7 +787,8 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
             let settled = passes == Infinity
               ? Promise.race(pending)
               : Promise.all(pending)
-            while (await still(settled, beat)) await renew(g)
+            if (opts.singleOwner) await settled
+            else while (await still(settled, beat)) await renew(g)
           }
           await sleep(0)
         }

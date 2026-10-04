@@ -363,6 +363,45 @@ some effects holds no presence lease. Signal abort or `stop` stops further
 claims; `idle` and `stop` wait for started runs while renewing their claims.
 Abort the live `work` signal to end its loop.
 
+### Single-owner stores
+
+**Single-owner mode** means exactly one process exclusively owns the store,
+including its effect execution. Set `singleOwner: true` only for such a store,
+for example a Durable Object. Shared box workers leave this option unset.
+
+`work` drains recorded runs without claims or presence leases. It owes no
+start-up effects or sweeps and runs no expiration duty. A host calls `work` on
+writes and alarms, not on reads; the host supplies any deployment work itself.
+Attempts are persisted before handler invocation and outcomes afterwards, so
+crash recovery, retry backoff, attempt limits and non-idempotent interruption
+handling still apply. `max`, `defer`, and `Attempt.progressed` keep their
+meaning. Overlapping calls to `work` on the same registry share its running set.
+
+```ts
+import { graph } from '@yaks/graph'
+import { loadVocab } from '@yaks/vocab'
+import { ram } from '@yaks/ram'
+import { effectDoc, effects } from '@yaks/effects'
+import { equal } from '@yaks/testing'
+
+let vocab = loadVocab([effectDoc, {
+  $defs: {
+    order: { component: true },
+    send_receipt: { effect: true, created: ['order'] },
+  },
+}])
+let fx = effects(vocab, { singleOwner: true, defer: true })
+let g = graph({ storage: ram(vocab), vocab, plugins: [fx] })
+let sent = 0
+fx.handle({ send_receipt: () => void sent++ })
+await g.apply([{ entity: { eid: 'order-1' }, order: {} }])
+await fx.work(g)
+equal(sent, 1)
+await fx.work(g) // An empty alarm owes nothing and writes nothing.
+equal(sent, 1)
+equal(await g.read('.lease'), [])
+```
+
 ### Attempts and retries
 
 An **attempt** is one start of a pooled handler (`Attempt`). A failure is due
