@@ -26,7 +26,9 @@ test('an embedding failure honors the store retry interval across reboot', async
       },
     },
   }
-  let store = new Store(ctx, bind)
+  // This fixture isolates embedding retry from schema movers, which may
+  // legitimately own an earlier alarm after a platform deployment.
+  let store = new Store(ctx, bind, [])
   let post = (path: string, body: unknown) =>
     store.fetch(
       new Request(`http://store${path}`, {
@@ -38,14 +40,22 @@ test('an embedding failure honors the store retry interval across reboot', async
   assertEquals((await post('/vocab', {})).status, 200)
   let began = Date.now()
   await until(() => failures > 0)
-  let alarm = await ctx.storage.getAlarm()
-  assert(alarm != null && alarm >= began + Store.RETRY, `${alarm! - began}ms`)
+  // The provider rejects before the drain catches it and rearms the alarm.
+  // Wait for that durable outcome, not just the attempted provider call.
+  let alarm = await until(async () => {
+    let at = await ctx.storage.getAlarm()
+    return at != null && at >= began + Store.RETRY ? at : null
+  })
+  assert(alarm >= began + Store.RETRY, `${alarm - began}ms`)
   await ctx.storage.deleteAlarm()
   began = Date.now()
   let count = failures
-  store = new Store(ctx, bind)
+  store = new Store(ctx, bind, [])
   await store.alarm()
   await until(() => failures > count)
-  alarm = await ctx.storage.getAlarm()
-  assert(alarm != null && alarm >= began + Store.RETRY, `${alarm! - began}ms`)
+  alarm = await until(async () => {
+    let at = await ctx.storage.getAlarm()
+    return at != null && at >= began + Store.RETRY ? at : null
+  })
+  assert(alarm >= began + Store.RETRY, `${alarm - began}ms`)
 })
