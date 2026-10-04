@@ -118,13 +118,11 @@ A screen adds only what is its own around that renderer: the inbox's lane,
 reason, unread dot and archive button, a board's drag handle. It never reads an
 entity's components to draw the entity with markup of its own.
 
-The pull the other way is strong. Building a screen, the nearest thing at hand
-is `e.doc?.title` in a span with a preview line beside it, and it looks right
-with the tasks you tested on. Everything without that component then draws as
-an empty row: the inbox drew every session as "Thread" and expanded it to
-almost nothing. A UI kit part that lays out an entity's title, body and status
-is the same mistake one layer down. When a renderer draws a kind poorly, fix
-that renderer, and every screen gets the fix.
+The pull the other way is strong: the nearest thing at hand is `e.doc?.title`
+in a span, which looks right for kinds that carry a `doc` and draws everything
+else as an empty row. A UI kit part that lays out an entity's title, body and
+status is the same mistake one layer down. When a renderer draws a kind poorly,
+fix that renderer, and every screen gets the fix.
 
 Draw for a person reading:
 
