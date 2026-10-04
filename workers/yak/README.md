@@ -531,8 +531,8 @@ inspector unchanged.
 
 App stores compose @yaks/vocab's schema entities, without the journal.
 Component/property pages use ordinary queries; the schema description is
-refreshed after boot in bounded writes, with its hash last. The inspector omits
-history when its vocabulary has no `_change`. Standing journal tables and their
-rows are left untouched: removing them would incur billed writes. Schema rows
-are excluded from ordinary page listings unless named explicitly, like other
-platform-owned rows.
+materialized during deployment in bounded writes, with its hash last. The
+inspector omits history when its vocabulary has no `_change`. Standing journal
+tables and their rows are left untouched: removing them would incur billed
+writes. Schema rows are excluded from ordinary page listings unless named
+explicitly, like other platform-owned rows.

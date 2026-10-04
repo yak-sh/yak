@@ -360,6 +360,7 @@ export let idleWake = async (
     total: Cost
     requests: Record<string, Cost>
     alarm: number | null
+    loads: Record<string, Cost>
     shapes: { sql: string; cost: Cost }[]
   }
 > => {
@@ -396,33 +397,101 @@ export let idleWake = async (
     },
   })
   let g = store.door.graph
-  // Same 79k synthetic history as play, plus ended transcripts and calls.
-  // None owes a model request, tool invocation, receipt, or embedding.
-  for (let start = 0; start < 79_000; start += 500) {
-    await g.storage.tx((tx) =>
-      tx.patch(Array.from({ length: 500 }, (_, j) => ({
-        entity: { eid: eid(start + j + 100) },
-        doc: { title: `History ${start + j}` },
-        created: { at: '2026-01-01T00:00:00Z', by: person },
-        updated: { at: '2026-01-01T00:00:00Z', by: person },
-      })))
-    )
-  }
+  // Keep the linked transcript/call archetypes that production loads, not
+  // just unlinked session markers. Teach small-table statistics before the
+  // retained history grows; the indexed-get regression must survive them.
+  await g.storage.tx((tx) =>
+    tx.patch([
+      {
+        entity: { eid: person },
+        person: {},
+        doc: { title: 'A fixture author' },
+      },
+      {
+        entity: { eid: eid(90_000) },
+        doc: { body: 'Fixture persona' },
+      },
+      { entity: { eid: eid(90_002) }, model: { name: 'fixture-model' } },
+      {
+        entity: { eid: eid(90_001) },
+        tool: { name: 'kept', description: 'Kept call target' },
+      },
+    ])
+  )
   for (let n = 0; n < 61; n++) {
-    let session = eid(100_000 + n)
-    let rows: Bundle[] = [{
-      entity: { eid: session },
-      session: { id: `ended-${n}`, ended: true },
-    }]
+    let session = eid(100_000 + n), log = eid(110_000 + n)
+    let source = eid(200_000 + n * 100)
+    let call = eid(300_000 + n), result = eid(310_000 + n)
+    let rows: Bundle[] = [
+      {
+        entity: { eid: log },
+        doc: { title: `fixture-${n}.jsonl` },
+      },
+      {
+        entity: { eid: session },
+        session: {
+          id: `ended-${n}`,
+          ended: true,
+          actor: person,
+          source,
+          persona: eid(90_000),
+          log,
+        },
+      },
+      {
+        entity: { eid: call },
+        call: { to: eid(90_001), id: `kept-${n}`, args: { n }, source },
+        execution: { by: person },
+        entry: { session, seq: 13 },
+      },
+      {
+        entity: { eid: result },
+        result: { call, ms: 1 },
+        content: { body: 'Kept result' },
+        entry: { session, seq: 14 },
+      },
+    ]
     for (let j = 0; j < 12; j++) {
       rows.push({
         entity: { eid: eid(200_000 + n * 100 + j) },
         entry: { session, seq: j + 1 },
         content: { body: 'Kept transcript' },
-        ...(j == 11 ? { stop: {} } : { notice: {} }),
+        cost: { dollars: 0.001, reported: true },
+        ...(j == 0
+          ? { using: { model: eid(90_002) } }
+          : j == 11
+          ? { stop: {} }
+          : { notice: {} }),
       })
     }
     await g.storage.tx((tx) => tx.patch(rows))
+  }
+  let driver = (await import('@yaks/durable-object')).driver(db)
+  driver.query({ t: 'pragma', name: 'optimize', value: 0x10002 })
+  // Synthetic item/slain/chat/document mix, never a copy of an app's data.
+  for (let start = 0; start < 79_000; start += 500) {
+    await g.storage.tx((tx) =>
+      tx.patch(Array.from({ length: 500 }, (_, j) => {
+        let n = start + j
+        return {
+          entity: { eid: eid(n + 100) },
+          created: { at: '2026-01-01T00:00:00Z', by: person },
+          updated: { at: '2026-01-01T00:00:00Z', by: person },
+          ...(n < 40_000
+            ? { item: { owner: person, kind: 'wood', at: n } }
+            : n < 60_000
+            ? {
+              slain: { by: person, creature: `wolf-${n % 100}`, at: n, xp: 1 },
+            }
+            : n < 70_000
+            ? {
+              chat: { level: 'old-land', player: person },
+              doc: { body: 'Old chat' },
+            }
+            : { doc: { title: `History ${n}` } }),
+        }
+      }))
+    )
   }
   for (let i = 0; i < 100; i++) {
     await store.alarm()
@@ -439,6 +508,10 @@ export let idleWake = async (
     if (i == 99) throw new Error('idle fixture did not settle')
   }
   await db.deleteAlarm()
+  let pending = await g.read('.effect.state=pending')
+  if (pending.length) {
+    throw new Error(`idle fixture holds ${pending.length} pending effects`)
+  }
   // No approximations: returned rows are not rows scanned by SQLite.
   let sql = db.sql.exec.bind(db.sql),
     total = empty(),
@@ -482,9 +555,20 @@ export let idleWake = async (
         throw new Error('idle read armed an alarm')
       }
     }
+    let loads: Record<string, Cost> = {}
+    for (
+      let [name, id] of [['session', eid(100_000)], ['call', eid(300_000)]]
+    ) {
+      current = loads[name] = empty()
+      // Cold and warm paths both use the linked production-shaped identities.
+      let rows = await store.door.graph.get([id])
+      if (!rows[0]?.[name]) throw new Error(`missing ${name} fixture`)
+      await store.door.graph.get([id])
+    }
     return {
       total,
       requests,
+      loads,
       alarm: await db.getAlarm(),
       shapes: [...shapes].map(([sql, cost]) => ({ sql, cost })).sort((a, b) =>
         b.cost.read - a.cost.read

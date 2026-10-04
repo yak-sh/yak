@@ -28,7 +28,7 @@
 //   wakes    rows seeded once in the directory: when to write `fired`, with
 //            the tags the plugin's effect rules match beside it
 //   installs rows a store holds as the plugin ships them, written as the
-//            kernel whenever they differ (graph.ts `#sow`): the directory's
+//            kernel during deployment (graph.ts `#deployed`): the directory's
 //            built integrations, every app store's model catalogue
 //   pins     the pinned bytes it still names, so the retention sweep keeps
 //            them (versions.ts `pruned`)
@@ -232,7 +232,7 @@ export type Plugin = {
   /** schedules seeded once in the directory; existing rows keep their state */
   wakes?: Wake[]
   /** rows the directory holds as the plugin ships them, installed as the
-   * kernel once per incarnation of the directory's store */
+   * kernel during deployment */
   installs?: Install[]
   /** the pinned bytes it still names, which the sweep must keep */
   pins?: Pins[]

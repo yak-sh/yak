@@ -83,17 +83,26 @@ app manifest does not enable the journal.
 
 ## Idle alarms and schema pages
 
-An app alarm fires its stored wakes, moves owed schema rows, runs pending
-effects whose handlers it composes and drains queued embeddings (`graph.ts`).
-Pending effects without a composed handler do not arm an alarm. Each incarnation
-joins the effect pool once, including its restart sweeps. A failed embedding pass keeps
-its queued text and retries; its crash-recovery alarm includes the provider
-timeout plus the retry interval, so it cannot outrun the failure retry.
+An app alarm fires its stored wakes, moves explicitly owed schema rows, drains
+recorded effects whose handlers it composes and drains queued embeddings
+(`graph.ts`). A read does not install descriptions, sweep sessions, reconcile
+calls, re-owe guest registration, or join a startup pool. Durable Objects use
+`singleOwner: true`: attempts and outcomes are durable; process presence and run
+leases are unnecessary. Pending effects without a composed handler do not arm
+an alarm.
 
-Schema pages come from @yaks/code's `described`: `_vocab.hash` skips an unchanged
-vocabulary, and a changed hash diffs the rows rather than rewriting every page.
-First installation writes all descriptions; later changes write only changed
-rows and the hash. This is separate from the storage schema stamp.
+Deployment POSTs materialize schema/lens descriptions, shipped rows, command
+identities and embedding queue triggers. Schema pages come from @yaks/code's
+`described`: `_vocab.hash` skips an unchanged vocabulary and a changed hash
+writes only changed rows. This is separate from the storage schema stamp.
+`schemaReady` is asserted only after a completed deployment install establishes
+metadata, epoch and archetypes for that vocabulary. Explicit mover commands arm
+bounded migration work; a cold read never starts it.
+
+The idle regression is `workers/yak/idle_alarm_workerd_test.ts`, through the real
+Store and SQL cursor counters. Its synthetic history includes linked sessions,
+answered calls and stale statistics. Returned rows are not billed rows; native
+plan/fullscan tests complement, not replace, the cursor measurement.
 
 ## Trashed stores
 

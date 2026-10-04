@@ -12,6 +12,13 @@ test('idle Vale-sized Store wakes seek no work and write nothing', async () => {
   console.log('IDLE_COST', JSON.stringify(report))
   assertEquals(report.total.written, 0)
   assertEquals(report.alarm, null)
+  for (let [name, cost] of Object.entries(report.loads)) {
+    assert(
+      cost.read <= 150,
+      `${name} cold+warm identity load: ${cost.read} rows`,
+    )
+    assertEquals(cost.written, 0)
+  }
   for (let [path, cost] of Object.entries(report.requests)) {
     assert(
       cost.read <= (path == 'alarm' ? 300 : 20),
