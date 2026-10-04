@@ -54,23 +54,8 @@ export let group = (hits: Hit[], q: string) =>
     Number(exact(b, q)) - Number(exact(a, q)) || rank(a.kind) - rank(b.kind)
   )
 
-// Matches arrive marked \x01…\x02 — rendered as <mark> WITHOUT parsing
-// any HTML out of the data.
-let marked = (s: string) =>
-  s.split('\x01').flatMap((chunk, i) => {
-    if (!i) return [chunk]
-    let [hit, rest] = chunk.split('\x02')
-    return [<mark key={i}>{hit}</mark>, rest]
-  })
-
-// The palette's field: its line is the person's draft, so it opens on what
-// was being searched for, here or in another interface, until it closes.
+// The palette's query is the person's draft.
 let FIELD = 'search'
-
-export let hitSlots = (h: Hit) => ({
-  title: marked(h.title_hit || h.title || '(untitled)'),
-  body: <Snip>{marked(h.snip)}{h.retired && ' · retired'}</Snip>,
-})
 
 export let Search = ({ open }: { open: (eid: string) => void }) => {
   let [hits, setHits] = useState<Hit[]>([])
@@ -225,7 +210,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
                 pick(h)
               }}
             >
-              <Entity eid={h.open} view='Tile' slots={hitSlots(h)} />
+              <Entity eid={h.open} view='Search.Tile' hit={h} />
             </Row>
           )
           if (!head) return [row]

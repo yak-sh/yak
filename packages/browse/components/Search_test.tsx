@@ -1,3 +1,4 @@
+import { hitSlots } from './views/Search.tsx'
 // The graph palette lets a word settle before asking the single server loop
 // to search it.
 import { test } from '@yaks/testing'
@@ -5,7 +6,7 @@ import { until } from '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
-import { group, hitSlots, Search, searchOpen } from './Search.tsx'
+import { group, Search, searchOpen } from './Search.tsx'
 import { config } from '../live.ts'
 
 let hit = (num: number, kind: string, title: string) => ({

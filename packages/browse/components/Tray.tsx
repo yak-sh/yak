@@ -12,7 +12,6 @@ import type { Ent } from '../types.ts'
 import { block } from '@yaks/ui'
 import { dragData } from './drag.ts'
 import { Entity } from './Entity.tsx'
-import { SessionDot } from './session_status.tsx'
 import { Card, icons } from './Card.tsx'
 import { usePinTargets } from './subscriptions.ts'
 import { Icon } from './icons.tsx'
@@ -228,7 +227,13 @@ export let Tray = () => {
           onClick={() => toggle(!trayOpen.value)}
         >
           <Dots>
-            {ls.map(([eid]) => <SessionDot key={eid} e={ent(eid)} />)}
+            {ls.map(([eid]) => (
+              <Entity
+                key={eid}
+                eid={eid}
+                view='Tray.Status'
+              />
+            ))}
           </Dots>
           <Chevron>{trayOpen.value ? '⌄' : '⌃'}</Chevron>
         </Live>

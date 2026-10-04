@@ -125,7 +125,7 @@ test('a session exposes its spawned children through SessionRelated', async () =
         'children · 1'
     )
     assertEquals(
-      mounted.root.querySelector('.SessionManage_Link')?.textContent?.includes(
+      mounted.root.textContent?.includes(
         'Needle 1',
       ),
       true,

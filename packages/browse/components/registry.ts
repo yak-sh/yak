@@ -175,7 +175,9 @@ export let renderView = (
     name: ux.name,
     when: ux.when,
     link: (eid: string) => `/${idOf(ent(eid))}`,
-    show: (b: Bundle, view: string) => renderView(ent(b.entity.eid), view),
+    show: (b: Bundle, view: string, extra: Context = {}) =>
+      renderView(ent(b.entity.eid), view, extra),
+    get: (eid: string) => row(eid).value ? bundle(ent(eid)) : undefined,
     onPatch: (patch) => applyPatch(e.eid, patch),
     onError: (error) => {
       problem.value = error instanceof Error ? error.message : String(error)

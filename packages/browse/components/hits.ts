@@ -3,7 +3,7 @@
 // UX host's `find`, @yaks/ux); `hits` is the palette's ranked form of the
 // same answer. A picker's line and its debounced hook are @yaks/ux's
 // `pickLine` and `useHits`.
-import { base } from '../live.ts'
+import { applyLocal, base } from '../live.ts'
 import { hitOf, rowOf } from '../client.ts'
 import type { Hit } from '../types.ts'
 import type { Bundle } from '@yaks/graph'
@@ -30,4 +30,20 @@ export let hits = async (
   q: string,
   limit = 20,
   signal?: AbortSignal,
-): Promise<Hit[]> => (await rows(q, limit, signal)).map((r) => hitOf(rowOf(r)))
+): Promise<Hit[]> => {
+  let found = await rows(q, limit, signal)
+  // Keep the actual bundles: every picker draws the hit through the registry,
+  // not from a private title-only search shape.
+  applyLocal(
+    found.flatMap(({ entity, ...comps }) =>
+      Object.entries({ entity, ...comps })
+        .filter(([, value]) => value && typeof value == 'object')
+        .map(([name, value]) => ({
+          eid: entity.eid,
+          name,
+          comp: value as Record<string, unknown>,
+        }))
+    ),
+  )
+  return found.map((r) => hitOf(rowOf(r)))
+}

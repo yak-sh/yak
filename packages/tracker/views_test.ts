@@ -1,3 +1,4 @@
+import { type Bundle, define, type H } from '@yaks/render'
 // Domain faces and queries are checked with graph bundles, not a fleet boot.
 import { equal, ok, test } from '@yaks/testing'
 import { renderToString } from 'preact-render-to-string'
@@ -28,6 +29,13 @@ let bug = {
 }
 test('the same bug and error readings work in text and Preact, with related rows through the registry', () => {
   let vocab = fixture().vocab
+  let refs = [{
+    view: 'Inline',
+    match: true as const,
+    render: <Node>(b: Bundle, h: H<Node>): Node =>
+      h('a', { href: host.link(b.entity.eid) }, host.name(b.entity.eid)),
+  }]
+  let registry = define([...views.renderers, ...refs])
   let error = {
     entity: { eid: 'error' },
     error: { at: '2026-10-03', level: 'fatal', message: 'no row' },
@@ -43,17 +51,27 @@ test('the same bug and error readings work in text and Preact, with related rows
       }, { file: 'dep.ts', line: 2 }],
     },
   }
-  let txt = text(views, bug, 'Full', vocab, {
+  let txt = text(registry, bug, 'Full', vocab, {
     ...host,
     errors: [error],
-    show: (b: typeof error, view: string) => tree(views, b, view, vocab, host),
+    show: (b: Bundle, view: string) =>
+      tree(registry, b, view, vocab, {
+        ...host,
+        show: (ref: Bundle, v: string) => tree(registry, ref, v, vocab, host),
+      }),
   }, 'plain')
-  let html = renderToString(preact(views, bug, 'Full', vocab, {
-    ...host,
-    errors: [error],
-    show: (b: typeof error, view: string) =>
-      preact(views, b, view, vocab, host),
-  }))
+  let html = renderToString(
+    preact(registry, bug, 'Full', vocab, {
+      ...host,
+      errors: [error],
+      show: (b: Bundle, view: string) =>
+        preact(registry, b, view, vocab, {
+          ...host,
+          show: (b: Bundle, view: string) =>
+            preact(registry, b, view, vocab, host),
+        }),
+    })!,
+  )
   for (let output of [txt, html]) {
     for (
       let part of [
@@ -67,7 +85,12 @@ test('the same bug and error readings work in text and Preact, with related rows
     ) ok(output.includes(part), part)
   }
   ok(html.includes('href="/symbol"'))
-  let tile = renderToString(preact(views, bug, 'List.Tile', vocab, host))
+  let tile = renderToString(
+    preact(registry, bug, 'List.Tile', vocab, {
+      ...host,
+      show: (b: Bundle, view: string) => preact(registry, b, view, vocab, host),
+    })!,
+  )
   ok(tile.includes('href="/B-7"'))
   equal(inspectViews[0].asks!(bug, {} as never, {}), {
     errors: occurrences('bug'),

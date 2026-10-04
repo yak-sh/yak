@@ -77,9 +77,12 @@ export let Persona = ({ e }: { e: Ent }) => {
     <Frame>
       {both.length > 0 && (
         <Lint>
-          ⚠ on both tiers (preload wins):{' '}
-          {both.map((r) => r.doc?.title || r.kind).join(', ')}{' '}
-          — drop each on one to settle
+          ⚠ on both tiers (preload wins): {both.map((r, i) => (
+            <span key={r.eid}>
+              {i ? ', ' : ''}
+              <Entity eid={r.eid} view='Persona.Lint.Inline' />
+            </span>
+          ))} — drop each on one to settle
         </Lint>
       )}
       {TIERS.map(([t, name, hint]) => (

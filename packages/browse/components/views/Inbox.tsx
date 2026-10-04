@@ -88,7 +88,8 @@ let EmbeddedInbox = ({ e, limit }: { e: Ent; limit?: number }) => {
   if (!items.length) {
     return (
       <ListFrame.Empty>
-        nothing addressed to {e.doc?.title || 'this'} yet
+        nothing addressed to{' '}
+        <Entity eid={e.eid} view='Inbox.Recipient.Inline' /> yet
       </ListFrame.Empty>
     )
   }

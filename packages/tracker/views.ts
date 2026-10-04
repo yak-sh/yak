@@ -30,7 +30,14 @@ let frames = <Node>(h: H<Node>, fs: Frame[], ctx: Context<Node>) =>
         null,
         f.app ? 'in app · ' : '',
         eid
-          ? h('a', { href: ctx.link?.(eid) ?? `/${eid}` }, frameText(f))
+          ? [
+            ctx.show?.(
+              ctx.get?.(eid) ?? { entity: { eid } },
+              'Tracker.Frame.Inline',
+            ),
+            ' · ',
+            h('code', null, frameText(f)),
+          ]
           : h('code', null, frameText(f)),
       )
     }),
@@ -129,10 +136,9 @@ let bugPage = <Node>(e: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node => {
         'p',
         null,
         'Culprit: ',
-        h(
-          'a',
-          { href: s.link?.(str(bug.culprit)) ?? `/${bug.culprit}` },
-          s.name?.(str(bug.culprit)) ?? str(bug.culprit),
+        s.show?.(
+          s.get?.(str(bug.culprit)) ?? { entity: { eid: str(bug.culprit) } },
+          'Tracker.Culprit.Inline',
         ),
       )
       : bug.spot

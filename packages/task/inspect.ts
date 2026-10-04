@@ -85,27 +85,34 @@ let Comments = (
     h(
       ui.Notes,
       {},
-      all.map((b) => {
-        let by = str(b, 'created', 'by')
-        let at = str(b, 'created', 'at')
-        return h(
-          ui.Notes.Item,
-          { key: b.entity.eid, 'data-comment': b.entity.eid },
-          h(
-            ui.Notes.Text,
-            {},
-            h(Markdown, {
-              source: str(b, 'doc', 'body') || str(b, 'doc', 'title'),
-            }),
-          ),
-          h(ui.Notes.Who, {}, by ? mention(io, by) : ''),
-          h(
-            ui.Notes.When,
-            {},
-            h('a', { href: io.link(b.entity.eid), title: at }, io.when(at)),
-          ),
-        )
+      all.map((b) => io.show(b, 'Task.Comment', {})),
+    ),
+  )
+}
+
+/** A comment's reading in a task, chosen through the same registry as its page. */
+export let TaskComment = ({ e: b, io }: Props): JSX.Element => {
+  let by = str(b, 'created', 'by')
+  let at = str(b, 'created', 'at')
+  useNamed(io, [by])
+  return h(
+    ui.Notes.Item,
+    { 'data-comment': b.entity.eid },
+    h(
+      ui.Notes.Text,
+      {},
+      h(Markdown, {
+        source: str(b, 'doc', 'body') || str(b, 'doc', 'title'),
       }),
+    ),
+    h(ui.Notes.Who, {}, by ? mention(io, by) : ''),
+    h(
+      ui.Notes.When,
+      {},
+      h('a', {
+        href: io.link(b.entity.eid),
+        title: at,
+      }, io.when(at)),
     ),
   )
 }
@@ -128,5 +135,6 @@ export let TaskPage = ({ e, io }: Props): JSX.Element => {
 
 /** The page this package draws in the inspector. */
 export let inspectViews: View[] = [
+  { view: 'Task.Comment', match: parse('.comment'), Render: TaskComment },
   { view: 'Inspect.Page', match: parse(`.${TASK}`), Render: TaskPage },
 ]

@@ -19,15 +19,15 @@ import {
   settled,
   statuses,
 } from '../../live.ts'
-import { actionsAt, linkProps } from '../nav.tsx'
+import { actionsAt } from '../nav.tsx'
 import { useBoardsOver, useQueryEids } from '../useQuery.ts'
 import { block } from '@yaks/ui'
 import { Stamp } from '../Stamp.tsx'
-import { Comments, viaName } from '../Comments.tsx'
+import { Comments } from '../Comments.tsx'
 import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
 import { Markdown } from '../Markdown.tsx'
-import { title, TitleEdit } from '../title.tsx'
+import { TitleEdit } from '../title.tsx'
 import { Edit, useEdit } from '@yaks/ux'
 import { bundle } from '../registry.ts'
 import { Relate } from './Relate.tsx'
@@ -54,10 +54,8 @@ let Frame = block('div', 'Show', {
   Acceptance: 'section',
   AcceptanceTitle: 'h2',
   AcceptanceBody: 'div',
-  Claim: 'a',
+  Claim: 'span',
   Domain: 'span',
-  Project: 'a',
-  Assignee: 'a',
   Meta: 'div',
   More: 'div',
   Proposal: 'span',
@@ -87,8 +85,6 @@ let {
   AcceptanceBody,
   Claim,
   Domain,
-  Project,
-  Assignee,
   Meta: MetaEl,
   Proposal,
   Deps,
@@ -187,7 +183,7 @@ let By = (
         show={(face, v) => {
           if (!face || !v) return null
           let a = ent(String(v))
-          return <Assignee {...linkProps(a)}>{face}</Assignee>
+          return <Entity eid={a.eid} view='Meta.Author.Inline' />
         }}
       />
     )
@@ -207,7 +203,7 @@ let Plate = ({ e }: { e: Ent }) => (
     show={(face, v) => {
       if (!face || !v) return null
       let a = ent(String(v))
-      return <Assignee {...linkProps(a)} {...title(a.doc?.title || face)} />
+      return <Entity eid={a.eid} view='Meta.Assignee.Inline' />
     }}
   />
 )
@@ -223,7 +219,7 @@ let Home = ({ e }: { e: Ent }) => (
     show={(face, v) => {
       if (!face || !v) return null
       let p = ent(String(v))
-      return <Project {...linkProps(p)} {...title(p.doc?.title || face)} />
+      return <Entity eid={p.eid} view='Meta.Project.Inline' />
     }}
   />
 )
@@ -659,9 +655,9 @@ export let Meta = (
       )}
       {e.task && <Plate e={e} />}
       {e.claim && (
-        <Claim {...(claimant.value ? linkProps(claimant.value) : {})}>
+        <Claim>
           ⚑ {claimant.value
-            ? viaName(e.claim.session)
+            ? <Entity eid={e.claim.session} view='Meta.Claim.Inline' />
             : claimant.state?.status == 'failed'
             ? 'could not load'
             : claimant.ready

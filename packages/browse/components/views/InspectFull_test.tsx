@@ -1,3 +1,6 @@
+import { parse } from '@yaks/query'
+import { mount } from '../mount.ts'
+import { InspectFull } from './InspectFull.tsx'
 // The InspectFull inspector exposes every component and gives its editing controls
 // the same component vocabulary as its stored rows.
 import { test } from '@yaks/testing'
@@ -8,7 +11,7 @@ import { act } from 'preact/test-utils'
 import { parseHTML } from 'linkedom'
 import { compTone } from '../comp.ts'
 import { cache, ent, useRoute } from '../../live.ts'
-import { applicable, ux } from '../registry.ts'
+import { applicable, registry, ux } from '../registry.ts'
 import { Ux } from '@yaks/ux'
 
 // Each case imports Entity.tsx — the whole component registry — and mounts a
@@ -339,5 +342,41 @@ test('Inspect.Full combines the entity reading, raw properties and registered li
     cache.value = {}
     if (prior) Object.defineProperty(globalThis, 'document', prior)
     else delete (globalThis as { document?: unknown }).document
+  }
+})
+
+test('Inspect.Full reference cells honor the referenced entity renderer', () => {
+  cache.value = {
+    task: {
+      entity: { eid: 'task', num: 1 },
+      task: {},
+      filed: { project: 'project' },
+    },
+    project: {
+      entity: { eid: 'project', num: 2 },
+      project: {},
+      doc: { title: 'Plain doc title' },
+    },
+  }
+  let prior = registry.renderers
+  registry.renderers = [
+    {
+      view: 'Inspect.Reference.Inline',
+      match: parse('.project'),
+      Render: () => <span>Specific project identity</span>,
+    },
+    ...prior,
+  ]
+  let mounted = mount(<InspectFull e={ent('task')} />)
+  try {
+    assertEquals(
+      mounted.root.querySelector('[data-raw-properties]')?.textContent
+        ?.includes('Specific project identity'),
+      true,
+    )
+  } finally {
+    mounted.free()
+    registry.renderers = prior
+    cache.value = {}
   }
 })

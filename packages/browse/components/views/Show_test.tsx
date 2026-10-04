@@ -290,9 +290,15 @@ test('task meta carries both full facts and compact edge tallies', () => {
   let e = ent('task')
   let { root, free } = mount(h(resolve(e, 'Meta').Render, { e, id: true }))
   try {
-    assertEquals(root.querySelector('.Show_Project')?.textContent, 'Task Graph')
+    assertEquals(
+      root.querySelector('.Show_Meta')?.textContent.includes('Task Graph'),
+      true,
+    )
     assertEquals(root.querySelector('.Show_Domain')?.textContent, 'Eng')
-    assertEquals(root.querySelector('.Show_Assignee')?.textContent, 'Jeff')
+    assertEquals(
+      root.querySelector('.Show_Meta')?.textContent.includes('Jeff'),
+      true,
+    )
     let comments = root.querySelector('.Show_Comments')!
     assertEquals(comments.textContent.trim(), '1')
     assertEquals(
@@ -328,7 +334,7 @@ test('task meta carries both full facts and compact edge tallies', () => {
     assertEquals(root.querySelector('.Show_Done')?.textContent, '1')
     assertEquals(root.querySelector('.Show_Claim')?.textContent, '⚑ S-4')
     assertEquals(
-      root.querySelector('.Show_Claim')?.getAttribute('href'),
+      root.querySelector('.Show_Claim a')?.getAttribute('href'),
       '/S-4',
     )
     assertExists(root.querySelector('.Stamp'))

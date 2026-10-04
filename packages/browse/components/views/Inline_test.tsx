@@ -1,3 +1,5 @@
+import { registry } from '../registry.ts'
+import { parse } from '@yaks/query'
 import { test } from '@yaks/testing'
 import '../../testing.ts'
 import { type ComponentChild, h, type VNode } from 'preact'
@@ -7,7 +9,7 @@ import { mount } from '../mount.ts'
 import { resolve } from '../Entity.tsx'
 import * as ui from '@yaks/ui'
 import { Dot } from '../Dot.tsx'
-import { Inline, TaskInline } from './Inline.tsx'
+import { Id, Inline, TaskInline } from './Inline.tsx'
 
 let vnode = (child: ComponentChild): child is VNode =>
   typeof child == 'object' && child != null &&
@@ -79,6 +81,28 @@ test('an entity with no title and no number is called by its handle', () => {
     assertEquals(root.textContent, '#bbbbbbbbbb')
   } finally {
     free()
+    cache.value = {}
+  }
+})
+
+// A chip is a view too: a package's more specific identity wins at every
+// caller of the shared Id, without the caller knowing the entity's kind.
+test('shared Id resolves a contributed identity instead of drawing its own chip', () => {
+  cache.value = {
+    named: { entity: { eid: 'named', num: 1 }, doc: { title: 'Not the chip' } },
+  }
+  let prior = registry.renderers
+  registry.renderers = [
+    { view: 'Id', match: parse('.doc'), Render: () => <b>Domain identity</b> },
+    ...prior,
+  ]
+  let mounted = mount(<Id e={ent('named')} />)
+  try {
+    assertEquals(mounted.root.textContent, 'Domain identity')
+    assertEquals(mounted.root.querySelector('.Id'), null)
+  } finally {
+    mounted.free()
+    registry.renderers = prior
     cache.value = {}
   }
 })

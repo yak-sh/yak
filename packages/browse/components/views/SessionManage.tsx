@@ -1,12 +1,10 @@
 // A session's phone sized controls: choose the model for the next input and
 // open its children and claims without leaving the transcript.
 import { useEffect, useState } from 'preact/hooks'
-import { ent } from '../../live.ts'
 import { catalog, transport, usingOf } from '../../providers.ts'
-import { entityPath } from '../../url.ts'
-import { type Ent, idOf } from '../../types.ts'
+import { type Ent } from '../../types.ts'
 import { Composer } from '../Comments.tsx'
-import { follow } from '../nav.tsx'
+import { Entity } from '../Entity.tsx'
 import { load, providers } from '../Run.tsx'
 import { useModel } from '../subscriptions.ts'
 import { block } from '@yaks/ui'
@@ -19,10 +17,9 @@ let Frame = block('div', 'SessionManage', {
   Group: 'details',
   Gist: 'summary',
   List: 'div',
-  Link: 'a',
   Empty: 'span',
 })
-let { Input, Label, Related, Group, Gist, List, Link, Empty } = Frame
+let { Input, Label, Related, Group, Gist, List, Empty } = Frame
 
 export let SessionInput = ({ e }: { e: Ent }) => {
   let current = useModel(e)
@@ -91,15 +88,9 @@ let Links = ({ name, ids }: { name: string; ids: string[] }) => (
     <Gist>{name} · {ids.length}</Gist>
     <List>
       {ids.length
-        ? ids.map((eid) => {
-          let e = ent(eid)
-          let href = entityPath(idOf(e))
-          return (
-            <Link key={eid} href={href} onClick={follow(href)}>
-              {idOf(e)} {e.doc?.title ?? ''}
-            </Link>
-          )
-        })
+        ? ids.map((eid) => (
+          <Entity key={eid} eid={eid} view='Session.Related.List.Tile' />
+        ))
         : <Empty>none</Empty>}
     </List>
   </Group>
@@ -107,12 +98,12 @@ let Links = ({ name, ids }: { name: string; ids: string[] }) => (
 
 export let SessionRelated = ({ eid }: { eid: string }) => {
   let children = useQueryResult(
-    `.spawned.parent=${eid}&.fields=spawned.parent,session.id,session.status,doc.title`,
+    `.spawned.parent=${eid}&*`,
     true,
     true,
   )
   let claims = useQueryResult(
-    `.claim.session=${eid}&.fields=claim.session,task.status,doc.title`,
+    `.claim.session=${eid}&*`,
     true,
     true,
   )

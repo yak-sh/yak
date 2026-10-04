@@ -66,7 +66,7 @@ export let statement = (body: string): string =>
  * where, what somebody wrote about them, and, where they were said in a
  * conversation, the turns around them, drawn as the package that keeps the
  * conversation draws it (`Inspect.Conversation`). */
-let Cited = ({ m, io }: { m: Bundle; io: Io }): JSX.Element => {
+export let Cited = ({ e: m, io }: Props): JSX.Element => {
   let by = str(m, 'created', 'by')
   let session = str(m, 'entry', 'session')
   let on = str(m, 'comment', 'target')
@@ -132,7 +132,7 @@ let Evidence = (
       : cited.map((to) => {
         let m = held.get(to)
         return m
-          ? h(Cited, { key: to, m, io })
+          ? io.show(m, 'Belief.Cited', {})
           : h(ui.Rows.More, { key: to }, mention(io, to), ' is gone')
       }),
   )
@@ -189,25 +189,21 @@ let Beliefs = (
       : h(
         ui.Rows,
         {},
-        all.map((b) => {
-          let scope = str(b, 'belief', 'scope')
-          return h(
-            ui.Rows.Item,
-            { key: b.entity.eid, 'data-belief': b.entity.eid },
-            h(
-              'a',
-              { href: io.link(b.entity.eid) },
-              str(b, 'doc', 'title') || io.id(b),
-            ),
-            scope ? [' · for ', mention(io, scope)] : null,
-            h(
-              ui.Body,
-              { mod: 'short' },
-              statement(str(b, 'doc', 'body')),
-            ),
-          )
-        }),
+        all.map((b) => io.show(b, 'Topic.Belief.Tile', {})),
       ),
+  )
+}
+
+/** A belief's reading in a topic's list, reusable wherever that view is needed. */
+export let BeliefTile = ({ e: b, io }: Props): JSX.Element => {
+  let scope = str(b, 'belief', 'scope')
+  useNamed(io, [scope])
+  return h(
+    ui.Rows.Item,
+    { 'data-belief': b.entity.eid },
+    io.show(b, 'Inspect.Reference.Inline', {}),
+    scope ? [' · for ', mention(io, scope)] : null,
+    h(ui.Body, { mod: 'short' }, statement(str(b, 'doc', 'body'))),
   )
 }
 
@@ -230,6 +226,8 @@ export let TopicPage = ({ e, io }: Props): JSX.Element => {
 
 /** The pages this package draws in the inspector. */
 export let inspectViews: View[] = [
+  { view: 'Belief.Cited', match: parse('.memory'), Render: Cited },
+  { view: 'Topic.Belief.Tile', match: parse('.belief'), Render: BeliefTile },
   { view: 'Inspect.Page', match: parse('.belief'), Render: BeliefPage },
   { view: 'Inspect.Page', match: parse(`.${TOPIC}`), Render: TopicPage },
 ]

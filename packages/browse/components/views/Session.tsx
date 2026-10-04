@@ -753,15 +753,19 @@ export let SessionRow = ({ e, slots, onOpen }: TileProps) => {
   ).eids[0]
   let last = latest ? ent(latest) : undefined
   let model = useModel(e).name
-  let title = excerpt(face.value?.doc?.title) || excerpt(e.doc?.title) || ask ||
+  let title = excerpt(e.doc?.title) || ask ||
     brief || 'Session'
-  let detail = face.value?.doc?.title ? brief || ask : ask && brief
+  let detail = face.value ? brief || ask : ask && brief
   return (
     <RowLine>
       <RowLine.Head {...tileLink(e, onOpen)}>
         {slot(slots, 'before')}
         <SessionDot e={e} />
-        <RowLine.Title {...tileTitle(slots, title)} />
+        <RowLine.Title>
+          {slots?.title ?? (face.value
+            ? <Entity eid={face.value.eid} view='Session.Work.Inline' />
+            : <span {...tileTitle(undefined, title)} />)}
+        </RowLine.Title>
         {slot(slots, 'after')}
         {(last?.entry?.seq != null || model || last?.created?.at) && (
           <RowLine.Meta>

@@ -107,7 +107,7 @@ export let EntryTurn = ({ e, io, ctx }: Props): JSX.Element => {
   let to = str(e, CALL, 'to')
   useNamed(io, [kind == 'input' ? by : '', to])
   let who = kind == 'input' && by
-    ? io.name(by)
+    ? mention(io, by)
     : OUTPUT in e || CALL in e || RESULT in e
     ? 'agent'
     : kind ?? io.kind(e)

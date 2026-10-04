@@ -31,8 +31,8 @@ import { spawnOf } from './Run.tsx'
 import { Tray } from './Tray.tsx'
 import { shelve } from './shelf.ts'
 import { block } from '@yaks/ui'
+import { Entity } from './Entity.tsx'
 import { Id } from './views/Inline.tsx'
-import { title } from './title.tsx'
 import { hits } from './hits.ts'
 import { spawnHit } from './Canvas.tsx'
 import { fields } from './fields.tsx'
@@ -98,7 +98,7 @@ export let FixMessage = (
       <Id e={t} /> → {s.num
         ? (
           <>
-            <Id e={s} /> {s.session?.status ?? 'starting'}
+            <Entity eid={s.eid} view='Status.Session.Id' />
           </>
         )
         : 'agent starting'}
@@ -271,8 +271,9 @@ let WhoAmI = () => {
               name: 'client',
               comp: { actor: p.eid },
             })}
-          {...title(p.title || idOf(p))}
-        />
+        >
+          <Entity eid={p.eid} view='Identity.Inline' />
+        </Person>
       ))}
       ?
     </You>

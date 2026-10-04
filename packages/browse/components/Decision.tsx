@@ -6,7 +6,7 @@ import { useQueryResult } from './useQuery.ts'
 import { drafts } from './drafts.ts'
 import { bundle } from './registry.ts'
 import { useReference } from './subscriptions.ts'
-import { viaName } from './Comments.tsx'
+import { Entity } from './Entity.tsx'
 
 /** The decision domain's form bound to this page's graph and drafts. */
 export let Decision = ({ e, caret }: { e: Ent; caret?: number }) => {
@@ -20,7 +20,7 @@ export let Decision = ({ e, caret }: { e: Ent; caret?: number }) => {
     !!e.decision,
     true,
   )
-  let who = useReference(e.decided?.by)
+  useReference(e.decided?.by)
   // apply reports refusals in the page; the button has no promise consumer.
   let send = (bundles: Bundle[]) => void apply(bundles).catch(() => {})
   return (
@@ -28,7 +28,7 @@ export let Decision = ({ e, caret }: { e: Ent; caret?: number }) => {
       e={bundle(e)}
       drafts={drafts}
       apply={send}
-      name={(eid) => who.value?.doc?.title || viaName(eid)}
+      name={(eid) => <Entity eid={eid} view='Decision.Author.Inline' />}
       blocking={waiting.ready ? waiting.eids.length > 0 : undefined}
       caret={caret}
     />

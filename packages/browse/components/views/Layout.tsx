@@ -1,8 +1,8 @@
 import { useState } from 'preact/hooks'
-import { type Ent, type Hit, idOf, uuid } from '../../types.ts'
+import { type Ent, type Hit, uuid } from '../../types.ts'
 import { backlinks, ent, mutate } from '../../live.ts'
 import { useBacklinks } from '../useQuery.ts'
-import { block } from '@yaks/ui'
+import { block, Button, Choices, Field } from '@yaks/ui'
 import { resolve } from '../registry.ts'
 import { Entity } from '../Entity.tsx'
 import { panEvents } from '../Canvas.tsx'
@@ -24,10 +24,9 @@ let Frame = block('div', 'Layout', {
   Acts: 'div',
   Act: 'button',
   Fill: 'div',
-  Row: 'button',
   Empty: 'div',
 })
-let { Pane, Gutter: GutterEl, Acts, Act, Fill: FillEl, Row, Empty } = Frame
+let { Pane, Gutter: GutterEl, Acts, Act, Fill: FillEl, Empty } = Frame
 
 // The panes of one layout, straight off the reactive cache. The cache
 // key is the identity (a comp cast from another client may carry no eid
@@ -130,16 +129,26 @@ let Fill = ({ eid, layout }: { eid: string; layout: string }) => {
     ))
   return (
     <FillEl>
-      <input
+      <Field
         placeholder='fill this pane — search the graph…'
         onInput={(e: InputEvent) =>
           seek((e.currentTarget as HTMLInputElement).value)}
       />
-      {hits.slice(0, 12).map((h) => (
-        <Row key={h.eid} onClick={() => pick(h)}>
-          {h.title || '(untitled)'} <span>{idOf(h)}</span>
-        </Row>
-      ))}
+      <Choices>
+        {hits.slice(0, 12).map((h) => (
+          <Choices.Item
+            key={h.eid}
+            role='button'
+            tabIndex={0}
+            onClick={() => pick(h)}
+            onKeyDown={(ev: KeyboardEvent) => {
+              if (ev.key == 'Enter' || ev.key == ' ') pick(h)
+            }}
+          >
+            <Entity eid={h.open} view='Layout.Pick.List.Tile' />
+          </Choices.Item>
+        ))}
+      </Choices>
     </FillEl>
   )
 }
@@ -203,7 +212,7 @@ export let Layout = ({ e }: { e: Ent }) => {
     <Frame>
       <Empty>
         empty layout —{' '}
-        <button type='button' onClick={reroot}>add a pane</button>
+        <Button type='button' onClick={reroot}>add a pane</Button>
       </Empty>
     </Frame>
   )

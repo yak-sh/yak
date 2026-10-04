@@ -577,7 +577,7 @@ test('session Tile names its work, model, and last activity without IDs', () => 
       new Date(lastAt).toLocaleString(),
     )
     assertEquals(
-      head.querySelector('.SessionRow_Title')?.textContent,
+      head.querySelector('.SessionRow_Title')?.textContent?.trim(),
       'Second task',
     )
     assertEquals(

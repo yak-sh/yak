@@ -4,6 +4,7 @@ import * as ui from '@yaks/ui'
 import { linkProps } from '../nav.tsx'
 import { Dot } from '../Dot.tsx'
 import { title } from '../title.tsx'
+import { renderView } from '../registry.ts'
 
 // The Inline role: identify an entity in flowing content — dot for a task +
 // truncated title, ONE anchor wearing the whole internal-link contract
@@ -13,9 +14,12 @@ import { title } from '../title.tsx'
 
 let retired = (e: Ent) => (e.project && e.archived ? 'retired' : undefined)
 
-export let Id = ({ e }: { e: Ent }) => (
+export let IdFace = ({ e }: { e: Ent }) => (
   <ui.Id {...linkProps(e)} mod={retired(e)}>{idOf(e)}</ui.Id>
 )
+
+// Resolve at render time: Inline is imported while the registry is composed.
+export let Id = ({ e }: { e: Ent }) => renderView(e, 'Id')
 
 let Line = ui.block('a', 'Inline', { Title: 'span' })
 let { Title } = Line
@@ -41,3 +45,10 @@ export let Inline = ({ e, dot }: { e: Ent; dot?: boolean }) => (
 )
 
 export let TaskInline = ({ e }: { e: Ent }) => <Inline e={e} dot />
+
+/** A compact session address with its lifecycle, wherever status names it. */
+export let SessionId = ({ e }: { e: Ent }) => (
+  <>
+    <Id e={e} /> {e.session?.status ?? 'starting'}
+  </>
+)

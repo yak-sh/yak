@@ -1,5 +1,5 @@
 /** A decision's question, choices and answer, shared by browser and terminal. */
-import { h, type JSX } from 'preact'
+import { type ComponentChildren, h, type JSX } from 'preact'
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Drafts } from '@yaks/draft'
 import { Button, Field, Notes, Say, Section } from '@yaks/ui'
@@ -14,7 +14,7 @@ export let DecisionForm = (
     e: Bundle
     drafts: Drafts
     apply: (bundles: Bundle[]) => unknown
-    name: (eid: string) => string
+    name: (eid: string) => ComponentChildren
     blocking?: boolean
     caret?: number
   },
@@ -71,7 +71,7 @@ export let DecisionForm = (
         {},
         'Answered: ',
         String(decided.choice ?? ''),
-        decided.by ? ` · by ${name(String(decided.by))}` : '',
+        decided.by ? [' · by ', name(String(decided.by))] : '',
         decided.at ? ` · ${decided.at}` : '',
       ),
     open && h(

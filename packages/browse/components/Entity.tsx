@@ -53,6 +53,8 @@ import {
 } from './views/Title.tsx'
 import { Board } from './views/Board.tsx'
 import { Split } from './views/Split.tsx'
+import { SessionDot } from './session_status.tsx'
+import { SearchTile } from './views/Search.tsx'
 import { Layout } from './views/Layout.tsx'
 import { Dashboard } from './views/Dashboard.tsx'
 import { Persona } from './views/Persona.tsx'
@@ -62,7 +64,7 @@ import { TaskTile } from './views/TaskTile.tsx'
 import { BoardMeta, BoardTile } from './views/BoardTile.tsx'
 import { BoardList, List, ListTile } from './views/List.tsx'
 import { Canvas } from './Canvas.tsx'
-import { Inline, TaskInline } from './views/Inline.tsx'
+import { IdFace, Inline, SessionId, TaskInline } from './views/Inline.tsx'
 import { Dependency } from './views/Dependency.tsx'
 import { InspectFull, ProjectInspectFull } from './views/InspectFull.tsx'
 import { Json } from './views/Json.tsx'
@@ -103,6 +105,8 @@ export { applicable, extend, has, type Renderer, resolve } from './registry.ts'
 // tabs list plus an icon in Card.tsx.
 define([
   ...inspectViews,
+  { view: 'Search.Tile', match: and(), Render: SearchTile },
+  { view: 'Status', match: parse('.session'), Render: SessionDot },
   // Canvas and List render child entities through this registry. Defer their
   // bindings until render so either module can be imported first.
   {
@@ -277,6 +281,8 @@ define([
   { view: 'Inspect.Full', match: and(), Render: InspectFull },
   { view: 'Inline', match: parse('.doc .task'), Render: TaskInline },
   { view: 'Inline', match: and(), Render: Inline },
+  { view: 'Id', match: and(), Render: IdFace },
+  { view: 'Status.Session.Id', match: parse('.session'), Render: SessionId },
   { view: 'Dependency', match: and(), Render: Dependency },
 ], [
   'Wake',

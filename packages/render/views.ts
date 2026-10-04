@@ -48,6 +48,8 @@ export type Shown<Node> = {
   show: (b: Bundle, view: string) => Node | null
   /** the relation an edge states: `contains` */
   relation?: (b: Bundle) => string | undefined
+  /** a reference's complete bundle, when this host holds it */
+  get?: (eid: string) => Bundle | undefined
   /** the groups of entities related to this one, for `Page` */
   relations?: Related[]
   /** the comments aimed at this one, oldest first, for `Page` */
@@ -69,8 +71,7 @@ let AT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/
 // reads as the caller says, and anything structured is its JSON.
 let value = <Node>(h: H<Node>, s: Ctx<Node>, v: unknown): Child<Node> => {
   if (typeof v == 'string' && EID.test(v)) {
-    let href = s.link?.(v)
-    return href ? h('a', { href }, s.name(v)) : s.name(v)
+    return s.show(s.get?.(v) ?? { entity: { eid: v } }, 'Reference.Inline')
   }
   if (typeof v == 'string' && AT.test(v)) {
     return h('time', { datetime: v }, s.when(v))
@@ -89,7 +90,15 @@ let section = <Node>(h: H<Node>, title: string, ...kids: Child<Node>[]) =>
 // An entity with no title of its own is called by its id — except beside its
 // id in a `Tile`, where it is called by its kind rather than by its id twice.
 let title = <Node>(b: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node =>
-  h('span', null, ctx.in == 'Tile' ? shown(ctx).kind(b) : shown(ctx).id(b))
+  h(
+    'span',
+    null,
+    ctx.in == 'Reference'
+      ? shown(ctx).name(b.entity.eid)
+      : ctx.in == 'Tile'
+      ? shown(ctx).kind(b)
+      : shown(ctx).id(b),
+  )
 
 // An edge is titled by the sentence it states: `T-1 requires T-2`.
 let sentence = <Node>(
@@ -109,6 +118,13 @@ let sentence = <Node>(
     to ? value(h, s, to) : '?',
   )
 }
+
+let inline = <Node>(b: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node =>
+  h(
+    'a',
+    { href: shown(ctx).link?.(b.entity.eid) },
+    ctx.render?.('Title', { in: 'Reference' }),
+  )
 
 let tile = <Node>(b: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node => {
   let s = shown(ctx)
@@ -214,6 +230,7 @@ export let views: Registry = define([
   { view: 'Title', match: true, render: title },
   { view: 'Title', match: parse('.edge'), render: sentence },
   { view: 'Tile', match: true, render: tile },
+  { view: 'Inline', match: true, render: inline },
   { view: 'Facts', match: true, render: facts },
   { view: 'Comment', match: parse('.comment'), render: comment },
   { view: 'Page', match: true, render: page },

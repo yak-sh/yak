@@ -7,15 +7,12 @@ import { up } from './Dependency.tsx'
 import * as ui from '@yaks/ui'
 import { Edit } from '@yaks/ux'
 import { usePage } from '../page.ts'
-import { bundle } from '../registry.ts'
-import { Id } from './Inline.tsx'
+import { bundle, renderView } from '../registry.ts'
 import { Entity } from '../Entity.tsx'
 import { follow } from '../nav.tsx'
 import { compTone } from '../comp.ts'
 import { Icon } from '../icons.tsx'
 import { dragData } from '../drag.ts'
-import { Md } from './Md.tsx'
-import { Json } from './Json.tsx'
 
 // Adding/removing comps is a browser power tool — the TUI paints InspectFull as
 // static lines with no live events, so the controls stay web-only. typeof
@@ -84,9 +81,9 @@ export let InspectFullTabs = (
         </Tabs>
       </Head>
       {view == 'Markdown'
-        ? <Md e={e} />
+        ? renderView(e, 'Markdown')
         : view == 'JSON'
-        ? <Json e={e} />
+        ? renderView(e, 'JSON')
         : children}
     </Lens>
   )
@@ -144,7 +141,7 @@ let Row = ({ comp, k, v }: { comp?: string; k: string; v: unknown }) => (
 let refFace = (v: unknown) =>
   v == null || v === '' ? null : (
     <>
-      <Id e={ent(String(v))} /> {ent(String(v)).doc?.title ?? ''}{' '}
+      <Entity eid={String(v)} view='Inspect.Reference.Inline' />{' '}
       <Val mod='id'>{typeof v == 'object' ? JSON.stringify(v) : String(v)}</Val>
     </>
   )
