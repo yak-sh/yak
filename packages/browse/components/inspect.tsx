@@ -162,6 +162,7 @@ export let inspectIo: Io = {
 // specific reading wins, and io.show comes back through this same registry.
 export let adaptViews = (views: import('@yaks/inspect').View[]): Entry[] =>
   views
+    .filter((r) => r.view != 'Inspect.Reference.Inline')
     .map((r) => ({
       ...r,
       Render: ({ e, ...ctx }) => {
