@@ -32,6 +32,7 @@
 // answered at all. A deploy in v1 is a version bump, since an
 // app's files serve live from its blob store — and the version it bumps to is
 // kept, files and all, so app_rollback can put it back.
+import { declarationOf, keepDeclaration } from './declaration.ts'
 import type { Reload } from '@yaks/platform'
 import { configured, deployWorker } from './deploy_worker.ts'
 import { compiled } from './esbuild.ts'
@@ -1060,6 +1061,12 @@ let published = async (
       },
       vouched(who),
     )
+    await keepDeclaration(ctx.env, space, home, release, {
+      vocab: JSON.parse(
+        await answer(draftStore(ctx.env.STORE, space, home, release), '/vocab'),
+      ),
+      tools: (await declarationOf(ctx.env, space, home)).tools,
+    })
     staged.push({ app: home, release })
   }
   let mine = JSON.parse(
@@ -1198,6 +1205,10 @@ let published = async (
   // as a manifest of path to the name of their bytes, those bytes pinned
   // beside them, and Cloudflare's name for the script this uploaded. The
   // app's live pointer and its move record commit together.
+  await keepDeclaration(ctx.env, space, stagedApp, String(version), {
+    vocab: JSON.parse(await answer(draft, '/vocab')),
+    tools: checked,
+  })
   let pinned = await c.time('snapshot', () => files.finish())
   await c.time(
     'record',
@@ -2213,6 +2224,13 @@ let OURS: Row[] = [
             blobs,
             `${space.slug}/.releases/${app.eid}/`,
             `${to}/.releases/${app.eid}/`,
+          ),
+        )
+        keys.push(
+          ...await laid(
+            blobs,
+            `${space.slug}/.declarations/${app.eid}/`,
+            `${to}/.declarations/${app.eid}/`,
           ),
         )
         keys.push(

@@ -164,7 +164,10 @@ let toml = () =>
  * first, as the workerd kernel's does, since the first person to sign in owns
  * the meta space. `close` ends it.
  */
-let boot = async (bindings: Partial<Env> = {}) => {
+let boot = async (
+  bindings: Partial<Env> = {},
+  prepare?: (env: Env) => void,
+) => {
   // Loaded when a test asks: the runner imports this module for its Stripe
   // helpers and has no use for the kernel's whole graph.
   await (await import('./wrangler.ts')).ready()
@@ -188,6 +191,7 @@ let boot = async (bindings: Partial<Env> = {}) => {
     ),
     ...bindings,
   })
+  prepare?.(p.env)
   let server = Deno.serve(
     { hostname: '127.0.0.1', port: 0, onListen: () => {} },
     (req) =>
@@ -244,8 +248,11 @@ export let kernel = async (): Promise<Kernel> => {
  * `stop`: for a test that needs the kernel whole, such as one that times a
  * store's first wake.
  */
-export let fresh = async (bindings: Partial<Env> = {}): Promise<Kernel> => {
-  let { close, ...k } = await boot(bindings)
+export let fresh = async (
+  bindings: Partial<Env> = {},
+  prepare?: (env: Env) => void,
+): Promise<Kernel> => {
+  let { close, ...k } = await boot(bindings, prepare)
   return owning(k, close)
 }
 

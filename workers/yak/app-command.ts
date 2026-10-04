@@ -4,18 +4,11 @@ import { invoke, mayCall, type ToolDef, type Tools } from '@yaks/tools/declared'
 import { CallError, display } from '@yaks/tools'
 import { legacyOptions } from '@yaks/vocab/tools'
 import { type Bundle } from '@yaks/graph'
-import {
-  type App,
-  appStore,
-  releaseOf,
-  type Space,
-  storeName,
-} from './directory.ts'
+import { type App, type Space } from './directory.ts'
 import { commandWorker, workerBreak } from './dispatch.ts'
 import type { Env } from './env.ts'
-import { recall } from './lib/hops.ts'
+import { declarationOf } from './declaration.ts'
 import type { Who } from './session.ts'
-import { readTools } from './tool-grammar.ts'
 
 type Acts = {
   apply: (
@@ -42,18 +35,7 @@ export let toolsOf = async (
   space: Space,
   app: App,
 ): Promise<Tools> => {
-  // Commands arrive with a release, as words do (reach.ts `vocabAt`).
-  if (releaseOf(app) == '0') return {}
-  let name = storeName(space, app)
-  return readTools(
-    await recall(name, '/tools', () => {
-      return appStore(env.STORE, space, app).consume('/tools', async (r) => {
-        if (r.ok) return await r.text()
-        await r.body?.cancel()
-        return '{}'
-      })
-    }),
-  )
+  return (await declarationOf(env, space, app)).tools
 }
 
 /** Commands this page caller can discover, with only the fields a page needs

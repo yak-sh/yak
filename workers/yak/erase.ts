@@ -341,6 +341,7 @@ export let emptied = async (
   await swept(env, under(space, app))
   await swept(env, `${space.slug}/.releases/${app.eid}/`)
   await swept(env, `${space.slug}/.drafts/${app.eid}/`)
+  await swept(env, `${space.slug}/.declarations/${app.eid}/`)
   // The store is named for where the app was born (directory.ts storeName),
   // so emptying it is what keeps a later app at the same address from waking
   // up in this one's graph.

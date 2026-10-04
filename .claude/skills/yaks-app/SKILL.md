@@ -142,6 +142,25 @@ designing words; the `data-migration` skill covers moving stored rows.
   source. Something new that costs money spends from it rather than adding an
   allowance; embedding calls don't count yet (T-59279).
 
+## Release declarations and discovery
+
+An app's accepted vocabulary and commands are release metadata in R2
+(`declaration.ts`), selected by the directory's source and declaration pointers.
+Deploy writes that snapshot before committing either pointer, including the
+retained words and borrowed-home declarations the Store accepted. Space rename
+copies the snapshots; app erasure sweeps them. Discovery reads no app Store:
+`initialize`, `tools/list`, and the schema preparation before a named tool call
+must leave every non-target app asleep (T-65378).
+
+Existing releases without a snapshot read their pinned deploy files, translating
+kept command grammar and reconstructing word homes without a Store fetch or a
+backfill. Only a deploy can know whether a retired column is empty; the
+file-only reader conservatively retains its declaration until the next deploy
+records the Store's accepted document.
+
+`yak admin tail` streams local Wrangler stdout, not the MCP door. Its account
+check runs once before the stream; following logs is not app traffic.
+
 ## The connector
 
 A tool's name, arguments, answer and `outputSchema`, as published in a

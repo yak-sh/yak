@@ -55,21 +55,16 @@ import {
   type App,
   appStore,
   META_STORE,
-  releaseOf,
   type Space,
   storeName,
 } from './directory.ts'
 import type { Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
 import { edits, mode } from '@yaks/member'
-import { recall } from './lib/hops.ts'
-import {
-  appKeywords,
-  appVocab,
-  meant,
-  platformDocs,
-  platformVocab,
-} from './vocab.ts'
+import { declarationOf } from './declaration.ts'
+import { compile, lensesIn } from '@yaks/lens'
+import { lensDocAt, spoken as lensSpoken } from './lenses.ts'
+import { appKeywords, appVocab, platformDocs, platformVocab } from './vocab.ts'
 import { matcher, rows } from '@yaks/match'
 import { parse } from '@yaks/query'
 import {
@@ -776,13 +771,8 @@ let projected = async (
 // store that cannot answer says nothing, which reads as an app with no words
 // of its own.
 //
-// Read once per request (hops.ts `recall`): the roster asks it for what an app
-// holds (standing.ts), the door for the properties a write may carry (agent.ts
-// `spoken`), and a write for where each word goes (`spoken` below), and all
-// three are the same moment until the store is written to. An app that has
-// released nothing declares nothing (directory.ts `releaseOf`), and its store
-// is not woken to say so: the door asks this of every app in reach on every
-// call.
+// Words are release metadata. Discovery and schema translation must never
+// wake a Store merely to ask which declaration its directory pointer selects.
 export let vocabAt = async (
   env: Env,
   space: Space,
@@ -790,37 +780,21 @@ export let vocabAt = async (
   headers: Record<string, string> = {},
 ): Promise<VocabDoc> => {
   if (at({ space, app }) == META_STORE) return PLATFORM_WORDS
-  if (releaseOf(app) == '0') return {}
-  let name = storeName(space, app)
-  let said = await recall(name, '/vocab', () => {
-    return appStore(env.STORE, space, app).consume('/vocab', async (res) => {
-      if (res.ok) return await res.text()
-      await res.body?.cancel()
-      return '{}'
-    })
-  })
-  let doc = meant(JSON.parse(said))
-  if (!headers['x-yak-speaks']) return doc
-  // The store owns schema translation, including destinations from its core
-  // documents. Keep this home's component set when composing the space.
-  return appStore(env.STORE, space, app).consume(
-    '/vocab.json',
-    async (res) => {
-      if (!res.ok) throw rejected(res.status, await told(res))
-      let docs = await res.json() as VocabDoc[]
-      let own = new Set(Object.keys(doc.$defs ?? {}))
-      return {
-        ...doc,
-        $defs: Object.fromEntries(
-          docs.flatMap((d) =>
-            Object.entries(d.$defs ?? {}).filter(([name]) => own.has(name))
-          ),
-        ),
-      }
-    },
-    {},
-    headers,
-  )
+  let doc = (await declarationOf(env, space, app)).vocab
+  let speaks =
+    lensSpoken(new Request('https://store/vocab', { headers })).speaks
+  if (!speaks) return doc
+  let docs = compile(lensesIn([lensDocAt(storeName(space, app), doc)]), speaks)
+    .schema(appVocab(doc).docs)
+  let own = new Set(Object.keys(doc.$defs ?? {}))
+  return {
+    ...doc,
+    $defs: Object.fromEntries(
+      docs.flatMap((d) =>
+        Object.entries(d.$defs ?? {}).filter(([name]) => own.has(name))
+      ),
+    ),
+  }
 }
 
 // Every word in reach as one vocabulary: the platform's core plus each app's
