@@ -38,6 +38,7 @@
         }
       }
     },
+    "@yaks/browse",
     "@yaks/inspect"
   ],
   "numbers": {
