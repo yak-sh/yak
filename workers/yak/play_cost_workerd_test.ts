@@ -1,6 +1,8 @@
 // T-65275: this budget is EXPECTED TO FAIL until play's storage costs are fixed.
 // Baseline after ee46a358f: 2 players, 79k synthetic history entities;
 // 15,521 reads / 234 writes per player-minute. Opening: 8,366 reads/player.
+// After the pending-save retry fix: 10,552 reads / 234 writes per player-minute.
+// Still expected to fail; this is not the orders-of-magnitude target.
 // Inclusive index writes are counted by workerd's cursor, not estimated.
 // Source reads/writes per player: live queries 6302.5/0, saves 4603/8,
 // relays 3623.5/15.5, gathering 485/105.5, fighting 334.5/74.5,

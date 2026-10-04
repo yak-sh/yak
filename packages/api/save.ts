@@ -254,6 +254,11 @@ export let saving = <C>(
             v.row = row
             v.dirty = true
             values.set(key, v)
+            // Eligibility reads stored state, never this incoming peer value.
+            // A pending clock/commit retry already owns the next read; new
+            // patches only replace the value it will save. Re-reading here
+            // both duplicates the retry and cancels/restarts its clock.
+            if (v.waiting || v.reading || v.cancel) return
             return save(key, v)
           }),
           () => accepted,

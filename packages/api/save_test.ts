@@ -463,3 +463,20 @@ test('a failed eligibility read can wake again on a relevant stored change', asy
   equal(f.read(), { x: 7 })
   equal(f.timers.size, 0)
 })
+
+test('pending peer patches do not recheck unchanged stored eligibility on every relay', () => {
+  let f = fixture('.book (!position | .updated.at<="1s ago")')
+  f.g.apply([{ entity: { eid: 'a' }, book: { status: 'draft' } }])
+  f.saved.write('one', f.write(1))
+  let read = f.g.read.bind(f.g), reads = 0
+  f.g.read = (...args) => {
+    reads++
+    return read(...args)
+  }
+  f.saved.write('one', f.write(2))
+  let afterFirst = reads
+  for (let x = 3; x < 20; x++) f.saved.write('one', f.write(x))
+  equal(reads, afterFirst)
+  f.tick(1000)
+  equal(f.read(), { x: 19 })
+})
