@@ -3,8 +3,10 @@ name: ui-building
 description: >
   How to build interface here, browser and terminal: @yaks/ui parts, themes,
   @yaks/ux components (editing, picking, stacking, popovers), entity pages and
-  views (inspector, web canvas, TUI, style guides, /views). Use it whenever a
-  change adds or changes what a person sees or presses, restyles anything,
+  views (inspector, web canvas, TUI, style guides, /views), and drawing any
+  entity anywhere through the shared renderers. Use it whenever a change adds
+  or changes what a person sees or presses, shows entities in a row, list,
+  inbox, panel or detail, restyles anything,
   touches packages/ui, packages/ux, packages/tui, packages/inspect,
   packages/visualize or packages/web/components, or a screen is confusing,
   ugly, slow to read or different in the terminal, even if the request never
@@ -100,13 +102,29 @@ What a browser and a terminal do differently (a popover, focus, keys) is a
 platform primitive with one interface: the browser's in @yaks/ui
 (packages/ui/float.ts is the popover), the terminal's in @yaks/tui.
 
-## A page or a view of entities
+## Drawing an entity, anywhere
 
-Draw entities through @yaks/render registrations, `{view, match, Render}`,
-where the most specific match wins. The package that owns a kind contributes its
-view through its `/views` facet, so the inspector or the canvas draws a belief as
-a belief without knowing what one is (packages/inspect/views.ts,
+Every entity on screen is drawn by a shared renderer: a row in a list, a thread
+in the inbox, a chip in prose, a cell, a panel, a page, an expanded detail
+(M-39550). The screen asks the registry for the view it needs by name, and the
+most specific renderer for that entity draws it: `Inbox.List.Tile` tries
+`Inbox.List.Tile`, then `List.Tile`, then `Tile`. Renderers are @yaks/render
+registrations, `{view, match, Render}`. The package that owns a kind contributes
+its renderers through its `/views` facet, so any screen draws a belief as a
+belief without knowing what one is (packages/inspect/views.ts,
 packages/render/views.ts, packages/web/components/registry.ts).
+
+A screen adds only what is its own around that renderer: the inbox's lane,
+reason, unread dot and archive button, a board's drag handle. It never reads an
+entity's components to draw the entity with markup of its own.
+
+The pull the other way is strong. Building a screen, the nearest thing at hand
+is `e.doc?.title` in a span with a preview line beside it, and it looks right
+with the tasks you tested on. Everything without that component then draws as
+an empty row: the inbox drew every session as "Thread" and expanded it to
+almost nothing. A UI kit part that lays out an entity's title, body and status
+is the same mistake one layer down. When a renderer draws a kind poorly, fix
+that renderer, and every screen gets the fix.
 
 Draw for a person reading:
 
