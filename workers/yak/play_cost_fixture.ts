@@ -348,3 +348,142 @@ let wire = () => {
     deserializeAttachment: () => held,
   }
 }
+
+/** An evicted, idle app: real cursor accounting includes Store construction,
+ * its first read-only request, and all microtasks that request starts. */
+export let idleWake = async (
+  db: Parameters<typeof playMinute>[0],
+): Promise<
+  {
+    total: Cost
+    requests: Record<string, Cost>
+    alarm: number | null
+    shapes: { sql: string; cost: Cost }[]
+  }
+> => {
+  let headers = {
+    'x-store': 'probe/idle-cost',
+    'x-yak-access': 'private',
+    'x-yak-role': 'owner',
+    'x-yak-person': person,
+    'x-yak-app': app,
+  }
+  let context = {
+    storage: db,
+    getWebSockets: () => [],
+    acceptWebSocket: () => {},
+  }
+  let store = new Store(context)
+  let post = async (path: string, body: unknown) => {
+    let res = await store.fetch(
+      new Request(`http://store${path}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      }),
+    )
+    if (!res.ok) throw new Error(`${path}: ${await res.text()}`)
+    await res.body?.cancel()
+  }
+  await post('/vocab', words)
+  await post('/tools', {
+    history: {
+      description: 'Read history',
+      query: '.doc',
+      inputSchema: { type: 'object' },
+    },
+  })
+  let g = store.door.graph
+  // Same 79k synthetic history as play, plus ended transcripts and calls.
+  // None owes a model request, tool invocation, receipt, or embedding.
+  for (let start = 0; start < 79_000; start += 500) {
+    await g.storage.tx((tx) =>
+      tx.patch(Array.from({ length: 500 }, (_, j) => ({
+        entity: { eid: eid(start + j + 100) },
+        doc: { title: `History ${start + j}` },
+        created: { at: '2026-01-01T00:00:00Z', by: person },
+        updated: { at: '2026-01-01T00:00:00Z', by: person },
+      })))
+    )
+  }
+  for (let n = 0; n < 61; n++) {
+    let session = eid(100_000 + n)
+    let rows: Bundle[] = [{
+      entity: { eid: session },
+      session: { id: `ended-${n}`, ended: true },
+    }]
+    for (let j = 0; j < 12; j++) {
+      rows.push({
+        entity: { eid: eid(200_000 + n * 100 + j) },
+        entry: { session, seq: j + 1 },
+        content: { body: 'Kept transcript' },
+        ...(j == 11 ? { stop: {} } : { notice: {} }),
+      })
+    }
+    await g.storage.tx((tx) => tx.patch(rows))
+  }
+  for (let i = 0; i < 100; i++) {
+    await store.alarm()
+    let res = await store.fetch(
+      new Request('http://store/move', {
+        method: 'POST',
+        headers: { ...headers, 'x-yak-kernel': '1' },
+      }),
+    )
+    let held = await res.json() as { rules: { done?: string }[] }
+    if (held.rules.every((r) => r.done)) break
+    if (i == 99) throw new Error('idle fixture did not settle')
+  }
+  await db.deleteAlarm()
+  // No approximations: returned rows are not rows scanned by SQLite.
+  let sql = db.sql.exec.bind(db.sql),
+    total = empty(),
+    shapes = new Map<string, Cost>()
+  let requests: Record<string, Cost> = {}, current = empty()
+  db.sql.exec = (query, ...bindings) => {
+    let cursor = sql(query, ...bindings)
+    let rows = cursor.toArray()
+    if (cursor.rowsRead == null || cursor.rowsWritten == null) {
+      throw new Error('idle cost requires SQL driver row counters')
+    }
+    let cost = { read: cursor.rowsRead, written: cursor.rowsWritten, calls: 1 }
+    plus(total, cost)
+    plus(current, cost)
+    plus(
+      shapes.get(query) ?? (shapes.set(query, empty()), shapes.get(query)!),
+      cost,
+    )
+    return {
+      rowsRead: cursor.rowsRead,
+      rowsWritten: cursor.rowsWritten,
+      toArray: () => rows,
+      [Symbol.iterator]: () => rows.values(),
+    }
+  }
+  try {
+    for (let path of ['/tools', '/vocab']) {
+      current = requests[path] = empty()
+      store = new Store(context)
+      let res = await store.fetch(
+        new Request(`http://store${path}`, { headers }),
+      )
+      if (!res.ok) throw new Error(`${path}: ${await res.text()}`)
+      await res.body?.cancel()
+      // Drain the asynchronous pool work started by the request, not just its response.
+      for (let i = 0; i < 100; i++) await Promise.resolve()
+      if (await db.getAlarm() != null) {
+        throw new Error('idle read armed an alarm')
+      }
+    }
+    return {
+      total,
+      requests,
+      alarm: await db.getAlarm(),
+      shapes: [...shapes].map(([sql, cost]) => ({ sql, cost })).sort((a, b) =>
+        b.cost.read - a.cost.read
+      ).slice(0, 20),
+    }
+  } finally {
+    db.sql.exec = sql
+  }
+}

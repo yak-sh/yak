@@ -205,7 +205,7 @@ import { and, eq as equals, fields as project, list, parse } from '@yaks/query'
 import { effectsIn, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Anatomy, anatomy } from '@yaks/code/anatomy'
 import { workerAnatomy } from './anatomy.ts'
-import { reconcile, type Runner, runner } from '@yaks/tools'
+import { type Runner, runner } from '@yaks/tools'
 import { commands } from '@yaks/tools/declared'
 import { readTools } from './tool-grammar.ts'
 import { rouse, soonest, tick, type Ticked, wakes } from '@yaks/wake'
@@ -1177,6 +1177,7 @@ export class Store {
       done()
     }
     observed.effects(fx.slots())
+    this.#effectsReady = true
     this.#effects = fx
     this.#vocab = vocab
     this.#graph = g
@@ -1978,7 +1979,7 @@ export class Store {
           this.#stuck = false
           await this.#drain()
         }
-        await this.#sown()
+        if (this.#get('name') == PLATFORM_STORE) await this.#sown()
         await this.#tick(Date.now())
         this.#workingEffects()
         this.#embedding()
@@ -2082,16 +2083,13 @@ export class Store {
     if (this.#alarm && (await armed(this.#alarm)) == null) {
       await this.#owed(Date.now())
     }
-    // The app's own commands, standing: the `tool` rows a call names, and
-    // one pass over the calls nobody is waiting on — one another process
-    // wrote, one a crash left claimed, one whose wake fired while this
-    // object was away. Only a store that has commands asks.
+    // A deployment stands up command identities. Recovery drains recorded
+    // call_ready/call_woken effects, not a second derivation over all calls.
     if ((this.#get('tools') ?? '{}') != '{}') {
       await this.#planting()
-      await reconcile(this.#runner())
     }
     this.#effectsReady = true
-    this.#workingEffects()
+    if (this.#get('name') == PLATFORM_STORE) this.#workingEffects()
     // Whatever text is owed its vector, and, the first time, every text this
     // store holds.
     this.#embedding()
@@ -2574,13 +2572,11 @@ export class Store {
     let selected = this.#select(request)
     if (this.#refused) return this.#stalled()
     await this.#live.wake()
-    // The clock, started. A wake row is owed at an instant and the runtime's
-    // alarm is how this object comes back for it — but an object that has
-    // never been asked anything is not running, so a request is the moment its
-    // schedules are planted and a lost alarm is set again. Once per
-    // incarnation, and the stamp keeps it to one read after the first.
-    await this.#sown()
-    if (selected.toolsMoved) await this.#planting()
+    // A read does not owe deployment work. App declarations, descriptions and
+    // shipped rows are installed by deployment POSTs, never by an eviction.
+    // The directory still seeds its standing platform schedules here.
+    if (this.#get('name') == PLATFORM_STORE) await this.#sown()
+    if (selected.toolsMoved) await this.#sown()
     for (let run of selected.effects) await run()
 
     return null
@@ -3613,7 +3609,7 @@ export class Store {
         { status: 405, headers: { allow: 'GET, POST' } },
       )
     }
-    return readBody(request).then((body) => {
+    return readBody(request).then(async (body) => {
       try {
         let was = appDoc(this.#get('vocab') ?? '{}')
         let next = unsaid(appDoc(body), was)
@@ -3676,6 +3672,7 @@ export class Store {
             prepare()
           })
           if (this.#refused) return this.#stalled()
+          await this.#sown()
         }
         return Response.json({
           ok: true,
