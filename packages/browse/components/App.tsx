@@ -1,4 +1,4 @@
-import { pagePath } from '../hosting.ts'
+import { hosting, pagePath } from '../hosting.ts'
 import { vocab } from '../types.ts'
 import { searchAt } from '../url.ts'
 import { entityPath } from '../url.ts'

@@ -175,8 +175,7 @@ export let inspectViews: Entry[] = adaptViews([
 ].filter((r) =>
   (r.view != 'Inspect.Page' || schemaPages.includes(r)) &&
   r.view != 'Inspect.Reference.Inline'
-)
-)
+))
 
 // Query and map pages are chosen by the same registry as entity pages. The
 // temporary bundle identifies the page; its query is caller context, not data
@@ -201,4 +200,3 @@ export let InspectPage = (
     })
     : null
 }
-
