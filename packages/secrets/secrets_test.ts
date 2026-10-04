@@ -91,6 +91,24 @@ test('a written value is kept in the vault and read back as its handle', async (
   assertEquals(vault.read(secretEid('MAIL_TOKEN'))!.handle, held!.value)
 })
 
+test('every secret in a batch seals with only secret and provisional vocabulary', async () => {
+  let vocab = loadVocab([secretsDoc, provisionalDoc])
+  let vault = ramVault()
+  let reported: unknown[] = []
+  let g = graph({
+    storage: ram(vocab),
+    vocab,
+    plugins: [secrets(vault, (b) => g.apply(b, { trusted: true }))],
+    report: (e) => void reported.push(e),
+  })
+  await g.apply([sealed('A', 'one'), sealed('B', 'two')])
+  assertEquals(await reveal(vault, 'A', none), 'one')
+  assertEquals(await reveal(vault, 'B', none), 'two')
+  assertEquals((await whole(g, 'A'))!.provisional, undefined)
+  assertEquals((await whole(g, 'B'))!.provisional, undefined)
+  assertEquals(reported, [])
+})
+
 test('a secret keeps its handle when its value changes, and writing the handle back changes nothing', async () => {
   let { g, vault } = setup()
   await g.apply([sealed('A', 'one')])

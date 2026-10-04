@@ -282,7 +282,7 @@ test(
         'https://accounts.google.com/o/oauth2/v2/auth',
         'yaks-google',
         'https://yaks.app/connections/callback',
-        'https://www.googleapis.com/auth/calendar.events ' +
+        'openid email https://www.googleapis.com/auth/calendar.events ' +
         'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
         'offline',
         'consent',
@@ -291,13 +291,19 @@ test(
     )
     answering(
       [200, { access_token: 'G1', refresh_token: 'GR', expires_in: 3599 }],
+      [200, { email: 'ann@example.com' }],
       [200, { items: [] }],
     )
     await connect(signing, gcal, {
       attempt,
       callback: `${signing.redirect}?code=C&state=${attempt.state}`,
     })
-    let sentinel = (await resolve(c, 'app', 'google-calendar'))!.sentinel
+    let connected = (await resolve(c, 'app', 'google-calendar'))!
+    assertEquals(
+      (connected.connection.connection as Comp).account,
+      'ann@example.com',
+    )
+    let sentinel = connected.sentinel
     let call = (at: string) =>
       forward(
         c,
@@ -314,6 +320,10 @@ test(
       [
         'https://oauth2.googleapis.com/token',
         `Basic ${btoa('yaks-google:shh')}`,
+      ],
+      [
+        'https://openidconnect.googleapis.com/v1/userinfo',
+        'Bearer G1',
       ],
       [
         'https://www.googleapis.com/calendar/v3/users/me/calendarList',

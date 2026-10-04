@@ -274,9 +274,8 @@ let sealing = (vault: Vault, write: Write): Hook => {
         mark({
           entity: { eid },
           [PROVISIONAL]: null,
-          ...b?.exception || b?.provisional
-            ? { exception: null, content: null }
-            : {},
+          ...b?.exception ? { exception: null } : {},
+          ...b?.content ? { content: null } : {},
         }))
     let attempt = (n: number): unknown =>
       settle(put, sealed, (err) =>
