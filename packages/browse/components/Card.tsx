@@ -41,6 +41,7 @@ export let icons: Record<string, string> = {
   Markdown: 'hash',
   JSON: 'braces',
   'Inspect.Full': 'scan-search',
+  'Inspect.Page': 'table',
 }
 
 let { Tab, Badge } = ui.Tabs

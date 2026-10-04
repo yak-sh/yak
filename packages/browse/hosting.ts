@@ -6,7 +6,6 @@ export type Hosting = {
   api: string
   apply: string
   owner: string
-  inspect?: string
   storage?: string
 }
 let declared = () => (globalThis as { YAK_WEB?: Hosting }).YAK_WEB
@@ -16,7 +15,6 @@ export let hosting = (): Hosting =>
     api: '',
     apply: '/web/apply',
     owner: '/web/owner',
-    inspect: '/inspect',
   }
 export let pagePath = (path: string): string => hosting().page + path
 export let localPath = (path: string): string => {
@@ -29,8 +27,7 @@ export let apiPath = (path: string): string => hosting().api + path
 export let webOrigin = (): string =>
   declared() ? globalThis.location.origin : 'https://tasks.yak.sh'
 /** Host-only operations are never inferred from app data words. */
-export let door = (name: 'freeze' | 'inspect'): boolean =>
-  name == 'inspect' && !!hosting().inspect
+export let door = (_name: 'freeze'): boolean => false
 
 // New app mounts have no legacy browser state. Box keys stay unchanged; an
 // app/account never replays another store's cached rows, drafts or writes.

@@ -28,7 +28,6 @@ export let mount = async (
       api: '',
       apply: '/web/apply',
       owner: '/web/owner',
-      inspect: '/inspect',
       ...g.YAK_WEB,
       home,
     }

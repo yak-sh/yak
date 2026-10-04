@@ -30,7 +30,6 @@ test('an app mount keeps page addresses and API transport apart', () => {
     assertEquals(pagePath('/?q=hello'), '/notes/_web/?q=hello')
     assertEquals(localPath('/notes/_web/%23abcdef1234'), '/%23abcdef1234')
     assertEquals(entityPath('#abcdef1234'), '/notes/_web/%23abcdef1234')
-    assertEquals(door('inspect'), false)
     assertEquals(door('freeze'), false)
     assertEquals(localPath('/other/_web/X-1'), '/other/_web/X-1')
   } finally {
@@ -43,7 +42,6 @@ test('the box keeps its existing unmounted doors and public entity links', () =>
   assertEquals(apiPath('/vocab'), '/vocab')
   assertEquals(pagePath('/T-1'), '/T-1')
   assertEquals(entityId('https://tasks.yak.sh/T-1'), 'T-1')
-  assertEquals(door('inspect'), true)
   assertEquals(door('freeze'), false)
 })
 

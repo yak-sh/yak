@@ -24,7 +24,7 @@ test('appRoute admits app routes and refuses resources', () => {
   }
 })
 
-test('the app inspector keeps native navigation instead of the web entity router', () => {
+test('removed inspector route is not intercepted as an entity address', () => {
   let host = globalThis as { YAK_WEB?: import('../hosting.ts').Hosting }
   let prior = host.YAK_WEB
   host.YAK_WEB = {
@@ -32,7 +32,6 @@ test('the app inspector keeps native navigation instead of the web entity router
     api: '/notes/api',
     apply: '/notes/api/apply',
     owner: '/notes/_web/owner',
-    inspect: '/notes/_web/inspect',
   }
   try {
     assertEquals(appRoute('/inspect'), false)

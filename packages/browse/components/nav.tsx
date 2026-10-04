@@ -49,7 +49,7 @@ export let navigate = (to: string, options: { replace?: boolean } = {}) => {
 // resources (/blob/<sha>, /logs/…, files) and keep native navigation.
 export let appRoute = (path: string) =>
   /^\/[^/?#.]*$/.test(path) &&
-  path != localPath(hosting().inspect ?? '/inspect')
+  path != '/inspect'
 
 // Following an entity link stacks its page, on either pointer kind.
 export let openAt = (eid: string, _ev: MouseEvent) =>
@@ -408,4 +408,3 @@ export let Menu = () => {
     </ui.Menu>
   )
 }
-
