@@ -10,7 +10,7 @@ import { agreementProbe, boot, clientId, config } from './live.ts'
 import { restore } from './components/nav.tsx'
 import { App } from './components/App.tsx'
 import { extend, ux } from './components/registry.ts'
-import { adaptViews } from './components/inspect.tsx'
+import { contributedViews } from './components/inspect.tsx'
 import type { Registry } from '@yaks/render'
 import type { View } from '@yaks/inspect'
 import type { Hosting } from './hosting.ts'
@@ -32,11 +32,7 @@ export let mount = async (
       home,
     }
   }
-  extend(
-    facets.flatMap((
-      f,
-    ) => [...adaptViews(f.inspectViews ?? []), ...(f.views?.renderers ?? [])]),
-  )
+  extend(contributedViews(facets))
 
   // Name this tab to the socket before it opens, so its writes journal a
   // resolved actor (T-6669). Fill the cache, open the socket, render.

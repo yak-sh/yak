@@ -77,3 +77,6 @@ export let views: Registry<View> = define(all)
  * own. */
 export let composed = (more: View[]): Registry<View> =>
   more.length ? define([...more, ...all]) : views
+
+/** Query-backed facet contributions, adapted by the app’s host. */
+export let inspectViews: View[] = all

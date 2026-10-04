@@ -204,3 +204,24 @@ test('search chip is a draggable link, modifiers keep native navigation', async 
     }
   }
 })
+
+// A configured Inspect facet exposes the same query-backed entries through
+// both exports. The host must adapt them once, not overwrite with raw Props.
+test('configured Inspect query renderer receives its host context', async () => {
+  let { contributedViews } = await import('./inspect.tsx')
+  let facet = await import('@yaks/inspect/views')
+  let { extend } = await import('./registry.ts')
+  let { SearchPage } = await import('./Search.tsx')
+  let { mount } = await import('./mount.ts')
+  extend(contributedViews([facet]))
+  let seen = mount(h(SearchPage, { query: '.task .count' }))
+  try {
+    assertEquals(
+      seen.root.querySelector('[data-query]')?.getAttribute('data-query'),
+      '.task .count',
+    )
+    assertEquals(seen.root.textContent?.includes('count'), true)
+  } finally {
+    seen.free()
+  }
+})

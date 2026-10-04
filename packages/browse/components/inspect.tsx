@@ -204,3 +204,21 @@ export let InspectPage = (
     })
     : null
 }
+
+/** Merge configured contributions without registering query-backed views as
+ * native components. The same entry may be offered under both facet exports;
+ * it is mounted once, through the query adapter. */
+export let contributedViews = (
+  facets: {
+    views?: import('@yaks/render').Registry
+    inspectViews?: import('@yaks/inspect').View[]
+  }[],
+): Entry[] =>
+  facets.flatMap((f) => [
+    ...adaptViews(f.inspectViews ?? []),
+    ...(f.views?.renderers ?? []).filter((r) =>
+      !(f.inspectViews ?? []).includes(
+        r as unknown as import('@yaks/inspect').View,
+      )
+    ),
+  ])
