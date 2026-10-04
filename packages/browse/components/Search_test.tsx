@@ -210,7 +210,8 @@ test('search chip is a draggable link, modifiers keep native navigation', async 
 test('configured Inspect query renderer receives its host context', async () => {
   let { contributedViews } = await import('./inspect.tsx')
   let facet = await import('@yaks/inspect/views')
-  let { extend } = await import('./registry.ts')
+  let { extend, registry } = await import('./registry.ts')
+  let original = registry.renderers
   let { SearchPage } = await import('./Search.tsx')
   let { mount } = await import('./mount.ts')
   extend(contributedViews([facet]))
@@ -223,5 +224,6 @@ test('configured Inspect query renderer receives its host context', async () => 
     assertEquals(seen.root.textContent?.includes('count'), true)
   } finally {
     seen.free()
+    registry.renderers = original
   }
 })

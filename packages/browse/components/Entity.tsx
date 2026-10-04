@@ -285,9 +285,13 @@ define([
   {
     view: 'Inspect.Full',
     match: parse('.project'),
-    Render: ProjectInspectFull,
+    Render: (props) => <ProjectInspectFull {...props} />,
   },
-  { view: 'Inspect.Full', match: and(), Render: InspectFull },
+  {
+    view: 'Inspect.Full',
+    match: and(),
+    Render: (props) => <InspectFull {...props} />,
+  },
   { view: 'Inline', match: parse('.doc .task'), Render: TaskInline },
   { view: 'Inline', match: and(), Render: Inline },
   { view: 'Id', match: and(), Render: IdFace },
