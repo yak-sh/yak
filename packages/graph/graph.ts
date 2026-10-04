@@ -52,11 +52,13 @@ import { matcher, rows as matchRows } from '@yaks/match'
 import { rulesIn, syncOf, type Vocab } from '@yaks/vocab'
 import {
   type Context,
+  context,
   during,
   live,
   parent,
   peek,
   recording,
+  scope,
 } from '@yaks/trace'
 import { after, each, isPromise } from '@yaks/fp'
 import { type Actor, type Bundle, comps, dead, type Eid } from './bundle.ts'
@@ -587,6 +589,41 @@ export let graph = (opts: Options): Graph => {
     return runHooks(run, name, tx, calls, bundles)
   }
 
+  // Restore an operation's context whenever its retained transaction enters
+  // storage. Keep a synchronous rule's deeper span only within this ancestry.
+  let tracedTx = (tx: Tx, owner: () => Context): Tx =>
+    Object.fromEntries(
+      Object.entries(tx).map((
+        [name, method],
+      ) => [
+        name,
+        typeof method != 'function' ? method : (...args: unknown[]) => {
+          let at = owner()
+          let inside = context(at.parent)
+          return scope(
+            inside?.channel == at.channel ? inside : at,
+            () => Reflect.apply(method, tx, args),
+          )
+        },
+      ]),
+    ) as Tx
+
+  let outsideRead = (): Tx => {
+    let tx = detached(storage)
+    let at = context()
+    return at ? tracedTx(tx, () => at) : tx
+  }
+
+  // A read's rewriting and addressing may yield before reaching storage.
+  // Only observed continuations need a wrapper; no scope outlives this call.
+  let continuing = <A, B>(
+    value: A | Promise<A>,
+    run: (value: A) => B,
+  ): B | Promise<Awaited<B>> => {
+    let at = context()
+    return after(value, at ? (value) => scope(at, () => run(value)) : run)
+  }
+
   let applying = (
     bundles: Bundle[],
     o: AdmitOpts,
@@ -606,7 +643,9 @@ export let graph = (opts: Options): Graph => {
     let st = state()
     let now = o.now ?? new Date().toISOString()
     let instant: string | undefined
-    let outside = detached(storage)
+    let traced = (tx: Tx): Tx =>
+      tracing ? tracedTx(tx, () => ({ ...tracing, parent: current })) : tx
+    let outside = traced(detached(storage))
     // One registry for the whole apply, so `#Now` is one instant however many
     // phases and rules read it.
     let resources = resourced(() => instant ??= o.now ?? opts.clock?.() ?? now)
@@ -807,7 +846,8 @@ export let graph = (opts: Options): Graph => {
 
     let inside = (bundles: Bundle[]): Bundle[] | Promise<Bundle[]> => {
       checking = admission && !fallback && certified(bundles)
-      let run = (tx: Tx) =>
+      let run = (tx: Tx) => {
+        tx = traced(tx)
         // Every read the phases before the write will make, taken as one call.
         // It is handed to those phases alone — a snapshot of the graph as the
         // batch found it is exactly what a precondition needs, and exactly
@@ -816,7 +856,7 @@ export let graph = (opts: Options): Graph => {
         // writes anything, and a patch made through the gathered transaction
         // is folded back into the snapshot, so those phases still see each
         // other's writes.
-        after(gathering(tx, bundles), (snap) => {
+        return after(gathering(tx, bundles), (snap) => {
           if (checking) tx = rehearsing(tx, vocab, snap)
           let trackers: Tracker[] = []
           for (let p of plugins) {
@@ -835,40 +875,41 @@ export let graph = (opts: Options): Graph => {
           return after(
             each(
               [
-                phase('precondition', held, (b) =>
-                  after(guard(b, held, vocab), (guarded) => {
-                    if (!admission || !o.overlay?.length) {
-                      return guarded
-                    }
-                    let ids = new Set(guarded.map((b) =>
-                      b.entity.eid
-                    ))
-                    let overlay = composed(o.overlay).filter((b) =>
-                      ids.has(b.entity.eid)
-                    )
-                    return after(
-                      held.get(overlay.map((b) => b.entity.eid)),
-                      () => {
-                        for (let row of overlay) {
-                          if (!snap.got.get(row.entity.eid)) continue
-                          let peer: Bundle = { entity: row.entity }
-                          for (let [name, patch] of comps(row)) {
-                            if (syncOf(vocab, name) != 'peers') continue
-                            peer[name] = patch
-                            snap.only?.get(row.entity.eid)?.add(name)
-                          }
-                          let eid = row.entity.eid
-                          snap.got.set(
-                            eid,
-                            merged(snap.got.get(eid) ?? null, peer),
-                          )
-                        }
+                phase(
+                  'precondition',
+                  held,
+                  (b) =>
+                    after(guard(b, held, vocab), (guarded) => {
+                      if (!admission || !o.overlay?.length) {
                         return guarded
-                      },
-                    )
-                  })),
-                (b: Bundle[]) =>
-                  admission ? overlaid(b, vocab, o.overlay) : b,
+                      }
+                      let ids = new Set(guarded.map((b) => b.entity.eid))
+                      let overlay = composed(o.overlay).filter((b) =>
+                        ids.has(b.entity.eid)
+                      )
+                      return after(
+                        held.get(overlay.map((b) => b.entity.eid)),
+                        () => {
+                          for (let row of overlay) {
+                            if (!snap.got.get(row.entity.eid)) continue
+                            let peer: Bundle = { entity: row.entity }
+                            for (let [name, patch] of comps(row)) {
+                              if (syncOf(vocab, name) != 'peers') continue
+                              peer[name] = patch
+                              snap.only?.get(row.entity.eid)?.add(name)
+                            }
+                            let eid = row.entity.eid
+                            snap.got.set(
+                              eid,
+                              merged(snap.got.get(eid) ?? null, peer),
+                            )
+                          }
+                          return guarded
+                        },
+                      )
+                    }),
+                ),
+                (b: Bundle[]) => admission ? overlaid(b, vocab, o.overlay) : b,
                 // The declared rules, before any row of the batch is
                 // written: what they produce joins the batch, and `mutate`
                 // writes it like anything else.
@@ -924,14 +965,19 @@ export let graph = (opts: Options): Graph => {
                     ? ordered(b, tx, vocab, snap, st, checks)
                     : mutate(b, held, st, vocab)
                 }),
-                phase('cascade', tx, (b) =>
-                  after(b.length ? complete(tx, snap) : undefined, () =>
-                    checks?.length ? b : cascade(b, tx, vocab, st))),
+                phase(
+                  'cascade',
+                  tx,
+                  (b) =>
+                    after(
+                      b.length ? complete(tx, snap) : undefined,
+                      () => checks?.length ? b : cascade(b, tx, vocab, st),
+                    ),
+                ),
                 // The stamps are rules, and they ask what the graph already
                 // holds for an entity: a newly created entity is one with no
                 // `created` component.
-                phase('stamp', tx, (b) =>
-                  births(b, st), holds),
+                phase('stamp', tx, (b) => births(b, st), holds),
                 flush,
                 (b: Bundle[]) => {
                   if (checking && !certified(b)) {
@@ -940,20 +986,17 @@ export let graph = (opts: Options): Graph => {
                   return b
                 },
                 ...(checking
-                  ? [(b: Bundle[]) =>
-                    st.heard.length ? rejoin(b, st.heard) : b]
+                  ? [(b: Bundle[]) => st.heard.length ? rejoin(b, st.heard) : b]
                   : [
                     phase('journal', tx),
                     // What was heard and never written joins the batch again.
-                    (b: Bundle[]) =>
-                      st.heard.length ? rejoin(b, st.heard) : b,
+                    (b: Bundle[]) => st.heard.length ? rejoin(b, st.heard) : b,
                     phase('commit', tx),
                     flush,
                   ]),
               ],
               bundles,
-              (b, step) =>
-                step(b),
+              (b, step) => step(b),
             ),
             (b) => {
               if (o.check && !checking) {
@@ -963,6 +1006,7 @@ export let graph = (opts: Options): Graph => {
             },
           )
         })
+      }
       // A rolled-back dry run is not a refusal: it is audited like any other
       // rollback, then returns what the phases produced, and skips the
       // effects, which observe committed data only.
@@ -1097,13 +1141,17 @@ export let graph = (opts: Options): Graph => {
   ): Map<string, Eid> | Promise<Map<string, Eid>> => {
     let asks = plugins.flatMap((p) => p.address ?? [])
     if (!asks.length || !ids.length) return new Map<string, Eid>()
-    let outside = detached(storage)
-    let asked = each(asks, new Map<string, Eid | null>(), (at, ask) =>
-      after(
-        ask(outside, ids.filter((id) => at.get(id) == null), kind),
-        (more) => new Map([...at, ...more]),
-      ))
-    return after(asked, (at) => {
+    let outside = outsideRead()
+    let asked = each(
+      asks,
+      new Map<string, Eid | null>(),
+      (at, ask) =>
+        continuing(
+          ask(outside, ids.filter((id) => at.get(id) == null), kind),
+          (more) => new Map([...at, ...more]),
+        ),
+    )
+    return continuing(asked, (at) => {
       let found = new Map<string, Eid>()
       let nothing: string[] = []
       for (let [id, eid] of at) {
@@ -1120,7 +1168,7 @@ export let graph = (opts: Options): Graph => {
   }
 
   let ask = (query: Query, readOpts?: ReadOpts): Query | Promise<Query> =>
-    after(aim(query, address), (q) => {
+    continuing(aim(query, address), (q) => {
       if (readOpts?.native || !askHooks.length) return q
       let hooks = askHooks.filter((p) =>
         !p.reads || p.reads(readOpts ?? emptyReadOpts)
@@ -1129,10 +1177,10 @@ export let graph = (opts: Options): Graph => {
       let ast = typeof q == 'string' ? parse(q) : q
       let ctx = {
         opts: readOpts ?? emptyReadOpts,
-        tx: detached(storage),
+        tx: outsideRead(),
         vocab,
       }
-      return after(
+      return continuing(
         each(hooks, ast, (at, p) => p.ask!(ctx, at)),
         (out) => out === ast ? q : out,
       )
@@ -1144,7 +1192,7 @@ export let graph = (opts: Options): Graph => {
       !p.reads || p.reads(readOpts ?? emptyReadOpts)
     )
     if (!hooks.length) return bundles
-    let ctx = { opts: readOpts ?? emptyReadOpts, tx: detached(storage), vocab }
+    let ctx = { opts: readOpts ?? emptyReadOpts, tx: outsideRead(), vocab }
     return each(hooks, bundles, (at, p) => p.answer!(ctx, at))
   }
 
@@ -1161,14 +1209,14 @@ export let graph = (opts: Options): Graph => {
       !p.reads || p.reads(readOpts ?? emptyReadOpts)
     )
     if (!hooks.length) return null
-    return after(aim(query, address), (q) => {
+    return continuing(aim(query, address), (q) => {
       let original = typeof q == 'string' ? parse(q) : q
       let ctx = {
         opts: readOpts ?? emptyReadOpts,
-        tx: detached(storage),
+        tx: outsideRead(),
         vocab,
       }
-      return after(
+      return continuing(
         each(
           hooks,
           null as ReadView | null,
@@ -1193,16 +1241,16 @@ export let graph = (opts: Options): Graph => {
     'after',
   ])
   let candidates = (v: ReadView, readOpts?: ReadOpts) =>
-    after(
+    continuing(
       storage.read({
         ...v.query,
         clauses: v.query.clauses.filter((c) => !shaped.has(c.kind)),
       }, { ...readOpts, native: true }),
-      (rows) => after(v.expand ? v.expand(rows) : rows, v.answer),
+      (rows) => continuing(v.expand ? v.expand(rows) : rows, v.answer),
     )
 
   let readView = (v: ReadView, readOpts?: ReadOpts) =>
-    after(candidates(v, readOpts), (bundles) => {
+    continuing(candidates(v, readOpts), (bundles) => {
       let p = projection(v.vocab, v.original)
       if (p) {
         return flat(p.fold(matchRows(p.query, v.vocab, readOpts)(bundles)))
@@ -1220,11 +1268,14 @@ export let graph = (opts: Options): Graph => {
       return storage.get(eids, comps)
     }
     if (!comps?.length) {
-      return after(storage.get(eids, comps), (out) => answer(out, readOpts))
+      return continuing(
+        storage.get(eids, comps),
+        (out) => answer(out, readOpts),
+      )
     }
-    return after(ask(and(...comps.map(want)), readOpts), (q) => {
+    return continuing(ask(and(...comps.map(want)), readOpts), (q) => {
       let names = named(vocab, q, true)
-      return after(
+      return continuing(
         storage.get(eids, names ? [...names] : undefined),
         (out) => answer(out, readOpts),
       )
@@ -1236,15 +1287,15 @@ export let graph = (opts: Options): Graph => {
       return getTranslated(eids, comps, readOpts)
     }
     let q = and(eq('entity.eid', list(...eids)), ...comps?.map(want) ?? [])
-    return after(
+    return continuing(
       view(q, readOpts),
       (v) =>
         v
-          ? after(
+          ? continuing(
             storage.get(eids),
             (bundles) =>
-              after(
-                after(v.expand ? v.expand(bundles) : bundles, v.answer),
+              continuing(
+                continuing(v.expand ? v.expand(bundles) : bundles, v.answer),
                 (out) =>
                   out.filter((b) => eids.includes(b.entity.eid)).map(
                     only(comps ? new Set(comps) : null),
@@ -1258,20 +1309,20 @@ export let graph = (opts: Options): Graph => {
   let readStored = (q: Query, readOpts?: ReadOpts, nested = false) => {
     let p = projection(vocab, q)
     if (p) {
-      return after(
+      return continuing(
         storage.rows(p.query, readOpts),
         (rows) => flat(p.fold(rows)),
       )
     }
     let names = named(vocab, q, nested)
-    return after(
+    return continuing(
       storage.read(q, readOpts, names ? [...names] : undefined),
       (rows) => rows.map(only(names)),
     )
   }
 
   let readPlain = (query: Query, readOpts?: ReadOpts) =>
-    after(
+    continuing(
       aim(query, address),
       (q) => readStored(q, readOpts, !!readOpts?.native),
     )
@@ -1281,7 +1332,7 @@ export let graph = (opts: Options): Graph => {
     readOpts?: ReadOpts,
   ): Bundle[] | Promise<Bundle[]> => {
     if (viewHooks.length && !readOpts?.native) {
-      return after(
+      return continuing(
         view(query, readOpts),
         (v) => v ? readView(v, readOpts) : readRenamed(query, readOpts),
       )
@@ -1290,10 +1341,10 @@ export let graph = (opts: Options): Graph => {
   }
   let readRenamed = (query: Query, readOpts?: ReadOpts) => {
     if (!rewrites(readOpts)) return readPlain(query, readOpts)
-    return after(
+    return continuing(
       ask(query, readOpts),
       (q) =>
-        after(
+        continuing(
           readStored(q, readOpts, q !== query),
           (rows) => answer(rows, readOpts),
         ),
@@ -1304,18 +1355,18 @@ export let graph = (opts: Options): Graph => {
     : readPlain
 
   let rowsPlain = (query: Query, readOpts?: ReadOpts) =>
-    after(aim(query, address), (q) => storage.rows(q, readOpts))
+    continuing(aim(query, address), (q) => storage.rows(q, readOpts))
 
   let rowsTranslated = (
     query: Query,
     readOpts?: ReadOpts,
   ): Row[] | Promise<Row[]> => {
     if (viewHooks.length && !readOpts?.native) {
-      return after(
+      return continuing(
         view(query, readOpts),
         (v) =>
           v
-            ? after(
+            ? continuing(
               candidates(v, readOpts),
               matchRows(v.original, v.vocab, readOpts),
             )
@@ -1326,7 +1377,7 @@ export let graph = (opts: Options): Graph => {
   }
   let rowsRenamed = (query: Query, readOpts?: ReadOpts) => {
     if (!rewrites(readOpts)) return rowsPlain(query, readOpts)
-    return after(ask(query, readOpts), (q) => {
+    return continuing(ask(query, readOpts), (q) => {
       if (q === query) return storage.rows(q, readOpts)
       let before = typeof query == 'string' ? parse(query) : query
       let rewritten = typeof q == 'string' ? parse(q) : q
@@ -1337,7 +1388,7 @@ export let graph = (opts: Options): Graph => {
         f.path.join('.'),
         old.fields[i]?.path.join('.') ?? f.path.join('.'),
       ])
-      return after(storage.rows(q, readOpts), rename)
+      return continuing(storage.rows(q, readOpts), rename)
       function rename(rows: Row[]): Row[] {
         return rows.map((row) => {
           let out = { ...row }

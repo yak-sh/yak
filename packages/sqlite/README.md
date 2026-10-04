@@ -362,6 +362,37 @@ timeout. It honors `DENO_SQLITE_PATH`, otherwise selecting the platform's system
 library. This module uses Deno environment/FFI APIs. The root adapter can
 instead receive another runtime's synchronous SQLite driver.
 
+The embedded driver emits one `sql` span per statement while
+[@yaks/trace](../trace/README.md) observes it or an enclosing graph operation.
+Names contain the logical table and verb, such as `doc select` or
+`entity
+update`; transaction names omit savepoint identifiers, and pragma names
+omit arguments and values. SQL text and bound values never enter the trace. A
+successful span counts returned rows for reads and affected rows for writes,
+including writes without `returning`. SQL nests under the current phase, hook,
+rule, read or transaction. No subscriber means no statement metadata, spans,
+clocks or counts are allocated.
+
+```ts
+import { open } from '@yaks/sqlite/db'
+import { insert } from '@yaks/sql'
+import { record } from '@yaks/trace'
+import { equal } from '@yaks/testing'
+
+let sql = open(':memory:')
+try {
+  sql.query({ t: 'create table', name: 'note', cols: [{ name: 'title' }] })
+  let captured = record(
+    sql,
+    () => sql.query(insert('note', { title: 'Hello' })),
+  )
+  equal(captured.spans[0].name, 'note insert')
+  equal(captured.spans[0].counts, { rows: 1 })
+} finally {
+  sql.close()
+}
+```
+
 ## Schema installation
 
 `schema(vocab)` builds statements for a fresh database.

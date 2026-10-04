@@ -123,6 +123,7 @@ export let doomSql = (
         ` from ${W} join "entity" ${E} on ${E}."id" = ${W}."id"` +
         ` group by ${W}."id" order by depth, ${W}."id"`,
       head.params,
+      'entity',
     )
   })
 
@@ -163,6 +164,7 @@ export let looseSql = (
           ` and ${own} not in (select "id" from ${W}) and ${alive(own)}`
       }).join('\n union all ') + ` order by "ord"`,
       [...open.params, ...group.flat()],
+      'entity',
     )
   })
 }

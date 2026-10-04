@@ -61,6 +61,9 @@ export type Channel = {
 }
 
 let channels = new WeakMap<object, Channel>()
+type Scope = Context & { outer?: Scope }
+let scopes = new WeakMap<Span, Scope>()
+let current: Scope | undefined
 let capacity = 256
 let recordings = new WeakMap<Channel, number>()
 let roots = new WeakMap<Channel, (id: string) => void>()
@@ -80,6 +83,9 @@ let counts = (input?: Counts): Counts | undefined => {
 
 let create = (): Channel => {
   let listeners = new Set<(event: Event) => void>()
+  // Delivery owns a snapshot. Subscription changes replace it, so reentrant
+  // delivery remains isolated without copying the listeners for every event.
+  let delivery: ((event: Event) => void)[] = []
   let ring: Event[] = []
   let next = 0
   let size = 0
@@ -90,7 +96,7 @@ let create = (): Channel => {
     ring[next] = event
     next = (next + 1) % capacity
     size = Math.min(size + 1, capacity)
-    for (let listener of [...listeners]) {
+    for (let listener of delivery) {
       try {
         listener(event)
       } catch (why) {
@@ -104,7 +110,7 @@ let create = (): Channel => {
     id: string,
     stage: Event['stage'],
     time: number,
-  ): Event => ({
+  ): { -readonly [K in keyof Event]: Event[K] } => ({
     id,
     parent: a.parent,
     kind: a.kind,
@@ -123,8 +129,9 @@ let create = (): Channel => {
       // Each subscription owns its unsubscribe, even for the same callback.
       let subscribed = (e: Event) => listener(e)
       listeners.add(subscribed)
+      delivery = [...listeners]
       return () => {
-        listeners.delete(subscribed)
+        if (listeners.delete(subscribed)) delivery = [...listeners]
       }
     },
     history: (limit = capacity) => {
@@ -139,15 +146,17 @@ let create = (): Channel => {
     },
     begin: (a) => {
       if (!listeners.size) return
+      let start = performance.now()
       // Copy code metadata before delivering: a listener may mutate its caller.
       a = { ...a }
       let id = `${epoch}.${++sequence}`
       roots.get(out)?.(id)
-      let start = performance.now()
       let recording = epoch
       let ended = false
-      emit({ ...event(a, id, 'start', start), start })
-      return {
+      let begun = event(a, id, 'start', start)
+      begun.start = start
+      emit(begun)
+      let span: Span = {
         get active() {
           return !ended && !!listeners.size && epoch == recording
         },
@@ -158,16 +167,27 @@ let create = (): Channel => {
           ended = true
           // A disconnected recording cannot finish in a later recording.
           if (!listeners.size || epoch != recording) return
-          let time = performance.now()
-          emit({
-            ...event(a, id, 'end', time),
-            start,
-            duration: Math.max(0, time - start),
-            outcome: o?.outcome ?? 'ok',
-            counts: counts(o?.counts),
-          })
+          // Normalizing counts and constructing the event belong to this
+          // span's work, rather than gaps between its parent's children.
+          let finished = event(a, id, 'end', 0)
+          finished.start = start
+          finished.outcome = o?.outcome ?? 'ok'
+          finished.counts = counts(o?.counts)
+          finished.duration = 0
+          finished.time = performance.now()
+          finished.duration = Math.max(0, finished.time - start)
+          emit(finished)
         },
       }
+      scopes.set(span, {
+        channel: out,
+        parent: id,
+        recording,
+        outer: current?.channel == out && current.parent == a.parent
+          ? current
+          : undefined,
+      })
+      return span
     },
     instant: (a, o) => {
       if (!listeners.size) return
@@ -195,8 +215,8 @@ export let channel = (target: object): Channel => {
 
 /** Producer entry point: never creates anything and exposes only a subscribed
  * channel. Construct activity metadata inside this branch, not before it. */
-export let peek = (target: object): Channel | undefined => {
-  let found = channels.get(target)
+export let peek = (target?: object): Channel | undefined => {
+  let found = target ? channels.get(target) : context()?.channel
   return found?.active ? found : undefined
 }
 
@@ -306,6 +326,28 @@ export let live = (ctx: Context): boolean =>
   ctx.channel.active &&
   (ctx.recording == null || ctx.recording == recording(ctx.channel))
 
+/** The subscribed context on this synchronous call stack. It never survives
+ * an await: asynchronous boundaries explicitly restore their own context. */
+export let context = (ancestor?: string): Context | undefined => {
+  if (!current || !live(current)) return
+  if (!ancestor) return current
+  for (let at: Scope | undefined = current; at; at = at.outer) {
+    if (at.parent == ancestor) return current
+  }
+}
+
+/** Run a synchronous boundary under an operation's context, restoring the
+ * caller even on failure. A returned promise carries no ambient context. */
+export let scope = <T>(ctx: Context | undefined, run: () => T): T => {
+  let before = current
+  current = ctx
+  try {
+    return run()
+  } finally {
+    current = before
+  }
+}
+
 /** Only the error's category, never its text or properties, is observable. */
 export let outcome = (error: unknown): Outcome => {
   let name = error instanceof Error ? error.name : undefined
@@ -331,12 +373,18 @@ export let outcome = (error: unknown): Outcome => {
 
 /** Called only inside a producer's active branch. It preserves a synchronous
  * return and observes thenables without assuming a particular Promise realm. */
-export let during = <T>(
+export function during<T>(
+  span: Span | undefined,
+  run: () => T,
+  ok?: Outcome,
+  count?: (value: Awaited<T>) => Counts,
+): T
+export function during<T>(
   span: Span | undefined,
   run: () => T | Promise<T>,
   ok: Outcome = 'ok',
   count?: (value: T) => Counts,
-): T | Promise<T> => {
+): T | Promise<T> {
   let done = (value: T): T => {
     if (span && span.active !== false) {
       span.end({ outcome: ok, counts: count?.(value) })
@@ -348,7 +396,7 @@ export let during = <T>(
     throw error
   }
   try {
-    let value = run()
+    let value = span ? scope(scopes.get(span), run) : run()
     return value && typeof (value as Promise<T>).then == 'function'
       ? (value as Promise<T>).then(done, failed)
       : done(value as T)

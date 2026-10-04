@@ -5,6 +5,8 @@
 
 import './sqlitepath.ts'
 import { Database } from '@db/sqlite'
+import { context, during, peek } from '@yaks/trace'
+import { statement, writing } from './statement.ts'
 import {
   call,
   col,
@@ -204,11 +206,11 @@ export let driver = (db: Database): Driver => {
     where: eq(col('name'), val('main')),
   }))
   let file = !!run(main.sql, main.params)[0]?.file
-  let query = (s: Stmt): Row[] => {
+  let execute = (s: Stmt): Row[] => {
     if (s.t == 'create index') {
-      let info = render({ t: 'pragma', name: 'table_info', arg: s.on })
       let cols = new Set(
-        run(info.sql, info.params).map((r) => String(r.name)),
+        query({ t: 'pragma', name: 'table_info', arg: s.on })
+          .map((r) => String(r.name)),
       )
       for (
         let name of [...s.cols, ...(s.where ? [s.where] : [])].flatMap(refs)
@@ -223,7 +225,24 @@ export let driver = (db: Database): Driver => {
     let { sql, params } = render(s)
     return run(sql, params)
   }
-  return {
+  let query = (s: Stmt): Row[] => {
+    let c = peek() ?? peek(d)
+    if (!c) return execute(s)
+    return during(
+      c.begin({
+        kind: 'sql',
+        name: statement(s),
+        package: '@yaks/sqlite',
+        parent: context()?.channel == c ? context()?.parent : undefined,
+      }),
+      () => execute(s),
+      'ok',
+      (rows) => ({
+        rows: writing(s) ? db.changes : rows.length,
+      }),
+    )
+  }
+  let d: Driver = {
     query,
     file,
     arms: STOCK,
@@ -248,4 +267,5 @@ export let driver = (db: Database): Driver => {
       },
     },
   }
+  return d
 }

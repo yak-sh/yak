@@ -434,7 +434,12 @@ let lit = (c: Ctx): Ctx => c.inline ? c : { params: c.params, inline: true }
 export let render = (node: Stmt | Expr): Raw => {
   let c: Ctx = { params: [], inline: false }
   let sql = isExpr(node) ? expr(node, c) : stmt(node, c)
-  return raw(sql, c.params)
+  return raw(
+    sql,
+    c.params,
+    node.t == 'raw' ? node.table : undefined,
+    node.t == 'raw' ? node.origin : isExpr(node) ? undefined : node,
+  )
 }
 
 /** The statement's SQL shape, without values. Bound parameters were never in

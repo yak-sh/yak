@@ -1,4 +1,5 @@
 import type { Driver, Stmt } from '@yaks/sql'
+import { context, scope } from '@yaks/trace'
 import { busy } from './error.ts'
 
 // SQLite has one transaction per connection, so nesting is done with
@@ -33,6 +34,7 @@ export let unit = <R>(
   body: () => R,
   mode: 'write' | 'read' = 'write',
 ): R => {
+  let tracing = context()
   let held = depth.get(driver) ?? 0
   // A read already has the outer unit's snapshot. Opening another savepoint
   // adds no isolation; writes still need their own rollback boundary.
@@ -69,7 +71,11 @@ export let unit = <R>(
   depth.set(driver, held + 1)
   let close = (...stmts: Stmt[]) => {
     depth.set(driver, (depth.get(driver) ?? 1) - 1)
-    for (let s of stmts) driver.query(s)
+    if (tracing) {
+      scope(tracing, () => {
+        for (let s of stmts) driver.query(s)
+      })
+    } else for (let s of stmts) driver.query(s)
   }
   let undo = (e: unknown): never => {
     if (outer) close({ t: 'rollback' })

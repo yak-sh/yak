@@ -1,5 +1,15 @@
 import { equal, ok, test, throws } from '@yaks/testing'
-import { channel, during, link, parent, peek, record, unlink } from './mod.ts'
+import {
+  channel,
+  context,
+  during,
+  link,
+  parent,
+  peek,
+  record,
+  scope,
+  unlink,
+} from './mod.ts'
 import type { Event } from './mod.ts'
 
 test('trace is subscriber-owned, finite and preserves zero duration', () => {
@@ -192,4 +202,34 @@ test('record disconnects on throws and rejections and restores nested calls', as
   equal(outer.result.result, 3)
   equal(outer.spans, outer.result.spans)
   equal(peek(target), undefined)
+})
+
+test('synchronous scopes restore callers on returns, throws and awaits', async () => {
+  let target = {}
+  let c = channel(target)
+  let stop = c.subscribe(() => {})
+  try {
+    let root = c.begin({ kind: 'apply', name: 'apply' })
+    let pending = during(root, () => {
+      let at = ok(context())
+      equal(at.parent, root?.id)
+      equal(peek(), c)
+      during(undefined, () => equal(context(), at))
+      throws(() =>
+        scope(undefined, () => {
+          throw new Error('failure')
+        })
+      )
+      equal(context(), at)
+      return Promise.resolve().then(() => {
+        equal(context(), undefined)
+        return scope(at, () => equal(context(), at))
+      })
+    })
+    equal(context(), undefined)
+    await pending
+    equal(peek(), undefined)
+  } finally {
+    stop()
+  }
 })

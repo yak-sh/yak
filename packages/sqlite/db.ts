@@ -62,8 +62,7 @@ export let open = (path: string): Opened => {
     set('synchronous', 'normal')
     set('journal_size_limit', 64 * 1024 * 1024)
   }
-  return {
-    ...d,
+  return Object.assign(d, {
     extension: (file: string) => {
       db.enableLoadExtension = true
       try {
@@ -73,5 +72,5 @@ export let open = (path: string): Opened => {
       }
     },
     close: () => db.close(),
-  }
+  })
 }

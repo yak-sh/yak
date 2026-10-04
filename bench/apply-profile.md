@@ -13,10 +13,17 @@ Reproduce from the checkout:
 ```sh
 flock /tmp/yaks-throughput-bench.lock deno run -A bench/apply-profile.ts 9
 flock /tmp/yaks-throughput-bench.lock deno run -A bench/apply-profile.ts 101 edit-1
+flock /tmp/yaks-throughput-bench.lock deno run -A bench/apply-profile.ts 101 edit-1 spans
 flock /tmp/yaks-throughput-bench.lock deno run -A bench/apply-profile.ts 1 create-200 counts
 flock /tmp/yaks-throughput-bench.lock deno run -A bench/apply-profile.ts 1 create-1000 counts
 flock /tmp/yaks-throughput-bench.lock deno run -A --cpu-prof --cpu-prof-md --cpu-prof-interval=200 --cpu-prof-dir=/tmp/apply-profile-cpu --cpu-prof-name=create.cpuprofile bench/apply-profile.ts 12 create-1000
 ```
+
+The `spans` mode uses `record()` alone, without the storage, driver or tracker
+wrappers. Its `trace.coverage_percent` measures the union of the transaction's
+direct child intervals divided by its duration. Nested SQL is counted inside its
+phase once; SQL outside phases is counted directly under the transaction.
+`trace.sql_outside_phases` reports the table and verb for those statements.
 
 ## Time outside named transaction phases
 

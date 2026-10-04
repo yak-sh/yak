@@ -61,6 +61,7 @@ import type {
 } from '@yaks/graph'
 import { sha256 } from '@yaks/graph'
 import { after } from '@yaks/fp'
+import { context, scope } from '@yaks/trace'
 import type { Query } from './read.ts'
 import {
   analyzed,
@@ -530,10 +531,12 @@ export let storage = (
       return unit(driver, (): R => {
         if (!classified) return body(tx)
         let { tx: t, settle } = tracked()
+        let tracing = context()
         // An async body settles what it owes before the unit closes, as the
         // unit waits for it (./unit.ts).
         return after(body(t), (out) => {
-          settle()
+          if (tracing) scope(tracing, settle)
+          else settle()
           return out
         }) as R
       })

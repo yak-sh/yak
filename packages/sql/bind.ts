@@ -826,7 +826,7 @@ let rel = (from: string, o: {
 }): Select => ({
   t: 'select',
   cols: o.cols.map((c) => raw(c)),
-  from: raw(from),
+  from: raw(from, [], 'entity'),
   joins: o.joins.map((j): Join => ({
     how: 'left',
     src: raw(j.source),

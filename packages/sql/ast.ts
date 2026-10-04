@@ -41,15 +41,27 @@ export type Raw = {
   t: 'raw'
   sql: string
   params: Param[]
+  /** Structural origin retained by rendering, for observers that must never
+   * infer code names from SQL text or bound values. */
+  origin?: Stmt
+  /** The logical table of a compiler-lowered source or statement. */
+  table?: string
   [RAW]: true
 }
 
 /** A fragment this package wrote, marked as such. Not exported from the
  * package: every caller outside it builds nodes instead. */
-export let raw = (sql: string, params: Param[] = []): Raw => ({
+export let raw = (
+  sql: string,
+  params: Param[] = [],
+  table?: string,
+  origin?: Stmt,
+): Raw => ({
   t: 'raw',
   sql,
   params,
+  table,
+  origin,
   [RAW]: true,
 })
 

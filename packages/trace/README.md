@@ -115,3 +115,33 @@ root?.end()
 equal(c.history().at(-1)?.kind, 'process-start')
 stop()
 ```
+
+`during(span, run)` makes that span available to synchronous boundaries through
+`context()` and `peek()` without a target. `scope(context, run)` restores a
+captured context at an asynchronous boundary. Both restore the caller when `run`
+returns, throws or returns a promise; context never stays ambient across an
+`await`. `context(ancestorId)` returns the current context only when that span
+is in its synchronous ancestry, so a retained boundary can keep its own
+operation's parent during reentrant work. Expired recordings return no context.
+
+```ts
+import { context, during, peek, record, scope } from '@yaks/trace'
+import { equal, ok } from '@yaks/testing'
+
+let target = {}
+let captured = record(target, () => {
+  let c = ok(peek(target))
+  return during(c.begin({ kind: 'apply', name: 'apply' }), () => {
+    let at = ok(context())
+    scope(at, () => {
+      equal(peek(), c)
+      equal(context()?.parent, at.parent)
+    })
+    return at
+  })
+})
+equal(context(), undefined)
+// The recorder disconnected: captured contexts cannot revive its recording.
+scope(captured.result, () => equal(peek(), undefined))
+equal(peek(), undefined)
+```
