@@ -435,14 +435,10 @@ export type CliFacet = { commands?: CliCommand[] }
  * plugin's options. Usually the code is the declaring plugin's own; a plugin
  * may instead handle one another declares, lending what only it has (the
  * machine a transcript's run is given, @yaks/harness). Each effect has one
- * handler, and a declared effect this config gives no code has nothing to do
- * here — its runs are settled as done. */
+ * handler, and a declared effect this process gives no code owes no run. */
 export type EffectsFacet = {
   effects?: (host: Host, options: Options) => Handlers
 }
-
-// What a declared effect does where this config gives it no code.
-let nothing: Handlers[string] = () => {}
 
 // A plugin's `./effects` handling a name no vocabulary declares: code that
 // would never run, since nothing owes it.
@@ -1117,10 +1113,9 @@ let composed = async (
     store.install()
     part?.('effects')
 
-    // The registry, in every process: the effects the plugins' vocabularies
-    // declare are what a commit owes, so whatever this process writes, the
-    // runs it owes are written down with it (@yaks/effects), for any process
-    // working the pool — this one only if it serves `effects`. An effect
+    // The registry, in every process: a commit owes only the declared effects
+    // this process handles. Their runs are written down with it
+    // (@yaks/effects), for any process working the pool. An effect
     // writes through the graph's own `apply()`, trusted: what it writes comes
     // from the host, never from a client.
     let fx = watching = effects(vocab, {
@@ -1165,9 +1160,8 @@ let composed = async (
     })
     // The code behind the plugins' effects, where this process serves
     // `effects` (their facets were never imported anywhere else). Each
-    // declared effect has one handler, from whichever plugin gives it code,
-    // and one this config gives no code has nothing to do here: its runs are
-    // settled as done, not left owed to a process that will never come.
+    // declared effect has one handler, from whichever plugin gives it code.
+    // An effect this config gives no code owes no run.
     part?.('bindings')
     observed.graphed()
     let effecting = roles.includes('effects')
@@ -1188,10 +1182,7 @@ let composed = async (
           code[name] = run
         }
       }
-      fx.handle({
-        ...Object.fromEntries([...declared].map((n) => [n, nothing])),
-        ...code,
-      })
+      fx.handle(code)
       observed.effects(by, true)
     }
     // After every table exists, the plugins' own included: a full-text index is

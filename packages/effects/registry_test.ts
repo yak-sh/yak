@@ -358,7 +358,12 @@ test('a declared effect runs where it is handled, on each trigger it declares', 
 // A graph whose vocabulary declares `$defs` beside the blog and its pool.
 let declaring = ($defs: VocabDoc['$defs']) => {
   let vocab = loadVocab([...blog.docs, effectDoc, { $defs }])
-  return blogGraph([effects(vocab)], vocab)
+  let fx = effects(vocab)
+  fx.handle(Object.fromEntries(
+    Object.entries($defs ?? {}).filter(([, d]) => d.effect)
+      .map(([name]) => [name, () => {}]),
+  ))
+  return blogGraph([fx], vocab)
 }
 
 test('matching a create batch visits its bundles linearly', () => {
@@ -366,6 +371,7 @@ test('matching a create batch visits its bundles linearly', () => {
     $defs: { noticed: { effect: true, created: ['post'] } },
   }])
   let fx = effects(vocab)
+  fx.handle({ noticed: () => {} })
   let commit = fx.hooks!.commit!
   let visits = 0
   let size = 0

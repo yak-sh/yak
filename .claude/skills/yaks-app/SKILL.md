@@ -84,8 +84,9 @@ app manifest does not enable the journal.
 ## Idle alarms and schema pages
 
 An app alarm fires its stored wakes, moves owed schema rows, runs pending
-effects and drains queued embeddings (`graph.ts`). Each incarnation joins the
-effect pool once, including its restart sweeps. A failed embedding pass keeps
+effects whose handlers it composes and drains queued embeddings (`graph.ts`).
+Pending effects without a composed handler do not arm an alarm. Each incarnation
+joins the effect pool once, including its restart sweeps. A failed embedding pass keeps
 its queued text and retries; its crash-recovery alarm includes the provider
 timeout plus the retry interval, so it cannot outrun the failure retry.
 

@@ -201,7 +201,7 @@ import {
   policy,
   reads,
 } from '@yaks/member'
-import { parse } from '@yaks/query'
+import { and, eq as equals, fields as project, list, parse } from '@yaks/query'
 import { effectsIn, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Anatomy, anatomy } from '@yaks/code/anatomy'
 import { workerAnatomy } from './anatomy.ts'
@@ -2181,7 +2181,20 @@ export class Store {
         this.#effectAgain = false
         await this.#effects.work(this.#stored(this.#graph).graph)
       } while (this.#effectAgain)
-      let pending = await this.#graph.read('.effect.state=pending&*')
+      let handlers = [
+        ...new Set(
+          this.#effects.slots().filter((s) => s.effect && s.run).map((s) =>
+            s.id
+          ),
+        ),
+      ]
+      let pending = handlers.length
+        ? await this.#graph.read(and(
+          equals('effect.state', 'pending'),
+          equals('effect.handler', list(...handlers)),
+          project('effect.handler', 'effect.next', 'effect.lease_expiry'),
+        ))
+        : []
       if (pending.length) {
         let now = Date.now()
         let next = Math.min(...pending.map((b) => {

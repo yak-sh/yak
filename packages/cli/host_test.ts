@@ -840,6 +840,21 @@ let pooled = (effects: Plugged['effects']): Plugged => ({
   effects,
 })
 
+test('a declared effect with no handler owes no run in a composed host', async () => {
+  let host = await compose(
+    { db: ':memory:', plugins: ['shop'] },
+    only({ shop: pooled({ effects: () => ({}) }) }),
+  )
+  try {
+    await host.graph.apply([{ entity: { eid: 'b1' }, book: { title: 'One' } }])
+    assertEquals(await host.graph.read('.effect'), [])
+    await host.duties(AbortSignal.abort())
+    assertEquals(await host.graph.read('.effect'), [])
+  } finally {
+    await host.close()
+  }
+})
+
 test('a process coming up owes again what a declared sweep selects', async () => {
   let ran: string[] = []
   let host = await compose(
@@ -895,7 +910,7 @@ test('an explicit pass runs the retries that are due', async () => {
     assertEquals(ran, ['b1'])
     // The runs, written down and settled — no handler asked for any of this.
     let rows = await host.graph.read('.effect')
-    assertEquals(rows.map((b) => (b.effect as Comp).state), ['done', 'done'])
+    assertEquals(rows.map((b) => (b.effect as Comp).state), ['done'])
     // A failure that reported, whose backoff has come up. Written as the
     // pool would have written it, so the pass below is the only thing under
     // test.

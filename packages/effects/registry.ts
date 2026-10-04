@@ -6,11 +6,11 @@
 //
 //   An effect is declared in a vocabulary (`effect: true`, @yaks/vocab
 //   `effectsIn`), so every process that loads the vocabulary knows what a
-//   write owes, whatever it imported. The code that runs one is registered
-//   under its name, by a process that runs effects (`handle`). Where the
-//   vocabulary declares the `effect` component, a commit writes each run it
-//   owes into the graph in its own transaction, and any process working the
-//   pool claims it and runs it (./pool.ts). Where it does not, there is no
+//   write can owe. The code that runs one is registered under its name, by a
+//   process that runs effects (`handle`). Where the vocabulary declares the
+//   `effect` component, a commit writes runs only for registered handlers into
+//   the graph in its own transaction, and any process working the pool claims
+//   it and runs it (./pool.ts). Where it does not, there is no
 //   pool to hand one to, and a handled effect runs here after the commit.
 //
 //   An observer is registered at runtime (`created`, `changed`, `removed`,
@@ -624,7 +624,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
   let owe: Hook = (bundles, tx, _err, context) => {
     if (generation(bundles) > depth) return bundles
     return after(
-      matched(bundles, tx, (s) => !!s.effect),
+      matched(bundles, tx, (s) => !!s.effect && !!s.run),
       (found) =>
         !found.length ? bundles : after(
           pooled!.owe(tx, found, generation(bundles)),

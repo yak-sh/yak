@@ -60,9 +60,14 @@ page, names the same entity.
 Declared in vocab.json with its triggers (`created`, `changed` with a component
 or `comp.prop`, `removed`, `match`), its code registered under the same name
 with `handle` (packages/effects/README.md). With the `effect` component loaded,
-a commit writes each run it owes as an `effect` row in the same transaction, so
-a crash can't lose one, and any process serving the effects role claims and
-runs it.
+a commit writes runs for its registered handlers as `effect` rows in the same
+transaction, so a crash can't lose one, and any process serving the effects
+role claims and runs it.
+
+A declared effect with no registered handler owes no row. Composition registers
+only the code the process has, including conditional handlers; it supplies no
+no-op handler for a missing one. A store's alarm ignores existing pending rows
+for handlers it does not compose.
 
 What to get right:
 

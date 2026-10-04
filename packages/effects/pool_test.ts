@@ -54,8 +54,16 @@ test('a commit writes down what it owes, and a writer working nothing runs none'
   assertEquals(a.ran, [])
   assertEquals(await owed(a.g), [
     'post_note p1 pending',
-    'post_swept p1 pending',
   ])
+})
+
+test('a declared effect owes no row until its handler is registered', async () => {
+  let a = proc(store())
+  await a.g.apply([post('p0')])
+  assertEquals(await owed(a.g), [])
+  a.fx.handle({ post_note: a.note })
+  await a.g.apply([post('p1')])
+  assertEquals(await owed(a.g), ['post_note p1 pending'])
 })
 
 test('a batch that never commits owes nothing', async () => {
@@ -97,6 +105,7 @@ test('what one process wrote, another runs, and only one of many', async () => {
   for (let p of [a, b]) {
     p.fx.handle({ post_note: (e) => void ran.push(e.entity.eid) })
   }
+  w.fx.handle({ post_note: w.note })
   await w.g.apply([post('p1')])
   await Promise.all([a.fx.work(a.g), b.fx.work(b.g)])
   await Promise.all([a.fx.idle(), b.fx.idle()])
@@ -339,6 +348,7 @@ test('a thread that wrote runs down wakes the worker beside it', async () => {
   let serving = server.fx.work(server.g, up.signal)
   await until(async () => (await rows(server.g, '.lease')).length)
   let beside = proc(s, { nudge: () => server.fx.wake() })
+  beside.fx.handle({ post_note: beside.note })
   await beside.g.apply([post('p1')])
   // Well inside the pass the worker would otherwise wait for.
   await until(() => server.ran.length, { timeout: 500 })
