@@ -72,6 +72,9 @@ The base kit uses `groups` in packages/ui/kit.ts:
 A part shows things and nothing else: no state, no graph, no app imports, no
 outer layout (margins, widths), and it never styles a part nested inside it.
 That is what lets a part sit anywhere and look the same.
+A part made of other parts holds them, the way `Say` holds a `Field` and a
+`Button`: an `input` or `textarea` a part styles itself is a second text box
+beside `Field`, with its own look in both the browser and the terminal.
 
 Colors come from **roles**, never hues: `--positive`, `--negative`, `--number`,
 `--time`, `--link`, `--accent`, `--heading` and the rest of `Colors` in
