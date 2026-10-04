@@ -17,8 +17,7 @@
     "@yaks/trace": "../trace/mod.ts",
     "@yaks/match": "../match/mod.ts",
     "@yaks/ram": "../ram/mod.ts",
-    "@yaks/sync": "../sync/mod.ts",
-    "@preact/signals": "npm:@preact/signals@^2.9.0"
+    "@yaks/sync": "../sync/mod.ts"
   },
   "entries": [
     ".",

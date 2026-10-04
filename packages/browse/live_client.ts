@@ -1,3 +1,4 @@
+import { batch } from '@preact/signals'
 // Browse's learned projection and patch adapter over generic named watches.
 import { entire, namedClient, quiet } from '@yaks/client/named'
 import { type Bundle, type Comp, dead } from '@yaks/graph'
@@ -46,6 +47,7 @@ export let liveClient = (opts: {
   let core = namedClient({
     ...opts,
     vocab: browserVocab(),
+    batch,
     wireVault: opts.disk
       ? { name: storageKey('tasks-client-wire') }
       : undefined,

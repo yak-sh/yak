@@ -1,6 +1,5 @@
 // Named server watches over a generic client: shared wires, readiness retained
 // across reconnects, and landed frames delivered to their owning watch names.
-import { batch } from '@preact/signals'
 import { type Client, client, type Watch, wireIdb } from './mod.ts'
 import { type Bundle } from '@yaks/graph'
 import { type Frame, replicate, type Socket } from '@yaks/sync'
@@ -40,6 +39,7 @@ export type NamedClient = {
 }
 export let namedClient = (opts: {
   vocab: Vocab
+  batch?: (work: () => void) => void
   wireVault?: Parameters<typeof wireIdb>[0]
   url: string
   connect: (url: string) => Socket
@@ -107,7 +107,9 @@ export let namedClient = (opts: {
         setTimeout(() => {
           let frames = arrived
           arrived = []
-          batch(() => frames.forEach(land))
+          ;(opts.batch ?? ((work: () => void) => work()))(() =>
+            frames.forEach(land)
+          )
         })
       })
     },
