@@ -527,7 +527,8 @@ The package exports eight entry points:
   `bundle(entry, signal)` makes a page's script and everything it imports into
   one browser module with `deno bundle`, from a file or from an entry written
   for the host (`Written`: its code, and where its imports resolve from).
-  @yaks/web's app and @yaks/inspect's page are each served this way.
+  @yaks/web serves the application its plugin config chooses through a
+  contributed `./web` facet, such as @yaks/browse.
 
 Application commands use `yak command <name> [arguments] --app <app>`, or the
 short form `yak <app> <name> [arguments]`, as the selected yaks.app connection.
