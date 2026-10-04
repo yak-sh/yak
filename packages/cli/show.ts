@@ -43,7 +43,7 @@ let slot = (name: string, p: Prop | undefined, need: boolean): string => {
  * optional. The tool's own schema is the whole grammar, so this is the only
  * place that decides how a tool is written on a command line.
  */
-export let sketch = (t: Grammar): string => {
+export let sketch = (t: Grammar, omit: readonly string[] = []): string => {
   let schema = (t.inputSchema ?? {}) as Schema
   let props = schema.properties ?? {}
   let need = new Set(schema.required ?? [])
@@ -51,7 +51,7 @@ export let sketch = (t: Grammar): string => {
   let names = positional.map((n) => n.replace(/\.\.\.$/, ''))
   let forward = t.forward
   let named = Object.keys(props).filter(
-    (n) => !names.includes(n) && n != forward,
+    (n) => !names.includes(n) && n != forward && !omit.includes(n),
   )
   return [
     ...positional.map((n, i) => need.has(names[i]) ? `<${n}>` : `[${n}]`),
@@ -61,8 +61,8 @@ export let sketch = (t: Grammar): string => {
 }
 
 /** The whole command line to type, without the program's own name. */
-export let lineOf = (t: Grammar): string =>
-  `${commandOf(t)} ${sketch(t)}`.trimEnd()
+export let lineOf = (t: Grammar, omit: readonly string[] = []): string =>
+  `${commandOf(t)} ${sketch(t, omit)}`.trimEnd()
 
 /** One tool's help page: the command line to type, what it is for, and a row
  * per argument with its type, whether it is required, and the description the

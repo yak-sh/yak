@@ -86,8 +86,10 @@ let called = async (
   return printed(c, null, 'command', answer)
 }
 
-let ABOUT =
-  `Run a connector tool or one of an app's own commands, as the yak login account. ` +
+let ABOUT = `Run a connector tool or one of an app's own commands. ` +
+  `--as selects an owner's yaks.app connection by its whole address or the part before @; ` +
+  `\`yak connection list <owner>\` lists connections (owner id or name); use a yaks.app entry’s account. ` +
+  `Without it, use your own email, else the oldest connection. ` +
   `Connector tools come first; \`yak commands\` lists app commands and their schemas. ` +
   `Use positionals and --flags; --app chooses an app when two share a command. ` +
   `Values follow the schema's types; @path reads a file and - reads stdin.`

@@ -117,6 +117,8 @@ export type Opts = {
   about?: string
   /** The notes it closes with. */
   notes?: string
+  /** Global flags listed in the notes, omitted from command sketches. */
+  globalFlags?: readonly string[]
   /** The MCP server a command talks to where it names neither a config nor a
    * host. */
   host?: string
@@ -219,25 +221,33 @@ type Listed = Grammar & { title?: string; description?: string }
 
 // The line to type, with the heading's own word left out: under `graph`, a
 // tool is its verb and its arguments.
-let lineIn = (noun: string, t: Listed): string =>
-  noun ? `${t.verb} ${sketch(t)}`.trimEnd() : lineOf(t)
+let lineIn = (noun: string, t: Listed, omit: readonly string[]): string =>
+  noun ? `${t.verb} ${sketch(t, omit)}`.trimEnd() : lineOf(t, omit)
 
-let block = (noun: string, said: Listed[], wide: number): string[] => [
+let block = (
+  noun: string,
+  said: Listed[],
+  wide: number,
+  omit: readonly string[] = [],
+): string[] => [
   ...(noun ? ['', noun] : []),
   ...said.map((t) =>
-    `  ${lineIn(noun, t).padEnd(wide)}  ${titleOf(t)}`.trimEnd()
+    `  ${lineIn(noun, t, omit).padEnd(wide)}  ${titleOf(t)}`.trimEnd()
   ),
 ]
 
 // How wide the one column is across every block: the longest line it holds,
 // capped.
-let column = (groups: [string, Listed[]][]): number =>
+let column = (
+  groups: [string, Listed[]][],
+  omit: readonly string[] = [],
+): number =>
   Math.min(
     WIDE,
     Math.max(
       0,
       ...groups.flatMap(([noun, said]) =>
-        said.map((t) => lineIn(noun, t).length)
+        said.map((t) => lineIn(noun, t, omit).length)
       ),
     ),
   )
@@ -248,10 +258,11 @@ export let usage = (
   opts: Opts = {},
 ): string => {
   let groups = nouns(tools)
-  let wide = column(groups)
+  let omit = opts.globalFlags ?? []
+  let wide = column(groups, omit)
   return [
     ...(opts.about ? [opts.about, ''] : []),
-    ...groups.flatMap(([noun, said]) => block(noun, said, wide)),
+    ...groups.flatMap(([noun, said]) => block(noun, said, wide, omit)),
     ...(opts.notes ? ['', opts.notes] : []),
   ].join('\n')
 }

@@ -758,11 +758,12 @@ test('a write naming nothing of its kind is refused, and mints nothing', async (
   assertEquals(await g.get(['ghost']), [])
 })
 
-test('a read is answered about whatever its reference names', async () => {
+test('a read may ask about a missing durable id', async () => {
   let { r } = named([mark(true)])
   await r.ensure()
-  let answer = await r.call(called('person_mark', { who: 'ghost' }))
-  assertEquals(body(answer.find((b) => b.output)), 'ghost')
+  let who = mint()
+  let answer = await r.call(called('person_mark', { who }))
+  assertEquals(body(answer.find((b) => b.output)), who)
 })
 
 test("a tool writes in the CALLER's name, never the runner's", async () => {

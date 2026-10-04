@@ -21,6 +21,7 @@ import {
   sentinelOf,
 } from '@yaks/secrets'
 import {
+  AccountError,
   accountOf,
   attach,
   begin,
@@ -725,3 +726,33 @@ test('pick computes the own-address default then the oldest, and only explicit a
   await assertRejects(() => pick(g.read, 'space', 'texts', 'missing'))
   assertEquals(await pick(g.read, 'space', 'absent'), undefined)
 })
+
+// A refusal is useful without exposing any of the connection's other fields.
+for (
+  let [said, integration, accounts] of [
+    ['missing', 'texts', ['ann@one.example', 'ann@two.example']],
+    ['ann', 'texts', ['ann@one.example', 'ann@two.example']],
+    ['missing', 'absent', []],
+  ] as const
+) {
+  test(`pick lists only account addresses: ${integration}/${said}`, async () => {
+    let { g, c } = await setup()
+    for (let account of ['ann@one.example', 'ann@two.example']) {
+      let eid = (await g.apply(
+        await need(g.read, {
+          owner: 'space',
+          integration: 'texts',
+        }),
+      ))[0].entity.eid
+      await connect(c, eid, { key: 'private-key' }, account)
+    }
+    let error = await assertRejects(
+      () => pick(g.read, 'space', integration, said),
+      AccountError,
+    )
+    assertEquals(
+      error.message.split('; available accounts: ')[1],
+      accounts.join(', ') || '(none)',
+    )
+  })
+}

@@ -199,6 +199,7 @@
         },
         "feedback": {
           "type": "string",
+          "ref": "person",
           "description": "the correcting person’s id or name, or an empty string if unknown; either marks the memory as feedback"
         },
         "about": {
@@ -238,7 +239,8 @@
         "ids": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "ref": "entity"
           },
           "description": "particular memories, by id"
         },

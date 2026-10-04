@@ -55,7 +55,11 @@ let TAIL =
   --host <host>   an MCP server to call over /mcp instead, for a graph this
                   machine cannot open as a file (default $YAKS_HOST, else
                   ${HOST})
-  --as <account>  another account (default is computed, never stored)
+  --as <account>  select an owner's yaks.app connection by its whole address
+                  or the part before @; list them with
+                  \`yak connection list <owner>\` (owner id or name), and use
+                  a yaks.app entry’s account.
+                  Default is your own email, else the oldest connection.
   --json          print the structured result instead of the text
   --tui           hold the answer in the terminal, scrollable, until Ctrl-C
   --timing        one line on stderr per response, with its Server-Timing
@@ -116,6 +120,16 @@ export let YAK: Opts = {
   name: 'yak',
   about: HEAD,
   notes: TAIL,
+  globalFlags: [
+    'as',
+    'json',
+    'host',
+    'config',
+    'timing',
+    'tui',
+    'no-duties',
+    'help',
+  ],
   host: HOST,
   more: table,
   stray: appStray,

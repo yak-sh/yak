@@ -9,7 +9,7 @@
       "noun": "admin",
       "verb": "throwaway",
       "title": "Sign in as a throwaway test account",
-      "description": "Sign this box in as a throwaway test account, <name>@bot.yak.sh. Without a name, a fresh probe-<random> address. The sign-in code is read from the letter in this graph. The current account stays as it was: name the new one per command with --as.\n\n  yak admin throwaway cookbook\n  yak admin tool app_list --as=cookbook",
+      "description": "Sign this box in as a throwaway test account, <name>@bot.yak.sh. Without a name, a fresh probe-<random> address. The sign-in code is read from the letter in this graph. The current account stays as it was: name the new one per command with --as.\n\n  yak admin throwaway cookbook",
       "input": {
         "name": {
           "type": "string",
@@ -37,7 +37,7 @@
         },
         "as": {
           "type": "string",
-          "description": "outside account; default is your own email, else the oldest connection"
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
         }
       },
       "required": [
@@ -65,7 +65,7 @@
         },
         "as": {
           "type": "string",
-          "description": "outside account; default is your own email, else the oldest connection"
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
         }
       },
       "openWorld": true
@@ -83,7 +83,7 @@
         },
         "as": {
           "type": "string",
-          "description": "outside account; default is your own email, else the oldest connection"
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
         }
       },
       "openWorld": true,
@@ -112,7 +112,7 @@
         },
         "as": {
           "type": "string",
-          "description": "outside account; default is your own email, else the oldest connection"
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
         }
       },
       "openWorld": true,
@@ -155,7 +155,7 @@
         },
         "as": {
           "type": "string",
-          "description": "outside account; default is your own email, else the oldest connection"
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
         }
       },
       "required": [
@@ -180,7 +180,7 @@
         },
         "as": {
           "type": "string",
-          "description": "outside account; default is your own email, else the oldest connection"
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
         }
       },
       "required": [
@@ -215,7 +215,7 @@
         },
         "as": {
           "type": "string",
-          "description": "outside account; default is your own email, else the oldest connection"
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
         }
       },
       "required": [
@@ -255,7 +255,7 @@
         },
         "as": {
           "type": "string",
-          "description": "outside account; default is your own email, else the oldest connection"
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
         }
       },
       "required": [
@@ -297,7 +297,7 @@
         },
         "as": {
           "type": "string",
-          "description": "outside account; default is your own email, else the oldest connection"
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
         }
       },
       "required": [
@@ -334,7 +334,7 @@
         },
         "as": {
           "type": "string",
-          "description": "outside account; default is your own email, else the oldest connection"
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
         }
       },
       "required": [
@@ -376,7 +376,7 @@
         },
         "as": {
           "type": "string",
-          "description": "outside account; default is your own email, else the oldest connection"
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
         }
       },
       "required": [
@@ -396,7 +396,7 @@
       "input": {
         "as": {
           "type": "string",
-          "description": "outside account; default is your own email, else the oldest connection"
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
         }
       },
       "readOnly": true,
@@ -415,7 +415,7 @@
         },
         "as": {
           "type": "string",
-          "description": "outside account; default is your own email, else the oldest connection"
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
         }
       },
       "readOnly": true,
@@ -433,7 +433,7 @@
       "input": {
         "as": {
           "type": "string",
-          "description": "outside account; default is your own email, else the oldest connection"
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
         }
       },
       "readOnly": true,
@@ -452,7 +452,7 @@
         },
         "as": {
           "type": "string",
-          "description": "outside account; default is your own email, else the oldest connection"
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
         }
       },
       "destructive": true,
@@ -474,7 +474,7 @@
         },
         "as": {
           "type": "string",
-          "description": "outside account; default is your own email, else the oldest connection"
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
         }
       },
       "destructive": true,

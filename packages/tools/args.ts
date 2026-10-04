@@ -7,12 +7,14 @@
 
 import {
   addressed,
-  type Eid,
   type Graph,
+  minted,
   type NamedTool,
   TOMBSTONE,
 } from '@yaks/graph'
 import { validateToolInput } from '@yaks/vocab/tools'
+import { and, eq, present, want } from '@yaks/query'
+import { human } from '@yaks/id'
 
 /** Expected invocation failures, not programming defects. */
 export class CallError extends Error {
@@ -83,28 +85,16 @@ let ids = (v: unknown): string[] =>
     typeof x == 'string' && x != ''
   )
 
-// The ids that name nothing a tool may write about: no entity, a deleted one,
-// or one that is not the kind the argument declares (`entity` is any kind).
-let absent = async (
-  graph: Graph,
-  kind: string,
-  said: string[],
-  eids: Eid[],
-): Promise<string[]> => {
-  let found = new Map(
-    (await graph.get(eids)).map((b) => [b.entity.eid, b]),
+let missing = (key: string, kind: string, said: string): CallError =>
+  new CallError(
+    'arguments',
+    `${key}: ${said} names ${kind == 'entity' ? 'nothing' : `no ${kind}`}`,
   )
-  return said.filter((_, i) => {
-    let b = found.get(eids[i])
-    return !b || b[TOMBSTONE] != null || b[kind] == null
-  })
-}
 
 /**
- * The arguments with every declared reference resolved to the eid it names,
- * through the graph's `address` asked with the kind the argument names. A
- * tool that writes is refused an argument naming nothing of that kind; a read
- * is answered about whatever it names, a deleted entity's history included.
+ * Tool references are resolved here once: ids and registered aliases first,
+ * then an exact document title of the declared kind. A name must identify one
+ * entity; a read may still ask about a missing or deleted durable eid.
  */
 export let resolved = async (
   tool: NamedTool,
@@ -116,14 +106,36 @@ export let resolved = async (
     let said = ids(args[key])
     if (!said.length) continue
     let eids = await addressed(graph, said, kind)
-    if (!tool.readOnly) {
-      let none = await absent(graph, kind, said, eids)
-      if (none.length) {
-        throw new CallError(
-          'arguments',
-          `${key}: ${none.join(', ')} ${none.length == 1 ? 'names' : 'name'} ` +
-            (kind == 'entity' ? 'nothing' : `no ${kind}`),
-        )
+    let held = new Map((await graph.get(eids)).map((b) => [b.entity.eid, b]))
+    for (let i = 0; i < said.length; i++) {
+      let row = held.get(eids[i])
+      if (!row && !minted(eids[i])) {
+        let matches = graph.vocab.prop('doc', 'title')
+          ? await graph.read(and(
+            eq('doc.title', said[i]),
+            ...kind == 'entity' ? [] : [present(kind)],
+            want('entity'),
+          ))
+          : []
+        if (matches.length > 1) {
+          let id = human(graph.vocab)
+          throw new CallError(
+            'arguments',
+            `${key}: ${said[i]} names several ${kind} candidates: ` +
+              matches.map((b) => `${id(b)} (${b.entity.eid})`).join(', ') +
+              '; use an id',
+          )
+        }
+        row = matches[0]
+        if (row) eids[i] = row.entity.eid
+        else {
+          throw missing(key, kind, said[i])
+        }
+      }
+      if (
+        !tool.readOnly && (!row || row[TOMBSTONE] != null || row[kind] == null)
+      ) {
+        throw missing(key, kind, said[i])
       }
     }
     out[key] = Array.isArray(args[key]) ? eids : eids[0]

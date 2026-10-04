@@ -14,15 +14,6 @@ import { personaMirror, remembered } from './files.ts'
 import { voice } from './voice.ts'
 import { wear } from './worn.ts'
 
-// The persona the caller typed, resolved to an eid: an eid resolves to itself,
-// and a name resolves to whatever the graph addresses it to (@yaks/alias, when
-// it is composed in) — the same resolution `graph_show` performs, so a persona
-// is reachable here by every name it is reachable by there.
-let at = async (graph: Graph, said: string): Promise<string> => {
-  let found = await graph.address([said])
-  return found.get(said) ?? said
-}
-
 let answer = (call: Bundle, body: string): Bundle[] => [{
   entity: { eid: '$voice' },
   content: { body },
@@ -68,7 +59,7 @@ export let runs = (host?: { config?: { db?: string } }): Runs => {
       let said = String(argsOf(call).persona ?? '').trim()
       if (!said) throw new Refused('persona_read needs a persona')
       let worn = await wear(graph.storage, graph.vocab)(
-        await at(graph, said),
+        said,
       )
       // An entity that is not a persona is refused rather than rendered as an
       // empty document: a caller that named a task would otherwise read the

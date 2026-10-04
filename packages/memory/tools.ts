@@ -29,7 +29,6 @@
 // selected, which is a worse answer and not a broken one.
 
 import {
-  addressed,
   argsOf,
   type Bundle,
   type Comp,
@@ -71,12 +70,6 @@ let ids = (v: unknown): string[] =>
 // Words compared as written, but for how they were wrapped: a line break an
 // importer or an agent put in is not a different sentence.
 let flat = (s: string) => s.replace(/\s+/g, ' ').trim()
-
-// Who gave a correction, as the eid they are: `feedback` takes a name or an
-// id and may be empty, so it is not a declared reference the runner resolves
-// the way it resolves `id`, `scope`, `on` and `near` (@yaks/tools).
-let byWhom = async (graph: Graph, said: string): Promise<string> =>
-  said ? (await addressed(graph, [said]))[0] : ''
 
 // A memory as it stands right now, for a patch to be judged against: the
 // entity the caller named, or nothing where it names no memory of this graph.
@@ -121,7 +114,7 @@ export let runs = (): Runs => ({
     let named = str(args.id)
     let scope = str(args.scope)
     let feedback = args.feedback
-    let by = await byWhom(graph, str(feedback))
+    let by = str(feedback)
     let where: Omit<Marking, 'eid'> = {
       ...(scope ? { scope } : {}),
       context: str(args.context),
@@ -189,7 +182,7 @@ export let runs = (): Runs => ({
       ...(near ? { near } : {}),
       ...(scope ? { scope } : {}),
       ...(args.feedback ? { feedback: true } : {}),
-      ...(named.length ? { eids: await addressed(graph, named) } : {}),
+      ...(named.length ? { eids: named } : {}),
     }
     return (await graph.read(line(asked))).map(witnessed)
   },

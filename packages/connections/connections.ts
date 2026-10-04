@@ -447,13 +447,18 @@ export let pick = async (
       : name.includes('@')
       ? []
       : found.filter((b) => address(b).split('@')[0] == name)
+    let accounts = [...new Set(found.map((b) => comp(b, CONNECTION).account))]
+      .filter((a): a is string => typeof a == 'string' && a != '')
+    let available = `; available accounts: ${accounts.join(', ') || '(none)'}`
     if (matches.length > 1) {
       throw new AccountError(
-        `${as} names several ${integration} accounts; use the whole address`,
+        `${as} names several ${integration} accounts; use the whole address${available}`,
       )
     }
     if (!matches.length) {
-      throw new AccountError(`no ${integration} account is named ${as}`)
+      throw new AccountError(
+        `no ${integration} account is named ${as}${available}`,
+      )
     }
     return matches[0]
   }

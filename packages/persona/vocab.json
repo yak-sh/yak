@@ -81,7 +81,8 @@
       "input": {
         "persona": {
           "type": "string",
-          "description": "the persona’s unique entity id (eid), human-readable id, or registered name"
+          "ref": "persona",
+          "description": "the persona’s unique entity id (eid), human-readable id, registered name, or exact title"
         }
       },
       "required": [

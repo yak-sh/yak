@@ -114,12 +114,12 @@ tmux capture-pane -p -t <task>
 
 ## yaks.app
 
-A probe of the platform runs as a test account, never as the owner:
-`yak admin throwaway` signs in as one, and `--owner` is only for an act the owner
-asked for (M-31958). Tests that need workerd itself are
-`deno task test
---tag=workerd`. After a deploy, `yak admin deploys --admin`
-shows what is live and `yak admin errors` what broke.
+A probe of the platform runs as a test account:
+`yak admin throwaway` signs in as one. Select that connection with `--as`;
+listing accounts is covered by `secrets-and-connections`. Acting as the owner
+requires the owner's instruction (M-31958). Tests that need workerd itself
+are `deno task test --tag=workerd`. After a deploy, `yak admin deploys`
+shows what is live and `yak admin errors` what broke; both take `--as`.
 
 ## Reaping
 
