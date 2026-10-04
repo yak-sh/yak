@@ -80,8 +80,10 @@ export let Turn = ({ e, io, ctx }: Props): JSX.Element => {
 }
 
 /** Its history, as a part of a page. */
-let Told = ({ e, io, ctx }: Props): JSX.Element =>
-  h(History, { e, io, notes: (ctx as PageCtx).notes ?? new Map() })
+let Told = ({ e, io, ctx }: Props): JSX.Element | null =>
+  io.vocab.comp('_change')
+    ? h(History, { e, io, notes: (ctx as PageCtx).notes ?? new Map() })
+    : null
 
 /** The headings a page holds, for its notes: the components it carries, and
  * the parts it draws. */

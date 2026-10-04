@@ -385,7 +385,7 @@ test('a query that counts shows the count through its view registration', () => 
 test('a terminal paints a page as values, with nothing to type in', () => {
   using t = host({}, false)
   let painted = print(h(t.Door, { e: T1, view: 'Inspect.Page' }), 100)
-  for (let word of ['N-t1', 'status', 'open', 'History']) {
+  for (let word of ['N-t1', 'status', 'open']) {
     assert(painted.includes(word), word)
   }
   for (let control of ['note', 'edit', '+ component', 'delete']) {
@@ -467,4 +467,14 @@ test('terminal walk visits a row then each of its links before the next row', as
   } finally {
     ui.free()
   }
+})
+
+test('an inspector without a journal never asks for history', () => {
+  using t = host()
+  using p = mount(t.draw(h(t.Door, { e: T1, view: 'Inspect.Page' })))
+  assertEquals(
+    t.asked.some((q) => q.includes('._change') || q.includes('._tx')),
+    false,
+  )
+  assertEquals(p.root.textContent?.includes('History'), false)
 })

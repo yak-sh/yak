@@ -30,8 +30,9 @@ import { metaOf } from './meta.ts'
 import type { Plugin } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import { named as spoken, type Names } from './listing.ts'
-import { col, isNull, tally } from '@yaks/sql'
-import { db, slot, unclassified } from './testing.ts'
+import { col, isNull, lit, select, table, tally } from '@yaks/sql'
+import { ddl as journalDdl } from '@yaks/journal'
+import { db, keep, slot, unclassified } from './testing.ts'
 
 // A hibernatable socket, faked: what it was sent, and the attachment that is
 // its only memory across an eviction.
@@ -1526,10 +1527,21 @@ test('a Store anatomy supplier observes its own conditional composition without 
   assertEquals(app.comps.length, store.anatomy().comps.length)
 })
 
-test('app schema pages and journal history are backed by store rows through normal reads', async () => {
+test('app schema reads and writes leave old journal tables untouched across boot', async () => {
   let ctx = state()
   using _db = ctx.storage
   let store = await cookbook(ctx)
+  let drive = db(ctx)
+  for (let stmt of journalDdl()) drive.query(stmt)
+  drive.query({
+    t: 'insert',
+    into: 'journal_tx',
+    cols: ['ts'],
+    rows: [[lit('2026-10-04T00:00:00Z')]],
+  })
+  let before = drive.query(select({ from: table('journal_tx') }))
+  // A prior deploy's schema stamp forces the actual fitting path on wake.
+  keep(ctx, 'schema', 'journal-enabled-deploy')
   let query = async (line: string) =>
     await (await get(
       store,
@@ -1540,42 +1552,29 @@ test('app schema pages and journal history are backed by store rows through norm
   assertEquals((schema.doc as Comp).title, 'recipe')
   let props = await query(`._prop.comp=${schema.entity.eid}`)
   assert(props.some((b) => (b._prop as Comp).name == 'serves'))
+  for (let serves of [2, 7]) {
+    await post(
+      store,
+      '/apply',
+      [{ entity: { eid: CAKE }, recipe: { serves } }],
+      owner,
+    )
+  }
+  assertEquals(drive.query(select({ from: table('journal_tx') })), before)
+  assertEquals(drive.query(select({ from: table('journal_change') })), [])
+  assertEquals(drive.query(select({ from: table('journal_field') })), [])
+  store = new Store(ctx)
+  let [cake] = await query(`.recipe&.entity.eid=${CAKE}`)
+  assertEquals((cake.recipe as Comp).serves, 7)
   await post(store, '/apply', [{
     entity: { eid: CAKE },
-    recipe: { serves: 2 },
+    recipe: { serves: 8 },
   }], owner)
-  await post(store, '/apply', [{
-    entity: { eid: CAKE },
-    recipe: { serves: 7 },
-  }], owner)
-  let history = await query(`._change.target=${CAKE}`)
-  let changes = history.filter((b) =>
-    (b._change as Comp).comp == schema.entity.eid
-  )
-  assertEquals(changes.map((b) => ((b._change as Comp).value as Comp).serves), [
-    2,
-    7,
-  ])
-  let tx = String((changes[0]._change as Comp).tx)
-  let [writer] = await query(`._tx&.entity.eid=${tx}`)
-  assertEquals((writer._tx as Comp).by, ADA)
-  let ws = wire()
-  ctx.live.push(ws)
-  store.webSocketMessage(
-    ws,
-    JSON.stringify({ subscribe: `._change.target=${CAKE}`, id: 'history' }),
-  )
-  assertEquals((ws.sent[0] as Frame).bundles?.length, history.length)
-  // Writes rejected by the app guard or check mode leave no journal row.
-  let count = history.length
-  await post(store, '/apply?check=1', [{
-    entity: { eid: CAKE },
-    recipe: { serves: 9 },
-  }], owner)
-  assertEquals((await query(`._change.target=${CAKE}`)).length, count)
-  let woken = new Store(ctx)
-  store = woken
-  assertEquals((await query(`._change.target=${CAKE}`)).length, count)
+  assertEquals(drive.query(select({ from: table('journal_tx') })), before)
+  assertEquals(drive.query(select({ from: table('journal_change') })), [])
+  assertEquals(drive.query(select({ from: table('journal_field') })), [])
+  assertEquals((await query('._comp.name=_tx')).length, 0)
+  assertEquals((await query('._comp.name=_change')).length, 0)
   // The stored schema is refreshable at deploy; adding a property serves
   // its page immediately, and a removed property no longer appears.
   await post(

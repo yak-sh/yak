@@ -529,10 +529,10 @@ owners keep the app's own access; invalid credentials and cross-space narrowed
 grants are refused in the app's JSON envelope. No option keeps the local
 inspector unchanged.
 
-App stores compose @yaks/vocab's schema entities and @yaks/journal's computed
-`_tx`/`_change` backings. Component/property pages use ordinary queries; the
-schema description is refreshed after boot in bounded writes, with its hash
-last. Journal after-images commit inside the graph transaction, never for a
-rehearsal or refusal. History starts when this composition is installed: old
-changes are not invented or backfilled. Schema rows are excluded from ordinary
-page listings unless named explicitly, like other platform-owned rows.
+App stores compose @yaks/vocab's schema entities, without the journal.
+Component/property pages use ordinary queries; the schema description is
+refreshed after boot in bounded writes, with its hash last. The inspector omits
+history when its vocabulary has no `_change`. Standing journal tables and their
+rows are left untouched: removing them would incur billed writes. Schema rows
+are excluded from ordinary page listings unless named explicitly, like other
+platform-owned rows.

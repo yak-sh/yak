@@ -74,6 +74,13 @@ build, so it is a sandbox for billing, not a canary.
   shape change, a backfill) runs after boot, in slices, behind the store's own
   traffic.
 
+## Journaling
+
+App stores do not load @yaks/journal (T-65227). Their inspector reads schema
+and entities without history. Standing journal tables and rows stay untouched;
+deleting them would itself incur billed writes. Declaring journal names in an
+app manifest does not enable the journal.
+
 ## An app's words
 
 A store's vocabulary is the platform's core documents plus the app's own

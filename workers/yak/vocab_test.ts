@@ -555,3 +555,18 @@ test('app vocab keeps external UX state page-only, including transient events', 
     'sync',
   )
 })
+
+// Journal names in a manifest are refused; an app never loads them implicitly.
+test('app vocabularies never load journal components', () => {
+  let v = appVocab({})
+  assertEquals(v.comp('_tx'), undefined)
+  assertEquals(v.comp('_change'), undefined)
+  assertThrows(() =>
+    appVocab({
+      $defs: {
+        _tx: { component: true, properties: {} },
+        _change: { component: true, properties: {} },
+      },
+    })
+  )
+})

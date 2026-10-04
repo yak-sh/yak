@@ -1,12 +1,12 @@
 // The shared store reads the terminal needs, including the actual runtime's
-// socket upgrade and SQLite computed journal backing.
+// socket upgrade, without journal history.
 /// <reference lib="deno.ns" />
 import { test, until } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { bearerFor, connector, signIn, workerd } from './probe.ts'
 
 test(
-  'private app inspector schema and live history use login bearer in workerd',
+  'private app inspector schema and live reads use login bearer without history in workerd',
   async () => {
     let k = await workerd()
     try {
@@ -48,9 +48,11 @@ test(
       let eid = applied.find((b: { $alias?: string }) =>
         b.$alias == '$one'
       ).entity.eid
-      let changes = await (await read(`._change.target=${eid}`)).json()
-      assert(changes.some((b: { _change: { value?: { title?: string } } }) =>
-        b._change.value?.title == 'Runtime history'
+      let journal = await (await read(`._comp.name=_change`)).json()
+      assertEquals(journal, [])
+      let changes = await (await read(`.doc&.entity.eid=${eid}`)).json()
+      assert(changes.some((b: { doc: { title?: string } }) =>
+        b.doc.title == 'Runtime history'
       ))
       let Socket = WebSocket as unknown as {
         new (
@@ -73,7 +75,7 @@ test(
         })
         socket.send(
           JSON.stringify({
-            subscribe: `._change.target=${eid}`,
+            subscribe: `.doc&.entity.eid=${eid}`,
             id: 'history',
           }),
         )
