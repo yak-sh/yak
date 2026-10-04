@@ -6,7 +6,7 @@ import { resolve } from '@yaks/render'
 import { signal } from '@preact/signals'
 import { useLayoutEffect, useMemo } from 'preact/hooks'
 import { parse } from '@yaks/query'
-import { all } from '@yaks/inspect/views'
+import { all, schemaPages } from '@yaks/inspect/views'
 import { inspectViews as memoryViews } from '@yaks/memory/views'
 import { inspectViews as sessionViews } from '@yaks/session/views'
 import { inspectViews as taskViews } from '@yaks/task/views'
@@ -130,7 +130,12 @@ export let inspectIo: Io = {
     await apply(bs)
   },
   get: (eid) => row(eid).value ? bundle(ent(eid)) : undefined,
-  link: (eid) => `/${idOf(ent(eid))}?v=Inspect.Full`,
+  link: (eid) =>
+    `/${idOf(ent(eid))}?v=${
+      ['_package', '_comp', '_prop'].some((n) => ent(eid)[n])
+        ? 'Inspect.Page'
+        : 'Inspect.Full'
+    }`,
   find: (q) => `/?q=${encodeURIComponent(q)}`,
   go: (href) => navigate(href),
   id: (b) =>
@@ -167,4 +172,33 @@ export let inspectViews: Entry[] = adaptViews([
   ...sessionViews,
   ...taskViews,
   ...all,
-].filter((r) => r.view != 'Inspect.Page'))
+].filter((r) =>
+  (r.view != 'Inspect.Page' || schemaPages.includes(r)) &&
+  r.view != 'Inspect.Reference.Inline'
+)
+)
+
+// Query and map pages are chosen by the same registry as entity pages. The
+// temporary bundle identifies the page; its query is caller context, not data
+// written into the server graph.
+export let InspectPage = (
+  { query, map }: { query?: string; map?: boolean },
+) => {
+  let b = { entity: { eid: map ? 'browse-map' : `browse-query:${query}` } }
+  let entry = resolve(registry, b, map ? 'Inspect.Map' : 'Inspect.Query', vocab)
+
+  return entry && 'Render' in entry
+    ? h(entry.Render, {
+      e: {
+        eid: map ? 'browse-map' : `browse-query:${query}`,
+        entity: { eid: map ? 'browse-map' : `browse-query:${query}` },
+        num: 0,
+        kind: 'entity',
+        refs: [],
+        kids: [],
+      } as import('../types.ts').Ent,
+      query,
+    })
+    : null
+}
+

@@ -1,4 +1,4 @@
-import { door, hosting, pagePath } from '../hosting.ts'
+import { pagePath } from '../hosting.ts'
 import { vocab } from '../types.ts'
 import { searchAt } from '../url.ts'
 import { entityPath } from '../url.ts'
@@ -23,6 +23,7 @@ import {
 import { Peek } from './Peek.tsx'
 import { Run, run } from './Run.tsx'
 import { Search, searchOpen, SearchPage } from './Search.tsx'
+import { InspectPage } from './inspect.tsx'
 import { Status } from './Status.tsx'
 import { Entity } from './Entity.tsx'
 import { tips } from '@yaks/ui'
@@ -208,16 +209,6 @@ export let App = () => {
                       <TabFace view={v} eid={e.eid} />
                     </Tab>
                   ))}
-                  {door('inspect') && (
-                    <Tab
-                      type='button'
-                      aria-label='Inspect'
-                      data-tip='Inspect'
-                      onClick={() => location.assign(hosting().inspect!)}
-                    >
-                      <Icon name='table' />
-                    </Tab>
-                  )}
                   {
                     /* The root card's dropdown: the same menu a card's right-click
               serves, hung from the bar's far edge. Pointerdown must not
@@ -252,7 +243,11 @@ export let App = () => {
             )}
         </Bar>
         <Body>
-          {search != null ? <SearchPage query={search} /> : sessions
+          {url.searchParams.has('map')
+            ? <InspectPage map />
+            : search != null
+            ? <SearchPage query={search} />
+            : sessions
             ? (
               <QueryList
                 eid={allSessionsKey}

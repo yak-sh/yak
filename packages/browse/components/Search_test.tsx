@@ -102,39 +102,28 @@ test('search sends only the settled query while typing', async () => {
   }
 })
 
-test('search page uses the palette query door and bare words remain text', async () => {
+test('query page draws the inspector table through the shared registry', async () => {
   let { SearchPage } = await import('./Search.tsx')
-  let { searchAt, searchPath } = await import('../url.ts')
-  let q = 'fleet .task&!completed'
-  assertEquals(searchAt(searchPath(q)), q)
-  assertEquals(searchAt('/T-1?q=fleet'), null)
-  let host = config.host
-  let priorDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
-  let priorFetch = globalThis.fetch
-  let { document } = parseHTML('<main></main>')
-  let asked: string[] = []
-  config.host = 'tasks.test'
-  Object.defineProperty(globalThis, 'document', {
-    value: document,
-    configurable: true,
-  })
-  globalThis.fetch = (input) => {
-    asked.push(new URL(String(input)).searchParams.get('q')!)
-    return Promise.resolve(Response.json([]))
+  let { cache } = await import('../live.ts')
+  let { mount } = await import('./mount.ts')
+  cache.value = {
+    sample: {
+      entity: { eid: 'sample', num: 1 },
+      task: {},
+      doc: { title: 'A shared task' },
+    },
   }
-  let root = document.querySelector('main')!
+  let seen = mount(h(SearchPage, { query: '.task' }))
   try {
-    render(h(SearchPage, { query: 'fleet' }), root)
-    await until(() => asked.length > 0, { label: 'search page query' })
-    assertEquals(asked, ['fleet&.limit=20'])
-    assertEquals(root.textContent, 'Search: fleet')
+    assertEquals(
+      seen.root.querySelector('[data-query]')?.getAttribute('data-query'),
+      '.task',
+    )
+    assertEquals(seen.root.querySelector('[role=table]') != null, true)
+    assertEquals(seen.root.textContent?.includes('A shared task'), true)
   } finally {
-    render(null, root)
-    config.host = host
-    globalThis.fetch = priorFetch
-    if (priorDocument) {
-      Object.defineProperty(globalThis, 'document', priorDocument)
-    } else delete (globalThis as Record<string, unknown>).document
+    seen.free()
+    cache.value = {}
   }
 })
 

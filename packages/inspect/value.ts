@@ -22,11 +22,9 @@ import { brief, comp, face, line, named, shape, writable } from './read.ts'
  * person types where the pointer rests on it. */
 export let mention = (io: Io, eid: string): JSX.Element => {
   let b = io.get(eid)
-  return h(
-    'a',
-    { href: io.link(eid), title: b ? io.id(b) : undefined },
-    io.name(eid),
-  )
+  return b
+    ? io.show(b, 'Inspect.Reference.Inline') as JSX.Element
+    : h('a', { href: io.link(eid) }, io.name(eid))
 }
 
 /** A stored value as it was stored: a reference as the entity it names;

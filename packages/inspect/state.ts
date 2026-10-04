@@ -4,16 +4,14 @@
  * and written through `io.set`. One entity, `inspect`, holds the page's
  * (`inspector`: the pane with the keys, a note open, a delete armed, where a
  * write was refused); each table holds its own (`table`: its order and
- * page); and the stack of panes the page shows is a @yaks/ux `Stack` of its
- * own (`STACK`), each pane an address's (./where.ts).
+ * page).
  *
  * @module
  */
 
-import { type Host as Ux, stackAt, stacked } from '@yaks/ux'
+import { type Host as Ux } from '@yaks/ux'
 import type { Bundle, Host, Io } from './host.ts'
 import { comp } from './read.ts'
-import { HOME, stackOf } from './where.ts'
 
 /** The entity the page's state is on. */
 export let INSPECT = 'inspect'
@@ -50,28 +48,6 @@ export let put = (patch: Inspector): Bundle[] => [{
 }]
 
 /** The eid of the page's stack of panes (@yaks/ux `Stack`). */
-export let STACK: string = stackAt(INSPECT)
-
-/** The stack as the page's graph holds it: the first page, before any. */
-export let stack = (io: Pick<Io, 'state'>): Bundle =>
-  io.state(STACK) ?? { entity: { eid: STACK }, Stack: { panes: [HOME] } }
-
-/**
- * The stack after `href` is followed: each pane it names stacked on `b`, an
- * address outside the inspector none.
- *
- * ```ts
- * import { assertEquals } from '@std/assert'
- * import { panesOf } from '@yaks/ux'
- * import { follow } from './state.ts'
- *
- * let b = { entity: { eid: 's' }, Stack: { panes: ['q='] } }
- * assertEquals(panesOf(follow(b, '/inspect/T-9')), ['q=', 'T-9'])
- * assertEquals(panesOf(follow(b, '/T-9')), ['q='])
- * ```
- */
-export let follow = (b: Bundle, href: string): Bundle =>
-  (stackOf(href) ?? []).reduce((s, pane) => stacked(s, pane), b)
 
 /** Whether the page of the entity `eid` shows its controls: where the host's
  * take input, once the reader asked to edit it. */

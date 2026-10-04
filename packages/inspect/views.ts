@@ -1,37 +1,73 @@
 /**
- * Every inspector view, as the `/views` facet contributes them: one registry
- * (@yaks/render `define`), selected per bundle by the most specific match. A
- * host draws them through `inspector()` (./door.ts), with the views the
- * config's other plugins contribute ahead of these (`composed`,
- * ./plugins.ts): a package's page for its own kind wins over the page any
- * entity has.
- *
- * - `Inspect.Page`: an entity's page. A component's (./Comp.ts), a
- *   property's (./Prop.ts) and a package's (./Package.ts) are their own;
- *   anything else is the parts any page has (./Entity.ts).
- * - `Inspect.Head`, `Inspect.Body`, `Inspect.Facts`, `Inspect.Links`,
- *   `Inspect.History`: those parts, each a view, so a package's page draws
- *   the ones it has no better way to say (`io.show`).
- *
- * The first page and a query's page draw no entity, so they are the frame's
- * (./Frame.ts), not views.
- *
+ * Inspect registrations for vocabulary entities, entity readings, query rows
+ * and the map. A host merges them into the same registry as its domain views.
  * @module
  */
 
 import { define, type Registry } from '@yaks/render'
 import type { View } from './host.ts'
+import { and, parse } from '@yaks/query'
+import { h } from 'preact'
+import { Tile } from '@yaks/ui'
+import { str } from './read.ts'
+import { HomePage } from './Home.ts'
+import { QueryPage } from './Query.ts'
+import { Note } from './notes.ts'
 import { compViews } from './Comp.ts'
 import { entityViews } from './Entity.ts'
 import { packageViews } from './Package.ts'
 import { propViews } from './Prop.ts'
 
+// Schema names belong to inspect; every consumer asks for this renderer,
+// including the sidebar, query table and any inline reference.
+let schemaTiles: View[] = ['_package', '_comp', '_prop'].flatMap((name) => [
+  {
+    view: 'Tile',
+    match: parse(`.${name}`),
+    Render: ({ e, io }) =>
+      h(
+        Tile,
+        { href: io.link(e.entity.eid) },
+        h(Tile.Title, {}, str(e, name, 'name')),
+        h(Tile.Kind, {}, name.slice(1)),
+      ),
+  },
+  {
+    view: 'Inline',
+    match: parse(`.${name}`),
+    Render: ({ e, io }) =>
+      h('a', { href: io.link(e.entity.eid) }, str(e, name, 'name')),
+  },
+])
+
+/** The pages for vocabulary entities. */
+export let schemaPages: View[] = [...compViews, ...propViews, ...packageViews]
+
 /** Every inspector view. */
 export let all: View[] = [
+  { view: 'Inspect.Note', match: parse('.comment'), Render: Note },
+  ...schemaTiles,
   ...compViews,
   ...propViews,
   ...packageViews,
   ...entityViews,
+  {
+    view: 'Inspect.Reference.Inline',
+    match: and(),
+    Render: ({ e, io }) =>
+      h('a', { href: io.link(e.entity.eid) }, io.name(e.entity.eid)),
+  },
+  {
+    view: 'Inspect.Map',
+    match: and(),
+    Render: ({ io }) => h(HomePage, { io }),
+  },
+  {
+    view: 'Inspect.Query',
+    match: and(),
+    Render: ({ io, ctx }) =>
+      h(QueryPage, { io, text: String(ctx.query ?? '') }),
+  },
 ]
 
 /** The inspector's views, as a registry. */

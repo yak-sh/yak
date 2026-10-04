@@ -13,7 +13,7 @@ import { conjoin, orderOf, parse, type Query, windowOf } from '@yaks/query'
 import { Head, Rows, Value } from '@yaks/ui'
 import type { Bundle, Io } from './host.ts'
 import { Grid, paged, SIZE } from './grid.ts'
-import { comp, comps, count, line, named, str } from './read.ts'
+import { comp, comps, count, line, named } from './read.ts'
 import { rows, waiting } from './rows.ts'
 import { useNamed, useSets } from './notes.ts'
 import { grid, key } from './state.ts'
@@ -120,8 +120,7 @@ let Answered = ({ io, text, ast }: { io: Io; text: string; ast: Query }) => {
   })
   let all = rows(got.rows)
   useSets(io, all)
-  let titled = all.some((b) => str(b, 'doc', 'title'))
-  let cols = shared(all).filter((n) => !(titled && n == 'doc'))
+  let cols = shared(all)
   useNamed(io, mentioned(all, cols))
   return waiting(got.rows) ?? h(Grid, {
     io,
@@ -131,14 +130,8 @@ let Answered = ({ io, text, ast }: { io: Io; text: string; ast: Query }) => {
     columns: [
       {
         name: 'id',
-        cell: (b) => h('a', { href: io.link(b.entity.eid) }, io.id(b)),
+        cell: (b) => io.show(b, 'Inspect.Reference.Inline'),
       },
-      ...titled
-        ? [{
-          name: 'title',
-          cell: (b: Bundle) => line(str(b, 'doc', 'title'), 80),
-        }]
-        : [],
       ...cols.map((n) => ({
         name: n,
         cell: (b: Bundle) => summed(io, b, n),

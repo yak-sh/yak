@@ -1,201 +1,56 @@
 # @yaks/inspect
 
-The inspector: a graph's data model, its values and how they flow, as a schema
-browser built of [@yaks/ui](../ui/README.md) parts, the same in a browser and a
-terminal: an index, and beside it the pages gone to, stacked. Every value is
-written where it stands, and a note can be left under any heading.
+Inspect views show how a graph is made: its entities, vocabulary components,
+packages, properties, query rows and map. They draw through the host's shared
+[@yaks/render](../render) registry, in browsers and terminals.
 
-The views know no store. Each is a @yaks/render registration, or a component
-drawn by one, that declares the queries it needs as data, draws what the host
-answers, and sends an edit out as bundles. The inspector's own state lives in
-the page's own graph.
+A **view** is a registration selected for a bundle, with declared queries and a
+renderer. The host supplies `Io`: answers, edits, references, page state and
+navigation. Inspect owns the reading; [@yaks/browse](../browse) owns the app,
+sidebar and history stack.
 
-An app web serves it at `/<app>/_web/inspect`, over that app's store and
-signed-in account; its links stay under that mount and its transport uses
-`/<app>/api`. For example, `/notes/_web/inspect/q=.doc` reads the notes app's
-documents.
+## Views
 
-It has a page of its own at `/inspect` and a terminal of its own, `yak inspect`:
-nothing of another package's app around it. A host that lists `@yaks/api` and
-this package serves it.
+| name                                            | draws                                                            |
+| ----------------------------------------------- | ---------------------------------------------------------------- |
+| `Inspect.Page`                                  | a `_comp`, `_package` or `_prop` vocabulary entity               |
+| `Inspect.Head`, `Inspect.Body`, `Inspect.Facts` | name, provenance, words and component values                     |
+| `Inspect.Links`, `Inspect.History`              | references both ways and recorded changes                        |
+| `Inspect.Query`                                 | query rows with shared component columns, count or tally         |
+| `Inspect.Map`                                   | packages, components, relations and archetypes with their counts |
+| `Inspect.Note`                                  | a note under a heading, selected through the registry            |
+| `Tile`, `Inline`                                | vocabulary entities in any screen that asks for them             |
 
-## A tour
+The `/views` facet contributes `all`. Hosts adapt `View.Render` to their query
+and edit interfaces; `asks` declares which answers the renderer needs.
 
-- **The index**, on the left, always there: every package the server's
-  vocabulary is served from (`/vocab`), with the components it declares under
-  it, each linked to the entity the graph describes it in (@yaks/code
-  `vocab_describe`). The field above it narrows it as it is typed (a component
-  by its name, a package with all of its own), and runs the line as a query on
-  Enter.
-- **The stack**, beside it: each page gone to (a link followed, a row pressed, a
-  query run) is stacked on top, and each page under it narrows to a strip at its
-  left saying what it is (its name and kind, or the query). A press on a strip
-  returns to that page, closing those above it. It holds six pages, the top one
-  and five strips (@yaks/ux `Stack`, `LIMIT`); past that the oldest leave, and
-  the browser's history still has them. The address is the stack, bottom first,
-  a path segment a page (./where.ts): `/inspect/q=/T-9` is the first page with
-  T-9's over it, so back, forward and a shared link restore it.
-- **A page**, for what a pane names:
-  - the first page (`/inspect`), a map of how the data is made: the packages
-    (what each is, how many components it declares, how many entities carry any
-    of them), the components (package, what it is, how many carry it, the most
-    carried first), the edge relations (what each reads as from the far end, how
-    many edges state it) and the sets of components entities are made of, most
-    populous first. Every count is read off one census (./census.ts).
-  - a component: what it is, its package, how many carry it; Properties (name,
-    type, description, flags); Found with (the sets it appears in, with counts);
-    Refers to, and referred to by (each property naming it or named by it, and
-    each relation its entities are an end of, both ways, with what is at the
-    other end); Entities (a row each, a column per property, a page at a time,
-    sorted by a pressed heading).
-  - a property: what it is, whose, its type; its values ranked by how many hold
-    each; and its component's recent writes that touched it.
-  - a package: the components it declares and how many carry each, and what it
-    adds to others'.
-  - any other entity (`/inspect/<id>`, by any id the graph resolves), read the
-    way a person reads a page: what it is called, its id and kind, and one quiet
-    line of where it came from (what built it, who made it and when, through
-    which session, when it last changed); what it says, in full, as markdown;
-    what else it states, a line per component in the order they mean (the kinds
-    it is, what else it carries, then the marks of what happened to it), each
-    value as a person reads it; what it is linked to, grouped by relation both
-    ways and by the property that names it; and its history as a timeline. Every
-    reference reads as the name of what it names, linked.
-  - a kind a package draws its own way (below): a belief, a topic, a transcript
-    entry, a session, a task.
-  - a query (`/inspect/q=<line>`): its rows, with a column per component they
-    share; a `.count` as a number, a `.tally` as values by count, an entity by
-    its name.
-- **The keys**, in a browser: ↓ or j rests on the next row of the table the keys
-  are in (the top page's first, before any), ↑ or k the one before, and Enter
-  opens it.
-- **Editing**: a page is read until the reader asks to edit it (`edit` in its
-  head, `done` to stop). Edited, each component is a table of its values, and
-  through [@yaks/ux](../ux/README.md)'s `Edit`, the same as web's page, a value
-  pressed is typed over where it stands, and nothing else on the page moves;
-  Enter or leaving it writes it, Escape puts it back. A closed set's choices,
-  and a reference's search of the graph, float beside the value; a flag is its
-  own toggle. A refusal, and input that could not be read, is said under the
-  entity's head. A component is added from the head and removed by its ×; an
-  edge is added under the links and removed by its ×; an entity is deleted by
-  two presses.
-- **Notes**: the head's `note` press opens a one-line field, and while a page is
-  edited every heading has one. A note shows under the heading it was left
-  under, and each one is a task an agent picks up.
-- **The terminal**: `yak inspect` opens the first page, `yak inspect T-9` an
-  entity's page and `yak inspect '<line>'` a query's. The index and the top page
-  are framed columns, and each page under it a strip three wide; Tab moves the
-  keys between the index and the top page, j and k walk the rows and links,
-  Enter or l stacks what the walk is on, h returns to the page under the top
-  one, a press on a strip returns to it, `/` types in the index's field, q
-  quits. Without `--app` it reads through the config's `yak serve`, unchanged.
-  `yak inspect --app recipes` opens the login account's app store;
-  `yak inspect --app myspace/recipes '.recipe'` names its space explicitly when
-  a slug is shared. It uses the caller's `yak login` token on HTTP reads and the
-  live socket, with the app's own access rules and JSON refusals. Values paint
-  as values; editing is the page's.
-- **Elsewhere**: a page that registers these views (a card's Inspect tab) draws
-  an entity's page in place, a row pressed opening that entity's own card.
+```ts
+import { all } from '@yaks/inspect/views'
+import { equal } from '@yaks/testing'
+equal(all.some((v) => v.view === 'Inspect.Query'), true)
+equal(all.some((v) => v.view === 'Inspect.Map'), true)
+```
 
-## Kinds
+Inspect pages are read until the reader asks to edit. Values use @yaks/ux
+editing; changes are emitted as bundles. Notes are comments and tasks about the
+entity and heading where they were left. Page-only table order, paging, editing
+and refusal state use the `/front` vocabulary.
 
-Every page is a @yaks/render registration of `Inspect.Page`, and the most
-specific match wins. Each part of the page any entity has is a view of its own,
-registered for anything: `Inspect.Head`, `Inspect.Body`, `Inspect.Facts`,
-`Inspect.Links`, `Inspect.History`, and `Inspect.Turn`, an entity as a turn of a
-conversation. So a package draws its own kind by exporting `inspectViews` from
-its `/views` facet: a page, or one part of one, that draws what is its own and
-asks for the rest through the same registry (`io.show(e, 'Inspect.Links', ctx)`,
-the context saying what the page already says elsewhere). The inspector puts
-them ahead of its own (`composed`, ./views.ts), from every plugin the config
-names (./plugins.ts): the page's script is bundled for its host with them
-imported (./routes.ts), and `yak inspect` imports them as it opens.
+## Exports
 
-| package       | draws                                                                                                                                          |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| @yaks/memory  | a belief: what it says, its subject and scope, and each memory it cites, the words verbatim, by whom, when and where, and the talk around them |
-| @yaks/memory  | a topic: its brief, and the beliefs about it, newest first                                                                                     |
-| @yaks/session | an entry: as a turn (`Inspect.Turn`), amid the turns around it (`Inspect.Conversation`), and its page inside its conversation                  |
-| @yaks/session | a session: its status, model and worktree, its brief, its latest turns                                                                         |
-| @yaks/task    | a task: where it stands, what it asks, and the comments on it                                                                                  |
+| export    | provides                                                         |
+| --------- | ---------------------------------------------------------------- |
+| `.`       | host/view contracts, value helpers, notes and a registry adapter |
+| `./views` | registrations and schema-page registrations                      |
+| `./front` | page-only state vocabulary                                       |
 
-What a package's page is built of besides those parts is exported here: `Part`
-(a titled part with its notes), `usePageNotes`, `mention` (an entity by its
-name, linked), `reads` (a value as a person reads it) and `useNamed`.
-
-## The host
-
-A browser or a terminal supplies a `Host` once (./host.ts): the vocabulary, a
-hook answering a view's asks while it is mounted, where links go, `go`, which
-follows one in place (a link's, or a pressed row's), how an entity is named and
-when a moment was, and `apply`, which writes a batch and rejects with the reason
-when the graph refuses it (the value or heading that wrote says it).
-`inspector(registry, host)` gives the `Door` every view is drawn through, and
-`frame()` the index and the stack around it.
-
-The inspector's own page and terminal share one host, `live()` (./live.ts), and
-it is small: the vocabulary the server serves (@yaks/api `/vocab`), a
-@yaks/client box connected to that server, and the page's own graph. An ask is a
-server-evaluated watch held while its view is mounted, sent as it is written
-(`*` for whole rows); an aggregate is the watch's `reduced` and a refusal its
-`refused`; one asked `once` is kept for as long as the page is open. A write
-goes to the server as it stands (@yaks/sync `submit`), so the graph resolves the
-ids and aliases a person typed. `go` stacks what it follows in the page's own
-graph (./state.ts `follow`). Around it the page (./main.ts) says the stack in
-the address and hands @yaks/ux a host over the same one (`editing`, ./state.ts),
-its pickers asking @yaks/api's `/query`; the terminal (./tui.ts) adds its keys.
-
-| export     | what it is                                                    |
-| ---------- | ------------------------------------------------------------- |
-| `.`        | the views, `inspector()`, `frame()`, the addresses, the host  |
-| `./views`  | the views as a registry, for a host that draws them           |
-| `./routes` | `/inspect`, `/inspect/<pane>/…` and what their page loads     |
-| `./cli`    | `yak inspect`                                                 |
-| `./front`  | the components of the page's own graph, never a graph's vocab |
-
-## State
-
-The page's own graph holds the inspector's state, in components this package
-declares for that graph alone (`front.json`, exported as `./front`, never a
-`./vocab` a host composes; `sync: none`, `durable: connection`):
-
-| component   | on               | what it holds                                                                         |
-| ----------- | ---------------- | ------------------------------------------------------------------------------------- |
-| `inspector` | `inspect`        | the pane with the keys, the page edited, a note open, a delete armed, a refused write |
-| `table`     | each table's key | how its rows run, the page it shows, whether its values are ranked                    |
-
-The index's field is the same `inspect` entity's `filter` (@yaks/filter), each
-value being changed an `Edit` of its own, and the pages stacked a `Stack` of its
-own (`STACK`, @yaks/ux). What is typed in the field is the person's draft, read
-through @yaks/filter's `text`, which the page's host hands `frame()` as its
-`fields`.
-
-## Notes
-
-A note is one entity: `doc{title, body}` + `comment{target}` + `task{}`, a
-comment on what the page is about that is an open task (`note()`, ./notes.ts).
-The heading it was left under rides in its title (`task · Properties: …`), since
-a comment has nowhere else to say it. An agent finds it as work: `yak task list`
-lists open tasks, and `yak task list .comment.target=<eid>` what was said about
-one thing.
+The `inspector(registry, host)` adapter mounts registrations supplied by a host.
+Browse uses its own shared registry instead; it never creates a second registry
+for Inspect.
 
 ## Limits
 
-- The census is one tally over every entity (`.tally=entity.archetype`): a
-  second or two on a graph of 2.5 million, most of it checking each entity is
-  not deleted. It is asked once for as long as the page is open, every count on
-  every page is read off it, and the page draws before it is in.
-- A tally cannot be bounded, so a property's values are ranked at once only for
-  an enum or a component carried by up to 5,000 entities; beyond that, a press
-  ranks them.
-- A table asked whole (the first page's, a package's) is sorted where it is
-  drawn; one asked a page at a time is sorted by the graph.
-- A `.fields` projection cannot carry a JSON value, so `_comp` rows are asked
-  whole.
-- A terminal's pane cannot yet scroll to an element, so walking past the bottom
-  of a pane does not bring the row into view.
-
-`Inspect.Full` is the app’s full entity reading. It combines `Inspect.Head`,
-`Inspect.Body`, `Inspect.Facts`, `Inspect.Links` and `Inspect.History` with
-every raw property. The app binds those parts through its own registry; linked
-entities use its registered `List.Tile` views.
+Inspect serves no page or terminal app, and owns no stack or URL. Browse
+integrates these views into its app. Its `Inspect.Full` view combines these
+readings with every raw property. The census asks the graph for archetype rows
+and counts, rather than running a count query for each component.

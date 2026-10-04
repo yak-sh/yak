@@ -141,13 +141,21 @@ export let useNotes = (io: Io, eid: string): Bundle[] => {
 // mark.
 let done = (b: Bundle) => !!b.completed || !!b.cancelled
 
-let said = (io: Io, b: Bundle) => {
+export let Note = ({ e: b, io }: import('./host.ts').Props) => {
   let c = comp(b, 'created')
   return h(
     Notes.Item,
     { key: b.entity.eid, mod: done(b) && 'done' },
     h(Notes.Text, {}, str(b, 'doc', 'body') || str(b, 'doc', 'title')),
-    h(Notes.Who, {}, typeof c.by == 'string' ? io.name(c.by) : ''),
+    h(
+      Notes.Who,
+      {},
+      typeof c.by == 'string'
+        ? (io.get(c.by)
+          ? io.show(io.get(c.by)!, 'Inspect.Reference.Inline')
+          : io.name(c.by))
+        : '',
+    ),
     h(
       Notes.When,
       {},
@@ -204,7 +212,7 @@ export let Said = (p: Said): JSX.Element | null => {
     ? h(
       Notes,
       {},
-      notes.map((b) => said(p.io, b)),
+      notes.map((b) => p.io.show(b, 'Inspect.Note')),
       open ? h(Line, p) : null,
     )
     : null

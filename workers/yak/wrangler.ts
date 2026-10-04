@@ -128,17 +128,6 @@ export let ready = async (root = dir, timeout = 600_000) => {
     stdin: 'null',
   }).spawn().status
   if (!web.success) throw new Error('Web asset generation failed')
-  let inspect = await new Deno.Command('deno', {
-    args: [
-      'run',
-      '--no-lock',
-      '-A',
-      join(repo, 'packages/inspect/assets.ts'),
-      join(root, 'public/_web/inspect'),
-    ],
-    stdin: 'null',
-  }).spawn().status
-  if (!inspect.success) throw new Error('Inspector asset generation failed')
   let generated = await new Deno.Command('deno', {
     args: ['run', '--no-lock', '-A', join(repo, 'bin/compiler-packages.ts')],
     stdin: 'null',

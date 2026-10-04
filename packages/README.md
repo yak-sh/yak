@@ -179,13 +179,9 @@ grouped approximately by function, **not** by dependency order.
   property's type through @yaks/render and drawn with @yaks/ui, under the host a
   page hands down (web's and the inspector's alike). `Stack` is panes stacked as
   a person goes, those under the top one narrowed to strips that return to them.
-- **[@yaks/inspect](./inspect)** — the inspector: a graph's data model, its
-  values and how they flow, as pages and listings of @yaks/ui parts on a page of
-  its own (`/inspect`, served beside @yaks/api over a @yaks/client box) and in
-  the terminal (`yak inspect`). Its views are selected through @yaks/render, ask
-  for the queries they need as data, write edits out as bundles, keep their own
-  state in the page's own graph, and take feedback on any part as an open task
-  aimed at it.
+- **[@yaks/inspect](./inspect)** — Inspect views for entities, vocabulary
+  components, packages, properties, query rows and the map. Browse mounts them
+  in its shared renderer registry; the views know neither door nor store.
 - **[@yaks/visualize](./visualize)** — the platform MRI at `/visualize`: its
   composed parts, value-free contracts and relationships, with bounded causal
   activity from the exact serving graph's shared trace channel. Agents use the

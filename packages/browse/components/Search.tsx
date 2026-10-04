@@ -244,29 +244,5 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
   )
 }
 
-// The addressed page and the palette share the query door, grouping and tiles.
-export let SearchPage = ({ query }: { query: string }) => {
-  let [hits, setHits] = useState<Hit[]>([])
-  let [err, setErr] = useState('')
-  useEffect(() => {
-    let abort = new AbortController()
-    setHits([])
-    setErr('')
-    if (query.trim()) {
-      queryHits(query, 20, abort.signal).then(
-        (found) => !abort.signal.aborted && setHits(found),
-        (e) => !abort.signal.aborted && setErr(String(e)),
-      )
-    }
-    return () => abort.abort()
-  }, [query])
-  return (
-    <section class='SearchPage'>
-      <h1>Search: {query}</h1>
-      {err && <p>{err}</p>}
-      {group(hits, query).map((h) => (
-        <Entity key={h.eid} eid={h.open} view='Tile' slots={hitSlots(h)} />
-      ))}
-    </section>
-  )
-}
+// Addressed query results are the inspector's table/aggregate view.
+export { InspectPage as SearchPage } from './inspect.tsx'

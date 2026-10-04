@@ -2,7 +2,7 @@ import { mount as terminalMount } from '../tui/testing.ts'
 import { TElement } from '@yaks/tui'
 import { everforest, kits, sheet as uiSheet } from '@yaks/ui'
 import { Grid } from './grid.ts'
-import { linkOf, stops } from './tui.ts'
+import { linkOf, stops } from './terminal-links.ts'
 import { test, tick, until } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { client } from '@yaks/client'
@@ -23,19 +23,14 @@ import {
   type Asks,
   type Bundle,
   editing,
-  follow,
-  frame,
   type Host,
-  INSPECT,
   inspector,
-  pagePath,
-  queryPath,
-  STACK,
   views,
 } from './mod.ts'
 import { docs } from './front.ts'
+let pagePath = (id: string) => `/${id}`
+
 import { CENSUS } from './census.ts'
-import { compEid } from './schema.ts'
 
 // A graph of tasks, their owners and the edges between them.
 let vocab = loadVocab([{
@@ -123,11 +118,8 @@ let host = (answers: Answers = {}, edits = true) => {
     },
     get: (eid) => ({ t1: T1, t2: T2 } as Record<string, Bundle>)[eid],
     link: pagePath,
-    find: queryPath,
-    go: (href) =>
-      void front.mutate([
-        follow(front.ent(STACK) ?? { entity: { eid: STACK } }, href),
-      ]),
+    find: (q) => `/?q=${encodeURIComponent(q)}`,
+    go: (_href) => {},
     id: (b) => b.entity.eid.toUpperCase(),
     kind: (b) => b.task ? 'task' : 'entity',
     name: (eid) => `N-${eid}`,
@@ -376,69 +368,18 @@ test("a component's entities run by a pressed heading, a page at a time", async 
   assertEquals(last(), '.task&.after=t49&.limit=50')
 })
 
-test("a row pressed stacks its entity's page on the query's, and the query's strip returns to it", async () => {
-  using t = host({
-    '.task&.limit=50&*': { rows: [T1, T2] },
-    '.task&.count': { count: 2 },
-    'entity.eid=t2&*': { rows: [T2] },
-  })
-  let Page = frame(t.door, {
-    fields: t.fields,
-    Bar: () => h('input', { name: 'filter' }),
-    Scroll: ({ children }) => h('div', {}, children),
-  })
-  t.io.go(queryPath('.task'))
-  using p = mount(t.draw(h(Page, null)))
-  let top = '.Stack_Pane'
-  assertEquals(
-    [...p.root.querySelectorAll(`${top} [role=columnheader]`)].map((th) =>
-      th.textContent
-    ),
-    ['id', 'title', 'task'],
-  )
-  // linkedom calls a bubbled listener as its target's, so the row is pressed
-  // itself
-  await p.fire(p.$(`${top} [role=row][data-pick="t2"]`), 'click')
-  assert(p.text(`${top} h1`).includes('N-t2'))
-  let strips = () => [...p.root.querySelectorAll('.Stack_Strip')]
-  assertEquals(strips().map((s) => s.textContent), ['.taskquery'])
-  await p.fire(strips()[0], 'click')
-  assertEquals(strips(), [])
-  assert(p.$(`${top} [role=row][data-pick="t2"]`))
-})
-
-test('a query that counts shows the count', () => {
+test('a query that counts shows the count through its view registration', () => {
   using t = host({ '.task&.count': { count: 12403 } })
-  let Page = frame(t.door, {
-    fields: t.fields,
-    Bar: () => null,
-    Scroll: ({ children }) => h('div', {}, children),
-  })
-  t.io.go(queryPath('.task&.count'))
-  using p = mount(t.draw(h(Page, null)))
-  assert(p.text('.Stack_Pane').includes('12,403'))
-})
-
-test('the index lists what the vocabulary serves, narrowed by what is typed in its field', async () => {
-  using t = host()
-  let Page = frame(t.door, {
-    fields: t.fields,
-    Bar: () => null,
-    Scroll: ({ children }) => h('div', {}, children),
-  })
-  using p = mount(t.draw(h(Page, null)))
-  let listed = () =>
-    [...p.root.querySelectorAll('[data-pane="index"] .Index_Item')]
-      .map((a) => a.textContent)
-  assertEquals(listed(), ['comment', 'doc', 'edge', 'requires', 'task'])
-  t.fields.type(INSPECT, 're')
-  await tick()
-  assertEquals(listed(), ['requires'])
-  // Each links to the page of the entity the graph describes it in.
-  assertEquals(
-    p.$('[data-pane="index"] .Index_Item').getAttribute('href'),
-    t.io.link(compEid('requires')),
+  using p = mount(
+    t.draw(
+      h(t.Door, {
+        e: { entity: { eid: 'query' } },
+        view: 'Inspect.Query',
+        ctx: { query: '.task&.count' },
+      }),
+    ),
   )
+  assert(p.root.textContent?.includes('12,403'))
 })
 
 test('a terminal paints a page as values, with nothing to type in', () => {

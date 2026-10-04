@@ -297,6 +297,7 @@ define([
   'Full',
   'Web',
   'Media',
+  'Inspect.Page',
   'Inspect.Full',
 ])
 
