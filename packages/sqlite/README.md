@@ -237,6 +237,32 @@ what of its own went missing, and drops, rebuilds and re-marks nothing, so
 processes on two vocabularies share a file without undoing each other's
 installs.
 
+A **schema readiness check** is a single-owner host's assertion that the bound
+vocabulary's schema, derived columns, metadata and archetypes already stand.
+`base.schemaReady` runs at the first graph operation, not at binding. True skips
+installation and schema inspection; false falls back to installation. The host
+must bind a new store when its schema changes. File drivers ignore the check and
+retain detection of other connections' changes. Explicit `install()` always
+validates.
+
+```ts
+import { storage } from '@yaks/sqlite'
+import { open } from '@yaks/sqlite/db'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+let sql = open(':memory:')
+try {
+  let vocab = loadVocab({ $defs: {} })
+  storage(sql, vocab).install()
+  // A single-owner host can also verify a persisted schema stamp here.
+  let store = storage(sql, vocab, { schemaReady: () => true })
+  equal(store.get(['absent']), [])
+} finally {
+  sql.close()
+}
+```
+
 A transaction provides `read`, `get(eids, comps?)`, `patch`, `remove`, `revive`,
 `doom`, and `bindings`. `get` retrieves entities including tombstones, whole or
 carrying only the components `comps` names, and reads no other table. `patch`
@@ -258,7 +284,7 @@ A component declared `computed: true` gets no table: it is read through the
 [backing](../sql/README.md#computed-components) another package supplies
 (`Backing`), as @yaks/journal's `_tx` and `_change` are. The store tags each
 backing with `tagOf(epoch, comp)` once the first install has minted its epoch
-(`epochAt` reads it without minting), so a backed entity's eid names it in this
+(read from metadata without minting), so a backed entity's eid names it in this
 store and no other. `read` and `get` return such entities like any other;
 `patch` refuses one, since nothing writes it. `number` controls human numbering,
 and `adopt: true` accepts numbers supplied in patches when mirroring another

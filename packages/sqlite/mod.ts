@@ -76,7 +76,7 @@ import {
   standing,
   tabled,
 } from './ddl.ts'
-import { epoch, epochAt, installed, meta, SCHEMA } from './meta.ts'
+import { EPOCH, epoch, installed, meta, SCHEMA } from './meta.ts'
 import { doom, get, read, rows, screened, tagOf } from './read.ts'
 import { unit } from './unit.ts'
 import { backfill, entomb, ledger, reclassify } from './archetype.ts'
@@ -241,6 +241,13 @@ export type Store = {
  * as text through `doc_value`.
  */
 export type Opts = BindOpts & {
+  /** A single-owner host's readiness check, called on the first operation.
+   * True asserts that this vocabulary and its derived schema, metadata and
+   * archetypes already stand; false asks this adapter to install them. The
+   * host must bind a new store when its schema changes. File drivers ignore
+   * this assertion: other connections can alter their schema. Explicit
+   * `install()` always validates, regardless of this check. */
+  schemaReady?: () => boolean
   /** Give new spines a human-readable number. Opt-IN: left out, an entity is
    * its eid and nothing else, which is what a store whose entities nobody ever
    * types the number of wants. Identity, and reporting which entities were
@@ -310,7 +317,8 @@ export let storage = (
   let tagged: Opts | undefined
   let opts = (): Opts => {
     if (tagged || !base.backed) return tagged ?? base
-    let e = epochAt(driver)
+    // Every caller has ensured schema readiness, including server_meta.
+    let e = meta(driver).get(EPOCH)
     if (!e) return base
     let backed = Object.fromEntries(
       Object.entries(base.backed).map((
@@ -490,8 +498,12 @@ export let storage = (
     ;[version, own] = [seen, now]
   }
   let ensure = () => {
-    if (!ready) install()
-    else if (driver.file && version != changed()) mend()
+    if (!ready) {
+      // A single owner can establish readiness through its persisted schema
+      // stamp. File stores must inspect: an assertion cannot exclude peers.
+      if (!driver.file && base.schemaReady?.()) ready = true
+      else install()
+    } else if (driver.file && version != changed()) mend()
   }
   return {
     worn: worn(vocab, base.derived),
