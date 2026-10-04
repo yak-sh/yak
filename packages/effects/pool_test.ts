@@ -24,6 +24,7 @@ let proc = (storage: Storage, opts: Partial<Opts> = {}) => {
     ...opts,
   })
   let g = graph({ storage, vocab: pooledBlog, plugins: [fx] })
+  if (opts.owner) g.apply([{ entity: { eid: opts.owner }, subscriber: {} }])
   let note: Handler = (e) => void ran.push(`${e.kind} ${e.entity.eid}`)
   return { g, fx, ran, oops, note }
 }
@@ -81,10 +82,7 @@ test('a process working the pool runs what it writes, once committed', async () 
   await a.g.apply([post('p1', { title: 'Two' })])
   await a.fx.idle()
   assertEquals(a.ran, ['created p1', 'changed p1'])
-  assertEquals((await owed(a.g)).filter((r) => r.startsWith('post_note')), [
-    'post_note p1 done',
-    'post_note p1 done',
-  ])
+  assertEquals((await owed(a.g)).filter((r) => r.startsWith('post_note')), [])
 })
 
 test('a pooled event retains all components moved on its target', async () => {
@@ -110,7 +108,7 @@ test('what one process wrote, another runs, and only one of many', async () => {
   await Promise.all([a.fx.work(a.g), b.fx.work(b.g)])
   await Promise.all([a.fx.idle(), b.fx.idle()])
   assertEquals(ran, ['p1'])
-  assertEquals((await run(w.g, 'post_note')).state, 'done')
+  assertEquals(await run(w.g, 'post_note'), undefined)
 })
 
 // Over a synchronous storage a backlog never waits on anything, so without a
@@ -161,7 +159,7 @@ test('a worker refills a freed slot while another handler is still running', asy
     await work
   }
   assertEquals(active, 0)
-  assertEquals((await run(a.g, 'post_note', 'next')).state, 'done')
+  assertEquals(await run(a.g, 'post_note', 'next'), undefined)
   assertEquals(a.oops, [])
 })
 
@@ -255,7 +253,7 @@ test('a run its worker dropped is run again, unless running twice is not safe', 
   await next.fx.work(next.g)
   await next.fx.idle()
   assertEquals(next.ran, ['created p1'])
-  assertEquals((await run(next.g, 'post_note')).state, 'done')
+  assertEquals(await run(next.g, 'post_note'), undefined)
   assertEquals((await run(next.g, 'post_gone')).state, 'failed')
 })
 
@@ -402,7 +400,7 @@ test('a worker told to stop claims nothing more, and keeps what it is running un
   finish()
   await waiting
   assertEquals(server.ran, ['p1'])
-  assertEquals((await run(server.g, 'post_note')).state, 'done')
+  assertEquals(await run(server.g, 'post_note'), undefined)
 })
 
 test("a run's write owes a generation on, and the chain stops at depth", async () => {
@@ -428,7 +426,7 @@ let orphaned = async (dead: string[]) => {
   let s = store()
   let bare = graph({ storage: s, vocab: pooledBlog })
   let hour = new Date(Date.now() + 3_600_000).toISOString()
-  await bare.apply([post('p1'), {
+  await bare.apply([{ entity: { eid: 'w1' }, subscriber: {} }, post('p1'), {
     entity: { eid: leaseEid(`${POOL}/w1`) },
     lease: { name: `${POOL}/w1`, holder: 'w1', until: hour },
   }, {
@@ -483,10 +481,10 @@ test('local completion retry retains reply, respects backoff and bounds', async 
     assertEquals(external, 1)
     assertEquals(saves, 2)
     assertEquals(
-      (await run(a.g, 'post_note')).state,
-      recover ? 'done' : 'failed',
+      (await run(a.g, 'post_note'))?.state,
+      recover ? undefined : 'failed',
     )
-    assertEquals((await run(a.g, 'post_note')).attempts, 2)
+    if (!recover) assertEquals((await run(a.g, 'post_note')).attempts, 2)
     await a.fx.stop()
   }
 })

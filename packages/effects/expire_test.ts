@@ -9,7 +9,16 @@ import { effectDoc } from './pool.ts'
 import { leaseEid } from './lease.ts'
 import { effects } from './registry.ts'
 
-let vocab = loadVocab([effectDoc, {
+let vocab = loadVocab([{
+  ...effectDoc,
+  $defs: {
+    ...effectDoc.$defs,
+    effect: {
+      ...effectDoc.$defs!.effect,
+      expire: '.effect.state=done,failed .effect.at<="7d ago"',
+    },
+  },
+}, {
   $defs: {
     created: {
       component: true,
@@ -34,7 +43,16 @@ let run = (eid: string, state = 'done', at = old): Bundle => ({
   entity: { eid },
   effect: { state, at },
 })
-let make = () => graph({ vocab, storage: ram(vocab) })
+let make = () => {
+  let g = graph({ vocab, storage: ram(vocab) })
+  g.apply(
+    ['worker', 'rival', 'one', 'two'].map((eid) => ({
+      entity: { eid },
+      item: {},
+    })),
+  )
+  return g
+}
 
 test('expire batches matching rows; preserves live runs, other components and unrelated OR matches', async () => {
   let g = make()
@@ -134,7 +152,9 @@ test('a worker that stays up runs generic expiration without a registered compon
   let stop = new AbortController()
   let fx = effects(vocab, { owner: 'worker', now: () => now })
   let g = graph({ vocab, storage, plugins: [fx] })
-  await g.apply([run('old')], { trusted: true })
+  await g.apply([{ entity: { eid: 'worker' }, item: {} }, run('old')], {
+    trusted: true,
+  })
   let door: Access = {
     ...g,
     apply: async (bs, o) => {

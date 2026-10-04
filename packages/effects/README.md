@@ -344,7 +344,7 @@ equal(receipts, [])
 equal((await g.read('.effect'))[0].effect?.state, 'pending')
 await fx.work(g)
 equal(receipts, ['o1'])
-equal((await g.read('.effect'))[0].effect?.state, 'done')
+equal(await g.read('.effect'), [])
 await fx.stop()
 equal(fx.running(), [])
 ```
@@ -490,7 +490,7 @@ await fx.work(g)
 equal(sent, 1)
 equal(saved, 2)
 equal(last, [false, true, false])
-equal((await g.read('.effect'))[0].effect?.state, 'done')
+equal(await g.read('.effect'), [])
 await fx.stop()
 ```
 
@@ -574,8 +574,8 @@ rows removed. Each transaction removes at most 100 rows by default. Removal uses
 the graph's `apply()` with guards against values changed since selection, so its
 reference consequences, tombstones, journal and subscribers follow the ordinary
 write path. The graph removes owners left with only provenance stamps. The
-`effect` component expires settled `done` and `failed` runs recorded at least
-seven days ago; pending runs are not selected.
+Successful effect runs are deleted when they settle. Failed runs stay readable
+until a person removes them.
 
 ```ts
 import { graph } from '@yaks/graph'

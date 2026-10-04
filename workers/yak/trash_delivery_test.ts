@@ -108,7 +108,7 @@ test('trash and restore notifications survive directory restart and more than th
   p.fail(false)
   await recovery.drain()
   equal(p.dormant.get('trash-delivery/one.123456'), true)
-  equal((await recovery.runs()).map((r) => (r.effect as Comp).state), ['done'])
+  equal(await recovery.runs(), [])
 
   // A restore is also owed in the same commit, then retried after a restart.
   p.fail(true)
@@ -128,7 +128,7 @@ test('trash and restore notifications survive directory restart and more than th
   await restored.drain()
   equal(p.dormant.get('trash-delivery/one.123456'), false)
   equal(
-    (await restored.runs()).every((r) => (r.effect as Comp).state == 'done'),
+    (await restored.runs()).length == 0,
     true,
   )
   await restored.fx.stop()

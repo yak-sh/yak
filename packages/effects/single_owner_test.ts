@@ -69,11 +69,8 @@ test('single owner recorded success writes only attempt and outcome, without lea
   noLeases(a)
   a.writes.length = 0
   await a.fx.work(a.g)
-  equal(effectWrites(a).length, 4) // Two owed runs, two writes each.
-  equal((await runs(a)).map((r) => [r.state, r.attempts]), [
-    ['done', 1],
-    ['done', 1],
-  ])
+  equal(effectWrites(a).length, 2) // Two attempts; successes delete.
+  equal(await runs(a), [])
   noLeases(a)
   equal(a.errors, [])
 })
@@ -85,7 +82,7 @@ test('single owner writer-started runs contain no distributed claim', async () =
   await a.fx.idle()
   equal(a.ran.sort(), ['p1', 'sweep'])
   noLeases(a)
-  equal((await runs(a)).map((r) => r.state), ['done', 'done'])
+  equal(await runs(a), [])
 })
 
 test('single owner retries keep backoff and attempt limits without lease churn', async () => {
@@ -148,9 +145,9 @@ for (let legacy of [false, true]) {
     await a.fx.work(a.g)
     equal(a.ran, ['p1'])
     let rs = await runs(a)
-    equal(rs.find((r) => r.handler == 'post_note')?.state, 'done')
+    equal(rs.find((r) => r.handler == 'post_note'), undefined)
     equal(rs.find((r) => r.handler == 'post_gone')?.state, 'failed')
-    equal(effectWrites(a).length, 3)
+    equal(effectWrites(a).length, 2)
     noLeases(a)
   })
 }
@@ -214,7 +211,7 @@ test('single owner live work and idle never renew claims or take presence duties
   let waiting = a.fx.idle()
   release.resolve()
   await waiting
-  equal(effectWrites(a).length, count + 1)
+  equal(effectWrites(a).length, count)
   noLeases(a)
   equal(a.errors, [])
 })
@@ -246,7 +243,7 @@ test('single owner progress restores attempts before a later failure', async () 
   t = 20
   await a.fx.work(a.g)
   equal(calls, 3)
-  equal((await note()).state, 'done')
+  equal(await note(), undefined)
   noLeases(a)
   equal(a.errors.length, 2)
 })

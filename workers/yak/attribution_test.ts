@@ -150,7 +150,7 @@ test('original guest writes owe durable registration, recovered once after resta
     'editor-browser',
   ])
   assertEquals((await recovery.g.read('.effect.state=pending')).length, 0)
-  assertEquals((await recovery.g.read('.effect.state=done')).length, 2)
+  assertEquals((await recovery.g.read('.effect')).length, 0)
   await recovery.g.apply([{
     entity: { eid: 'guest' },
     doc: { title: 'Edited again' },
@@ -158,7 +158,7 @@ test('original guest writes owe durable registration, recovered once after resta
   }], { now: '2026-10-04T00:00:02.000Z' })
   await recovery.fx.idle()
   assertEquals(receipts.length, 6)
-  assertEquals((await recovery.g.read('.effect.state=done')).length, 3)
+  assertEquals((await recovery.g.read('.effect')).length, 0)
   await recovery.fx.stop()
   let idle = boot(vocab, storage, STORE)
   await idle.drain()

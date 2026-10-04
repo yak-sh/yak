@@ -31,6 +31,7 @@
 // it out, until a Durable Object's runtime refuses them as overloaded. So a
 // worker gives way between passes, and a pass starts no more than `max` runs.
 //
+// Success deletes its run under the same claim guard; it leaves no done row.
 // There are two ways a run does not complete, and they are not the same:
 //
 //   It reported. The handler threw, so the row is marked with the error and
@@ -319,12 +320,12 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     g: Access,
     eid: Eid,
     was: Comp,
-    patch: Comp,
+    patch: Comp | null,
   ): Promise<boolean> => {
     try {
       await g.apply([{
         entity: { eid },
-        [EFFECT]: patch,
+        ...(patch == null ? { $delete: true } : { [EFFECT]: patch }),
         $was: {
           [EFFECT]: {
             ...(opts.singleOwner ? {} : {
@@ -427,7 +428,12 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           attempt,
         )
         if (peek(g) && span?.active) span.end({ counts: { runs: 1 } })
-        await settle({ state: 'done', error: null, next: null, ...free })
+        await swap(
+          g,
+          eid,
+          { lease_token: held.token, attempts: held.attempts },
+          null,
+        )
       } catch (err) {
         if (peek(g) && span?.active) {
           span.end({ outcome: outcome(err), counts: { runs: 1 } })

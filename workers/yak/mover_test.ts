@@ -9,7 +9,7 @@ import { kernelDoc } from '@yaks/kernel/vocab'
 import { doorOf } from './door.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
-import { dispatchMove, dispatchRule } from './mover.ts'
+import { dispatchMove, dispatchRule, doneEffectsRule } from './mover.ts'
 import { deadMailInboxMove, deadMailInboxRule } from './migrate.ts'
 import { type Rehearsal, type Rule, type Standing } from './mover.ts'
 import { state } from './testing.ts'
@@ -528,4 +528,38 @@ test('dead mail cleanup refuses a claim or changed selection after reading', asy
   }
   assertEquals(deadMailInboxMove({ entity: { eid: 'absent' } }), [])
   assertEquals(deadMailInboxMove(deadMail('new', { attempts: 1 })), [])
+})
+
+// Rehearsal-only until the owner has reviewed the all-store report.
+test('legacy done effect cleanup rehearses without moving human data or failures', async () => {
+  let s = await store(0, doneEffectsRule)
+  await s.apply([
+    { entity: { eid: 'done' }, effect: { state: 'done' } },
+    {
+      entity: { eid: 'human' },
+      effect: { state: 'done' },
+      was: { word: 'keep this' },
+    },
+    {
+      entity: { eid: 'failed' },
+      effect: { state: 'failed', error: 'keep failure' },
+    },
+    { entity: { eid: 'pending' }, effect: { state: 'pending' } },
+  ])
+  let before = await s.query('.effect&*')
+  let [report] = await s.rehearse()
+  assertEquals(report.rows, 2)
+  assertEquals(report.failed, undefined)
+  assertEquals(await s.query('.effect&*'), before)
+  s.wake({ ...doneEffectsRule, live: 'apps' })
+  for (let i = 0; i < 5 && (await s.query('.effect.state=done')).length; i++) {
+    await s.alarm()
+  }
+  assertEquals(await s.query('.effect.state=done'), [])
+  assertEquals((await s.query('.was'))[0].was, { word: 'keep this' })
+  assertEquals(
+    ((await s.query('.effect.state=failed'))[0].effect as Comp)?.error,
+    'keep failure',
+  )
+  assertEquals((await s.query('.effect.state=pending')).length, 1)
 })

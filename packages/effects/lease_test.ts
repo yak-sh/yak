@@ -6,7 +6,16 @@ import { test, until as soon } from '@yaks/testing'
 import { blogGraph, pooledBlog } from './testing.ts'
 import { drop, held, holding, LEASE, leaseEid, take, until } from './lease.ts'
 
-let g = () => blogGraph([], pooledBlog)
+let g = () => {
+  let g = blogGraph([], pooledBlog)
+  g.apply(
+    ['p1', 'p2', 'gone', 'rival'].map((eid) => ({
+      entity: { eid },
+      subscriber: {},
+    })),
+  )
+  return g
+}
 
 // A clock the test moves by hand, so nothing waits.
 let at = (ms: number) => () => ms

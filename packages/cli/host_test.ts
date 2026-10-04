@@ -931,7 +931,7 @@ test('an explicit pass runs the retries that are due', async () => {
     assertEquals(ran, ['b1'])
     // The runs, written down and settled — no handler asked for any of this.
     let rows = await host.graph.read('.effect')
-    assertEquals(rows.map((b) => (b.effect as Comp).state), ['done'])
+    assertEquals(rows, [])
     // A failure that reported, whose backoff has come up. Written as the
     // pool would have written it, so the pass below is the only thing under
     // test.
@@ -952,10 +952,7 @@ test('an explicit pass runs the retries that are due', async () => {
     // One pass and out: the host works what is owed, then leaves the pool.
     await host.duties(AbortSignal.abort())
     assertEquals(ran, ['b1'])
-    assertEquals(
-      ((await host.storage.get(['r1']))[0].effect as Comp).state,
-      'done',
-    )
+    assertEquals((await host.storage.get(['r1']))[0].effect, undefined)
   } finally {
     await host.close()
   }
