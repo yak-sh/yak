@@ -67,6 +67,9 @@ export type DerivedProp = {
   // well: `updated.at` falling back to `created.at`, because being created is
   // the last time an untouched row changed. Defaults to true.
   worn?: boolean
+  // Whether a whole-component gather includes this property. Expensive
+  // aggregates can opt out; an explicit property query still reads them.
+  whole?: boolean
 }
 
 // The registry a caller passes to `compile`, keyed by `comp.prop`. `compile`

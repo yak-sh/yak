@@ -2,15 +2,20 @@
 // store: every shape a transcript can be in answers the same word both ways.
 
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { graph, identityEid } from '@yaks/graph'
+import { col, eq, render, select, table, val } from '@yaks/sql'
+import { sqlitePath } from '../sqlite/sqlitepath.ts'
+import { Database } from '@db/sqlite'
+import { driver } from '../sqlite/native.ts'
 import { effectsIn, loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
 import { storage as held } from '@yaks/durable-object'
 import { mem } from '../sqlite/testing.ts'
 import { durable } from '../durable-object/testing.ts'
 import { effectDoc } from '@yaks/effects'
+import { archetypeDoc } from '@yaks/archetype/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { modelDoc } from '@yaks/model'
 import { toolsDoc } from '@yaks/tools/vocab'
@@ -236,6 +241,33 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
     entry(5, { ask: { to: M, through: 'e4' } }),
     said(6, 'e5'),
   ], 'settled'],
+  ['input after an open call does not start another ask', [
+    request(1),
+    entry(2, { ask: { through: 'e1' } }),
+    entry(3, { call: { to: T, source: 'e2' } }),
+    input(4),
+  ], 'running'],
+  ['an interrupted call still owes its result', [
+    request(1),
+    entry(2, { ask: { through: 'e1' } }),
+    entry(3, { call: { to: T, source: 'e2' }, execution: {}, interrupted: {} }),
+    said(4, 'e2'),
+  ], 'running'],
+  ['a refusal remains terminal beside a held open call', [
+    request(1),
+    entry(2, { ask: { through: 'e1' } }),
+    entry(3, { call: { to: T, source: 'e2' }, execution: { by: S } }),
+    entry(4, { refusal: {}, output: { source: 'e2' } }),
+  ], 'failed'],
+  ['a completed old turn cannot keep the next turn running', [
+    request(1),
+    entry(2, { ask: { through: 'e1' }, attempt: {} }),
+    entry(3, { call: { to: T, source: 'e2' }, interrupted: {} }),
+    input(4),
+    entry(5, { result: { call: 'e3' }, content: { body: 'cut' } }),
+    entry(6, { ask: { through: 'e5' }, attempt: {} }),
+    said(7, 'e6'),
+  ], 'settled'],
   ['nothing', [], 'empty'],
   ['a request', [request(1)], 'pending'],
   // Nothing here asked the runner: a harness runs it, and its hooks record
@@ -382,33 +414,53 @@ let apart = (name: string, entries: Bundle[]): Bundle[] => {
     .map((b) => own(b) as Bundle)
 }
 
-test('the SQL view answers the same word as the rule', () => {
-  let g = store()
-  g.apply(shapes.flatMap(([name, entries]) => apart(name, entries)), {
-    trusted: true,
-  })
-  let want = Object.fromEntries(shapes.map(([name, , w]) => [name, w]))
-  // Each word filters exactly the transcripts in that shape.
-  for (let word of new Set(Object.values(want))) {
-    let found = (g.read(`.session.status=${word}`) as Bundle[])
-      .map((b) => (b.session as { id: string }).id).filter((id) => id != 'one')
-    assertEquals(
-      found.sort(),
-      shapes.filter(([, , w]) => w == word).map(([name]) => name).sort(),
-      `filters as ${word}`,
+for (let typed of [false, true]) {
+  test(`the SQL view answers the same word as the rule (archetypes: ${typed})`, () => {
+    let v = typed
+      ? loadVocab([
+        sessionDoc,
+        toolsDoc,
+        modelDoc,
+        kernelDoc,
+        effectDoc,
+        archetypeDoc,
+      ], [kernelKeywords])
+      : vocab
+    let storage1 = storage(mem(), v, { derived: sessionDerived(v) })
+    storage1.install()
+    let g = graph({ storage: storage1, vocab: v })
+    g.apply([{ entity: { eid: M }, model: { name: 'fake' } }, {
+      entity: { eid: T },
+      tool: { name: 'echo' },
+    }])
+    g.apply(shapes.flatMap(([name, entries]) => apart(name, entries)), {
+      trusted: true,
+    })
+    let want = Object.fromEntries(shapes.map(([name, , w]) => [name, w]))
+    // Each word filters exactly the transcripts in that shape.
+    for (let word of new Set(Object.values(want))) {
+      let found = (g.read(`.session.status=${word}`) as Bundle[])
+        .map((b) => (b.session as { id: string }).id).filter((id) =>
+          id != 'one'
+        )
+      assertEquals(
+        found.sort(),
+        shapes.filter(([, , w]) => w == word).map(([name]) => name).sort(),
+        `filters as ${word}`,
+      )
+    }
+    // The two words this package owns. A host composing its own properties onto
+    // `session` (the fleet does) reads those beside them, and they are its.
+    let read = Object.fromEntries(
+      (g.read('.session') as Bundle[]).map((b) => {
+        let { id, status } = b.session as { id: string; status: string }
+        return [id, status]
+      }),
     )
-  }
-  // The two words this package owns. A host composing its own properties onto
-  // `session` (the fleet does) reads those beside them, and they are its.
-  let read = Object.fromEntries(
-    (g.read('.session') as Bundle[]).map((b) => {
-      let { id, status } = b.session as { id: string; status: string }
-      return [id, status]
-    }),
-  )
-  delete read.one
-  assertEquals(read, want)
-})
+    delete read.one
+    assertEquals(read, want)
+  })
+}
 
 // The status is computed from the entries, and an entity that is not a session
 // at all has none: the model and the tool rows read `empty` too, so
@@ -507,4 +559,69 @@ test("the runner's sweep finds a transcript owed a turn in a Durable Object", ()
   ], { trusted: true })
   let owed = (g.read(run.sweep!) as Bundle[]).map((b) => b.entity.eid)
   assertEquals(owed, [S])
+})
+
+// SQLite's statement counters measure engine work, not the number of returned
+// bundles. A transcript lookup returning one row used to visit its history.
+test('a finished session status seeks its newest turn with bounded engine work', () => {
+  let lib = Deno.dlopen(sqlitePath, {
+    sqlite3_next_stmt: {
+      parameters: ['pointer', 'pointer'],
+      result: 'pointer',
+    },
+    sqlite3_stmt_status: {
+      parameters: ['pointer', 'i32', 'i32'],
+      result: 'i32',
+    },
+  })
+  let db = new Database(':memory:')
+  try {
+    let d = driver(db)
+    let s = storage(d, vocab, { derived: sessionDerived(vocab) })
+    s.install()
+    let g = graph({ storage: s, vocab })
+    g.apply([{ entity: { eid: S }, session: { id: 'long' } }])
+    let transcript = Array.from(
+      { length: 3000 },
+      (_, i) =>
+        i % 3 == 0
+          ? input(i + 1)
+          : i % 3 == 1
+          ? entry(i + 1, { ask: { through: `e${i}` }, attempt: {} })
+          : said(i + 1, `e${i}`),
+    )
+    g.apply(transcript, { trusted: true })
+    let [owner] = d.query(
+      select({
+        cols: [col('id')],
+        from: table('entity'),
+        where: eq(col('eid'), val(S)),
+      }),
+    )
+    let query = select({
+      cols: [
+        sessionDerived(vocab)['session.status'].expr(val(Number(owner.id))),
+      ],
+    })
+    let compiled = render(query)
+    let plan = d.query({ t: 'explain query plan', of: query }).map((r) =>
+      String(r.detail)
+    ).join('\n')
+    assert(plan.includes('entry_session_seq'), plan)
+    assert(!/SCAN (?:entry|e)\b|USE TEMP B-TREE FOR ORDER BY/.test(plan), plan)
+    let statement = db.prepare(compiled.sql)
+    assertEquals(
+      Object.values(statement.get(...compiled.params)!)[0],
+      'settled',
+    )
+    // The statement just prepared is SQLite's newest live statement.
+    let handle = lib.symbols.sqlite3_next_stmt(db.unsafeHandle, null)
+    let steps = lib.symbols.sqlite3_stmt_status(handle, 4, 0)
+    console.log('SESSION_STATUS_VM_STEPS', steps)
+    assert(steps < 2000, `finished status executed ${steps} VM steps`)
+    statement.finalize()
+  } finally {
+    db.close()
+    lib.close()
+  }
 })

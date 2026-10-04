@@ -51,7 +51,8 @@ let costOf = (
   eid: string,
 ) => ((g.get([eid]) as Bundle[])[0]?.cost as Comp | undefined)
 let session = (g: ReturnType<typeof shop>, eid: string) =>
-  (g.get([eid]) as Bundle[])[0].session as Comp
+  ((g.read(`.entity.eid=${eid} .fields=session.cost`) as Bundle[])[0]
+    .session as Comp | undefined)?.cost
 
 test('a request is weighed at its model price unless its provider said', () => {
   let g = shop()
@@ -84,8 +85,20 @@ test("a session's cost is its entries' sum, and absent where none cost", () => {
     asked(PRICED, { usage, cost: { dollars: 0.75, reported: true } }),
     asked(FREE, { usage }),
   ])
-  assertAlmostEquals(Number(session(g, 'S').cost), 3)
-  assertEquals(session(g, 'Q').cost, null)
+  assertAlmostEquals(Number(session(g, 'S')), 3)
+  assertEquals(session(g, 'Q'), undefined)
   let costly = g.read('.session.cost>1') as Bundle[]
   assertEquals(costly.map((b) => b.entity.eid), ['S'])
+})
+
+test('whole session reads leave its transcript cost for an explicit query', () => {
+  let g = shop()
+  g.apply([asked(PRICED, { usage })])
+  for (let query of ['.entity.eid=S ?session', '.entity.eid=S *']) {
+    let [row] = g.read(query) as Bundle[]
+    assertEquals('cost' in (row.session as Comp), false, query)
+  }
+  assertEquals('cost' in ((g.get(['S']) as Bundle[])[0].session as Comp), false)
+  let [row] = g.read('.session.cost>1') as Bundle[]
+  assertAlmostEquals(Number((row.session as Comp).cost), 2.25)
 })

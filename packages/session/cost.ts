@@ -59,6 +59,7 @@ export let weighing: Hook = (bundles, tx) => {
  * dollars its entries record, or nothing where none records any. */
 export let sessionCost: DerivedProp = {
   tag: 'number',
+  whole: false,
   expr: (owner) =>
     sub(select({
       cols: [fn('sum', col('dollars', 'k'))],

@@ -39,6 +39,7 @@ import {
   and,
   as,
   col,
+  cross,
   desc,
   eq,
   exists,
@@ -49,9 +50,13 @@ import {
   gt,
   iff,
   isNull,
+  type Join,
   join,
+  left,
   lit,
   not,
+  notNull,
+  op,
   or,
   select,
   sub,
@@ -186,12 +191,14 @@ export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
   if (!newest) return 'empty'
   let kind = kindOf(newest)
   if (kind == 'stop') return 'stopped'
-  if (abandoned(all)) return 'running'
+  let asked = newestAsk(all)
+  let turn = all.filter((b) => !asked || seqOf(b) >= seqOf(asked))
+  if (abandoned(turn)) return 'running'
   if (kind == 'exception') return 'failed'
   if (kind == 'interrupted' && newest.failed && !newest.ask && !newest.call) {
     return 'failed'
   }
-  if (all.some((b) => attemptState(b) == 'inflight')) {
+  if (turn.some((b) => attemptState(b) == 'inflight')) {
     return 'running'
   }
   let afterAsk = (ask = newestAsk(all)) => {
@@ -221,7 +228,7 @@ export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
       ? 'failed'
       : 'pending'
   }
-  if (openCalls(all).length) return 'running'
+  if (openCalls(turn).length) return 'running'
   if (
     kind == 'ask' && attemptState(newest) == 'completed'
   ) return 'settled'
@@ -308,222 +315,476 @@ export let sessionStatus = {
   expr: (
     owner: Expr,
     dispatch = dispatchStatus,
-    states: Derived = {},
     declared: (name: string) => boolean = () => true,
   ): Expr => {
-    let state = (name: string, alias: string) =>
-      states[`${name}.state`]?.expr(col('entity', alias)) ?? col('state', alias)
-    // Whether the entity `of` wears `comp` (and `also` holds of that row, `k`).
-    let has = (comp: string, of: Expr, also?: Expr) =>
-      declared(comp)
-        ? exists(select({
-          cols: [lit(1)],
-          from: table(comp, 'k'),
-          where: and(eq(col('entity', 'k'), of), ...(also ? [also] : [])),
-        }))
-        : lit(false)
-    let lacks = (comp: string, of: Expr) => not(has(comp, of))
-    // The newest entry is the row the verdict below reads, `n`, so each
-    // branch looks at it without finding it again.
-    let n = col('entity', 'n')
-    let wears = (comp: string, also?: Expr) => has(comp, n, also)
-    let mine = (e: string) => eq(col('session', e), owner)
-    // Start at this transcript's indexed entries. These checks also run when
-    // one session is read by eid, so scanning every call in the store for each
-    // such read multiplies the cost of an unrelated transcript.
-    let entries = (also: Expr) =>
-      exists(select({
-        cols: [lit(1)],
-        from: table('entry', 'e'),
-        where: and(mine('e'), also),
-      }))
-    let calls = (also: Expr) =>
-      entries(exists(select({
-        cols: [lit(1)],
-        from: table(CALL, 'c'),
-        where: and(eq(col('entity', 'c'), col('entity', 'e')), also),
-      })))
-    let unanswered = not(exists(select({
-      cols: [lit(1)],
-      from: table(RESULT, 'r'),
-      where: eq(col('call', 'r'), col('entity', 'c')),
-    })))
-    let inflight = entries(has(
-      'attempt',
-      col('entity', 'e'),
-      eq(state('attempt', 'k'), lit('inflight')),
-    ))
-    let open = calls(unanswered)
-    let abandoned = calls(and(
-      lacks('interrupted', col('entity', 'c')),
-      has(
-        'execution',
-        col('entity', 'c'),
-        and(
-          isNull(col('by', 'k')),
+    // A turn is read once. The row set below contains the newest
+    // ask and its unacknowledged suffix, not a predicate per question over the transcript.
+    // Every fact in the decision is reduced from those rows in one pass.
+    let typed = declared('archetype')
+    let joins: Join[] = typed
+      ? [
+        join(
+          table('entity', 'owner'),
+          eq(col('id', 'owner'), col('entity', 'e')),
         ),
-      ),
-      unanswered,
-    ))
-    // The newest ask.
-    let ask = sub(select({
-      cols: [col('entity', 'e')],
+        join(
+          table('archetype', 'shape'),
+          eq(col('entity', 'shape'), col('archetype', 'owner')),
+        ),
+      ]
+      : []
+    let wears = (comp: string) =>
+      gt(fn('instr', col('tables', 'shape'), lit(JSON.stringify(comp))), lit(0))
+    let fields: Expr[] = [col('entity', 'e'), col('seq', 'e')]
+    let read = (comp: string, props: string[] = []) => {
+      if (!declared(comp)) {
+        fields.push(
+          as(lit(null), comp),
+          ...props.map((p) => as(lit(null), `${comp}_${p}`)),
+        )
+        return
+      }
+      if (typed) {
+        fields.push(as(iff(wears(comp), col('entity', 'e'), lit(null)), comp))
+        for (let prop of props) {
+          fields.push(
+            as(
+              iff(
+                wears(comp),
+                sub(
+                  select({
+                    cols: [col(prop, 'v')],
+                    from: table(comp, 'v'),
+                    where: eq(col('entity', 'v'), col('entity', 'e')),
+                  }),
+                ),
+                lit(null),
+              ),
+              `${comp}_${prop}`,
+            ),
+          )
+        }
+      } else {
+        joins.push(
+          left(table(comp, comp), eq(col('entity', comp), col('entity', 'e'))),
+        )
+        fields.push(
+          as(col('entity', comp), comp),
+          ...props.map((p) => as(col(p, comp), `${comp}_${p}`)),
+        )
+      }
+    }
+    for (
+      let comp of [
+        'stop',
+        'exception',
+        'refusal',
+        'content',
+        'interrupted',
+        'failed',
+        'provisional',
+        'using',
+        'notice',
+      ]
+    ) read(comp)
+    read('ask')
+    read('call')
+    read('result')
+    read('output')
+    read('attempt', ['by'])
+    read('execution', ['by'])
+    // Calls and their answers are joined within this row read. The runner
+    // cannot take another ask before all calls in the previous turn answer.
+    if (typed) {
+      fields.push(
+        as(
+          iff(
+            wears('call'),
+            sub(
+              select({
+                cols: [col('entity', 'r')],
+                from: table(RESULT, 'r'),
+                where: eq(col('call', 'r'), col('entity', 'e')),
+                limit: lit(1),
+              }),
+            ),
+            lit(null),
+          ),
+          'answered',
+        ),
+      )
+    } else {
+      joins.push(
+        left(
+          table(RESULT, 'answer'),
+          eq(col('call', 'answer'), col('entity', 'e')),
+        ),
+      )
+      fields.push(as(col('entity', 'answer'), 'answered'))
+    }
+    let has = (comp: string, alias = 't') => notNull(col(comp, alias))
+    let lacks = (comp: string, alias = 't') => isNull(col(comp, alias))
+    let mine = (alias: string) => eq(col('session', alias), owner)
+    let noticed = (alias: string) =>
+      declared('notice')
+        ? exists(
+          select({
+            cols: [lit(1)],
+            from: table('notice', 'z'),
+            where: eq(col('entity', 'z'), col('entity', alias)),
+          }),
+        )
+        : lit(false)
+    let latest = select({
+      cols: [
+        col('entity', 'e'),
+        col('seq', 'e'),
+        as(
+          iff(
+            typed
+              ? gt(
+                fn(
+                  'instr',
+                  col('tables', 'ls'),
+                  lit(JSON.stringify('refusal')),
+                ),
+                lit(0),
+              )
+              : notNull(col('entity', 'refusal')),
+            sub(select({
+              cols: [col('seq', 'b')],
+              from: table('output', 'o'),
+              joins: [
+                join(
+                  table('entry', 'b'),
+                  eq(col('entity', 'b'), col('source', 'o')),
+                ),
+              ],
+              where: eq(col('entity', 'o'), col('entity', 'e')),
+            })),
+            lit(null),
+          ),
+          'refused_seq',
+        ),
+        as(
+          iff(
+            typed
+              ? gt(
+                fn(
+                  'instr',
+                  col('tables', 'ls'),
+                  lit(JSON.stringify('refusal')),
+                ),
+                lit(0),
+              )
+              : notNull(col('entity', 'refusal')),
+            sub(
+              select({
+                cols: [col('source', 'o')],
+                from: table('output', 'o'),
+                where: eq(col('entity', 'o'), col('entity', 'e')),
+              }),
+            ),
+            lit(null),
+          ),
+          'refused_source',
+        ),
+      ],
       from: table('entry', 'e'),
-      where: and(mine('e'), has(ASK, col('entity', 'e'))),
-      order: [desc(col('seq', 'e'))],
-      limit: lit(1),
-    }))
-    // An input entry after `seq`: prose that is none of the other kinds.
-    let input = (seq: Expr) =>
-      exists(select({
-        cols: [lit(1)],
-        from: table('entry', 'u'),
-        joins: [
+      joins: typed
+        ? [
+          join(table('entity', 'lo'), eq(col('id', 'lo'), col('entity', 'e'))),
           join(
-            table('content', 'uc'),
-            eq(col('entity', 'uc'), col('entity', 'u')),
+            table('archetype', 'ls'),
+            eq(col('entity', 'ls'), col('archetype', 'lo')),
+          ),
+        ]
+        : [
+          left(
+            table('refusal'),
+            eq(col('entity', 'refusal'), col('entity', 'e')),
           ),
         ],
-        where: and(
-          mine('u'),
-          gt(col('seq', 'u'), seq),
-          ...[
-            'output',
-            'notice',
-            'result',
-            'refusal',
-            'exception',
-            'ask',
-            'call',
-            'stop',
-          ].map((c) => lacks(c, col('entity', 'u'))),
-        ),
-      }))
-    let unread = input(sub(select({
-      cols: [col('seq', 'boundary')],
-      from: table('ask', 'a'),
+      where: and(
+        mine('e'),
+        typed
+          ? eq(
+            fn('instr', col('tables', 'ls'), lit(JSON.stringify('notice'))),
+            lit(0),
+          )
+          : not(noticed('e')),
+      ),
+      order: [desc(col('seq', 'e'))],
+      limit: lit(1),
+    })
+    let ask = select({
+      cols: [col('entity', 'e'), col('seq', 'e'), col('through', 'a')],
+      from: table('entry', 'e'),
       joins: [
-        join(
+        join(table(ASK, 'a'), eq(col('entity', 'a'), col('entity', 'e'))),
+      ],
+      where: mine('e'),
+      order: [desc(col('seq', 'e'))],
+      limit: lit(1),
+    })
+    let anchors = select({
+      cols: [
+        as(col('entity', 'l'), 'newest'),
+        as(col('seq', 'l'), 'newest_seq'),
+        as(col('entity', 'a'), 'asked'),
+        as(col('seq', 'a'), 'asked_seq'),
+        as(col('seq', 'boundary'), 'boundary_seq'),
+        as(col('refused_seq', 'l'), 'refused_seq'),
+        as(col('refused_source', 'l'), 'refused_source'),
+      ],
+      from: from(latest, 'l'),
+      joins: [
+        left(from(ask, 'a'), lit(true)),
+        left(
           table('entry', 'boundary'),
           eq(col('entity', 'boundary'), col('through', 'a')),
         ),
       ],
-      where: eq(col('entity', 'a'), ask),
-    })))
-    // `served` above: the transcript asked the runner, by a request or a turn
-    // it took.
-    let served = exists(select({
-      cols: [lit(1)],
-      from: table('entry', 's'),
-      where: and(
-        mine('s'),
-        lacks('notice', col('entity', 's')),
-        or(has(USING, col('entity', 's')), has(ASK, col('entity', 's'))),
+    })
+    let anchor = (name: string) => col(name, 'anchor')
+    let start = fn(
+      'min',
+      fn('coalesce', anchor('asked_seq'), anchor('newest_seq')),
+      fn(
+        'coalesce',
+        op('+', anchor('boundary_seq'), lit(1)),
+        anchor('newest_seq'),
       ),
-    }))
-    let owed = iff(served, lit('pending'), lit('running'))
-    let queued = eq(dispatch.expr(owner), lit('queued'))
-    let settled = exists(select({
-      cols: [lit(1)],
-      from: table('attempt', 'a'),
-      where: and(
-        eq(col('entity', 'a'), n),
-        eq(state('attempt', 'a'), lit('completed')),
+      fn(
+        'coalesce',
+        op('+', anchor('refused_seq'), lit(1)),
+        anchor('newest_seq'),
       ),
-    }))
-    let asked = sub(select({
-      cols: [col('seq')],
-      from: table('entry'),
-      where: eq(col('entity'), ask),
-    }))
-    // Provider refusals name their ask; compaction and no-model refusals do
-    // not. Only input arriving after the associated ask still needs an answer.
-    let refusedAsk = sub(select({
-      cols: [col('seq', 'r')],
-      from: table('output', 'ro'),
+    )
+    let turn = select({
+      cols: [
+        ...fields,
+        as(anchor('boundary_seq'), 'boundary_seq'),
+        as(anchor('refused_seq'), 'refused_seq'),
+        as(anchor('refused_source'), 'refused_source'),
+        as(eq(col('entity', 'e'), anchor('newest')), 'newest'),
+        as(eq(col('entity', 'e'), anchor('asked')), 'asked'),
+        as(
+          ge(
+            col('seq', 'e'),
+            fn('coalesce', anchor('asked_seq'), anchor('newest_seq')),
+          ),
+          'current',
+        ),
+      ],
+      from: from(anchors, 'anchor'),
       joins: [
-        join(table('entry', 'r'), eq(col('entity', 'r'), col('source', 'ro'))),
+        cross(table('entry', 'e')),
+        ...joins,
       ],
       where: and(
-        eq(col('entity', 'ro'), n),
-        mine('r'),
-        has(ASK, col('entity', 'r')),
+        mine('e'),
+        ge(col('seq', 'e'), start),
+      ),
+    })
+    let input = and(
+      has('content'),
+      ...[
+        'output',
+        'notice',
+        'result',
+        'refusal',
+        'exception',
+        'ask',
+        'call',
+        'stop',
+        'interrupted',
+      ].map((c) => lacks(c)),
+    )
+    let current = col('current', 't')
+    let open = and(current, has('call'), lacks('answered'))
+    let inflight = and(
+      current,
+      has('attempt'),
+      notNull(col('attempt_by', 't')),
+      lacks('interrupted'),
+    )
+    let flag = (name: string, condition: Expr) =>
+      as(fn('max', iff(condition, lit(1), lit(0))), name)
+    let newest = col('newest', 't')
+    let asked = col('asked', 't')
+    let names = [
+      'stop',
+      'exception',
+      'refusal',
+      'interrupted',
+      'failed',
+      'ask',
+      'call',
+      'output',
+      'attempt',
+      'attempt_by',
+      'refused_source',
+      'refused_seq',
+      'boundary_seq',
+    ]
+    let askNames = [
+      'interrupted',
+      'failed',
+      'provisional',
+      'seq',
+      'entity',
+    ]
+    let facts = select({
+      cols: [
+        flag('open', open),
+        flag(
+          'abandoned',
+          and(
+            open,
+            has('execution'),
+            isNull(col('execution_by', 't')),
+            lacks('interrupted'),
+          ),
+        ),
+        flag('inflight', inflight),
+        as(fn('max', iff(input, col('seq', 't'), lit(null))), 'input_seq'),
+        flag('served', or(has('using'), has('ask'))),
+        ...names.map((name) =>
+          as(fn('max', iff(newest, col(name, 't'), lit(null))), 'n_' + name)
+        ),
+        ...askNames.map((name) =>
+          as(fn('max', iff(asked, col(name, 't'), lit(null))), 'a_' + name)
+        ),
+        as(fn('max', col('entity', 't')), 'any'),
+      ],
+      from: from(turn, 't'),
+      where: lacks('notice'),
+    })
+    let n = (name: string) => notNull(col('n_' + name, 'f'))
+    let f = (name: string) => col(name, 'f')
+    let a = (name: string) => notNull(col('a_' + name, 'f'))
+    let after = (seq: Expr) =>
+      fn('coalesce', gt(f('input_seq'), seq), lit(false))
+    // Two bounded historical facts remain: a refusal can explicitly name an
+    // older ask, and the retry limit covers at most RETRIES consecutive asks.
+    // Neither is an open-work scan. The ask's boundary also acknowledges
+    // input admitted while that request was in flight.
+    let refused = sub(select({
+      cols: [col('seq', 'b')],
+      from: table('entry', 'b'),
+      joins: [
+        join(table(ASK, 'r'), eq(col('entity', 'r'), col('entity', 'b'))),
+      ],
+      where: and(
+        mine('b'),
+        eq(col('entity', 'b'), col('n_refused_source', 'f')),
       ),
     }))
-    let interruptions = sub(select({
-      cols: [fn('count', lit(1))],
+    let interrupted = (entity: Expr) =>
+      declared('interrupted')
+        ? exists(
+          select({
+            cols: [lit(1)],
+            from: table('interrupted', 'i'),
+            where: eq(col('entity', 'i'), entity),
+          }),
+        )
+        : lit(false)
+    let retries = sub(select({
+      cols: [fn('sum', iff(interrupted(col('entity', 'r')), lit(1), lit(0)))],
       from: from(
         select({
-          cols: [col('entity', 'a'), col('seq', 'a')],
-          from: table('entry', 'a'),
-          where: and(
-            mine('a'),
-            lacks('notice', col('entity', 'a')),
-            has(ASK, col('entity', 'a')),
-          ),
-          order: [desc(col('seq', 'a'))],
+          cols: [col('entity', 'e'), col('seq', 'e')],
+          from: table('entry', 'e'),
+          joins: [
+            join(table(ASK, 'r'), eq(col('entity', 'r'), col('entity', 'e'))),
+          ],
+          where: and(mine('e'), not(noticed('e'))),
+          order: [desc(col('seq', 'e'))],
           limit: lit(RETRIES),
         }),
-        'recent',
+        'r',
       ),
-      where: and(
-        has('interrupted', col('entity', 'recent')),
-        not(input(col('seq', 'recent'))),
-      ),
+      where: or(isNull(f('input_seq')), gt(col('seq', 'r'), f('input_seq'))),
     }))
-    // What the newest entry, `n`, says the transcript is doing.
-    let verdict = when(
-      [
-        [wears(STOP_ENTRY), lit('stopped')],
-        [abandoned, lit('running')],
-        [wears(EXCEPTION), lit('failed')],
-        [
-          and(
-            wears('interrupted'),
-            wears('failed'),
-            not(wears(ASK)),
-            not(wears(CALL)),
-          ),
-          lit('failed'),
-        ],
-        [inflight, lit('running')],
-        [queued, lit('queued')],
-        [wears(REFUSAL), iff(input(refusedAsk), lit('pending'), lit('failed'))],
-        [
-          and(has('interrupted', ask), has('failed', ask), not(input(asked))),
-          lit('failed'),
-        ],
-        [and(has('interrupted', ask), has('provisional', ask)), lit('pending')],
-        [
-          has('interrupted', ask),
-          iff(ge(interruptions, lit(RETRIES)), lit('failed'), lit('pending')),
-        ],
-        [open, lit('running')],
-        [and(wears(ASK), settled), lit('settled')],
-        [or(wears(ASK), wears(CALL)), lit('running')],
-        [wears(RESULT), owed],
-        [wears(OUTPUT), iff(unread, lit('pending'), lit('settled'))],
+    // Before the first ask, a model selection on the original request still
+    // makes a later input owed by this runner. Once asked, the turn itself is
+    // the proof of service and no historical request is read.
+    let requested = exists(select({
+      cols: [lit(1)],
+      from: table('entry', 'r'),
+      joins: [
+        join(table(USING, 'u'), eq(col('entity', 'u'), col('entity', 'r'))),
       ],
-      owed,
+      where: and(mine('r'), not(noticed('r'))),
+    }))
+    let owed = iff(
+      or(f('served'), notNull(col('a_entity', 'f')), requested),
+      lit('pending'),
+      lit('running'),
     )
-    // SQLite charges an expression on top of every expression enclosing it,
-    // and workerd refuses a statement past 100 deep (SQLITE_LIMIT_EXPR_DEPTH).
-    // A FROM subquery is no part of the height of the expression it sits in,
-    // so the verdict is read out of one, which leaves room for a query that
-    // nests this status inside another select, as an alternation's union does.
-    let newest = select({
+    let verdict = when([
+      [n('stop'), lit('stopped')],
+      [f('abandoned'), lit('running')],
+      [n('exception'), lit('failed')],
+      [
+        and(n('interrupted'), n('failed'), not(n('ask')), not(n('call'))),
+        lit('failed'),
+      ],
+      [f('inflight'), lit('running')],
+      [eq(dispatch.expr(owner), lit('queued')), lit('queued')],
+      [n('refusal'), iff(after(refused), lit('pending'), lit('failed'))],
+      [
+        and(a('interrupted'), a('failed'), not(after(col('a_seq', 'f')))),
+        lit('failed'),
+      ],
+      [and(a('interrupted'), after(col('a_seq', 'f'))), lit('pending')],
+      [and(a('interrupted'), a('provisional')), lit('pending')],
+      [
+        a('interrupted'),
+        iff(ge(retries, lit(RETRIES)), lit('failed'), lit('pending')),
+      ],
+      [f('open'), lit('running')],
+      [
+        and(
+          n('ask'),
+          n('attempt'),
+          isNull(col('n_attempt_by', 'f')),
+          not(n('interrupted')),
+        ),
+        lit('settled'),
+      ],
+      [or(n('ask'), n('call')), lit('running')],
+      [
+        n('output'),
+        iff(
+          after(col('n_boundary_seq', 'f')),
+          lit('pending'),
+          lit('settled'),
+        ),
+      ],
+    ], owed)
+    // Keep the expression below workerd's depth limit, including the runner's
+    // enclosing union. FROM subqueries don't add to expression height.
+    let decision = select({
       cols: [as(verdict, 'v')],
-      from: table('entry', 'n'),
-      where: and(mine('n'), lacks('notice', n)),
-      order: [desc(col('seq', 'n'))],
-      limit: lit(1),
+      from: from(facts, 'f'),
+      where: notNull(col('any', 'f')),
     })
+    let ended = sub(
+      select({
+        cols: [col('ended', 's')],
+        from: table('session', 's'),
+        where: eq(col('entity', 's'), owner),
+      }),
+    )
     return iff(
-      has('session', owner, eq(col('ended', 'k'), lit(true))),
+      ended,
       lit('stopped'),
       fn(
         'coalesce',
-        sub(select({ cols: [col('v', 'x')], from: from(newest, 'x') })),
+        sub(select({ cols: [col('v', 'x')], from: from(decision, 'x') })),
         lit('empty'),
       ),
     )
@@ -552,7 +813,6 @@ export let sessionDerived = (vocab: Vocab): Derived => {
         sessionStatus.expr(
           owner,
           dispatch,
-          states,
           (name) => !!vocab.comp(name),
         ),
     },

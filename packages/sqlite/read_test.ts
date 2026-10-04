@@ -6,7 +6,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { gather } from '@yaks/graph'
 import { and, eq, or } from '@yaks/query'
-import { ARMS, insert, Unsupported } from '@yaks/sql'
+import { ARMS, insert, lit, Unsupported } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import type { Bundle, Comp } from './bundle.ts'
 import { mem, seed, shop as vocab, spy, store } from './testing.ts'
@@ -346,4 +346,42 @@ test('a disjunction longer than SQLite nests expressions reads', () => {
   assertEquals(eids(s.read(`.product.maker=${makers}`)), ['p1'])
   let any = or(...makers.map((m) => eq('entity.eid', m)))
   assertEquals(eids(s.read(and(any))), ['m1'])
+})
+
+test('whole gathers omit an opted-out derived sum but explicit queries read it', () => {
+  let v = loadVocab({
+    $defs: {
+      report: {
+        component: true,
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          total: { type: 'number', computed: true },
+        },
+      },
+    },
+  })
+  let d = mem()
+  let s = storage(d, v, {
+    derived: {
+      'report.total': {
+        tag: 'number',
+        whole: false,
+        expr: () => lit(7),
+      },
+    },
+  })
+  s.install()
+  seed(s, [{ entity: { eid: 'r' }, report: { name: 'one' } }])
+  assertEquals(s.get(['r'])[0].report, { name: 'one' })
+  assertEquals(s.read('.report')[0].report, { name: 'one' })
+  assertEquals(s.read('.report.total>0')[0].report, { name: 'one', total: 7 })
+  assertEquals(s.read('.report .order=report.total')[0].report, {
+    name: 'one',
+    total: 7,
+  })
+  assertEquals(s.rows('.report .fields=report.total'), [{
+    eid: 'r',
+    'report.total': 7,
+  }])
 })

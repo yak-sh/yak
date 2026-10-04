@@ -151,7 +151,9 @@ A request's `cost{dollars, reported}` (@yaks/model) is written beside its
 same transaction, the usage weighed at the `price` on the row of the model that
 answered it (`weighing`, a precondition of `sessions()`). `session.cost` is
 computed, never stored: the sum of its entries' `cost`, absent where none
-records any. `sessionCost` is its SQL, registered in `sessionDerived`.
+records any. Whole session reads omit this transcript-wide sum; name
+`session.cost` in a filter or `.fields=session.cost` to compute it.
+`sessionCost` is its SQL, registered in `sessionDerived`.
 
 Applications that run a session add components from other packages:
 `process{pid, command, cwd}` and `exit{code}` describe its program;

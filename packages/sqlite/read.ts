@@ -12,7 +12,7 @@
 // `screened()` is the statement alone, for a search beside the graph to run.
 
 import { field } from '@yaks/sql'
-import { type And, parse } from '@yaks/query'
+import { type And, map, parse } from '@yaks/query'
 import type { Prop, Vocab } from '@yaks/vocab'
 import {
   among,
@@ -119,7 +119,10 @@ export let screened = (
 // result does not carry.
 let read1 = (v: Vocab, comp: string, derived: Derived): Prop[] =>
   v.props(comp).map((p) => v.prop(comp, p)!)
-    .filter((c) => !c.computed || derived[`${comp}.${c.prop}`])
+    .filter((c) =>
+      (!c.computed || derived[`${comp}.${c.prop}`]) &&
+      derived[`${comp}.${c.prop}`]?.whole !== false
+    )
 
 // The projected read for one component: each scalar straight off the row, each
 // reference joined back to its target's eid, each JSON value as its JSON text
@@ -793,18 +796,46 @@ export let doom = (driver: Driver, vocab: Vocab, eids: string[]): Doom => {
 
 // The matched entities, with only `comps` when named. A membership query
 // returns entities; an aggregate query wants `rows()` instead.
+// An explicit property query opts into a derived value omitted by a whole
+// gather. Registries keep their identity so the projection caches still hit.
+let explicit = new WeakMap<Derived, Map<string, Derived>>()
+let requestedDerived = (query: And, derived: Derived): Derived => {
+  let wanted = new Set<string>()
+  let path = (segments: string[]) => {
+    let key = segments.join('.')
+    if (derived[key]?.whole === false) wanted.add(key)
+  }
+  map(query, (clause) => {
+    if ('path' in clause) path(clause.path)
+    if (clause.kind == 'order') path(clause.value.replace(/^-/, '').split('.'))
+    if (clause.kind == 'fields') clause.fields.forEach((f) => path(f.path))
+    return clause
+  })
+  if (!wanted.size) return derived
+  let key = [...wanted].sort().join(',')
+  let cache = at(explicit, derived, () => new Map())
+  return at(cache, key, () => ({
+    ...derived,
+    ...Object.fromEntries(
+      [...wanted].map((p) => [p, { ...derived[p], whole: true }]),
+    ),
+  }))
+}
+
 export let read = (
   driver: Driver,
   vocab: Vocab,
   query: Query,
   opts: BindOpts = {},
   comps?: string[],
-): Bundle[] =>
-  get(
+): Bundle[] => {
+  let parsed = ast(query)
+  let selected = rows(driver, vocab, parsed, opts)
+  return get(
     driver,
     vocab,
-    rows(driver, vocab, query, opts)
-      .filter((r) => r.eid != null).map((r) => String(r.eid)),
-    opts,
+    selected.filter((r) => r.eid != null).map((r) => String(r.eid)),
+    { ...opts, derived: requestedDerived(parsed, opts.derived ?? NONE) },
     comps,
   )
+}
