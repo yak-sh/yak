@@ -84,8 +84,6 @@ import { apex, type Host as HostEnv } from './host.ts'
 import { destroyed } from './sandbox.ts'
 import { vouched, type Who } from './session.ts'
 import { storeOf } from './door.ts'
-import { KERNEL } from './meta.ts'
-import { defect } from './sentry.ts'
 import { ending } from './billing.ts'
 import { NOTES } from './standing.ts'
 import {
@@ -496,17 +494,6 @@ let mark = (
   trashed: Record<string, never> | null,
 ) => dir.apply({ entities: [{ entity: { eid }, trashed }] }, vouched(who))
 
-// The directory commits first; a missed notification is reconciled at wake.
-let dormancy = async (env: Env, space: Space, app: App, asleep: boolean) => {
-  let r = await storeOf(env.STORE, storeName(space, app))(
-    asleep ? '/dormant' : '/revive',
-    { method: 'POST' },
-    KERNEL,
-  )
-  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`)
-  await r.body?.cancel()
-}
-
 // Into the trash: the mark, then the roster. Nothing else — the bytes, the
 // store, the deploys and the slug are all exactly where they were.
 export let trash = async (
@@ -517,30 +504,9 @@ export let trash = async (
   who: Who,
 ) => {
   await mark(dir, app.eid, who, {})
-  await dormancy(env, space, app, true)
   // A dormant store cannot describe its views. Tell the directory's members
   // directly, without asking the app for the declaration it stopped serving.
   await viewsMoved({ env, dir }, space)
-}
-
-// A store out of the trash, told to come back now for what its wakes are owed
-// (graph.ts `/alarm`). In the trash it fired nothing and armed nothing, so
-// nothing else would wake it; its first tick fires each wake once for the
-// whole stretch, and the cadence goes on from there. The restore has happened
-// whatever this answers, so a failure is reported rather than thrown.
-let woken = async (env: Env, space: Space, app: App) => {
-  let store = storeName(space, app)
-  try {
-    let r = await storeOf(env.STORE, store)(
-      '/alarm',
-      { method: 'POST' },
-      KERNEL,
-    )
-    if (!r.ok) throw new Error(`${r.status} ${await r.text()}`)
-    await r.body?.cancel()
-  } catch (e) {
-    defect(e, { request: 'restore wakes', store })
-  }
 }
 
 // And out of it. Both doors call this, the tool and the space page's form.
@@ -555,9 +521,7 @@ export let untrash = async (
   who: Who,
 ) => {
   await mark(dir, app.eid, who, null)
-  await dormancy(env, space, app, false)
   await rostered(env, dir, space, app)
-  await woken(env, space, app)
 }
 
 // Everyone in the space, told their reach moved (declared.ts, T-33004) — the
@@ -581,7 +545,6 @@ export let trashSpace = async (
   who: Who,
 ) => {
   await mark(dir, space.eid, who, {})
-  for (let app of await dir.apps(space)) await dormancy(env, space, app, true)
   await reachMoved(env, dir, space)
 }
 
@@ -593,12 +556,6 @@ export let untrashSpace = async (
 ) => {
   await mark(dir, space.eid, who, null)
   await reachMoved(env, dir, space)
-  for (let app of await dir.apps(space)) {
-    if (!app.trashed) {
-      await dormancy(env, space, app, false)
-      await woken(env, space, app)
-    }
-  }
 }
 
 // What a space's trashing says back — `went`'s opposite number, and the same

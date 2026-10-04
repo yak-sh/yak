@@ -786,19 +786,6 @@ export class Store {
     }
     return this.#checking ??= (async () => {
       let dormant = await this.#ctx.storage.get<boolean>?.('dormant')
-      if (!dormant) {
-        let id = this.#ctx.id?.toString()
-        let ns = this.#bind.STORE
-        if (
-          id && ns &&
-          ![PLATFORM_STORE, GIT_STORE].some((name) =>
-            String(ns.idFromName(name)) == id
-          )
-        ) {
-          let names = await directoryOf(ns).trashedStores()
-          dormant = names.some((name) => String(ns.idFromName(name)) == id)
-        }
-      }
       if (dormant) await this.#sleep()
       else this.#dormant = false
       return !this.#dormant
@@ -1881,19 +1868,6 @@ export class Store {
     if (Number.isFinite(at)) await this.#arming(new Date(at).toISOString())
   }
 
-  // Whether the app this store holds is in the trash, on its own or with its
-  // space (erase.ts). The word is the directory's, and it is asked here, where
-  // a firing is decided, rather than copied into this store: a trashed app is
-  // sent no request that could carry it, and a copy goes stale. The
-  // platform's own two stores hold no app and never ask.
-  #trashed = async (): Promise<boolean> => {
-    let app = this.#get('app')
-    let ns = this.#bind.STORE
-    if (!app || !ns) return false
-    let held = await directoryOf(ns).appAt(app)
-    return !!(held?.app.trashed || held?.space.trashed)
-  }
-
   /**
    * Fire the wakes due at `now`, then come back for the next one. The
    * runtime's own `alarm()` is this at the present instant; a caller naming
@@ -1904,10 +1878,10 @@ export class Store {
    * and the alarm is set a minute out so nothing is silently dropped.
    *
    * An app in the trash fires nothing and arms nothing: its wakes stay owed
-   * where they stood, and a restore brings the object back for them (`/alarm`,
-   * erase.ts `untrash`), when the stretch it sat out is one firing, as any
-   * stretch nobody was there for is. A directory that cannot say is asked
-   * again in a minute, never guessed at.
+   * where they stood, and a restore brings the object back for them (`/revive`,
+   * trash.ts `notify_trash`), when the stretch it sat out is one firing, as any
+   * stretch nobody was there for is. Dormancy is delivered durably by the
+   * directory; this store never polls it.
    */
   async tick(now = Date.now()): Promise<Ticked> {
     if (!await this.#awake()) return { fired: [], refused: [] }
@@ -1925,14 +1899,6 @@ export class Store {
   }
 
   async #tick(now: number): Promise<Ticked> {
-    let none: Ticked = { fired: [], refused: [] }
-    try {
-      if (await this.#trashed()) return none
-    } catch (e) {
-      defect(e, { request: 'wake trash', store: this.#name() })
-      await this.#owed(now, now + Store.RETRY)
-      return none
-    }
     let result = await tick(this.#clock, now)
     for (let { wake, error } of result.refused) {
       await this.#broke(`wake ${wake.entity.eid}`, error)
@@ -2380,12 +2346,13 @@ export class Store {
     }
     if (kernel && path == '/revive' && request.method == 'POST') {
       await this.#ctx.storage.put?.('dormant', false)
-      this.#dormant = null
+      this.#dormant = false
+      this.#ensureStarted()
+      if (this.#refused) return this.#stalled()
+      await this.#arming(new Date().toISOString())
+      return json({ ok: true })
     }
     if (!await this.#awake()) {
-      if (kernel && path == '/revive' && request.method == 'POST') {
-        return json({ ok: true })
-      }
       if (kernel && path == '/' && request.method == 'DELETE') {
         await this.#ctx.storage.deleteAll()
         return json({ ok: true })
@@ -2393,9 +2360,6 @@ export class Store {
       return this.#missing()
     }
     this.#ensureStarted()
-    if (kernel && path == '/revive' && request.method == 'POST') {
-      return json({ ok: true })
-    }
     let tally = this.#pending
     this.#pending = new Map()
     let run = () =>

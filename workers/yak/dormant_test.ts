@@ -1,4 +1,4 @@
-import { equal, test } from '@yaks/testing'
+import { equal, test, until } from '@yaks/testing'
 import { directory, fetch as directoryFetch, storeName } from './directory.ts'
 import { trash, untrash } from './erase.ts'
 import { Store } from './graph.ts'
@@ -59,6 +59,9 @@ test('trash makes a store dormant across every wake and restore keeps its data',
   }
   let who = { person: 'dormant-owner', role: 'owner' as const }
   await trash(p.env, dir, space, app, who)
+  await until(async () => await ctx.storage.get<boolean>('dormant') == true, {
+    label: 'trash delivered',
+  })
   equal(statements, 0)
   equal(await ctx.storage.getAlarm(), null)
   equal(closed > 0, true)
@@ -84,6 +87,9 @@ test('trash makes a store dormant across every wake and restore keeps its data',
   }
   equal(statements, 0)
   await untrash(p.env, dir, space, app, who)
+  await until(async () => await ctx.storage.get<boolean>('dormant') == false, {
+    label: 'restore delivered',
+  })
   let response = await ask(
     `/query?q=${encodeURIComponent(`.entity.eid=${eid}&.doc`)}`,
     undefined,
@@ -93,7 +99,7 @@ test('trash makes a store dormant across every wake and restore keeps its data',
   equal((await response.json())[0].doc.title, 'Keep me')
 })
 
-test('a store trashed before notification becomes dormant before boot', async () => {
+test('directory recovery delivers trash before the dormant store boots', async () => {
   using p = platform('missed trash probe')
   let dir = directory({ fetch: (r) => directoryFetch(r, p.env) }, true)
   let space = await dir.own('missed-owner', 'missed')
@@ -119,9 +125,56 @@ test('a store trashed before notification becomes dormant before boot', async ()
     statements++
     return exec(sql, ...args)
   }
+  await until(async () => await ctx.storage.get<boolean>('dormant') == true, {
+    label: 'trash reconciled',
+  })
   let store = new Store(ctx, p.env)
   await store.alarm()
   equal(await ctx.storage.getAlarm(), null)
   equal(statements, 0)
   equal((await store.fetch(new Request('http://store/vocab'))).status, 404)
+})
+
+test('an app store wake makes zero directory calls and directory SQL statements', async () => {
+  using p = platform('wake directory probe')
+  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) }, true)
+  let space = await dir.own('wake-owner', 'wake')
+  await dir.apply({
+    entities: [{
+      entity: { eid: '$app' },
+      app: {
+        slug: 'held',
+        space: space.eid,
+        store: 'wake/held.123456',
+        access: 'public',
+      },
+    }],
+  })
+  let app = (await dir.app(space, 'held'))!
+  let name = storeName(space, app)
+  let ask = storeOf(p.env.STORE, name, { eid: app.eid, access: 'public' })
+  await (await ask('/vocab', undefined, KERNEL)).body?.cancel()
+  let ctx = p.states.get(name)!
+  let directoryCtx = p.states.get('yak/platform')!
+  let calls = 0
+  let statements = 0
+  let get = p.env.STORE.get.bind(p.env.STORE)
+  p.env.STORE.get = (id) => {
+    let stub = get(id)
+    return {
+      fetch: (r: Request) => {
+        if (String(id) == 'yak/platform') calls++
+        return stub.fetch(r)
+      },
+    }
+  }
+  let exec = directoryCtx.storage.sql.exec.bind(directoryCtx.storage.sql)
+  directoryCtx.storage.sql.exec = (sql, ...args) => {
+    statements++
+    return exec(sql, ...args)
+  }
+  // The alarm path includes both first-incarnation dormancy and the tick gate.
+  let incarnation = new Store(ctx, p.env)
+  await incarnation.tick()
+  equal({ calls, statements }, { calls: 0, statements: 0 })
 })

@@ -97,14 +97,16 @@ rows and the hash. This is separate from the storage schema stamp.
 
 ## Trashed stores
 
-Trashing an app or its space notifies each app store (`erase.ts`). The store
-keeps a `dormant` object-storage mark, deletes its alarm and closes sockets.
-Every runtime entry checks that mark before graph boot or SQL; dormant fetches
-answer 404. First-wake reconciliation compares the object's ID with the
-directory's trashed store names, covering missed notifications without reading
-the app's SQL. The platform directory and git stores bypass this check: asking
-the directory while it waits on git would deadlock. Restore clears the mark
-and fires owed wakes; permanent erasure remains reachable while dormant.
+Trashing or restoring an app or its space commits a `notify_trash` effect
+in the directory alongside the mark (`trash.ts`). The effect tells every
+affected app store, retries failed delivery until acknowledged, and reads the
+present state so an older retry cannot undo a restore. A directory restart
+also reconciles existing trash marks through its effect sweep; app wakes
+never ask the directory about trash. The store keeps a `dormant` object-storage
+mark, deletes its alarm and closes sockets. Every runtime entry checks that
+mark before graph boot or SQL; dormant fetches answer 404. Restore clears the
+mark and arms the store for owed wakes. Permanent erasure remains reachable
+while dormant.
 
 ## An app's words
 
