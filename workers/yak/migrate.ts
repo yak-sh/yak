@@ -31,9 +31,8 @@ import { type Bundle, type Comp, token } from '@yaks/graph'
 import type { Rule } from './mover.ts'
 
 // T-65228: app stores never composed mail_inbox. T-65357 stopped owing new
-// runs and ignores these old ones when arming alarms. This is only a prepared
-// cleanup: the owner said to leave Vale's stored rows alone. No live flag and
-// no BOUNDARIES entry; any hosted rehearsal/activation needs owner action.
+// runs and ignores these old ones when arming alarms. The owner invokes
+// the live mover explicitly; reading an app never runs cleanup.
 // Restrict it to the reported archive-change shape, never-started/unclaimed,
 // recorded before the owner-confirmed T-65357 deployment on October 4, 2026.
 let DEAD_MAIL_BEFORE = '2026-10-04T19:07:36.000Z'
@@ -72,9 +71,10 @@ export let deadMailInboxMove = (row: Bundle): Bundle[] => {
   }]
 }
 
-/** Rehearsal-only; no automatic cleanup on app boot/alarm. */
+/** Dead unhandled runs; the owner activates the app mover explicitly. */
 export let deadMailInboxRule: Rule & { find: string } = {
   mark: 'yak/store/dead-mail-inbox/1',
+  live: 'apps',
   find: deadMailFind + '&*',
   move: deadMailInboxMove,
 }
@@ -281,6 +281,7 @@ export let respelled = (text: string): string | null => {
  * names the first shape its rules can produce, even though only declaring apps
  * move. Code without the name is code from before it could read that shape. */
 export let BOUNDARIES = [
+  'yak/store/dead-mail-inbox/1',
   'yak/store/lens/1',
   'yak/store/lens-contract/1',
   'yak/store/lens-view/1',

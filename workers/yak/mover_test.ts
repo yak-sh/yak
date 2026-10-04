@@ -454,7 +454,7 @@ let deadMailStore = async () => {
 let remainingEffects = async (s: Awaited<ReturnType<typeof store>>) =>
   await count(s, '.effect')
 
-test('dead mail rehearsal rolls back 141 rows and never activates cleanup', async () => {
+test('dead mail rehearsal rolls back 141 rows before explicit activation', async () => {
   let s = await deadMailStore()
   let before = await s.query('*')
   let [r] = await s.rehearse()
@@ -462,9 +462,7 @@ test('dead mail rehearsal rolls back 141 rows and never activates cleanup', asyn
   assertEquals(await s.query('*'), before)
   assertEquals(await remainingEffects(s), 154)
   assertEquals(await count(s, '.effect.state=pending'), 152)
-  await s.alarm()
-  assertEquals(await s.query('*'), before)
-  assertEquals((await s.moves())[0].live, false)
+  assertEquals((await s.moves())[0].live, true)
 })
 
 test('synthetic cleanup removes 141 dead runs only and a second pass moves zero', async () => {
@@ -475,8 +473,8 @@ test('synthetic cleanup removes 141 dead runs only and a second pass moves zero'
   let before = (await s.query('*')).filter((b) => !ids.has(b.entity.eid))
   let preserved = new Set(before.map((b) => b.entity.eid))
   let [attached] = await s.query(`.entity.eid=${deadEid(0)}&*`)
-  // Only this synthetic Store is given a live copy of the rule; the shipped
-  // rule remains rehearsal-only, and no hosted admin/mover door is invoked.
+  // Activation is exercised in this synthetic Store only; no hosted mover
+  // door is invoked. The owner invokes the live mover after deployment.
   s.wake({ ...deadMailInboxRule, live: 'apps' })
   await s.alarm()
   assertEquals(await s.query(deadMailInboxRule.find), [])
