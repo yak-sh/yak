@@ -105,14 +105,16 @@ export let attributed = async (
   return { filled: bundles.length, more: bundles.length == size }
 }
 
+// Registration is owed with the write, including its first updated stamp.
+// Pending runs recover through the pool; settled guest stamps owe nothing
+// on restart, even while they still have no author.
 export let registrationDoc: VocabDoc = {
   $defs: {
     register_writes: {
       effect: true,
-      created: ['created'],
+      created: ['created', 'updated'],
       changed: ['updated'],
       active: '(.created.via !created.by|.updated.via !updated.by)',
-      sweep: '(.created.via !created.by|.updated.via !updated.by)',
       description: 'register this browser’s guest work for durable attribution',
     },
   },
