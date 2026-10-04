@@ -81,6 +81,19 @@ and entities without history. Standing journal tables and rows stay untouched;
 deleting them would itself incur billed writes. Declaring journal names in an
 app manifest does not enable the journal.
 
+## Idle alarms and schema pages
+
+An app alarm fires its stored wakes, moves owed schema rows, runs pending
+effects and drains queued embeddings (`graph.ts`). Each incarnation joins the
+effect pool once, including its restart sweeps. A failed embedding pass keeps
+its queued text and retries; its crash-recovery alarm includes the provider
+timeout plus the retry interval, so it cannot outrun the failure retry.
+
+Schema pages come from @yaks/code's `described`: `_vocab.hash` skips an unchanged
+vocabulary, and a changed hash diffs the rows rather than rewriting every page.
+First installation writes all descriptions; later changes write only changed
+rows and the hash. This is separate from the storage schema stamp.
+
 ## An app's words
 
 A store's vocabulary is the platform's core documents plus the app's own

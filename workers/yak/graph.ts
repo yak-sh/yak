@@ -2215,11 +2215,13 @@ export class Store {
     }
     let name = this.#name()
     this.#vectorWork = (async () => {
-      // Back after this slice whatever becomes of it: an object evicted while
-      // it drains takes up the rest on its alarm.
+      // Recover a pass killed in provider I/O after its timeout plus the
+      // retry interval. An earlier crash alarm would also survive a provider
+      // failure: arm() preserves earlier duties, bypassing the catch's retry.
+      // A successful incomplete slice explicitly schedules its continuation.
       if (this.#owes()) {
         await this.#arming(
-          new Date(Date.now() + Store.EMBED + PAUSE).toISOString(),
+          new Date(Date.now() + Store.EMBED + Store.RETRY).toISOString(),
         )
       }
       do {

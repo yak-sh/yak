@@ -458,3 +458,18 @@ test('finite pool passes leave newly owed work for the next wake', async () => {
   assertEquals(a.ran, ['p1', 'p2'])
   assertEquals(a.oops, [])
 })
+
+test('a restart sweep selects identities without projecting every target', async () => {
+  let s = store(), bare = graph({ storage: s, vocab: pooledBlog })
+  await bare.apply([post('p1'), post('p2')])
+  let p = proc(s), read = p.g.read.bind(p.g)
+  p.fx.handle({ post_swept: (e) => void p.ran.push(e.entity.eid) })
+  p.g.read = (query, opts) => {
+    if (query == '.post') throw Error('sweep projected target components')
+    return read(query, opts)
+  }
+  await p.fx.work(p.g)
+  await p.fx.idle()
+  assertEquals(p.ran.sort(), ['p1', 'p2'])
+  assertEquals(p.oops, [])
+})

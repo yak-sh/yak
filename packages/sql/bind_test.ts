@@ -125,7 +125,10 @@ test('a derived read is NULL where the component is not worn', () => {
     sql,
   )
   // and the narrowing a value test keeps, now that the read can carry it
-  assert(sql.includes('("task"."entity" is not null and '), sql)
+  assert(
+    sql.includes('"entity"."id" in (select "task"."entity" from "task")'),
+    sql,
+  )
   // over a dereferenced leaf the component is a row of its own, not a column
   let deref = compile(parse('.note.about.task.status=empty'), v, {
     derived: blind,

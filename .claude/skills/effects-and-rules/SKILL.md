@@ -92,7 +92,10 @@ What to get right:
   the graph owes nothing (43b4d4e26). Keep its no-change case cheap: compare a
   stored hash before diffing (749273e48, `_vocab{hash}`).
 - **`sweep`** is a query whose matches are owed a run again whenever a worker
-  starts: for work a commit never wrote down.
+  starts: for work a commit never wrote down. The pool selects identities, not
+  projected target components; the handler reads the present target when it
+  runs. Projecting targets here needlessly evaluates every matched session's
+  computed status and cost (T-65228).
 - **Bound work by rows, not time** inside a Worker: the clock doesn't move
   while code runs.
 - **A failure is seen** (M-37965): the pool reports it, and `yak effect check`

@@ -529,15 +529,18 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     query: string,
     tries = 3,
   ): Promise<void> => {
-    let found = (await g.read(query)) as Bundle[]
+    // A sweep owes runs to identities. Projecting targets here evaluates
+    // computed properties (session status/cost) again for every match, though
+    // only the eid is used; the handler reads its current target when it runs.
+    let found = (await g.rows(query)) as { eid: Eid }[]
     if (!found.length) return
     let held = await g.read(and(
       eq(`${EFFECT}.handler`, s.id),
       eq(`${EFFECT}.state`, 'pending'),
     ))
     let owed = new Set(held.map((b) => String((b[EFFECT] as Comp).target)))
-    let due = found.filter((b) => !owed.has(b.entity.eid))
-    let eids = due.map((b) => sweptEid(s.id, b.entity.eid))
+    let due = found.filter((b) => !owed.has(b.eid))
+    let eids = due.map((b) => sweptEid(s.id, b.eid))
     let was = new Map(
       (await g.get(eids)).map((b) => [b.entity.eid, b[EFFECT] as Comp]),
     )
@@ -546,7 +549,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       entity: { eid: eids[i] },
       [EFFECT]: {
         handler: s.id,
-        target: b.entity.eid,
+        target: b.eid,
         comp: s.effect!.created![0],
         kind: 'created',
         state: 'pending',

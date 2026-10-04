@@ -503,6 +503,11 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     ctx.derived[`${hop.comp}.${hop.prop}`]?.worn !== false &&
     needs(op, flat(p.value))
   if (!needsComp) return cond(frag)
+  // A derived expression is opaque to SQLite's outer-join strength reduction.
+  // Name its owning set explicitly; a CASE guard cannot make it seek that set.
+  if (ctx.derived[`${hop.comp}.${hop.prop}`]) {
+    return and(owned(ctx, hop.comp), cond(frag))
+  }
   let owner = ctx.d.col(hop.comp, 'eid', ctx.v)!
   return cond({
     sql: `(${owner} is not null and ${frag.sql})`,
@@ -1104,7 +1109,21 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   let all: string[] = []
   let none: string[] = []
   let rest: Clause[] = []
-  let cs = addressed(ctx, flattened(clauses)).flatMap((c) => {
+  let siblings = flattened(clauses)
+  // Value tests imply component presence too. Only disjunctions need this
+  // explicit sibling: direct predicates already narrow their own selection.
+  let scopes = siblings.some((c) => c.kind == 'or')
+    ? siblings.flatMap((c): Clause[] => {
+      if (c.kind != 'pred' || c.not || c.where || c.path.length != 2) return []
+      let [comp, prop] = c.path
+      return comp != 'entity' && ctx.v.prop(comp, prop) &&
+          ctx.derived[`${comp}.${prop}`]?.worn !== false &&
+          needs(opOf(c), flat(c.value))
+        ? [present(comp)]
+        : []
+    })
+    : []
+  let cs = addressed(ctx, [...siblings, ...scopes]).flatMap((c) => {
     let x = rungs(ctx, c)
     return x?.kind == 'and' ? x.clauses : [x ?? c]
   })
@@ -1121,24 +1140,23 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
 }
 
 // An OR's indexed arms are selected before the outer WHERE is applied. Carry
-// an exact entity address into each arm so a scoped query seeks that entity
-// instead of running every arm over the whole graph first. This runs for every
-// conjunction, including the ones made here for an OR arm; nested disjunctions
-// inherit the address as well.
+// its required components and exact entity addresses into each arm: applying
+// the narrowing only outside a UNION still scans every entity inside it.
+// Nested disjunctions inherit the same scope.
 let addressed = (ctx: Ctx, cs: Clause[]): Clause[] => {
-  let eid = cs.find((c): c is Pred =>
-    c.kind == 'pred' && c.path.join('.') == 'entity.eid' && c.op == '=' &&
-    c.value != null && !c.not && !c.where &&
-    !claims(ctx, 'pred')
+  let scope = cs.filter((c): c is Pred =>
+    c.kind == 'pred' && !c.not && !c.where && !claims(ctx, 'pred') &&
+    (c.path.join('.') == 'entity.eid' && c.op == '=' && c.value != null ||
+      c.path.length == 1 && c.op == '!')
   )
-  return eid
+  return scope.length
     ? cs.map((c) =>
       c.kind == 'or'
         ? {
           ...c,
           clauses: c.clauses.map((alt): And => ({
             kind: 'and',
-            clauses: [eid, alt],
+            clauses: [...scope, alt],
           })),
         }
         : c
