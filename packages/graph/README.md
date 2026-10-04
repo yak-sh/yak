@@ -455,6 +455,13 @@ ordinary reference validation. `g.address(ids, kind)` also says which component
 the ids are meant to name, so a plugin may answer to a key only that kind has:
 @yaks/session resolves a run's own harness id only when a session is meant.
 
+Tool inputs and writes resolve reference values through `referenced(graph, ids,
+kind)`: registered addresses first, then exact document titles of the declared
+kind. A word eid takes precedence only while its entity has components and no
+tombstone. An unresolved word is refused instead of being stored as an empty
+identity; UUIDs and content hashes remain direct eids. References to entities
+created in the same batch, including `$aliases`, need no name lookup.
+
 ### Derived eids
 
 `derivedEid(text)` derives a version-8 UUID from SHA-256. The vocabulary's

@@ -3,6 +3,13 @@
  * needs. */
 import type { Actor, Bundle, Comp, Eid } from './bundle.ts'
 import type { Surface, Tool } from './plugin.ts'
+import { alive } from './bundle.ts'
+import { minted } from './mint.ts'
+import { Refused } from './admit.ts'
+import type { ReadTx } from './storage.ts'
+import type { Vocab } from '@yaks/vocab'
+import { after, each } from '@yaks/fp'
+import { and, eq, present, want } from '@yaks/query'
 
 let part = (call: Bundle, comp: string): Comp | undefined =>
   call[comp] as Comp | undefined
@@ -37,15 +44,7 @@ export let who = (call: Bundle): Actor | null => {
     : null
 }
 
-/**
- * The ids a caller passed, resolved to the eids they refer to — through
- * whatever a plugin resolves (a name, a human-readable id, a key only `kind`
- * has), and left as they are when no plugin resolves them, since an eid needs
- * no resolution.
- *
- * A tool's arguments declared as references are resolved before the tool is
- * handed them (@yaks/tools); this is for an id that arrives any other way.
- */
+/** Resolve registered addresses for callers that supply their own fallback. */
 export let addressed = async (
   graph: {
     address: (
@@ -59,6 +58,60 @@ export let addressed = async (
   let at = await graph.address(ids, kind)
   return ids.map((id) => at.get(id) ?? id)
 }
+
+/**
+ * Resolve a reference through registered addresses, then an exact title of
+ * the requested kind. Only a live word eid takes precedence over a name;
+ * minted ids retain identity even when absent or deleted.
+ */
+export let referenced = (
+  graph: Pick<ReadTx, 'get' | 'read'> & {
+    vocab: Vocab
+    address: (
+      ids: string[],
+      kind?: string,
+    ) => Map<string, Eid> | Promise<Map<string, Eid>>
+  },
+  ids: string[],
+  kind = 'entity',
+): Eid[] | Promise<Eid[]> =>
+  after(graph.address(ids, kind), (at) => {
+    let eids = ids.map((id) => at.get(id) ?? id)
+    let words = eids.filter((id) => !!id && !id.startsWith('$') && !minted(id))
+    if (!words.length) return eids
+    return after(graph.get(words), (rows) => {
+      let held = new Map(rows.map((b) => [b.entity.eid, b]))
+      return each(
+        ids.map((said, i) => ({ said, i })),
+        eids,
+        (out, { said, i }) => {
+          if (!words.includes(eids[i]) || alive(held.get(eids[i]))) return out
+          let matches = graph.vocab.prop('doc', 'title')
+            ? graph.read(and(
+              eq('doc.title', said),
+              ...kind == 'entity' ? [] : [present(kind)],
+              want('entity'),
+            ))
+            : []
+          return after(matches, (found) => {
+            if (found.length > 1) {
+              throw new Refused(
+                `${said} names several ${kind} candidates: ` +
+                  found.map((b) => b.entity.eid).join(', ') + '; use an id',
+              )
+            }
+            if (!found.length) {
+              throw new Refused(
+                `${said} names ${kind == 'entity' ? 'nothing' : `no ${kind}`}`,
+              )
+            }
+            out[i] = found[0].entity.eid
+            return out
+          })
+        },
+      )
+    })
+  })
 
 /** The three fields that decide what a tool is called — all `toolName` reads,
  * so it can be called on a command whose `run` and result types belong to

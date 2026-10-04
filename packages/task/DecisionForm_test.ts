@@ -8,6 +8,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { kernel, kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { desk, draftDoc, drafts } from '@yaks/draft'
+import { docDoc } from '@yaks/doc'
 import { taskDoc } from './comp.ts'
 import { tasks } from './plugin.ts'
 import { answerPlace, DecisionForm } from './DecisionForm.ts'
@@ -26,13 +27,18 @@ let question: Bundle = {
 }
 
 let form = async () => {
-  let vocab = loadVocab([kernelDoc, taskDoc, draftDoc], [kernelKeywords])
+  let vocab = loadVocab([kernelDoc, taskDoc, draftDoc, docDoc], [
+    kernelKeywords,
+  ])
   let g = graph({
     vocab,
     storage: ram(vocab),
     plugins: [kernel(), tasks(), drafts()],
   })
-  await g.apply([question])
+  await g.apply([question, {
+    entity: { eid: 'reader' },
+    doc: { title: 'Reader' },
+  }])
   let words = desk({
     mutate: (b) => g.apply(signed(b, { by: 'reader' })),
     watch: () => signal([]),

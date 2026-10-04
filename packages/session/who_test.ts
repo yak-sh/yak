@@ -14,6 +14,7 @@ import { sessions } from './plugin.ts'
 
 let spine: VocabDoc = {
   $defs: {
+    person: { component: true, properties: {} },
     entity: {
       component: true,
       type: 'object',
@@ -33,6 +34,7 @@ let store = () => {
   g.apply([
     { entity: { eid: 's1' }, session: { id: 'abc', actor: 'p1' } },
     { entity: { eid: 's2' }, session: { id: 'def' } },
+    { entity: { eid: 'p1' }, person: {} },
   ], { trusted: true })
   return graph({ storage: s, vocab, plugins: [ids(vocab)] })
 }

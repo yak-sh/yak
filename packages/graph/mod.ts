@@ -102,6 +102,7 @@ export {
   type NamedTool,
   namedTool,
   offered,
+  referenced,
   type ToolId,
   toolName,
   who,

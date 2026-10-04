@@ -6,15 +6,13 @@
 // handed one that names nothing, or it mints an entity under it.
 
 import {
-  addressed,
   type Graph,
-  minted,
   type NamedTool,
+  referenced,
+  Refused,
   TOMBSTONE,
 } from '@yaks/graph'
 import { validateToolInput } from '@yaks/vocab/tools'
-import { and, eq, present, want } from '@yaks/query'
-import { human } from '@yaks/id'
 
 /** Expected invocation failures, not programming defects. */
 export class CallError extends Error {
@@ -85,10 +83,10 @@ let ids = (v: unknown): string[] =>
     typeof x == 'string' && x != ''
   )
 
-let missing = (key: string, kind: string, said: string): CallError =>
+let missing = (kind: string, said: string): CallError =>
   new CallError(
     'arguments',
-    `${key}: ${said} names ${kind == 'entity' ? 'nothing' : `no ${kind}`}`,
+    `${said} names ${kind == 'entity' ? 'nothing' : `no ${kind}`}`,
   )
 
 /**
@@ -105,37 +103,22 @@ export let resolved = async (
   for (let [key, kind] of refs(tool.inputSchema)) {
     let said = ids(args[key])
     if (!said.length) continue
-    let eids = await addressed(graph, said, kind)
+    let eids: string[]
+    try {
+      eids = await referenced(graph, said, kind)
+    } catch (error) {
+      if (error instanceof Refused) {
+        throw new CallError('arguments', error.message)
+      }
+      throw error
+    }
     let held = new Map((await graph.get(eids)).map((b) => [b.entity.eid, b]))
     for (let i = 0; i < said.length; i++) {
       let row = held.get(eids[i])
-      if (!row && !minted(eids[i])) {
-        let matches = graph.vocab.prop('doc', 'title')
-          ? await graph.read(and(
-            eq('doc.title', said[i]),
-            ...kind == 'entity' ? [] : [present(kind)],
-            want('entity'),
-          ))
-          : []
-        if (matches.length > 1) {
-          let id = human(graph.vocab)
-          throw new CallError(
-            'arguments',
-            `${key}: ${said[i]} names several ${kind} candidates: ` +
-              matches.map((b) => `${id(b)} (${b.entity.eid})`).join(', ') +
-              '; use an id',
-          )
-        }
-        row = matches[0]
-        if (row) eids[i] = row.entity.eid
-        else {
-          throw missing(key, kind, said[i])
-        }
-      }
       if (
         !tool.readOnly && (!row || row[TOMBSTONE] != null || row[kind] == null)
       ) {
-        throw missing(key, kind, said[i])
+        throw missing(kind, said[i])
       }
     }
     out[key] = Array.isArray(args[key]) ? eids : eids[0]

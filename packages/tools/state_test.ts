@@ -35,7 +35,7 @@ for (let sql of [false, true]) {
     s.install()
     let g = graph({ vocab, storage: s })
     await g.apply([
-      { entity: { eid: 'owner' } },
+      { entity: { eid: 'owner' }, session: {} },
       { entity: { eid: 'held' }, execution: { by: 'owner' } },
       { entity: { eid: 'done' }, execution: { by: 'owner' } },
       { entity: { eid: 'failed' }, execution: {} },

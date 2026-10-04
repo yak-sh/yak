@@ -313,6 +313,12 @@ for (let async of [false, true]) {
     }])
     let storage = memory()
     let one = graph({ storage: async ? slow(storage) : storage, vocab })
+    await one.apply(
+      ['ada', 'visitor'].map((eid) => ({
+        entity: { eid },
+        doc: { title: eid },
+      })),
+    )
     let created = '2026-01-01T00:00:00.000Z'
     let updated = '2026-01-02T00:00:00.000Z'
     await one.apply(

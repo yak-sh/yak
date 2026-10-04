@@ -449,6 +449,10 @@ import { equal } from '@yaks/testing'
 const vocab = loadVocab([toolsDoc])
 const records = graph({ vocab, storage: ram(vocab) })
 const host = graph({ vocab, storage: ram(vocab) })
+await records.apply([{
+  entity: { eid: 'server' },
+  content: { body: 'Runner' },
+}])
 await host.apply([{ entity: { eid: 'source' }, content: { body: 'hello' } }])
 const read: Tool = {
   name: 'read',

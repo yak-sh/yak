@@ -132,6 +132,11 @@ export let dead = (b: Bundle): boolean =>
  */
 export let gives = (b: Bundle): boolean => comps(b).some(([, c]) => c != null)
 
+/** Whether a whole stored row is a live entity, rather than an empty identity
+ * or a tombstone. */
+export let alive = (b: Bundle | undefined): b is Bundle =>
+  !!b && !dead(b) && gives(b)
+
 /** Whether a bundle raced a delete: its `$was` names a value the writer read,
  * which a tombstoned entity no longer holds. A `$was` naming only `null` read
  * nothing, and is a blind write.

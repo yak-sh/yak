@@ -8,7 +8,8 @@
 // ambiguity, since a name is unique in the store, so exactly one entity has it
 // or none does.
 //
-// EIDS are checked first. An id that is an entity here means that entity, even
+// Live eids are checked first. An id with components and no tombstone means
+// that entity, even
 // if some other entity has the same string as a name. A caller who wrote an id
 // down must never find their write land on a different row because a name was
 // later created over it.
@@ -21,7 +22,7 @@
 
 import type { Eid, Tx } from '@yaks/graph'
 import { after } from '@yaks/fp'
-import { minted } from '@yaks/graph'
+import { alive, minted } from '@yaks/graph'
 import { ofOf } from '@yaks/key'
 import { aliasEid } from './comp.ts'
 
@@ -49,9 +50,8 @@ export let addressed = (
     let by = new Map(rows.map((b) => [b.entity.eid, b]))
     let at = new Map<string, Eid>()
     for (let id of ask) {
-      // Eids first: an id that is an entity here is that entity, name or no
-      // name. Only otherwise is it looked up as a name.
-      if (by.has(id)) continue
+      // A live eid wins. An empty identity or tombstone is only a name.
+      if (alive(by.get(id))) continue
       let of = ofOf(by.get(aliasEid(id)))
       if (of) at.set(id, of)
     }

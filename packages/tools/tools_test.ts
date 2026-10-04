@@ -66,6 +66,14 @@ let words = (extra: Record<string, unknown> = {}) =>
 let world = (tools: Tool[] = [echo], owner?: string) => {
   let vocab = words()
   let g = graph({ vocab, storage: ram(vocab, { computed: executionComputed }) })
+  if (owner) {
+    g.apply(
+      ['host1', 'host2', 'dead'].map((eid) => ({
+        entity: { eid },
+        person: {},
+      })),
+    )
+  }
   return { g, r: runner(g, { tools, owner, report: () => {} }) }
 }
 
@@ -351,6 +359,7 @@ test('a call is held from the moment it is written, by whoever asked it', async 
       fx.on(rule.plan, (e) => other.due(e.entity.eid))
     }
   }
+  await here.apply([{ entity: { eid: 'host1' }, person: {} }])
   let asking = runner(here, { tools: [peek], owner: 'host1' })
   await asking.ensure()
   let answer = await asking.call(called('example_echo', { value: 'mine' }))
@@ -752,7 +761,7 @@ test('a write naming nothing of its kind is refused, and mints nothing', async (
     )
     assertEquals(
       body(answer.find((b) => b.refusal)),
-      `CallError: who: ${who} names no person`,
+      `CallError: ${who} names no person`,
     )
   }
   assertEquals(await g.get(['ghost']), [])

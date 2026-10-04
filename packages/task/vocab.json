@@ -135,6 +135,10 @@
         "domain": {
           "type": "string",
           "description": "the area of work"
+        },
+        "check": {
+          "type": "boolean",
+          "description": "rehearse the write and roll it back, returning the resolved task without saving it"
         }
       },
       "required": [

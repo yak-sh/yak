@@ -61,7 +61,15 @@ import {
   scope,
 } from '@yaks/trace'
 import { after, each, isPromise } from '@yaks/fp'
-import { type Actor, type Bundle, comps, dead, type Eid } from './bundle.ts'
+import {
+  type Actor,
+  type Bundle,
+  type Comp,
+  comps,
+  dead,
+  type Eid,
+  gives,
+} from './bundle.ts'
 import type { ReadTx, Row, Storage, Tx } from './storage.ts'
 import { detached, type Query, type ReadOpts } from './storage.ts'
 import type {
@@ -104,6 +112,7 @@ import { state } from './state.ts'
 import { addressing } from './said.ts'
 import { flat, named, only, projection } from './projection.ts'
 import { NeedsWrite, rehearsing } from './admission.ts'
+import { referenced } from './tool.ts'
 
 /** Checking options. `overlay` is the host's already admitted, canonical
  * component values, used to check a partial patch's complete proposed value.
@@ -1046,6 +1055,45 @@ export let graph = (opts: Options): Graph => {
         : observe(committed)
     }
 
+    // Resolve only the refs admission keeps. Server-owned or computed input
+    // values that admission discards must not introduce a lookup or refusal.
+    let referring = (named: Bundle[]): Bundle[] | Promise<Bundle[]> => {
+      let targets = new Set(
+        named.filter((row) => gives(row) && !dead(row))
+          .map((row) => row.entity.eid),
+      )
+      let refs = named.flatMap((row, i) =>
+        comps(row).flatMap(([comp, patch]) =>
+          Object.entries(patch ?? {}).flatMap(([prop, value]) => {
+            let p = vocab.prop(comp, prop)
+            return p?.category == 'ref' && typeof value == 'string' &&
+                !isAlias(value) && !targets.has(value)
+              ? [{ i, comp, prop, value, kind: String(p.ref) }]
+              : []
+          })
+        )
+      )
+      return each(
+        refs,
+        named,
+        (out, { i, comp, prop, value, kind }) =>
+          after(
+            referenced(
+              { ...outsideRead(), vocab, address },
+              [value],
+              kind,
+            ),
+            ([eid]) => {
+              out[i] = {
+                ...out[i],
+                [comp]: { ...out[i][comp] as Comp, [prop]: eid },
+              }
+              return out
+            },
+          ),
+      )
+    }
+
     // The run, end to end: the phases before the transaction, the transaction,
     // and then the return value — composed once, at the point every exit from
     // `apply()` passes through, the commit and a dry run's rollback alike.
@@ -1060,7 +1108,9 @@ export let graph = (opts: Options): Graph => {
           outside,
           (b) =>
             after(
-              address(reached(b, vocab).filter((id) => !isAlias(id))),
+              address(
+                b.map((row) => row.entity.eid).filter((id) => !isAlias(id)),
+              ),
               (at) => substitute(b, vocab, at),
             ),
         ),
@@ -1068,15 +1118,18 @@ export let graph = (opts: Options): Graph => {
           'admit',
           outside,
           (b) =>
-            admit(
-              requested(
-                o.replica ? known(b, vocab) : b,
-                plugins.flatMap((p) => p.requests ?? []),
+            after(
+              admit(
+                requested(
+                  o.replica ? known(b, vocab) : b,
+                  plugins.flatMap((p) => p.requests ?? []),
+                ),
+                vocab,
+                o.trusted,
+                opts.teach,
+                o.replica,
               ),
-              vocab,
-              o.trusted,
-              opts.teach,
-              o.replica,
+              referring,
             ),
         ),
         // Derive the id, then check it still matches: an id derived from a
