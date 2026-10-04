@@ -19,6 +19,20 @@ test('the slice is storable', () => {
   assertEquals(storable(slice), [])
 })
 
+test('entity-named references are storable properties', () => {
+  assertEquals(
+    storable(doc({
+      during: {
+        type: 'object',
+        properties: {
+          entity: { type: 'string', ref: 'entity', death: 'keep' },
+        },
+      },
+    })),
+    [],
+  )
+})
+
 test('JSON text and JSON values are storable', () => {
   let schema = (value: PropSchema) =>
     doc({ config: { type: 'object', properties: { value } } })

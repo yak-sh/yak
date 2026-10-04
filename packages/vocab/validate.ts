@@ -237,7 +237,7 @@ export let storable = (doc: VocabDoc): string[] => {
       )
     }
     for (let [prop, s] of Object.entries(schema.properties ?? {})) {
-      if (!NAME.test(prop) || prop == 'entity' || prop == 'eid') {
+      if (!NAME.test(prop) || prop == 'eid') {
         errs.push(`${comp}.${JSON.stringify(prop)} is not a property name`)
       }
       errs.push(...storableProp(comp, prop, s))

@@ -13,11 +13,12 @@ anything.
 
 ## Stored data
 
-- `bug{fault, hits, last}` sits on a task (@yaks/task) filed for a failure.
-  `fault` is the key two failures share when they are the same failure: the
-  broken entity's kind, the message with its ids, paths, timestamps and numbers
-  taken out, and the top frame of the stack. `hits` counts how often it was
-  caught while the task was open, and `last` says when.
+- `bug{fault, hits, last}` ([`@yaks/tracker`](../tracker/README.md)) sits on a
+  task (@yaks/task) filed for a failure. `fault` is the key two failures share
+  when they are the same failure: the broken entity's kind, the message with its
+  ids, paths, timestamps and numbers taken out, and the top frame of the stack.
+  `hits` counts how often it was caught while the task was open, and `last` says
+  when.
 - `fixer{bug}` sits on a session started to fix that task.
 - `nofix{}` sits on a project. Bugs filed under it start no fixer; on the home
   project (config `project`), no bug starts one.
@@ -50,6 +51,9 @@ The `@yaks/heal/effects` handlers, after each commit:
    starts. A bug never gets a second fixer.
 
 ## Config
+
+Load `@yaks/tracker` beside `@yaks/heal`: tracker declares `bug`; heal declares
+`fixer` and `nofix` and contributes the handlers.
 
 ```json
 {

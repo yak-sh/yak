@@ -22,6 +22,7 @@ import { modelDoc } from '@yaks/model'
 import { sessionDoc } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { processDoc } from '@yaks/process'
+import { bugDoc } from '@yaks/tracker/vocab'
 import { effects, type Options } from './effects.ts'
 import { healDoc } from './vocab.ts'
 
@@ -48,6 +49,7 @@ let host = async (options: Options = {}) => {
       toolsDoc,
       modelDoc,
       processDoc,
+      bugDoc,
       healDoc,
     ],
     [kernelKeywords, idKeywords, nameKeywords, edgeKeywords],
