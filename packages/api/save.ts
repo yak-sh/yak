@@ -11,8 +11,9 @@ import {
   signed,
 } from '@yaks/graph'
 import { saveOf, syncOf } from '@yaks/vocab'
-import { and, eq, parse } from '@yaks/query'
+import { and, bare, type Clause, eq, parse, timeEdges } from '@yaks/query'
 import type { Timer } from './relay.ts'
+import { type Interest, interest } from './interest.ts'
 
 /** The receiving door's identity and vocabulary versions, never client claims. */
 export type PeerWriter = {
@@ -26,6 +27,9 @@ type Value<C> = {
   row: Bundle
   connected: boolean
   dirty: boolean
+  waiting?: boolean
+  reading?: boolean
+  invalidated?: boolean
   cancel?: () => void
 }
 
@@ -50,37 +54,157 @@ export let saving = <C>(
     v.cancel = undefined
     if (values.get(key) === v) values.delete(key)
   }
+  // A clock can move a relative-time comparison only when its property
+  // exists and the other eligibility predicates already hold. Preserve those
+  // predicates (notably .player) instead of polling every nonmatching entity.
+  let clockQuery = (query: Clause): Clause | null => {
+    let timed = false
+    let relax = (c: Clause): Clause => {
+      if (c.kind == 'and' || c.kind == 'or') {
+        let clauses = c.clauses.map(relax)
+        return clauses.some((part, i) => part !== c.clauses[i])
+          ? { ...c, clauses }
+          : c
+      }
+      if (c.kind != 'pred') return c
+      if (c.where) {
+        // Under a negative quantifier, making the child easier makes the
+        // parent harder. A clock-sensitive negative association is possible,
+        // not its negated presence approximation.
+        let where = relax(c.where)
+        let changed = where !== c.where
+        if (c.not && changed) return { kind: 'and', clauses: [] }
+        return changed ? { ...c, where } : c
+      }
+      if (!c.value || c.op == '~=') return c
+      let assoc = graph.vocab.assoc(c.path[0])
+      if (assoc && c.path.length == 1) return c
+      let [leaf] = graph.vocab.aim(
+        (assoc ? c.path.slice(1) : c.path).join('.'),
+        bare(c),
+      ).slice(-1)
+      let prop = leaf && graph.vocab.prop(leaf.comp, leaf.prop)
+      if (prop?.scalar != 'time' && prop?.scalar != 'number') return c
+      let text = (v: NonNullable<typeof c.value>): string =>
+        v.kind == 'list'
+          ? v.items.map(text).join(',')
+          : v.kind == 'range'
+          ? text(v.lo) + (v.exclusiveEnd ? '...' : '..') + text(v.hi)
+          : v.raw
+      let op = c.op == '!=' ? '=' : c.op
+      let edges = timeEdges(op, text(c.value), now())
+      if (
+        !edges ||
+        JSON.stringify(edges) ==
+          JSON.stringify(timeEdges(op, text(c.value), now() + 366 * 86_400_000))
+      ) return c
+      timed = true
+      // A negative comparison can hold for a missing value as well.
+      return c.not || c.op == '!='
+        ? { kind: 'and', clauses: [] }
+        : { ...c, op: '!', value: null }
+    }
+    let out = relax(query)
+    return timed ? out : null
+  }
+  let later = (key: string, v: Value<C>, ms: number) => {
+    v.cancel?.()
+    v.cancel = timer(() => {
+      v.cancel = undefined
+      try {
+        let out = save(key, v)
+        if (isPromise(out)) return out.catch((err) => failed(v.conn, err))
+      } catch (err) {
+        failed(v.conn, err)
+      }
+    }, ms)
+  }
   let save = (key: string, v: Value<C>) => {
     v.cancel?.()
     v.cancel = undefined
+    v.waiting = false
     if (!v.dirty) return
+    v.reading = true
+    v.invalidated = false
     let [comp] = comps(v.row)[0]
-    let query = and(
-      eq('entity.eid', v.row.entity.eid),
-      parse(saveOf(graph.vocab, comp)!),
-    )
-    return after(graph.read(query, { now: now(), native: true }), (rows) => {
-      if (!rows.length) {
-        // Queries can change with time or another stored write. Recheck only
-        // while a value is pending, including the last one after disconnect.
-        v.cancel = timer(() => {
-          v.cancel = undefined
-          try {
-            let out = save(key, v)
-            if (isPromise(out)) return out.catch((err) => failed(v.conn, err))
-          } catch (err) {
-            failed(v.conn, err)
+    let condition = parse(saveOf(graph.vocab, comp)!)
+    let scope = eq('entity.eid', v.row.entity.eid)
+    let failedRead = (err: unknown): never => {
+      v.reading = false
+      v.waiting = true
+      throw err
+    }
+    let rows: Bundle[] | Promise<Bundle[]>
+    try {
+      rows = graph.read(and(scope, condition), { now: now(), native: true })
+    } catch (err) {
+      return failedRead(err)
+    }
+    return after(
+      isPromise(rows) ? rows.catch(failedRead) : rows,
+      (rows) => {
+        v.reading = false
+        if (!rows.length) {
+          v.waiting = true
+          if (v.invalidated) {
+            later(key, v, 0)
+            return
           }
-        }, 1000)
-        return
-      }
-      let row = v.row
-      return after(graph.apply(signedRows([row], v.writer)), () => {
-        if (v.row === row) v.dirty = false
-        if (!v.connected || comps(row)[0][1] == null) forget(key, v)
-      })
-    })
+          let clock = clockQuery(condition)
+          if (!clock) return
+          return after(
+            graph.read(and(scope, clock), { now: now(), native: true }),
+            (possible) => {
+              if (possible.length) later(key, v, 1000)
+            },
+          )
+        }
+        let row = v.row
+        return after(graph.apply(signedRows([row], v.writer)), () => {
+          if (v.row === row) v.dirty = false
+          if (!v.connected || comps(row)[0][1] == null) forget(key, v)
+        })
+      },
+    )
   }
+  // A non-clock eligibility change is owed by a commit, not by an endless
+  // timer. Recheck after the write releases; graph.apply may be asynchronous
+  // and this hook must never wait for registry work that contains that write.
+  let interests = new Map<string, Interest | null>()
+  let changed = (v: Value<C>, bundles: Bundle[]) => {
+    let [comp] = comps(v.row)[0]
+    if (!interests.has(comp)) {
+      interests.set(
+        comp,
+        interest(
+          parse(saveOf(graph.vocab, comp)!),
+          graph.vocab,
+          () => true,
+        ),
+      )
+    }
+    let i = interests.get(comp)
+    return !i || i.unseen ||
+      bundles.some((b) =>
+        comps(b).some(([name]) =>
+          i.far.has(name) || i.via.has(name) ||
+          (b.entity.eid == v.row.entity.eid && i.near.has(name))
+        )
+      )
+  }
+  graph.use({
+    name: '@yaks/api/save',
+    hooks: {
+      effect: (bundles) => {
+        for (let [key, v] of values) {
+          if (!v.dirty || !changed(v, bundles)) continue
+          if (v.reading) v.invalidated = true
+          else if (v.waiting) later(key, v, 0)
+        }
+        return bundles
+      },
+    },
+  })
   let write = (
     conn: C,
     bundles: Bundle[],

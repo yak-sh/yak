@@ -1595,3 +1595,99 @@ test('app schema reads and writes leave old journal tables untouched across boot
     1,
   )
 })
+
+test(
+  'closing a Store with unsaveable wildlife settles, while an eligible final save completes',
+  async () => {
+    let ctx = state()
+    using _db = ctx.storage
+    let manifest = JSON.stringify({
+      $defs: {
+        recipe: { component: true, properties: { serves: { type: 'number' } } },
+        position: {
+          component: true,
+          sync: 'peers',
+          durable: 'forever',
+          save: '.recipe (!position.at | .position.at<="30s ago")',
+          properties: { x: { type: 'number' }, at: { type: 'number' } },
+        },
+      },
+    })
+    let store = await cookbook(ctx, manifest)
+    let at = Date.now()
+    using _clock = stub(Date, 'now', () => at)
+    let timers = new Map<number, { fn: () => void; at: number }>(), id = 0
+    let set = globalThis.setTimeout, clear = globalThis.clearTimeout
+    using _timer = stub(
+      globalThis,
+      'setTimeout',
+      ((fn: () => void, ms: number) => {
+        if (ms == 16) return set(fn, ms)
+        timers.set(--id, { fn, at: at + ms })
+        return id
+      }) as typeof setTimeout,
+    )
+    using _clear = stub(globalThis, 'clearTimeout', (id) => {
+      if (typeof id != 'number' || !timers.delete(id)) clear(id)
+    })
+    let tick = (ms: number) => {
+      at += ms
+      for (let [id, t] of [...timers]) {
+        if (t.at <= at) {
+          timers.delete(id)
+          t.fn()
+        }
+      }
+    }
+    await post(store, '/apply', [{
+      entity: { eid: CAKE },
+      recipe: { serves: 8 },
+    }], owner)
+    let ws = wire()
+    let actor = await store.door.authenticate(
+      new Request('http://store/ws', { headers: headers(owner) }),
+    )
+    ws.serializeAttachment({ writer: { actor } })
+    ctx.live.push(ws)
+    let wildlife = Array.from({ length: 4 }, () => crypto.randomUUID())
+    // Stored entities without recipe are never eligible, despite the time arm.
+    await post(
+      store,
+      '/apply',
+      wildlife.map((eid) => ({ entity: { eid } })),
+      owner,
+    )
+    await store.webSocketMessage(
+      ws,
+      JSON.stringify({
+        relay: [...wildlife, CAKE].map((eid) => ({
+          entity: { eid },
+          position: { x: 7, at },
+        })),
+      }),
+    )
+    await store.webSocketMessage(
+      ws,
+      JSON.stringify({
+        relay: [{ entity: { eid: CAKE }, position: { x: 9, at: at + 1 } }],
+      }),
+    )
+    await store.webSocketClose(ws)
+    tick(1000)
+    // Only the eligible hero owns a clock retry. The four wildlife values own none.
+    assertEquals(timers.size, 1)
+    tick(30_000)
+    assertEquals(timers.size, 0)
+    let rows = await (await get(store, '/query?q=.position', owner))
+      .json() as Bundle[]
+    assertEquals(rows.map((b) => b.position), [{ x: 9, at: at - 31_000 + 1 }])
+    await post(store, '/apply', [{
+      entity: { eid: CAKE },
+      recipe: { serves: 9 },
+    }], owner)
+    tick(0)
+    assertEquals(timers.size, 0)
+    assertEquals((await get(store, '/query?q=.recipe', owner)).status, 200)
+  },
+  { tags: ['T-65211'] },
+)

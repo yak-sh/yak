@@ -2,14 +2,17 @@
 import { equal, test, throws } from '@yaks/testing'
 import { type Bundle, type Comp, graph, Refused } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { loadVocab } from '@yaks/vocab'
+import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { fake, req, shop } from './testing.ts'
 import { api } from './route.ts'
 import { saving } from './save.ts'
 import { type Frame, subscriptions } from './subs.ts'
 
-let fixture = (query = '!position | .updated.at<="1s ago"') => {
-  let vocab = loadVocab([...shop.docs, {
+let fixture = (
+  query = '!position | .updated.at<="1s ago"',
+  extra: VocabDoc[] = [],
+) => {
+  let vocab = loadVocab([...shop.docs, ...extra, {
     $defs: {
       position: {
         component: true,
@@ -333,4 +336,130 @@ test('a query that never matches never saves, including clears and disconnect', 
   f.tick(1000)
   equal(f.read(), undefined)
   equal(f.commits.length, 0)
+})
+
+test('disconnecting an ineligible timed save settles until storage can change eligibility', () => {
+  let f = fixture('.book (!position | .updated.at<="1s ago")')
+  let reads = 0
+  let read = f.g.read.bind(f.g)
+  f.g.read = (...args) => {
+    reads++
+    return read(...args)
+  }
+  f.saved.write('wildlife', f.write(7))
+  f.saved.drop('wildlife')
+  f.tick(1000)
+  equal(f.timers.size, 0)
+  let settled = reads
+  for (let i = 0; i < 60; i++) f.tick(1000)
+  equal(reads, settled)
+  equal(f.commits.length, 0)
+  f.g.apply([{ entity: { eid: 'b' }, book: { status: 'draft' } }])
+  equal(f.timers.size, 0)
+  equal(reads, settled)
+  // The pending admitted value is not thrown away: eligibility is a stored
+  // fact, and a commit making it true must wake it without clock polling.
+  f.g.apply([{ entity: { eid: 'a' }, book: { status: 'draft' } }])
+  f.tick(0)
+  equal(f.read(), { x: 7 })
+  equal(f.timers.size, 0)
+})
+
+test('save queries without a clock wake on relevant commits, not periodic reads', () => {
+  let f = fixture('.book.status=shelved')
+  f.g.apply([{ entity: { eid: 'a' }, book: { status: 'draft' } }])
+  f.saved.write('one', f.write(7))
+  f.saved.drop('one')
+  equal(f.timers.size, 0)
+  f.g.apply([{ entity: { eid: 'a' }, book: { status: 'shelved' } }])
+  equal(f.timers.size, 1)
+  f.tick(0)
+  equal(f.read(), { x: 7 })
+  equal(f.timers.size, 0)
+})
+
+test('a relevant commit during an asynchronous eligibility read is rechecked', async () => {
+  let f = fixture('.book.status=shelved')
+  f.g.apply([{ entity: { eid: 'a' }, book: { status: 'draft' } }])
+  let read = f.g.read.bind(f.g), release!: () => void, first = true
+  f.g.read = (...args) => {
+    let rows = read(...args)
+    if (!first) return rows
+    first = false
+    return new Promise<Bundle[]>((resolve) =>
+      release = () => resolve(rows as Bundle[])
+    )
+  }
+  let writing = f.saved.write('one', f.write(7))
+  f.g.apply([{ entity: { eid: 'a' }, book: { status: 'shelved' } }])
+  release()
+  await writing
+  f.tick(0)
+  equal(f.read(), { x: 7 })
+  equal(f.timers.size, 0)
+})
+
+test('a negated association time condition can become eligible without a commit', () => {
+  let f = fixture('.book .reviews!.created.at>"1s ago"')
+  f.g.apply([{ entity: { eid: 'a' }, book: { status: 'draft' } }, {
+    entity: { eid: 'review' },
+    review: { book: 'a' },
+  }])
+  f.saved.write('one', f.write(7))
+  f.saved.drop('one')
+  equal(f.read(), undefined)
+  equal(f.timers.size, 1)
+  f.tick(1001)
+  equal(f.read(), { x: 7 })
+  equal(f.timers.size, 0)
+})
+
+test('computed eligibility wakes on its referenced dependency', () => {
+  let f = fixture('.book.ready=1', [{
+    $defs: {
+      book: {
+        component: true,
+        extends: true,
+        type: 'object',
+        properties: {
+          ready: { type: 'number', computed: true, reads: ['review.book'] },
+        },
+      },
+    },
+  }])
+  let read = f.g.read.bind(f.g)
+  // Stand in only for computing the property; dependency metadata and the
+  // real save boundary decide whether a referenced commit wakes the value.
+  f.g.read = (q, opts) =>
+    JSON.stringify(q).includes('ready')
+      ? (read('.review.book=a', opts) as Bundle[]).length
+        ? read('.entity.eid=a', opts)
+        : []
+      : read(q, opts)
+  f.g.apply([{ entity: { eid: 'a' }, book: { status: 'draft' } }])
+  f.saved.write('one', f.write(7))
+  f.saved.drop('one')
+  equal(f.timers.size, 0)
+  f.g.apply([{ entity: { eid: 'review' }, review: { book: 'a' } }])
+  f.tick(0)
+  equal(f.read(), { x: 7 })
+  equal(f.timers.size, 0)
+})
+
+test('a failed eligibility read can wake again on a relevant stored change', async () => {
+  let f = fixture('.book.status=shelved')
+  f.g.apply([{ entity: { eid: 'a' }, book: { status: 'draft' } }])
+  f.saved.write('one', f.write(7))
+  let read = f.g.read.bind(f.g), broken = true
+  f.g.read = (...args) =>
+    broken ? Promise.reject(new Error('read failed')) : read(...args)
+  f.g.apply([{ entity: { eid: 'a' }, book: { price: 3 } }])
+  f.tick(0)
+  await Promise.resolve()
+  await Promise.resolve()
+  broken = false
+  f.g.apply([{ entity: { eid: 'a' }, book: { status: 'shelved' } }])
+  f.tick(0)
+  equal(f.read(), { x: 7 })
+  equal(f.timers.size, 0)
 })

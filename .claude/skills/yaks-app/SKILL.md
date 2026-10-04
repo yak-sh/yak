@@ -141,6 +141,12 @@ lives in `public/docs/components.md`, and a test checks it.
   the owner, only for an act he asked for (M-31958).
 - An app's own errors surface through `app_errors` and the unseen block
   (`unseen.ts`).
+- Row profiles count SQL statements, not invocation events. Their operation
+  labels follow asynchronous work, including timers created by a socket close;
+  a repeated `ws close` bucket can be a pending save retry rather than repeated
+  close callbacks (`packages/durable-object/profile.ts`, `packages/api/save.ts`).
+  For a save query, distinguish an entity waiting on time from one missing its
+  non-time eligibility; only the former owns a clock retry.
 - Examples to look at live in the `yourname` space (M-37804).
 
 ## Tests
