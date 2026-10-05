@@ -403,29 +403,22 @@ test('.entity.num and a human id name entities by their spine number', () => {
   assertEquals(both.params, ['["a3f1"]', '[7]'])
 })
 
-test('an OR compiles as a union of indexed selections of spine ids', () => {
+test('an OR compiles independent selections and keeps operand order', () => {
   let either = compile(parse('.doc.title=a|.task.priority=1'), v)
-  let [head, arms] = either.sql.split('"entity"."id" in (')
-  assert(head.includes('from "entity"'), either.sql)
-  // one arm per alternative, each its own selection over the same joins
-  assertEquals(arms.split(/\bunion\b/).length, 2)
-  assert(arms.startsWith('select "entity"."id" from "entity"'), arms)
-  assertEquals(either.params, ['a', 1])
+  assert(either.sql.includes('union'), either.sql)
+  assert(either.sql.includes('"__candidates"'), either.sql)
+  assertEquals(either.params, ['a', 1, 'a', 1])
 })
 
-test('a wide OR is cut into compounds workerd will take', () => {
-  // Six alternatives is a sixth term, which workerd refuses (compound.ts) —
-  // the tray's own or is seven. Each group stays one indexed `in`.
+test('a wide OR nests capped compounds and keeps its operands', () => {
   let wide = compile(
     parse(
       '.doc.title=a|.doc.body=b|.task.priority=1|.note.stars=2|.doc.title=c|.task.priority=3',
     ),
     v,
   )
-  let groups = wide.sql.split('"entity"."id" in (').slice(1)
-  assertEquals(groups.length, 2)
-  for (let g of groups) assert(g.split(/\bunion\b/).length <= ARMS, g)
-  assertEquals(wide.params, ['a', 'b', 1, 2, 'c', 3])
+  assert(wide.sql.includes('select * from ('), wide.sql)
+  assertEquals(wide.params, ['a', 'b', 1, 2, 'c', 3, 'a', 'b', 1, 2, 'c', 3])
 })
 
 test('a spine value that is no operand list keeps the column road', () => {

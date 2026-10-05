@@ -121,6 +121,7 @@ type Ctx = {
   ext: Extension[]
   now: number
   tables: Set<string>
+  candidates?: Frag
   owner?: string
   archetypes?: ArchetypeSet
   /** the computed component whose rows this query reads as its spine, when it
@@ -786,25 +787,44 @@ let inRefs = (ctx: Ctx, refs: [string, string][], value: string): Cond => {
 // is what forced this shape. Each group is still one indexed `in`, so the cut
 // costs nothing that the scan it replaced did not.
 let union = (ctx: Ctx, alts: Clause[]): Cond => {
-  let conds = alts.map((x) => clause(ctx, x))
-  let joins = joinsOf(ctx)
-  // Over the entity table alone (presence tests answered by the archetype
-  // column, and columns of the entity table itself) a disjunction can already
-  // use an index, and a tree of presence tests keeps its boolean shape.
-  if (!joins.length) return or(...conds)
-  let picks = conds.map((where) =>
-    render(rel(ctx.d.spine, { cols: [ctx.d.ownerKey('entity')], joins, where }))
+  let branches = alts.map((x) => {
+    let branch = { ...ctx, tables: new Set<string>(), candidates: undefined }
+    let where = clause(branch, x)
+    return { branch, where, joins: joinsOf(branch), x }
+  })
+  if (branches.every((b) => !b.joins.length)) {
+    return or(...branches.map((b) => b.where))
+  }
+  let picks = branches.map(({ branch, where, joins, x }) =>
+    render(indexedRelation(branch, [x], ctx.d.spine, {
+      cols: [`${ctx.d.ownerKey('entity')} as id`],
+      joins,
+      where,
+    }))
   )
-  return or(
-    ...cut(picks, ARMS).map((group) =>
-      cond({
-        sql: `${ctx.d.ownerKey('entity')} in (${
-          group.map((a) => a.sql).join(' union ')
-        })`,
-        params: group.flatMap((a) => a.params),
-      })
-    ),
-  )
+  let groups = cut(picks, ARMS).map((group) => ({
+    sql: group.map((a) => a.sql).join(' union '),
+    params: group.flatMap((a) => a.params),
+  }))
+  // Nest each capped compound as one arm. OR-ing several IN selections lets
+  // stale estimates choose a scan of the outer spine; one IN seeks the union.
+  while (groups.length > ARMS) {
+    groups = cut(groups, ARMS).map((group) => ({
+      sql: group.map((g) => `select * from (${g.sql})`).join(' union '),
+      params: group.flatMap((g) => g.params),
+    }))
+  }
+  let candidates = {
+    sql: groups.map((g) =>
+      groups.length == 1 ? g.sql : `select * from (${g.sql})`
+    ).join(' union '),
+    params: groups.flatMap((g) => g.params),
+  }
+  ctx.candidates ??= candidates
+  return cond({
+    sql: `${ctx.d.ownerKey('entity')} in (${candidates.sql})`,
+    params: candidates.params,
+  })
 }
 
 // The left JOINs for the tables this bind touched, keyed on the row they hang
@@ -1379,6 +1399,76 @@ export let tallied = (tag: Tag): 'number' | 'text' | null =>
     ? 'text'
     : null
 
+// Every arm owns its indexed selection; unrelated alternatives share no joins.
+let indexedRelation = (
+  ctx: Ctx,
+  clauses: Clause[],
+  from: string,
+  o: Parameters<typeof rel>[1],
+): Select => {
+  let root: { comp: string; index: string } | undefined
+  if (!ctx.spine && !claims(ctx, 'pred') && ctx.d.indexed) {
+    for (let c of flattened(clauses)) {
+      if (c.kind != 'pred' || c.not || c.where || c.path.length != 2) continue
+      let [comp, prop] = c.path
+      let p = ctx.v.prop(comp, prop)
+      if (
+        comp == 'entity' || !p || p.computed || computed(ctx.v, comp) ||
+        ctx.derived[`${comp}.${prop}`] || !needs(opOf(c), flat(c.value)) ||
+        opOf(c) == EXISTS || opOf(c) == '~'
+      ) continue
+      let index = ctx.v.indexes(comp).find((i) =>
+        i.props[0] == prop && !i.present
+      )
+      if (
+        !index || ctx.d.table(comp) != `"${comp}"` ||
+        source(ctx, comp) != `"${comp}"`
+      ) continue
+      root = { comp, index: `${comp}_${index.props.join('_')}` }
+      break
+    }
+  }
+  let s = rel(from, o)
+  if (!root) {
+    if (!ctx.candidates || ctx.spine || from != '"entity"') return s
+    return {
+      ...s,
+      from: raw(
+        `(${ctx.candidates.sql}) as "__candidates"`,
+        ctx.candidates.params,
+      ),
+      joins: [
+        {
+          how: 'cross',
+          src: raw(from, [], 'entity'),
+          on: raw(`"__candidates"."id" = ${ctx.d.ownerKey('entity')}`),
+        },
+        ...s.joins ?? [],
+      ],
+    }
+  }
+  let src = ctx.d.indexed?.(root.comp, root.index)
+  if (!src) return s
+  return {
+    ...s,
+    from: raw(src),
+    joins: [
+      {
+        how: 'cross',
+        src: raw(from, [], 'entity'),
+        on: raw(ctx.d.joinOn(root.comp, 'entity')),
+      },
+      ...o.joins.filter((j) => j.source != ctx.d.table(root!.comp)).map((
+        j,
+      ): Join => ({
+        how: 'left',
+        src: raw(j.source),
+        on: raw(j.on),
+      })),
+    ],
+  }
+}
+
 /** A query as the statement that answers it: the one function `compile`
  * renders. */
 export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Select =>
@@ -1415,52 +1505,8 @@ export let bound = (
   // sparse/empty range a seek rather than a scan of historical component rows.
   // Only mandatory conjunctions qualify; optional and OR arms must retain
   // their outer joins, as must derived values and alternate backing sources.
-  let root: { comp: string; index: string } | undefined
-  if (!spine && !claims(ctx, 'pred') && d.indexed) {
-    for (let c of flattened(ast.clauses)) {
-      if (c.kind != 'pred' || c.not || c.where || c.path.length != 2) continue
-      let [comp, prop] = c.path
-      let p = vocab.prop(comp, prop)
-      if (
-        comp == 'entity' || !p || p.computed || computed(vocab, comp) ||
-        ctx.derived[`${comp}.${prop}`] || !needs(opOf(c), flat(c.value)) ||
-        opOf(c) == EXISTS || opOf(c) == '~'
-      ) continue
-      let index = vocab.indexes(comp).find((i) =>
-        i.props[0] == prop && !i.present
-      )
-      if (
-        !index || ctx.d.table(comp) != `"${comp}"` ||
-        source(ctx, comp) != `"${comp}"`
-      ) continue
-      root = { comp, index: `${comp}_${index.props.join('_')}` }
-      break
-    }
-  }
-  let relation = (from: string, o: Parameters<typeof rel>[1]): Select => {
-    let s = rel(from, o)
-    if (!root) return s
-    let src = ctx.d.indexed?.(root.comp, root.index)
-    if (!src) return s
-    return {
-      ...s,
-      from: raw(src),
-      joins: [
-        {
-          how: 'cross',
-          src: raw(from, [], 'entity'),
-          on: raw(ctx.d.joinOn(root.comp, 'entity')),
-        },
-        ...o.joins.filter((j) => j.source != ctx.d.table(root!.comp)).map((
-          j,
-        ): Join => ({
-          how: 'left',
-          src: raw(j.source),
-          on: raw(j.on),
-        })),
-      ],
-    }
-  }
+  let relation = (from: string, o: Parameters<typeof rel>[1]): Select =>
+    indexedRelation(ctx, ast.clauses, from, o)
   // A new query, and what the rest of it selects. An extension that remembers
   // what it resolved for one query is told here, before any clause compiles, so
   // that what a long-lived extension remembers is always this query's; one that
