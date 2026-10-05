@@ -222,7 +222,7 @@ let skills = board(h.panels.skills, {
     h.toast('Every skill forgotten. Spend the points again.')
   },
 })
-let log = journal(h.panels.journal, { pin: g.pin })
+let log = journal(h.panels.journal, { pin: g.pin }, uiState)
 let trades = ledger(h.panels.trades, tradePreview, uiState)
 // A quest taken from a notice board is pinned while it is on offer, so the
 // way to whoever gives it is tracked; a villager's job is agreed to.

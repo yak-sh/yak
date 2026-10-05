@@ -13,6 +13,8 @@
  * - `Stack`: panes stacked as a person goes, those under the top one strips
  *   that return to them; `stackAt`, `panesOf`, `stacked`, `cut`, `LIMIT`,
  *   its eid and bundles, pure (./Stack.ts).
+ * - `Disclosure`: a summary opening optional content; `disclosureAt`,
+ *   `isOpen`, `disclosed`, its page eid and bundles, pure (./Disclosure.ts).
  * - `Ux`, `useHost`, `Host`: what a page hands down, once per tree
  *   (./host.ts).
  * - `useEdit`, `Editing`: an `Edit`'s state, read and changed by whoever
@@ -50,6 +52,13 @@ export {
   views,
 } from './Edit.ts'
 export { Text, type TextProps } from './Text.ts'
+export {
+  disclosed,
+  Disclosure,
+  disclosureAt,
+  type DisclosureProps,
+  isOpen,
+} from './Disclosure.ts'
 export {
   cut,
   LIMIT,

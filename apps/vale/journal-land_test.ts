@@ -1,9 +1,9 @@
 // Land membership, bounded local suggestions and journal ordering share the
 // same task rows the tracker and journal render.
 import { equal, ok, test } from '@yaks/testing'
-import { parseHTML } from 'linkedom'
+import { withJournal } from './journal_fixture.ts'
 import { GIVERS, QUESTS } from './quests.ts'
-import { journal, landsOf, quest, type Task, tracked } from './journal.ts'
+import { landsOf, quest, type Task, tracked } from './journal.ts'
 
 let task = (
   id: string,
@@ -102,35 +102,26 @@ test('journal groups lands current first and keeps each lifecycle section', () =
   equal(landsOf([], 'mossvale'), [])
 })
 
-test('journal renders land headings with local work before remote work', () => {
-  let { document } = parseHTML('<html><body><main></main></body></html>')
-  let body = document.querySelector('main')!
-  let page = {
-    body,
-    open: true,
-    show: () => {},
-    close: () => {},
-    toggle: () => {},
-  }
-  let list = journal(page, { pin: () => {} })
-  list.show([
-    task('away', 'birchmere'),
-    task('local', 'mossvale'),
-    task('offer', 'mossvale', 'open'),
-    task('done', 'mossvale', 'done', 10),
-  ], 'mossvale')
-  equal(
-    [...body.querySelectorAll('[data-select]')].map((node) =>
-      node.getAttribute('data-select')
-    ),
-    ['local', 'offer', 'done', 'away'],
-  )
-  ok(body.querySelector('h2')!.textContent.endsWith(' · Here'))
-  list.show([task('away', 'birchmere'), task('local', 'mossvale')], 'birchmere')
-  equal(
-    [...body.querySelectorAll('[data-select]')].map((node) =>
-      node.getAttribute('data-select')
-    ),
-    ['away', 'local'],
-  )
-})
+test('journal renders land headings with local work before remote work', () =>
+  withJournal(({ body, view, click }) => {
+    let rows = [
+      task('away', 'birchmere'),
+      task('local', 'mossvale'),
+      task('offer', 'mossvale', 'open'),
+      task('done', 'mossvale', 'done', 10),
+    ]
+    view.show(rows, 'mossvale')
+    let shown = () =>
+      [...body.querySelectorAll('[data-select]')].map((node) =>
+        node.getAttribute('data-select')
+      )
+    equal(shown(), ['local', 'offer', 'away'])
+    ok(body.querySelector('h2')!.textContent.endsWith(' · Here'))
+    click('[data-completed=mossvale]')
+    equal(shown(), ['local', 'offer', 'done', 'away'])
+    view.show(
+      [task('away', 'birchmere'), task('local', 'mossvale')],
+      'birchmere',
+    )
+    equal(shown(), ['away', 'local'])
+  }))

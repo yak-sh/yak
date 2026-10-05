@@ -4,6 +4,19 @@
   },
   "title": "ux",
   "$defs": {
+    "Disclosure": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "A disclosure's open state on the consumer-named page entity; missing state is closed.",
+      "properties": {
+        "open": {
+          "type": "boolean",
+          "description": "whether the disclosure's content is shown"
+        }
+      }
+    },
     "Edit": {
       "component": true,
       "type": "object",

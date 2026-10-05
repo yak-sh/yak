@@ -7,7 +7,9 @@ import { h, type JSX } from 'preact'
 import { useEffect, useMemo } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { client } from '@yaks/client'
+import type { Bundle } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
+import { Disclosure, disclosureAt } from './Disclosure.ts'
 import { Edit } from './Edit.ts'
 import { Text } from './Text.ts'
 import { panesOf, Stack, stackAt, stacked } from './Stack.ts'
@@ -20,6 +22,34 @@ let domain = {
   $defs: {
     Sample: { component: true, properties: { title: { type: 'string' } } },
   },
+}
+
+let DisclosureSample = ({ open }: { open: boolean }): JSX.Element => {
+  let front = useMemo(
+    () => client(loadVocab([uxDoc]), [], { vault: false, wireVault: false }),
+    [],
+  )
+  let row = useSignal<Bundle>({
+    entity: { eid: disclosureAt(`guide/${open}`) },
+    Disclosure: { open },
+  })
+  useEffect(() => {
+    front.mutate([row.value])
+    let watch = front.watch('.Disclosure', { remote: false })
+    let off = watch.subscribe((rows) => {
+      if (rows[0]) row.value = rows[0]
+    })
+    return () => {
+      off()
+      watch.close()
+      front.close()
+    }
+  }, [])
+  return h(Disclosure, {
+    e: row.value,
+    onChange: (b) => void front.mutate([b]),
+    summary: 'Completed',
+  }, h('p', {}, 'The village is safe.'))
 }
 
 // Read-only text specimens do not type drafts. A real editor uses the
@@ -86,6 +116,22 @@ export let kit: Kit = defineKit({
   description: 'Controlled editing and navigation in the page graph',
   vocab: uxDoc,
   components: {
+    Disclosure: {
+      Component: Disclosure,
+      description:
+        'A summary that opens consumer-supplied content, emitting a page bundle',
+      state: ['Disclosure'],
+      specimens: () => [
+        [
+          'Closed; press the summary to show content',
+          h('div', {}, h(DisclosureSample, { open: false })),
+        ],
+        [
+          'Open; press the summary to hide content',
+          h('div', {}, h(DisclosureSample, { open: true })),
+        ],
+      ],
+    },
     Edit: {
       Component: Edit,
       description:

@@ -9,7 +9,7 @@
     "./completion": "./completion.ts"
   },
   "license": "Apache-2.0",
-  "description": "Controlled Preact components for editing properties, stacking panes and completing input. Component state lives in a page graph; drafts and emitted bundles belong to the caller.",
+  "description": "Controlled Preact components for editing properties, stacking panes, opening disclosures and completing input. Component state lives in a page graph; drafts and emitted bundles belong to the caller.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "preact": "npm:preact@^10.29.1",

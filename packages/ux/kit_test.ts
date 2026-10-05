@@ -114,11 +114,13 @@ test('kit state must be declared, CamelCase and page-only', () => {
   )
 })
 
-test('base facet exposes Edit, Stack and Text with their shared state', () => {
+test('base facet supplies its controlled components with page vocabulary', () => {
   assertEquals(ux.base, kit)
-  assertEquals(Object.keys(kit.components), ['Edit', 'Stack', 'Text'])
   assertEquals(kit.components.Text.state, kit.components.Edit.state)
   let v = loadVocab(kitDocs(ux))
+  for (let piece of Object.values(kit.components)) {
+    for (let state of piece.state) assertEquals(v.comp(state)?.sync, 'none')
+  }
   assertEquals(v.comp('Edit')?.sync, 'none')
   assertEquals(v.comp('Stack')?.durable, 'connection')
   assertEquals(v.comp('Refused')?.durable, '0s')
@@ -156,6 +158,14 @@ test('base and external specimens draw, Stack emits and keeps its controlled row
           buttons[buttons.length - 1].click()
           await tick()
           assertEquals(root.textContent?.includes('Detail pane'), true)
+        } else if (piece == kit.components.Disclosure) {
+          let shown = !!root.querySelector('p')
+          root.querySelector('button')!.click()
+          await tick()
+          assertEquals(!!root.querySelector('p'), !shown)
+          root.querySelector('button')!.click()
+          await tick()
+          assertEquals(!!root.querySelector('p'), shown)
         } else {
           assertEquals(!!root.textContent, true)
         }

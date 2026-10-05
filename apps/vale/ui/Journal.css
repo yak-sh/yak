@@ -5,6 +5,65 @@
   gap: 0.5rem;
 }
 
+.Journal_Land {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.Journal_Status {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--quest) 16%, var(--paper));
+  color: var(--quest);
+}
+
+.Journal_Row-open {
+  --quest: var(--caution);
+}
+
+.Journal_Row-taken {
+  --quest: var(--info);
+}
+
+.Journal_Row-done {
+  --quest: var(--positive);
+}
+
+.Journal_State,
+.Journal_Tracked {
+  color: var(--quest);
+}
+
+.Journal_Row small.Journal_State {
+  color: var(--quest);
+}
+
+.Journal_Completed {
+  color: var(--positive);
+}
+
+.Journal_Toggle {
+  display: flex;
+  align-items: center;
+  justify-content: start;
+  gap: 0.35rem;
+  width: 100%;
+  color: var(--positive);
+}
+
+.Journal_Toggle::after {
+  content: '+';
+  margin-left: auto;
+}
+
+.Journal_Toggle[aria-expanded='true']::after {
+  content: '−';
+}
+
 .Journal_Head {
   margin: 0.4rem 0 0;
   font-size: 0.82rem;

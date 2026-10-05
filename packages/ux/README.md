@@ -1,8 +1,8 @@
 # @yaks/ux
 
-Controlled Preact components for editing properties, stacking panes and
-completing input. Component state lives in a page graph; drafts and emitted
-bundles belong to the caller.
+Controlled Preact components for editing properties, stacking panes, opening
+disclosures and completing input. Component state lives in a page graph; drafts
+and emitted bundles belong to the caller.
 
 A **UX component** supplies behavior between [@yaks/ui](../ui/README.md)'s
 presentation and an application's data. It takes a
@@ -96,13 +96,13 @@ try {
 
 ## Exports
 
-| Entry point           | Provides                                                                                                                                                           |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@yaks/ux`            | `Edit`, `Text`, `Stack`; `Ux`, `useHost`, `useOwner`; `useEdit`; state, emission, formatting and picker helpers; `defineKit`, `kitDocs`; `completion`; their types |
-| `@yaks/ux/views`      | `editorViews`, `views`: editor registrations and their registry                                                                                                    |
-| `@yaks/ux/vocab`      | `uxDoc`, `docs`, `description`: the UX vocabulary documents and package summary                                                                                    |
-| `@yaks/ux/ui`         | `kit`, `ux`: the base UX kit and `{ base: kit }`                                                                                                                   |
-| `@yaks/ux/completion` | `completion`; `typed`, `placed`, `moved`, `taken`, `dismissed`, `act`, `CAP`; controller, input and transition types                                               |
+| Entry point           | Provides                                                                                                                                                                         |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/ux`            | `Edit`, `Text`, `Stack`, `Disclosure`; `Ux`, `useHost`, `useOwner`; `useEdit`; state, emission, formatting and picker helpers; `defineKit`, `kitDocs`; `completion`; their types |
+| `@yaks/ux/views`      | `editorViews`, `views`: editor registrations and their registry                                                                                                                  |
+| `@yaks/ux/vocab`      | `uxDoc`, `docs`, `description`: the UX vocabulary documents and package summary                                                                                                  |
+| `@yaks/ux/ui`         | `kit`, `ux`: the base UX kit and `{ base: kit }`                                                                                                                                 |
+| `@yaks/ux/completion` | `completion`; `typed`, `placed`, `moved`, `taken`, `dismissed`, `act`, `CAP`; controller, input and transition types                                                             |
 
 ## Kits from outside
 
@@ -187,9 +187,9 @@ for page-only state rather than requesting a server subscription.
 
 A package's `./ui` facet exports `ux = {toggle}` beside any `kits`, `themes` and
 `skins` it contributes. `@yaks/ux/ui` exports `kit` and `ux = {base: kit}`:
-`Edit`, `Stack` and `Text`, with labelled Preact specimens. `Text` shares `Edit`
-state. **Refused** is the transient event component emitted when input cannot be
-read; its `said` property is the reason. The guide reads
+`Edit`, `Stack`, `Disclosure` and `Text`, with labelled Preact specimens. `Text`
+shares `Edit` state. **Refused** is the transient event component emitted when
+input cannot be read; its `said` property is the reason. The guide reads
 `components[name].description` and `specimens()` without importing UX or
 invoking its component references. Guide identities must include the kind and
 kit name: UI `base/Edit` and UX `base/Edit` are separate entries even though
@@ -313,20 +313,49 @@ tree.props.onChange(cut(next, 0))
 equal(sent, [cut(next, 0)])
 ```
 
+## Disclosure
+
+A **disclosure** is a summary Button that opens optional content. `Disclosure`
+takes `e` and emits `Disclosure{open}` through `onChange`; its owner writes that
+bundle into the page graph and supplies it again. Missing state is closed.
+Content mounts only while open. `summary` supplies the Button's label and
+`summaryProps` supplies its presentation, such as a `mod` or `class`.
+
+```ts
+import { h } from 'preact'
+import { disclosed, Disclosure, disclosureAt, isOpen } from '@yaks/ux'
+import { equal } from '@yaks/testing'
+
+let e = { entity: { eid: disclosureAt('journal/meadow') } }
+equal(isOpen(e), false)
+let opened = disclosed(e, true)
+equal(isOpen(opened), true)
+let sent: unknown[] = []
+let tree = h(Disclosure, {
+  e,
+  onChange: (b) => sent.push(b),
+  summary: 'Completed',
+  summaryProps: { mod: 'quiet' },
+}, h('p', {}, 'Saved the village'))
+tree.props.onChange(opened)
+equal(sent, [opened])
+```
+
 ## State and events
 
 | component    | on                                | what it holds                                          |
 | ------------ | --------------------------------- | ------------------------------------------------------ |
 | `Edit`       | `at(owner, eid, comp, prop)`      | `open` while it is changed here, `query` in its picker |
 | `Stack`      | `stackAt(owner)`                  | `panes`, bottom first, and `scroll` per pane           |
+| `Disclosure` | `disclosureAt(owner)`             | `open`, whether its content is shown                   |
 | `Completion` | field id                          | `caret`, `from`, `to`, `cands`, `pick`                 |
 | `Refused`    | the entity whose value it changes | an event: `said`, why what was typed could not be read |
 
-Each state component is `sync: none`: nothing leaves the page. `Edit`, `Stack`
-and `Completion` are `durable: connection`, gone with the page and kept across
-every remount before that; closing an `Edit` removes it. What is typed over a
-value is not its state but the person's draft, in the value's own place
-(`place(eid, comp, prop)`), kept by the host's `drafts`: every view of the
+Each state component is `sync: none`: nothing leaves the page. `Edit`, `Stack`,
+`Disclosure` and `Completion` are `durable: connection`, gone with the page and
+kept across every remount before that; closing an `Edit` removes it. What is
+typed over a value is not its state but the person's draft, in the value's own
+place (`place(eid, comp, prop)`), kept by the host's `drafts`: every view of the
 value, and every interface the host syncs drafts to, types on from it, and a
 value whose draft says something else shows it, open, wherever it is drawn.
 Leaving a value typed over emits it and spends the draft, Escape puts the value

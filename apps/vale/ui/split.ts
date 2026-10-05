@@ -1,5 +1,7 @@
 // A list and its selected thing. Only changed content is replaced, so picking
 // leaves every list node and its scroll in place. Phones show one side at a time.
+import { type ComponentChildren, render } from 'preact'
+
 export let split = (host: HTMLElement) => {
   host.classList.add('Split_Host')
   host.closest('.Panel_Sheet')?.classList.add('Split_Sheet')
@@ -8,7 +10,13 @@ export let split = (host: HTMLElement) => {
   let root = host.querySelector<HTMLElement>('.Split')!
   let list = root.querySelector<HTMLElement>('.Split_List')!
   let detail = root.querySelector<HTMLElement>('.Split_Content')!
-  let wasList = '', wasDetail = '', wasPick: string | null = null
+  let wasList: ComponentChildren = '',
+    wasDetail: ComponentChildren = '',
+    wasPick: string | null = null
+  let paint = (node: HTMLElement, content: ComponentChildren) => {
+    if (typeof content == 'string') node.innerHTML = content
+    else render(content, node)
+  }
   list.addEventListener('click', (event) => {
     let row = event.target instanceof host.ownerDocument.defaultView!.Element
       ? event.target.closest('[data-pick], [data-skill], [data-select]')
@@ -21,18 +29,24 @@ export let split = (host: HTMLElement) => {
   return {
     list,
     detail,
-    render: (rows: string, content: string, picked: string | null = null) => {
+    render: (
+      rows: ComponentChildren,
+      content: ComponentChildren,
+      picked: string | null = null,
+    ) => {
       // Older tile renderers include the highlight in their HTML; it is state,
       // not list content, and must never replace the list on selection.
-      rows = rows.replace(/ (?:Pack_Tile-on|Board_Skill-on)/g, '')
+      if (typeof rows == 'string') {
+        rows = rows.replace(/ (?:Pack_Tile-on|Board_Skill-on)/g, '')
+      }
       if (rows != wasList) {
         let top = list.scrollTop
-        list.innerHTML = rows
+        paint(list, rows)
         list.scrollTop = top
         wasList = rows
       }
       if (content != wasDetail) {
-        detail.innerHTML = content
+        paint(detail, content)
         wasDetail = content
       }
       for (

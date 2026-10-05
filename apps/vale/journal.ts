@@ -10,21 +10,22 @@
 // opens it, and so does a tap on the tracker.
 import { beastId, beastOf, BEASTS } from './beasts.ts'
 import type { View } from './deals.ts'
-import { type Glyph, glyph, glyphText } from './glyphs.ts'
+import { type Glyph, glyph } from './glyphs.ts'
 import { dens } from './homes.ts'
 import { ITEMS } from './items.ts'
 import { levelOf, type Spot } from './levels.ts'
 import type { Page } from './panel.ts'
+import { type ComponentChildren, h } from 'preact'
+import { Button } from '@yaks/ui'
+import { Disclosure, disclosureAt, isOpen } from '@yaks/ux'
+import { type PageState, pageState } from './page-state.ts'
 import type { Sheet } from './play.ts'
 import { GIVERS, questXp } from './quests.ts'
 import { originOf } from './regions.ts'
 import type { Standing } from './rules.ts'
 import { said } from './stock.ts'
-import { tipped } from './tip.ts'
 import { split } from './ui/split.ts'
 import { homeOf } from './villagers.ts'
-
-let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
 /** One step of a task: what it asks, how far it has come when it counts,
  * whether it is done, and where it is done: a level, and there whoever to go
@@ -207,7 +208,9 @@ export let landsOf = (tasks: Task[], here: string) => {
     let rows = tasks.filter((t) => t.level == level && t.state != 'locked')
     return {
       level,
-      taken: rows.filter((t) => t.state == 'taken' || t.pinned)
+      taken: rows.filter((t) =>
+        t.state != 'done' && (t.state == 'taken' || t.pinned)
+      )
         .sort((a, b) => Number(b.pinned) - Number(a.pinned)),
       open: rows.filter((t) => t.state == 'open' && !t.pinned),
       done: rows.filter((t) => t.state == 'done'),
@@ -334,99 +337,163 @@ export let toward = ([x, z]: Spot, [tx, tz]: Spot) =>
 export type Acts = { pin: (task: string, on: boolean) => void }
 
 /** The journal, drawn into its tab (panel.ts). */
-export let journal = (panel: Page, acts: Acts) => {
+export let journal = (
+  panel: Page,
+  acts: Acts,
+  state: PageState = pageState(),
+  owner = 'journal',
+) => {
   let panes = split(panel.body)
-  let picked: string | null = null
   let tasks: Task[] = [], here = ''
-  panel.body.addEventListener('click', (e) => {
-    let row = e.target instanceof Element
-      ? e.target.closest<HTMLElement>('[data-select]')
-      : null
-    if (row) {
-      picked = row.dataset.select!
-      draw()
-      return
-    }
-    let b = e.target instanceof Element
-      ? e.target.closest<HTMLElement>('[data-pin]')
-      : null
-    if (!b) return
-    acts.pin(b.dataset.pin!, b.getAttribute('aria-pressed') != 'true')
-  })
-
-  // A step as a line: a mark, what it asks, and how far it has come.
-  let line = (s: Step, here: string) =>
-    `<li class="Journal_Step${s.done ? ' Journal_Step-done' : ''}">${
-      glyph(s.done ? 'done' : 'todo')
-    }<span>${esc(told(s, here))}</span>${
-      s.need ? `<em>${s.have ?? 0} / ${s.need}</em>` : ''
-    }</li>`
-
-  let task = (t: Task, here: string) => {
+  let section = (level: string) =>
+    disclosureAt(`${state.owner}|${owner}|${level}`)
+  let picture = (icon: Glyph, className = '') =>
+    h('span', {
+      class: className,
+      'aria-hidden': 'true',
+      dangerouslySetInnerHTML: { __html: glyph(icon) },
+    })
+  let status = (t: Task): [Glyph, string] =>
+    t.state == 'done'
+      ? ['done', 'Completed']
+      : t.state == 'open'
+      ? ['notices', 'On offer']
+      : !next(t)?.need
+      ? ['handHeart', 'Return to giver']
+      : ['journal', 'Under way']
+  let line = (s: Step) =>
+    h(
+      'li',
+      { class: `Journal_Step${s.done ? ' Journal_Step-done' : ''}` },
+      picture(
+        s.done ? 'done' : s.fell ? 'blow' : s.giver ? 'handHeart' : 'backpack',
+      ),
+      h('span', {}, told(s, here)),
+      s.need ? h('em', {}, `${s.have ?? 0} / ${s.need}`) : null,
+    )
+  let task = (t: Task) => {
     let tracked = t.state == 'taken' || t.pinned
-    let pin: Glyph = t.pinned ? 'pin' : 'pinOff'
-    return `<article class=Journal_Task><header class=Journal_Top><b class=Journal_Title>${
-      esc(t.title)
-    }</b>${
-      tracked
-        ? `<button class="Orb Orb-small Journal_Pin" data-pin="${
-          esc(t.id)
-        }" aria-pressed=${t.pinned}${
-          tipped(
-            t.pinned
-              ? {
-                name: 'Tracked',
-                says: 'On the glass and the compass. Tap to stop.',
-              }
-              : {
-                name: 'Track it',
-                says: 'Show it on the glass and the compass.',
-              },
-          )
-        }>${glyph(pin)}</button>`
-        : ''
-    }</header><p class=Journal_From>${esc(t.from)} · ${
-      esc(nameOf(t.level))
-    } · ${esc(t.gives)}</p><ol class=Journal_Steps>${
-      t.steps.map((s) => line(s, here)).join('')
-    }</ol>${t.says ? `<p class=Journal_Says>${esc(t.says)}</p>` : ''}</article>`
+    return h(
+      'article',
+      { class: 'Journal_Task' },
+      h(
+        'header',
+        { class: 'Journal_Top' },
+        h('b', { class: 'Journal_Title' }, t.title),
+        tracked && t.state != 'done'
+          ? h(Button, {
+            class: 'Orb Orb-small Journal_Pin',
+            'data-pin': t.id,
+            'aria-label': t.pinned ? 'Stop tracking' : 'Track it',
+            'aria-pressed': t.pinned,
+            'data-tip': t.pinned ? 'Tracked' : 'Track it',
+            onClick: () => acts.pin(t.id, !t.pinned),
+          }, picture(t.pinned ? 'pin' : 'pinOff'))
+          : null,
+      ),
+      h(
+        'p',
+        { class: 'Journal_From' },
+        `${t.from} · ${nameOf(t.level)} · ${t.gives}`,
+      ),
+      h('ol', { class: 'Journal_Steps' }, t.steps.map(line)),
+      t.says ? h('p', { class: 'Journal_Says' }, t.says) : null,
+    )
   }
-
   let summary = (t: Task) => {
-    let step = next(t)
-    return `<button class="Split_Row Journal_Row" type=button data-select="${
-      esc(t.id)
-    }"><span class=Journal_Label><b>${esc(t.title)}</b>${
-      t.pinned ? glyphText('pin') : ''
-    }</span><small>${
-      t.state == 'done' ? 'Done' : step ? esc(told(step, here)) : esc(t.from)
-    }${
-      step?.need ? ` · ${step.have ?? 0} / ${step.need}` : ''
-    }</small></button>`
+    let step = next(t), [icon, label] = status(t)
+    return h(
+      Button,
+      {
+        key: t.id,
+        class: `Split_Row Journal_Row Journal_Row-${t.state}`,
+        'data-select': t.id,
+        onClick: () => {
+          state.select(owner, t.id)
+          draw()
+        },
+      },
+      h(
+        'span',
+        { class: 'Journal_Label' },
+        picture(icon, 'Journal_Status'),
+        h('b', {}, t.title),
+        t.pinned && t.state != 'done'
+          ? picture('pin', 'Journal_Tracked')
+          : null,
+      ),
+      h('small', { class: 'Journal_State' }, label),
+      h(
+        'small',
+        {},
+        t.state == 'done' ? t.gives : step
+          ? told(step, here) +
+            (step.need ? ` · ${step.have ?? 0} / ${step.need}` : '')
+          : t.from,
+      ),
+    )
   }
-  let group = (head: string, ts: Task[]) =>
-    `<h3 class=Journal_Head>${head}</h3>${ts.map(summary).join('')}`
+  let group = (title: string, rows: Task[]): ComponentChildren => [
+    h('h3', { class: 'Journal_Head' }, title),
+    ...rows.map(summary),
+  ]
   let draw = () => {
     if (!panel.open) return
     let lands = landsOf(tasks, here)
-    let selected = tasks.find((t) => t.id == picked && t.state != 'locked')
-    if (!selected) picked = null
-    let rows = `<div class=Journal>${
+    let picked = state.cursor(owner)
+    let selected = tasks.find((t) =>
+      t.id == picked && t.state != 'locked' &&
+      (t.state != 'done' || isOpen(state.row(section(t.level))))
+    )
+    if (!selected && picked) {
+      state.select(owner, null)
+      picked = undefined
+    }
+    let rows = h(
+      'div',
+      { class: 'Journal' },
       lands.map(({ level, taken, open, done }) =>
-        `<h2 class=Journal_Head>${esc(nameOf(level))}${
-          level == here ? ' · Here' : ''
-        }</h2>${taken.length ? group('Under way', taken) : ''}${
-          open.length ? group('On offer', open) : ''
-        }${done.length ? group(`Done · ${done.length}`, done) : ''}`
-      ).join('')
-    }${lands.length ? '' : '<p class=Journal_None>No quests yet.</p>'}</div>`
-    let content = selected
-      ? `<div class=Journal>${task(selected, here)}</div>`
-      : '<p class=Journal_None>Select a task to see its steps and rewards.</p>'
-    panes.render(rows, content, picked)
+        h(
+          'section',
+          { key: level, class: 'Journal_Land' },
+          h(
+            'h2',
+            { class: 'Journal_Head' },
+            picture('mountain'),
+            ` ${nameOf(level)}${level == here ? ' · Here' : ''}`,
+          ),
+          taken.length ? group('Under way', taken) : null,
+          open.length ? group('On offer', open) : null,
+          done.length
+            ? h(Disclosure, {
+              e: state.row(section(level)),
+              class: 'Journal_Completed',
+              summary: [picture('done'), `Completed · ${done.length}`],
+              summaryProps: {
+                class: 'Journal_Head Journal_Toggle',
+                'data-completed': level,
+              },
+              onChange: (bundle) => {
+                state.mutate([bundle])
+                draw()
+              },
+            }, done.map(summary))
+            : null,
+        )
+      ),
+      lands.length ? null : h('p', { class: 'Journal_None' }, 'No quests yet.'),
+    )
+    panes.render(
+      rows,
+      selected ? h('div', { class: 'Journal' }, task(selected)) : h(
+        'p',
+        { class: 'Journal_None' },
+        'Select a task to see its steps and rewards.',
+      ),
+      picked ?? null,
+    )
   }
   return {
-    /** show the journal, when it is open and what it shows changed */
     show: (latest: Task[], level: string) => {
       tasks = latest
       here = level
