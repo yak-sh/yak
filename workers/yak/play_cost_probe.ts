@@ -29,11 +29,23 @@ export class PlayCost {
     if (new URL(req.url).searchParams.has('idle')) {
       return Response.json(await idleWake(this.ctx.storage))
     }
+    let params = new URL(req.url).searchParams
+    let history = Number(params.get('history') ?? 79000)
+    if (![100, 79000].includes(history)) {
+      return new Response('bad history', { status: 400 })
+    }
     let n = Number(new URL(req.url).searchParams.get('players') ?? 2)
     if (![1, 2, 4].includes(n)) {
       return new Response('bad player count', { status: 400 })
     }
-    return Response.json(await playMinute(this.ctx.storage, n))
+    return Response.json(
+      await playMinute(
+        this.ctx.storage,
+        n,
+        history,
+        params.has('join') ? 0 : 5,
+      ),
+    )
   }
 }
 export default {

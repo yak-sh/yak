@@ -1406,9 +1406,32 @@ let indexedRelation = (
   from: string,
   o: Parameters<typeof rel>[1],
 ): Select => {
-  let root: { comp: string; index: string } | undefined
+  let root: { comp: string; index?: string } | undefined
   if (!ctx.spine && !claims(ctx, 'pred') && ctx.d.indexed) {
-    for (let c of flattened(clauses)) {
+    let scalar = flattened(clauses).some((c) =>
+      c.kind == 'pred' && !c.not &&
+      !c.where && c.path.length == 2 && c.path[0] != 'entity' &&
+      ctx.v.prop(c.path[0], c.path[1])?.category == 'ref' &&
+      !ctx.v.prop(c.path[0], c.path[1])?.computed &&
+      !ctx.derived[c.path.join('.')] && needs(opOf(c), flat(c.value))
+    )
+    if (scalar && ctx.d.owned) {
+      for (let c of flattened(clauses)) {
+        if (
+          c.kind != 'pred' || c.not || c.where || c.path.length != 1 ||
+          opOf(c) != EXISTS
+        ) continue
+        let comp = c.path[0]
+        if (
+          comp == 'entity' || !ctx.v.comp(comp) || ctx.v.props(comp).length ||
+          computed(ctx.v, comp) || source(ctx, comp) != `"${comp}"` ||
+          ctx.d.table(comp) != `"${comp}"`
+        ) continue
+        root = { comp }
+        break
+      }
+    }
+    for (let c of root ? [] : flattened(clauses)) {
       if (c.kind != 'pred' || c.not || c.where || c.path.length != 2) continue
       let [comp, prop] = c.path
       let p = ctx.v.prop(comp, prop)
@@ -1447,7 +1470,9 @@ let indexedRelation = (
       ],
     }
   }
-  let src = ctx.d.indexed?.(root.comp, root.index)
+  let src = root.index
+    ? ctx.d.indexed?.(root.comp, root.index)
+    : ctx.d.table(root.comp)
   if (!src) return s
   return {
     ...s,
@@ -1455,14 +1480,29 @@ let indexedRelation = (
     joins: [
       {
         how: 'cross',
-        src: raw(from, [], 'entity'),
+        src: raw(
+          !root.index && from == '"entity"' ? from + ' not indexed' : from,
+          [],
+          'entity',
+        ),
         on: raw(ctx.d.joinOn(root.comp, 'entity')),
       },
       ...o.joins.filter((j) => j.source != ctx.d.table(root!.comp)).map((
         j,
       ): Join => ({
-        how: 'left',
-        src: raw(j.source),
+        how: !root!.index &&
+            flattened(clauses).some((c) =>
+              c.kind == 'pred' && !c.not && !c.where && c.path.length == 2 &&
+              ctx.d.table(c.path[0]) == j.source &&
+              needs(opOf(c), flat(c.value))
+            )
+          ? 'cross'
+          : 'left',
+        src: raw(
+          !root!.index && ctx.d.owned && /^"[a-z_0-9]+"$/.test(j.source)
+            ? ctx.d.owned(j.source.slice(1, -1))
+            : j.source,
+        ),
         on: raw(j.on),
       })),
     ],

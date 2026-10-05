@@ -31,10 +31,30 @@ test('Vale play reads and writes at most 99 rows per player-minute (expected to 
     )
   }
   assert(
-    report.total.read / report.players <= 99 &&
-      report.total.written / report.players <= 99,
-    `rows/player-minute: ${report.total.read / report.players} read, ${
-      report.total.written / report.players
+    report.total.read / (report.players * report.minutes) <= 99 &&
+      report.total.written / (report.players * report.minutes) <= 99,
+    `rows/player-minute: ${
+      report.total.read / (report.players * report.minutes)
+    } read, ${
+      report.total.written / (report.players * report.minutes)
     } written (expected failure until T-65275 fix)`,
+  )
+})
+
+test('joining Vale reads a bounded number of rows independent of retained history', async () => {
+  let k = workerd()
+  let reports: Report[] = []
+  for (let history of [100, 79000]) {
+    let res = await fetch(
+      `${k.base}/__play_cost/?players=1&join=1&history=${history}`,
+    )
+    assertEquals(res.status, 200, await res.clone().text())
+    let r = await res.json() as Report
+    console.log('JOIN_COST', JSON.stringify(r))
+    reports.push(r)
+  }
+  assert(
+    reports[1].opening.read <= reports[0].opening.read + 20,
+    `joining: ${reports.map((r) => r.opening.read)} rows as history grows`,
   )
 })

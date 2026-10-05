@@ -3,12 +3,21 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { Store } from './graph.ts'
 import type { Bundle } from '@yaks/graph'
-import type { DurableStorage } from '@yaks/durable-object'
+import {
+  type DurableStorage,
+  profile,
+  type Summary,
+} from '@yaks/durable-object'
 import words from '../../apps/vale/vocab.json' with { type: 'json' }
+import { seedWorld, settleWorld, worldBindings } from './play_world_fixture.ts'
 
 export type Cost = { read: number; written: number; calls: number }
 export type Report = {
   players: number
+  history: number
+  minutes: number
+  profile: Summary[]
+  openingShapes: { sql: string; cost: Cost }[]
   sources: Record<string, Cost>
   components: Record<string, Cost>
   total: Cost
@@ -35,12 +44,17 @@ export let playMinute = async (
     setAlarm(at: number): Promise<void>
   },
   players: number,
+  history = 79_000,
+  minutes = 5,
 ): Promise<Report> => {
   let source = 'setup', measured = false
   let context = new AsyncLocalStorage<string>()
   let shapes = new Map<string, Cost>()
   let sources: Record<string, Cost> = {}, components: Record<string, Cost> = {}
   let total = empty(), opening = empty()
+  let summaries: Summary[] = []
+  let profiler = profile((summary) => summaries.push(summary))
+  let openingShapes: Report['openingShapes'] = []
   let sql = db.sql.exec.bind(db.sql)
   db.sql.exec = (query, ...bindings) => {
     let cursor = sql(query, ...bindings)
@@ -84,6 +98,12 @@ export let playMinute = async (
       plus(sources[kind] ??= empty(), cost)
       plus(components[component] ??= empty(), cost)
       plus(total, cost)
+      profiler.run(kind, () =>
+        profiler.observe({
+          shape: query,
+          rowsRead: cost.read,
+          rowsWritten: cost.written,
+        }))
     }
     return {
       rowsRead: cursor.rowsRead,
@@ -97,7 +117,7 @@ export let playMinute = async (
     storage: db,
     getWebSockets: () => live,
     acceptWebSocket: () => {},
-  })
+  }, worldBindings(app, person))
   let headers = {
     'x-store': 'probe/play-cost',
     'x-yak-access': 'private',
@@ -126,36 +146,9 @@ export let playMinute = async (
       : 'live queries'
     return context.run(kind, () => read(q, opts))
   }
-  // A synthetic 79k-entity history, not a copy of anyone's app. Seed directly
-  // through storage before measurement; gameplay still uses admitted doors.
-  for (let start = 0; start < 79_000; start += 500) {
-    let rows: Bundle[] = Array.from({ length: 500 }, (_, j) => {
-      let n = start + j
-      return {
-        entity: { eid: eid(n + 100) },
-        created: { at: '2026-01-01T00:00:00Z', by: person },
-        updated: { at: '2026-01-01T00:00:00Z', by: person },
-        ...(n < 40_000
-          ? { item: { owner: eid(n % 2000 + 1), kind: 'wood', at: n } }
-          : n < 60_000
-          ? {
-            slain: {
-              by: eid(n % 2000 + 1),
-              creature: `wolf-${n % 100}`,
-              at: n,
-              xp: 1,
-            },
-          }
-          : n < 70_000
-          ? {
-            chat: { level: 'old-land', player: eid(n % 2000 + 1) },
-            doc: { body: 'Old chat' },
-          }
-          : { doc: { title: `History ${n}` } }),
-      }
-    })
-    await g.storage.tx((tx) => tx.patch(rows))
-  }
+  // Linked retained transcripts are part of Vale's shape. They carry the
+  // same computed status/cost pressure as the app without copying live rows.
+  await seedHistory(g, db, history)
   await post(
     '/apply',
     Array.from({ length: players }, (_, i) => ({
@@ -180,22 +173,52 @@ export let playMinute = async (
     if (held.rules.every((r) => !r.live || r.done)) break
     if (i == 99) throw new Error('lens fixture did not settle')
   }
+  if (minutes) await seedWorld(store, post)
   measured = true
   source = 'live queries'
   for (let i = 0; i < players; i++) {
     let ws = wire()
     live.push(ws)
     let hero = eid(i + 1)
+    // The actual world/hero/catalog watches from Vale net.ts, including
+    // proximity disjunctions and builder provenance. Empty answers still cost.
+    let q = JSON.stringify(hero)
     let queries = [
-      `.entity.eid=${hero}&*`,
-      `.item.owner=${hero}&?gathered&?crafted`,
-      `.slain.by=${hero}`,
-      '.slain.creature=wolf-1,wolf-2,wolf-3',
-      '.gathered.node=tree-1,tree-2,tree-3',
-      '.position.level=mossvale&?motion&?fight&?vitals',
+      `.entity.eid=${q}&?created&*`,
+      `.player&.created.by=${person}&?doc&?position`,
+      `.item.owner=${q}&?gathered&?crafted`,
+      `.slain.by=${q}`,
+      ...['used', 'upgraded'].map((name) => `.${name}.by=${q}`),
+      ...[
+        'journal',
+        'equip',
+        'learned',
+        'respec',
+        'fire',
+        'explored',
+        'visited_region',
+      ]
+        .map((name) => `.${name}.player=${q}`),
+      `.directive.player=${q}&?created&?companion&.order=-created.at&.limit=10`,
+      `.teleport_request.player=${q}&?created&?completed&.order=-created.at&.limit=10`,
+      '(.place.level=mossvale&.place.ci=-4..4&.place.ck=-4..4|.position.x=-128...160&.position.z=-128...160)&*',
+      `(.look.player.position.x=-128...160&.look.player.position.z=-128...160|.look.player=${q})&.look&*`,
+      '.fight.level=mossvale&*',
       '.chat.level=mossvale&?doc&?created&.order=-created.at&.limit=60',
-      '.villager.level=mossvale&*',
-      '.fight.level=mossvale',
+      ...[
+        'theme_design',
+        'building_design',
+        'item_design',
+        'ability_design',
+        'den',
+      ]
+        .map((name) => `.${name}`),
+      '.beast_design&?combat&?loot&?sounds',
+      '.alias&.key',
+      '.figure !built | .figure .built.current=true .built.build.build.variant=main *',
+      '.figure .built.current=true .built.build.build.variant=main .fields=built.current,built.build.build.variant',
+      '.built.current=true&.built.slot=kind&.built.build.build.variant=main&.built.build.build.for.spawned.lvl&.fields=built.current,built.slot,built.build.build.variant,built.build.build.for.spawned.lvl',
+      '.built.current=true&.built.artifact&.built.build.build.variant=main&.fields=built.build.build.for.sfx.name,built.artifact.artifact.address,built.artifact.artifact.media_type',
     ]
     for (let [j, subscribe] of queries.entries()) {
       await store.webSocketMessage(
@@ -205,6 +228,11 @@ export let playMinute = async (
     }
   }
   opening = { ...total }
+  openingShapes = [...shapes].map(([sql, cost]) => ({ sql, cost })).sort((
+    a,
+    b,
+  ) => b.cost.read - a.cost.read).slice(0, 20)
+  profiler.flush(Infinity)
   shapes.clear()
   sources = {}
   components = {}
@@ -248,7 +276,7 @@ export let playMinute = async (
     return value as T
   }
   try {
-    for (let second = 0; second < 60; second++) {
+    for (let second = 0; second < 60 * minutes; second++) {
       for (let i = 0; i < players; i++) {
         source = 'relays'
         let hero = eid(i + 1)
@@ -266,7 +294,7 @@ export let playMinute = async (
         if (second % 15 == 5) {
           source = 'gathering'
           await settle(post('/apply', [{
-            entity: { eid: eid(100_000 + i * 100 + second) },
+            entity: { eid: eid(400_000 + i * 1000 + second) },
             item: { owner: hero, kind: 'wood', at },
             gathered: {
               node: `tree-${i}-${second}`,
@@ -280,14 +308,14 @@ export let playMinute = async (
         if (second % 20 == 10) {
           source = 'fighting'
           await settle(post('/apply', [{
-            entity: { eid: eid(200_000 + i * 100 + second) },
+            entity: { eid: eid(500_000 + i * 1000 + second) },
             slain: { by: hero, creature: 'wolf-1', at, xp: 1, lvl: 1 },
           }]))
         }
-        if (second == 25) {
+        if (second % 60 == 25) {
           source = 'chatting'
           await settle(post('/apply', [{
-            entity: { eid: eid(300_000 + i) },
+            entity: { eid: eid(600_000 + i * 1000 + second) },
             chat: { level: 'mossvale', player: hero },
             doc: { body: 'Hello' },
           }]))
@@ -314,11 +342,17 @@ export let playMinute = async (
       if (alarm != null && alarm <= at) {
         await db.deleteAlarm?.()
         await settle(store.alarm())
+        await settle(settleWorld(store, db))
       }
       for (let k = 0; k < 20; k++) await Promise.resolve()
     }
+    profiler.flush(Infinity)
     return {
       players,
+      history,
+      minutes,
+      profile: summaries,
+      openingShapes,
       sources,
       components,
       total,
@@ -397,102 +431,7 @@ export let idleWake = async (
     },
   })
   let g = store.door.graph
-  // Keep the linked transcript/call archetypes that production loads, not
-  // just unlinked session markers. Teach small-table statistics before the
-  // retained history grows; the indexed-get regression must survive them.
-  await g.storage.tx((tx) =>
-    tx.patch([
-      {
-        entity: { eid: person },
-        person: {},
-        doc: { title: 'A fixture author' },
-      },
-      {
-        entity: { eid: eid(90_000) },
-        doc: { body: 'Fixture persona' },
-      },
-      { entity: { eid: eid(90_002) }, model: { name: 'fixture-model' } },
-      {
-        entity: { eid: eid(90_001) },
-        tool: { name: 'kept', description: 'Kept call target' },
-      },
-    ])
-  )
-  for (let n = 0; n < 61; n++) {
-    let session = eid(100_000 + n), log = eid(110_000 + n)
-    let source = eid(200_000 + n * 100)
-    let call = eid(300_000 + n), result = eid(310_000 + n)
-    let rows: Bundle[] = [
-      {
-        entity: { eid: log },
-        doc: { title: `fixture-${n}.jsonl` },
-      },
-      {
-        entity: { eid: session },
-        session: {
-          id: `ended-${n}`,
-          ended: true,
-          actor: person,
-          source,
-          persona: eid(90_000),
-          log,
-        },
-      },
-      {
-        entity: { eid: call },
-        call: { to: eid(90_001), id: `kept-${n}`, args: { n }, source },
-        execution: { by: person },
-        entry: { session, seq: 13 },
-      },
-      {
-        entity: { eid: result },
-        result: { call, ms: 1 },
-        content: { body: 'Kept result' },
-        entry: { session, seq: 14 },
-      },
-    ]
-    for (let j = 0; j < 12; j++) {
-      rows.push({
-        entity: { eid: eid(200_000 + n * 100 + j) },
-        entry: { session, seq: j + 1 },
-        content: { body: 'Kept transcript' },
-        cost: { dollars: 0.001, reported: true },
-        ...(j == 0
-          ? { using: { model: eid(90_002) } }
-          : j == 11
-          ? { stop: {} }
-          : { notice: {} }),
-      })
-    }
-    await g.storage.tx((tx) => tx.patch(rows))
-  }
-  let driver = (await import('@yaks/durable-object')).driver(db)
-  driver.query({ t: 'pragma', name: 'optimize', value: 0x10002 })
-  // Synthetic item/slain/chat/document mix, never a copy of an app's data.
-  for (let start = 0; start < 79_000; start += 500) {
-    await g.storage.tx((tx) =>
-      tx.patch(Array.from({ length: 500 }, (_, j) => {
-        let n = start + j
-        return {
-          entity: { eid: eid(n + 100) },
-          created: { at: '2026-01-01T00:00:00Z', by: person },
-          updated: { at: '2026-01-01T00:00:00Z', by: person },
-          ...(n < 40_000
-            ? { item: { owner: person, kind: 'wood', at: n } }
-            : n < 60_000
-            ? {
-              slain: { by: person, creature: `wolf-${n % 100}`, at: n, xp: 1 },
-            }
-            : n < 70_000
-            ? {
-              chat: { level: 'old-land', player: person },
-              doc: { body: 'Old chat' },
-            }
-            : { doc: { title: `History ${n}` } }),
-        }
-      }))
-    )
-  }
+  await seedHistory(g, db, 79_000)
   for (let i = 0; i < 100; i++) {
     await store.alarm()
     let res = await store.fetch(
@@ -576,5 +515,117 @@ export let idleWake = async (
     }
   } finally {
     db.sql.exec = sql
+  }
+}
+
+// Seed-only storage doors, outside every measured window. Small-table stats
+// precede unrelated retained rows: the test must survive stale production plans.
+let seedHistory = async (
+  g: Store['door']['graph'],
+  db: Parameters<typeof playMinute>[0],
+  history: number,
+) => {
+  // Keep the linked transcript/call archetypes that production loads, not
+  // just unlinked session markers. Teach small-table statistics before the
+  // retained history grows; the indexed-get regression must survive them.
+  await g.storage.tx((tx) =>
+    tx.patch([
+      {
+        entity: { eid: person },
+        person: {},
+        doc: { title: 'A fixture author' },
+      },
+      {
+        entity: { eid: eid(90_000) },
+        doc: { body: 'Fixture persona' },
+      },
+      { entity: { eid: eid(90_002) }, model: { name: 'fixture-model' } },
+      {
+        entity: { eid: eid(90_001) },
+        tool: { name: 'kept', description: 'Kept call target' },
+      },
+    ])
+  )
+  for (let n = 0; n < 61; n++) {
+    let session = eid(100_000 + n), log = eid(110_000 + n)
+    let source = eid(200_000 + n * 100)
+    let call = eid(300_000 + n), result = eid(310_000 + n)
+    let rows: Bundle[] = [
+      {
+        entity: { eid: log },
+        doc: { title: `fixture-${n}.jsonl` },
+      },
+      {
+        entity: { eid: session },
+        session: {
+          id: `ended-${n}`,
+          ended: true,
+          actor: person,
+          source,
+          persona: eid(90_000),
+          log,
+        },
+      },
+      {
+        entity: { eid: call },
+        call: { to: eid(90_001), id: `kept-${n}`, args: { n }, source },
+        execution: { by: person },
+        entry: { session, seq: 13 },
+      },
+      {
+        entity: { eid: result },
+        result: { call, ms: 1 },
+        content: { body: 'Kept result' },
+        entry: { session, seq: 14 },
+      },
+    ]
+    for (let j = 0; j < 12; j++) {
+      rows.push({
+        entity: { eid: eid(200_000 + n * 100 + j) },
+        entry: { session, seq: j + 1 },
+        content: { body: 'Kept transcript' },
+        cost: { dollars: 0.001, reported: true },
+        ...(j == 0
+          ? { using: { model: eid(90_002) } }
+          : j == 11
+          ? { stop: {} }
+          : { notice: {} }),
+      })
+    }
+    await g.storage.tx((tx) => tx.patch(rows))
+  }
+  let driver = (await import('@yaks/durable-object')).driver(db)
+  driver.query({ t: 'pragma', name: 'optimize', value: 0x10002 })
+  // Synthetic item/slain/chat/document mix, never a copy of an app's data.
+  for (let start = 0; start < history; start += 500) {
+    await g.storage.tx((tx) =>
+      tx.patch(
+        Array.from({ length: Math.min(500, history - start) }, (_, j) => {
+          let n = start + j
+          return {
+            entity: { eid: eid(n + 100) },
+            created: { at: '2026-01-01T00:00:00Z', by: person },
+            updated: { at: '2026-01-01T00:00:00Z', by: person },
+            ...(n < 40_000
+              ? { item: { owner: person, kind: 'wood', at: n } }
+              : n < 60_000
+              ? {
+                slain: {
+                  by: person,
+                  creature: `wolf-${n % 100}`,
+                  at: n,
+                  xp: 1,
+                },
+              }
+              : n < 70_000
+              ? {
+                chat: { level: 'old-land', player: person },
+                doc: { body: 'Old chat' },
+              }
+              : { doc: { title: `History ${n}` } }),
+          }
+        }),
+      )
+    )
   }
 }

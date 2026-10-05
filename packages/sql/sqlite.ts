@@ -48,6 +48,9 @@ export type Dialect = {
   source?: (comp: string) => string
   // A declared ordinary index, used to drive a required scalar selection.
   indexed?: (comp: string, index: string) => string
+  // A component keyed by its owner: disable secondary-index scans while
+  // retaining SQLite's integer-primary-key lookup for a finite owner set.
+  owned?: (comp: string) => string
   ownerKey: (base: string) => string
   joinOn: (comp: string, base: string) => string
   // A column read expression. A reference column is projected to an eid; `eid`
@@ -316,6 +319,7 @@ let all = (parts: Frag[]): Frag =>
   }
 
 export let sqlite: Dialect = {
+  owned: (comp) => `${q(comp)} not indexed`,
   indexed: (comp, index) => `${q(comp)} indexed by ${q(index)}`,
   refCol: (comp, prop) => `${q(comp)}.${q(field(prop))}`,
   among,
