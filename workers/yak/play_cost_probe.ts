@@ -1,4 +1,5 @@
 // Test-only workerd door: real SQL row counters, no account or live app.
+import { worldTick } from './play_world_fixture.ts'
 import { idleWake, playMinute } from './play_cost_fixture.ts'
 import type { DurableStorage } from '@yaks/durable-object'
 import type { Namespace } from './door.ts'
@@ -17,6 +18,14 @@ export class PlayCost {
   ) {}
   alarm(): void {}
   async fetch(req: Request): Promise<Response> {
+    if (new URL(req.url).searchParams.has('world')) {
+      return Response.json(
+        await worldTick(
+          this.ctx.storage,
+          Number(new URL(req.url).searchParams.get('history') ?? 79000),
+        ),
+      )
+    }
     if (new URL(req.url).searchParams.has('idle')) {
       return Response.json(await idleWake(this.ctx.storage))
     }

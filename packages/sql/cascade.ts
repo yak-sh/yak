@@ -82,7 +82,9 @@ let closure = (eids: string[], group: Arm[], d: Dialect): Frag => {
           ' or ',
         )
         return `  union select ${own}, min(${W}."depth" + 1, ${DEEP})` +
-          ` from ${d.table(comp)}, ${W} where (${hits}) and ${alive(own)}\n`
+          ` from ${W} cross join ${d.table(comp)} where (${hits}) and ${
+            alive(own)
+          }\n`
       }).join('') + `)\n`,
     params: set.params,
   }
@@ -120,7 +122,7 @@ export let doomSql = (
       head.sql +
         `select ${E}."eid" as eid, ${E}."num" as num,` +
         ` min(${W}."depth") as depth` +
-        ` from ${W} join "entity" ${E} on ${E}."id" = ${W}."id"` +
+        ` from ${W} cross join "entity" ${E} on ${E}."id" = ${W}."id"` +
         ` group by ${W}."id" order by depth, ${W}."id"`,
       head.params,
       'entity',
