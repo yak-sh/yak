@@ -1253,6 +1253,30 @@ export let grew = (
   was: VocabDoc,
   next: VocabDoc,
   rows: (name: string, prop?: string) => number = () => 1,
+): ReturnType<typeof growing> =>
+  growing(was, next, rows, (name, prop, had) => {
+    if (rows(name, prop)) {
+      throw refuse(
+        'arguments',
+        `vocab.json: ${name}.${prop} is already ${
+          wordOf(had)
+        } — a property keeps the type its rows were written under`,
+      )
+    }
+  })
+
+/** Accepted release declarations reconstructed without Store rows. Retired
+ * words stay declared conservatively; a property explicitly declared by a
+ * later accepted release takes that release's type. Admission belongs to
+ * {@link grew}, when the Store can count the values a change would affect. */
+export let retained = (was: VocabDoc, next: VocabDoc): VocabDoc =>
+  growing(was, next, () => 1, () => {}).doc
+
+let growing = (
+  was: VocabDoc,
+  next: VocabDoc,
+  rows: (name: string, prop?: string) => number,
+  retype: (name: string, prop: string, had: PropSchema) => void,
 ): {
   doc: VocabDoc
   dropped: string[]
@@ -1293,15 +1317,7 @@ export let grew = (
     for (let [prop, s] of Object.entries(schema.properties ?? {})) {
       let had = props[prop]
       if (had && delta.retyped.includes(`${name}.${prop}`)) {
-        if (rows(name, prop)) {
-          throw refuse(
-            'arguments',
-            `vocab.json: ${name}.${prop} is already ${
-              wordOf(had)
-            } — a property ` +
-              'keeps the type its rows were written under',
-          )
-        }
+        retype(name, prop, had)
         retyped.push(`${name}.${prop}`)
       }
       if (!had || !same(had, s)) added.push(`${name}.${prop}`)

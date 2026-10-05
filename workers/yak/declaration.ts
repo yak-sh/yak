@@ -1,7 +1,9 @@
 // Discovery reads release metadata in R2, never the app's Durable Object.
 // Deploy writes the accepted (including retained/borrowed words) declaration
 // before its directory pointer commits. Old releases are read from their
-// pinned files without waking a store or backfilling production.
+// pinned files without waking a store or backfilling production. Their types
+// were already admitted; reconstruction retains declarations without running
+// Store admission again, which needs the Store's row counts.
 import type { VocabDoc } from '@yaks/vocab'
 import type { Tools } from '@yaks/tools/declared'
 import { read } from '@yaks/yaml'
@@ -17,7 +19,7 @@ import { bound, type Env } from './env.ts'
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { recall } from './lib/hops.ts'
 import { pins } from './versions.ts'
-import { appDoc, coreDocs, grew, homed, type Homes } from './vocab.ts'
+import { appDoc, coreDocs, homed, type Homes, retained } from './vocab.ts'
 import { appTools, readTools } from './tool-grammar.ts'
 import { documented, respelled, unholed, unworded } from './migrate.ts'
 import { withKinds } from './kinds.ts'
@@ -58,11 +60,26 @@ let legacy = async (env: Env, space: Space, app: App): Promise<Declaration> => {
       let apps = (await dir.apps(space)).filter((a) => !a.trashed)
       if (!apps.some((a) => a.eid == app.eid)) apps.push(app)
       return await Promise.all(apps.map(async (one) => {
+        let bytes = await r2RawObjects(env.BLOBS).read(
+          key(space, one, releaseOf(one)),
+        )
+        if (bytes) {
+          let snapshot: Declaration = JSON.parse(
+            new TextDecoder().decode(bytes),
+          )
+          return {
+            app: one,
+            vocab: snapshot.vocab,
+            source: {},
+            tools: snapshot.tools,
+            snapshot: true,
+          }
+        }
         let all = (await dir.deploys(one)).filter((v) =>
           v.version <= (one.version ?? 0)
         )
           .sort((a, b) => a.version - b.version)
-        let retained: VocabDoc = {}, source: unknown = {}
+        let vocab: VocabDoc = {}, source: unknown = {}
         let oldTools: Tools | undefined
         let pin = pins(blobs, `${space.slug}/${one.slug}/`)
         for (let version of all) {
@@ -78,7 +95,7 @@ let legacy = async (env: Env, space: Space, app: App): Promise<Declaration> => {
           source = read(new TextDecoder().decode(bytes), file)
           let said = JSON.stringify(source)
           source = JSON.parse(documented(said) ?? said)
-          retained = grew(retained, appDoc(source)).doc
+          vocab = retained(vocab, appDoc(source))
           // Commands had their own file before they were entries of vocab.json.
           // Read that release's bytes and the same translations its Store applies.
           let commands = ['tools.yml', 'tools.json'].find((f) =>
@@ -98,17 +115,12 @@ let legacy = async (env: Env, space: Space, app: App): Promise<Declaration> => {
             oldTools = readTools(said)
           }
         }
-        let bytes = await r2RawObjects(env.BLOBS).read(
-          key(space, one, releaseOf(one)),
-        )
-        let snapshot: Declaration | undefined = bytes &&
-          JSON.parse(new TextDecoder().decode(bytes))
         return {
           app: one,
-          vocab: snapshot?.vocab ?? retained,
+          vocab,
           source,
-          tools: snapshot?.tools ?? oldTools,
-          snapshot: !!snapshot,
+          tools: oldTools,
+          snapshot: false,
         }
       }))
     },
