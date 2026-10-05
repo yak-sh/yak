@@ -13,8 +13,8 @@
 //
 // A 401 is the one status code read for meaning: the server answers it with
 // the `WWW-Authenticate` challenge an MCP client would follow into an OAuth
-// flow, and this client has no browser to follow it with — so it prints one
-// sentence a person can act on instead.
+// flow, and this client has no browser to follow it with — so it prints the
+// door's refusal, or a sign-in sentence when the door sends only a challenge.
 
 /** The newest MCP protocol version this client supports. */
 export let PROTOCOL = '2025-06-18'
@@ -98,19 +98,27 @@ export let rpc = (door: Door): Rpc => {
     let r = await go(request)
     session ??= r.headers.get('mcp-session-id')
     let text = await r.text()
-    if (r.status == 401) throw new Unauthorized(SIGN_IN)
     let said = r.headers.get('content-type')?.includes('text/event-stream')
       ? eventData(text)
       : text
     let reply: {
       result?: Record<string, unknown>
-      error?: { code: number; message: string }
+      error?: { code: number | string; message: string }
     }
     try {
       reply = JSON.parse(said)
     } catch {
+      if (r.status == 401) throw new Unauthorized(SIGN_IN)
       throw new Refused(
         `${door.url} said ${r.status} and not JSON: ${text.slice(0, 200)}`,
+      )
+    }
+    if (r.status == 401) {
+      throw new Unauthorized(
+        typeof reply?.error?.code == 'string' &&
+          typeof reply.error.message == 'string'
+          ? reply.error.message
+          : SIGN_IN,
       )
     }
     if (reply.error) throw new Refused(reply.error.message)

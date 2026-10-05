@@ -342,6 +342,29 @@ test('an MCP protocol refusal is caller input, not a defect', async () => {
   }
 })
 
+test('an MCP door refusal keeps its code and message for every 4xx', async () => {
+  let old = globalThis.fetch
+  try {
+    for (let status of [400, 403, 404, 409, 413, 422, 429]) {
+      globalThis.fetch = (() =>
+        Promise.resolve(Response.json({
+          error: {
+            code: 'not_a_writer',
+            message: 'this instrument cannot write',
+          },
+        }, { status }))) as typeof fetch
+      let error = await assertRejects(
+        () => rpc('session')('tools/call', { name: 'app_list', arguments: {} }),
+        CallError,
+      )
+      assertEquals(error.code, 'not_a_writer')
+      assertEquals(error.message, 'this instrument cannot write')
+    }
+  } finally {
+    globalThis.fetch = old
+  }
+})
+
 test('an MCP 500 names its request without dumping an HTML page', async () => {
   let old = globalThis.fetch
   globalThis.fetch = (() =>

@@ -7,7 +7,8 @@
 // store and in Sentry — our code fell over, whatever app the URL named
 // (T-33234, unseen.ts `fault`) — and a soft page, so no failure goes unseen
 // (D-32318 §Errors, V-32361). A door's deliberate no is not a failure and
-// files nothing (unseen.ts `refusal`).
+// files nothing; it is logged and returned with its 4xx, in JSON at the
+// connector and API doors and as a page elsewhere (unseen.ts `refusal`).
 //
 // It imports nothing only the runtime can load, so a test serves it under
 // Deno over the in-memory platform (probe.ts `kernel`) exactly as index.ts
@@ -552,10 +553,40 @@ let router = {
     } catch (e) {
       // A refusal is not a break (unseen.ts `refusal`, T-32655). A part that
       // relays a door's deliberate no by throwing what it was answered is
-      // carrying an answer out, not a failure, and the same rule holds here
-      // as at the report door: it files nothing.
+      // carrying an answer out, not a failure: it files nothing. Log one
+      // line for the tail, and preserve its body and 4xx at JSON doors.
+      // A shaped refusal without a status is a bad request (400). Pages
+      // keep a page, with the refusal's status.
       let said = e instanceof Error ? e.message : String(e)
-      if (refusal(said)) return oops(env)
+      let carried = e as { status?: number; body?: string } | null
+      let body = typeof carried?.body == 'string' ? carried.body : said
+      let status = carried?.status
+      if (refusal(body, status)) {
+        status ??= 400
+        let path = new URL(req.url).pathname
+        console.log(
+          `yak: ${req.method} ${hostOf(req)}${path} refused ${status}: ${
+            JSON.stringify(body)
+          }`,
+        )
+        if (path == '/mcp' || /^(?:\/[^/]+)?\/api\//.test(path)) {
+          let answer: unknown
+          try {
+            answer = JSON.parse(body)
+          } catch {
+            answer = { error: { code: 'refused', message: said } }
+          }
+          return sealed(Response.json(answer, { status }), env)
+        }
+        let page = oops(env)
+        return sealed(
+          new Response(page.body, {
+            status,
+            headers: page.headers,
+          }),
+          env,
+        )
+      }
       // The host the router routed by, not the one the socket arrived on: it
       // is what names the space and the app this was on its way to, and after
       // `aimed` it is the address the platform derived rather than the

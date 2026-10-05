@@ -47,11 +47,14 @@ export let KERNEL: Record<string, string> = { 'x-yak-kernel': '1' }
 // store says no as `{error, message}` (@yaks/api), and its message is the
 // sentence a caller is owed — a door hands it on as it came, never wrapped in
 // the envelope it travelled in. A body that is not one is the message whole.
+// The original body and status also travel with the error so a catch that
+// answers a JSON client can return the door's refusal intact.
 export let answered = async (r: Response) => {
   let text = await r.text()
   let said = refusal(text)
   return Object.assign(new Error(said?.message ?? text), {
     status: r.status,
+    body: text,
     ...(said?.error ? { name: said.error } : {}),
   })
 }

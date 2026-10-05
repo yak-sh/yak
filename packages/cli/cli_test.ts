@@ -132,6 +132,26 @@ test('a 401 is one sentence a person can act on', async () => {
   let err = await assertRejects(() => client(false)('tools/list'), Unauthorized)
   // It names the command that signs in, as the command is spelled.
   assert(err.message.includes('`yak auth yaks.app`'), err.message)
+  for (let body of ['', 'null']) {
+    let ask = rpc({
+      url: doorUrl('shop.test'),
+      fetch: () => new Response(body, { status: 401 }),
+    })
+    let error = await assertRejects(() => ask('tools/list'), Unauthorized)
+    assertEquals(error.message, err.message)
+  }
+})
+
+test('a shaped 401 keeps the door’s refusal and remains unauthorized', async () => {
+  let ask = rpc({
+    url: doorUrl('shop.test'),
+    fetch: () =>
+      Response.json({
+        error: { code: 'unauthorized', message: 'this credential has expired' },
+      }, { status: 401 }),
+  })
+  let error = await assertRejects(() => ask('tools/list'), Unauthorized)
+  assertEquals(error.message, 'this credential has expired')
 })
 
 test('help is drawn from the schema the server published', async () => {

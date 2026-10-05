@@ -39,9 +39,12 @@ import { refuse } from './tool.ts'
 // or a 5xx (`failed` below).
 //
 // Where there is no status — a kernel part that relayed a door's no by
-// throwing what it was answered (index.ts's catch-all) — the answer's own
+// throwing what it was answered (kernel.ts's catch-all) — the answer's own
 // shape stands in for it: every door here says a no one way, a body
 // carrying `{"error":{"code":…}}`, and what fell over never wears it.
+// The catch logs that refusal without filing a break, and returns its JSON
+// and 4xx at `/mcp` and API doors. A shaped refusal with no carried status
+// answers 400; a page door keeps a page with that same status.
 //
 // The shape alone was the whole rule until C-32869 item 5, where a weather
 // worker answered the person a sentence about the mistyped key and the

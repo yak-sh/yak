@@ -312,9 +312,9 @@ export let rpc = (session: string) => {
     if (r.status != 200) {
       let text = await r.text()
       let refusal = refusalOf(parsed(text))
-      // A stale session is account state, not a broken connector. Keep its
-      // code and sign-in sentence so the caller records a refusal, not a defect.
-      if (r.status == 401 && refusal) {
+      // A door's deliberate no is a call refusal, not a broken connector.
+      // Keep its code and sentence so the caller can act on the refusal.
+      if (r.status >= 400 && r.status < 500 && refusal) {
         throw new CallError(refusal.code, refusal.message)
       }
       let requestId = r.headers.get('x-request-id')
