@@ -4,6 +4,8 @@
 import {
   type Actor,
   type Comp,
+  comps,
+  dead,
   type Graph,
   type Hook,
   type Plugin,
@@ -13,6 +15,7 @@ import {
 import { after } from '@yaks/fp'
 import { CallError } from '@yaks/tools'
 import { changing } from './change.ts'
+import { syncOf } from '@yaks/vocab'
 
 export let choosing: Hook = (bundles, tx) => {
   let marked = bundles.filter((row) => row.chosen != null)
@@ -53,8 +56,23 @@ export let choices = (): Plugin => ({
   admission: () => true,
   hooks: {
     precondition: choosing,
-    stamp: (bundles, tx, _err, context) =>
-      changing((context!.graph as Graph).vocab)(bundles, tx),
+    stamp: (bundles, tx, _err, context) => {
+      let vocab = (context!.graph as Graph).vocab
+      // A relay admits transient peer values, not a durable builder input.
+      // Reconciliation here cannot commit; querying after rehearsal mutation
+      // would instead force a billed SQL rollback of the entire admission.
+      // The ordinary apply that saves gameplay still reconciles builders.
+      if (
+        context?.admission && bundles.every((b) =>
+          !dead(b) &&
+          comps(b).every(([name]) =>
+            ['created', 'updated'].includes(name) ||
+            syncOf(vocab, name) == 'peers'
+          )
+        )
+      ) return bundles
+      return changing(vocab)(bundles, tx)
+    },
   },
 })
 
