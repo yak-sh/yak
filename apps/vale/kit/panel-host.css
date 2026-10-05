@@ -1,9 +1,15 @@
-/* Bridges around still-native domain bodies must not add a formatting box.
-   Bodies, canvas/drafts, scroll and the fixed list/detail contract stay put. */
-.Panel_Mount,
-.Panel_Content,
-.Panel_Native {
+/* The mount adds no box. The content and native wrappers keep the heading
+   above a body that fills the remaining pane, even in a tabbed sheet. */
+.Panel_Mount {
   display: contents;
+}
+
+.Panel_Content {
+  max-width: none;
+}
+
+.Panel_Native {
+  overflow: hidden;
 }
 
 /* A page heading gap is not space between the shell tabs and their pane. */

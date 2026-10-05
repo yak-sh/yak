@@ -235,6 +235,7 @@ export let panels = (
     id: string,
     spec: Spec & { tabs: Record<T, TabSpec> },
   ): Record<T, Tab> => {
+    if (!state.heading(id)) state.head(id, spec.title)
     let leaves = Object.entries<TabSpec>(spec.tabs).map(([name, tab]) => {
       let native = body(doc, true)
       let page: Tab = {
