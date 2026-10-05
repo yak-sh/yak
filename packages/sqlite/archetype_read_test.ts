@@ -121,12 +121,12 @@ test('classified gathers select only present tables and only their owners', () =
   assertEquals(asked.length, 1) // value-only queries do not load the catalog
   asked = []
   s.rows('.doc .marker')
-  // completeness, catalog version, one shared catalog, entity scan
-  assertEquals(asked.length, 4)
-  assert(asked[3].sql.includes('"entity"."archetype" in ('))
-  assert(!/join "(doc|marker)"/.test(asked[3].sql))
+  // completeness, one catalog snapshot, entity scan
+  assertEquals(asked.length, 3)
+  assert(asked[2].sql.includes('"entity"."archetype" in ('))
+  assert(!/join "(doc|marker)"/.test(asked[2].sql))
   asked = []
   s.rows('.doc .marker')
-  assertEquals(asked.length, 3) // the version proves the snapshot; no re-read
+  assertEquals(asked.length, 1) // no catalog SQL until the connection mutates
   assert(!asked.some((q) => q.sql.startsWith('select "entity", "tables" from')))
 })

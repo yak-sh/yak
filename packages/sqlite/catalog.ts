@@ -1,26 +1,24 @@
-// Only immutable table sets are cached. Read the catalog's current ids on each
-// plan: an uncommitted descriptor may disappear and its rowid may be reused.
+// Immutable table sets and a connection-revision snapshot: planning reads no
+// persistent rows until a catalog mutation or rollback invalidates that snapshot.
 import { type Archetype, Archetypes, tablesOf } from '@yaks/archetype'
 import {
   type ArchetypeSet,
   archetypeSet,
-  as,
   col,
-  count,
   type Driver,
-  fn,
   isNull,
   lit,
   select,
   table,
   val,
 } from '@yaks/sql'
+import { revision } from './revision.ts'
 
 let caches = new WeakMap<Driver, {
   sets: Archetypes
   text: Map<string, Archetype>
   // The last snapshot and the catalog version it was read at (below).
-  version?: string
+  version?: number
   set?: ArchetypeSet
 }>()
 let cacheFor = (driver: Driver) => {
@@ -31,24 +29,6 @@ let cacheFor = (driver: Driver) => {
   }
   return cache
 }
-
-// The catalog's version: one aggregate over the (small) archetype table, so a
-// plan pays one statement to prove the last snapshot still stands instead of
-// re-reading and re-interning every descriptor. Rows are appended when a new
-// table set appears and are otherwise immutable, so count, newest id and total
-// descriptor length move on every change. Re-reading 464 rows per compile was
-// ~8 ms of a 55-subscription boot burst (T-37445).
-let version = (driver: Driver) =>
-  JSON.stringify(
-    driver.query(select({
-      cols: [
-        as(count(), 'n'),
-        as(fn('max', col('entity')), 'm'),
-        as(fn('total', fn('length', col('tables'))), 't'),
-      ],
-      from: table('archetype'),
-    }))[0],
-  )
 
 /** Decode a descriptor once, independent of its transaction-local row id. */
 export function descriptor(driver: Driver, text: string): Archetype {
@@ -62,9 +42,11 @@ export function descriptor(driver: Driver, text: string): Archetype {
 }
 
 function snapshot(driver: Driver): ArchetypeSet | undefined {
-  // Low-level patch() is also public, and can be used before the graph plugin
-  // or boot backfill classifies its rows. Such a file still needs the legacy
-  // predicates; a partial catalog must never silently hide unclassified rows.
+  let cache = cacheFor(driver)
+  let v = revision(driver, 'catalog')
+  if (cache.version == v) return cache.set
+  // Raw patch() can mint rows before classification. Keep that incomplete
+  // snapshot as a declined catalog, and inspect it again only after a mutation.
   if (
     driver.query(select({
       cols: [lit(1)],
@@ -73,11 +55,10 @@ function snapshot(driver: Driver): ArchetypeSet | undefined {
       limit: val(1),
     })).length
   ) {
+    cache.version = v
+    cache.set = undefined
     return undefined
   }
-  let cache = cacheFor(driver)
-  let v = version(driver)
-  if (cache.set && cache.version == v) return cache.set
   let ids = new Map<string, number>()
   let all = select({
     cols: [col('entity'), col('tables')],

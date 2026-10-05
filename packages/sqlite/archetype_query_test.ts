@@ -254,15 +254,15 @@ test('archetype plans and gathers observe commits from another SQLite handle', (
   let afterCatalog: (() => void) | undefined
   let driver = (db: Opened): Driver => ({
     ...db,
-    // Deferred units, so the commit staged below can land while the reader's
-    // unit is open rather than wait on the write lock it would take up front.
-    file: false,
+    // Read units on a file are deferred; the peer may commit while the
+    // reader keeps the snapshot its catalog and entity query share.
+    file: true,
     query: (s) => {
       let result = db.query(s)
-      // The planner consults the catalog through its version probe; a
+      // The planner consults the connection's data version; a
       // commit landing right after it is the race this test stages.
       let sql = render(s).sql
-      if (db == first && sql.startsWith('select count(*) as "n", max(')) {
+      if (db == first && sql == 'pragma data_version') {
         let hook = afterCatalog
         afterCatalog = undefined
         hook?.()
