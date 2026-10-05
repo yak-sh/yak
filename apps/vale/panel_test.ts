@@ -217,14 +217,22 @@ test('keys, backdrop and close button preserve input, busy and pointer-lock guar
     }
   }))
 
-test('Mossvale opens every interface in one sheet and retains each tab heading', () =>
+test('Mossvale tabs keep Menu last and world interactions open their own sheet', () =>
   mounted((glass, dom) => {
     let state = pageState('mossvale-panel-test')
     let manager = panels(glass, () => false, state)
     try {
       let pages = manager.book('hero', SHEETS.hero)
-      equal(glass.querySelectorAll('.Panel_Sheet').length, 1)
+      let craft = manager.add('craft', SHEETS.craft)
+      equal(glass.querySelectorAll('.Panel_Sheet').length, 2)
       let buttons = [...glass.querySelectorAll<HTMLButtonElement>('[role=tab]')]
+      equal(buttons.at(-1)?.getAttribute('aria-label'), 'Menu')
+      for (let title of ['Crafting', 'Deals', 'Notice board', 'About']) {
+        equal(
+          buttons.some((button) => button.getAttribute('aria-label') == title),
+          false,
+        )
+      }
       for (let [name, page] of Object.entries(pages)) {
         let button = buttons.find((button) =>
           button.getAttribute('aria-label') ==
@@ -233,19 +241,25 @@ test('Mossvale opens every interface in one sheet and retains each tab heading',
         ok(button.querySelector('.Glyph'))
         button.click()
         equal(manager.open, page)
-        equal(glass.querySelectorAll('.Panel_Content:not([hidden])').length, 1)
+        equal(
+          glass.querySelectorAll('.Panel-hero .Panel_Content:not([hidden])')
+            .length,
+          1,
+        )
         equal(page.body.hidden, false)
       }
       pages.map.head('The valley')
       pages.map.show()
       equal(
-        glass.querySelector('.Panel_Content:not([hidden]) h2')?.textContent,
+        glass.querySelector('.Panel-hero .Panel_Content:not([hidden]) h2')
+          ?.textContent,
         'The valley',
       )
-      pages.craft.head('Forge')
-      pages.craft.show()
+      craft.head('Forge')
+      craft.show()
+      equal(pages.map.open, false)
       equal(
-        glass.querySelector('.Panel_Content:not([hidden]) h2')?.textContent,
+        glass.querySelector('.Panel-craft .Panel_Title')?.textContent,
         'Forge',
       )
       dom.window.dispatchEvent(
@@ -262,7 +276,8 @@ test('Mossvale opens every interface in one sheet and retains each tab heading',
       equal(pages.menu.open, true)
       pages.map.show()
       equal(
-        glass.querySelector('.Panel_Content:not([hidden]) h2')?.textContent,
+        glass.querySelector('.Panel-hero .Panel_Content:not([hidden]) h2')
+          ?.textContent,
         'The valley',
       )
     } finally {

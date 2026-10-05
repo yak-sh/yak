@@ -73,6 +73,7 @@ import { sound } from './sound.ts'
 import { spellFx } from './spell_fx.ts'
 import { icon, refreshSprites } from './sprites.ts'
 import { station } from './station.ts'
+import { pageState } from './page-state.ts'
 import { voices } from './voicebox.ts'
 import { COARSER } from './stream.ts'
 import {
@@ -85,7 +86,8 @@ import {
   VOXEL,
   withoutSpent,
 } from './terrain.ts'
-import { ledger, TRADES } from './trades.ts'
+import { TRADES } from './trades.ts'
+import { ledger } from './tradebook.ts'
 import { preview as tradePreview } from './trade-preview.ts'
 import { world } from './world.ts'
 import { village } from './village.ts'
@@ -180,7 +182,8 @@ let typing = false
 // someone is talked to.
 let elsewhere = () => typing || h.talking || chat.typing
 let hands = listen(canvas, glass, elsewhere)
-let h = hud(glass, hands.press, elsewhere)
+let uiState = pageState(undefined, opening.client)
+let h = hud(glass, hands.press, elsewhere, uiState)
 let marks = overlay(h.layer, camera, h.under)
 let chat = chatbox(
   glass,
@@ -206,7 +209,7 @@ let you = character(h.panels.character, {
 let bench = station(h.panels.craft, {
   make: toil.make,
   upgrade: toil.upgrade,
-})
+}, uiState)
 let actions = bar(h.acts)
 let skills = board(h.panels.skills, {
   learn: (id) => {
@@ -220,7 +223,7 @@ let skills = board(h.panels.skills, {
   },
 })
 let log = journal(h.panels.journal, { pin: g.pin })
-let trades = ledger(h.panels.trades, tradePreview)
+let trades = ledger(h.panels.trades, tradePreview, uiState)
 // A quest taken from a notice board is pinned while it is on offer, so the
 // way to whoever gives it is tracked; a villager's job is agreed to.
 let notes = noticeboard(h.panels.notices, {
@@ -785,7 +788,11 @@ let worked = (e: Work) => {
       plus: e.plus,
       gain: e.gain,
     })
-    h.toast(`Upgraded: ${t.name}`, `Toast-loot ${tint(t.rarity)}`, icon(e.item))
+    h.toast(
+      `Upgraded: ${t.name}`,
+      `Toast-loot ${tint(t.rarity)}`,
+      icon(e.item),
+    )
     glow.emit(v3(e.at, 1), GRADES[t.rarity].light, 24, {
       speed: 2,
       up: 2.5,
@@ -1226,7 +1233,7 @@ let loop = (t: number) => {
       p.show(f)
       you.show(f.sheet, mine)
       skills.show(f)
-      trades.show(job.trades)
+      trades.show(f.sheet, job)
       // Walked off from the station its sheet is open at: it folds away.
       if (bench.at && job.bench?.craft != bench.at) bench.close()
       bench.show(f.sheet, job)

@@ -3,6 +3,34 @@
    bag is short of it. The button fills as it is made. The last tab, set
    apart, upgrades what the hero carries; on a narrow sheet it takes a row of
    its own. */
+.Panel-craft .Panel_Sheet {
+  width: min(64rem, 100%);
+}
+
+.Panel-craft .Panel_Title {
+  flex-wrap: wrap;
+  white-space: normal;
+}
+
+.Craft_Menu {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  align-items: start;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+.Craft_Menu > .Pack {
+  width: auto;
+  min-height: 0;
+}
+
+.Craft_Detail {
+  display: grid;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
 .Craft_Tiers {
   display: flex;
   flex-wrap: wrap;

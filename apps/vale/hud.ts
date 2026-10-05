@@ -44,6 +44,7 @@ import { next, type Task, told, toward, tracked } from './journal.ts'
 import type { Spot } from './levels.ts'
 import { cap, type Page, panels, type Spec, type TabSpec } from './panel.ts'
 import type { Quest } from './quests.ts'
+import { type PageState, pageState } from './page-state.ts'
 import { need } from './rules.ts'
 import { icon } from './sprites.ts'
 import { said } from './stock.ts'
@@ -158,8 +159,8 @@ let MICS: Record<Mic, string> = {
   spent: "This space's voice is spent for the month",
 }
 
-/** One panel for every interface, with each tab's icon and opening keys.
- * Crafting, notices and deals are also opened from their places in the world. */
+/** The hero's interfaces, with Menu last; world interactions have their own
+ * sheets, opened from their places rather than from the navigation tabs. */
 export let SHEETS = {
   hero: {
     title: 'Mossvale',
@@ -172,13 +173,13 @@ export let SHEETS = {
       map: { title: 'Map', icon: 'mountain', keys: ['KeyM'] },
       party: { title: 'Party', icon: 'users', keys: ['KeyO'] },
       menu: { title: 'Menu', icon: 'menu', keys: ['Escape'] },
-      craft: { title: 'Crafting', icon: 'anvil', keys: [] },
-      notices: { title: 'Notice board', icon: 'notices', keys: [] },
-      deal: { title: 'Deals', icon: 'handHeart', keys: [] },
-      about: { title: 'About', icon: 'lamp', keys: [] },
     },
   },
-} satisfies Record<string, Spec & { tabs: Record<string, TabSpec> }>
+  craft: { title: 'Crafting' },
+  notices: { title: 'Notice board' },
+  deal: { title: 'Deals' },
+  about: { title: 'About', tall: 'auto' },
+} satisfies Record<string, Spec & { tabs?: Record<string, TabSpec> }>
 
 let TABS = SHEETS.hero.tabs
 
@@ -188,6 +189,7 @@ export let hud = (
   root: HTMLElement,
   press: (a: Action) => void,
   busy: () => boolean,
+  state: PageState = pageState(),
 ) => {
   let layer = el('Hud_Layer')
   let vitals = el('Vitals', '', 'button')
@@ -235,8 +237,14 @@ export let hud = (
   root.append(layer, vitals, quest, foe, nav, toasts, pads, talk, faint)
   tips(root)
 
-  let shelf = panels(root, busy)
-  let panel = shelf.book('hero', SHEETS.hero)
+  let shelf = panels(root, busy, state)
+  let panel = {
+    ...shelf.book('hero', SHEETS.hero),
+    craft: shelf.add('craft', SHEETS.craft),
+    notices: shelf.add('notices', SHEETS.notices),
+    deal: shelf.add('deal', SHEETS.deal),
+    about: shelf.add('about', SHEETS.about),
+  }
   about(panel.about)
   badge.addEventListener('click', panel.about.toggle)
   rose.addEventListener('click', panel.map.toggle)

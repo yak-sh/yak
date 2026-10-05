@@ -1,18 +1,69 @@
-// Trade selection preserves the list while progress and catalog guides refresh.
-import { test } from '@yaks/testing'
-import { assertEquals, assertMatch } from '@std/assert'
+// Trades browse the same station interface while only a village can do work.
+import { equal, ok, test } from '@yaks/testing'
+import { assertMatch } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { ALL, ledger, tradesOf } from './trades.ts'
+import { render } from 'preact'
+import { ALL, MAKING, tradesOf } from './trades.ts'
+import { ledger } from './tradebook.ts'
 import { seedItems } from './items_fixture.ts'
-import { ITEMS, useItems } from './items.ts'
+import { ITEMS } from './items.ts'
 import { preview } from './trade-preview.ts'
+import { pageState } from './page-state.ts'
+import { station } from './station.ts'
+import { recipes, serves } from './craft.ts'
+import { kitOf } from './gear.ts'
+import type { Sheet } from './play.ts'
+import type { Job } from './work.ts'
 
+let sheet = (): Sheet => ({
+  name: 'Tester',
+  xp: 0,
+  lvl: 1,
+  max: 50,
+  bag: [{ eid: 'sword', kind: 'sword1', n: 1 }],
+  worn: {},
+  kit: kitOf({}),
+  firsts: [],
+  abilities: [],
+  learned: [],
+  points: 0,
+  quests: [],
+  unpinned: new Set(),
+})
+let job = (works: Parameters<typeof tradesOf>[0] = []): Job => ({
+  nodes: [],
+  near: null,
+  bench: null,
+  board: null,
+  doing: null,
+  trades: tradesOf(works),
+  events: [],
+})
+let mounted = async (
+  run: (p: ReturnType<typeof page>) => void | Promise<void>,
+) => {
+  seedItems()
+  let p = page(),
+    prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  Object.defineProperty(globalThis, 'document', {
+    value: p.tab.body.ownerDocument,
+    configurable: true,
+  })
+  await p.state.ready
+  try {
+    await run(p)
+  } finally {
+    render(null, p.tab.body)
+    p.state.dispose()
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else Reflect.deleteProperty(globalThis, 'document')
+  }
+}
 let page = () => {
   let { document, window } = parseHTML(
     '<html><body><div class=Panel_Sheet><div id=host></div></div></body></html>',
   )
-  let body = document.querySelector<HTMLElement>('#host')!
-  let open = true
+  let body = document.querySelector<HTMLElement>('#host')!, open = true
   let tab = {
     body,
     get open() {
@@ -27,76 +78,119 @@ let page = () => {
     toggle: () => {
       open = !open
     },
+    head: (_html: string) => {},
   }
-  return { tab, window, view: ledger(tab, preview) }
+  let state = pageState('trades-test')
+  let click = (q: string, host: Element = body) => {
+    let target = host.querySelector(q)
+    ok(target, `Missing ${q}`)
+    target.dispatchEvent(new window.Event('click', { bubbles: true }))
+  }
+  return { tab, state, click, view: ledger(tab, preview, state) }
 }
 
-test('every trade shows name, level and xp before selection; picking keeps list identity', () => {
-  seedItems()
-  let { tab, window, view } = page()
-  let mine = tradesOf([['wood', 15], ['forge', 45]])
-  view.show(mine)
-  let list = tab.body.querySelector<HTMLElement>('.Split_List')!
-  let detail = tab.body.querySelector<HTMLElement>('.Split_Content')!
-  let rows = [...list.querySelectorAll<HTMLElement>('[data-select]')]
-  assertEquals(rows.length, ALL.length)
-  assertMatch(rows[0].textContent!, /Woodcutting.*Level 2.*5 \/ 30 xp/s)
-  assertMatch(rows[4].textContent!, /Smithing.*Level 3.*5 \/ 50 xp/s)
-  assertEquals(list.querySelectorAll('.Bar-xp').length, ALL.length)
-  list.scrollTop = 85
-  rows[4].dispatchEvent(new window.Event('click', { bubbles: true }))
-  assertEquals(list.querySelector('[data-select=wood]'), rows[0])
-  assertEquals(list.scrollTop, 85)
-  assertEquals(rows[4].getAttribute('aria-pressed'), 'true')
-  assertMatch(detail.textContent!, /Forge preview/)
-  assertEquals(detail.querySelectorAll('button, [data-do]').length, 0)
-  let guide = detail.firstElementChild
-  view.show(mine)
-  assertEquals(detail.firstElementChild, guide)
-  tab.close()
-  view.show(tradesOf([['forge', 100]]))
-  assertEquals(list.querySelector('[data-select=forge]'), rows[4])
-  tab.show()
-  view.show(tradesOf([['forge', 100]]))
-  assertEquals(list.scrollTop, 85)
-  assertMatch(
-    list.querySelector('[data-select=forge]')!.textContent!,
-    /Level 4/,
-  )
-  assertMatch(detail.textContent!, /Forge preview/)
-  tab.body.querySelector('.Split_Back')!.dispatchEvent(
-    new window.Event('click'),
-  )
-  view.show(tradesOf([['forge', 100]]))
-  assertEquals(
-    tab.body.querySelector('.Split')!.classList.contains('Split-picked'),
-    false,
-  )
-})
+test('trade selection keeps progress rows, scroll and phone back navigation', () =>
+  mounted(({ tab, view, click, state }) => {
+    let s = sheet(), work = job([['wood', 15], ['forge', 45]])
+    view.show(s, work)
+    let list = tab.body.querySelector<HTMLElement>('.Split_List')!,
+      rows = [...list.querySelectorAll('[data-select]')]
+    equal(rows.length, ALL.length)
+    assertMatch(rows[0].textContent!, /Woodcutting.*Level 2.*5 \/ 30 xp/s)
+    assertMatch(rows[4].textContent!, /Smithing.*Level 3.*5 \/ 50 xp/s)
+    list.scrollTop = 85
+    click('[data-select=forge]')
+    equal(list.querySelector('[data-select=wood]'), rows[0])
+    equal(list.scrollTop, 85)
+    equal(rows[4].getAttribute('aria-pressed'), 'true')
+    ok(tab.body.querySelector('[data-tier]'))
+    equal(tab.body.querySelectorAll('[data-do]').length, 0)
+    tab.close()
+    view.show(s, job([['forge', 100]]))
+    tab.show()
+    view.show(s, job([['forge', 100]]))
+    equal(list.querySelector('[data-select=forge]'), rows[4])
+    assertMatch(rows[4].textContent!, /Level 4/)
+    click('.Split_Back')
+    view.show(s, work)
+    equal(
+      tab.body.querySelector('.Split')!.classList.contains('Split-picked'),
+      false,
+    )
+    equal(state.cursor('trades'), 'forge')
+  }))
 
-test('gathering guide follows nodes; crafting preview follows recipes and trade eligibility', () => {
-  seedItems()
-  let { tab, window, view } = page()
-  view.show(tradesOf([]))
-  tab.body.querySelector('[data-select=wood]')!.dispatchEvent(
-    new window.Event('click', { bubbles: true }),
-  )
-  let detail = tab.body.querySelector('.Split_Content')!
-  assertMatch(detail.textContent!, /Oak.*Oak log/s)
-  assertEquals(detail.querySelectorAll('button, [data-do]').length, 0)
-  assertMatch(preview('cauldron', 1), /Requires level 3/)
-  assertEquals(preview('cauldron', 3).includes('Requires level 3'), false)
-  let sword = ITEMS.sword1
-  useItems([{
-    entity: { eid: 'trade-preview-sword' },
-    item_design: {
-      ...sword,
-      kind: 'sword1',
-      name: '<New sword>',
-    },
-  }])
-  let { document } = parseHTML(preview('forge', 1))
-  assertEquals(document.querySelector('b')!.textContent, '<New sword>')
-  assertEquals(document.querySelector('New'), null)
-  seedItems()
-})
+test('gathering selection teaches the nodes and does not show station actions', () =>
+  mounted(({ tab, view, click }) => {
+    view.show(sheet(), job())
+    click('[data-select=wood]')
+    let detail = tab.body.querySelector('.Split_Content')!
+    assertMatch(detail.textContent!, /Oak.*Oak log/s)
+    equal(detail.querySelectorAll('button, [data-do]').length, 0)
+  }))
+
+for (let trade of MAKING) {
+  test(`${trade}: Trades browses the bench's tiers, requirements and ranges without work`, () =>
+    mounted(({ tab, view, click }) => {
+      let s = sheet(),
+        work = job(),
+        r = Object.values(recipes()).find((r) => r.at == trade && r.tier == 1)!
+      view.show(s, work)
+      click(`[data-select=${trade}]`)
+      let detail = tab.body.querySelector('.Split_Content')!
+      ok(detail.querySelector('[data-tier="2"]'))
+      click(`[data-pick=${r.makes}]`, detail)
+      assertMatch(detail.textContent!, new RegExp(ITEMS[r.makes].name))
+      equal(detail.querySelectorAll('.Craft_Need').length, r.needs.length)
+      if (ITEMS[r.makes].slot) ok(detail.querySelector('.Craft_Ranges'))
+      equal(detail.querySelectorAll('[data-do]').length, 0)
+      click('[data-tier="2"]', detail)
+      equal(detail.querySelectorAll(`[data-pick=${r.makes}]`).length, 0)
+      equal(detail.querySelectorAll('.Craft_Need').length, 0)
+      click('[data-tier="1"]', detail)
+      click(`[data-pick=${r.makes}]`, detail)
+      equal(detail.querySelectorAll('.Craft_Need').length, r.needs.length)
+    }))
+}
+
+test('Trades exposes upgrade requirements and comparisons for carried pieces', () =>
+  mounted(({ tab, view, click }) => {
+    view.show(sheet(), job())
+    click('[data-select=forge]')
+    click('[data-tier=up]')
+    click('[data-pick=sword]')
+    let detail = tab.body.querySelector('.Split_Content')!
+    ok(detail.querySelector('.Craft_Need'))
+    assertMatch(
+      detail.textContent!,
+      /Now.*current → possible result.*→ .*[-–]/s,
+    )
+    equal(detail.querySelectorAll('[data-do]').length, 0)
+  }))
+
+for (let available of [false, true]) {
+  test(`a village bench ${available ? 'dispatches eligible work' : 'refuses work when materials are short'}`, () =>
+    mounted(({ tab, state, click }) => {
+      let s = sheet(), work = job(), made: string[] = [], r = recipes().sword1
+      if (available) {
+        s.bag = r.needs.map(([what, n]) => ({
+          eid: what,
+          kind: serves(what, r.tier)[0],
+          n,
+        }))
+      }
+      let bench = station(tab, {
+        make: (recipe) => made.push(recipe),
+        upgrade: (piece) => made.push(piece),
+      }, state)
+      bench.open('forge', work.trades)
+      bench.show(s, work)
+      click('[data-pick=sword1]')
+      equal(
+        tab.body.querySelector<HTMLButtonElement>('[data-do=make]')!.disabled,
+        !available,
+      )
+      click('[data-do=make]')
+      equal(made, available ? ['sword1'] : [])
+    }))
+}

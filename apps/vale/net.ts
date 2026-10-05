@@ -27,6 +27,7 @@ import { SIZE } from './levels.ts'
 import { type Look, lookOf } from './make.ts'
 import { type Place, placeOf as savedPlace } from './place.ts'
 import { once as read } from './once.ts'
+import { pageDocs } from './page-state.ts'
 
 export type Bundle = NonNullable<ReturnType<Client['ent']>>
 
@@ -50,7 +51,10 @@ export type Hero = Look & { eid: string; position: Place | null }
 // The store's words include this app's vocabulary and the platform's. A
 // failed request waits for the store to recover before the page opens a client.
 export let vocabulary = async (base: URL) =>
-  loadVocab(await read<VocabDoc>(new URL('vocab.json', base)))
+  loadVocab([
+    ...await read<VocabDoc>(new URL('vocab.json', base)),
+    ...pageDocs(),
+  ])
 
 /** A hero, off their player row and their newest look row. */
 let heroOf = (b: Bundle, look?: Bundle): Hero => ({

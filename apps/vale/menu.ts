@@ -60,10 +60,8 @@ let keys = (swapped: boolean, strafes: boolean) =>
     [`wheel`, 'Nearer or further'],
     ...DOES.map(([a, what]) => [kbd(keysOf(a).map(cap)), what]),
     [kbd(['Enter']), 'Chat'],
-    ...Object.values(SHEETS).flatMap((s) =>
-      Object.values(s.tabs).filter((t) => t.keys.length)
-        .map((t) => [kbd(t.keys.map(cap)), t.title])
-    ),
+    ...Object.values(SHEETS.hero.tabs).filter((t) => t.keys.length)
+      .map((t) => [kbd(t.keys.map(cap)), t.title]),
   ].map(([k, what]) => `<dt>${k}</dt><dd>${what}</dd>`).join('')
 
 let TOUCH = [

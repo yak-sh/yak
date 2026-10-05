@@ -120,12 +120,15 @@
   flex: 1;
   align-items: end;
   overflow-x: auto;
+  overflow-y: hidden;
   gap: 0.2rem;
   min-width: 0;
+  padding-bottom: 2px;
 }
 
 .Panel_Tab {
   position: relative;
+  flex: none;
   display: flex;
   align-items: center;
   gap: 0.3rem;

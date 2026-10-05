@@ -219,3 +219,27 @@ test('base and Vale kitDocs compose and the interactive List specimen draws', ()
       }
     })
   ))
+
+test('page controllers keep navigation in the supplied game graph and leave it open', async () => {
+  let shared = pageState('game')
+  let page = pageState('navigation', shared.front)
+  try {
+    await shared.ready
+    page.open('hero', 'trades')
+    equal(page.front, shared.front)
+    equal(shared.front.ent('navigation')?.Panels, {
+      panel: 'hero',
+      pane: 'trades',
+    })
+    page.select('recipes', 'sword1')
+    equal(shared.front.ent(page.listAt('recipes'))?.List, {
+      cursor: 'sword1',
+      pane: 'list',
+    })
+    page.dispose()
+    shared.select('still-open', 'yes')
+    equal(shared.cursor('still-open'), 'yes')
+  } finally {
+    shared.dispose()
+  }
+})

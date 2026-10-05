@@ -2,7 +2,7 @@
  * The manager and each List instance have named entities. Consumers subscribe
  * to these rows and send controlled outputs through mutate; no hook owns state.
  */
-import { client } from '@yaks/client'
+import { type Client, client } from '@yaks/client'
 import { type Bundle, comps, derivedEid, mint } from '@yaks/graph'
 import { parse } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
@@ -15,8 +15,8 @@ export let pageDocs = () => kitDocs({ ...base, ...ux })
 let query = (eid: string) => `.entity.eid=${JSON.stringify(eid)}`
 
 /** One controller per page; owner can be supplied again for a named instance. */
-export let pageState = (owner = mint()) => {
-  let front = client(loadVocab(pageDocs()), [], {
+export let pageState = (owner = mint(), shared?: Client) => {
+  let front = shared ?? client(loadVocab(pageDocs()), [], {
     vault: false,
     wireVault: false,
   })
@@ -35,7 +35,7 @@ export let pageState = (owner = mint()) => {
     return typeof tab == 'string' ? tab : undefined
   }
   let open = (panel: string, tab?: string) =>
-    mutate([{
+    mutate([{ entity: { eid: panel }, Panel: {} }, {
       entity: { eid: owner },
       Panels: { panel, pane: tab ?? null },
     }])
@@ -57,6 +57,7 @@ export let pageState = (owner = mint()) => {
     front,
     ready: front.ready,
     mutate,
+    row,
     get opened() {
       return opened()
     },
@@ -88,7 +89,9 @@ export let pageState = (owner = mint()) => {
     select,
     cursor: (panel: string) => selection(list(panel)).cursor,
     watchList: (panel: string) => front.watch(query(listAt(panel))),
-    dispose: () => front.close(),
+    dispose: () => {
+      if (!shared) front.close()
+    },
   }
 }
 export type PageState = ReturnType<typeof pageState>
