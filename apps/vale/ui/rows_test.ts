@@ -74,3 +74,43 @@ test('shared list rows have no card frame and selection keeps their geometry', (
     window.close()
   }
 })
+
+test('selection outlines shared rows and gear without repainting rarity or changing size', () => {
+  for (
+    let [base, selected] of [
+      ['Split_Row Menu_Row', 'Split_Row-on'],
+      ['Pack_Tile Rarity-rare', 'Split_Row-on'],
+      ['Pack_Slot Rarity-legendary', 'Pack_Tile-on'],
+      ['Board_Skill Board_Skill-known', 'Split_Row-on'],
+    ]
+  ) {
+    let { window } = styled(
+      `<button class="${base}">Item</button>` +
+        `<button class="${base} ${selected}">Item</button>`,
+    )
+    try {
+      let [before, after] = [...window.document.querySelectorAll('button')]
+        .map((row) => window.getComputedStyle(row))
+      for (
+        let property of [
+          'borderWidth',
+          'padding',
+          'width',
+          'height',
+          'background',
+          'boxShadow',
+        ]
+      ) {
+        assertEquals(
+          Reflect.get(after, property),
+          Reflect.get(before, property),
+          `${base}: ${property}`,
+        )
+      }
+      assertEquals(after.outline, '3px solid var(--selection)')
+      assertEquals(after.outlineOffset, '2px')
+    } finally {
+      window.close()
+    }
+  }
+})

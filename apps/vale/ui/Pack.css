@@ -80,15 +80,6 @@
     0 0 10px color-mix(in srgb, var(--legendary) 60%, transparent);
 }
 
-.Pack_Slot.Pack_Tile-on,
-.Pack_Tile.Pack_Tile-on {
-  --frame: var(--rarity, var(--gold));
-  border: 3px solid var(--deep);
-  background: #fff3c4;
-  box-shadow: inset 0 0 0 2px var(--gold),
-    inset 0 -3px 0 color-mix(in srgb, var(--rim) 70%, transparent);
-}
-
 /* The tier sits at the lower right of its picture, clear of most gear. */
 .Pack_Tier {
   position: absolute;

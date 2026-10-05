@@ -65,9 +65,11 @@
   color: var(--faint);
 }
 
-.Split_Row-on {
-  background: var(--well);
-  box-shadow: inset 3px 0 0 var(--gold);
+/* A separate ring preserves every row's own frame, rarity and geometry. */
+.Split_Row-on,
+.Pack_Tile-on {
+  outline: 3px solid var(--selection);
+  outline-offset: 2px;
 }
 
 .Split_Back {
