@@ -1,4 +1,6 @@
 // Discovery is release metadata, never a reason to fetch an app Store.
+import { directory, fetch as directoryFetch } from './directory.ts'
+import { bound } from './env.ts'
 import { r2RawObjects } from './lib/objects.ts'
 import type { Env } from './env.ts'
 import { commandsOf } from './probe.ts'
@@ -27,7 +29,7 @@ let watched = async () => {
       }),
     } satisfies Namespace
   })
-  return { k, fetched, blobs: r2RawObjects(bindings!.BLOBS) }
+  return { k, fetched, env: bindings!, blobs: r2RawObjects(bindings!.BLOBS) }
 }
 
 test('MCP discovery fetches zero app Stores and a named write fetches only its app', async () => {
@@ -112,7 +114,7 @@ test('MCP discovery fetches zero app Stores and a named write fetches only its a
 })
 
 test('MCP discovers accepted retypes and retained words from legacy releases without waking Stores', async () => {
-  let { k, fetched, blobs } = await watched()
+  let { k, fetched, blobs, env } = await watched()
   try {
     let person = await signIn(k)
     let agent = connector(k, person.cookie)
@@ -143,6 +145,21 @@ test('MCP discovers accepted retypes and retained words from legacy releases wit
       })
       await agent.tool('app_deploy', app)
     }
+    // A person's roster also includes an undeployed app with no release
+    // metadata and a trashed app that discovery must not reconstruct.
+    await agent.tool('app_new', { space, slug: 'draft', title: 'Draft' })
+    await agent.tool('app_new', { space, slug: 'trashed', title: 'Trashed' })
+    await agent.tool('app_delete', { space, app: 'trashed' })
+    let dir = directory(bound(env.DIRECTORY, directoryFetch, env))
+    let here = (await dir.space(space))!
+    let arena = (await dir.app(here, 'arena'))!
+    // Releases before source pointers selected the same pinned deploy files.
+    await dir.stamp({
+      entities: [{
+        entity: { eid: arena.eid },
+        app: { source: null },
+      }],
+    }, { 'x-yak-person': person.person, 'x-yak-role': 'owner' })
     // Only this isolated kernel's snapshots are removed. File-only discovery
     // cannot know which retired columns were empty, so it preserves them.
     let snapshots = await blobs.list(`${space}/.declarations/`)

@@ -6,6 +6,7 @@
 // Store admission again, which needs the Store's row counts.
 import type { VocabDoc } from '@yaks/vocab'
 import type { Tools } from '@yaks/tools/declared'
+import { CallError } from '@yaks/tools'
 import { read } from '@yaks/yaml'
 import {
   type App,
@@ -183,5 +184,15 @@ export let declarationOf = (
     return bytes
       ? JSON.parse(new TextDecoder().decode(bytes))
       : legacy(env, space, app)
+  }).catch((error) => {
+    // Accepted release metadata is not a caller's proposed write. A refusal
+    // while reconstructing it is our defect, not a 4xx to suppress at the
+    // router; preserve the cause and let the kernel report it to Sentry.
+    if (error instanceof CallError) {
+      throw new Error(`Release discovery failed: ${error.message}`, {
+        cause: error,
+      })
+    }
+    throw error
   })
 }

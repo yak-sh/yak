@@ -16,6 +16,7 @@ import { doorOf, type Namespace, storeOf } from './door.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { state } from './testing.ts'
+import { connector, fresh, txt, vocabFile } from './probe.ts'
 
 // A client that keeps what it would have sent.
 let sentry = () => {
@@ -208,4 +209,65 @@ test("a store's alarm the runtime cut off is reported by its retry", async () =>
     s.seen.filter((e) => e.tags?.request == 'alarm').map((e) => e.tags),
     [{ request: 'alarm', store: 'ada/notes', retry: '1' }],
   )
+})
+
+test('signed-in MCP discovery faults before a tool runs reach Sentry with the request id', async () => {
+  let failing = false
+  let k = await fresh({}, (env) => {
+    let get = env.BLOBS.get.bind(env.BLOBS)
+    env.BLOBS.get = (...args) => {
+      if (failing) {
+        throw new CallError(
+          'arguments',
+          'vocab.json: fight.dealt is already text',
+        )
+      }
+      return get(...args)
+    }
+  })
+  try {
+    let agent = connector(k, k.owner.cookie)
+    let made = await agent.tool('app_new', { slug: 'notes', title: 'Notes' })
+    let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/.exec(made)![1]
+    await agent.tool('app_files', {
+      space,
+      app: 'notes',
+      files: [{
+        path: 'vocab.json',
+        content: vocabFile({ note: { body: txt } }),
+      }],
+    })
+    await agent.tool('app_deploy', { space, app: 'notes' })
+    let captured = sentry()
+    failing = true
+    for (let method of ['initialize', 'tools/list', 'tools/call']) {
+      let response = await k.at(k.host, '/mcp', {
+        method: 'POST',
+        headers: { cookie: k.owner.cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method,
+          params: method == 'tools/call'
+            ? { name: 'app_list', arguments: {} }
+            : {},
+        }),
+      })
+      assertEquals(response.status, 500)
+      let requestId = response.headers.get('x-request-id')
+      await response.body?.cancel()
+      await captured.done()
+      let event = captured.seen.at(-1)!
+      assertEquals(
+        event.exception?.values?.[0].value,
+        'Release discovery failed: vocab.json: fight.dealt is already text',
+      )
+      assertEquals(event.tags?.request, `POST ${k.host}/mcp`)
+      assertEquals(event.tags?.request_id, requestId)
+    }
+    assertEquals(captured.seen.length, 3)
+  } finally {
+    failing = false
+    await k.stop()
+  }
 })

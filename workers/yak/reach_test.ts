@@ -23,6 +23,8 @@ import { storeOf } from './door.ts'
 import type { Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
 import { type Reach, read, written } from './reach.ts'
+import { bucket } from './testing.ts'
+import { keepDeclaration } from './declaration.ts'
 
 let space = (slug: string): Space => ({
   eid: `space-${slug}`,
@@ -96,6 +98,17 @@ let deploy = async (env: Env, r: Reach, manifest: Record<string, unknown>) => {
   }, vouched(r.who))
   assertEquals(res.status, 200)
   await res.body?.cancel()
+  // Deployment commits its accepted release declaration before discovery
+  // selects it. Reading the accepted document here also keeps borrowed words
+  // and translations identical to the Store used by these reach assertions.
+  if (env.BLOBS) {
+    let vocab = await (await appStore(env.STORE, r.space, r.app)('/vocab'))
+      .json()
+    await keepDeclaration(env, r.space, r.app, String(r.app.version), {
+      vocab,
+      tools: {},
+    })
+  }
 }
 
 test('the app version selects its store declarations after preparation', async () => {
@@ -434,7 +447,7 @@ let reading = app('reading', nora.eid)
 let lending = app('lending', nora.eid)
 
 let where = async () => {
-  let env = { STORE: namespace() } as unknown as Env
+  let env = { STORE: namespace(), BLOBS: bucket().r2 } as unknown as Env
   let reach: Reach[] = [
     { space: nora, app: reading, who: owner },
     { space: nora, app: lending, who: owner },
