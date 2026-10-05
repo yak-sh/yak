@@ -17,6 +17,13 @@ test('Vale world tick cascade does no store-sized work', async () => {
     assert(report.villagers > 0)
     assertEquals(report.answers, report.villagers * 2)
     assertEquals(report.failures.length, 0)
+    assert(
+      report.shapes.filter((s) => /from "sqlite_schema"/.test(s.sql)).reduce(
+        (n, s) => n + s.cost.read,
+        0,
+      ) <= 600,
+      'world tick re-inspects unchanged component schema',
+    )
     costs.push(report.cascade)
   }
   assert(costs[1].read <= costs[0].read + 100, JSON.stringify(costs))

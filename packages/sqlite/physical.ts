@@ -1,3 +1,4 @@
+import { revision } from './revision.ts'
 import {
   among,
   as,
@@ -188,28 +189,36 @@ export let columns = (driver: Driver, name: string): string[] =>
  * out without being asked about. No other name is reserved: an app may call a
  * component `journal` (@yaks/journal keeps its own rows in `journal_*`).
  */
+let components = new WeakMap<Driver, { revision: number; tables: string[] }>()
+
 export function componentTables(
   driver: Driver,
   known: readonly string[] = [],
 ): string[] {
-  let skip = new Set(['entity', ...known])
-  let ordinary = new Set(
-    driver.query({ t: 'pragma', name: 'table_list' })
-      .filter((r) => r.schema == 'main' && r.type == 'table')
-      .map((r) => String(r.name)),
-  )
-  return tables(driver)
-    .filter((name) =>
-      ordinary.has(name) && !skip.has(name) &&
-      !name.startsWith('sqlite_') && !/^_+cf_/i.test(name)
+  let current = revision(driver, 'schema')
+  let held = components.get(driver)
+  if (!held || held.revision != current) {
+    let ordinary = new Set(
+      driver.query({ t: 'pragma', name: 'table_list' })
+        .filter((r) => r.schema == 'main' && r.type == 'table')
+        .map((r) => String(r.name)),
     )
-    .filter((name) =>
-      driver.query({ t: 'pragma', name: 'table_info', arg: name })
-        .some((r) =>
-          r.name == 'entity' && Number(r.pk) == 1 &&
-          String(r.type).toLowerCase() == 'integer'
-        )
-    )
+    let found = tables(driver)
+      .filter((name) =>
+        ordinary.has(name) && name != 'entity' &&
+        !name.startsWith('sqlite_') && !/^_+cf_/i.test(name)
+      )
+      .filter((name) =>
+        driver.query({ t: 'pragma', name: 'table_info', arg: name })
+          .some((r) =>
+            r.name == 'entity' && Number(r.pk) == 1 &&
+            String(r.type).toLowerCase() == 'integer'
+          )
+      )
+    held = { revision: current, tables: found }
+    components.set(driver, held)
+  }
+  return held.tables.filter((name) => !known.includes(name))
 }
 
 /**
