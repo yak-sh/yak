@@ -5,6 +5,9 @@ import { ram } from '@yaks/ram'
 import { edgeEid } from '@yaks/edge'
 import { toolEid } from '@yaks/tools'
 import { parseTools } from '@yaks/tools/declared'
+import { DIM, MODEL } from './embedding.ts'
+import { driver } from '@yaks/durable-object'
+import { left } from '@yaks/embedding'
 import { platformVocab } from './vocab.ts'
 import { type Bindings, type State, Store } from './graph.ts'
 import { profile, type Summary } from '../../packages/durable-object/profile.ts'
@@ -45,14 +48,22 @@ export let worldBindings = (app: string, person: string): Bindings => {
     },
     AI: {
       gateway: () => ({ getUrl: () => Promise.resolve('') }),
-      run: () =>
-        Promise.resolve({
-          answers: {
-            go: { type: 'choice', choice: 'home', confidence: 1 },
-            mood: { type: 'choice', choice: 'glad', confidence: 1 },
-          },
-          usage: { input_tokens: 1, output_tokens: 1 },
-        }),
+      run: (model: string, input: unknown) =>
+        Promise.resolve(
+          model == MODEL
+            ? {
+              data: (input as { text: string[] }).text.map(() =>
+                Array.from({ length: DIM }, (_, i) => i == 0 ? 1 : 0)
+              ),
+            }
+            : {
+              answers: {
+                go: { type: 'choice', choice: 'home', confidence: 1 },
+                mood: { type: 'choice', choice: 'glad', confidence: 1 },
+              },
+              usage: { input_tokens: 1, output_tokens: 1 },
+            },
+        ),
     } as Bindings['AI'],
     MODEL_FETCH: () =>
       Promise.resolve(
@@ -113,13 +124,13 @@ export let seedWorld = async (
 
 // A firing starts deferred effects. Wait for the real queue to settle rather
 // than calling alarm() a second time and accidentally counting another tick.
-export let settleWorld = async (store: Store) => {
+export let settleWorld = async (store: Store, storage?: State['storage']) => {
   for (let round = 0; round < 1000; round++) {
     for (let i = 0; i < 100; i++) await Promise.resolve()
     let pending = await store.door.graph.read(
       '.effect.state=pending,running&.fields=entity.eid',
     )
-    if (!pending.length) return
+    if (!pending.length && (!storage || left(driver(storage)) == 0)) return
     await new Promise<void>((resolve) => setTimeout(resolve, 0))
   }
   throw new Error('world effects did not settle')
@@ -180,12 +191,12 @@ export let worldTick = async (storage: State['storage'], history = 79_000) => {
     )
   }
   await store.alarm()
-  await settleWorld(store)
+  await settleWorld(store, storage)
   await storage.deleteAlarm?.()
   let hero = crypto.randomUUID()
   await post('/apply', [{ entity: { eid: hero }, player: {} }])
   let villagers = await seedWorld(store, post)
-  await settleWorld(store)
+  await settleWorld(store, storage)
   let at = Date.now()
   await store.webSocketMessage(
     wire,
@@ -196,7 +207,7 @@ export let worldTick = async (storage: State['storage'], history = 79_000) => {
       }],
     }),
   )
-  await settleWorld(store)
+  await settleWorld(store, storage)
   // Take the alarm's instant from the schedules rouse actually armed.
   let due = NaN
   for (let round = 0; round < 1000; round++) {
@@ -251,7 +262,7 @@ export let worldTick = async (storage: State['storage'], history = 79_000) => {
     await rows.run('world alarm', async () => {
       await storage.deleteAlarm?.()
       await store.alarm()
-      await settleWorld(store)
+      await settleWorld(store, storage)
     })
     rows.flush(Infinity)
     let total = reports.reduce(
