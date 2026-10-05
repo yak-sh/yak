@@ -107,6 +107,57 @@ export let saving = <C>(
     let out = relax(query)
     return timed ? out : null
   }
+  // A simple local relative-time predicate has a known crossing. Hold its
+  // deadline, not a one-second SQL poll. Associations, negations and computed
+  // predicates keep the general retry path; relevant commits still invalidate
+  // either timer through the same eligibility interest.
+  let deadline = (query: Clause, row: Bundle): number | null => {
+    let waits: number[] = [], uncertain = false
+    let visit = (c: Clause) => {
+      if (c.kind == 'and' || c.kind == 'or') {
+        c.clauses.forEach(visit)
+        return
+      }
+      if (c.kind != 'pred' || !c.value || c.op == '~=') return
+      if (c.value.kind != 'scalar' && c.value.kind != 'time') {
+        uncertain = true
+        return
+      }
+      let edges = timeEdges(c.op, c.value.raw, now())
+      if (!edges) return
+      let future = timeEdges(c.op, c.value.raw, now() + 1000)
+      if (JSON.stringify(edges) == JSON.stringify(future)) return
+      if (c.where || graph.vocab.assoc(c.path[0])) {
+        uncertain = true
+        return
+      }
+      let hops = graph.vocab.aim(c.path.join('.'), bare(c))
+      let hop = hops[0]
+      if (
+        c.not || c.where || hops.length != 1 || !hop ||
+        graph.vocab.assoc(c.path[0]) ||
+        graph.vocab.prop(hop.comp, hop.prop)?.computed ||
+        edges.length != 1 || edges[0].length != 1 ||
+        !['<', '<='].includes(edges[0][0][0]) ||
+        future?.[0]?.[0]?.[1] != edges[0][0][1] + 1000
+      ) {
+        uncertain = true
+        return
+      }
+      let value = (row[hop.comp] as Comp | undefined)?.[hop.prop]
+      let at = graph.vocab.prop(hop.comp, hop.prop)?.scalar == 'time'
+        ? Date.parse(String(value))
+        : Number(value)
+      if (!Number.isFinite(at)) {
+        uncertain = true
+        return
+      }
+      let wait = at - edges[0][0][1] + (edges[0][0][0] == '<' ? 1 : 0)
+      if (wait > 0) waits.push(wait)
+    }
+    visit(query)
+    return uncertain || !waits.length ? null : Math.min(...waits)
+  }
   let later = (key: string, v: Value<C>, ms: number) => {
     v.cancel?.()
     v.cancel = timer(() => {
@@ -155,7 +206,9 @@ export let saving = <C>(
           return after(
             graph.read(and(scope, clock), { now: now(), native: true }),
             (possible) => {
-              if (possible.length) later(key, v, 1000)
+              if (possible.length) {
+                later(key, v, deadline(condition, possible[0]) ?? 1000)
+              }
             },
           )
         }

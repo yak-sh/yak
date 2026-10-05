@@ -41,6 +41,7 @@ let setup = () => {
       },
     }],
   })
+  g.apply([{ entity: { eid: 'ada' } }])
   return { g, serve: api({ graph: g, authenticate: () => ({ by: 'ada' }) }) }
 }
 
@@ -97,6 +98,7 @@ for (let streaming of [false, true]) {
     let eid = applied[0].entity.eid
     assertEquals((await g.get([eid]))[0].ledger, { writes: 1, text: 'private' })
     let cached = graph({ vocab: shop, storage: ram(shop) })
+    await cached.apply([{ entity: { eid: 'ada' } }])
     await cached.apply(applied, { trusted: true })
     for (let q of ['.book&*', '.book&.fields=book.price,ledger.writes']) {
       let rows = await (await serve(req(`/query?q=${encodeURIComponent(q)}`)))

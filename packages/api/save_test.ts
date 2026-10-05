@@ -480,3 +480,22 @@ test('pending peer patches do not recheck unchanged stored eligibility on every 
   f.tick(1000)
   equal(f.read(), { x: 19 })
 })
+
+test('a known local save deadline owns one timer rather than polling SQLite each second', () => {
+  let f = fixture('.book (!position | .updated.at<="30s ago")')
+  f.g.apply([{ entity: { eid: 'a' }, book: { status: 'draft' } }])
+  f.saved.write('one', f.write(1))
+  f.saved.write('one', f.write(2))
+  let read = f.g.read.bind(f.g), reads = 0
+  f.g.read = (...args) => {
+    reads++
+    return read(...args)
+  }
+  for (let i = 0; i < 29; i++) f.tick(1000)
+  equal(reads, 0)
+  equal(f.read(), { x: 1 })
+  f.tick(1000)
+  equal(f.read(), { x: 2 })
+  equal(reads, 1)
+  equal(f.timers.size, 0)
+})

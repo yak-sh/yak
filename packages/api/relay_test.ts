@@ -552,7 +552,9 @@ test('scoped reference refresh keeps other roots and direct branches', () => {
 })
 
 test('a peer-held reference follows its target and can retarget', () => {
-  let graph = shop(), subs = subscriptions(graph)
+  let graph = shop()
+  graph.apply(['one', 'two'].map((eid) => ({ entity: { eid } })))
+  let subs = subscriptions(graph)
   let writer = ear(), watcher = ear(), late = ear()
   subs.open(watcher.to, 'looks', '.pointing.at.browsing.x<10&*')
   assertEquals(watcher.take()[0].bundles, [])

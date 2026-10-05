@@ -416,6 +416,7 @@ test('a created edit on a member refreshes its window', () => {
     vocab: shopVocab,
     provenance: () => ({ kind: 'created' }),
   })
+  g.apply([{ entity: { eid: 'owner' }, book: {} }])
   g.apply([{ entity: { eid: 'r1' }, review: { book: 'owner' } }], {
     now: '2026-01-01T00:00:00.000Z',
   })
