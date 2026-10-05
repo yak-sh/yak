@@ -650,3 +650,40 @@ test('archetype: drift finds the pointer a raw writer left behind', () => {
   reclassify(driver, ['a']) // an audit reports; only a writer repairs
   assertEquals(drift(driver), { checked: 2, drifted: 0, sample: [] })
 })
+
+test('archetype: component patches discover no unchanged physical schema', () => {
+  let { driver, store: s } = setup()
+  s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'same' }, doc: { title: 'before' } }])
+  )
+  let query = driver.query, calls = 0
+  driver.query = (stmt) => {
+    if (
+      stmt.t == 'select' && JSON.stringify(stmt.from).includes('sqlite_schema')
+    ) calls++
+    return query(stmt)
+  }
+  for (let i = 0; i < 5; i++) {
+    s.tx((tx) =>
+      tx.patch([{ entity: { eid: 'same' }, task: i % 2 ? null : {} }])
+    )
+  }
+  assertEquals(calls, 0)
+})
+
+test('archetype: physical discovery follows same-length table swaps and rollback', () => {
+  let { driver: d, store, get } = setup()
+  store.tx((tx) => tx.patch([{ entity: { eid: 'a' }, doc: { title: 'a' } }]))
+  d.query(HIDDEN)
+  d.query(insert('hidden', { entity: idOf(d, 'a') }))
+  reclassify(d, ['a'])
+  assertEquals(get('a').entity.archetype, eidOf(['doc', 'hidden']))
+  d.query({ t: 'savepoint', name: 'swap' })
+  d.query({ t: 'alter table', table: 'hidden', rename: 'secret' })
+  reclassify(d, ['a'])
+  assertEquals(get('a').entity.archetype, eidOf(['doc', 'secret']))
+  d.query({ t: 'rollback', to: 'swap' })
+  d.query({ t: 'release', name: 'swap' })
+  reclassify(d, ['a'])
+  assertEquals(get('a').entity.archetype, eidOf(['doc', 'hidden']))
+})

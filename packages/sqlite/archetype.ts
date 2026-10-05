@@ -26,6 +26,7 @@ import {
 import { componentTables } from './physical.ts'
 import { mintSql } from './write.ts'
 import { unit } from './unit.ts'
+import { revision } from './revision.ts'
 
 export { componentTables } from './physical.ts'
 
@@ -60,24 +61,16 @@ let point = (target: number | null, which: Expr): Stmt => ({
 /** Counts from a boot: existing assignments stay untouched on a repeated run. */
 export type Backfill = { entities: number; archetypes: number; retired: number }
 
-// The component tables of a file change only with its schema, so the schema as
-// `sqlite_schema` states it validates the cached list instead of a table_info
-// per table per call: every statement, not a count or a length, since a
-// candidate schema can trade one table for another of the same name's length
-// inside one unit. Read there because a Durable Object's SQLite refuses
-// `pragma schema_version`.
-let facetsHeld = new WeakMap<Driver, { print: string; tables: string[] }>()
+// Physical discovery belongs to schema changes, not each gameplay write.
+// revision observes the statements already passing through this connection;
+// it also invalidates on rollback and on another file connection's DDL.
+let facetsHeld = new WeakMap<Driver, { version: number; tables: string[] }>()
 let facets = (driver: Driver): string[] => {
-  let print = String(
-    driver.query(select({
-      cols: [as(fn('group_concat', col('sql'), val('\n')), 'print')],
-      from: table('sqlite_schema'),
-    }))[0]?.print ?? '',
-  )
+  let version = revision(driver, 'schema')
   let held = facetsHeld.get(driver)
-  if (held?.print == print) return held.tables
+  if (held?.version == version) return held.tables
   let tables = componentTables(driver)
-  facetsHeld.set(driver, { print, tables })
+  facetsHeld.set(driver, { version, tables })
   return tables
 }
 
