@@ -173,7 +173,11 @@ export let playMinute = async (
     if (held.rules.every((r) => !r.live || r.done)) break
     if (i == 99) throw new Error('lens fixture did not settle')
   }
-  if (minutes) await seedWorld(store, post)
+  await settleWorld(store, db)
+  if (minutes) {
+    await seedWorld(store, post)
+    await settleWorld(store, db)
+  }
   measured = true
   source = 'live queries'
   for (let i = 0; i < players; i++) {
