@@ -1,8 +1,14 @@
-/* The map (map.ts): nearby ground with a zoomable world overview. A road's
-   label sits inside the edge it leaves by. */
+/* The map (map.ts): the controls and travel choices frame a square of
+   ground sized to the pane's remaining room. A road's label sits inside
+   the edge it leaves by. */
+.Map_Host {
+  overflow-y: auto;
+  scrollbar-gutter: auto;
+}
+
 .Map {
   position: relative;
-  width: min(36rem, 100cqw - 2rem, 100cqh - 5rem);
+  width: min(100cqw, 100cqh);
   aspect-ratio: 1;
   margin: 0 auto;
   overflow: hidden;
@@ -19,11 +25,17 @@
 .Map_Wrap {
   display: grid;
   gap: var(--gap);
-  width: min(36rem, 100cqw - 2rem);
+  grid-template-rows: auto minmax(8rem, 1fr) auto;
+  width: 100%;
+  height: 100%;
+  min-height: min-content;
 }
 
-.Map_Wrap .Map {
-  width: min(100%, 100cqh - 11rem);
+.Map_View {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  container: map-view / size;
 }
 
 .Map_Tools {

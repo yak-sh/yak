@@ -73,8 +73,9 @@ export let exits = (id: string): { at: Spot; side: Side; to: string }[] => {
 
 /** The map, drawn into its panel (panel.ts). */
 export let map = (panel: Panel, travel: (to: string) => void) => {
+  panel.body.classList.add('Map_Host')
   panel.body.innerHTML =
-    `<div class=Map_Wrap><div class=Map_Tools><button class="Btn Btn-small" data-map=here>Here</button><span class=Map_Scale></span><button class="Btn Btn-small" data-map=in aria-label="Zoom in">+</button><button class="Btn Btn-small" data-map=out aria-label="Zoom out">−</button><button class="Btn Btn-small" data-map=world>World</button></div><div class=Map><canvas class=Map_Ground></canvas><canvas class=Map_Fog></canvas><div class=Map_Marks></div></div><div class=Map_Travel></div></div>`
+    `<div class=Map_Wrap><div class=Map_Tools><button class="Btn Btn-small" data-map=here>Here</button><span class=Map_Scale></span><button class="Btn Btn-small" data-map=in aria-label="Zoom in">+</button><button class="Btn Btn-small" data-map=out aria-label="Zoom out">−</button><button class="Btn Btn-small" data-map=world>World</button></div><div class=Map_View><div class=Map><canvas class=Map_Ground></canvas><canvas class=Map_Fog></canvas><div class=Map_Marks></div></div></div><div class=Map_Travel></div></div>`
   let stage = panel.body.querySelector<HTMLElement>('.Map')!
   let tools = panel.body.querySelector<HTMLElement>('.Map_Tools')!
   let scale = panel.body.querySelector<HTMLElement>('.Map_Scale')!
