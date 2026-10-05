@@ -20,7 +20,7 @@ import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { areaOf, looksOf, placeOf, REACH } from './area.ts'
 import { writer } from './chat.ts'
 import { watchDesigns } from './design-watch.ts'
-import { SPAWN_KINDS, useSpawnKinds } from './spawn.ts'
+import { SPAWN_FAILURES, SPAWN_KINDS, useSpawnKinds } from './spawn.ts'
 import { groupOf } from './party-state.ts'
 import type { Tools } from './slash.ts'
 import { SIZE } from './levels.ts'
@@ -226,6 +226,7 @@ export let connect = (
   }
   let own: Record<string, Watch> = {}
   let chosen: Watch | null = null
+  let spawnFailures: Watch | null = null
   let followHero = (eid: string) => {
     for (let w of Object.values(own)) w.close()
     let q = JSON.stringify(eid)
@@ -419,6 +420,7 @@ export let connect = (
     /** the falls everyone has written, and mine still waiting */
     falls: (): Bundle[] => join('falls', rows('slain'), 'slain'),
     spawned: (): Bundle[] => rows('spawned'),
+    spawnFailures: (): Bundle[] => spawnFailures?.value ?? none,
     /** the nodes everyone has gathered, and mine still waiting */
     gathered: (): Bundle[] => join('gathered', gathered.value, 'gathered'),
     keep,
@@ -523,8 +525,9 @@ export let connect = (
     },
     spawnKinds: () => {
       let watch = c.watch(SPAWN_KINDS, { evaluate: 'server' })
+      spawnFailures = c.watch(SPAWN_FAILURES, { evaluate: 'server' })
       watchDesigns(watch, ['built', 'build', 'spawned'], useSpawnKinds)
-      return ready(watch)
+      return Promise.all([ready(watch), ready(spawnFailures)]).then(() => {})
     },
     designs,
     me: net.me,

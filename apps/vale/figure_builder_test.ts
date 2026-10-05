@@ -104,11 +104,18 @@ test('figure builder selects only main current kinds, not seeds or shadows', asy
       key: name == 'old' ? 'old' : 'current',
     },
   }])
-  await g.apply([...inputs, {
-    entity: { eid: 'seed' },
-    beast_design: { name: 'Seed' },
-    doc: { body: 'A seeded creature.' },
-  }], { trusted: true })
+  await g.apply([
+    {
+      entity: { eid: 'upstream' },
+      builder: {},
+    },
+    ...inputs,
+    {
+      entity: { eid: 'seed' },
+      beast_design: { name: 'Seed' },
+      doc: { body: 'A seeded creature.' },
+    },
+  ], { trusted: true })
   let found = await db.tx((tx) => selected(tx, builders[0], vocab))
   assertEquals(found.length, 1)
   assertEquals(found[0].binding.vars.kind, 'main')
@@ -125,10 +132,18 @@ test('figure subscription and installer leave stale and shadow outputs out', asy
     },
   }, {
     entity: { eid: name },
+    beast_design: { name },
     figure: { ...source, of: name },
     built: { build: `${name}-build`, key: name == 'old' ? 'old' : 'current' },
   }])
-  await g.apply([...rows, ...inputs], { trusted: true })
+  await g.apply([
+    {
+      entity: { eid: 'upstream' },
+      builder: {},
+    },
+    ...rows,
+    ...inputs,
+  ], { trusted: true })
   let filtered = await g.read(FIGURE_ROWS)
   let meta = await g.read(FIGURE_BUILDS)
   let at = new Map(filtered.map((row) => [row.entity.eid, row]))

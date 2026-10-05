@@ -1,6 +1,11 @@
 // A builder in an app's store opens its ordinary transcript, and the account
 // pays for the model turn that writes its output into that same store.
-import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
+import {
+  assert,
+  assertAlmostEquals,
+  assertEquals,
+  assertStringIncludes,
+} from '@std/assert'
 import { type Bundle, type Comp, identityEid } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import { test, until } from '@yaks/testing'
@@ -10,6 +15,10 @@ import type { Env } from './env.ts'
 import { BUDGET, monthOf } from './meter.ts'
 import { weigh } from '@yaks/model'
 import { embeds, platform } from './testing.ts'
+import creatures from '../../apps/vale/data/creatures/01.json' with {
+  type: 'json',
+}
+import valeWords from '../../apps/vale/vocab.json' with { type: 'json' }
 
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let SOURCE = 'a0000000-0000-4000-8000-0000000000aa'
@@ -17,21 +26,26 @@ let BUILDER = 'a0000000-0000-4000-8000-0000000000bb'
 let MODEL = '@cf/zai-org/glm-5.3-flash'
 let PRICE = { input: 0.15, output: 0.5 }
 
-let app = async (models = 0, access = 'private', chain = false) => {
+let app = async (
+  models = 0,
+  access = 'private',
+  chain = false,
+  answer?: unknown[],
+) => {
   let asked: string[] = []
   let AI = embeds({
     run: (model: string) => {
       asked.push(model)
       return Promise.resolve({
         response: JSON.stringify({
-          outputs: chain && asked.length > 1 ? [] : [{
+          outputs: answer ?? (chain && asked.length > 1 ? [] : [{
             slot: 'Ada',
             inputs: [SOURCE],
             components: {
               doc: { title: 'Ada', body: 'Keeps the forge.' },
               villager: { role: 'smith' },
             },
-          }],
+          }]),
         }),
         usage: { prompt_tokens: 1_000, completion_tokens: 100 },
       })
@@ -108,6 +122,13 @@ let app = async (models = 0, access = 'private', chain = false) => {
     })).status,
     200,
   )
+  assertEquals(
+    (await send('/apply', [{
+      entity: { eid: identityEid('model', [MODEL]) },
+      model: { name: MODEL },
+    }])).status,
+    200,
+  )
   // The kernel's own door onto the store, as the connector's tools reach it.
   let kernel = (path: string, body: unknown) =>
     store.fetch(
@@ -117,7 +138,139 @@ let app = async (models = 0, access = 'private', chain = false) => {
         body: JSON.stringify(body),
       }),
     )
-  return { asked, dir, send, read, kernel }
+  return {
+    asked,
+    dir,
+    send,
+    read,
+    kernel,
+    [Symbol.dispose]: () => p[Symbol.dispose](),
+  }
+}
+
+let creature = async (sounds?: Comp, hp = 36, step = true) => {
+  let outputs = [
+    {
+      slot: 'kind',
+      inputs: [SOURCE],
+      components: {
+        beast_design: { name: 'Moth' },
+        combat: {
+          lvl: 1,
+          hp,
+          dmg: 3,
+          speed: 2,
+          reach: 1,
+          aggro: 3,
+          xp: 12,
+          boss: false,
+        },
+        loot: { drops: [] },
+        doc: { body: 'A small moth with four feet and fluttering wings.' },
+        ...(sounds ? { sounds } : {}),
+      },
+    },
+    ...['cry', ...step ? ['step'] : []].map((slot) => ({
+      slot,
+      inputs: [SOURCE],
+      components: {
+        sfx: { name: `creature-${SOURCE}-${slot}`, loop: false },
+        doc: { body: `An isolated moth ${slot}.` },
+      },
+    })),
+  ]
+  let v = await app(0, 'private', false, outputs)
+  let names = ['beast_design', 'combat', 'loot', 'sounds', 'spawned', 'sfx']
+  let words = valeWords.$defs as Record<string, unknown>
+  assertEquals(
+    (await v.send('/vocab', {
+      $defs: Object.fromEntries(names.map((name) => [name, words[name]])),
+    })).status,
+    200,
+  )
+  assertEquals(
+    (await v.send('/apply', [{
+      ...creatures[0],
+      using: {
+        model: MODEL,
+        provider: identityEid('provider', ['workers-ai']),
+      },
+    }, {
+      entity: { eid: SOURCE },
+      spawned: { lvl: 1, x: 0, z: 0, roam: 6 },
+      doc: { body: 'A small moth.' },
+    }])).status,
+    200,
+  )
+  return v
+}
+
+for (
+  let sounds of [undefined, {
+    cry: `creature-${SOURCE}-cry`,
+    step: 'model-supplied junk',
+  }]
+) {
+  test(`the hosted creature builder wires sounds ${sounds ? 'over junk' : 'when omitted'}`, async () => {
+    using v = await creature(sounds)
+    let outputs = await until(async () => {
+      let rows = await v.read('.built.current=true&*')
+      return rows.length == 3 ? rows : null
+    }, { label: 'creature sound outputs' })
+    let slots = Object.fromEntries(outputs.map((row) => [
+      String((row.built as Comp).slot),
+      row,
+    ]))
+    assertEquals(slots.kind.sounds, {
+      cry: slots.cry.entity.eid,
+      step: slots.step.entity.eid,
+    })
+    let builds = [...new Set(outputs.map((row) => (row.built as Comp).build))]
+    assertEquals(builds.length, 1)
+    let [built] = await v.read(`.entity.eid=${builds[0]}&*`)
+    assertEquals((built.build as Comp).for, SOURCE)
+    assertEquals((built.build as Comp).builder, creatures[0].entity.eid)
+    assertEquals(v.asked, [MODEL])
+  })
+}
+
+for (
+  let rejected of [
+    {
+      name: 'unsafe combat',
+      hp: 0,
+      step: true,
+      reason: 'combat.hp',
+    },
+    {
+      name: 'missing sound sibling',
+      hp: 36,
+      step: false,
+      reason: 'step',
+    },
+  ]
+) {
+  test(`the hosted creature builder records ${rejected.name} as a failed build`, async () => {
+    using v = await creature(undefined, rejected.hp, rejected.step)
+    let [build] = await until(async () => {
+      let rows = await v.read('.build&.failed&*')
+      return rows.length ? rows : null
+    }, { label: 'visible creature build failure' })
+    assertStringIncludes(String((build.failed as Comp).reason), rejected.reason)
+    assertEquals((build.build as Comp).key, null)
+    assertEquals((build.build as Comp).for, SOURCE)
+    assertEquals((await v.read('.built')).length, 0)
+    assertEquals((await v.read('.sfx')).length, 0)
+    await until(async () => {
+      let effects = await v.read('.effect.handler=builder_answer&*')
+      return rejected.step
+        ? effects.length == 0
+        : effects.some((row) =>
+          String((row.effect as Comp).error).includes('step')
+        )
+    }, { label: 'settled output refusal' })
+    assertEquals(v.asked, [MODEL])
+  })
 }
 
 let start = (v: Awaited<ReturnType<typeof app>>) =>

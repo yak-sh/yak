@@ -7,7 +7,14 @@
 // `builder build` builds it until the mark comes off, and `builder_open`
 // answers that removal.
 
-import { type Bundle, type Comp, type ReadTx, Stale, token } from '@yaks/graph'
+import {
+  type Bundle,
+  type Comp,
+  type ReadTx,
+  Refused,
+  Stale,
+  token,
+} from '@yaks/graph'
 import type { Handler, Handlers } from '@yaks/effects'
 import type { Vocab } from '@yaks/vocab'
 import { next, WAKE } from '@yaks/wake'
@@ -103,6 +110,10 @@ export let modeling = (): Handler => async (event, tx, write) => {
     await write([{
       entity: build.entity,
       [BUILD]: { key: null },
+      failed: {
+        reason: str(comp(said, 'failed'), 'reason') ||
+          str(comp(said, 'refusal'), 'message') || 'Model session failed',
+      },
       $was: { [BUILD]: { call: token(call) } },
     }])
   }
@@ -128,13 +139,20 @@ export let answering = (vocab: Vocab): Handler => async (event, tx, write) => {
       if (cost.length) await write(cost)
       return
     }
-    // A malformed output remains a recorded call result, but its key may be
-    // tried again on the next explicit or scheduled reconciliation.
-    await write([...cost, {
-      entity: build.entity,
-      [BUILD]: { key: null },
-      $was: { [BUILD]: { call: token(call.entity.eid) } },
-    }])
+    // The caller reads the build's failure, including a store admission
+    // refusal. A late answer cannot fail the replacement already underway.
+    await write([
+      ...cost,
+      ...comp(build, BUILD)?.call == call.entity.eid
+        ? [{
+          entity: build.entity,
+          [BUILD]: { key: null },
+          failed: { reason: err instanceof Error ? err.message : String(err) },
+          $was: { [BUILD]: { call: token(call.entity.eid) } },
+        }]
+        : [],
+    ])
+    if (err instanceof Refused) return
     throw err
   }
 }

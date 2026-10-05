@@ -28,10 +28,21 @@
           "type": "boolean",
           "description": "reconcile when selected graph inputs change"
         },
+        "wiring": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "description": "output slot -> component.property -> sibling output slot; fills writable references before admission, overriding tool values"
+        },
         "definition": {
           "type": "string",
           "stamped": true,
-          "description": "fingerprint of the current template, effective using, tool and its revision; definition edits never invalidate outputs"
+          "description": "fingerprint of the current template, effective using, wiring, tool and its revision; definition edits never invalidate outputs"
         }
       },
       "description": "a query-to-tool transformation; content.body is its optional $var template and using chooses a model"
@@ -343,6 +354,7 @@
         "builder.query",
         "builder.to",
         "builder.immediate",
+        "builder.wiring",
         "content.body",
         "using"
       ],

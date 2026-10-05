@@ -18,8 +18,11 @@ import type { Frame } from './play.ts'
 import type { Command, Tools } from './slash.ts'
 import type { Village } from './village.ts'
 import words from './vocab.json' with { type: 'json' }
+import { pendingSpawns, SPAWN_FAILURES } from './spawn.ts'
 
 seedDesigns()
+let player = '11111111-1111-4111-8111-111111111111'
+let peerPerson = '22222222-2222-4222-8222-222222222222'
 
 let tools: Tools = Object.fromEntries(
   Object.entries(words.$defs).flatMap(([name, def]) =>
@@ -58,6 +61,27 @@ let vocab = loadVocab([{
       component: true,
       type: 'object',
       properties: { at: { type: 'number' }, by: { type: 'string' } },
+    },
+    build: {
+      component: true,
+      type: 'object',
+      properties: {
+        variant: { type: 'string' },
+        for: { type: 'string', ref: 'spawned' },
+      },
+    },
+    spawned: {
+      component: true,
+      type: 'object',
+      properties: { x: { type: 'number' }, z: { type: 'number' } },
+    },
+    failed: {
+      component: true,
+      type: 'object',
+      properties: {
+        reason: { type: 'string' },
+        at: { type: 'string', format: 'date-time' },
+      },
     },
   },
 }])
@@ -158,6 +182,7 @@ let setup = (
       return listing()
     },
     who: () => null,
+    spawnFailures: () => world.read(SPAWN_FAILURES),
     keep: (row: unknown) => writes.push(row),
   } as unknown as Net
   let folk = {
@@ -182,7 +207,7 @@ let setup = (
     { vault, stash: store, pace: 0, ...opts },
   )
   chat.me({
-    person: 'player',
+    person: player,
     name: 'Player',
     role: null,
     reads: true,
@@ -231,7 +256,7 @@ let setup = (
     store,
     savedDraft: async () =>
       (await vault.load()).find((row) =>
-        row.eid == draftEid('player', 'mossvale.chat')
+        row.eid == draftEid(player, 'mossvale.chat')
       )?.comps.draft?.text,
     chat,
     form,
@@ -368,9 +393,9 @@ test('chat gates typing and submission until its isolated draft vault is ready',
     assertEquals(h.listings, 0)
     assertEquals(h.input.disabled, true)
     load.resolve([{
-      eid: draftEid('player', 'mossvale.chat'),
+      eid: draftEid(player, 'mossvale.chat'),
       comps: {
-        draft: { by: 'player', place: 'mossvale.chat', text: 'saved words' },
+        draft: { by: player, place: 'mossvale.chat', text: 'saved words' },
       },
     }])
     await h.ready()
@@ -612,7 +637,7 @@ test('command replies belong only to their caller, while speech goes to the shar
     assertEquals(h.plates, [])
 
     h.chat.me({
-      person: 'another-player',
+      person: peerPerson,
       name: 'Another player',
       role: null,
       reads: true,
@@ -632,6 +657,52 @@ test('command replies belong only to their caller, while speech goes to the shar
     })
   } finally {
     peer.close()
+    await h.close()
+  }
+})
+
+test('failed creature builds appear only to their spawner and stop shimmering until retry', async () => {
+  let h = setup()
+  try {
+    await h.ready()
+    for (
+      let [eid, person, variant] of [
+        ['own', player, 'main'],
+        ['peer', peerPerson, 'main'],
+        ['shadow', player, 'shadow'],
+      ]
+    ) {
+      await h.world.mutate([{
+        entity: { eid },
+        spawned: { x: 1, z: 2 },
+        created: { by: person },
+        doc: { body: `${eid} bear` },
+      }, {
+        entity: { eid: `${eid}-build` },
+        build: { variant, for: eid },
+        failed: {
+          reason: 'figure names no creature',
+          at: '2026-10-05T00:00:00Z',
+        },
+      }])
+    }
+    assertStringIncludes(
+      h.draw(),
+      'Could not spawn own bear: figure names no creature',
+    )
+    assertEquals(h.draw().includes('peer bear'), false)
+    assertEquals(h.draw().includes('shadow bear'), false)
+    let spawn = h.world.ent('own')!
+    assertEquals(
+      pendingSpawns([spawn], () => false, h.net.spawnFailures()),
+      [],
+    )
+    await h.world.mutate([{ entity: { eid: 'own-build' }, failed: null }])
+    assertEquals(h.draw(), '')
+    assertEquals(pendingSpawns([spawn], () => false, h.net.spawnFailures()), [
+      { eid: 'own', x: 1, z: 2 },
+    ])
+  } finally {
     await h.close()
   }
 })

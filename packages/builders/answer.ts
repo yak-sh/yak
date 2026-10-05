@@ -1,7 +1,8 @@
 // Every tool returns the same named-output value. Validate it once, then write
 // retained output takes and their citations in one guarded graph batch. Each
 // call has its own entity per slot, and replay keeps it: its `output_of` key finds it again (build.ts). A reference in
-// one output may name a sibling of the same answer as `$<slot>`.
+// one output may name a sibling of the same answer as `$<slot>`. Definition
+// wiring fills reference properties even when the tool omits them.
 //
 // An output wearing `edge` is a link, and a link is identified by its ends and
 // its relation (@yaks/edge): it lands on that derived eid, which finds it again
@@ -36,11 +37,20 @@ export type Spec = {
   artifact?: Eid
 }
 
+/** Output slot -> component.property -> sibling output slot. */
+export type Wiring = Record<string, Record<string, string>>
+
 let object = (v: unknown): v is Record<string, unknown> =>
   v != null && typeof v == 'object' && !Array.isArray(v)
 let comp = (b: Bundle | undefined, name: string): Comp | undefined =>
   b?.[name] as Comp | undefined
 let str = (v: unknown): string => v == null ? '' : String(v)
+let writable = (vocab: Vocab, name: string) => {
+  let info = vocab.comp(name)
+  return info?.wire && ![BUILD, BUILT, 'builder', 'chosen'].includes(name)
+    ? info
+    : undefined
+}
 
 // The dollars an answer says its call spent, where it says any.
 let dollars = (value: unknown): number | undefined =>
@@ -67,6 +77,7 @@ export let parse = (
   selected: Eid[],
   vocab: Vocab,
   place: (slot: string) => Eid,
+  wiring: Wiring = {},
 ): Spec[] => {
   if (!object(value) || !Array.isArray(value.outputs)) {
     throw new Error('builder tool answer needs an outputs array')
@@ -76,8 +87,6 @@ export let parse = (
   }
   let allowed = new Set(selected)
   let slots = new Set<string>()
-  // The slots of what this answer made, which a reference may name.
-  let made = new Set<string>()
   let out: Omit<Spec, 'eid'>[] = []
   for (let item of value.outputs) {
     if (
@@ -90,7 +99,6 @@ export let parse = (
     let linked = item.components[EDGE] != null
     let named = item.slot
     slots.add(named)
-    if (!linked) made.add(named)
     let inputs: Eid[] = []
     for (let eid of item.inputs) {
       if (typeof eid != 'string' || !allowed.has(eid)) {
@@ -100,9 +108,9 @@ export let parse = (
     }
     let components: Record<string, Comp | null> = {}
     for (let [name, value] of Object.entries(item.components)) {
-      let info = vocab.comp(name)
+      let info = writable(vocab, name)
       if (
-        !info?.wire || [BUILD, BUILT, 'builder', 'chosen'].includes(name) ||
+        !info ||
         (value != null && !object(value))
       ) throw new Error(`${named} has no writable ${name} component`)
       if (value != null) {
@@ -124,6 +132,41 @@ export let parse = (
       components,
       ...(item.artifact ? { artifact: item.artifact } : {}),
     })
+  }
+  let bySlot = new Map(out.map((spec) => [spec.slot, spec]))
+  for (let [slot, refs] of Object.entries(wiring)) {
+    let spec = bySlot.get(slot)
+    if (!spec) throw new Error(`wiring names no output ${slot}`)
+    for (let [path, target] of Object.entries(refs)) {
+      let [name, prop, ...rest] = path.split('.')
+      let info = writable(vocab, name)
+      if (
+        !prop || rest.length || !info ||
+        !info.writable.includes(prop) ||
+        vocab.prop(name, prop)?.category != 'ref'
+      ) {
+        throw new Error(
+          `${slot} cannot wire ${path}: needs a writable reference`,
+        )
+      }
+      if (!bySlot.has(target)) {
+        throw new Error(`${slot} wiring names no sibling output ${target}`)
+      }
+      spec.components[name] = {
+        ...spec.components[name],
+        [prop]: place(target),
+      }
+    }
+    spec.link = spec.components[EDGE] != null
+  }
+  // Links derive their identities from nonedge siblings, never each other.
+  let made = new Set(out.filter((spec) => !spec.link).map((spec) => spec.slot))
+  for (let [slot, refs] of Object.entries(wiring)) {
+    for (let target of Object.values(refs)) {
+      if (!made.has(target)) {
+        throw new Error(`${slot} wiring cannot name edge output ${target}`)
+      }
+    }
   }
   for (let spec of out) {
     for (let [name, c] of Object.entries(spec.components)) {
@@ -215,6 +258,7 @@ export let answer = async (
     ? [{
       entity: run.entity,
       [BUILD]: { call: call.entity.eid, key: args.key },
+      failed: null,
       $was: {
         [BUILD]: {
           call: token(call.entity.eid),
@@ -242,7 +286,7 @@ export let outputs = async (
 ): Promise<Bundle[]> => {
   let source = run.entity.eid
   let b = comp(run, BUILD)!
-  let args = comp(call, 'call')?.args as { binding: Binding }
+  let args = comp(call, 'call')?.args as { binding: Binding; wiring?: Wiring }
   // Only a nonedge slot's take key chooses its owner. Links derive from the
   // siblings this call made; enumeration below changes choices, never ids.
   let slots = object(value) && Array.isArray(value.outputs)
@@ -266,7 +310,7 @@ export let outputs = async (
     if (!at.has(slot)) at.set(slot, crypto.randomUUID())
     return at.get(slot)!
   }
-  let specs = parse(value, ids(args.binding), vocab, place)
+  let specs = parse(value, ids(args.binding), vocab, place, args.wiring ?? {})
   let eids = specs.map((s) => s.eid)
   let prior = await tx.get(eids)
   // The links an earlier answer of this build stated and this one does not.

@@ -7,6 +7,7 @@ import { connect, vocabulary } from './net.ts'
 import { seedDesigns } from './designs_fixture.ts'
 import words from './vocab.json' with { type: 'json' }
 import core from '../../packages/kernel/vocab.json' with { type: 'json' }
+import { docDoc } from '@yaks/doc'
 
 test('a vocabulary 500 recovers before the page can query created', async () => {
   using time = new FakeTime()
@@ -49,8 +50,9 @@ test('a vocabulary 500 recovers before the page can query created', async () => 
 })
 
 test('creature builds use the server answer without matching computed current locally', async () => {
+  seedDesigns()
   let socket = pair().client
-  let vocab = loadVocab([words, core, builderDoc])
+  let vocab = loadVocab([words, core, builderDoc, docDoc])
   let page = connect(new URL('https://example.test/vale/api/'), vocab, {
     connect: () => socket,
     fetch: () => Response.json([]),
@@ -69,6 +71,10 @@ test('creature builds use the server answer without matching computed current lo
     )
       .find((frame) => frame.subscribe == SPAWN_KINDS)
     assert(ask, JSON.stringify(socket.sent))
+    let failureAsk = (socket.sent as { id: string; subscribe?: string }[])
+      .find((frame) => frame.subscribe == SPAWN_FAILURES)!
+    assert(failureAsk, JSON.stringify(socket.sent))
+    socket.emit('message', JSON.stringify({ id: failureAsk.id, bundles: [] }))
     socket.emit(
       'message',
       JSON.stringify({
@@ -91,6 +97,30 @@ test('creature builds use the server answer without matching computed current lo
     )
     await opening
     assertEquals(ready, true)
+    let person = crypto.randomUUID()
+    let refused = [{
+      entity: { eid: 'refused-build' },
+      build: { variant: 'main', for: 'refused-spawn' },
+      failed: {
+        reason: 'figure names no creature',
+        at: '2026-10-05T00:00:00Z',
+      },
+    }, {
+      entity: { eid: 'refused-spawn' },
+      spawned: { lvl: 1, x: 0 },
+      created: { by: person },
+      doc: { body: 'a bear' },
+    }]
+    socket.emit(
+      'message',
+      JSON.stringify({ id: failureAsk.id, bundles: refused }),
+    )
+    assertEquals(
+      spawnNotices(page.world().spawnFailures(), person).map((n) => n.text),
+      [
+        'Could not spawn a bear: figure names no creature',
+      ],
+    )
     assertEquals(
       kindOf({
         entity: { eid: 'spawn' },
@@ -122,7 +152,13 @@ test('creature builds use the server answer without matching computed current lo
 import { loadVocab } from '@yaks/vocab'
 import { builderDoc } from '@yaks/builders/vocab'
 import { pair } from '../../packages/sync/testing.ts'
-import { kindOf, SPAWN_KINDS, useSpawnKinds } from './spawn.ts'
+import {
+  kindOf,
+  SPAWN_FAILURES,
+  SPAWN_KINDS,
+  spawnNotices,
+  useSpawnKinds,
+} from './spawn.ts'
 
 test('figures wait for current-main provenance and disappear when stale', async () => {
   let socket = pair().client

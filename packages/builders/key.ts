@@ -5,6 +5,7 @@
 import { type Binding, type Bundle, type Eid, sha256 } from '@yaks/graph'
 import { content } from '@yaks/kernel'
 import type { Vocab } from '@yaks/vocab'
+import type { Wiring } from './answer.ts'
 
 export { content }
 
@@ -42,13 +43,21 @@ export let definitionKey = (
   tool: Bundle,
   template?: string,
   using?: Record<string, unknown>,
-): string =>
-  sha256(JSON.stringify([
+): string => {
+  let definition = builder.builder as
+    | { to?: string; wiring?: Wiring }
+    | undefined
+  let wiring = details(definition?.wiring).map((
+    [slot, refs],
+  ) => [slot, details(refs)])
+  return sha256(JSON.stringify([
     template ?? (builder.content as { body?: string } | undefined)?.body ?? '',
     details(using ?? builder.using ?? {}),
-    (builder.builder as { to?: string } | undefined)?.to,
+    definition?.to,
     (tool.tool as { revision?: string }).revision ?? '',
+    ...wiring.length ? [wiring] : [],
   ]))
+}
 
 /** An attempt key. A nonce also distinguishes deliberate identical rerolls. */
 export let key = (

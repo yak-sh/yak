@@ -130,6 +130,7 @@ export let modelTool = (desk: Desk = {}): Tool => ({
       key: { type: 'string' },
       template: { type: 'string' },
       using: { type: 'object' },
+      wiring: { type: 'object' },
     },
     required: ['binding', 'key'],
   },

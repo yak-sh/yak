@@ -41,6 +41,7 @@ import type { Me, Net } from './net.ts'
 import type { Frame } from './play.ts'
 import { type Command, slash } from './slash.ts'
 import type { Village } from './village.ts'
+import { spawnNotices } from './spawn.ts'
 
 // Lines the store is asked for at once. Observed lines are retained while open.
 let ASKED = 40
@@ -353,6 +354,7 @@ export let chatbox = (
         wait: mine.has(l.eid),
         at: l.at,
         fades: fades(l),
+        persistent: false,
       }
     })
     rows.push(...notices.map((n) => ({
@@ -364,7 +366,21 @@ export let chatbox = (
       wait: false,
       at: n.at,
       fades: fades(n),
+      persistent: false,
     })))
+    if (me?.person) {
+      rows.push(
+        ...spawnNotices(net.spawnFailures(), me.person).map((n) => ({
+          ...n,
+          name: 'Only you',
+          tint: '#dff5c8',
+          markdown: false,
+          wait: false,
+          fades: Infinity,
+          persistent: true,
+        })),
+      )
+    }
     rows.sort((a, b) => a.at - b.at)
     let key = JSON.stringify([open, rows])
     if (key == drawn) return
@@ -378,9 +394,9 @@ export let chatbox = (
         'li',
         `Chat_Line${r.wait ? ' Chat_Line-wait' : ''}${
           r.markdown ? ' Chat_Line-command' : ''
-        }`,
+        }${r.persistent ? ' Chat_Line-failed' : ''}`,
       )
-      if (!open) {
+      if (!open && !r.persistent) {
         li.style.animationDelay = `${Math.min(0, r.at - now).toFixed(0)}ms, ${
           (r.fades - now).toFixed(0)
         }ms`

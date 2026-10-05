@@ -1128,7 +1128,11 @@ let loop = (t: number) => {
         ): [number, number, number] => [g.x, groundAt(v, g.x, g.z), g.z]),
       ], dt)
       for (
-        let spot of pendingSpawns(net.spawned(), (kind) => !!FIGURES[kind])
+        let spot of pendingSpawns(
+          net.spawned(),
+          (kind) => !!FIGURES[kind],
+          net.spawnFailures(),
+        )
       ) {
         if (Math.hypot(spot.x - f.body.x, spot.z - f.body.z) > 40) continue
         let a = Math.random() * Math.PI * 2

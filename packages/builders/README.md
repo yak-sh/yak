@@ -8,8 +8,8 @@ contract whether its implementation is code or a model session.
 deno add jsr:@yaks/builders
 ```
 
-- `builder{query,to,immediate,floor}` is the definition. `to` references a
-  `tool` entity. `immediate` reconciles selected changes in their write
+- `builder{query,to,immediate,floor,wiring}` is the definition. `to` references
+  a `tool` entity. `immediate` reconciles selected changes in their write
   transaction; `floor` is the earliest scheduled reconciliation. `content.body`
   is an optional `$var` template; `using{provider,model,effort}` chooses model
   details. `doc.body` is documentation.
@@ -44,16 +44,17 @@ also leaves the person's choice alone. A full answer with an omitted slot clears
 that slot's choice, never its historical takes or links.
 
 A changed key writes a fresh `call{to,source,args}` with `source` set to the
-build and `args` containing the frozen binding tree, key, template and using.
-`build.inputs` fingerprints every entity in the binding tree; only changing
-those inputs automatically starts another attempt. `build.key` is an opaque
-attempt key shared with its outputs: a deliberate reroll gets a fresh one, even
-with identical inputs. Definition edits never invalidate current outputs.
+build and `args` containing the frozen binding tree, key, template, using and
+wiring. `build.inputs` fingerprints every entity in the binding tree; only
+changing those inputs automatically starts another attempt. `build.key` is an
+opaque attempt key shared with its outputs: a deliberate reroll gets a fresh
+one, even with identical inputs. Definition edits never invalidate current
+outputs.
 
-`builder.definition` fingerprints the template, effective using, tool and its
-revision. `build.definition` and `built.definition` keep the fingerprint used by
-the attempt and output. `.build.outdated=true` finds attempts made under a
-different definition; `.built.build.build.outdated=true&.built.current=true`
+`builder.definition` fingerprints the template, effective using, wiring, tool
+and its revision. `build.definition` and `built.definition` keep the fingerprint
+used by the attempt and output. `.build.outdated=true` finds attempts made under
+a different definition; `.built.build.build.outdated=true&.built.current=true`
 finds their current outputs. `build.stale` still means a vanished binding.
 Legacy attempt keys and output keys stay untouched; their input fingerprint is
 adopted at cutover without a call. A legacy definition whose historical tool
@@ -92,15 +93,42 @@ spent is its entries'. `build.cost` is computed, never stored: every call the
 build made, each call's own `cost` and the entries of the session the model tool
 opened for it, summed. `derived()` in `@yaks/builders/vocab` is its SQL.
 
-Each output lists only the selected input entities it used. A reference property
-in one output may name a sibling output of the same answer as `"$<slot>"`, which
-becomes that output's id, so a creature's `sounds{cry}` can point at the `sfx`
-the same answer made in slot `cry`; a `$` naming no sibling is refused, and text
+Each output lists only the selected input entities it used. **Wiring** is the
+builder definition's mapping from an output slot's reference properties to
+sibling output slots. For a creature and its two sounds:
+
+```json
+{
+  "builder": {
+    "wiring": {
+      "kind": { "sounds.cry": "cry", "sounds.step": "step" }
+    }
+  }
+}
+```
+
+The tool supplies `kind`, `cry` and `step`, leaving `kind`'s `sounds` to the
+builder. Wiring creates an omitted component and overrides tool-supplied
+property values with sibling output ids before store admission. Every source
+slot and sibling slot must be present in that answer; each property must be a
+writable reference, and a sibling target must be a nonedge output. The call
+freezes wiring so an in-flight answer keeps the definition it was asked under.
+Editing wiring marks existing builds outdated without rebuilding them.
+
+A tool may also name a nonedge sibling in a reference property as `"$<slot>"`,
+which becomes that output's id; a `$` naming no sibling is refused, and text
 properties keep what they say. The package validates writable components, the
 artifact reference and citations before writing all outputs as one graph batch.
 `cites` edges record each output's used inputs. The artifact's
 `artifact{address,media_type,size}` holds byte metadata; `built.artifact` only
 points to it.
+
+A rejected answer, including a store admission refusal, writes `failed{reason}`
+on its build and clears the attempt key. No output from that answer is stored;
+prior chosen takes remain available. The next reconciliation can try again,
+clearing the failure when it starts a fresh call. A store refusal ends the
+answer effect after recording the failure; unexpected errors also reach the
+host's effect reporter. A late answer cannot fail a newer call.
 
 An output wearing `edge{from,to}` and one relation beside it is a link:
 

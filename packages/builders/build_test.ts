@@ -431,6 +431,90 @@ test('an output names a sibling output of its answer by $slot', async () => {
   assert(String(lost.failed[0]).includes('names no sibling output $nowhere'))
 })
 
+test('wiring is frozen with the call; editing it marks outputs outdated without spending', async () => {
+  let { g, runner, failed } = await shop({}, [notes], [answering([
+    { slot: 'kind', inputs: ['a'], components: {} },
+    { slot: 'cry', inputs: [], components: { doc: { body: 'Cry' } } },
+    { slot: 'step', inputs: [], components: { doc: { body: 'Step' } } },
+  ])])
+  let definition = builder()
+  await g.apply([source('a'), {
+    ...definition,
+    builder: {
+      ...comp(definition, 'builder'),
+      wiring: { kind: { 'note.parent': 'cry' } },
+    },
+  }])
+  let buildId = await runOf(g, ['a'])
+  await g.apply([{
+    entity: definition.entity,
+    builder: { wiring: { kind: { 'note.parent': 'step' } } },
+  }])
+  await drive(g, runner, buildId)
+  let kind = await one(g, await outOf(g, buildId, 'kind'))
+  assertEquals(comp(kind, 'note')?.parent, await outOf(g, buildId, 'cry'))
+  assertEquals((await calls(g, buildId)).length, 1)
+  assertEquals((await g.read('.build.outdated=true')).length, 1)
+  await build(g, g.vocab, { builder: ids.builder, outdated: true }, null)
+  await drive(g, runner, buildId)
+  kind = await one(g, await outOf(g, buildId, 'kind'))
+  assertEquals(comp(kind, 'note')?.parent, await outOf(g, buildId, 'step'))
+  assertEquals((await g.read('.build.outdated=true')).length, 0)
+  assertEquals(failed, [])
+})
+
+test('store admission fails an answer atomically and a fresh call clears the failure', async () => {
+  let value = [
+    {
+      slot: 'main',
+      inputs: ['a'],
+      components: { note: { parent: 'missing' } },
+    },
+    { slot: 'other', inputs: [], components: { doc: { body: 'Other' } } },
+  ]
+  let { g, runner, failed } = await shop({}, [notes], [answering(() => value)])
+  await g.apply([source('a'), builder()])
+  let buildId = await runOf(g, ['a'])
+  await drive(g, runner, buildId)
+  let run = await one(g, buildId)
+  assertEquals(comp(run, 'build')?.key, null)
+  assert(
+    String(comp(run, 'failed')?.reason).includes('missing'),
+    String(comp(run, 'failed')?.reason),
+  )
+  assertEquals(await rows(g, '.built'), [])
+  assertEquals(failed, [])
+  value[0].components = { note: { parent: 'a' } }
+  await build(g, g.vocab, { builder: ids.builder }, null)
+  assertEquals(comp(await one(g, buildId), 'failed'), undefined)
+  await drive(g, runner, buildId)
+  assertEquals((await rows(g, '.built')).length, 2)
+  assertEquals(comp(await one(g, await outOf(g, buildId)), 'note')?.parent, 'a')
+})
+
+test('a refused late answer leaves the newer successful build alone', async () => {
+  let parent = 'a'
+  let { g, runner, failed } = await shop({}, [notes], [answering(() => [{
+    slot: 'main',
+    inputs: ['a'],
+    components: { note: { parent } },
+  }])])
+  await g.apply([source('a'), builder()])
+  let buildId = await runOf(g, ['a'])
+  let [first] = await calls(g, buildId)
+  await g.apply([source('a', 'changed')])
+  await drive(g, runner, buildId)
+  let output = await outOf(g, buildId)
+  let key = comp(await one(g, buildId), 'build')?.key
+  parent = 'missing'
+  await runner.due(first.entity.eid)
+  assertEquals(comp(await one(g, buildId), 'failed'), undefined)
+  assertEquals(comp(await one(g, buildId), 'build')?.key, key)
+  assertEquals(await outOf(g, buildId), output)
+  assertEquals((await rows(g, '.built')).length, 1)
+  assertEquals(failed, [])
+})
+
 test('each answer retains its sibling links; dropping a link only clears its choice', async () => {
   let outputs: unknown[] = [{
     slot: 'kind',

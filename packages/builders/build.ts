@@ -17,6 +17,7 @@ import type { Vocab } from '@yaks/vocab'
 import { next } from '@yaks/wake'
 import { definitionKey, inputKey, key } from './key.ts'
 import { inputs, queried, sync } from './deps.ts'
+import type { Wiring } from './answer.ts'
 
 export let BUILDER = 'builder'
 export let BUILD = 'build'
@@ -50,6 +51,7 @@ export type Plan = {
   to: Eid
   template: string
   using: Comp
+  wiring?: Wiring
 }
 
 export let clock = (): string => new Date().toISOString()
@@ -211,6 +213,7 @@ export let start = (
   return [
     {
       entity: { eid: p.build },
+      failed: null,
       [BUILD]: {
         builder: p.builder,
         match: p.match,
@@ -242,6 +245,7 @@ export let start = (
           definition: p.definition,
           template: p.template,
           using: p.using,
+          ...p.wiring ? { wiring: p.wiring } : {},
         },
       },
     },
@@ -340,6 +344,7 @@ export let reconcile = (
         to,
         template: o.template ?? str(comp(builder, 'content'), 'body'),
         using: { ...comp(builder, 'using'), ...o.using },
+        wiring: definition.wiring as Wiring | undefined,
       }
       plans.push(p)
       let before = comp(have.get(build), BUILD)

@@ -1,7 +1,7 @@
 // The connector reaches the same build door without running any model.
 import { assert, assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
-import { type Comp, graph } from '@yaks/graph'
+import { type Comp, graph, identityEid } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { keys } from '@yaks/key'
 import { edges } from '@yaks/edge'
@@ -21,6 +21,18 @@ test('hosted provider, model and native input override keeps supplied main outpu
   let source = crypto.randomUUID(), builder = crypto.randomUUID()
   let artifact = crypto.randomUUID(), person = crypto.randomUUID()
   let using = { provider: 'openrouter', model: 'google/lyria-3-pro-preview' }
+  await g.apply([
+    ...['openrouter', 'workers-ai'].map((name) => ({
+      entity: { eid: identityEid('provider', [name]) },
+      provider: { name },
+      doc: { title: name },
+    })),
+    ...['google/lyria-3-pro-preview', 'minimax/music-2.6'].map((name) => ({
+      entity: { eid: identityEid('model', [name]) },
+      model: { name },
+      doc: { title: name },
+    })),
+  ])
   await g.apply([toolRow(builderModelTool), {
     entity: { eid: source },
     doc: { title: 'Song', body: 'Wordless choir.' },

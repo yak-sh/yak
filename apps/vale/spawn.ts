@@ -5,7 +5,7 @@
 // creatures are derived on every page instead (homes.ts). The row's eid is
 // the creature's, so the slain row that names it keeps it down for good.
 import { placeOf } from './area.ts'
-import { comp } from './bundle.ts'
+import { comp, str } from './bundle.ts'
 import type { Home } from './homes.ts'
 import type { Bundle } from './net.ts'
 import { QUESTS } from './quests.ts'
@@ -175,6 +175,32 @@ export let SPAWN_KINDS = '.built.current=true&.built.slot=kind' +
   '&.fields=built.current,built.slot,built.build.build.variant,' +
   'built.build.build.for.spawned.lvl'
 
+/** Failed main builds and the spawn's description and owner, held in the page graph. */
+export let SPAWN_FAILURES = '.failed&.build.variant=main&.build.for.spawned.x' +
+  '&.fields=failed.reason,failed.at,build.variant,build.for.spawned.x,' +
+  'build.for.created.by,build.for.doc.body&.order=-failed.at&.limit=40'
+
+/** A failed spawn is reported only to the person who asked for it. */
+export let spawnNotices = (rows: Bundle[], person: string) => {
+  let at = new Map(rows.map((row) => [row.entity.eid, row]))
+  return rows.flatMap((row) => {
+    let build = comp(row, 'build'), failed = comp(row, 'failed')
+    let spawn = at.get(str(build.for))
+    if (
+      !row.failed || build.variant != 'main' || !spawn?.spawned ||
+      comp(spawn, 'created').by != person
+    ) return []
+    let description = str(comp(spawn, 'doc').body)
+    return [{
+      eid: row.entity.eid,
+      text: `Could not spawn${description ? ` ${description}` : ''}: ${
+        str(failed.reason, 'The creature build failed.')
+      }`,
+      at: Date.parse(str(failed.at)) || 0,
+    }]
+  })
+}
+
 let kinds = new Map<string, string>()
 
 /** Resolve only the current main kind; shadow builds stay review-only. */
@@ -198,15 +224,20 @@ export let kindOf = (row: Bundle): string | undefined => {
   return typeof beast == 'string' ? beast : kinds.get(row.entity.eid)
 }
 
-/** A pending spot keeps shimmering until its species has a figure. */
+/** A pending spot keeps shimmering until its species has a figure or its build fails. */
 export let pendingSpawns = (
   rows: Bundle[],
   ready: (beast: string) => boolean,
+  failures: Bundle[] = [],
 ): { eid: string; x: number; z: number }[] =>
   rows.flatMap((row) => {
     let { x, z } = comp(row, 'spawned')
     let beast = kindOf(row)
-    return typeof x == 'number' && typeof z == 'number' &&
+    let failed = failures.some((build) =>
+      build.failed && comp(build, 'build').for == row.entity.eid &&
+      comp(build, 'build').variant == 'main'
+    )
+    return !failed && typeof x == 'number' && typeof z == 'number' &&
         (!beast || !ready(beast))
       ? [{ eid: row.entity.eid, x, z }]
       : []

@@ -29,7 +29,7 @@ is the reference; this is how to use them well.
 
 ## The shape
 
-- `builder{query, to, immediate, floor}` with `content{body}`, the `$var`
+- `builder{query, to, immediate, floor, wiring}` with `content{body}`, the `$var`
   template, and `using{provider, model, effort, tools}`. `doc.body` documents
   the builder and is never sent. `to` is a `tool`: `modelToolEid()`
   (@yaks/builders/model) asks a model through an ordinary @yaks/session
@@ -71,7 +71,7 @@ output as `built.definition` (packages/builders/key.ts).
 
 - Bind only what a build depends on. Everything bound is hashed; a shared
   catalogue edits every binding. Reference material goes through `using.tools`.
-- Editing the template, `using`, tool or tool revision never rebuilds current
+- Editing the template, `using`, wiring, tool or tool revision never rebuilds current
   outputs. New bindings and changed inputs use the current definition.
 - `.build.outdated=true` finds attempts under another definition; it is not
   `build.stale`, which means the binding vanished. Legacy definitions whose
@@ -89,17 +89,21 @@ A tool answers `{"outputs": [...], "cost": 0.01}`; each output is
 `{slot, inputs, components, artifact?}`, citing only selected inputs (each
 becomes a `cites` edge). Every write lands as one batch, or none of it does.
 
-- A reference property may name a sibling output of the same answer as
-  `"$<slot>"`: a creature's `sounds{cry: "$cry"}` becomes the eid of the `sfx`
-  in slot `cry`. Text keeps a `$` as written; a reference naming no sibling is
-  refused.
+- Put fixed sibling references in `builder.wiring`, not in the model prompt:
+  `{"kind": {"sounds.cry": "cry", "sounds.step": "step"}}` fills the kind's
+  references to its sound outputs, overriding model values and creating an
+  omitted component. The call freezes wiring; missing source or sibling slots
+  fail the build. The README's "Wiring" paragraph gives its contract.
+- A tool's reference property may also name a nonedge sibling as `"$<slot>"`.
+  Text keeps a `$` as written; a reference naming no sibling is refused.
 - An output wearing `edge{from, to}` and one relation is a link:
   `{"slot": "needs <item>", "inputs": [], "components": {"edge": {"from":
   "$tome", "to": "<item>"}, "needs": {"count": 2}}}`. It lands on the link's
   own eid (@yaks/edge), carries an `output_of` key for its slot, one end must
   be a nonedge sibling, and a later answer leaves it linked to its take as history.
-- A malformed answer or a model turn that failed for good clears the build's
-  key, so the next reconciliation asks again. A refusal answered to the model,
+- A rejected answer, including store admission, or a model turn that failed for
+  good writes `failed{reason}` on the build and clears its key, so the next
+  reconciliation asks again. Starting a fresh call clears the failure. A refusal answered to the model,
   or a request the runner retries, does not.
 - The model adapter reads the reply of an ask that called no tools, once that
   ask completes; prose beside a tool call is the model working.
