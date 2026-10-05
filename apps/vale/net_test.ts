@@ -147,7 +147,13 @@ test('figures wait for current-main provenance and disappear when stale', async 
       'message',
       JSON.stringify({
         id: figures.id,
-        bundles: [{
+        coverage: {
+          figure: { figure: true, built: ['build'] },
+        },
+        bundles: [{ entity: { eid: 'made' }, beast_design: {} }, {
+          entity: { eid: 'build' },
+          build: { variant: 'main' },
+        }, {
           entity: { eid: 'figure' },
           figure,
           built: { build: 'build' },
@@ -213,5 +219,152 @@ test('spawn command sends no obsolete player input even with a selected hero', a
   } finally {
     globalThis.fetch = before
     page.close()
+  }
+})
+
+import { effort, LODES, naturalEid } from './gather.ts'
+import { flat, type Prop } from './terrain.ts'
+import { type WorkFrame, working } from './work.ts'
+import { placeOf } from './area.ts'
+import { comp } from './bundle.ts'
+import { api } from '@yaks/api'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import type { ClientOpts } from '@yaks/client'
+import type { Trouble } from '@yaks/sync'
+import type { Bundle } from './net.ts'
+
+// A page whose selected hero has arrived, with each watch answered explicitly.
+let storePage = (opts: Pick<ClientOpts, 'fetch' | 'report'> = {}) => {
+  let socket = pair().client
+  let page = connect(
+    new URL('https://example.test/vale/api/'),
+    loadVocab([words, core]),
+    {
+      connect: () => socket,
+      fetch: () => Response.json([]),
+      timer: () => {},
+      ...opts,
+    },
+  )
+  let net = page.world()
+  net.choose('hero')
+  socket.emit('open')
+  let receive = (query: string, bundles: Bundle[]) => {
+    let ask = (socket.sent as { id: string; subscribe?: string }[])
+      .find((a) => a.subscribe?.includes(query))!
+    assert(ask, query)
+    socket.emit('message', JSON.stringify({ id: ask.id, bundles }))
+  }
+  receive('.entity.eid=', [{ entity: { eid: 'hero' }, player: {} }])
+  return { page, net, receive, [Symbol.dispose]: page.close }
+}
+
+let harvest = (eid: string, node = 'tree'): Bundle => ({
+  entity: { eid },
+  item: { owner: 'hero', kind: 'oaklog', n: 1, at: 1000 },
+  gathered: { node, life: 0, kind: 'oak', at: 1000 },
+  place: placeOf(5, 5),
+})
+
+test('a returning hero cannot gather a life already known by their bag', () => {
+  seedDesigns()
+  let prop: Prop = { kind: 'oak', x: 5, z: 5, seed: 1, natural: true }
+  let eid = naturalEid(prop)
+  let natural = [{ prop, at: [5, 5, 5] as [number, number, number] }]
+  for (
+    let [source, query, place] of [
+      ['bag projection', '.item.owner=', undefined],
+      ['bag outside area', '.item.owner=', placeOf(1000, 1000)],
+      ['nearby', '.place.ci=', placeOf(5, 5)],
+    ] as const
+  ) {
+    using client = storePage()
+    let { net, receive } = client
+    // The new area's world watch has not answered yet. The bag's projection
+    // remembers gatherings without their place, wherever the hero has been.
+    let row = harvest('harvest', eid)
+    if (place) row.place = place
+    else delete row.place
+    receive(query, [row])
+    net.follow(5, 5)
+    let toil = working(net), v = flat(5, [], [prop])
+    let f: WorkFrame = {
+      body: { x: 3, y: 5, z: 5 },
+      sheet: { bag: [], worn: {} },
+      down: false,
+      now: 1001,
+    }
+    let start = toil.tick(v, f, true, false, natural)
+    assertEquals(start.doing, null, source)
+    assertEquals(start.nodes.find((n) => n.eid == eid)?.spent, true, source)
+    f.now += effort(LODES.oak, 1)
+    assertEquals(
+      toil.tick(v, f, false, false, natural).events.some((e) =>
+        e.type == 'got'
+      ),
+      false,
+      source,
+    )
+    assertEquals(
+      net.gathered().map((b) => comp(b, 'gathered').node),
+      [eid],
+      source,
+    )
+  }
+})
+
+test('a gathering refused locally or by the store does not break later writes', async () => {
+  seedDesigns()
+  for (let where of ['page', 'store'] as const) {
+    using time = new FakeTime()
+    let vocab = loadVocab([words, core])
+    let store = graph({ storage: ram(vocab), vocab })
+    store.apply([{ entity: { eid: 'hero' }, player: {} }, harvest('first')])
+    let serve = api({
+      graph: store,
+      authenticate: () => ({ by: '11111111-1111-4111-8111-111111111111' }),
+    })
+    let trouble: Trouble[] = [], sent: Request[] = []
+    using client = storePage({
+      fetch: (request) => {
+        sent.push(request)
+        let url = new URL(request.url)
+        url.pathname = '/apply'
+        return serve(new Request(url, request))
+      },
+      report: (r) => trouble.push(r),
+    })
+    let { net, page, receive } = client
+    if (where == 'page') receive('.item.owner=', [harvest('first')])
+    net.keep(harvest('second'))
+    await time.tickAsync(0)
+    assertEquals(trouble.length, 1, where)
+    assert(
+      String(trouble[0].error ?? trouble[0].refused?.message).includes(
+        'unique constraint failed',
+      ),
+      where,
+    )
+    assertEquals(page.client.ent('second')?.gathered, undefined, where)
+    assertEquals(
+      net.gathered().map((b) => b.entity.eid),
+      where == 'page' ? ['first'] : [],
+      where,
+    )
+    assertEquals(sent.length, where == 'page' ? 0 : 1, where)
+    net.keep(harvest('third', 'another-tree'))
+    net.flush()
+    await time.tickAsync(0)
+    assertEquals(trouble.length, 1, where)
+    assertEquals((await store.read('.gathered')).map((b) => b.entity.eid), [
+      'first',
+      'third',
+    ], where)
+    assertEquals(
+      net.gathered().some((b) => b.entity.eid == 'third'),
+      true,
+      where,
+    )
   }
 })

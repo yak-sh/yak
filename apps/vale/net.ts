@@ -97,18 +97,23 @@ export let connect = (
   vocab: ReturnType<typeof loadVocab>,
   opts: ClientOpts = {},
 ) => {
+  let report: NonNullable<ClientOpts['report']> = opts.report ??
+    ((e) =>
+      console.warn(
+        'mossvale store:',
+        e.refused?.message ?? String(e.error),
+        JSON.stringify(e.sent).slice(0, 300),
+      ))
   let c = client(vocab, [], {
     ...opts,
     url: base.href.replace(/\/$/, ''),
     vault: false,
     wireVault: false,
-    report: (e) =>
-      console.warn(
-        'mossvale store:',
-        e.refused?.message ?? String(e.error),
-        JSON.stringify(e.sent).slice(0, 300),
-      ),
+    report,
   })
+  // A bag watch knows gatherings without their place, including while the
+  // next area's watch is loading. Every known gathering spends its node.
+  let gathered = c.watch('.gathered', { remote: false })
   let skew = 0
   let now = () => Date.now() + skew
   let hero: string | null = null
@@ -122,7 +127,16 @@ export let connect = (
     let batch = waiting
     waiting = []
     last = Date.now()
-    c.mutate(batch)
+    // This is a fire-and-forget effect: both local admission and a held
+    // server write can refuse. Report either without breaking the game loop.
+    let refused = (error: unknown) =>
+      report({ sent: batch, error, reverted: false })
+    try {
+      let result = c.mutate(batch)
+      if (result instanceof Promise) void result.catch(refused)
+    } catch (error) {
+      refused(error)
+    }
   }
   let keep = (...bundles: Bundle[]) => {
     waiting = [...waiting, ...bundles]
@@ -402,7 +416,7 @@ export let connect = (
     falls: (): Bundle[] => join('falls', rows('slain'), 'slain'),
     spawned: (): Bundle[] => rows('spawned'),
     /** the nodes everyone has gathered, and mine still waiting */
-    gathered: (): Bundle[] => join('gathered', rows('gathered'), 'gathered'),
+    gathered: (): Bundle[] => join('gathered', gathered.value, 'gathered'),
     keep,
     command,
     /** The commands this caller may discover, as the app door decides. */

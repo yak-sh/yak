@@ -41,13 +41,15 @@ let peers = () => {
   seedDesigns()
   let vocab = loadVocab([words, core])
   let store = graph({ storage: ram(vocab), vocab })
-  let heroes = ['a-hero', 'b-hero', 'c-hero']
-  let mobs = ['first-mob', 'second-mob', 'third-mob', 'fourth-mob']
+  let heroes: string[] = Array.from({ length: 3 }, () => crypto.randomUUID())
+    .sort()
+  let mobs = Array.from({ length: 4 }, () => crypto.randomUUID())
+  let person = crypto.randomUUID()
   store.apply([
     ...heroes.flatMap((eid) => [
       { entity: { eid }, player: {} },
       {
-        entity: { eid: `look-${eid}` },
+        entity: { eid: crypto.randomUUID() },
         look: { player: eid, name: eid, at: 0 },
       },
     ]),
@@ -66,7 +68,7 @@ let peers = () => {
   let sockets: ReturnType<typeof pair>['server'][] = []
   let serve = api({
     graph: store,
-    authenticate: () => ({ by: 'person' }),
+    authenticate: () => ({ by: person }),
     upgrade: () => ({
       socket: sockets.shift()!,
       response: new Response(null, { status: 101 }),
