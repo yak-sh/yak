@@ -593,6 +593,11 @@ let router = {
       // customer's own domain.
       let where = `${hostOf(req)}${new URL(req.url).pathname}`
       let requestId = crypto.randomUUID()
+      console.log(
+        `yak: ${req.method} ${where} failed ${requestId}: ${
+          JSON.stringify(said)
+        }`,
+      )
       await fault(env, `${req.method} ${where}`, e, {
         space: r.space,
         app: r.app,
