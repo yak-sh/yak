@@ -220,6 +220,7 @@ let shown = <Node>(
   answer: Bundle[],
   draw: (b: Bundle, view: string, ctx: Shown<Node>) => Node | null,
   named: Bundle[] = [],
+  links: Bundle[] = [],
 ): Shown<Node> => {
   let id = human(vocab)
   let idAs = idOf(vocab)
@@ -237,6 +238,14 @@ let shown = <Node>(
     when: (at) => at,
     show: (b, view) => draw(b, view, ctx),
     relation: (b) => relationOf(vocab, b),
+    get: (eid) => held.get(eid),
+    related: (eid, relation) =>
+      links.flatMap((b) => {
+        let edge = b.edge as { from?: string; to?: string } | undefined
+        return b[relation] && edge?.to == eid && edge.from
+          ? [held.get(edge.from) ?? { entity: { eid: edge.from } }]
+          : []
+      }),
   }
   return ctx
 }
@@ -263,11 +272,20 @@ let refsOf = (vocab: Vocab, b: Bundle): [string, string, string][] =>
 /** The entities an answer's references point at that the answer does not
  * carry itself: what a printed reference needs looked up to read as `P-19`
  * rather than as its handle. */
-export let referenced = (vocab: Vocab, answer: Bundle[]): string[] => {
+export let referenced = (
+  vocab: Vocab,
+  answer: Bundle[],
+  views?: Registry,
+): string[] => {
   let held = new Set(answer.map((b) => b.entity.eid))
   let out = new Set<string>()
   for (let b of answer) {
     for (let [, , eid] of refsOf(vocab, b)) if (!held.has(eid)) out.add(eid)
+    for (
+      let eid of views
+        ? resolve(views, b, viewOf(answer), vocab)?.needs?.(b) ?? []
+        : []
+    ) if (!held.has(eid)) out.add(eid)
   }
   return [...out]
 }
@@ -370,7 +388,7 @@ let drawn = <Node>(
   near: Near,
   draw: (b: Bundle, view: string, ctx: Shown<Node>) => Node | null,
 ): (Node | null)[][] => {
-  let ctx = shown(vocab, answer, draw, named)
+  let ctx = shown(vocab, answer, draw, named, [...answer, ...near.links])
   let { them, hits } = parted(answer)
   let found = hits.map((b) => draw(b, 'Search.Tile', ctx))
   let [lone] = them
@@ -542,7 +560,11 @@ export let show = async (
   let [lone, ...more] = parted(answer).them
   let asked = lone && !more.length ? nearQuery(vocab, lone.entity.eid) : null
   let near = asked ? nearOf(lone.entity.eid, await from.query(asked)) : nothing
-  let refs = referenced(vocab, [...answer, ...near.links, ...near.comments])
+  let refs = referenced(
+    vocab,
+    [...answer, ...near.links, ...near.comments],
+    views,
+  )
   let named = refs.length ? await from.lookup(refs) : []
   if (c.tui) {
     return await hold(

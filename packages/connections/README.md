@@ -7,9 +7,15 @@ holding the credential it uses. No key or token is ever graph data: a connection
 is also a [@yaks/secrets](../secrets) secret, so the graph holds a handle, the
 vault holds the credential, and code that calls out is handed a sentinel.
 
-It builds no HTTP route or page. A host draws the page where a person connects
-and runs the OAuth callback with these verbs, and [@yaks/egress](../egress)
-swaps sentinels on the way out with them.
+Its `./views` facet draws connections as integration title, account and status,
+and names the apps whose `uses` links the host holds. An unknown integration
+title falls back to its name. Neither the secret's key nor its value is drawn.
+The CLI composes these views for commands such as `yak connection list Alex`;
+browser hosts use the same views for tiles and connection pages.
+
+A host draws the page where a person connects and runs the OAuth callback with
+these verbs, and [@yaks/egress](../egress) swaps sentinels on the way out with
+them.
 
 ## Stored data
 

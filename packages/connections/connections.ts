@@ -449,6 +449,7 @@ export let pick = async (
       : found.filter((b) => address(b).split('@')[0] == name)
     let accounts = [...new Set(found.map((b) => comp(b, CONNECTION).account))]
       .filter((a): a is string => typeof a == 'string' && a != '')
+      .sort()
     let available = `; available accounts: ${accounts.join(', ') || '(none)'}`
     if (matches.length > 1) {
       throw new AccountError(

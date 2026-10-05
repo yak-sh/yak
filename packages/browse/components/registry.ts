@@ -20,10 +20,22 @@ import {
 import { type ComponentRenderer, type Events, render } from '@yaks/preact'
 import type { Host } from '@yaks/ux'
 import { Float } from '@yaks/ui'
-import { h } from 'preact'
+import { type ComponentChild, h } from 'preact'
 import { short } from '@yaks/id'
 import { parseProp, propAt } from '../props.ts'
-import { cache, capable, ent, findEid, mutate, problem, row } from '../live.ts'
+import {
+  backlinks,
+  cache,
+  capable,
+  ent,
+  findEid,
+  mutate,
+  parents,
+  problem,
+  row,
+} from '../live.ts'
+import { useRows } from './subscriptions.ts'
+import { names as edgeNames } from '@yaks/edge'
 import { and, present } from '@yaks/query'
 import { type Ent, idOf, kindOf, statusOf, vocab } from '../types.ts'
 import { archetypeTables, rememberArchetype } from '../live_archetypes.ts'
@@ -168,7 +180,26 @@ export let renderView = (
   e: Ent,
   view?: string,
   ctx: Context & Events = {},
-): ReturnType<typeof render<Ent>> => {
+): ComponentChild => {
+  let entry = select(registry, bundle(e), view, vocab)
+  return entry && !('Render' in entry)
+    ? h(Portable, { e, view, ctx, entry })
+    : mount(e, view, ctx)
+}
+
+// Portable views declare their reference reads; the browser holds them for
+// the component's life, just as the CLI looks them up for its answer.
+let Portable = ({ e, view, ctx, entry }: {
+  e: Ent
+  view?: string
+  ctx: Context & Events
+  entry: PortableRenderer
+}) => {
+  useRows([e.eid, ...entry.needs?.(bundle(e)) ?? []])
+  return mount(e, view, ctx)
+}
+
+let mount = (e: Ent, view?: string, ctx: Context & Events = {}) => {
   let context: Context & Events = {
     id: ux.id,
     kind: ux.kind,
@@ -178,6 +209,18 @@ export let renderView = (
     show: (b: Bundle, view: string, extra: Context = {}) =>
       renderView(ent(b.entity.eid), view, extra),
     get: (eid: string) => row(eid).value ? bundle(ent(eid)) : undefined,
+    related: (eid: string, relation: string) => {
+      let type = edgeNames(vocab)[relation]
+      let peers = parents(eid)
+        .filter((r) => r.type == type)
+        .map((r) => r.parent)
+      let links = backlinks(eid).flatMap((ref) => {
+        let b = bundle(ent(ref.from))
+        let edge = b.edge as { from?: string; to?: string } | undefined
+        return b[relation] && edge?.to == eid && edge.from ? [edge.from] : []
+      })
+      return [...new Set([...peers, ...links])].map((eid) => bundle(ent(eid)))
+    },
     onPatch: (patch) => applyPatch(e.eid, patch),
     onError: (error) => {
       problem.value = error instanceof Error ? error.message : String(error)

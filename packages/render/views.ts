@@ -50,6 +50,8 @@ export type Shown<Node> = {
   relation?: (b: Bundle) => string | undefined
   /** a reference's complete bundle, when this host holds it */
   get?: (eid: string) => Bundle | undefined
+  /** Entities pointing here through a relation, where the host holds its links. */
+  related?: (eid: string, relation: string) => Bundle[]
   /** the groups of entities related to this one, for `Page` */
   relations?: Related[]
   /** the comments aimed at this one, oldest first, for `Page` */

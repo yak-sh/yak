@@ -3,6 +3,9 @@ import { views as commentViews } from '@yaks/kernel/views'
 import { domainBundle } from '../domain-host.tsx'
 import { inspectViews } from './inspect.tsx'
 import { views as secretViews } from '@yaks/secrets/views'
+import { views as connectionViews } from '@yaks/connections/views'
+import { views as docViews } from '@yaks/doc/views'
+import { views as genericViews } from '@yaks/render/views'
 // The curated views and verbs, with the app's quarantine, failure and memo
 // boundaries.
 // @yaks/render selects them; @yaks/preact mounts the selected component.
@@ -130,6 +133,9 @@ define([
     Render: (props) => <BoardList {...props} />,
   },
   ...secretViews.renderers,
+  ...connectionViews.renderers,
+  ...docViews.renderers.filter((r) => r.view == 'Title'),
+  ...genericViews.renderers.filter((r) => r.view == 'Title'),
   ...commentViews.renderers.map((r) => ({
     ...r,
     Render: ({ e, ...ctx }: { e: Ent }) => (

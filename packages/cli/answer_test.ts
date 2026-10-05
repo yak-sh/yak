@@ -270,7 +270,7 @@ test('a link in a list reads as the sentence it states', () => {
       link(t9.entity.eid, 'requires', t10.entity.eid),
     ] as never, [t9, t10] as never).split('\n')
       .map((line) => line.replace(/^#\S+ /, '').trimEnd()),
-    ['T-10 contains T-9', 'T-9 requires T-10'],
+    ['Ship it contains Fix the bar', 'Fix the bar requires Ship it'],
   )
 })
 

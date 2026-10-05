@@ -46,7 +46,12 @@ export type RenderContext<Node> = Context & {
 
 /** The fields selection needs, shared by portable renderers and by ones a
  * backend defines itself. */
-export type Registration = { view: string; match: Query | true }
+export type Registration = {
+  view: string
+  match: Query | true
+  /** Additional entities this view reads, supplied by the host. */
+  needs?: (bundle: Bundle) => string[]
+}
 
 /** A pure view of a bundle, independent of any backend's node type. */
 export type Renderer = Registration & {

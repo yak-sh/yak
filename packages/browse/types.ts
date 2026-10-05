@@ -22,6 +22,7 @@ import { idOf as idsOf, prefixes, SHORT } from '@yaks/id'
 import { idKeywords } from '@yaks/id/vocab'
 import { nameKeywords } from '@yaks/names'
 import { edgeKeywords } from '@yaks/edge/vocab'
+import { relations as edgeRelations } from '@yaks/edge'
 import { blobKeywords } from '@yaks/blob'
 import { kernelKeywords } from '@yaks/kernel/vocab'
 import { keyKeywords } from '@yaks/key/vocab'
@@ -154,7 +155,6 @@ export let learn = (docs: VocabDoc[], hostKeywords?: Keywords[]): Vocab => {
   let st: typeof stamped = {}
   let ix: typeof indexes = {}
   let names = new Set<string>()
-  let relations: string[] = []
   let parts: typeof partition = {}
   // The spine's columns are the store's to stamp: read and filtered on, never
   // written. Its identity, eid, is read through spineProps below.
@@ -162,7 +162,6 @@ export let learn = (docs: VocabDoc[], hostKeywords?: Keywords[]): Vocab => {
   if (spine.length) st.entity = Object.fromEntries(spine)
   for (let name of v.all.filter((n) => n != 'entity')) {
     let def = (v.def(name) ?? {}) as {
-      edge?: string
       by_name?: boolean
       index?: string[][]
       unique?: string[][]
@@ -183,7 +182,6 @@ export let learn = (docs: VocabDoc[], hostKeywords?: Keywords[]): Vocab => {
     ].filter((r) => Array.isArray(r.cols))
     if (rows.length) ix[name] = rows
     if (def.by_name) names.add(name)
-    if (typeof def.edge == 'string') relations.push(def.edge)
     if (v.comp(name)?.keywords?.lazy) parts[name] = 'lazy'
   }
   vocab = v
@@ -193,7 +191,7 @@ export let learn = (docs: VocabDoc[], hostKeywords?: Keywords[]): Vocab => {
   prefix = prefixes(v)
   idOf = idsOf(v)
   byName = names
-  edges = relations
+  edges = Object.keys(edgeRelations(v))
   partition = parts
   kindOrder = [...v.kinds]
   kindRank = new Map(kindOrder.map((k, i) => [k, i]))
