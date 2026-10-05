@@ -80,6 +80,8 @@
 //                             that path: the space's apps own the first path
 //                             segment, the front page answers what is left
 import { caught } from './sentry.ts'
+import { CallError } from '@yaks/tools'
+import { refused as toolRefusal } from '@yaks/tools/routes'
 import * as apps from './apps.ts'
 import { sealed } from './cache.ts'
 import * as billing from './billing.ts'
@@ -555,12 +557,18 @@ let router = {
       // relays a door's deliberate no by throwing what it was answered is
       // carrying an answer out, not a failure: it files nothing. Log one
       // line for the tail, and preserve its body and 4xx at JSON doors.
+      // Typed tool refusals use the tools package's JSON and HTTP status.
       // A shaped refusal without a status is a bad request (400). Pages
       // keep a page, with the refusal's status.
       let said = e instanceof Error ? e.message : String(e)
       let carried = e as { status?: number; body?: string } | null
-      let body = typeof carried?.body == 'string' ? carried.body : said
-      let status = carried?.status
+      let tool = e instanceof CallError ? toolRefusal(e) : null
+      let body = tool
+        ? await tool.text()
+        : typeof carried?.body == 'string'
+        ? carried.body
+        : said
+      let status = tool?.status ?? carried?.status
       if (refusal(body, status)) {
         status ??= 400
         let path = new URL(req.url).pathname

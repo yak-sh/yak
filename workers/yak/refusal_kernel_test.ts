@@ -6,6 +6,7 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import { handler } from './kernel.ts'
 import type { Env } from './env.ts'
 import { answered } from './meta.ts'
+import { CallError } from '@yaks/tools'
 
 test('escaped refusals keep their JSON and status at machine doors, and pages stay pages', async () => {
   let logs: string[] = []
@@ -51,5 +52,30 @@ test('escaped refusals keep their JSON and status at machine doors, and pages st
     assertStringIncludes(logs[0], 'the door says no')
   } finally {
     console.log = log
+  }
+})
+
+test('a typed tool refusal escaping before the tool runs keeps its code and message', async () => {
+  for (
+    let [code, status] of [
+      ['arguments', 400],
+      ['access', 403],
+      ['missing', 404],
+      ['conflict', 409],
+      ['limit', 429],
+    ] as const
+  ) {
+    let message = 'vocab.json: fight.dealt is already text'
+    let env = {
+      MCP: {
+        fetch: () => {
+          throw new CallError(code, message)
+        },
+      },
+      META: { apply: () => Promise.resolve([]) },
+    } as unknown as Env
+    let out = await handler.fetch(new Request('https://yaks.app/mcp'), env)
+    assertEquals(out.status, status)
+    assertEquals(await out.json(), { error: { code, message } })
   }
 })

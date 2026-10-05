@@ -95,7 +95,7 @@ is assigned a fresh eid first.
 | `@yaks/tools`          | `runner`, `Runner`, `Opts`, `Reply`; `toolEid`, `toolRow`, `answerOf`, `worded`, `structured`, `valueIn`, `display`, `faulted`, `parsed`; `reconcile`, `CallError`, `UnfinishedCall`, `Interrupted`; `executionState`, `executionComputed`, `executionDerived`; `RULES`, `READY`, `WOKEN`, `WORDS`, `MOST`; `CHECK`, `checks`, `checked`, `ailing`, `Finding`, `Level`; `toolsDoc`, `callDoc`, `toolDoc` |
 | `@yaks/tools/access`   | `mayCall`, `Floor`                                                                                                                                                                                                                                                                                                                                                                                       |
 | `@yaks/tools/declared` | `parseTools`, `filled`, `invoke`, `commands`, `schemaOf`, `viewsOf`, `mayCall`, `TOOLS_EXAMPLE`; `Arg`, `ToolDef`, `Tools`, `Context`                                                                                                                                                                                                                                                                    |
-| `@yaks/tools/routes`   | `routes`                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `@yaks/tools/routes`   | `routes`, `refused`                                                                                                                                                                                                                                                                                                                                                                                      |
 | `@yaks/tools/vocab`    | `toolsDoc`, `callDoc`, `toolDoc`, `docs`, `description`, `derived`                                                                                                                                                                                                                                                                                                                                       |
 | `@yaks/tools/value`    | `valueIn`                                                                                                                                                                                                                                                                                                                                                                                                |
 | `@yaks/tools/views`    | `views`                                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -646,6 +646,21 @@ equal(await (await route.handle(request('echo'))).json(), {
 })
 equal((await route.handle(request('unknown'))).status, 404)
 equal(routes({}), [])
+```
+
+`refused(error)` gives a host the same JSON refusal and HTTP status. It throws
+unexpected errors through to the host's failure boundary.
+
+```ts
+import { refused } from '@yaks/tools/routes'
+import { CallError } from '@yaks/tools'
+import { equal } from '@yaks/testing'
+
+const answer = refused(new CallError('access', 'Not a writer'))
+equal(answer.status, 403)
+equal(await answer.json(), {
+  error: { code: 'access', message: 'Not a writer' },
+})
 ```
 
 `views` supplies `Tile` and `Page` [renderers](../render/README.md#use) for

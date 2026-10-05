@@ -45,6 +45,8 @@ import { refuse } from './tool.ts'
 // The catch logs that refusal without filing a break, and returns its JSON
 // and 4xx at `/mcp` and API doors. A shaped refusal with no carried status
 // answers 400; a page door keeps a page with that same status.
+// A typed tool refusal (`CallError`) uses @yaks/tools' JSON HTTP answer,
+// carrying its code, message and status rather than requiring a JSON message.
 //
 // The shape alone was the whole rule until C-32869 item 5, where a weather
 // worker answered the person a sentence about the mistyped key and the

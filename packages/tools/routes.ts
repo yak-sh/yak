@@ -17,7 +17,9 @@ let codes: Record<string, number> = {
   unavailable: 503,
 }
 
-let refused = (e: unknown): Response => {
+/** A thrown invocation refusal as its JSON HTTP answer. Defects are thrown
+ * through so the host's failure boundary can report them. */
+export let refused = (e: unknown): Response => {
   let code = e instanceof CallError
     ? e.code
     : e instanceof Error
