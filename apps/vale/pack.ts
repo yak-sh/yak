@@ -135,6 +135,21 @@ export let pack = (panel: Page, acts: Acts) => {
   let picked: { from: From; key: string } | null = null
   let sheet: Sheet | null = null
   let was: unknown[] = []
+  // Every equip gesture uses the same admission as the hero's wear command.
+  let equip = (s: Sheet, key: string, slot?: Slot) => {
+    let h = s.bag.find((h) => h.eid == key)
+    slot ??= h && into(s, h.kind)
+    if (!h || !slot || !canWear(h, s.lvl)) return
+    acts.wear(slot, h.eid)
+    picked = { from: 'worn', key: slot }
+  }
+  box.addEventListener('dblclick', (e) => {
+    let t = e.target instanceof Element ? e.target : null
+    let pick = t?.closest<HTMLElement>('[data-pick]')?.dataset.pick
+    if (!sheet || !pick?.startsWith('bag:')) return
+    equip(sheet, pick.slice(4))
+    was = []
+  })
   box.addEventListener('click', (e) => {
     let t = e.target instanceof Element ? e.target : null
     let s = sheet
@@ -148,9 +163,7 @@ export let pack = (panel: Page, acts: Acts) => {
       if (act == 'off') acts.wear(key as Slot)
       if (act == 'wear' || act == 'twin') {
         let h = s.bag.find((h) => h.eid == key)
-        let slot = act == 'twin' ? 'off' : ITEMS[h?.kind ?? '']?.slot
-        if (h && slot) acts.wear(slot, h.eid)
-        picked = slot ? { from: 'worn', key: slot } : null
+        equip(s, key, act == 'twin' ? 'off' : ITEMS[h?.kind ?? '']?.slot)
       }
       if (act == 'take' && from == 'rack') {
         acts.take(key)
@@ -172,14 +185,28 @@ export let pack = (panel: Page, acts: Acts) => {
     n = 1,
     on = false,
     had = false,
+    locked = false,
   ) => {
     let p = piece(h)
     return `<button class="Pack_Tile ${tint(p.rarity)}${
       on ? ' Pack_Tile-on' : ''
-    }${had ? ' Pack_Tile-had' : ''}" data-pick="${pick}"${
-      tipped({ name: p.name, note: p.slot ? sortLine(p) : undefined })
-    }><i>${icon(h.kind) || '•'}${tier(p)}</i>${
-      n > 1 ? `<b>${n}</b>` : ''
+    }${had ? ' Pack_Tile-had' : ''}${
+      locked ? ' Pack_Tile-locked' : ''
+    }" data-pick="${pick}"${
+      tipped({
+        name: p.name,
+        note: locked
+          ? `Requires level ${p.lvl}`
+          : p.slot
+          ? sortLine(p)
+          : undefined,
+      })
+    }><i>${icon(h.kind) || '•'}${tier(p)}</i>${n > 1 ? `<b>${n}</b>` : ''}${
+      locked
+        ? `<span class=Pack_Lock aria-label="Requires level ${p.lvl}">${
+          glyphText('lock')
+        }</span>`
+        : ''
     }</button>`
   }
 
@@ -219,7 +246,7 @@ export let pack = (panel: Page, acts: Acts) => {
           : `<button class="Btn Btn-go Btn-small" data-do=take>Take it</button>`
         : ''
       : !ready && t.slot
-      ? `<span class=Pack_Hint>Requires level ${t.lvl}</span>`
+      ? `<span class=Pack_Requirement>Requires level ${t.lvl}</span>`
       : slot == 'off' && t.slot == 'main'
       ? `<button class="Btn Btn-small" data-do=wear>Hold it</button><button class="Btn Btn-go Btn-small" data-do=twin>Other hand</button>`
       : t.slot
@@ -275,6 +302,8 @@ export let pack = (panel: Page, acts: Acts) => {
         h,
         n,
         picked?.from == 'bag' && picked.key == h.eid,
+        false,
+        !!ITEMS[h.kind]?.slot && !canWear(h, s.lvl),
       )
     ).join('')
     let rack = f.rack

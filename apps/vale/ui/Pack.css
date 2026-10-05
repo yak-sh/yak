@@ -107,10 +107,6 @@
 .Pack_Num {
   white-space: nowrap;
 
-  & .Glyph {
-    color: var(--amber);
-  }
-
   & em {
     font-style: normal;
   }
@@ -238,4 +234,21 @@
 .Pack_Ability .Glyph {
   margin-right: 0.3rem;
   color: var(--deep);
+}
+
+/* The piece remains inspectable; dim its picture, keeping its rarity and selection ring. */
+.Pack_Tile-locked > i,
+.Pack_Tile-locked > b {
+  opacity: 0.45;
+}
+.Pack_Card .Pack_Requirement,
+.Pack_Lock {
+  color: var(--char);
+}
+.Pack_Lock {
+  position: absolute;
+  left: 0.15rem;
+  bottom: 0.1rem;
+  font-size: 0.7rem;
+  line-height: 1;
 }
