@@ -18,6 +18,16 @@ export class PlayCost {
   ) {}
   alarm(): void {}
   async fetch(req: Request): Promise<Response> {
+    try {
+      return await this.measure(req)
+    } catch (e) {
+      return Response.json({
+        error: String(e),
+        stack: e instanceof Error ? e.stack : null,
+      }, { status: 500 })
+    }
+  }
+  async measure(req: Request): Promise<Response> {
     if (new URL(req.url).searchParams.has('world')) {
       return Response.json(
         await worldTick(
