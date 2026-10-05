@@ -3,10 +3,22 @@ import { equal, ok, test } from '@yaks/testing'
 import { JSDOM } from 'npm:jsdom@26.1.0'
 import { character } from './character.ts'
 import { kitOf } from './gear.ts'
+import { seedItems } from './items_fixture.ts'
 import { HAIRS, type Look, SKINS, TINTS } from './make.ts'
 import type { Sheet } from './play.ts'
 
-test('character and appearance remain visible while editing and reopening', () => {
+let probe = (
+  check: (p: {
+    dom: JSDOM
+    body: HTMLElement
+    tab: { open: boolean }
+    view: ReturnType<typeof character>
+    look: Look
+    sheet: Sheet
+    saved: Look[]
+    painted: Look[]
+  }) => void,
+) => {
   let dom = new JSDOM('<main></main>')
   let keys = ['document', 'HTMLElement', 'HTMLInputElement', 'Element']
   let prior = keys.map((key) =>
@@ -57,6 +69,19 @@ test('character and appearance remain visible while editing and reopening', () =
       unpinned: new Set(),
     }
     view.show(sheet, look)
+    check({ dom, body, tab, view, look, sheet, saved, painted })
+  } finally {
+    dom.window.close()
+    keys.forEach((key, i) => {
+      if (prior[i]) Object.defineProperty(globalThis, key, prior[i]!)
+      else Reflect.deleteProperty(globalThis, key)
+    })
+  }
+}
+
+test('character and appearance remain visible while editing and reopening', () =>
+  probe(({ dom, body, tab, view, look, sheet, saved, painted }) => {
+    let face = body.querySelector('canvas')!
     let sections = [...body.querySelectorAll('section')]
     equal(sections.map((section) => section.getAttribute('aria-label')), [
       'Character',
@@ -82,11 +107,35 @@ test('character and appearance remain visible while editing and reopening', () =
       new dom.window.Event('submit', { bubbles: true, cancelable: true }),
     )
     equal(saved, [{ ...look, name: 'Bramble' }])
-  } finally {
-    dom.window.close()
-    keys.forEach((key, i) => {
-      if (prior[i]) Object.defineProperty(globalThis, key, prior[i]!)
-      else Reflect.deleteProperty(globalThis, key)
-    })
-  }
-})
+  }))
+
+test('character stats have icons and conditional stats follow equipped gear', () =>
+  probe(({ body, view, look, sheet }) => {
+    seedItems()
+    let twin = { eid: 'a', kind: 'dagger1', n: 1 }
+    let fast = {
+      ...sheet,
+      worn: {
+        main: twin,
+        off: { ...twin, eid: 'b' },
+        feet: { eid: 'c', kind: 'boots1', n: 1 },
+      },
+    }
+    for (let [s, extras] of [[sheet, []], [fast, ['twin', 'speed']]] as const) {
+      view.show(s, look)
+      for (
+        let k of ['blow', 'pace', 'reach', 'armour', 'hp', 'luck', ...extras]
+      ) {
+        let line = body.querySelector(`.Stat-${k}`)!
+        ok(line, `The ${k} stat is visible`)
+        ok(line.querySelector('svg[aria-hidden=true]'), `${k} has a stat icon`)
+        ok(line.textContent?.trim(), `${k} has its number and name`)
+      }
+      for (let k of ['twin', 'speed']) {
+        equal(
+          !!body.querySelector(`.Stat-${k}`),
+          extras.some((extra) => extra == k),
+        )
+      }
+    }
+  }))

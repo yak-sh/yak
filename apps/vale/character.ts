@@ -1,7 +1,7 @@
 // Character stats and a live portrait stay beside the appearance editor.
 // Mount once so frames and panel navigation preserve the canvas and draft.
 import { ABILITIES } from './abilities.ts'
-import { LINES, numbers, said } from './compare.ts'
+import { lineMark, LINES, numbers, said } from './compare.ts'
 import type { Dress } from './figures.ts'
 import { glyphText } from './glyphs.ts'
 import { fields, type Look, lookOf, picks } from './make.ts'
@@ -28,13 +28,15 @@ export let character = (tab: Page, acts: Acts) => {
   let box = tab.body
   box.innerHTML = `<div class=Character_Panes>` +
     `<section class=Character aria-label=Character>` +
-    `<div class=Character_Top><canvas class=Character_Face></canvas>` +
-    `<div class=Character_Who></div></div></section>` +
+    `<div class=Character_Top><div class=Character_Portrait>` +
+    `<canvas class=Character_Face aria-label="Your portrait"></canvas></div>` +
+    `<div class=Character_Who></div></div><div class=Pack_Nums></div></section>` +
     `<section class=Character aria-label=Appearance>` +
     `<h3 class=Pack_Head>Your look</h3><form class=Make></form>` +
     `</section></div>`
   let face = box.querySelector<HTMLCanvasElement>('.Character_Face')!
   let who = box.querySelector<HTMLElement>('.Character_Who')!
+  let stats = box.querySelector<HTMLElement>('.Pack_Nums')!
   let form = box.querySelector<HTMLFormElement>('.Make')!
   // Keep the unfinished look even while another panel is open.
   let picking: Look = { name: '', tint: '', hair: '', skin: '' }
@@ -85,7 +87,11 @@ export let character = (tab: Page, acts: Acts) => {
       let xp = s.lvl == 60 ? 'Max level' : `${s.xp - from} / ${to - from} xp`
       let nums =
         LINES.filter((l) => (l.k != 'speed' && l.k != 'twin') || n[l.k])
-          .map((l) => `<span class=Pack_Num>${said(l, n[l.k])}</span>`).join(
+          .map((l) =>
+            `<span class="Pack_Num Stat Stat-${l.k}">${lineMark(l)} ${
+              said(l, n[l.k])
+            }</span>`
+          ).join(
             '',
           ) +
         s.abilities.map((id, i) =>
@@ -97,7 +103,8 @@ export let character = (tab: Page, acts: Acts) => {
         ).join('')
       who.innerHTML = `<b class=Character_Name>${
         esc(s.name)
-      }</b><span class=Character_Level><span class=Badge>Level ${s.lvl}</span><small>${xp}</small></span><div class=Pack_Nums>${nums}</div>`
+      }</b><span class=Character_Level><span class=Badge>Level ${s.lvl}</span><small>${xp}</small></span>`
+      stats.innerHTML = nums
     },
   }
 }
