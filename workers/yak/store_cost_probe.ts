@@ -1,4 +1,5 @@
 // Test-only workerd door: real Store applies and SQL row counters.
+import { reconnect } from './reconnect_fixture.ts'
 import { storeCost } from './store_cost_fixture.ts'
 import type { Namespace } from './door.ts'
 
@@ -6,6 +7,9 @@ export class StoreCost {
   constructor(private ctx: { storage: Parameters<typeof storeCost>[0] }) {}
   alarm(): void {}
   async fetch(req: Request): Promise<Response> {
+    if (new URL(req.url).searchParams.get('kind') == 'reconnect') {
+      return Response.json(await reconnect(this.ctx.storage))
+    }
     return Response.json(
       await storeCost(
         this.ctx.storage,

@@ -251,7 +251,7 @@ export let sockets = (
   opts: {
     /** A host whose authenticated standing expires on wake can require a
      * new handshake before this writer relays again. */
-    writer?: (writer: PeerWriter) => boolean
+    writer?: (writer: PeerWriter) => boolean | Promise<boolean>
   } = {},
 ): Sockets => {
   let sinks = new Map<
@@ -445,61 +445,65 @@ export let sockets = (
       let run = () => {
         let held = ws.deserializeAttachment() as Held | null
         let msg = 'value' in input ? input.value : undefined
-        // Sockets accepted before writer attribution shipped must reconnect
-        // before relaying: only a handshake can vouch for their instrument.
-        if (
-          (held?.writer === undefined ||
-            opts.writer?.(held.writer) === false) &&
-          msg && typeof msg == 'object' &&
+        // A held identity is vouched at the handshake. A host may refresh its
+        // current standing on wake without making the page reopen its socket.
+        let relay = msg && typeof msg == 'object' &&
           'relay' in msg && Array.isArray(msg.relay)
-        ) {
-          finish(ws)
-          ws.close?.(1012, 'writer handshake required')
-          return
-        }
-        return after(sink(ws), (to) => {
-          let ask = asked('value' in input ? input.value : null)
-          let sender = sinks.get(ws)!
-          if (ask?.ack) return sender.ack(ask.ack)
-          if (ask) sender.forget(ask.id)
-          if (ask?.acks) sender.enable(ask.frames)
-          let was = subs.relaying(to).join('\n')
-          return after(
-            receive(
-              subs,
-              to,
-              data,
-              undefined,
-              input,
-              (ws.deserializeAttachment() as Held | null)?.read,
-              (ws.deserializeAttachment() as Held | null)?.writer,
-            ),
-            (verdict) => {
-              if (verdict == 'close') {
-                finish(ws)
-                ws.close?.(1008, 'relay flood')
-                return
-              }
-              // Only when it moved: a frame that relays nothing should not rewrite
-              // an attachment, and most frames relay nothing.
-              let now = subs.relaying(to)
-              if (now.join('\n') != was) remember(ws, now, asks(ws))
-              if (!ask) return
-              let subscriptions = { ...asks(ws) }
-              if (ask.ask === undefined) delete subscriptions[ask.id]
-              else subscriptions[ask.id] = ask.ask
-              if (hold(ws, subscriptions, ask.acks, ask.frames)) return
-              subs.close(to, ask.id)
-              to({
-                id: ask.id,
-                refused: refusal(
-                  new RangeError(
-                    'too many subscriptions to survive hibernation',
+        let valid = relay
+          ? held?.writer === undefined
+            ? false
+            : opts.writer?.(held.writer) ?? true
+          : true
+        return after(valid, (valid) => {
+          if (!valid) {
+            finish(ws)
+            ws.close?.(1012, 'writer handshake required')
+            return
+          }
+          return after(sink(ws), (to) => {
+            let ask = asked('value' in input ? input.value : null)
+            let sender = sinks.get(ws)!
+            if (ask?.ack) return sender.ack(ask.ack)
+            if (ask) sender.forget(ask.id)
+            if (ask?.acks) sender.enable(ask.frames)
+            let was = subs.relaying(to).join('\n')
+            return after(
+              receive(
+                subs,
+                to,
+                data,
+                undefined,
+                input,
+                (ws.deserializeAttachment() as Held | null)?.read,
+                (ws.deserializeAttachment() as Held | null)?.writer,
+              ),
+              (verdict) => {
+                if (verdict == 'close') {
+                  finish(ws)
+                  ws.close?.(1008, 'relay flood')
+                  return
+                }
+                // Only when it moved: a frame that relays nothing should not rewrite
+                // an attachment, and most frames relay nothing.
+                let now = subs.relaying(to)
+                if (now.join('\n') != was) remember(ws, now, asks(ws))
+                if (!ask) return
+                let subscriptions = { ...asks(ws) }
+                if (ask.ask === undefined) delete subscriptions[ask.id]
+                else subscriptions[ask.id] = ask.ask
+                if (hold(ws, subscriptions, ask.acks, ask.frames)) return
+                subs.close(to, ask.id)
+                to({
+                  id: ask.id,
+                  refused: refusal(
+                    new RangeError(
+                      'too many subscriptions to survive hibernation',
+                    ),
                   ),
-                ),
-              })
-            },
-          )
+                })
+              },
+            )
+          })
         })
       }
       let kind = messageKind('value' in input ? input.value : null)

@@ -239,7 +239,7 @@ import {
   type Namespace,
   PLATFORM_STORE,
 } from './door.ts'
-import { type Meta, metaOf } from './meta.ts'
+import { type Meta, meta, metaOf } from './meta.ts'
 import { caught, defect } from './sentry.ts'
 import { counts, hop, type Tally, tallying } from './lib/hops.ts'
 import {
@@ -1186,9 +1186,9 @@ export class Store {
       ctx,
       (error) => defect(error, { request: 'socket restore', store: name }),
       {
-        // After a wake only a fresh handshake can supply current standing.
+        // Restore current standing after hibernation; keep the verified identity.
         // Guest instruments have no standing to lose.
-        writer: ({ actor }) => !actor?.by || this.#vouched.has(actor.by),
+        writer: ({ actor }) => this.#socketWriter(actor),
       },
     )
     // The one `Authenticate` (T-33813). The app is read at request time — the
@@ -1467,6 +1467,53 @@ export class Store {
   // person: two requests can be in flight at once, and a `Vouch` held in one
   // field would be whichever of them spoke last. `#told` is what has already
   // been written down for them, so a session's second write costs no rows.
+  #socketStanding = new Map<string, Promise<boolean>>()
+
+  #socketWriter(actor: Actor | null | undefined): boolean | Promise<boolean> {
+    let person = actor?.by
+    if (!person || this.#vouched.has(person)) return true
+    let held = this.#socketStanding.get(person)
+    if (held) return held
+    let run = async () => {
+      let ns = this.#bind.STORE, app = this.#get('app')
+      if (!ns || !app) return false
+      let directory = meta({ STORE: ns })
+      let [row] = await directory.query(
+        `.entity.eid=${app}&.fields=app.space,app.access`,
+      )
+      let definition = row?.app as Comp | undefined
+      let space = typeof definition?.space == 'string'
+        ? definition.space
+        : (definition?.space as { eid?: unknown } | undefined)?.eid
+      if (typeof space != 'string') return false
+      let rows = await directory.query(
+        `.member.space=${space}&.member.person=${person}&?member|.grant.app=${app}&.grant.person=${person}&?grant`,
+      )
+      let membership = rows.find((r) => r.member)?.member as Comp | undefined
+      let grant = rows.find((r) => r.grant)?.grant as Comp | undefined
+      let access = membership?.role == 'owner'
+        ? 'owner'
+        : membership?.role == 'member'
+        ? 'viewer'
+        : grant?.access
+      let standing =
+        access == 'owner' || access == 'editor' || access == 'viewer'
+          ? level(access)
+          : null
+      if (!reads(mode(definition?.access), standing)) return false
+      this.#vouched.set(person, {
+        person,
+        via: actor?.via ?? null,
+        level: standing,
+        title: null,
+      })
+      return true
+    }
+    let pending = run().finally(() => this.#socketStanding.delete(person))
+    this.#socketStanding.set(person, pending)
+    return pending
+  }
+
   #vouched = new Map<string, Vouch>()
   #told = new Map<string, string>()
 
