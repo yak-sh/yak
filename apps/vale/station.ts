@@ -20,7 +20,13 @@ import {
   stuffName,
 } from './craft.ts'
 import { SLOTS, sortOf, tierName, tierRange } from './arms.ts'
-import { sortLine, statName, statValue, stepRange, trying } from './compare.ts'
+import {
+  sortLine,
+  statLine,
+  statRangeValue,
+  stepRange,
+  trying,
+} from './compare.ts'
 import { glyphText } from './glyphs.ts'
 import { ITEMS } from './items.ts'
 import type { Panel } from './panel.ts'
@@ -146,12 +152,7 @@ export let station = (panel: Panel, acts: Acts) => {
     let lines = GEAR_STATS.flatMap((stat) => {
       let pair = values[stat]
       if (!pair) return []
-      let [a, b] = pair.map((n) => statValue(stat, n))
-      return [
-        `<span class=Pack_Num>${a == b ? a : `${a}–${b}`} ${
-          statName(stat)
-        }</span>`,
-      ]
+      return [statLine(stat, statRangeValue(stat, ...pair))]
     }).join('')
     return `<div class=Craft_Ranges><small>Possible per-stat ranges · Level ${lo}–${hi} · Common–Legendary</small>${lines}</div>`
   }

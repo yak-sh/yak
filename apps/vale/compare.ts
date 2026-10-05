@@ -181,12 +181,31 @@ export let statValue = (s: Stat | 'dmg', n: number): string =>
     ? `${n < 0 ? '' : '+'}${(n * 100).toFixed(1).replace(/\.0$/, '')}%`
     : `${n < 0 ? '' : '+'}${n}`
 
+/** A range carries its shared unit once and its positive sign once. */
+export let rangeText = (a: string, b: string): string => {
+  if (a == b) return a
+  let unit = a.match(/(?:%|×| s| m)$/)?.[0]
+  if (unit && b.endsWith(unit)) a = a.slice(0, -unit.length)
+  return `${a}-${b.replace(/^\+/, '')}`
+}
+
+/** Possible item rolls, written just as a finished item's stat is. */
+export let statRangeValue = (
+  stat: Stat | 'dmg',
+  low: number,
+  high: number,
+): string => rangeText(statValue(stat, low), statValue(stat, high))
+
+/** One item's own named stat, with its mark and color everywhere it appears. */
+export let statLine = (stat: Stat | 'dmg', value: string): string =>
+  `<span class="Pack_Num Stat Stat-${stat}">${statMark(stat)} ${value} ${
+    statName(stat)
+  }</span>`
+
 /** Every number the item itself grants, including its rolled bonuses. */
 export let itemStats = (p: Piece): string =>
   GEAR_STATS.filter((st) => p[st]).map((st) =>
-    `<span class="Pack_Num Stat Stat-${st}">${statMark(st)} ${
-      statValue(st, p[st]!)
-    } ${statName(st)}</span>`
+    statLine(st, statValue(st, p[st]!))
   ).join('') +
   (p.legend
     ? `<span class=Pack_Legend>${glyphText(p.legend.icon)} ${
@@ -250,17 +269,14 @@ export let versus = (s: Hero, then: Side, now: Side): string => {
 /** An exact piece and the bounds of its next upgrade, calculated through
  * the same worn gear as a finished upgrade. */
 export let stepRange = (s: Hero, now: Side, low: Side, high: Side): string => {
-  let range = (a: string, b: string) => a == b ? a : `${a}–${b}`
   let own = GEAR_STATS.flatMap((stat) => {
     let a = now.p?.[stat] ?? 0, b = low.p?.[stat] ?? 0
     let c = high.p?.[stat] ?? 0
     if (a == b && a == c) return []
     return [
-      `<span class=Pack_Num>${statName(stat)} ${
-        statValue(stat, a)
-      } → <em class=Pack_Up>${
-        range(statValue(stat, b), statValue(stat, c))
-      }</em></span>`,
+      `<span class="Pack_Num Stat Stat-${stat}">${statMark(stat)} ${
+        statName(stat)
+      } ${statValue(stat, a)} → <em>${statRangeValue(stat, b, c)}</em></span>`,
     ]
   }).join('')
   let [a, b, c] = [now, low, high].map((x) => numbers(s, x.worn))
@@ -268,8 +284,10 @@ export let stepRange = (s: Hero, now: Side, low: Side, high: Side): string => {
     let x = a[line.k], y = b[line.k], z = c[line.k]
     if (x == y && x == z) return []
     return [
-      `<span class=Pack_Num>${line.name} ${line.shows(x)} → <em class=Pack_Up>${
-        range(line.shows(y), line.shows(z))
+      `<span class="Pack_Num Stat Stat-${line.k}">${
+        lineMark(line)
+      } ${line.name} ${line.shows(x)} → <em>${
+        rangeText(line.shows(y), line.shows(z))
       }</em></span>`,
     ]
   }).join('')
