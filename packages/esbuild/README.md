@@ -79,9 +79,13 @@ Before bundling each entry, the compiler rewrites parsed package
 `import.meta.url` references to the package module's original location in that
 namespace, relative to the entry. Dynamic `new URL` paths and CSS imports keep
 resolving beside their source module, including nested entries and snapshots.
-Comments, strings and the app's own module URLs are unchanged. Hosts retain
-these assets beside compiled output and serve them with their own MIME type; a
-conflicting app path refuses the deploy rather than overwriting user files.
+Server entries use an absolute logical module URL such as `file:///worker.js`,
+because workerd supplies a module name without a URL origin. Their package URLs
+are logical file identities, not fetchable hosted asset addresses. Page entries
+resolve package URLs against the browser's entry URL. Comments, strings and the
+app's own module URLs are unchanged. Hosts retain these assets beside compiled
+output and serve them with their own MIME type; a conflicting app path refuses
+the deploy rather than overwriting user files.
 
 The wrapper's catalog is part of the compiler deployment. A host reusing build
 output includes its compiler deployment version in the reuse fingerprint; an

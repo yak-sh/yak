@@ -1,6 +1,5 @@
-// The hero's journal, drawn into their panel's Journal tab: every quest under
-// way, with who asked it and where, its steps and how far each has come, the
-// ones on offer, and the ones done. A quest is the vale's own (quests.ts) or a
+// Quest tasks for the journal, tracker, map and compass: who asked, where
+// each step goes and how far it has come. A quest is the vale's own (quests.ts) or a
 // villager's deal (deals.ts); both are a task here, a list of steps, so the
 // journal, the tracker on the glass (hud.ts), the map (map.ts) and the
 // compass show them the same way. A task under way is pinned until the hero
@@ -10,21 +9,14 @@
 // opens it, and so does a tap on the tracker.
 import { beastId, beastOf, BEASTS } from './beasts.ts'
 import type { View } from './deals.ts'
-import { type Glyph, glyph } from './glyphs.ts'
 import { dens } from './homes.ts'
 import { ITEMS } from './items.ts'
 import { levelOf, type Spot } from './levels.ts'
-import type { Page } from './panel.ts'
-import { type ComponentChildren, h } from 'preact'
-import { Button } from '@yaks/ui'
-import { Disclosure, disclosureAt, isOpen } from '@yaks/ux'
-import { type PageState, pageState } from './page-state.ts'
 import type { Sheet } from './play.ts'
 import { GIVERS, questXp } from './quests.ts'
 import { originOf } from './regions.ts'
 import type { Standing } from './rules.ts'
 import { said } from './stock.ts'
-import { split } from './ui/split.ts'
 import { homeOf } from './villagers.ts'
 
 /** One step of a task: what it asks, how far it has come when it counts,
@@ -60,7 +52,7 @@ export type Task = {
 }
 
 let giverOf = (id: string) => GIVERS.find((g) => g.id == id)
-let nameOf = (level: string) => levelOf(level)?.name ?? level
+export let nameOf = (level: string) => levelOf(level)?.name ?? level
 
 // Going back to whoever asked, done once it is handed in.
 let back = (giver: string, done: boolean): Step => {
@@ -333,171 +325,3 @@ export let guide = (
  */
 export let toward = ([x, z]: Spot, [tx, tz]: Spot) =>
   (Math.round(Math.atan2(tx - x, z - tz) * 180 / Math.PI) + 360) % 360
-
-export type Acts = { pin: (task: string, on: boolean) => void }
-
-/** The journal, drawn into its tab (panel.ts). */
-export let journal = (
-  panel: Page,
-  acts: Acts,
-  state: PageState = pageState(),
-  owner = 'journal',
-) => {
-  let panes = split(panel.body)
-  let tasks: Task[] = [], here = ''
-  let section = (level: string) =>
-    disclosureAt(`${state.owner}|${owner}|${level}`)
-  let picture = (icon: Glyph, className = '') =>
-    h('span', {
-      class: className,
-      'aria-hidden': 'true',
-      dangerouslySetInnerHTML: { __html: glyph(icon) },
-    })
-  let status = (t: Task): [Glyph, string] =>
-    t.state == 'done'
-      ? ['done', 'Completed']
-      : t.state == 'open'
-      ? ['notices', 'On offer']
-      : !next(t)?.need
-      ? ['handHeart', 'Return to giver']
-      : ['journal', 'Under way']
-  let line = (s: Step) =>
-    h(
-      'li',
-      { class: `Journal_Step${s.done ? ' Journal_Step-done' : ''}` },
-      picture(
-        s.done ? 'done' : s.fell ? 'blow' : s.giver ? 'handHeart' : 'backpack',
-      ),
-      h('span', {}, told(s, here)),
-      s.need ? h('em', {}, `${s.have ?? 0} / ${s.need}`) : null,
-    )
-  let task = (t: Task) => {
-    let tracked = t.state == 'taken' || t.pinned
-    return h(
-      'article',
-      { class: 'Journal_Task' },
-      h(
-        'header',
-        { class: 'Journal_Top' },
-        h('b', { class: 'Journal_Title' }, t.title),
-        tracked && t.state != 'done'
-          ? h(Button, {
-            class: 'Orb Orb-small Journal_Pin',
-            'data-pin': t.id,
-            'aria-label': t.pinned ? 'Stop tracking' : 'Track it',
-            'aria-pressed': t.pinned,
-            'data-tip': t.pinned ? 'Tracked' : 'Track it',
-            onClick: () => acts.pin(t.id, !t.pinned),
-          }, picture(t.pinned ? 'pin' : 'pinOff'))
-          : null,
-      ),
-      h(
-        'p',
-        { class: 'Journal_From' },
-        `${t.from} · ${nameOf(t.level)} · ${t.gives}`,
-      ),
-      h('ol', { class: 'Journal_Steps' }, t.steps.map(line)),
-      t.says ? h('p', { class: 'Journal_Says' }, t.says) : null,
-    )
-  }
-  let summary = (t: Task) => {
-    let step = next(t), [icon, label] = status(t)
-    return h(
-      Button,
-      {
-        key: t.id,
-        class: `Split_Row Journal_Row Journal_Row-${t.state}`,
-        'data-select': t.id,
-        onClick: () => {
-          state.select(owner, t.id)
-          draw()
-        },
-      },
-      h(
-        'span',
-        { class: 'Journal_Label' },
-        picture(icon, 'Journal_Status'),
-        h('b', {}, t.title),
-        t.pinned && t.state != 'done'
-          ? picture('pin', 'Journal_Tracked')
-          : null,
-      ),
-      h('small', { class: 'Journal_State' }, label),
-      h(
-        'small',
-        {},
-        t.state == 'done' ? t.gives : step
-          ? told(step, here) +
-            (step.need ? ` · ${step.have ?? 0} / ${step.need}` : '')
-          : t.from,
-      ),
-    )
-  }
-  let group = (title: string, rows: Task[]): ComponentChildren => [
-    h('h3', { class: 'Journal_Head' }, title),
-    ...rows.map(summary),
-  ]
-  let draw = () => {
-    if (!panel.open) return
-    let lands = landsOf(tasks, here)
-    let picked = state.cursor(owner)
-    let selected = tasks.find((t) =>
-      t.id == picked && t.state != 'locked' &&
-      (t.state != 'done' || isOpen(state.row(section(t.level))))
-    )
-    if (!selected && picked) {
-      state.select(owner, null)
-      picked = undefined
-    }
-    let rows = h(
-      'div',
-      { class: 'Journal' },
-      lands.map(({ level, taken, open, done }) =>
-        h(
-          'section',
-          { key: level, class: 'Journal_Land' },
-          h(
-            'h2',
-            { class: 'Journal_Head' },
-            picture('mountain'),
-            ` ${nameOf(level)}${level == here ? ' · Here' : ''}`,
-          ),
-          taken.length ? group('Under way', taken) : null,
-          open.length ? group('On offer', open) : null,
-          done.length
-            ? h(Disclosure, {
-              e: state.row(section(level)),
-              class: 'Journal_Completed',
-              summary: [picture('done'), `Completed · ${done.length}`],
-              summaryProps: {
-                class: 'Journal_Head Journal_Toggle',
-                'data-completed': level,
-              },
-              onChange: (bundle) => {
-                state.mutate([bundle])
-                draw()
-              },
-            }, done.map(summary))
-            : null,
-        )
-      ),
-      lands.length ? null : h('p', { class: 'Journal_None' }, 'No quests yet.'),
-    )
-    panes.render(
-      rows,
-      selected ? h('div', { class: 'Journal' }, task(selected)) : h(
-        'p',
-        { class: 'Journal_None' },
-        'Select a task to see its steps and rewards.',
-      ),
-      picked ?? null,
-    )
-  }
-  return {
-    show: (latest: Task[], level: string) => {
-      tasks = latest
-      here = level
-      draw()
-    },
-  }
-}

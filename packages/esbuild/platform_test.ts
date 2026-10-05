@@ -236,6 +236,51 @@ test('package resources retain module-relative addresses for nested entries', as
   }
 })
 
+test('package URLs boot in server modules and follow browser release URLs', async () => {
+  let source = `export let module = import.meta.url
+    export let sheet = new URL('./Button.css', import.meta.url).href
+    export let icon = name => new URL(\`./icons/\${name}.svg\`, import.meta.url).href`
+  let files = {
+    'node_modules/@yaks/kit/mod.ts': source,
+    'node_modules/@yaks/kit/nested/mod.ts': source,
+  }
+  for (
+    let [entry, runtime, root] of [
+      [new URL('file:///worker.js'), 'worker.js', 'file:///'],
+      [
+        new URL('file:///workers/deep/worker.js'),
+        'workers/deep/worker.js',
+        'file:///',
+      ],
+      [
+        'main.ts',
+        'https://example.test/app/main.ts',
+        'https://example.test/app/',
+      ],
+      [
+        'scripts/deep/main.ts',
+        'https://example.test/app/.snapshots/release/scripts/deep/main.ts',
+        'https://example.test/app/.snapshots/release/',
+      ],
+    ] as const
+  ) {
+    for (let [path, rewritten] of Object.entries(located(files, entry))) {
+      let code = rewritten.replaceAll(
+        'import.meta.url',
+        JSON.stringify(runtime),
+      )
+      let mod = await import(`data:text/javascript,${encodeURIComponent(code)}`)
+      let module = new URL(
+        `__packages/${path.slice('node_modules/'.length)}`,
+        root,
+      )
+      assertEquals(mod.module, module.href)
+      assertEquals(mod.sheet, new URL('./Button.css', module).href)
+      assertEquals(mod.icon('leaf'), new URL('./icons/leaf.svg', module).href)
+    }
+  }
+})
+
 test('compile returns only declared package resources without npm I/O', async () => {
   let got = await compile({
     files: files({ '@yaks/kit': 'platform' }),

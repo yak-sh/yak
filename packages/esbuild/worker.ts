@@ -161,7 +161,7 @@ export let compile = async (
   } catch (e) {
     return { ...answer, errors: said(e) }
   }
-  let locate = (entry: string) => {
+  let locate = (entry: string | URL) => {
     for (let [path, source] of Object.entries(located(setup.files, entry))) {
       fs.write(path, source)
     }
@@ -169,7 +169,9 @@ export let compile = async (
   if (ask.worker) {
     let { entry, flags } = ask.worker
     let main = compiledName(entry)
-    locate(main)
+    // A workerd module name is not a URL. Its file URL is a logical identity,
+    // not a hosted asset address; page entries retain their browser's URL.
+    locate(new URL(main, 'file:///'))
     // What worker-bundler reads nodejs_compat from; a page compiles without it.
     fs.write('wrangler.json', JSON.stringify({ compatibility_flags: flags }))
     try {

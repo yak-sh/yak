@@ -2,7 +2,7 @@
 // bubbling listeners to the target, so clicks on nested icons need a native DOM.
 import { parseHTML } from 'linkedom'
 import { render } from 'preact'
-import { journal } from './journal.ts'
+import { journal } from './journalbook.ts'
 import { pageState } from './page-state.ts'
 
 export let withJournal = async (

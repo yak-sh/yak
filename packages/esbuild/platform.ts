@@ -39,22 +39,26 @@ let safe = (path: string) =>
   !/[\\?#%]/.test(path)
 
 // The lexer identifies import.meta outside comments, strings and regexps.
-let URL =
+let urlProp =
   /^(?:\s|\/\*[\s\S]*?\*\/|\/\/[^\n]*(?:\n|$))*\.(?:\s|\/\*[\s\S]*?\*\/)*url\b/
 
 /** Preserve a package module's URL when its source is bundled into an entry.
- * Rewritten from the original source for each entry, including nested workers. */
-export let located = (files: Record<string, string>, entry: string) => {
+ * Page paths resolve against the browser's entry URL. A server entry supplies
+ * its absolute logical module URL, since workerd names modules without an origin. */
+export let located = (files: Record<string, string>, entry: string | URL) => {
   let out: Record<string, string> = {}
-  let up = '../'.repeat(entry.split('/').length - 1)
+  let path = typeof entry == 'string' ? entry : entry.pathname.slice(1)
+  let up = '../'.repeat(path.split('/').length - 1)
   for (let [path, source] of Object.entries(files)) {
     if (!path.startsWith('node_modules/@yaks/') || !script(path)) continue
     let base = up + ASSETS + path.slice('node_modules/'.length)
     for (let imp of parse(source)[0].toReversed()) {
       if (imp.d != -2) continue
-      let tail = URL.exec(source.slice(imp.e))
+      let tail = urlProp.exec(source.slice(imp.e))
       if (!tail) continue
-      let value = `new URL(${JSON.stringify(base)}, import.meta.url).href`
+      let value = typeof entry == 'string'
+        ? `new URL(${JSON.stringify(base)}, import.meta.url).href`
+        : JSON.stringify(new URL(base, entry).href)
       source = source.slice(0, imp.s) + value +
         source.slice(imp.e + tail[0].length)
     }
