@@ -87,11 +87,15 @@ export let board = (panel: Page, acts: Learning) => {
       ? `<button class="Btn Btn-go Btn-small" data-do=learn>Learn it</button>`
       : need ||
         `<span class=Pack_Hint>No points left. A level brings one.</span>`
-    return `<div class=Pack_Card><i class=Pack_Big>${
+    return `<div class="Pack_Card Board_Card Board_Discipline-${k.discipline}"><i class="Pack_Big Board_Icon">${
       glyph(k.icon)
-    }</i><div><b>${esc(k.name)}</b><span>${
-      esc(k.says)
-    } ${what}.</span></div>${act}</div>${skillDetail(s, picked)}`
+    }</i><div><b class=Board_Name>${esc(k.name)}</b><small class=Board_Kind>${
+      esc(DISCIPLINES[k.discipline].name)
+    } · ${
+      k.boon ? 'Passive' : k.hand ? 'Second weapon' : 'Ability'
+    }</small><span>${esc(k.says)} ${what}.</span></div>${act}</div>${
+      skillDetail(s, picked)
+    }`
   }
 
   let draw = (s: Sheet, f: Frame) => {

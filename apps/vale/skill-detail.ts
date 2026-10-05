@@ -2,8 +2,17 @@
 // the gear comparison and action bar.
 import { type Ability, abilityStats, OFF, secs } from './abilities.ts'
 import { HANDLES } from './arms.ts'
-import { doer, moved, numbers, statName, statValue } from './compare.ts'
+import {
+  doer,
+  moved,
+  numbers,
+  statMark,
+  statName,
+  statValue,
+} from './compare.ts'
+import { glyph } from './glyphs.ts'
 import type { Sheet } from './play.ts'
+import type { Stat } from './rarity.ts'
 import { type Boon, formOf, SKILLS } from './skills.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -17,19 +26,24 @@ export let skillDetail = (s: Hero, id: string): string => {
   if (!skill) return ''
   let known = s.learned.includes(id)
   let next = { ...s, learned: known ? s.learned : [...s.learned, id] }
-  let names: Record<keyof Boon, string> = {
-    force: statName('force'),
-    pace: statName('haste'),
-    health: statName('hp'),
-    armour: statName('armour'),
-    speed: statName('speed'),
-    luck: statName('luck'),
+  let names: Record<keyof Boon, Stat> = {
+    force: 'force',
+    pace: 'haste',
+    health: 'hp',
+    armour: 'armour',
+    speed: 'speed',
+    luck: 'luck',
   }
   // Health and armor passives multiply existing stats, rather than adding
   // the flat values found on gear.
   let stats = (Object.keys(names) as (keyof Boon)[]).flatMap((key) => {
     let n = skill.boon?.[key]
-    return n == null ? [] : [line(`${statValue('force', n)} ${names[key]}`)]
+    let stat = names[key]
+    return n == null ? [] : [
+      `<span class="Pack_Num Stat Stat-${stat}">${statMark(stat)} ${
+        statValue('force', n)
+      } ${statName(stat)}</span>`,
+    ]
   }).join('')
   if (skill.with) {
     stats += line(
@@ -53,21 +67,28 @@ export let skillDetail = (s: Hero, id: string): string => {
             ? ['Ready again after a killing blow']
             : []),
         ].map(line).join('')
-      abilities += `<small class=Compare_Label>${esc(after.name)}${
-        skill.hand ? ' · With a second weapon' : known ? '' : ' · Current'
-      }</small><div class=Pack_Nums>${
-        effects(skill.hand ? after : before, skill.hand ? next : s)
-      }</div>`
+      abilities +=
+        `<small class="Compare_Label Board_Ability Board_Discipline-${skill.discipline}">${
+          glyph(after.icon)
+        } ${esc(after.name)}${
+          skill.hand ? ' · With a second weapon' : known ? '' : ' · Current'
+        }</small><div class=Pack_Rolled>${
+          effects(skill.hand ? after : before, skill.hand ? next : s)
+        }</div>`
       if (!known && !skill.hand) {
         abilities +=
-          `<small class=Compare_Label>→ If learned</small><div class=Pack_Nums>${
+          `<small class=Compare_Label>→ If learned</small><div class=Pack_Rolled>${
             effects(after, next)
           }</div>`
       }
     }
   }
   let changes = moved(numbers(s, s.worn), numbers(next, s.worn))
-  return `${stats ? `<div class=Pack_Nums>${stats}</div>` : ''}${abilities}${
+  return `${
+    stats
+      ? `<small class=Compare_Label>Skill stats</small><div class=Pack_Rolled>${stats}</div>`
+      : ''
+  }${abilities}${
     known
       ? ''
       : `<div class=Compare_Impact><small class=Compare_Label>If learned with your current gear</small>${

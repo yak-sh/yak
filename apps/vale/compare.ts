@@ -4,7 +4,7 @@
 import type { Doer } from './abilities.ts'
 import { type Slot, sortOf, tierName } from './arms.ts'
 import { hands, kitOf, twins, type Worn } from './gear.ts'
-import { glyphText } from './glyphs.ts'
+import { type Glyph, glyphText } from './glyphs.ts'
 import { ITEMS } from './items.ts'
 import type { Sheet } from './play.ts'
 import { GEAR_STATS, GRADES, type Piece, type Stat, tint } from './rarity.ts'
@@ -61,51 +61,75 @@ export let statName = (s: Stat | 'dmg'): string =>
 export type Line = {
   k: keyof Numbers
   name: string
+  icon: Glyph
   shows: (n: number) => string
   more: boolean
 }
 
 /** Each number a sheet shows. */
 export let LINES: Line[] = [
-  { k: 'blow', name: 'Attack', shows: String, more: true },
+  { k: 'blow', name: 'Attack', icon: 'blow', shows: String, more: true },
   {
     k: 'twin',
     name: 'Off-hand Attack',
+    icon: 'blow',
     shows: String,
     more: true,
   },
   {
     k: 'pace',
     name: 'Attack interval',
+    icon: 'pace',
     shows: (n) => `${n.toFixed(2)} s`,
     more: false,
   },
   {
     k: 'reach',
     name: 'Reach',
+    icon: 'reach',
     shows: (n) => `${n} m`,
     more: true,
   },
   {
     k: 'armour',
     name: statName('armour'),
+    icon: 'armour',
     shows: String,
     more: true,
   },
-  { k: 'hp', name: statName('hp'), shows: String, more: true },
+  { k: 'hp', name: statName('hp'), icon: 'health', shows: String, more: true },
   {
     k: 'speed',
     name: statName('speed'),
+    icon: 'footprints',
     shows: (n) => `${n}%`,
     more: true,
   },
   {
     k: 'luck',
     name: statName('luck'),
+    icon: 'luck',
     shows: (n) => `${n}%`,
     more: true,
   },
 ]
+
+/** A named stat's mark, shared by gear, skills and their possible rolls. */
+export let statMark = (stat: Stat | 'dmg'): string =>
+  glyphText(
+    ({
+      dmg: 'blow',
+      force: 'blow',
+      haste: 'pace',
+      armour: 'armour',
+      hp: 'health',
+      speed: 'footprints',
+      luck: 'luck',
+    } as const)[stat],
+  )
+
+/** The mark of a number on the hero's sheet. */
+export let lineMark = (line: Line): string => glyphText(line.icon)
 
 /** A hero's number, read in its line.
  *
@@ -145,7 +169,7 @@ let arrow = (x: string, y: string, more: boolean, a: number, b: number) =>
 /** Each line where `b` differs from `a`: from `a`'s number to `b`'s. */
 export let moved = (a: Numbers, b: Numbers): string =>
   LINES.filter((l) => a[l.k] != b[l.k]).map((l) =>
-    `<span class=Pack_Num>${l.name} ${
+    `<span class="Pack_Num Stat Stat-${l.k}">${lineMark(l)} ${l.name} ${
       arrow(l.shows(a[l.k]), l.shows(b[l.k]), l.more, a[l.k], b[l.k])
     }</span>`
   ).join('')
@@ -160,7 +184,9 @@ export let statValue = (s: Stat | 'dmg', n: number): string =>
 /** Every number the item itself grants, including its rolled bonuses. */
 export let itemStats = (p: Piece): string =>
   GEAR_STATS.filter((st) => p[st]).map((st) =>
-    `<span class=Pack_Num>${statValue(st, p[st]!)} ${statName(st)}</span>`
+    `<span class="Pack_Num Stat Stat-${st}">${statMark(st)} ${
+      statValue(st, p[st]!)
+    } ${statName(st)}</span>`
   ).join('') +
   (p.legend
     ? `<span class=Pack_Legend>${glyphText(p.legend.icon)} ${

@@ -1,5 +1,6 @@
-import { assertMatch, assertNotMatch } from '@std/assert'
+import { assertEquals, assertMatch, assertNotMatch } from '@std/assert'
 import { test } from '@yaks/testing'
+import { parseHTML } from 'linkedom'
 import { seedAbilities } from './abilities_fixture.ts'
 import { seedItems } from './items_fixture.ts'
 import { numbers } from './compare.ts'
@@ -9,6 +10,26 @@ let hero = (kind = 'hammer1', learned: string[] = []) => ({
   lvl: 5,
   learned,
   worn: { main: { eid: 'weapon', kind, n: 1 } },
+})
+
+test('skill bonuses use the same named stat colors and icons as gear', () => {
+  seedItems()
+  for (
+    let [id, stats] of [
+      ['brawn', [['hp', '+10% Health']]],
+      ['heft', [['force', '+12% Attack bonus']]],
+      ['hide', [['armour', '+25% Armor']]],
+      ['momentum', [['haste', '+12% Attack speed bonus']]],
+      ['nimble', [['speed', '+8% Speed'], ['luck', '+5% Critical chance']]],
+    ] as [string, [string, string][]][]
+  ) {
+    let { document } = parseHTML(skillDetail(hero(), id))
+    for (let [stat, text] of stats) {
+      let row = document.querySelector(`.Pack_Rolled .Stat-${stat}`)
+      assertEquals(row?.textContent?.trim(), text, `${id}: ${stat}`)
+      assertEquals(row?.querySelectorAll('svg.Glyph').length, 1, id)
+    }
+  }
 })
 
 test('skill details show bonuses and the hero changes with current gear', () => {
