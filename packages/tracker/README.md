@@ -12,7 +12,7 @@ All references may name entities in other stores.
 | `./report`  | `report`, `caught`, `capture`, `queue`, `spool`, `post`     |
 | `./page`    | Classic browser capture script and twenty breadcrumbs       |
 | `./effects` | `error_group`, `bug_notify`, `error_trim`                   |
-| `./views`   | Bug pages, list rows and retained error frames              |
+| `./views`   | Bug pages, list rows, error frames and the Bugs destination |
 | `./tools`   | `bug_list`, `bug_show`, `bug_resolve`, `bug_archive`        |
 | `./service` | Spool record admission and acknowledgement                  |
 

@@ -134,6 +134,8 @@ await g.apply([
 - `@yaks/project/graph`: `plugins(host)` supplies the validation plugin.
 - `@yaks/project/tools`: `runs(host, options)` supplies the two checks above;
   `options.through` chooses containment relation tags.
+- `@yaks/project/views`: `destinations`, the Projects and Saved searches pages a
+  browsing app lists in its sidebar.
 
 Here `host` is the process that opened the graph; these factories need its
 loaded vocabulary. A schema keyword is metadata on a declaration: `governed`

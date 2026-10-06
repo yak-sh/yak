@@ -2,8 +2,8 @@
 name: ui-building
 description: >
   How to build interface here, browser and terminal: @yaks/ui parts, themes,
-  @yaks/ux components (editing, picking, stacking, popovers), entity pages and
-  views (inspector, web canvas, TUI, style guides, /views), and drawing any
+  @yaks/ux components (editing, picking, disclosure, popovers), entity pages
+  and views (inspector, web canvas, TUI, style guides, /views), and drawing any
   entity anywhere through the shared renderers. Use it whenever a change adds
   or changes what a person sees or presses, shows entities in a row, list,
   inbox, panel or detail, restyles anything, touches packages/ui, packages/ux,
@@ -60,7 +60,7 @@ used.
 
 The pull the other way comes from packages/browse. The browsing app has parts
 from before the kits: `block` parts in its components, styled in
-packages/browse/styles.css (`Search`, `Filter`, `Peek`, `Tray` and more). One
+packages/browse/styles.css (`Search`, `Filter`, `Row`, `Tray` and more). One
 of them sits beside the screen you're changing, already imported, and reusing
 it feels like looking first. But it isn't a kit part, and two copies of one
 part give two looks and two behaviors for one thing. Where the kit has the
@@ -115,7 +115,7 @@ elements stay free of terminal-only attributes.
 
 ## A UX component
 
-packages/ux/README.md has the model, with `Edit` and `Stack` as working
+packages/ux/README.md has the model, with `Edit` and `Disclosure` as working
 examples. The shape of it:
 
 - It's controlled by a bundle and emits a bundle of the same shape, like
@@ -124,9 +124,10 @@ examples. The shape of it:
 - When it has something to say that isn't a new value, it emits an event
   bundle: a component with `durable: "0s"`, like `Refused`.
 - Its own state is one CamelCase component named after it (`Edit{…}`,
-  `Stack{panes}`), declared in packages/ux/vocab.json. It's page-only, and it
-  sits on an eid derived from its owner and the value it changes, so a remount
-  finds it again. CamelCase is reserved for this (packages/vocab/README.md).
+  `Disclosure{open}`), declared in packages/ux/vocab.json. It's page-only, and
+  it sits on an eid derived from its owner and the value it changes, so a
+  remount finds it again. CamelCase is reserved for this
+  (packages/vocab/README.md).
 - It declares no rules; front-end rules belong to domain packages.
 
 What a browser and a terminal do differently (a popover, focus, keys) is a

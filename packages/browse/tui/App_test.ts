@@ -43,7 +43,7 @@ test('the shared Browse App paints its sidebar and home; its search field goes t
       render(h(Ux, { host: { ...ux, Float: undefined } }, h(App, {})), target)
     )
     ok(root.textContent.includes('Favorites'))
-    ok(root.textContent.includes('Schema'))
+    ok(root.textContent.includes('Sessions'))
     let field = root.querySelector('input')!
     ok(field)
     keys.focus(field)

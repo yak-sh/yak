@@ -1,9 +1,9 @@
 # @yaks/browse
 
 The graph browsing app: a person's threaded inbox, cards, boards and editing in
-a browser. `/` is the configured owner's Inbox. `/T-9` opens T-9 fullscreen,
-`?v=` picks its view, and every card on screen is live: an edit anywhere reaches
-the page over the socket.
+a browser. `/` is the configured owner's Inbox. `/T-9` opens T-9's page, `?v=`
+picks its view, and every card on screen is live: an edit anywhere reaches the
+page over the socket.
 
 ## An app store on yaks.app
 
@@ -147,17 +147,28 @@ equal(entry.pathname.endsWith('/main.tsx'), true)
 equal(styles.pathname.endsWith('/styles.css'), true)
 ```
 
-## Stacked pages
+## Pages and the sidebar
 
-Following a page link stacks it in the main area. The UX `Stack` controls panes
-in the page graph; pressing a strip returns to that page. The browser door keeps
-snapshots in `history.state`, so back, forward and reload restore the stack and
-its scroll offsets. The address names only the top page: opening that address in
-another tab starts with one page. Changing the top page's view replaces it
-rather than adding a strip.
+The main area shows one page at a time, each at its own address; the browser's
+back is the way back, and a page gone back to starts scrolled where it was left.
+Changing a page's view replaces its address rather than adding one.
 
-The terminal door keeps history snapshots in `TASKS_TUI_STATE`. Ctrl-O goes back
-and Ctrl-F goes forward.
+The sidebar is a short fixed list of places: search, then the Inbox (Home when
+nothing composes @yaks/notify), Favorites, Recent, each package's destinations,
+Sessions, and the Schema when the host serves its packages. Each is a plain
+link, and the one you are on is lit. Narrower than a tablet, it folds behind the
+bar's menu. A destination is a page at `/?<key>` listing what its query finds. A
+package offers its own from its `./views` facet beside its renderers, so Browse
+lists a tracker's bugs without knowing a bug:
+
+```ts
+import { destinations } from '@yaks/tracker/views'
+import { equal } from '@yaks/testing'
+equal(destinations.map((d) => d.key), ['bugs'])
+```
+
+The terminal door keeps its history in `TASKS_TUI_STATE`. Ctrl-O goes back and
+Ctrl-F goes forward.
 
 The configured `./web` facet contributes `app` to the browser door. The door
 imports that facet from the plugin config, never imports browse by name.

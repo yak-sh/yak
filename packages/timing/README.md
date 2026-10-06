@@ -57,7 +57,7 @@ equal(selected[1].elapsed, { start: 0, ms: 20 })
 | Export               | Provides                                                                                                                                                      |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@yaks/timing`       | `summarize`, `bounds`, `sample`, `project`, `selectedRequest`, `selectRequest`, `sampleRequest`, `thresholds`, `timingDoc`; summary, trace and sampling types |
-| `@yaks/timing/views` | `views`, `inspectViews`: trace and span views, a trace's page and the trace list                                                                              |
+| `@yaks/timing/views` | `views`, `inspectViews`: trace and span views, a trace's page and the trace list; `destinations`: the Traces page in a browsing app's sidebar                 |
 | `@yaks/timing/vocab` | `timingDoc`, `docs`, `description`                                                                                                                            |
 
 ## Closed-minute summaries

@@ -296,7 +296,7 @@ UUID.
 
 CamelCase is a UX component's own state or event, declared by @yaks/ux,
 page-only (`sync: none`), on an entity the consumer names (D-58967):
-`Edit{open, query}`, `Stack{panes, scroll}`. An event is a component with
+`Edit{open, query}`, `Disclosure{open}`. An event is a component with
 `durable: "0s"`: applied and handed on, never stored or journaled
 (`Refused{said}`). A UX component declares no rules; data names and front-end
 rules belong to the domain package.
