@@ -3,11 +3,19 @@
   "version": "0.2.10",
   "exports": {
     ".": "./mod.ts",
-    "./vocab": "./vocab.ts"
+    "./vocab": "./vocab.ts",
+    "./views": "./views.ts"
   },
   "license": "Apache-2.0",
-  "description": "Pure closed-minute timing summaries and slow or representative span-tree selection for tracker stores.",
+  "description": "Timing summaries, stored span-entity traces and trace views for insight into request time and rows in tracker stores.",
   "publish": {
-    "exclude": ["**/*_test.ts", "./browser.json"]
+    "exclude": [
+      "**/*_test.ts",
+      "./browser.json"
+    ]
+  },
+  "imports": {
+    "preact": "npm:preact@^10.29.1",
+    "preact-render-to-string": "npm:preact-render-to-string@6.7.0"
   }
 }

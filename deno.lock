@@ -2377,6 +2377,12 @@
           "npm:preact@^10.29.1"
         ]
       },
+      "packages/timing": {
+        "dependencies": [
+          "npm:preact-render-to-string@6.7.0",
+          "npm:preact@^10.29.1"
+        ]
+      },
       "packages/tmux": {
         "dependencies": [
           "jsr:@std/assert@1"

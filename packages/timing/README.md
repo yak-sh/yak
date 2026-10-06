@@ -1,7 +1,7 @@
 # @yaks/timing
 
-Pure closed-minute timing summaries and slow or representative span-tree
-selection for tracker stores. It consumes
+Timing summaries, stored span-entity traces and trace views for insight into
+request time and rows in tracker stores. It consumes
 [@yaks/trace events and span trees](../trace/README.md), and declares the
 `timing`, `trace`, `span` and metric components.
 
@@ -57,6 +57,7 @@ equal(selected[1].elapsed, { start: 0, ms: 20 })
 | Export               | Provides                                                                                                                                                      |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@yaks/timing`       | `summarize`, `bounds`, `sample`, `project`, `selectedRequest`, `selectRequest`, `sampleRequest`, `thresholds`, `timingDoc`; summary, trace and sampling types |
+| `@yaks/timing/views` | `views`, `inspectViews`: trace list, span tree, flamegraph and ordinary comparison                                                                            |
 | `@yaks/timing/vocab` | `timingDoc`, `docs`, `description`                                                                                                                            |
 
 ## Closed-minute summaries
@@ -238,4 +239,46 @@ Neither projection nor selection reads a clock, draws randomness or mutates
 inputs.
 
 Hosts own subscriptions, tree assembly, clocks, trace eids, tracker context,
-delivery, retention and pages. This package performs no I/O or graph writes.
+delivery and retention. Views ask the host for stored entities; the pure timing
+functions perform no I/O or graph writes.
+
+## Trace views
+
+`@yaks/timing/views` contributes portable trace and span readings and
+query-backed inspector views through the host's existing registry. Configure
+`@yaks/timing` beside `@yaks/tracker`, `@yaks/inspect` and a browser
+application. Open `/?q=.trace` for traces grouped by store/space/app and request
+kind/name, ranked by root rows or time. The list reads the latest 200 matching
+traces; its window and total are explicit. Narrow it with, for example,
+`.trace .trace.name="POST apply"`.
+
+A trace page asks for its span entities, draws their parent tree and flamegraph,
+and compares it with the newest ordinary candidate in the latest 100 matching
+traces. Both flamegraphs use the same scale. An **ordinary candidate** has
+recorded root rows read and written at most 10,000, no error outcome or
+missing-parent fragment, and at most 500 ms if time is recorded. The recording
+reason is not stored; the page does not claim this proves random sampling or
+request health. An absent candidate is stated, never substituted from another
+store or request kind.
+
+Metrics are inclusive: parents contain their descendants. Root measurements
+provide totals; child metrics are never added to their parents. Absent metrics
+are not zero. A Worker clock may report zero milliseconds, in which case the
+page recommends rows instead of inventing a time flamegraph. Row widths are
+inclusive counts laid out in span order, not a timing axis. Missing parents and
+cycles remain visible as fragments. Storage has no delivery-completion marker,
+so the page cannot guarantee a trace arrived in full.
+
+```ts
+import { inspectViews } from '@yaks/timing/views'
+import { equal, ok } from '@yaks/testing'
+
+let page = ok(inspectViews.find((v) => v.view === 'Inspect.Page'))
+let trace = {
+  entity: { eid: 'example-trace' },
+  trace: { op: 'request', name: 'POST apply', at: '2026-01-01T00:00:00Z' },
+}
+equal(page.asks!(trace, {} as never, {}), {
+  spans: '.span.trace=example-trace * .order=elapsed.start',
+})
+```
