@@ -3,15 +3,15 @@ name: packages-and-plugins
 description: >
   How an @yaks package or plugin is made, wired and published in ~/code/tasks,
   and where code belongs. Use it whenever you add a package or plugin, move code
-  between packages (or out of workers/yak or packages/web), change a subpath
-  export or facet (./vocab, ./graph, ./tools, ./effects, ./routes, ./service,
-  ./cli, ./views, ./tui), add a plugin to ~/.yak/yak.json, hit an import cycle,
-  publish to jsr, or land with `yak land --allow-revert`, even if the task says
-  "put this somewhere", "share this helper" or "make it reusable". Reading
-  composed anatomy and causal activity is `platform-visualize`, not wiring.
-  Declared words are `vocabulary`; effects and rules are `effects-and-rules`;
-  drawn views are `ui-building`; keys a plugin reads are
-  `secrets-and-connections`; how its README is written is
+  between packages (or out of workers/yak, packages/web or packages/browse),
+  change a subpath export or facet (./vocab, ./graph, ./tools, ./effects,
+  ./routes, ./ui, ./service, ./cli, ./views, ./tui, ./web), add a plugin to
+  ~/.yak/yak.json, hit an import cycle, publish to jsr, or land with `yak land
+  --allow-revert`, even if the task says "put this somewhere", "share this
+  helper" or "make it reusable". Reading composed anatomy and causal activity
+  is `platform-visualize`, not wiring. Declared words are `vocabulary`; effects
+  and rules are `effects-and-rules`; drawn views are `ui-building`; keys a
+  plugin reads are `secrets-and-connections`; how its README is written is
   `writing-documentation`. A new package or an owner-decided boundary gets a
   design first (`design-docs`).
 ---
@@ -19,113 +19,155 @@ description: >
 # Packages and plugins
 
 The repo is one library cut into many `@yaks/*` packages under `packages/`,
-plus `workers/yak` (the yaks.app platform) and `apps/`. A package is also a
-plugin: the parts a running graph needs are its subpath exports, and a config
-decides which packages a process loads. packages/README.md indexes them;
-packages/cli/README.md ("A plugin is a package, and each part of it is a subpath
-export") is the reference for facets and `compose()`.
+plus `workers/yak` (the yaks.app platform) and `apps/`. Every package is also a
+plugin: the parts a running graph needs are its subpath exports, called facets,
+and a config decides which packages a process loads. Nothing else wires the
+platform together. `yak` reads the config and composes what it lists; even
+`yak serve` is a plugin's tool (@yaks/api). packages/README.md indexes the
+packages, and packages/cli/README.md ("A plugin is a package, and each part of
+it is a subpath export") is the reference for facets and `compose()`, which
+lives in packages/cli/host.ts.
 
-## Where code belongs
+## Walls and furniture
 
-Package boundaries are the decision the owner makes; inside one, mess is cheap to fix
-later (M-38025). Left alone you put new code next to the nearest code that
-needed it, and a helper lands in workers/yak or a second copy of an idea grows
-inside the package that first wanted it.
+Inside a package is furniture: mess there is cheap, and you can rearrange it
+any time. Between packages are walls, and walls are expensive to move once
+people live in them. The owner draws the walls. In his words (M-38025):
 
-- **Existing package first.** Find the package that owns the idea and grow it.
-  Name a new package only where none does, and say in the design what it owns,
-  what it offers, and what it depends on.
-- **One home per idea.** Moving code is a move: the old copy is deleted and
-  every caller moves in the same change (M-17871). A domain component with two
-  consumers gets a package of its own, not a home inside one of them (M-39550).
-- **The platform keeps its UI and wiring.** What workers/yak or packages/web do
-  that isn't their own screen or glue belongs in a package (M-37867). SQL is
-  @yaks/sql's AST, and only SQL-facing packages know SQLite exists (M-39498).
-- **Before building a part, look for it.** packages/web often has it already;
-  port it and split it to fit (the `ui-building` skill).
-- **No cycles.** When two packages need the same type or helper, it moves down
-  into a package both already depend on. Restating it on one side to dodge the
-  cycle is a second shape (T-58961 is one such case). `deno task check:publish`
-  refuses a cycle.
+> i'm fine with some mess inside each package that i don't see, but it's harder
+> to re-organize the packages later and agents tend to stuff things wherever,
+> rather than designing clean modules
+
+> It's the modules and their interfaces that need my attention.
+
+The pull you'll feel is toward the nearest code. You're in workers/yak, the
+helper you need would fit right there, and the local choice always looks fine.
+Many such choices make the "stuffed wherever" shape: a helper living in the
+platform, a second copy of an idea growing inside whichever package first
+wanted it. Against that pull, every idea already has, or should have, one
+owner. So the first move is to find the package that owns the idea and grow it.
+A new package is a new wall, and a design says what it owns, what it offers and
+what it depends on before it's built (`design-docs`).
+
+What the walls are made of:
+
+- **One home per idea.** A move deletes the old copy and moves every caller in
+  the same change (M-17871). A domain component with two consumers gets a
+  package of its own rather than a room inside one of them (M-39550).
+- **The platform keeps its own screen and glue.** What workers/yak, the browser
+  door (packages/web) or the browsing app (packages/browse) do that isn't
+  theirs belongs in a package, open source like the rest (M-37867).
+- **SQL is @yaks/sql's AST**, and only SQL-facing packages know SQLite exists
+  (M-39498).
+- **Parts are often already built.** packages/browse/components, with its
+  styles.css and components/registry.ts, tends to have the thing you're about
+  to write; port it and split it to fit (`ui-building`).
+- **A cycle means something lives a floor too high.** When two packages need
+  the same type or helper, it moves down into a package both already depend on.
+  Restating it on one side to dodge the cycle is a second shape of one thing
+  (T-58961 is one still open). `deno task check:publish` refuses a cycle.
 
 ## What a package is made of
 
-Copy the shape of a small one, such as packages/draft:
+packages/draft is a good small one to copy:
 
 - **deno.json**: `name`, the family's current `version` (every package moves
   together; bin/release.ts), `exports`, `license`, `description` and `publish`
   excludes. The description is the one place a package says what it is: its
   `./vocab` facet re-exports it (packages/draft/vocab.ts), the graph's package
-  rows read it, and `deno task jsr` puts it on jsr.io. Imports name outside
-  dependencies only, never another workspace package.
-- **The workspace list** in the root deno.json names the package.
-- **README.md**, written as the `writing-documentation` skill says: its
-  terms defined, every major feature shown in an example that runs.
-- **vocab.json and vocab.ts** if it declares words (the `vocabulary` skill).
-- **browser.json** if a page imports it: `deno task check:browser` type-checks
-  its browser-facing exports, and always its `./vocab` and `./views`, with only
-  the web platform in scope (bin/check-platform.ts).
-- **An entry in packages/README.md's index.**
+  rows read it, and `deno task jsr` puts it on jsr.io. Its `imports` name
+  outside dependencies only; workspace packages resolve through the workspace.
+- **The workspace list** in the root deno.json, which names the package.
+- **README.md**, written the way `writing-documentation` describes.
+- **vocab.json and vocab.ts** if it declares words (`vocabulary`).
+- **browser.json** if a page imports it. `deno task check:browser`
+  (bin/check-platform.ts) type-checks its browser-facing exports, and always
+  its `./vocab` and `./views`, with only the web platform in scope.
+- **Its line in packages/README.md's index.**
 
-## Facets: what a plugin contributes
+## Facets: where things run
 
-A facet is one optional subpath, and a plugin never says where it runs
-(M-39540). A process serves roles and imports only those roles' facets
-(`ROLES` in packages/cli/host.ts): `graph` takes `./vocab`, `./graph`,
-`./tools`; `web` takes `./routes`; `effects` takes `./effects`; a package with
-`./service` brings a role of its own. `./cli` adds terminal commands, `./views`
-and `./tui` draw entities. `./graph` holds the package's graph contributions;
-its `plugins(host, options)` factory returns graph plugins. The README's table
-lists the facet's other exports and what each subpath provides.
+The owner, verbatim (M-39540): "facets are about where things run, not when."
+And: "each user can decide which part runs where without the plugins being
+descriptive." So a plugin offers parts and never says where they go. A process
+serves roles and imports only those roles' facets (`ROLES` in
+packages/cli/host.ts):
 
-Consequences worth knowing:
-- An exported facet that fails to import fails composition for every process
-  that loads it, so a bad `./graph` breaks every `yak` command. An unexported
-  facet is simply skipped.
-- `./vocab` and `./views` run in browsers: no SQL, storage drivers or server
-  APIs in them or in anything they import.
-- Start-up work is an effect declared `start: true`, owed only by a process
-  that works the effects pool, never by a CLI command passing through.
+- `graph` takes `./vocab`, `./graph` and `./tools`, though a plugin's tool code
+  is imported only by the first call of one of its tools;
+- `web` takes `./routes` and `./ui` (kits, UX specimens, themes and skins:
+  @yaks/ui's `Contributions`);
+- `effects` takes `./effects`;
+- a package with `./service` brings a role of its own, named by the package.
+
+Outside `compose`, `./cli` adds `yak` commands, `./views` draws entities in the
+web UI and in `yak`'s answers, `./tui` draws them in the terminal, and `./web`
+is an application's page (entry, mounting module, stylesheet) that @yaks/web,
+the browser door, finds in the config and serves; @yaks/browse has one.
+`./graph`'s `plugins(host, options)` returns graph plugins, and
+packages/cli/README.md's table has every facet's other exports.
+
+A passing `yak` command serves `graph` alone, so it never pays for routes. The
+other side of importing by role: an exported facet that fails to import fails
+composition for every process that loads it, so a bad `./graph` breaks every
+`yak` command at once. An unexported facet is simply skipped. `./vocab`,
+`./views` and `./ui` run in browsers, so SQL, storage drivers and server APIs
+stay out of them and out of everything they import. Start-up work is an effect
+declared `start: true`, owed by a process that works the effects pool and not
+by a command passing through; there is no `./boot`.
+
+To see what a running process composed, which facets are declared, loaded and
+bound, read its anatomy: `yak visualize anatomy --group facets`
+(`platform-visualize`).
 
 ## Turning a plugin on
 
-A plugin runs on the box only once `~/.yak/yak.json` lists it in `plugins`,
-either as a name or as `{"use": "@yaks/x", "with": {…}}`, and the server is
-restarted. Adding one has broken every `yak` command before, so prove the config
-on a scratch server first (the `end-to-end-checks` skill), back up yak.json,
-then edit it and run `yak restart`, the agent restart door. A key in `with` is
-`{"secret": "NAME"}`, never the value (the `secrets-and-connections` skill).
+`~/.yak/yak.json` is the box's spine. A plugin runs there once its `plugins`
+list names it, as `"@yaks/x"` or `{"use": "@yaks/x", "with": {…}}`, and the
+server restarts. Every `yak` command composes from that file, so an entry that
+fails to compose takes all of them down together, and that has happened. Treat
+the edit like work on a running patient: prove the config on a scratch server
+first (`end-to-end-checks`), keep a copy of the old yak.json, then edit it and
+run `yak restart`, the agent restart door. The file is plain JSON on disk, so a
+key in `with` is `{"secret": "NAME"}` and the value lives in the vault
+(`secrets-and-connections`).
 
 ## Publishing
 
-- A new package has no page on jsr.io, and CI's publish refuses it until one
-  exists: `deno task jsr` shows what would change, and
-  `deno task jsr --apply --create` creates missing pages (it needs a JSR token,
-  so this is often the owner's to run). bin/release.ts refuses to cut a release
-  while a package has no page.
-- Releases are one version for the whole family: bin/release.ts writes it,
-  commits and tags; pushing the tag publishes.
+The family is one release. bin/release.ts writes one version into every
+package, commits and tags; pushing the tag publishes
+(.github/workflows/publish.yml). CI publishes under GitHub's identity, which
+jsr accepts only for a package that already has a page, so a new package needs
+its page first or the publish stops partway, and a version can't be
+unpublished. bin/release.ts refuses to cut a release while one is missing.
+bin/jsr.ts writes the pages from the repo:
 
-## Landing: `yak land` and `--allow-revert`
+```sh
+deno task jsr                    # dry run: what would change on every page
+deno task jsr --apply --create   # write them, and mint pages for new packages
+```
 
-`yak land` refuses when a file would end up with content that no commit on your
-branch wrote, which almost always means your branch would undo someone else's
-newer change to that file. `--allow-revert <paths>` overrides that, so check
-before you use it:
+Writing needs a `JSR_TOKEN`, so it's often the owner's to run.
+
+## Landing over someone's newer change
+
+`yak land` refuses when a file would end up with content no commit on your
+branch wrote. That almost always means your branch would quietly undo someone
+else's newer change to it. `--allow-revert <paths>` (comma-separated) lets it
+through, so first look at who touched the file after you branched:
 
 ```sh
 git log --oneline $(git merge-base HEAD main)..main -- <path>
 ```
 
-Any commit listed changed the file after you branched; read it and rebase your
-change onto it rather than reverting it. Allow the revert only when the content
-you are undoing is your own earlier work or a change you were asked to undo, and
-say so in the commit message.
+A commit there is someone's work: read it, and rebase your change onto it. The
+override is for undoing your own earlier work or a change you were asked to
+undo, and the commit message says which.
 
-## Before you land
-
-- Each moved thing has one home; the old copy is gone and no caller reaches it.
-- `deno task check` passes (format, lint, types, publish, browser, workers).
-- The package's README and packages/README.md describe it as it is now.
+A change here feels finished when each moved idea has one home and nothing
+reaches the old one, `deno task check` is green (it runs format, lint, bytes,
+types, publish, browser, workers and content, so cycles and browser leaks show
+up there), and the package's README and packages/README.md describe it as it
+is.
 
 When this skill is wrong or missing something, fix it in the same change.
