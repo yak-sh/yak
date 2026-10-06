@@ -93,10 +93,8 @@ and it takes about a quarter of an hour under a lock (each run is in
 it, and it will do.
 
 The live run belongs to the moment the code that reads the new shape goes
-live: land, then run the migration and `yak restart` back to back. A session
-can't restart the live server, so it lands, asks on its task, and the locus
-runs both. A change that drops a column or renames a table is the same, done in
-that one sitting.
+live: land, then run the migration and `yak restart` back to back. A change
+that drops a column or renames a table is the same, done in that one sitting.
 
 The script is deleted in the next commit. Its commit is the record, and the
 message says what moved, with counts.
