@@ -7,6 +7,8 @@
 // map and the region it leads to, and a ring where each quest tracked goes
 // next (journal.ts). Its controls stand on top of it. M or the compass opens
 // its panel.
+import { h, render } from 'preact'
+import { Button, Section } from '@yaks/ui'
 import { chartVersion, fogged } from './grown.ts'
 import { groundImages } from './mapground.ts'
 import { glyph } from './glyphs.ts'
@@ -28,6 +30,7 @@ import type { Frame } from './play.ts'
 import { clamp } from './rand.ts'
 import { tint } from './rarity.ts'
 import { originOf, regionOf } from './regions.ts'
+import { hint } from './tile.ts'
 import { tipped } from './tip.ts'
 import { arriveOf, roadsOf } from './ways.ts'
 import type { Seen } from './work.ts'
@@ -86,26 +89,62 @@ export let exits = (id: string): { at: Spot; side: Side; to: string }[] => {
  * the hero is, the tools and the fires to travel by stand on top. */
 export let map = (panel: Panel, travel: (to: string) => void) => {
   panel.body.classList.add('Map_Host')
-  panel.body.innerHTML =
-    `<div class=Map><canvas class=Map_Ground></canvas><canvas class=Map_Fog></canvas><div class=Map_Marks></div></div><div class=Map_Where><b class=Map_Land></b><span class=Map_Scale></span></div><div class=Map_Tools><button class=Button data-map=in aria-label="Zoom in">+</button><button class=Button data-map=out aria-label="Zoom out">−</button><button class=Button data-map=here>Here</button><button class=Button data-map=world>World</button></div><div class=Map_Travel></div>`
+  // Zoom in or out, back to the hero, or out to the world.
+  let tool = (does: string, words: string, label?: string) =>
+    h(Button, {
+      'data-map': does,
+      'aria-label': label,
+      onClick: () =>
+        setView(
+          does == 'here'
+            ? view(hero)
+            : does == 'world'
+            ? view(hero, WORLD[2])
+            : zoom(aim, does == 'in' ? 1 / 1.5 : 1.5),
+          true,
+        ),
+    }, words)
+  render(
+    [
+      h(
+        'div',
+        { class: 'Map' },
+        h('canvas', { class: 'Map_Ground' }),
+        h('canvas', { class: 'Map_Fog' }),
+        h('div', { class: 'Map_Marks' }),
+      ),
+      h(
+        'div',
+        { class: 'Map_Where' },
+        h('b', { class: 'Map_Land' }),
+        h('span', { class: 'Map_Scale' }),
+      ),
+      h(
+        'div',
+        { class: 'Map_Tools' },
+        tool('in', '+', 'Zoom in'),
+        tool('out', '−', 'Zoom out'),
+        tool('here', 'Here'),
+        tool('world', 'World'),
+      ),
+      h('div', { class: 'Map_Travel' }),
+    ],
+    panel.body,
+  )
   let stage = panel.body.querySelector<HTMLElement>('.Map')!
-  let tools = panel.body.querySelector<HTMLElement>('.Map_Tools')!
   let land = panel.body.querySelector<HTMLElement>('.Map_Land')!
   let scale = panel.body.querySelector<HTMLElement>('.Map_Scale')!
   let canvas = panel.body.querySelector<HTMLCanvasElement>('.Map_Ground')!
   let fog = panel.body.querySelector<HTMLCanvasElement>('.Map_Fog')!
   let marks = panel.body.querySelector<HTMLElement>('.Map_Marks')!
   let choices = panel.body.querySelector<HTMLElement>('.Map_Travel')!
+  // Travel by the fire the hero stands beside to one found before.
   let near = false
-  let known = new Set<string>()
-  choices.addEventListener('click', (e) => {
-    let to = e.target instanceof Element
-      ? e.target.closest<HTMLElement>('[data-fire]')?.dataset.fire
-      : undefined
-    if (!to || !near || !known.has(to)) return
+  let go = (to: string) => {
+    if (!near) return
     travel(to)
     panel.close()
-  })
+  }
 
   // The view is a square of world metres, which the panel shows across its
   // shorter side. The ground, its veil and the marks are drawn over the
@@ -224,20 +263,6 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
     }).catch(reportError)
   }
 
-  tools.addEventListener('click', (e) => {
-    let action = e.target instanceof Element
-      ? e.target.closest<HTMLElement>('[data-map]')?.dataset.map
-      : undefined
-    if (!action) return
-    setView(
-      action == 'here'
-        ? view(hero)
-        : action == 'world'
-        ? view(hero, WORLD[2])
-        : zoom(aim, action == 'in' ? 1 / 1.5 : 1.5),
-      true,
-    )
-  })
   // The fraction of the view under a point of the page (mapview.ts `under`).
   let pointed = (x: number, y: number): Spot => {
     let rect = stage.getBoundingClientRect()
@@ -352,24 +377,37 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
         inside(x, z) && regions.has(regionOf(x, z))
       let here = f.down ? null : fireNear(f.body.x, f.body.z)
       near = !!here
-      known = new Set(visited)
-      let destinations = [...visited].filter((id) =>
-        id != here?.level && !!villageOf(id)
-      ).sort((a, b) => levelOf(a)!.name.localeCompare(levelOf(b)!.name))
-      let choicesHtml = here
-        ? `<b>Travel by fire</b><span>Choose a village fire you have found.</span><div class=Map_Fires>${
-          destinations.length
-            ? destinations.map((id) =>
-              `<button class=Button data-fire="${esc(id)}">${
-                esc(levelOf(id)!.name)
-              }</button>`
-            ).join('')
-            : '<span>Explore to find another village fire.</span>'
-        }</div>`
-        : '<span>Stand beside a village fire to travel.</span>'
-      if (choicesHtml != choicesWas) {
-        choicesWas = choicesHtml
-        choices.innerHTML = choicesHtml
+      let destinations = here
+        ? [...visited].filter((id) => id != here.level && !!villageOf(id))
+          .sort((a, b) => levelOf(a)!.name.localeCompare(levelOf(b)!.name))
+        : []
+      let fires = `${!!here}/${destinations}`
+      if (fires != choicesWas) {
+        choicesWas = fires
+        render(
+          here
+            ? h(
+              Section,
+              {},
+              h(Section.Title, {}, 'Travel by fire'),
+              h(Section.Sub, {}, 'Choose a village fire you have found.'),
+              destinations.length
+                ? h(
+                  'div',
+                  { class: 'Map_Fires' },
+                  destinations.map((id) =>
+                    h(Button, {
+                      key: id,
+                      'data-fire': id,
+                      onClick: () => go(id),
+                    }, levelOf(id)!.name)
+                  ),
+                )
+                : hint('Explore to find another village fire.'),
+            )
+            : hint('Stand beside a village fire to travel.'),
+          choices,
+        )
       }
       // Where a point sits on the map, as a percentage across and down.
       let pct = (m: number) => `${(m / side * 100).toFixed(2)}%`

@@ -83,25 +83,20 @@
   pointer-events: none;
 }
 
+/* The fires to travel by (a kit Section), or what to do to see some. */
 .Map_Travel {
   display: grid;
   grid-area: 3 / 1 / 4 / -1;
   justify-self: center;
-  gap: 0.35rem;
   max-width: 26rem;
   padding: 0.5rem 0.75rem;
   border-radius: var(--radius-small);
   background: var(--glass);
   box-shadow: var(--flat);
-  color: var(--deep);
-  font-size: 0.85rem;
-  line-height: 1.25;
-  text-align: center;
 }
 
 .Map_Fires {
   display: flex;
-  justify-content: center;
   flex-wrap: wrap;
   gap: 0.35rem;
   max-height: 5rem;
@@ -115,7 +110,7 @@
   height: 1.5rem;
   border-radius: 50%;
   background: var(--ember);
-  color: white;
+  color: var(--paper);
   box-shadow: 0 0 0 2px var(--paper);
 }
 
