@@ -101,6 +101,7 @@ export type Roused = {
 export let rouse = async (
   graph: Driver,
   now: number = Date.now(),
+  catalog?: Bundle[],
 ): Promise<Roused> => {
   let result: Roused = { roused: [], refused: [] }
   let holds = matches(graph, now)
@@ -108,7 +109,7 @@ export let rouse = async (
     | { wake: Bundle; at: number }
     | { wake: Bundle; error: unknown }
   )[] = []
-  for (let wake of await graph.read(`.${WAKE}.while`, { now })) {
+  for (let wake of catalog ?? await graph.read(`.${WAKE}.while`, { now })) {
     let w = wakeOf(wake) ?? {}
     try {
       let every = await cadence(graph, w, now, holds)

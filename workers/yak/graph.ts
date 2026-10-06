@@ -209,7 +209,7 @@ import { workerAnatomy } from './anatomy.ts'
 import { type Runner, runner } from '@yaks/tools'
 import { commands } from '@yaks/tools/declared'
 import { readTools } from './tool-grammar.ts'
-import { rouse, soonest, tick, type Ticked, wakes } from '@yaks/wake'
+import { soonest, tick, type Ticked, wakes } from '@yaks/wake'
 import { type Alarm, arm } from '@yaks/wake/cloudflare'
 import {
   asking,
@@ -230,6 +230,7 @@ import { PLUGINS } from './plugins.ts'
 import { builderModelTool, building, choosing, supplying } from './builders.ts'
 import type { Env } from './env.ts'
 import { seeded } from './wake.ts'
+import { conditionalWakes } from './conditional-wakes.ts'
 import type { Binding } from './post.ts'
 import { ledger } from './ledger.ts'
 import {
@@ -1162,6 +1163,7 @@ export class Store {
     observed.effects(fx.slots())
     this.#effectsReady = true
     this.#effects = fx
+    this.#conditionalWakes = undefined
     this.#vocab = vocab
     this.#graph = g
     this.#anatomy = observed
@@ -1893,11 +1895,14 @@ export class Store {
   // one that stopped is armed again by the write that makes one hold
   // (@yaks/wake `rouse`): a player arriving is a write, so arriving is what
   // starts a sleeping world again, with no page asking. Every committed write
-  // asks; in a store holding no such wake the asking is one read. A condition
+  // asks, but an unchanged wake catalog is retained for this incarnation.
+  // A condition
   // it cannot read goes to Sentry, not to the break log — that log is a write,
   // and a write asks again.
+  #conditionalWakes: ReturnType<typeof conditionalWakes> | undefined
   #rouse = async (bundles: Bundle[]): Promise<Bundle[]> => {
-    let { refused } = await rouse(this.#clock, Date.now())
+    this.#conditionalWakes ??= conditionalWakes(this.#clock)
+    let { refused } = await this.#conditionalWakes(bundles, Date.now())
     for (let { wake, error } of refused) {
       defect(error, { request: `wake ${wake.entity.eid}`, store: this.#name() })
     }
