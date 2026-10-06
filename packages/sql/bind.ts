@@ -1417,6 +1417,53 @@ let indexedRelation = (
   from: string,
   o: Parameters<typeof rel>[1],
 ): Select => {
+  // A finite identity selection is narrower than any component predicate.
+  // Driving from the component's session/owner index re-sorts its entire
+  // history before applying these ids, even when only three can be returned.
+  if (
+    !ctx.spine && !claims(ctx, 'pred') && ctx.d.indexed && from == '"entity"'
+  ) {
+    let named = flattened(clauses).find((c) =>
+      c.kind == 'pred' &&
+      !c.not && !c.where && c.path.join('.') == 'entity.eid' && opOf(c) == ''
+    )
+    if (named?.kind == 'pred') {
+      let set = identity('eid', flat(named.value))
+      if (set && !set.nums.length && o.joins.length) {
+        let s = rel(from, o)
+        return {
+          ...s,
+          from: raw('json_each(?) as "__named"', [JSON.stringify(set.eids)]),
+          joins: [
+            {
+              how: 'cross',
+              src: raw(from, [], 'entity'),
+              on: raw('"entity"."eid" = "__named"."value"'),
+            },
+            ...o.joins.map((j): Join => {
+              let must = flattened(clauses).some((c) =>
+                c.kind == 'pred' &&
+                !c.not && !c.where && c.path.length <= 2 &&
+                ctx.d.table(c.path[0]) == j.source &&
+                (c.path.length == 1
+                  ? opOf(c) == EXISTS
+                  : needs(opOf(c), flat(c.value)))
+              )
+              return {
+                how: must ? 'cross' : 'left',
+                src: raw(
+                  must && ctx.d.owned && /^"[a-z_0-9]+"$/.test(j.source)
+                    ? ctx.d.owned(j.source.slice(1, -1))
+                    : j.source,
+                ),
+                on: raw(j.on),
+              }
+            }),
+          ],
+        }
+      }
+    }
+  }
   let root: { comp: string; index?: string } | undefined = ctx.present
     ? { comp: ctx.present }
     : undefined
