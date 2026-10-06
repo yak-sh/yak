@@ -1089,9 +1089,13 @@ test('unsaved partial peer patches check the complete held value without storing
 test('unrelated durable commits do not reread peer query candidates', async () => {
   let g = shop()
   await g.apply([{ entity: { eid: 'p' }, book: { price: 5 } }])
-  let reads = 0
+  let reads = 0, gets = 0
   let spy: Graph = {
     ...g,
+    get: (...args) => {
+      gets++
+      return g.get(...args)
+    },
     read: (q, opts) => {
       reads++
       return g.read(q, opts)
@@ -1101,11 +1105,12 @@ test('unrelated durable commits do not reread peer query candidates', async () =
   await subs.open(watcher.to, 'near', '.book&.browsing.x<10&.fields=book.price')
   await subs.relay(writer.to, [{ entity: { eid: 'p' }, browsing: { x: 1 } }])
   watcher.take()
-  reads = 0
+  reads = gets = 0
   await g.apply([{
     entity: { eid: 'unrelated' },
     doc: { title: 'nothing to do with books' },
   }])
+  assertEquals(gets, 0)
   await subs.relay(writer.to, [{ entity: { eid: 'p' }, browsing: { x: 2 } }])
   assertEquals(reads, 0)
   assertEquals(
