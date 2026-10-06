@@ -1,411 +1,508 @@
-/** Trace queries and readings belong to timing. The inspector host supplies
- * held answers, navigation and page-graph state through its existing contract. */
-import { h } from 'preact'
+/** A trace's page and the trace list, as the inspector draws them: where a
+ * request's time and rows went, place by place in the code (phases, rules,
+ * reads, statements), beside an ordinary request of the same kind in the same
+ * store; and every recorded kind of request, its worst first. Queries belong
+ * here; the host answers them, names references and keeps the page's state.
+ * @module
+ */
+import { type ComponentChildren, h, type JSX } from 'preact'
 import { parse } from '@yaks/query'
-import type { Bundle, Io, Props, View } from '@yaks/inspect'
-import { inspectViews as baseViews } from '@yaks/inspect/views'
-import { Button, Head, Rows, Section, Table, Value } from '@yaks/ui'
 import {
-  type Branch,
+  type Bundle,
+  type Io,
+  mention,
+  type Props,
+  useNamed,
+  type View,
+} from '@yaks/inspect'
+import { inspectViews as baseViews } from '@yaks/inspect/views'
+import { Head, Section, Tabs, Tile } from '@yaks/ui'
+import { Disclosure, disclosureAt, isOpen } from '@yaks/ux'
+import {
+  amount,
+  axes,
   branches,
   comp,
-  format,
+  differences,
+  figure,
   labels,
-  metrics,
+  merge,
+  type Merged,
+  noun,
   ordinary,
   peers,
-  sameKind,
   spans,
   str,
   totals,
+  walk,
 } from './readings.ts'
 import { Flamegraph } from './Flamegraph.ts'
+import { Gaps, Line, list, Places } from './Places.ts'
 
-let status = (answer: Props['got'][string] | undefined) =>
+let CONTEXT = ['entity', 'space', 'app', 'process', 'request']
+let WORST = 5
+
+let status = (answer: Props['got'][string] | undefined, what: string) =>
   answer?.error
-    ? h('p', { class: 'Section_Sub', role: 'alert' }, answer.error)
+    ? h(Section.Sub, { role: 'alert' }, answer.error)
     : !answer?.ready
-    ? h(
-      'p',
-      { class: 'Section_Sub', role: 'status' },
-      'Loading recorded spans…',
-    )
+    ? h(Section.Sub, { role: 'status' }, `Reading ${what}…`)
     : null
-let ref = (io: Io, value: unknown) =>
-  value
-    ? io.show(
-      io.get(str(value)) ?? { entity: { eid: str(value) } },
-      'Inspect.Reference.Inline',
-    )
-    : 'not recorded'
-let references = (rows: Bundle[]): string => {
-  let ids = [
-    ...new Set(
-      rows.flatMap((e) =>
-        Object.entries(comp(e, 'during')).filter(([k]) => k != 'kind').map((
-          [, v],
-        ) => str(v)).filter(Boolean)
-      ),
-    ),
-  ]
-  return ids.length ? `.entity.eid=${ids.join(',')} *` : ''
-}
-let context = (e: Bundle, io: Io) => {
+
+/** Where a trace ran, by name: the store, space and app its context names. */
+let Where = ({ io, e }: { io: Io; e: Bundle }): JSX.Element | null => {
   let d = comp(e, 'during')
+  let keys = CONTEXT.filter((k) => d[k])
+  useNamed(io, keys.map((k) => str(d[k])))
+  if (!keys.length && !d.kind) return null
   return h(
-    Head.Facts,
+    'span',
     {},
-    ...['entity', 'space', 'app', 'kind', 'process', 'request'].filter((k) =>
-      d[k]
-    ).map((k) =>
-      h(
-        'span',
-        {},
-        `${k == 'entity' ? 'store' : k} `,
-        k == 'kind' ? str(d[k]) : ref(io, d[k]),
-      )
-    ),
+    keys.map((k, i) => [
+      i ? ' · ' : '',
+      `${k == 'entity' ? 'store' : k} `,
+      mention(io, str(d[k])),
+    ]),
+    d.kind ? `${keys.length ? ' · ' : ''}${str(d.kind)}` : null,
   )
 }
-let summary = (t: Record<string, number | undefined>) =>
-  metrics.map((n) =>
-    h(
-      'span',
-      { key: n },
-      h(Value, { mod: 'num' }, format(t[n])),
-      ` ${labels[n]}`,
+
+/** The measure a page lays traces out by, kept in the page's graph. */
+let axisOf = (io: Io, id: string, fallback = 'rows_read'): string => {
+  let held = io.state(id)
+  let order = held ? str(comp(held, 'table').order) : ''
+  return axes.includes(order) ? order : fallback
+}
+let lay = (io: Io, id: string, axis: string) =>
+  io.set([{ entity: { eid: id }, table: { order: axis } }])
+
+let Measures = ({ io, id, axis }: { io: Io; id: string; axis: string }) =>
+  h(
+    Tabs,
+    { role: 'group', 'aria-label': 'Lay out by' },
+    axes.map((a) =>
+      h(Tabs.Tab, {
+        key: a,
+        type: 'button',
+        mod: a == axis && 'on',
+        'aria-pressed': a == axis,
+        onClick: () => lay(io, id, a),
+      }, labels[a])
+    ),
+  )
+
+/** Press a bar to find its row in the table of places. */
+let finder = (paths: Map<string, number>, id: (i: number) => string) =>
+(
+  path: string[],
+) => {
+  let i = paths.get(path.join('\n'))
+  if (i == null) return
+  globalThis.document?.getElementById?.(id(i))?.scrollIntoView?.({
+    block: 'center',
+  })
+}
+
+/** The newest ordinary trace of the same kind in the same store, and where
+ * this one's work differs from it. Ordinary: its root read and wrote at most
+ * ten thousand rows, took at most half a second where time was measured, and
+ * failed nowhere. */
+let Beside = (
+  { e, io, roots, axis }: {
+    e: Bundle
+    io: Io
+    roots: Merged[]
+    axis: string
+  },
+): JSX.Element => {
+  let t = comp(e, 'trace')
+  let found = io.ask({ peers: peers(e) })
+  let others = (found.peers?.rows ?? []).filter((b) =>
+    b.entity.eid != e.entity.eid
+  )
+  let tops = io.ask({
+    tops: others.length
+      ? `${spans(others.map((b) => b.entity.eid))} !span.parent`
+      : '',
+  })
+  let peer = others.find((b) =>
+    (tops.tops?.rows ?? []).some((r) =>
+      comp(r, 'span').trace == b.entity.eid && ordinary([r])
     )
   )
-let TraceSummary = ({ e, io, got }: Props) =>
-  h(
-    'div',
+  let theirs = io.ask({ theirs: peer ? spans([peer.entity.eid]) : '' })
+  let rows = theirs.theirs?.rows ?? []
+  let them = merge(branches(rows))
+  let a = roots.reduce((s, r) => s + (r.total[axis] ?? 0), 0)
+  let b = them.reduce((s, r) => s + (r.total[axis] ?? 0), 0)
+  let diffs = differences(roots, them, axis).slice(0, 8)
+  let title = h(
+    Section.Title,
     {},
-    io.show(e, 'Timing.Trace.Tile'),
-    status(got.spans),
-    got.spans?.ready
-      ? h(Head.Facts, {}, ...summary(totals(got.spans.rows)))
-      : null,
-  )
-let state = (io: Io, id: string) =>
-  comp(io.state(id) ?? { entity: { eid: id } }, 'table')
-let axisControls = (io: Io, id: string, axis: string) =>
-  h(
-    'div',
-    { class: 'Tabs', role: 'group', 'aria-label': 'Metric' },
-    ...metrics.map((n) =>
-      h(Button, {
-        key: n,
-        mod: axis == n ? 'on' : 'quiet',
-        onClick: () => io.set([{ entity: { eid: id }, table: { order: n } }]),
-        'aria-pressed': axis == n,
-      }, labels[n])
-    ),
-  )
-let axisOf = (io: Io, id: string): string => {
-  let n = str(state(io, id).order)
-  return metrics.includes(n as typeof metrics[number]) ? n : 'rows_read'
-}
-let SpanTree = ({ ns, io }: { ns: Branch[]; io: Io }) =>
-  h(
-    Rows,
-    { mod: 'nested' },
-    ...ns.map((n) =>
-      h(
-        Rows.Item,
-        { key: n.row.entity.eid, id: `span-${n.row.entity.eid}` },
-        io.show(n.row, 'Timing.Span'),
-        n.orphan
-          ? h(
-            'p',
-            { class: 'Section_Sub' },
-            'Missing or cyclic parent; this is a fragment, not a complete root.',
-          )
-          : null,
-        n.children.length ? h(SpanTree, { ns: n.children, io }) : null,
-      )
-    ),
-  )
-let TreePanel = (
-  { e, rows, io, axis, title, extent }: {
-    e: Bundle
-    rows: Bundle[]
-    io: Io
-    axis: string
-    title: string
-    extent?: number
-  },
-) =>
-  h(
-    'section',
-    { 'aria-label': title },
-    h(Section.Title, {}, title),
-    h(
-      'p',
-      { class: 'Section_Sub' },
-      str(comp(e, 'trace').name),
-      ' · ',
-      io.when(str(comp(e, 'trace').at)),
-    ),
-    h(Head.Facts, {}, ...summary(totals(rows))),
-    !rows.length
+    `Beside an ordinary ${str(t.name)}`,
+    peer
       ? h(
-        'p',
-        { class: 'Section_Sub' },
-        'No span entities received. Delivery may be incomplete.',
+        Section.Note,
+        {},
+        h('a', { href: io.link(peer.entity.eid) }, io.id(peer)),
       )
       : null,
-    rows.length ? h(Flamegraph, { rows, axis, extent }) : null,
-    h(SpanTree, { ns: branches(rows), io }),
   )
-let Comparison = (
-  { e, io, rows, axis }: { e: Bundle; io: Io; rows: Bundle[]; axis: string },
-) => {
-  let got = io.ask({ peers: peers(e) })
-  let candidates = (got.peers?.rows ?? []).filter((b) =>
-    b.entity.eid != e.entity.eid && sameKind(e, b)
-  )
-  let answer = io.ask({ spans: spans(candidates.map((b) => b.entity.eid)) })
-  let candidate = candidates.find((b) =>
-    ordinary(
-      (answer.spans?.rows ?? []).filter((s) =>
-        comp(s, 'span').trace == b.entity.eid
+  if (!found.peers?.ready || (others.length && !tops.tops?.ready)) {
+    return h(Section, {}, title, status(undefined, 'traces of this kind'))
+  }
+  if (!peer) {
+    return h(
+      Section,
+      {},
+      title,
+      h(
+        Section.Sub,
+        {},
+        `No ordinary ${
+          str(t.name)
+        } in this store among its latest hundred traces: none read and wrote at most 10,000 rows, took at most 500 ms and failed nowhere.`,
       ),
     )
-  )
-  let other = candidate
-    ? (answer.spans?.rows ?? []).filter((s) =>
-      comp(s, 'span').trace == candidate.entity.eid
-    )
-    : []
-  let left = totals(rows), right = totals(other)
-  let extent = Math.max(left[axis] ?? 0, right[axis] ?? 0)
+  }
   return h(
     Section,
     {},
-    h(Section.Title, {}, 'Compare with an ordinary request'),
-    status(got.peers) ?? (candidates.length ? status(answer.spans) : null),
+    title,
     h(
       Section.Sub,
       {},
-      'Same store/space/app and request kind/name. Ordinary candidates have recorded root counts ≤10,000 rows read and written, no error outcome, and at most 500 ms if time was measured. Recording reason is not stored: this is not proof of a random sample or a healthy request.',
+      `Recorded ${io.when(str(comp(peer, 'trace').at))} in the same store. `,
+      `This one: ${amount(axis, a)}; the ordinary one: ${amount(axis, b)}`,
+      a && b ? `, ${ratio(a, b)}.` : '.',
     ),
-    candidate
-      ? h(
-        'div',
-        {},
-        h(
-          'p',
+    status(theirs.theirs, 'its spans') ??
+      [
+        diffs.length ? h(Gaps, { gaps: diffs, axis }) : h(
+          Section.Sub,
           {},
-          'Ordinary candidate: ',
-          io.show(candidate, 'Timing.Trace.Tile'),
+          `They spent the same ${noun(axis)} in the same places.`,
         ),
         h(
-          Table,
-          { cols: [null, 'num', 'num', 'num'] },
-          h(
-            Table.Head,
-            {},
-            h(
-              Table.Row,
-              {},
-              ...['Metric', 'Selected', 'Ordinary', 'Difference'].map((t) =>
-                h(Table.Heading, {}, t)
-              ),
-            ),
-          ),
-          h(
-            Table.Body,
-            {},
-            ...metrics.map((n) =>
-              h(
-                Table.Row,
-                { key: n },
-                h(Table.Cell, {}, labels[n]),
-                h(Table.Cell, { mod: 'num' }, format(left[n])),
-                h(Table.Cell, { mod: 'num' }, format(right[n])),
-                h(
-                  Table.Cell,
-                  { mod: 'num' },
-                  left[n] != null && right[n] != null
-                    ? format(left[n]! - right[n]!)
-                    : 'not recorded',
-                ),
-              )
-            ),
-          ),
+          Section.Sub,
+          {},
+          `The ordinary one, at its own scale (${amount(axis, b)}):`,
         ),
-        h(
-          'div',
-          {
-            style: {
-              display: 'grid',
-              gridTemplateColumns:
-                'repeat(auto-fit, minmax(min(100%, 24rem), 1fr))',
-              gap: '1.5rem',
-            },
-          },
-          h(TreePanel, { e, rows, axis, io, extent, title: 'Selected trace' }),
-          h(TreePanel, {
-            e: candidate,
-            rows: other,
-            axis,
-            io,
-            extent,
-            title: 'Ordinary trace',
-          }),
-        ),
-      )
-      : h(
-        'p',
-        { class: 'Section_Sub' },
-        'No ordinary candidate with the same context in the latest 100 matching traces. No comparison is fabricated.',
-      ),
-    !candidate
-      ? h(TreePanel, { e, rows, axis, io, title: 'Selected trace' })
-      : null,
+        h(Flamegraph, { roots: them, axis }),
+      ],
   )
 }
-let TracePage = ({ e, io, got }: Props) => {
-  io.ask({ references: references([e]) })
-  let rows = got.spans?.rows ?? [],
-    t = comp(e, 'trace'),
-    id = `timing-axis:${e.entity.eid}`,
-    axis = axisOf(io, id)
+
+let count = (v?: number) =>
+  v == null ? '–' : Math.round(v).toLocaleString('en-US')
+
+/// ratio(290029, 149) -> '1,947× as many'
+/// ratio(10, 20) -> 'half as many'
+/// ratio(12, 10) -> '1.2× as many'
+/** How many times one amount is another, said plainly. */
+export let ratio = (a: number, b: number): string =>
+  a == b
+    ? 'as many'
+    : a < b
+    ? (a / b == 0.5 ? 'half as many' : `${count(b / a)}× fewer`)
+    : `${a / b < 10 ? Number((a / b).toPrecision(2)) : count(a / b)}× as many`
+
+let TracePage = ({ e, io, got }: Props): JSX.Element => {
+  let t = comp(e, 'trace'), rows = got.spans?.rows ?? []
+  let roots = merge(branches(rows))
+  let all = totals(rows)
+  let state = `timing-axis:${e.entity.eid}`
+  let axis = axisOf(
+    io,
+    state,
+    all.rows_read || !all.elapsed ? 'rows_read' : 'elapsed',
+  )
+  let ids = (i: number) => `place-${i}`
+  let paths = new Map(walk(roots).map((w, i) => [w.path.join('\n'), i]))
+  let repeats = all.repeats
   return h(
     'article',
-    {
-      class: 'Body',
-      style: { maxWidth: 'none', width: '100%' },
-      'data-trace': e.entity.eid,
-    },
-    h(
-      'nav',
-      {},
-      h('a', { href: io.find('.bug.status=open * .order=-bug.hits') }, 'Bugs'),
-      ' · ',
-      h('a', { href: io.find('.trace') }, 'Traces'),
-    ),
+    { 'data-trace': e.entity.eid },
     h(
       Head,
       {},
-      h(Head.Title, {}, `${str(t.op)} · ${str(t.name)}`),
-      h(Head.Sub, {}, io.when(str(t.at))),
-      context(e, io),
+      h(
+        Head.Title,
+        {},
+        str(t.name),
+        h(Head.Id, {}, io.id(e)),
+        h(Head.Kind, {}, str(t.op)),
+      ),
+      h(Head.Sub, {}, h(Where, { io, e })),
+      h(
+        Head.Facts,
+        {},
+        h(
+          'time',
+          { datetime: str(t.at), title: str(t.at) },
+          io.when(str(t.at)),
+        ),
+        ...got.spans?.ready ? axes.map((a) => amount(a, all[a])) : [],
+        repeats
+          ? `${count(repeats)} more like it went unrecorded within the hour`
+          : null,
+      ),
     ),
+    h(Measures, { io, id: state, axis }),
     h(
-      Section.Sub,
+      Section,
       {},
-      'Metrics are inclusive: parent spans include their children. Totals use root spans only; missing measurements are not zero. Span delivery has no completion marker; missing parents are shown as fragments.',
+      h(
+        Section.Title,
+        {},
+        `Where the ${noun(axis)} went`,
+        h(Section.Count, {}, amount(axis, all[axis])),
+      ),
+      status(got.spans, 'its spans') ?? (
+        !rows.length
+          ? h(Section.Sub, {}, 'No span of this trace was received.')
+          : !all[axis]
+          ? h(
+            Section.Sub,
+            {},
+            axis == 'elapsed'
+              ? "Its clock did not move: a Worker's clock stands still while it computes. The rows read show where its work went."
+              : `It recorded no ${noun(axis)}.`,
+          )
+          : [
+            h(Flamegraph, { roots, axis, pick: finder(paths, ids) }),
+            h(
+              Section.Sub,
+              {},
+              `Each bar is a place in the code, as wide as the ${
+                noun(axis)
+              } there and in what it called, which hangs under it; siblings that ran the same code are one bar. Press a bar to find it below.`,
+            ),
+          ]
+      ),
     ),
-    axisControls(io, id, axis),
-    status(got.spans),
-    got.spans?.ready ? h(Comparison, { e, io, rows, axis }) : null,
+    // Beside a trace that recorded none of the measure, any other differs
+    // only by what it recorded.
+    got.spans?.ready && all[axis] ? h(Beside, { e, io, roots, axis }) : null,
+    rows.length
+      ? h(
+        Section,
+        {},
+        h(
+          Section.Title,
+          {},
+          'Places',
+          h(Section.Count, {}, `${rows.length} spans`),
+        ),
+        roots.some((r) => r.orphan)
+          ? h(
+            Section.Sub,
+            {},
+            'Some spans name a parent that never arrived; they stand at the top.',
+          )
+          : null,
+        h(Places, { roots, axis, id: ids }),
+      )
+      : null,
   )
 }
-let groupKey = (b: Bundle) => {
+
+/** A trace in a list: what it was, when, and what its root measured. */
+let TraceTile = ({ e, io, got }: Props): JSX.Element => {
+  let t = comp(e, 'trace'), root = got.root?.rows ?? []
+  let all = totals(root)
+  return h(
+    Tile,
+    { href: io.link(e.entity.eid) },
+    h(Tile.Id, {}, io.id(e)),
+    h(Tile.Title, {}, `${str(t.name)}`),
+    h(Tile.Kind, {}, str(t.op)),
+    h(
+      Tile.Sub,
+      {},
+      [
+        io.when(str(t.at)),
+        ...root.length ? axes.map((a) => amount(a, all[a])) : [],
+      ].join(' · '),
+    ),
+  )
+}
+
+let kindOf = (b: Bundle) => {
   let d = comp(b, 'during'), t = comp(b, 'trace')
   return JSON.stringify([d.space, d.entity, d.app, d.kind, t.op, t.name])
 }
-let TraceList = ({ io, query }: { io: Io; query: string }) => {
-  let id = `timing-list:${query}`, axis = axisOf(io, id)
+
+/** Content a press opens, its state kept in the page's graph under `at`. */
+let More = (
+  { io, at, summary, children }: {
+    io: Io
+    at: string
+    summary: ComponentChildren
+    children?: ComponentChildren
+  },
+): JSX.Element => {
+  let eid = disclosureAt(at), e = io.state(eid) ?? { entity: { eid } }
+  return h(Disclosure, {
+    e,
+    onChange: (b: Bundle) => io.set([b]),
+    summary: [isOpen(e) ? '▾ ' : '▸ ', summary],
+    summaryProps: { mod: 'quiet' },
+  }, children)
+}
+
+/** Traces of one kind as lines, worst first: when each was recorded and
+ * what its root measured, the measure they are ordered by marked in its
+ * heading. The worst few show; the rest are a press away. */
+let Measured = (
+  { io, at, traces, measured, axis }: {
+    io: Io
+    at: string
+    traces: Bundle[]
+    measured: Map<string, Record<string, number | undefined>>
+    axis: string
+  },
+): JSX.Element => {
+  let line = (b: Bundle) => {
+    let m = measured.get(b.entity.eid) ?? {}, moment = str(comp(b, 'trace').at)
+    return h(Line, {
+      key: b.entity.eid,
+      label: h(
+        'a',
+        { href: io.link(b.entity.eid), title: moment },
+        io.when(moment),
+      ),
+      cells: axes.map((a) => figure(a, m[a])),
+    })
+  }
+  let shown = traces.length > WORST + 1 ? traces.slice(0, WORST) : traces
+  let rest = traces.slice(shown.length)
+  return h(
+    'div',
+    {},
+    h(
+      'ul',
+      { style: list },
+      h(Line, {
+        head: true,
+        label: 'when',
+        cells: axes.map((a) =>
+          h('span', {
+            style: a == axis ? { color: 'var(--accent)' } : undefined,
+          }, labels[a])
+        ),
+      }),
+      shown.map(line),
+    ),
+    rest.length
+      ? h(
+        More,
+        { io, at, summary: `${rest.length} more of this kind` },
+        h('ul', { style: list }, rest.map(line)),
+      )
+      : null,
+  )
+}
+
+/** Every recorded kind of request in each store, worst first on the measure
+ * chosen, each trace a row of its root's measurements. */
+let TraceList = ({ io, query }: { io: Io; query: string }): JSX.Element => {
+  let state = `timing-list:${query}`, axis = axisOf(io, state)
   let line = query.includes('*') ? query : `${query} *`
-  // A bounded recent window is explicit; sorting is by root metrics, not the
-  // sum of inclusive span rows and not a hidden server-wide aggregate.
   let got = io.ask({
     traces: `${line} .order=-trace.at .limit=200`,
     count: `${line} .count`,
   })
   let traces = got.traces?.rows ?? []
-  io.ask({ references: references(traces) })
-  let root = io.ask({
-    roots: traces.length
+  let tops = io.ask({
+    tops: traces.length
       ? `${spans(traces.map((t) => t.entity.eid))} !span.parent`
       : '',
   })
-  let measured = (e: Bundle) =>
-    totals(
-      (root.roots?.rows ?? []).filter((r) =>
-        comp(r, 'span').trace == e.entity.eid
+  let measured = new Map(
+    traces.map((t) => [
+      t.entity.eid,
+      totals(
+        (tops.tops?.rows ?? []).filter((r) =>
+          comp(r, 'span').trace == t.entity.eid
+        ),
       ),
-    )
-  let score = (e: Bundle) => measured(e)[axis] ?? -1
+    ]),
+  )
+  let score = (b: Bundle) => measured.get(b.entity.eid)?.[axis] ?? -1
   let groups = new Map<string, Bundle[]>()
   for (let t of traces) {
-    let k = groupKey(t)
-    groups.set(k, [...(groups.get(k) ?? []), t])
+    groups.set(kindOf(t), [...groups.get(kindOf(t)) ?? [], t])
   }
-  let ordered = [...groups.values()].map((g) =>
-    g.sort((a, b) => score(b) - score(a))
-  ).sort((a, b) => score(b[0]) - score(a[0]))
+  let ordered = [...groups.values()]
+    .map((g) => g.sort((a, b) => score(b) - score(a)))
+    .sort((a, b) => score(b[0]) - score(a[0]))
+  let total = got.count?.count
   return h(
     'article',
-    { class: 'Body', 'data-trace-list': true },
-    h(
-      'nav',
-      {},
-      h('a', { href: io.find('.bug.status=open * .order=-bug.hits') }, 'Bugs'),
-      ' · ',
-      h('a', { href: io.find('.trace') }, 'Traces'),
-    ),
+    { 'data-trace-list': true },
     h(
       Head,
       {},
-      h(Head.Title, {}, 'Traces · worst first'),
+      h(Head.Title, {}, 'Traces'),
       h(
         Head.Sub,
         {},
-        `${traces.length} recent traces shown${
-          got.count?.count != null ? ' of ' + got.count.count : ''
-        }. Groups and traces ranked by inclusive root ${
-          labels[axis]
-        }; unmeasured roots last. Window: latest 200. Narrow by store or request with the query box.`,
+        total != null && total > traces.length
+          ? `The latest ${traces.length} of ${count(total)} recorded traces, `
+          : `${count(traces.length)} recorded traces, `,
+        `each kind of request in a store together, the most ${
+          noun(axis)
+        } first.`,
       ),
     ),
-    axisControls(io, id, axis),
-    status(got.traces),
-    traces.length ? status(root.roots) : null,
+    h(Measures, { io, id: state, axis }),
+    status(got.traces, 'traces'),
     !traces.length && got.traces?.ready
-      ? h('p', {}, 'No recorded traces match this query.')
+      ? h(Section.Sub, {}, 'No recorded trace matches this query.')
       : null,
-    ...ordered.map((g) =>
-      h(
+    ordered.map((g) => {
+      let t = comp(g[0], 'trace')
+      return h(
         Section,
-        { key: groupKey(g[0]) },
+        { key: kindOf(g[0]) },
         h(
           Section.Title,
           {},
-          `${str(comp(g[0], 'trace').op)} · ${str(comp(g[0], 'trace').name)}`,
-          h(Section.Count, {}, g.length),
-        ),
-        context(g[0], io),
-        h(
-          Rows,
-          {},
-          ...g.map((e) =>
-            h(
-              Rows.Item,
-              { key: e.entity.eid },
-              io.show(e, 'Timing.Trace.Tile'),
-              h(Head.Facts, {}, ...summary(measured(e))),
-            )
+          str(t.name),
+          h(Section.Note, {}, str(t.op)),
+          h(
+            Section.Count,
+            {},
+            g.length == 1 ? '1 trace' : `${g.length} traces`,
           ),
         ),
+        h(Section.Sub, {}, h(Where, { io, e: g[0] })),
+        h(Measured, {
+          io,
+          at: `${state}:${kindOf(g[0])}`,
+          traces: g,
+          measured,
+          axis,
+        }),
       )
-    ),
+    }),
   )
 }
+
+/** The pages this package draws in the inspector. */
 export let inspectViews: View[] = [
-  ...['Full', 'Page', 'Inspect.Full', 'Inspect.Page'].map((view) => ({
-    view,
+  {
+    view: 'Full',
     match: parse('.trace'),
     asks: (e: Bundle) => ({ spans: spans([e.entity.eid]) }),
     Render: TracePage,
-  })),
+  },
   ...['List.Tile', 'Tile'].map((view) => ({
     view,
     match: parse('.trace'),
-    asks: (e: Bundle) => ({ spans: `${spans([e.entity.eid])} !span.parent` }),
-    Render: TraceSummary,
+    asks: (e: Bundle) => ({ root: `${spans([e.entity.eid])} !span.parent` }),
+    Render: TraceTile,
   })),
   {
     view: 'Inspect.Query',

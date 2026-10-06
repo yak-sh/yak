@@ -9,19 +9,23 @@ import { trackerDoc } from '@yaks/tracker/vocab'
 import { timingDoc } from './vocab.ts'
 import {
   branches,
+  differences,
+  merge,
   ordinary,
   peers,
+  said,
   sameKind,
   spans,
   totals,
+  walk,
 } from './readings.ts'
 import { inspectViews } from './inspect.ts'
 import { views } from './views.ts'
-import { render } from '@yaks/preact'
+import { render as preact } from '@yaks/preact'
+import { render as text } from '@yaks/text'
 import { renderToString } from 'preact-render-to-string'
 import { h } from 'preact'
-import type { Bundle, Io } from '@yaks/inspect'
-import { Flamegraph } from './Flamegraph.ts'
+import type { Answer, Bundle, Io } from '@yaks/inspect'
 let vocab = loadVocab([kernelDoc, toolsDoc, docDoc, trackerDoc, timingDoc], [
   kernelKeywords,
 ])
@@ -104,60 +108,178 @@ test('ordinary comparisons require matching request and store context and record
   ])
   equal((await g.read(spans(['trace']))).map((b) => b.entity.eid), ['root'])
 })
-test('portable span readings expose each metric and flamegraph bars jump to exact spans', () => {
-  let io = {
-    link: (id: string) => '/' + id,
-    name: (id: string) => id,
-    when: (s: string) => s,
-  } as Io
-  let r = row('child', 'root')
-  r.repeats = { n: 7 }
-  let html = renderToString(render(views, r, 'Timing.Span', vocab, io)!)
-  for (
-    let s of [
-      'select entity',
-      '@yaks/sqlite',
-      '10 rows read',
-      '0 rows written',
-      '1 statements',
-      '2 ms',
-      'start +1 ms',
-      '7 suppressed repeats',
-    ]
-  ) ok(html.includes(s), s)
-  let flame = renderToString(
-    h(Flamegraph, { rows: [row('root'), r], axis: 'rows_read' }),
+// A span of `trace` under `parent`, measuring `n` rows read in `ms`.
+let at = (
+  eid: string,
+  parent: string | undefined,
+  [op, name]: string[],
+  n: number,
+  ms = 1,
+  of = 'trace',
+): Bundle => ({
+  entity: { eid },
+  span: {
+    trace: of,
+    parent,
+    op,
+    name,
+    plugin: op == 'rule' ? '@yaks/task' : undefined,
+  },
+  rows_read: { n },
+  rows_written: { n: 0 },
+  statements: { n: 1 },
+  elapsed: { start: 0, ms },
+})
+let request = ['request', 'POST apply'], rule = ['rule', 'task_ready']
+let read = ['query', 'read']
+// A request whose rule read three times what an ordinary one's read once.
+let mine = [
+  at('root', undefined, request, 903),
+  at('rule', 'root', rule, 902, 0.7),
+  ...[1, 2, 3].map((i) => at(`q${i}`, 'rule', read, 300, 0.1)),
+  at('stamp', 'root', ['phase', 'stamp'], 0),
+]
+let theirs = (n = 101) => [
+  at('r0', undefined, request, n, 1, 'peer'),
+  at('r1', 'r0', rule, 100, 0.5, 'peer'),
+  at('r2', 'r1', read, 100, 0.1, 'peer'),
+]
+let peer: Bundle = { ...trace, entity: { eid: 'peer' } }
+
+test('siblings that ran the same code read as one place, and two traces line up place by place', () => {
+  let roots = merge(branches(mine))
+  equal(
+    walk(roots).map((w) => [said(w.node), w.node.spans.length, w.depth]),
+    [
+      ['request POST apply', 1, 0],
+      ['rule task_ready', 1, 1],
+      ['query read', 3, 2],
+      ['phase stamp', 1, 1],
+    ],
   )
-  ok(flame.includes('#span-child'))
-  ok(flame.includes('inclusive rows read'))
-  ok(flame.includes('Flamegraph by rows read'))
-  ok(
-    renderToString(
-      h(Flamegraph, { rows: [row('root')], axis: 'rows_read', extent: 1000 }),
-    ).includes('Axis: 0–1,000'),
+  let them = merge(branches(theirs()))
+  equal(
+    differences(roots, them, 'rows_read').map((d) => [said(d.node), d.by]),
+    [['query read', 800], ['rule task_ready', 2]],
   )
-  let zero = row('root')
-  zero.elapsed = { start: 0, ms: 0 }
-  ok(
-    renderToString(
-      h(Flamegraph, {
-        rows: [zero, {
-          ...row('zero-child', 'root'),
-          elapsed: { start: 10, ms: 0 },
-        }],
-        axis: 'elapsed',
-      }),
-    )
-      .includes('No positive ms'),
+  // The rule's own time is the same in both, but for a clock's last bits.
+  equal(
+    differences(roots, them, 'elapsed').map((d) => said(d.node)),
+    ['phase stamp', 'request POST apply', 'query read'],
   )
 })
-test('query-backed trace page asks for stored span entities', () => {
-  equal(
-    inspectViews.find((v) => v.view == 'Inspect.Page')!.asks!(
-      trace,
-      {} as Io,
-      {},
+
+// An inspector view drawn with the answer to each query line it asks, and
+// the page state `held` keeps.
+let draw = (
+  view: string,
+  e: Bundle,
+  lines: Record<string, Bundle[]>,
+  ctx: Record<string, unknown> = {},
+  held: Record<string, Bundle> = {},
+) => {
+  let answer = (line: unknown): Answer => ({
+    rows: lines[String(line)] ?? [],
+    count: lines[String(line)]?.length,
+    ready: true,
+  })
+  let answers = (asks: Record<string, unknown>) =>
+    Object.fromEntries(Object.entries(asks).map(([k, l]) => [k, answer(l)]))
+  let io = {
+    vocab,
+    link: (eid: string) => `/${eid}`,
+    find: (q: string) => `/?q=${q}`,
+    id: (b: Bundle) => b.entity.eid.toUpperCase(),
+    name: (eid: string) => eid,
+    when: (s: string) => `at ${s}`,
+    get: () => undefined,
+    show: () => null,
+    can: () => true,
+    ask: answers,
+    state: (eid: string) => held[eid],
+    set: () => {},
+  } as unknown as Io
+  let v = inspectViews.find((r) =>
+    r.view == view && (view == 'Inspect.Query' || r.match && e.trace)
+  )!
+  return renderToString(
+    h(v.Render, { e, io, got: answers(v.asks?.(e, io, ctx) ?? {}), ctx }),
+  ).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ')
+}
+let lines = (peerRows = theirs()) => ({
+  [spans(['trace'])]: mine,
+  [peers(trace)]: [trace, peer],
+  [`${spans(['peer'])} !span.parent`]: peerRows.slice(0, 1),
+  [spans(['peer'])]: peerRows,
+})
+
+test('a trace page says where its rows went, beside an ordinary trace of its kind', () => {
+  let page = draw('Full', trace, lines())
+  for (
+    let part of [
+      'Where the rows read went',
+      'query read ×3: 900 rows read',
+      'Beside an ordinary POST apply',
+      'PEER',
+      '903 rows read; the ordinary one: 101 rows read, 8.9× as many',
+      'query read ×3 900 100 +800',
+      '1 more place recorded no rows read',
+    ]
+  ) ok(page.includes(part), part)
+  ok(
+    draw('Full', trace, lines(theirs(20_000))).includes(
+      'No ordinary POST apply',
     ),
-    { spans: spans(['trace']) },
   )
+  let timed = draw('Full', trace, lines(), {}, {
+    'timing-axis:trace': {
+      entity: { eid: 'timing-axis:trace' },
+      table: { order: 'elapsed' },
+    },
+  })
+  ok(timed.includes('Where the time went'))
+})
+
+test('the trace list puts each kind of request together, the most work first', () => {
+  let query = '.trace'
+  let list = draw('Inspect.Query', { entity: { eid: 'q' } }, {
+    [`${query} * .order=-trace.at .limit=200`]: [peer, trace],
+    [`${spans(['peer', 'trace'])} !span.parent`]: [theirs()[0], mine[0]],
+  }, { query })
+  ok(list.includes('POST apply request 2 traces'))
+  ok(list.indexOf('903') < list.indexOf('101'))
+})
+
+test('a span and a trace read the same in a terminal and a browser', () => {
+  let host = {
+    id: (b: Bundle) => b.entity.eid.toUpperCase(),
+    link: (eid: string) => `/${eid}`,
+    when: (s: string) => `at ${s}`,
+    get: (eid: string) => eid == 'trace' ? trace : undefined,
+  }
+  let faces = (b: Bundle, view: string) => [
+    text(views, b, view, vocab, host, 'plain'),
+    renderToString(preact(views, b, view, vocab, host)!),
+  ]
+  for (let face of faces(mine[1], 'List.Tile')) {
+    for (
+      let part of [
+        'rule',
+        'task_ready',
+        '@yaks/task',
+        '902 rows read',
+        '0.7 ms',
+      ]
+    ) {
+      ok(face.includes(part), part)
+    }
+  }
+  for (let face of faces(trace, 'List.Tile')) {
+    for (let part of ['TRACE', 'POST apply', 'request', 'at 2026-10-06']) {
+      ok(face.includes(part), part)
+    }
+  }
+  for (let face of faces(mine[1], 'Page')) {
+    ok(face.includes('Part of') && face.includes('TRACE POST apply'))
+  }
 })

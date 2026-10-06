@@ -57,7 +57,7 @@ equal(selected[1].elapsed, { start: 0, ms: 20 })
 | Export               | Provides                                                                                                                                                      |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@yaks/timing`       | `summarize`, `bounds`, `sample`, `project`, `selectedRequest`, `selectRequest`, `sampleRequest`, `thresholds`, `timingDoc`; summary, trace and sampling types |
-| `@yaks/timing/views` | `views`, `inspectViews`: trace list, span tree, flamegraph and ordinary comparison                                                                            |
+| `@yaks/timing/views` | `views`, `inspectViews`: trace and span views, a trace's page and the trace list                                                                              |
 | `@yaks/timing/vocab` | `timingDoc`, `docs`, `description`                                                                                                                            |
 
 ## Closed-minute summaries
@@ -244,37 +244,54 @@ functions perform no I/O or graph writes.
 
 ## Trace views
 
-`@yaks/timing/views` contributes portable trace and span readings and
-query-backed inspector views through the host's existing registry. Configure
+`@yaks/timing/views` draws a stored trace and a stored span wherever an entity
+is drawn by name: as a `Title`, a `Tile` or `List.Tile`, a `Card.Title` and an
+`Inline` link, and a span on a `Page` of its own. These render through the
+host's hyperscript, so a terminal lists the same rows a browser does. Configure
 `@yaks/timing` beside `@yaks/tracker`, `@yaks/inspect` and a browser
-application. Open `/?q=.trace` for traces grouped by store/space/app and request
-kind/name, ranked by root rows or time. The list reads the latest 200 matching
-traces; its window and total are explicit. Narrow it with, for example,
-`.trace .trace.name="POST apply"`.
+application; the inspector then draws a trace's page and the trace list.
 
-A trace page asks for its span entities, draws their parent tree and flamegraph,
-and compares it with the newest ordinary candidate in the latest 100 matching
-traces. Both flamegraphs use the same scale. An **ordinary candidate** has
-recorded root rows read and written at most 10,000, no error outcome or
-missing-parent fragment, and at most 500 ms if time is recorded. The recording
-reason is not stored; the page does not claim this proves random sampling or
-request health. An absent candidate is stated, never substituted from another
-store or request kind.
+A **place** is the code a span ran: its `op`, `name` and `plugin`. Sibling spans
+at one place read as one, their measurements summed, so a rule's two hundred
+reads read as `query read ×200`. A **measure** is one of rows read, time, rows
+written and statements; a page lays its traces out by one at a time, and keeps
+the one chosen in the page's own graph.
+
+A trace's page asks for its stored spans and shows where its work went on the
+measure: a flamegraph draws each place as wide as the work done there and in
+what it called, which hangs under it, and the places list beneath gives each
+one's figure and share, leaving out the places that recorded none. Beside it
+stands the newest ordinary trace of the same request kind in the same store,
+among the latest 100 matching traces, drawn at its own scale, with the places
+whose own work differs most between the two. An **ordinary trace** has recorded
+root rows read and written at most 10,000, no error outcome or missing-parent
+fragment, and at most 500 ms if time is recorded. The recording reason is not
+stored; the page does not claim this proves random sampling or request health.
+An absent ordinary trace is stated, never substituted from another store or
+request kind.
 
 Metrics are inclusive: parents contain their descendants. Root measurements
 provide totals, including suppressed `repeats` when present; child metrics are
-never added to their parents. Absent metrics are not zero. A Worker clock may
-report zero milliseconds, in which case the page recommends rows instead of
-inventing a time flamegraph. Row widths are inclusive counts laid out in span
-order, not a timing axis. Missing parents and cycles remain visible as
+never added to their parents. A place's own work is its measurement less what it
+called. Absent metrics are not zero. A Worker's clock stands still while it
+computes, so a trace from one may record zero milliseconds; its page then says
+so rather than drawing time. Missing parents and cycles remain visible as
 fragments. Storage has no delivery-completion marker, so the page cannot
 guarantee a trace arrived in full.
+
+The trace list answers a query for traces, `/?q=.trace` or a narrower one such
+as `.trace .trace.name="POST apply"`. It reads the latest 200 matching traces
+and says so when more match. Traces of one request kind in one store stand
+together, ordered by the measure, the kind with the most first; the five with
+the most show, and the rest of a kind are a press away.
 
 ```ts
 import { inspectViews } from '@yaks/timing/views'
 import { equal, ok } from '@yaks/testing'
 
-let page = ok(inspectViews.find((v) => v.view === 'Inspect.Page'))
+let page = ok(
+  inspectViews.find((v) => v.view === 'Full' && v.asks),
+)
 let trace = {
   entity: { eid: 'example-trace' },
   trace: { op: 'request', name: 'POST apply', at: '2026-01-01T00:00:00Z' },
