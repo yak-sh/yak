@@ -16,6 +16,9 @@ import { host } from './host_testing.ts'
 import { Web } from './components/views/Web.tsx'
 import { pasted } from './paste.ts'
 import { sessionQueries } from './tray_query.ts'
+import './domain-host.tsx'
+import { lone } from '@yaks/draft/ui'
+import { people } from './components/hits.ts'
 
 let docs = vocab.docs
 let minimal = () =>
@@ -73,6 +76,30 @@ test('a document-only vocabulary browses without task, session or box-only reads
     config.host = priorHost
     learn(docs)
     cache.value = {}
+  }
+})
+
+test('a store that declares no person is never asked for one', async () => {
+  let asked: string[] = []
+  let prior = globalThis.fetch
+  let priorHost = config.host
+  config.host = 'optional.test'
+  globalThis.fetch = (input: RequestInfo | URL) => {
+    asked.push(decodeURIComponent(String(input)))
+    return Promise.resolve(Response.json([]))
+  }
+  try {
+    learn(minimal())
+    assertEquals(await people(2), [])
+    await lone()
+    assertEquals(asked, [])
+    learn(docs)
+    await people(2)
+    assertEquals(asked.some((url) => url.includes('.person')), true)
+  } finally {
+    globalThis.fetch = prior
+    config.host = priorHost
+    learn(docs)
   }
 })
 

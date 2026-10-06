@@ -22,7 +22,7 @@ import { cardCommands, run } from '../commands.ts'
 import { pasted } from '../paste.ts'
 import { block } from '@yaks/ui'
 import { resolve } from './registry.ts'
-import { hits } from './hits.ts'
+import { people } from './hits.ts'
 import { Card } from './Card.tsx'
 import { actionsAt } from './nav.tsx'
 
@@ -243,13 +243,13 @@ export let Canvas = ({ eid }: { eid: string }) => {
     // that raced the status row's own assertion.
     let bind = new AbortController()
     if (!cache.value[id]?.client?.actor) {
-      hits('.person', 2, bind.signal)
-        .then((people) => {
-          if (people.length == 1 && !cache.value[id]?.client?.actor) {
+      people(2, bind.signal)
+        .then((found) => {
+          if (found.length == 1 && !cache.value[id]?.client?.actor) {
             mutate({
               eid: id,
               name: 'client',
-              comp: { eid: id, actor: people[0].eid },
+              comp: { eid: id, actor: found[0].entity.eid },
             })
           }
         })

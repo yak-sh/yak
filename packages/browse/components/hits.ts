@@ -5,7 +5,7 @@
 // `pickLine` and `useHits`.
 import { applyLocal, base } from '../live.ts'
 import { hitOf, rowOf } from '../client.ts'
-import type { Hit } from '../types.ts'
+import { type Hit, vocab } from '../types.ts'
 import type { Bundle } from '@yaks/graph'
 
 // One server search. A malformed filter answers 400 — the typist's news in
@@ -24,6 +24,11 @@ export let rows = async (
   if (!r.ok) throw new Error(await r.text())
   return await r.json()
 }
+
+/** The graph's people, up to `limit`: none where the vocabulary declares no
+ * `person` (a tracker store), whose server would refuse the line. */
+export let people = (limit: number, signal?: AbortSignal): Promise<Bundle[]> =>
+  vocab.comp('person') ? rows('.person', limit, signal) : Promise.resolve([])
 
 /** The same search, each row as the palette ranks and shows it. */
 export let hits = async (

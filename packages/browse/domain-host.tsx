@@ -19,7 +19,7 @@ import { parseQuery } from './query.ts'
 import { type Ent, idOf, nick, vocab } from './types.ts'
 import { commands, orderIn, suggest } from './commands.ts'
 import { slotsOf } from './verb.ts'
-import { rows } from './components/hits.ts'
+import { people } from './components/hits.ts'
 import { usePage } from './components/page.ts'
 import { useModel, useRepoUrl } from './components/subscriptions.ts'
 import { useQuery } from './components/useQuery.ts'
@@ -44,7 +44,7 @@ export let domainBundle = (e: Ent): Bundle => {
 let entity = (b: Bundle) => ent(b.entity.eid)
 configureDrafts({
   by: () => capable('draft') ? myActor() : undefined,
-  people: () => rows('.person', 2),
+  people: () => people(2),
   stash: () => {
     if (!config.host) return undefined
     try {
