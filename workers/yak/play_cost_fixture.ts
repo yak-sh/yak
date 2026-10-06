@@ -130,7 +130,12 @@ export let playMinute = async (
     let res = await store.fetch(
       new Request(`http://store${path}`, {
         method: 'POST',
-        headers,
+        headers: {
+          ...headers,
+          ...(path == '/apply'
+            ? { 'idempotency-key': crypto.randomUUID() }
+            : {}),
+        },
         body: JSON.stringify(body),
       }),
     )
