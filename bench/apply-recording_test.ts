@@ -29,8 +29,11 @@ test('apply recording summarizes all spans and samples one ordinary tree', () =>
   equal(rows.find((r) => r.timing.op == 'sql')?.timing.n, 600)
   // Slow roots can add traces, but the first ordinary tree is always retained.
   ok(traces.length >= 1)
-  equal(traces[0].spans.length, 301)
-  equal(traces[0].spans[0].kind, 'apply')
+  equal(traces[0].filter((row) => row.span).length, 301)
+  equal(
+    traces[0].find((row) => row.span && !row.span.parent)?.span?.op,
+    'apply',
+  )
   equal(c.active, false)
 })
 

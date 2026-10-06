@@ -1940,21 +1940,6 @@ export class Store {
     if (Number.isFinite(at)) await this.#arming(new Date(at).toISOString())
   }
 
-  /**
-   * Fire the wakes due at `now`, then come back for the next one. The
-   * runtime's own `alarm()` is this at the present instant; a caller naming
-   * the instant is how a test reads a schedule without waiting for one.
-   *
-   * A refused occurrence stays due and its reason goes to this store's break
-   * log — the directory's for the platform's sweeps, the app's for an app's —
-   * and the alarm is set a minute out so nothing is silently dropped.
-   *
-   * An app in the trash fires nothing and arms nothing: its wakes stay owed
-   * where they stood, and a restore brings the object back for them (`/revive`,
-   * trash.ts `notify_trash`), when the stretch it sat out is one firing, as any
-   * stretch nobody was there for is. Dormancy is delivered durably by the
-   * directory; this store never polls it.
-   */
   // Only completed, selected requests leave the object. Queue delivery is
   // deliberately outside the recording and its SQL counts. No routing lookup
   // or persisted sample quota is read on an unselected request.
@@ -2039,6 +2024,21 @@ export class Store {
     return captured.result.value
   }
 
+  /**
+   * Fire the wakes due at `now`, then come back for the next one. The
+   * runtime's own `alarm()` is this at the present instant; a caller naming
+   * the instant is how a test reads a schedule without waiting for one.
+   *
+   * A refused occurrence stays due and its reason goes to this store's break
+   * log — the directory's for the platform's sweeps, the app's for an app's —
+   * and the alarm is set a minute out so nothing is silently dropped.
+   *
+   * An app in the trash fires nothing and arms nothing: its wakes stay owed
+   * where they stood, and a restore brings the object back for them (`/revive`,
+   * trash.ts `notify_trash`), when the stretch it sat out is one firing, as any
+   * stretch nobody was there for is. Dormancy is delivered durably by the
+   * directory; this store never polls it.
+   */
   async tick(now = Date.now()): Promise<Ticked> {
     if (!await this.#awake()) return { fired: [], refused: [] }
     this.#ensureStarted()

@@ -1,7 +1,7 @@
 /** Benchmark consumer for timing delivery: retain completed minute events and
  * root-first trees, then summarize and sample without tracker I/O. Each graph
  * has channel-local IDs; the process shares its minute buffer and sample quota. */
-import { sample, summarize, type TimingRow, type Trace } from '@yaks/timing'
+import { sample, summarize, type TimingRow, type TraceRow } from '@yaks/timing'
 import { channel, type Event } from '@yaks/trace'
 
 export let applyRecording = (targets: readonly object[]) => {
@@ -11,7 +11,7 @@ export let applyRecording = (targets: readonly object[]) => {
   let open = new Map<Map<string, Event>, number>()
   let sampled: ReadonlySet<string> = new Set()
   let rows: TimingRow[] = []
-  let traces: Trace[] = []
+  let traces: TraceRow[][] = []
   let minute: number | undefined
   let flush = (before: number) => {
     rows.push(...summarize(events, { process, origin, before }))
@@ -45,9 +45,12 @@ export let applyRecording = (targets: readonly object[]) => {
       roots.set(e.id, root)
       tree.set(e.id, e)
       if (e.id != root || e.stage == 'start') return
-      let selected = sample([...tree.values()], { origin }, sampled)
+      let selected = sample([...tree.values()], {
+        origin,
+        eid: crypto.randomUUID(),
+      }, sampled)
       sampled = selected.sampled
-      if (selected.trace) traces.push(selected.trace)
+      if (selected.rows) traces.push(selected.rows)
       for (let id of tree.keys()) roots.delete(id)
       trees.delete(root)
       open.delete(tree)
