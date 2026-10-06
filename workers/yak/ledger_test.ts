@@ -62,7 +62,7 @@ test('the invocation ledger keeps refusals out of caller data', async () => {
       entity: { eid: failure },
       [failure]: { code: 'invalid' },
       content: { body: 'Invalid arguments' },
-      result: { call: 'asked' },
+      result: { call: crypto.randomUUID() },
     }])
     assertEquals((await door.get([failure]))[0][failure], { code: 'invalid' })
     assertEquals(await host.get([failure]), [])
