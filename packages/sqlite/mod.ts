@@ -373,11 +373,14 @@ export let storage = (
       tx: {
         ...tx,
         get: (eids, comps) => get(driver, vocab, eids, opts(), comps, l.owed()),
-        // Indexed queries need current pointers as well as current rows.
-        read: (query, o) => {
-          settle()
-          return tx.read(query, o)
-        },
+        // Pending component rows already stand in this transaction. Read them
+        // directly rather than persisting an intermediate archetype just to
+        // read before the graph's final stamp/tracker flush.
+        read: (query, o) =>
+          tx.read(query, {
+            ...o,
+            ...(l.owed().length ? { archetypes: () => undefined } : {}),
+          }),
         patch: (bundles) => {
           let born = patch(
             driver,
