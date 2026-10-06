@@ -79,7 +79,7 @@
 .Pad-strike {
   --size: var(--strike);
   --face: var(--ember);
-  --tint: #fff;
+  --tint: var(--paper);
   --edge-lip: var(--char);
 
   & .Sprite {
@@ -127,7 +127,7 @@
   display: grid;
   place-items: center;
   font-size: 1.15rem;
-  color: #fff;
+  color: var(--paper);
   text-shadow: var(--text-shadow);
 
   &:empty {
@@ -151,7 +151,7 @@
   border-radius: var(--round);
   background: var(--deep);
   font-size: 0.75rem;
-  color: #fff;
+  color: var(--paper);
 
   &:empty {
     display: none;

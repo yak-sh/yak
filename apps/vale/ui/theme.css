@@ -38,11 +38,13 @@
   --scrim: rgba(20, 30, 15, 0.38);
 
   /* A card on the glass: a solid paper face and a defined rim. What can be
-     pressed stands on a `--lip` instead (Button, ValeOrb, Pad, Track). */
+     pressed stands on a `--lip` instead (Button, ValeOrb, Pad), and a card
+     that can be pressed is `--raised` (Vitals, Track). */
   --glass: color-mix(in srgb, var(--paper) 98%, transparent);
   --lip: color-mix(in srgb, var(--rim) 75%, transparent);
   --flat: 0 0 0 2px var(--rim), 0 4px 0 var(--lip),
     0 8px 16px rgba(20, 30, 15, 0.2);
+  --raised: 0 3px 0 var(--lip), 0 7px 16px rgba(20, 30, 15, 0.2);
   --text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);
 
   --radius: 14px;

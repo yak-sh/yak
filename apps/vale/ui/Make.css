@@ -20,8 +20,8 @@
   & input {
     padding: 0.5rem 0.8rem;
     border: 2px solid var(--line);
-    border-radius: 12px;
-    background: #fff;
+    border-radius: var(--radius-small);
+    background: var(--paper);
     font: inherit;
     font-size: max(16px, 1.1rem);
     color: var(--ink);

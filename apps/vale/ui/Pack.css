@@ -24,7 +24,7 @@
   --frame: var(--rarity, transparent);
   position: relative;
   border: 2px solid var(--rim);
-  border-radius: 12px;
+  border-radius: var(--radius-small);
   background-color: color-mix(in srgb, var(--frame) 14%, var(--well));
   box-shadow:
     inset 0 0 0 2px var(--frame),

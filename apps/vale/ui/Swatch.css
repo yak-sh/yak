@@ -3,7 +3,7 @@
   width: 2rem;
   height: 2rem;
   padding: 0;
-  border: 3px solid #fff;
+  border: 3px solid var(--paper);
   border-radius: 50%;
   background: var(--c);
   box-shadow: 0 0 0 2px var(--line);
