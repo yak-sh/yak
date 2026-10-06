@@ -225,3 +225,116 @@ test('the runner inspects finite-window status without loading old transcript pr
   })
   assertEquals(bodies, 0)
 })
+
+for (let legacy of [false, true]) {
+  test(`bounded body selection matches full model history for crossing calls and typed questions (legacy: ${legacy})`, async () => {
+    let vocab = loadVocab([
+      sessionDoc,
+      modelDoc,
+      toolsDoc,
+      contextDoc,
+      effectDoc,
+      kernelDoc,
+      archetypeDoc,
+    ], [kernelKeywords])
+    let m = identityEid('model', ['fake'])
+    let { toolEid } = await import('@yaks/tools')
+    let tool = toolEid('echo')
+    let initial: Bundle[] = [
+      { entity: { eid: m }, model: { name: 'fake' } },
+      { entity: { eid: tool }, tool: { name: 'echo', description: 'echo' } },
+      { entity: { eid: 'parent' }, session: {} },
+      ...Array.from(
+        { length: 100 },
+        (_, i): Bundle => ({
+          entity: { eid: 'older' + i },
+          entry: { session: 'parent', ...legacy ? {} : { seq: i + 1 } },
+          content: { body: 'old ' + i },
+        }),
+      ),
+      {
+        entity: { eid: 'begin' },
+        entry: { session: 'parent', seq: 101 },
+        content: { body: 'begin turn' },
+      },
+      {
+        entity: { eid: 'call' },
+        entry: { session: 'parent', seq: 102 },
+        call: { to: tool, id: 'c', source: 'begin' },
+        content: { body: '{"text":"exact arguments"}' },
+      },
+      {
+        entity: { eid: 'during' },
+        entry: { session: 'parent', seq: 103 },
+        content: { body: 'input during tool' },
+      },
+      {
+        entity: { eid: 'result' },
+        entry: { session: 'parent', seq: 104 },
+        result: { call: 'call' },
+        content: { body: 'exact result' },
+      },
+      {
+        entity: { eid: 'anchor' },
+        entry: { session: 'parent', seq: 105 },
+        content: { body: 'reply' },
+        output: {},
+      },
+      { entity: { eid: 'child' }, session: {}, fork: { from: 'anchor' } },
+      {
+        entity: { eid: 'input' },
+        entry: { session: 'child', seq: 106 },
+        content: { body: 'typed current request' },
+        using: { model: m, window: 5 },
+        questions: {
+          asked: {
+            where: {
+              type: 'choice',
+              instructions: 'where?',
+              criteria: { home: 'home', inn: 'inn' },
+            },
+          },
+        },
+      },
+    ]
+    let requests: Request[] = []
+    for (let full of [true, false]) {
+      let s = storage(mem(), vocab, { derived: sessionDerived(vocab) })
+      await s.tx((tx) => tx.patch(initial))
+      let g = graph({ vocab, storage: s, plugins: [sessions()] })
+      await react(g, 'child', {
+        tools: [{
+          name: 'echo',
+          description: 'echo',
+          parameters: {},
+          run: () => 'done',
+        }],
+        ...full ? { contextItems: () => Promise.resolve(new Map()) } : {},
+        model: (req) => {
+          requests.push(req)
+          return Promise.resolve({
+            id: 'reply',
+            model: 'fake',
+            items: [{ kind: 'assistant', text: 'done' }],
+          })
+        },
+      })
+    }
+    assertEquals(requests[1].items, requests[0].items)
+    assertEquals(requests[1].questions, requests[0].questions)
+    assertEquals(requests[1].tools, requests[0].tools)
+    assertEquals(requests[1].items, [
+      { kind: 'user', text: 'begin turn' },
+      {
+        kind: 'call',
+        id: 'c',
+        name: 'echo',
+        args: '{"text":"exact arguments"}',
+      },
+      { kind: 'user', text: 'input during tool' },
+      { kind: 'result', id: 'c', output: 'exact result' },
+      { kind: 'assistant', text: 'reply' },
+      { kind: 'user', text: 'typed current request' },
+    ])
+  })
+}
