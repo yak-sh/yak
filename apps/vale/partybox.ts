@@ -58,8 +58,26 @@ export let partybox = (
   let frame: Frame | null = null
   let act = (name: string, words: string, more: Record<string, unknown> = {}) =>
     h(Button, { 'data-act': name, ...more }, words)
+  // What the sheet shows, as it would be drawn now: the invitations, the
+  // members, what is picked and where the one picked is.
+  let shows = () => {
+    let member = party.members.find((m) => `member:${m.eid}` == picked)
+    return JSON.stringify([
+      party.canJoin,
+      party.signIn,
+      party.group,
+      party.invites.map((i) => [i.eid, party.name(i.from)]),
+      party.members.map((
+        m,
+      ) => [m.eid, m.name, m.online, m.vitals, m.gear, m.status]),
+      picked,
+      member && frame && party.location(member, [frame.body.x, frame.body.z]),
+    ])
+  }
+  let drawn = ''
   let draw = () => {
     if (!panel.open || !frame) return
+    drawn = shows()
     if (!party.canJoin) {
       picked = null
       let content = () => [
@@ -181,9 +199,13 @@ export let partybox = (
       party.group && act('leave', 'Leave party'),
     ], picked)
   }
+  // Show this frame. It runs every frame, so drawing the sheet again when
+  // nothing it shows has changed is a bug: it draws as it opens and as what
+  // it shows changes, and a pick draws it itself.
   let paint = (f: Frame) => {
     frame = f
-    draw()
+    if (!panel.open) return void (drawn = '')
+    if (shows() != drawn) draw()
   }
   panel.body.addEventListener('click', async (e) => {
     let button = e.target instanceof Element

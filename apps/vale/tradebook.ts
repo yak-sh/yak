@@ -11,6 +11,7 @@ import { menu } from './station.ts'
 import { focused, selected, selection } from './ux-kit.ts'
 import { hint, part, picture } from './tile.ts'
 import { ValeMeter } from './kit/ValeMeter.ts'
+import { ITEMS } from './items.ts'
 
 import {
   ALL,
@@ -121,10 +122,19 @@ export let ledger = (
       tab.body,
     )
   }
+  let was: unknown[] = []
   return {
+    /** Show this frame's sheet and trades. It runs every frame, so drawing
+     * the tab again when nothing it shows has changed is a bug: it draws as
+     * it opens and as the sheet or the trades change, and a pick draws it
+     * itself. */
     show: (s: Sheet, latest: Job) => {
       sheet = s
       job = latest
+      if (!tab.open) return void (was = [])
+      let key = [s, latest.trades, ITEMS]
+      if (key.every((v, i) => v === was[i])) return
+      was = key
       draw()
     },
   }

@@ -157,10 +157,20 @@ export let journal = (
       picked ?? null,
     )
   }
+  let drawn = ''
   return {
+    /** Show this frame's tasks, the hero in `level`. It runs every frame,
+     * so drawing the journal again when nothing it shows has changed is a
+     * bug: it draws as it opens and as the tasks or the land change, and a
+     * pick draws it itself. A frame makes its tasks afresh, so they are
+     * compared by what they say. */
     show: (latest: Task[], level: string) => {
       tasks = latest
       here = level
+      if (!panel.open) return void (drawn = '')
+      let key = JSON.stringify([latest, level])
+      if (key == drawn) return
+      drawn = key
       draw()
     },
   }

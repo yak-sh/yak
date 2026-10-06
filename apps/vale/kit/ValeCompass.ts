@@ -1,9 +1,14 @@
 /** Cardinal marks relative to a bearing, a tick between each two, with an
  * optional destination on the rim. Bearings are degrees clockwise from
- * north, supplied by a caller. */
+ * north, supplied by a caller. A bearing or destination given as a signal
+ * turns the rose without its being drawn again; it is drawn again only when
+ * a destination comes or goes. */
 import { block, type Colors, type Specimen } from '@yaks/ui'
 import type { Sheet } from '@yaks/tui/theme'
+import { computed } from '@preact/signals'
 import { Fragment, h } from 'preact'
+import { useMemo } from 'preact/hooks'
+import { type Live, read } from './live.ts'
 
 let Compass = block('div', 'ValeCompass', {
   Mark: 'i',
@@ -13,17 +18,31 @@ let Compass = block('div', 'ValeCompass', {
 })
 let degrees = (n: number) => Number.isFinite(n) ? ((n % 360) + 360) % 360 : 0
 export let ValeCompass = (
-  { bearing = 0, destination }: { bearing?: number; destination?: number },
+  { bearing = 0, destination }: {
+    bearing?: Live<number>
+    destination?: Live<number | undefined>
+  },
 ) => {
-  let turn = degrees(bearing)
+  let shown = useMemo(() => {
+    let turn = computed(() => degrees(read(bearing)))
+    let goal = computed(() => {
+      let at = read(destination)
+      return at == null ? null : degrees(at)
+    })
+    return {
+      aiming: computed(() => goal.value != null),
+      heard: computed(() =>
+        `Bearing ${turn.value}°` +
+        (goal.value == null ? '' : `, destination ${goal.value}°`)
+      ),
+      turn: computed(() => `--turn:${turn.value}deg`),
+      goal: computed(() => `--at:${goal.value ?? 0}deg`),
+      read: computed(() => `${turn.value}°`),
+    }
+  }, [bearing, destination])
   return h(
     Compass,
-    {
-      role: 'img',
-      'aria-label': `Bearing ${turn}°` +
-        (destination == null ? '' : `, destination ${degrees(destination)}°`),
-      style: { '--turn': `${turn}deg` },
-    },
+    { role: 'img', 'aria-label': shown.heard, style: shown.turn },
     ['N', 'E', 'S', 'W'].map((mark, i) =>
       h(Compass.Mark, {
         key: mark,
@@ -39,11 +58,10 @@ export let ValeCompass = (
         style: { '--at': `${at}deg` },
       })
     ),
-    destination == null ? null : h(Compass.Goal, {
-      'aria-hidden': true,
-      style: { '--at': `${degrees(destination)}deg` },
-    }),
-    h(Compass.Read, { 'aria-hidden': true }, `${turn}°`),
+    shown.aiming.value
+      ? h(Compass.Goal, { 'aria-hidden': true, style: shown.goal })
+      : null,
+    h(Compass.Read, { 'aria-hidden': true }, shown.read),
   )
 }
 export let description = 'A bearing and destination on a compass rose.'

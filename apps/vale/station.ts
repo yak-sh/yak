@@ -1,6 +1,7 @@
 // The station menu shared by the village bench and the Trades guide. Its
 // selection lives in the page graph; the guide omits every work action.
 import { type ComponentChildren, h, render } from 'preact'
+import { computed, type ReadonlySignal, signal } from '@preact/signals'
 import { Button, Rows, Section, Tabs, Tile } from '@yaks/ui'
 import {
   able,
@@ -53,7 +54,14 @@ export type Acts = {
   make: (recipe: string) => void
   upgrade: (piece: string) => void
 }
-export type StationState = { state: PageState; owner: string }
+/** Where a menu keeps what is picked, and, at a bench, how far the work
+ * under way has come as the style its button rings with, which moves
+ * every frame without the menu being drawn again. */
+export type StationState = {
+  state: PageState
+  owner: string
+  ring?: ReadonlySignal<string>
+}
 let tiers = (c: Craft) =>
   [
     ...new Set(
@@ -153,7 +161,7 @@ export let menu = (
   c: Craft,
   s: Sheet,
   job: Job,
-  { state, owner }: StationState,
+  { state, owner, ring }: StationState,
   change: () => void,
   acts?: Acts,
 ) => {
@@ -192,7 +200,7 @@ export let menu = (
       class: active ? 'Craft_Go' : undefined,
       'data-do': kind,
       disabled: active || !plan(r, bag),
-      style: active ? { '--k': job.doing!.k.toFixed(3) } : undefined,
+      style: active ? ring : undefined,
       onClick: () => {
         if (plan(r, bag) && !active) acts[kind](key)
       },
@@ -370,6 +378,7 @@ export let station = (
   let sheet: Sheet | null = null,
     latest: Job | null = null,
     was: unknown[] = []
+  let k = signal(0), ring = computed(() => `--k:${k.value.toFixed(3)}`)
   let current = () => state.cursor(`${owner}/at`) as Craft | undefined
   let draw = () => {
     let c = current()
@@ -382,7 +391,10 @@ export let station = (
         tradeNeed(mine.lvl + 1)
       } xp</small>`,
     )
-    render(menu(c, sheet, latest, { state, owner }, draw, acts), panel.body)
+    render(
+      menu(c, sheet, latest, { state, owner, ring }, draw, acts),
+      panel.body,
+    )
   }
   cards(panel.body, (e) => {
     let held = state.cursor(`${owner}/tier`) == 'up'
@@ -409,10 +421,15 @@ export let station = (
       draw()
     },
     close: panel.close,
+    /** Show this frame's sheet and work. It runs every frame, so drawing
+     * the menu again when nothing it shows has changed is a bug: the work's
+     * progress moves its ring alone. */
     show: (s: Sheet, job: Job) => {
       sheet = s
       latest = job
-      let key = [s, job.trades, job.doing?.k.toFixed(2), current(), ITEMS]
+      k.value = job.doing?.k ?? 0
+      let d = job.doing
+      let key = [s, job.trades, d?.recipe, d?.piece, current(), ITEMS]
       if (key.every((v, i) => v === was[i])) return
       was = key
       draw()

@@ -105,9 +105,21 @@ export let dealbox = (panel: Panel, act: (a: Act, v: View) => void) => {
     let v = shown.find((v) => v.eid == b?.dataset.deal)
     if (a && v) act(a, v)
   })
+  // What the sheet shows, as it would be drawn now: the deals, the one
+  // picked and how long it still stands.
+  let shows = () => {
+    let selected = shown.find((v) => v.eid == picked)
+    return JSON.stringify([
+      shown,
+      picked,
+      selected && left(selected.ends - now),
+    ])
+  }
+  let drawn = ''
   let draw = () => {
     let selected = shown.find((v) => v.eid == picked)
     if (!selected) picked = null
+    drawn = shows()
     let rows = shown.length
       ? h(
         Rows,
@@ -161,13 +173,15 @@ export let dealbox = (panel: Panel, act: (a: Act, v: View) => void) => {
       panel.show()
     },
     /** this frame's deals with the villager the hero is beside, by their
-     * id: walked off from the one it is open at, it folds away */
+     * id: walked off from the one it is open at, it folds away. It runs
+     * every frame, so drawing the sheet again when nothing it shows has
+     * changed is a bug. */
     paint: (views: View[], id: string | null, time: number) => {
-      if (!panel.open) return
+      if (!panel.open) return void (drawn = '')
       if (id != at) return panel.close()
       shown = views
       now = time
-      draw()
+      if (shows() != drawn) draw()
     },
   }
 }

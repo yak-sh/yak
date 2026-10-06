@@ -1,5 +1,7 @@
 // Public pages retain native content while graph navigation repaints the shell.
-import { equal, ok, test } from '@yaks/testing'
+// A sheet draws what changed after the change, before the browser paints, so
+// each look at the page waits a tick.
+import { equal, ok, test, tick } from '@yaks/testing'
 import { JSDOM } from 'npm:jsdom@26.1.0'
 import { render } from 'preact'
 import { cap, panels } from './panel.ts'
@@ -59,9 +61,11 @@ test('panel and tabs keep native nodes, drafts, listeners and scroll across grap
       map.show()
       equal(state.opened, 'map')
       equal(manager.open, map)
+      await tick()
       equal(glass.querySelector<HTMLElement>('.Panel-map')!.hidden, false)
       map.head('<b>New map</b>')
       equal(state.heading('map'), '<b>New map</b>')
+      await tick()
       equal(glass.querySelector('.Panel_Title b')?.textContent, 'New map')
       tabs.quests.show()
       equal(state.pane, 'quests')
@@ -69,6 +73,7 @@ test('panel and tabs keep native nodes, drafts, listeners and scroll across grap
       equal(tabs.quests.open, true)
       tabs.skills.mark(true)
       equal(state.marked('book/skills'), true)
+      await tick()
       let buttons = glass.querySelectorAll<HTMLButtonElement>(
         '.Panel_Tabs .Tabs_Tab',
       )
@@ -83,6 +88,7 @@ test('panel and tabs keep native nodes, drafts, listeners and scroll across grap
       ok(buttons[1].querySelector('.Tabs_Badge'))
       buttons[1].click()
       equal(state.pane, 'skills')
+      await tick()
       equal(buttons[1].getAttribute('aria-selected'), 'true')
       equal(tabs.quests.body.hidden, true)
       tabs.quests.close()
@@ -92,14 +98,17 @@ test('panel and tabs keep native nodes, drafts, listeners and scroll across grap
       await state.open('book', 'quests')
       equal(tabs.quests.body.hidden, false)
       await state.mark('book/skills', false)
+      await tick()
       ok(!buttons[1].querySelector('.Tabs_Badge'))
       await state.open('map')
       await state.head('map', '<em>External heading</em>')
+      await tick()
       equal(
         glass.querySelector('.Panel_Title em')?.textContent,
         'External heading',
       )
       map.head('')
+      await tick()
       equal(glass.querySelector('.Panel-map .Panel_Title')!.textContent, '')
       equal(map.body.parentNode, mount)
       equal(glass.querySelector('.Panel-map .Panel_Sheet'), sheet)
@@ -220,7 +229,7 @@ test('keys, backdrop and close button preserve input, busy and pointer-lock guar
   }))
 
 test('Mossvale tabs keep Menu last and world interactions open their own sheet', () =>
-  mounted((glass, dom) => {
+  mounted(async (glass, dom) => {
     let state = pageState('mossvale-panel-test')
     let manager = panels(glass, () => false, state)
     try {
@@ -243,6 +252,7 @@ test('Mossvale tabs keep Menu last and world interactions open their own sheet',
         ok(button.querySelector('.Glyph'))
         button.click()
         equal(manager.open, page)
+        await tick()
         equal(
           glass.querySelectorAll('.Panel-hero .Panel_Content:not([hidden])')
             .length,
@@ -252,6 +262,7 @@ test('Mossvale tabs keep Menu last and world interactions open their own sheet',
       }
       pages.map.head('The valley')
       pages.map.show()
+      await tick()
       equal(
         glass.querySelector('.Panel-hero .Panel_Content:not([hidden]) h2')
           ?.textContent,
@@ -260,6 +271,7 @@ test('Mossvale tabs keep Menu last and world interactions open their own sheet',
       craft.head('Forge')
       craft.show()
       equal(pages.map.open, false)
+      await tick()
       equal(
         glass.querySelector('.Panel-craft .Panel_Title')?.textContent,
         'Forge',
@@ -277,6 +289,7 @@ test('Mossvale tabs keep Menu last and world interactions open their own sheet',
       )
       equal(pages.menu.open, true)
       pages.map.show()
+      await tick()
       equal(
         glass.querySelector('.Panel-hero .Panel_Content:not([hidden]) h2')
           ?.textContent,

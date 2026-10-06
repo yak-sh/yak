@@ -11,6 +11,14 @@
 // Each tab's owner holds it as it would a panel of its own.
 import type { Glyph } from './glyphs.ts'
 import { h, render } from 'preact'
+import {
+  batch,
+  computed,
+  effect,
+  type ReadonlySignal,
+  type Signal,
+  signal,
+} from '@preact/signals'
 import { Body, Button, Head, Tabs } from '@yaks/ui'
 import { ValeKeycap } from './kit/ValeKeycap.ts'
 import { type PageState, pageState } from './page-state.ts'
@@ -80,11 +88,82 @@ export let panels = (
 ) => {
   let doc = glass.ownerDocument
   let all: { keys?: string[]; page: Page }[] = []
-  let paints: (() => void)[] = []
   let clean: (() => void)[] = []
+  // What the sheets show, as signals the state's rows set: which panel is
+  // open, on which tab, and each panel's and tab's heading and mark. A sheet
+  // is drawn once; each of its parts draws again only as what it shows
+  // changes, and showing or hiding one changes only its `hidden`.
+  let opened = signal(state.opened), pane = signal(state.pane)
   let watch = state.watch()
-  clean.push(watch.subscribe(() => paints.forEach((paint) => paint())))
+  clean.push(watch.subscribe(() =>
+    batch(() => {
+      opened.value = state.opened
+      pane.value = state.pane
+    })
+  ))
   clean.push(() => watch.close())
+  let rows = new Map<
+    string,
+    { head: Signal<string>; marked: Signal<boolean> }
+  >()
+  let row = (eid: string) => {
+    let r = rows.get(eid)
+    if (r) return r
+    let seen = {
+      head: signal(state.heading(eid)),
+      marked: signal(state.marked(eid)),
+    }
+    rows.set(eid, seen)
+    let watched = state.watchPanel(eid)
+    clean.push(
+      watched.subscribe(() =>
+        batch(() => {
+          seen.head.value = state.heading(eid)
+          seen.marked.value = state.marked(eid)
+        })
+      ),
+      () => watched.close(),
+    )
+    return seen
+  }
+
+  // A tab of a sheet, drawn again only as it is picked or marked.
+  let TabView = (
+    { leaf, on, marked }: {
+      leaf: Leaf
+      on: ReadonlySignal<boolean>
+      marked: ReadonlySignal<boolean>
+    },
+  ) => {
+    let keycap = leaf.spec!.keys[0] && cap(leaf.spec!.keys[0])
+    return h(
+      Tabs.Tab,
+      {
+        type: 'button',
+        mod: on.value && 'on',
+        role: 'tab',
+        'aria-selected': String(on.value),
+        'aria-label': leaf.spec!.title,
+        'data-tip': leaf.spec!.title,
+        'data-tip-key': keycap || undefined,
+        onClick: leaf.page.show,
+      },
+      mark(leaf.spec!.icon),
+      h('span', { class: 'Panel_TabLabel' }, leaf.spec!.title),
+      keycap && h(ValeKeycap, { keycap }),
+      marked.value && h(Tabs.Badge, {}),
+    )
+  }
+  // A heading its owner writes as HTML, drawn again as it changes.
+  let Title = (
+    { head, sub }: { head: ReadonlySignal<string>; sub?: boolean },
+  ) =>
+    !sub || head.value
+      ? h('h2', {
+        class: sub ? 'Panel_Title Panel_Subtitle' : 'Panel_Title',
+        dangerouslySetInnerHTML: { __html: head.value },
+      })
+      : null
 
   let sheet = (id: string, spec: Spec, leaves: Leaf[]) => {
     let host = doc.createElement('div')
@@ -92,109 +171,75 @@ export let panels = (
     glass.append(host)
     let tabs = leaves.some((leaf) => leaf.name !== undefined)
     let key = tabs ? 'Esc' : cap(spec.keys?.[0] ?? 'Escape')
-    let paint = () =>
-      render(
-        h(
-          'section',
-          {
-            class: `Panel Panel-${id}${tabs ? ' Panel-tabs' : ''}`,
-            hidden: state.opened != id,
-            'aria-label': spec.title,
-            style: spec.tall ? { '--tall': spec.tall } : undefined,
-            onpointerdown: (event: PointerEvent) => {
-              event.stopPropagation()
-              if (event.target == event.currentTarget) state.close(id)
-            },
+    let shut = computed(() => opened.value != id)
+    let shown = leaves.map((leaf) => {
+      let on = computed(() => pane.value == leaf.name)
+      let hidden = computed(() => tabs && !on.value)
+      // The owner's native body hides with its tab.
+      clean.push(effect(() => {
+        leaf.page.body.hidden = hidden.value
+      }))
+      return { leaf, on, hidden, ...(tabs && row(`${id}/${leaf.name}`)) }
+    })
+    let title = row(id).head
+    render(
+      h(
+        'section',
+        {
+          class: `Panel Panel-${id}${tabs ? ' Panel-tabs' : ''}`,
+          hidden: shut,
+          'aria-label': spec.title,
+          style: spec.tall ? { '--tall': spec.tall } : undefined,
+          onpointerdown: (event: PointerEvent) => {
+            event.stopPropagation()
+            if (event.target == event.currentTarget) state.close(id)
           },
+        },
+        h(
+          'div',
+          { class: 'Panel_Sheet' },
           h(
-            'div',
-            { class: 'Panel_Sheet' },
-            h(
-              Head,
-              { class: 'Panel_Head' },
-              tabs
-                ? h(
-                  Tabs,
-                  { class: 'Panel_Tabs', role: 'tablist' },
-                  leaves.map((leaf) => {
-                    let on = state.pane == leaf.name
-                    let keycap = leaf.spec!.keys[0] && cap(leaf.spec!.keys[0])
-                    return h(
-                      Tabs.Tab,
-                      {
-                        key: leaf.name,
-                        type: 'button',
-                        mod: on && 'on',
-                        role: 'tab',
-                        'aria-selected': String(on),
-                        'aria-label': leaf.spec!.title,
-                        'data-tip': leaf.spec!.title,
-                        'data-tip-key': keycap || undefined,
-                        onClick: leaf.page.show,
-                      },
-                      mark(leaf.spec!.icon),
-                      h('span', { class: 'Panel_TabLabel' }, leaf.spec!.title),
-                      keycap && h(ValeKeycap, { keycap }),
-                      state.marked(`${id}/${leaf.name}`) && h(Tabs.Badge, {}),
-                    )
-                  }),
-                )
-                : h('h2', {
-                  class: 'Panel_Title',
-                  dangerouslySetInnerHTML: { __html: state.heading(id) },
-                }),
-              h(
-                Button,
-                {
-                  type: 'button',
-                  mod: 'quiet',
-                  class: 'Panel_Close',
-                  'aria-label': 'Close',
-                  'data-tip': 'Close',
-                  'data-tip-key': key,
-                  onClick: () => state.close(id),
-                },
-                mark('x'),
-              ),
-            ),
-            leaves.map((leaf) => {
-              leaf.page.body.hidden = tabs && state.pane != leaf.name
-              return h(
-                Body,
-                {
-                  key: leaf.name ?? id,
-                  class: 'Panel_Content',
-                  hidden: tabs && state.pane != leaf.name,
-                },
-                leaf.name !== undefined &&
-                  state.heading(`${id}/${leaf.name}`) && h('h2', {
-                    class: 'Panel_Title Panel_Subtitle',
-                    dangerouslySetInnerHTML: {
-                      __html: state.heading(`${id}/${leaf.name}`),
-                    },
-                  }),
-                h('div', { class: 'Panel_Native', ref: leaf.mount }),
+            Head,
+            { class: 'Panel_Head' },
+            tabs
+              ? h(
+                Tabs,
+                { class: 'Panel_Tabs', role: 'tablist' },
+                shown.map(({ leaf, on, marked }) =>
+                  h(TabView, { key: leaf.name, leaf, on, marked: marked! })
+                ),
               )
-            }),
+              : h(Title, { head: title }),
+            h(
+              Button,
+              {
+                type: 'button',
+                mod: 'quiet',
+                class: 'Panel_Close',
+                'aria-label': 'Close',
+                'data-tip': 'Close',
+                'data-tip-key': key,
+                onClick: () => state.close(id),
+              },
+              mark('x'),
+            ),
+          ),
+          shown.map(({ leaf, hidden, head }) =>
+            h(
+              Body,
+              { key: leaf.name ?? id, class: 'Panel_Content', hidden },
+              head && h(Title, { head, sub: true }),
+              h('div', { class: 'Panel_Native', ref: leaf.mount }),
+            )
           ),
         ),
-        host,
-      )
-    paints.push(paint)
-    let ids = [
-      id,
-      ...leaves.filter((leaf) => leaf.name !== undefined)
-        .map((leaf) => `${id}/${leaf.name}`),
-    ]
-    for (let eid of ids) {
-      let row = state.watchPanel(eid)
-      clean.push(row.subscribe(paint), () => row.close())
-    }
+      ),
+      host,
+    )
     clean.push(() => {
       render(null, host)
       host.remove()
     })
-    paint()
   }
 
   let add = (id: string, spec: Spec): Panel => {

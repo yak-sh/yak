@@ -168,9 +168,13 @@ export let noticeboard = (panel: Panel, acts: Acts) => {
     ...questPage(n, here),
   ]
 
+  // What the sheet shows, as it would be drawn now.
+  let shows = () => JSON.stringify([shown, here, picked])
+  let drawn = ''
   let draw = () => {
     let selected = shown.find((n) => n.id == picked)
     if (!selected) picked = null
+    drawn = shows()
     let rows = shown.length
       ? h(
         Rows,
@@ -221,9 +225,11 @@ export let noticeboard = (panel: Panel, acts: Acts) => {
       panel.toggle()
     },
     close: panel.close,
-    /** show the notices of the board in `level`, while the sheet is open */
+    /** show the notices of the board in `level`, while the sheet is open.
+     * It runs every frame, so drawing the sheet again when nothing it shows
+     * has changed is a bug. */
     show: (list: Notice[], level: string) => {
-      if (!panel.open) return
+      if (!panel.open) return void (drawn = '')
       shown = list
       here = level
       panel.head(
@@ -231,7 +237,7 @@ export let noticeboard = (panel: Panel, acts: Acts) => {
           list.length == 1 ? 'notice' : 'notices'
         }</small>`,
       )
-      draw()
+      if (shows() != drawn) draw()
     },
   }
 }

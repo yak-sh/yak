@@ -1,15 +1,20 @@
 /** A labelled quantity, with a bounded fill and readable numbers in either
- * renderer. The caller supplies the value; this part never advances it.
+ * renderer. The caller supplies the value; this part never advances it. A
+ * value given as a signal moves the fill, the numbers and what is heard
+ * without the meter being drawn again, for one that changes every frame.
  * Words given as children stand over the fill in place of the label and its
  * numbers, in a row; the label and the numbers are still what is heard. */
 import { block, type Colors, type Specimen } from '@yaks/ui'
 import type { Sheet } from '@yaks/tui/theme'
+import { computed } from '@preact/signals'
 import { type ComponentChildren, Fragment, h } from 'preact'
+import { useMemo } from 'preact/hooks'
+import { type Live, read } from './live.ts'
 
 let Meter = block('div', 'ValeMeter', { Fill: 'i', Label: 'span' })
 export type MeterProps = {
   label: string
-  value: number
+  value: Live<number>
   max: number
   tone?: 'health' | 'experience' | 'danger'
   children?: ComponentChildren
@@ -19,7 +24,17 @@ export let ValeMeter = (
   { label, value, max, tone = 'health', children }: MeterProps,
 ) => {
   let limit = Number.isFinite(max) ? Math.max(0, max) : 0
-  let amount = Number.isFinite(value) ? Math.max(0, Math.min(limit, value)) : 0
+  let shown = useMemo(() => {
+    let amount = computed(() => {
+      let v = read(value)
+      return Number.isFinite(v) ? Math.max(0, Math.min(limit, v)) : 0
+    })
+    return {
+      amount,
+      fill: computed(() => `--k:${limit ? amount.value / limit : 0}`),
+      words: computed(() => `${label} ${amount.value}/${limit}`),
+    }
+  }, [value, limit, label])
   return h(
     Meter,
     {
@@ -28,11 +43,11 @@ export let ValeMeter = (
       'aria-label': label,
       'aria-valuemin': 0,
       'aria-valuemax': limit,
-      'aria-valuenow': amount,
-      style: { '--k': limit ? amount / limit : 0 },
+      'aria-valuenow': shown.amount,
+      style: shown.fill,
     },
     h(Meter.Fill, { 'aria-hidden': true }),
-    h(Meter.Label, {}, children ?? `${label} ${amount}/${limit}`),
+    h(Meter.Label, {}, children ?? shown.words),
   )
 }
 

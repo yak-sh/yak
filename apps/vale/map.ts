@@ -339,7 +339,8 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
 
   return {
     /** mark who is where this frame, the nodes, and where each quest tracked
-     * goes next, when the map is open */
+     * goes next, when the map is open. It runs every frame, so writing what
+     * the map shows again when it has not changed is a bug. */
     show: (
       f: Frame,
       nodes: Seen[] = [],
@@ -367,9 +368,10 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
         draw()
         uncover(regions)
       }
-      scale.textContent = `${
+      let across = `${
         Math.round(box[2] * wide / Math.min(wide, tall))
       } m across`
+      if (scale.textContent != across) scale.textContent = across
       let [x0, z0, side] = seen()
       let inside = (x: number, z: number) =>
         x >= x0 && x <= x0 + side && z >= z0 && z <= z0 + side

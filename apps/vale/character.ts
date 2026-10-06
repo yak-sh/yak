@@ -27,7 +27,7 @@ let same = (a: Look, b: Look) =>
 
 /** How far the hero is toward their next level; full, and saying so, at
  * the last. */
-export let experience = (s: Sheet) => {
+export let experience = (s: { lvl: number; xp: number }) => {
   let from = need(s.lvl), to = need(s.lvl + 1)
   return s.lvl == TOP
     ? h(
@@ -140,7 +140,9 @@ export let character = (tab: Page, acts: Acts) => {
   let was: unknown[] = []
   let drawn = ''
   return {
-    /** Show this frame without replacing the appearance draft. */
+    /** Show this frame without replacing the appearance draft. It runs
+     * every frame, so drawing the tab again when nothing it shows has
+     * changed is a bug. */
     show: (s: Sheet, look: Look) => {
       if (!tab.open) return
       if (!kept) {
@@ -150,8 +152,10 @@ export let character = (tab: Page, acts: Acts) => {
           h(Button, { mod: 'go', 'data-do': 'keep' }, 'Keep this look'),
         ], form)
       }
-      kept = look
-      changed()
+      if (!kept || !same(kept, look)) {
+        kept = look
+        changed()
+      }
       let dress: Dress = Object.fromEntries(
         Object.entries(s.worn).map(([slot, h]) => [slot, h?.kind]),
       )

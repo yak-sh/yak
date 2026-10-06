@@ -5,9 +5,12 @@
 // at the bottom the buttons for the thumbs, or the words of whoever you talk
 // to. Its parts are the kit's (kit/Vale*.ts, packages/ui): meters, keycaps,
 // a level's badge, the compass, the tray's orbs, the toasts and the tiles of
-// the quests followed. Each part is drawn again only when what it shows
-// changed (`paint`). The scene's labels (fx.ts) are never seen through or
-// between the glass: one that would touch it is not shown (`under`).
+// the quests followed. Each part is drawn once and reads what it shows from
+// signals `show` sets every frame, so it is drawn again only when that
+// changed, and a value that moves every frame (health, the bearing) is handed
+// to its kit part as the signal itself, which follows it without being drawn
+// again. The scene's labels (fx.ts) are never seen through or between the
+// glass: one that would touch it is not shown (`under`).
 //
 // Every interface opens as a tab of one sheet (panel.ts). SHEETS lists its
 // tabs; `h.panels.<id>` gives each owner a body and whether it is open. Draw
@@ -30,13 +33,22 @@
 // rests on it or a thumb holds it: its name, its key, and a line of what it
 // does; an ability's is bar.ts's, with its numbers. Give a new button one.
 import { type ComponentChildren, Fragment, h, render } from 'preact'
+import {
+  batch,
+  computed,
+  effect,
+  type ReadonlySignal,
+  Signal,
+  signal,
+  useComputed,
+} from '@preact/signals'
 import { Body, Button, Dot, Rows, Tile } from '@yaks/ui'
 import { about } from './about.ts'
 import { experience } from './character.ts'
 import type { View } from './deals.ts'
 import { type Action, keysOf } from './input.ts'
 import type { Under } from './fx.ts'
-import type { Frame, Mob, Sheet } from './play.ts'
+import type { Frame } from './play.ts'
 import type { Job } from './work.ts'
 import { BEASTS } from './beasts.ts'
 import { skull } from './danger.ts'
@@ -231,9 +243,29 @@ export let SHEETS = {
 
 let TABS = SHEETS.hero.tabs
 
+// What the hero is, as the glass shows it.
+type Hero = {
+  name: string
+  lvl: number
+  points: number
+  xp: number
+  max: number
+}
+
+// What ails the hero, while anything does: drawn as the first starts and
+// the last ends, its seconds counting down in place.
+let Ails = ({ ails }: { ails: ReadonlySignal<string> }) => {
+  let ailing = useComputed(() => ails.value != '')
+  return ailing.value ? h('small', {}, ails) : null
+}
+
 // The hero's name and level over their health, what ails them, and the xp to
 // the next level; gold while points wait to be spent on skills.
-let vitalsView = (s: Sheet, hp: number, ails: string) => [
+let vitalsView = (
+  s: Hero,
+  hp: ReadonlySignal<number>,
+  ails: ReadonlySignal<string>,
+) => [
   h(
     'div',
     { class: 'Vitals_Top' },
@@ -253,7 +285,7 @@ let vitalsView = (s: Sheet, hp: number, ails: string) => [
     ),
   ),
   h(ValeMeter, { label: 'Health', value: hp, max: s.max }),
-  ails && h('small', {}, ails),
+  h(Ails, { ails }),
   experience(s),
   h(ValeKeycap, { keycap: cap(TABS.character.keys[0]) }),
 ]
@@ -283,11 +315,18 @@ let trackView = (shown: Task[], here: string) =>
       ),
   )
 
+// The creature fought, as the glass shows it.
+type Foe = { beast: string; lvl: number; most: number }
+
 // The creature fought: its name and level, or a skull for one far above the
-// hero, over its health.
-let foeView = (m: Mob, lvl: number) => {
+// hero, over its health, which `says` in numbers.
+let foeView = (
+  m: Foe,
+  lvl: number,
+  hp: ReadonlySignal<number>,
+  says: ReadonlySignal<string>,
+) => {
   let name = BEASTS[m.beast].name, danger = skull(m.lvl, lvl)
-  let hp = Math.ceil(m.hp)
   return h(
     ValeMeter,
     { label: name, value: hp, max: m.most, tone: 'danger' },
@@ -297,7 +336,7 @@ let foeView = (m: Mob, lvl: number) => {
       danger ? { title: 'Overwhelming foe' } : {},
       danger ? '☠' : `level ${m.lvl}`,
     ),
-    h('small', {}, `${hp} / ${m.most}`),
+    h('small', {}, says),
   )
 }
 
@@ -320,8 +359,35 @@ let whoView = (here: number, clock: Clock) => {
  * its marks, which that module sets. */
 export type Opener = { button: HTMLElement; mark: (m: Marks) => void }
 
-// A tray button: its icon, its tip, its marks, and what pressing it does.
-type Orb = { glyph: Glyph; tip: Tip; marks: Marks; press: () => void }
+// A tray button: its icon, its tip, its marks, and what pressing it does. A
+// mark is unset until something sets it.
+type Orb = {
+  glyph: ReadonlySignal<Glyph>
+  tip: ReadonlySignal<Tip>
+  marks: { [K in keyof Marks]-?: Signal<boolean | undefined> }
+  press: () => void
+}
+
+// A tray button, drawn again only when its icon, its tip or a mark changed.
+let OrbView = ({ name, o }: { name: string; o: Orb }) => {
+  let t = o.tip.value
+  return h(
+    ValeOrb,
+    {
+      'data-orb': name,
+      label: heard(t),
+      ...tipProps(t),
+      selected: o.marks.selected.value,
+      attention: o.marks.attention.value,
+      calling: o.marks.calling.value,
+      faded: o.marks.faded.value,
+      live: o.marks.live.value,
+      onClick: o.press,
+    },
+    mark(o.glyph.value),
+    t.key && h(ValeKeycap, { keycap: t.key }),
+  )
+}
 
 /** Build the HUD into `root`. `press` sends a button's action to the game;
  * `busy` says when the keyboard belongs to something else. */
@@ -371,14 +437,67 @@ export let hud = (
   root.append(layer, vitals, quest, foe, nav, toasts, pads, talk, faint)
   tips(root)
 
-  // Draw `view` into `e`, unless what it shows, `shows`, is as it was.
-  let drawn = new Map<Element, string>()
-  let paint = (e: Element, shows: unknown, view: () => ComponentChildren) => {
-    let key = JSON.stringify(shows)
-    if (drawn.get(e) == key) return
-    drawn.set(e, key)
-    render(h(Fragment, {}, view()), e)
+  // What the glass shows, as `show` last found it. A signal set to what it
+  // holds changes nothing, so a frame where nothing changed draws nothing.
+  let seen = {
+    hero: signal<Hero | null>(null),
+    hp: signal(0),
+    ails: signal(''),
+    level: signal(''),
+    followed: signal<Task[]>([]),
+    foe: signal<Foe | null>(null),
+    foeHp: signal(0),
+    here: signal(0),
+    clock: signal<Clock>('day'),
+    facing: signal(0),
+    way: signal<number | undefined>(undefined),
+    down: signal(false),
   }
+  let foeSays = computed(() =>
+    `${seen.foeHp.value} / ${seen.foe.value?.most ?? 0}`
+  )
+  // A frame makes the hero's numbers, the tasks followed and the foe
+  // afresh; each part takes them only when what it shows of them changed.
+  let held = new Map<Signal<unknown>, string>()
+  let hold = <T>(s: Signal<T>, now: T, shows: unknown = now) => {
+    let key = JSON.stringify(shows)
+    if (held.get(s as Signal<unknown>) == key) return
+    held.set(s as Signal<unknown>, key)
+    s.value = now
+  }
+  // Each part, drawn once the first frame is shown.
+  let parts: [HTMLElement, () => ComponentChildren][] = [
+    [vitals, () => {
+      let s = seen.hero.value
+      return s && vitalsView(s, seen.hp, seen.ails)
+    }],
+    [quest, () => trackView(seen.followed.value, seen.level.value)],
+    [foe, () => {
+      let m = seen.foe.value
+      return m && foeView(m, seen.hero.value?.lvl ?? 0, seen.foeHp, foeSays)
+    }],
+    [who, () => whoView(seen.here.value, seen.clock.value)],
+    [rose, () => [
+      h(ValeCompass, { bearing: seen.facing, destination: seen.way }),
+      h(ValeKeycap, { keycap: cap(TABS.map.keys[0]) }),
+    ]],
+  ]
+  let mounted = false
+  let mount = () => {
+    mounted = true
+    for (let [e, Part] of parts) render(h(Part, {}), e)
+  }
+  // The foe's card shows while one is fought, ringed for a boss or one far
+  // above the hero; the faint while the hero is down.
+  effect(() => {
+    let m = seen.foe.value, lvl = seen.hero.value?.lvl ?? 0
+    foe.hidden = !m
+    foe.classList.toggle('Foe-boss', !!m && !!BEASTS[m.beast].combat?.boss)
+    foe.classList.toggle('Foe-danger', !!m && skull(m.lvl, lvl))
+  })
+  effect(() => {
+    faint.hidden = !seen.down.value
+  })
 
   let shelf = panels(root, busy, state)
   let panel = {
@@ -457,48 +576,58 @@ export let hud = (
   let orbs: Record<string, Orb> = {}
   let opens: [Orb, Page][] = []
   let screen: ReturnType<typeof fullscreen> = null
+  // Drawn as the tray is made and as full screen changes; each orb draws
+  // itself again as its own icon, tip or marks change.
   let drawTray = () =>
-    paint(trayBox, [orbs, screen?.on, screen?.busy], () => [
-      Object.entries(orbs).map(([name, o]) =>
-        h(
-          ValeOrb,
-          {
-            key: name,
-            'data-orb': name,
-            label: heard(o.tip),
-            ...tipProps(o.tip),
-            ...o.marks,
-            onClick: o.press,
-          },
-          mark(o.glyph),
-          o.tip.key && h(ValeKeycap, { keycap: o.tip.key }),
-        )
+    render(
+      h(
+        Fragment,
+        {},
+        Object.entries(orbs).map(([name, o]) =>
+          h(OrbView, { key: name, name, o })
+        ),
+        screen && h(ValeOrb, {
+          key: 'screen',
+          label: screen.on ? 'Leave full screen' : 'Full screen',
+          ...tipProps({
+            name: screen.on ? 'Leave full screen' : 'Full screen',
+          }),
+          selected: screen.on,
+          disabled: screen.busy,
+          onClick: screen.toggle,
+        }, mark(screen.on ? 'shrink' : 'expand')),
       ),
-      screen && h(ValeOrb, {
-        key: 'screen',
-        label: screen.on ? 'Leave full screen' : 'Full screen',
-        ...tipProps({ name: screen.on ? 'Leave full screen' : 'Full screen' }),
-        selected: screen.on,
-        disabled: screen.busy,
-        onClick: screen.toggle,
-      }, mark(screen.on ? 'shrink' : 'expand')),
-    ])
+      trayBox,
+    )
   let tray = (
     name: string,
-    glyph: Glyph,
-    t: Tip & { key: string },
+    glyph: Glyph | ReadonlySignal<Glyph>,
+    t: Tip & { key: string } | ReadonlySignal<Tip>,
     press: () => void,
     page?: Page,
   ) => {
-    let o: Orb = { glyph, tip: t, marks: {}, press }
+    let o: Orb = {
+      glyph: glyph instanceof Signal ? glyph : signal(glyph),
+      tip: t instanceof Signal ? t : signal(t),
+      marks: {
+        selected: signal(undefined),
+        attention: signal(undefined),
+        calling: signal(undefined),
+        faded: signal(undefined),
+        live: signal(undefined),
+      },
+      press,
+    }
     orbs[name] = o
     if (page) opens.push([o, page])
     return o
   }
-  let marked = (o: Orb, m: Marks) => {
-    o.marks = { ...o.marks, ...m }
-    drawTray()
-  }
+  let marked = (o: Orb, m: Marks) =>
+    batch(() => {
+      for (let [k, on] of Object.entries(m)) {
+        o.marks[k as keyof Marks].value = on
+      }
+    })
   let chat = tray('chat', 'chat', {
     name: 'Chat',
     key: 'Enter',
@@ -550,11 +679,13 @@ export let hud = (
     panel.party,
   )
   let micKey = cap(keysOf('mic')[0])
-  let mic = tray('mic', 'micOff', {
-    name: 'Microphone',
-    key: micKey,
-    says: MICS.off,
-  }, () => {})
+  let micOn = signal(false), micSays = signal(MICS.off)
+  let mic = tray(
+    'mic',
+    computed(() => micOn.value ? 'mic' : 'micOff'),
+    computed(() => ({ name: 'Microphone', key: micKey, says: micSays.value })),
+    () => {},
+  )
   tray(
     'menu',
     'menu',
@@ -682,6 +813,7 @@ export let hud = (
     get talking() {
       return !talk.hidden
     },
+    /** how many invitations wait, told every frame */
     partyBadge: (n: number) =>
       marked(party, { attention: n > 0 && !panel.party.open }),
     /** the gather button, for this frame's work: its trade's icon while a node
@@ -721,25 +853,24 @@ export let hud = (
         gatherPad.style.setProperty('--k', k)
       }
     },
-    /** how the microphone stands (voicebox.ts) */
-    mic: (m: Mic, input?: string | null, sending = false) => {
-      mic.glyph = m == 'on' ? 'mic' : 'micOff'
-      mic.tip = {
-        name: 'Microphone',
-        key: micKey,
-        says: `${MICS[m]}${input && m == 'on' ? ` · Input: ${input}` : ''}${
-          sending ? ' · Voice going out' : ''
-        }`,
-      }
-      marked(mic, {
-        selected: m == 'on',
-        faded: m == 'denied' || m == 'missing' || m == 'spent',
-        live: sending,
-      })
-    },
-    /** paint this frame, the camera looking `facing` degrees from north,
+    /** how the microphone stands (voicebox.ts), told every frame */
+    mic: (m: Mic, input?: string | null, sending = false) =>
+      batch(() => {
+        micOn.value = m == 'on'
+        micSays.value = `${MICS[m]}${
+          input && m == 'on' ? ` · Input: ${input}` : ''
+        }${sending ? ' · Voice going out' : ''}`
+        marked(mic, {
+          selected: m == 'on',
+          faded: m == 'denied' || m == 'missing' || m == 'spent',
+          live: sending,
+        })
+      }),
+    /** Show this frame, the camera looking `facing` degrees from north,
      * following the hero's `followed` tasks (journal.ts `tracked`), the
-     * compass pointing to `goal`, where the first of them goes next */
+     * compass pointing to `goal`, where the first of them goes next. It runs
+     * every frame, so a part drawn again when nothing it shows has changed
+     * is a bug. */
     show: (
       f: Frame,
       here: number,
@@ -748,48 +879,39 @@ export let hud = (
       followed: Task[],
       goal: Spot | null,
     ) => {
-      let s = f.sheet
-      let ails = labels(f.statuses, f.now)
-      paint(
-        vitals,
-        [s.name, s.lvl, s.points, s.xp, s.max, f.vitals.hp, ails],
-        () => vitalsView(s, f.vitals.hp, ails),
-      )
-      paint(
-        quest,
-        [f.level, followed.map((t) => [t.id, t.title, next(t)])],
-        () => trackView(followed, f.level),
-      )
-      let m = f.foe
-      foe.hidden = !m
-      if (m) {
-        paint(
-          foe,
-          [m.beast, m.lvl, Math.ceil(m.hp), m.most, s.lvl],
-          () => foeView(m, s.lvl),
-        )
-        foe.classList.toggle('Foe-boss', !!BEASTS[m.beast].combat?.boss)
-        foe.classList.toggle('Foe-danger', skull(m.lvl, s.lvl))
-      }
-      paint(who, [here, clock], () => whoView(here, clock))
-      let way = goal ? toward([f.body.x, f.body.z], goal) : undefined
-      paint(rose, [facing, way], () => [
-        h(ValeCompass, { bearing: facing, destination: way }),
-        h(ValeKeycap, { keycap: cap(TABS.map.keys[0]) }),
-      ])
-      for (let [o, p] of opens) o.marks.selected = p.open
+      let s = f.sheet, m = f.foe
       // Arms or armour found mark the bag, until it is opened; points to
       // spend mark the skills. Nothing in hand by a fire: the rack there
       // has arms to try, and the bag calls.
       fresh = !panel.bag.open &&
         (fresh ||
           f.events.some((e) => e.type == 'loot' && ITEMS[e.item]?.slot))
+      let bare = f.rack && !s.worn.main
+      batch(() => {
+        let { name, lvl, points, xp, max } = s
+        hold(seen.hero, { name, lvl, points, xp, max })
+        seen.hp.value = f.vitals.hp
+        seen.ails.value = labels(f.statuses, f.now)
+        hold(seen.followed, followed, [
+          f.level,
+          followed.map((t) => [t.id, t.title, next(t)]),
+        ])
+        seen.level.value = f.level
+        hold(seen.foe, m && { beast: m.beast, lvl: m.lvl, most: m.most })
+        if (m) seen.foeHp.value = Math.ceil(m.hp)
+        seen.here.value = here
+        seen.clock.value = clock
+        seen.facing.value = facing
+        seen.way.value = goal ? toward([f.body.x, f.body.z], goal) : undefined
+        seen.down.value = f.down
+        for (let [o, p] of opens) o.marks.selected.value = p.open
+        bag.marks.attention.value = fresh
+        bag.marks.calling.value = bare
+        skills.marks.attention.value = s.points > 0 && !panel.skills.open
+      })
+      if (!mounted) mount()
       panel.bag.mark(fresh)
       panel.skills.mark(s.points > 0)
-      let bare = f.rack && !s.worn.main
-      bag.marks = { ...bag.marks, attention: fresh, calling: bare }
-      skills.marks.attention = s.points > 0 && !panel.skills.open
-      drawTray()
       if (bare && !nudged) {
         nudged = true
         toast(
@@ -821,7 +943,6 @@ export let hud = (
           : 'Nothing in your bag mends.',
       })
       talkPad.classList.toggle('Pad-none', !f.talk && !f.peer || !!nearBench)
-      faint.hidden = !f.down
     },
   }
 }
