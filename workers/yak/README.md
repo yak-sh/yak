@@ -21,10 +21,10 @@ fresh worktree has none and a bare `wrangler deploy` dies at `mcp.ts`
 `import { z } from 'zod'`. The test probes (probe-suite.ts) install through the
 same door before they bundle the kernel.
 
-Correct a deployed regression with `yak admin revert <sha> --admin`: main is
-always deployed. `yak admin rollback [version] --admin` is for a broken build
-path and refuses to cross a data migration boundary. A Durable Object already
-migrated keeps its data, even when older code is deployed.
+Correct a deployed regression with `yak admin revert <sha>`: main is always
+deployed. `yak admin rollback [version]` is for a broken build path and refuses
+to cross a data migration boundary. A Durable Object already migrated keeps its
+data, even when older code is deployed.
 
 ## Workers Builds
 
@@ -148,26 +148,25 @@ wrapper alone cannot change that dashboard setting. Build and deploy are
 separate shell commands, so deploy mode restores Deno's path before it runs
 `deno task deploy:yak`. The wrapper passes `--message "<sha> <subject>"` from
 `git log -1`, making `annotations["workers/message"]` identify the deployed
-commit. `yak admin deploys --owner` estimates older, unannotated versions from
-commit times and marks that estimate in its output.
+commit. `yak admin deploys` estimates older, unannotated versions from commit
+times and marks that estimate in its output.
 
-The incident commands, using this box’s Wrangler/GitHub login. An agent names
-the act with `--admin` and it is recorded as the platform’s admin person
-(`admin@bot.yak.sh`, seeded into the directory); the owner names it with
-`--owner` and it is his. Same commands, same credentials — the flag says whose
-act it is, and the banner on stderr says so out loud.
+The incident commands, using this box’s Wrangler/GitHub login. `--as` names the
+yaks.app account the act is recorded under; without it the act is the configured
+person’s own. An agent acts as the platform’s admin person (`admin@bot.yak.sh`,
+seeded into the directory), so the owner’s name stays on what he did himself.
 
 ```sh
-yak admin deploys --admin        # or --owner, when it is the owner
-yak admin errors --since 10m --admin
-yak admin tail --admin
-yak admin rollback [version] --admin
-yak admin revert <sha> --admin
-yak admin move --rehearse --admin  # every store rehearses the mover's rules
+yak admin deploys --as admin@bot.yak.sh
+yak admin errors --since 10m --as admin@bot.yak.sh
+yak admin tail --as admin@bot.yak.sh
+yak admin rollback [version] --as admin@bot.yak.sh
+yak admin revert <sha> --as admin@bot.yak.sh
+yak admin move --rehearse --as admin@bot.yak.sh  # every store rehearses the mover's rules
 ```
 
-`yak login admin@bot.yak.sh --admin` signs this box in as that person; the
-session is kept beside the owner’s and is never the remembered default.
+An account’s credential is a connection in the CLI’s graph, never a token file;
+`yak auth --as <account>` signs one in without a browser.
 
 `deploys` joins uploads to deployments and reads each commit’s `BOUNDARIES` from
 `migrate.ts` (`MARKS` in older commits). Rollback retains every boundary main
@@ -310,12 +309,12 @@ moves from its alarm once it serves, one transaction of fifty rows at a time,
 yielding between them; a batch that fails unwinds and is reported, and the store
 keeps serving the shape it holds until its next incarnation tries again. A rule
 is data, the rows still in the old shape and the patch that moves one, and lands
-rehearsal-only: `yak admin move --rehearse --admin` moves every rule's rows in
-every store inside a transaction the store rolls back, up to twenty batches, and
-says what each found and moved, any failure, and how long each store took to
-answer. A clean rule goes `live: 'apps'`, then `'all'`, the directory last, and
-its mark joins `BOUNDARIES` in that release. `yak admin move --admin` wakes the
-dormant stores a few a minute and says where each rule stands in each.
+rehearsal-only: `yak admin move --rehearse` moves every rule's rows in every
+store inside a transaction the store rolls back, up to twenty batches, and says
+what each found and moved, any failure, and how long each store took to answer.
+A clean rule goes `live: 'apps'`, then `'all'`, the directory last, and its mark
+joins `BOUNDARIES` in that release. `yak admin move` wakes the dormant stores a
+few a minute and says where each rule stands in each.
 
 An app's declared lens also supplies its mover rule. Its expanded vocabulary
 holds source columns only while they hold values. The final batch drops empty
@@ -560,7 +559,7 @@ including the inspector in `public/_web/inspect`.
 
 `yak inspect --app <slug>` (or `--app <space>/<slug>`) resolves the app at
 `GET /api/app?app=…`, then reads its ordinary `/<app>/api` wire using the
-caller's saved `yak login` bearer, including the socket handshake. Members and
+caller's saved account credential, including the socket handshake. Members and
 owners keep the app's own access; invalid credentials and cross-space narrowed
 grants are refused in the app's JSON envelope. No option keeps the local
 inspector unchanged.

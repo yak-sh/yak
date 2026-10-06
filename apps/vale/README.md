@@ -88,11 +88,11 @@ any property the person changed. Run from main after deploying the new schema:
 
 ```sh
 mkdir -p /tmp/vale-ability-update
-yak admin query yourname/vale '.ability_design' --admin --json > /tmp/vale-ability-update/live.json
+yak admin query yourname/vale '.ability_design' --as admin@bot.yak.sh --json > /tmp/vale-ability-update/live.json
 git show ff0fc0c44:apps/vale/seed/abilities/abilities.json > /tmp/vale-ability-update/before.json
 deno run --allow-read --allow-write bin/vale-ability-update.ts /tmp/vale-ability-update/live.json /tmp/vale-ability-update/before.json /tmp/vale-ability-update/update.json
-yak admin apply yourname/vale @/tmp/vale-ability-update/update.json --admin --check
-yak admin apply yourname/vale @/tmp/vale-ability-update/update.json --admin
+yak admin apply yourname/vale @/tmp/vale-ability-update/update.json --as admin@bot.yak.sh --check
+yak admin apply yourname/vale @/tmp/vale-ability-update/update.json --as admin@bot.yak.sh
 ```
 
 Then reread the rows and generate legacy scalar cleanup separately; `effects` is
@@ -102,10 +102,10 @@ so the cleanup is admitted by its retained schema. The next deploy drops those
 empty properties.
 
 ```sh
-yak admin query yourname/vale '.ability_design' --admin --json > /tmp/vale-ability-update/live.json
+yak admin query yourname/vale '.ability_design' --as admin@bot.yak.sh --json > /tmp/vale-ability-update/live.json
 deno run --allow-read --allow-write bin/vale-ability-update.ts /tmp/vale-ability-update/live.json /tmp/vale-ability-update/before.json /tmp/vale-ability-update/clean.json clean
-yak admin apply yourname/vale @/tmp/vale-ability-update/clean.json --admin --check
-yak admin apply yourname/vale @/tmp/vale-ability-update/clean.json --admin
+yak admin apply yourname/vale @/tmp/vale-ability-update/clean.json --as admin@bot.yak.sh --check
+yak admin apply yourname/vale @/tmp/vale-ability-update/clean.json --as admin@bot.yak.sh
 rm -rf /tmp/vale-ability-update
 ```
 
@@ -128,18 +128,18 @@ the main checkout containing the desired release:
 ```sh
 D="$HOME/vale-fight-cutover"
 mkdir -p "$D"
-yak admin query yourname/vale '.fight&?doc&?person' --admin --json > "$D/original.json"
+yak admin query yourname/vale '.fight&?doc&?person' --as admin@bot.yak.sh --json > "$D/original.json"
 deno run --allow-read --allow-write bin/vale-fight-update.ts clear "$D/original.json" "$D/clear.json"
-yak admin apply yourname/vale @"$D/clear.json" --admin --check
+yak admin apply yourname/vale @"$D/clear.json" --as admin@bot.yak.sh --check
 # Inspect the plan/count; every patch clears only fight.dealt, never fight itself.
-yak admin apply yourname/vale @"$D/clear.json" --admin
+yak admin apply yourname/vale @"$D/clear.json" --as admin@bot.yak.sh
 # Release the intended files and array declaration from main.
 yak admin push apps/vale --space=yourname --app=vale --owner
-yak admin query yourname/vale '.fight&?doc&?person' --admin --json > "$D/after-deploy.json"
+yak admin query yourname/vale '.fight&?doc&?person' --as admin@bot.yak.sh --json > "$D/after-deploy.json"
 deno run --allow-read --allow-write bin/vale-fight-update.ts restore "$D/original.json" "$D/restore.json" "$D/after-deploy.json"
-yak admin apply yourname/vale @"$D/restore.json" --admin --check
-yak admin apply yourname/vale @"$D/restore.json" --admin
-yak admin query yourname/vale '.fight&?doc&?person' --admin --json > "$D/after-restore.json"
+yak admin apply yourname/vale @"$D/restore.json" --as admin@bot.yak.sh --check
+yak admin apply yourname/vale @"$D/restore.json" --as admin@bot.yak.sh
+yak admin query yourname/vale '.fight&?doc&?person' --as admin@bot.yak.sh --json > "$D/after-restore.json"
 deno run --allow-read --allow-write bin/vale-fight-update.ts restore "$D/original.json" "$D/verify.json" "$D/after-restore.json"
 # Expected: zero restore patches. Compare row counts and person prose with original.json.
 yak admin tool app_errors --space yourname --app vale --owner
@@ -152,10 +152,10 @@ still stopped, regenerate `restore-text` against a fresh read and apply its
 checked patches to put the exact original strings back:
 
 ```sh
-yak admin query yourname/vale '.fight&?doc&?person' --admin --json > "$D/failed-deploy.json"
+yak admin query yourname/vale '.fight&?doc&?person' --as admin@bot.yak.sh --json > "$D/failed-deploy.json"
 deno run --allow-read --allow-write bin/vale-fight-update.ts restore-text "$D/original.json" "$D/recover.json" "$D/failed-deploy.json"
-yak admin apply yourname/vale @"$D/recover.json" --admin --check
-yak admin apply yourname/vale @"$D/recover.json" --admin
+yak admin apply yourname/vale @"$D/recover.json" --as admin@bot.yak.sh --check
+yak admin apply yourname/vale @"$D/recover.json" --as admin@bot.yak.sh
 ```
 
 Use `restore-text` only while the served declaration is still text; an accepted
