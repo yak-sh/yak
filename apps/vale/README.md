@@ -27,8 +27,8 @@ state lives in the page's graph").
 Hero positions relay between connected pages, and the server saves their latest
 value every thirty seconds. A returning hero resumes that position facing the
 default direction. Wildlife positions only relay. Teleport requests carry a
-`completed` mark once the addressed hero moves. Villager schedules read live
-player positions, so saved positions keep nobody awake after disconnect.
+`completed` mark once the addressed hero moves. Villagers follow their daily rhythm derived in each page. Human dialogue asks
+a model; playing nearby creates no autonomous model turn or world clock.
 
 Vale's chat slash commands use the shared browser-safe `@yaks/cli/grammar` for
 parsing (`argsFor`) and completion (`complete`). Command arguments accept both

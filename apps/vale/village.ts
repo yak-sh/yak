@@ -5,8 +5,7 @@
 // them to answer, told what they hold, what deals stand between them and the
 // hero (deals.ts), their job on the notice board, how they feel and where
 // the land's people went lately; and the news of a quest handed in. What
-// keeps a level's villagers awake while somebody plays in it is where the
-// connected hero's relayed position.
+// follows their daily rhythm is derived by each page, without a store clock.
 //
 // A guest reads what villagers say and is not heard by them: only a person
 // signed in speaks (chat.ts).
@@ -37,6 +36,7 @@ import {
   named,
   type Person,
   persona,
+  retired,
   said,
   where,
   WINDOW,
@@ -94,7 +94,6 @@ export let village = (net: Net, deal: Deals) => {
     }
   }
   let rows: Watch | null = null
-  let think = watch('.tool.name=think')
 
   // What the level's villagers said back and chose, newest first.
   let level = ''
@@ -210,8 +209,7 @@ export let village = (net: Net, deal: Deals) => {
       if (engaged && f.talk?.id != engaged) engaged = null
       if (f.level != level) follow(f.level)
       if (!net.hero || !me?.writes) return
-      let tool = think?.value[0]?.entity.eid
-      if (!tool || !rows?.ready) return
+      if (!rows?.ready) return
       let stored = new Map(rows.value.map((b) => [b.entity.eid, b]))
       let missing = GIVERS.filter((g) =>
         g.level == f.level && !stored.has(eidOf(g.id)) && !asked.has(g.id)
@@ -223,16 +221,21 @@ export let village = (net: Net, deal: Deals) => {
         let patch = Object.fromEntries(
           Object.entries(aboutOf(g)).filter(([key]) => !(key in saved)),
         )
-        return Object.keys(patch).length ? [{ g, patch }] : []
+        let row = stored.get(eidOf(g.id))
+        let schedule = row ? retired(row) : null
+        return Object.keys(patch).length || schedule
+          ? [{ g, patch, schedule }]
+          : []
       })
       for (let g of missing) asked.add(g.id)
       for (let { g } of older) asked.add(g.id)
       // Another page adding the same row first refuses this one.
-      if (missing.length) write(missing.map((g) => born(g, tool)))
+      if (missing.length) write(missing.map((g) => born(g)))
       if (older.length) {
-        write(older.map(({ g, patch }) => ({
-          entity: { eid: eidOf(g.id) },
+        write(older.map(({ g, patch, schedule }) => ({
           villager: patch,
+          ...schedule ?? {},
+          entity: { eid: eidOf(g.id) },
         })))
       }
     },

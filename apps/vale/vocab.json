@@ -2215,7 +2215,7 @@
     "villager": {
       "component": true,
       "type": "object",
-      "description": "One of the people of the vale, as a mind of their own: the row is their transcript (it wears session). A hero's line said near them is a line of it that asks them for a turn on GLM Flash, a neighbour's news is a line they heard, and their wake calls think every five minutes while a hero is connected in their land and sleeps while none has (villagers.ts). A page adds the row the first time a hero comes to their land.",
+      "description": "One of the people of the vale, with a transcript for human dialogue. Their daily movement is derived in the page from their routine; merely playing nearby asks no model and starts no clock.",
       "properties": {
         "id": {
           "type": "string",
@@ -2658,9 +2658,11 @@
     },
     "think": {
       "tool": true,
-      "positional": ["villager..."],
+      "positional": [
+        "villager..."
+      ],
       "discoverable": false,
-      "description": "Let a villager decide how to spend the next while, from what they lately heard and said: where to go, and how they feel. Their wake calls it every five minutes while a hero is in their land.",
+      "description": "Retire the named villager's legacy autonomous clock, preserving their transcript. Human dialogue is not changed.",
       "input": {
         "villager": {
           "type": "string",
@@ -2670,47 +2672,7 @@
       "required": [
         "villager"
       ],
-      "apply": {
-        "entity": {
-          "eid": "$thought"
-        },
-        "entry": {
-          "session": "$villager"
-        },
-        "content": {
-          "body": "A while passes."
-        },
-        "using": {
-          "model": "typesafe/jev",
-          "window": 16,
-          "instructions": "You are one of the people of Mossvale, a world of small lands where heroes take up quests. These are the lines you lately heard and said: a line from a hero begins with their name, and a line beginning News: is something a neighbour told you."
-        },
-        "questions": {
-          "asked": {
-            "go": {
-              "type": "choice",
-              "instructions": "Where do you spend the next while?",
-              "criteria": {
-                "home": "at home, resting or eating with your family",
-                "work": "at your workbench or shop, doing your trade",
-                "inn": "at the inn, eating and hearing the day's news",
-                "about": "strolling about your part of the land",
-                "visit": "at a neighbour's door, talking over the news"
-              }
-            },
-            "mood": {
-              "type": "choice",
-              "instructions": "How do you feel?",
-              "criteria": {
-                "glad": "glad, and ready to chat",
-                "busy": "busy with your work",
-                "weary": "tired, and short with people",
-                "worried": "worried by what you have heard"
-              }
-            }
-          }
-        }
-      }
+      "worker": "/villager/retire"
     },
     "tell": {
       "tool": true,

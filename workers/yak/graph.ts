@@ -2253,6 +2253,7 @@ export class Store {
     if (this.#dormant) return
     let model = embedder(this.#bind)
     if (this.#refused || !this.#texts || !this.#get('schema') || !model) return
+    if (!this.#owes()) return
     if (this.#vectorWork) {
       this.#vectorAgain = true
       return

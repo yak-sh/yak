@@ -10,7 +10,7 @@ import { creatureNamed, frontOf, heroLevel, spawnedAt } from './spawn.ts'
 import { useBeasts } from './beasts.ts'
 import { resolveHero, resolveTarget } from './target.ts'
 import { GIVERS } from './quests.ts'
-import { decided, where as villagerWhere } from './villagers.ts'
+import { decided, retired, where as villagerWhere } from './villagers.ts'
 import { eidOf } from './villager-id.ts'
 import { inspectOf } from './inspect.ts'
 import { objectiveOf } from './companion.ts'
@@ -40,6 +40,22 @@ let apply = async (env, rows) => {
     throw new Error(`store apply ${res.status}: ${await res.text()}`)
   }
   await res.body?.cancel()
+}
+
+// A retained autonomous clock calls this once after release. Read only its
+// named villager and remove only the canonical standing think schedule.
+let retire = async (req, env) => {
+  let input = await req.json()
+  if (typeof input.villager != 'string') {
+    return new Response('villager required', { status: 400 })
+  }
+  let [row] = await query(
+    env,
+    `.entity.eid=${JSON.stringify(input.villager)}&.villager&?call&?wake`,
+  )
+  let patch = row ? retired(row) : null
+  if (patch) await apply(env, [patch])
+  return Response.json({ retired: Boolean(patch) })
 }
 
 let choose = async (env, choices) => {
@@ -498,6 +514,9 @@ export let workerOf = (v) => {
   return {
     fetch(req, env) {
       let path = new URL(req.url).pathname
+      if (req.method == 'POST' && path.endsWith('/villager/retire')) {
+        return retire(req, env)
+      }
       if (req.method == 'POST' && path.endsWith('/companion/tick')) {
         return tick(req, env, v, themes)
       }

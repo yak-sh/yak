@@ -1,9 +1,8 @@
-// Vale's actual five-minute villager turn, with only the outside AI answer
-// scripted. The Store's wakes, calls, transcript runner and effect pool run.
+// Vale's actual world scheduling path. Human dialogue can use the scripted
+// outside AI; playing nearby owes no periodic transcript/model turn.
 import { type Bundle, graph, identityEid } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { edgeEid } from '@yaks/edge'
-import { toolEid } from '@yaks/tools'
 import { parseTools } from '@yaks/tools/declared'
 import { DIM, MODEL } from './embedding.ts'
 import { driver } from '@yaks/durable-object'
@@ -117,7 +116,7 @@ export let seedWorld = async (
   )
   let villagers = GIVERS.filter((giver) => giver.level == 'mossvale').map((
     giver,
-  ) => born(giver, toolEid('think')))
+  ) => born(giver))
   await post('/apply', villagers)
   return villagers.map((row) => row.entity.eid)
 }
@@ -208,20 +207,9 @@ export let worldTick = async (storage: State['storage'], history = 79_000) => {
     }),
   )
   await settleWorld(store, storage)
-  // Take the alarm's instant from the schedules rouse actually armed.
-  let due = NaN
-  for (let round = 0; round < 1000; round++) {
-    let wakes = await g.read('.villager&?wake')
-    let ats = wakes.map((b) =>
-      Date.parse(String((b.wake as { at: string }).at))
-    )
-    if (ats.length == villagers.length && ats.every(Number.isFinite)) {
-      due = Math.max(...ats)
-      break
-    }
-    await new Promise<void>((resolve) => setTimeout(resolve, 0))
-  }
-  if (!Number.isFinite(due)) throw new Error('world did not arm')
+  // Playing for five minutes still reaches the actual Store alarm, even
+  // when the world has no periodic durable work to owe.
+  let due = at + 5 * 60_000
   let reports: Summary[] = [], rows = profile((s) => reports.push(s))
   let cascade = { read: 0, written: 0, calls: 0 }
   let shapes = new Map<

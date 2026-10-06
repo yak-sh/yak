@@ -1,8 +1,8 @@
 // The people of the vale as minds of their own. Each quest-giver (quests.ts
 // GIVERS) is a transcript in the app's store (models.md): a hero talks to one
 // by opening a conversation or mentioning their name nearby; a neighbour's news reaches them as a line they
-// heard, and every few minutes, while a hero is in their land, they decide
-// how to spend the next while. These are the pure parts: the row a villager
+// heard. Their movement follows a daily rhythm derived in each page; mere
+// proximity asks no model. These are the pure parts: the row a villager
 // is born as, what a turn is told, what came back, and where a villager
 // stands because of it. village.ts is the page's side, and what a villager
 // holds, and may give or trade, is stock.ts's.
@@ -14,8 +14,9 @@
 // What they decide shows: they walk where they chose, how they feel colours
 // what they say and shows when a hero talks to them, and where the land's
 // people went is news its people talk about. A decision Jev could not make
-// leaves them on their routine: at home. Their wake sleeps while nobody is in
-// their land, so a vale nobody plays asks no model at all.
+// leaves them on their routine: at home. Their daily rhythm is derived in the page; only human dialogue asks a model.
+import { type Bundle, token } from '@yaks/graph'
+import { toolEid } from '@yaks/tools'
 import type { Line } from './chat.ts'
 import { BEASTS } from './beasts.ts'
 import { aliasOf } from './names.ts'
@@ -49,9 +50,6 @@ export let CHAT = '@cf/zai-org/glm-5.3-flash'
 
 /** How many of a villager's newest lines a turn reads. */
 export let WINDOW = 16
-
-/** How often a villager returns to decide while a hero is connected. */
-export let EVERY = '5m'
 
 /** How fast a villager walks, in metres a second. */
 let SPEED = 1.2
@@ -139,16 +137,15 @@ export let aboutOf = (
 }
 
 /**
- * A villager as the store first holds them: a transcript, and a standing call
- * to `think` (the command whose row is `think`) that wakes every `EVERY`
- * while a hero is connected in their land, and sleeps when none is.
+ * A villager as the store first holds them: a transcript for human dialogue.
+ * Their daily movement is derived by `where`, never a scheduled model turn.
  * Every page adds the same row, so two that add it at once add one.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
  * import { GIVERS } from './quests.ts'
  * let pip = GIVERS.find((g) => g.id == 'pip')!
- * assertEquals(born(pip, 't1').entity, born(pip, 't2').entity)
+ * assertEquals(born(pip).entity, born(pip).entity)
  * assertEquals(aboutOf(pip).workplace, undefined)
  * let mira = GIVERS.find((g) => g.id == 'mira')!
  * assertEquals(aboutOf(mira).role, undefined)
@@ -156,19 +153,25 @@ export let aboutOf = (
  * assertEquals(aboutOf(rowan, { role: 'armorer' }).role, 'armorer')
  * ```
  */
-export let born = (g: Giver, think: string) => ({
+export let born = (g: Giver) => ({
   entity: { eid: eidOf(g.id) },
   doc: { title: g.name },
   villager: { id: g.id, level: g.level, ...aboutOf(g) },
   session: {},
-  call: { to: think, args: { villager: eidOf(g.id) } },
-  wake: {
-    while: [{
-      match: `.player&.position.level=${g.level}`,
-      every: EVERY,
-    }],
-  },
 })
+
+/** Retire only the standing autonomous think call, never a human call or
+ * a transcript entry. Guards preserve a schedule changed after this read. */
+export let retired = (row: Bundle): Bundle | null => {
+  let call = row.call as { to?: unknown } | undefined
+  if (!row.villager || !row.wake || call?.to != toolEid('think')) return null
+  return {
+    entity: row.entity,
+    call: null,
+    wake: null,
+    $was: { call: { to: token(call.to) } },
+  }
+}
 
 /** A hero's line as a villager hears it: who said it, then what. */
 /** Meaningful components of a villager's name, not their title or job.
@@ -642,7 +645,13 @@ export let answered = (
     }
     let text = String(part(b.content).body ?? '').replace(/\s+/g, ' ').trim()
     if (text) {
-      lines.push({ eid: b.entity.eid, player: id, by: '', text, at: whenOf(b) })
+      lines.push({
+        eid: b.entity.eid,
+        player: id,
+        by: '',
+        text,
+        at: whenOf(b),
+      })
     }
   }
   return { lines, plans, moods }
