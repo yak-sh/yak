@@ -122,13 +122,19 @@ bound, read its anatomy: `yak visualize anatomy --group facets`
 
 ## Turning a plugin on
 
-`~/.yak/yak.json` is the box's spine. A plugin runs there once its `plugins`
-list names it, as `"@yaks/x"` or `{"use": "@yaks/x", "with": {…}}`, and the
-server restarts. Every `yak` command composes from that file, so an entry that
-fails to compose takes all of them down together, and that has happened. Treat
-the edit like work on a running patient: prove the config on a scratch server
-first (`end-to-end-checks`), keep a copy of the old yak.json, then edit it and
-run `yak restart`, the agent restart door. The file is plain JSON on disk, so a
+`~/.yak/yak.json` is the box's spine, and the box serves other configs beside
+it (`~/.yak/tracker.json` is the tracker's). A plugin runs in a config once its
+`plugins` list names it, as `"@yaks/x"` or `{"use": "@yaks/x", "with": {…}}`,
+its components have tables, and the server restarts. No server or command
+creates tables on its own: the graph installer does, `yak upgrade --config
+<file>` (packages/cli/README.md, "graph installer"). Until it runs, every query
+naming the new plugin's components fails with "no such table". Every `yak`
+command composes from yak.json, so an entry that fails to compose takes all of
+them down together, and that has happened. Treat the edit like work on a
+running patient: prove the config on a scratch server first
+(`end-to-end-checks`), keep a copy of the old file and a `.backup` of its db,
+then edit it, run `yak upgrade --config <file>`, and run `yak restart`, the
+agent restart door. The file is plain JSON on disk, so a
 key in `with` is `{"secret": "NAME"}` and the value lives in the vault
 (`secrets-and-connections`).
 
