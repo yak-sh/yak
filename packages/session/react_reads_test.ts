@@ -381,3 +381,48 @@ test('status-only completion asks the existing derived fact without loading hist
   assertEquals(await currentStatus(g, 's'), 'pending')
   assertEquals(historyReads, 0)
 })
+
+test('a terminal runner checks the derived verdict before loading entry history', async () => {
+  let vocab = loadVocab([
+    sessionDoc,
+    modelDoc,
+    toolsDoc,
+    contextDoc,
+    effectDoc,
+    kernelDoc,
+    archetypeDoc,
+  ], [kernelKeywords])
+  let s = storage(mem(), vocab, { derived: sessionDerived(vocab) })
+  let g = graph({ vocab, storage: s, plugins: [sessions()] })
+  await g.apply([{ entity: { eid: 'terminal' }, session: {} }, {
+    entity: { eid: 'holder' },
+  }])
+  await g.apply(
+    Array.from(
+      { length: 200 },
+      (_, i): Bundle => ({
+        entity: { eid: `terminal-${i}` },
+        entry: { session: 'terminal' },
+        content: { body: 'old' },
+        stop: {},
+      }),
+    ),
+  )
+  let reads = 0, read = g.read.bind(g)
+  g.read = (q, o) => {
+    if (
+      typeof q == 'string' && q.startsWith('.entry.session=terminal') &&
+      !q.includes('.limit=') && !q.includes('.ask&.provisional')
+    ) reads++
+    return read(q, o)
+  }
+  let { settle } = await import('./run.ts')
+  await settle(g, 'terminal', {
+    holder: 'holder',
+    model: () => {
+      throw new Error('terminal model asked')
+    },
+    tools: [],
+  })
+  assertEquals(reads, 0)
+})

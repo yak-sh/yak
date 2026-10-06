@@ -59,14 +59,7 @@ import {
   statusEntries,
   type Step,
 } from './react.ts'
-import {
-  newestAsk,
-  openCalls,
-  seqOf,
-  statusOf,
-  type TranscriptStatus,
-  usingBefore,
-} from './status.ts'
+import { seqOf, type TranscriptStatus, usingBefore } from './status.ts'
 
 /** What a host lends the runner: how a step is taken (./react.ts `Deps`), the
  * bound on children, and who is running it. */
@@ -112,19 +105,6 @@ let newest = async (g: Graph, session: Eid): Promise<number> => {
 // no claims (an app's store) has no task a transcript could be holding.
 let holds = (g: Graph) =>
   g.vocab.comps.includes('task') && g.vocab.comps.includes(CLAIM)
-
-// A task this transcript holds was cancelled: the transcript is stopped, once.
-let quit = async (g: Graph, session: Eid, entries: Bundle[]) => {
-  if (!holds(g)) return entries
-  let held = await g.read(`.task&.claim.session=${session}&.cancelled`)
-  if (!held.length || statusOf(entries) == 'stopped') return entries
-  await g.apply([{
-    entity: { eid: `${session}:cancelled` },
-    entry: { session },
-    [STOP_ENTRY]: {},
-  }], { trusted: true })
-  return statusEntries(g, session)
-}
 
 // A transcript that has ended: its parent told, its dispatch settled, and its
 // place among the children given to the next. The parent is told first, so a
@@ -309,12 +289,25 @@ let step = async (g: Graph, session: Eid, r: Runner): Promise<Step> => {
 // The steps a held transcript takes: until one does nothing, or it ends.
 // Answers the newest seq it saw.
 let turns = async (g: Graph, session: Eid, r: Runner): Promise<number> => {
-  let entries = await quit(g, session, await statusEntries(g, session))
-  let status = statusOf(entries)
-  let older = openCalls(entries).some((b) =>
-    (b.call as Comp)?.source != newestAsk(entries)?.entity.eid
-  )
-  if (ENDED.includes(status) && !(status == 'settled' && older)) {
+  // A terminal transcript owes no model step. Use the already-derived fact
+  // before loading all entry marks; old unresolved calls still keep settled
+  // transcripts runnable and are queried explicitly when that matters.
+  let status = await currentStatus(g, session)
+  let held = holds(g)
+    ? await g.read(`.task&.claim.session=${session}&.cancelled`)
+    : []
+  if (held.length && status != 'stopped') {
+    await g.apply([{
+      entity: { eid: `${session}:cancelled` },
+      entry: { session },
+      [STOP_ENTRY]: {},
+    }], { trusted: true })
+    status = await currentStatus(g, session)
+  }
+  let older = status == 'settled' &&
+    (await g.read(`.entry.session=${session}&.call&!results&.limit=1`)).length >
+      0
+  if (ENDED.includes(status) && !older) {
     await ended(g, session, r)
     return newest(g, session)
   }
