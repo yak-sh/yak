@@ -17,6 +17,7 @@ export type Report = {
   history: number
   minutes: number
   profile: Summary[]
+  writeShapes: { sql: string; cost: Cost }[]
   openingShapes: { sql: string; cost: Cost }[]
   sources: Record<string, Cost>
   components: Record<string, Cost>
@@ -361,6 +362,10 @@ export let playMinute = async (
       components,
       total,
       opening,
+      writeShapes: [...shapes].map(([sql, cost]) => ({ sql, cost })).sort((
+        a,
+        b,
+      ) => b.cost.written - a.cost.written).slice(0, 30),
       shapes: [...shapes].map(([sql, cost]) => ({ sql, cost })).sort((a, b) =>
         b.cost.read + b.cost.written - a.cost.read - a.cost.written
       ).slice(0, 20),
