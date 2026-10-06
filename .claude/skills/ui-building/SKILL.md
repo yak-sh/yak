@@ -150,12 +150,13 @@ State a view needs lives in the page's graph, never in `useState`. A person's
 half-typed text is a draft in @yaks/draft, kept and synced everywhere, never
 lost (M-59093).
 
-## Render cost
+## Feel
 
-A screen renders only what changed: a part that re-renders when nothing it
-shows has changed is a bug, and on a screen painted every frame it costs the
-frame rate. @yaks/ui depends on @preact/signals for values that change often,
-and a test can count renders per update through Preact's `options.diffed`.
+We want screens that feel instant and light, the way a great native app does.
+Build with the instincts of a frontend engineer who cares how it feels in the
+hand: curious about what renders and why, quick to reach for the profiler
+rather than a guess, happy when an update touches only what it must.
+@preact/signals is there when a value moves fast.
 
 ## Check it
 
