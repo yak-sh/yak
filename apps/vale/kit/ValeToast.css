@@ -1,7 +1,7 @@
 /* A paper notice: a moment a little bigger, in moss; a thing gained in its
    rarity's colour, amber when it is common; a legendary one bigger still,
-   ringed and glowing a while. Its lifetime and its place on the screen stay
-   with its consumer. */
+   ringed and glowing a while; harm as big as a moment, in char, ringed in
+   it. Its lifetime and its place on the screen stay with its consumer. */
 .ValeToast {
   --tint: var(--ink);
   padding: 0.4rem 0.9rem;
@@ -26,6 +26,11 @@
   box-shadow: var(--flat), 0 0 0 2px var(--legendary),
     0 0 24px color-mix(in srgb, var(--legendary) 70%, transparent);
   animation: ValeToastGlow 0.9s ease-in-out 3 alternate;
+}
+.ValeToast-harm {
+  --tint: var(--char);
+  font-size: 1.15rem;
+  box-shadow: var(--flat), 0 0 0 2px var(--char);
 }
 @keyframes ValeToastGlow {
   to {

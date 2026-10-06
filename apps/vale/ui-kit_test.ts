@@ -78,7 +78,7 @@ test('Vale specimens carry browser content and paint in the terminal', () => {
   let expected = {
     ValeMeter: ['Health', 'Experience'],
     ValeKeycap: ['M', 'Shift + Enter'],
-    ValeToast: ['trail', 'Level 5', 'Boar tusk', 'Legendary!'],
+    ValeToast: ['trail', 'Level 5', 'Boar tusk', 'Legendary!', 'fainted'],
     ValeBadge: ['Level 5'],
     ValeOrb: ['⌖', 'J', 'P', '♧'],
     ValeCompass: ['N', 'E'],

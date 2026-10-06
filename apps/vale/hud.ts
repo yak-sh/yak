@@ -360,7 +360,7 @@ export let hud = (
   render(
     h(
       ValeToast,
-      { tone: 'big' },
+      { tone: 'harm' },
       'You fainted.',
       h('br', {}),
       h('small', {}, 'You will wake by the fire, patched up.'),

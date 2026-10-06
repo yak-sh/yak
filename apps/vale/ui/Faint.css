@@ -1,5 +1,5 @@
-/* Fainted: the glass reddens at its edges, and a notice in the middle says
-   where you will wake (hud.ts). */
+/* Fainted: the glass reddens at its edges, and a notice of harm in the
+   middle says where you will wake (hud.ts). */
 .Faint {
   position: absolute;
   inset: 0;
