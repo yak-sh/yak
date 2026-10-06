@@ -97,3 +97,76 @@ for (let fork of [false, true]) {
     }
   })
 }
+
+for (let fork of [false, true]) {
+  test(`finite model window reads selected prose, retaining exact inherited lines (fork: ${fork})`, async () => {
+    let vocab = loadVocab([
+      sessionDoc,
+      modelDoc,
+      toolsDoc,
+      contextDoc,
+      effectDoc,
+      kernelDoc,
+      archetypeDoc,
+    ], [kernelKeywords])
+    let d = mem(), s = storage(d, vocab, { derived: sessionDerived(vocab) })
+    let g = graph({ vocab, storage: s, plugins: [sessions()] })
+    let m = identityEid('model', ['fake'])
+    await g.apply([
+      { entity: { eid: m }, model: { name: 'fake' } },
+      { entity: { eid: 'parent' }, session: {} },
+      ...Array.from({ length: 200 }, (_, i): Bundle => ({
+        entity: { eid: 'e' + i },
+        entry: { session: 'parent', seq: i + 1 },
+        content: { body: 'exact line ' + i },
+      })),
+      ...fork
+        ? [{ entity: { eid: 'child' }, session: {}, fork: { from: 'e199' } }]
+        : [],
+      {
+        entity: { eid: 'input' },
+        entry: { session: fork ? 'child' : 'parent', seq: 201 },
+        using: { model: m, window: 16 },
+        content: { body: 'now' },
+      },
+    ])
+    let bodyRows = 0, read = g.read.bind(g), get = g.get.bind(g)
+    g.read = async (q, opts) => {
+      let rows = await read(q, opts)
+      bodyRows += rows.filter((b) =>
+        b.content && typeof b.content == 'object' &&
+        Object.hasOwn(b.content, 'body')
+      ).length
+      return rows
+    }
+    g.get = async (ids, comps, opts) => {
+      let rows = await get(ids, comps, opts)
+      bodyRows += rows.filter((b) =>
+        b.content && typeof b.content == 'object' &&
+        Object.hasOwn(b.content, 'body')
+      ).length
+      return rows
+    }
+    let asked: Request[] = []
+    let step = await react(g, fork ? 'child' : 'parent', {
+      tools: [],
+      model: (request) => {
+        asked.push(request)
+        return Promise.resolve({
+          id: 'reply',
+          model: 'fake',
+          items: [{ kind: 'assistant', text: 'done' }],
+        })
+      },
+    })
+    assertEquals(step.status, 'settled')
+    assertEquals(asked[0].items, [
+      ...Array.from(
+        { length: 15 },
+        (_, i) => ({ kind: 'user' as const, text: 'exact line ' + (185 + i) }),
+      ),
+      { kind: 'user', text: 'now' },
+    ])
+    assert(bodyRows <= 16, `finite window loaded ${bodyRows} content rows`)
+  })
+}

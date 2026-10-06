@@ -279,14 +279,28 @@ let readTranscript = async (
   ]
 }
 
-// Status reads every entry afresh, including mutable ancestors and legacy rows,
-// but prose is only a kind marker here. Archetypes give that presence without
-// fetching old content bodies. A composition without them keeps the full read.
-let currentStatus = async (
+// Re-read every membership/kind fact, including legacy rows and mutable fork
+// ancestors. Only content presence comes from the immutable archetype; no prose.
+let contentKinds = async (
   g: Graph,
-  session: Eid,
-): Promise<TranscriptStatus> => {
-  if (!g.vocab.comp('archetype')) return statusOf(await transcript(g, session))
+  entries: Bundle[],
+): Promise<Bundle[] | undefined> => {
+  let shapes = [...new Set(entries.map((b) => b.entity.archetype))]
+  if (shapes.includes(undefined)) return undefined
+  let types = await g.get(shapes as Eid[], ['archetype'])
+  let byId = new Map(
+    types.map((b) => [b.entity.eid, comp(b, 'archetype')?.tables]),
+  )
+  for (let b of entries) {
+    let tables = byId.get(b.entity.archetype!)
+    if (typeof tables != 'string') return undefined
+    if ((JSON.parse(tables) as string[]).includes(CONTENT)) b.content = {}
+  }
+  return entries
+}
+
+let statusEntries = async (g: Graph, session: Eid): Promise<Bundle[]> => {
+  if (!g.vocab.comp('archetype')) return transcript(g, session)
   let components = [
     ENTRY,
     ASK,
@@ -304,19 +318,45 @@ let currentStatus = async (
     EXCEPTION,
     REFUSAL,
   ].filter((name) => g.vocab.comp(name))
-  let entries = await readTranscript(g, session, components)
-  let shapes = [...new Set(entries.map((b) => b.entity.archetype))]
-  if (shapes.includes(undefined)) return statusOf(await transcript(g, session))
-  let types = await g.get(shapes as Eid[], ['archetype'])
-  let byId = new Map(
-    types.map((b) => [b.entity.eid, comp(b, 'archetype')?.tables]),
+  return await contentKinds(g, await readTranscript(g, session, components)) ??
+    await transcript(g, session)
+}
+
+let currentStatus = async (g: Graph, session: Eid): Promise<TranscriptStatus> =>
+  statusOf(await statusEntries(g, session))
+
+// A bounded model turn needs all kind/reference facts for pairing and choosing
+// instructions, but only the selected lines' prose. Unbounded turns, tools,
+// recovery and context callbacks keep the exact full transcript interface.
+let turnEntries = async (
+  g: Graph,
+  session: Eid,
+  deps: Deps,
+): Promise<{ entries: Bundle[]; bodies: boolean }> => {
+  let full = async () => ({
+    entries: await transcript(g, session),
+    bodies: true,
+  })
+  if (
+    !g.vocab.comp('archetype') || deps.contextItems || deps.requestItems ||
+    deps.compactModel
+  ) return full()
+  let components = g.vocab.comps.filter((name) =>
+    name != CONTENT && name != 'session'
   )
-  for (let b of entries) {
-    let tables = byId.get(b.entity.archetype!)
-    if (typeof tables != 'string') return statusOf(await transcript(g, session))
-    if ((JSON.parse(tables) as string[]).includes(CONTENT)) b.content = {}
-  }
-  return statusOf(entries)
+  let entries = await contentKinds(
+    g,
+    await readTranscript(g, session, components),
+  )
+  if (
+    !entries || openCalls(entries).length ||
+    entries.some((b) =>
+      attemptState(b) == 'inflight' || b.checkpoint || b.prompt ||
+      b.task_context
+    ) ||
+    !(Math.floor(Number(usingBefore(entries)?.window)) >= 1)
+  ) return full()
+  return { entries, bodies: false }
 }
 
 /** The model's view of a window of the transcript: inputs as user turns, what
@@ -623,7 +663,7 @@ export let react = async (
   session: Eid,
   deps: Deps,
 ): Promise<Step> => {
-  let entries = await transcript(g, session)
+  let { entries, bodies } = await turnEntries(g, session, deps)
   let status = statusOf(entries)
   let nothing: Step = { did: 'nothing', status, added: [] }
   let newest = entries.at(-1)
@@ -926,6 +966,10 @@ export let react = async (
   const { model: providerModel, name: spelled } = deps.resolveModel
     ? await deps.resolveModel(using, modelEntity!)
     : { model: deps.model, name: modelName }
+  if (!bodies && providerModel.anchor) {
+    entries = await transcript(g, session)
+    bodies = true
+  }
   // Only completed responses can supply provider continuation state. A partial
   // response remains ordinary visible history after the last completed anchor.
   asked = newestAsk(
@@ -952,6 +996,21 @@ export let react = async (
         !b.notice)
     )
     : recent(said, using?.window)
+  if (!bodies) {
+    let loaded = new Map(
+      (await g.get(window.map((b) => b.entity.eid), [CONTENT])).map((
+        b,
+      ) => [b.entity.eid, b]),
+    )
+    for (let b of window) {
+      let content = comp(
+        loaded.get(b.entity.eid) ?? { entity: b.entity },
+        CONTENT,
+      )
+      if (content) b.content = content
+      else delete b.content
+    }
+  }
   let held = checkpoint ? await tasksOf(g, session) : []
   if (checkpoint) {
     let tasks = snapshot(held)
