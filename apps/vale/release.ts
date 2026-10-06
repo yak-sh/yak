@@ -1,5 +1,8 @@
 // The release notice belongs to the glass, not a sheet: it leaves the
 // scene and any draft usable, and reloads only when its button is pressed.
+import { h, render } from 'preact'
+import { Button } from '@yaks/ui'
+
 export let releaseNotice = (
   glass: HTMLElement,
   gate: HTMLElement,
@@ -49,30 +52,26 @@ export let releaseNotice = (
     box = document.createElement('div')
     box.className = 'Release'
     box.setAttribute('role', 'status')
-    let words = document.createElement('span')
-    words.textContent = release.reload == 'required'
-      ? 'This app has changed. Reload to keep using it'
-      : 'A new version of this app is out'
-    box.append(words)
-    let button = (text: string, action: () => void, primary = false) => {
-      let b = document.createElement('button')
-      b.type = 'button'
-      b.className = `Button${primary ? ' Button-go' : ''}`
-      b.textContent = text
-      b.addEventListener('click', action)
-      box!.append(b)
+    let dismiss = () => {
+      try {
+        sessionStorage.setItem(key(release.version), 'dismissed')
+      } catch {
+        // Dismiss this notice even if the tab cannot keep the choice.
+      }
+      clear()
     }
-    button('Reload', reload, true)
-    if (release.reload == 'optional') {
-      button('Dismiss', () => {
-        try {
-          sessionStorage.setItem(key(release.version), 'dismissed')
-        } catch {
-          // Dismiss this notice even if the tab cannot keep the choice.
-        }
-        clear()
-      })
-    }
+    render([
+      h(
+        'span',
+        {},
+        release.reload == 'required'
+          ? 'This app has changed. Reload to keep using it'
+          : 'A new version of this app is out',
+      ),
+      h(Button, { type: 'button', mod: 'go', onClick: reload }, 'Reload'),
+      release.reload == 'optional' &&
+      h(Button, { type: 'button', onClick: dismiss }, 'Dismiss'),
+    ], box)
     // Native button keys belong to the notice, not the game's shortcuts.
     box.addEventListener('keydown', (e) => e.stopPropagation())
     box.addEventListener('keyup', (e) => e.stopPropagation())

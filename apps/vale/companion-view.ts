@@ -1,9 +1,12 @@
-// The companion on stage and the short report beside the game controls.
+// The companion on stage and the short report beside the game controls,
+// a kit notice (kit/ValeToast.ts).
 // Its state comes from companion.ts; the figure and words have no store access.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
+import { h, render } from 'preact'
 import { BUILD, hero } from './figures.ts'
 import type { Companion } from './companion.ts'
+import { ValeToast } from './kit/ValeToast.ts'
 
 export let companionView = (scene: THREE.Scene, hud: HTMLElement) => {
   let figure = hero(BUILD, {
@@ -18,11 +21,15 @@ export let companionView = (scene: THREE.Scene, hud: HTMLElement) => {
   note.setAttribute('role', 'status')
   hud.append(note)
   let was: [number, number, number] | null = null
+  let said = ''
   return {
     show: (s: ReturnType<Companion['tick']>, dt: number, now: number) => {
       figure.root.visible = !!s.at
       note.hidden = !s.status
-      if (note.textContent != s.status) note.textContent = s.status
+      if (said != s.status) {
+        said = s.status
+        render(said ? h(ValeToast, {}, said) : null, note)
+      }
       if (!s.at) {
         was = null
         return
