@@ -1,4 +1,6 @@
 // Tracker tests use graph admission and queries, with no filesystem or Worker.
+// External references use UUIDs or commit hashes: absent word names are refused
+// even in trusted writes, while global eids need no local catalog record.
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'

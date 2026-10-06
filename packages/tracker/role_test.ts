@@ -63,6 +63,8 @@ test('box role groups and enriches a spool occurrence through its configured cat
       (request) => ask(catalog, request),
     )
     let url = `http://127.0.0.1:${server.addr.port}`
+    // Opening a file-backed host only binds schema; this fresh scratch store
+    // must install it explicitly before its tracker service can write.
     host = await compose(
       {
         db: `${dir}/tracker.db`,
