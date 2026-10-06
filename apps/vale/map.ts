@@ -1,17 +1,28 @@
-// A map of the world, north up: it opens near the hero and zooms out to a
-// broad view that can pan through explored country. Grown chunks are charted
-// once and composited at every scale (mapground.ts). Over them,
-// who is where, written only while it is open: the hero's arrow, the other
-// players, the people with a quest, the nodes to gather (work.ts), coloured
-// by their trade and hollow while spent, where each road leaves the map and
-// the region it leads to, and a ring where each quest tracked goes next
-// (journal.ts). M or the compass opens its panel.
+// A map of the world, north up, filling its panel: it opens near the hero
+// and zooms out to a broad view that can pan through explored country. Grown
+// chunks are charted once and composited at every scale (mapground.ts). Over
+// them, who is where, written only while it is open: the hero's arrow, the
+// other players, the people with a quest, the nodes to gather (work.ts),
+// coloured by their trade and hollow while spent, where each road leaves the
+// map and the region it leads to, and a ring where each quest tracked goes
+// next (journal.ts). Its controls stand on top of it. M or the compass opens
+// its panel.
 import { chartVersion, fogged } from './grown.ts'
 import { groundImages } from './mapground.ts'
 import { glyph } from './glyphs.ts'
 import type { Mark } from './journal.ts'
 import { levelOf, type Side, SIZE, type Spot } from './levels.ts'
-import { type Box, pan, pinch, reopen, view, WORLD, zoom } from './mapview.ts'
+import {
+  type Box,
+  cover,
+  pan,
+  pinch,
+  reopen,
+  under,
+  view,
+  WORLD,
+  zoom,
+} from './mapview.ts'
 import type { Panel } from './panel.ts'
 import type { Frame } from './play.ts'
 import { clamp } from './rand.ts'
@@ -71,13 +82,15 @@ export let exits = (id: string): { at: Spot; side: Side; to: string }[] => {
   })
 }
 
-/** The map, drawn into its panel (panel.ts). */
+/** The map, drawn into its panel (panel.ts): the ground fills it, and where
+ * the hero is, the tools and the fires to travel by stand on top. */
 export let map = (panel: Panel, travel: (to: string) => void) => {
   panel.body.classList.add('Map_Host')
   panel.body.innerHTML =
-    `<div class=Map_Wrap><div class=Map_Tools><button class="Btn Btn-small" data-map=here>Here</button><span class=Map_Scale></span><button class="Btn Btn-small" data-map=in aria-label="Zoom in">+</button><button class="Btn Btn-small" data-map=out aria-label="Zoom out">−</button><button class="Btn Btn-small" data-map=world>World</button></div><div class=Map_View><div class=Map><canvas class=Map_Ground></canvas><canvas class=Map_Fog></canvas><div class=Map_Marks></div></div></div><div class=Map_Travel></div></div>`
+    `<div class=Map><canvas class=Map_Ground></canvas><canvas class=Map_Fog></canvas><div class=Map_Marks></div></div><div class=Map_Where><b class=Map_Land></b><span class=Map_Scale></span></div><div class=Map_Tools><button class="Btn Btn-small" data-map=in aria-label="Zoom in">+</button><button class="Btn Btn-small" data-map=out aria-label="Zoom out">−</button><button class="Btn Btn-small" data-map=here>Here</button><button class="Btn Btn-small" data-map=world>World</button></div><div class=Map_Travel></div>`
   let stage = panel.body.querySelector<HTMLElement>('.Map')!
   let tools = panel.body.querySelector<HTMLElement>('.Map_Tools')!
+  let land = panel.body.querySelector<HTMLElement>('.Map_Land')!
   let scale = panel.body.querySelector<HTMLElement>('.Map_Scale')!
   let canvas = panel.body.querySelector<HTMLCanvasElement>('.Map_Ground')!
   let fog = panel.body.querySelector<HTMLCanvasElement>('.Map_Fog')!
@@ -94,8 +107,11 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
     panel.close()
   })
 
-  // The view is a square of world metres. The ground may lag a drag or zoom;
-  // its last composition is transformed until the next one has been painted.
+  // The view is a square of world metres, which the panel shows across its
+  // shorter side. The ground, its veil and the marks are drawn over the
+  // square about it that covers the panel (mapview.ts `cover`). The ground
+  // may lag a drag or zoom; its last composition is transformed until the
+  // next one has been painted.
   let box = view([0, 0], WORLD[2])
   let aim = box
   let frameWas = performance.now()
@@ -112,21 +128,28 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
   let fogWas = ''
   let fogCtx = fog.getContext('2d')!
   let choicesWas = ''
-  canvas.width = canvas.height = 320
+  let wide = 1
+  let tall = 1
+  let seen = () => cover(box, wide, tall)
   fog.width = fog.height = FOG_SIZE
   let ctx = canvas.getContext('2d')!
-  let key = () => box.join(',')
+  let key = () => seen().join(',')
   let moveImage = (image: HTMLCanvasElement, drawn: Box) => {
-    let x = (drawn[0] - box[0]) / box[2] * 100
-    let z = (drawn[1] - box[1]) / box[2] * 100
-    image.style.transform = `translate(${x}%, ${z}%) scale(${
-      drawn[2] / box[2]
-    })`
+    let [x0, z0, side] = seen()
+    let x = (drawn[0] - x0) / side * 100
+    let z = (drawn[1] - z0) / side * 100
+    image.style.transform = `translate(${x}%, ${z}%) scale(${drawn[2] / side})`
   }
   let moveImages = () => {
     moveImage(canvas, drawn)
     moveImage(fog, fogDrawn)
   }
+  new ResizeObserver(([{ contentRect }]) => {
+    if (!contentRect.width || !contentRect.height) return
+    wide = contentRect.width
+    tall = contentRect.height
+    moveImages()
+  }).observe(stage)
   let setView = (next: Box, smooth = false) => {
     if (next.join() == box.join()) next = box
     aim = next
@@ -159,35 +182,35 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
     let id = `${key()}/${[...explored].sort().join(',')}`
     if (shown == id) return
     shown = id
-    drawn = box
+    let asked = seen()
+    drawn = asked
+    // 320 pixels across the view, as many beyond it as the panel shows.
+    let px = Math.round(320 * asked[2] / box[2])
+    if (canvas.width != px) canvas.width = canvas.height = px
     canvas.style.transform = ''
     ctx.fillStyle = '#22231f'
-    ctx.fillRect(0, 0, 320, 320)
-    let asked = box
+    ctx.fillRect(0, 0, px, px)
     let askedAt = version
     groundImages(asked, explored).then((charts) => {
       if (askedAt != chartVersion || shown != id) return
+      let scale = px / asked[2]
       for (let { image, box: tile } of charts) {
-        let side = tile[2] / asked[2] * 320
         ctx.drawImage(
           image,
-          (tile[0] - asked[0]) / asked[2] * 320,
-          (tile[1] - asked[1]) / asked[2] * 320,
-          side,
-          side,
+          (tile[0] - asked[0]) * scale,
+          (tile[1] - asked[1]) * scale,
+          tile[2] * scale,
+          tile[2] * scale,
         )
       }
       moveImages()
     }).catch(reportError)
   }
-  // Where a point sits on the map, as a percentage across and down.
-  let pct = (m: number, from: number) =>
-    `${((m - from) / box[2] * 100).toFixed(2)}%`
   let uncover = (visited: ReadonlySet<string>) => {
     let id = `${key()}/${[...visited].sort().join(',')}`
     if (id == fogWas) return
     fogWas = id
-    let asked = box
+    let asked = seen()
     fogged(asked, visited).then((px) => {
       if (id == fogWas) {
         fogDrawn = asked
@@ -215,16 +238,22 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
       true,
     )
   })
+  // The fraction of the view under a point of the page (mapview.ts `under`).
+  let pointed = (x: number, y: number): Spot => {
+    let rect = stage.getBoundingClientRect()
+    return under([x - rect.left, y - rect.top], rect.width, rect.height)
+  }
   stage.addEventListener('wheel', (e) => {
     e.preventDefault()
     let rect = stage.getBoundingClientRect()
     let pixels = e.deltaY *
       (e.deltaMode == 1 ? 40 : e.deltaMode == 2 ? rect.height : 1)
     setView(
-      zoom(aim, Math.exp(clamp(pixels, -240, 240) * 0.0015), [
-        (e.clientX - rect.left) / rect.width,
-        (e.clientY - rect.top) / rect.height,
-      ]),
+      zoom(
+        aim,
+        Math.exp(clamp(pixels, -240, 240) * 0.0015),
+        pointed(e.clientX, e.clientY),
+      ),
       true,
     )
   }, { passive: false })
@@ -233,12 +262,10 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
   let gesture: { from: Spot; span: number; box: Box } | null = null
   let pair = () => {
     let [a, b] = [...points.values()]
-    let rect = stage.getBoundingClientRect()
-    let from: Spot = [
-      ((a[0] + b[0]) / 2 - rect.left) / rect.width,
-      ((a[1] + b[1]) / 2 - rect.top) / rect.height,
-    ]
-    return { from, span: Math.hypot(a[0] - b[0], a[1] - b[1]) }
+    return {
+      from: pointed((a[0] + b[0]) / 2, (a[1] + b[1]) / 2),
+      span: Math.hypot(a[0] - b[0], a[1] - b[1]),
+    }
   }
   stage.addEventListener('pointerdown', (e) => {
     aim = box
@@ -266,7 +293,8 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
       return
     }
     if (!drag) return
-    let side = stage.getBoundingClientRect().width
+    let { width, height } = stage.getBoundingClientRect()
+    let side = Math.min(width, height)
     setView(
       pan(drag.box, (e.clientX - drag.x) / side, (e.clientY - drag.z) / side),
     )
@@ -281,14 +309,7 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
   stage.addEventListener('pointerup', end)
   stage.addEventListener('pointercancel', end)
   stage.addEventListener('dblclick', (e) => {
-    let rect = stage.getBoundingClientRect()
-    setView(
-      zoom(aim, 1 / 1.5, [
-        (e.clientX - rect.left) / rect.width,
-        (e.clientY - rect.top) / rect.height,
-      ]),
-      true,
-    )
+    setView(zoom(aim, 1 / 1.5, pointed(e.clientX, e.clientY)), true)
   })
 
   return {
@@ -315,16 +336,18 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
       }
       if (levelWas != f.level) {
         levelWas = f.level
-        panel.head(esc(levelOf(f.level)?.name ?? f.level))
+        land.textContent = levelOf(f.level)?.name ?? f.level
       }
       if (!drag && !gesture && box == aim) {
         draw()
         uncover(regions)
       }
-      scale.textContent = `${Math.round(box[2])} m across`
+      scale.textContent = `${
+        Math.round(box[2] * wide / Math.min(wide, tall))
+      } m across`
+      let [x0, z0, side] = seen()
       let inside = (x: number, z: number) =>
-        x >= box[0] && x <= box[0] + box[2] &&
-        z >= box[1] && z <= box[1] + box[2]
+        x >= x0 && x <= x0 + side && z >= z0 && z <= z0 + side
       let visible = (x: number, z: number) =>
         inside(x, z) && regions.has(regionOf(x, z))
       let here = f.down ? null : fireNear(f.body.x, f.body.z)
@@ -348,8 +371,10 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
         choicesWas = choicesHtml
         choices.innerHTML = choicesHtml
       }
+      // Where a point sits on the map, as a percentage across and down.
+      let pct = (m: number) => `${(m / side * 100).toFixed(2)}%`
       let at = (x: number, z: number) =>
-        `left:${pct(x, box[0])};top:${pct(z, box[1])}`
+        `left:${pct(x - x0)};top:${pct(z - z0)}`
       let html = [...new Set([f.level, ...visited])].flatMap((id) => {
         let fire = villageOf(id)
         return fire && visible(...fire.at)

@@ -1,5 +1,7 @@
 // The square of world ground a map shows. Pan and zoom change this value;
 // drawing and pointer input both use it, so markers agree with the ground.
+// A panel of any shape shows the square whole across its shorter side, and
+// the ground beyond it along its longer side.
 import { LEVELS, SIZE, type Spot } from './levels.ts'
 import { clamp } from './rand.ts'
 
@@ -59,6 +61,21 @@ export let pinch = (
 /** Zoom around a point on the chart, given as a fraction from its top left. */
 export let zoom = (box: Box, factor: number, at: Spot = [0.5, 0.5]): Box =>
   pinch(box, at, at, factor)
+
+/** The square about a view's middle that covers a panel `wide` by `tall`:
+ * the view spans the panel's shorter side, and this its longer side. */
+export let cover = ([x, z, size]: Box, wide: number, tall: number): Box => {
+  let more = size * (Math.max(wide, tall) / Math.min(wide, tall) - 1) / 2
+  return [x - more, z - more, size + 2 * more]
+}
+
+/** Where a point on a panel `wide` by `tall`, from its top left, falls on
+ * the view it shows: a fraction of the view from its top left, below zero or
+ * above one on the ground beyond it. */
+export let under = ([x, y]: Spot, wide: number, tall: number): Spot => {
+  let side = Math.min(wide, tall)
+  return [(x - (wide - side) / 2) / side, (y - (tall - side) / 2) / side]
+}
 
 /** A world point on the chart, from zero to one across and down. */
 export let place = (

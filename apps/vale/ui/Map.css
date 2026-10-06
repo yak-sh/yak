@@ -1,19 +1,24 @@
-/* The map (map.ts): the controls and travel choices frame a square of
-   ground sized to the pane's remaining room. A road's label sits inside
-   the edge it leaves by. */
+/* The map (map.ts) fills its panel edge to edge. On top of it stand which
+   land the hero is in and how wide the view is, top left; the tools, top
+   right; and the fires to travel by, at the foot. The ground, its veil and
+   the marks are each the square about the view that covers the panel
+   (mapview.ts `cover`), cut to the panel's shape. A road's label sits
+   inside the edge it leaves by. */
 .Map_Host {
-  overflow-y: auto;
+  display: grid;
+  grid-template: auto minmax(0, 1fr) auto / minmax(0, 1fr) auto;
+  padding: 0;
+  overflow: hidden;
   scrollbar-gutter: auto;
 }
 
 .Map {
   position: relative;
-  width: min(100cqw, 100cqh);
-  aspect-ratio: 1;
-  margin: 0 auto;
+  grid-area: 1 / 1 / -1 / -1;
   overflow: hidden;
-  border-radius: var(--radius-small);
-  box-shadow: inset 0 0 0 2px var(--line);
+  /* Ground nobody has explored, as the veil paints it. */
+  background: #22231f;
+  container-type: size;
   touch-action: none;
   cursor: grab;
 }
@@ -22,44 +27,75 @@
   cursor: grabbing;
 }
 
-.Map_Wrap {
-  display: grid;
-  gap: var(--gap);
-  grid-template-rows: auto minmax(8rem, 1fr) auto;
-  width: 100%;
-  height: 100%;
-  min-height: min-content;
+.Map_Ground,
+.Map_Fog,
+.Map_Marks {
+  position: absolute;
+  left: min(0px, 50cqw - 50cqh);
+  top: min(0px, 50cqh - 50cqw);
+  width: max(100cqw, 100cqh);
+  height: max(100cqw, 100cqh);
+  transform-origin: top left;
 }
 
-.Map_View {
-  display: grid;
-  place-items: center;
-  min-height: 0;
-  container: map-view / size;
+.Map_Where,
+.Map_Tools,
+.Map_Travel {
+  z-index: 1;
+  margin: 0.6rem;
 }
 
-.Map_Tools {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
+/* A card on the glass that a drag passes through to the map. A long name
+   is cut short before it reaches the tools. */
+.Map_Where {
+  display: grid;
+  grid-area: 1 / 1;
+  grid-template-columns: minmax(0, 1fr);
+  align-self: start;
+  justify-self: start;
+  padding: 0.3rem 0.75rem;
+  border-radius: var(--radius-small);
+  background: var(--glass);
+  box-shadow: var(--flat);
+  line-height: 1.25;
+  pointer-events: none;
+}
+
+.Map_Land {
+  overflow: hidden;
+  color: var(--deep);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .Map_Scale {
-  flex: 1;
-  color: var(--deep);
-  font-size: 0.8rem;
-  text-align: center;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+/* Zoom in and out, back to the hero, and out to the world, one under the
+   next, each as wide as the widest. */
+.Map_Tools {
+  display: grid;
+  grid-area: 1 / 2 / 3 / 3;
+  align-self: start;
+  gap: 0.4rem;
+  pointer-events: none;
 }
 
 .Map_Travel {
   display: grid;
+  grid-area: 3 / 1 / 4 / -1;
+  justify-self: center;
   gap: 0.35rem;
-  padding: 0.65rem;
+  max-width: 26rem;
+  padding: 0.5rem 0.75rem;
   border-radius: var(--radius-small);
-  background: var(--well);
+  background: var(--glass);
+  box-shadow: var(--flat);
   color: var(--deep);
   font-size: 0.85rem;
+  line-height: 1.25;
   text-align: center;
 }
 
@@ -84,26 +120,14 @@
 }
 
 .Map_Ground {
-  display: block;
-  width: 100%;
-  height: 100%;
   image-rendering: pixelated;
-  transform-origin: top left;
 }
 
 .Map_Fog {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
   pointer-events: none;
-  transform-origin: top left;
 }
 
 .Map_Marks {
-  position: absolute;
-  inset: 0;
-
   & > * {
     position: absolute;
     translate: -50% -50%;

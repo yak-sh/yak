@@ -3,11 +3,13 @@ import { test } from '@yaks/testing'
 import { assertAlmostEquals, assertEquals } from '@std/assert'
 import { LEVELS, SIZE } from './levels.ts'
 import {
+  cover,
   NEAR,
   pan,
   pinch,
   place,
   reopen,
+  under,
   view,
   WORLD,
   zoom,
@@ -72,4 +74,25 @@ test('reopening nearby reuses the chart until the hero leaves its middle', () =>
   assertEquals(reopen([180, 120], first), first)
   let moved = reopen([181, 120], first)
   assertEquals(place(moved, [181, 120]), [0.5, 0.5])
+})
+
+test('a panel of any shape shows the view whole and the ground beyond it', () => {
+  let box = view([100, 120])
+  for (let [wide, tall] of [[600, 400], [390, 560], [500, 500]]) {
+    // The ground under the panel's corners, by the pointer's reckoning.
+    let ground = (x: number, y: number): [number, number] => {
+      let [u, v] = under([x, y], wide, tall)
+      return [box[0] + u * box[2], box[1] + v * box[2]]
+    }
+    let [x0, z0] = ground(0, 0), [x1, z1] = ground(wide, tall)
+    assertAlmostEquals((x1 - x0) / wide, (z1 - z0) / tall)
+    assertAlmostEquals(Math.min(x1 - x0, z1 - z0), box[2])
+    assertEquals(place(box, ground(wide / 2, tall / 2)), [0.5, 0.5])
+    // The square drawn over the panel spans its longer side, about the same
+    // middle.
+    let [cx, cz, side] = cover(box, wide, tall)
+    assertAlmostEquals(side, Math.max(x1 - x0, z1 - z0))
+    assertAlmostEquals(cx + side / 2, (x0 + x1) / 2)
+    assertAlmostEquals(cz + side / 2, (z0 + z1) / 2)
+  }
 })
