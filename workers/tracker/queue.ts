@@ -3,6 +3,7 @@
 
 import type { Bundle } from '@yaks/graph'
 import { platform } from './core.ts'
+import { traceBatch } from '@yaks/tracker/intake'
 
 export type Message = {
   body: unknown
@@ -60,14 +61,29 @@ export let consume = async (
   messages: Message[],
   destination: (scope: string) => Destination,
   report: (error: unknown) => Promise<void>,
+  trace?: (scope: string, rows: Bundle[]) => Promise<unknown>,
 ): Promise<void> => {
   for (let message of messages.slice(0, 100)) {
+    let tracing = Array.isArray(message.body) &&
+      message.body.some((row) => row?.trace || row?.span)
     try {
-      let { scope, rows } = batch(message.body)
-      await destination(scope).ingest(rows)
+      if (
+        tracing
+      ) {
+        // Invalid, incomplete and oversized traces are drops, not retries or
+        // tracker errors that could snowball. The authority counts every drop.
+        let capture = traceBatch(message.body)
+        await trace?.(capture?.scope ?? '', message.body as Bundle[])
+      } else {
+        let { scope, rows } = batch(message.body)
+        await destination(scope).ingest(rows)
+      }
       message.ack()
     } catch (error) {
       message.retry()
+      // An unavailable authority may retry transport, but tracing its failure
+      // through the error queue would feed the snowball this guard prevents.
+      if (tracing) continue
       try {
         await report(error)
       } catch { /* intake still retries */ }

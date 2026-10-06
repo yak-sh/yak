@@ -1,4 +1,4 @@
-// Trace chunks remain immutable and tenant scoped even when delivery reorders.
+// Portable intake preserves references; queue trace admission is bounded by its authority.
 import { equal, ok, test } from '@yaks/testing'
 import type { Bundle, Comp } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -36,25 +36,10 @@ let rows = (scope = space): Bundle[] => [{
   statements: { n: 1 },
 }]
 
-test('trace-only chunks can precede their root and parent; redelivery never replaces metrics', async () => {
-  let g = fixture()
-  let capture = rows()
-  let acked = 0
-  let retried = 0
-  let message = (body: Bundle[]) => ({
-    body,
-    ack: () => {
-      acked++
-    },
-    retry: () => {
-      retried++
-    },
-  })
-  await consume([message([capture[2]])], (scope) => {
-    equal(scope, space)
-    return g
-  }, async () => {})
-  await consume([message(capture.slice(0, 2))], () => g, async () => {})
+test('portable trace intake preserves reordered references and immutable metrics', async () => {
+  let g = fixture(), capture = rows()
+  await g.ingest([capture[2]])
+  await g.ingest(capture.slice(0, 2))
   let found = ok(await g.trace(root))
   equal(found.spans.length, 2)
   equal(found.trace.trace, capture[0].trace)
@@ -62,17 +47,12 @@ test('trace-only chunks can precede their root and parent; redelivery never repl
     (found.spans.find((s) => s.entity.eid == child)!.span as Comp).parent,
     parent,
   )
-  await consume(
-    [message(capture.map((r) => ({ ...r, rows_read: { n: 999 } })))],
-    () => g,
-    async () => {},
-  )
+  await g.ingest(capture.map((r) => ({ ...r, rows_read: { n: 999 } })))
   equal(((await g.graph.get([child]))[0].rows_read as Comp).n, 3)
-  equal([acked, retried], [3, 0])
   equal((await g.bugs()).length, 0)
 })
 
-test('trace queue rejects mixed scopes, missing context, unsafe references and nonrecords', async () => {
+test('trace queue drops malformed captures and retains validation of nonrecords', async () => {
   let commits = 0
   let retried = 0
   let invalid: unknown[] = [
@@ -87,11 +67,12 @@ test('trace queue rejects mixed scopes, missing context, unsafe references and n
     [{ ...rows()[2], $was: {} }],
     [{ entity: { eid: child }, during: { space }, rows_read: { n: 3 } }],
   ]
+  let acknowledged = 0, dropped = 0
   await consume(
     invalid.map((body) => ({
       body,
       ack: () => {
-        throw Error('invalid batch acknowledged')
+        acknowledged++
       },
       retry: () => {
         retried++
@@ -104,8 +85,13 @@ test('trace queue rejects mixed scopes, missing context, unsafe references and n
       },
     }),
     async () => {},
+    () => {
+      dropped++
+      return Promise.resolve()
+    },
   )
-  equal([commits, retried], [0, invalid.length])
+  // The metric-only batch is not a trace and still uses error validation.
+  equal([commits, retried, acknowledged, dropped], [0, 1, 6, 6])
   equal(batch([rows()[2]]).scope, space)
 })
 

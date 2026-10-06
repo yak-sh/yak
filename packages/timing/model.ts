@@ -57,6 +57,7 @@ export type TraceRow = {
   rows_read?: { n: number }
   rows_written?: { n: number }
   statements?: { n: number }
+  repeats?: { n: number }
 }
 
 /** Epoch milliseconds at monotonic time zero, normally performance.timeOrigin. */

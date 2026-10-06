@@ -19,6 +19,12 @@ export class Tracker extends DurableObject<Env> {
   ingest(rows: Bundle[]) {
     return this.tracker.ingest(rows)
   }
+  ingestTrace(rows: Bundle[]) {
+    return this.tracker.ingestTrace(rows)
+  }
+  admitTrace(scope: string, rows: Bundle[]) {
+    return this.tracker.admitTrace(scope, rows)
+  }
   bugs(ticket: string, app: string) {
     return this.tracker.bugs(ticket, app)
   }

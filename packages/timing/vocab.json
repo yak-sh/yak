@@ -208,6 +208,21 @@
           "description": "The measured count; parent spans include their descendants."
         }
       }
+    },
+    "repeats": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "wire": false,
+      "description": "Automatic occurrences suppressed by the source since the previous selected trace of this root span\u2019s code coordinates.",
+      "properties": {
+        "n": {
+          "type": "integer",
+          "minimum": 0,
+          "stamped": true,
+          "description": "The number of suppressed automatic requests; this metric is carried only by a trace root span."
+        }
+      }
     }
   }
 }

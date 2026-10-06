@@ -183,7 +183,7 @@ import {
   record,
   shareChannel,
 } from '@yaks/trace'
-import { sampleRequest, selectedRequest } from '@yaks/timing'
+import { type RequestState, sampleRequest, selectRequest } from '@yaks/timing'
 import { phases } from './store-inspect.ts'
 import {
   type Actor,
@@ -704,6 +704,8 @@ export class Store {
   #pending: Tally = new Map()
   #traceNext = 0
   #traceRate = 0
+  #traceQuota: RequestState = new Map()
+  #traceNow: () => number
   #measure = (rowsRead?: number, rowsWritten?: number) => {
     hop('stmts')
     if (rowsRead != null) hop('rows', rowsRead)
@@ -768,7 +770,13 @@ export class Store {
   #quiet: (() => void) | null = null
   #draft: Promise<void> | null = null
 
-  constructor(ctx: State, bind: Bindings = {}, rules: Rule[] = RULES) {
+  constructor(
+    ctx: State,
+    bind: Bindings = {},
+    rules: Rule[] = RULES,
+    traceNow: () => number = Date.now,
+  ) {
+    this.#traceNow = traceNow
     this.#ctx = ctx
     this.#bind = bind
     this.#rules = rules
@@ -1983,15 +1991,20 @@ export class Store {
     }
     let rowsRead = root?.counts?.rowsRead ?? 0
     let rowsWritten = root?.counts?.rowsWritten ?? 0
-    if (
-      !control && this.#bind.ERRORS && selectedRequest({
+    let selected = !control && this.#bind.ERRORS && root
+      ? selectRequest({
+        op: root.kind,
+        name: root.name,
+        now: this.#traceNow(),
         rowsRead,
         rowsWritten,
         requested,
         rate: this.#traceRate,
         random: Math.random(),
-      })
-    ) {
+      }, this.#traceQuota)
+      : undefined
+    if (selected) this.#traceQuota = selected.state
+    if (selected?.reason && this.#bind.ERRORS) {
       // HTTP already carries vouched scope. Alarms/sockets can use metadata
       // planted by deploy/control, but only selected work pays for that lookup.
       let space = request?.headers.get('x-yak-space') ??
@@ -2006,6 +2019,7 @@ export class Store {
           rowsRead,
           rowsWritten,
           requested: true,
+          repeats: selected.repeats,
         })
         if (rows) {
           try {

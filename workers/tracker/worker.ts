@@ -13,6 +13,8 @@ export type Stub = {
   fetch: (request: Request) => Promise<Response>
   ingest: (rows: Bundle[]) => Promise<void>
   monitor: () => Promise<void>
+  admitTrace: (scope: string, rows: Bundle[]) => Promise<unknown>
+  ingestTrace: (rows: Bundle[]) => Promise<boolean>
 }
 export type Env = Settings & {
   TRACKERS: { getByName: (scope: string) => Stub }
@@ -63,6 +65,7 @@ export let worker = (env: Env) => ({
       (scope) => env.TRACKERS.getByName(scope),
       (error) =>
         caught(error, { sink: env.ERRORS ? queue(env.ERRORS) : () => {} }),
+      (scope, rows) => env.TRACKERS.getByName(platform).admitTrace(scope, rows),
     ),
   scheduled: () => env.TRACKERS.getByName(platform).monitor(),
 })

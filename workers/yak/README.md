@@ -92,9 +92,14 @@ next deploy builds and pushes the base before its own image.
 
 Store requests are recorded in memory. Only requests reading or writing more
 than 10,000 SQL rows, requested captures, and ordinary samples are delivered to
-`yak-errors`; an unselected request performs no additional SQL or delivery.
-Errors remain on Sentry. The independent [tracker](../tracker/README.md) stores
-the trace and its separately addressed spans and metric components.
+`yak-errors`; an unselected request performs no additional SQL or delivery. An
+automatic over-the-line capture is admitted at most once per operation and name
+per rolling hour in each Store incarnation. Suppressed repeats are counted in
+memory and carried as `repeats{n}` on the next delivered root span. Requested
+and sampled captures retain their independent N and rate bounds. The quota
+resets on eviction and is never stored in app rows. Errors remain on Sentry. The
+independent [tracker](../tracker/README.md) stores the trace and its separately
+addressed spans and metric components.
 
 A platform admin can arm a capture without generating app traffic:
 

@@ -2,6 +2,7 @@
 // failed installation never leaves a permanently rejected constructor promise.
 
 import {
+  driver,
   type DurableStorage,
   type Hibernation,
   type Sockets,
@@ -17,6 +18,14 @@ import { door, json } from './door.ts'
 import { authorize } from './auth.ts'
 import { monitor } from './monitor.ts'
 import type { Bundle } from '@yaks/graph'
+import { meta } from '@yaks/sqlite'
+import {
+  reserveTrace,
+  TRACE_CEILING,
+  traceBatch,
+  type TraceBudget,
+  traceBudget,
+} from '@yaks/tracker/intake'
 
 export type State = Hibernation & {
   id: { name?: string }
@@ -26,7 +35,18 @@ export type State = Hibernation & {
     put: (key: string, value: unknown) => Promise<void>
   }
 }
+export type TraceAdmission = {
+  accepted: boolean
+  dropped: number
+  reserved: number
+  reason?: string
+}
 export type Settings = {
+  TRACKERS?: {
+    getByName: (
+      scope: string,
+    ) => { ingestTrace: (rows: Bundle[]) => Promise<boolean> }
+  }
   TRACKER_SECRET?: string
   ERRORS?: { send: (rows: Bundle[]) => Promise<void> }
   MAIL?: {
@@ -43,21 +63,39 @@ export type Settings = {
   MAIL_FROM?: string
   MAIL_TO?: string
 }
+let TRACE_READY = 'trace-ceiling-v1'
 export class Tracker {
   tracker?: TrackerStore
   live?: Sockets
   scope: string
   sink: Sink
-  constructor(public ctx: State, public env: Settings = {}) {
+  #traceTail = Promise.resolve()
+  #traceDropped = 0
+  #traceMeta = () => meta(driver(this.ctx.storage))
+  constructor(
+    public ctx: State,
+    public env: Settings = {},
+    private now: () => number = Date.now,
+  ) {
     this.scope = ctx.id.name ?? platform
     this.sink = env.ERRORS
       ? queue(env.ERRORS)
       : (rows) => console.error(JSON.stringify(rows))
   }
-  boot = async () => {
+  boot = async (install = true) => {
     if (this.tracker) return this.tracker
-    let saved = storage(this.ctx.storage, vocab, options)
-    saved.install()
+    let kept = this.#traceMeta()
+    if (!install && kept.get('trace-ready') != TRACE_READY) {
+      throw Error('tracker trace schema not initialized')
+    }
+    let saved = storage(this.ctx.storage, vocab, {
+      ...options,
+      schemaReady: () => !install,
+    })
+    if (install) {
+      saved.install()
+      kept.set('trace-ready', TRACE_READY)
+    }
     let tracker = store(saved, {
       sink: this.sink,
       store: this.scope,
@@ -78,7 +116,7 @@ export class Tracker {
         }
         : {},
     })
-    if (this.scope == platform && this.env.MAIL_TO) {
+    if (install && this.scope == platform && this.env.MAIL_TO) {
       await tracker.graph.apply([{
         entity: { eid: platform },
         email: { address: this.env.MAIL_TO },
@@ -95,6 +133,9 @@ export class Tracker {
     } catch { /* next queue delivery retries */ }
   }
   ingest = async (rows: Bundle[]): Promise<void> => {
+    if (rows.some((row) => row.trace || row.span)) {
+      throw Error('trace intake requires platform admission')
+    }
     if (batch(rows).scope != this.scope) {
       throw Error('tracker intake scope mismatch')
     }
@@ -107,6 +148,106 @@ export class Tracker {
       await this.recover(error)
       throw error
     }
+  }
+  // This RPC is reached only by the queue's platform authority, never HTTP.
+  // Existing schema can be reopened after eviction without installation writes.
+  ingestTrace = async (rows: Bundle[]): Promise<boolean> => {
+    let capture = traceBatch(rows)
+    if (!capture || capture.scope != this.scope) return false
+    let tracker: TrackerStore
+    try {
+      tracker = await this.boot(false)
+    } catch {
+      return false
+    }
+    await tracker.ingest(rows)
+    return true
+  }
+  traceBudget = () => {
+    let budget: TraceBudget | undefined
+    try {
+      budget = traceBudget(this.#traceMeta().get('trace-budget'))
+      if (!budget) throw Error('invalid trace reservations')
+    } catch {
+      return {
+        ceiling: TRACE_CEILING,
+        reserved: TRACE_CEILING,
+        pending: true,
+        dropped: this.#traceDropped,
+        initialized: false,
+      }
+    }
+    let slots = budget!.slots.filter((slot) =>
+      slot.until == null || slot.until > this.now()
+    )
+    return {
+      ceiling: TRACE_CEILING,
+      reserved: slots.reduce((n, slot) => n + slot.reserved, 0),
+      pending: slots.some((slot) => slot.until == null),
+      dropped: this.#traceDropped,
+      initialized: true,
+    }
+  }
+  admitTrace = (scope: string, rows: Bundle[]): Promise<TraceAdmission> => {
+    let work = async (): Promise<TraceAdmission> => {
+      let drop = (reason: string): TraceAdmission => {
+        this.#traceDropped++
+        return {
+          accepted: false,
+          dropped: this.#traceDropped,
+          reserved: this.traceBudget().reserved,
+          reason,
+        }
+      }
+      if (this.scope != platform) return drop('platform authority required')
+      let capture = traceBatch(rows)
+      if (!capture || capture.scope != scope) {
+        return drop('incomplete or oversized trace')
+      }
+      let kept = this.#traceMeta(), held: TraceBudget
+      try {
+        if (kept.get('trace-ready') != TRACE_READY) {
+          return drop('tracker not initialized')
+        }
+        let parsed = traceBudget(kept.get('trace-budget'))
+        if (!parsed) return drop('invalid trace reservations')
+        held = parsed
+      } catch {
+        return drop('tracker not initialized')
+      }
+      let next = reserveTrace(held, this.now(), capture.cost)
+      if (!next) return drop('trace ceiling')
+      // Persist before any target write. A crash or failed target leaves this
+      // reservation pending forever rather than reopening a spent allowance.
+      try {
+        kept.set('trace-budget', JSON.stringify(next))
+      } catch {
+        return drop('trace reservation unavailable')
+      }
+      let accepted = false
+      try {
+        accepted = scope == platform
+          ? await this.ingestTrace(rows)
+          : await this.env.TRACKERS!.getByName(scope).ingestTrace(rows)
+      } catch {
+        return drop('trace delivery failed')
+      }
+      next.slots[next.slots.length - 1].until = this.now() + 60_000
+      try {
+        kept.set('trace-budget', JSON.stringify(next))
+      } catch {
+        return drop('trace completion unavailable')
+      }
+      if (!accepted) return drop('target not initialized')
+      return {
+        accepted: true,
+        dropped: this.#traceDropped,
+        reserved: this.traceBudget().reserved,
+      }
+    }
+    let ran = this.#traceTail.then(work)
+    this.#traceTail = ran.then(() => {}, () => {})
+    return ran
   }
   fetch = async (request: Request): Promise<Response> => {
     try {
@@ -121,6 +262,12 @@ export class Tracker {
         }
         await this.ctx.storage.put('heartbeat', Date.now())
         return json({ ok: true })
+      }
+      if (new URL(request.url).pathname == '/trace-budget') {
+        if (this.scope != platform || !access.admin) {
+          return json({ error: 'platform only' }, 403)
+        }
+        return json(this.traceBudget())
       }
       let tracker = await this.boot()
       await this.live?.wake()

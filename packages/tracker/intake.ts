@@ -26,3 +26,18 @@ export let intake = async (g: Graph, source: Source): Promise<void> => {
     await record.ack()
   }
 }
+
+export {
+  reserveTrace,
+  TRACE_CEILING,
+  TRACE_MAX_BUNDLES,
+  TRACE_RESERVATION_WRITES,
+  TRACE_ROW_BOUND,
+  traceBatch,
+  traceBudget,
+} from './trace-intake.ts'
+export type {
+  TraceBatch,
+  TraceBudget,
+  TraceReservation,
+} from './trace-intake.ts'

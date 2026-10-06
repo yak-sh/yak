@@ -144,7 +144,11 @@ let door = (server: Harness) =>
       if (mode) headers.set('mf-sec-fetch-mode', mode)
       let res = await server
         .getWorker(
-          path.startsWith('/__store_trace/')
+          path.startsWith('/__tracker_trace_bound/')
+            ? 'probe-tracker-trace-bound'
+            : path.startsWith('/__store_trace_bound/')
+            ? 'probe-store-trace-bound'
+            : path.startsWith('/__store_trace/')
             ? 'probe-store-trace'
             : path.startsWith('/__store_cost/')
             ? 'probe-store-cost'
@@ -216,6 +220,40 @@ export let probeSuite = async () => {
             bindings: [{ name: 'COST', class_name: 'StoreCost' }],
           },
           migrations: [{ tag: 'v1', new_sqlite_classes: ['StoreCost'] }],
+        },
+      },
+      {
+        config: {
+          name: 'probe-tracker-trace-bound',
+          main: 'tracker_trace_bound_probe.ts',
+          compatibility_date: '2025-05-08',
+          compatibility_flags: kernel.compatibility_flags,
+          tsconfig: kernel.tsconfig,
+          alias: kernel.alias,
+          durable_objects: {
+            bindings: [{
+              name: 'TRACKER_BOUND',
+              class_name: 'TrackerTraceBound',
+            }],
+          },
+          migrations: [{
+            tag: 'v1',
+            new_sqlite_classes: ['TrackerTraceBound'],
+          }],
+        },
+      },
+      {
+        config: {
+          name: 'probe-store-trace-bound',
+          main: 'store_trace_bound_probe.ts',
+          compatibility_date: '2025-05-08',
+          compatibility_flags: kernel.compatibility_flags,
+          tsconfig: kernel.tsconfig,
+          alias: kernel.alias,
+          durable_objects: {
+            bindings: [{ name: 'BOUND', class_name: 'StoreTraceBound' }],
+          },
+          migrations: [{ tag: 'v1', new_sqlite_classes: ['StoreTraceBound'] }],
         },
       },
       {

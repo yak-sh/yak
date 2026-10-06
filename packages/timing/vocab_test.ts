@@ -8,7 +8,7 @@ import { toolsDoc } from '@yaks/tools/vocab'
 import { trackerDoc } from '@yaks/tracker/vocab'
 import type { Event } from '@yaks/trace'
 import { loadVocab } from '@yaks/vocab'
-import { sample, summarize, timingDoc } from './mod.ts'
+import { project, sample, summarize, timingDoc } from './mod.ts'
 
 test('summaries and separately measured span entities round-trip in a tracker', async () => {
   let vocab = loadVocab([kernelDoc, toolsDoc, trackerDoc, timingDoc], [
@@ -70,4 +70,31 @@ test('summaries and separately measured span entities round-trip in a tracker', 
   equal(changed.span, rows[1].span)
   let [summary] = await g.get([summaries[0].entity.eid])
   equal(summary.timing, summaries[0].timing)
+})
+
+test('suppressed repeats are a separately removable root span metric', async () => {
+  let vocab = loadVocab([kernelDoc, toolsDoc, trackerDoc, timingDoc], [
+    kernelKeywords,
+  ])
+  let g = graph({ vocab, storage: ram(vocab) })
+  let rows = project([{
+    id: 'root',
+    kind: 'request',
+    name: 'http query',
+    stage: 'end',
+    time: 0,
+    duration: 0,
+  }], {
+    origin: 0,
+    eid: mint(),
+    repeats: 12,
+  })
+  await g.apply(rows, { trusted: true })
+  let [root] = await g.get([rows[1].entity.eid])
+  equal(root.repeats, { n: 12 })
+  await g.apply([{ entity: root.entity, repeats: null }], { trusted: true })
+  let [without] = await g.get([root.entity.eid])
+  equal(without.repeats, undefined)
+  equal(without.span, root.span)
+  equal(without.elapsed, root.elapsed)
 })

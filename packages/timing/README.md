@@ -14,9 +14,11 @@ span** is a separate entity with
 `span{trace, parent, op, name, plugin, package,
 outcome}` referring to its trace
 and containing span. Each measurement has its own component:
-`elapsed{start, ms}`, `rows_read{n}`, `rows_written{n}` and `statements{n}`.
-`elapsed.start` is relative to the trace root; unfinished spans omit
-`elapsed.ms`. The components can be removed independently.
+`elapsed{start, ms}`, `rows_read{n}`, `rows_written{n}`, `statements{n}` and
+`repeats{n}`. `repeats` is carried only by a root span and counts suppressed
+automatic requests of the same operation and name. `elapsed.start` is relative
+to the trace root; unfinished spans omit `elapsed.ms`. The components can be
+removed independently.
 
 ```ts
 import { sample, summarize } from '@yaks/timing'
@@ -52,10 +54,10 @@ equal(selected[1].elapsed, { start: 0, ms: 20 })
 
 ## Exports
 
-| Export               | Provides                                                                                                                                     |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/timing`       | `summarize`, `bounds`, `sample`, `project`, `selectedRequest`, `sampleRequest`, `thresholds`, `timingDoc`; summary, trace and sampling types |
-| `@yaks/timing/vocab` | `timingDoc`, `docs`, `description`                                                                                                           |
+| Export               | Provides                                                                                                                                                      |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/timing`       | `summarize`, `bounds`, `sample`, `project`, `selectedRequest`, `selectRequest`, `sampleRequest`, `thresholds`, `timingDoc`; summary, trace and sampling types |
+| `@yaks/timing/vocab` | `timingDoc`, `docs`, `description`                                                                                                                            |
 
 ## Closed-minute summaries
 
@@ -191,11 +193,46 @@ equal(rows[1].statements, { n: 1 })
 equal(rows[1].during, rows[0].during)
 ```
 
-`project(spans, { origin, eid, during? })` performs projection without
+Store hosts use
+`selectRequest({ op, name, now, rowsRead, rowsWritten,
+requested?, rate?, random? }, state?)`
+to bound automatic traces. Its result is `{ reason?, repeats, state }`: an
+absent reason suppresses delivery, while `requested`, `sampled` or `automatic`
+identifies an independent retention reason. Keep the returned state only in the
+Store incarnation. Automatic traces are admitted once per operation and name per
+rolling hour, measured from the last automatically admitted request. Repeated
+over-the-line requests increase an in-memory count; the next admitted trace for
+that code carries it. A requested capture or random sample bypasses the
+automatic quota and carries pending repeats without resetting the automatic
+hour. Sampling an over-the-line request therefore stays bounded by the sampling
+rate, not by the automatic quota.
+
+```ts
+import { selectRequest } from '@yaks/timing'
+import { equal } from '@yaks/testing'
+
+let request = {
+  op: 'request',
+  name: 'http query',
+  now: 1000,
+  rowsRead: 20_000,
+  rowsWritten: 0,
+}
+let first = selectRequest(request)
+equal(first.reason, 'automatic')
+let repeated = selectRequest({ ...request, now: 2000 }, first.state)
+equal(repeated.reason, undefined)
+let next = selectRequest({ ...request, now: 3_601_000 }, repeated.state)
+equal(next.reason, 'automatic')
+equal(next.repeats, 1)
+```
+
+`project(spans, { origin, eid, during?, repeats? })` performs projection without
 selection. It returns one trace bundle followed by one bundle per span, copying
 tracker context onto every bundle so independently delivered chunks retain their
 scope. Projection maps the numeric `rowsRead`, `rowsWritten` and `statements`
-counts to separate components. Missing metrics stay absent; zero counts are
+counts to separate components. A supplied nonzero `repeats` count becomes
+`repeats{n}` only on the root span. Missing metrics stay absent; zero counts are
 retained. Other runtime counts are not stored. Resends retain every entity id.
 Neither projection nor selection reads a clock, draws randomness or mutates
 inputs.

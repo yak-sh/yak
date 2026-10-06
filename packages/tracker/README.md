@@ -164,3 +164,18 @@ failures through this transport, tagged with their handler and target. It
 resolves `SENTRY_DSN` or `sentry` from the host vault when used, so a credential
 arriving after startup is not cached as missing. A reporting failure is retained
 in the spool without recursively reporting to Sentry.
+
+## Bounded trace admission
+
+`./intake` exports `traceBatch` and `reserveTrace` for a host that bounds stored
+trace writes. `traceBatch` accepts only complete captures of at most ten bundles
+with trace, span, context and independent metric components. References to the
+trace and parent spans must stay within the capture. Unknown properties,
+identity metadata and write controls are refused. This deliberately does not
+limit error intake or the box's portable immutable intake.
+
+`reserveTrace` keeps pending reservations charged until their host records a
+successful delivery's expiry. The
+[tracker Worker](../../workers/tracker/README.md) uses this with its
+platform-wide authority and durable metadata; no package creates a Worker or
+decides which space owns a capture.

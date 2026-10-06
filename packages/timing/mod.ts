@@ -15,6 +15,14 @@ export { sample, thresholds } from './sample.ts'
 export type { Sample, SampleOptions, Thresholds } from './sample.ts'
 export { project } from './project.ts'
 export type { ProjectOptions } from './project.ts'
-export { sampleRequest, selectedRequest } from './request.ts'
-export type { RequestOptions, RequestSelection } from './request.ts'
+export { sampleRequest, selectedRequest, selectRequest } from './request.ts'
+export type {
+  GatedRequest,
+  RequestDecision,
+  RequestOptions,
+  RequestQuota,
+  RequestReason,
+  RequestSelection,
+  RequestState,
+} from './request.ts'
 export { timingDoc } from './vocab.ts'

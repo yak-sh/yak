@@ -4,7 +4,11 @@ import { derivedEid } from '@yaks/graph'
 import type { Event } from '@yaks/trace'
 import type { Clock, During, TraceRow } from './model.ts'
 
-export type ProjectOptions = Clock & { eid: string; during?: During }
+export type ProjectOptions = Clock & {
+  eid: string
+  during?: During
+  repeats?: number
+}
 
 /** One trace entity followed by its span entities. Each span owns independent
  * metric components; unrecognized counts remain runtime observations only. */
@@ -35,6 +39,9 @@ export let project = (
       let read = metric(e.counts?.rowsRead)
       let written = metric(e.counts?.rowsWritten)
       let statements = metric(e.counts?.statements)
+      let repeats = e === root && options.repeats
+        ? metric(options.repeats)
+        : undefined
       return {
         entity: { eid: ids.get(e.id)! },
         ...options.during ? { during: { ...options.during } } : {},
@@ -60,6 +67,7 @@ export let project = (
         ...read ? { rows_read: read } : {},
         ...written ? { rows_written: written } : {},
         ...statements ? { statements } : {},
+        ...repeats ? { repeats } : {},
       }
     }),
   ]

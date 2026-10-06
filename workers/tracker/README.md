@@ -51,17 +51,44 @@ General `/apply` and HTTP intake are absent.
 `GET /trace?eid=<trace-eid>&limit=100&after=<span-eid>` returns
 `{trace, spans, next?}`; span pages are ordered by entity eid, and each span
 preserves its separate metric components. Both page limits are 1–100. The `next`
-eid is supplied as `after` to continue. A trace can be visible while later queue
-chunks are still arriving.
+eid is supplied as `after` to continue. Traces are admitted as complete trees,
+not partial captures.
 
-Trusted queue batches carry reporter bundles with `during.space` by global eid;
-a mixed-space batch never reaches a store. Each message is acknowledged only
-after graph admission. Redelivery preserves grouping receipts and bug hit
-counts. Trace-only batches contain `trace` or `span` entities, each with its own
-`during.space`. A message holds at most 100 bundles; span-only chunks can arrive
-before their trace or parent. Reference placeholder entities are not intake
-receipts, so later delivery fills their components, while a redelivery preserves
-existing metrics.
+Trusted error queue batches carry reporter bundles with `during.space` by global
+eid; a mixed-space batch never reaches a store. Error messages are acknowledged
+only after graph admission. Redelivery preserves grouping receipts and bug hit
+counts. Error intake does not share the trace allowance.
+
+### Trace write ceiling
+
+The platform tracker object serializes admission for every space and reserves a
+conservative write bound before forwarding a trace. At most 700 reserved rows
+can overlap any rolling 60-second window. A reservation is 64 rows per bundle
+plus eight rows for the two durable metadata writes. Accepted captures contain
+one trace root and its complete span tree, at most ten bundles, with only the
+trace/context/metric components the bounded intake supports. Oversized,
+incomplete, malformed and over-ceiling captures are dropped and acknowledged; no
+partial tree is stored and drops do not report new tracker errors.
+
+Successful reservations expire 60 seconds after delivery completes, not at a
+calendar-minute rollover. Reservations persist in the platform's existing
+`server_meta`. A failed or interrupted delivery leaves its reservation pending
+indefinitely: failure cannot refund writes that might already have happened.
+Redelivery consumes another reservation even if immutable intake writes nothing.
+
+`GET /trace-budget?scope=platform` with a platform-admin ticket returns the
+ceiling, current reserved bound, whether any reservation is pending, and dropped
+admission attempts. Drop counters are memory-only and reset when the platform
+object is evicted; the spent allowance does not. Tracing does not arm alarms or
+send error reports. Direct error `ingest` rejects traces so it cannot bypass the
+authority.
+
+Activation initializes each tracker through its authenticated ordinary read.
+That explicit boot installs the schema and its readiness marker. Trace intake
+can reopen a marked store after eviction without installation or mail writes; an
+uninitialized tracker drops captures. The platform authority also needs that
+explicit initialization before reserving traces. Large captures exceeding the
+ten-bundle limit are discarded rather than split and partly admitted.
 
 Platform-only `POST /heartbeat` renews the box heartbeat. Cron probes the MCP
 endpoint and tracks an activated box heartbeat older than five minutes. The
