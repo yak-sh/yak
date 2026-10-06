@@ -1537,7 +1537,7 @@ let indexedRelation = (
   return {
     ...s,
     from: raw(src),
-    order: ctx.present
+    order: ctx.present || root.index
       ? s.order?.map((order) =>
         order.t == 'raw'
           ? raw(

@@ -37,7 +37,7 @@ test('finite entry window identities do not sort their unbounded session', () =>
     d.query(insert('entity', { id: 1, eid: 'session' }))
     for (let n = 2; n < 20002; n++) {
       d.query(insert('entity', { id: n, eid: `e${n}` }))
-      d.query(insert('entry', { entity: n, session: 1, seq: n }))
+      d.query(insert('entry', { entity: n, session: 1, seq: null }))
       d.query(insert('created', { entity: n, at: `${n}` }))
     }
     let finite = render(
@@ -51,6 +51,12 @@ test('finite entry window identities do not sort their unbounded session', () =>
     for (
       let q of [
         finite,
+        render(
+          compile(
+            parse('.entry.session=session&.order=-entry.seq&.limit=1'),
+            v,
+          ),
+        ),
         render(
           compile(
             parse(
