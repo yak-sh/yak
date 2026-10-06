@@ -371,7 +371,10 @@ test('a hibernated editor reconnects for current standing before relaying again'
     JSON.stringify({ subscribe: '.recipe', id: 'r' }),
   )
   late.sent.length = 0
-  woken.webSocketMessage(eve, JSON.stringify({ relay: says(CAKE, { x: 4 }) }))
+  await woken.webSocketMessage(
+    eve,
+    JSON.stringify({ relay: says(CAKE, { x: 4 }) }),
+  )
   assertEquals(eve.closed, [1012])
   assertEquals(relay(late), [])
 

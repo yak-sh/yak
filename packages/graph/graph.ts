@@ -162,7 +162,9 @@ export type ApplyOpts = {
    * the words it was loaded with, so a component this vocabulary does not
    * declare is left out; every other write is refused for naming one. It
    * holds the values its server computed as the server sent them, since it
-   * has no rule to derive them itself. */
+   * has no rule to derive them itself. With `trusted: true`, write admission
+   * is skipped: stored values are kept without validation or ref resolution.
+   * `trusted` alone still admits a new write strictly. */
   replica?: boolean
   /** the timestamp every stamp in this batch uses, ISO-8601 (default: now) */
   now?: string
@@ -1130,7 +1132,9 @@ export let graph = (opts: Options): Graph => {
               (at) => substitute(b, vocab, at),
             ),
         ),
-        phase(
+        // Accepted data is copied, never admitted again. Like accepted release
+        // declarations, it may predate the current writer's admission rules.
+        o.trusted && o.replica ? (b: Bundle[]) => known(b, vocab) : phase(
           'admit',
           outside,
           (b) =>

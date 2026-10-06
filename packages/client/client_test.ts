@@ -9,7 +9,7 @@ import { type Bundle, graph } from '@yaks/graph'
 import { ids } from '@yaks/id/graph'
 import { keyDoc, keyKeywords, keys } from '@yaks/key'
 import { ram } from '@yaks/ram'
-import { replicate } from '@yaks/sync'
+import { land, replicate } from '@yaks/sync'
 import { loadVocab } from '@yaks/vocab'
 import { box, boxClient, comp, COOK, server, titles } from './testing.ts'
 import { client } from './client.ts'
@@ -206,6 +206,88 @@ test('a write lands locally first, then on the server', async () => {
   assertEquals(comp(c.ent('r1'), 'created').by, COOK)
   assertEquals(c.trouble, [])
   c.close()
+})
+
+for (let transport of ['watch', 'write answer'] as const) {
+  test(`a client holds an accepted word ref from its store: ${transport}`, async () => {
+    let srv = server()
+    let row = {
+      entity: { eid: 'r1' },
+      doc: { title: 'Dal' },
+      recipe: { cook: 'forgotten-cook' },
+    }
+    // Historical data in a probe store, admitted before word refs were strict.
+    await srv.graph.storage.tx((tx) => tx.patch([row]))
+    let trouble: unknown[] = []
+    let watched = transport == 'watch' ? boxClient(srv) : undefined
+    let c = watched ?? client(box, [], {
+      vault: false,
+      wireVault: false,
+      url: 'http://box.test',
+      report: (t) => trouble.push(t),
+      fetch: async (request) => {
+        let response = await srv.handler(request)
+        if (!response.ok) return response
+        // An accepted response can repeat stored components beside the patch.
+        return Response.json(await srv.graph.get(['r1']))
+      },
+    })
+    try {
+      if (transport == 'watch') {
+        let w = c.watch('.recipe&?doc')
+        await watched!.idle()
+        assertEquals(w.ready, true)
+        assertEquals(comp(w.value[0], 'recipe').cook, 'forgotten-cook')
+        w.close()
+      } else {
+        c.mutate([{ entity: row.entity, doc: { title: 'Better dal' } }])
+        await c.wire!.idle()
+      }
+      assertEquals(comp(c.ent('r1'), 'recipe').cook, 'forgotten-cook')
+      assertThrows(
+        () => c.mutate([{ entity: { eid: 'r2' }, recipe: row.recipe }]),
+        Error,
+        'forgotten-cook names nothing',
+      )
+      assertEquals(c.ent('r2'), undefined)
+      assertEquals(watched?.trouble ?? trouble, [])
+      assertEquals(
+        c.ent('r1')?.doc,
+        transport == 'watch' ? row.doc : {
+          title: 'Better dal',
+        },
+      )
+    } finally {
+      c.close()
+    }
+  })
+}
+
+test('a client holds a relayed word ref while its own writes stay strict', async () => {
+  let vocab = loadVocab([...box.docs, {
+    $defs: {
+      following: {
+        component: true,
+        type: 'object',
+        sync: 'peers',
+        properties: { of: { type: 'string', ref: 'entity' } },
+      },
+    },
+  }])
+  let c = client(vocab, [], { vault: false, wireVault: false })
+  let row = { entity: { eid: 'r1' }, following: { of: 'forgotten-cook' } }
+  try {
+    await land(c.graph, { id: 'relay', relay: [row] })
+    assertEquals(c.ent('r1')?.following, row.following)
+    assertThrows(
+      () => c.mutate([{ entity: { eid: 'r2' }, following: row.following }]),
+      Error,
+      'forgotten-cook names nothing',
+    )
+    assertEquals(c.ent('r2'), undefined)
+  } finally {
+    c.close()
+  }
 })
 
 test("a caller's plugin runs on the client graph", () => {

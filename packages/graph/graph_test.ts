@@ -193,6 +193,40 @@ test('a replica lands what it declares and leaves the rest out', () => {
   assertEquals(one.get(['b2']), [])
 })
 
+for (
+  let [name, patch] of Object.entries({
+    'unresolved word ref': { book: { publisher: 'forgotten-publisher' } },
+    'retired enum value': { book: { status: 'shipped' } },
+  })
+) {
+  test(`accepted replica data skips write admission: ${name}`, () => {
+    let row = { entity: { eid: 'b1' }, ...patch }
+    for (let opts of [{}, { trusted: true }, { replica: true }]) {
+      let one = graph({ storage: ram(books), vocab: books })
+      assertThrows(() => one.apply([row], opts), Refused)
+      assertEquals(one.get(['b1']), [])
+    }
+    let one = graph({ storage: ram(books), vocab: books })
+    sync(one.apply([row], { trusted: true, replica: true }))
+    assertEquals(comp((one.get(['b1']) as Bundle[])[0], 'book'), patch.book)
+  })
+}
+
+test('a replica does not rerun a plugin’s write admission', () => {
+  let one = g([{
+    name: 'write-policy',
+    hooks: {
+      admit: () => {
+        throw new Refused('write closed')
+      },
+    },
+  }])
+  let row = { entity: { eid: 'b1' }, doc: { title: 'Dune' } }
+  assertThrows(() => one.apply([row]), Refused, 'write closed')
+  sync(one.apply([row], { trusted: true, replica: true }))
+  assertEquals(comp((one.get(['b1']) as Bundle[])[0], 'doc'), row.doc)
+})
+
 test('the answer is one bundle per entity, and no pipeline key', () => {
   let one = g()
   // A write: the caller's patch, the stamp and the birth are one bundle, and

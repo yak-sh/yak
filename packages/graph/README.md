@@ -160,16 +160,20 @@ effects. Trusted server code may correct metadata with
 `apply(bundles, { trusted: true, stamp: false })`: core provenance and mark
 rules are skipped, preserving stored timestamps and attribution, while plugin
 rules and hooks, validation, journaling and effects still run. Disabling
-stamping is refused without `trusted: true`. `apply(bundles, { replica: true })`
-lands rows another graph already admitted in a partial copy of it, leaving out
-the components this vocabulary does not declare instead of refusing them, and
-keeping the computed values it was sent, which it has no rule to derive.
-`g.rows(query)` returns adapter-specific rows for aggregates and other raw query
-results. `g.get(eids)` returns those entities whole, tombstones included, by eid
-rather than by query; `g.get(eids, comps)` returns each carrying only the
-components `comps` names, and the storage reads nothing else. The storage
-interface requires this lookup to avoid its write lock. `g.install()` makes the
-adapter ready for the vocabulary (its schema, where it has one).
+stamping is refused without `trusted: true`.
+`apply(bundles, { trusted: true, replica: true })` lands rows another graph
+already admitted in a partial copy of it, leaving out the components this
+vocabulary does not declare instead of refusing them, and keeping the computed
+values it was sent, which it has no rule to derive. Accepted rows skip write
+admission, including value checks, ref resolution and admission hooks and rules.
+They retain their stored values even when current write admission would refuse
+them. `trusted: true` alone still validates writes. `g.rows(query)` returns
+adapter-specific rows for aggregates and other raw query results. `g.get(eids)`
+returns those entities whole, tombstones included, by eid rather than by query;
+`g.get(eids, comps)` returns each carrying only the components `comps` names,
+and the storage reads nothing else. The storage interface requires this lookup
+to avoid its write lock. `g.install()` makes the adapter ready for the
+vocabulary (its schema, where it has one).
 
 Graph methods work with synchronous and asynchronous storage. Using `await` is
 safe either way; a synchronous adapter can also return values directly.
@@ -455,12 +459,14 @@ ordinary reference validation. `g.address(ids, kind)` also says which component
 the ids are meant to name, so a plugin may answer to a key only that kind has:
 @yaks/session resolves a run's own harness id only when a session is meant.
 
-Tool inputs and writes resolve reference values through `referenced(graph, ids,
-kind)`: registered addresses first, then exact document titles of the declared
-kind. A word eid takes precedence only while its entity has components and no
-tombstone. An unresolved word is refused instead of being stored as an empty
-identity; UUIDs and content hashes remain direct eids. References to entities
-created in the same batch, including `$aliases`, need no name lookup.
+Tool inputs and writes resolve reference values through
+`referenced(graph, ids,
+kind)`: registered addresses first, then exact document
+titles of the declared kind. A word eid takes precedence only while its entity
+has components and no tombstone. An unresolved word is refused instead of being
+stored as an empty identity; UUIDs and content hashes remain direct eids.
+References to entities created in the same batch, including `$aliases`, need no
+name lookup.
 
 ### Derived eids
 
