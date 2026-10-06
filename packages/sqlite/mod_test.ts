@@ -439,3 +439,41 @@ test('a driver over a FILE takes the write lock up front', () => {
   assertEquals(said.filter((sql) => /^(begin|commit)/.test(sql)), [])
   assert(said.some((sql) => sql.startsWith('savepoint')), said.join(' · '))
 })
+
+test('a stored presence page keeps order, graves, offsets and projections', () => {
+  let vocab = loadVocab({
+    $defs: {
+      recipe: {
+        component: true,
+        properties: {
+          title: { type: 'string' },
+        },
+      },
+    },
+  })
+  let s = storage(mem(), vocab)
+  s.install()
+  s.tx((tx) => {
+    tx.patch([
+      { entity: { eid: 'bare' } },
+      { entity: { eid: 'first' }, recipe: { title: 'Zulu' } },
+      { entity: { eid: 'second' }, recipe: { title: 'Alpha' } },
+      { entity: { eid: 'buried' }, recipe: { title: 'Ghost' } },
+      { entity: { eid: 'last' }, recipe: { title: 'Last' } },
+    ])
+    tx.remove([{ eid: 'buried' }])
+  })
+  assertEquals(s.rows('.recipe .limit=2'), [{ eid: 'last' }, { eid: 'second' }])
+  assertEquals(s.rows('.recipe .limit=2 .order=-entity.eid'), [
+    { eid: 'second' },
+    { eid: 'last' },
+  ])
+  assertEquals(s.rows('.recipe .limit=1 .order=recipe.title'), [{
+    eid: 'second',
+  }])
+  assertEquals(s.rows('.recipe .limit=1 .after=last'), [{ eid: 'second' }])
+  assertEquals(s.rows('.recipe .limit=1 .fields=recipe.title'), [{
+    eid: 'last',
+    'recipe.title': 'Last',
+  }])
+})

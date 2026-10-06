@@ -122,6 +122,7 @@ type Ctx = {
   now: number
   tables: Set<string>
   candidates?: Frag
+  present?: string
   owner?: string
   archetypes?: ArchetypeSet
   /** the computed component whose rows this query reads as its spine, when it
@@ -429,6 +430,7 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     if (!ctx.v.comp(hop.comp)) throw new Unknown(hop.comp)
     if (!worn(ctx, hop.comp)) return unworn(op, '', '')
     let present = op == '~' || op == EXISTS
+    if (present && hop.comp == ctx.present) return TRUE
     let shape = hop.comp == 'entity' ? null : byArchetype(
       ctx,
       present ? { all: [hop.comp] } : { none: [hop.comp] },
@@ -1406,7 +1408,9 @@ let indexedRelation = (
   from: string,
   o: Parameters<typeof rel>[1],
 ): Select => {
-  let root: { comp: string; index?: string } | undefined
+  let root: { comp: string; index?: string } | undefined = ctx.present
+    ? { comp: ctx.present }
+    : undefined
   if (!ctx.spine && !claims(ctx, 'pred') && ctx.d.indexed) {
     let scalar = flattened(clauses).some((c) =>
       c.kind == 'pred' && !c.not &&
@@ -1477,6 +1481,19 @@ let indexedRelation = (
   return {
     ...s,
     from: raw(src),
+    order: ctx.present
+      ? s.order?.map((order) =>
+        order.t == 'raw'
+          ? raw(
+            order.sql.replaceAll(
+              ctx.d.ownerKey('entity'),
+              ctx.d.ownerKey(root!.comp),
+            ),
+            order.params,
+          )
+          : order
+      )
+      : s.order,
     joins: [
       {
         how: 'cross',
@@ -1560,6 +1577,20 @@ export let bound = (
     }
   }
   let filters = cs.filter((c) => !directive(c) || claims(ctx, c.kind))
+  // A page of one stored component is already an owner-keyed table. Drive it
+  // directly: loading every archetype to rediscover that table buys nothing.
+  let only = filters.length == 1 ? filters[0] : undefined
+  if (
+    !spine && !claims(ctx, 'pred') && ctx.d.owned && find<Limit>(cs, 'limit') &&
+    only?.kind == 'pred' && !only.not && !only.where &&
+    only.path.length == 1 && opOf(only) == EXISTS
+  ) {
+    let comp = only.path[0]
+    if (
+      comp != 'entity' && vocab.comp(comp) && !computed(vocab, comp) &&
+      source(ctx, comp) == `"${comp}"` && ctx.d.table(comp) == `"${comp}"`
+    ) ctx.present = comp
+  }
   let where = and(
     ...conjuncts(ctx, filters),
     cond(ctx.d.live()),
