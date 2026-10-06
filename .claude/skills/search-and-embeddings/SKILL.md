@@ -25,9 +25,10 @@ text predicate") is the contract; this is how it works and what we've learned.
 The posture here is an experimenter's. Every choice in this corner, which
 model, how wide, where the floor sits, has a number behind it, measured on our
 own data on the machine that serves it. Intuition about embeddings is cheap and
-often wrong; a benchmark run is cheap too, and it isn't. What we're proud of is
-a change that came with its table. What makes us wince is a model swapped
-because it sounded faster, or a threshold carried from one model to another.
+often wrong; a benchmark run is nearly as cheap, and it tells you. What we're
+proud of is a change that came with its table. What makes us wince is a model
+swapped because it sounded faster, or a threshold carried from one model to
+another.
 
 ## Two kinds of search
 

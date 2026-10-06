@@ -105,11 +105,11 @@ box. A query that works on the box can be refused in a store.
 ## Asleep is the normal state
 
 Most apps, most of the time, have nobody in them, and an idle store is where
-cost hides. Vale (yourname/vale) once read 1.5M rows a minute with nobody
-playing (T-65228). Each MCP call once woke every app store in the caller's
-spaces (T-65378). Every store wake once asked the directory for every trashed
-store on the platform (T-65467). App journals were once 87% of the rows written
-(T-65227). Each was work that felt free in code and was billed by the row.
+cost hides in work that feels free in code and is billed by the row: a store
+that reads itself every minute with nobody playing (T-65228), a connector call
+that wakes every app store in the caller's spaces (T-65378), a wake that asks
+the directory about every trashed store on the platform (T-65467), a journal
+written beside every app's rows (T-65227).
 
 Good work here keeps a clear sense of who owes what: a deploy installs, an
 alarm does what was recorded, a read reads, and a store nobody touches costs
