@@ -149,5 +149,6 @@ export let reconnect = async (storage: State['storage']) => {
     cost,
     revokedCloses: closed.slice(validCloses.length),
     frames,
+    accepted: (attachment as { relay?: string[] }).relay ?? [],
   }
 }

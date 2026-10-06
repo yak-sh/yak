@@ -110,3 +110,59 @@ yak admin apply yourname/vale @/tmp/vale-ability-update/clean.json --admin --che
 yak admin apply yourname/vale @/tmp/vale-ability-update/clean.json --admin
 rm -rf /tmp/vale-ability-update
 ```
+
+### Persisted fight declaration cutover
+
+`fight.dealt` is an array. A store retaining its JSON-text declaration cannot
+accept that declaration while any persisted `fight.dealt` value remains.
+`bin/vale-fight-update.ts` generates guarded patches for an operator to move
+those values. It does not contact a store. Malformed JSON or a value other than
+a dealings array refuses the entire plan, without offering any clears. Extra
+object fields and numerical values survive parsing; the original export keeps
+the exact text. No entity, component, or person input is deleted.
+
+The operator must keep all Vale pages and command writers stopped during the
+cutover. Do not begin while someone is playing. Keep the original export outside
+`/tmp` until verification is complete. These commands are **operator-only**;
+agents rehearse them against synthetic rows, never against the live store. From
+the main checkout containing the desired release:
+
+```sh
+D="$HOME/vale-fight-cutover"
+mkdir -p "$D"
+yak admin query yourname/vale '.fight&?doc&?person' --admin --json > "$D/original.json"
+deno run --allow-read --allow-write bin/vale-fight-update.ts clear "$D/original.json" "$D/clear.json"
+yak admin apply yourname/vale @"$D/clear.json" --admin --check
+# Inspect the plan/count; every patch clears only fight.dealt, never fight itself.
+yak admin apply yourname/vale @"$D/clear.json" --admin
+# Release the intended files and array declaration from main.
+yak admin push apps/vale --space=yourname --app=vale --owner
+yak admin query yourname/vale '.fight&?doc&?person' --admin --json > "$D/after-deploy.json"
+deno run --allow-read --allow-write bin/vale-fight-update.ts restore "$D/original.json" "$D/restore.json" "$D/after-deploy.json"
+yak admin apply yourname/vale @"$D/restore.json" --admin --check
+yak admin apply yourname/vale @"$D/restore.json" --admin
+yak admin query yourname/vale '.fight&?doc&?person' --admin --json > "$D/after-restore.json"
+deno run --allow-read --allow-write bin/vale-fight-update.ts restore "$D/original.json" "$D/verify.json" "$D/after-restore.json"
+# Expected: zero restore patches. Compare row counts and person prose with original.json.
+yak admin tool app_errors --space yourname --app vale --owner
+```
+
+A changed or disappeared fight refuses restoration instead of overwriting or
+resurrecting it. Stop and inspect such a conflict; do not weaken its guards. If
+deployment refuses, the serving declaration remains text. While writers are
+still stopped, regenerate `restore-text` against a fresh read and apply its
+checked patches to put the exact original strings back:
+
+```sh
+yak admin query yourname/vale '.fight&?doc&?person' --admin --json > "$D/failed-deploy.json"
+deno run --allow-read --allow-write bin/vale-fight-update.ts restore-text "$D/original.json" "$D/recover.json" "$D/failed-deploy.json"
+yak admin apply yourname/vale @"$D/recover.json" --admin --check
+yak admin apply yourname/vale @"$D/recover.json" --admin
+```
+
+Use `restore-text` only while the served declaration is still text; an accepted
+array release uses `restore`. Do not resume writers until restored values and
+person input have been verified. The local workerd rehearsal is
+`workers/yak/fight_update_workerd_test.ts`: it retains two legacy rows, proves
+the array deployment refusal, checks both dry runs roll back, moves and restores
+the values, and verifies a second restoration produces no patches.
