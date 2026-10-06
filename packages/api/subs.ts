@@ -61,7 +61,14 @@ import {
   Refused,
 } from '@yaks/graph'
 import { matcher, net, rows as matchRows } from '@yaks/match'
-import { type And, parse } from '@yaks/query'
+import {
+  type And,
+  bare,
+  type Clause,
+  parse,
+  timeEdges,
+  type Value,
+} from '@yaks/query'
 import { paceOf, saveOf, syncOf } from '@yaks/vocab'
 import { published } from './publish.ts'
 import { cares, type Interest, interest } from './interest.ts'
@@ -749,6 +756,29 @@ export let subscriptions = (graph: Graph, opts: {
     }
   }
 
+  let moving = (ast: And): boolean => {
+    let text = (v: Value): string =>
+      v.kind == 'list'
+        ? v.items.map(text).join(',')
+        : v.kind == 'range'
+        ? text(v.lo) + (v.exclusiveEnd ? '...' : '..') + text(v.hi)
+        : v.raw
+    let now = Date.now()
+    let visit = (c: Clause): boolean => {
+      if (c.kind == 'and' || c.kind == 'or') return c.clauses.some(visit)
+      if (c.kind != 'pred') return false
+      if (c.where && visit(c.where)) return true
+      if (!c.value) return false
+      let leaf = graph.vocab.aim(c.path.join('.'), bare(c)).at(-1)
+      let p = leaf && graph.vocab.prop(leaf.comp, leaf.prop)
+      if (p?.scalar != 'time' && p?.scalar != 'number') return false
+      let op = c.op == '!=' ? '=' : c.op, value = text(c.value)
+      return JSON.stringify(timeEdges(op, value, now)) !=
+        JSON.stringify(timeEdges(op, value, now + 366 * 86_400_000))
+    }
+    return ast.clauses.some(visit)
+  }
+
   let open = (
     sink: Sink,
     id: string,
@@ -826,7 +856,9 @@ export let subscriptions = (graph: Graph, opts: {
             if (
               deferStatic && !sub.peer && sub.reads && !sub.reads.unseen &&
               sub.opts?.now == null && !sub.agg &&
-              !/\b(?:now|today|yesterday|tomorrow|ago)\b/.test(line)
+              !moving(ast) &&
+              [...sub.reads.near, ...sub.reads.far, ...sub.reads.via.keys()]
+                .every((c) => syncOf(graph.vocab, c) != 'peers')
             ) {
               sub.deferred = true
               return
@@ -1450,12 +1482,47 @@ export let subscriptions = (graph: Graph, opts: {
     )
   }
 
-  let peerChange = (bundles: Bundle[], except?: Sink, casted = false) => {
+  // A durable watch kept by the page may still carry relays for its rows.
+  // Recover only the touched owners' membership, never its retained catalog.
+  let recoverMembership = (bundles: Bundle[]): void | Promise<void> => {
+    let deferred = all().filter((s) => s.deferred)
+    if (!deferred.length || !bundles.length) return
+    let ids = [...new Set(bundles.map((b) => b.entity.eid))]
+    return after(
+      graph.get(ids, undefined, { native: true }),
+      (rows) =>
+        after(
+          over(deferred, (s) => {
+            let i = s.reads!
+            let candidates = rows.filter((row) => i.own.every((c) => c in row))
+            if (!candidates.length) return
+            if (
+              i.whole || i.far.size || i.via.size || s.plan?.reaches.length
+            ) return open(s.sink, s.id, s.query, s.opts)
+            for (
+              let row of matcher(queryOf(s), graph.vocab, s.opts)(candidates)
+            ) s.members.add(row.entity.eid)
+          }),
+          () => {},
+        ),
+    )
+  }
+  let peerChange = (
+    bundles: Bundle[],
+    except?: Sink,
+    casted = false,
+  ): void | Promise<void> => {
     if (!bundles.length) return
+    if (!casted) {
+      return after(recoverMembership(bundles), () => {
+        cast(bundles, except)
+        return peerChange(bundles, except, true)
+      })
+    }
     notify(bundles)
     // Old members hear the patch that moved a row out; new members receive
     // its full held value in the membership frame below.
-    if (!casted) cast(bundles, except)
+
     let touched = [...new Set(bundles.map((b) => b.entity.eid))]
     let values = peers.values(touched)
     let active = new Set(values.map((b) => b.entity.eid))
@@ -1601,12 +1668,11 @@ export let subscriptions = (graph: Graph, opts: {
         rows.push(row)
         writes.set(sink, rows)
       }
-      for (let [sink, rows] of writes) cast(coalesced(rows), sink)
-      return peerChange(
-        coalesced([...next.writes.values()].map((w) => w.row)),
-        undefined,
-        true,
-      )
+      let bundles = coalesced([...next.writes.values()].map((w) => w.row))
+      return after(recoverMembership(bundles), () => {
+        for (let [sink, rows] of writes) cast(coalesced(rows), sink)
+        return peerChange(bundles, undefined, true)
+      })
     }
     try {
       let out = ordered(run)
