@@ -150,38 +150,12 @@ State a view needs lives in the page's graph, never in `useState`. A person's
 half-typed text is a draft in @yaks/draft, kept and synced everywhere, never
 lost (M-59093).
 
-## Render only what changed
+## Render cost
 
-This is ordinary Preact performance work. A component runs when its parent
-re-renders or its own inputs change, and every child below it runs too unless
-something stops it. So the cost of an update is how many components run, not how
-big the DOM is.
-
-It goes wrong here in two ways:
-
-- **Feeding a region from a loop.** A game frame or a timer calls `render()` on
-  a whole region. It decides whether anything changed by stringifying the inputs,
-  but a function or a freshly built object never compares equal, so it renders
-  every time.
-- **One fast value dragging a tree.** A value that moves every frame, like a
-  bearing or a meter's fill, makes everything around it render with it.
-
-What holds:
-
-- **A value that changes often is a signal.** @preact/signals is already a
-  dependency of @yaks/ui (packages/ui/tui.ts uses one). Pass the signal itself
-  as a child or prop, and Preact updates that one text or attribute without
-  running the component.
-- **Mount a region once.** After that it updates through its own signals and
-  state. Calling `render()` again from a loop is the first way it goes wrong.
-- **Props stay stable.** Define handlers once, and keep objects and arrays when
-  their contents haven't changed, so `memo` and Preact's own diff can skip.
-- **Key lists by eid.**
-- **Never write the DOM directly to go faster.** That route around the parts is
-  exactly what the kit exists to prevent. Make the component cheap instead.
-- **Measure it.** Count renders per update with Preact's `options.diffed` hook,
-  alongside frame time. An update where nothing visible changed renders nothing,
-  and a test can hold that.
+Some screens repaint every frame: Mossvale's HUD is painted from the game loop
+(apps/vale/hud.ts `show`). There, a part that re-renders when nothing it shows
+has changed is a bug. @yaks/ui already depends on @preact/signals, and a test
+can count renders per update through Preact's `options.diffed`.
 
 ## Check it
 
