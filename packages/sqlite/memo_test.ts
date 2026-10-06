@@ -209,3 +209,18 @@ test('dynamic component appearance and disappearance invalidate whole admission 
   s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: null }]))
   assertEquals(get().position, undefined)
 })
+
+test('ordinary transactions reuse authoritative reads while pending component images bypass reuse', () => {
+  let f = fixture()
+  f.get()
+  f.reset()
+  assertEquals(f.s.tx((tx) => tx.get(['hero']))[0].player, { active: true })
+  assertEquals(f.calls(), 2)
+  f.s.tx((tx) => {
+    tx.patch([{ entity: { eid: 'hero' }, position: { x: 3 } }])
+    assertEquals(tx.get(['hero'])[0].position, { x: 3 })
+    tx.patch([{ entity: { eid: 'hero' }, position: null }])
+    assertEquals(tx.get(['hero'])[0].position, undefined)
+  })
+  assertEquals(f.get().position, undefined)
+})
