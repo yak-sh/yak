@@ -29,6 +29,9 @@ import { station } from '../station.ts'
 import { partybox } from '../partybox.ts'
 import { noticeboard } from '../notices.ts'
 import { dealbox } from '../dealbox.ts'
+import { character } from '../character.ts'
+import { HAIRS, SKINS, TINTS } from '../make.ts'
+import { need } from '../rules.ts'
 
 let held = (eid: string, kind: string, more: Partial<Held> = {}): Held => ({
   eid,
@@ -232,6 +235,24 @@ export let LISTS: [string, Tab | Own, Draw][] = [
   }],
 ]
 
+// Every other page of a tab, drawn the same way: one with no list in it.
+export let PAGES: [string, Tab | Own, Draw][] = [
+  ['character', 'character', (p) => {
+    let view = character(p, {
+      restyle: () => {},
+      typing: () => {},
+      paint: () => {},
+    })
+    let s = hero({ abilities: ['cleave', 'lunge'], xp: need(5) + 120 })
+    view.show(s, {
+      name: s.name,
+      tint: TINTS[0],
+      hair: HAIRS[0],
+      skin: SKINS[0],
+    })
+  }],
+]
+
 // The game's page: the kit's stylesheet, then the game's own, as main.ts
 // dresses it, and each list in its panel (panel.ts), open over a glass
 // filling a window of its own.
@@ -240,7 +261,7 @@ export let listsPage = async (): Promise<string> => {
   seedDesigns()
   let body = await withDom(async ({ document, window }) => {
     let settle = () => new Promise((ok) => setTimeout(ok))
-    for (let [name, where, draw] of LISTS) {
+    for (let [name, where, draw] of [...LISTS, ...PAGES]) {
       let glass = document.createElement('div')
       glass.className = 'Case'
       glass.dataset.list = name

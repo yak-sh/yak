@@ -10,6 +10,10 @@
   min-height: 100%;
 }
 
+.Pack > .Button {
+  align-self: flex-start;
+}
+
 .Pack_Worn {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -91,19 +95,6 @@
   font-size: 0.75rem;
   line-height: 1;
   color: var(--amber);
-}
-
-.Pack_Head {
-  margin: 0.2rem 0 0;
-  font-size: 0.85rem;
-  color: var(--amber);
-}
-
-.Pack_Nums {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
-  gap: 0.25rem 0.7rem;
-  font-size: 0.85rem;
 }
 
 .Pack_Hint {

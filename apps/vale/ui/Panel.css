@@ -88,8 +88,9 @@
   text-overflow: ellipsis;
 }
 
+/* A sheet with tabs keeps one size whichever tab shows. */
 .Panel-tabs .Panel_Sheet {
-  width: min(40rem, 100%);
+  width: min(64rem, 100%);
 }
 
 /* Keep the hero's vitals beside their sheet on a wide glass, and above it
@@ -160,6 +161,16 @@
 
   & > * {
     max-width: 100%;
+  }
+
+  /* A meter on a sheet reads in ink, with no shadow to lift it off the
+     world. */
+  & .ValeMeter {
+    --label: var(--ink);
+  }
+
+  & .ValeMeter_Label {
+    text-shadow: none;
   }
 }
 

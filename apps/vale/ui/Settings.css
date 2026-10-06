@@ -28,7 +28,3 @@
     color: var(--muted);
   }
 }
-
-.Settings_Apply {
-  justify-self: start;
-}

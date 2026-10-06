@@ -96,8 +96,8 @@ test('trade selection keeps progress rows, scroll and phone back navigation', ()
     let list = tab.body.querySelector<HTMLElement>('.Split_List')!,
       rows = [...list.querySelectorAll('[data-select]')]
     equal(rows.length, ALL.length)
-    assertMatch(rows[0].textContent!, /Woodcutting.*5 \/ 30 xp.*Level 2/s)
-    assertMatch(rows[4].textContent!, /Smithing.*5 \/ 50 xp.*Level 3/s)
+    assertMatch(rows[0].textContent!, /Woodcutting.*XP 5\/30.*Level 2/s)
+    assertMatch(rows[4].textContent!, /Smithing.*XP 5\/50.*Level 3/s)
     list.scrollTop = 85
     click('[data-select=forge]')
     equal(list.querySelector('[data-select=wood]'), rows[0])

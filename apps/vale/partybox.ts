@@ -1,46 +1,69 @@
 // The party sheet: incoming invitations, the members who answered, and their
 // current or last known lands. Actions stay on the sheet while its graph rows
 // arrive, so accepting an invitation does not require walking back to them.
-import { h } from 'preact'
-import { Rows, Tile } from '@yaks/ui'
+// A member picked shows how they fare: their health, what they are doing,
+// and what they wear.
+import { type ComponentChildren, h } from 'preact'
+import { Body, Button, Pairs, Rows, Tile } from '@yaks/ui'
 import { glyph } from './glyphs.ts'
 import type { Panel } from './panel.ts'
 import type { parties } from './party.ts'
 import type { Frame } from './play.ts'
 import { split } from './ui/split.ts'
 import { ITEMS } from './items.ts'
-import { type Slot, SLOTS } from './arms.ts'
+import { SLOT_NAMES, SLOTS } from './arms.ts'
 import type { Member } from './party-state.ts'
-import { picture } from './tile.ts'
+import { ValeMeter } from './kit/ValeMeter.ts'
+import { hint, part, picture } from './tile.ts'
 
-let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+// A picked thing's head: its icon, its name, what it is, what can be done.
+let head = (
+  icon: 'user' | 'users',
+  tone: string | false,
+  title: string,
+  subs: string[],
+  end?: ComponentChildren,
+) =>
+  h(
+    Tile,
+    { mod: 'head' },
+    picture(glyph(icon), { mod: tone }),
+    h(Tile.Title, {}, title),
+    subs.map((sub) => h(Tile.Sub, { key: sub }, sub)),
+    end && h(Tile.End, {}, end),
+  )
 
-let slots: Record<Slot, string> = {
-  main: 'Main hand',
-  off: 'Off hand',
-  head: 'Head',
-  body: 'Body',
-  feet: 'Feet',
-  trinket: 'Trinket',
-}
-
-let details = (m: Member) => {
-  let stats = m.vitals
-    ? `<p><span class=Badge>Level ${m.vitals.lvl}</span></p><p>Health: ${m.vitals.hp} / ${m.vitals.max}</p><progress aria-label="Health" value="${m.vitals.hp}" max="${m.vitals.max}"></progress>`
-    : '<p class=Party_Empty>Live stats unavailable.</p>'
-  let gear = m.gear
-    ? `<div class=Pack_Nums>${
-      SLOTS.map((slot) => {
-        let kind = m.gear![slot] ?? ''
-        let name = kind ? ITEMS[kind]?.name ?? 'Unknown equipment' : 'Empty'
-        return `<span class=Pack_Num>${slots[slot]}: ${esc(name)}</span>`
-      }).join('')
-    }</div>`
-    : `<p class=Party_Empty>${
-      m.online ? 'Equipment unavailable.' : 'Equipment unavailable while away.'
-    }</p>`
-  return `${stats}<p>${esc(m.status)}</p><h3>Equipment</h3>${gear}`
-}
+// How a member fares, and what they wear, as far as is known.
+let details = (m: Member) => [
+  h(Body, {}, h('p', {}, m.status)),
+  m.vitals
+    ? h(ValeMeter, { label: 'Health', value: m.vitals.hp, max: m.vitals.max })
+    : hint('Live stats unavailable.'),
+  part(
+    'Equipment',
+    m.gear
+      ? h(
+        Pairs,
+        {},
+        SLOTS.map((slot) => {
+          let kind = m.gear![slot] ?? ''
+          return [
+            h(Pairs.Key, { key: `${slot}:k` }, SLOT_NAMES[slot]),
+            h(
+              Pairs.Value,
+              { key: `${slot}:v` },
+              kind ? ITEMS[kind]?.name ?? 'Unknown equipment' : 'Empty',
+            ),
+          ]
+        }),
+      )
+      : hint(
+        m.online
+          ? 'Equipment unavailable.'
+          : 'Equipment unavailable while away.',
+      ),
+  ),
+]
 
 export let partybox = (
   panel: Panel,
@@ -50,17 +73,18 @@ export let partybox = (
   let panes = split(panel.body)
   let picked: string | null = null
   let frame: Frame | null = null
+  let act = (name: string, words: string, more: Record<string, unknown> = {}) =>
+    h(Button, { 'data-act': name, ...more }, words)
   let draw = () => {
     if (!panel.open || !frame) return
     if (!party.canJoin) {
       picked = null
-      let content =
-        `<p class=Party_Empty>Sign in to form a party with other heroes.</p>${
-          party.signIn
-            ? `<a class="Btn Btn-go" href="${esc(party.signIn)}">Sign in</a>`
-            : ''
-        }`
-      panes.render(content, content)
+      let content = () => [
+        hint('Sign in to form a party with other heroes.'),
+        party.signIn &&
+        h(Button, { mod: 'go', href: party.signIn }, 'Sign in'),
+      ]
+      panes.render(content(), content())
       return
     }
     let invites = party.invites, members = party.members
@@ -70,7 +94,7 @@ export let partybox = (
       picked = null
     }
     let location = (m: typeof members[number]) =>
-      esc(party.location(m, [frame!.body.x, frame!.body.z]))
+      party.location(m, [frame!.body.x, frame!.body.z])
     let row = (
       id: string,
       icon: 'user' | 'users',
@@ -93,82 +117,81 @@ export let partybox = (
         h(Tile.Title, {}, title),
         h(Tile.Sub, {}, sub),
       )
-    let rows = [
-      invites.length
-        ? [
-          h('h3', { class: 'Pack_Head' }, 'Invitations'),
-          h(
-            Rows,
-            {},
-            invites.map((i) =>
-              row(
-                `invite:${i.eid}`,
-                'users',
-                party.name(i.from),
-                'invited you to their party',
-                'caution',
-              )
-            ),
-          ),
-        ]
-        : null,
-      h('h3', { class: 'Pack_Head' }, 'Members'),
-      members.length
-        ? h(
+    let rows = h(
+      'div',
+      { class: 'Pack' },
+      invites.length > 0 && part(
+        'Invitations',
+        h(
           Rows,
           {},
-          members.map((m) =>
+          invites.map((i) =>
             row(
-              `member:${m.eid}`,
-              'user',
-              m.name,
-              `${m.online ? 'Online' : 'Away'}${
-                m.vitals
-                  ? ` · Level ${m.vitals.lvl} · ${m.vitals.hp} / ${m.vitals.max} HP`
-                  : ''
-              }`,
+              `invite:${i.eid}`,
+              'users',
+              party.name(i.from),
+              'invited you to their party',
+              'caution',
             )
           ),
-        )
-        : h(
-          'p',
-          { class: 'Party_Empty' },
-          'Talk to a nearby hero to invite them.',
         ),
-      party.group
-        ? h(
-          Rows,
-          {},
-          row('party', 'users', 'Party details', `${members.length} members`),
-        )
-        : null,
-    ]
-    let content = invite
-      ? `<div class=Party_Row><div><b>${
-        esc(party.name(invite.from))
-      }</b><small>invited you to their party</small></div></div><div class=Party_Acts><button class="Btn Btn-go Btn-small" data-act=accept data-invite="${
-        esc(invite.eid)
-      }">Join</button><button class="Btn Btn-small" data-act=decline data-invite="${
-        esc(invite.eid)
-      }">Decline</button></div>`
+      ),
+      part(
+        'Members',
+        members.length
+          ? h(
+            Rows,
+            {},
+            members.map((m) =>
+              row(
+                `member:${m.eid}`,
+                'user',
+                m.name,
+                `${m.online ? 'Online' : 'Away'}${
+                  m.vitals
+                    ? ` · Level ${m.vitals.lvl} · ${m.vitals.hp} / ${m.vitals.max} HP`
+                    : ''
+                }`,
+                m.online ? 'positive' : undefined,
+              )
+            ),
+          )
+          : hint('Talk to a nearby hero to invite them.'),
+      ),
+      party.group && h(
+        Rows,
+        {},
+        row('party', 'users', 'Party details', `${members.length} members`),
+      ),
+    )
+    let content: ComponentChildren = invite
+      ? head(
+        'users',
+        'caution',
+        party.name(invite.from),
+        ['invited you to their party'],
+        [
+          act('accept', 'Join', { mod: 'go', 'data-invite': invite.eid }),
+          act('decline', 'Decline', { 'data-invite': invite.eid }),
+        ],
+      )
       : member
-      ? `<div class=Party_Row><div><b>${esc(member.name)}</b><small>${
-        location(member)
-      }</small><small>${
-        member.online ? 'Online' : 'Away'
-      }</small></div><span class="Party_Dot${
-        member.online ? ' Party_Dot-on' : ''
-      }" title="${member.online ? 'Online' : 'Away'}"></span></div>${
-        details(member)
-      }`
+      ? [
+        head('user', member.online && 'positive', member.name, [
+          location(member),
+          `${member.online ? 'Online' : 'Away'}${
+            member.vitals ? ` · Level ${member.vitals.lvl}` : ''
+          }`,
+        ]),
+        ...details(member),
+      ]
       : picked == 'party'
-      ? `<h3>Your party</h3><p>${members.length} members</p>`
-      : '<p class=Party_Empty>Select an invitation or member to see details.</p>'
-    if (party.group) {
-      content +=
-        '<button class="Btn Btn-small Party_Leave" data-act=leave>Leave party</button>'
-    }
-    panes.render(rows, content, picked)
+      ? head('users', false, 'Your party', [`${members.length} members`])
+      : hint('Select an invitation or member to see details.')
+    panes.render(rows, [
+      content,
+      party.group && act('leave', 'Leave party'),
+    ], picked)
   }
   let paint = (f: Frame) => {
     frame = f

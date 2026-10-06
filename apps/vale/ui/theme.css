@@ -21,6 +21,8 @@
   --amber: #9a6a1c;
   --hp: #e0573f;
   --xp: #7fc6f2;
+  /* The sky behind a likeness (Character.css). */
+  --sky: #dcecf4;
   /* A number that changes (compare.ts): for the better, or the worse. */
   --better: #3f8f2a;
   --worse: #c0442a;

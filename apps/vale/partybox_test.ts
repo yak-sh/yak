@@ -43,21 +43,22 @@ test('party details show live character stats and gear, then clear them when awa
     let text = () => detail.textContent!
     ok(text().includes('Ada <hero>'))
     ok(text().includes('Level 7'))
-    ok(text().includes('Health: 35 / 80'))
-    equal(detail.querySelector('progress')?.getAttribute('value'), '35')
+    let health = () => detail.querySelector('[role=meter]')
+    equal(health()?.getAttribute('aria-valuenow'), '35')
+    equal(health()?.getAttribute('aria-valuemax'), '80')
     ok(text().includes('In combat'))
     ok(text().includes(ITEMS.sword1.name))
     ok(text().includes(ITEMS.shield1.name))
-    ok(text().includes('Head: Empty'))
+    ok(text().includes('HeadEmpty'))
     row.vitals = { hp: 0, max: 80, lvl: 7 }
     row.motion = { gait: 'down' }
     members = [memberOf(row, 'Ada <hero>', 1000)]
     view.paint(frame)
-    ok(text().includes('Health: 0 / 80'))
+    equal(health()?.getAttribute('aria-valuenow'), '0')
     ok(text().includes('Fainted'))
     members = [memberOf(row, 'Ada <hero>', 20000)]
     view.paint(frame)
-    equal(detail.querySelector('progress'), null)
+    equal(health(), null)
     ok(text().includes('Live stats unavailable'))
     ok(!text().includes(ITEMS.sword1.name))
     ok(text().includes('Equipment unavailable'))

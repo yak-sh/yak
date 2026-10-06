@@ -1,12 +1,9 @@
 /* Shared list/detail geometry. The list's rows are Tiles, and picking one
-   paints it (the skin's base.css), never measures. */
+   paints it (the skin's base.css), never measures. A split whose sides both
+   show at once (`Split-both`, the Character tab) stacks them on a phone. */
 .Split_Sheet {
   width: min(64rem, 100%);
   height: 40rem;
-}
-
-.Panel-tabs .Split_Sheet {
-  width: min(64rem, 100%);
 }
 
 .Split_Host {
@@ -69,5 +66,17 @@
   .Split_Back {
     display: block;
     margin-bottom: 0.75rem;
+  }
+  .Split-both {
+    overflow-y: auto;
+
+    & > .Split_Detail {
+      display: block;
+      border-top: 3px solid var(--rim);
+    }
+
+    & > * {
+      overflow: visible;
+    }
   }
 }

@@ -1,7 +1,7 @@
 // The Trades panel: trade progress beside gathering guides and station menus.
 import { glyph } from './glyphs.ts'
 import type { Page } from './panel.ts'
-import { h, render } from 'preact'
+import { type ComponentChildren, h, render } from 'preact'
 import { Button, Rows, Tile } from '@yaks/ui'
 import { isStation } from './craft.ts'
 import { type PageState, pageState } from './page-state.ts'
@@ -9,7 +9,8 @@ import type { Sheet } from './play.ts'
 import type { Job } from './work.ts'
 import { menu } from './station.ts'
 import { focused, selected, selection } from './ux-kit.ts'
-import { picture } from './tile.ts'
+import { hint, part, picture } from './tile.ts'
+import { ValeMeter } from './kit/ValeMeter.ts'
 
 import {
   ALL,
@@ -23,7 +24,7 @@ import {
 /** Trade progress beside its gathering guide or the station's own menu. */
 export let ledger = (
   tab: Page,
-  guide: (trade: Gather, lvl: number) => string,
+  guide: (trade: Gather, lvl: number) => ComponentChildren,
   state: PageState = pageState(),
   owner = 'trades',
 ) => {
@@ -35,9 +36,13 @@ export let ledger = (
     let from = tradeNeed(lvl), to = tradeNeed(lvl + 1)
     return h(
       Tile.Sub,
-      { class: 'Bar Bar-xp' },
-      h('i', { style: { '--k': ((xp - from) / (to - from)).toFixed(3) } }),
-      h('span', {}, `${xp - from} / ${to - from} xp`),
+      {},
+      h(ValeMeter, {
+        label: 'XP',
+        value: xp - from,
+        max: to - from,
+        tone: 'experience',
+      }),
     )
   }
   let draw = () => {
@@ -47,45 +52,40 @@ export let ledger = (
     let detail = picked && isStation(picked)
       ? menu(picked, sheet, job, { state, owner: `${owner}/${picked}` }, draw)
       : picked
-      ? h('div', {
-        dangerouslySetInnerHTML: {
-          __html: guide(picked as Gather, job.trades[picked].lvl),
-        },
-      })
-      : h(
-        'p',
-        {},
+      ? guide(picked as Gather, job.trades[picked].lvl)
+      : hint(
         'Select a trade for its gathering guide or crafting bench preview.',
       )
     let list = (
       title: string,
       trades: Trade[],
-    ) => [
-      h('h3', { class: 'Pack_Head' }, title),
-      h(
-        Rows,
-        {},
-        trades.map((trade) => {
-          let progress = job!.trades[trade]
-          return h(
-            Tile,
-            {
-              key: trade,
-              mod: picked == trade && 'on',
-              'data-select': trade,
-              onClick: () => {
-                state.mutate([focused(selected(e, trade), 'detail')])
-                draw()
+    ) =>
+      part(
+        title,
+        h(
+          Rows,
+          {},
+          trades.map((trade) => {
+            let progress = job!.trades[trade]
+            return h(
+              Tile,
+              {
+                key: trade,
+                mod: picked == trade && 'on',
+                'data-select': trade,
+                onClick: () => {
+                  state.mutate([focused(selected(e, trade), 'detail')])
+                  draw()
+                },
               },
-            },
-            picture(glyph(TRADES[trade].icon)),
-            h(Tile.Title, {}, TRADES[trade].name),
-            bar(progress),
-            h(Tile.End, {}, `Level ${progress.lvl}`),
-          )
-        }),
-      ),
-    ]
+              picture(glyph(TRADES[trade].icon)),
+              h(Tile.Title, {}, TRADES[trade].name),
+              bar(progress),
+              h(Tile.End, {}, `Level ${progress.lvl}`),
+            )
+          }),
+        ),
+      )
     render(
       h(
         'div',
@@ -99,7 +99,7 @@ export let ledger = (
           { class: 'Split_List', 'aria-label': 'Trades' },
           h(
             'div',
-            { class: 'Trades' },
+            { class: 'Pack' },
             list('Gathering', GATHERING),
             list('Making', MAKING),
           ),

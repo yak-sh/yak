@@ -4,13 +4,14 @@
    pill until the pointer finds it. One pressed in (`aria-pressed`) is a
    setting that is on, and is lit. A link drawn as a button looks the same,
    and so does one the glass holds, where the pointer otherwise passes
-   through. */
+   through. One standing alone in a column keeps its own width. */
 .Button {
   --face: var(--well);
   --ink: var(--text);
   --under: var(--rim);
   display: inline-flex;
   flex: none;
+  justify-self: start;
   align-items: center;
   justify-content: center;
   gap: var(--half-gap);

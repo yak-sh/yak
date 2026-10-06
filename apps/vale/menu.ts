@@ -211,7 +211,6 @@ export let menu = (panel: Page, o: Settings) => {
       h(Button, {
         type: 'button',
         mod: 'go',
-        class: 'Settings_Apply',
         'data-do': 'voxel',
         disabled: voxel == o.voxel.current,
         onClick: () => o.voxel.apply(voxel),
@@ -327,7 +326,7 @@ export let menu = (panel: Page, o: Settings) => {
         )
       ),
     )
-  let paint = () => panes.render(list(), h('div', {}, detail()), picked)
+  let paint = () => panes.render(list(), detail(), picked)
 
   return {
     /** show what is set, when the menu is open and it changed */

@@ -5,7 +5,8 @@
   gap: 0.45rem;
   text-align: left;
 
-  & .Btn-go {
+  & :is(.Btn-go, .Button-go) {
+    justify-self: stretch;
     margin-top: 0.7rem;
   }
 }
@@ -13,7 +14,8 @@
 .Make_Name {
   display: grid;
   gap: 0.25rem;
-  color: var(--deep);
+  font-size: 0.85rem;
+  color: var(--faint);
 
   & input {
     padding: 0.5rem 0.8rem;
