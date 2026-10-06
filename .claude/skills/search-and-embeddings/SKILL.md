@@ -16,9 +16,18 @@ description: >
 
 # Search
 
-The graph finds things two ways, by words and by meaning, and both read one
-list of what is searchable. The persona's invariant (M-17876, "Search is a text
-predicate") is the contract; this is how it works and what has been learned.
+Search is how people find what they already said: the task they filed last
+week, the memory that answers today's question, the duplicate about to be
+filed. The graph finds things two ways, by words and by meaning, and both read
+one list of what is searchable. The persona's invariant (M-17876, "Search is a
+text predicate") is the contract; this is how it works and what we've learned.
+
+The posture here is an experimenter's. Every choice in this corner, which
+model, how wide, where the floor sits, has a number behind it, measured on our
+own data on the machine that serves it. Intuition about embeddings is cheap and
+often wrong; a benchmark run is cheap too, and it isn't. What we're proud of is
+a change that came with its table. What makes us wince is a model swapped
+because it sounded faster, or a threshold carried from one model to another.
 
 ## Two kinds of search
 
@@ -31,37 +40,57 @@ predicate") is the contract; this is how it works and what has been learned.
   `.order=similar` orders by it (packages/embedding/README.md, "How `.near`
   compiles"). A target with no vector yet selects nothing.
 
+How either is written in a query is `query-grammar`'s; how the archetype index
+answers the rest of the query is `graph-reads-and-writes`'.
+
 ## What is searchable
+
+Whether a component is searchable is a vocabulary decision (`vocabulary`), and
+these are the words for it:
 
 - `search: true` on a string property indexes it for words and embeds it for
   meaning. A component's `search` list names text it is found by on another
   component: `entry` is found by `content.body`, so tool results wearing
-  `content` are not.
+  `content` are not. What a bare word finds, `.near` finds too.
 - `embed: false` on a component keeps its entities out of the vectors while
   they stay findable by words: tool results (`result`, packages/tools) and
-  drafts. Embedding text nobody looks up by meaning costs vectors, index time
-  and lookup time for nothing.
+  drafts. Text nobody looks up by meaning costs vectors, index time and lookup
+  time for nothing.
 - Vectors are derived data: per store, never synced, never backed up, rebuilt
   from the text. So the box and a yaks.app store may use different models.
+
+## The tools
+
+- **@yaks/fts**: `fields(vocab)` picks the text, `heal()` rebuilds an index
+  that disagrees with its rows, `adopt()` brings an existing database into the
+  generated layout (packages/fts/README.md, "Maintaining existing indexes").
+- **@yaks/embedding's embedders** ("The embedder is yours"): `remote()` for
+  Ollama or any OpenAI-compatible endpoint, `workersAi()` for a Worker's `AI`
+  binding, an in-process Model2Vec model (@yaks/model2vec), and `hashEmbedder()`
+  for a test that needs vectors without a model.
+- **`yak vector check`** says whether the box's index is built and current,
+  and names the cases where every search reads every vector.
+- **The benchmark**: duplicate-task MRR and comment-to-task MRR, with the
+  tables, in T-45558's and T-59058's comments. It's what a candidate model is
+  run through.
 
 ## On the box
 
 - **Provider and model are rows**, the way chat models are (M-36709):
   `provider{name, base, api}` with a `serves{name}` edge to a `model{name}` row
   (@yaks/model). ~/.yak/yak.json's `@yaks/embedding` entry names the provider
-  and the model; switching either is a write, never a release. Today:
+  and the model, so switching either is a write, not a release. Today:
   provider `ollama.yak.sh`, model `granite-embedding-30m-english`, 384 wide,
   on the GPU's Ollama container.
 - **The sweep:** triggers queue every written entity in `embedding_owed`, and
   the plugin's service drains it in batches (packages/embedding/README.md,
   "The sweep"). Writes never wait on embedding.
 - **The index:** sqlite-vector keeps 2-bit codes; a search scans them for
-  candidates and ranks those by exact cosine ("The index"). `yak vector check`
-  says whether it is built and current.
+  candidates and ranks those by exact cosine ("The index").
 - **Neighbours on write:** a tool call that creates a task, memory or comment
   answers its three nearest of the same kind ("A write answers what it is
   near"). The doc view's similar-task twins cut at `FLOOR` in
-  packages/web/twin.ts.
+  packages/browse/twin.ts.
 
 ## In yaks.app stores
 
@@ -74,32 +103,35 @@ predicate") is the contract; this is how it works and what has been learned.
   isolate; past it a store reads every row.
 - The store drains its sweep after each commit and from its alarm, behind its
   own traffic. Memory recall ranks a space's memories in the directory through
-  the same `.near` (workers/yak/memory.ts, graph.ts `/meaning`).
+  the same `.near` (workers/yak/memory.ts, graph.ts `/meaning`). The store
+  itself is `yaks-app`'s.
 
-## What has been learned
+## What we've learned
 
-- **Lookup cost matters more than embedding cost** (the owner, on T-59058). A
-  vector is made once; it is searched every time. Measure the indexed `.near`
-  at the live vector count, on the server, before choosing a model or width.
-  On the box a request to Ollama costs 40–80 ms whatever the model, so a small
-  model buys little embed time; width is what moves lookup time.
-- **Provider and model are two choices.** Which server answers is data;
-  which model it runs is measured. Never swap one to fix the other.
-- **Quality is measured, not assumed.** A switch to a faster model once dropped
-  duplicate-finding MRR from .843 to .711. T-45558's and T-59058's comments hold
-  the benchmark (duplicate-task MRR, comment-to-task MRR) and the tables; run
-  the same benchmark on any candidate.
+- **Lookup cost matters more than embedding cost.** The owner, verbatim
+  (T-59058): "i care more about indexed embedding lookup than i do how long the
+  embedding itself takes." A vector is made once and searched every time. So
+  the number to measure is the indexed `.near` at the live vector count, on the
+  server. On the box a request to Ollama costs 40–80 ms whatever the model, so
+  a small model buys little embed time; width is what moves lookup time.
+- **Provider and model are two choices.** The owner, verbatim (T-59058): "two
+  different things: using ollama (or any provider; build it generically), and
+  then which model the provider uses." Which server answers is data; which
+  model it runs is measured. A problem with one is fixed in that one.
+- **Quality is a number.** A switch to a faster model once dropped
+  duplicate-finding MRR from .843 to .711, and the owner asked for the remote
+  model back (T-59058). Any candidate goes through the same benchmark.
 - **Keep the width; quantize instead of cutting.** Cutting a vector's
   dimensions loses quality nothing recovers; int8 loses less, and re-scoring
   the top candidates from float wins it back (T-61474, with sources).
 - **A similarity floor belongs to its model's space.** A threshold measured on
-  one model means something else on another; changing the model means
-  measuring the floor again (twin.ts says how it was measured).
-- **Changing the model or width is a migration** (the `data-migration` skill).
-  Every vector is made again; on the box, while two models share the table no
-  index is built and every search reads every vector; in a store, `.near`
-  answers only from what is done until the sweep finishes. Back up
-  ~/.yak/yak.json first and prove it on a `VACUUM INTO` copy.
+  one model means something else on another, so a new model means measuring
+  the floor again (twin.ts says how it was measured).
+- **Changing the model or width is a migration** (`data-migration`). Every
+  vector is made again. On the box, while two models share the table no index
+  is built and every search reads every vector; in a store, `.near` answers
+  only from what is done until the sweep finishes. Back up ~/.yak/yak.json
+  first and prove it on a `VACUUM INTO` copy.
 - **Open:** 1-bit codes for the box's scan (T-59519), `.near` on D1 (T-59333),
   embedding calls spending from an account's budget (T-59279).
 
