@@ -1,40 +1,19 @@
-// The write log (T-37968): every write that reaches a store, kept in that
-// store's own SQLite before the store applies it, so a store that cannot
-// apply it now applies it later instead of losing it. On 2026-09-22 a deploy
-// left jill/coaches refusing to boot, and the 888 writes its page sent in
-// those 46 minutes were answered with an error and kept nowhere.
+// The write log and successful receipts share the Store's own SQLite.
+// A live keyed request commits its mutation and receipt in one graph
+// transaction. Successful input needs no earlier pending/running row: the
+// caller holds it until acknowledged, and a reset resend either finds the
+// exact committed answer or applies an uncommitted mutation.
 //
-// Why here, beside the graph and not in the directory, a per-space object or
-// a Queue: what fails is the graph above the storage — a schema that will not
-// stand, a build that throws — never the SQLite under it, and this table is raised
-// before either runs (graph.ts `#start`). Each app's writes stay in its own
-// object, nothing global sits on the write path, and a row is removed or
-// marked applied in the transaction that commits its batch (`yak/writes`),
-// which makes a replay exactly once: a Queue or another object could only
-// mark it done after the fact.
-// The log tables are plain ones that no vocabulary or app migration owns,
-// so whichever code wakes the object next can read it.
+// Input that cannot commit is kept with its headers and body, so a Store that
+// cannot boot or apply it can recover without asking the caller to retype it.
+// Pending writes replay oldest first. Failed writes wait for another
+// incarnation; interrupted and legacy unreviewed attempts require explicit
+// review. Reviewed retries retain their input and complete outcome forever.
+// Ordinary receipts expire after the resend window; held input never expires.
 //
-// A row is a request as the kernel sent it: its headers (the vouch — who
-// wrote, at what level) and its body. Ordinary unkeyed writes leave when
-// their batch commits; a reviewed retry keeps its body and outcome. A
-// write the store refused on the caller's own input the first time is
-// answered and dropped, as it always was. While the store cannot start, every
-// write waits, and new pending writes replay oldest first on its next healthy
-// wake. A write that fails on a store that started is set aside as `failed`,
-// so the writes behind it go on, and the next incarnation tries it again: a
-// deploy starts one, which is how fixed code reaches it. A reviewed retry
-// stays failed until another explicit retry. A replay that the
-// store now refuses (a `$was` that moved, a property the app no longer
-// declares) is kept as `refused` with the reason and reported, never dropped.
-//
-// A write the kernel sends carries an idempotency key (door.ts `storeOf`),
-// which a resend of it carries too. The row of a keyed write does not leave
-// when its batch commits: it stays `applied`, holding the answer it was given,
-// for as long as a resend could come (`WINDOW`). A resend is the write it
-// repeats: told that answer once applied, and otherwise waiting where the first
-// waits. So a write the store committed just before a deploy reset it, and
-// that the kernel sent again, is applied once.
+// These plain tables belong to no vocabulary or app migration. Their placement
+// beside the graph makes receipt persistence and mutation atomic even when
+// the graph above storage cannot stand.
 import { type Bundle, composed, Refused } from '@yaks/graph'
 import { carries } from '@yaks/secrets'
 import {
@@ -226,7 +205,7 @@ export let writes = (db: Driver, seq?: number, recent = false) =>
     ...r,
     kernel: new Headers(JSON.parse(String(headers))).get('x-yak-kernel') ==
       '1',
-    ...(seq != null && r.audit == 1 && r.state == 'applied'
+    ...(seq != null && r.answer == null && r.state == 'applied'
       ? { answer: outcome(db, seq) }
       : {}),
   }))
@@ -301,15 +280,25 @@ export let keyed = (body: string): boolean => {
 
 let now = () => new Date().toISOString()
 
-/** Keep one write; its place in the log. The answers no resend can come for
- * any more go as it arrives. */
-export let keep = (db: Driver, req: Request, body: string): number => {
+/** Expire only ordinary successful receipts, never held user input. */
+let expire = (db: Driver) => {
   let gone = new Date(Date.now() - WINDOW).toISOString()
-  db.query({
+  let rows = db.query({
     t: 'delete',
     from: LOG,
     where: and(APPLIED, not(AUDIT), lt(col('at'), val(gone))),
+    returning: [col('seq'), col('answer')],
   })
+  for (let row of rows) {
+    if (row.answer == null) {
+      db.query({ t: 'delete', from: ANSWERS, where: at(Number(row.seq)) })
+    }
+  }
+}
+
+/** Keep one write that cannot commit now; its place in the replay log. */
+export let keep = (db: Driver, req: Request, body: string): number => {
+  expire(db)
   let [row] = db.query({
     t: 'insert',
     into: LOG,
@@ -347,7 +336,7 @@ export let first = (db: Driver, key: string): Sent | null => {
       seq: Number(row.seq),
       state: String(row.state),
       why: String(row.why ?? ''),
-      answer: row.audit == 1 && row.state == 'applied'
+      answer: row.state == 'applied' && row.answer == null
         ? outcome(db, Number(row.seq))
         : String(row.answer ?? '[]'),
       audit: row.audit == 1,
@@ -367,13 +356,65 @@ let pieces = function* (text: string) {
   }
 }
 
+/** A successful live request has no earlier log row. The graph commit hook
+ * inserts its receipt in the same transaction as the mutation. With no receipt
+ * there is no committed mutation; the caller still holds its unacknowledged
+ * input and may resend after a reset. */
+export type Receipt = { request: Request }
+export let received = (
+  db: Driver,
+  receipt: Receipt,
+  answer: () => Bundle[],
+) => {
+  let key = receipt.request.headers.get(IDEMPOTENCY)
+  if (!key) return
+  expire(db)
+  let text = JSON.stringify(composed(answer()))
+  let [row] = db.query({
+    t: 'insert',
+    into: LOG,
+    cols: [
+      'at',
+      'headers',
+      'body',
+      KEY,
+      'generation',
+      'state',
+      'answer',
+      'status',
+    ],
+    rows: [[
+      val(now()),
+      val(JSON.stringify([...receipt.request.headers])),
+      lit(''),
+      val(key),
+      lit(1),
+      lit('applied'),
+      val(fits(text) ? text : null),
+      lit(200),
+    ]],
+    returning: [col('seq')],
+  })
+  if (!fits(text)) chunks(db, Number(row.seq), text)
+}
+
+let chunks = (db: Driver, seq: number, text: string) => {
+  for (let [part, body] of [...pieces(text)].entries()) {
+    db.query({
+      t: 'insert',
+      into: ANSWERS,
+      cols: ['seq', 'part', 'body'],
+      rows: [[val(seq), val(part), val(body)]],
+    })
+  }
+}
+
 /** A committed write, in its batch's own transaction: out of the log, or,
  * sent with a key, kept as `applied` with its answer for a resend to be told.
  * The hook receives phase patches; compose them here to keep exactly what
  * `apply()` returns after the transaction. An audited retry keeps its original
- * body and full answer in chunks. An ordinary keyed answer too big for a row
- * keeps each entity's identity,
- * which is what a caller reads to learn what its aliases minted. */
+ * body and full answer in chunks. Ordinary large answers use chunks too,
+ * so every resend receives the complete canonical answer. */
 export let landed = (db: Driver, seq: number, answer: () => Bundle[]) => {
   let [row] = db.query(select({
     cols: [col(KEY), col('audit')],
@@ -383,33 +424,14 @@ export let landed = (db: Driver, seq: number, answer: () => Bundle[]) => {
   if (row?.[KEY] == null && row?.audit != 1) return done(db, seq)
   let all = composed(answer())
   let text = JSON.stringify(all)
-  if (row.audit == 1) {
-    for (let [part, body] of [...pieces(text)].entries()) {
-      db.query({
-        t: 'insert',
-        into: ANSWERS,
-        cols: ['seq', 'part', 'body'],
-        rows: [[val(seq), val(part), val(body)]],
-      })
-    }
-    db.query({
-      t: 'update',
-      table: LOG,
-      set: { state: lit('applied'), answer: lit(null), status: lit(200) },
-      where: at(seq),
-    })
-    return
-  }
-  let kept = fits(text) ? text : JSON.stringify(
-    all.map(({ entity, $alias }) => ({ entity, $alias })),
-  )
+  if (row.audit == 1 || !fits(text)) chunks(db, seq, text)
   db.query({
     t: 'update',
     table: LOG,
     set: {
       state: lit('applied'),
       ...(row.audit == 1 ? {} : { at: val(now()), body: lit('') }),
-      answer: val(kept),
+      answer: val(row.audit == 1 || !fits(text) ? null : text),
       status: lit(200),
     },
     where: at(seq),

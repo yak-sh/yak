@@ -279,6 +279,8 @@ import {
   next,
   parked,
   raise,
+  type Receipt,
+  received,
   replayed,
   retry,
   revived,
@@ -724,12 +726,11 @@ export class Store {
   // manifest they were built from. A deploy is the only thing that moves that
   // manifest, and a new one is a new runner.
   #runs: { said: string; run: Runner } | null = null
-  // The write log's replay (writes.ts). `#landing` is the kept write whose
-  // batch is being applied right now, which the `yak/writes` hook takes out
-  // of the log in that batch's own transaction; `#draining` is the replay in
+  // The write log's replay (writes.ts). `#landing` names a held write or
+  // live receipt; the `yak/writes` hook completes it in the graph transaction; `#draining` is the replay in
   // progress, one at a time; `#stuck` says the last one stopped because the
   // log itself failed, and only the alarm or the next incarnation tries again.
-  #landing: number | null = null
+  #landing: number | Receipt | null = null
   #draining: Promise<void> | null = null
   #callers = new Map<number, (answer: Response) => void>()
   #stuck = false
@@ -2499,9 +2500,9 @@ export class Store {
   // ---- the write log (T-37968, writes.ts) ----------------------------------
 
   /**
-   * A write, kept before anything else happens to it, then applied in its
-   * turn by the one replay that runs at a time, which answers its caller as
-   * the store always did. A write that finds the object refusing to start, or
+   * A live keyed write commits its mutation and successful receipt together,
+   * with no transient log stages. Inputs that cannot commit are kept and
+   * replayed in order by the one drain that runs at a time. A write that finds the object refusing to start, or
    * the log itself failing, is answered 202 and waits in the log. A resend
    * (its idempotency key already in the log) is the write it repeats: told
    * what that one was told, or waiting beside it.
@@ -2518,10 +2519,53 @@ export class Store {
     if (!fits(body) || keyed(body)) return unkept()
     try {
       was = key ? first(this.#sql, key) : null
+      // No pending/running row for a successful live write. Readiness may
+      // yield, so check the key again afterwards and inside #commit, immediately
+      // before synchronous apply. Concurrent same-key requests cannot mutate twice.
+      if (!was && key) {
+        let no = await this.#ready(request)
+        was = key ? first(this.#sql, key) : null
+        if (
+          !was && !no && !this.#stuck && !this.#draining && !waiting(this.#sql)
+        ) {
+          let r = await this.#commit(new Request(request, { body }), {
+            request,
+          })
+          if (r.status < 500) return this.#callerResponse(request, r)
+          // An error after the transaction must not enqueue its mutation again.
+          let committed = key ? first(this.#sql, key) : null
+          if (committed?.state == 'applied') {
+            return this.#callerResponse(
+              request,
+              new Response(committed.answer, JSONED),
+            )
+          }
+          seq = keep(this.#sql, request, body)
+          aside(this.#sql, seq, await said(r.clone()))
+          return this.#park(seq, await said(r))
+        }
+      }
       seq = was?.seq ?? keep(this.#sql, request, body)
     } catch (e) {
-      // Storage that will not take a row: applied as it came, and said.
       defect(e, { request: 'write log', store: this.#name() })
+      // Readiness can throw too. Keep that input if storage still works;
+      // never bypass a keyed receipt after an error and risk a second mutation.
+      if (key) {
+        try {
+          let was = first(this.#sql, key)
+          if (was?.state == 'applied') {
+            return this.#callerResponse(
+              request,
+              new Response(was.answer, JSONED),
+            )
+          }
+          let seq = was?.seq ?? keep(this.#sql, request, body)
+          aside(this.#sql, seq, String(e))
+          return this.#park(seq, String(e))
+        } catch {
+          return refuse(e)
+        }
+      }
       return unkept()
     }
     if (was?.state == 'applied') {
@@ -2691,7 +2735,7 @@ export class Store {
    */
   async #commit(
     request: Request,
-    seq: number | null = null,
+    seq: number | Receipt | null = null,
     opts: ApplyOpts = {},
     spans?: Event[],
   ) {
@@ -2716,6 +2760,12 @@ export class Store {
       body = this.#spokenWrites(request, body)
       let apply = async () => {
         try {
+          if (seq != null && typeof seq != 'number') {
+            let key = seq.request.headers.get(IDEMPOTENCY)
+            let was = key ? first(this.#sql, key) : null
+            if (was?.state == 'applied') return new Response(was.answer, JSONED)
+            if (was) return parked(was.seq, was.why, was.audit)
+          }
           let out
           this.#landing = seq
           try {
@@ -2746,9 +2796,8 @@ export class Store {
     }
   }
 
-  // The hook that closes the loop: inside the transaction of the batch a kept
-  // write brought, that write leaves the log, or stays as its answer for a
-  // resend (writes.ts `landed`). Every other batch — an effect's, a tick's,
+  // The commit hook inserts a live receipt or completes a held write inside
+  // the mutation's transaction. A resend cannot observe one without the other. Every other batch — an effect's, a tick's,
   // one applied after an await — finds `#landing` empty.
   #logging: Plugin = {
     name: 'yak/writes',
@@ -2757,11 +2806,10 @@ export class Store {
     hooks: {
       commit: (bundles) => {
         if (this.#landing != null) {
-          landed(
-            this.#sql,
-            this.#landing,
-            () => published(this.#vocab, bundles),
-          )
+          let answer = () => published(this.#vocab, bundles)
+          if (typeof this.#landing == 'number') {
+            landed(this.#sql, this.#landing, answer)
+          } else received(this.#sql, this.#landing, answer)
           this.#landing = null
         }
         return bundles

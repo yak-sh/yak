@@ -15,6 +15,7 @@ import {
   keyed,
   landed,
   Pending,
+  received,
   retry as retryWrite,
 } from './writes.ts'
 
@@ -587,4 +588,116 @@ test('recent write inspection includes committed outcomes without credentials', 
   assertEquals(JSON.parse(write.answer)[0].entity.eid, 'recent-two')
   assertEquals(write.body, '')
   assertEquals(await (await door('/writes', {}, KERNEL)).json(), [])
+})
+
+test('a live keyed write commits its receipt without pending or running stages', async () => {
+  let o = object()
+  await o.query('.doc')
+  let sql = o.ctx.storage.sql
+  let exec = sql.exec
+  let stages: string[] = []
+  sql.exec = (query, ...bindings) => {
+    if (
+      /^insert into "yak_writes"/i.test(query) ||
+      (/^update "yak_writes"/i.test(query) &&
+        query.includes('set "state" = \'running\''))
+    ) {
+      stages.push(query)
+    }
+    return exec.call(sql, query, ...bindings)
+  }
+  try {
+    let applied = await metaOf(storeOf(resetting(o), NAME)).apply(
+      [{ entity: { eid: '$n' }, doc: { title: 'receipt once' } }],
+      KERNEL,
+    )
+    assertEquals(
+      (await o.query('.doc.title="receipt once"')).map((b) => b.entity.eid),
+      [minted(applied).$n],
+    )
+    assertEquals(stages.length, 1)
+    assert(stages[0].includes("'applied'"))
+    assertEquals(o.writes('applied'), 1)
+    assertEquals(o.writes('pending'), 0)
+  } finally {
+    sql.exec = exec
+  }
+})
+
+test('receipt insertion failure rolls back the mutation and keeps replayable input', async () => {
+  let o = object()
+  await o.query('.doc')
+  let sql = o.ctx.storage.sql
+  let exec = sql.exec
+  let broken = true
+  sql.exec = (query, ...bindings) => {
+    if (
+      broken && /^insert into "yak_writes"/i.test(query) &&
+      query.includes("'applied'")
+    ) {
+      throw new Error('SQLITE_IOERR: receipt failure')
+    }
+    return exec.call(sql, query, ...bindings)
+  }
+  let door = storeOf({
+    idFromName: (name) => name,
+    get: () => ({ fetch: o.fetch }),
+  }, NAME)
+  try {
+    await assertRejects(
+      () => metaOf(door).apply([titled('n1', 'durable failure')], KERNEL),
+      Pending,
+    )
+    assertEquals(await o.title('n1'), undefined)
+    assertEquals(o.writes('failed'), 1)
+    broken = false
+    o.wake()
+    await o.alarm()
+    assertEquals(await o.title('n1'), 'durable failure')
+    assertEquals(o.writes('applied'), 1)
+    assertEquals(o.writes('failed'), 0)
+  } finally {
+    sql.exec = exec
+  }
+})
+
+test('concurrent resends of one key return the same minted answer', async () => {
+  let o = object()
+  let body = JSON.stringify([{
+    entity: { eid: '$n' },
+    doc: { title: 'concurrent' },
+  }])
+  let send = () =>
+    o.fetch(
+      new Request('http://store/apply', {
+        method: 'POST',
+        headers: { ...KERNEL, [IDEMPOTENCY]: 'concurrent-key' },
+        body,
+      }),
+    )
+  let answers = await Promise.all(Array.from({ length: 4 }, async () => {
+    let r = await send()
+    assertEquals(r.status, 200)
+    return r.json()
+  }))
+  for (let answer of answers) assertEquals(answer, answers[0])
+  assertEquals((await o.query('.doc.title=concurrent')).length, 1)
+  assertEquals(o.writes('applied'), 1)
+})
+
+test('ordinary large receipts retain the exact answer across rows', async () => {
+  let o = object()
+  await o.query('.doc')
+  let d = db(o.ctx)
+  let answer: Bundle[] = Array.from(
+    { length: 307 },
+    (_, i) => titled(`n${i}`, '🦊'.repeat(4000)),
+  )
+  let req = new Request('http://store/apply', {
+    method: 'POST',
+    headers: { [IDEMPOTENCY]: 'large-live' },
+  })
+  received(d, { request: req }, () => answer)
+  assertEquals(JSON.parse(first(d, 'large-live')!.answer), answer)
+  assert(scan(d, 'yak_write_answers').length > 1)
 })

@@ -1,4 +1,5 @@
 // Test-only workerd door: real SQL row counters, no account or live app.
+import { writeCost } from './write_cost_fixture.ts'
 import { worldTick } from './play_world_fixture.ts'
 import { idleWake, playMinute } from './play_cost_fixture.ts'
 import type { DurableStorage } from '@yaks/durable-object'
@@ -28,6 +29,9 @@ export class PlayCost {
     }
   }
   async measure(req: Request): Promise<Response> {
+    if (new URL(req.url).searchParams.has('writes')) {
+      return Response.json(await writeCost(this.ctx.storage))
+    }
     if (new URL(req.url).searchParams.has('world')) {
       return Response.json(
         await worldTick(
