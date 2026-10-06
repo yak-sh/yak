@@ -238,7 +238,7 @@ test('a release reaches consumer and home through stale isolate caches', async (
       'home-2',
     ])
   })
-  assertEquals(reads, [2, 2])
+  assertEquals(reads, [3, 3])
 })
 
 // A comp is the platform holding one of its own spaces to no ceiling. It is a

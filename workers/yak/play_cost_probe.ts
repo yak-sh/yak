@@ -1,5 +1,5 @@
 // Test-only workerd door: real SQL row counters, no account or live app.
-import { queryCost } from './query_cost_fixture.ts'
+import { directoryCost, queryCost } from './query_cost_fixture.ts'
 import { writeCost } from './write_cost_fixture.ts'
 import { productionGap } from './production_gap_fixture.ts'
 import { worldTick } from './play_world_fixture.ts'
@@ -31,6 +31,9 @@ export class PlayCost {
     }
   }
   async measure(req: Request): Promise<Response> {
+    if (new URL(req.url).searchParams.has('directory-query')) {
+      return Response.json(await directoryCost(this.ctx.storage))
+    }
     if (new URL(req.url).searchParams.has('query')) {
       return Response.json(await queryCost(this.ctx.storage))
     }

@@ -977,7 +977,7 @@ export type Directory = ReturnType<typeof directory>
 // `now` makes every read of this client fresh (FRESH above). App rows are
 // always fresh: the app and the homes it borrows from must select declarations
 // written by one directory commit, even when two isolates hold old caches.
-// A request asks the space's app roster once and reads every app from it.
+// Address lookups select one app; roster consumers explicitly ask apps().
 //
 // A request asks once. The door, the reach it answers over and the tool itself
 // each ask who the caller is and where they sit, and within one request those
@@ -1041,8 +1041,13 @@ export let directory = (via: Fetcher, now = false) => {
         .find((s) => s.slug != slug && s.slugs.includes(slug))
       return space ?? null
     },
-    app: async (space: Space, slug: string) =>
-      (await self.apps(space)).find((app) => app.slug == slug) ?? null,
+    app: async (space: Space, slug: string) => {
+      let row = await one(
+        `.app.space=${space.eid}&.app.slug=${slug}&${ABOUT}`,
+        true,
+      )
+      return row ? appOf(row) : null
+    },
     // An address the app has left, still pointing at it. A rename moves
     // `app.slug` and keeps the old address in the app's `former`, so the answer
     // is the app of this space that still answers to the address asked for —
