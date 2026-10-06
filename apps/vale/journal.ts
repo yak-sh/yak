@@ -168,8 +168,13 @@ export let tasksOf = (s: Sheet, views: View[]): Task[] => {
   return [...vale, ...views.map((v) => deal(v, !s.unpinned.has(v.eid)))]
 }
 
-/** Pinned tasks everywhere, plus three local tasks: under way before offers,
- * with the most progress first. Pins neither consume slots nor repeat. */
+/** How many tasks the glass follows at once. */
+export let FOLLOWED = 3
+
+/** The tasks the glass follows (the quest card, the compass and the map),
+ * `FOLLOWED` at most: those the hero pinned first, this land's before
+ * another's, then the work in this land closest to done, under way before
+ * offers. The journal lists the rest. */
 export let tracked = (tasks: Task[], here: string): Task[] => {
   let active = tasks.filter((t) => t.state == 'taken' || t.state == 'open')
   let progress = (t: Task) => {
@@ -180,12 +185,16 @@ export let tracked = (tasks: Task[], here: string): Task[] => {
         need
       : 0
   }
+  let pins = active.filter((t) => t.pinned).sort((a, b) =>
+    Number(b.level == here) - Number(a.level == here) ||
+    progress(b) - progress(a)
+  )
   let local = active.filter((t) => !t.pinned && t.level == here)
     .sort((a, b) =>
       Number(b.state == 'taken') - Number(a.state == 'taken') ||
       progress(b) - progress(a)
-    ).slice(0, 3)
-  return [...active.filter((t) => t.pinned), ...local]
+    )
+  return [...pins, ...local].slice(0, FOLLOWED)
 }
 
 /** The journal's lands, current first; within each, pins and work in progress,
@@ -273,10 +282,10 @@ export let goal = (t: Task, at: Record<string, Spot>): Spot[] => {
 /** A spot on the map a task tracked goes to next, and the task's title. */
 export type Mark = { at: Spot; title: string }
 
-/** Where the tasks tracked go next (see `goal`): every spot, for the map,
- * and for the compass the one nearest `me` of the first task's. A task is
- * tracked while it is pinned: under way, or on offer and pinned from a notice
- * board (notices.ts), when it goes to whoever offers it.
+/** Where the tasks the glass follows (`tracked`) go next (see `goal`): every
+ * spot, for the map, and for the compass the one nearest `me` of the first
+ * task's. A quest on offer, pinned from a notice board (notices.ts), goes to
+ * whoever offers it.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -286,8 +295,7 @@ export type Mark = { at: Spot; title: string }
  * let way = guide([t], { [q.giver]: [10, 20] }, [0, 0])
  * assertEquals(way.aim, [10, 20])
  * assertEquals(way.marks, [{ at: [10, 20], title: q.title }])
- * let off = guide([{ ...t, pinned: false }], {}, [0, 0])
- * assertEquals(off, { marks: [], aim: null })
+ * assertEquals(guide([], {}, [0, 0]), { marks: [], aim: null })
  * // a quest on offer, pinned from a board: to whoever offers it
  * let offer = quest({ quest: q, state: 'open', have: 0, pinned: true })
  * assertEquals(guide([offer], { [q.giver]: [3, 4] }, [0, 0]).aim, [3, 4])
@@ -298,8 +306,7 @@ export let guide = (
   at: Record<string, Spot>,
   [x, z]: Spot,
 ): { marks: Mark[]; aim: Spot | null } => {
-  let spots = tasks.filter((t) => t.pinned)
-    .map((t) => ({ t, at: goal(t, at) }))
+  let spots = tasks.map((t) => ({ t, at: goal(t, at) }))
   let far = ([sx, sz]: Spot) => Math.hypot(sx - x, sz - z)
   return {
     marks: spots.flatMap(({ t, at }) =>

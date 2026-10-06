@@ -46,7 +46,7 @@ import {
 } from './grown.ts'
 import { type Clock, hud } from './hud.ts'
 import { releaseNotice } from './release.ts'
-import { guide, tasksOf } from './journal.ts'
+import { guide, tasksOf, tracked } from './journal.ts'
 import { journal } from './journalbook.ts'
 import { pack } from './pack.ts'
 import { pace } from './pace.ts'
@@ -1171,17 +1171,15 @@ let loop = (t: number) => {
         )
       }
       let here = 1 + f.others.length
-      // The hero's quests and deals, and where the ones tracked go next.
+      // The hero's quests and deals, those the glass follows, and where
+      // those go next.
       let tasks = tasksOf(f.sheet, views)
+      let followed = tracked(tasks, f.level)
       let givers = Object.fromEntries(
         f.givers.map((n): [string, Spot] => [n.id, [n.x, n.z]]),
       )
-      let way = guide(
-        tasks,
-        givers,
-        [f.body.x, f.body.z],
-      )
-      h.show(f, here, clockOf(w.day), bearing(cam.yaw), tasks, way.aim)
+      let way = guide(followed, givers, [f.body.x, f.body.z])
+      h.show(f, here, clockOf(w.day), bearing(cam.yaw), followed, way.aim)
       log.show(tasks, f.level)
       actions.show(f)
       // A ward shimmers about the hero while it holds.

@@ -40,7 +40,7 @@ import { STATIONS } from './craft.ts'
 import { type Glyph, glyph } from './glyphs.ts'
 import { fullscreen } from './ui/fullscreen.ts'
 import { ITEMS } from './items.ts'
-import { next, type Task, told, toward, tracked } from './journal.ts'
+import { next, type Task, told, toward } from './journal.ts'
 import type { Spot } from './levels.ts'
 import { cap, type Page, panels, type Spec, type TabSpec } from './panel.ts'
 import type { Quest } from './quests.ts'
@@ -449,11 +449,11 @@ export let hud = (
     while (toasts.children.length > 3) toasts.firstElementChild?.remove()
   }
 
-  // Pins remain visible across lands; local work fills three extra slots.
+  // The quests followed (journal.ts `tracked`), each its title over its next
+  // step.
   let line = (title: string, says: string) =>
     `<span class=Track_Quest><b>${title}</b><span>${says}</span></span>`
-  let tracking = (tasks: Task[], f: Frame) => {
-    let shown = tracked(tasks, f.level)
+  let tracking = (shown: Task[], f: Frame) => {
     if (!shown.length) {
       return line(
         'No quests here.',
@@ -576,14 +576,14 @@ export let hud = (
       })
     },
     /** paint this frame, the camera looking `facing` degrees from north,
-     * tracking the hero's `tasks` (journal.ts), the compass pointing to `goal`,
-     * where the first one tracked goes next */
+     * following the hero's `followed` tasks (journal.ts `tracked`), the
+     * compass pointing to `goal`, where the first of them goes next */
     show: (
       f: Frame,
       here: number,
       clock: Clock,
       facing: number,
-      tasks: Task[],
+      followed: Task[],
       goal: Spot | null,
     ) => {
       let s = f.sheet
@@ -611,7 +611,7 @@ export let hud = (
             capped ? 'Max level' : `${s.xp - from} / ${to - from} xp`,
           ) + `<kbd class=Key>${cap(TABS.character.keys[0])}</kbd>`,
       )
-      put('quest', quest, tracking(tasks, f))
+      put('quest', quest, tracking(followed, f))
       let m = f.foe
       foe.hidden = !m
       if (m) {

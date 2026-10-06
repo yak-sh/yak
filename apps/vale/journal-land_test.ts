@@ -41,43 +41,29 @@ test('every authored quest has its work land, including cross-land asks', () => 
   equal(offered.steps[0].level, GIVERS.find((g) => g.id == away.giver)!.level)
 })
 
-test('tracker keeps all pins plus three local quests nearest completion', () => {
-  let rows = [
+test('the quest card follows three quests at most: pins first, then the local work nearest done', () => {
+  let work = [
     task('offer', 'mossvale', 'open'),
     task('low', 'mossvale', 'taken', 1),
     task('high', 'mossvale', 'taken', 9),
     task('ready', 'mossvale', 'taken', 10),
     task('middle', 'mossvale', 'taken', 5),
-    ...['a', 'b', 'c', 'd'].map((id) =>
-      task(id, 'birchmere', 'taken', 0, true)
-    ),
-    task('local-pin', 'mossvale', 'taken', 0, true),
     task('away', 'birchmere', 'taken', 10),
     task('done', 'mossvale', 'done', 10),
     task('locked', 'mossvale', 'locked'),
   ]
-  equal(tracked(rows, 'mossvale').map((t) => t.id), [
-    'a',
-    'b',
-    'c',
-    'd',
-    'local-pin',
-    'ready',
-    'high',
-    'middle',
-  ])
-  equal(tracked([rows[0], rows[1]], 'mossvale').map((t) => t.id), [
-    'low',
-    'offer',
-  ])
-  equal(tracked(rows, 'reedmarsh').map((t) => t.id), [
-    'a',
-    'b',
-    'c',
-    'd',
-    'local-pin',
-  ])
-  equal(tracked([rows[10]], 'reedmarsh'), [])
+  let pins = [
+    ...['a', 'b'].map((id) => task(id, 'birchmere', 'taken', 0, true)),
+    task('here', 'mossvale', 'taken', 0, true),
+  ]
+  let ids = (rows: Task[], here = 'mossvale') =>
+    tracked(rows, here).map((t) => t.id)
+  equal(ids(work), ['ready', 'high', 'middle'])
+  equal(ids([work[0], work[1]]), ['low', 'offer'])
+  equal(ids([...work, pins[0]]), ['a', 'ready', 'high'])
+  equal(ids([...work, ...pins]), ['here', 'a', 'b'])
+  equal(ids([...work, ...pins], 'reedmarsh'), ['a', 'b', 'here'])
+  equal(ids([work[6], work[7]]), [])
 })
 
 test('journal groups lands current first and keeps each lifecycle section', () => {
