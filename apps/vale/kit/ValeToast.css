@@ -1,4 +1,7 @@
-/* A paper notice; lifetime and screen placement stay with its consumer. */
+/* A paper notice: a moment a little bigger, in moss; a thing gained in its
+   rarity's colour, amber when it is common; a legendary one bigger still,
+   ringed and glowing a while. Its lifetime and its place on the screen stay
+   with its consumer. */
 .ValeToast {
   --tint: var(--ink);
   padding: 0.4rem 0.9rem;
@@ -10,13 +13,23 @@
   color: var(--tint);
   overflow-wrap: anywhere;
 }
-.ValeToast-positive {
-  --tint: var(--positive);
+.ValeToast-big {
+  --tint: var(--deep);
+  font-size: 1.15rem;
 }
-.ValeToast-negative {
-  --tint: var(--negative);
+.ValeToast-gain {
+  --tint: var(--rarity, var(--amber));
 }
 .ValeToast-special {
   --tint: var(--legendary);
-  box-shadow: var(--flat), 0 0 0 2px var(--legendary);
+  font-size: 1.2rem;
+  box-shadow: var(--flat), 0 0 0 2px var(--legendary),
+    0 0 24px color-mix(in srgb, var(--legendary) 70%, transparent);
+  animation: ValeToastGlow 0.9s ease-in-out 3 alternate;
+}
+@keyframes ValeToastGlow {
+  to {
+    box-shadow: var(--flat), 0 0 0 3px var(--legendary),
+      0 0 40px var(--legendary);
+  }
 }

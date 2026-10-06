@@ -11,5 +11,6 @@
   line-height: 1.4;
   text-align: center;
   color: var(--ink);
+  text-shadow: none;
   white-space: nowrap;
 }

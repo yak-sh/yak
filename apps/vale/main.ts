@@ -61,7 +61,7 @@ import { friendlyKey, interaction, prompted, workTarget } from './interact.ts'
 import { type Board, noticeboard, notices } from './notices.ts'
 import { papers } from './papers.ts'
 import { ITEMS, useItems } from './items.ts'
-import { GRADES, piece, RARITIES, type Rarity, tint } from './rarity.ts'
+import { GRADES, piece, RARITIES, type Rarity } from './rarity.ts'
 import type { Held } from './rules.ts'
 import { HOME, levelOf, LEVELS, type Spot } from './levels.ts'
 import { connect, type Hero, type Me, vocabulary } from './net.ts'
@@ -215,7 +215,7 @@ let actions = bar(h.acts)
 let skills = board(h.panels.skills, {
   learn: (id) => {
     g.learn(id)
-    h.toast(`${SKILLS[id].name} learned`, 'Toast-loot')
+    h.toast(`${SKILLS[id].name} learned`, { tone: 'gain' })
     sound.quest()
   },
   respec: () => {
@@ -233,7 +233,7 @@ let notes = noticeboard(h.panels.notices, {
       ? deal.agree(n.job.giver.id, n.job.eid)
       : (g.pin(n.id, true), `Tracked: ${n.title}. Find ${n.from}.`)
     if (!said) return
-    h.toast(said, 'Toast-big')
+    h.toast(said, { tone: 'big' })
     sound.quest()
   },
 })
@@ -247,7 +247,7 @@ let chooseDeal = (a: Act, v: View) => {
     ? deal.hand(v.giver.id, v.eid, s)
     : null
   if (!said) return
-  h.toast(said, a == 'hand' ? 'Toast-loot' : 'Toast-big')
+  h.toast(said, { tone: a == 'hand' ? 'gain' : 'big' })
   sound.quest()
 }
 let dealt = dealbox(h.panels.deal, chooseDeal)
@@ -305,7 +305,7 @@ let feet = new THREE.Vector3()
 // The microphone (voicebox.ts): off until the player turns it on, from the
 // tray's button, whose tap the browser may ask the player about.
 let voice = voices(net, h.mic)
-h.orbs.mic.addEventListener('click', () => void voice.toggle())
+h.orbs.mic.button.addEventListener('click', () => void voice.toggle())
 // The menu: the vale's sound, camera, frame rate and ground detail. Reloading through
 // this tab keeps its hero, and the store keeps its position.
 let frameRate: 30 | 60 = 60
@@ -439,7 +439,7 @@ let make = (who: Me, back: (() => void) | null) => {
     look.name ||= anyName()
     typing = false
     begin(net.create(look))
-    h.toast(`Welcome to Mossvale, ${look.name}.`, 'Toast-big')
+    h.toast(`Welcome to Mossvale, ${look.name}.`, { tone: 'big' })
   })
   dress()
 }
@@ -466,7 +466,7 @@ let choose = (who: Me, heroes: Hero[]) => {
       let o = heroes.find((x) => x.eid == b.dataset.eid)
       if (!o) return
       begin(o.eid, o.position)
-      h.toast(`Welcome back, ${o.name}.`, 'Toast-big')
+      h.toast(`Welcome back, ${o.name}.`, { tone: 'big' })
     })
   )
   gateCard.querySelector('[data-do=new]')?.addEventListener(
@@ -569,8 +569,7 @@ let got = (held: Held, at: THREE.Vector3) => {
   let legend = r == 'legendary'
   h.toast(
     `${legend ? 'Legendary! ' : ''}${t.name}${held.n > 1 ? ` ×${held.n}` : ''}`,
-    `Toast-loot ${tint(r)}${legend ? ' Toast-legend' : ''}`,
-    icon(held.kind),
+    { tone: legend ? 'special' : 'gain', rarity: r, face: icon(held.kind) },
   )
   glow.emit(at, GRADES[r].light, legend ? 40 : 8, {
     speed: legend ? 3 : 1.5,
@@ -609,7 +608,7 @@ let spoiled = (r: Rarity, at: THREE.Vector3) => {
     cam.shake = Math.max(cam.shake, 0.3)
     h.toast(
       `Something ${GRADES[r].name.toLowerCase()} fell!`,
-      `Toast-loot ${tint(r)} Toast-legend`,
+      { tone: 'special', rarity: r },
     )
   }
 }
@@ -681,7 +680,7 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
     got({ eid: e.piece, kind: e.item, n: e.n, rarity: e.rarity }, p(e.at))
   } else if (e.type == 'spoil') spoiled(e.rarity, p(e.at))
   else if (e.type == 'level') {
-    h.toast(`Level ${e.lvl}! You feel stronger.`, 'Toast-big')
+    h.toast(`Level ${e.lvl}! You feel stronger.`, { tone: 'big' })
     glow.emit(heroAt, 0xffd45a, 40, {
       speed: 3,
       up: 3,
@@ -703,7 +702,7 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
   } else if (e.type == 'faint') sound.fall(net.hero)
   else if (e.type == 'rise') h.toast('Back on your feet, by the fire.')
   else if (e.type == 'travel') {
-    h.toast(`${levelOf(e.to)?.name ?? e.to}`, 'Toast-big')
+    h.toast(`${levelOf(e.to)?.name ?? e.to}`, { tone: 'big' })
     sound.quest()
   } else if (e.type == 'say') h.toast(e.text)
   else if (e.type == 'wear') {
@@ -713,8 +712,7 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
         `${t.slot == 'main' || t.slot == 'off' ? 'In hand' : 'On'}: ${
           piece({ eid: e.piece, kind: e.item, rarity: e.rarity }).name
         }`,
-        `Toast-loot ${tint(e.rarity)}`,
-        icon(e.item),
+        { tone: 'gain', rarity: e.rarity, face: icon(e.item) },
       )
     }
   } else if (e.type == 'shot') {
@@ -793,8 +791,7 @@ let worked = (e: Work) => {
     })
     h.toast(
       `Upgraded: ${t.name}`,
-      `Toast-loot ${tint(t.rarity)}`,
-      icon(e.item),
+      { tone: 'gain', rarity: t.rarity, face: icon(e.item) },
     )
     glow.emit(v3(e.at, 1), GRADES[t.rarity].light, 24, {
       speed: 2,
@@ -812,7 +809,7 @@ let worked = (e: Work) => {
     sound.spoil(null, 'rare')
   } else if (e.type == 'trade') {
     let t = TRADES[e.trade]
-    h.toast(`${t.name} ${e.lvl}!`, 'Toast-big', glyphText(t.icon))
+    h.toast(`${t.name} ${e.lvl}!`, { tone: 'big', face: glyphText(t.icon) })
     glow.emit(target, 0x9fe07a, 24, {
       speed: 2,
       up: 2.5,
@@ -884,7 +881,7 @@ let talkTo = async () => {
       accept: () => {
         if (!next) return
         g.accept(next.quest)
-        h.toast(`Quest taken: ${next.quest.title}`, 'Toast-big')
+        h.toast(`Quest taken: ${next.quest.title}`, { tone: 'big' })
         sound.quest()
       },
       hand: () => {
@@ -1087,13 +1084,15 @@ let loop = (t: number) => {
       folk.tick(f)
       let found = camp.tick(f)
       explored.tick(f)
-      if (found) h.toast(`${LEVELS[found.level].name} fire found`, 'Toast-big')
+      if (found) {
+        h.toast(`${LEVELS[found.level].name} fire found`, { tone: 'big' })
+      }
       // A villager's new offer opens the quest card at once.
       let talk = f.talk
       let news = deal.tick(f.level)
       let views = deal.standing(f.sheet)
       for (let n of news) {
-        h.toast(n.text, 'Toast-loot')
+        h.toast(n.text, { tone: 'gain' })
         let offer = views.find((v) => v.eid == n.offer)
         if (talk && offer?.giver.id == talk.id) offerTalk(talk, offer)
       }

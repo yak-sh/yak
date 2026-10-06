@@ -1,19 +1,18 @@
-/* The quests tracked (hud.ts, journal.ts): each its title over the step it
-   is on, and how far that has come. It is a button, which opens the journal,
-   so it stands on a lip. */
+/* The quests followed (hud.ts, journal.ts): a tile each, its title over the
+   step it is on and how far that has come. It is a button, which opens the
+   journal, so it stands on a lip. */
 .Track {
   display: grid;
-  gap: 0.3rem;
   padding: 0.35rem 0.65rem;
   border: 2px solid var(--rim);
   border-radius: var(--radius);
   background: var(--glass);
-  box-shadow: 0 3px 0 var(--lip), 0 7px 16px rgba(20, 30, 15, 0.2);
+  box-shadow: 0 3px 0 var(--lip),
+    0 7px 16px color-mix(in srgb, var(--ink) 20%, transparent);
   font: inherit;
-  font-size: 0.8rem;
-  line-height: 1.25;
+  font-size: 0.85rem;
   text-align: start;
-  color: var(--muted);
+  color: var(--ink);
   cursor: pointer;
   pointer-events: auto;
 
@@ -21,26 +20,4 @@
     translate: 0 2px;
     box-shadow: 0 1px 0 var(--lip);
   }
-}
-
-.Track_Quest {
-  display: grid;
-  min-width: 0;
-
-  & b {
-    overflow: hidden;
-    color: var(--amber);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  & em {
-    font-style: normal;
-    color: var(--deep);
-  }
-}
-
-.Track_Quest + .Track_Quest {
-  padding-top: 0.3rem;
-  border-top: 1px solid var(--line);
 }

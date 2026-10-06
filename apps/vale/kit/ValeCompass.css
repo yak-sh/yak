@@ -1,4 +1,5 @@
-/* The Vale rose's cardinal marks rotate about a fixed forward notch. */
+/* The Vale rose: its marks turn about the notch on its rim, which stays
+   ahead. */
 .ValeCompass {
   --r: calc(var(--rose) * 0.34);
   position: relative;
@@ -19,6 +20,7 @@
   border-bottom: 0;
 }
 .ValeCompass_Mark,
+.ValeCompass_Tick,
 .ValeCompass_Goal {
   position: absolute;
   left: 50%;
@@ -36,13 +38,21 @@
   font-size: 1rem;
   color: var(--ember);
 }
+.ValeCompass_Tick {
+  --r: calc(var(--rose) * 0.36);
+  width: 0.24rem;
+  height: 0.22rem;
+  border-radius: 50%;
+  background: var(--rim);
+}
 .ValeCompass_Goal {
   --r: calc(var(--rose) * 0.5 - 0.05rem);
   width: 0.62rem;
   height: 0.62rem;
   border-radius: 50%;
   background: var(--amber);
-  box-shadow: 0 0 0 2px var(--paper);
+  box-shadow: 0 0 0 2px var(--paper),
+    0 1px 2px color-mix(in srgb, var(--ink) 35%, transparent);
 }
 /* Text for the terminal's bearing; the browser conveys it through the rose
    and its accessible name rather than fitting a number inside the ring. */

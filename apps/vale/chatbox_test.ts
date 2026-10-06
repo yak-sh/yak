@@ -103,6 +103,9 @@ let memory = (): Stash => {
   }
 }
 
+// The tray's chat button, whose marks no test reads.
+let opening = (button: HTMLElement) => ({ button, mark: () => {} })
+
 let setup = (
   opts: CommandFieldOpts = {},
   listing: () => Promise<Tools> = () => Promise.resolve(tools),
@@ -196,7 +199,7 @@ let setup = (
   } as unknown as ReturnType<typeof overlay>
   let chat = chatbox(
     glass,
-    opener,
+    opening(opener),
     net,
     marks,
     folk,
@@ -610,7 +613,7 @@ test('command replies belong only to their caller, while speech goes to the shar
   let glass = h.document.createElement('div')
   let peer = chatbox(
     glass,
-    h.document.createElement('button'),
+    opening(h.document.createElement('button')),
     h.net,
     h.marks,
     h.folk,

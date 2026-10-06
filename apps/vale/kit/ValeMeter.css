@@ -1,8 +1,13 @@
-/* The Vale bar's rounded fill, without its caller's placement. */
+/* A rounded fill `--k` of the way along, its words over it in a row in the
+   middle, lifted off the fill by a shadow. Its caller may set how tall it is
+   (`--tall`), its fill for a meaning of its own (`--fill`), and its words'
+   colour and lift for what lies behind it (`--label`, `--lift`); where it
+   sits is its caller's. */
 .ValeMeter {
   --fill: var(--hp);
   --tall: 1.15rem;
   --label: var(--book-cream);
+  --lift: var(--text-shadow);
   position: relative;
   height: var(--tall);
   overflow: hidden;
@@ -21,17 +26,23 @@
 }
 .ValeMeter_Label {
   position: relative;
-  display: block;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.45rem;
+  padding-inline: 0.6rem;
   font-size: calc(var(--tall) * 0.7);
   line-height: var(--tall);
   text-align: center;
   color: var(--label);
-  text-shadow: var(--text-shadow);
+  white-space: nowrap;
+  text-shadow: var(--lift);
 }
 .ValeMeter-experience {
   --fill: var(--xp);
   --tall: 1.1rem;
   --label: var(--ink);
+  --lift: 0 1px 0 color-mix(in srgb, var(--paper) 50%, transparent);
 }
 .ValeMeter-danger {
   --fill: var(--ember);

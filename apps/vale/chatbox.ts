@@ -36,6 +36,7 @@ import {
   writer,
 } from './chat.ts'
 import type { overlay } from './fx.ts'
+import type { Opener } from './hud.ts'
 import { commandBody } from './command-body.ts'
 import type { Me, Net } from './net.ts'
 import type { Frame } from './play.ts'
@@ -73,11 +74,12 @@ let el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string) => {
   return e
 }
 
-/** Build the chat box into `glass`, opened by `opener`, and the bubbles into
+/** Build the chat box into `glass`, opened by the tray's `opener`, on while
+ * the chat is open and faded while this hero cannot speak, and the bubbles into
  * `marks`. */
 export let chatbox = (
   glass: HTMLElement,
-  opener: HTMLElement,
+  opener: Opener,
   net: Net,
   marks: ReturnType<typeof overlay>,
   folk: Village,
@@ -235,7 +237,7 @@ export let chatbox = (
     }
     open = true
     form.hidden = false
-    opener.classList.add('Orb-on')
+    opener.mark({ selected: true })
     box.classList.add('Chat-open')
     input.focus()
   }
@@ -244,7 +246,7 @@ export let chatbox = (
     open = false
     shut = net.now()
     form.hidden = true
-    opener.classList.remove('Orb-on')
+    opener.mark({ selected: false })
     box.classList.remove('Chat-open')
     input.blur()
   }
@@ -270,16 +272,16 @@ export let chatbox = (
   addEventListener('pointerdown', (e) => {
     if (
       open && !box.contains(e.target as Node) &&
-      !opener.contains(e.target as Node)
+      !opener.button.contains(e.target as Node)
     ) {
       hide()
     }
   }, { signal: listeners.signal })
   // The opener keeps the line's focus, so a second tap folds it away.
-  opener.addEventListener('pointerdown', (e) => e.preventDefault(), {
+  opener.button.addEventListener('pointerdown', (e) => e.preventDefault(), {
     signal: listeners.signal,
   })
-  opener.addEventListener('click', () => open ? hide() : show(), {
+  opener.button.addEventListener('click', () => open ? hide() : show(), {
     signal: listeners.signal,
   })
   let submitting = false
@@ -454,7 +456,7 @@ export let chatbox = (
       if (who.person != me?.person) notices = []
       me = who
       person.value = who.person || undefined
-      opener.classList.toggle('Orb-off', !speaks())
+      opener.mark({ faded: !speaks() })
     },
     /** this frame: the level's lines, and the words over heads near me */
     tick: (f: Frame, head: (eid: string) => THREE.Vector3 | null) => {

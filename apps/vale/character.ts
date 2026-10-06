@@ -5,12 +5,13 @@ import { Section } from '@yaks/ui'
 import { ABILITIES } from './abilities.ts'
 import { LINES, numbers, sheetStats, stat, stats } from './compare.ts'
 import type { Dress } from './figures.ts'
+import { ValeBadge } from './kit/ValeBadge.ts'
 import { ValeKeycap } from './kit/ValeKeycap.ts'
 import { ValeMeter } from './kit/ValeMeter.ts'
 import { fields, type Look, lookOf, picks } from './make.ts'
 import type { Page } from './panel.ts'
 import type { Sheet } from './play.ts'
-import { need } from './rules.ts'
+import { need, TOP } from './rules.ts'
 
 export type Acts = {
   /** keep a new look */
@@ -24,21 +25,32 @@ export type Acts = {
 let same = (a: Look, b: Look) =>
   a.name == b.name && a.tint == b.tint && a.hair == b.hair && a.skin == b.skin
 
-// The hero: their name, and how far they are toward their next level.
-let who = (s: Sheet) => {
+/** How far the hero is toward their next level; full, and saying so, at
+ * the last. */
+export let experience = (s: Sheet) => {
   let from = need(s.lvl), to = need(s.lvl + 1)
-  return h(
-    'div',
-    { class: 'Character_Who' },
-    h('b', { class: 'Character_Name' }, s.name),
-    s.lvl == 60 ? h('small', {}, 'Max level') : h(ValeMeter, {
+  return s.lvl == TOP
+    ? h(
+      ValeMeter,
+      { label: 'XP', value: 1, max: 1, tone: 'experience' },
+      'Max level',
+    )
+    : h(ValeMeter, {
       label: 'XP',
       value: s.xp - from,
       max: to - from,
       tone: 'experience',
-    }),
-  )
+    })
 }
+
+// The hero: their name, and how far they are toward their next level.
+let who = (s: Sheet) =>
+  h(
+    'div',
+    { class: 'Character_Who' },
+    h('b', { class: 'Character_Name' }, s.name),
+    experience(s),
+  )
 
 // The numbers the hero fights by, and their abilities by the keys that use
 // them.
@@ -87,7 +99,7 @@ let page = (s?: Sheet) =>
             class: 'Character_Face',
             'aria-label': 'Your portrait',
           }),
-          s && h('span', { class: 'Badge' }, `Level ${s.lvl}`),
+          s && h(ValeBadge, {}, `Level ${s.lvl}`),
         ),
         s && who(s),
       ),

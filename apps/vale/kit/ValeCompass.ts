@@ -1,11 +1,13 @@
-/** Cardinal marks relative to a bearing, with an optional destination on
- * the rim. Bearings are degrees clockwise from north, supplied by a caller. */
+/** Cardinal marks relative to a bearing, a tick between each two, with an
+ * optional destination on the rim. Bearings are degrees clockwise from
+ * north, supplied by a caller. */
 import { block, type Colors, type Specimen } from '@yaks/ui'
 import type { Sheet } from '@yaks/tui/theme'
 import { Fragment, h } from 'preact'
 
 let Compass = block('div', 'ValeCompass', {
   Mark: 'i',
+  Tick: 'i',
   Goal: 'i',
   Read: 'span',
 })
@@ -29,6 +31,13 @@ export let ValeCompass = (
         'aria-hidden': true,
         style: { '--at': `${i * 90}deg` },
       }, mark)
+    ),
+    [45, 135, 225, 315].map((at) =>
+      h(Compass.Tick, {
+        key: at,
+        'aria-hidden': true,
+        style: { '--at': `${at}deg` },
+      })
     ),
     destination == null ? null : h(Compass.Goal, {
       'aria-hidden': true,

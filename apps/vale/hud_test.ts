@@ -2,12 +2,15 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { hud, talkHtml } from './hud.ts'
+import { hud, type Talk, talkView } from './hud.ts'
 import { GIVERS } from './quests.ts'
 import { quests } from './quests/vale.ts'
 import { completion, WELCOME } from './village-tasks.ts'
 import { greeting } from './villagers.ts'
 import { seedDesigns } from './designs_fixture.ts'
+import { drawn } from './dom_fixture.ts'
+
+let talked = (t: Talk) => drawn(talkView(t))
 
 seedDesigns()
 
@@ -15,17 +18,15 @@ test('Pip reacts to this hero marking the welcome task in Village Tasks', async 
   let quest = quests.find((q) => q.giver == 'pip')!
   let neutral = 'Still got room by the fire.'
   let panel = (line: string) =>
-    parseHTML(`<html><body>${
-      talkHtml({
-        quest,
-        state: 'open',
-        have: 0,
-        greets: line,
-        name: 'Pip',
-        note: line,
-        link: { href: '/village-tasks/', label: 'Village Tasks' },
-      })
-    }</body></html>`).document
+    talked({
+      quest,
+      state: 'open',
+      have: 0,
+      greets: line,
+      name: 'Pip',
+      note: line,
+      link: { href: '/village-tasks/', label: 'Village Tasks' },
+    })
 
   let rows = [{ village_done: { task: WELCOME, player: 'hero-a' } }]
   let done = (hero: string) => completion(() => Promise.resolve(rows), hero)
@@ -49,21 +50,19 @@ test('Pip reacts to this hero marking the welcome task in Village Tasks', async 
 })
 
 test('a villager offer appears as a quest card with both choices', () => {
-  let document = parseHTML(`<html><body>${
-    talkHtml({
-      offer: {
-        eid: 'offer-1',
-        giver: GIVERS[0],
-        give: [{ kind: 'coin', n: 5 }],
-        take: [{ kind: 'tusk', n: 2 }],
-        state: 'open',
-        ends: 0,
-        steps: [{ kind: 'tusk', n: 2, have: 0, deed: false }],
-        ready: false,
-      },
-      name: GIVERS[0].name,
-    })
-  }</body></html>`).document
+  let document = talked({
+    offer: {
+      eid: 'offer-1',
+      giver: GIVERS[0],
+      give: [{ kind: 'coin', n: 5 }],
+      take: [{ kind: 'tusk', n: 2 }],
+      state: 'open',
+      ends: 0,
+      steps: [{ kind: 'tusk', n: 2, have: 0, deed: false }],
+      ready: false,
+    },
+    name: GIVERS[0].name,
+  })
   let body = document.querySelector('.Talk_Body')!.textContent
   assertStringIncludes(body, 'Bring 2 Boar tusk')
   assertStringIncludes(body, 'Reward: 5 Coins')
@@ -76,14 +75,12 @@ test('a villager offer appears as a quest card with both choices', () => {
 })
 
 test('talking to another hero offers a party invitation', () => {
-  let document = parseHTML(`<html><body>${
-    talkHtml({
-      player: true,
-      name: 'Ada <the Bold>',
-      message: 'Travel together.',
-      invite: true,
-    })
-  }</body></html>`).document
+  let document = talked({
+    player: true,
+    name: 'Ada <the Bold>',
+    message: 'Travel together.',
+    invite: true,
+  })
   assertEquals(
     document.querySelector('.Talk_Who')!.textContent,
     'Ada <the Bold>',

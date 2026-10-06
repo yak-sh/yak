@@ -111,8 +111,38 @@
     grid-area: who;
   }
 
-  & > .Rose {
+  & > .Hud_Rose {
     grid-area: rose;
+  }
+}
+
+/* The compass (kit/ValeCompass.ts), as the button that opens the map. */
+.Hud_Rose {
+  position: relative;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+  pointer-events: auto;
+
+  &:active {
+    translate: 0 2px;
+  }
+}
+
+/* A key's cap at the corner of the button it presses, only where there is a
+   keyboard to press it on. */
+:is(.ValeOrb, .Pad, .Hud_Rose, .Vitals) > .ValeKeycap {
+  position: absolute;
+  right: -0.25rem;
+  bottom: -0.25rem;
+  pointer-events: none;
+}
+
+@media (pointer: coarse) {
+  :is(.ValeOrb, .Pad, .Hud_Rose, .Vitals) > .ValeKeycap {
+    display: none;
   }
 }
 
@@ -121,15 +151,40 @@
   display: flex;
   flex-direction: column;
   gap: var(--gap);
+
+  & > * {
+    pointer-events: auto;
+  }
 }
 
-/* The toasts, newest last. */
+/* The toasts, newest last (kit/ValeToast.ts): each comes up into its place,
+   and rises as it fades away. */
 .Hud_Toasts {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.4rem;
   min-height: 0;
+}
+
+.Hud_Toast {
+  max-width: min(26rem, 100%);
+  transition: opacity 0.25s ease-out, translate 0.25s ease-out,
+    scale 0.25s ease-out;
+}
+
+@starting-style {
+  .Hud_Toast {
+    opacity: 0;
+    translate: 0 0.6rem;
+    scale: 0.96;
+  }
+}
+
+.Hud_Toast-out {
+  opacity: 0;
+  translate: 0 -0.5rem;
+  transition-duration: 0.5s;
 }
 
 /* The thumbs' buttons, as a bar along the bottom, its buttons in the

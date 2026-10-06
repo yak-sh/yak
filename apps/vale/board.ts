@@ -9,6 +9,7 @@ import { h } from 'preact'
 import { Body, Button, Rows, Section, Tile } from '@yaks/ui'
 import { ABILITIES, OFF } from './abilities.ts'
 import { glyph } from './glyphs.ts'
+import { ValeBadge } from './kit/ValeBadge.ts'
 import type { Page } from './panel.ts'
 import type { Frame, Sheet } from './play.ts'
 import { canLearn, DISCIPLINES, SKILLS } from './skills.ts'
@@ -137,8 +138,8 @@ export let board = (panel: Page, acts: Learning) => {
         'div',
         { class: 'Pack Board' },
         h(
-          'span',
-          { class: `Badge Board_Points${s.points ? ' Badge-points' : ''}` },
+          ValeBadge,
+          { class: 'Board_Points', calling: s.points > 0 },
           `✦ ${s.points} to spend`,
         ),
         COLS.map((c) =>

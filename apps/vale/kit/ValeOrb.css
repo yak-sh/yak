@@ -1,4 +1,7 @@
-/* A moss action on paper, keeping the old orb's lip without child rules. */
+/* A round button on a lip, its icon in the middle, a share of its size. On,
+   it is moss; with something new behind it, dotted; calling, it swells and
+   glows gold; faded, it is pale; live, it glows the green of a voice going
+   out. Where it sits is its caller's. */
 .ValeOrb {
   --size: var(--orb);
   --face: var(--glass);
@@ -6,6 +9,7 @@
   position: relative;
   display: grid;
   place-items: center;
+  flex: none;
   width: var(--size);
   height: var(--size);
   padding: 0;
@@ -17,13 +21,20 @@
     0 6px 16px color-mix(in srgb, var(--ink) 16%, transparent);
   cursor: pointer;
   touch-action: manipulation;
+
+  & svg {
+    width: calc(var(--size) * 0.48);
+    height: calc(var(--size) * 0.48);
+  }
 }
 .ValeOrb:active {
   translate: 0 2px;
   box-shadow: 0 1px 0 var(--lip);
 }
-.ValeOrb:disabled {
+.ValeOrb:is(:disabled, .ValeOrb-off) {
   opacity: 0.55;
+}
+.ValeOrb:disabled {
   cursor: default;
 }
 .ValeOrb:focus-visible {
@@ -45,4 +56,18 @@
   border-radius: 50%;
   background: var(--ember);
   box-shadow: 0 0 0 2px var(--paper);
+}
+.ValeOrb-call {
+  animation: ValeOrbCall 1s ease-in-out infinite;
+}
+@keyframes ValeOrbCall {
+  50% {
+    scale: 1.15;
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--gold) 65%, transparent);
+  }
+}
+.ValeOrb-live {
+  border-color: var(--voice);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--voice) 60%, transparent),
+    0 0 16px color-mix(in srgb, var(--voice) 65%, transparent);
 }

@@ -1,4 +1,5 @@
-/* Fainted: the glass reddens at its edges, and says where you will wake. */
+/* Fainted: the glass reddens at its edges, and a notice in the middle says
+   where you will wake (hud.ts). */
 .Faint {
   position: absolute;
   inset: 0;
@@ -7,26 +8,11 @@
   place-items: center;
   background: radial-gradient(
     circle,
-    rgba(120, 30, 20, 0) 30%,
-    rgba(120, 30, 20, 0.45)
+    transparent 30%,
+    color-mix(in srgb, var(--char) 45%, transparent)
   );
 
   &[hidden] {
     display: none;
-  }
-}
-
-.Faint_Card {
-  display: grid;
-  gap: 0.2rem;
-  padding: 0.9rem 1.3rem;
-  border-radius: var(--radius-big);
-  background: var(--glass);
-  box-shadow: var(--flat);
-  text-align: center;
-
-  & b {
-    font-size: 1.3rem;
-    color: var(--char);
   }
 }

@@ -1,5 +1,5 @@
-/* Who is here, and the time of day. On a phone held upright the time is its
-   icon alone. */
+/* Who is here, after a green dot, and the time of day. On a phone held
+   upright the time is its icon alone. */
 .Who {
   display: flex;
   align-items: center;
@@ -10,14 +10,6 @@
   box-shadow: var(--flat);
   font-size: 0.9rem;
   white-space: nowrap;
-}
-
-.Who_Dot {
-  width: 0.6rem;
-  height: 0.6rem;
-  border-radius: 50%;
-  background: var(--moss);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--moss) 30%, transparent);
 }
 
 .Who_Clock {
@@ -35,7 +27,7 @@
 }
 
 @media (orientation: portrait) {
-  .Who_Clock span {
+  .Who_Word {
     display: none;
   }
 }

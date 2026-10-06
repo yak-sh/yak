@@ -1,5 +1,5 @@
-/** Vale's display-only parts and their carried stylesheet addresses. No
- * game entrypoint imports this foundation until the corresponding port. */
+/** Vale's display-only parts and their carried stylesheet addresses, which
+ * the game, the guide and the style guide draw with. */
 import { type Composition, type Kit, kits as base } from '@yaks/ui'
 import * as meter from './kit/ValeMeter.ts'
 import * as keycap from './kit/ValeKeycap.ts'
@@ -8,6 +8,7 @@ import * as orb from './kit/ValeOrb.ts'
 import * as recording from './kit/ValeRecording.ts'
 import * as compass from './kit/ValeCompass.ts'
 import * as stats from './kit/ValeStats.ts'
+import * as badge from './kit/ValeBadge.ts'
 import { skin, theme } from './skin.ts'
 
 export { ValeMeter } from './kit/ValeMeter.ts'
@@ -17,6 +18,7 @@ export { ValeOrb } from './kit/ValeOrb.ts'
 export { ValeRecording } from './kit/ValeRecording.ts'
 export { ValeCompass } from './kit/ValeCompass.ts'
 export { ValeStats } from './kit/ValeStats.ts'
+export { ValeBadge } from './kit/ValeBadge.ts'
 
 export let kit: Kit = {
   ValeRecording: {
@@ -53,6 +55,11 @@ export let kit: Kit = {
     ...stats,
     Component: stats.ValeStats,
     css: new URL('./kit/ValeStats.css', import.meta.url),
+  },
+  ValeBadge: {
+    ...badge,
+    Component: badge.ValeBadge,
+    css: new URL('./kit/ValeBadge.css', import.meta.url),
   },
 }
 export let kits = { vale: kit }

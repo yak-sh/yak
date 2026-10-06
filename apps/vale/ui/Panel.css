@@ -167,10 +167,7 @@
      world. */
   & .ValeMeter {
     --label: var(--ink);
-  }
-
-  & .ValeMeter_Label {
-    text-shadow: none;
+    --lift: none;
   }
 }
 

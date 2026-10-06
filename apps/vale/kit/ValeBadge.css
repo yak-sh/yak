@@ -1,8 +1,7 @@
-/* A little pill beside a name: a level, gold while skill points wait to be
-   spent (board.ts). */
-.Badge {
+/* A moss pill of small words; calling, gold. */
+.ValeBadge {
   --face: var(--deep);
-  --tint: #fff;
+  --tint: var(--paper);
   flex: none;
   padding: 0.05rem 0.5rem;
   border-radius: var(--round);
@@ -12,8 +11,7 @@
   color: var(--tint);
   white-space: nowrap;
 }
-
-.Badge-points {
+.ValeBadge-call {
   --face: var(--gold);
   --tint: var(--ink);
 }

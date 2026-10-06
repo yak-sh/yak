@@ -376,9 +376,9 @@ export let station = (
     if (!panel.open || !c || !sheet || !latest) return
     let mine = latest.trades[c], trade = TRADES[c]
     panel.head(
-      `${STATIONS[c].name} <span class=Badge>${
+      `${STATIONS[c].name} <small class=Panel_Note>${
         glyphText(trade.icon)
-      } ${trade.name} ${mine.lvl}</span><small class=Panel_Note>${mine.xp} / ${
+      } ${trade.name} ${mine.lvl} · ${mine.xp} / ${
         tradeNeed(mine.lvl + 1)
       } xp</small>`,
     )

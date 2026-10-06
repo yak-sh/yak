@@ -1,8 +1,10 @@
 /** A labelled quantity, with a bounded fill and readable numbers in either
- * renderer. The caller supplies the value; this part never advances it. */
+ * renderer. The caller supplies the value; this part never advances it.
+ * Words given as children stand over the fill in place of the label and its
+ * numbers, in a row; the label and the numbers are still what is heard. */
 import { block, type Colors, type Specimen } from '@yaks/ui'
 import type { Sheet } from '@yaks/tui/theme'
-import { Fragment, h } from 'preact'
+import { type ComponentChildren, Fragment, h } from 'preact'
 
 let Meter = block('div', 'ValeMeter', { Fill: 'i', Label: 'span' })
 export type MeterProps = {
@@ -10,10 +12,11 @@ export type MeterProps = {
   value: number
   max: number
   tone?: 'health' | 'experience' | 'danger'
+  children?: ComponentChildren
 }
 
 export let ValeMeter = (
-  { label, value, max, tone = 'health' }: MeterProps,
+  { label, value, max, tone = 'health', children }: MeterProps,
 ) => {
   let limit = Number.isFinite(max) ? Math.max(0, max) : 0
   let amount = Number.isFinite(value) ? Math.max(0, Math.min(limit, value)) : 0
@@ -29,7 +32,7 @@ export let ValeMeter = (
       style: { '--k': limit ? amount / limit : 0 },
     },
     h(Meter.Fill, { 'aria-hidden': true }),
-    h(Meter.Label, {}, `${label} ${amount}/${limit}`),
+    h(Meter.Label, {}, children ?? `${label} ${amount}/${limit}`),
   )
 }
 
@@ -51,6 +54,16 @@ export let specimens = (): Specimen[] => [
       value: 24,
       max: 60,
       tone: 'experience',
+    }),
+  ],
+  [
+    'Words of its own',
+    sample({
+      label: 'Garden toad',
+      value: 31,
+      max: 48,
+      tone: 'danger',
+      children: 'Garden toad · level 7',
     }),
   ],
 ]

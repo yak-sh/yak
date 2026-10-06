@@ -32,9 +32,12 @@ import { dropped, type Rarity } from './rarity.ts'
  */
 export { maxHp, need, power } from './progress.ts'
 
+/** The highest level a hero reaches. */
+export let TOP = 60
+
 export let levelOf = (xp: number): number => {
   let l = 1
-  while (l < 60 && xp >= need(l + 1)) l++
+  while (l < TOP && xp >= need(l + 1)) l++
   return l
 }
 

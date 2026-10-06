@@ -34,7 +34,9 @@ let ATTRS: [keyof Tip, string][] = [
   ['note', 'data-tip-note'],
   ['says', 'data-tip-says'],
 ]
-let heard = (t: Tip) => [t.name, t.note, t.says].filter(Boolean).join('. ')
+/** What a screen reader hears of a tip, for a thing that names itself. */
+export let heard = (t: Tip): string =>
+  [t.name, t.note, t.says].filter(Boolean).join('. ')
 
 /** A tip as attributes, for markup.
  *

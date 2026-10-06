@@ -1,5 +1,6 @@
-/* The creature being fought: one slim bar of its health, its name and level
-   written at its start and its health at its end. */
+/* The creature being fought: one slim meter of its health (kit/ValeMeter.ts),
+   its name and level at its start and its health at its end. A boss's fill
+   is char, and one far above the hero fills red, its skull on paper. */
 .Foe {
   align-self: start;
   padding: 0.25rem;
@@ -11,16 +12,8 @@
     display: none;
   }
 
-  & .Bar {
+  & .ValeMeter {
     --tall: 1.4rem;
-  }
-
-  & .Bar > span {
-    display: flex;
-    align-items: baseline;
-    gap: 0.45rem;
-    padding-inline: 0.7rem;
-    white-space: nowrap;
   }
 
   & b {
@@ -33,7 +26,6 @@
     flex: none;
     font-size: 0.85em;
     font-style: normal;
-    font-weight: 400;
     opacity: 0.85;
   }
 
@@ -45,20 +37,21 @@
   }
 }
 
-.Foe-boss .Bar {
+.Foe-boss .ValeMeter {
   --fill: var(--char);
 }
 
 .Foe-danger {
-  & .Bar {
+  & .ValeMeter {
     --fill: var(--hp);
   }
 
   & em {
-    color: #b71519;
-    background: rgba(255, 255, 255, 0.9);
-    border-radius: var(--round);
     padding-inline: 0.3em;
+    border-radius: var(--round);
+    background: var(--paper);
+    color: var(--worse);
+    text-shadow: none;
     opacity: 1;
   }
 }

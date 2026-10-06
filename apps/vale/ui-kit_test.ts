@@ -78,12 +78,8 @@ test('Vale specimens carry browser content and paint in the terminal', () => {
   let expected = {
     ValeMeter: ['Health', 'Experience'],
     ValeKeycap: ['M', 'Shift + Enter'],
-    ValeToast: [
-      'trail',
-      'Quest completed',
-      'Inventory full',
-      'Legendary found',
-    ],
+    ValeToast: ['trail', 'Level 5', 'Boar tusk', 'Legendary!'],
+    ValeBadge: ['Level 5'],
     ValeOrb: ['⌖', 'J', 'P', '♧'],
     ValeCompass: ['N', 'E'],
   }
@@ -97,8 +93,8 @@ test('Vale specimens carry browser content and paint in the terminal', () => {
       assert(terminal.includes(word), `${name}: terminal ${word}`)
     }
   }
-  let toast = print(h(ValeToast, { tone: 'positive' }, 'Saved'), 40, dress)
-  assert(toast.includes(fg(composition.theme.colors.positive)))
+  let toast = print(h(ValeToast, { tone: 'special' }, 'Found'), 40, dress)
+  assert(toast.includes(fg(composition.theme.colors.special)))
   assert(render(h(ValeKeycap, { keycap: '<Esc>' })).includes('&lt;Esc>'))
 })
 
