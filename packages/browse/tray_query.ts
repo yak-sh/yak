@@ -53,13 +53,9 @@ export let sessionFields = [
   'brief.text',
 ]
 
-// This is a view of the store, not a saved board or a new entity.
+// The Sessions destination (navigation.ts): a view of the store, not a saved
+// board or a new entity.
 export let allSessionsPath = '/?sessions'
-export let allSessionsAt = (at: string) => {
-  let url = new URL(at, 'http://x')
-  return url.pathname == '/' && url.searchParams.has('sessions')
-}
-export let allSessionsKey = 'all-sessions'
 export let allSessionsQuery = '.session&.order=-created.at&.fields=' +
   sessionFields.join(',')
 

@@ -122,11 +122,11 @@ test('base facet supplies its controlled components with page vocabulary', () =>
     for (let state of piece.state) assertEquals(v.comp(state)?.sync, 'none')
   }
   assertEquals(v.comp('Edit')?.sync, 'none')
-  assertEquals(v.comp('Stack')?.durable, 'connection')
+  assertEquals(v.comp('Disclosure')?.durable, 'connection')
   assertEquals(v.comp('Refused')?.durable, '0s')
 })
 
-test('base and external specimens draw, Stack emits and keeps its controlled row', async () => {
+test('base and external specimens draw, Disclosure emits and keeps its controlled row', async () => {
   let { document } = parseHTML('<html><body><main></main></body></html>')
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   Object.defineProperty(globalThis, 'document', {
@@ -148,17 +148,7 @@ test('base and external specimens draw, Stack emits and keeps its controlled row
         assertEquals(typeof label, 'string')
         render(node, root)
         await tick()
-        if (piece == kit.components.Stack) {
-          assertEquals(root.textContent?.includes('Detail pane'), true)
-          let strip = root.querySelector('button')!
-          strip.click()
-          await tick()
-          assertEquals(root.textContent?.includes('Detail pane'), false)
-          let buttons = root.querySelectorAll('button')
-          buttons[buttons.length - 1].click()
-          await tick()
-          assertEquals(root.textContent?.includes('Detail pane'), true)
-        } else if (piece == kit.components.Disclosure) {
+        if (piece == kit.components.Disclosure) {
           let shown = !!root.querySelector('p')
           root.querySelector('button')!.click()
           await tick()

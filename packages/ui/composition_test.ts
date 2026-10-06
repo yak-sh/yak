@@ -113,9 +113,9 @@ test('UI and UX with the same names retain distinct specimens and navigation', (
             description: 'UX editor',
             specimens: () => [['behaviour', h(Extra, {}, 'UX EDIT')]],
           },
-          Stack: {
-            description: 'UX stack',
-            specimens: () => [['behaviour', h(Extra, {}, 'UX STACK')]],
+          Disclosure: {
+            description: 'UX disclosure',
+            specimens: () => [['behaviour', h(Extra, {}, 'UX DISCLOSURE')]],
           },
         },
       },
@@ -125,7 +125,7 @@ test('UI and UX with the same names retain distinct specimens and navigation', (
   assert(html.includes('id="Edit"'))
   assert(html.includes('id="ux/base/Edit"'))
   assert(html.includes('UX EDIT'))
-  assert(stopsOf(dressed).includes('ux/base/Stack'))
+  assert(stopsOf(dressed).includes('ux/base/Disclosure'))
   let ui = renderToString(h(Page, { stop: 'Edit', composition: dressed }))
   assert(!ui.includes('UX EDIT'))
   let ux = renderToString(

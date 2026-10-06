@@ -5,21 +5,18 @@ import { act } from 'preact/test-utils'
 import type { Bundle, Comp } from '@yaks/graph'
 import { cache, config } from '../live.ts'
 import { host, reader } from '../host_testing.ts'
-import {
-  allSessionsKey,
-  allSessionsPath,
-  allSessionsQuery,
-} from '../tray_query.ts'
+import { allSessionsPath, allSessionsQuery } from '../tray_query.ts'
 import { fields } from './fields.tsx'
 import { filterField, FilterInput } from './Filter.tsx'
 import { QueryList } from './views/List.tsx'
-import { Navigation, toggleNavigation } from './Navigation.tsx'
+import { Navigation } from './Navigation.tsx'
 import { Tray } from './Tray.tsx'
 import { mount } from './mount.ts'
 import { SessionRelated } from './views/SessionManage.tsx'
 import { useSessions } from './useSessions.ts'
 import { leaseEid } from '../../effects/lease.ts'
 
+let list = 'destination:sessions'
 let sessions: Bundle[] = Array.from({ length: 15 }, (_, i) => ({
   entity: {
     eid: `eeee6386-0000-4000-8000-${String(i + 1).padStart(12, '0')}`,
@@ -44,8 +41,8 @@ test('All sessions reuses the paged list and accepts words and query filters, ne
   let wire = host((ask) => ({ bundles: read(ask.subscribe) }))
   let mounted = mount(
     <>
-      <FilterInput eid={allSessionsKey} />
-      <QueryList eid={allSessionsKey} query={allSessionsQuery} />
+      <FilterInput eid={list} />
+      <QueryList eid={list} query={allSessionsQuery} />
     </>,
   )
   let titles = () =>
@@ -58,15 +55,13 @@ test('All sessions reuses the paged list and accepts words and query filters, ne
       titles(),
       sessions.slice(0, 10).map((b) => (b.doc as Comp).title),
     )
-    await act(() => fields.set(filterField(allSessionsKey), 'Needle'))
+    await act(() => fields.set(filterField(list), 'Needle'))
     await until(() => titles().length == 7)
     assertEquals(
       titles(),
       sessions.filter((_, i) => i % 2).map((b) => (b.doc as Comp).title),
     )
-    await act(() =>
-      fields.set(filterField(allSessionsKey), '.session.status=settled')
-    )
+    await act(() => fields.set(filterField(list), '.session.status=settled'))
     await until(() => titles().length == 8)
     assertEquals(
       titles(),
@@ -74,20 +69,19 @@ test('All sessions reuses the paged list and accepts words and query filters, ne
     )
   } finally {
     mounted.free()
-    fields.set(filterField(allSessionsKey), '')
+    fields.set(filterField(list), '')
     wire.free()
     cache.value = {}
     config.host = prior
   }
 })
 
-test('tray and sidebar both expose All sessions even with no personal sessions', () => {
+test('the sidebar and the tray both lead to every session, even with none of your own', () => {
   using _ = faked({ addEventListener: () => {}, removeEventListener: () => {} })
   let prior = config.host
   config.host = 'browser.test'
   cache.value = {}
   let wire = host(() => ({ bundles: [] }))
-  toggleNavigation(true)
   let mounted = mount(
     <>
       <Navigation />
@@ -97,13 +91,12 @@ test('tray and sidebar both expose All sessions even with no personal sessions',
   try {
     assertEquals(
       [...mounted.root.querySelectorAll('a')].filter((a) =>
-        a.textContent == 'All sessions'
+        ['Sessions', 'All sessions'].includes(a.textContent!)
       ).map((a) => a.getAttribute('href')),
       [allSessionsPath, allSessionsPath],
     )
   } finally {
     mounted.free()
-    toggleNavigation(false)
     wire.free()
     cache.value = {}
     config.host = prior

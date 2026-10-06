@@ -1,5 +1,5 @@
-// A history port is the platform primitive beneath a controlled page stack.
-// Its path names the top page; state holds whatever the app restores with it.
+// A history port is the platform primitive beneath an app's pages.
+// Its path names the page; state holds whatever the app restores with it.
 import type { HistoryPort } from '@yaks/tui/history'
 export type { HistoryEntry, HistoryPort } from '@yaks/tui/history'
 let port: HistoryPort | undefined

@@ -1,0 +1,152 @@
+/* An app's frame: the sidebar on the surface at the left, the page on the
+   floor beside it. A place is a line you can press, its icon then its name in
+   the body's type; where you are is lit. The page's bar is one quiet line,
+   its title in the text's ink; the body under it scrolls on its own.
+   Narrower than a tablet, the sidebar folds away behind the bar's menu and
+   slides over the page when opened, a shade behind it. */
+.Shell {
+  display: flex;
+  height: 100dvh;
+  min-height: 0;
+  background: var(--bg);
+}
+
+.Shell_Side {
+  flex: 0 0 15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: calc(var(--gap) + env(safe-area-inset-top, 0px)) var(--half-gap)
+    var(--gap);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+.Shell_Brand {
+  padding: 2px 10px var(--gap);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+}
+.Shell_Find {
+  padding: 0 2px var(--half-gap);
+}
+.Shell_Item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: max(2rem, var(--tap));
+  padding: 0 10px;
+  border-radius: calc(var(--radius) - 2px);
+  color: var(--text);
+  text-decoration: none;
+}
+.Shell_Item:hover {
+  background: var(--soft);
+}
+.Shell_Item-on {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  font-weight: 600;
+}
+.Shell_Icon {
+  flex: none;
+  display: inline-flex;
+  color: var(--muted);
+}
+.Shell_Icon > svg {
+  width: 16px;
+  height: 16px;
+}
+.Shell_Item-on .Shell_Icon {
+  color: var(--accent);
+}
+.Shell_Label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.Shell_Count {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.Shell_Main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.Shell_Bar {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  min-height: 3rem;
+  padding: calc(var(--half-gap) + env(safe-area-inset-top, 0px))
+    calc(var(--gap) + env(safe-area-inset-right, 0px)) var(--half-gap)
+    calc(var(--gap) + env(safe-area-inset-left, 0px));
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.Shell_Menu {
+  display: none;
+}
+.Shell_Title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+.Shell_Body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column; /* a page that fills the floor takes flex: 1 */
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.Shell_Shade {
+  display: none;
+}
+
+@media (max-width: 44rem) {
+  .Shell_Side {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 10;
+    width: min(85vw, 18rem);
+    transform: translateX(-100%);
+    transition: transform 0.18s ease-out;
+    border-right: 0;
+  }
+  .Shell-open .Shell_Side {
+    transform: none;
+    box-shadow: var(--shadow);
+  }
+  .Shell-open .Shell_Shade {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 9;
+    padding: 0;
+    border: 0;
+    background: color-mix(in srgb, var(--text) 25%, transparent);
+  }
+  .Shell_Menu {
+    display: inline-flex;
+    margin-left: calc(var(--half-gap) * -1);
+  }
+}

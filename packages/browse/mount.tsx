@@ -1,8 +1,5 @@
 import './domain-host.tsx'
 import './browser-links.ts'
-import { bindHistory } from './history.ts'
-import { historyPort } from '@yaks/ui/history'
-import { front } from './components/fields.tsx'
 // Mount the browsing app with the configured plugins’ shared views and home
 // query. The door chooses the facets; domains own their queries and readings.
 import { render } from 'preact'
@@ -10,15 +7,14 @@ import { agreementProbe, boot, clientId, config } from './live.ts'
 import { restore } from './components/nav.tsx'
 import { App } from './components/App.tsx'
 import { extend, ux } from './components/registry.ts'
-import { contributedViews } from './components/inspect.tsx'
-import type { Registry } from '@yaks/render'
-import type { View } from '@yaks/inspect'
+import { contributedViews, type Facet } from './components/inspect.tsx'
+import { offer } from './components/Navigation.tsx'
 import type { Hosting } from './hosting.ts'
 import { lone } from '@yaks/draft/ui'
 import { Ux } from '@yaks/ux'
 
 export let mount = async (
-  facets: { views?: Registry; inspectViews?: View[] }[] = [],
+  facets: Facet[] = [],
   home?: Hosting['home'],
 ) => {
   if (home) {
@@ -33,6 +29,7 @@ export let mount = async (
     }
   }
   extend(contributedViews(facets))
+  offer(facets.flatMap((f) => f.destinations ?? []))
 
   // Name this tab to the socket before it opens, so its writes journal a
   // resolved actor (T-6669). Fill the cache, open the socket, render.
@@ -43,8 +40,6 @@ export let mount = async (
   // person (components/drafts.ts).
   void lone()
 
-  // The door retains the history snapshot; the page graph controls Stack.
-  bindHistory(historyPort(), front)
   restore()
 
   // The cursor is update-only: nav.tsx publishes where this client

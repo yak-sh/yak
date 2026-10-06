@@ -33,7 +33,7 @@ import * as quote from './Quote.ts'
 import * as rows from './Rows.ts'
 import * as say from './Say.ts'
 import * as section from './Section.ts'
-import * as stack from './Stack.ts'
+import * as shell from './Shell.ts'
 import * as stamp from './Stamp.ts'
 import * as table from './Table.ts'
 import * as tabs from './Tabs.ts'
@@ -64,7 +64,7 @@ let modules = {
     Menu: menu,
     Prop: prop,
   },
-  Navigation: { Tabs: tabs, Stack: stack, Index: index, Pager: pager },
+  Navigation: { Tabs: tabs, Index: index, Pager: pager },
   Lists: {
     Tile: tile,
     Rows: rows,
@@ -76,6 +76,7 @@ let modules = {
     Inbox: inbox,
   },
   Page: {
+    Shell: shell,
     Head: head,
     Section: section,
     Panes: panes,

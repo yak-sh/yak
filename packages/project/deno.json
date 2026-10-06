@@ -5,7 +5,8 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./graph": "./graph.ts",
-    "./tools": "./tools.ts"
+    "./tools": "./tools.ts",
+    "./views": "./views.ts"
   },
   "license": "Apache-2.0",
   "description": "A portfolio: the projects work is filed under, the boards that are saved filters over it, the ventures being built, and where a project lands its source.",

@@ -154,9 +154,13 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
           for (let plug of host.config?.plugins ?? []) {
             let plugin = used(plug)
             let facet = await subpath<
-              { views?: Registry; inspectViews?: unknown[] }
+              {
+                views?: Registry
+                inspectViews?: unknown[]
+                destinations?: unknown[]
+              }
             >(plugin, 'views')
-            if (facet?.views || facet?.inspectViews) {
+            if (facet?.views || facet?.inspectViews || facet?.destinations) {
               specs.push(import.meta.resolve(located(`${plugin}/views`)))
             }
           }

@@ -142,7 +142,7 @@ export let interaction = (
     }
     if (['up', 'down', 'pageup', 'pagedown'].includes(k.name)) {
       let scroller = node?.closest('[scroll]') ??
-        root.querySelector('.App_Body')
+        root.querySelector('[scroll]')
       if (scroller) {
         event(scroller, 'wheel', {
           deltaY: k.name == 'up' || k.name == 'pageup' ? -1 : 1,

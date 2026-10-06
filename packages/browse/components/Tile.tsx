@@ -20,7 +20,9 @@ export type TileProps = {
   onOpen?: () => void
 }
 
-export let TileFrame = block('div', 'Tile', { Head: 'span', Title: 'span' })
+// A task's or a board's line, in Browse's own look: `Row`, not the kit's
+// `Tile`, so neither restyles the other.
+export let TileFrame = block('div', 'Row', { Head: 'span', Title: 'span' })
 
 let Part = el('span', 'TileSlot')
 export let TileSlot = (

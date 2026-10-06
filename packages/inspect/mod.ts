@@ -2,7 +2,7 @@
  * Inspect views: entities, vocabulary components, packages, properties, query
  * rows and the map. A host mounts these registrations in its shared registry,
  * answers their declared queries and applies emitted bundles. Browse owns the
- * sidebar, navigation and stack; web and tui are its doors.
+ * sidebar and navigation; web and tui are its doors.
  * @module
  */
 

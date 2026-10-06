@@ -14,9 +14,7 @@ export let open = async (url: string, opts: {
   what?: string
   inspect?: boolean
   wire?: Connection
-  facets?: () => Promise<
-    Parameters<typeof import('./components/inspect.tsx').contributedViews>[0]
-  >
+  facets?: () => Promise<import('./components/inspect.tsx').Facet[]>
 } = {}): Promise<void> => {
   let screen = install()
   let port = terminalHistory({ path: '/', state: null })
@@ -47,10 +45,10 @@ export let open = async (url: string, opts: {
   let { App } = await import('./components/App.tsx')
   await import('./domain-host.tsx')
   let live = await import('./live.ts')
-  let { bindHistory, frames } = await import('./history.ts')
-  let { front } = await import('./components/fields.tsx')
+  let { bindHistory } = await import('./history.ts')
   let { extend, ux } = await import('./components/registry.ts')
   let { contributedViews } = await import('./components/inspect.tsx')
+  let { offer } = await import('./components/Navigation.tsx')
   let { navigate } = await import('./components/nav.tsx')
   let { Ux } = await import('@yaks/ux')
   let { lone } = await import('@yaks/draft/ui')
@@ -77,7 +75,9 @@ export let open = async (url: string, opts: {
       return await go(new Request(input, { ...init, headers }))
     }
   }
-  extend(contributedViews(await opts.facets?.() ?? []))
+  let facets = await opts.facets?.() ?? []
+  extend(contributedViews(facets))
+  offer(facets.flatMap((f) => f.destinations ?? []))
   onMarkdown((text, repo, inline) =>
     h(Md, { text, repo: repo ?? undefined, inline })
   )
@@ -91,7 +91,7 @@ export let open = async (url: string, opts: {
       true,
     )
   }
-  bindHistory(port, front)
+  bindHistory(port)
   let unlisten = port.listen(() =>
     Deno.writeTextFileSync(state, JSON.stringify(port.snapshot()))
   )
@@ -104,7 +104,7 @@ export let open = async (url: string, opts: {
         k.name == 'char' && !k.ctrl && !k.alt && k.text == 'f' &&
         !doc.activeElement?.matches('input,textarea,select,[contenteditable]')
       ) {
-        let field = screen.root.querySelector('.Navigation')?.querySelector(
+        let field = screen.root.querySelector('.Shell_Side')?.querySelector(
           'input',
         )
         if (field) {
@@ -116,7 +116,7 @@ export let open = async (url: string, opts: {
         k.name == 'char' && !k.ctrl && !k.alt && k.text == 'i' &&
         !doc.activeElement?.matches('input,textarea,select,[contenteditable]')
       ) {
-        let field = screen.root.querySelector('.App_Body')?.querySelector(
+        let field = screen.root.querySelector('.Shell_Body')?.querySelector(
           'input,textarea',
         )
         if (field) {
@@ -142,7 +142,6 @@ export let open = async (url: string, opts: {
       }
       return false
     })
-    frames.value
     return h(
       Ux,
       { host: { ...ux, Float: undefined, markup: undefined } },
@@ -155,17 +154,11 @@ export let open = async (url: string, opts: {
       screen,
       sheet: {
         ...sheet({ kits, theme: everforest }),
-        App: { row: true, grow: true },
-        App_Main: { col: true, grow: true },
         'Button-quiet': { block: true },
-        App_Bar: { row: true, spaced: true },
-        App_Body: { grow: true, wrap: true },
         Status: { block: true, fg: c.muted },
         Icon: { glyph: '◇' },
         'lucide-menu': { glyph: '≡' },
         'lucide-ellipsis-vertical': { glyph: '⋮' },
-        Navigation: { width: 30 },
-        'Navigation-shade': { width: 0, glyph: '' },
         Md_B: { bold: true },
         Md_I: { italic: true },
         Md_S: { strike: true },

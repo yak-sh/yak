@@ -53,7 +53,10 @@ test('a document-only vocabulary browses without task, session or box-only reads
   try {
     await tick()
     assertEquals(seen.root.textContent?.includes('App document'), true)
-    assertEquals(seen.root.textContent?.includes('All sessions'), false)
+    assertEquals(
+      [...seen.root.querySelectorAll('.Shell_Label')].map((l) => l.textContent),
+      ['Home'],
+    )
     assertEquals(wire.asked().length, 0)
     assertEquals(problem.value, '')
     assertEquals(seen.root.textContent?.includes('ReferenceError'), false)
@@ -67,7 +70,7 @@ test('a document-only vocabulary browses without task, session or box-only reads
       assertEquals(name in offered, true, name)
     }
     assertEquals(
-      actionsFor(ent('document')).some((a) => a.label == 'show in navigation'),
+      actionsFor(ent('document')).some((a) => a.label == 'add to favorites'),
       false,
     )
   } finally {

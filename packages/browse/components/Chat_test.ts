@@ -64,7 +64,7 @@ test('chat references mount the entity List.Tile renderer', () => {
   )
   try {
     assertEquals(
-      mounted.root.querySelector('.List_Row > .Tile-task .Tile_Title')
+      mounted.root.querySelector('.List_Row > .Row-task .Row_Title')
         ?.textContent,
       'A target',
     )

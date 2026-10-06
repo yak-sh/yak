@@ -41,11 +41,7 @@ export let commands: CliCommand[] = ['browse', 'inspect'].map((name) => ({
         facets: async () =>
           (await Promise.all(
             (host.config.plugins ?? []).map((p) =>
-              subpath<
-                Parameters<
-                  typeof import('./components/inspect.tsx').contributedViews
-                >[0][number]
-              >(
+              subpath<import('./components/inspect.tsx').Facet>(
                 used(p),
                 'views',
               )

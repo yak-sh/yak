@@ -207,20 +207,24 @@ export let InspectPage = (
     : null
 }
 
+/** What a package's `./views` facet offers the app: its renderers, its
+ * inspector views, and the pages it lists in the sidebar. */
+export type Facet = {
+  views?: import('@yaks/render').Registry<
+    Entry | import('@yaks/inspect').View
+  >
+  inspectViews?: import('@yaks/inspect').View[]
+  destinations?: import('../navigation.ts').Destination[]
+}
+
 /** Merge configured contributions without registering query-backed views as
  * native components. The same entry may be offered under both facet exports;
  * it is mounted once, through the query adapter. */
-export let contributedViews = (
-  facets: {
-    views?: import('@yaks/render').Registry
-    inspectViews?: import('@yaks/inspect').View[]
-  }[],
-): Entry[] =>
-  facets.flatMap((f) => [
-    ...adaptViews(f.inspectViews ?? []),
-    ...(f.views?.renderers ?? []).filter((r) =>
-      !(f.inspectViews ?? []).includes(
-        r as unknown as import('@yaks/inspect').View,
-      )
-    ),
-  ])
+export let contributedViews = (facets: Facet[]): Entry[] =>
+  facets.flatMap((f) => {
+    let adapted = new Set<unknown>(f.inspectViews)
+    return [
+      ...adaptViews(f.inspectViews ?? []),
+      ...(f.views?.renderers ?? []).filter((r): r is Entry => !adapted.has(r)),
+    ]
+  })

@@ -3,7 +3,6 @@ import { crewed, gated } from '../../live.ts'
 import * as ui from '@yaks/ui'
 import { linkProps } from '../nav.tsx'
 import { Dot } from '../Dot.tsx'
-import { title } from '../title.tsx'
 import { renderView } from '../registry.ts'
 
 // The Inline role: identify an entity in flowing content — dot for a task +
@@ -25,8 +24,9 @@ let Line = ui.block('a', 'Inline', { Title: 'span' })
 let { Title } = Line
 
 // A settled task's title is struck — the sentence says whether the entity
-// still binds, wherever it's said (the Dependency read, now universal). An
-// entity with no title is called by its id, as every door calls it.
+// still binds, wherever it's said (the Dependency read, now universal). The
+// words are the entity's Title view, so a package's own (a bug's headline)
+// names it here too; one with no title is called by its id.
 // The literal spaces are for the TUI painter: the web's flex layout
 // suppresses whitespace-only items and spaces via gap instead.
 export let Inline = ({ e, dot }: { e: Ent; dot?: boolean }) => (
@@ -37,10 +37,9 @@ export let Inline = ({ e, dot }: { e: Ent; dot?: boolean }) => (
         {' '}
       </>
     )}
-    <Title
-      mod={settled(statusOf(e)) && 'settled'}
-      {...title(e.doc?.title || idOf(e))}
-    />
+    <Title mod={settled(statusOf(e)) && 'settled'}>
+      {renderView(e, 'Title', { in: 'Inline' })}
+    </Title>
   </Line>
 )
 

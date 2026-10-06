@@ -1,4 +1,4 @@
-// The actual Browse App, its controlled history and native events in a terminal.
+// The Browse App, its history and native events in a terminal.
 import './doc.ts'
 import '../testing.ts'
 import '../domain-host.tsx'
@@ -13,7 +13,6 @@ import { App } from '../components/App.tsx'
 import { Ux } from '@yaks/ux'
 import { ux } from '../components/registry.ts'
 import { bindHistory } from '../history.ts'
-import { front } from '../components/fields.tsx'
 import { cache, owner } from '../live.ts'
 import { start } from '../terminal-route.ts'
 
@@ -24,7 +23,7 @@ test('terminal CLI routes ids, map and queries to Browse pages', () => {
   equal(start('.task .count', true), '/?q=.task%20.count')
   equal(start('.doc.title~=Hello', true), '/?q=.doc.title~%3DHello')
 })
-test('the shared Browse App paints its sidebar and root; native fields navigate query pages', async () => {
+test('the shared Browse App paints its sidebar and home; its search field goes to a query page', async () => {
   let root = new TElement('root')
   let target = root as unknown as Parameters<typeof render>[1]
   let port = terminalHistory({ path: '/', state: null })
@@ -36,7 +35,7 @@ test('the shared Browse App paints its sidebar and root; native fields navigate 
     },
   }
   owner.value = undefined
-  bindHistory(port, front)
+  bindHistory(port)
   installViewport(({ children, ...props }) => h('div', props, children))
   let keys = interaction(root, () => {})
   try {
@@ -44,7 +43,7 @@ test('the shared Browse App paints its sidebar and root; native fields navigate 
       render(h(Ux, { host: { ...ux, Float: undefined } }, h(App, {})), target)
     )
     ok(root.textContent.includes('Favorites'))
-    ok(root.textContent.includes('Packages'))
+    ok(root.textContent.includes('Schema'))
     let field = root.querySelector('input')!
     ok(field)
     keys.focus(field)

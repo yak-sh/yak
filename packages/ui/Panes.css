@@ -1,5 +1,5 @@
 /* The window in columns: a narrow nav on the surface, the page on the floor
-   beside it (or whatever column follows, a Stack of pages), a hairline
+   beside it (or whatever column follows), a hairline
    between each two. Each pane keeps its top where it is and scrolls its
    body. A phone-width window stacks them, and the page scrolls as one. */
 .Panes {

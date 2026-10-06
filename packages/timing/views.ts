@@ -190,3 +190,13 @@ export let views: Registry = define([
 ])
 
 export { inspectViews } from './inspect.ts'
+
+/** The page a browsing app's sidebar offers: every trace, newest first. */
+export let destinations = [
+  {
+    key: 'traces',
+    name: 'Traces',
+    icon: 'activity',
+    query: '.trace * .order=-trace.at',
+  },
+]

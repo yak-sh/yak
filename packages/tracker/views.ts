@@ -10,9 +10,14 @@ import type { Bundle } from '@yaks/graph'
 import { comp, type Frame, str } from './model.ts'
 import { count, headline, moment, sha, thrown } from './brief.ts'
 import { tags } from './spread.ts'
-import { frameAt, pip, said, standing, where } from './reading.ts'
+import { frameAt, openBugs, pip, said, standing, where } from './reading.ts'
 
 export { occurrences, openBugs, relatedTraces } from './reading.ts'
+
+/** The page a browsing app's sidebar offers: the open bugs, worst first. */
+export let destinations = [
+  { key: 'bugs', name: 'Bugs', icon: 'bug', query: openBugs },
+]
 
 type Ctx<Node> = RenderContext<Node> & Partial<Shown<Node>>
 let shown = <Node>(ctx: RenderContext<Node>) => ctx as Ctx<Node>

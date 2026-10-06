@@ -59,136 +59,21 @@ html {
   flex-direction: column;
   /* Surface, not --bg: the phone's notch band takes its color from BODY
      (observed on-device; the html background never shows there). The app's
-     dark floor lives on .App instead — same pixels everywhere else. */
+     floor lives on its Shell (@yaks/ui) instead. */
   background: var(--surface);
 }
 
-.App {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: row;
-  background: var(--bg); /* the dark floor body used to carry */
-  /* Lift the document h1's view-timeline over the bar/body split, so the
-     bar's compact title can listen (.CardTitle_Text below). */
-  timeline-scope: --doc-title;
-}
-.App_Main {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-/* One graph-backed wayfinding rail. It is ordinary layout on a wide screen;
-   on a phone it becomes a modal drawer so the current view keeps its width. */
-/* Sidebar layout only. Entries, controls and headings wear their kits. */
-.Navigation {
-  width: 18rem;
-  flex: 0 0 18rem;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  z-index: 5;
-}
-.Navigation[data-drop] {
-  outline: 2px solid var(--accent);
-}
-.SidebarTile {
-  display: flex;
-  align-items: baseline;
-  gap: var(--half-gap);
-  min-width: 0;
-}
-.SidebarTile_Title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.SidebarTile_Id {
-  flex: none;
-  font-family: var(--mono);
-  font-size: 0.75em;
-  color: var(--dim);
-}
-.Navigation-body {
-  overflow-y: auto;
-}
-.Navigation-shade {
-  display: none;
-}
-@media (max-width: 700px) {
-  .Navigation {
-    position: fixed;
-    inset: 0 auto 0 0;
-    width: min(85vw, 20rem);
-  }
-  .Navigation-shade {
-    display: block;
-    position: fixed;
-    inset: 0;
-    z-index: 4;
-  }
-}
-/* The page is a fullscreen card; this bar is its titlebar — brand,
-   Card.Title, view tabs, same grammar as any pinned card's chrome. */
-.App_Bar {
-  display: flex;
-  align-items: center;
-  gap: var(--gap);
-  /* cover + black-translucent draw the bar under the phone's clock — the
-     padding absorbs the notch, the bar's background fills it (sides too,
-     for the landscape notch). */
-  padding: calc(var(--half-gap) + env(safe-area-inset-top, 0px))
-    calc(var(--gap) + env(safe-area-inset-right, 0px))
-    var(--half-gap)
-    calc(var(--half-gap) + env(safe-area-inset-left, 0px));
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-}
-.App_Brand {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text);
-  text-decoration: none;
-  padding: 2px 6px;
-  border-right: 1px solid var(--border);
-}
-/* The bar's breadcrumbs (nav.tsx trail): the last few roots as bare
-   chips, one tight group between brand and title, a › handing off to
-   the current title's own chip. */
-.App_Trail {
-  display: flex;
-  align-items: center;
-  gap: var(--half-gap);
-}
-.App_Trail::after {
-  content: '›';
-  color: var(--dim);
-}
-.App_Body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: auto;
-  /* THIS scroller owns the rubberband: hitting its edge never chains a
-     bounce up to the page. */
-  overscroll-behavior: contain;
-}
-/* Ordinary roots just get breathing room; every root fills the floor —
+/* Ordinary pages just get breathing room; every page fills the floor —
    a board or canvas paints its own. */
-.App_Body > :not(.Canvas, .Board, .Split) {
+.Shell_Body > :not(.Canvas, .Board, .Split) {
   padding: var(--gap);
 }
 /* The two-pane Split paints its own floor, like a board or canvas. */
-.App_Body > .Split {
+.Shell_Body > .Split {
   flex: 1;
   min-height: 0;
 }
-.App_Body > .Board,
+.Shell_Body > .Board,
 .Split_Left > .Board {
   /* vertical padding rides INSIDE the columns (the header band carries
      the top, the scroller's padding the bottom), so rows scroll clear
@@ -197,7 +82,7 @@ html {
   /* Fullscreen, the board fills the floor and each COLUMN scrolls
      itself. One scroller per axis is what buys touch axis-locking: a
      vertical finger flings the column (native momentum, no snap physics
-     damping it), a horizontal one chains up to the snapping App_Body —
+     damping it), a horizontal one chains up to the snapping Shell_Body —
      no more lane-hopping mid-scroll. */
   flex: 1;
   min-height: 0;
@@ -543,26 +428,6 @@ html {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-/* The App bar's compact title defers to the document h1: hidden while
-   the h1 is on screen, fading in as it scrolls out (the h1 names the
-   --doc-title view-timeline; timeline-scope on .App carries it across
-   the bar/body split). No h1 on screen — a session, a board, another
-   tab, or a browser without scroll-driven animations (the 0s animation
-   finishes instantly) — and the title simply shows. The timeline/range
-   lines must FOLLOW the shorthand: `animation:` resets both. */
-.App_Bar .CardTitle_Text {
-  animation: BarTitleReveal linear both;
-  animation-timeline: --doc-title;
-  animation-range: exit;
-}
-@keyframes BarTitleReveal {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
 .CardTitle-dim {
   color: var(--dim);
   font-weight: 400;
@@ -617,13 +482,11 @@ html {
 }
 /* An embedded board scrolls exactly like fullscreen: its host owns x + snap,
    each COLUMN owns its own y. */
-.Card_Scroll:has(> .Board),
-.Peek_Body:has(> .Board) {
+.Card_Scroll:has(> .Board) {
   display: flex;
   overflow-y: hidden;
 }
-.Card_Scroll > .Board,
-.Peek_Body > .Board {
+.Card_Scroll > .Board {
   flex: 1;
   min-width: 0;
 }
@@ -660,9 +523,8 @@ html {
 /* The snap lives on whichever scroller hosts the board. Content without
    snap-align defines no snap areas, so every other page scrolls exactly as
    before. */
-.App_Body,
+.Shell_Body,
 .Card_Scroll,
-.Peek_Body,
 .Split_Left {
   scroll-snap-type: x mandatory;
   scroll-padding-inline: calc(var(--gap) + env(safe-area-inset-left, 0px))
@@ -784,7 +646,7 @@ html {
 
 /* The board's card for a task, Trello-shaped: dot + wrapping title, then the
    shared meta line at dense scale. */
-.Tile {
+.Row {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 2px var(--half-gap);
@@ -796,15 +658,15 @@ html {
   text-decoration: none;
   container-type: inline-size;
 }
-.Tile-task:has(> .TileSlot-before) {
+.Row-task:has(> .TileSlot-before) {
   grid-template-columns: auto auto 1fr;
 }
-.Tile-task:has(> .TileSlot-before) > .Show_Meta {
+.Row-task:has(> .TileSlot-before) > .Show_Meta {
   grid-column: 3;
 }
 /* Density changes metrics, never the shared Meta markup. Provenance gives
    out first; the narrower container rungs below retire assignee, then project. */
-.Tile-dense {
+.Row-dense {
   --meta-wrap: nowrap;
   --meta-gap: var(--half-gap);
   --meta-margin: 0;
@@ -815,55 +677,55 @@ html {
   --meta-hand: none;
   --meta-stamp: none;
 }
-.Tile-task > .Dot {
+.Row-task > .Dot {
   align-self: start;
   margin-top: calc((1lh - 0.72em) / 2); /* pinned to the title's first line */
 }
-.Tile_Title {
+.Row_Title {
   min-width: 0; /* wraps freely — a board card reads, it doesn't truncate */
 }
-.Tile-task > .Show_Meta {
+.Row-task > .Show_Meta {
   grid-column: 2;
   min-width: 0;
   overflow: hidden;
 }
-.Tile > .TileSlot-body {
+.Row > .TileSlot-body {
   grid-column: 1 / -1;
 }
-.Tile > .Show_Meta .Id {
+.Row > .Show_Meta .Id {
   margin-left: auto;
 }
-.Tile > .Show_Meta > .Prop:has(.Show_Assignee) {
+.Row > .Show_Meta > .Prop:has(.Show_Assignee) {
   flex-shrink: 8;
 }
-.Tile > .Show_Meta > .Prop:has(.Show_Project) {
+.Row > .Show_Meta > .Prop:has(.Show_Project) {
   flex-shrink: 2;
 }
-.Tile > .Show_Meta > .Show_Claim {
+.Row > .Show_Meta > .Show_Claim {
   flex-shrink: 4;
 }
 @container (max-width: 20rem) {
-  .Tile > .Show_Meta > .Prop:has(.Show_Assignee) {
+  .Row > .Show_Meta > .Prop:has(.Show_Assignee) {
     display: none;
   }
 }
 @container (max-width: 14rem) {
-  .Tile > .Show_Meta > .Prop:has(.Show_Project) {
+  .Row > .Show_Meta > .Prop:has(.Show_Project) {
     display: none;
   }
 }
-.Tile-board {
+.Row-board {
   grid-template-columns: 1fr;
 }
-.Tile_Head {
+.Row_Head {
   display: flex;
   min-width: 0;
   gap: var(--half-gap);
 }
-.Tile_Head > .Tile_Title {
+.Row_Head > .Row_Title {
   flex: 1;
 }
-.Tile-board > .Show_Meta {
+.Row-board > .Show_Meta {
   grid-column: 1;
   min-width: 0;
   overflow: hidden;
@@ -1042,7 +904,6 @@ html {
   font-size: 1.75rem;
   font-weight: 650;
   line-height: 1.15;
-  view-timeline: --doc-title block;
 }
 .Show_Heading .Dot {
   align-self: start;
@@ -1572,7 +1433,7 @@ html {
   padding: 2px var(--gap);
   cursor: pointer;
 }
-.Search_Hit-sel > :where(.Tile, .ListTile, .SessionRow) {
+.Search_Hit-sel > :where(.Row, .Tile, .ListTile, .SessionRow) {
   background: var(--soft);
 }
 .Search_Snip {
@@ -2097,28 +1958,19 @@ a[data-ref]:hover {
 
 /* A session keeps every control in sight on a phone. Wide hosts place
    references beside the transcript. */
-.Card_Scroll:has(> .Session),
-.Peek_Body:has(> .Session) {
+.Card_Scroll:has(> .Session) {
   padding: 0;
   min-height: 0;
   overflow: hidden;
 }
 /* Every host of a session is its width container: the responsive grid
    below keys off the room the session actually has, not the viewport —
-   so a session peeked or carded narrow on a wide screen still pages. */
-.App_Body:has(> .Session),
-.Card_Scroll:has(> .Session),
-.Peek_Body:has(> .Session) {
+   so a session carded narrow on a wide screen still pages. */
+.Shell_Body:has(> .Session),
+.Card_Scroll:has(> .Session) {
   container-type: inline-size;
 }
-.Peek_Body:has(> .Session) {
-  display: flex;
-  flex-direction: column;
-}
-.Peek_Body > .Session {
-  flex: 1;
-}
-.App_Body > .Session {
+.Shell_Body > .Session {
   padding: 0;
 }
 .Session {
@@ -2301,11 +2153,10 @@ a[data-ref]:hover {
    board's scroll host (see .Split_Left in the board-snap rule above), so a
    board's columns snap within it exactly as they do fullscreen. */
 /* Every host of a Split is its width container — the grid below keys off the
-   room it actually has, not the viewport, so a Split carded or peeked narrow
-   on a wide screen still pages (an element can't query its OWN container). */
-.App_Body:has(> .Split),
-.Card_Scroll:has(> .Split),
-.Peek_Body:has(> .Split) {
+   room it actually has, not the viewport, so a Split carded narrow on a wide
+   screen still pages (an element can't query its OWN container). */
+.Shell_Body:has(> .Split),
+.Card_Scroll:has(> .Split) {
   container-type: inline-size;
 }
 .Split {
@@ -3040,70 +2891,19 @@ a[data-ref]:hover {
   color: var(--muted);
 }
 
-/* The Peek: a link's popover card on desktop — placed above the click by
-   overlay place(), clamped to the viewport. Card-shaped on purpose: what
-   pins to the canvas is what you were already looking at. */
-.Peek {
-  --handle-inset: -1px;
-  position: fixed;
-  z-index: 30;
-  display: flex;
-  flex-direction: column;
-  width: max-content;
-  min-width: 340px;
-  max-width: min(560px, calc(100vw - 2 * var(--gap)));
-  max-height: min(60vh, 640px);
-  background: var(--card);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius);
-  box-shadow: 0 6px 24px rgb(0 0 0 / 0.35);
-  overflow: visible;
-}
-.Peek:has(> .Peek_Body > .Session) {
-  width: min(60rem, calc(100vw - 2 * var(--gap)));
-  max-width: none;
-}
-.Peek-sized {
-  min-width: 160px;
-  max-width: none;
-  max-height: none;
-}
-/* A titlebar like a card's: the title flexes, the view tabs cluster
-   right (a gapless @yaks/ui Tabs row), and the whole
-   head moves the temporary card. The chips keep drag-to-pin. */
-.Peek_Head {
-  display: flex;
-  align-items: center;
-  gap: var(--gap);
-  padding: 4px var(--half-gap);
-  background: var(--surface);
-  border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 12px;
-  cursor: grab;
-  user-select: none;
-}
-.Peek_Body {
-  min-height: 0;
-  padding: var(--half-gap);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  border-radius: 0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px);
-}
-
 /* Density: one renderer, three sizes. A composite view sets --density on a
    cell and the shared row components answer through style queries — metrics
    and elisions only, never markup, so one renderer serves every tier (the
-   .Tile-dense var set, made selectable by a value). Unset = full: each
+   .Row-dense var set, made selectable by a value). Unset = full: each
    rule here is inert outside a container that sets the property, which is
    what keeps boards, lists and inboxes elsewhere untouched. */
 @container style(--density: summary) {
   .ListTile,
-  .Tile {
+  .Row {
     padding: 2px var(--half-gap);
     font-size: 12px;
   }
-  .Tile {
+  .Row {
     --meta-stamp: none; /* provenance is the full tier's luxury */
   }
   .List_Label {
@@ -3114,20 +2914,20 @@ a[data-ref]:hover {
    the prose and provenance yield. The Fleet Grid's tier (D-14587). */
 @container style(--density: glance) {
   .ListTile,
-  .Tile,
+  .Row,
   .SessionRow {
     padding: 0 2px;
     border: 0;
     background: none;
     font-size: 11px;
   }
-  .Tile > .Show_Meta,
+  .Row > .Show_Meta,
   .SessionRow_Brief,
   .List_Label,
   .Stamp {
     display: none;
   }
-  .Tile_Title {
+  .Row_Title {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

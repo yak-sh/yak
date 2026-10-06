@@ -12,7 +12,6 @@ import { loadVocab } from '@yaks/vocab'
 import { Disclosure, disclosureAt } from './Disclosure.ts'
 import { Edit } from './Edit.ts'
 import { Text } from './Text.ts'
-import { panesOf, Stack, stackAt, stacked } from './Stack.ts'
 import { type Host, Ux } from './host.ts'
 import { defineKit, type Kit } from './kit.ts'
 import { uxDoc } from './vocab.ts'
@@ -54,7 +53,7 @@ let DisclosureSample = ({ open }: { open: boolean }): JSX.Element => {
 
 // Read-only text specimens do not type drafts. A real editor uses the
 // consumer's persistent drafts through its host, not this guide's graph.
-let Sample = ({ part }: { part: 'Edit' | 'Text' | 'Stack' }): JSX.Element => {
+let Sample = ({ part }: { part: 'Edit' | 'Text' }): JSX.Element => {
   let front = useMemo(
     () => client(loadVocab([uxDoc]), [], { vault: false, wireVault: false }),
     [],
@@ -73,39 +72,7 @@ let Sample = ({ part }: { part: 'Edit' | 'Text' | 'Stack' }): JSX.Element => {
     }
   }, [])
   useEffect(() => () => front.close(), [])
-  let row = useSignal({
-    entity: { eid: stackAt('guide') },
-    Stack: { panes: ['List', 'Detail'] },
-  })
-  useEffect(() => {
-    if (part != 'Stack') return
-    host.front.mutate([row.value])
-    let watch = host.front.watch('.Stack')
-    let off = watch.subscribe((rows) => {
-      let next = rows[0]
-      if (next) {
-        row.value = { entity: next.entity, Stack: { panes: panesOf(next) } }
-      }
-    })
-    return off
-  }, [])
-  let node = part == 'Stack'
-    ? h(
-      'div',
-      {},
-      h(Stack, {
-        e: row.value,
-        onChange: (b) => {
-          host.front.mutate([b])
-        },
-        Pane: ({ pane }) => h('p', {}, `${pane} pane`),
-        Strip: ({ pane }) => h('span', {}, pane),
-      }),
-      h('button', {
-        onClick: () => host.front.mutate([stacked(row.value, 'Detail')]),
-      }, 'Open detail'),
-    )
-    : part == 'Edit'
+  let node = part == 'Edit'
     ? h(Edit, { e: value, comp: 'Sample', prop: 'title' })
     : h(Text, { e: value, comp: 'Sample', prop: 'title', readOnly: true })
   return h(Ux, { host, at: `guide/${part}` }, node)
@@ -140,16 +107,6 @@ export let kit: Kit = defineKit({
       specimens: () => [[
         'A property at rest (read-only)',
         h('div', {}, h(Sample, { part: 'Edit' })),
-      ]],
-    },
-    Stack: {
-      Component: Stack,
-      description:
-        'Consumer-named panes stacked in the page graph, emitting a bundle',
-      state: ['Stack'],
-      specimens: () => [[
-        'List and detail; press the list strip to return',
-        h('div', {}, h(Sample, { part: 'Stack' })),
       ]],
     },
     Text: {

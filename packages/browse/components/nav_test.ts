@@ -1,16 +1,9 @@
-// A peek belongs to its one opener without making every link reactive.
+// Links open their entity's page in place; menus and routes resolve ids.
 import { test } from '@yaks/testing'
 import { until } from '../testing.ts'
-import { effect } from '@preact/signals'
 import { parseHTML } from 'linkedom'
 import { assertEquals, assertStrictEquals } from '@std/assert'
-import {
-  cache,
-  clearResolved,
-  landSub,
-  peek as shellPeek,
-  unsubscribe,
-} from '../live.ts'
+import { cache, clearResolved, landSub, unsubscribe } from '../live.ts'
 import { host } from '../host_testing.ts'
 import { type Ent } from '../types.ts'
 import {
@@ -20,11 +13,11 @@ import {
   eidOf,
   menu,
   openAt,
-  peek,
   route,
   screenResolving,
   screenTarget,
 } from './nav.tsx'
+import './Entity.tsx'
 import { Id } from './views/Inline.tsx'
 import { mount } from './mount.ts'
 
@@ -35,9 +28,6 @@ let e: Ent = {
   refs: [],
   kids: [],
 }
-
-import { frames } from '../history.ts'
-import { panesOf } from '@yaks/ux'
 
 test('numeric routes resolve confirmed retained rows before a reopen frame', () => {
   cache.value = {}
@@ -61,11 +51,7 @@ test('numeric routes resolve confirmed retained rows before a reopen frame', () 
   }
 })
 
-test('peek state lives above the hot-swap boundary', () => {
-  assertStrictEquals(peek, shellPeek)
-})
-
-test('following an entity stacks its main page on either pointer kind', () => {
+test('following an entity opens its page on either pointer kind', () => {
   let priorMedia = Object.getOwnPropertyDescriptor(globalThis, 'matchMedia')
   let prior = cache.peek()
   cache.value = {
@@ -85,8 +71,6 @@ test('following an entity stacks its main page on either pointer kind', () => {
     })
     openAt('other', {} as MouseEvent)
     assertEquals(route.value, '/T-8')
-    assertEquals(panesOf(frames.value).slice(-2), ['/T-7', '/T-8'])
-    assertEquals(peek.value, [])
   } finally {
     cache.value = prior
     if (priorMedia) Object.defineProperty(globalThis, 'matchMedia', priorMedia)
@@ -172,18 +156,6 @@ test('a point menu carries only the actions its host gives it', () => {
   } finally {
     menu.value = null
   }
-})
-
-test('link props do not subscribe to peek state', () => {
-  let runs = 0
-  let stop = effect(() => {
-    clickProps(e)
-    runs++
-  })
-  peek.value = [{ eid: e.eid, x: 1, y: 2 }]
-  assertEquals(runs, 1)
-  stop()
-  peek.value = []
 })
 
 test('short id chip and browser route round trip; a lettered handle is lost', async () => {

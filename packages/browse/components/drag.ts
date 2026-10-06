@@ -48,7 +48,7 @@ export let resetSize = (d: string) => ({
   ...(d.includes('n') || d.includes('s') ? { h: 0 } : {}),
 })
 
-// Pointer geometry is shared by persistent Pins and temporary Peeks. The
+// Pointer geometry for a Pin and anything else dragged on a canvas. The
 // element previews locally; its owner decides where the one settle write goes.
 export let moveEl = (
   e: PointerEvent,

@@ -48,8 +48,8 @@ let { Tab, Badge } = ui.Tabs
 
 // A tab's face: its icon, plus what is waiting behind it. Only the Inbox
 // carries a count today, and it is the difference between a tab you check
-// and one you remember to check. Shared by all three tab rows (card, peek,
-// fullscreen) so a badge can never appear on one and not another.
+// and one you remember to check. Shared by the card's tab row and the page's
+// bar, so a badge can never appear on one and not the other.
 export let TabFace = ({ view, eid }: { view: string; eid: string }) => {
   return (
     <>

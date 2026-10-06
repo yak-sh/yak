@@ -10,9 +10,6 @@
  *
  * - `Edit`, `Edit.Text`, `Edit.Control`: a property's value changed where it
  *   stands, typed over in place, or its control alone (./Edit.ts, ./Text.ts).
- * - `Stack`: panes stacked as a person goes, those under the top one strips
- *   that return to them; `stackAt`, `panesOf`, `stacked`, `cut`, `LIMIT`,
- *   its eid and bundles, pure (./Stack.ts).
  * - `Disclosure`: a summary opening optional content; `disclosureAt`,
  *   `isOpen`, `disclosed`, its page eid and bundles, pure (./Disclosure.ts).
  * - `Ux`, `useHost`, `Host`: what a page hands down, once per tree
@@ -59,18 +56,6 @@ export {
   type DisclosureProps,
   isOpen,
 } from './Disclosure.ts'
-export {
-  cut,
-  LIMIT,
-  type PaneProps,
-  panesOf,
-  scrolledPane,
-  scrollOf,
-  Stack,
-  stackAt,
-  stacked,
-  type StackProps,
-} from './Stack.ts'
 export { type Editing, useEdit } from './live.ts'
 export {
   at,

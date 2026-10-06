@@ -2,7 +2,7 @@
  * The inspector's own state, as it lives in the page's own graph
  * (./front.json): read through `io.state`, changed by the patches built here
  * and written through `io.set`. One entity, `inspect`, holds the page's
- * (`inspector`: the pane with the keys, a note open, a delete armed, where a
+ * (`inspector`: the page being edited, a note open, a delete armed, where a
  * write was refused); each table holds its own (`table`: its order and
  * page).
  *
@@ -18,7 +18,6 @@ export let INSPECT = 'inspect'
 
 /** The page's state. */
 export type Inspector = {
-  pane?: 'index' | 'page' | null
   editing?: string | null
   note?: string | null
   armed?: string | null
@@ -38,16 +37,14 @@ export let me = (io: Pick<Io, 'state'>): Inspector =>
  *
  * ```ts
  * import { put } from './state.ts'
- * put({ pane: 'index' })
- * // [{ entity: { eid: 'inspect' }, inspector: { pane: 'index' } }]
+ * put({ note: 'T-9 Facts' })
+ * // [{ entity: { eid: 'inspect' }, inspector: { note: 'T-9 Facts' } }]
  * ```
  */
 export let put = (patch: Inspector): Bundle[] => [{
   entity: { eid: INSPECT },
   inspector: patch,
 }]
-
-/** The eid of the page's stack of panes (@yaks/ux `Stack`). */
 
 /** Whether the page of the entity `eid` shows its controls: where the host's
  * take input, once the reader asked to edit it. */

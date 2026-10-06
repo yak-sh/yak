@@ -1,5 +1,5 @@
 import { localPath } from '../hosting.ts'
-import { addressId, entityPath, searchAt } from '../url.ts'
+import { addressId, entityPath } from '../url.ts'
 import { signal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import * as ui from '@yaks/ui'
@@ -14,33 +14,24 @@ import {
   mutate,
   myCursor,
   owner,
-  peek,
   resolveEid,
   resolvingId,
   serverEid,
-  trail,
 } from '../live.ts'
 import { type Action, actionsFor, resolve } from './registry.ts'
 import { SHORT } from '@yaks/id'
 import { type Change, type Ent, IdError, idOf, vocab } from '../types.ts'
 import { dragData } from './drag.ts'
 import { cursorEid } from '../edge.ts'
-import { allSessionsAt } from '../tray_query.ts'
 
-export { peek, trail }
-
-// The door keeps history; browse writes the controlled Stack through it.
+// The door keeps history: one page at a time, each at its own address.
 export { route } from '../history.ts'
 import { go, route } from '../history.ts'
 import { historyPort } from '@yaks/ui/history'
 
 export let navigate = (to: string, options: { replace?: boolean } = {}) => {
   let url = new URL(to, 'http://x')
-  let target = localPath(url.pathname) + url.search + url.hash
-  let was = screenTarget()?.eid
-  peek.value = []
-  go(target, options.replace)
-  track(was)
+  go(localPath(url.pathname) + url.search + url.hash, options.replace)
   mark()
 }
 
@@ -51,7 +42,7 @@ export let appRoute = (path: string) =>
   /^\/[^/?#.]*$/.test(path) &&
   path != '/inspect'
 
-// Following an entity link stacks its page, on either pointer kind.
+// Following an entity link opens its page, on either pointer kind.
 export let openAt = (eid: string, _ev: MouseEvent) =>
   navigate(entityPath(idOf(ent(eid))))
 
@@ -81,8 +72,8 @@ export let screenResolving = (at = route.value) => {
 }
 
 // The plain-click half of an in-app anchor: modifiers and middle-click keep
-// their new-tab forms; a bare click (tap included) opens in place — peeked
-// when the caller knows its entity, navigated when all it has is an href.
+// their new-tab forms; a bare click (tap included) opens the page in place,
+// by its entity when the caller knows it, by its href when that is all it has.
 export let follow = (href: string, eid?: string) => (ev: MouseEvent) => {
   if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button != 0) return
   ev.preventDefault()
@@ -93,7 +84,7 @@ export let follow = (href: string, eid?: string) => (ev: MouseEvent) => {
 
 // A link inside another link keeps its tag and says data-href (@yaks/ui el),
 // and no component owns its clicks. It resolves its entity at click time, so
-// it peeks like any chip, and double click stays the deliberate navigate.
+// it opens like any chip.
 // Heard in the capture phase, ahead of the link around it, which would
 // otherwise take the click as its own.
 let demoted =
@@ -180,8 +171,12 @@ export let linkProps = (e: Ent) => ({
 // is how a REMEMBERED route (below) is screened against the same resolver
 // the screen uses — a route naming a dead entity resolves to nothing.
 export let screenTarget = (at = route.value) => {
-  if (allSessionsAt(at) || searchAt(at) != null) return null
   let url = new URL(at, 'http://x')
+  // `/?q=`, `/?map` and `/?<destination>` are pages of their own, not home.
+  if (
+    url.pathname == '/' &&
+    [...url.searchParams.keys()].some((k) => k != 'v' && k != 'task')
+  ) return null
   let id = addressId(decodeURIComponent(url.pathname.slice(1)))
   if (!id && !vocab.comp('subscription')) return null
   let view = url.searchParams.get('v') ?? undefined
@@ -200,19 +195,6 @@ let routed = (id: string) => {
     if (error instanceof IdError) return undefined
     throw error
   }
-}
-
-// Writing the trail (live.ts holds it, above the hot-swap boundary): both
-// route writers above call track() with where they WERE — landing somewhere
-// already on the trail (a crumb click, the back button) cuts back to it, so
-// the trail never loops and never holds the present. The owner inbox never
-// rides — the brand is that crumb.
-let track = (was?: string) => {
-  let now = screenTarget()?.eid
-  if (!now || now == was) return
-  let i = trail.value.indexOf(now)
-  if (i >= 0) trail.value = trail.value.slice(0, i)
-  else if (was && was != owner.value) trail.value = [...trail.value, was]
 }
 
 // Home always opens the inbox. An explicit entity URL stays put; old ?task=

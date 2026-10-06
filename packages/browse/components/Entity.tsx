@@ -1,11 +1,9 @@
 import '../domain-host.tsx'
-import { SidebarTile } from './views/Sidebar.tsx'
 import { views as commentViews } from '@yaks/kernel/views'
 import { domainBundle } from '../domain-host.tsx'
 import { inspectViews } from './inspect.tsx'
 import { views as secretViews } from '@yaks/secrets/views'
 import { views as connectionViews } from '@yaks/connections/views'
-import { views as docViews } from '@yaks/doc/views'
 import { views as genericViews } from '@yaks/render/views'
 // The curated views and verbs, with the app's quarantine, failure and memo
 // boundaries.
@@ -97,6 +95,7 @@ import { viaName } from '@yaks/kernel/Comments'
 import { block } from '@yaks/ui'
 import { Ux } from '@yaks/ux'
 import { favoriteChange, favoriteLabel } from '../navigation.ts'
+import { TitleText } from './title.tsx'
 
 // Convenience re-exports: Entity.tsx is the front door, registry.ts the
 // engine room — importers of either get the same bindings.
@@ -112,7 +111,6 @@ export { applicable, extend, has, type Renderer, resolve } from './registry.ts'
 // tabs list plus an icon in Card.tsx.
 define([
   ...inspectViews,
-  { view: 'Sidebar.Tile', match: and(), Render: SidebarTile },
   { view: 'Search.Tile', match: and(), Render: SearchTile },
   { view: 'Status', match: parse('.session'), Render: SessionDot },
   // Canvas and List render child entities through this registry. Defer their
@@ -136,7 +134,8 @@ define([
   },
   ...secretViews.renderers,
   ...connectionViews.renderers,
-  ...docViews.renderers.filter((r) => r.view == 'Title'),
+  // A package's own Title (a bug's headline) outranks this by specificity.
+  { view: 'Title', match: parse('.doc.title'), Render: TitleText },
   ...genericViews.renderers.filter((r) => r.view == 'Title'),
   ...commentViews.renderers.map((r) => ({
     ...r,

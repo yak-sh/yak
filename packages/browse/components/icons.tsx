@@ -11,19 +11,26 @@ import { h } from 'preact'
 import type { IconNode } from 'lucide'
 import AlarmClock from 'lucide/dist/esm/icons/alarm-clock.mjs'
 import BookOpen from 'lucide/dist/esm/icons/book-open.mjs'
+import Activity from 'lucide/dist/esm/icons/activity.mjs'
+import Bookmark from 'lucide/dist/esm/icons/bookmark.mjs'
 import Bot from 'lucide/dist/esm/icons/bot.mjs'
 import Box from 'lucide/dist/esm/icons/box.mjs'
 import Braces from 'lucide/dist/esm/icons/braces.mjs'
+import Bug from 'lucide/dist/esm/icons/bug.mjs'
 import CircleAlert from 'lucide/dist/esm/icons/circle-alert.mjs'
 import CircleX from 'lucide/dist/esm/icons/circle-x.mjs'
+import Clock from 'lucide/dist/esm/icons/clock.mjs'
 import Columns2 from 'lucide/dist/esm/icons/columns-2.mjs'
 import Columns3 from 'lucide/dist/esm/icons/columns-3.mjs'
+import Database from 'lucide/dist/esm/icons/database.mjs'
 import Drama from 'lucide/dist/esm/icons/drama.mjs'
 import EllipsisVertical from 'lucide/dist/esm/icons/ellipsis-vertical.mjs'
 import FileText from 'lucide/dist/esm/icons/file-text.mjs'
+import Folder from 'lucide/dist/esm/icons/folder.mjs'
 import Globe from 'lucide/dist/esm/icons/globe.mjs'
 import Hash from 'lucide/dist/esm/icons/hash.mjs'
 import History from 'lucide/dist/esm/icons/rotate-ccw-clock.mjs'
+import House from 'lucide/dist/esm/icons/house.mjs'
 import Image from 'lucide/dist/esm/icons/image.mjs'
 import Inbox from 'lucide/dist/esm/icons/inbox.mjs'
 import Kanban from 'lucide/dist/esm/icons/kanban.mjs'
@@ -39,6 +46,7 @@ import Settings from 'lucide/dist/esm/icons/settings.mjs'
 import Shapes from 'lucide/dist/esm/icons/shapes.mjs'
 import SquareCheck from 'lucide/dist/esm/icons/square-check.mjs'
 import Stamp from 'lucide/dist/esm/icons/stamp.mjs'
+import Star from 'lucide/dist/esm/icons/star.mjs'
 import Table from 'lucide/dist/esm/icons/table.mjs'
 import Workflow from 'lucide/dist/esm/icons/workflow.mjs'
 
@@ -76,6 +84,14 @@ let glyphs: Record<string, IconNode> = {
   workflow: Workflow,
   settings: Settings,
   'arrow-up-right': ArrowUpRight,
+  activity: Activity,
+  bookmark: Bookmark,
+  bug: Bug,
+  clock: Clock,
+  database: Database,
+  folder: Folder,
+  house: House,
+  star: Star,
 }
 
 /** One glyph as Lucide draws it: a 24-unit stroked SVG, sized in pixels. */

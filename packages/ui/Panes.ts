@@ -1,8 +1,8 @@
 /**
  * The screen in columns, side by side: a narrow `Pane-nav` to find the way,
- * and the `Pane-main` page beside it, or any column that takes the rest (a
- * `Stack` of pages). What stays at a pane's top is its `Top`; its `Body`
- * scrolls on its own beneath. `Pane-on` is the pane that has the keyboard.
+ * and the `Pane-main` page beside it, or any column that takes the rest.
+ * What stays at a pane's top is its `Top`; its `Body` scrolls on its own
+ * beneath. `Pane-on` is the pane that has the keyboard.
  *
  * A browser fills the window with the columns, and a phone-width one stacks
  * them. A terminal makes each pane a framed column of the screen, by its

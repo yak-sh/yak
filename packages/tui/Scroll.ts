@@ -53,15 +53,16 @@ export let Scroll = (
     scrollbar = false,
     keyboard = true,
     reveal,
-    top: controlled,
+    start = 0,
     onScroll,
     children,
     ...rest
   }: {
     id: string
-    /** Controlled offset in rows; absent, the region keeps its own. */
-    top?: number
-    /** Reports keyboard, wheel and reveal changes to the controlled offset. */
+    /** The offset in rows each `id` starts at, such as where a page was
+     * left; the region keeps its own from there. */
+    start?: number
+    /** Hears the offset each time keys, the wheel or a reveal move it. */
     onScroll?: (top: number) => void
     scrollbar?: boolean
     keyboard?: boolean
@@ -76,8 +77,7 @@ export let Scroll = (
   let v = useMetric(id)
   let max = Math.max(0, v.total - v.height)
   let shown = reveal ?? v.reveal
-  let [local, setLocal] = useState(0)
-  let top = controlled ?? local
+  let [top, setLocal] = useState(start)
   let setTop = (next: number) => {
     if (next == live.current && next == top) return
     setLocal(next)
@@ -100,8 +100,8 @@ export let Scroll = (
   // A different id is a different transcript, without remounting the key
   // handler above the editor in the focus stack.
   useLayoutEffect(() => {
-    live.current = controlled ?? 0
-    if (controlled == null) setTop(0)
+    live.current = start
+    setLocal(start)
     setStick(follow)
   }, [id, follow])
   useLayoutEffect(() => {

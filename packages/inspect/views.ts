@@ -19,7 +19,7 @@ import { packageViews } from './Package.ts'
 import { propViews } from './Prop.ts'
 
 // Schema names belong to inspect; every consumer asks for this renderer,
-// including the sidebar, query table and any inline reference.
+// including the query table and any inline reference.
 let schemaTiles: View[] = ['_package', '_comp', '_prop'].flatMap((name) => [
   {
     view: 'Tile',

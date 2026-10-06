@@ -28,7 +28,7 @@ let task = (n: number): Bundle => ({
 })
 let read = reader(Array.from({ length: 12 }, (_, i) => task(i + 1)))
 let titles = (root: Element) =>
-  [...root.querySelectorAll('.Tile_Title')].map((n) => n.textContent)
+  [...root.querySelectorAll('.Row_Title')].map((n) => n.textContent)
 
 test('a list grows by appending, and keeps its rows while it loads', async () => {
   let prior = config.host
