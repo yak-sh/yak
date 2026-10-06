@@ -118,7 +118,7 @@ export let models = (): Plugin => ({
   name: '@yaks/model',
   vocab: [modelDoc],
   address: addressed,
-  hooks: { admit: requesting },
+  hooks: { normalize: requesting },
 })
 
 /** One line of a conversation as a model sees it. */

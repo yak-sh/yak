@@ -271,6 +271,8 @@ test('worker exit drains a burst and is idempotent', async () => {
 test('stuck model deadline is an expected bounded exit, not a crash', async () => {
   let dir = await Deno.makeTempDir()
   let db = dir + '/shutdown.db'
+  let installed = await harness(db)
+  await installed.close()
   let r = await remote({
     config: at(db),
     cwd: dir,
@@ -382,6 +384,8 @@ test('selection subscription does not invalidate its own awaiting projection', a
 test('unbounded graceful close finishes a slow response beyond the old deadline', async () => {
   let dir = await Deno.makeTempDir()
   let db = dir + '/graceful.db'
+  let installed = await harness(db)
+  await installed.close()
   let r = await remote({
     config: at(db),
     cwd: dir,

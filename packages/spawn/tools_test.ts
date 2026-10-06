@@ -80,7 +80,7 @@ let shelf = [
 ]
 
 let asked = (g: Graph, args: Record<string, unknown>): [Bundle, Graph] => [
-  { entity: { eid: 'the-call' }, call: { args } },
+  { entity: { eid: mint() }, call: { args } },
   g,
 ]
 

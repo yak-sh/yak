@@ -11,6 +11,9 @@ import { repoSkills } from './skills.ts'
 import { skillEffects, type SkillRuntime } from './skill-effects.ts'
 import { world } from './testing.ts'
 
+let host = crypto.randomUUID()
+let other = crypto.randomUUID()
+
 let report = () => ({
   read: [],
   wrote: [],
@@ -432,7 +435,7 @@ test('skill effects hold separate watcher and per-pass graph leases', async () =
   let stop = new AbortController()
   let entered = deferred()
   let release = deferred()
-  let fx = skillEffects({ graph, me: 'host', stopping: stop.signal }, {
+  let fx = skillEffects({ graph, me: host, stopping: stop.signal }, {
     skills: true,
   }, {
     roots: () => Promise.resolve(['/repo']),
@@ -445,17 +448,17 @@ test('skill effects hold separate watcher and per-pass graph leases', async () =
   })
   let watcher = invoke(fx, 'skill_watch')
   await entered.promise
-  assertEquals((await held(graph, '@yaks/persona/skill_watch'))?.holder, 'host')
-  assertEquals((await held(graph, '@yaks/persona/skill_files'))?.holder, 'host')
+  assertEquals((await held(graph, '@yaks/persona/skill_watch'))?.holder, host)
+  assertEquals((await held(graph, '@yaks/persona/skill_files'))?.holder, host)
   assertEquals(
     await take(graph, '@yaks/persona/skill_watch', {
-      holder: 'other',
+      holder: other,
     }),
     false,
   )
   assertEquals(
     await take(graph, '@yaks/persona/skill_files', {
-      holder: 'other',
+      holder: other,
     }),
     false,
   )
@@ -463,7 +466,7 @@ test('skill effects hold separate watcher and per-pass graph leases', async () =
   await until(async () =>
     (await held(graph, '@yaks/persona/skill_files'))?.holder === null
   )
-  assertEquals((await held(graph, '@yaks/persona/skill_watch'))?.holder, 'host')
+  assertEquals((await held(graph, '@yaks/persona/skill_watch'))?.holder, host)
   stop.abort()
   await watcher
   assertEquals((await held(graph, '@yaks/persona/skill_watch'))?.holder, null)
@@ -471,9 +474,9 @@ test('skill effects hold separate watcher and per-pass graph leases', async () =
 
 test('skill effects leave a contended singleton watcher to its current holder', async () => {
   let graph = leasedGraph()
-  await take(graph, '@yaks/persona/skill_watch', { holder: 'other' })
+  await take(graph, '@yaks/persona/skill_watch', { holder: other })
   let calls = 0
-  let fx = skillEffects({ graph, me: 'host' }, { skills: true }, {
+  let fx = skillEffects({ graph, me: host }, { skills: true }, {
     roots: () => Promise.resolve(['/repo']),
     sync: () => {
       calls++
@@ -484,7 +487,7 @@ test('skill effects leave a contended singleton watcher to its current holder', 
   assertEquals(calls, 0)
   assertEquals(
     (await held(graph, '@yaks/persona/skill_watch'))?.holder,
-    'other',
+    other,
   )
 })
 
@@ -496,7 +499,7 @@ test('skill lease acquisition errors propagate through the awaited watcher', asy
   }
   let fx = skillEffects({
     graph,
-    me: 'host',
+    me: host,
     stopping: new AbortController().signal,
   }, {
     skills: true,
@@ -529,7 +532,7 @@ test('skill per-pass lease release errors reject the awaited effect and retry', 
     return apply(bundles, ...rest)
   }
   let calls = 0
-  let fx = skillEffects({ graph, me: 'host' }, { skills: true }, {
+  let fx = skillEffects({ graph, me: host }, { skills: true }, {
     roots: () => Promise.resolve(['/repo']),
     sync: () => {
       calls++

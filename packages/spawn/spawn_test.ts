@@ -152,10 +152,12 @@ test('a request made beside a server is started by the server, not the command',
     return { g, fx }
   }
   let where = dir()
-  let cmd = process('cmd')
+  let command = crypto.randomUUID()
+  let serving = crypto.randomUUID()
+  let cmd = process(command)
   let g = cmd.g
   // The server is up and working the pool.
-  await take(g, `${POOL}/server`, { holder: 'server' })
+  await take(g, `${POOL}/${serving}`, { holder: serving })
   try {
     await g.apply(asking('S1', 'E1', 'do the thing'))
     await cmd.fx.work(g)
@@ -165,7 +167,7 @@ test('a request made beside a server is started by the server, not the command',
     assertEquals(comp(row, 'effect')?.state, 'pending')
     assertEquals(comp(row, 'effect')?.attempts, 0)
     // The server's next pass starts it.
-    let server = process('server')
+    let server = process(serving)
     await server.fx.work(server.g)
     await until(
       async () => comp((await g.read('.session&*'))[0], 'exit'),

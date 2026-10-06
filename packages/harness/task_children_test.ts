@@ -448,7 +448,7 @@ test('completion author survives database reopen; another parent still receives 
         entity: { eid: 'final' },
         entry: { session: 'c', seq: 1 },
         content: { body: 'Finished' },
-        output: { source: 'source' },
+        output: { source: crypto.randomUUID() },
       },
     ])
     await deliverChild(h.g, 'c')

@@ -100,13 +100,22 @@ export let observe = async (
 ) => {
   let decoder = new TextDecoder()
   let pending = ''
+  let running = false
   let read = (line: string, done = false) => {
     line = line.replace(ansi, '')
     let test = line.match(/^(.+?) \.\.\./)
-    if (test) progress.name = test[1]
-    if (done && / \.\.\. (ok|FAILED|ignored)(?: |$)/.test(line)) {
+    if (test) {
+      progress.name = test[1]
+      running = true
+    }
+    // Console output can end the test's opening line. Its result then starts
+    // a line of its own; a repeated result outside a running test is no news.
+    let result =
+      /^(?:.+? \.\.\. )?(ok|FAILED|ignored) \(\d+(?:µs|ms|s|m\d+s)\)$/
+    if (done && running && result.test(line)) {
       progress.completed = Date.now()
       progress.count++
+      running = false
     }
   }
   for await (let bytes of stream) {

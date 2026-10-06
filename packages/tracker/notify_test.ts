@@ -5,7 +5,11 @@ import { notify } from './effects.ts'
 import { capture } from './report.ts'
 import { comp } from './model.ts'
 
-let options = { to: 'person', from: 'tracker@example.test', store: 'box' }
+let options = {
+  to: crypto.randomUUID(),
+  from: 'tracker@example.test',
+  store: 'box',
+}
 let opened = async (g: ReturnType<typeof fixture>, id: string) => {
   await g.apply(
     capture(`broken ${id}`, {

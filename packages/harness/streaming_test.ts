@@ -233,7 +233,7 @@ test('restart resumes a dispatched attempt from its partial history', async () =
         entity: { eid: 'request' },
         entry: { session: 'interrupted-session' },
         ask: { through: 'question' },
-        attempt: { by: 'holder' },
+        attempt: { by: crypto.randomUUID() },
       },
       {
         entity: { eid: 'partial' },
@@ -277,7 +277,7 @@ test('fork admission cannot capture mutable in-flight output', async () => {
         entity: { eid: 'request' },
         entry: { session: 'parent' },
         ask: {},
-        attempt: { by: 'holder' },
+        attempt: { by: crypto.randomUUID() },
       },
       {
         entity: { eid: 'partial' },

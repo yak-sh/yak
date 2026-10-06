@@ -4,6 +4,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, derivedEid } from '@yaks/graph'
 import { artifactStore } from '@yaks/blob'
+import { checkoutAt } from '@yaks/git/host'
 import type { Item, Request } from '@yaks/model'
 import { sessionTools, usingBefore } from '@yaks/session'
 import { local } from './local.ts'
@@ -233,9 +234,14 @@ test('user-only skills are absent from model discovery and refused by the loader
       cwd: at.repo,
       worktree: null,
     })
+    let tree = await checkoutAt(h.g, at.repo)
+    assert(tree)
     await h.g.apply([{
       entity: { eid: 'session' },
-      home: { worktree: 'missing' },
+      home: { worktree: tree.entity.eid },
+    }, {
+      entity: tree.entity,
+      worktree: null,
     }])
     assertEquals(await skillCwd(h.g, 'session', at.repo), undefined)
   } finally {

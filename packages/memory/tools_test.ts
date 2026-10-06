@@ -109,6 +109,13 @@ let said = (session: string, seq: number, body: string): Bundle => ({
 let jeff = { by: 'jeff', via: 's1' }
 let agent = { by: 'agent', via: 's1' }
 
+let writers = (g: G) =>
+  write(g, [
+    { entity: { eid: 'jeff' }, person: { name: 'Jeff' } },
+    { entity: { eid: 'agent' }, session: {} },
+    { entity: { eid: 's1' }, session: {} },
+  ])
+
 test('every memory tool is declared and implemented', () => {
   let declared = loadTools(memoryDoc, tools).map((t) => t.name)
   assertEquals(declared.filter((name) => !tools[name]), [])
@@ -175,6 +182,7 @@ test('find answers the topics holding the words, else every one by name', async 
 
 test('words the graph already holds are marked where they are', async () => {
   let g = fresh()
+  await writers(g)
   await write(g, [
     said('s1', 1, 'ok so the persona.\nuse grams,   never cups. and commit'),
   ], jeff)
@@ -203,6 +211,7 @@ test('words the graph already holds are marked where they are', async () => {
 
 test('the words are marked where their speaker first said them', async () => {
   let g = fresh()
+  await writers(g)
   await write(g, [{
     entity: { eid: 'quote' },
     doc: { body: 'Jeff says: "always commit your changes"' },
@@ -223,6 +232,7 @@ test('the words are marked where their speaker first said them', async () => {
 
 test('source is where a person said the words, never a quote of them', async () => {
   let g = fresh()
+  await writers(g)
   await write(g, [{
     entity: { eid: 'quote' },
     doc: { body: 'Jeff says: "always commit your changes"' },
@@ -235,6 +245,7 @@ test('source is where a person said the words, never a quote of them', async () 
 
 test('on marks the entity named, only for words it holds', async () => {
   let g = fresh()
+  await writers(g)
   await write(g, [
     { entity: { eid: 't1' }, task: {}, doc: { title: 'a task' } },
     { entity: { eid: 'b1' }, task: {} },
@@ -307,6 +318,7 @@ test('feedback names who gave it, or says only that somebody did', async () => {
 
 test('a patch leaves alone what the line left out', async () => {
   let g = fresh()
+  await write(g, [{ entity: { eid: 'p19' }, project: {} }])
   await save({ said: 'use grams, never cups', title: 'measurements' }, g)
   let [m] = await marks(g)
   await save({ id: m, scope: 'p19', context: 'the recipe app' }, g)
@@ -350,6 +362,7 @@ test('a memory this graph does not hold is said so', async () => {
 
 test('a recall answers whole memories, each wearing its token', async () => {
   let g = fresh()
+  await write(g, [{ entity: { eid: 'jeff' }, person: { name: 'Jeff' } }])
   await save({ said: 'use grams, never cups', feedback: 'jeff' }, g)
   await save({ said: 'always commit your changes' }, g)
   let out = await ask('memory_recall', {}, g)
@@ -368,17 +381,19 @@ test('a recall answers whole memories, each wearing its token', async () => {
 
 test('a recall stays in its space, and words never speak its grammar', async () => {
   let g = fresh()
+  let ada = crypto.randomUUID()
+  let bo = crypto.randomUUID()
   let [a] = eids(
     await write(
       g,
-      saved({ eid: '$a', said: 'how they like it', space: 'ada' }),
+      saved({ eid: '$a', said: 'how they like it', space: ada }),
     ),
   )
   let [b] = eids(
-    await write(g, saved({ eid: '$b', said: 'how they like it', space: 'bo' })),
+    await write(g, saved({ eid: '$b', said: 'how they like it', space: bo })),
   )
   let recall = async (asked: Partial<Asked>) =>
-    eids(await g.read(line({ limit: 8, space: 'ada', ...asked })))
+    eids(await g.read(line({ limit: 8, space: ada, ...asked })))
   // `.doc` is two words here, and the text has no "doc" in it.
   assertEquals(await recall({ said: '.doc&how they like it' }), [])
   assertEquals(await recall({ said: 'how they&like it?' }), [a])
@@ -389,7 +404,10 @@ test('a recall stays in its space, and words never speak its grammar', async () 
 
 // A transcript with a gap in its numbering, and the second session beside it.
 let transcript = async (g: G) => {
-  await write(g, [{ entity: { eid: 's1' }, session: {} }])
+  await write(g, [
+    { entity: { eid: 's1' }, session: {} },
+    { entity: { eid: 's2' }, session: {} },
+  ])
   for (let seq of [1, 2, 4, 5, 6, 7, 9]) {
     await write(g, [said('s1', seq, `line ${seq}`)])
   }
@@ -453,6 +471,7 @@ test('a thread is what it is about, then every comment, oldest first', async () 
 
 test('session is where it was said, and what that session worked on', async () => {
   let g = fresh()
+  await writers(g)
   await transcript(g)
   await write(g, [
     { entity: { eid: 't1' }, task: {}, doc: { title: 'worked' } },

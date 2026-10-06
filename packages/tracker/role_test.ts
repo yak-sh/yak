@@ -63,21 +63,26 @@ test('box role groups and enriches a spool occurrence through its configured cat
       (request) => ask(catalog, request),
     )
     let url = `http://127.0.0.1:${server.addr.port}`
-    host = await compose({
-      db: `${dir}/tracker.db`,
-      tracker: { spool: `${dir}/spool` },
-      plugins: [
-        '@yaks/kernel',
-        '@yaks/doc',
-        '@yaks/tools',
-        '@yaks/api',
-        '@yaks/process',
-        '@yaks/effects',
-        '@yaks/mail',
-        '@yaks/wake',
-        { use: '@yaks/tracker', with: { code: { cwd: dir, url } } },
-      ],
-    }, ['graph', 'effects', '@yaks/tracker'])
+    host = await compose(
+      {
+        db: `${dir}/tracker.db`,
+        tracker: { spool: `${dir}/spool` },
+        plugins: [
+          '@yaks/kernel',
+          '@yaks/doc',
+          '@yaks/tools',
+          '@yaks/api',
+          '@yaks/process',
+          '@yaks/effects',
+          '@yaks/mail',
+          '@yaks/wake',
+          { use: '@yaks/tracker', with: { code: { cwd: dir, url } } },
+        ],
+      },
+      ['graph', 'effects', '@yaks/tracker'],
+      undefined,
+      { install: true },
+    )
     let error = new Error('broken')
     error.stack = `Error: broken\n at fail (file://${dir}/fail.ts:1:33)`
     await caught(error, {

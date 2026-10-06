@@ -48,6 +48,28 @@ test('colored test results count as completed', async () => {
   assertEquals(progress.count, 1)
 })
 
+test('test results after console output count once and only while a test runs', async () => {
+  let progress = { name: 'loading tests', completed: 0, count: 0 }
+  let encoder = new TextEncoder()
+  let output = new ReadableStream<Uint8Array>({
+    start(stream) {
+      for (
+        let chunk of [
+          'ok (1ms)\nfirst ... a report\n',
+          'more output\nok\x1b[90m (2s)',
+          '\x1b[0m\nsecond ... ok (1ms)\n',
+          'third ... details\nFAILED (3ms)\nFAILED (4ms)\n',
+        ]
+      ) stream.enqueue(encoder.encode(chunk))
+      stream.close()
+    },
+  })
+  await observe(output, progress)
+  assertEquals(progress.name, 'third')
+  assert(progress.completed > 0)
+  assertEquals(progress.count, 3)
+})
+
 test('a run started inside a run refuses at once', async () => {
   let out = await new Deno.Command(Deno.execPath(), {
     // A path that names nothing: a runner without the refusal fails on it

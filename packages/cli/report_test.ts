@@ -6,6 +6,7 @@ import { reporter } from './report.ts'
 import { files } from '@yaks/tracker/file'
 import { compose } from './host.ts'
 import { read } from './config.ts'
+import { mint } from '@yaks/graph'
 
 export let trackerConfig = (dir: string) => ({
   db: `${dir}/tracker.db`,
@@ -30,24 +31,26 @@ test('a composed tracker drains a separate spool, preserving error attribution',
     install: true,
   })
   try {
+    let actor = { by: mint(), via: mint() }
+    let entity = mint(), process = mint()
     let report = reporter(
       config,
-      { by: 'actor', via: 'session' },
-      'abc',
+      actor,
+      'a'.repeat(40),
       () => Promise.resolve(),
     )
     await report(new Error('failure'), {
-      during: { entity: 'call-in-another-store', process: 'source-process' },
+      during: { entity, process },
     })
     await host.duties(AbortSignal.abort())
     let rows = await host.graph.read('.error ?created ?during *')
     equal(rows.length, 1)
     let row = rows[0]
     if (!row.created || typeof row.created != 'object') throw Error('no stamp')
-    equal('by' in row.created && row.created.by, 'actor')
-    equal('via' in row.created && row.created.via, 'session')
+    equal('by' in row.created && row.created.by, actor.by)
+    equal('via' in row.created && row.created.via, actor.via)
     if (!row.during || typeof row.during != 'object') throw Error('no context')
-    equal('entity' in row.during && row.during.entity, 'call-in-another-store')
+    equal('entity' in row.during && row.during.entity, entity)
     let again = await Array.fromAsync(files(config.tracker.spool).source())
     equal(again, [])
   } finally {

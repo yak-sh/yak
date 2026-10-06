@@ -12,6 +12,7 @@ import { ram } from '@yaks/ram'
 import { docDoc } from '@yaks/doc'
 import { edgeDoc, edgeKeywords } from '@yaks/edge'
 import { gitDoc } from '@yaks/git'
+import { repositoryEid } from '@yaks/git/host'
 import { loadVocab } from '@yaks/vocab'
 import { personaDoc } from './comp.ts'
 import { parseSkill } from './skill-text.ts'
@@ -22,6 +23,10 @@ import {
   skillLocation,
   skillsAt,
 } from './skills.ts'
+
+let repo = repositoryEid('/repo/.git')
+let elsewhere = repositoryEid('/elsewhere/.git')
+let another = repositoryEid('/another/.git')
 
 let world = (): Graph => {
   let vocab = loadVocab([docDoc, edgeDoc, gitDoc, personaDoc, {
@@ -42,7 +47,7 @@ let file = (repository: string, path: string): Bundle => ({
   file: { repository, path },
 })
 
-let skill = (eid: string, title: string, repository = 'repo'): Bundle[] => {
+let skill = (eid: string, title: string, repository = repo): Bundle[] => {
   let location = file(repository, `.claude/skills/${title}/SKILL.md`)
   return [
     {
@@ -106,20 +111,20 @@ test('graph skills are complete, sorted and repository-scoped', async () => {
   await g.apply([
     ...skill('z', 'zebra'),
     ...skill('a', 'apple'),
-    ...skill('other', 'other', 'elsewhere'),
+    ...skill('other', 'other', elsewhere),
     ...skill('no-body', 'incomplete'),
     { entity: { eid: 'no-body' }, content: null },
     ...skill('no-description', 'empty'),
     { entity: { eid: 'no-description' }, doc: { body: '' } },
     ...skill('wrong-path', 'wrong').slice(0, 1),
-    file('repo', '../SKILL.md'),
+    file(repo, '../SKILL.md'),
     {
       entity: { eid: 'unsafe-location' },
-      edge: { from: 'wrong-path', to: file('repo', '../SKILL.md').entity.eid },
+      edge: { from: 'wrong-path', to: file(repo, '../SKILL.md').entity.eid },
       references: {},
     },
   ])
-  assertEquals((await repoSkills(g, 'repo')).map((b) => b.entity.eid), [
+  assertEquals((await repoSkills(g, repo)).map((b) => b.entity.eid), [
     'a',
     'z',
   ])
@@ -133,7 +138,7 @@ test('graph skills are complete, sorted and repository-scoped', async () => {
 
 test('skillFiles renders documents and only safe text under owned directories', async () => {
   let g = world()
-  let support = (path: string, body: string, repository = 'repo'): Bundle => ({
+  let support = (path: string, body: string, repository = repo): Bundle => ({
     ...file(repository, path),
     content: { body },
   })
@@ -143,10 +148,10 @@ test('skillFiles renders documents and only safe text under owned directories', 
     support('.claude/skills/missing/notes.txt', 'orphan'),
     support('.claude/skills/review/../../escape', 'escape'),
     support('.claude/skills/review/a\\b', 'escape'),
-    support('.claude/skills/review/other.txt', 'other', 'elsewhere'),
-    file('repo', '.claude/skills/review/image.png'),
+    support('.claude/skills/review/other.txt', 'other', elsewhere),
+    file(repo, '.claude/skills/review/image.png'),
   ])
-  let files = await skillFiles(g, 'repo')
+  let files = await skillFiles(g, repo)
   assertEquals([...files.keys()], [
     '.claude/skills/review/SKILL.md',
     '.claude/skills/review/scripts/check.ts',
@@ -168,13 +173,13 @@ test('skill locations accept identity or bundle and never put file on the skill'
   let location = await skillLocation(g, held)
   assertEquals(
     location?.entity.eid,
-    identityEid('file', ['.claude/skills/review/SKILL.md', 'repo']),
+    identityEid('file', ['.claude/skills/review/SKILL.md', repo]),
   )
   assertEquals(await skillLocation(g, 'held'), location)
   assertEquals(location?.content, undefined)
   assertEquals(await skillLocation(g, 'absent'), undefined)
   await assertRejects(() => loadSkill(g, 'absent'), Refused, 'No skill')
-  let second = file('repo', '.claude/skills/second/SKILL.md')
+  let second = file(repo, '.claude/skills/second/SKILL.md')
   await g.apply([second, {
     entity: { eid: derivedEid(`skill-file|held|${second.entity.eid}`) },
     edge: { from: 'held', to: second.entity.eid },
@@ -192,16 +197,16 @@ test('graph title renames move companion suffixes before the locator changes', a
   await g.apply([
     ...skill('held', 'old-name'),
     {
-      ...file('repo', '.claude/skills/old-name/scripts/dom.ts'),
+      ...file(repo, '.claude/skills/old-name/scripts/dom.ts'),
       content: { body: 'dom()\n' },
     },
     {
-      ...file('repo', '.claude/skills/old-name/notes/readme.md'),
+      ...file(repo, '.claude/skills/old-name/notes/readme.md'),
       content: { body: 'notes' },
     },
     { entity: { eid: 'held' }, doc: { title: 'new-name' } },
   ])
-  let files = await skillFiles(g, 'repo')
+  let files = await skillFiles(g, repo)
   assertEquals([...files.keys()], [
     '.claude/skills/new-name/SKILL.md',
     '.claude/skills/new-name/notes/readme.md',
@@ -214,10 +219,10 @@ test('graph title renames move companion suffixes before the locator changes', a
     'new-name',
   )
   assertEquals((await skillLocation(g, 'held'))?.file, {
-    repository: 'repo',
+    repository: repo,
     path: '.claude/skills/old-name/SKILL.md',
   })
-  assertEquals((await repoSkills(g, 'repo'))[0].entity.eid, 'held')
+  assertEquals((await repoSkills(g, repo))[0].entity.eid, 'held')
 })
 
 test('skillFiles refuses duplicate titles and renamed companion destinations', async () => {
@@ -227,20 +232,20 @@ test('skillFiles refuses duplicate titles and renamed companion destinations', a
     ...skill('two', 'new'),
     { entity: { eid: 'one' }, doc: { title: 'new' } },
   ])
-  await assertRejects(() => skillFiles(g, 'repo'), Refused, 'targets')
+  await assertRejects(() => skillFiles(g, repo), Refused, 'targets')
   await g.apply([{ entity: { eid: 'two' }, $delete: true }])
   await g.apply([
     {
-      ...file('repo', '.claude/skills/old/scripts/check.ts'),
+      ...file(repo, '.claude/skills/old/scripts/check.ts'),
       content: { body: 'old' },
     },
     {
-      ...file('repo', '.claude/skills/new/scripts/check.ts'),
+      ...file(repo, '.claude/skills/new/scripts/check.ts'),
       content: { body: 'new' },
     },
   ])
   await assertRejects(
-    () => skillFiles(g, 'repo'),
+    () => skillFiles(g, repo),
     Refused,
     '.claude/skills/new/scripts/check.ts',
   )
@@ -308,14 +313,14 @@ test('checkout overlays never borrow a matching title from another repository', 
   fixture(async (g, root, repository) => {
     await g.apply([
       ...skill('here', 'review', repository),
-      ...skill('there', 'review', 'elsewhere'),
+      ...skill('there', 'review', elsewhere),
     ])
     await write(root, 'review')
     assertEquals((await loadSkill(g, 'review', root)).entity.eid, 'here')
     await assertRejects(() => loadSkill(g, 'review'), Refused, 'more than one')
     await Deno.remove(`${root}/.claude`, { recursive: true })
     assertEquals(await skillsAt(g, root), [])
-    assertEquals((await repoSkills(g, 'elsewhere')).map((b) => b.entity.eid), [
+    assertEquals((await repoSkills(g, elsewhere)).map((b) => b.entity.eid), [
       'there',
     ])
   }))
@@ -388,7 +393,7 @@ test('linked checkouts scope graph identities by their shared git common directo
 test('unregistered repositories get temporary views rather than borrowing graph names', () =>
   fixture(async (g, root, repository) => {
     await g.apply([{ entity: { eid: repository }, $delete: true }])
-    await g.apply(skill('elsewhere', 'review', 'another-repository'))
+    await g.apply(skill('elsewhere', 'review', another))
     await write(root, 'review')
     let before = await repoSkills(g)
     let local = await loadSkill(g, 'review', root)

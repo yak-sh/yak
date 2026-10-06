@@ -23,7 +23,7 @@ export let fixture = () => {
   return graph({
     vocab,
     storage: ram(vocab, { computed }),
-    actor: { by: 'tracker', via: 'tracker' },
+    actor: { by: crypto.randomUUID(), via: crypto.randomUUID() },
     clock: () => '2026-10-02T00:00:10Z',
   })
 }

@@ -39,16 +39,16 @@ interface guessed at rather than one found by use.
 ```ts
 import { tmuxDoc } from '@yaks/tmux'
 import { loadVocab } from '@yaks/vocab'
-import { graph } from '@yaks/graph'
+import { graph, mint } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 
 const vocab = loadVocab([tmuxDoc])
 const g = graph({ vocab, storage: ram(vocab) })
+const job = mint()
 await g.apply([
-  { entity: { eid: 'running-job' } },
-  { entity: { eid: 'terminal' }, tmux: { of: 'running-job', pane: '%42' } },
+  { entity: { eid: 'terminal' }, tmux: { of: job, pane: '%42' } },
 ])
-console.log(await g.read('.tmux.of=running-job'))
+console.log(await g.read(`.tmux.of=${job}`))
 ```
 
 An entity is a record identified by `entity.eid`; a component is a named object

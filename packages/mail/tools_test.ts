@@ -3,10 +3,18 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import type { Actor, Bundle, Comp, Graph } from '@yaks/graph'
+import {
+  type Actor,
+  type Bundle,
+  type Comp,
+  type Graph,
+  mint,
+} from '@yaks/graph'
 import { clubhouse } from './testing.ts'
 import type { Options } from './options.ts'
 import { reSubject, runs } from './tools.ts'
+
+let call = mint()
 
 let ask = (
   g: Graph,
@@ -18,7 +26,7 @@ let ask = (
   Promise.resolve(
     runs(undefined, { domain: 'books.example', ...options })[tool](
       {
-        entity: { eid: 'c1' },
+        entity: { eid: call },
         call: { args },
         ...(actor ? { created: actor } : {}),
       },
@@ -339,7 +347,7 @@ test('a letter that arrived with a sender is nothing to report', async () => {
   )
   assertEquals(said.level, undefined)
   assert(said.body.endsWith('— nothing to report'), said.body)
-  assertEquals(said.source, 'c1')
+  assertEquals(said.source, call)
 })
 
 test('a letter that arrived with no sender is a fail', async () => {

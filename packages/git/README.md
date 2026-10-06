@@ -242,7 +242,7 @@ their own, loading `refDoc` in the first and `gitDoc` in the second.
 ## A branch, and landing a release on it
 
 ```ts
-import { graph } from '@yaks/graph'
+import { graph, mint } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
@@ -260,7 +260,7 @@ let bytes = memoryBlobs()
 bytes.put(address('<h1>Hello</h1>\n'), encode('<h1>Hello</h1>\n'))
 
 let repo = { refs, objects, bytes }
-let app = 'recipes'
+let app = mint()
 let who = { name: 'Build Service', email: 'build@example.com', at: 0 }
 
 let head = await commitOnto(repo, {

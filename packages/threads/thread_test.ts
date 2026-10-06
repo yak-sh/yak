@@ -161,9 +161,9 @@ test('remote graph refuses writes and preserves claim conflicts across the port'
       ['job'],
     )
     equal(bindings.map((b) => b.vars), [{ value: 1 }])
-    await client.apply([{ entity: { eid: 'a' } }, { entity: { eid: 'b' } }])
+    let holders = [crypto.randomUUID(), crypto.randomUUID()]
     let outcomes = await Promise.all(
-      ['a', 'b'].map((holder) => take(client, 'clock', { holder })),
+      holders.map((holder) => take(client, 'clock', { holder })),
     )
     equal(outcomes.filter(Boolean).length, 1)
   } finally {

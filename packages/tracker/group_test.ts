@@ -6,18 +6,22 @@ import { capture } from './report.ts'
 import { comp } from './model.ts'
 import { runs } from './tools.ts'
 
+let app = crypto.randomUUID(), second = crypto.randomUUID()
+let person = crypto.randomUUID(), other = crypto.randomUUID()
+let a = 'a'.repeat(40), b = 'b'.repeat(40), c = 'c'.repeat(40)
+
 let occurrence = (
   id: string,
-  commit = 'a',
-  app = 'app',
-  by = 'person',
+  commit = a,
+  scope = app,
+  by = person,
 ): Bundle =>
   capture(new TypeError('missing row 42'), {
     sink: () => {},
     eid: id,
     at: `2026-10-02T00:00:${id.padStart(2, '0')}Z`,
     commit,
-    during: { app, kind: 'call' },
+    during: { app: scope, kind: 'call' },
     actor: { by },
   })[0]
 let put = async (g: ReturnType<typeof fixture>, row: Bundle) => {
@@ -37,9 +41,9 @@ test('grouping counts once, scopes apps, and reads people and status', async () 
   ok(!('title' in comp(bug, 'bug')))
   equal(comp(bug, 'bug').people, 1)
   equal(comp(bug, 'bug').status, 'open')
-  await put(g, occurrence('3', 'a', 'app', 'other'))
+  await put(g, occurrence('3', a, app, other))
   equal(comp((await bugs(g))[0], 'bug').people, 2)
-  await put(g, occurrence('4', 'a', 'second'))
+  await put(g, occurrence('4', a, second))
   equal((await bugs(g)).length, 2)
 })
 
@@ -52,20 +56,20 @@ test('old code counts without reopening; a new commit regresses once', async () 
   })
   await put(g, occurrence('2'))
   equal(comp((await bugs(g))[0], 'bug').status, 'resolved')
-  await put(g, occurrence('3', 'b'))
+  await put(g, occurrence('3', b))
   let [back] = await bugs(g)
   equal(comp(back, 'bug').status, 'open')
   equal(comp(back, 'regressed').error, '3')
   ok(!back.notified && !back.resolved)
   await g.apply([{ entity: back.entity, archived: {} }], { trusted: true })
-  await put(g, occurrence('4', 'c'))
+  await put(g, occurrence('4', c))
   equal(comp((await bugs(g))[0], 'bug').status, 'archived')
 })
 
 test('retention preserves the first per commit and historical hit count', async () => {
   let g = fixture()
   for (let i = 1; i <= 6; i++) {
-    await put(g, occurrence(String(i), i == 3 ? 'b' : 'a'))
+    await put(g, occurrence(String(i), i == 3 ? b : a))
   }
   let [bug] = await bugs(g)
   await trim(g, bug.entity.eid, 2)

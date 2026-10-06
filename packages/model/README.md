@@ -197,7 +197,7 @@ equal(model.anchor!({}), undefined)
 `modelDoc` declares `provider`, `model`, `serves`, `usage`, `price`, `cost`,
 `response`, `questions` and `answer`. `models()` supplies a graph
 [plugin](../graph/README.md#data-model) with that vocabulary, name addressing
-and the `requesting` admission [hook](../graph/README.md#data-model).
+and the `requesting` normalization [hook](../graph/README.md#data-model).
 `@yaks/model/graph` exports the same plugin through `plugins()`.
 
 Provider and model names are each an
@@ -208,8 +208,8 @@ a model on an [edge](../edge/README.md); `serves.name` is the name that provider
 accepts, which may differ from `model.name`.
 
 `requesting` replaces a name in `using.model` with its eid and creates an
-unknown model with `offered: false` and `pending: {}`.
-`confirmed(provider,
+unknown model with `offered: false` and `pending: {}` before admission resolves
+references. `confirmed(provider,
 name, listing?)` returns
 [bundles](../graph/README.md#data-model) that remove `pending`, set
 `offered: true`, and record the provider's serves edge.

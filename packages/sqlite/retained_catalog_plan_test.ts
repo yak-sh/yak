@@ -1,3 +1,4 @@
+import { sqlitePath } from './sqlitepath.ts'
 import { equal, ok, test } from '@yaks/testing'
 import { Database } from '@db/sqlite'
 import { graph } from '@yaks/graph'
@@ -8,7 +9,6 @@ import { storage } from './mod.ts'
 import { catalog } from './catalog.ts'
 import { compile, render } from '@yaks/sql'
 import { parse } from '@yaks/query'
-import { sqlitePath } from './sqlitepath.ts'
 
 let status = Deno.dlopen(sqlitePath, {
   sqlite3_stmt_status: { parameters: ['pointer', 'i32', 'i32'], result: 'i32' },

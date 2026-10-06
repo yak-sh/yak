@@ -8,6 +8,9 @@ import { group, reframe } from './group.ts'
 import { comp } from './model.ts'
 import { capture } from './report.ts'
 
+let commit = 'a'.repeat(40)
+let module = crypto.randomUUID(), symbol = crypto.randomUUID()
+
 let stack = `TypeError: no row
     at async fail (file:///srv/app/a.ts?secret=x:10:3)
     at file:///srv/app/b.ts:9:2
@@ -36,7 +39,7 @@ test('later frame resolution fills a culprit without recounting its group', asyn
     capture(error, {
       sink: () => {},
       eid: 'occurrence',
-      commit: 'failing-commit',
+      commit,
     }),
     { trusted: true },
   )
@@ -44,12 +47,12 @@ test('later frame resolution fills a culprit without recounting its group', asyn
   let [bug] = await g.read('.bug *')
   equal(comp(bug, 'bug').hits, 1)
   ok(comp(bug, 'bug').spot)
-  let enrich = enrichFrames((frames, commit) => {
-    equal(commit, 'failing-commit')
+  let enrich = enrichFrames((frames, revision) => {
+    equal(revision, commit)
     return Promise.resolve(frames.map((f, i) => ({
       ...f,
       app: i == 1,
-      ...i == 1 ? { module: 'known-module', symbol: 'known-export' } : {},
+      ...i == 1 ? { module, symbol } : {},
     })))
   })
   await reframe(g, 'occurrence', enrich)
@@ -57,9 +60,9 @@ test('later frame resolution fills a culprit without recounting its group', asyn
   let [full] = await g.get(['occurrence'])
   let [filled] = await g.read('.bug *')
   equal(comp(filled, 'bug').hits, 1)
-  equal(comp(filled, 'bug').culprit, 'known-export')
+  equal(comp(filled, 'bug').culprit, symbol)
   ok(!comp(filled, 'bug').spot)
-  equal(comp(full, 'error').commit, 'failing-commit')
+  equal(comp(full, 'error').commit, commit)
   equal(
     comp(full, 'exception').frames,
     await enrich(full).then((r) => comp(r, 'exception').frames),

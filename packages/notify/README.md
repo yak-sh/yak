@@ -32,17 +32,17 @@ are no tools or effect handlers here.
 ```ts
 import { notifyDoc } from '@yaks/notify'
 import { loadVocab } from '@yaks/vocab'
-import { graph } from '@yaks/graph'
+import { graph, mint } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 
 const vocab = loadVocab([notifyDoc])
 const g = graph({ vocab, storage: ram(vocab) })
+const reader = mint()
+const release = mint()
 await g.apply([
-  { entity: { eid: 'reader' } },
-  { entity: { eid: 'release' } },
   {
     entity: { eid: 'release-watch' },
-    subscription: { actor: 'reader', target: 'release', mode: 'watch' },
+    subscription: { actor: reader, target: release, mode: 'watch' },
   },
 ])
 console.log(await g.read('.subscription.mode=watch'))

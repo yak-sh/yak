@@ -42,26 +42,27 @@
  *
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
- * import { graph } from '@yaks/graph'
+ * import { graph, mint } from '@yaks/graph'
  * import { ram } from '@yaks/ram'
  * import { memberDoc, members, policy } from '@yaks/member'
  *
  * let vocab = loadVocab([memberDoc])
  * let storage = ram(vocab)
  * let g = graph({ storage, vocab })
+ * let club = mint()
+ * let dana = mint()
+ * let list = mint()
  * await g.apply([
- *   { entity: { eid: 'club' } },
- *   { entity: { eid: 'dana' } },
- *   { entity: { eid: 'list' }, access: { mode: 'private' } },
+ *   { entity: { eid: list }, access: { mode: 'private' } },
  *   {
  *     entity: { eid: 'm1' },
- *     member: { space: 'club', person: 'dana', role: 'owner' },
+ *     member: { space: club, person: dana, role: 'owner' },
  *   },
  * ])
- * g.use(members({ app: 'list', space: 'club', vocab }))
+ * g.use(members({ app: list, space: club, vocab }))
  *
- * let may = policy(storage, { space: 'club' })
- * await may.canRead('dana', 'list') // true
+ * let may = policy(storage, { space: club })
+ * await may.canRead(dana, list) // true
  * ```
  *
  * ## Only an owner edits the access rows

@@ -6,6 +6,7 @@ import { mcpTools } from './mcp.ts'
 import { signins } from '@yaks/connections'
 import { fixture } from '../mcp-client/testing.ts'
 import { graphToolName } from '@yaks/mcp-client/servers'
+import { toolEid } from '@yaks/tools'
 import { at, harness, repo, worker } from './testing.ts'
 
 test('configured remote MCP tool publishes mockup through existing call/result transcript', async () => {
@@ -170,12 +171,12 @@ test('remote images use external artifacts while large text retains bounded cont
   }])
   const tools = mcpTools(h, signins(h))
   try {
+    const [tool] = await tools.snapshot()
     await h.g.apply([{ entity: { eid: 's' }, session: {} }, {
       entity: { eid: 'call' },
       entry: { session: 's' },
-      call: { to: 'tool' },
+      call: { to: toolEid(tool.name) },
     }])
-    const [tool] = await tools.snapshot()
     const text = await tool.run({}, {
       session: 's',
       call: { entity: { eid: 'call' } },

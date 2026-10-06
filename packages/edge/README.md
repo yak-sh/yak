@@ -123,7 +123,7 @@ checked together.
 ```ts
 import { equal, throws } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
-import { graph } from '@yaks/graph'
+import { graph, mint } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import {
   derive,
@@ -139,24 +139,23 @@ let vocab = loadVocab([edgeDoc, {
   $defs: { cites: { component: true, type: 'object', edge: true } },
 }], [edgeKeywords])
 let g = graph({ storage: ram(vocab), vocab, plugins: [edges(vocab)] })
-await g.apply([{ entity: { eid: 'p1' } }, { entity: { eid: 'p2' } }])
+let p1 = mint()
+let p2 = mint()
 let bundle = {
   entity: { eid: '$link' },
-  edge: { from: 'p1', to: 'p2' },
+  edge: { from: p1, to: p2 },
   cites: {},
 }
 equal(tagOf(bundle, names(vocab)), 'cites')
-equal(derive(names(vocab))(bundle.edge, bundle), edgeEid('p1', 'cites', 'p2'))
+equal(derive(names(vocab))(bundle.edge, bundle), edgeEid(p1, 'cites', p2))
 await g.apply([bundle])
 equal((await g.read('.cites')).map((b) => b.entity.eid), [
-  edgeEid('p1', 'cites', 'p2'),
+  edgeEid(p1, 'cites', p2),
 ])
 throws(() =>
-  g.apply([{ entity: { eid: 'bad' }, edge: { from: 'p1' }, cites: {} }])
+  g.apply([{ entity: { eid: 'bad' }, edge: { from: p1 }, cites: {} }])
 )
-throws(() =>
-  g.apply([{ entity: { eid: 'bad' }, edge: { from: 'p1', to: 'p2' } }])
-)
+throws(() => g.apply([{ entity: { eid: 'bad' }, edge: { from: p1, to: p2 } }]))
 ```
 
 ## Following links through storage
@@ -169,7 +168,7 @@ required depth limit. These methods take query names and return endpoint eids.
 ```ts
 import { equal } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
-import { graph } from '@yaks/graph'
+import { graph, mint } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { edgeDoc, edgeKeywords, edges, link, walk } from '@yaks/edge'
 
@@ -178,18 +177,18 @@ let vocab = loadVocab([edgeDoc, {
 }], [edgeKeywords])
 let store = ram(vocab)
 let g = graph({ storage: store, vocab, plugins: [edges(vocab)] })
+let p1 = mint()
+let p2 = mint()
+let p3 = mint()
 await g.apply([
-  { entity: { eid: 'p1' } },
-  { entity: { eid: 'p2' } },
-  { entity: { eid: 'p3' } },
-  link('p1', 'links', 'p2'),
-  link('p2', 'links', 'p3'),
+  link(p1, 'links', p2),
+  link(p2, 'links', p3),
 ])
 let w = walk(store, vocab)
-equal(await w.out('p1', 'linked'), ['p2'])
-equal(await w.in('p3', 'linked'), ['p2'])
-equal(await w.reach('p1', 'linked', 2), ['p2', 'p3'])
-equal(await w.reach('p3', 'linked', 2, 'in'), ['p2', 'p1'])
+equal(await w.out(p1, 'linked'), [p2])
+equal(await w.in(p3, 'linked'), [p2])
+equal(await w.reach(p1, 'linked', 2), [p2, p3])
+equal(await w.reach(p3, 'linked', 2, 'in'), [p2, p1])
 ```
 
 Synchronous storage produces synchronous results; asynchronous storage produces
@@ -261,7 +260,7 @@ import { equal } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
 import { docs, keywords } from '@yaks/edge/vocab'
 import { extend, plugins } from '@yaks/edge/graph'
-import { graph } from '@yaks/graph'
+import { graph, mint } from '@yaks/graph'
 import { open } from '@yaks/sqlite/db'
 import { storage } from '@yaks/sqlite'
 
@@ -274,12 +273,14 @@ try {
   let store = storage(db, vocab, { extend: extend(host) })
   store.install()
   let g = graph({ storage: store, vocab, plugins: plugins(host) })
-  await g.apply([{ entity: { eid: 'p1' } }, { entity: { eid: 'p2' } }, {
+  let p1 = mint()
+  let p2 = mint()
+  await g.apply([{
     entity: { eid: '$link' },
-    edge: { from: 'p1', to: 'p2' },
+    edge: { from: p1, to: p2 },
     cites: {},
   }])
-  equal((await g.read('.cites[<=2]->p2')).map((b) => b.entity.eid), ['p1'])
+  equal((await g.read(`.cites[<=2]->${p2}`)).map((b) => b.entity.eid), [p1])
 } finally {
   db.close()
 }

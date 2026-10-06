@@ -36,6 +36,10 @@ let seed = (repository = 'repo', title = 'testing'): Bundle[] => {
   let eid = `skill-${repository}-${title}`
   return [
     {
+      entity: { eid: repository },
+      repository: { common: `/skills/${repository}/.git` },
+    },
+    {
       entity: { eid },
       skill: { options: { author: 'A person' } },
       doc: { title, body: 'Check a system’s behavior' },

@@ -59,6 +59,8 @@ let fixture = async (floors = {}, kernelFirst = true, pace?: string) => {
   let storage = ram(vocab)
   let g = graph({ storage, vocab })
   await g.apply([
+    { entity: { eid: 'club' }, space: { name: 'Tuesday Books' } },
+    { entity: { eid: 'owner' }, person: { name: 'Owner' } },
     {
       entity: { eid: 'app' },
       access: { mode: 'open' },
@@ -173,7 +175,7 @@ test('a referenced owner may remove a mark without editing the request', async (
     await assertRejects(async () =>
       await f.g.apply(
         signed([
-          patch('completed', { via: 'forged' }, eid),
+          patch('completed', { via: crypto.randomUUID() }, eid),
         ], actor),
         { trusted: true, stamp: false },
       ), Denied)
@@ -187,7 +189,7 @@ test('a referenced owner may remove a mark without editing the request', async (
 
 test('permission requires a live stored target and obeys mode and mark floors', async () => {
   let f = await fixture()
-  await f.apply(owner, patch('request', { hero: 'missing' }))
+  await f.apply(owner, patch('request', { hero: crypto.randomUUID() }))
   await assertRejects(async () => await f.apply(person, mark()), Denied)
   await f.apply(owner, patch('request', { hero: 'hero' }))
   await f.apply(person, { entity: { eid: 'hero' }, $delete: true })
@@ -224,19 +226,19 @@ test('a completion does not accept client stamps or forged actors', async () => 
 
 test('companion permission follows the target current ownership', async () => {
   let f = await fixture()
+  let next = { by: crypto.randomUUID(), via: crypto.randomUUID() }
   await f.g.apply(
     signed([{
       entity: { eid: 'hero' },
-      created: { by: 'new-owner', via: 'new-browser' },
+      created: next,
     }], owner),
     { trusted: true, stamp: false },
   )
   await assertRejects(async () => await f.apply(person, mark()), Denied)
-  await f.apply({ by: 'new-owner', via: 'new-browser' }, mark())
+  await f.apply(next, mark())
   assertEquals((await f.read()).completed, {
     at: '2026-10-02T00:00:00Z',
-    by: 'new-owner',
-    via: 'new-browser',
+    ...next,
   })
 })
 

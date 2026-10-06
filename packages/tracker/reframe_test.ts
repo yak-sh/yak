@@ -8,6 +8,12 @@ import { group, reframe } from './group.ts'
 import { comp } from './model.ts'
 import { capture } from './report.ts'
 
+let commit = 'a'.repeat(40)
+let correct = crypto.randomUUID(),
+  old = crypto.randomUUID(),
+  next = crypto.randomUUID()
+let winner = crypto.randomUUID(), late = crypto.randomUUID()
+
 let occurrence = async () => {
   let g = fixture()
   let error = new Error('broken')
@@ -31,12 +37,12 @@ test('group moves during catalog await link only its current group', async () =>
       { entity: { eid: 'current' }, bug: { fault: 'new', hits: 7 } },
       { entity: row.entity, error: { bug: 'current' } },
     ], { trusted: true })
-    return linked('correct')(row)
+    return linked(correct)(row)
   })
   let [before, current] = await g.get([old.entity.eid, 'current'])
   equal(comp(before, 'bug').culprit, undefined)
   equal(comp(before, 'bug').hits, 1)
-  equal(comp(current, 'bug').culprit, 'correct')
+  equal(comp(current, 'bug').culprit, correct)
   equal(comp(current, 'bug').hits, 7)
 })
 
@@ -48,23 +54,23 @@ test('source and commit changed during catalog await are re-enriched', async () 
     if (calls == 1) {
       await g.apply([{
         entity: row.entity,
-        error: { commit: 'new-commit' },
+        error: { commit },
         exception: {
           stack: 'Error: changed\n at next (file:///srv/b.ts:20:3)',
         },
       }], { trusted: true })
     }
-    return linked(comp(row, 'error').commit ? 'new' : 'old')(row)
+    return linked(comp(row, 'error').commit ? next : old)(row)
   })
   let [row] = await g.get(['occurrence'])
   equal(calls, 2)
-  equal(comp(row, 'error').commit, 'new-commit')
+  equal(comp(row, 'error').commit, commit)
   let frames = comp(row, 'exception').frames as {
     file: string
     symbol: string
   }[]
   equal(frames[0].file, 'file:///srv/b.ts')
-  equal(frames[0].symbol, 'new')
+  equal(frames[0].symbol, next)
   equal(comp((await g.read('.bug *'))[0], 'bug').hits, 1)
 })
 
@@ -73,12 +79,12 @@ test('a competing frame result is revalidated rather than overwritten stale', as
   let calls = 0
   await reframe(g, 'occurrence', async (row) => {
     calls++
-    if (calls == 1) await reframe(g, 'occurrence', linked('winner'))
-    return linked('late')(row)
+    if (calls == 1) await reframe(g, 'occurrence', linked(winner))
+    return linked(late)(row)
   })
   equal(calls, 2)
   let [bug] = await g.read('.bug *')
-  equal(comp(bug, 'bug').culprit, 'winner')
+  equal(comp(bug, 'bug').culprit, winner)
   equal(comp(bug, 'bug').hits, 1)
 })
 

@@ -29,6 +29,7 @@ for (let recover of [true, false]) {
     let storage = ram(vocab, { computed })
     let g = graph({ vocab, storage })
     let now = 0, calls = 0, reports = 0, ready = false
+    let symbol = crypto.randomUUID()
     let reporting: (unknown | Promise<unknown>)[] = []
     let fx = registry(vocab, {
       write: (b) => g.apply(b, { trusted: true }),
@@ -54,7 +55,7 @@ for (let recover of [true, false]) {
     })
     let enrich = enrichFrames(async (frames) => {
       await catalog.get(['module'])
-      return frames.map((f) => ({ ...f, app: true, symbol: 'linked' }))
+      return frames.map((f) => ({ ...f, app: true, symbol }))
     })
     fx.handle(effects({ graph: g }, { enrich }))
     let error = new Error('original')
@@ -97,7 +98,7 @@ for (let recover of [true, false]) {
       await next.stop()
     }
     let [filled] = await g.get([bug])
-    equal(comp(filled, 'bug').culprit, 'linked')
+    equal(comp(filled, 'bug').culprit, symbol)
     equal(comp(filled, 'bug').hits, 1)
     await fx.stop()
   })

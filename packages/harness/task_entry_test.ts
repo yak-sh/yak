@@ -220,7 +220,7 @@ test('taskEntry references the stable prefix without copying later inputs', asyn
         entity: { eid: 'active' },
         entry: { session: 'p' },
         ask: { through: 'first' },
-        attempt: { by: 'holder' },
+        attempt: { by: crypto.randomUUID() },
       },
       {
         entity: { eid: 'partial' },
