@@ -436,3 +436,22 @@ test('membership counts what the index holds, not what its table does', () => {
   assertEquals(found(db, 'dune'), ['note'])
   assert(heal(db, fields(post)).length == 0)
 })
+
+test('schema adoption retains unchanged content and repairs changed writers without a census', () => {
+  let db = shelf(), text = fields(shop)
+  let before = cookie(db), query = db.query.bind(db), scans = 0
+  db.query = (stmt) => {
+    if (stmt.t == 'select' && JSON.stringify(stmt).includes('count')) scans++
+    return query(stmt)
+  }
+  assertEquals(adopt(db, text, {}, { heal: false }), {
+    recut: [],
+    dropped: [],
+    healed: [],
+  })
+  assertEquals(scans, 0)
+  assertEquals(cookie(db), before)
+  db.query({ t: 'drop', kind: 'trigger', name: 'book_fts_insert' })
+  assertEquals(adopt(db, text, {}, { heal: false }).recut, ['book_fts'])
+  assertEquals(scans, 0)
+})

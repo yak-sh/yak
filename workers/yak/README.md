@@ -443,13 +443,13 @@ If installation fails, the existing schema-refusal path prevents serving a
 partially initialized store. An app that already used a newly reserved component
 name needs explicit migration; its data is not silently reinterpreted.
 
-The hourly usage request also wakes app stores, but deployment does not eagerly
-visit every database. Until an app wakes, its old rows have not been backfilled.
-These changes use the Durable Object transaction/request barrier, not the local
-harness's migration-announcement polling. Do not run older writers against an
-upgraded store: they do not maintain the derived pointers. Rebuilding all
-pointers is an explicit repair, not a reason to change their values through the
-app API.
+The hourly usage request reads Cloudflare analytics and R2, not app stores.
+Platform deployment does not visit app databases. Until an app wakes, its old
+rows have not been backfilled. These changes use the Durable Object
+transaction/request barrier, not the local harness's migration-announcement
+polling. Do not run older writers against an upgraded store: they do not
+maintain the derived pointers. Rebuilding all pointers is an explicit repair,
+not a reason to change their values through the app API.
 
 An isolated benchmark is available with
 `deno run -A workers/yak/archetype_bench.ts`. In one run with 2,000 entities
@@ -532,8 +532,11 @@ inspector unchanged.
 
 App stores compose @yaks/vocab's schema entities, without the journal.
 Component/property pages use ordinary queries; the schema description is
-materialized during deployment in bounded writes, with its hash last. The
-inspector omits history when its vocabulary has no `_change`. Standing journal
-tables and their rows are left untouched: removing them would incur billed
-writes. Schema rows are excluded from ordinary page listings unless named
-explicitly, like other platform-owned rows.
+materialized during deployment in bounded writes, with its hash last. A retained
+declaration selects only changed description identities; the first description
+install reads existing description rows. Schema changes retain unchanged FTS
+indexes and writers. Classification audits are explicit repairs, not release
+installation work. The inspector omits history when its vocabulary has no
+`_change`. Standing journal tables and their rows are left untouched: removing
+them would incur billed writes. Schema rows are excluded from ordinary page
+listings unless named explicitly, like other platform-owned rows.

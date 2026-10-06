@@ -426,12 +426,13 @@ try {
 ## Schema installation
 
 `schema(vocab)` builds statements for a fresh database.
-`standing(driver,
-vocab)` reads existing tables; `grown(vocab, standing)` builds
-missing-column statements, and `refit(vocab, standing)` builds table-rebuild
-statements. `fit(driver, vocab)` executes growth and rebuilds, returning errors
-for tables whose existing values cannot fit. `Store.install()` also maintains
-indexes, metadata, and archetypes.
+`retabled(driver, vocab, reads?)` keeps an identical document view and replaces
+only a changed one. `standing(driver,
+vocab)` reads existing tables;
+`grown(vocab, standing)` builds missing-column statements, and
+`refit(vocab, standing)` builds table-rebuild statements. `fit(driver, vocab)`
+executes growth and rebuilds, returning errors for tables whose existing values
+cannot fit. `Store.install()` also maintains indexes, metadata, and archetypes.
 
 ```ts
 import { open } from '@yaks/sqlite/db'

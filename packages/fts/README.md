@@ -179,6 +179,34 @@ other triggers referencing these indexes, and calls `heal()` last. It returns
 `{ recut, dropped, healed }`. A second call with the same configuration makes no
 changes. Review custom triggers before adopting existing indexes.
 
+A schema installer can use `{ heal: false }` to skip the content census of
+retained indexes. Missing indexes and changed views or writers are still
+rebuilt; unchanged indexes keep their terms without reading their content:
+
+```ts
+import { adopt, fields } from '@yaks/fts'
+import { loadVocab } from '@yaks/vocab'
+import { open } from '@yaks/sqlite/db'
+import { storage } from '@yaks/sqlite'
+import { equal } from '@yaks/testing'
+
+let vocab = loadVocab({
+  $defs: {
+    book: {
+      component: true,
+      properties: {
+        title: { type: 'string', search: true },
+      },
+    },
+  },
+})
+let db = open(':memory:')
+storage(db, vocab).install()
+adopt(db, fields(vocab), {}, { heal: false })
+equal(adopt(db, fields(vocab), {}, { heal: false }).recut, [])
+db.close()
+```
+
 ## What it assumes
 
 The SQLite layout used by `@yaks/sql` and `@yaks/sqlite`: `entity.id` is an

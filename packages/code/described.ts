@@ -115,23 +115,36 @@ let rows = (g: Graph, docs: VocabDoc[]): Map<string, Bundle> => {
  * `docs` no longer declares, cleared, and the hash of the rows as described
  * (`_vocab`). A graph whose hash already matches is not read further and is
  * written nothing; nor is one that cannot hold a vocabulary (@yaks/vocab not
- * composed). */
+ * composed). A single-owner host can supply its previously committed docs to
+ * select only changed identities rather than read every description. */
 export let described = async (
   g: Graph,
   docs: VocabDoc[],
+  previous?: VocabDoc[],
 ): Promise<Bundle[]> => {
   if (!g.vocab.comp('_vocab')) return []
   let fresh = rows(g, docs)
   let [was] = await g.get([VOCAB], ['_vocab'])
   let hash = await sha(canon([...fresh.values()]))
   if ((was?._vocab as Comp | undefined)?.hash == hash) return []
-  let held = (await Promise.all([
-    g.read('._package ?doc'),
-    g.read('._comp ?doc'),
-    g.read('._extends ?doc'),
-    g.read('._prop ?doc'),
-    g.read('._before ?edge'),
-  ])).flat()
+  // A single-owner host can retain the last accepted declaration outside the
+  // graph. Select only changed identities; the global hash remains the
+  // commit marker, so an interrupted pass is diffed again from its old docs.
+  let before = previous && rows(g, previous)
+  let changed = before &&
+    [...fresh.values()].filter((b) =>
+      canon(b) != canon(before.get(b.entity.eid))
+    )
+  let gone = before && [...before.keys()].filter((id) => !fresh.has(id))
+  let held = changed && gone
+    ? await g.get([...changed.map((b) => b.entity.eid), ...gone])
+    : (await Promise.all([
+      g.read('._package ?doc'),
+      g.read('._comp ?doc'),
+      g.read('._extends ?doc'),
+      g.read('._prop ?doc'),
+      g.read('._before ?edge'),
+    ])).flat()
   let at = new Map(held.map((b) => [b.entity.eid, b]))
   let cleared = (b: Bundle): Bundle => {
     let e = b.edge as Comp | undefined
@@ -142,8 +155,12 @@ export let described = async (
     }
   }
   return [
-    ...[...fresh.values()].filter((b) => moves(b, at.get(b.entity.eid))),
-    ...held.filter((b) => !fresh.has(b.entity.eid)).map(cleared),
+    ...(changed ?? [...fresh.values()]).filter((b) =>
+      moves(b, at.get(b.entity.eid))
+    ),
+    ...held.filter((b) => rank(b) >= 0 && !fresh.has(b.entity.eid)).map(
+      cleared,
+    ),
     { entity: { eid: VOCAB }, _vocab: { hash } },
   ].toSorted((a, b) => rank(a) - rank(b))
 }

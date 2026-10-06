@@ -116,6 +116,7 @@ export {
   logged,
   META,
   refit,
+  retabled,
   retired,
   schema,
   type Standing,

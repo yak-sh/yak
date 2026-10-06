@@ -5,6 +5,7 @@ import {
   and,
   as,
   col,
+  cross,
   type Driver,
   each,
   eq,
@@ -228,12 +229,15 @@ export function backfill(driver: Driver, number = false): Backfill {
         ],
         from: table('archetype', 'a'),
         joins: [
-          join(table('entity', 'e'), eq(col('id', 'e'), col('entity', 'a'))),
+          // The catalogue is small; drive its primary-key lookups, never
+          // let a no-statistics Store scan every retained entity instead.
+          cross(table('entity', 'e')),
           left(
             table('retired', 'r'),
             eq(col('entity', 'r'), col('entity', 'a')),
           ),
         ],
+        where: eq(col('id', 'e'), col('entity', 'a')),
       }))
     ) {
       let a = cache.intern(tablesOf(row.tables))

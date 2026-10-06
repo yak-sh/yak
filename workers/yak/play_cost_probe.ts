@@ -3,6 +3,7 @@ import { directoryCost, queryCost } from './query_cost_fixture.ts'
 import { writeCost } from './write_cost_fixture.ts'
 import { productionGap } from './production_gap_fixture.ts'
 import { worldTick } from './play_world_fixture.ts'
+import { deployCost } from './deploy_cost_fixture.ts'
 import { idleWake, playMinute } from './play_cost_fixture.ts'
 import type { DurableStorage } from '@yaks/durable-object'
 import type { Namespace } from './door.ts'
@@ -41,6 +42,13 @@ export class PlayCost {
           new URL(req.url).searchParams.has('screened'),
         ),
       )
+    }
+    if (new URL(req.url).searchParams.has('deploy')) {
+      let history = Number(new URL(req.url).searchParams.get('history') ?? 100)
+      if (![100, 5000].includes(history)) {
+        return new Response('bad history', { status: 400 })
+      }
+      return Response.json(await deployCost(this.ctx.storage, history))
     }
     if (new URL(req.url).searchParams.has('writes')) {
       return Response.json(await writeCost(this.ctx.storage))

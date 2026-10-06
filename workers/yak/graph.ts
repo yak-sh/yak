@@ -299,8 +299,6 @@ import {
   documented,
   install,
   lifecycleColumns,
-  rebuild,
-  recut,
   requestIds,
   respelled,
   retire,
@@ -467,6 +465,7 @@ type Word =
   | 'mail'
   | 'schema'
   | 'schema-ready'
+  | 'descriptions'
   | 'wakes'
   | 'planted'
   | 'effect-migrated'
@@ -874,9 +873,8 @@ export class Store {
   #schema(vocab: Vocab, stamp: string, name: string) {
     let held = this.#get('schema')
     if (!(this.#get('name') || held) || held == stamp) return
-    // Definitions cannot be altered by replaying them. Raise each changed
-    // index, trigger and view from the vocabulary in the same transaction.
-    if (held) recut(this.#sql)
+    // Install only changed definitions. Unrelated words must not discard
+    // search indexes or audit every entity on the request that discovers them.
     requestIds(this.#sql, vocab)
     lifecycleColumns(this.#sql, vocab)
     for (let stmt of blobSchema()) this.#sql.query(stmt)
@@ -885,7 +883,6 @@ export class Store {
     }
     let unfit = install(this.#sql, vocab, blobRead(vocab))
     for (let e of unfit) defect(e, { request: 'schema fit', store: name })
-    if (held) rebuild(this.#sql)
     if (!unfit.length) {
       watchEmbedding(this.#sql, texts(vocab, blobRead(vocab)))
       this.#put('schema', stamp)
@@ -2018,10 +2015,16 @@ export class Store {
     // their identities. Describe after boot, in bounded writes, with the
     // hash last so an interrupted pass resumes on the next request.
     if (this.#vocab.comp('_vocab')) {
-      let rows = await described(this.#graph, this.#vocab.docs)
+      let previous = this.#get('descriptions')
+      let rows = await described(
+        this.#graph,
+        this.#vocab.docs,
+        previous ? JSON.parse(previous) : undefined,
+      )
       for (let at = 0; at < rows.length; at += 30) {
         await this.#trust(rows.slice(at, at + 30), null)
       }
+      this.#put('descriptions', JSON.stringify(this.#vocab.docs))
     }
     if (this.#lensMove) {
       let doc = lensDocAt(this.#name() ?? '', meant(this.#get('vocab')))

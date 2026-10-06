@@ -1,12 +1,11 @@
 // What a Store's own storage is brought to at each wake (graph.ts): the schema
 // its vocabulary implies, raised over whatever the object holds ({@link
-// install}), the definitions re-cut when that schema moves ({@link recut},
-// {@link rebuild}), a column its vocabulary stopped naming dropped ({@link
-// shed}), and each slot the object remembers rewritten into the one shape a
+// install}), changed definitions installed when that schema moves, a column
+// its vocabulary stopped naming dropped ({@link shed}), and each slot the object remembers rewritten into the one shape a
 // deploy takes now ({@link documented}, {@link unholed}, {@link unworded},
 // {@link respelled}). {@link BOUNDARIES} names the stored shapes this code
 // reads, for `yak admin deploys`.
-import { fields, schema as ftsSchema } from '@yaks/fts'
+import { adopt, fields } from '@yaks/fts'
 import { rekey, schema as vectorSchema } from '@yaks/embedding'
 import { reserved } from '@yaks/durable-object'
 import {
@@ -24,7 +23,7 @@ import {
   tally,
   val,
 } from '@yaks/sql'
-import { backfill, fit, indexed, mend, retired, tabled } from '@yaks/sqlite'
+import { backfill, fit, indexed, retabled, retired } from '@yaks/sqlite'
 import type { Index, Vocab } from '@yaks/vocab'
 
 import { type Bundle, type Comp, token } from '@yaks/graph'
@@ -372,9 +371,10 @@ export let requestIds = (d: Driver, vocab: Vocab) => {
  * They hold no rows of their own — a view is a query, a trigger is a rule, and
  * an external-content FTS5 index is an inverted copy of rows that live
  * somewhere else — and `create ... if not exists` says nothing about one that is
- * already standing. So re-raising them is the only way a changed shape reaches a
- * store that has an older one, and dropping them costs only the rebuild below.
- * Dropping a virtual table takes its shadow tables with it.
+ * already standing. This is only for explicit column contraction: definitions
+ * may still name the column being shed. Installation recreates the missing
+ * definitions and refills affected indexes. Ordinary release fitting keeps
+ * unchanged definitions. Dropping a virtual table takes its shadow tables.
  */
 export let recut = (d: Driver) => {
   let drop = (kind: 'table' | 'index' | 'view' | 'trigger', name: string) =>
@@ -443,15 +443,6 @@ export let shed = (
   d.query(unseat(name, prop))
 }
 
-/** Every full-text index refilled from the content it mirrors — what a freshly
- * raised external-content index needs, because the rows it indexes were written
- * before it existed. */
-export let rebuild = (d: Driver) => {
-  for (let f of shadowed(d)) {
-    d.query({ t: 'insert', into: f, cols: [f], rows: [[lit('rebuild')]] })
-  }
-}
-
 /** The schema a vocabulary implies, raised over whatever the object holds.
  * Only the tables that stood before it can be behind their vocabulary
  * (@yaks/sqlite `fit`), so a fresh object is asked nothing about its columns,
@@ -465,7 +456,7 @@ export let install = (
   derived: Derived = {},
 ): Error[] => {
   let stood = new Set(named(d, 'index').map((i) => i.name))
-  for (let stmt of tabled(vocab, derived)) d.query(stmt)
+  for (let stmt of retabled(d, vocab, derived)) d.query(stmt)
   let unfit = fit(d, vocab)
   for (let stmt of retired(d, vocab)) d.query(stmt)
   let held = new Set(named(d, 'index').map((i) => i.name))
@@ -493,22 +484,11 @@ export let install = (
   // the full-text indexes, and the table the vectors are kept in beside the
   // triggers that note which of them changed (@yaks/embedding). The triggers
   // that queue text to embed are the sweep's own (graph.ts `#embedding`).
-  for (let stmt of ftsSchema(fields(vocab), derived)) d.query(stmt)
+  adopt(d, fields(vocab), derived, { heal: false })
   rekey(d)
   for (let stmt of vectorSchema()) d.query(stmt)
   if (vocab.comp('archetype')) {
     backfill(d, false)
-    // A pass: pointers a write past the graph left out of step (the access
-    // mode `#mode` writes, before @yaks/sqlite's units kept them) are
-    // classified again, so `get` reads the rows they hold. A pass that fails
-    // is told like a table left unfit, and the store serves on and tries it
-    // again at its next wake. It can be deleted once every store has opened
-    // with it (T-59268).
-    try {
-      mend(d, false)
-    } catch (e) {
-      unfit.push(e instanceof Error ? e : new Error(String(e)))
-    }
   }
   return unfit
 }

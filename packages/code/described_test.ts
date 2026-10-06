@@ -96,3 +96,34 @@ test('a graph describes what it is served with, and stops describing what it is 
   g = await serve([p({ a: { type: 'string' } })])
   assertEquals((await g.read('._comp.name=note'))[0].entity.eid, note)
 })
+
+test('a retained declaration reads only changed description identities and resumes', async () => {
+  let old = [p({ a: { type: 'string' }, b: { type: 'number' } }), q]
+  let serve = store(), g = await serve(old)
+  let next = [p({ a: { type: 'string' } }, [])]
+  let read = g.read.bind(g), get = g.get.bind(g)
+  let scans = 0, identities: string[] = []
+  g.read = (line, opts) => {
+    scans++
+    return read(line, opts)
+  }
+  g.get = (ids, comps) => {
+    identities.push(...ids)
+    return get(ids, comps)
+  }
+  let patch = await described(g, [...base, ...next], [...base, ...old])
+  assertEquals(scans, 0)
+  assertEquals(identities.includes(identityEid('_prop', ['note', 'a'])), false)
+  // An interrupted pass commits only one batch. The old declaration remains
+  // the comparison until the global marker is committed last.
+  await g.apply(patch.slice(0, 1), { trusted: true })
+  let resumed = await described(g, [...base, ...next], [...base, ...old])
+  await g.apply(resumed, { trusted: true })
+  assertEquals(await described(g, [...base, ...next], [...base, ...next]), [])
+  assertEquals(
+    (await read('._prop.comp._comp.name=note')).map((b) =>
+      (b._prop as Comp).name
+    ),
+    ['a'],
+  )
+})

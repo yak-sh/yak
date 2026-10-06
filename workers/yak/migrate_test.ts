@@ -16,7 +16,7 @@ import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { at, by, col, fn, insert, lit, scan, type Stmt } from '@yaks/sql'
 import { DIRTY, OWED, TABLE } from '@yaks/embedding'
-import { columns, objects as catalogue } from '@yaks/sqlite'
+import { columns, objects as catalogue, reclassify } from '@yaks/sqlite'
 import { Store } from './graph.ts'
 import { documented, respelled, unholed, unworded } from './migrate.ts'
 import { PLATFORM_STORE } from './door.ts'
@@ -212,7 +212,7 @@ test('a Store keeps exception request ids across the rename', async () => {
   }
 })
 
-test('a Store answers, after its next schema wake, a row a raw write gave it', async () => {
+test('a raw writer classifies its changed owner rather than owing a schema census', async () => {
   let ctx = state()
   let before = newer(ctx, PLATFORM_STORE)
   assertEquals(
@@ -225,11 +225,14 @@ test('a Store answers, after its next schema wake, a row a raw write gave it', a
   let d = db(ctx)
   let two = Number(scan(d, 'entity', by({ eid: TWO }), ['id'])[0].id)
   // Past every door, as a script or an older Store's own write could.
-  run(ctx, insert('exception', { entity: two, request_id: 'report-2' }))
+  ctx.storage.transactionSync(() => {
+    run(ctx, insert('exception', { entity: two, request_id: 'report-2' }))
+    reclassify(d, [TWO], true)
+  })
   let reported = async () =>
     (await newer(ctx, PLATFORM_STORE).query('.exception'))
       .map((b) => b.entity.eid).sort()
-  assertEquals(await reported(), [ONE])
+  assertEquals(await reported(), [ONE, TWO])
   keep(ctx, 'schema', 'older schema')
   assertEquals(await reported(), [ONE, TWO])
 })

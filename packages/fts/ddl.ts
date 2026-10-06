@@ -406,11 +406,17 @@ let strays = (db: Driver, ix: Index): string[] => {
 //
 // Everything else runs with `if not exists` / `if exists`, so a second call on
 // the same database changes nothing, writes nothing, and returns empty lists.
+export type AdoptOpts = HealOpts & {
+  /** Check retained indexes for drift (default true). Schema installation can
+   * keep unchanged indexes without reading their content. */
+  heal?: boolean
+}
+
 export let adopt = (
   db: Driver,
   fields: Field[],
   derived: Derived = {},
-  opts: HealOpts = {},
+  opts: AdoptOpts = {},
 ): Adopted => {
   let recut: string[] = [], dropped: string[] = []
   let gone = (kind: 'trigger' | 'view' | 'table', name: string) =>
@@ -433,6 +439,7 @@ export let adopt = (
       dropped.push(t)
     }
     let mine = index(ix, derived)
+    let changed = false
     let ours: ['view' | 'trigger', string][] = [
       ['view', textName(ix.name)],
       ...owned(ix).map((t): ['trigger', string] => ['trigger', t]),
@@ -444,15 +451,21 @@ export let adopt = (
         had != null &&
         (kind == 'trigger' && !same || now == null ||
           body(had, name) != body(now, name))
-      ) gone(kind, name)
+      ) {
+        gone(kind, name)
+        changed = true
+      }
+      // A rebuilt content table loses its triggers, but not its external
+      // index. Refill that index before its replacement writers start.
+      if (kind == 'trigger' && had == null) changed = true
     }
     if (!same) gone('table', fts)
     for (let s of mine) db.query(s)
-    if (!same) {
+    if (!same || opts.heal === false && changed) {
       db.query(command(fts, 'rebuild'))
       recut.push(fts)
     }
   }
-  let healed = heal(db, fields, opts)
+  let healed = opts.heal === false ? [] : heal(db, fields, opts)
   return { recut, dropped, healed }
 }
