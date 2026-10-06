@@ -118,7 +118,8 @@ let useAnswers = (asks: Asks): Record<string, Answer> => {
 }
 
 // Inspector state is in the page graph; reading it during a render wakes
-// that render when an inspector control or history pager changes it.
+// that render when an inspector control or history pager changes it, or a
+// view sets state of its own there (a @yaks/ux Disclosure's).
 let turn = signal(0)
 front.watch('.inspector|.table').subscribe(() => turn.value++)
 
@@ -148,7 +149,7 @@ export let inspectIo: Io = {
   when: ago,
   state: (eid) => (turn.value, front.ent(eid)),
   set: (bs) => {
-    void front.mutate(bs)
+    void Promise.resolve(front.mutate(bs)).then(() => turn.value++)
   },
   show: (b, view, ctx = {}) => {
     let e = ent(b.entity.eid)
