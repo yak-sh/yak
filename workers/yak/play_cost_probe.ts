@@ -1,3 +1,4 @@
+import { coldMessages } from './cold_message_fixture.ts'
 import { entryPageCost } from './entry_page_cost_fixture.ts'
 // Test-only workerd door: real SQL row counters, no account or live app.
 import { directoryCost, queryCost } from './query_cost_fixture.ts'
@@ -33,6 +34,14 @@ export class PlayCost {
     }
   }
   async measure(req: Request): Promise<Response> {
+    if (new URL(req.url).searchParams.has('coldmessages')) {
+      return Response.json(
+        await coldMessages(
+          this.ctx.storage,
+          Number(new URL(req.url).searchParams.get('outputs') ?? 10),
+        ),
+      )
+    }
     if (new URL(req.url).searchParams.has('entrypage')) {
       return Response.json(entryPageCost(this.ctx.storage))
     }

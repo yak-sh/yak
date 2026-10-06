@@ -534,7 +534,7 @@ export let idleWake = async (
 
 // Seed-only storage doors, outside every measured window. Small-table stats
 // precede unrelated retained rows: the test must survive stale production plans.
-let seedHistory = async (
+export let seedHistory = async (
   g: Store['door']['graph'],
   db: Parameters<typeof playMinute>[0],
   history: number,
