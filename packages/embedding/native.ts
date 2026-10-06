@@ -45,6 +45,7 @@ import {
   lit,
   op,
   type Raw,
+  revision,
   select,
   table,
   val,
@@ -115,12 +116,23 @@ let tally = (db: Driver, name: string): number =>
 
 /** Whether sqlite-vector was installed on this database: then the dirty set
  * is its index's, cleared only by {@link build}. */
-export let installed = (db: Driver): boolean =>
-  !!db.query(select({
+let installations = new WeakMap<
+  Driver,
+  { version: number; installed: boolean }
+>()
+
+export let installed = (db: Driver): boolean => {
+  let version = revision(db, 'schema')
+  let kept = installations.get(db)
+  if (kept?.version == version) return kept.installed
+  let found = !!db.query(select({
     cols: [col('name')],
     from: table('sqlite_master'),
     where: eq(col('name'), val('_sqliteai_vector')),
   }))[0]
+  installations.set(db, { version, installed: found })
+  return found
+}
 
 // The one model every stored vector is under, or null while two spaces share
 // the table: an index over both would rank vectors of different lengths.

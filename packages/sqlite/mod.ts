@@ -84,7 +84,7 @@ import { componentTables, shape } from './physical.ts'
 import { patch, remove, revive } from './write.ts'
 import { bindings } from './rules.ts'
 import { memoized } from './memo.ts'
-import { revision } from './revision.ts'
+import { revision } from '@yaks/sql'
 
 export * from './archetype.ts'
 export { catalog } from './catalog.ts'

@@ -159,3 +159,5 @@ export let compile = (
 ): Compiled => render(bind(ast, vocab, opts))
 
 export { field } from './sqlite.ts'
+
+export { revision } from './revision.ts'

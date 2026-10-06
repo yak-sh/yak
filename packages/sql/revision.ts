@@ -4,7 +4,8 @@
 // connections through SQLite's version pragmas. Rollback invalidates rather
 // than rewinding a counter, since a snapshot may have been taken inside the
 // transaction whose changes just disappeared.
-import type { Driver, Stmt } from '@yaks/sql'
+import type { Driver } from './driver.ts'
+import type { Stmt } from './ast.ts'
 
 let held = new WeakMap<Driver, {
   schema: number
@@ -42,6 +43,7 @@ export function revision(driver: Driver, scope: Scope): number {
     let observe = (s: Stmt): void => {
       if (s.t == 'raw') {
         if (s.origin) observe(s.origin)
+        else invalidate() // Unannotated SQL may change tables or triggers.
         return
       }
       if (s.t == 'insert' || s.t == 'update' || s.t == 'delete') current.data++
@@ -98,6 +100,14 @@ export function revision(driver: Driver, scope: Scope): number {
           undo(was)
           throw error
         }
+      }
+    }
+    if (driver.extension) {
+      let extension = driver.extension.bind(driver)
+      driver.extension = (path) => {
+        // Loading a library can create its metadata tables outside query/run.
+        invalidate()
+        extension(path)
       }
     }
     if (driver.template) {

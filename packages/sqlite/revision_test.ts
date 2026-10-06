@@ -3,7 +3,7 @@ import { test } from '@yaks/testing'
 import { insert } from '@yaks/sql'
 import { open } from './db.ts'
 import { mem } from './testing.ts'
-import { revision } from './revision.ts'
+import { revision } from '@yaks/sql'
 import { unit } from './unit.ts'
 
 let table = (name: string) => ({
@@ -48,7 +48,7 @@ test('snapshot revisions invalidate snapshots made inside a rolled back savepoin
 })
 
 test('snapshot revisions observe other file connections without catalog scans', () => {
-  let dir = Deno.makeTempDir({ prefix: 'T-65691-revision-' })
+  let dir = Deno.makeTempDirSync({ prefix: 'T-65691-revision-' })
   let a = open(`${dir}/test.db`), b = open(`${dir}/test.db`)
   try {
     let schema = revision(a, 'schema')

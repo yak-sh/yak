@@ -26,7 +26,7 @@ import {
 import { componentTables } from './physical.ts'
 import { mintSql } from './write.ts'
 import { unit } from './unit.ts'
-import { revision } from './revision.ts'
+import { revision } from '@yaks/sql'
 
 export { componentTables } from './physical.ts'
 

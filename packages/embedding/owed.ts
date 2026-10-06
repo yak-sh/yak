@@ -36,6 +36,7 @@ import {
   not,
   op,
   render,
+  revision,
   select,
   table,
   val,
@@ -137,13 +138,20 @@ export let triggers = (fields: Field[]): CreateTrigger[] => {
 let body = (sql: string, name: string): string =>
   sql.slice(sql.indexOf(`"${name}"`)).trim()
 
+let watched = new WeakMap<Driver, { version: number; fields: string }>()
+
 /**
  * Make the database's queue triggers the ones {@link triggers} says, and
  * queue everything when that changed anything. Returns whether it did. A
- * second call with the same fields reads the schema and writes nothing.
+ * second call with the same fields and schema reads and writes nothing.
  */
 export let watch = (db: Driver, fields: Field[]): boolean => {
-  let want = new Map(triggers(fields).map((t) => [t.name, t]))
+  let version = revision(db, 'schema')
+  let definitions = triggers(fields)
+  let key = JSON.stringify(definitions)
+  let kept = watched.get(db)
+  if (kept?.version == version && kept.fields == key) return false
+  let want = new Map(definitions.map((t) => [t.name, t]))
   let have = db.query(
     select({
       cols: [col('name'), col('sql')],
@@ -167,6 +175,7 @@ export let watch = (db: Driver, fields: Field[]): boolean => {
   }
   for (let t of want.values()) db.query(t)
   if (moved || want.size) owe(db, fields)
+  watched.set(db, { version: revision(db, 'schema'), fields: key })
   return moved || want.size > 0
 }
 

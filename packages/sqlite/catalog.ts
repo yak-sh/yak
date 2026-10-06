@@ -12,7 +12,7 @@ import {
   table,
   val,
 } from '@yaks/sql'
-import { revision } from './revision.ts'
+import { revision } from '@yaks/sql'
 
 let caches = new WeakMap<Driver, {
   sets: Archetypes

@@ -246,7 +246,10 @@ Triggers on each component a field lives on queue the entity a write touched in
 `embedding_owed`, in the same statement as the write, whichever process made it.
 `watch(db, fields)` makes the triggers match the fields; when it changes any, it
 queues every entity wearing a field or holding a vector, which is how a new
-database or a new field is backfilled.
+database or a new field is backfilled. With unchanged fields and schema, `watch`
+issues no SQL. Both trigger inspection and native-installation inspection reuse
+the driver's [schema revision](../sql/README.md#driver); DDL, rollback, and
+file-peer schema changes discard those decisions.
 
 `sweep(db, fields, embedder, limit?)` calls `watch`, then takes the newest
 `limit` (64) queued entities: it embeds those whose text changed, deletes the

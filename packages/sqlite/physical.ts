@@ -1,4 +1,4 @@
-import { revision } from './revision.ts'
+import { revision } from '@yaks/sql'
 import {
   among,
   as,

@@ -60,7 +60,7 @@ All exports use the single import path `@yaks/sql`.
 | Query compilation     | `compile`, `bind`, `BindOpts`, `Compiled`, `screen`, `tallied`, `Unsupported`, `whole`                                      |
 | SQL nodes             | `Expr`, `Query`, `Stmt`, `Select`, `Insert`, `Update`, `Delete`, schema-operation types, `Raw`, `Param`, and their builders |
 | Rendering             | `render`, `shape`, `isRaw`                                                                                                  |
-| Drivers               | `Driver`, `Row`, `effect`, `scan`, `tally`                                                                                  |
+| Drivers               | `Driver`, `Row`, `effect`, `scan`, `tally`, `revision`                                                                      |
 | Property reads        | `Tag`, `tagOf`, `held`, `field`, `Derived`, `DerivedProp`, `ladders`, `derivedOf`, `worn`                                   |
 | Computed components   | `Backing`, `Backings`, `eidOf`, `idOf`, `eidAt`                                                                             |
 | Clause compilation    | `Extension`, `Compile`, `Site`, `OrderBy`, `Begin`, `Screen`                                                                |
@@ -270,6 +270,26 @@ Optional driver capabilities include `tx` for synchronous transactions,
 `file` for a database file needing a write lock before reads, and `arms` for the
 engine's compound-select allowance. Async engines wrap execution at their own
 boundary.
+
+A **revision** is a connection-local invalidation token for a schema, catalog,
+or data snapshot. `revision(driver, 'schema')` changes after DDL and after a
+rollback that undoes DDL. Single-owner drivers observe statements through
+`query`, `run`, and `tx` without issuing SQL; file drivers additionally read
+SQLite's version pragmas to observe peer connections. Unannotated raw SQL,
+extension loading, and schema templates invalidate snapshots conservatively.
+
+```ts
+import { revision } from '@yaks/sql'
+import { open } from '@yaks/sqlite/db'
+import { equal } from '@yaks/testing'
+
+let db = open(':memory:')
+let before = revision(db, 'schema')
+equal(revision(db, 'schema'), before)
+db.query({ t: 'create table', name: 'example', cols: [{ name: 'x' }] })
+equal(revision(db, 'schema') > before, true)
+db.close()
+```
 
 ## SQLite layout and value types
 
