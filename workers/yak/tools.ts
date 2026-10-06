@@ -99,6 +99,7 @@ import {
 // app_rollback does for an app's files.
 import { mark, moment, oldest, putBack, recorded } from './recover.ts'
 import { inspect as inspectWrites, retry as retryWrite } from './write-log.ts'
+import { KERNEL } from './meta.ts'
 import { inspect as inspectStore } from './store-inspect.ts'
 // Only the ceiling, and only ever called: tools.ts and standing.ts are a
 // cycle through declared.ts, so nothing from there may be read while this
@@ -260,6 +261,7 @@ import { within } from './rate.ts'
 // from: an upload, a drop, or `app_files` fetch.
 import { MAX } from './apps.ts'
 import {
+  admin,
   APP,
   type Args,
   asCaller,
@@ -3274,6 +3276,41 @@ let OURS: Row[] = [
           story,
         space,
       }
+    },
+  },
+  {
+    name: 'store_trace',
+    readOnly: false,
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        app: APP,
+        next: { type: 'integer', minimum: 0, maximum: 100 },
+        rate: { type: 'number', minimum: 0, maximum: 1 },
+      },
+      required: ['app', 'next'],
+    },
+    run: async (ctx, args) => {
+      if (!await admin(ctx)) throw refuse('access', 'platform admin required')
+      let { space, store } = await inApp(ctx, args, true)
+      let next = Number(args.next),
+        rate = args.rate == null ? undefined : Number(args.rate)
+      if (
+        !Number.isSafeInteger(next) || next < 0 || next > 100 ||
+        (rate != null && (!Number.isFinite(rate) || rate < 0 || rate > 1))
+      ) {
+        throw refuse('arguments', 'next must be 0..100 and rate must be 0..1')
+      }
+      let response = await store('/trace', {
+        method: 'POST',
+        body: JSON.stringify({ next, rate }),
+      }, KERNEL)
+      let value = await response.json() as Record<string, unknown>
+      if (!response.ok) {
+        throw rejected(response.status, String(value.message ?? ''))
+      }
+      return { text: JSON.stringify(value), value, space }
     },
   },
   {

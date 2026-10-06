@@ -2,7 +2,8 @@
  * owns representative-sampling state, so repeated calls remain pure and can
  * share a quota across channels in a process without sharing span IDs. */
 import type { Event } from '@yaks/trace'
-import { type Clock, minute, type Trace } from './model.ts'
+import { minute, type TraceRow } from './model.ts'
+import { project, type ProjectOptions } from './project.ts'
 
 /** Per-root-op slow thresholds in ms. An absent op has no slow threshold. */
 export type Thresholds = Readonly<Record<string, number>>
@@ -17,10 +18,10 @@ export let thresholds: Thresholds = Object.freeze({
 
 /** Tree time origin and per-op slow thresholds; overrides replace defaults
  * only for the ops they name. */
-export type SampleOptions = Clock & { thresholds?: Thresholds }
+export type SampleOptions = ProjectOptions & { thresholds?: Thresholds }
 
 /** Selection result and ordinary op/minute keys to pass to the next call. */
-export type Sample = { trace?: Trace; sampled: ReadonlySet<string> }
+export type Sample = { rows?: TraceRow[]; sampled: ReadonlySet<string> }
 
 /** Select a root-first span tree, as returned by @yaks/trace record(). Every
  * completed root strictly past its threshold is selected, without consuming
@@ -41,31 +42,8 @@ export let sample = (
   let slow = threshold != null && ms > threshold
   if (!slow && sampled.has(key)) return { sampled }
   if (!slow) sampled = new Set([...sampled, key])
-  let ids = new Map(spans.map((e, i) => [e.id, String(i)]))
   return {
     sampled,
-    trace: {
-      op: root.kind,
-      name: root.name,
-      at: new Date(at).toISOString(),
-      ms,
-      spans: spans.map((e) => ({
-        id: ids.get(e.id)!,
-        ...e.parent != null && ids.has(e.parent)
-          ? { parent: ids.get(e.parent)! }
-          : {},
-        kind: e.kind,
-        name: e.name,
-        ...e.plugin != null ? { plugin: e.plugin } : {},
-        start: (e.start ?? e.time) - start,
-        ...e.stage == 'instant'
-          ? { ms: 0 }
-          : e.duration != null
-          ? { ms: e.duration }
-          : {},
-        ...e.outcome != null ? { outcome: e.outcome } : {},
-        ...e.counts != null ? { counts: { ...e.counts } } : {},
-      })),
-    },
+    rows: project(spans, options),
   }
 }

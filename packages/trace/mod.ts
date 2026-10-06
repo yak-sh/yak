@@ -54,7 +54,10 @@ export type Span = {
 }
 export type Channel = {
   readonly active: boolean
-  subscribe: (listener: (event: Event) => void) => () => void
+  subscribe: (
+    listener: (event: Event) => void,
+    options?: { history?: boolean },
+  ) => () => void
   history: (limit?: number) => Event[]
   begin: (activity: Activity) => Span | undefined
   instant: (activity: Activity, o?: End) => Event | undefined
@@ -64,9 +67,31 @@ let channels = new WeakMap<object, Channel>()
 type Scope = Context & { outer?: Scope; ancestor?: string }
 let scopes = new WeakMap<Span, Scope>()
 let current: Scope | undefined
+
+/** A host-provided asynchronous context carrier. The trace package remains
+ * web-only; hosts may adapt AsyncLocalStorage or another task-local carrier. */
+export type ContextCarrier = {
+  get: () => Context | undefined
+  run: <T>(ctx: Context | undefined, work: () => T) => T
+}
+let carrier: ContextCarrier | undefined
+
+/** Install task-local propagation once in a host. The returned cleanup restores
+ * the prior carrier, useful for isolated hosts and tests. Without a carrier,
+ * scopes retain their synchronous-only behavior. */
+export let installContext = (next: ContextCarrier): () => void => {
+  let before = carrier
+  carrier = next
+  return () => {
+    if (carrier == next) carrier = before
+  }
+}
 let capacity = 256
 let recordings = new WeakMap<Channel, number>()
-let roots = new WeakMap<Channel, (id: string) => void>()
+let roots = new WeakMap<
+  Channel,
+  (id: string) => { parent?: string } | undefined
+>()
 let links = new WeakMap<
   object,
   WeakMap<object, { id: string; recording: number }>
@@ -90,12 +115,19 @@ let create = (): Channel => {
   let next = 0
   let size = 0
   let sequence = 0
+  let open = new Map<
+    string,
+    { parent?: string; counts: Record<string, number> }
+  >()
   let epoch = 0
+  let historians = 0
   let emit = (event: Event): Event => {
     Object.freeze(event)
-    ring[next] = event
-    next = (next + 1) % capacity
-    size = Math.min(size + 1, capacity)
+    if (historians) {
+      ring[next] = event
+      next = (next + 1) % capacity
+      size = Math.min(size + 1, capacity)
+    }
     for (let listener of delivery) {
       try {
         listener(event)
@@ -124,14 +156,23 @@ let create = (): Channel => {
     get active() {
       return listeners.size > 0
     },
-    subscribe: (listener) => {
-      if (!listeners.size) recordings.set(out, ++epoch)
+    subscribe: (listener, options) => {
+      let history = options?.history !== false
+      if (history) historians++
+      if (!listeners.size) {
+        open.clear()
+        recordings.set(out, ++epoch)
+      }
       // Each subscription owns its unsubscribe, even for the same callback.
       let subscribed = (e: Event) => listener(e)
       listeners.add(subscribed)
       delivery = [...listeners]
       return () => {
-        if (listeners.delete(subscribed)) delivery = [...listeners]
+        if (listeners.delete(subscribed)) {
+          if (history) historians--
+          delivery = [...listeners]
+          if (!listeners.size) open.clear()
+        }
       }
     },
     history: (limit = capacity) => {
@@ -148,11 +189,21 @@ let create = (): Channel => {
       if (!listeners.size) return
       let start = performance.now()
       // Copy code metadata before delivering: a listener may mutate its caller.
-      a = { ...a }
+      let at = context()
       let id = `${epoch}.${++sequence}`
-      roots.get(out)?.(id)
+      let root = roots.get(out)?.(id)
+      a = {
+        ...a,
+        parent: a.parent ?? root?.parent ??
+          (!root && at?.channel == out ? at.parent : undefined),
+      }
       let recording = epoch
       let ended = false
+      let accumulated = {
+        parent: a.parent,
+        counts: {} as Record<string, number>,
+      }
+      open.set(id, accumulated)
       let begun = event(a, id, 'start', start)
       begun.start = start
       emit(begun)
@@ -167,12 +218,17 @@ let create = (): Channel => {
           ended = true
           // A disconnected recording cannot finish in a later recording.
           if (!listeners.size || epoch != recording) return
+          open.delete(id)
           // Normalizing counts and constructing the event belong to this
           // span's work, rather than gaps between its parent's children.
           let finished = event(a, id, 'end', 0)
           finished.start = start
           finished.outcome = o?.outcome ?? 'ok'
-          finished.counts = counts(o?.counts)
+          finished.counts = counts(
+            Object.keys(accumulated.counts).length
+              ? { ...o?.counts, ...accumulated.counts }
+              : o?.counts,
+          )
           finished.duration = 0
           finished.time = performance.now()
           finished.duration = Math.max(0, finished.time - start)
@@ -184,8 +240,8 @@ let create = (): Channel => {
         parent: id,
         recording,
         ancestor: a.parent,
-        outer: current?.channel == out && current.parent == a.parent
-          ? current
+        outer: at?.channel == out && at.parent == a.parent
+          ? at as Scope
           : undefined,
       })
       return span
@@ -201,7 +257,32 @@ let create = (): Channel => {
       })
     },
   }
+  meters.set(out, (id, input) => {
+    let visited = new Set<string>()
+    while (id && !visited.has(id)) {
+      visited.add(id)
+      let at = open.get(id)
+      if (!at) break
+      for (let [name, n] of Object.entries(input)) {
+        if (Number.isFinite(n)) at.counts[name] = (at.counts[name] ?? 0) + n
+      }
+      id = at.parent
+    }
+  })
   return out
+}
+
+let meters = new WeakMap<
+  Channel,
+  (id: string | undefined, counts: Counts) => void
+>()
+
+/** Add measured work once to the current span and its open ancestors. Inclusive
+ * totals follow parent ids rather than shared channel state, so interleaved
+ * requests and siblings cannot charge each other. Nothing is kept unobserved. */
+export let measure = (input: Counts): void => {
+  let at = context()
+  if (at) meters.get(at.channel)?.(at.parent, input)
 }
 
 /** Explicit consumer entry point. Merely creating a channel does not turn
@@ -212,6 +293,13 @@ export let channel = (target: object): Channel => {
   let made = create()
   channels.set(target, made)
   return made
+}
+
+/** Give another object the source's channel. Hosts use a stable source when
+ * the graph it observes can be replaced; producers still use peek(target).
+ * Sharing a channel creates no subscription and records no activity. */
+export let shareChannel = (target: object, source: object): void => {
+  channels.set(target, channel(source))
 }
 
 /** Producer entry point: never creates anything and exposes only a subscribed
@@ -250,23 +338,27 @@ let tree = (events: Map<string, Event>, root?: string): Event[] => {
 export function record<T>(
   target: object,
   run: () => T,
+  options?: { parent?: string; history?: boolean },
 ): T extends PromiseLike<unknown> ? Promise<Recorded<Awaited<T>>> : Recorded<T>
 export function record<T>(
   target: object,
   run: () => T | PromiseLike<T>,
+  options: { parent?: string; history?: boolean } = {},
 ): Recorded<T> | Promise<Recorded<T>> {
   let c = channel(target)
   let events = new Map<string, Event>()
   let root: string | undefined
   let stop = c.subscribe((e) => {
     if (e.stage == 'end' || !events.has(e.id)) events.set(e.id, e)
-  })
+  }, { history: options.history })
   let before = roots.get(c)
   // Nominate before delivery: another subscriber can reenter the producer
   // before this recorder receives the original root's start event.
   roots.set(c, (id) => {
+    let nominated = root == null
     root ??= id
     before?.(id)
+    return nominated ? { parent: options.parent } : undefined
   })
   let done = (result: T): Recorded<T> => {
     stop()
@@ -327,26 +419,30 @@ export let live = (ctx: Context): boolean =>
   ctx.channel.active &&
   (ctx.recording == null || ctx.recording == recording(ctx.channel))
 
-/** The subscribed context on this synchronous call stack. It never survives
- * an await: asynchronous boundaries explicitly restore their own context. */
+/** The subscribed context on this call stack or the host's optional task-local
+ * carrier. Without a carrier, asynchronous boundaries restore it explicitly. */
 export let context = (ancestor?: string): Context | undefined => {
-  if (!current || !live(current)) return
-  if (!ancestor) return current
-  for (let at: Scope | undefined = current; at; at = at.outer) {
-    if (at.parent == ancestor || at.ancestor == ancestor) return current
+  let active = (carrier?.get() ?? current) as Scope | undefined
+  if (!active || !live(active)) return
+  if (!ancestor) return active
+  for (let at: Scope | undefined = active; at; at = at.outer) {
+    if (at.parent == ancestor || at.ancestor == ancestor) return active
   }
 }
 
-/** Run a synchronous boundary under an operation's context, restoring the
- * caller even on failure. A returned promise carries no ambient context. */
+/** Run under an operation's context, restoring the caller even on failure.
+ * A host-installed carrier also keeps the operation's asynchronous work local. */
 export let scope = <T>(ctx: Context | undefined, run: () => T): T => {
-  let before = current
-  current = ctx
-  try {
-    return run()
-  } finally {
-    current = before
+  let scoped = () => {
+    let before = current
+    current = ctx
+    try {
+      return run()
+    } finally {
+      current = before
+    }
   }
+  return carrier ? carrier.run(ctx, scoped) : scoped()
 }
 
 /** Only the error's category, never its text or properties, is observable. */

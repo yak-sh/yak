@@ -88,6 +88,36 @@ adds the `yak` CLI, so a push to main pushes only the CLI's layers. To change a
 toolchain, edit the base file and set the FROM tag `sandbox_test.ts` names; the
 next deploy builds and pushes the base before its own image.
 
+## Store traces
+
+Store requests are recorded in memory. Only requests reading or writing more
+than 10,000 SQL rows, requested captures, and ordinary samples are delivered to
+`yak-errors`; an unselected request performs no additional SQL or delivery.
+Errors remain on Sentry. The independent [tracker](../tracker/README.md) stores
+the trace and its separately addressed spans and metric components.
+
+A platform admin can arm a capture without generating app traffic:
+
+```sh
+yak store_trace --space yourname --app notes --next 3 --rate 0.001
+```
+
+`next` is 0..100 and `rate` is the probability of retaining an ordinary request.
+Both apply to the current Store incarnation and reset on eviction. The reply
+reports whether the queue producer is available. The control request is not a
+sample and does not consume `next`; HTTP, socket messages, and alarms do.
+Ordinary sampling defaults to zero until its rate is set. The Store learns a
+space's global eid from explicit kernel setup/control so alarms can route to
+that tracker without polling the directory. A pre-existing Store without that
+scope needs explicit setup/control before an alarm capture can be delivered.
+
+The locus provisions `yak-errors` and deploys the tracker; the producer binding
+is prepared as a commented stanza in `wrangler.toml`; activation uncomments it
+after the queue and tracker exist. Without the binding, records are discarded
+rather than writing into the app Store. Each delivered chunk carries
+`during.space` on every entity, and immutable ids make queue redelivery safe.
+The request's span counts close before delivery and do not include delivery.
+
 Defects go to Sentry (org `yaks`, project `yaks-app`; sentry.ts): an exception
 nothing caught, a break the router or a job files, a Store's own, a connector
 tool's, any `console.error`, and a Workers Build that failed (builds.ts, fed by

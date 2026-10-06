@@ -171,7 +171,19 @@ import {
   watch as watchEmbedding,
 } from '@yaks/embedding'
 import { after, isPromise } from '@yaks/fp'
-import { type Event, record } from '@yaks/trace'
+import { AsyncLocalStorage } from 'node:async_hooks'
+import {
+  type Context,
+  context,
+  during,
+  type Event,
+  installContext,
+  outcome,
+  peek,
+  record,
+  shareChannel,
+} from '@yaks/trace'
+import { sampleRequest, selectedRequest } from '@yaks/timing'
 import { phases } from './store-inspect.ts'
 import {
   type Actor,
@@ -461,6 +473,7 @@ type Word =
   | `seed:${string}`
   | 'seeded'
   | 'app'
+  | 'space'
   | 'access'
   | 'mail'
   | 'schema'
@@ -672,6 +685,12 @@ let routeKind = (request: Request): string => {
     : 'http other'
 }
 
+let traceContext = new AsyncLocalStorage<Context | undefined>()
+installContext({
+  get: () => traceContext.getStore(),
+  run: (ctx, work) => traceContext.run(ctx, work),
+})
+
 export class Store {
   #ctx: State
   #vocab!: Vocab
@@ -683,9 +702,12 @@ export class Store {
   #profile: ReturnType<typeof profile> | null = null
   // Constructor work belongs to the first fetch that woke this incarnation.
   #pending: Tally = new Map()
-  #measure = (rowsRead?: number) => {
+  #traceNext = 0
+  #traceRate = 0
+  #measure = (rowsRead?: number, rowsWritten?: number) => {
     hop('stmts')
     if (rowsRead != null) hop('rows', rowsRead)
+    if (rowsWritten != null) hop('rowsWritten', rowsWritten)
   }
   #people = new Map<string, string | null>()
   #live!: Sockets
@@ -1162,6 +1184,7 @@ export class Store {
     this.#effects = fx
     this.#conditionalWakes = undefined
     this.#vocab = vocab
+    shareChannel(g, this)
     this.#graph = g
     this.#anatomy = observed
     // One per incarnation, like the graph: directory.ts seeds once per Meta.
@@ -1932,6 +1955,90 @@ export class Store {
    * stretch nobody was there for is. Dormancy is delivered durably by the
    * directory; this store never polls it.
    */
+  // Only completed, selected requests leave the object. Queue delivery is
+  // deliberately outside the recording and its SQL counts. No routing lookup
+  // or persisted sample quota is read on an unselected request.
+  async #traced<T>(
+    name: string,
+    run: () => T | Promise<T>,
+    request?: Request,
+  ): Promise<T> {
+    if (this.#bind.STORE_TRACING == 'off') return run()
+    let control = request && new URL(request.url).pathname == '/trace'
+    let requested = !control && this.#traceNext > 0
+    if (requested) this.#traceNext--
+    let origin = Date.now() - performance.now()
+    let captured = await record(this, () =>
+      during(
+        peek(this)!.begin({ kind: 'request', name, package: 'workers/yak' }),
+        async () => {
+          try {
+            return { ok: true as const, value: await run() }
+          } catch (error) {
+            return { ok: false as const, error }
+          }
+        },
+      ), { history: false })
+    let root = captured.spans[0]
+    if (root) {
+      let result = captured.result
+      let status = result.ok && result.value instanceof Response
+        ? result.value.status
+        : undefined
+      captured.spans[0] = {
+        ...root,
+        outcome: !result.ok
+          ? outcome(result.error)
+          : status != null && status >= 500
+          ? 'error'
+          : status != null && status >= 400
+          ? 'refused'
+          : root.outcome,
+      }
+    }
+    let rowsRead = root?.counts?.rowsRead ?? 0
+    let rowsWritten = root?.counts?.rowsWritten ?? 0
+    if (
+      !control && this.#bind.ERRORS && selectedRequest({
+        rowsRead,
+        rowsWritten,
+        requested,
+        rate: this.#traceRate,
+        random: Math.random(),
+      })
+    ) {
+      // HTTP already carries vouched scope. Alarms/sockets can use metadata
+      // planted by deploy/control, but only selected work pays for that lookup.
+      let space = request?.headers.get('x-yak-space') ??
+        (this.#started ? this.#get('space') : null)
+      let app = request?.headers.get('x-yak-app') ??
+        (this.#started ? this.#get('app') : null)
+      if (space) {
+        let rows = sampleRequest(captured.spans, {
+          origin,
+          eid: crypto.randomUUID(),
+          during: { space, ...app ? { app } : {} },
+          rowsRead,
+          rowsWritten,
+          requested: true,
+        })
+        if (rows) {
+          try {
+            // The intake accepts independently scoped chunks and immutable ids;
+            // queue order is not assumed.
+            for (let i = 0; i < rows.length; i += 100) {
+              await this.#bind.ERRORS.send(rows.slice(i, i + 100))
+            }
+          } catch (error) {
+            defect(error, { request: 'trace delivery', store: this.#name() })
+          }
+        }
+      }
+    }
+    if (!captured.result.ok) throw captured.result.error
+    return captured.result.value
+  }
+
   async tick(now = Date.now()): Promise<Ticked> {
     if (!await this.#awake()) return { fired: [], refused: [] }
     this.#ensureStarted()
@@ -1963,7 +2070,11 @@ export class Store {
    * The runtime retries an alarm whose run failed. One that threw was reported
    * where it threw; one the runtime killed for its limits left nothing behind
    * that could report it, so its retry does (M-37965). */
-  async alarm(
+  alarm(info?: { isRetry?: boolean; retryCount?: number }): Promise<void> {
+    return this.#traced('alarm', () => this.#alarmRequest(info))
+  }
+
+  async #alarmRequest(
     info?: { isRetry?: boolean; retryCount?: number },
   ): Promise<void> {
     if (!await this.#awake()) return
@@ -2393,7 +2504,11 @@ export class Store {
    * a batch applied by the request that woke this object still reaches the
    * sockets it inherited.
    */
-  async fetch(request: Request): Promise<Response> {
+  fetch(request: Request): Promise<Response> {
+    return this.#traced(routeKind(request), () => this.#fetch(request), request)
+  }
+
+  async #fetch(request: Request): Promise<Response> {
     let path = new URL(request.url).pathname
     let kernel = request.headers.get('x-yak-kernel') == '1'
     if (kernel && path == '/dormant' && request.method == 'POST') {
@@ -2796,7 +2911,9 @@ export class Store {
       if (!spans) return apply()
       // Parsing and auth have settled; the apply root begins inside record,
       // before its callback yields. Refusals are responses, so their spans stay.
-      let captured = await record(this.#graph, apply)
+      let captured = await record(this.#graph, apply, {
+        parent: context()?.parent,
+      })
       spans.push(...captured.spans)
       return captured.result
     } catch (e) {
@@ -2853,6 +2970,8 @@ export class Store {
       if (!kernel || request.method != 'POST') {
         return json({ error: 'NotFound', message: 'no route' }, 404)
       }
+      let space = request.headers.get('x-yak-space')
+      if (space && this.#get('space') != space) this.#put('space', space)
       let version
       try {
         version =
@@ -2949,6 +3068,34 @@ export class Store {
       } catch (e) {
         return refuse(e, request)
       }
+    }
+    if (path == '/trace') {
+      if (!kernel || request.method != 'POST') {
+        return json({ error: 'NotFound', message: 'no route' }, 404)
+      }
+      let { next, rate } = await request.json() as {
+        next?: number
+        rate?: number
+      }
+      if (
+        !Number.isSafeInteger(next) || next! < 0 || next! > 100 ||
+        (rate != null && (!Number.isFinite(rate) || rate < 0 || rate > 1))
+      ) {
+        return json({
+          error: 'Refused',
+          message: 'next must be 0..100 and rate must be 0..1',
+        }, 400)
+      }
+      this.#traceNext = next!
+      if (rate != null) this.#traceRate = rate
+      let space = request.headers.get('x-yak-space')
+      if (space && this.#get('space') != space) this.#put('space', space)
+      return json({
+        next: this.#traceNext,
+        rate: this.#traceRate,
+        delivery: !!this.#bind.ERRORS,
+        lifetime: 'this Store incarnation; eviction clears next and rate',
+      })
     }
     if (path == '/inspect') {
       if (!kernel || request.method != 'GET') {
@@ -3685,14 +3832,18 @@ export class Store {
   }
 
   /** A frame from a client: a subscription opened or closed. */
-  webSocketMessage(
+  webSocketMessage(ws: Wire, data: string | ArrayBuffer): Promise<void> {
+    return this.#traced('ws message', () => this.#socketMessage(ws, data))
+  }
+
+  #socketMessage(
     ws: Wire,
     data: string | ArrayBuffer,
   ): void | Promise<void> {
     let run = (): void | Promise<void> => {
       this.#ensureStarted()
       if (this.#draft) {
-        return this.#draft.then(() => this.webSocketMessage(ws, data))
+        return this.#draft.then(() => this.#socketMessage(ws, data))
       }
       // A hibernated socket outlives a deploy, so one can wake an object
       // whose schema refused to stand. The page must reopen the socket.

@@ -806,3 +806,22 @@ non-ASCII containment. [bind.ts](./bind.ts) states the restrictions.
 The package is pure TypeScript and uses `@yaks/query`, `@yaks/vocab` and
 `@yaks/id`. Execution requires a compatible driver and the expected layout;
 [@yaks/match](../match/README.md) evaluates queries over bundles in memory.
+
+## Statement code names
+
+`statement(stmt)` names the statement's structural table and verb for runtime
+spans. `writing(stmt)` distinguishes inserts, updates and deletes. Neither
+helper inspects rendered SQL or bound values; a lowered statement retains its
+origin's name.
+
+```ts
+import { col, eq, select, statement, table, val, writing } from '@yaks/sql'
+import { equal } from '@yaks/testing'
+
+let stmt = select({
+  from: table('book'),
+  where: eq(col('title'), val('private')),
+})
+equal(statement(stmt), 'book select')
+equal(writing(stmt), false)
+```

@@ -22,8 +22,10 @@ import {
   render,
   type Row,
   shape,
+  statement,
   type Stmt,
 } from '@yaks/sql'
+import { during, measure as traced, peek } from '@yaks/trace'
 
 /** A value the engine will bind: everything else is converted first. */
 export type SqlValue = ArrayBuffer | string | number | null
@@ -134,7 +136,7 @@ export let driver = (
 ): Driver => {
   let reported = false
   // The cursor is lazy: draining it is what runs the statement.
-  let query = (s: Stmt): Row[] => {
+  let execute = (s: Stmt): Row[] => {
     let rendered = render(s)
     let { sql, params } = rendered
     let cursor: SqlCursor<Row> | undefined
@@ -161,6 +163,15 @@ export let driver = (
       return rows
     } finally {
       // A statement that failed still cost a call to the engine.
+      if (peek()) {
+        traced({
+          statements: 1,
+          ...cursor?.rowsRead != null ? { rowsRead: cursor.rowsRead } : {},
+          ...cursor?.rowsWritten != null
+            ? { rowsWritten: cursor.rowsWritten }
+            : {},
+        })
+      }
       try {
         measure?.(cursor?.rowsRead, cursor?.rowsWritten)
       } catch (e) {
@@ -168,6 +179,18 @@ export let driver = (
         reported = true
       }
     }
+  }
+  let query = (s: Stmt): Row[] => {
+    let c = peek()
+    if (!c) return execute(s)
+    return during(
+      c.begin({
+        kind: 'sql',
+        name: statement(s),
+        package: '@yaks/durable-object',
+      }),
+      () => execute(s),
+    )
   }
   query({ t: 'pragma', name: 'foreign_keys', value: 'on' })
   return { query, tx: (body) => durable.transactionSync(body) }

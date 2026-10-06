@@ -49,13 +49,17 @@
           "stamped": true,
           "minItems": 43,
           "maxItems": 43,
-          "items": { "type": "integer" },
+          "items": {
+            "type": "integer"
+          },
           "description": "Fixed log-scale counts: exact zero, upper bounds 2^-10 through 2^30 milliseconds inclusive, then overflow. Read whole."
         },
         "counts": {
           "type": "object",
           "stamped": true,
-          "additionalProperties": { "type": "number" },
+          "additionalProperties": {
+            "type": "number"
+          },
           "description": "The spans' summed numeric metrics, such as bundles, statements and rows; read whole."
         },
         "commit": {
@@ -72,7 +76,7 @@
       "type": "object",
       "embed": false,
       "wire": false,
-      "description": "One selected root's span tree, with tracker context in during; every root past its op's threshold and one ordinary root per op per minute are kept.",
+      "description": "One selected operation with tracker context in during; its separately stored spans refer to this entity.",
       "properties": {
         "op": {
           "type": "string",
@@ -89,33 +93,119 @@
           "format": "date-time",
           "stamped": true,
           "description": "When the root began, in UTC."
+        }
+      }
+    },
+    "span": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "wire": false,
+      "description": "One measured piece of code within a stored trace; each measurement is a separate component on this entity.",
+      "properties": {
+        "trace": {
+          "type": "string",
+          "stamped": true,
+          "description": "The operation this span belongs to.",
+          "ref": "trace",
+          "death": "cascade"
+        },
+        "parent": {
+          "type": "string",
+          "stamped": true,
+          "description": "The containing span; absent for the root.",
+          "ref": "span",
+          "death": "cascade"
+        },
+        "op": {
+          "type": "string",
+          "stamped": true,
+          "description": "The span kind."
+        },
+        "name": {
+          "type": "string",
+          "stamped": true,
+          "description": "The measured code, never a query, URL, credential or value."
+        },
+        "plugin": {
+          "type": "string",
+          "stamped": true,
+          "description": "The emitting plugin."
+        },
+        "package": {
+          "type": "string",
+          "stamped": true,
+          "description": "The package owning the measured code."
+        },
+        "outcome": {
+          "type": "string",
+          "stamped": true,
+          "description": "How the measured operation ended."
+        }
+      }
+    },
+    "elapsed": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "wire": false,
+      "description": "A span's start and duration in milliseconds relative to its trace root.",
+      "properties": {
+        "start": {
+          "type": "number",
+          "stamped": true,
+          "description": "Milliseconds from the trace root start."
         },
         "ms": {
           "type": "number",
           "stamped": true,
-          "description": "The completed root's duration in milliseconds."
-        },
-        "spans": {
-          "type": "array",
+          "minimum": 0,
+          "description": "Completed duration; absent for an unfinished span. Zero is meaningful for clocks that advance only across I/O."
+        }
+      }
+    },
+    "rows_read": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "wire": false,
+      "description": "SQL cursor rows read during a span.",
+      "properties": {
+        "n": {
+          "type": "number",
           "stamped": true,
-          "description": "Code metadata, relative starts and durations; span ids and parents are local tree ordinals, never entity references. Read whole. Unfinished descendants omit ms.",
-          "items": {
-            "type": "object",
-            "properties": {
-              "id": { "type": "string" },
-              "parent": { "type": "string" },
-              "kind": { "type": "string" },
-              "name": { "type": "string" },
-              "plugin": { "type": "string" },
-              "start": { "type": "number" },
-              "ms": { "type": "number" },
-              "outcome": { "type": "string" },
-              "counts": {
-                "type": "object",
-                "additionalProperties": { "type": "number" }
-              }
-            }
-          }
+          "minimum": 0,
+          "description": "The measured count; parent spans include their descendants."
+        }
+      }
+    },
+    "rows_written": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "wire": false,
+      "description": "SQL cursor rows written during a span.",
+      "properties": {
+        "n": {
+          "type": "number",
+          "stamped": true,
+          "minimum": 0,
+          "description": "The measured count; parent spans include their descendants."
+        }
+      }
+    },
+    "statements": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "wire": false,
+      "description": "SQL statements executed during a span.",
+      "properties": {
+        "n": {
+          "type": "number",
+          "stamped": true,
+          "minimum": 0,
+          "description": "The measured count; parent spans include their descendants."
         }
       }
     }

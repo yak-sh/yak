@@ -1,16 +1,20 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { equal, ok, test, throws } from '@yaks/testing'
 import {
   channel,
   context,
   during,
+  installContext,
   link,
+  measure,
   parent,
   peek,
   record,
   scope,
+  shareChannel,
   unlink,
 } from './mod.ts'
-import type { Event } from './mod.ts'
+import type { Context, Event } from './mod.ts'
 
 test('trace is subscriber-owned, finite and preserves zero duration', () => {
   let graph = {}
@@ -232,4 +236,165 @@ test('synchronous scopes restore callers on returns, throws and awaits', async (
   } finally {
     stop()
   }
+})
+
+test('async carrier keeps interleaved requests and inclusive metrics separate', async () => {
+  let carrier = new AsyncLocalStorage<Context | undefined>()
+  let restore = installContext({
+    get: () => carrier.getStore(),
+    run: (ctx, run) => carrier.run(ctx, run),
+  })
+  let target = {}
+  let gate = Promise.withResolvers<void>()
+  let entered = Promise.withResolvers<void>()
+  let run = (name: string, n: number, wait?: Promise<void>) =>
+    record(target, () => {
+      let c = ok(peek(target))
+      return during(c.begin({ kind: 'request', name }), async () => {
+        if (wait) {
+          entered.resolve()
+          await wait
+        }
+        await Promise.resolve()
+        let root = ok(context()).parent
+        return during(c.begin({ kind: 'phase', name: 'work' }), async () => {
+          await Promise.resolve()
+          during(c.begin({ kind: 'sql', name: 'book select' }), () => {
+            measure({ rowsRead: n, rowsWritten: 0, statements: 1 })
+          })
+          during(c.begin({ kind: 'sql', name: 'book insert' }), () => {
+            measure({ rowsRead: 0, rowsWritten: n + 1, statements: 1 })
+          })
+          equal(context(root)?.parent, context()?.parent)
+          return name
+        })
+      })
+    })
+  try {
+    let first = run('first', 3, gate.promise)
+    await entered.promise
+    let second = await run('second', 7)
+    gate.resolve()
+    let captured = await first
+    for (let [out, n] of [[captured, 3], [second, 7]] as const) {
+      equal(out.spans.map((e) => e.name), [
+        out.result,
+        'work',
+        'book select',
+        'book insert',
+      ])
+      equal(out.spans[1].parent, out.spans[0].id)
+      equal(out.spans[2].parent, out.spans[1].id)
+      equal(out.spans[3].parent, out.spans[1].id)
+      equal(out.spans[0].counts, {
+        rowsRead: n,
+        rowsWritten: n + 1,
+        statements: 2,
+      })
+      equal(out.spans[1].counts, out.spans[0].counts)
+      equal(out.spans[2].counts, { rowsRead: n, rowsWritten: 0, statements: 1 })
+      equal(out.spans[3].counts, {
+        rowsRead: 0,
+        rowsWritten: n + 1,
+        statements: 1,
+      })
+    }
+    equal(context(), undefined)
+    equal(peek(target), undefined)
+  } finally {
+    gate.resolve()
+    restore()
+  }
+})
+
+test('shared channel keeps replacements in one trace, never another graph', () => {
+  let host = {}
+  let first = {}
+  let replacement = {}
+  let other = {}
+  shareChannel(first, host)
+  shareChannel(replacement, host)
+  let otherStop = channel(other).subscribe(() => {})
+  try {
+    let captured = record(host, () => {
+      let c = ok(peek(host))
+      return during(c.begin({ kind: 'request', name: 'request' }), () => {
+        during(
+          ok(peek(first)).begin({ kind: 'get', name: 'first' }),
+          () => measure({ statements: 1 }),
+        )
+        during(
+          ok(peek(replacement)).begin({ kind: 'get', name: 'replacement' }),
+          () => measure({ statements: 2 }),
+        )
+        during(
+          ok(peek(other)).begin({ kind: 'get', name: 'other' }),
+          () => measure({ statements: 9 }),
+        )
+      })
+    })
+    equal(captured.spans.map((e) => e.name), [
+      'request',
+      'first',
+      'replacement',
+    ])
+    equal(captured.spans[0].counts, { statements: 3 })
+    equal(channel(other).history().at(-1)?.parent, undefined)
+    equal(channel(other).history().at(-1)?.counts, { statements: 9 })
+    equal(peek(first), undefined)
+  } finally {
+    otherStop()
+  }
+})
+
+test('record explicitly links its root while keeping the complete nested tree', () => {
+  let target = {}
+  let nested: ReturnType<typeof record<unknown>> | undefined
+  let captured = record(target, () => {
+    let c = ok(peek(target))
+    return during(c.begin({ kind: 'request', name: 'request' }), () => {
+      let parent = context()?.parent
+      nested = record(
+        target,
+        () =>
+          during(c.begin({ kind: 'apply', name: 'apply' }), () => {
+            during(
+              c.begin({ kind: 'sql', name: 'book select' }),
+              () => measure({ rowsRead: 2 }),
+            )
+          }),
+        { parent },
+      )
+    })
+  })
+  equal(captured.spans.map((e) => e.name), ['request', 'apply', 'book select'])
+  equal(nested?.spans.map((e) => e.name), ['apply', 'book select'])
+  equal(captured.spans[1].parent, captured.spans[0].id)
+  equal(captured.spans[0].counts, { rowsRead: 2 })
+})
+
+test('private captures discard events without suppressing another subscriber history', () => {
+  let target = {}, c = channel(target)
+  let captured = record(
+    target,
+    () => during(c.begin({ kind: 'request', name: 'private' }), () => 1),
+    { history: false },
+  )
+  equal(captured.spans.length, 1)
+  equal(c.history(), [])
+  let stop = c.subscribe(() => {})
+  record(
+    target,
+    () => during(c.begin({ kind: 'request', name: 'shared' }), () => 2),
+    { history: false },
+  )
+  equal(c.history().length, 2)
+  stop()
+  record(
+    target,
+    () => during(c.begin({ kind: 'request', name: 'discarded' }), () => 3),
+    { history: false },
+  )
+  equal(c.history().length, 2)
+  equal(c.active, false)
 })

@@ -1,5 +1,5 @@
-/** Generated telemetry is admitted beside tracker context and round-trips
- * whole JSON distributions and trees through the graph's public interface. */
+/** Generated telemetry is admitted beside tracker context; stored spans and
+ * their independent metrics round-trip through the graph's public interface. */
 import { graph, mint } from '@yaks/graph'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { ram } from '@yaks/ram'
@@ -10,13 +10,14 @@ import type { Event } from '@yaks/trace'
 import { loadVocab } from '@yaks/vocab'
 import { sample, summarize, timingDoc } from './mod.ts'
 
-test('summary and trace bundles round-trip in a composed tracker vocabulary', async () => {
+test('summaries and separately measured span entities round-trip in a tracker', async () => {
   let vocab = loadVocab([kernelDoc, toolsDoc, trackerDoc, timingDoc], [
     kernelKeywords,
   ])
   let g = graph({ vocab, storage: ram(vocab) })
   let origin = Date.parse('2026-01-01T00:00:00Z')
   let process = mint()
+  let eid = mint()
   let spans: Event[] = [{
     id: '1.1',
     kind: 'apply',
@@ -25,17 +26,48 @@ test('summary and trace bundles round-trip in a composed tracker vocabulary', as
     start: 10,
     time: 30,
     duration: 20,
-    counts: { bundles: 4, rows: 8 },
+    counts: { bundles: 4, rowsRead: 8, rowsWritten: 2, statements: 3 },
+  }, {
+    id: '1.2',
+    parent: '1.1',
+    kind: 'sql',
+    name: 'select entity',
+    stage: 'end',
+    start: 11,
+    time: 12,
+    duration: 1,
+    counts: { rowsRead: 8, rowsWritten: 0, statements: 1 },
   }]
-  let rows = summarize(spans, { process, origin, before: origin + 60_000 })
-  let trace = sample(spans, { origin }).trace!
-  let eid = mint()
-  await g.apply([...rows, { entity: { eid }, trace, during: { process } }], {
+  let summaries = summarize(spans, { process, origin, before: origin + 60_000 })
+  let rows = sample(spans, { origin, eid, during: { process } }).rows!
+  await g.apply([...summaries, ...rows], { trusted: true })
+  let saved = await g.get(rows.map((row) => row.entity.eid))
+  for (let i = 0; i < rows.length; i++) {
+    for (
+      let component of [
+        'trace',
+        'span',
+        'during',
+        'elapsed',
+        'rows_read',
+        'rows_written',
+        'statements',
+      ] as const
+    ) {
+      equal(saved[i][component] ?? undefined, rows[i][component])
+    }
+  }
+  equal(saved[2].span, rows[2].span)
+  // One metric can be removed while every other measurement and relationship stays.
+  await g.apply([{ entity: rows[1].entity, rows_written: null }], {
     trusted: true,
   })
-  let saved = await g.get([rows[0].entity.eid, eid])
-  equal(saved[0].timing, rows[0].timing)
-  equal(saved[0].during, { process })
-  equal(saved[1].trace, trace)
-  equal(saved[1].during, { process })
+  let [changed] = await g.get([rows[1].entity.eid])
+  equal(changed.rows_written, undefined)
+  equal(changed.rows_read, { n: 8 })
+  equal(changed.statements, { n: 3 })
+  equal(changed.elapsed, { start: 0, ms: 20 })
+  equal(changed.span, rows[1].span)
+  let [summary] = await g.get([summaries[0].entity.eid])
+  equal(summary.timing, summaries[0].timing)
 })

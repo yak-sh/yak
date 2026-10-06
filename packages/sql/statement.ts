@@ -1,6 +1,6 @@
 // Code names for statement spans, taken from structural identifiers. Lowered
 // SQL retains its origin; SQL text, aliases and values are never inspected.
-import type { Source, Stmt } from '@yaks/sql'
+import type { Source, Stmt } from './ast.ts'
 
 let source = (s?: Source | Source[]): string => {
   if (!s) return ''

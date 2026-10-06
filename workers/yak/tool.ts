@@ -240,7 +240,7 @@ export let ownSpace = async (ctx: Ctx, app?: unknown) => {
 
 // The platform's admin: an owner of the meta space, the seat every platform
 // act answers to (sell.ts `fees`, tunnel.ts).
-let admin = async (ctx: Ctx): Promise<boolean> => {
+export let admin = async (ctx: Ctx): Promise<boolean> => {
   let meta = await ctx.dir.space(META.space)
   return !!meta && await ctx.dir.role(meta, ctx.person) == 'owner'
 }

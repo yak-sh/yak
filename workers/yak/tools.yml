@@ -349,6 +349,15 @@ store_restore:
     those back. To undo: another store_restore, to the moment just before
     this one, which the response names. Documentation:
     https://yaks.app/docs/files.
+store_trace:
+  title: Record the next Store requests
+  description: >-
+    Platform-admin only. Record the next N requests to an app's Store into
+    its space's tracker. next is 0..100; optional rate sets ordinary-request
+    sampling probability from 0 to 1. Threshold traces are retained above
+    10,000 rows read or written. The setting lasts for this Store incarnation;
+    eviction clears it. The reply says whether queue delivery is available.
+    This does not make synthetic app requests.
 store_inspect:
   title: Inspect store size and dry-run cost
   description: >-

@@ -14,9 +14,20 @@ import { effectDoc, effects } from '@yaks/effects'
 import { computed, derived, trackerDoc } from '@yaks/tracker/vocab'
 import { effects as handlers, type Options } from '@yaks/tracker/effects'
 import { ingest } from '@yaks/tracker/intake'
+import { timingDoc } from '@yaks/timing/vocab'
 import { caught, type Sink } from '@yaks/tracker/report'
 import { runs } from '@yaks/tracker/tools'
-import { absent, and, eq, every, limit, parse } from '@yaks/query'
+import {
+  absent,
+  after,
+  and,
+  eq,
+  every,
+  limit,
+  order,
+  parse,
+  present,
+} from '@yaks/query'
 
 export let platform = derivedEid('tracker|platform')
 export let vocab = loadVocab([
@@ -28,6 +39,7 @@ export let vocab = loadVocab([
   wakeDoc,
   effectDoc,
   trackerDoc,
+  timingDoc,
 ], [kernelKeywords])
 export let options = { computed, derived: derived(), number: true }
 export type Config = Options & { sink: Sink; sender?: Sender }
@@ -71,6 +83,40 @@ export let store = (storage: Storage, config: Config) => {
     drain: async () => {
       await tick(g)
       await fx.work(g, AbortSignal.abort(), 4)
+    },
+    // Trace reads are bounded separately from intake; a large capture is read
+    // as pages of span entities, preserving each metric component unchanged.
+    traces: async (app?: string, count = 50, cursor?: string) => {
+      let n = Math.min(Math.max(count, 1), 100)
+      let rows = await g.read(and(
+        present('trace'),
+        ...app ? [eq('during.app', app)] : [],
+        every(),
+        order('-trace.at'),
+        ...cursor ? [after(cursor)] : [],
+        limit(n + 1),
+      ))
+      return {
+        rows: rows.slice(0, n),
+        ...rows.length > n ? { next: rows[n - 1].entity.eid } : {},
+      }
+    },
+    trace: async (eid: string, count = 100, cursor?: string) => {
+      let [trace] = await g.get([eid])
+      if (!trace?.trace) return undefined
+      let n = Math.min(Math.max(count, 1), 100)
+      let spans = await g.read(and(
+        eq('span.trace', eid),
+        every(),
+        order('entity.eid'),
+        ...cursor ? [after(cursor)] : [],
+        limit(n + 1),
+      ))
+      return {
+        trace,
+        spans: spans.slice(0, n),
+        ...spans.length > n ? { next: spans[n - 1].entity.eid } : {},
+      }
     },
     bugs: (app?: string) => read(app),
     unseen: (app?: string) => read(app, '.bug.status=open !notified'),

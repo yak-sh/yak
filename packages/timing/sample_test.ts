@@ -5,6 +5,7 @@ import type { Event, Kind } from '@yaks/trace'
 import { sample, type SampleOptions } from './mod.ts'
 
 let origin = Date.parse('2026-01-01T00:00:00Z')
+let eid = 'a3f19c02-4b00-4000-8000-000000000001'
 let root = (kind: Kind, ms: number, start = 100): Event => ({
   id: '1.1',
   kind,
@@ -14,13 +15,13 @@ let root = (kind: Kind, ms: number, start = 100): Event => ({
   time: start + ms,
   duration: ms,
 })
-let select = (events: Event[], options: SampleOptions = { origin }) => {
+let select = (events: Event[], options: SampleOptions = { origin, eid }) => {
   let sampled: ReadonlySet<string> = new Set()
   let kept: Event[] = []
   for (let e of events) {
     let result = sample([e], options, sampled)
     sampled = result.sampled
-    if (result.trace) kept.push(e)
+    if (result.rows) kept.push(e)
   }
   return kept
 }
@@ -57,7 +58,7 @@ test('config thresholds, op quota and root-start minute control selection', () =
     root('apply', 16, 60_100),
     root('request', 501, 60_100),
   ]
-  equal(select(events, { origin, thresholds: { apply: 50 } }), [
+  equal(select(events, { origin, eid, thresholds: { apply: 50 } }), [
     events[0],
     events[1],
     events[3],
@@ -75,74 +76,19 @@ test('config thresholds, op quota and root-start minute control selection', () =
 
 test('selection never mutates the quota or consumes it for slow or open roots', () => {
   let initial: ReadonlySet<string> = new Set()
-  let ordinary = sample([root('apply', 1)], { origin }, initial)
+  let ordinary = sample([root('apply', 1)], { origin, eid }, initial)
   equal(initial.size, 0)
   equal(ordinary.sampled.size, 1)
   equal(
-    sample([root('apply', 2)], { origin }, ordinary.sampled).trace,
+    sample([root('apply', 2)], { origin, eid }, ordinary.sampled).rows,
     undefined,
   )
-  let slow = sample([root('apply', 30)], { origin }, initial)
+  let slow = sample([root('apply', 30)], { origin, eid }, initial)
   equal(slow.sampled, initial)
-  ok(sample([root('apply', 1)], { origin }, slow.sampled).trace)
-  equal(sample([], { origin }, initial), { sampled: initial })
+  ok(sample([root('apply', 1)], { origin, eid }, slow.sampled).rows)
+  equal(sample([], { origin, eid }, initial), { sampled: initial })
   equal(
-    sample([{ ...root('apply', 1), stage: 'start' }], { origin }, initial),
+    sample([{ ...root('apply', 1), stage: 'start' }], { origin, eid }, initial),
     { sampled: initial },
   )
-})
-
-test('stored tree projects metadata, relative times and tree-local ids only', () => {
-  let spans: Event[] = [
-    { ...root('apply', 20, 1000), outcome: 'ok', counts: { bundles: 2 } },
-    {
-      ...root('phase', 5, 1002),
-      id: '1.2',
-      parent: '1.1',
-      plugin: '@yaks/task',
-      package: '@yaks/graph',
-      outcome: 'ok',
-    },
-    { ...root('fanout', 0, 1003), id: '1.3', parent: '1.2', stage: 'instant' },
-    {
-      ...root('effect', 0, 1004),
-      id: '1.4',
-      parent: '1.1',
-      stage: 'start',
-      duration: undefined,
-    },
-  ]
-  let snapshot = structuredClone(spans)
-  let trace = ok(sample(spans, { origin }).trace)
-  equal(trace, {
-    op: 'apply',
-    name: 'apply',
-    at: '2026-01-01T00:00:01.000Z',
-    ms: 20,
-    spans: [
-      {
-        id: '0',
-        kind: 'apply',
-        name: 'apply',
-        start: 0,
-        ms: 20,
-        outcome: 'ok',
-        counts: { bundles: 2 },
-      },
-      {
-        id: '1',
-        parent: '0',
-        kind: 'phase',
-        name: 'phase',
-        plugin: '@yaks/task',
-        start: 2,
-        ms: 5,
-        outcome: 'ok',
-      },
-      { id: '2', parent: '1', kind: 'fanout', name: 'fanout', start: 3, ms: 0 },
-      { id: '3', parent: '0', kind: 'effect', name: 'effect', start: 4 },
-    ],
-  })
-  ;(trace.spans[0].counts as Record<string, number>).bundles = 99
-  equal(spans, snapshot)
 })

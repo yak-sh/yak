@@ -6,7 +6,7 @@
 import './sqlitepath.ts'
 import { Database } from '@db/sqlite'
 import { context, during, peek } from '@yaks/trace'
-import { statement, writing } from './statement.ts'
+import { statement, writing } from '@yaks/sql'
 import {
   call,
   col,

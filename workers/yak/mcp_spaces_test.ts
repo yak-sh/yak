@@ -44,11 +44,30 @@ test('only a space owner can inspect and retry held store writes', async () => {
     })
     await accepted(k, guest.email, guest.cookie)
     let editor = connector(k, guest.cookie)
-    for (let name of ['store_writes', 'store_retry', 'store_inspect']) {
+    for (
+      let name of [
+        'store_writes',
+        'store_retry',
+        'store_inspect',
+      ]
+    ) {
       let args = { space: slug, app: 'notes', seq: 1 }
       assertStringIncludes(
         (await assertRejects(() => editor.tool(name, args), Error)).message,
         `not the owner of ${slug}`,
+      )
+    }
+    // A space owner/editor is not the platform admin. Trace control cannot
+    // become a tenant-controlled recording/queue cost knob.
+    for (let caller of [editor, owner]) {
+      assertStringIncludes(
+        (await assertRejects(() =>
+          caller.tool('store_trace', {
+            space: slug,
+            app: 'notes',
+            next: 1,
+          }), Error)).message,
+        'platform admin required',
       )
     }
     assertStringIncludes(

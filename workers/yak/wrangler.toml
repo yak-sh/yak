@@ -104,6 +104,12 @@ crons = []
 #   wrangler queues subscription create yak-builds --source \
 #     workersBuilds.worker --events build.failed --worker-name yak
 # Production only: staging's builds are the same builds.
+# Triggered Store traces; errors continue through Sentry. The locus provisions
+# yak-errors and activates the independent tracker before this producer deploys.
+# [[queues.producers]]
+# binding = "ERRORS"
+# queue = "yak-errors"
+
 [[queues.consumers]]
 queue = "yak-builds"
 

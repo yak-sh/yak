@@ -858,6 +858,7 @@ export let handle = (space: Pick<Space, 'slug'>, slug: string, eid: string) =>
 // `storeOf` directly.
 let served = (space: Space, app: App, env: HostEnv) => ({
   eid: app.eid,
+  space: space.eid,
   access: app.access,
   mail: mailbox(space, app, env),
 })

@@ -123,6 +123,7 @@ let VOUCH = [
   IDEMPOTENCY,
   'x-store',
   'x-yak-app',
+  'x-yak-space',
   'x-yak-access',
   'x-yak-mail',
   'x-yak-release',
@@ -148,6 +149,7 @@ let VOUCH = [
  * space's home — a store is named at birth and never renamed (`storeName`). */
 export type Served = {
   eid: string
+  space?: string
   access: string
   mail?: string
   release?: string
@@ -180,6 +182,7 @@ export let doorOf = (
     req.headers.set('x-store', name)
     if (app) {
       req.headers.set('x-yak-app', app.eid)
+      if (app.space) req.headers.set('x-yak-space', app.space)
       req.headers.set('x-yak-access', app.access)
       if (app.mail) req.headers.set('x-yak-mail', app.mail)
       if (app.release != null) {

@@ -65,10 +65,14 @@ equal(peek(target), undefined)
 `run` must begin the operation's root synchronously, before its first `await`;
 its descendants carry parent IDs across asynchronous work. Interleaved calls on
 the same channel stay out of the tree. Recording ends when `run` returns or its
-promise settles, and errors propagate after unsubscribing. A synchronous `run`
-returns `{ result, spans }` directly; an asynchronous `run` returns a promise.
-The tree is independent of the bounded history, so large calls remain complete,
-and concurrent subscribers keep their subscriptions and history.
+promise settles, and errors propagate after unsubscribing.
+`record(target, run,
+{ parent })` explicitly links the nominated root to an
+outer span while still returning only its own complete tree; without that option
+a nominated root does not inherit an ambient parent. A synchronous `run` returns
+`{ result, spans }` directly; an asynchronous `run` returns a promise. The tree
+is independent of the bounded history, so large calls remain complete, and
+concurrent subscribers keep their subscriptions and history.
 
 `Event` exports `id`, optional `parent`, `kind`, `name`, `stage`, monotonic
 `time`, optional `start` and `duration`, optional `package` and `plugin`,
@@ -119,10 +123,11 @@ stop()
 `during(span, run)` makes that span available to synchronous boundaries through
 `context()` and `peek()` without a target. `scope(context, run)` restores a
 captured context at an asynchronous boundary. Both restore the caller when `run`
-returns, throws or returns a promise; context never stays ambient across an
-`await`. `context(ancestorId)` returns the current context only when that span
-is in its synchronous ancestry, so a retained boundary can keep its own
-operation's parent during reentrant work. Expired recordings return no context.
+returns, throws or returns a promise. Without a host-installed context carrier,
+context never stays ambient across an `await`. `context(ancestorId)` returns the
+current context only when that span is in its synchronous ancestry, so a
+retained boundary can keep its own operation's parent during reentrant work.
+Expired recordings return no context.
 
 ```ts
 import { context, during, peek, record, scope } from '@yaks/trace'
@@ -145,3 +150,79 @@ equal(context(), undefined)
 scope(captured.result, () => equal(peek(), undefined))
 equal(peek(), undefined)
 ```
+
+A **context carrier** provides task-local context through `get()` and `run()`.
+`installContext(carrier)` lets a host supply one without adding a runtime
+dependency to this package. `during()` and `scope()` then preserve their context
+across awaits. A child with no explicit parent inherits that context's parent
+only on the same channel. The cleanup returned by `installContext` restores the
+previous carrier.
+
+```ts
+import { AsyncLocalStorage } from 'node:async_hooks'
+import {
+  context,
+  during,
+  installContext,
+  measure,
+  peek,
+  record,
+} from '@yaks/trace'
+import type { Context } from '@yaks/trace'
+import { equal, ok } from '@yaks/testing'
+
+let local = new AsyncLocalStorage<Context | undefined>()
+let restore = installContext({
+  get: () => local.getStore(),
+  run: (ctx, run) => local.run(ctx, run),
+})
+try {
+  let target = {}
+  let captured = await record(target, () => {
+    let c = ok(peek(target))
+    return during(c.begin({ kind: 'request', name: 'request' }), async () => {
+      await Promise.resolve()
+      return during(c.begin({ kind: 'sql', name: 'book select' }), () => {
+        measure({ statements: 1, rowsRead: 4 })
+        equal(context()?.channel, c)
+      })
+    })
+  })
+  equal(captured.spans[1].parent, captured.spans[0].id)
+  equal(captured.spans[0].counts, { statements: 1, rowsRead: 4 })
+} finally {
+  restore()
+}
+```
+
+`measure(counts)` charges numeric measurements to the current span and its open
+ancestors. Its totals are inclusive: charging a SQL statement once gives both
+that SQL span and its enclosing request the statement's row counts. Siblings and
+interleaved requests do not charge each other. An accumulated measurement
+replaces a same-named count supplied to `end`; other end counts are preserved.
+
+`shareChannel(target, source)` makes two objects use the same channel. A host
+whose graph is replaced can retain its own channel and give each graph that
+channel; sharing creates no subscriber.
+
+```ts
+import { during, peek, record, shareChannel } from '@yaks/trace'
+import { equal, ok } from '@yaks/testing'
+
+let host = {}
+let graph = {}
+shareChannel(graph, host)
+let captured = record(host, () => {
+  let c = ok(peek(host))
+  return during(c.begin({ kind: 'request', name: 'request' }), () => {
+    ok(peek(graph)).begin({ kind: 'get', name: 'get' })?.end()
+  })
+})
+equal(captured.spans[1].parent, captured.spans[0].id)
+equal(peek(graph), undefined)
+```
+
+A request recorder can use `record(target, run, { history: false })` to keep
+only its returned tree, without retaining its events in channel history. Other
+subscribers that ask for history continue receiving it. The default keeps
+history for live inspection.

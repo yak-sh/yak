@@ -1,6 +1,6 @@
-/** Minute summaries and stored trees. Time enters as an explicit epoch origin
- * for the trace channel's monotonic clock; this package never reads a clock. */
-import type { Counts, Kind, Outcome } from '@yaks/trace'
+/** Minute summaries and stored span entities. Hosts supply epoch origins,
+ * trace identities and tracker context; this package never reads a clock. */
+import type { Kind, Outcome } from '@yaks/trace'
 
 /** One completed minute's measurements of one piece of code. */
 export type Timing = {
@@ -23,27 +23,40 @@ export type TimingRow = {
   timing: Timing
 }
 
-/** A span projected to code metadata and times relative to its tree's root.
- * An unfinished descendant has no ms; an instant has ms zero. */
-export type TraceSpan = {
-  id: string
-  parent?: string
-  kind: Kind
-  name: string
-  plugin?: string
-  start: number
-  ms?: number
-  outcome?: Outcome
-  counts?: Counts
-}
+/** A selected operation. Its spans refer to this entity, not to a JSON tree. */
+export type Trace = { op: Kind; name: string; at: string }
 
-/** A selected tree's trace component, ready to sit beside tracker context. */
-export type Trace = {
+/** One span's code metadata and references within its stored trace. */
+export type StoredSpan = {
+  trace: string
+  parent?: string
   op: Kind
   name: string
-  at: string
-  ms: number
-  spans: TraceSpan[]
+  plugin?: string
+  package?: string
+  outcome?: Outcome
+}
+
+/** Tracker context is supplied by the host, never obtained through a read. */
+export type During = {
+  entity?: string
+  app?: string
+  space?: string
+  process?: string
+  request?: string
+  kind?: string
+}
+
+/** Each measurement is a separate component on its span's entity. */
+export type TraceRow = {
+  entity: { eid: string }
+  during?: During
+  trace?: Trace
+  span?: StoredSpan
+  elapsed?: { start: number; ms?: number }
+  rows_read?: { n: number }
+  rows_written?: { n: number }
+  statements?: { n: number }
 }
 
 /** Epoch milliseconds at monotonic time zero, normally performance.timeOrigin. */

@@ -8,8 +8,14 @@ export type Source = () => AsyncIterable<Record>
 
 export let ingest = async (g: Graph, rows: Bundle[]): Promise<void> => {
   let unique = [...new Map(rows.map((row) => [row.entity.eid, row])).values()]
-  let known = new Set((await g.get(unique.map((row) => row.entity.eid)))
-    .map((row) => row.entity.eid))
+  // References can mint bare entity spines before a queued record arrives.
+  // Those are not delivered records: admitting their later components is the
+  // first intake, while a redelivery must still preserve an existing receipt.
+  let known = new Set(
+    (await g.get(unique.map((row) => row.entity.eid)))
+      .filter((row) => Object.keys(row).some((name) => name != 'entity'))
+      .map((row) => row.entity.eid),
+  )
   let fresh = unique.filter((row) => !known.has(row.entity.eid))
   if (fresh.length) await g.apply(fresh, { trusted: true })
 }

@@ -161,3 +161,5 @@ export let compile = (
 export { field } from './sqlite.ts'
 
 export { revision } from './revision.ts'
+
+export { statement, writing } from './statement.ts'

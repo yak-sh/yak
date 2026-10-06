@@ -144,7 +144,9 @@ let door = (server: Harness) =>
       if (mode) headers.set('mf-sec-fetch-mode', mode)
       let res = await server
         .getWorker(
-          path.startsWith('/__store_cost/')
+          path.startsWith('/__store_trace/')
+            ? 'probe-store-trace'
+            : path.startsWith('/__store_cost/')
             ? 'probe-store-cost'
             : path.startsWith('/__play_cost/')
             ? 'probe-play-cost'
@@ -214,6 +216,20 @@ export let probeSuite = async () => {
             bindings: [{ name: 'COST', class_name: 'StoreCost' }],
           },
           migrations: [{ tag: 'v1', new_sqlite_classes: ['StoreCost'] }],
+        },
+      },
+      {
+        config: {
+          name: 'probe-store-trace',
+          main: 'store_trace_probe.ts',
+          compatibility_date: '2025-05-08',
+          compatibility_flags: kernel.compatibility_flags,
+          tsconfig: kernel.tsconfig,
+          alias: kernel.alias,
+          durable_objects: {
+            bindings: [{ name: 'TRACE', class_name: 'StoreTrace' }],
+          },
+          migrations: [{ tag: 'v1', new_sqlite_classes: ['StoreTrace'] }],
         },
       },
       {

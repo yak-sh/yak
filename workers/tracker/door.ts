@@ -24,6 +24,31 @@ async (request: Request): Promise<Response> => {
   if (path == '/query' || path == '/vocab') {
     return await api({ graph: tracker.graph })(request)
   }
+  if (request.method == 'GET' && (path == '/traces' || path == '/trace')) {
+    let count = url.searchParams.get('limit')
+    let n = count == null ? (path == '/traces' ? 50 : 100) : Number(count)
+    let cursor = url.searchParams.get('after') ?? undefined
+    let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (
+      !Number.isSafeInteger(n) || n < 1 || n > 100 ||
+      (cursor != null && !uuid.test(cursor))
+    ) {
+      return json({ error: 'limit must be 1..100 and after a global eid' }, 400)
+    }
+    if (path == '/traces') {
+      let app = url.searchParams.get('app') ?? undefined
+      if (app != null && !uuid.test(app)) {
+        return json({ error: 'app must be a global eid' }, 400)
+      }
+      return json(await tracker.traces(app, n, cursor))
+    }
+    let eid = url.searchParams.get('eid')
+    if (!eid || !uuid.test(eid)) {
+      return json({ error: 'trace global eid required' }, 400)
+    }
+    let found = await tracker.trace(eid, n, cursor)
+    return found ? json(found) : json({ error: 'trace not found' }, 404)
+  }
   if (path == '/bugs') {
     return json(await tracker.bugs(url.searchParams.get('app') ?? undefined))
   }

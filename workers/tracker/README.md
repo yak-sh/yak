@@ -41,14 +41,27 @@ let bugs = await fetch(`${trackerUrl}/bugs?scope=${spaceEid}&app=${appEid}`, {
 }).then((response) => response.json())
 ```
 
-Authenticated endpoints: `/bugs`, `/unseen`, `/query`, `/vocab`, `/ws`,
-`POST /resolve` and `/archive` with `{bug}`, and `POST /deployed` with `{app}`.
-`/ws?scope=…&ticket=…` accepts subscriptions, unsubscribe and ACK only, never
-relay writes. `/query` returns graph bundles. General `/apply` and HTTP intake
-are absent. Trusted queue batches carry reporter bundles with `during.space` by
-global eid; a mixed-space batch never reaches a store. Each message is
-acknowledged only after graph admission. Redelivery preserves grouping receipts
-and bug hit counts.
+Authenticated endpoints: `/bugs`, `/unseen`, `/traces`, `/trace`, `/query`,
+`/vocab`, `/ws`, `POST /resolve` and `/archive` with `{bug}`, and
+`POST /deployed` with `{app}`. `/ws?scope=…&ticket=…` accepts subscriptions,
+unsubscribe and ACK only, never relay writes. `/query` returns graph bundles.
+General `/apply` and HTTP intake are absent.
+`GET /traces?app=<global-eid>&limit=50&after=<trace-eid>` returns
+`{rows, next?}` ordered by descending `trace.at`.
+`GET /trace?eid=<trace-eid>&limit=100&after=<span-eid>` returns
+`{trace, spans, next?}`; span pages are ordered by entity eid, and each span
+preserves its separate metric components. Both page limits are 1–100. The `next`
+eid is supplied as `after` to continue. A trace can be visible while later queue
+chunks are still arriving.
+
+Trusted queue batches carry reporter bundles with `during.space` by global eid;
+a mixed-space batch never reaches a store. Each message is acknowledged only
+after graph admission. Redelivery preserves grouping receipts and bug hit
+counts. Trace-only batches contain `trace` or `span` entities, each with its own
+`during.space`. A message holds at most 100 bundles; span-only chunks can arrive
+before their trace or parent. Reference placeholder entities are not intake
+receipts, so later delivery fills their components, while a redelivery preserves
+existing metrics.
 
 Platform-only `POST /heartbeat` renews the box heartbeat. Cron probes the MCP
 endpoint and tracks an activated box heartbeat older than five minutes. The

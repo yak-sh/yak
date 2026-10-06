@@ -254,3 +254,10 @@ deno check --config packages/durable-object/workers.json packages/durable-object
 ## License
 
 Apache-2.0
+
+When a trace context is subscribed, the SQL driver emits one `sql` span per
+statement. Its code name comes from the SQL AST, never rendered values. The
+span's `rowsRead` and `rowsWritten` counts are the runtime cursor's billed
+counts, not the number of returned rows; `statements` includes failed calls.
+These measurements are charged inclusively to enclosing spans through
+[@yaks/trace](../trace/README.md). Recording adds no SQL reads or writes.
