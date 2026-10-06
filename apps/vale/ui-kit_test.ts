@@ -82,6 +82,7 @@ test('Vale specimens carry browser content and paint in the terminal', () => {
     ValeBadge: ['Level 5'],
     ValeOrb: ['⌖', 'J', 'P', '♧'],
     ValeCompass: ['N', 'E'],
+    ValeGrid: ['⚔', '24', '12', 'Weapon', 'Nothing'],
   }
   for (let [name, words] of Object.entries(expected)) {
     let samples = kit[name].specimens()

@@ -15,7 +15,7 @@
 }
 
 /* Picking: the one look for whatever is picked from a set, a list's tile, a
-   piece of gear worn, a colour. Each says it is one of a set with
+   square in the bag or a slot worn (kit/ValeGrid.css), a colour. Each says it is one of a set with
    `aria-current`, true on the one picked. The one picked wears a moss ring
    drawn just inside its edge, following its corners, over a pale moss wash
    laid on top of its own face, so a piece's rarity and its frame still show

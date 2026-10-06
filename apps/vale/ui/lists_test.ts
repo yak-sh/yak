@@ -1,14 +1,16 @@
 // Every list in the vale, drawn by its own module with the game's own
 // stylesheets and laid out by Chrome at a desktop's width and a phone's:
-// each icon keeps its title's line, each end its row, and picking or
-// focusing a thing moves nothing.
+// each icon keeps its title's line, each end its row, each grid of squares
+// (the bag's) stays a grid, and picking or focusing a thing moves nothing.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { chromeBin, withChrome } from '../chrome_fixture.ts'
 import { LISTS, listsPage } from './lists_fixture.ts'
 
 // In the page: every icon beside its words, every end beside the words it
-// ends, where they show; how many tiles were seen, by list.
+// ends, and every grid's cells in rows of more than one, each the same size,
+// square unless wide, inside its grid and clear of the others, where they
+// show; how many tiles and cells were seen, by list.
 let lines = () => {
   let shown = (e: Element) => e.getClientRects().length > 0
   let box = (e: Element) => e.getBoundingClientRect()
@@ -30,6 +32,10 @@ let lines = () => {
   let beside = (a: DOMRect, b: DOMRect) =>
     a.top < b.bottom && b.top < a.bottom &&
     (a.right <= b.left + 0.5 || b.right <= a.left + 0.5)
+  let near = (a: number, b: number) => Math.abs(a - b) < 1
+  let over = (a: DOMRect, b: DOMRect) =>
+    a.left < b.right - 0.5 && b.left < a.right - 0.5 &&
+    a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5
   let wrong: string[] = [], seen: Record<string, number> = {}
   for (let list of document.querySelectorAll<HTMLElement>('[data-list]')) {
     let name = list.dataset.list!
@@ -52,9 +58,34 @@ let lines = () => {
         say('end off its row', tile)
       }
     }
+    for (let grid of list.querySelectorAll('.ValeGrid')) {
+      let cells = [...grid.querySelectorAll(':scope > .ValeGrid_Cell')]
+        .filter(shown).map(box)
+      let [a] = cells, g = box(grid), wide = grid.matches('.ValeGrid-wide')
+      seen[name] += cells.length
+      if (
+        cells.length > 1 && cells.filter((c) => near(c.top, a.top)).length < 2
+      ) {
+        say('one to a row', grid)
+      }
+      cells.forEach((c, i) => {
+        if (!near(c.width, a.width) || !near(c.height, a.height)) {
+          say('cells of two sizes', grid)
+        }
+        if (!wide && !near(c.width, c.height)) say('a cell not square', grid)
+        if (c.left < g.left - 0.5 || c.right > g.right + 0.5) {
+          say('a cell out of its grid', grid)
+        }
+        if (cells.slice(i + 1).some((d) => over(c, d))) {
+          say('cells over each other', grid)
+        }
+      })
+    }
     for (let glyph of list.querySelectorAll('svg.Glyph')) {
       let head = glyph.closest('h1, h2, h3, summary, b, button, li, label')
-      if (!head || glyph.closest('.Tile') || !shown(glyph)) continue
+      if (!head || glyph.closest('.Tile, .ValeGrid_Cell') || !shown(glyph)) {
+        continue
+      }
       let near = words(head)
       if (near && !beside(box(glyph), near)) {
         say("icon off its words' line", head)
@@ -70,7 +101,12 @@ let lines = () => {
 let still = () => {
   let wrong: string[] = []
   let paint = (e: Element) =>
-    [e, ...e.querySelectorAll('.Rarity, .Tile_Icon, .Tile_Title')].map((x) => {
+    [
+      e,
+      ...e.querySelectorAll(
+        '.Rarity, .Tile_Icon, .Tile_Title, .ValeGrid_Picture, .ValeGrid_Name',
+      ),
+    ].map((x) => {
       let c = getComputedStyle(x)
       return [c.color, c.backgroundColor, c.boxShadow, c.borderColor].join()
     }).join(';')
@@ -98,7 +134,7 @@ let still = () => {
 let call = (fn: () => unknown) => `(${fn})()`
 
 test(
-  'every list keeps its icons on their lines and moves nothing when picked, on a desktop and a phone',
+  'every list keeps its icons on their lines, every grid its rows, and moves nothing when picked, on a desktop and a phone',
   async () => {
     let file = await listsPage()
     try {

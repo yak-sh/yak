@@ -9,6 +9,7 @@ import * as recording from './kit/ValeRecording.ts'
 import * as compass from './kit/ValeCompass.ts'
 import * as stats from './kit/ValeStats.ts'
 import * as badge from './kit/ValeBadge.ts'
+import * as grid from './kit/ValeGrid.ts'
 import { skin, theme } from './skin.ts'
 
 export { ValeMeter } from './kit/ValeMeter.ts'
@@ -19,6 +20,7 @@ export { ValeRecording } from './kit/ValeRecording.ts'
 export { ValeCompass } from './kit/ValeCompass.ts'
 export { ValeStats } from './kit/ValeStats.ts'
 export { ValeBadge } from './kit/ValeBadge.ts'
+export { ValeGrid } from './kit/ValeGrid.ts'
 
 export let kit: Kit = {
   ValeRecording: {
@@ -60,6 +62,11 @@ export let kit: Kit = {
     ...badge,
     Component: badge.ValeBadge,
     css: new URL('./kit/ValeBadge.css', import.meta.url),
+  },
+  ValeGrid: {
+    ...grid,
+    Component: grid.ValeGrid,
+    css: new URL('./kit/ValeGrid.css', import.meta.url),
   },
 }
 export let kits = { vale: kit }

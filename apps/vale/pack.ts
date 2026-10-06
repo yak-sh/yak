@@ -1,18 +1,18 @@
 // The hero's pack, drawn into their panel's Bag tab: what they wear in each
 // slot (how they fight in it is the Character tab's), everything else they
 // carry, and by a village's fire, the rack of plain arms anyone may take
-// to try, each a list, one thing to a row. Each piece of gear is its own,
-// framed and named in its rarity's colour (rarity.ts), saying its level and
-// kind, or in red the level it needs, faded until the hero has it; everything
-// else is a stack of its kind. A piece's tip sets it beside what is worn in
-// its place (compare.ts `versus`). Tap a thing, or double-tap a piece to wear
-// it,
-// to see, below the worn slots in the right pane, its stats, abilities, and
-// what wearing it would change, then wear it, take it off, or take
-// it from the rack; a second dagger, for a hero who knows how, shows what it
-// would change in the other hand. B or the tray's bag opens it. It is written
+// to try, each a grid of squares (kit/ValeGrid.ts), as a bag in a good game
+// is. Each piece of gear is its own, its picture framed in its rarity's
+// colour (rarity.ts) with its tier in a corner, or in red the level it needs,
+// faded until the hero has it; everything else is a stack of its kind, how
+// many in a corner. A piece's tip sets it beside what is worn in its place
+// (compare.ts `versus`). Tap a thing to see, below the worn slots in the
+// right pane, its stats, abilities, and what wearing it would change, then
+// wear it, take it off, or take it from the rack, or double-tap a piece to
+// wear it; a second dagger, for a hero who knows how, shows what it would
+// change in the other hand. B or the tray's bag opens it. It is written
 // again only when what it shows changed.
-import { h as el } from 'preact'
+import { type ComponentChildren, h as el } from 'preact'
 import { Button, Rows, Tile } from '@yaks/ui'
 import { type Doer, does, GIVES, OFF } from './abilities.ts'
 import { HANDLES, type Slot, SLOT_NAMES, SLOTS, tierName } from './arms.ts'
@@ -33,15 +33,18 @@ import {
 import { canWear, rack as rackKinds } from './gear.ts'
 import { glyph } from './glyphs.ts'
 import { ITEMS, type Thing } from './items.ts'
-import { piece, RARITIES, tint } from './rarity.ts'
+import { ValeGrid } from './kit/ValeGrid.ts'
+import { type Piece, piece, RARITIES, tint } from './rarity.ts'
 import { icon } from './sprites.ts'
 import type { Page } from './panel.ts'
 import type { Frame, Sheet } from './play.ts'
 import type { Held } from './rules.ts'
 import { formOf } from './skills.ts'
-import { cards, tipProps } from './tip.ts'
-import { hint, part, picture } from './tile.ts'
+import { cards, heard, type Tip, tipProps } from './tip.ts'
+import { hint, mark, part, picture } from './tile.ts'
 import { split } from './ui/split.ts'
+
+let { Cell, Picture, Label, Name, Tier, Need, Count } = ValeGrid
 
 export type Acts = {
   wear: (slot: Slot, item?: string) => void
@@ -72,12 +75,6 @@ let gives = (t: Thing, slot: Slot | undefined, learned: string[], d: Doer) => {
       : []
   })
 }
-
-// A thing's tier, beside its picture.
-let tier = (t?: Thing) =>
-  t?.tier
-    ? `<span class=Pack_Tier aria-hidden=true>${tierName(t.tier)}</span>`
-    : ''
 
 // Where a thing picked is: a slot worn, a row in the bag, or a kind on the
 // rack.
@@ -189,65 +186,86 @@ export let pack = (panel: Page, acts: Acts) => {
       : undefined
   })
 
-  // A thing carried, or on the rack: its picture framed in its rarity, its
-  // name, and its level and kind, or the level it needs.
-  let row = (
+  let at = (from: From, key: string) =>
+    picked?.from == from && picked.key == key
+
+  // A thing in its square (kit/ValeGrid.ts), picked from `from` by `key`,
+  // framed in its rarity, a legendary's alight; `mod` says how else it
+  // stands.
+  let cell = (
     from: From,
-    h: Held,
-    n = 1,
-    on = false,
-    had = false,
-    locked = false,
-  ) => {
-    let p = piece(h), key = from == 'rack' ? h.kind : h.eid
-    let what = locked
-      ? `Requires level ${p.lvl}`
-      : had
-      ? 'You have one'
-      : p.slot
-      ? sortLine(p)
-      : p.heals
-      ? `Drink it to mend ${p.heals}`
-      : ''
-    return pieceTile(
-      p,
+    key: string,
+    p: Piece | undefined,
+    mod: (string | false)[],
+    props: Record<string, string>,
+    ...kids: ComponentChildren[]
+  ) =>
+    el(
+      Cell,
       {
         key,
-        mod: [on && 'on', (had || locked) && 'dim'],
+        class: tint(p?.rarity),
+        mod: [
+          at(from, key) && 'on',
+          p?.rarity == 'legendary' && 'glow',
+          ...mod,
+        ],
         'data-pick': `${from}:${key}`,
-        ...tipProps({ name: p.name }),
+        ...props,
         onClick: pick(from, key),
       },
-      what && el(Tile.Sub, { mod: locked && 'negative' }, what),
-      n > 1 ? el(Tile.End, {}, `×${n}`) : null,
+      ...kids,
+    )
+
+  // A thing's picture, or a dot for none, and its tier in a corner.
+  let face = (h?: Held, p?: Piece) => [
+    el(Picture, {
+      'aria-hidden': 'true',
+      dangerouslySetInnerHTML: { __html: h ? icon(h.kind) || '•' : '·' },
+    }),
+    p?.tier && el(Tier, { 'aria-hidden': 'true' }, tierName(p.tier)),
+  ]
+
+  // A thing carried, or on the rack: how many there are, and in red the
+  // level it needs. Its name, and what it is, are its tip's.
+  let carry = (from: From, h: Held, n = 1, had = false, locked = false) => {
+    let p = piece(h)
+    let tip: Tip = {
+      name: n > 1 ? `${p.name} ×${n}` : p.name,
+      note: locked
+        ? `Requires level ${p.lvl}`
+        : had
+        ? 'You have one'
+        : p.slot
+        ? sortLine(p)
+        : p.heals
+        ? `Drink it to mend ${p.heals}`
+        : undefined,
+    }
+    return cell(
+      from,
+      from == 'rack' ? h.kind : h.eid,
+      p,
+      [(had || locked) && 'dim'],
+      { ...tipProps(tip), 'aria-label': heard(tip) },
+      ...face(h, p),
+      locked && el(Need, { 'aria-hidden': 'true' }, mark('lock'), p.lvl),
+      n > 1 && el(Count, { 'aria-hidden': 'true' }, n),
     )
   }
 
-  // A slot worn, as a piece of gear framed in its rarity.
+  // A slot worn: what it is, over what fills it.
   let slot = (s: Sheet, slot: Slot) => {
     let h = s.worn[slot], t = h && piece(h)
-    return el(
-      'button',
-      {
-        key: slot,
-        type: 'button',
-        class: `Pack_Slot ${tint(t?.rarity)}${t ? '' : ' Pack_Slot-empty'}`,
-        'data-pick': `worn:${slot}`,
-        'aria-current': picked?.from == 'worn' && picked.key == slot,
-        ...(t ? tipProps({ name: t.name, note: sortLine(t) }) : {}),
-        onClick: pick('worn', slot),
-      },
-      el('small', {}, SLOT_NAMES[slot]),
-      el('i', {
-        dangerouslySetInnerHTML: {
-          __html: (h ? icon(h.kind) : '·') + tier(t),
-        },
-      }),
-      el(
-        'span',
-        { class: 'Rarity' },
-        t?.name ?? (slot == 'main' ? 'Bare hands' : 'Nothing'),
-      ),
+    return cell(
+      'worn',
+      slot,
+      t,
+      [!t && 'empty'],
+      t ? tipProps({ name: t.name, note: sortLine(t) }) : {},
+      el(Label, {}, SLOT_NAMES[slot]),
+      ...face(h, t),
+      el(Name, {}, t?.name ?? (slot == 'main' ? 'Bare hands' : 'Nothing')),
     )
   }
 
@@ -316,17 +334,8 @@ export let pack = (panel: Page, acts: Acts) => {
   }
 
   let draw = (s: Sheet, f: Pick<Frame, 'rack'>) => {
-    let at = (from: From, key: string) =>
-      picked?.from == from && picked.key == key
     let bag = carried(s).map(({ h, n }) =>
-      row(
-        'bag',
-        h,
-        n,
-        at('bag', h.eid),
-        false,
-        !!ITEMS[h.kind]?.slot && !canWear(h, s.lvl),
-      )
+      carry('bag', h, n, false, !!ITEMS[h.kind]?.slot && !canWear(h, s.lvl))
     )
     panes.render(
       el(
@@ -334,19 +343,18 @@ export let pack = (panel: Page, acts: Acts) => {
         { class: 'Pack' },
         part(
           'In your bag',
-          bag.length ? el(Rows, {}, bag) : hint('Your bag is empty.'),
+          bag.length ? el(ValeGrid, {}, bag) : hint('Your bag is empty.'),
         ),
         f.rack && part(
           'By the fire: plain arms for anyone to try',
           el(
-            Rows,
+            ValeGrid,
             {},
             rackKinds().map((k) =>
-              row(
+              carry(
                 'rack',
                 { eid: k, kind: k, n: 1 },
                 1,
-                at('rack', k),
                 s.bag.some((h) => h.kind == k),
               )
             ),
@@ -354,7 +362,7 @@ export let pack = (panel: Page, acts: Acts) => {
         ),
       ),
       [
-        el('div', { class: 'Pack_Worn' }, SLOTS.map((sl) => slot(s, sl))),
+        el(ValeGrid, { mod: 'wide' }, SLOTS.map((sl) => slot(s, sl))),
         card(s, f),
       ],
       picked ? `${picked.from}:${picked.key}` : null,

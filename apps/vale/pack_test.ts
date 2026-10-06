@@ -1,4 +1,4 @@
-// The bag lists wearable pieces before grouped supplies, with item level
+// The bag holds wearable pieces before grouped supplies, with item level
 // taking priority over rarity and older pieces using their tier's first level.
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
@@ -70,14 +70,16 @@ test('worn slots stay above the detail outside the scrolling bag list', () =>
     view.show(frame)
     let list = body.querySelector<HTMLElement>('.Split_List')!
     let detail = body.querySelector('.Split_Content')!
-    assert(!list.querySelector('.Pack_Worn'))
-    assertEquals(detail.firstElementChild?.className, 'Pack_Worn')
+    let heads = () =>
+      detail.firstElementChild?.firstElementChild?.getAttribute('data-pick')
+    assert(!list.querySelector('[data-pick^="worn:"]'))
+    assertEquals(heads(), 'worn:main')
     let worn = detail.querySelector<HTMLElement>('[data-pick="worn:main"]')!
     list.scrollTop = 300
     worn.click()
     view.show(frame)
     assertEquals(list.scrollTop, 300)
-    assertEquals(detail.firstElementChild?.className, 'Pack_Worn')
+    assertEquals(heads(), 'worn:main')
     detail.querySelector<HTMLElement>('[data-do=off]')!.click()
     assertEquals(actions, [['main']])
   }))
@@ -133,13 +135,15 @@ test('a click inspects and double-click equips eligible bag gear in its appropri
     ] as [string, number, string[], unknown[]][]
   ) {
     withPack(kind, lvl, learned, ({ body, show, actions, window }) => {
-      let tile = body.querySelector<HTMLElement>('[data-pick="bag:candidate"]')!
-      tile.click()
+      let cell = body.querySelector<HTMLElement>(
+        '[data-pick="bag:candidate"]',
+      )!
+      cell.click()
       show()
       assertEquals(actions, [], kind)
-      // Selection must retain the row so the browser can deliver its second click.
-      assertEquals(body.querySelector('[data-pick="bag:candidate"]'), tile)
-      tile.dispatchEvent(new window.Event('dblclick', { bubbles: true }))
+      // Selection must retain the cell so the browser can deliver its second click.
+      assertEquals(body.querySelector('[data-pick="bag:candidate"]'), cell)
+      cell.dispatchEvent(new window.Event('dblclick', { bubbles: true }))
       assertEquals(actions, expected, kind)
     })
   }
@@ -153,15 +157,17 @@ test('unmet level requirements are visible in the bag before inspection and cann
     ]] as [string, boolean][]
   ) {
     withPack(kind, 1, [], ({ body, show, actions }) => {
-      let tile = body.querySelector<HTMLElement>('[data-pick="bag:candidate"]')!
-      assertEquals(tile.classList.contains('Tile-dim'), locked, kind)
+      let cell = body.querySelector<HTMLElement>(
+        '[data-pick="bag:candidate"]',
+      )!
+      assertEquals(cell.classList.contains('ValeGrid_Cell-dim'), locked, kind)
+      assertEquals(!!cell.querySelector('.ValeGrid_Need'), locked, kind)
       assertEquals(
-        !!tile.querySelector('.Tile_Sub-negative')?.textContent
-          ?.startsWith('Requires level'),
+        !!cell.getAttribute('aria-label')?.includes('Requires level'),
         locked,
         kind,
       )
-      tile.click()
+      cell.click()
       show()
       assertEquals(
         !!body.querySelector('.Tile-head .Tile_Sub-negative'),

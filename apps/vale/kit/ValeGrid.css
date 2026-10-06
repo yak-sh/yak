@@ -1,0 +1,121 @@
+/* Things in squares, as many to a row as fit and every one the same square:
+   a rimmed face, framed just inside the rim in its rarity, its picture in the
+   middle on a faint light of that colour, its marks small in its corners. The
+   pick's ring (skin/base.css) lies on the rim, clear of the frame, and its
+   wash over the face, which the cell paints with background-color. */
+.ValeGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(3.25rem, 1fr));
+  gap: 0.35rem;
+  min-width: 0;
+}
+.ValeGrid-wide {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.ValeGrid_Cell {
+  --frame: var(--rarity, transparent);
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 0;
+  border: 2px solid var(--border2);
+  border-radius: var(--radius-small, var(--radius));
+  background-color: color-mix(in srgb, var(--frame) 14%, var(--surface));
+  box-shadow:
+    inset 0 0 0 2px var(--frame),
+    inset 0 -3px 0 color-mix(in srgb, var(--border2) 50%, transparent);
+  font: inherit;
+  color: var(--text);
+}
+.ValeGrid-wide > .ValeGrid_Cell {
+  gap: 0.05rem;
+  aspect-ratio: auto;
+  padding: 0.3rem 0.25rem 0.4rem;
+}
+.ValeGrid_Cell-empty {
+  background-color: color-mix(in srgb, var(--surface) 50%, transparent);
+}
+.ValeGrid_Cell-glow {
+  box-shadow:
+    inset 0 0 0 2px var(--frame),
+    0 0 10px color-mix(in srgb, var(--frame) 60%, transparent);
+}
+.ValeGrid_Picture {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 50%;
+  background-image: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--frame) 28%, transparent),
+    transparent
+  );
+  font-size: 1.5rem;
+  line-height: 1;
+
+  & .Sprite {
+    width: 2.2rem;
+    height: 2.2rem;
+  }
+
+  & .Glyph {
+    width: 1.4rem;
+    height: 1.4rem;
+  }
+}
+.ValeGrid_Cell-dim > .ValeGrid_Picture,
+.ValeGrid_Cell-empty > :is(.ValeGrid_Picture, .ValeGrid_Name) {
+  opacity: 0.45;
+}
+.ValeGrid_Label {
+  font-size: 0.75rem;
+  color: var(--dim);
+}
+.ValeGrid_Name {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 0.82rem;
+  color: var(--rarity, inherit);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ValeGrid_Tier,
+.ValeGrid_Need,
+.ValeGrid_Count {
+  position: absolute;
+  min-width: 0.95rem;
+  padding: 0 0.2rem;
+  border-radius: var(--round, 999px);
+  background-color: color-mix(in srgb, var(--surface) 88%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--border2) 70%, transparent);
+  font-size: 0.66rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  text-align: center;
+}
+.ValeGrid_Tier {
+  top: 0.15rem;
+  left: 0.15rem;
+  color: var(--number);
+}
+.ValeGrid_Need {
+  bottom: 0.15rem;
+  left: 0.15rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.05rem;
+  color: var(--negative);
+
+  & svg {
+    width: 0.65rem;
+    height: 0.65rem;
+  }
+}
+.ValeGrid_Count {
+  right: 0.15rem;
+  bottom: 0.15rem;
+}
