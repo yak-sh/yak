@@ -102,9 +102,10 @@ functions. To prove a deploy's defects arrive, a test account POSTs
 `/api/defect` at the apex: that is a defect tagged `tool:canary`, `account:test`
 (mcp.ts `canary`).
 
-Sentry's uptime monitor (https://yaks.sentry.io/monitors/10414356/) POSTs
-`tools/list` to https://yaks.app/mcp every minute and is the one alarm for an
-outage.
+Sentry's one active uptime monitor (https://yaks.sentry.io/monitors/10414356/)
+GETs https://yourname.yaks.app/recipes/api/query?.recipe&.limit=1 every minute
+and is the one alarm for an outage: it reaches the kernel, the directory and an
+app's store, so each check also costs that store's rows.
 
 **Update the dashboard Deploy command to `../../bin/build-yak deploy`.** The
 previous `npx wrangler deploy` bypasses the repo's deploy wrapper; changing the
