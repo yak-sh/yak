@@ -36,7 +36,7 @@
   --scrim: rgba(20, 30, 15, 0.38);
 
   /* A card on the glass: a solid paper face and a defined rim. What can be
-     pressed stands on a `--lip` instead (Btn, Orb, Pad, Track). */
+     pressed stands on a `--lip` instead (Button, Orb, Pad, Track). */
   --glass: color-mix(in srgb, var(--paper) 98%, transparent);
   --lip: color-mix(in srgb, var(--rim) 75%, transparent);
   --flat: 0 0 0 2px var(--rim), 0 4px 0 var(--lip),

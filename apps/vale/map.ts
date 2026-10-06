@@ -87,7 +87,7 @@ export let exits = (id: string): { at: Spot; side: Side; to: string }[] => {
 export let map = (panel: Panel, travel: (to: string) => void) => {
   panel.body.classList.add('Map_Host')
   panel.body.innerHTML =
-    `<div class=Map><canvas class=Map_Ground></canvas><canvas class=Map_Fog></canvas><div class=Map_Marks></div></div><div class=Map_Where><b class=Map_Land></b><span class=Map_Scale></span></div><div class=Map_Tools><button class="Btn Btn-small" data-map=in aria-label="Zoom in">+</button><button class="Btn Btn-small" data-map=out aria-label="Zoom out">−</button><button class="Btn Btn-small" data-map=here>Here</button><button class="Btn Btn-small" data-map=world>World</button></div><div class=Map_Travel></div>`
+    `<div class=Map><canvas class=Map_Ground></canvas><canvas class=Map_Fog></canvas><div class=Map_Marks></div></div><div class=Map_Where><b class=Map_Land></b><span class=Map_Scale></span></div><div class=Map_Tools><button class=Button data-map=in aria-label="Zoom in">+</button><button class=Button data-map=out aria-label="Zoom out">−</button><button class=Button data-map=here>Here</button><button class=Button data-map=world>World</button></div><div class=Map_Travel></div>`
   let stage = panel.body.querySelector<HTMLElement>('.Map')!
   let tools = panel.body.querySelector<HTMLElement>('.Map_Tools')!
   let land = panel.body.querySelector<HTMLElement>('.Map_Land')!
@@ -360,7 +360,7 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
         ? `<b>Travel by fire</b><span>Choose a village fire you have found.</span><div class=Map_Fires>${
           destinations.length
             ? destinations.map((id) =>
-              `<button class="Btn Btn-small" data-fire="${esc(id)}">${
+              `<button class=Button data-fire="${esc(id)}">${
                 esc(levelOf(id)!.name)
               }</button>`
             ).join('')

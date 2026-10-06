@@ -32,20 +32,19 @@ export let about = (panel: Panel) =>
         'div',
         { class: 'Yaks_Actions' },
         h(Button, {
-          class: 'Btn Btn-go',
+          mod: 'go',
           href: 'https://yaks.app/login',
           target: '_blank',
           rel: 'noopener noreferrer',
         }, 'Build on yaks.app'),
         h(Button, {
-          class: 'Btn',
           href: 'https://github.com/yak-sh/yak/tree/main/apps/vale',
           target: '_blank',
           rel: 'noopener noreferrer',
         }, 'See Mossvale’s code'),
         h(
           Button,
-          { class: 'Btn', href: './guide.html' },
+          { href: './guide.html' },
           'Explore the UI guide',
         ),
       ),

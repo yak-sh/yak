@@ -412,12 +412,14 @@ let make = (who: Me, back: (() => void) | null) => {
     <form class=Make>${fields(look)}
       ${
     who.writes
-      ? '<button class="Btn Btn-go Btn-big">Enter the vale</button>'
-      : `<a class="Btn Btn-go Btn-big" href="${
+      ? '<button class="Button Button-go">Enter the vale</button>'
+      : `<a class="Button Button-go" href="${
         esc(who.signIn ?? '')
       }">Sign in to play</a>`
   }
-      ${back ? '<button type=button class=Btn data-do=back>Back</button>' : ''}
+      ${
+    back ? '<button type=button class=Button data-do=back>Back</button>' : ''
+  }
     </form>
     ${
     guest && who.writes
@@ -457,7 +459,7 @@ let choose = (who: Me, heroes: Hero[]) => {
       }"><i class=Hero_Face></i><b>${esc(o.name)}</b></button>`
     ).join('')
   }</div>
-    <button class=Btn data-do=new>A new hero</button>
+    <button class=Button data-do=new>A new hero</button>
     ${NOTE}`
   gateCard.querySelectorAll<HTMLElement>('.Hero').forEach((b) =>
     b.addEventListener('click', () => {
@@ -1400,7 +1402,7 @@ deal.me(me)
 if (!me.reads) {
   gateCard.innerHTML = `${TITLE}<p class=Gate_Lede>This vale is private.</p>${
     me.signIn
-      ? `<a class="Btn Btn-go Btn-big" href="${esc(me.signIn)}">Sign in</a>`
+      ? `<a class="Button Button-go" href="${esc(me.signIn)}">Sign in</a>`
       : ''
   }`
 } else if (me.person) {

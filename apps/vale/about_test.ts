@@ -32,7 +32,6 @@ test('about draws base parts and working actions inside a retained page body', (
     ])
     for (let action of actions) {
       ok(action.classList.contains('Button'))
-      ok(action.classList.contains('Btn'))
     }
     for (let action of actions.slice(0, 2)) {
       equal(action.target, '_blank')

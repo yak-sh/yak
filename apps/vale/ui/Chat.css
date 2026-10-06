@@ -131,19 +131,12 @@
   }
 }
 
-/* @yaks/ui Choices is the same list used by query completion. Its palette
-   belongs to the vale; position stays with the native chat field. */
+/* The command field's choices (@yaks/ui Choices, in the skin), above the
+   chat field they complete. */
 .Chat_Say {
   position: relative;
 }
 .Chat_Choices {
-  --card: var(--paper);
-  --border: var(--rim);
-  --soft: var(--moss);
-  --dim: var(--deep);
-  --mono: ui-monospace, monospace;
-  --half-gap: 0.4rem;
-  --shadow: 0 4px 16px #0004;
   position: absolute;
   bottom: calc(100% + 0.35rem);
   left: 0;

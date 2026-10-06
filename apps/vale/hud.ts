@@ -91,7 +91,8 @@ export let talkHtml = (t: Talk): string => {
   if ('player' in t) {
     html = `<p>${esc(t.message)}</p>`
     if (t.invite) {
-      act = '<button class="Btn Btn-go" data-do=invite>Invite to party</button>'
+      act =
+        '<button class="Button Button-go" data-do=invite>Invite to party</button>'
     }
   } else if ('offer' in t) {
     let v = t.offer
@@ -104,8 +105,9 @@ export let talkHtml = (t: Talk): string => {
         )
       ).join(', ')
     }</p><p class=Talk_Reward>Reward: ${esc(said(v.give))}</p>`
-    act = '<button class="Btn Btn-go" data-do=accept>I’ll do it</button>' +
-      '<button class=Btn data-do=refuse>No thanks</button>'
+    act =
+      '<button class="Button Button-go" data-do=accept>I’ll do it</button>' +
+      '<button class=Button data-do=refuse>No thanks</button>'
   } else {
     let q = t.quest
     if (!q) html = `<p>${esc(t.greets)}</p>`
@@ -115,10 +117,11 @@ export let talkHtml = (t: Talk): string => {
       }</p><p class=Talk_Reward>Reward: ${q.xp} xp${
         q.gift ? `, ${esc(ITEMS[q.gift]?.name ?? q.gift)}` : ''
       }</p>`
-      act = '<button class="Btn Btn-go" data-do=accept>I’ll do it</button>'
+      act =
+        '<button class="Button Button-go" data-do=accept>I’ll do it</button>'
     } else if (t.have >= q.count) {
       html = `<h3>${esc(q.title)}</h3><p>You did it! The vale owes you one.</p>`
-      act = '<button class="Btn Btn-go" data-do=hand>Hand it in</button>'
+      act = '<button class="Button Button-go" data-do=hand>Hand it in</button>'
     } else {
       html = `<h3>${esc(q.title)}</h3><p>${
         esc(q.body)
@@ -135,9 +138,9 @@ export let talkHtml = (t: Talk): string => {
     esc(t.name)
   }</div><div class=Talk_Body>${html}</div><div class=Talk_Acts>${act}${
     t.link
-      ? `<a class=Btn href="${esc(t.link.href)}">${esc(t.link.label)}</a>`
+      ? `<a class=Button href="${esc(t.link.href)}">${esc(t.link.label)}</a>`
       : ''
-  }<button class=Btn data-do=close>Farewell</button></div>`
+  }<button class=Button data-do=close>Farewell</button></div>`
 }
 
 /** The time of day, as the glass shows it. */

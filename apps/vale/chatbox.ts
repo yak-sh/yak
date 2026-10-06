@@ -97,7 +97,7 @@ export let chatbox = (
   input.setAttribute('aria-label', 'Say something or enter a command')
   form.append(input)
   form.hidden = true
-  let ask = el('a', 'Btn Btn-small Chat_Ask')
+  let ask = el('a', 'Button Chat_Ask')
   ask.textContent = 'Sign in to chat'
   ask.hidden = true
   box.append(log, form, ask)

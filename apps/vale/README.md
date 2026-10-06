@@ -27,8 +27,9 @@ state lives in the page's graph").
 Hero positions relay between connected pages, and the server saves their latest
 value every thirty seconds. A returning hero resumes that position facing the
 default direction. Wildlife positions only relay. Teleport requests carry a
-`completed` mark once the addressed hero moves. Villagers follow their daily rhythm derived in each page. Human dialogue asks
-a model; playing nearby creates no autonomous model turn or world clock.
+`completed` mark once the addressed hero moves. Villagers follow their daily
+rhythm derived in each page. Human dialogue asks a model; playing nearby creates
+no autonomous model turn or world clock.
 
 Vale's chat slash commands use the shared browser-safe `@yaks/cli/grammar` for
 parsing (`argsFor`) and completion (`complete`). Command arguments accept both
@@ -53,9 +54,6 @@ The grammar, completion, drafts, network client, Markdown and voice packages
 join the same compiled page runtime. The creature-build subscription uses server
 evaluation: `built.current` is computed by the store, and the page has neither
 the complete build graph nor a local rule for it.
-
-`ui/Choices.css` is a tracked port of the shared UI part's stylesheet. It is
-loaded by `ui/components.css`; deployment does not copy or generate CSS.
 
 Map ground is charted once per 16-metre chunk at one pixel per metre, from
 patches already grown for play. The page keeps these charts even after the

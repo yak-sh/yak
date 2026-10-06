@@ -57,7 +57,7 @@ export let releaseNotice = (
     let button = (text: string, action: () => void, primary = false) => {
       let b = document.createElement('button')
       b.type = 'button'
-      b.className = `Btn Btn-small${primary ? ' Btn-go' : ''}`
+      b.className = `Button${primary ? ' Button-go' : ''}`
       b.textContent = text
       b.addEventListener('click', action)
       box!.append(b)
