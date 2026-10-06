@@ -65,7 +65,7 @@ export let sequencing: Hook = (bundles, tx, _err, context) =>
             tx.read(
               parse(
                 '.entry.session=' + session +
-                  '&.order=-entry.seq&.limit=1&.fields=entry.session,entry.seq',
+                  '&.order=-entry.seq&.limit=1',
               ),
             ),
             (latest) =>
@@ -84,7 +84,7 @@ export let sequencing: Hook = (bundles, tx, _err, context) =>
                             .map((
                               b,
                             ) => Number(entry(b)!.seq)),
-                        ) + '&.fields=entry.session,entry.seq',
+                        ),
                     ),
                   )
                   : [],
