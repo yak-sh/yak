@@ -244,7 +244,9 @@ server updates. Queries about one entity's own values test only changed
 entities. These results keep their initial order and append new matches. Queries
 that follow references, order, limit, or aggregate run again against the store.
 State an order explicitly, for example `.order=doc.title`, when order matters.
-Unrelated writes do not notify listeners.
+Unrelated writes do not notify listeners, and neither does a write that leaves
+every entity it names as it was. A stamp the write adds is a change: in a graph
+that stamps `updated`, writing the same values again still notifies.
 
 ### With a server
 

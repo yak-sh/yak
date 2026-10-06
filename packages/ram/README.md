@@ -73,7 +73,8 @@ The root module is the only export path.
 `worn` returns false for undeclared properties, computed properties, and
 properties overridden by `computed`. `read` and `get` add computed values before
 restricting returned components. Stored bundles are replaced rather than mutated
-by writes; callers must not mutate returned bundles.
+by writes, and a write that changes nothing keeps the bundle it found; callers
+must not mutate returned bundles.
 
 ```ts
 import { ram } from '@yaks/ram'

@@ -18,10 +18,11 @@
 // the order it was first touched, and returns what it created.
 //
 // A record is the bundle a read answers with, and it is never mutated in place:
-// a patch builds the next one and puts it in the map. So a read copies nothing,
-// and rolling back is cheap — an undo log of one reference per entity a
-// transaction touched, replayed backwards, restores the map and its indexes
-// exactly as they were without copying anything the write did not touch.
+// a patch builds the next one and puts it in the map, and a patch that changes
+// nothing keeps the one it found. So a read copies nothing, and rolling back is
+// cheap — an undo log of one reference per entity a transaction touched,
+// replayed backwards, restores the map and its indexes exactly as they were
+// without copying anything the write did not touch.
 //
 // The same log is how declared rules see a batch before it is written: the
 // batch is patched in, the rules are asked (./rules.ts), and the log is
@@ -38,7 +39,7 @@ import type {
   ReadOpts,
   Row,
 } from '@yaks/graph'
-import { isPromise } from '@yaks/fp'
+import { isPromise, same } from '@yaks/fp'
 import { comps, dead, only, TOMBSTONE, tombstoned } from '@yaks/graph'
 import {
   type Computed,
@@ -502,28 +503,46 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       let eid = b.entity.eid
       let rec = rows.get(eid)
       let patches = comps(b)
-      if (rec && b.entity.archetype !== undefined) {
+      let archetype = b.entity.archetype
+      if (
+        rec && archetype !== undefined && archetype !== rec.entity.archetype
+      ) {
         save(eid)
-        let entity = { ...rec.entity, archetype: b.entity.archetype }
+        let entity = { ...rec.entity, archetype }
         put(eid, rec = { ...rec, entity })
       }
       if (!rec || buried(rec) || !patches.length) continue
+      let held = merged(rec, patches)
+      if (held == rec) continue
       save(eid)
-      let held: Bundle = { ...rec }
-      for (let [name, comp] of patches) {
-        // A null component drops the row; anything else merges in, so an
-        // omitted property keeps what it held and a null one clears it.
-        if (comp == null) delete held[name]
-        else {
-          let was = held[name] as Comp | undefined
-          let now = stored(name, comp)
-          held[name] = was ? { ...was, ...now } : now
-        }
-      }
       put(eid, held)
     }
     return born
   }
+
+  // The record a patch leaves. A null component drops the row; anything else
+  // merges in, so an omitted property keeps what it held and a null one clears
+  // it. A patch that changes nothing leaves the very record it found: an
+  // unchanged write is no write.
+  let merged = (rec: Bundle, patches: [string, Comp | null][]): Bundle => {
+    let held = rec
+    let own = () => held == rec ? held = { ...rec } : held
+    for (let [name, comp] of patches) {
+      let was = held[name] as Comp | undefined
+      if (comp == null) {
+        if (was !== undefined) delete own()[name]
+        continue
+      }
+      let now = stored(name, comp)
+      if (!holds(was, now)) own()[name] = was ? { ...was, ...now } : now
+    }
+    return held
+  }
+
+  // Whether a component already holds every value a patch gives it.
+  let holds = (was: Comp | undefined, now: Comp): boolean =>
+    !!was &&
+    Object.keys(now).every((p) => Object.hasOwn(was, p) && same(was[p], now[p]))
 
   // The records themselves. A record is never mutated once stored, so the one a
   // read hands back is safe to keep, and costs no copy; a record cut to the

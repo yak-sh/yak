@@ -225,14 +225,20 @@ values of different types compare by their `typeOf` names. A value with a `cmp`
 method supplies its own comparison. Otherwise `cmp` uses `<` and `>` and returns
 -1, 0 or 1.
 
+`same(a, b)` says whether two values hold the same data: the same scalar, or
+arrays and plain objects whose items are the same under the same keys. The order
+an object's keys were written in does not matter.
+
 `bsearch(x)(xs)` finds the insertion index in an array sorted by `cmp`, after
 all equal items. It does not insert the value.
 
 ```ts
-import { bsearch, cmp } from '@yaks/fp'
+import { bsearch, cmp, same } from '@yaks/fp'
 import { equal } from '@yaks/testing'
 
 equal([10, 9, 1].sort(cmp), [1, 9, 10])
+equal(same({ a: 1, b: [2] }, { b: [2], a: 1 }), true)
+equal(same({ a: 1 }, { a: 1, b: null }), false)
 equal(cmp([1, 'b'], [1, 'a']), 1)
 equal(cmp([1], [1, 0]), -1)
 equal(cmp<unknown>(1, '1'), -1)

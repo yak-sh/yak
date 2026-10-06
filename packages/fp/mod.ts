@@ -323,6 +323,25 @@ export let cmp = <T>(a: T, b: T): number =>
     ? 1
     : 0
 
+/// same({ a: [1, { b: 2 }] }, { a: [1, { b: 2 }] }) -> true
+/// same({ a: 1, b: 2 }, { b: 2, a: 1 }) -> true
+/// same({ a: 1 }, { a: 1, b: null }) -> false
+/// same([1, 2], { 0: 1, 1: 2 }) -> false
+/**
+ * Whether two values hold the same data: the same scalar, or lists and plain
+ * objects whose items hold the same data under the same keys, in whatever
+ * order an object's keys were written.
+ */
+export let same = (a: unknown, b: unknown): boolean => {
+  if (a === b) return true
+  if (!a || !b || typeof a != 'object' || typeof b != 'object') return false
+  if (Array.isArray(a) != Array.isArray(b)) return false
+  let x = a as Record<string, unknown>, y = b as Record<string, unknown>
+  let keys = Object.keys(x)
+  return keys.length == Object.keys(y).length &&
+    keys.every((k) => Object.hasOwn(y, k) && same(x[k], y[k]))
+}
+
 /// bsearch(3)([1, 2, 4]) -> 2
 /// bsearch(2)([1, 2, 2, 4]) -> 3
 /// bsearch(0)([1]) -> 0

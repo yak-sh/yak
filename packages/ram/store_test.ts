@@ -52,6 +52,22 @@ test('a patch touches only the properties it names; null clears one', () => {
   assertEquals(comp(at(s, 'p1'), 'product'), { price: 9, status: null })
 })
 
+test('a patch that changes nothing keeps the record it found', () => {
+  let s = shopRam()
+  put(s, { entity: { eid: 'p1' }, doc: { title: 'Mug' }, product: {} })
+  let kept = (patch: Partial<Bundle>) => {
+    let was = at(s, 'p1')
+    put(s, { entity: { eid: 'p1' }, ...patch })
+    return at(s, 'p1') === was
+  }
+  assert(kept({ doc: { title: 'Mug' } }))
+  assert(kept({ doc: {}, product: {} }))
+  assert(kept({ bookmark: null }))
+  assert(!kept({ doc: { title: 'Cup' } }))
+  assert(!kept({ bookmark: {} }))
+  assert(!kept({ product: null }))
+})
+
 test('a null component drops it, the entity survives', () => {
   let s = shopRam()
   put(s, {

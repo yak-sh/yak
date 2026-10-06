@@ -74,6 +74,38 @@ test('an unrelated write does not wake a watch', () => {
   c.close()
 })
 
+test('a write that changes nothing wakes no watch, and any change does', () => {
+  // Unstamped, so that writing the same values again changes nothing.
+  let c = boxClient(undefined, { provenance: () => null })
+  c.mutate([dal()])
+  let heard = 0
+  for (
+    let query of [
+      '.recipe.course=dinner',
+      '.entity.eid="r1"',
+      '.recipe&.order=recipe.serves',
+    ]
+  ) c.watch(query).subscribe(() => heard++)
+  let wakes = (b: Bundle) => (heard = 0, c.mutate([b]), heard)
+
+  assertEquals(wakes(dal()), 0)
+  assertEquals(wakes({ entity: { eid: 'r1' }, recipe: { serves: 4 } }), 0)
+  assertEquals(wakes({ entity: { eid: 'r1' }, recipe: { serves: 6 } }), 3)
+  assertEquals(wakes({ entity: { eid: 'r1' }, doc: { title: 'Daal' } }), 3)
+  c.close()
+})
+
+test('a stamp is a change: writing the same values again wakes a watch', () => {
+  let c = boxClient()
+  c.mutate([dal()])
+  let heard = 0
+  c.watch('.recipe.course=dinner').subscribe(() => heard++)
+
+  c.mutate([dal()])
+  assertEquals(heard, 1)
+  c.close()
+})
+
 test('an ordered query re-reads, and comes back in order', () => {
   let c = boxClient()
   c.mutate([dal('r1', 4), { ...dal('r2', 9), doc: { title: 'Pie' } }])

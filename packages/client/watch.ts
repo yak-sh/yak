@@ -9,8 +9,10 @@
 // of the whole store.
 //
 // A commit is handled the way a server handles a subscription: read the
-// changed entities once, whole, then work out which watches each one moved, in
-// one of two ways chosen when the watch opens.
+// entities it wrote once, whole, then work out which watches each one moved, in
+// one of two ways chosen when the watch opens. A watch keeps each member's
+// whole record as it last read it, so a write that left an entity as it was
+// moves no watch: only a change, a stamp's included, is heard.
 //
 //   Routed    the query asks only about each entity itself, so it joins the
 //             registry's network (@yaks/match `net`), which every watch of
@@ -32,7 +34,7 @@
 // reaches runs again rather than being routed.
 
 import type { Bundle, Eid, Graph, Reduced } from '@yaks/graph'
-import { after, over } from '@yaks/fp'
+import { after, over, same } from '@yaks/fp'
 import { named, only, projection, transient } from '@yaks/graph'
 import { type Net, net } from '@yaks/match'
 import { parse } from '@yaks/query'
@@ -113,6 +115,8 @@ type Live = {
   cut: (b: Bundle) => Bundle
   /** the result, by eid, in the order it is published */
   members: Map<Eid, Bundle>
+  /** each member's whole record, as last read */
+  whole: Map<Eid, Bundle>
   hold: Hold<Bundle[]>
   ready: Hold<boolean>
   listeners: Set<(bundles: Bundle[]) => void>
@@ -152,22 +156,28 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
     for (let fn of w.listeners) fn(value)
   }
 
-  // The routed watches against the entities a transaction changed, read
-  // whole: each entity moves through the network once, into the watches it
-  // matches and out of the ones it has left.
-  let route = (now: Bundle[], touched: Eid[]) => {
+  // One entity out of a watch's result.
+  let drop = (w: Live, eid: Eid) => {
+    w.members.delete(eid)
+    w.whole.delete(eid)
+  }
+
+  // The routed watches against the entities a transaction wrote, read whole:
+  // each entity moves through the network once, into the watches it matches
+  // and out of the ones it has left. A watch that already held it, as it now
+  // is, has not moved.
+  let route = (now: Map<Eid, Bundle>, touched: Eid[]) => {
     let moved = new Set<Live>()
-    let seen = new Set<Eid>()
-    for (let b of now) {
-      let eid = b.entity.eid
-      seen.add(eid)
+    for (let [eid, b] of now) {
       for (let n of nets.values()) {
         let { into, out } = n.move(b)
         for (let w of out) {
-          w.members.delete(eid)
+          drop(w, eid)
           moved.add(w)
         }
         for (let w of into) {
+          if (same(w.whole.get(eid), b)) continue
+          w.whole.set(eid, b)
           w.members.set(eid, w.cut(b))
           moved.add(w)
         }
@@ -175,10 +185,10 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
     }
     // An entity the store no longer holds at all has left every result too.
     for (let eid of touched) {
-      if (seen.has(eid)) continue
+      if (now.has(eid)) continue
       for (let n of nets.values()) {
         for (let w of n.forget(eid)) {
-          w.members.delete(eid)
+          drop(w, eid)
           moved.add(w)
         }
       }
@@ -187,15 +197,23 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
   }
 
   // Refresh: the result is a property of the whole set, so run the query
-  // again.
-  let refresh = (w: Live, touched: Eid[]) =>
+  // again. It moved when a member left, or when an entity the transaction
+  // wrote is in it and was not, as it now is, before.
+  let refresh = (w: Live, now: Map<Eid, Bundle>) =>
     after(graph.read(w.query, { now: w.now, durable: true }), (set) => {
-      let ids = new Set(set.map((b) => b.entity.eid))
-      let left = [...w.members.keys()].some((eid) => !ids.has(eid))
-      w.members = new Map(set.map((b) => [b.entity.eid, b]))
-      if (left || touched.some((eid) => ids.has(eid))) {
-        publish(w, live.project(set))
+      let rows = new Map(set.map((b) => [b.entity.eid, b]))
+      let left = [...w.members.keys()].some((eid) => !rows.has(eid))
+      let moved = [...now].some(([eid, b]) =>
+        rows.has(eid) && !same(w.whole.get(eid), b)
+      )
+      let whole = new Map<Eid, Bundle>()
+      for (let eid of rows.keys()) {
+        let b = now.get(eid) ?? w.whole.get(eid)
+        if (b) whole.set(eid, b)
       }
+      w.members = rows
+      w.whole = whole
+      if (left || moved) publish(w, live.project(set))
     })
 
   const live = transient(graph)
@@ -210,10 +228,11 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
   let commit = (applied: Bundle[]) => {
     if (!held.size) return
     let touched = [...new Set(applied.map((b) => b.entity.eid))]
-    return after(graph.get(touched), (now) => {
+    return after(graph.get(touched), (read) => {
+      let now = new Map(read.map((b) => [b.entity.eid, b]))
       route(now, touched)
       let again = [...held].filter((w) => !w.routed)
-      return after(over(again, (w) => refresh(w, touched)), () => undefined)
+      return after(over(again, (w) => refresh(w, now)), () => undefined)
     })
   }
 
@@ -235,23 +254,30 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
       routed: false,
       cut: p?.cut ?? only(named(graph.vocab, query)),
       members: new Map(),
+      whole: new Map(),
       hold: make<Bundle[]>([]),
       ready: make(false),
       listeners: new Set(),
     }
     // The first result, read before the watch is registered: a query the
     // graph cannot answer throws here, out of `watch()`, rather than on every
-    // later commit for the life of the page.
-    after(graph.read(query, { now, durable: true }), (set) => {
-      if (!active || closed) return
-      w.members = new Map(set.map((b) => [b.entity.eid, b]))
-      w.routed = !p?.reaches.length &&
-        netFor(now).add(w, query, w.members.keys())
-      w.hold.value = live.project(set)
-      w.ready.value = true
-      held.add(w)
-      for (let fn of w.listeners) fn(w.hold.value)
-    })
+    // later commit for the life of the page. Its members are read whole too,
+    // as a commit reads what it wrote.
+    after(
+      graph.read(query, { now, durable: true }),
+      (set) =>
+        after(graph.get(set.map((b) => b.entity.eid)), (whole) => {
+          if (!active || closed) return
+          w.members = new Map(set.map((b) => [b.entity.eid, b]))
+          w.whole = new Map(whole.map((b) => [b.entity.eid, b]))
+          w.routed = !p?.reaches.length &&
+            netFor(now).add(w, query, w.members.keys())
+          w.hold.value = live.project(set)
+          w.ready.value = true
+          held.add(w)
+          for (let fn of w.listeners) fn(w.hold.value)
+        }),
+    )
     let forget = () => {
       held.delete(w)
       if (w.routed) nets.get(now)?.drop(w)
