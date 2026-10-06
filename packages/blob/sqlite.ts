@@ -176,6 +176,7 @@ export let blobRead = (vocab: Vocab, layout: Layout = {}): Derived => {
       `${comp}.${prop}`,
       {
         tag: 'text' as const,
+        stable: true,
         expr: readExpr(l, comp, prop),
         text: textExpr(l),
       },

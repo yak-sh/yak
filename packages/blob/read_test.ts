@@ -1,14 +1,17 @@
 // A component called doc is ordinary storage too. No adapter-owned doc_value
 // view participates: the registry is the sole truth for a swapped read.
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertThrows } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
 import { match, reads } from '@yaks/graph'
-import { insert } from '@yaks/sql'
-import { mem } from './testing.ts'
+import { insert, val } from '@yaks/sql'
+import { blog, fixture, mem } from './testing.ts'
 import { blobKeywords } from './keywords.ts'
-import { blobRead, blobSchema } from './sqlite.ts'
+import { blobRead, blobSchema, sqliteBlobs } from './sqlite.ts'
+import { open } from '@yaks/sqlite/db'
+import { graph } from '@yaks/graph'
+import { blobs } from './plugin.ts'
 
 test('doc predicates, paths, projections and bundles resolve the same blob', () => {
   let vocab = loadVocab({
@@ -84,4 +87,74 @@ test('doc predicates, paths, projections and bundles resolve the same blob', () 
       }],
     }],
   }])
+})
+
+test('admission reuses immutable content reads until their authoritative SQL state changes', () => {
+  let f = fixture()
+  f.g.apply([{ entity: { eid: 'p' }, post: { title: 'Hello', body: 'first' } }])
+  let get = () => f.db.tx((tx) => tx.get(['p']), { admission: true })[0]
+  assertEquals(get().post?.body, 'first')
+  let query = f.driver.query, reads = 0
+  f.driver.query = (stmt) => {
+    if (stmt.t == 'select' || stmt.t == 'raw') reads++
+    return query(stmt)
+  }
+  get()
+  get()
+  assertEquals(reads, 0)
+  f.g.apply([{ entity: { eid: 'p' }, post: { body: 'second' } }])
+  assertEquals(get().post?.body, 'second')
+})
+
+test('immutable admission content follows raw blob changes and rollback', () => {
+  let f = fixture()
+  f.g.apply([{ entity: { eid: 'p' }, post: { body: 'first' } }])
+  let get = () => f.db.tx((tx) => tx.get(['p']), { admission: true })[0]
+  get()
+  f.driver.query({
+    t: 'update',
+    table: 'blob_text',
+    set: { value: val('raw') },
+  })
+  assertEquals(get().post?.body, 'raw')
+  assertThrows(() =>
+    f.db.tx(() => {
+      f.driver.query({
+        t: 'update',
+        table: 'blob_text',
+        set: { value: val('temporary') },
+      })
+      assertEquals(get().post?.body, 'temporary')
+      throw new Error('rollback')
+    })
+  )
+  assertEquals(get().post?.body, 'raw')
+})
+
+test('immutable admission content observes blob commits by another file connection', () => {
+  let dir = Deno.makeTempDir({ prefix: 'T-65691-blob-' })
+  let a = open(`${dir}/data.db`), b = open(`${dir}/data.db`)
+  try {
+    let s = storage(a, blog, { derived: blobRead(blog) })
+    s.install()
+    for (let stmt of blobSchema()) a.query(stmt)
+    let g = graph({
+      storage: s,
+      vocab: blog,
+      plugins: [blobs(blog, sqliteBlobs(a))],
+    })
+    g.apply([{ entity: { eid: 'p' }, post: { body: 'first' } }])
+    let get = () => s.tx((tx) => tx.get(['p']), { admission: true })[0]
+    assertEquals(get().post?.body, 'first')
+    b.query({
+      t: 'update',
+      table: 'blob_text',
+      set: { value: val('other connection') },
+    })
+    assertEquals(get().post?.body, 'other connection')
+  } finally {
+    a.close()
+    b.close()
+    Deno.removeSync(dir, { recursive: true })
+  }
 })

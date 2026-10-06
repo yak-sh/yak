@@ -18,11 +18,17 @@ export let memoized = (
     sizes.delete(eid)
     held.delete(eid)
   }
-  let dynamic = new Set(Object.keys(derived).map((p) => p.split('.')[0]))
+  let dynamic = new Set(
+    Object.entries(derived).filter(([, value]) => !value.stable).map(([p]) =>
+      p.split('.')[0]
+    ),
+  )
   for (let name of vocab.comps) {
     if (
       vocab.comp(name)?.computed ||
-      vocab.props(name).some((p) => vocab.prop(name, p)?.computed)
+      vocab.props(name).some((p) =>
+        vocab.prop(name, p)?.computed && !derived[`${name}.${p}`]?.stable
+      )
     ) {
       dynamic.add(name)
     }

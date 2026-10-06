@@ -50,6 +50,11 @@ import { type Tag, tagOf } from './sqlite.ts'
 // names extra component tables the expression reads, which the binder must
 // therefore left join.
 export type DerivedProp = {
+  // This expression changes only when SQL state on its owning connection
+  // changes. Admission may reuse it under that connection's DML/schema/
+  // rollback/external-commit revision. Omitted means dynamic (clock, random,
+  // outside state); no inferred stability from a property's vocabulary.
+  stable?: boolean
   tag: Tag
   values?: string[]
   deps?: string[]
