@@ -1,5 +1,5 @@
-/* Making a hero, at the gate: a name, and the colours of their tunic, hair
-   and skin (Swatch.css). */
+/* A hero's look (make.ts), at the gate and on the Character tab: a name (a
+   kit Field) over the colours of their tunic, hair and skin (Swatch.css). */
 .Make {
   display: grid;
   gap: 0.45rem;
@@ -16,23 +16,6 @@
   gap: 0.25rem;
   font-size: 0.85rem;
   color: var(--faint);
-
-  & input {
-    padding: 0.5rem 0.8rem;
-    border: 2px solid var(--line);
-    border-radius: var(--radius-small);
-    background: var(--paper);
-    font: inherit;
-    font-size: max(16px, 1.1rem);
-    color: var(--ink);
-    -webkit-user-select: text;
-    user-select: text;
-
-    &:focus {
-      outline: none;
-      border-color: var(--moss);
-    }
-  }
 }
 
 .Make_Label {

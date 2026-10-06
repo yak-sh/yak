@@ -17,6 +17,8 @@
 // joins the log like anybody's line.
 import type { Watch } from '@yaks/client'
 import { h, render } from 'preact'
+import { Button, Field, Turns } from '@yaks/ui'
+import { Markdown } from '@yaks/markdown'
 import { signal } from '@preact/signals'
 import { commandField, type CommandFieldOpts } from './command-field.ts'
 import { commandLookup } from './command-lookup.ts'
@@ -37,7 +39,6 @@ import {
 } from './chat.ts'
 import type { overlay } from './fx.ts'
 import type { Opener } from './hud.ts'
-import { commandBody } from './command-body.ts'
 import type { Me, Net } from './net.ts'
 import type { Frame } from './play.ts'
 import { type Command, slash } from './slash.ts'
@@ -88,19 +89,26 @@ export let chatbox = (
 ) => {
   let listeners = new AbortController()
   let closed = false
+  // The feed, a window on the conversation (the kit's Turns) whose newest
+  // line is at its foot; the line to say something on, and the choices that
+  // complete a command over it; and the ask to sign in.
   let box = el('div', 'Chat')
-  let log = el('ol', 'Chat_Log')
+  let log = el('div', 'Chat_Log')
   let form = el('form', 'Chat_Say')
-  let input = el('input', 'Chat_Input')
-  input.maxLength = MAX
-  input.placeholder = 'Say something…'
-  input.enterKeyHint = 'send'
-  input.autocomplete = 'off'
-  input.setAttribute('aria-label', 'Say something or enter a command')
-  form.append(input)
+  render([
+    h(Field, {
+      maxLength: MAX,
+      placeholder: 'Say something…',
+      enterKeyHint: 'send',
+      autocomplete: 'off',
+      'aria-label': 'Say something or enter a command',
+    }),
+    h('div', { class: 'Chat_Choices' }),
+  ], form)
+  let input = form.querySelector('input')!
+  let choices = form.querySelector<HTMLElement>('.Chat_Choices')!
   form.hidden = true
-  let ask = el('a', 'Button Chat_Ask')
-  ask.textContent = 'Sign in to chat'
+  let ask = el('div', 'Chat_Ask')
   ask.hidden = true
   box.append(log, form, ask)
   box.style.setProperty('--fade', `${FADE}ms`)
@@ -140,8 +148,6 @@ export let chatbox = (
     if (!closed) notice(e instanceof Error ? e.message : 'Drafts unavailable.')
   })
   let unbind = fields.bind(place, input)
-  let choices = el('div', 'Chat_Choices')
-  form.append(choices)
   render(h(fields.List, { id: place, anchor: { current: input } }), choices)
   let spend = (text: string, by: string | undefined) => {
     // A slow command listing must not spend words typed or an account switched
@@ -230,7 +236,10 @@ export let chatbox = (
   let asked = 0
   let show = () => {
     if (!speaks()) {
-      if (me?.signIn) ask.href = me.signIn
+      render(
+        h(Button, { href: me?.signIn ?? undefined }, 'Sign in to chat'),
+        ask,
+      )
       ask.hidden = false
       asked = performance.now()
       return
@@ -343,14 +352,27 @@ export let chatbox = (
   // box shows every line whole.
   let drawn = ''
   let wasOpen = false
+  let since = new Map<string, string>()
+  type Row = {
+    eid: string
+    name: string
+    /** the colour of the one who said it, if they have one */
+    tint?: string
+    text: string
+    markdown: boolean
+    wait: boolean
+    at: number
+    fades: number
+    persistent: boolean
+  }
   let draw = (shown: Line[], mine: Set<string>, now: number) => {
-    let rows = shown.map((l) => {
+    let rows = shown.map((l): Row => {
       let p = net.who(l.player)
       let v = folk.who(l.player)
       return {
         eid: l.eid,
         name: v?.name ?? p?.name ?? 'Wanderer',
-        tint: v?.tint ?? p?.tint ?? '#dff5c8',
+        tint: v?.tint ?? p?.tint,
         text: l.text,
         markdown: false,
         wait: mine.has(l.eid),
@@ -362,7 +384,6 @@ export let chatbox = (
     rows.push(...notices.map((n) => ({
       eid: n.eid,
       name: 'Only you',
-      tint: '#dff5c8',
       text: n.text,
       markdown: n.markdown,
       wait: false,
@@ -375,7 +396,6 @@ export let chatbox = (
         ...spawnNotices(net.spawnFailures(), me.person).map((n) => ({
           ...n,
           name: 'Only you',
-          tint: '#dff5c8',
           markdown: false,
           wait: false,
           fades: Infinity,
@@ -390,28 +410,51 @@ export let chatbox = (
     let atBottom = !wasOpen ||
       log.scrollHeight - log.scrollTop - log.clientHeight < 24
     let position = log.scrollTop
+    // A line keeps the moment its arrival and fade were reckoned from while
+    // it is drawn again, until the box opens or closes and starts them anew.
+    let was = wasOpen == open ? since : new Map<string, string>()
+    since = new Map(
+      rows.filter((r) => !open && !r.persistent).map((r) => [
+        r.eid,
+        was.get(r.eid) ??
+          `${Math.min(0, r.at - now).toFixed(0)}ms, ${
+            (r.fades - now).toFixed(0)
+          }ms`,
+      ]),
+    )
     wasOpen = open
-    log.replaceChildren(...rows.map((r) => {
-      let li = el(
-        'li',
-        `Chat_Line${r.wait ? ' Chat_Line-wait' : ''}${
-          r.markdown ? ' Chat_Line-command' : ''
-        }${r.persistent ? ' Chat_Line-failed' : ''}`,
-      )
-      if (!open && !r.persistent) {
-        li.style.animationDelay = `${Math.min(0, r.at - now).toFixed(0)}ms, ${
-          (r.fades - now).toFixed(0)
-        }ms`
-      }
-      let name = el('b', 'Chat_Name')
-      name.textContent = r.name
-      name.style.setProperty('--tint', r.tint)
-      li.append(
-        name,
-        r.markdown ? commandBody(r.text) : document.createTextNode(r.text),
-      )
-      return li
-    }))
+    render(
+      h(
+        Turns,
+        {},
+        rows.map((r) => {
+          let delay = since.get(r.eid)
+          return h(
+            Turns.Turn,
+            {
+              key: r.eid,
+              class: [
+                r.wait && 'Chat_Line-wait',
+                r.markdown && 'Chat_Line-command',
+                r.persistent && 'Chat_Line-failed',
+              ].filter(Boolean).join(' ') || undefined,
+              style: delay ? { animationDelay: delay } : undefined,
+            },
+            h(
+              Turns.Who,
+              { style: r.tint ? { '--tint': r.tint } : undefined },
+              r.name,
+            ),
+            h(
+              Turns.Text,
+              {},
+              r.markdown ? h(Markdown, { source: r.text }) : r.text,
+            ),
+          )
+        }),
+      ),
+      log,
+    )
     if (open) {
       if (atBottom) log.scrollTop = log.scrollHeight
       else log.scrollTop = position

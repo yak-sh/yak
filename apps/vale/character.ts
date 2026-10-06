@@ -1,7 +1,7 @@
 // Character stats and a live portrait stay beside the appearance editor.
 // Mount once so frames and panel navigation preserve the canvas and draft.
 import { h, render } from 'preact'
-import { Section } from '@yaks/ui'
+import { Button, Section } from '@yaks/ui'
 import { ABILITIES } from './abilities.ts'
 import { LINES, numbers, sheetStats, stat, stats } from './compare.ts'
 import type { Dress } from './figures.ts'
@@ -145,8 +145,10 @@ export let character = (tab: Page, acts: Acts) => {
       if (!tab.open) return
       if (!kept) {
         Object.assign(picking, lookOf(look))
-        form.innerHTML = fields(picking) +
-          `<button class="Button Button-go" data-do=keep>Keep this look</button>`
+        render([
+          fields(picking),
+          h(Button, { mod: 'go', 'data-do': 'keep' }, 'Keep this look'),
+        ], form)
       }
       kept = look
       changed()

@@ -23,6 +23,9 @@
   --xp: #7fc6f2;
   /* The sky behind a likeness (Character.css). */
   --sky: #dcecf4;
+  /* Words said over the world: the chat's and a friend's name over their
+     head (kit/skin/Turns.css, Plate.css). */
+  --hail: #dff5c8;
   /* A voice going out (the microphone's orb, kit/ValeOrb.css). */
   --voice: #c1ff78;
   /* A number that changes (compare.ts): for the better, or the worse. */

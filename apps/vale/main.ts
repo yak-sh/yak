@@ -44,6 +44,7 @@ import {
   useBuildingDesigns,
   useThemeRows,
 } from './grown.ts'
+import { gateCard } from './gate.ts'
 import { type Clock, hud } from './hud.ts'
 import { releaseNotice } from './release.ts'
 import { guide, tasksOf, tracked } from './journal.ts'
@@ -53,7 +54,7 @@ import { pace } from './pace.ts'
 import { parties } from './party.ts'
 import { partybox } from './partybox.ts'
 import { character } from './character.ts'
-import { anyLook, anyName, fields, picks } from './make.ts'
+import { anyLook, anyName } from './make.ts'
 import { portrait } from './portrait.ts'
 import { listen } from './input.ts'
 import { nodes } from './nodes.ts'
@@ -102,11 +103,9 @@ let VOX = asked >= 0.125 && asked <= 2 && Number.isInteger(CHUNK / asked)
   ? asked
   : VOXEL
 
-let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
-
 let canvas = document.querySelector<HTMLCanvasElement>('.Stage')!
 let gate = document.querySelector<HTMLElement>('.Gate')!
-let gateCard = gate.querySelector<HTMLElement>('.Gate_Card')!
+let card = gateCard(gate.querySelector<HTMLElement>('.Gate_Card')!)
 let glass = document.querySelector<HTMLElement>('.Hud')!
 releaseNotice(glass, gate)
 
@@ -398,82 +397,29 @@ let begin = async (eid: string, stored: Place | null = null) => {
   }
 }
 
-let TITLE = '<h1 class=Gate_Title>Mossvale</h1>'
-let NOTE =
-  '<p class=Gate_Note>Slimes in the meadow, boars in Whisperwood, walking stones in Craghollow, and something old on Thornback Ridge.</p>'
-
-// Make a hero. A guest is offered the sign-in that keeps heroes; one who may
-// not write here is sent to it.
+// Make a hero, or go `back` to the heroes there are.
 let make = (who: Me, back: (() => void) | null) => {
   look.name ||= anyName()
-  let guest = !who.person && who.signIn
-  gateCard.innerHTML = `${TITLE}
-    <p class=Gate_Lede>A little vale of moss and stone. Whoever else is here walks it with you.</p>
-    <form class=Make>${fields(look)}
-      ${
-    who.writes
-      ? '<button class="Button Button-go">Enter the vale</button>'
-      : `<a class="Button Button-go" href="${
-        esc(who.signIn ?? '')
-      }">Sign in to play</a>`
-  }
-      ${
-    back ? '<button type=button class=Button data-do=back>Back</button>' : ''
-  }
-    </form>
-    ${
-    guest && who.writes
-      ? `<p class=Gate_Note><a href="${
-        esc(who.signIn ?? '')
-      }">Sign in</a> to keep your heroes on every device. A hero made without signing in lasts as long as this tab.</p>`
-      : NOTE
-  }`
-  let form = gateCard.querySelector<HTMLFormElement>('.Make')!
-  picks(form, look, dress, (on) => typing = on)
-  form.querySelector('[data-do=back]')?.addEventListener(
-    'click',
-    () => back?.(),
-  )
-  form.addEventListener('submit', (e) => {
-    e.preventDefault()
-    look.name ||= anyName()
-    typing = false
-    begin(net.create(look))
-    h.toast(`Welcome to Mossvale, ${look.name}.`, { tone: 'big' })
+  card.make(who, look, {
+    changed: dress,
+    typing: (on) => typing = on,
+    enter: () => {
+      look.name ||= anyName()
+      typing = false
+      begin(net.create(look))
+      h.toast(`Welcome to Mossvale, ${look.name}.`, { tone: 'big' })
+    },
+    back,
   })
   dress()
 }
 
 // Choose one of your heroes, or make another.
-let choose = (who: Me, heroes: Hero[]) => {
-  gateCard.innerHTML = `${TITLE}
-    <p class=Gate_Lede>Welcome back${
-    who.name ? `, ${esc(who.name.split(/\s/)[0])}` : ''
-  }. Who walks the vale today?</p>
-    <div class=Gate_Heroes>${
-    heroes.map((o) =>
-      `<button class=Hero data-eid="${esc(o.eid)}" style="--tint:${
-        esc(o.tint)
-      };--hair:${esc(o.hair)};--skin:${
-        esc(o.skin)
-      }"><i class=Hero_Face></i><b>${esc(o.name)}</b></button>`
-    ).join('')
-  }</div>
-    <button class=Button data-do=new>A new hero</button>
-    ${NOTE}`
-  gateCard.querySelectorAll<HTMLElement>('.Hero').forEach((b) =>
-    b.addEventListener('click', () => {
-      let o = heroes.find((x) => x.eid == b.dataset.eid)
-      if (!o) return
-      begin(o.eid, o.position)
-      h.toast(`Welcome back, ${o.name}.`, { tone: 'big' })
-    })
-  )
-  gateCard.querySelector('[data-do=new]')?.addEventListener(
-    'click',
-    () => make(who, () => choose(who, heroes)),
-  )
-}
+let choose = (who: Me, heroes: Hero[]) =>
+  card.choose(who, heroes, (o) => {
+    begin(o.eid, o.position)
+    h.toast(`Welcome back, ${o.name}.`, { tone: 'big' })
+  }, () => make(who, () => choose(who, heroes)))
 
 let clockOf = (d: number): Clock =>
   d < 0.22 || d > 0.8 ? 'night' : d < 0.3 ? 'dawn' : d < 0.7 ? 'day' : 'dusk'
@@ -1399,11 +1345,7 @@ camp.me(me)
 explored.me(me)
 deal.me(me)
 if (!me.reads) {
-  gateCard.innerHTML = `${TITLE}<p class=Gate_Lede>This vale is private.</p>${
-    me.signIn
-      ? `<a class="Button Button-go" href="${esc(me.signIn)}">Sign in</a>`
-      : ''
-  }`
+  card.closed(me.signIn)
 } else if (me.person) {
   // Signed in: your heroes, wherever you made them.
   look.name = me.name?.split(/\s/)[0] ?? ''

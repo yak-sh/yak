@@ -36,7 +36,7 @@
 }
 
 .Plate-friend .Plate_In b {
-  color: #dff5c8;
+  color: var(--hail);
 }
 
 .Plate-boss .Plate_In b {

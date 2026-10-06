@@ -1,10 +1,12 @@
-// A hero's look: the name over their head, and the colours of their tunic,
-// hair and skin, each picked from a row of swatches (ui/Make.css,
-// ui/Swatch.css). The gate makes one for a new hero (main.ts), and the
-// Character tab changes it (character.ts); both draw the same fields and
-// answer them the same way. A hero's look is what their player row was made
+// A hero's look: the name over their head (a kit Field), and the colours of
+// their tunic, hair and skin, each picked from a row of swatches
+// (ui/Make.css, ui/Swatch.css). The gate makes one for a new hero (gate.ts),
+// and the Character tab changes it (character.ts); both draw the same fields
+// and answer them the same way. A hero's look is what their player row was made
 // with, and over it the newest of their look rows, since a visitor may only
 // add rows (net.ts `who`).
+import { h, type JSX } from 'preact'
+import { Field } from '@yaks/ui'
 
 /** How a hero looks: their name, and their colours as #rrggbb. */
 export type Look = { name: string; tint: string; hair: string; skin: string }
@@ -44,7 +46,6 @@ export let NAMES = [
 ]
 
 let pick = <T>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)]
-let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
 /** A look to start from: colours at random, and no name yet. */
 export let anyLook = (): Look => ({
@@ -86,21 +87,40 @@ let ROWS: ['tint' | 'hair' | 'skin', string, string[]][] = [
   ['skin', 'Skin', SKINS],
 ]
 
-/** The name, and a row of swatches for each colour, `look`'s picked, as
- * HTML for a form. */
-export let fields = (look: Look) =>
-  `<label class=Make_Name>Your name<input name=name maxlength=${LONGEST} autocomplete=off value="${
-    esc(look.name)
-  }" required></label>` +
-  ROWS.map(([k, label, colors]) =>
-    `<span class=Make_Label>${label}</span><div class=Make_Row data-k=${k}>${
+/** The name, and a row of swatches for each colour, `look`'s picked, for a
+ * form, which `picks` answers. */
+export let fields = (look: Look): JSX.Element[] => [
+  h(
+    'label',
+    { class: 'Make_Name' },
+    'Your name',
+    h(Field, {
+      name: 'name',
+      maxLength: LONGEST,
+      autocomplete: 'off',
+      value: look.name,
+      required: true,
+    }),
+  ),
+  ...ROWS.flatMap(([k, label, colors]) => [
+    h('span', { class: 'Make_Label' }, label),
+    h(
+      'div',
+      { class: 'Make_Row', 'data-k': k },
       colors.map((c) =>
-        `<button type=button class=Swatch aria-current=${
-          c == look[k]
-        } style="--c:${c}" data-c="${c}" aria-label="${label} ${c}"></button>`
-      ).join('')
-    }</div>`
-  ).join('')
+        h('button', {
+          key: c,
+          type: 'button',
+          class: 'Swatch',
+          'aria-current': String(c == look[k]),
+          style: { '--c': c },
+          'data-c': c,
+          'aria-label': `${label} ${c}`,
+        })
+      ),
+    ),
+  ]),
+]
 
 /** Answer the fields in `form` into `look`: a swatch tapped picks its
  * colour, and the name is what is written. `changed` hears each, and

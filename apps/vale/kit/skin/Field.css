@@ -1,0 +1,31 @@
+/* Vale's rendering of Field: a line to type on, paper in a moss rim, deep
+   while it has the keyboard, and never in words smaller than a phone zooms
+   in on when it is tapped. A bare field draws no rim: its host's frame is
+   the edge. */
+.Field {
+  width: 100%;
+  padding: 0.5rem 0.8rem;
+  border: 2px solid var(--moss);
+  border-radius: var(--radius-small);
+  background: color-mix(in srgb, var(--paper) 96%, transparent);
+  font: inherit;
+  font-size: max(16px, 1rem);
+  color: var(--ink);
+  outline: 0;
+  resize: none;
+  cursor: text;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.Field::placeholder {
+  color: var(--faint);
+}
+.Field:focus {
+  border-color: var(--deep);
+}
+.Field-bare,
+.Field-bare:focus {
+  padding: 0;
+  border: 0;
+  background: none;
+}

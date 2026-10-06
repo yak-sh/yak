@@ -51,8 +51,10 @@ export let skin: Skin = Object.fromEntries(
     'Pairs',
     'Choices',
     'Edit',
+    'Field',
     'Panes',
     'Tip',
+    'Turns',
   ].map((name) => [name, {
     css: new URL(`./kit/skin/${name}.css`, import.meta.url),
   }]),
