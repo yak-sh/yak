@@ -6,9 +6,7 @@ learn([...vocab.docs, ...schemaDocs])
 import { assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { identityEid } from '@yaks/graph'
-import { parse } from '@yaks/query'
 import { cache, useRoute } from '../live.ts'
-import { extend } from './registry.ts'
 import { Navigation, toggleNavigation } from './Navigation.tsx'
 import { fields } from './fields.tsx'
 import { mount } from './mount.ts'
@@ -30,11 +28,6 @@ test('sidebar narrows registry entries and restores folded sections on remount',
       board: { eid: b, query: '.task' },
     },
   }
-  extend([{
-    view: 'Sidebar.Tile',
-    match: parse('.favorite'),
-    Render: ({ e }) => <span>Registry {e.eid == a ? 'Alpha' : 'Beta'}</span>,
-  }])
   fields.set('sidebar:query', '')
   toggleNavigation(true)
   let mounted = mount(h(Navigation, {}))
@@ -52,17 +45,27 @@ test('sidebar narrows registry entries and restores folded sections on remount',
         'Sessions',
       ],
     )
-    assertEquals(mounted.root.textContent!.includes('Registry Beta'), true)
+    assertEquals(mounted.root.textContent!.includes('board'), true)
+    assertEquals(mounted.root.querySelectorAll('a a').length, 0)
+    assertEquals(
+      mounted.root.querySelectorAll('[aria-label="Favorites"] .SidebarTile')
+        .length,
+      2,
+    )
+    assertEquals(
+      mounted.root.querySelector('.SidebarTile_Id')!.textContent,
+      'D-1',
+    )
     fields.set('sidebar:query', 'alpha')
-    await until(() => !mounted.root.textContent!.includes('Registry Beta'))
-    assertEquals(mounted.root.textContent!.includes('Registry Alpha'), true)
+    await until(() => !mounted.root.textContent!.includes('board'))
+    assertEquals(mounted.root.textContent!.includes('Alpha'), true)
     fields.set('sidebar:query', '')
-    await until(() => mounted.root.textContent!.includes('Registry Beta'))
+    await until(() => mounted.root.textContent!.includes('board'))
     let head = mounted.root.querySelector(
       '[aria-label="Favorites"] .Index_Head',
     ) as HTMLElement
     head.click()
-    await until(() => !mounted.root.textContent!.includes('Registry Alpha'))
+    await until(() => !mounted.root.textContent!.includes('Alpha'))
     mounted.free()
     mounted = mount(h(Navigation, {}))
     assertEquals(
@@ -95,11 +98,6 @@ test('expanding a package shows its declared components through the registry', a
       doc: { eid: c, title: 'task' },
     },
   }
-  extend([{
-    view: 'Sidebar.Tile',
-    match: parse('._comp'),
-    Render: () => <span>Registry component</span>,
-  }])
   fields.set('sidebar:query', '')
   toggleNavigation(true)
   let mounted = mount(h(Navigation, {}))
@@ -108,8 +106,12 @@ test('expanding a package shows its declared components through the registry', a
       '[aria-label="Toggle package components"]',
     ) as HTMLElement
     assertEquals(!!button, true)
+    let row = button.closest('.Index_Row')!
+    assertEquals(!!row.querySelector('.Index_Item .SidebarTile'), true)
+    assertEquals(row.querySelector('.Section_Count')!.textContent, '1')
+    assertEquals(mounted.root.querySelectorAll('a a').length, 0)
     button.click()
-    await until(() => mounted.root.textContent!.includes('Registry component'))
+    await until(() => mounted.root.textContent!.includes('task'))
   } finally {
     mounted.free()
     cache.value = {}

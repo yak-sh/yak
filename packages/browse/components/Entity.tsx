@@ -1,4 +1,5 @@
 import '../domain-host.tsx'
+import { SidebarTile } from './views/Sidebar.tsx'
 import { views as commentViews } from '@yaks/kernel/views'
 import { domainBundle } from '../domain-host.tsx'
 import { inspectViews } from './inspect.tsx'
@@ -111,6 +112,7 @@ export { applicable, extend, has, type Renderer, resolve } from './registry.ts'
 // tabs list plus an icon in Card.tsx.
 define([
   ...inspectViews,
+  { view: 'Sidebar.Tile', match: and(), Render: SidebarTile },
   { view: 'Search.Tile', match: and(), Render: SearchTile },
   { view: 'Status', match: parse('.session'), Render: SessionDot },
   // Canvas and List render child entities through this registry. Defer their

@@ -117,6 +117,7 @@ let Sidebar = () => {
     return (
       <Index.Item
         key={e.eid}
+        mod='prose'
         href={pagePath(href)}
         onClickCapture={(ev: MouseEvent) => {
           follow(href)(ev)
@@ -209,24 +210,26 @@ let Sidebar = () => {
               )
               return (
                 <Index.Group key={p.eid}>
-                  <Button
-                    mod='quiet'
-                    type='button'
-                    aria-label='Toggle package components'
-                    aria-expanded={!closed.includes(p.eid)}
-                    onClick={() => fold(p.eid)}
-                  >
-                    {closed.includes(p.eid) ? '▸' : '▾'}
-                  </Button>
-                  {tile(p)}
-                  <Section.Count>
-                    {components.filter((c) =>
-                      sidebarComponent(c)?.package == p.eid
-                    ).length}
-                  </Section.Count>
+                  <Index.Row>
+                    <Button
+                      mod='quiet'
+                      type='button'
+                      aria-label='Toggle package components'
+                      aria-expanded={!closed.includes(p.eid)}
+                      onClick={() => fold(p.eid)}
+                    >
+                      {closed.includes(p.eid) ? '▸' : '▾'}
+                    </Button>
+                    {tile(p)}
+                    <Section.Count>
+                      {components.filter((c) =>
+                        sidebarComponent(c)?.package == p.eid
+                      ).length}
+                    </Section.Count>
+                  </Index.Row>
                   {!closed.includes(p.eid) &&
                     cs.map((c) => (
-                      <Index.Group key={c.eid}>
+                      <Index.Row key={c.eid}>
                         {tile(c)}
                         <Section.Count>
                           {census.error ? '!' : census.ready
@@ -234,7 +237,7 @@ let Sidebar = () => {
                               .carried[String(sidebarComponent(c)?.name)] ?? 0
                             : '…'}
                         </Section.Count>
-                      </Index.Group>
+                      </Index.Row>
                     ))}
                 </Index.Group>
               )

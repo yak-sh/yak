@@ -95,6 +95,24 @@ html {
 .Navigation[data-drop] {
   outline: 2px solid var(--accent);
 }
+.SidebarTile {
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+  min-width: 0;
+}
+.SidebarTile_Title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.SidebarTile_Id {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 0.75em;
+  color: var(--dim);
+}
 .Navigation-body {
   overflow-y: auto;
 }

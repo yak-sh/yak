@@ -47,3 +47,24 @@
   background: var(--soft);
   color: var(--accent);
 }
+
+/* A row holds an entry beside a control or a count, without stacking them. */
+.Index_Row {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  min-width: 0;
+}
+.Index_Item {
+  flex: 1;
+  min-width: 0;
+}
+.Index_Item-prose {
+  font-family: var(--font);
+  font-size: inherit;
+}
+.Index_Head {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+}
