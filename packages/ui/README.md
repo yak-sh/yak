@@ -121,7 +121,7 @@ equal(
 | `Chip`     | a name, as a token                                                                                              | hues `0` to `5`, `ghost`                                                                                                                   |
 | `Value`    | a stored value                                                                                                  | shapes `text` `num` `bool` `id` `time` `json` `nil`                                                                                        |
 | `Pairs`    | `Key`, `Value`                                                                                                  |                                                                                                                                            |
-| `Tile`     | `Id`, `Kind`, `Title`, `Note`, `Count`                                                                          |                                                                                                                                            |
+| `Tile`     | `Icon`, `Id`, `Kind`, `Title`, `Note`, `Count`, `Sub`, `End`                                                    | `on` (the one picked), `hover`, `dim`; `Sub-negative`; `Icon` tones `info` `active` `positive` `negative` `caution` `accent` `special`     |
 | `Rows`     | `Item`, `More`                                                                                                  | `nested`                                                                                                                                   |
 | `Section`  | `Title`, `Count`, `Note`, `Sub`                                                                                 | `Note-refused`                                                                                                                             |
 | `Timeline` | `Item`, `When`, `Who`, `What`                                                                                   |                                                                                                                                            |
@@ -146,6 +146,38 @@ equal(
 A `hover` variant lets specimens show a pseudo-class without a pointer. Every
 piece supplies specimens; use them to see the parts and their variants without
 inventing application behavior.
+
+A `Tile` is one thing in a list. Its pieces are written flat, in any order: the
+tile sets its `Icon`, its words (the title line over the `Sub`) and its `End`
+side by side on a row that never wraps, so the icon keeps its title's line. A
+tile given an `onClick` is a button, picked from its list: `aria-current` says
+whether it is the one `on`.
+
+```ts
+import { h } from 'preact'
+import { renderToString } from 'preact-render-to-string'
+import { Tile } from '@yaks/ui'
+import { equal } from '@yaks/testing'
+
+const pick = () => {}
+equal(
+  renderToString(
+    h(
+      Tile,
+      { mod: 'on', onClick: pick },
+      h(Tile.End, {}, 'Lv 3'),
+      h(Tile.Sub, {}, 'Under way'),
+      h(Tile.Title, {}, 'Wolves at the mill'),
+      h(Tile.Icon, {}, '◆'),
+    ),
+  ),
+  '<button type="button" aria-current="true" class="Tile Tile-on">' +
+    '<span class="Tile_Icon">◆</span><span class="Tile_Text">' +
+    '<span class="Tile_Line"><span class="Tile_Title">Wolves at the mill</span></span>' +
+    '<span class="Tile_Sub">Under way</span></span>' +
+    '<span class="Tile_End">Lv 3</span></button>',
+)
+```
 
 ```ts
 import { kit } from '@yaks/ui'

@@ -1,6 +1,9 @@
-/* One thing on one line: id and kind small and dim, the title taking the
-   room and cut short before it wraps, a note after it, a count at the end.
-   As a link, the whole line is the target. */
+/* One thing in a list. Its title line: id and kind small and dim, the title
+   taking the room and cut short before it wraps, a note after it, a count at
+   the end. With an icon, a sub or an end, the row is the icon, the words (the
+   title line over the sub) and the end side by side; the row never wraps, so
+   the icon keeps its title's line. As a link or a button, the whole row is
+   the target; the one picked is lit. */
 .Tile {
   display: flex;
   align-items: baseline;
@@ -11,9 +14,50 @@
   padding: 1px 0;
   min-height: var(--tap);
 }
+/* A button's reset weighs no more than a class, so the states after it show
+   on a button too. */
+:where(button).Tile {
+  width: 100%;
+  font: inherit;
+  text-align: start;
+  background-color: transparent;
+  border: 0;
+  border-radius: calc(var(--radius) / 2);
+  padding: 1px var(--half-gap);
+  cursor: pointer;
+}
 a.Tile:hover,
 .Tile[data-href]:hover {
-  background: var(--soft);
+  background-color: var(--soft);
+}
+:where(button.Tile):hover,
+.Tile-hover {
+  background-color: color-mix(in srgb, var(--soft) 50%, transparent);
+}
+.Tile-on {
+  background-color: var(--soft);
+}
+.Tile-dim :is(.Tile_Icon, .Tile_Title) {
+  opacity: 0.55;
+}
+.Tile_Icon,
+.Tile_End {
+  flex: none;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+}
+.Tile_Text {
+  flex: 1 1 auto;
+  align-self: center;
+  display: grid;
+  min-width: 0;
+}
+.Tile_Line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+  min-width: 0;
 }
 .Tile_Id,
 .Tile_Kind {
@@ -42,4 +86,36 @@ a.Tile:hover,
   color: var(--number);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+.Tile_Sub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+.Tile_Sub-negative {
+  color: var(--negative);
+}
+.Tile_Icon-info {
+  color: var(--info);
+}
+.Tile_Icon-active {
+  color: var(--active);
+}
+.Tile_Icon-positive {
+  color: var(--positive);
+}
+.Tile_Icon-negative {
+  color: var(--negative);
+}
+.Tile_Icon-caution {
+  color: var(--caution);
+}
+.Tile_Icon-accent {
+  color: var(--accent);
+}
+.Tile_Icon-special {
+  color: var(--special);
 }
