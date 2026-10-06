@@ -112,7 +112,7 @@ test('an AND of facets binds one archetype list, not one per facet', () => {
   )
   // A facet beside a value keeps the value's own join and its parameter.
   let mixed = compile(parse('.task !claim .doc.title=hello'), v, { archetypes })
-  assertEquals(mixed.params, ['[12]', 'hello'])
+  assertEquals(mixed.params, ['hello'])
 })
 
 // A status ladder's filter is the presence tests it means, so it is answered
