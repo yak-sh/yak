@@ -32,7 +32,7 @@ The owner, verbatim:
 - "skills can also work well just for documentation. the auto-trigger is kinda
   what we were searching for with memories"
 - "agents are so bad at prompting. you gotta put vibes no policeis!"
-- "we always want skills to do at least these two things: capture any
+- "we always want skills to do at least these three things: capture any
   principles. capture what tools we have available. and set the vibe and
   attitude, the posture and orientation. we don't want to set policies to
   control behavior"
