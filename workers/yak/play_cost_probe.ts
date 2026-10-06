@@ -40,6 +40,7 @@ export class PlayCost {
         await queryCost(
           this.ctx.storage,
           new URL(req.url).searchParams.has('screened'),
+          new URL(req.url).searchParams.has('stale'),
         ),
       )
     }

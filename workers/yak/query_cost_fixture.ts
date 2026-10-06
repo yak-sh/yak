@@ -1,8 +1,13 @@
 // Real Store query costs: every SQL cursor's billed reads and writes, including boot.
 import { doorOf } from './door.ts'
 import { Store } from './graph.ts'
+import { driver } from '@yaks/durable-object'
+import { col, eq, val } from '@yaks/sql'
+import { queried } from './page-graph.ts'
+import type { App, Space } from './directory.ts'
+import type { Env } from './env.ts'
 import { asking } from './listing.ts'
-import { directory, over } from './directory.ts'
+import { directory, mailbox, over } from './directory.ts'
 import { metaOf } from './meta.ts'
 import type { DurableStorage } from '@yaks/durable-object'
 import type { Cost } from './play_cost_fixture.ts'
@@ -20,13 +25,23 @@ let plus = (a: Cost, b: Cost) => {
   a.written += b.written
   a.calls += b.calls
 }
-export let queryCost = async (db: Storage, screened = false) => {
+export let queryCost = async (db: Storage, screened = false, stale = false) => {
   let headers = {
     'x-store': 'probe/query-cost',
     'x-yak-access': 'public',
     'x-yak-role': 'owner',
     'x-yak-person': 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',
     'x-yak-app': 'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb',
+  }
+  if (stale) {
+    // Match the real page door's stable addressing metadata before measuring.
+    Object.assign(headers, {
+      'x-yak-mail': mailbox(
+        { slug: 'probe' } as Space,
+        { slug: 'query-cost', home: false } as App,
+      ),
+      'x-yak-release': '0',
+    })
   }
   let context = {
     storage: db,
@@ -65,6 +80,16 @@ export let queryCost = async (db: Storage, screened = false) => {
     })))
   )
   await db.deleteAlarm()
+  if (stale) {
+    // Simulate a deploy whose physical schema is current but whose old
+    // description-install marker cannot vouch for the new shape stamp.
+    driver(db).query({
+      t: 'update',
+      table: 'yak_kv',
+      set: { v: val('old-release') },
+      where: eq(col('k'), val('schema-ready')),
+    })
+  }
   let sql = db.sql.exec.bind(db.sql), current = empty()
   let shapes = new Map<string, Cost>()
   db.sql.exec = (query, ...bindings) => {
@@ -94,16 +119,38 @@ export let queryCost = async (db: Storage, screened = false) => {
       current = empty()
       shapes.clear()
       if (name == 'cold') store = new Store(context)
-      let res = await store.fetch(
-        new Request(
-          `http://store/query?q=${
-            encodeURIComponent(
-              screened ? asking('.recipe&.limit=1') : '.recipe&.limit=1',
-            )
-          }`,
-          { headers },
-        ),
-      )
+      let res = stale
+        ? Response.json(
+          await queried(
+            {
+              STORE: {
+                idFromName: (name: string) => name,
+                get: () => ({ fetch: (req: Request) => store.fetch(req) }),
+              },
+            } as unknown as Env,
+            { slug: 'probe' } as Space,
+            {
+              eid: headers['x-yak-app'],
+              slug: 'query-cost',
+              access: 'public',
+              version: null,
+              home: false,
+              store: 'probe/query-cost',
+            } as App,
+            { person: null, role: null },
+            '.recipe&.limit=1',
+          ),
+        )
+        : await store.fetch(
+          new Request(
+            `http://store/query?q=${
+              encodeURIComponent(
+                screened ? asking('.recipe&.limit=1') : '.recipe&.limit=1',
+              )
+            }`,
+            { headers },
+          ),
+        )
       if (!res.ok) throw new Error(await res.text())
       let body = await res.json() as { recipe?: { title?: string } }[]
       if (body.length != 1 || body[0].recipe?.title != 'Recipe 999') {

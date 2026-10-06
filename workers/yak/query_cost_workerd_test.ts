@@ -47,3 +47,12 @@ test('a screened page seeks its answer without loading unrelated archetypes', as
     )
   }
 })
+
+test('the full page query accounts for stale installation and uses lookup', async () => {
+  let k = workerd()
+  let res = await fetch(`${k.base}/__play_cost/?query=1&stale=1`)
+  assertEquals(res.status, 200, await res.clone().text())
+  let report = await res.json() as Awaited<ReturnType<typeof queryCost>>
+  console.log('FULL_QUERY_COST', JSON.stringify(report))
+  for (let value of Object.values(report)) assertEquals(value.cost.written, 0)
+})
