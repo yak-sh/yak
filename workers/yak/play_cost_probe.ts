@@ -62,6 +62,9 @@ export class PlayCost {
           Number(q.get('history') ?? 79000),
           Number(q.get('villagers') ?? 6),
           Number(q.get('turns') ?? 16),
+          Number(q.get('outputs') ?? 0),
+          q.has('cold'),
+          q.has('unsequenced'),
         ),
       )
     }

@@ -393,7 +393,10 @@ test('windowed property filters skip births without their components', () => {
   assertEquals([reads, e.take()], [[], []])
 
   g.apply([{ entity: { eid: 'r1' }, review: { stars: 3 } }])
-  assertEquals(reads, [review, bare])
+  assertEquals(reads, [
+    review + '&.entity.eid=r1',
+    bare + '&.entity.eid=r1',
+  ])
   assertEquals(e.take().map((f) => [f.id, ids(f)]), [
     ['reviews', ['r1']],
     ['bare', ['r1']],
@@ -401,12 +404,12 @@ test('windowed property filters skip births without their components', () => {
 
   reads = []
   g.apply([{ entity: { eid: 'b1' }, book: { price: 9 } }])
-  assertEquals(reads, [book])
+  assertEquals(reads, [book + '&.entity.eid=b1'])
   assertEquals(e.take().map((f) => [f.id, ids(f)]), [['books', ['b1']]])
 
   reads = []
   g.apply([{ entity: { eid: 'b1' }, book: null }])
-  assertEquals(reads, [book])
+  assertEquals(reads, [book + '&.entity.eid=b1'])
   assertEquals(e.take().map((f) => [f.id, f.gone]), [['books', ['b1']]])
 })
 
@@ -434,7 +437,7 @@ test('a created edit on a member refreshes its window', () => {
   g.apply([{ entity: { eid: 'r1' }, doc: { title: 'Edited' } }], {
     now: '2026-01-02T00:00:00.000Z',
   })
-  assertEquals(reads, [query])
+  assertEquals(reads, [query + '&.entity.eid=r1'])
   let [frame] = e.take()
   assertEquals(ids(frame), ['r1'])
   assertEquals(
@@ -518,7 +521,7 @@ test('commits made while a pass reads are one pass after it', async () => {
   }
   hold.resolve()
   await subs.snapshot('.book')
-  assertEquals(reads.filter((q) => q == window).length, 2)
+  assertEquals(reads.filter((q) => q.startsWith(window)).length, 2)
   assertEquals(e.take().map(ids).at(-1), ['b2', 'b3'])
 })
 
@@ -1009,4 +1012,35 @@ test('raw feeds preserve clears while snapshot readers can supply defaults', () 
   equal((subs.snapshot('.book') as Bundle[]).map((b) => comp(b, 'book').cost), [
     0,
   ])
+})
+
+test('local ordered windows query members and births, refill from unseen rows after deletion', () => {
+  let g = shop(), reads: string[] = []
+  let spy: Graph = {
+    ...g,
+    read: (q, o) => (reads.push(String(q)), g.read(q, o)),
+  }
+  g.apply(
+    Array.from(
+      { length: 100 },
+      (_, n) => ({ entity: { eid: `old-${n}` }, book: { price: n + 10 } }),
+    ),
+  )
+  let s = subscriptions(spy), e = ear()
+  let window = '.book&.order=book.price&.limit=2'
+  s.open(e.to, 'window', window)
+  e.take()
+  reads = []
+  g.apply([{ entity: { eid: 'new' }, book: { price: 1 } }])
+  assertEquals(e.take().map(ids).at(-1), ['new', 'old-0'])
+  assertEquals(reads.length, 1)
+  assertEquals(reads[0].startsWith(window + '&.entity.eid='), true)
+  reads = []
+  g.apply([{ entity: { eid: 'new' }, book: { price: 20 } }])
+  assertEquals(e.take().map(ids).at(-1), ['old-0', 'old-1'])
+  assertEquals(reads, [window])
+  reads = []
+  g.apply([{ entity: { eid: 'old-0' }, $delete: true }])
+  assertEquals(e.take().map(ids).at(-1), ['old-1', 'old-2'])
+  assertEquals(reads, [window])
 })

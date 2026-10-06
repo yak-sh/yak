@@ -1112,8 +1112,45 @@ export let subscriptions = (graph: Graph, opts: {
               }
               return send(s, moved)
             }
+            // An ordered window can change only at the named local rows.
+            // Re-select its existing members plus those rows, not every old
+            // entry. A missing replacement (delete/filter exit) falls back to
+            // the full query, since an unseen row may fill the window then.
+            let ast = s.ast ?? parse(s.query)
+            let limit = ast.clauses.find((c) => c.kind == 'limit')
+            if (
+              limit?.kind == 'limit' && !s.peer && !s.view && !s.agg &&
+              s.reads && !s.reads.unseen && !s.reads.far.size &&
+              !s.reads.via.size && s.reads.own.length &&
+              !ast.clauses.some((c) => c.kind == 'after') &&
+              (s.members.size < limit.n ||
+                ![...noticedBy.get(s)!].some((id) => s.members.has(id)))
+            ) {
+              let local = affected(
+                { ...s, reads: { ...s.reads, whole: false } },
+                touch,
+                noticedBy.get(s)!,
+              )
+              if (local === undefined) return
+              if (local) {
+                let candidates = [...new Set([...s.members, ...local])]
+                if (
+                  candidates.some((id) => !/^[a-zA-Z0-9_-]+$/.test(id))
+                ) return push(s, undefined, load)
+                let q = s.query + '&.entity.eid=' + candidates.join(',')
+                let loaded = load(s, q)
+                return after(loaded, (answer) => {
+                  return push(s, undefined, () =>
+                    s.members.size >= limit.n && answer.found.length < limit.n
+                      ? load(s, s.query)
+                      : answer)
+                })
+              }
+            }
             let scope = affected(s, touch, noticedBy.get(s)!)
-            if (scope === undefined) return
+            if (scope === undefined) {
+              return
+            }
             return push(s, scope ?? undefined, load)
           })),
         () => undefined,

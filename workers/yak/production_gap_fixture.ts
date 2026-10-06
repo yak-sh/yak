@@ -60,6 +60,9 @@ export let productionGap = async (
   history = 79000,
   villagers = 6,
   turns = 16,
+  outputs = 0,
+  cold = false,
+  unsequenced = false,
 ) => {
   let person = crypto.randomUUID(), app = crypto.randomUUID()
   let live: ReturnType<typeof wire>[] = []
@@ -156,7 +159,7 @@ export let productionGap = async (
   )
   // The GIVERS catalogue determines the real scheduled population; this is
   // parameterized to compare one local region with all retained villagers.
-  let people = GIVERS.slice(0, villagers)
+  let people = GIVERS.filter((g) => g.level == 'mossvale').slice(0, villagers)
   let think = (await import('@yaks/tools')).toolEid('think')
   for (let giver of people) {
     let id = eidOf(giver.id)
@@ -180,11 +183,50 @@ export let productionGap = async (
     await g.storage.tx((tx) =>
       tx.patch(Array.from({ length: turns }, (_, j): Bundle => ({
         entity: { eid: crypto.randomUUID() },
-        entry: { session: id, seq: j + 1 },
+        entry: { session: id, ...unsequenced ? {} : { seq: j + 1 } },
         content: { body: 'A synthetic past villager turn.' },
         ...(j % 2 ? { stop: {} } : { notice: {} }),
       })))
     )
+  }
+  if (outputs) {
+    let builder = crypto.randomUUID()
+    await g.storage.tx((tx) =>
+      tx.patch([{ entity: { eid: builder }, builder: { query: '.sfx' } }])
+    )
+    for (let n = 0; n < outputs; n++) {
+      let source = crypto.randomUUID(),
+        build = crypto.randomUUID(),
+        artifact = crypto.randomUUID(),
+        output = crypto.randomUUID()
+      await g.storage.tx((tx) =>
+        tx.patch([
+          { entity: { eid: source }, sfx: { name: `retained-${n}` } },
+          {
+            entity: { eid: build },
+            build: {
+              builder,
+              match: JSON.stringify([source]),
+              variant: 'main',
+              for: source,
+            },
+          },
+          {
+            entity: { eid: artifact },
+            artifact: {
+              address: 'a'.repeat(64),
+              media_type: 'audio/wav',
+              size: 1,
+            },
+          },
+          {
+            entity: { eid: output },
+            chosen: {},
+            built: { build, slot: 'sound', artifact },
+          },
+        ])
+      )
+    }
   }
   store = new Store(context, binds)
   g = store.door.graph
@@ -197,6 +239,27 @@ export let productionGap = async (
   let ws = wire(person)
   live.push(ws)
   await store.fetch(new Request('http://store/vocab', { headers }))
+  let watched = [
+    '.sfx',
+    '.built.current=true&.built.artifact&.built.build.build.variant=main&.fields=built.build.build.for.sfx.name,built.artifact.artifact.address,built.artifact.artifact.media_type',
+    '.failed&.build.variant=main&.build.for.spawned.x&.fields=failed.reason,failed.at,build.variant,build.for.spawned.x,build.for.created.by,build.for.doc.body&.order=-failed.at&.limit=40',
+    '.villager.level=mossvale&*',
+    `.entry.session=${
+      people.map((g) => eidOf(g.id)).join(',')
+    }&.output&?content&?answer&?created&.order=-created.at&.limit=60`,
+    `.going.villager=${
+      people.map((g) => eidOf(g.id)).join(',')
+    }&?created&.order=-created.at&.limit=60`,
+  ]
+  if (outputs) {
+    for (let [i, subscribe] of watched.entries()) {
+      await store.webSocketMessage(
+        ws,
+        JSON.stringify({ id: `keep${i}`, subscribe }),
+      )
+    }
+  }
+  await settleWorld(store, storage)
   let before = await g.read('.wake&?call&?villager')
   let at = Date.now()
   await store.webSocketMessage(
@@ -242,6 +305,7 @@ export let productionGap = async (
       [Symbol.iterator]: () => rows.values(),
     }
   }
+  if (cold) store = new Store(context, binds)
   let now = Date.now
   Date.now = () => at + 301000
   try {
@@ -252,11 +316,17 @@ export let productionGap = async (
     })
     p.flush(Infinity)
     storage.sql.exec = exec
-    let answers = (await g.read('.answer&?entry')).length
+    let actual = store.door.graph
+    let answers = (await actual.read('.answer&?entry')).length
+    let failures = await actual.read('.exception|.refusal|.error *')
     return {
       answers,
+      failures,
       before,
       history,
+      outputs,
+      cold,
+      unsequenced,
       villagers: people.length,
       turns,
       total,
