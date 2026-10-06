@@ -74,6 +74,8 @@ let setup = async (guard = false, expanded = false, shuffled = false) => {
     ],
   })
   await g.apply([
+    { entity: { eid: 'club' }, space: { name: 'Vale' } },
+    { entity: { eid: 'owner' }, person: { name: 'Owner' } },
     {
       entity: { eid: packageEid(app.package) },
       _package: { name: app.package },

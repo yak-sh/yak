@@ -17,9 +17,10 @@ test('two heroes invite and accept through their pages into one party', async ()
   seedDesigns()
   let vocab = appVocab(words)
   let store = graph({ vocab, storage: ram(vocab) })
-  for (let id of ['a', 'b']) {
+  let heroes = { a: crypto.randomUUID(), b: crypto.randomUUID() }
+  for (let id of ['a', 'b'] as const) {
     store.apply(signed([{
-      entity: { eid: `hero-${id}` },
+      entity: { eid: heroes[id] },
       player: {},
     }], { by: `owner-${id}` }))
   }
@@ -33,7 +34,7 @@ test('two heroes invite and accept through their pages into one party', async ()
   let close: (() => void)[] = []
   try {
     let pages: { party: ReturnType<typeof parties>; tick: () => unknown }[] = []
-    for (let id of ['a', 'b']) {
+    for (let id of ['a', 'b'] as const) {
       let socket = pair()
       let handler = api({
         graph: store,
@@ -58,7 +59,7 @@ test('two heroes invite and accept through their pages into one party', async ()
       socket.server.emit('open')
       socket.client.emit('open')
       let net = page.world()
-      net.choose(`hero-${id}`)
+      net.choose(heroes[id])
       let party = parties(net)
       party.me({
         person: `owner-${id}`,
@@ -74,7 +75,7 @@ test('two heroes invite and accept through their pages into one party', async ()
     let [a, b] = pages
     let tick = () => pages.forEach((p) => p.tick())
     await until(() => (tick(), a.party.canJoin && b.party.canJoin))
-    assertEquals(await a.party.invite('hero-b'), true)
+    assertEquals(await a.party.invite(heroes.b), true)
     await until(() => (tick(), b.party.invites.length == 1))
     let invite = b.party.invites[0]
     assertEquals(await b.party.accept(invite), true)
@@ -83,17 +84,17 @@ test('two heroes invite and accept through their pages into one party', async ()
         a.party.members.length == 2 && b.party.members.length == 2),
     )
     assertEquals(a.party.group, b.party.group)
-    assertEquals(a.party.members.map((m) => m.eid).sort(), [
-      'hero-a',
-      'hero-b',
-    ])
+    assertEquals(
+      a.party.members.map((m) => m.eid).sort(),
+      [heroes.a, heroes.b].sort(),
+    )
     assertEquals(b.party.invites, [])
     let replies = await store.read('.party_reply&*') as Bundle[]
     assertEquals(replies.map((r) => [writer(r), r.party_reply]), [[
       'owner-b',
       {
         invite: invite.eid,
-        to: 'hero-b',
+        to: heroes.b,
         accept: true,
       },
     ]])
