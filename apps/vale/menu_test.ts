@@ -65,40 +65,35 @@ test('menu sections show icons and keep their rows while settings change', () =>
       'false',
       'false',
     ])
-    assertEquals(
-      document.querySelector<HTMLElement>('[data-section=audio]')!.hidden,
-      true,
-    )
-    assertEquals(
-      document.querySelector<HTMLElement>('[data-section=display]')!.hidden,
-      false,
-    )
+    assertEquals(document.querySelector('[data-section=audio]'), null)
+    assertEquals(!!document.querySelector('[data-section=display]'), true)
     assertEquals(document.querySelector('[data-select=audio]'), rows[0])
     let slider = document.querySelector<HTMLInputElement>('[data-voxel]')!
     let button = document.querySelector<HTMLButtonElement>('[data-do=voxel]')!
     let choice = document.querySelector('[data-voxel-choice]')!
-    let cost = document.querySelector<HTMLElement>('[data-voxel-cost]')!
+    let cost = () => document.querySelector<HTMLElement>('[data-voxel-cost]')
     assertEquals(choice.textContent, '0.25 m')
     assertEquals(button.disabled, true)
+    assertEquals(cost(), null)
     slider.value = '0'
     slider.dispatchEvent(new window.Event('input', { bubbles: true }))
     assertEquals(choice.textContent, '0.125 m')
     assertEquals(button.disabled, false)
-    assertEquals(cost.hidden, false)
-    assertStringIncludes(cost.textContent ?? '', 'four times')
+    assertStringIncludes(cost()?.textContent ?? '', 'four times')
     assertEquals(chosen, null)
     button.dispatchEvent(new window.Event('click', { bubbles: true }))
     assertEquals(chosen, 0.125)
     slider.value = '1'
     slider.dispatchEvent(new window.Event('input', { bubbles: true }))
     assertEquals(button.disabled, true)
-    document.querySelector<HTMLElement>('[data-do=frames]')!.dispatchEvent(
-      new window.Event('click', { bubbles: true }),
-    )
+    let rates = () =>
+      [...document.querySelectorAll<HTMLElement>('[data-do=frames]')].map((
+        b,
+      ) => [b.textContent, b.getAttribute('aria-pressed')])
+    assertEquals(rates(), [['60 fps', 'true'], ['30 fps', 'false']])
+    document.querySelectorAll<HTMLElement>('[data-do=frames]')[1]
+      .dispatchEvent(new window.Event('click', { bubbles: true }))
     assertEquals(frames.current, 30)
     settings.show()
-    assertStringIncludes(
-      document.body.textContent ?? '',
-      '30 fps · lower power',
-    )
+    assertEquals(rates(), [['60 fps', 'false'], ['30 fps', 'true']])
   }, '<html><body></body></html>'))

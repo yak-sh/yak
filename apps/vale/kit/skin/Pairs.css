@@ -1,19 +1,26 @@
 /* Vale's rendering of Pairs: names beside their values, a row each, the
-   names muted in a column as wide as the widest, the values in ink. */
+   names muted in a column as wide as the widest, the values in ink, each
+   row's name level with the middle of its value. */
 .Pairs {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
   gap: 0.35rem 0.8rem;
-  align-items: baseline;
+  align-items: center;
   margin: 0;
   font-size: 0.9rem;
 }
 .Pairs_Key {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.2rem;
+  align-items: center;
+  gap: 0.2rem 0.35rem;
   color: var(--muted);
+
+  & .Glyph {
+    flex: none;
+    width: 1.1em;
+    height: 1.1em;
+  }
 }
 .Pairs_Value {
   min-width: 0;

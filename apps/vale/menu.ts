@@ -1,15 +1,18 @@
 // The menu, drawn into its tab (panel.ts): what a player sets for
-// themselves, the vale's sound and camera controls, and every
-// key and touch the vale answers. The tray's last button opens it, and so does
-// Escape when nothing else is open.
-import { h } from 'preact'
-import { Rows, Tile } from '@yaks/ui'
+// themselves, the vale's sound, display and camera, and every key and touch
+// the vale answers, each section picked from the list beside it. A setting is
+// its name beside what it is now: a choice of a few, the one taken pressed in,
+// or a slider. The tray's last button opens it, and so does Escape when
+// nothing else is open.
+import { type ComponentChildren, h } from 'preact'
+import { Button, Pairs, Rows, Section, Tile } from '@yaks/ui'
 import { type Glyph, glyph } from './glyphs.ts'
 import { SHEETS } from './hud.ts'
 import { type Action, keysOf } from './input.ts'
+import { ValeKeycap } from './kit/ValeKeycap.ts'
 import { cap, type Page } from './panel.ts'
 import { VOXEL, VOXELS } from './terrain.ts'
-import { picture } from './tile.ts'
+import { mark, picture } from './tile.ts'
 import { split } from './ui/split.ts'
 
 /** What the menu sets, and how it reads what is set. */
@@ -49,46 +52,265 @@ let DOES: [Action, string][] = [
   ['mic', 'Microphone'],
 ]
 
-let kbd = (keys: string[]) =>
-  keys.map((k) => `<kbd class=Key>${k}</kbd>`).join(' ')
+// Keys as caps, or a gesture in words.
+type Keys = string[] | string
 
-let keys = (swapped: boolean, strafes: boolean) =>
-  [
-    [kbd(['W', 'S', '↑', '↓']), 'Walk forward or back'],
-    [kbd(['A', 'D']), strafes ? 'Strafe' : 'Turn with the camera'],
-    [kbd(['←', '→']), 'Turn with the camera'],
-    [swapped ? 'right drag' : 'left drag', 'Turn the camera and your hero'],
-    [swapped ? 'left drag' : 'right drag', 'Orbit without turning your hero'],
-    ['left + right mouse buttons', 'Walk forward; move the mouse to steer'],
-    [`wheel`, 'Nearer or further'],
-    ...DOES.map(([a, what]) => [kbd(keysOf(a).map(cap)), what]),
-    [kbd(['Enter']), 'Chat'],
-    ...Object.values(SHEETS.hero.tabs).filter((t) => t.keys.length)
-      .map((t) => [kbd(t.keys.map(cap)), t.title]),
-  ].map(([k, what]) => `<dt>${k}</dt><dd>${what}</dd>`).join('')
+let keys = (swapped: boolean, strafes: boolean): [Keys, string][] => [
+  [['W', 'S', '↑', '↓'], 'Walk forward or back'],
+  [['A', 'D'], strafes ? 'Strafe' : 'Turn with the camera'],
+  [['←', '→'], 'Turn with the camera'],
+  [swapped ? 'Right drag' : 'Left drag', 'Turn the camera and your hero'],
+  [swapped ? 'Left drag' : 'Right drag', 'Orbit without turning your hero'],
+  ['Both mouse buttons', 'Walk forward; move the mouse to steer'],
+  ['Wheel', 'Nearer or further'],
+  ...DOES.map(([a, what]): [Keys, string] => [keysOf(a).map(cap), what]),
+  [['Enter'], 'Chat'],
+  ...Object.values(SHEETS.hero.tabs).filter((t) => t.keys.length)
+    .map((t): [Keys, string] => [t.keys.map(cap), t.title]),
+]
 
-let TOUCH = [
+let TOUCH: [Keys, string][] = [
   ['Left thumb', 'Move, wherever it lands'],
   ['Drag on the right', 'Look around'],
   ['Tap the world', 'Strike'],
-].map(([k, what]) => `<dt>${k}</dt><dd>${what}</dd>`).join('')
+]
+
+// What a key or a gesture does, a pair each.
+let pairs = (rows: [Keys, string][]) =>
+  h(
+    Pairs,
+    {},
+    rows.map(([k, what]) => [
+      h(
+        Pairs.Key,
+        { key: `${k}` },
+        typeof k == 'string'
+          ? k
+          : k.map((keycap) => h(ValeKeycap, { key: keycap, keycap })),
+      ),
+      h(Pairs.Value, { key: `${k}:does` }, what),
+    ]),
+  )
+
+let SECTIONS: [string, string, Glyph][] = [
+  ['audio', 'Audio', 'sound'],
+  ['display', 'Display', 'video'],
+  ['controls', 'Controls', 'cog'],
+  ['touch', 'Touch', 'handHeart'],
+  ['keys', 'Keys', 'menu'],
+]
 
 /** The menu, answering `o`. */
 export let menu = (panel: Page, o: Settings) => {
   let panes = split(panel.body)
   let picked = 'audio'
-  let sections: [string, string, Glyph][] = [
-    ['audio', 'Audio', 'sound'],
-    ['display', 'Display', 'video'],
-    ['controls', 'Controls', 'cog'],
-    ['touch', 'Touch', 'handHeart'],
-    ['keys', 'Keys', 'menu'],
+  // The ground's voxel size picked, which shows only once applied.
+  let voxel = VOXELS.includes(o.voxel.current) ? o.voxel.current : VOXEL
+  let was = ''
+
+  // A setting: its name beside its control.
+  let setting = (icon: Glyph, name: string, control: ComponentChildren) => [
+    h(Pairs.Key, { key: name }, mark(icon), name),
+    h(Pairs.Value, { key: `${name}:is` }, control),
   ]
-  let rows = () =>
+  // A choice of a few, the one taken pressed in.
+  let choice = (act: string, options: [string, boolean, () => void][]) =>
+    h(
+      'span',
+      { class: 'Settings_Choice' },
+      options.map(([words, on, take]) =>
+        h(Button, {
+          key: words,
+          type: 'button',
+          'data-do': act,
+          'aria-pressed': on,
+          onClick: () => {
+            if (!on) take()
+            paint()
+          },
+        }, words)
+      ),
+    )
+  let onOff = (act: string, on: boolean, flip: () => void) =>
+    choice(act, [['On', on, flip], ['Off', !on, flip]])
+  let slider = (name: string, level: Level) => {
+    let value = Math.round(level.level * 100)
+    return h(
+      'span',
+      { class: 'Settings_Slider' },
+      h('input', {
+        type: 'range',
+        min: 0,
+        max: 100,
+        value,
+        'aria-label': name,
+        'data-volume': name,
+        onInput: (e: Event) => {
+          level.set(Number((e.target as HTMLInputElement).value) / 100)
+          paint()
+        },
+      }),
+      h('output', {}, `${value}%`),
+    )
+  }
+
+  let section = (id: string, ...body: ComponentChildren[]) => {
+    let [, title, icon] = SECTIONS.find(([s]) => s == id)!
+    return h(
+      Section,
+      { 'data-section': id },
+      h(Section.Title, {}, mark(icon), title),
+      ...body,
+    )
+  }
+  let ground = () =>
+    h(
+      Section,
+      {},
+      h(
+        Section.Title,
+        {},
+        mark('mountain'),
+        'Ground detail',
+        h(Section.Count, { 'data-voxel-choice': '' }, `${voxel} m`),
+      ),
+      h(
+        'span',
+        { class: 'Settings_Slider' },
+        h('input', {
+          type: 'range',
+          min: 0,
+          max: VOXELS.length - 1,
+          step: 1,
+          value: VOXELS.indexOf(voxel),
+          'aria-label': 'Terrain voxel size',
+          'data-voxel': '',
+          onInput: (e: Event) => {
+            let at = Number((e.target as HTMLInputElement).value)
+            voxel = VOXELS[at] ?? o.voxel.current
+            paint()
+          },
+        }),
+      ),
+      h(Section.Sub, {}, 'Fine, 0.125 m, to chunky, 2 m.'),
+      h(
+        Section.Sub,
+        {},
+        `Now ${o.voxel.current} m. Reloads at your spot to compare. The ` +
+          `layout and placements stay; terrain steps can shift as the surface ` +
+          `is sampled and rounded.`,
+      ),
+      voxel == 0.125 &&
+        h(
+          Section.Sub,
+          { 'data-voxel-cost': '' },
+          '0.125 m makes about four times as much ground geometry as ' +
+            '0.25 m, and nearby trees and rocks gain detail. Loading can ' +
+            'take several seconds and frame rate may drop.',
+        ),
+      h(Button, {
+        type: 'button',
+        mod: 'go',
+        class: 'Settings_Apply',
+        'data-do': 'voxel',
+        disabled: voxel == o.voxel.current,
+        onClick: () => o.voxel.apply(voxel),
+      }, 'Apply and reload'),
+    )
+
+  let detail = () => {
+    let swapped = o.swapped(), strafes = o.strafes()
+    if (picked == 'audio') {
+      return section(
+        'audio',
+        h(
+          Pairs,
+          {},
+          setting(
+            o.muted() ? 'soundOff' : 'sound',
+            'Sound',
+            onOff('sound', !o.muted(), o.mute),
+          ),
+          setting(
+            o.music.muted ? 'soundOff' : 'sound',
+            'Music',
+            onOff('music', !o.music.muted, o.music.toggle),
+          ),
+          setting('sound', 'Music volume', slider('music', o.music)),
+          setting('sound', 'Effects volume', slider('effects', o.effects)),
+          setting('talk', 'Voice volume', slider('voice', o.voice)),
+        ),
+      )
+    }
+    if (picked == 'display') {
+      let rate = o.frames.current
+      let set = (r: 30 | 60) => () => o.frames.set(r)
+      return [
+        section(
+          'display',
+          h(
+            Pairs,
+            {},
+            setting(
+              'video',
+              'Frame rate',
+              choice('frames', [
+                ['60 fps', rate == 60, set(60)],
+                ['30 fps', rate == 30, set(30)],
+              ]),
+            ),
+          ),
+          h(
+            Section.Sub,
+            {},
+            '60 fps moves more smoothly; 30 fps spends less power.',
+          ),
+        ),
+        ground(),
+      ]
+    }
+    if (picked == 'controls') {
+      return section(
+        'controls',
+        h(
+          Pairs,
+          {},
+          setting(
+            'video',
+            'Steer with',
+            choice('swap', [
+              ['Left drag', !swapped, o.swap],
+              ['Right drag', swapped, o.swap],
+            ]),
+          ),
+          setting(
+            'eye',
+            'Cursor when steering',
+            choice('hideCursor', [
+              ['Hidden', o.hidesCursor(), o.hideCursor],
+              ['Shown', !o.hidesCursor(), o.hideCursor],
+            ]),
+          ),
+          setting(
+            'footprints',
+            'A and D',
+            choice('strafe', [
+              ['Turn', !strafes, o.strafe],
+              ['Strafe', strafes, o.strafe],
+            ]),
+          ),
+        ),
+      )
+    }
+    if (picked == 'touch') return section('touch', pairs(TOUCH))
+    return section('keys', pairs(keys(swapped, strafes)))
+  }
+
+  let list = () =>
     h(
       Rows,
       {},
-      sections.map(([id, title, icon]) =>
+      SECTIONS.map(([id, title, icon]) =>
         h(
           Tile,
           {
@@ -97,7 +319,7 @@ export let menu = (panel: Page, o: Settings) => {
             'data-select': id,
             onClick: () => {
               picked = id
-              select()
+              paint()
             },
           },
           picture(glyph(icon)),
@@ -105,163 +327,23 @@ export let menu = (panel: Page, o: Settings) => {
         )
       ),
     )
-  let content = ''
-  let select = () => {
-    panes.render(rows(), content, picked)
-    for (
-      let part of panes.detail.querySelectorAll<HTMLElement>('[data-section]')
-    ) {
-      part.hidden = part.dataset.section != picked
-    }
-  }
-  let was = ''
-  let selected = VOXELS.includes(o.voxel.current) ? o.voxel.current : VOXEL
-  let volumes = { music: o.music, effects: o.effects, voice: o.voice }
-  panel.body.addEventListener('click', (e) => {
-    let act = e.target instanceof Element
-      ? e.target.closest<HTMLElement>('[data-do]')?.dataset.do
-      : null
-    if (act == 'sound') o.mute()
-    if (act == 'music') o.music.toggle()
-    if (act == 'swap') o.swap()
-    if (act == 'hideCursor') o.hideCursor()
-    if (act == 'strafe') o.strafe()
-    if (act == 'frames') o.frames.set(o.frames.current == 60 ? 30 : 60)
-    if (act == 'voxel' && selected != o.voxel.current) {
-      o.voxel.apply(selected)
-    }
-    if (
-      act == 'sound' || act == 'music' || act == 'swap' ||
-      act == 'strafe' || act == 'hideCursor' || act == 'frames'
-    ) {
-      was = ''
-    }
-  })
-  panel.body.addEventListener('input', (e) => {
-    if (!(e.target instanceof HTMLInputElement)) return
-    if (e.target.dataset.voxel != null) {
-      selected = VOXELS[Number(e.target.value)] ?? o.voxel.current
-      let choice = panel.body.querySelector('[data-voxel-choice]')
-      if (choice) choice.textContent = `${selected} m`
-      let apply = panel.body.querySelector<HTMLButtonElement>(
-        '[data-do=voxel]',
-      )
-      if (apply) apply.disabled = selected == o.voxel.current
-      let cost = panel.body.querySelector<HTMLElement>('[data-voxel-cost]')
-      if (cost) cost.hidden = selected != 0.125
-      return
-    }
-    let name = e.target.dataset.volume
-    let level = name == 'music'
-      ? volumes.music
-      : name == 'effects'
-      ? volumes.effects
-      : name == 'voice'
-      ? volumes.voice
-      : null
-    if (!level) return
-    level.set(Number(e.target.value) / 100)
-    let value = e.target.parentElement?.querySelector('output')
-    if (value) value.textContent = `${e.target.value}%`
-  })
-  let toggle = (act: string, on: boolean, icon: string, what: string) =>
-    `<button class="Menu_Set${
-      on ? ' Menu_Set-on' : ''
-    }" data-do=${act} aria-pressed=${on}>${icon}<span>${what}</span></button>`
-  let slider = (name: keyof typeof volumes, label: string) => {
-    let value = Math.round(volumes[name].level * 100)
-    return `<div class=Menu_Volume>` +
-      `<label for=Menu_${name}>${label}</label>` +
-      `<output for=Menu_${name}>${value}%</output>` +
-      `<input id=Menu_${name} type=range data-volume=${name} ` +
-      `min=0 max=100 value=${value}></div>`
-  }
-  let voxel = () => {
-    let index = VOXELS.indexOf(selected)
-    return `<div class="Menu_Volume Menu_Voxel">` +
-      `<label for=Menu_voxel>Terrain voxel size</label>` +
-      `<output for=Menu_voxel data-voxel-choice>${selected} m</output>` +
-      `<input id=Menu_voxel type=range data-voxel min=0 max=${
-        VOXELS.length - 1
-      } step=1 value=${index}>` +
-      `<div class=Menu_VoxelTicks><span>Fine · 0.125 m</span>` +
-      `<span>Chunky · 2 m</span></div>` +
-      `<p class=Menu_VoxelNote>Current: ${o.voxel.current} m. Reloads at your ` +
-      `spot to compare. The layout and placements stay; terrain steps can ` +
-      `shift as the surface is sampled and rounded.</p>` +
-      `<p class=Menu_VoxelNote data-voxel-cost${
-        selected == 0.125 ? '' : ' hidden'
-      }>0.125 m makes about four times as much ground geometry as 0.25 m, ` +
-      `and nearby trees and rocks gain detail. Loading can take several ` +
-      `seconds and frame rate may drop.</p>` +
-      `<button class="Btn Btn-go" data-do=voxel${
-        selected == o.voxel.current ? ' disabled' : ''
-      }>Apply and reload</button></div>`
-  }
+  let paint = () => panes.render(list(), h('div', {}, detail()), picked)
+
   return {
     /** show what is set, when the menu is open and it changed */
     show: () => {
       if (!panel.open) return
-      let sound = !o.muted(), swapped = o.swapped()
-      let strafes = o.strafes()
-      let hidesCursor = o.hidesCursor()
-      let playing = !o.music.muted
-      let key =
-        `${sound} ${playing} ${swapped} ${strafes} ${o.frames.current} ${hidesCursor}`
+      let key = [
+        o.muted(),
+        o.music.muted,
+        o.swapped(),
+        o.strafes(),
+        o.frames.current,
+        o.hidesCursor(),
+      ].join()
       if (key == was) return
       was = key
-      let html = `<div class=Menu><section data-section=audio>` +
-        toggle(
-          'sound',
-          sound,
-          glyph(sound ? 'sound' : 'soundOff'),
-          sound ? 'Sound is on' : 'Sound is off',
-        ) +
-        toggle(
-          'music',
-          playing,
-          glyph(playing ? 'sound' : 'soundOff'),
-          playing ? 'Music is on' : 'Music is off',
-        ) +
-        slider('music', 'Music volume') +
-        slider('effects', 'Effects and ambience volume') +
-        slider('voice', 'Player voice volume') +
-        `</section><section data-section=display>` + voxel() +
-        toggle(
-          'frames',
-          o.frames.current == 30,
-          glyph('video'),
-          o.frames.current == 30
-            ? 'Frame rate: 30 fps · lower power'
-            : 'Frame rate: 60 fps · smoother motion',
-        ) +
-        `</section><section data-section=controls>` + toggle(
-          'swap',
-          swapped,
-          glyph('video'),
-          swapped
-            ? 'Right drag steers; left drag looks'
-            : 'Left drag steers; right drag looks',
-        ) +
-        toggle(
-          'hideCursor',
-          hidesCursor,
-          glyph('video'),
-          'Hide cursor when steering',
-        ) +
-        toggle(
-          'strafe',
-          strafes,
-          glyph('footprints'),
-          strafes ? 'A/D strafes' : 'A/D turns',
-        ) +
-        `</section><section data-section=touch><h3 class=Menu_Head>Touch</h3><dl class="Menu_Keys Menu_Keys-touch">${TOUCH}</dl>` +
-        `</section><section data-section=keys><h3 class=Menu_Head>Keys</h3><dl class="Menu_Keys Menu_Keys-keys">${
-          keys(swapped, strafes)
-        }</dl>` +
-        `</section></div>`
-      content = html
-      select()
+      paint()
     },
   }
 }

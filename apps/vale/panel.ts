@@ -9,18 +9,12 @@
 // with a body and keys of its own, one shown at a time: its key or its tab
 // opens the panel on it, and its key again, while it shows, folds it away.
 // Each tab's owner holds it as it would a panel of its own.
-import { type Glyph, glyph } from './glyphs.ts'
+import type { Glyph } from './glyphs.ts'
 import { h, render } from 'preact'
 import { Body, Button, Head, Tabs } from '@yaks/ui'
 import { ValeKeycap } from './kit/ValeKeycap.ts'
 import { type PageState, pageState } from './page-state.ts'
-
-// A glyph beside words, which a screen reader passes over.
-let mark = (icon: Glyph) =>
-  h('span', {
-    'aria-hidden': 'true',
-    dangerouslySetInnerHTML: { __html: glyph(icon) },
-  })
+import { mark } from './tile.ts'
 
 /** Where an owner draws, and whether it shows: a panel, or one tab of one. */
 export type Page = {

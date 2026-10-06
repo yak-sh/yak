@@ -172,10 +172,12 @@ export let LISTS: [string, Tab | Own, Draw][] = [
     ledger(p, preview, state).show(hero(), job())
     pick('[data-select=forge]')
   }],
-  ['menu', 'menu', (p, pick) => {
+  ...['audio', 'display', 'controls', 'keys'].map((
+    section,
+  ): [string, Tab, Draw] => [`menu ${section}`, 'menu', (p, pick) => {
     menu(p, settings()).show()
-    pick('[data-select=controls]')
-  }],
+    pick(`[data-select=${section}]`)
+  }]),
   ['skills', 'skills', (p, pick) => {
     let view = board(p, { learn: () => {}, respec: () => {} })
     let frame = { sheet: hero(), rack: true } as Parameters<
