@@ -7,9 +7,9 @@ import { UnknownSession } from './unknown.ts'
 
 let entry = (b: Bundle | undefined) => b?.entry as Comp | undefined
 
-export let sequencing: Hook = (bundles, tx) =>
+export let sequencing: Hook = (bundles, tx, _err, context) =>
   after(
-    tx.get(bundles.filter((b) => b.entry).map((b) => b.entity.eid)),
+    tx.get(bundles.filter((b) => b.entry).map((b) => b.entity.eid), ['entry']),
     (existing) => {
       let groups = new Map<string, Bundle[]>()
       for (let b of bundles) {
@@ -64,7 +64,8 @@ export let sequencing: Hook = (bundles, tx) =>
           after(
             tx.read(
               parse(
-                '.entry.session=' + session + '&.order=-entry.seq&.limit=1',
+                '.entry.session=' + session +
+                  '&.order=-entry.seq&.limit=1&.fields=entry.session,entry.seq',
               ),
             ),
             (latest) =>
@@ -83,7 +84,7 @@ export let sequencing: Hook = (bundles, tx) =>
                             .map((
                               b,
                             ) => Number(entry(b)!.seq)),
-                        ),
+                        ) + '&.fields=entry.session,entry.seq',
                     ),
                   )
                   : [],
@@ -93,70 +94,89 @@ export let sequencing: Hook = (bundles, tx) =>
                     ...latest,
                     ...collisions,
                   ]
-                  return after(tx.get([session]), (found) => {
-                    if (
-                      !found[0]?.session &&
-                      !bundles.some((b) => b.entity.eid == session && b.session)
-                    ) throw new UnknownSession(session)
-                    let self = bundles.find((b) =>
-                      b.entity.eid == session && b.fork
-                    ) ?? found[0]
-                    let from = (self?.fork as Comp | undefined)?.from
-                    let anchorInBatch = bundles.find((b) =>
-                      b.entity.eid == from
-                    )
-                    return after(
-                      from && !anchorInBatch ? tx.get([String(from)]) : [],
-                      (anchors) => {
-                        let floor = Number(
-                          entry(
-                            anchorInBatch ?? anchors[0] ??
-                              { entity: { eid: '' } },
-                          )?.seq ?? 0,
-                        )
-                        let max = Math.max(
-                          floor,
-                          ...own.map((b) => Number(entry(b)?.seq ?? 0)),
-                        )
-                        let occupied = new Map(
-                          own.map((b) => [Number(entry(b)?.seq), b.entity.eid]),
-                        )
-                        for (let b of sessionBundles) {
-                          let e = entry(b)!
-                          let old = own.find((o) =>
-                            o.entity.eid == b.entity.eid
+                  return after(
+                    tx.read(
+                      '.entity.eid=' + session +
+                        '&.session&.fields=entity.eid' +
+                        ((context?.graph as Graph | undefined)?.vocab.comp(
+                            'fork',
                           )
-                          if (
-                            old && e.seq != null && e.seq != entry(old)?.seq
-                          ) {
-                            throw new Error(
-                              'entry.seq cannot move an existing entry',
+                          ? ',fork.from'
+                          : ''),
+                    ),
+                    (found) => {
+                      if (
+                        !found[0] &&
+                        !bundles.some((b) =>
+                          b.entity.eid == session && b.session
+                        )
+                      ) throw new UnknownSession(session)
+                      let self = bundles.find((b) =>
+                        b.entity.eid == session && b.fork
+                      ) ?? found[0]
+                      let from = (self?.fork as Comp | undefined)?.from
+                      let anchorInBatch = bundles.find((b) =>
+                        b.entity.eid == from
+                      )
+                      return after(
+                        from && !anchorInBatch
+                          ? tx.get([String(from)], ['entry'])
+                          : [],
+                        (anchors) => {
+                          let floor = Number(
+                            entry(
+                              anchorInBatch ?? anchors[0] ??
+                                { entity: { eid: '' } },
+                            )?.seq ?? 0,
+                          )
+                          let max = Math.max(
+                            floor,
+                            ...own.map((b) =>
+                              Number(entry(b)?.seq ?? 0)
+                            ),
+                          )
+                          let occupied = new Map(
+                            own.map((
+                              b,
+                            ) => [Number(entry(b)?.seq), b.entity.eid]),
+                          )
+                          for (let b of sessionBundles) {
+                            let e = entry(b)!
+                            let old = own.find((o) =>
+                              o.entity.eid == b.entity.eid
                             )
+                            if (
+                              old && e.seq != null && e.seq != entry(old)?.seq
+                            ) {
+                              throw new Error(
+                                'entry.seq cannot move an existing entry',
+                              )
+                            }
+                            let seq = e.seq == null
+                              ? entry(old)?.seq ?? Math.floor(max) + 1
+                              : e.seq
+                            if (!Number.isSafeInteger(seq) || Number(seq) < 1) {
+                              throw new Error(
+                                'entry sequence exhausted',
+                              )
+                            }
+                            if (
+                              Number(seq) <= floor ||
+                              (occupied.has(Number(seq)) &&
+                                occupied.get(Number(seq)) != b.entity.eid)
+                            ) {
+                              throw new Error(
+                                'entry.seq is occupied or precedes the fork boundary; omit seq to append atomically',
+                              )
+                            }
+                            e.seq = seq
+                            occupied.set(Number(seq), b.entity.eid)
+                            max = Math.max(max, Number(seq))
                           }
-                          let seq = e.seq == null
-                            ? entry(old)?.seq ?? Math.floor(max) + 1
-                            : e.seq
-                          if (!Number.isSafeInteger(seq) || Number(seq) < 1) {
-                            throw new Error(
-                              'entry sequence exhausted',
-                            )
-                          }
-                          if (
-                            Number(seq) <= floor ||
-                            (occupied.has(Number(seq)) &&
-                              occupied.get(Number(seq)) != b.entity.eid)
-                          ) {
-                            throw new Error(
-                              'entry.seq is occupied or precedes the fork boundary; omit seq to append atomically',
-                            )
-                          }
-                          e.seq = seq
-                          occupied.set(Number(seq), b.entity.eid)
-                          max = Math.max(max, Number(seq))
-                        }
-                      },
-                    )
-                  })
+                        },
+                      )
+                    },
+                  )
                 },
               ),
           ))

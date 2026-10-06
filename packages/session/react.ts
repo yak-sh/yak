@@ -251,12 +251,15 @@ export let offered = (
 /** A transcript's entries: a fork's prefix from its parent up to the anchor,
  * then its own, in order. */
 export let transcript = async (g: Graph, session: Eid): Promise<Bundle[]> => {
-  let [self] = await g.get([session])
-  if (!self?.session) throw new UnknownSession(session)
+  let [self] = await g.read(
+    `.entity.eid=${session}&.session&.fields=entity.eid` +
+      (g.vocab.comp(FORK) ? ',fork.from' : ''),
+  )
+  if (!self) throw new UnknownSession(session)
   let own = await g.read(`.${ENTRY}.session=${session}&*`)
   let from = comp(self, FORK)?.from
   if (!from) return ordered(own)
-  let [anchor] = await g.get([String(from)])
+  let [anchor] = await g.get([String(from)], [ENTRY])
   let parent = anchor && comp(anchor, ENTRY)
   if (!parent) return ordered(own)
   let inherited = await transcript(g, String(parent.session))

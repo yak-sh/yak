@@ -63,13 +63,16 @@ const names: Hook = (bundles, tx) => {
     bundles.some((b) => b.entity.eid == eid && comp in b)
   let asked = all.filter(([, , eid, comp]) => !inBatch(eid, comp))
   if (!asked.length) return bundles
-  return after(tx.get(asked.map(([, , eid]) => eid)), (found) => {
-    for (let [comp, prop, eid, must] of asked) {
-      let hit = found.find((b) => b.entity.eid == eid)
-      if (!hit || !(must in hit)) throw new Unnamed(comp, prop, eid)
-    }
-    return bundles
-  })
+  return after(
+    over(asked, ([comp, prop, eid, must]) =>
+      after(
+        tx.read('.entity.eid=' + eid + '&.' + must + '&.fields=entity.eid'),
+        (found) => {
+          if (!found.length) throw new Unnamed(comp, prop, eid)
+        },
+      )),
+    () => bundles,
+  )
 }
 
 /** Fork boundaries cannot include mutable, unfinished provider output. */
@@ -77,13 +80,16 @@ export const naming: Hook = (bundles, tx, err) =>
   after(
     over(bundles.filter((b) => ref(b, FORK, 'from')), (b) => {
       const from = ref(b, FORK, 'from')!
-      return after(tx.get([from]), (rows) => {
+      return after(tx.get([from], [ENTRY]), (rows) => {
         const anchor = bundles.find((v) => v.entity.eid == from && v.entry) ??
           rows[0]
         const entry = anchor?.entry as Comp | undefined
         if (!entry) return
         return after(
-          tx.read('.entry.session=' + String(entry.session)),
+          tx.read(
+            '.entry.session=' + String(entry.session) +
+              '&.attempt&?interrupted',
+          ),
           (entries) => {
             if (
               entries.some((v) =>
