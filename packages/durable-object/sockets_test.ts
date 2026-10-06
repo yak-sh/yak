@@ -799,6 +799,15 @@ test('cold peer frames register static interests without reading their old snaps
     ((reset.bundles as Bundle[])[0].product as { price: number }).price,
     9,
   )
+  reads = 0
+  await cold.apply([{ entity: { eid: 'p' }, product: { price: 10 } }])
+  await live.message(
+    ws,
+    JSON.stringify({
+      relay: [{ entity: { eid: 'cursor' }, cursor: { x: 3 } }],
+    }),
+  )
+  assertEquals(reads, 0)
 })
 
 test('deferred cold catalog resets empty after deletion and is never revived after unsubscribe', async () => {
@@ -868,4 +877,48 @@ test('explicit read wake answers a deferred cold catalog immediately', async () 
   await live.wake()
   assertEquals(ws.sent[0].id, 'products')
   assertEquals(ws.sent[0].reset, true)
+})
+
+test('a deferred cold reset waits for its inherited snapshot ACK without losing the durable edit', async () => {
+  let vocab = loadVocab([...shop.docs, {
+    $defs: {
+      cursor: {
+        component: true,
+        type: 'object',
+        sync: 'peers',
+        durable: 'connection',
+        properties: { x: { type: 'number' } },
+      },
+    },
+  }])
+  let storage = store(vocab), ctx = hibernation(), ws = wire()
+  ctx.live.push(ws)
+  ws.serializeAttachment({ writer: { actor: {} } })
+  let [g, first] = instance(storage, ctx, vocab)
+  await g.apply([{ entity: { eid: 'p' }, product: { price: 1 } }])
+  await first.message(
+    ws,
+    JSON.stringify({ subscribe: '.product', id: 'products', acks: true }),
+  )
+  let ack = ws.sent[0].ack!
+  assertEquals(typeof ack, 'string')
+  ws.sent.length = 0
+  let cold = graph({ storage, vocab }),
+    subs = subscriptions(cold),
+    live = sockets(subs, ctx, undefined, { deferStatic: true })
+  await live.message(
+    ws,
+    JSON.stringify({ relay: [{ entity: { eid: 'c' }, cursor: { x: 1 } }] }),
+  )
+  assertEquals(ws.sent, [])
+  await cold.apply([{ entity: { eid: 'p' }, product: { price: 7 } }])
+  await subs.snapshot('.product')
+  assertEquals(ws.sent, [])
+  await live.message(ws, JSON.stringify({ ack }))
+  assertEquals(ws.sent.length, 1)
+  assertEquals(ws.sent[0].reset, true)
+  assertEquals(
+    ((ws.sent[0].bundles as Bundle[])[0].product as { price: number }).price,
+    7,
+  )
 })

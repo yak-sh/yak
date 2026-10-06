@@ -1144,7 +1144,11 @@ export let subscriptions = (graph: Graph, opts: {
                 let gone = [...s.members].filter((id) => !ids.has(id))
                 let joined = [...ids].filter((id) => !s.members.has(id))
                 s.members = ids
-                if (s.routed) network(s).add(s, queryOf(s), ids)
+                if (
+                  reset && !s.reads?.unseen && !s.plan?.reaches.length &&
+                  s.opts?.now == null
+                ) s.routed = network(s).add(s, queryOf(s), ids)
+                else if (s.routed) network(s).add(s, queryOf(s), ids)
                 rememberFields(s, set)
                 return s.send({
                   id: s.id,
