@@ -1,15 +1,4 @@
-/* Invitations and membership in the party sheet. */
-.Party_List {
-  display: grid;
-  gap: 0.35rem;
-
-  & + & {
-    margin-top: 0.8rem;
-    padding-top: 0.8rem;
-    border-top: 1px solid var(--line);
-  }
-}
-
+/* The party sheet's detail: an invitation or a member, and what to do. */
 .Party_Row {
   display: flex;
   align-items: center;

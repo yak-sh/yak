@@ -2,18 +2,12 @@
 // the selected size and its cost visible before applying it.
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { parseHTML } from 'linkedom'
+import { withDom } from './dom_fixture.ts'
 import { menu, type Settings } from './menu.ts'
 import type { Panel } from './panel.ts'
 
-test('menu sections show icons and keep their rows while settings change', () => {
-  let { document, window } = parseHTML('<html><body></body></html>')
-  let element = globalThis.Element, inputElement = globalThis.HTMLInputElement
-  Object.assign(globalThis, {
-    Element: window.Element,
-    HTMLInputElement: window.HTMLInputElement,
-  })
-  try {
+test('menu sections show icons and keep their rows while settings change', () =>
+  withDom(({ document, window }) => {
     let chosen: number | null = null
     let level = { level: 0.5, set: (_: number) => {} }
     let frames: Settings['frames'] = {
@@ -53,7 +47,10 @@ test('menu sections show icons and keep their rows while settings change', () =>
       'Touch',
       'Keys',
     ])
-    assertEquals(rows.every((row) => row.querySelector('.Glyph') != null), true)
+    assertEquals(
+      rows.every((row) => row.querySelector('.Glyph') != null),
+      true,
+    )
     for (let row of rows) {
       assertEquals(
         row.querySelector('svg')!.getAttribute('aria-hidden'),
@@ -61,6 +58,13 @@ test('menu sections show icons and keep their rows while settings change', () =>
       )
     }
     rows[1].dispatchEvent(new window.Event('click', { bubbles: true }))
+    assertEquals(rows.map((row) => row.getAttribute('aria-current')), [
+      'false',
+      'true',
+      'false',
+      'false',
+      'false',
+    ])
     assertEquals(
       document.querySelector<HTMLElement>('[data-section=audio]')!.hidden,
       true,
@@ -97,10 +101,4 @@ test('menu sections show icons and keep their rows while settings change', () =>
       document.body.textContent ?? '',
       '30 fps · lower power',
     )
-  } finally {
-    Object.assign(globalThis, {
-      Element: element,
-      HTMLInputElement: inputElement,
-    })
-  }
-})
+  }, '<html><body></body></html>'))

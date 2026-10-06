@@ -82,9 +82,9 @@ let page = () => {
   }
   let state = pageState('trades-test')
   let click = (q: string, host: Element = body) => {
-    let target = host.querySelector(q)
-    ok(target, `Missing ${q}`)
-    target.dispatchEvent(new window.Event('click', { bubbles: true }))
+    ok(host.querySelector(q), `Missing ${q}`).dispatchEvent(
+      new window.Event('click', { bubbles: true }),
+    )
   }
   return { tab, state, click, view: ledger(tab, preview, state) }
 }
@@ -96,13 +96,13 @@ test('trade selection keeps progress rows, scroll and phone back navigation', ()
     let list = tab.body.querySelector<HTMLElement>('.Split_List')!,
       rows = [...list.querySelectorAll('[data-select]')]
     equal(rows.length, ALL.length)
-    assertMatch(rows[0].textContent!, /Woodcutting.*Level 2.*5 \/ 30 xp/s)
-    assertMatch(rows[4].textContent!, /Smithing.*Level 3.*5 \/ 50 xp/s)
+    assertMatch(rows[0].textContent!, /Woodcutting.*5 \/ 30 xp.*Level 2/s)
+    assertMatch(rows[4].textContent!, /Smithing.*5 \/ 50 xp.*Level 3/s)
     list.scrollTop = 85
     click('[data-select=forge]')
     equal(list.querySelector('[data-select=wood]'), rows[0])
     equal(list.scrollTop, 85)
-    equal(rows[4].getAttribute('aria-pressed'), 'true')
+    equal(rows[4].getAttribute('aria-current'), 'true')
     ok(tab.body.querySelector('[data-tier]'))
     equal(tab.body.querySelectorAll('[data-do]').length, 0)
     tab.close()

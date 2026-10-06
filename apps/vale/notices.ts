@@ -10,6 +10,8 @@
 // whoever gives it, who asks it of the hero in person. Taking a job agrees
 // to it, and it is the hero's alone, to do and hand in as any deal. The
 // papers pinned on a board are as many as its notices (papers.ts).
+import { h } from 'preact'
+import { Rows, Tile } from '@yaks/ui'
 import { BEASTS } from './beasts.ts'
 import type { View } from './deals.ts'
 import { deal, quest, type Task, toward } from './journal.ts'
@@ -19,7 +21,9 @@ import type { Vec3 } from './play.ts'
 import { GIVERS } from './quests.ts'
 import type { Standing } from './rules.ts'
 import { said } from './stock.ts'
+import { glyph } from './glyphs.ts'
 import { builtNear, standAt, type Vale, villagesNear } from './terrain.ts'
+import { picture } from './tile.ts'
 import { split } from './ui/split.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -147,12 +151,6 @@ export let noticeboard = (panel: Panel, acts: Acts) => {
   let picked: string | null = null
   panel.body.addEventListener('click', (e) => {
     let t = e.target instanceof Element ? e.target : null
-    let select = t?.closest<HTMLButtonElement>('button[data-select]')
-    if (select && shown.some((n) => n.id == select.dataset.select)) {
-      picked = select.dataset.select!
-      draw()
-      return
-    }
     let b = t?.closest<HTMLElement>('[data-take]')
     let n = shown.find((n) => n.id == b?.dataset.take)
     if (n) acts.take(n)
@@ -174,14 +172,33 @@ export let noticeboard = (panel: Panel, acts: Acts) => {
   let draw = () => {
     let selected = shown.find((n) => n.id == picked)
     if (!selected) picked = null
-    let rows =
-      shown.map((n) =>
-        `<button class=Split_Row type=button data-select="${esc(n.id)}"><b>${
-          esc(n.title)
-        }</b><small>${esc(n.from)}${
-          n.where ? ` · ${esc(n.where)}` : ''
-        }</small><small>${esc(n.gives)}</small></button>`
-      ).join('') || '<p class=Notices_None>Nothing is pinned here just now.</p>'
+    let rows = shown.length
+      ? h(
+        Rows,
+        {},
+        shown.map((n) =>
+          h(
+            Tile,
+            {
+              key: n.id,
+              mod: n.id == picked && 'on',
+              'data-select': n.id,
+              onClick: () => {
+                picked = n.id
+                draw()
+              },
+            },
+            picture(glyph('notices'), { mod: 'caution' }),
+            h(Tile.Title, {}, n.title),
+            h(
+              Tile.Sub,
+              {},
+              [n.from, n.where, n.gives].filter(Boolean).join(' · '),
+            ),
+          )
+        ),
+      )
+      : h('p', { class: 'Notices_None' }, 'Nothing is pinned here just now.')
     panes.render(
       rows,
       selected

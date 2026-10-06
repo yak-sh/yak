@@ -1,0 +1,31 @@
+/* Field-book rendering of Rows, carrying its base structural contract. */
+/* A list of rows, close together. A nested list hangs off a rule. */
+.Rows {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.Rows-nested {
+  margin-left: var(--half-gap);
+  padding-left: var(--half-gap);
+  border-left: 1px solid var(--border2);
+}
+.Rows_Item {
+  min-width: 0;
+}
+.Rows_More {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+}
+
+/* Field-book rows stand a hair apart, so a picked one's ring never meets its
+   neighbour's. */
+.Rows {
+  gap: 0.2rem;
+}
+.Rows_More {
+  font-family: inherit;
+  font-size: 0.8rem;
+  color: var(--faint);
+}

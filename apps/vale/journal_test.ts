@@ -32,18 +32,18 @@ test('quest selection and tracking preserve list nodes, scroll and quest meaning
     view.show([quest], 'mossvale')
     let list = body.querySelector<HTMLElement>('.Split_List')!
     let row = list.querySelector('[data-select]')!
-    equal(row.querySelector('b')!.textContent, quest.title)
-    ok(row.querySelector('.Journal_Status .Glyph'))
-    ok(row.querySelector('.Journal_Tracked .Glyph'))
+    equal(row.querySelector('.Tile_Title')!.textContent, quest.title)
+    ok(row.querySelector('.Tile_Icon .Glyph'))
+    equal(row.querySelector('.Tile_End')!.getAttribute('aria-label'), 'Tracked')
     equal(
-      row.querySelector('small:last-child')!.textContent,
+      row.querySelector('.Tile_Sub')!.textContent,
       'Gather things · 1 / 3',
     )
     list.scrollTop = 37
     click('[data-select]')
     equal(list.querySelector('[data-select]'), row)
     equal(list.scrollTop, 37)
-    equal(row.getAttribute('aria-pressed'), 'true')
+    equal(row.getAttribute('aria-current'), 'true')
     click('[data-pin]')
     equal(pins, [[quest.id, false]])
     view.show([{ ...quest, pinned: false }], 'mossvale')

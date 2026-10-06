@@ -35,6 +35,11 @@
   --hue-3: var(--book-good);
   --hue-4: var(--legendary);
   --hue-5: var(--book-alert);
+  /* Picking (skin/base.css): a moss ring and wash for the one picked, a
+     fainter wash under the pointer. */
+  --pick: var(--deep);
+  --pick-wash: color-mix(in srgb, var(--moss) 13%, transparent);
+  --hover-wash: color-mix(in srgb, var(--moss) 7%, transparent);
   --font: Georgia, 'Times New Roman', serif;
   --mono: ui-monospace, monospace;
   --measure: 90ch;

@@ -10,7 +10,9 @@
   cursor: pointer;
 }
 
-.Swatch-on {
-  box-shadow: 0 0 0 3px var(--deep);
-  scale: 1.08;
+/* A swatch is its colour: picked, the pick's ring marks it (the skin's
+   base.css), and no wash is laid over the colour. */
+.Swatch,
+.Swatch:hover {
+  background-image: none;
 }

@@ -45,8 +45,18 @@ let heard = (t: Tip) => [t.name, t.note, t.says].filter(Boolean).join('. ')
  * ```
  */
 export let tipped = (t: Tip): string =>
-  ATTRS.map(([k, a]) => t[k] ? ` ${a}="${esc(t[k])}"` : '').join('') +
+  Object.entries(tipProps(t)).map(([a, v]) => ` ${a}="${esc(v)}"`).join('') +
   ` aria-label="${esc(heard(t))}"`
+
+/** A tip as attributes, for a Preact element that names itself.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(tipProps({ name: 'Iron sword' }), { 'data-tip': 'Iron sword' })
+ * ```
+ */
+export let tipProps = (t: Tip): Record<string, string> =>
+  Object.fromEntries(ATTRS.flatMap(([k, a]) => t[k] ? [[a, t[k]]] : []))
 
 /** Give `e` its tip, in place of any it had. Only what changed is written,
  * so a tip showing is written again only when its words change. */

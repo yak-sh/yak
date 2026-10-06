@@ -1,16 +1,19 @@
-// The skill board, drawn into the hero's Skills tab as a pack is: the points
-// to spend, and the three disciplines side by side, each skill a tile in its
-// row, gold once learned, bright while a point can go on it, dim until what
-// it needs is learned. Tap one to see what it does and learn it. By a village's fire, every skill can
+// The skill board, drawn into the hero's Skills tab: the points to spend,
+// then each discipline's skills in a list, from the first row down, each
+// with what it does; a learned one is checked, and one shut until what it
+// needs is learned or a point comes is faded, saying what it waits on. Tap
+// one to see what it does and learn it. By a village's fire, every skill can
 // be forgotten, free, to spend the points again. K or the tray's sparkles
 // opens it. It is written again only when what it shows changed.
+import { h } from 'preact'
+import { Rows, Tile } from '@yaks/ui'
 import { ABILITIES, OFF } from './abilities.ts'
 import { glyph, glyphText } from './glyphs.ts'
 import type { Page } from './panel.ts'
 import type { Frame, Sheet } from './play.ts'
 import { canLearn, DISCIPLINES, SKILLS } from './skills.ts'
 import { skillDetail } from './skill-detail.ts'
-import { tipped } from './tip.ts'
+import { picture } from './tile.ts'
 import { split } from './ui/split.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -20,15 +23,18 @@ export type Learning = {
   respec: () => void
 }
 
-// Each discipline, and its skills row by row.
-let COLS = Object.entries(DISCIPLINES).map(([d, about]) => {
-  let ids = Object.keys(SKILLS).filter((id) => SKILLS[id].discipline == d)
-  let rows = [...new Set(ids.map((id) => SKILLS[id].row))].sort((a, b) => a - b)
-  return {
-    ...about,
-    rows: rows.map((r) => ids.filter((id) => SKILLS[id].row == r)),
-  }
-})
+// Each discipline, and its skills from its first row down.
+let COLS = Object.entries(DISCIPLINES).map(([d, about]) => ({
+  ...about,
+  skills: Object.keys(SKILLS).filter((id) => SKILLS[id].discipline == d)
+    .sort((a, b) => SKILLS[a].row - SKILLS[b].row),
+}))
+
+let svg = (html: string) =>
+  h('span', {
+    'aria-hidden': 'true',
+    dangerouslySetInnerHTML: { __html: html },
+  })
 
 /** The board, drawn into its tab (panel.ts). */
 export let board = (panel: Page, acts: Learning) => {
@@ -38,9 +44,7 @@ export let board = (panel: Page, acts: Learning) => {
   let was: unknown[] = []
   box.addEventListener('click', (e) => {
     let t = e.target instanceof Element ? e.target : null
-    let pick = t?.closest<HTMLElement>('[data-skill]')?.dataset.skill
     let act = t?.closest<HTMLElement>('[data-do]')?.dataset.do
-    if (pick) picked = pick
     if (act == 'learn' && picked) acts.learn(picked)
     if (act == 'respec') {
       acts.respec()
@@ -52,17 +56,30 @@ export let board = (panel: Page, acts: Learning) => {
   // A skill as a tile: learned, open to learn now, or shut until what it
   // needs is learned or a point comes.
   let tile = (s: Sheet, id: string) => {
-    let k = SKILLS[id]
-    let state = s.learned.includes(id)
-      ? 'known'
-      : canLearn(id, s.learned, s.lvl)
-      ? 'open'
-      : 'shut'
-    return `<button class="Board_Skill Board_Skill-${state}${
-      picked == id ? ' Board_Skill-on' : ''
-    }" data-skill=${id}${tipped({ name: k.name, says: k.says })}><i>${
-      glyph(k.icon)
-    }</i><span>${esc(k.name)}</span></button>`
+    let k = SKILLS[id], known = s.learned.includes(id)
+    let open = canLearn(id, s.learned, s.lvl)
+    let waits = !known && !open && k.after && !s.learned.includes(k.after)
+    return h(
+      Tile,
+      {
+        key: id,
+        mod: [picked == id && 'on', !known && !open && 'dim'],
+        'data-skill': id,
+        onClick: () => {
+          picked = id
+          was = []
+        },
+      },
+      picture(glyph(k.icon), { mod: known && 'positive' }),
+      h(Tile.Title, {}, k.name),
+      h(Tile.Sub, {}, waits ? `Needs ${SKILLS[k.after!].name} first` : k.says),
+      known
+        ? h(Tile.End, {
+          'aria-label': 'Learned',
+          dangerouslySetInnerHTML: { __html: glyph('done') },
+        })
+        : null,
+    )
   }
 
   // What the picked skill does, what it needs, and learning it.
@@ -99,26 +116,41 @@ export let board = (panel: Page, acts: Learning) => {
   }
 
   let draw = (s: Sheet, f: Frame) => {
-    let cols = COLS.map((c) =>
-      `<div class=Board_Col><div class=Board_Head><b>${
-        glyph(c.icon)
-      }${c.name}</b><small>${esc(c.says)}</small></div>${
-        c.rows.map((row) =>
-          `<div class=Board_Row>${row.map((id) => tile(s, id)).join('')}</div>`
-        ).join('')
-      }</div>`
-    ).join('')
-    let forget = !s.learned.length
-      ? ''
-      : f.rack
-      ? `<button class="Btn Btn-small" data-do=respec>Forget them all, to choose again</button>`
-      : `<p class=Pack_Hint>By a village's fire you can forget them all, free, to choose again.</p>`
+    let forget = !s.learned.length ? null : f.rack
+      ? h(
+        'button',
+        { class: 'Btn Btn-small', 'data-do': 'respec' },
+        'Forget them all, to choose again',
+      )
+      : h(
+        'p',
+        { class: 'Pack_Hint' },
+        "By a village's fire you can forget them all, free, to choose again.",
+      )
     panes.render(
-      `<div class="Pack Board">` +
-        `<span class="Badge Board_Points${
-          s.points ? ' Badge-points' : ''
-        }">✦ ${s.points} to spend</span>` +
-        `<div class=Board_Cols>${cols}</div>${forget}</div>`,
+      h(
+        'div',
+        { class: 'Pack Board' },
+        h(
+          'span',
+          { class: `Badge Board_Points${s.points ? ' Badge-points' : ''}` },
+          `✦ ${s.points} to spend`,
+        ),
+        COLS.map((c) =>
+          h(
+            'section',
+            { key: c.name, class: 'Board_Col' },
+            h(
+              'div',
+              { class: 'Board_Head' },
+              h('b', {}, svg(glyph(c.icon)), c.name),
+              h('small', {}, c.says),
+            ),
+            h(Rows, {}, c.skills.map((id) => tile(s, id))),
+          )
+        ),
+        forget,
+      ),
       card(s),
       picked || null,
     )

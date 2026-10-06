@@ -5,11 +5,15 @@
 // opens it: talked to while a deal stands, or making an offer. It folds away
 // once the hero walks off, and is drawn only while open and only when what it
 // shows changed.
+import { h } from 'preact'
+import { Rows, Tile } from '@yaks/ui'
 import { BEASTS } from './beasts.ts'
 import type { View } from './deals.ts'
 import { ITEMS } from './items.ts'
 import type { Panel } from './panel.ts'
+import { glyph } from './glyphs.ts'
 import { said } from './stock.ts'
+import { picture } from './tile.ts'
 import { split } from './ui/split.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -68,12 +72,6 @@ export let dealbox = (panel: Panel, act: (a: Act, v: View) => void) => {
   let at = ''
   panel.body.addEventListener('click', (e) => {
     let t = e.target instanceof Element ? e.target : null
-    let select = t?.closest<HTMLButtonElement>('button[data-select]')
-    if (select && shown.some((v) => v.eid == select.dataset.select)) {
-      picked = select.dataset.select!
-      draw()
-      return
-    }
     let b = t?.closest<HTMLButtonElement>('button[data-do]')
     let a = ACTS.find((x) => x == b?.dataset.do)
     let v = shown.find((v) => v.eid == b?.dataset.deal)
@@ -82,15 +80,45 @@ export let dealbox = (panel: Panel, act: (a: Act, v: View) => void) => {
   let draw = () => {
     let selected = shown.find((v) => v.eid == picked)
     if (!selected) picked = null
-    let rows =
-      shown.map((v) =>
-        `<button class=Split_Row type=button data-select="${esc(v.eid)}"><b>${
-          esc(said(v.give))
-        }</b><small>${v.state == 'taken' ? 'Agreed' : 'Offered'}${
-          v.ready ? ' · Ready' : ''
-        }</small><small>For ${esc(said(v.take))}</small></button>`
-      ).join('') ||
-      '<p class=Deal_None>Nothing stands between you. Ask what they might trade.</p>'
+    let rows = shown.length
+      ? h(
+        Rows,
+        {},
+        shown.map((v) =>
+          h(
+            Tile,
+            {
+              key: v.eid,
+              mod: v.eid == picked && 'on',
+              'data-select': v.eid,
+              onClick: () => {
+                picked = v.eid
+                draw()
+              },
+            },
+            picture(glyph(v.ready ? 'done' : 'handHeart'), {
+              mod: v.ready
+                ? 'positive'
+                : v.state == 'taken'
+                ? 'info'
+                : 'caution',
+            }),
+            h(Tile.Title, {}, said(v.give)),
+            h(
+              Tile.Sub,
+              {},
+              `${v.state == 'taken' ? 'Agreed' : 'Offered'}${
+                v.ready ? ' · Ready' : ''
+              } · For ${said(v.take)}`,
+            ),
+          )
+        ),
+      )
+      : h(
+        'p',
+        { class: 'Deal_None' },
+        'Nothing stands between you. Ask what they might trade.',
+      )
     panes.render(
       rows,
       selected

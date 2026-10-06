@@ -39,9 +39,10 @@ export let theme: Theme = {
 
 // Missing terminal entries keep the base's structural sheet, in Vale colours.
 export let skin: Skin = Object.fromEntries(
-  ['base', 'Button', 'Tabs', 'Head', 'Tile', 'Edit', 'Panes', 'Tip'].map((
-    name,
-  ) => [name, {
-    css: new URL(`./kit/skin/${name}.css`, import.meta.url),
-  }]),
+  ['base', 'Button', 'Tabs', 'Head', 'Tile', 'Rows', 'Edit', 'Panes', 'Tip']
+    .map((
+      name,
+    ) => [name, {
+      css: new URL(`./kit/skin/${name}.css`, import.meta.url),
+    }]),
 )

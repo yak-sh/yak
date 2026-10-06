@@ -1,5 +1,7 @@
 // A list and its selected thing. Only changed content is replaced, so picking
-// leaves every list node and its scroll in place. Phones show one side at a time.
+// leaves every list node and its scroll in place; each row paints its own
+// pick (packages/ui/Tile.ts). Phones show one side at a time: a pick in the
+// list shows its detail, and Back shows the list again.
 import { type ComponentChildren, render } from 'preact'
 
 export let split = (host: HTMLElement) => {
@@ -13,13 +15,23 @@ export let split = (host: HTMLElement) => {
   let wasList: ComponentChildren = '',
     wasDetail: ComponentChildren = '',
     wasPick: string | null = null
-  let paint = (node: HTMLElement, content: ComponentChildren) => {
-    if (typeof content == 'string') node.innerHTML = content
-    else render(content, node)
+  // Markup and Preact each clear what the other drew there before drawing.
+  let paint = (
+    node: HTMLElement,
+    content: ComponentChildren,
+    was: ComponentChildren,
+  ) => {
+    if (typeof content == 'string') {
+      render(null, node)
+      node.innerHTML = content
+    } else {
+      if (typeof was == 'string') node.textContent = ''
+      render(content, node)
+    }
   }
   list.addEventListener('click', (event) => {
     let row = event.target instanceof host.ownerDocument.defaultView!.Element
-      ? event.target.closest('[data-pick], [data-skill], [data-select]')
+      ? event.target.closest('[aria-current]')
       : null
     if (row && list.contains(row)) root.classList.add('Split-picked')
   })
@@ -34,31 +46,15 @@ export let split = (host: HTMLElement) => {
       content: ComponentChildren,
       picked: string | null = null,
     ) => {
-      // Older tile renderers include the highlight in their HTML; it is state,
-      // not list content, and must never replace the list on selection.
-      if (typeof rows == 'string') {
-        rows = rows.replace(/ (?:Pack_Tile-on|Board_Skill-on)/g, '')
-      }
       if (rows != wasList) {
         let top = list.scrollTop
-        paint(list, rows)
+        paint(list, rows, wasList)
         list.scrollTop = top
         wasList = rows
       }
       if (content != wasDetail) {
-        paint(detail, content)
+        paint(detail, content, wasDetail)
         wasDetail = content
-      }
-      for (
-        let row of list.querySelectorAll<HTMLElement>(
-          '[data-pick], [data-skill], [data-select]',
-        )
-      ) {
-        let on = picked != null &&
-          (row.dataset.pick ?? row.dataset.skill ?? row.dataset.select) ==
-            picked
-        row.classList.toggle('Split_Row-on', on)
-        row.setAttribute('aria-pressed', String(on))
       }
       if (picked != wasPick) {
         root.classList.toggle('Split-picked', picked != null)

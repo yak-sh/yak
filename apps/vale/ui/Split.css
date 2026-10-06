@@ -1,4 +1,5 @@
-/* Shared list/detail geometry. Selection only paints, never measures. */
+/* Shared list/detail geometry. The list's rows are Tiles, and picking one
+   paints it (the skin's base.css), never measures. */
 .Split_Sheet {
   width: min(64rem, 100%);
   height: 40rem;
@@ -45,31 +46,6 @@
 .Split_List > .Pack {
   width: auto;
   min-height: 0;
-}
-
-.Split_Row {
-  width: 100%;
-  margin: 0 0 0.4rem;
-  padding: 0.65rem;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--ink);
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
-}
-
-.Split_Row small {
-  display: block;
-  color: var(--faint);
-}
-
-/* A separate ring preserves every row's own frame, rarity and geometry. */
-.Split_Row-on,
-.Pack_Tile-on {
-  outline: 3px solid var(--selection);
-  outline-offset: 2px;
 }
 
 .Split_Back {

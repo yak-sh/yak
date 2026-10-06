@@ -1,34 +1,21 @@
-/* The skill board (board.ts), a pack whose tiles are skills: the points to
-   spend, then the three disciplines side by side, each skill a tile in its
-   row, gold once learned, dim until it can be. Where the list is narrow, including
-   a desktop split, the disciplines stack, each across the whole panel, so every
-   name reads. */
-.Board {
-  container: board / inline-size;
-}
-
+/* The skill board (board.ts): the points to spend, then each discipline
+   under its heading, its skills a list of Tiles from the first row down. */
 .Board_Points {
   align-self: start;
 }
 
-.Board_Cols {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.4rem;
-}
-
 .Board_Col {
   display: grid;
-  align-content: start;
   gap: 0.3rem;
   min-width: 0;
 }
 
 .Board_Head {
   display: grid;
-  justify-items: center;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.5rem;
   line-height: 1.2;
-  text-align: center;
 
   & b {
     display: flex;
@@ -39,67 +26,15 @@
   }
 
   & .Glyph {
+    flex: none;
     width: 1.1em;
     height: 1.1em;
   }
 
   & small {
-    font-size: 0.75rem;
+    font-size: 0.78rem;
     color: var(--faint);
   }
-}
-
-.Board_Row {
-  display: flex;
-  justify-content: center;
-  gap: 0.25rem;
-}
-
-.Board_Skill {
-  --face: var(--well);
-  --mark: var(--deep);
-  --outline: inset 0 -3px 0 color-mix(in srgb, var(--rim) 50%, transparent);
-  display: grid;
-  flex: 1;
-  align-content: start;
-  justify-items: center;
-  gap: 0.15rem;
-  min-width: 0;
-  max-width: 4.6rem;
-  padding: 0.35rem 0.15rem 0.35rem;
-  border: 0;
-  border-radius: var(--radius-small);
-  background: var(--face);
-  box-shadow: var(--outline);
-  font: inherit;
-  color: var(--ink);
-  cursor: pointer;
-
-  & i {
-    font-size: 1.2rem;
-    font-style: normal;
-    line-height: 1;
-    color: var(--mark);
-  }
-
-  & span {
-    max-width: 100%;
-    font-size: 0.78rem;
-    line-height: 1.1;
-    text-wrap: balance;
-    overflow-wrap: anywhere;
-  }
-}
-
-.Board_Skill-known {
-  --face: #fbe7a8;
-  --mark: var(--amber);
-  --outline: inset 0 0 0 2px var(--gold),
-    inset 0 -3px 0 color-mix(in srgb, var(--amber) 35%, transparent);
-}
-
-.Board_Skill-shut {
-  opacity: 0.45;
 }
 
 .Board_Discipline-might {
@@ -146,37 +81,5 @@
 @media (max-width: 640px) {
   .Board_Card {
     flex-wrap: wrap;
-  }
-}
-
-@container board (width < 38rem) {
-  .Board_Cols {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0.7rem;
-  }
-
-  .Board_Head {
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: baseline;
-    justify-items: start;
-    gap: 0.5rem;
-    text-align: start;
-
-    & small {
-      font-size: 0.78rem;
-    }
-  }
-
-  .Board_Row {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .Board_Skill {
-    max-width: none;
-
-    & span {
-      font-size: 0.72rem;
-    }
   }
 }

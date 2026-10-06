@@ -1,7 +1,7 @@
 // The station menu shared by the village bench and the Trades guide. Its
 // selection lives in the page graph; the guide omits every work action.
 import { type ComponentChildren, h, render } from 'preact'
-import { Button } from '@yaks/ui'
+import { Button, Rows, Tabs, Tile } from '@yaks/ui'
 import {
   able,
   have,
@@ -37,7 +37,8 @@ import {
 import type { Held } from './rules.ts'
 import { icon } from './sprites.ts'
 import type { Sheet } from './play.ts'
-import { cards } from './tip.ts'
+import { picture as plate } from './tile.ts'
+import { cards, tipProps } from './tip.ts'
 import { type Craft, least, tradeNeed, TRADES, type Trades } from './trades.ts'
 import { madeBy, MOST, upgradeOf } from './upgrade.ts'
 import type { Job } from './work.ts'
@@ -256,30 +257,34 @@ export let menu = (
       ]
     }
   }
+  // A thing to make, or a piece to upgrade: its picture, its name, what it
+  // is or the trade level it waits on, faded while it cannot be done now.
   let tile = (
     key: string,
     kind: string,
     name: string,
-    className: string,
+    rarity: string,
     ready: boolean,
+    sub: [string, boolean?],
     plus = 0,
   ) =>
     h(
-      Button,
+      Tile,
       {
         key,
-        class: `Pack_Tile ${className}${picked == key ? ' Split_Row-on' : ''}${
-          ready ? '' : ' Pack_Tile-had'
-        }`,
+        mod: [picked == key && 'on', !ready && 'dim'],
         'data-pick': key,
-        'data-tip': name,
-        'aria-label': name,
-        'aria-pressed': picked == key,
+        ...(up ? tipProps({ name }) : {}),
         onClick: () => select(key),
       },
-      picture(kind),
-      plus ? h('b', {}, `+${plus}`) : null,
+      plate(icon(kind) || '•', { class: rarity }),
+      h(Tile.Title, { class: rarity && `Rarity ${rarity}` }, name),
+      sub[0] && h(Tile.Sub, { mod: sub[1] && 'negative' }, sub[0]),
+      plus ? h(Tile.End, {}, `+${plus}`) : null,
     )
+  let waits = (
+    r: Recipe,
+  ): [string, boolean] => [`Requires ${trade.name} ${least(r.tier)}`, true]
   let tiles = up
     ? pieces(s, c).map((held) => {
       let item = piece(held), r = upgradeOf(held.kind, held.plus ?? 0)
@@ -289,19 +294,28 @@ export let menu = (
         item.name,
         tint(item.rarity),
         !!r && able(r, mine.lvl),
+        !r
+          ? ['As fine as it gets']
+          : able(r, mine.lvl)
+          ? [sortLine(item)]
+          : waits(r),
         held.plus,
       )
     })
     : Object.values(recipes()).filter((r) => r.at == c && String(r.tier) == tab)
-      .map((r) =>
-        tile(
+      .map((r) => {
+        let item = ITEMS[r.makes]
+        return tile(
           r.makes,
           r.makes,
-          ITEMS[r.makes]?.name ?? r.makes,
+          item?.name ?? r.makes,
           '',
           able(r, mine.lvl) && !!plan(r, bag),
+          !able(r, mine.lvl)
+            ? waits(r)
+            : [item?.heals ? `Mends ${item.heals}` : item ? sortOf(item) : ''],
         )
-      )
+      })
   return h(
     'div',
     { class: 'Craft_Menu' },
@@ -309,52 +323,49 @@ export let menu = (
       'div',
       { class: 'Pack Craft' },
       h(
-        'div',
+        Tabs,
         { class: 'Craft_Tiers' },
         tiers(c).map((tier) =>
           h(
-            Button,
+            Tabs.Tab,
             {
               key: tier,
-              class: `Pack_Tile${tab == String(tier) ? ' Craft_Tier-on' : ''}`,
+              type: 'button',
+              mod: tab == String(tier) && 'on',
               'data-tier': tier,
               'aria-pressed': tab == String(tier),
               onClick: () => switchTier(String(tier)),
             },
-            h(
-              'span',
-              {},
-              mine.lvl < least(tier)
-                ? h('span', {
-                  dangerouslySetInnerHTML: { __html: glyphText('lock') },
-                })
-                : null,
-              tierName(tier),
-            ),
+            mine.lvl < least(tier)
+              ? h('span', {
+                dangerouslySetInnerHTML: { __html: glyphText('lock') },
+              })
+              : null,
+            tierName(tier),
           )
         ),
         Object.values(recipes()).some((r) =>
           r.at == c && ITEMS[r.makes]?.slot
         ) &&
           h(
-            Button,
+            Tabs.Tab,
             {
-              class: `Pack_Tile Craft_Up${up ? ' Craft_Tier-on' : ''}`,
+              type: 'button',
+              mod: up && 'on',
+              class: 'Craft_Up',
               'data-tier': 'up',
-              'data-tip': 'Upgrade what you carry',
+              'aria-pressed': up,
               onClick: () => switchTier('up'),
             },
             h('span', {
               dangerouslySetInnerHTML: { __html: glyphText('sparkles') },
             }),
-            h('span', {}, 'Upgrade'),
+            'Upgrade',
           ),
       ),
-      h(
-        'div',
-        { class: 'Pack_Grid' },
-        tiles.length ? tiles : hint('Nothing you carry is upgraded here.'),
-      ),
+      tiles.length
+        ? h(Rows, {}, tiles)
+        : hint('Nothing you carry is upgraded here.'),
     ),
     h('div', { class: 'Craft_Detail' }, detail),
   )

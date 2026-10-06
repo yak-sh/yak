@@ -19,7 +19,7 @@
   --stat: var(--muted);
 }
 .Stat-armour {
-  --stat: var(--selection);
+  --stat: var(--info);
 }
 .Stat-hp {
   --stat: var(--char);

@@ -2,11 +2,14 @@
 // themselves, the vale's sound and camera controls, and every
 // key and touch the vale answers. The tray's last button opens it, and so does
 // Escape when nothing else is open.
+import { h } from 'preact'
+import { Rows, Tile } from '@yaks/ui'
 import { type Glyph, glyph } from './glyphs.ts'
 import { SHEETS } from './hud.ts'
 import { type Action, keysOf } from './input.ts'
 import { cap, type Page } from './panel.ts'
 import { VOXEL, VOXELS } from './terrain.ts'
+import { picture } from './tile.ts'
 import { split } from './ui/split.ts'
 
 /** What the menu sets, and how it reads what is set. */
@@ -81,14 +84,30 @@ export let menu = (panel: Page, o: Settings) => {
     ['touch', 'Touch', 'handHeart'],
     ['keys', 'Keys', 'menu'],
   ]
-  let rows = sections.map(([id, title, icon]) =>
-    `<button class="Split_Row Menu_Row" type=button data-select=${id}>${
-      glyph(icon)
-    }<span>${title}</span></button>`
-  ).join('')
+  let rows = () =>
+    h(
+      Rows,
+      {},
+      sections.map(([id, title, icon]) =>
+        h(
+          Tile,
+          {
+            key: id,
+            mod: id == picked && 'on',
+            'data-select': id,
+            onClick: () => {
+              picked = id
+              select()
+            },
+          },
+          picture(glyph(icon)),
+          h(Tile.Title, {}, title),
+        )
+      ),
+    )
   let content = ''
   let select = () => {
-    panes.render(rows, content, picked)
+    panes.render(rows(), content, picked)
     for (
       let part of panes.detail.querySelectorAll<HTMLElement>('[data-section]')
     ) {
@@ -99,14 +118,6 @@ export let menu = (panel: Page, o: Settings) => {
   let selected = VOXELS.includes(o.voxel.current) ? o.voxel.current : VOXEL
   let volumes = { music: o.music, effects: o.effects, voice: o.voice }
   panel.body.addEventListener('click', (e) => {
-    let choice = e.target instanceof Element
-      ? e.target.closest<HTMLElement>('[data-select]')?.dataset.select
-      : null
-    if (choice) {
-      picked = choice
-      select()
-      return
-    }
     let act = e.target instanceof Element
       ? e.target.closest<HTMLElement>('[data-do]')?.dataset.do
       : null

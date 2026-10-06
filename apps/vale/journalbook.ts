@@ -1,11 +1,12 @@
 // The journal's quest list and detail, with page-graph selection and disclosure.
-import { type ComponentChildren, h } from 'preact'
-import { Button } from '@yaks/ui'
+import { h } from 'preact'
+import { Button, Rows, Tile } from '@yaks/ui'
 import { Disclosure, disclosureAt, isOpen } from '@yaks/ux'
 import { type Glyph, glyph } from './glyphs.ts'
 import { landsOf, nameOf, next, type Step, type Task, told } from './journal.ts'
 import { type PageState, pageState } from './page-state.ts'
 import type { Page } from './panel.ts'
+import { picture as plate } from './tile.ts'
 import { split } from './ui/split.ts'
 
 export type Acts = { pin: (task: string, on: boolean) => void }
@@ -27,14 +28,16 @@ export let journal = (
       'aria-hidden': 'true',
       dangerouslySetInnerHTML: { __html: glyph(icon) },
     })
+  // A quest's state, as its icon and the icon's tone; its group's heading
+  // and its next step say it in words.
   let status = (t: Task): [Glyph, string] =>
     t.state == 'done'
-      ? ['done', 'Completed']
+      ? ['done', 'positive']
       : t.state == 'open'
-      ? ['notices', 'On offer']
+      ? ['notices', 'caution']
       : !next(t)?.need
-      ? ['handHeart', 'Return to giver']
-      : ['journal', 'Under way']
+      ? ['handHeart', 'accent']
+      : ['journal', 'info']
   let line = (s: Step) =>
     h(
       'li',
@@ -74,42 +77,37 @@ export let journal = (
       t.says ? h('p', { class: 'Journal_Says' }, t.says) : null,
     )
   }
-  let summary = (t: Task) => {
-    let step = next(t), [icon, label] = status(t)
+  let summary = (t: Task, picked?: string) => {
+    let step = next(t), [icon, tone] = status(t)
+    let detail = t.state == 'done' ? t.gives : step
+      ? told(step, here) +
+        (step.need ? ` · ${step.have ?? 0} / ${step.need}` : '')
+      : t.from
     return h(
-      Button,
+      Tile,
       {
         key: t.id,
-        class: `Split_Row Journal_Row Journal_Row-${t.state}`,
+        mod: t.id == picked && 'on',
         'data-select': t.id,
         onClick: () => {
           state.select(owner, t.id)
           draw()
         },
       },
-      h(
-        'span',
-        { class: 'Journal_Label' },
-        picture(icon, 'Journal_Status'),
-        h('b', {}, t.title),
-        t.pinned && t.state != 'done'
-          ? picture('pin', 'Journal_Tracked')
-          : null,
-      ),
-      h('small', { class: 'Journal_State' }, label),
-      h(
-        'small',
-        {},
-        t.state == 'done' ? t.gives : step
-          ? told(step, here) +
-            (step.need ? ` · ${step.have ?? 0} / ${step.need}` : '')
-          : t.from,
-      ),
+      plate(glyph(icon), { mod: tone }),
+      h(Tile.Title, {}, t.title),
+      h(Tile.Sub, {}, detail),
+      t.pinned && t.state != 'done'
+        ? h(Tile.End, {
+          'aria-label': 'Tracked',
+          dangerouslySetInnerHTML: { __html: glyph('pin') },
+        })
+        : null,
     )
   }
-  let group = (title: string, rows: Task[]): ComponentChildren => [
+  let group = (title: string, rows: Task[], picked?: string) => [
     h('h3', { class: 'Journal_Head' }, title),
-    ...rows.map(summary),
+    h(Rows, {}, rows.map((t) => summary(t, picked))),
   ]
   let draw = () => {
     if (!panel.open) return
@@ -136,8 +134,8 @@ export let journal = (
             picture('mountain'),
             ` ${nameOf(level)}${level == here ? ' · Here' : ''}`,
           ),
-          taken.length ? group('Under way', taken) : null,
-          open.length ? group('On offer', open) : null,
+          taken.length ? group('Under way', taken, picked) : null,
+          open.length ? group('On offer', open, picked) : null,
           done.length
             ? h(Disclosure, {
               e: state.row(section(level)),
@@ -151,7 +149,7 @@ export let journal = (
                 state.mutate([bundle])
                 draw()
               },
-            }, done.map(summary))
+            }, h(Rows, {}, done.map((t) => summary(t, picked))))
             : null,
         )
       ),

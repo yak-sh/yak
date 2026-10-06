@@ -1,6 +1,9 @@
 // The party sheet: incoming invitations, the members who answered, and their
 // current or last known lands. Actions stay on the sheet while its graph rows
 // arrive, so accepting an invitation does not require walking back to them.
+import { h } from 'preact'
+import { Rows, Tile } from '@yaks/ui'
+import { glyph } from './glyphs.ts'
 import type { Panel } from './panel.ts'
 import type { parties } from './party.ts'
 import type { Frame } from './play.ts'
@@ -8,6 +11,7 @@ import { split } from './ui/split.ts'
 import { ITEMS } from './items.ts'
 import { type Slot, SLOTS } from './arms.ts'
 import type { Member } from './party-state.ts'
+import { picture } from './tile.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
@@ -67,31 +71,78 @@ export let partybox = (
     }
     let location = (m: typeof members[number]) =>
       esc(party.location(m, [frame!.body.x, frame!.body.z]))
-    let rows = `${invites.length ? '<h3>Invitations</h3>' : ''}${
-      invites.map((i) =>
-        `<button class=Split_Row type=button data-select="invite:${
-          esc(i.eid)
-        }"><b>${
-          esc(party.name(i.from))
-        }</b><small>invited you to their party</small></button>`
-      ).join('')
-    }<h3>Members</h3>${
+    let row = (
+      id: string,
+      icon: 'user' | 'users',
+      title: string,
+      sub: string,
+      tone?: string,
+    ) =>
+      h(
+        Tile,
+        {
+          key: id,
+          mod: picked == id && 'on',
+          'data-select': id,
+          onClick: () => {
+            picked = id
+            draw()
+          },
+        },
+        picture(glyph(icon), { mod: tone }),
+        h(Tile.Title, {}, title),
+        h(Tile.Sub, {}, sub),
+      )
+    let rows = [
+      invites.length
+        ? [
+          h('h3', { class: 'Pack_Head' }, 'Invitations'),
+          h(
+            Rows,
+            {},
+            invites.map((i) =>
+              row(
+                `invite:${i.eid}`,
+                'users',
+                party.name(i.from),
+                'invited you to their party',
+                'caution',
+              )
+            ),
+          ),
+        ]
+        : null,
+      h('h3', { class: 'Pack_Head' }, 'Members'),
       members.length
-        ? members.map((m) =>
-          `<button class=Split_Row type=button data-select="member:${
-            esc(m.eid)
-          }"><b>${esc(m.name)}</b><small>${m.online ? 'Online' : 'Away'}${
-            m.vitals
-              ? ` · Level ${m.vitals.lvl} · ${m.vitals.hp} / ${m.vitals.max} HP`
-              : ''
-          }</small></button>`
-        ).join('')
-        : '<p class=Party_Empty>Talk to a nearby hero to invite them.</p>'
-    }${
+        ? h(
+          Rows,
+          {},
+          members.map((m) =>
+            row(
+              `member:${m.eid}`,
+              'user',
+              m.name,
+              `${m.online ? 'Online' : 'Away'}${
+                m.vitals
+                  ? ` · Level ${m.vitals.lvl} · ${m.vitals.hp} / ${m.vitals.max} HP`
+                  : ''
+              }`,
+            )
+          ),
+        )
+        : h(
+          'p',
+          { class: 'Party_Empty' },
+          'Talk to a nearby hero to invite them.',
+        ),
       party.group
-        ? '<button class=Split_Row type=button data-select=party>Party details</button>'
-        : ''
-    }`
+        ? h(
+          Rows,
+          {},
+          row('party', 'users', 'Party details', `${members.length} members`),
+        )
+        : null,
+    ]
     let content = invite
       ? `<div class=Party_Row><div><b>${
         esc(party.name(invite.from))
@@ -124,14 +175,6 @@ export let partybox = (
     draw()
   }
   panel.body.addEventListener('click', async (e) => {
-    let row = e.target instanceof Element
-      ? e.target.closest<HTMLElement>('[data-select]')
-      : null
-    if (row) {
-      picked = row.dataset.select!
-      draw()
-      return
-    }
     let button = e.target instanceof Element
       ? e.target.closest<HTMLButtonElement>('button[data-act]')
       : null

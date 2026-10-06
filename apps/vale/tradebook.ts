@@ -2,13 +2,14 @@
 import { glyph } from './glyphs.ts'
 import type { Page } from './panel.ts'
 import { h, render } from 'preact'
-import { Button } from '@yaks/ui'
+import { Button, Rows, Tile } from '@yaks/ui'
 import { isStation } from './craft.ts'
 import { type PageState, pageState } from './page-state.ts'
 import type { Sheet } from './play.ts'
 import type { Job } from './work.ts'
 import { menu } from './station.ts'
 import { focused, selected, selection } from './ux-kit.ts'
+import { picture } from './tile.ts'
 
 import {
   ALL,
@@ -29,10 +30,11 @@ export let ledger = (
   let sheet: Sheet | null = null, job: Job | null = null
   tab.body.classList.add('Split_Host')
   tab.body.closest('.Panel_Sheet')?.classList.add('Split_Sheet')
+  // A trade's xp toward its next level, as the sub under its name.
   let bar = ({ xp, lvl }: { xp: number; lvl: number }) => {
     let from = tradeNeed(lvl), to = tradeNeed(lvl + 1)
     return h(
-      'div',
+      Tile.Sub,
       { class: 'Bar Bar-xp' },
       h('i', { style: { '--k': ((xp - from) / (to - from)).toFixed(3) } }),
       h('span', {}, `${xp - from} / ${to - from} xp`),
@@ -61,34 +63,25 @@ export let ledger = (
     ) => [
       h('h3', { class: 'Pack_Head' }, title),
       h(
-        'ul',
-        { class: 'Trades_List' },
+        Rows,
+        {},
         trades.map((trade) => {
           let progress = job!.trades[trade]
           return h(
-            'li',
-            { key: trade },
-            h(
-              Button,
-              {
-                class: `Split_Row Trades_Row${
-                  picked == trade ? ' Split_Row-on' : ''
-                }`,
-                type: 'button',
-                'data-select': trade,
-                'aria-pressed': picked == trade,
-                onClick: () => {
-                  state.mutate([focused(selected(e, trade), 'detail')])
-                  draw()
-                },
+            Tile,
+            {
+              key: trade,
+              mod: picked == trade && 'on',
+              'data-select': trade,
+              onClick: () => {
+                state.mutate([focused(selected(e, trade), 'detail')])
+                draw()
               },
-              h('i', {
-                dangerouslySetInnerHTML: { __html: glyph(TRADES[trade].icon) },
-              }),
-              h('b', {}, TRADES[trade].name),
-              h('small', {}, `Level ${progress.lvl}`),
-              bar(progress),
-            ),
+            },
+            picture(glyph(TRADES[trade].icon)),
+            h(Tile.Title, {}, TRADES[trade].name),
+            bar(progress),
+            h(Tile.End, {}, `Level ${progress.lvl}`),
           )
         }),
       ),

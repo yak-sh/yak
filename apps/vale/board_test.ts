@@ -2,7 +2,7 @@
 // while learning still respects points and the preceding skill.
 import { assertEquals, assertMatch } from '@std/assert'
 import { test } from '@yaks/testing'
-import { parseHTML } from 'linkedom'
+import { withDom } from './dom_fixture.ts'
 import { seedAbilities } from './abilities_fixture.ts'
 import { board } from './board.ts'
 import { kitOf } from './gear.ts'
@@ -18,16 +18,8 @@ let selected = (
 ) => {
   seedItems()
   seedAbilities()
-  let { document, window } = parseHTML(
-    '<html><body><main></main></body></html>',
-  )
-  let prior = Object.getOwnPropertyDescriptor(globalThis, 'Element')
-  Object.defineProperty(globalThis, 'Element', {
-    value: window.Element,
-    configurable: true,
-  })
-  try {
-    let body = document.querySelector('main')!, actions: string[] = []
+  withDom((_, body) => {
+    let actions: string[] = []
     let view = board({ body, open: true, show() {}, close() {}, toggle() {} }, {
       learn: (skill) => actions.push(skill),
       respec() {},
@@ -52,10 +44,7 @@ let selected = (
     body.querySelector<HTMLElement>(`[data-skill=${id}]`)!.click()
     view.show(frame)
     check(body, actions)
-  } finally {
-    if (prior) Object.defineProperty(globalThis, 'Element', prior)
-    else Reflect.deleteProperty(globalThis, 'Element')
-  }
+  })
 }
 
 test('the selected skill shows a discipline-colored icon plate and title like gear', () => {

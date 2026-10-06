@@ -95,9 +95,9 @@ export let fields = (look: Look) =>
   ROWS.map(([k, label, colors]) =>
     `<span class=Make_Label>${label}</span><div class=Make_Row data-k=${k}>${
       colors.map((c) =>
-        `<button type=button class="Swatch${
-          c == look[k] ? ' Swatch-on' : ''
-        }" style="--c:${c}" data-c="${c}" aria-label="${label} ${c}"></button>`
+        `<button type=button class=Swatch aria-current=${
+          c == look[k]
+        } style="--c:${c}" data-c="${c}" aria-label="${label} ${c}"></button>`
       ).join('')
     }</div>`
   ).join('')
@@ -130,7 +130,7 @@ export let picks = (
     let k = row?.dataset.k
     if (!b || !row || (k != 'tint' && k != 'hair' && k != 'skin')) return
     look[k] = b.dataset.c ?? look[k]
-    for (let s of row.children) s.classList.toggle('Swatch-on', s == b)
+    for (let s of row.children) s.setAttribute('aria-current', String(s == b))
     changed()
   })
 }

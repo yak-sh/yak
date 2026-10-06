@@ -1,15 +1,6 @@
-/* The notice board's sheet (notices.ts): each notice a paper pinned up and
-   tilted a hair, its title over who asks and where they stand, what they
-   said, and what it gives beside the button that takes it. Each is as wide
-   as the panel's room lets it be, whatever it says. */
-.Notices {
-  display: grid;
-  gap: 0.8rem;
-  width: min(30rem, 100cqw - 2rem);
-  margin: 0 auto;
-  padding: 0.5rem 0 0.8rem;
-}
-
+/* The notice board's sheet (notices.ts): the notice picked from its list, a
+   paper pinned up and tilted a hair, its title over who asks and where they
+   stand, what they said, and what it gives beside the button that takes it. */
 .Notices_None {
   margin: 0;
   color: var(--muted);

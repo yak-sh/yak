@@ -1,14 +1,19 @@
 // The hero's pack, drawn into their panel's Bag tab: what they wear in each
 // slot (how they fight in it is the Character tab's), everything else they
 // carry, and by a village's fire, the rack of plain arms anyone may take
-// to try. Each piece of gear is its own, framed and named in its rarity's
-// colour (rarity.ts); everything else is a stack of its kind. A piece's tip
-// sets it beside what is worn in its place (compare.ts `versus`). Tap a thing
+// to try, each a list, one thing to a row. Each piece of gear is its own,
+// framed and named in its rarity's colour (rarity.ts), saying its level and
+// kind, or in red the level it needs, faded until the hero has it; everything
+// else is a stack of its kind. A piece's tip sets it beside what is worn in
+// its place (compare.ts `versus`). Tap a thing, or double-tap a piece to wear
+// it,
 // to see, below the worn slots in the right pane, its stats, abilities, and
 // what wearing it would change, then wear it, take it off, or take
 // it from the rack; a second dagger, for a hero who knows how, shows what it
 // would change in the other hand. B or the tray's bag opens it. It is written
 // again only when what it shows changed.
+import { h as el } from 'preact'
+import { Rows, Tile } from '@yaks/ui'
 import { type Doer, does, GIVES, OFF } from './abilities.ts'
 import { HANDLES, type Slot, SLOT_NAMES, SLOTS, tierName } from './arms.ts'
 import {
@@ -32,7 +37,8 @@ import type { Page } from './panel.ts'
 import type { Frame, Sheet } from './play.ts'
 import type { Held } from './rules.ts'
 import { formOf } from './skills.ts'
-import { cards, tipped } from './tip.ts'
+import { cards, tipProps } from './tip.ts'
+import { picture } from './tile.ts'
 import { split } from './ui/split.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -150,15 +156,15 @@ export let pack = (panel: Page, acts: Acts) => {
     equip(sheet, pick.slice(4))
     was = []
   })
+  let pick = (from: From, key: string) => () => {
+    picked = { from, key }
+    was = []
+  }
   box.addEventListener('click', (e) => {
     let t = e.target instanceof Element ? e.target : null
     let s = sheet
-    let pick = t?.closest<HTMLElement>('[data-pick]')?.dataset.pick
     let act = t?.closest<HTMLElement>('[data-do]')?.dataset.do
-    if (pick) {
-      let [from, key] = pick.split(':') as [From, string]
-      picked = { from, key }
-    } else if (act && s && picked) {
+    if (act && s && picked) {
       let { from, key } = picked
       if (act == 'off') acts.wear(key as Slot)
       if (act == 'wear' || act == 'twin') {
@@ -179,35 +185,68 @@ export let pack = (panel: Page, acts: Acts) => {
       : undefined
   })
 
-  let tile = (
-    pick: string,
+  // A thing carried, or on the rack: its picture framed in its rarity, its
+  // name, and its level and kind, or the level it needs.
+  let row = (
+    from: From,
     h: Held,
     n = 1,
     on = false,
     had = false,
     locked = false,
   ) => {
-    let p = piece(h)
-    return `<button class="Pack_Tile ${tint(p.rarity)}${
-      on ? ' Pack_Tile-on' : ''
-    }${had ? ' Pack_Tile-had' : ''}${
-      locked ? ' Pack_Tile-locked' : ''
-    }" data-pick="${pick}"${
-      tipped({
-        name: p.name,
-        note: locked
-          ? `Requires level ${p.lvl}`
-          : p.slot
-          ? sortLine(p)
-          : undefined,
-      })
-    }><i>${icon(h.kind) || '•'}${tier(p)}</i>${n > 1 ? `<b>${n}</b>` : ''}${
-      locked
-        ? `<span class=Pack_Lock aria-label="Requires level ${p.lvl}">${
-          glyphText('lock')
-        }</span>`
-        : ''
-    }</button>`
+    let p = piece(h), key = from == 'rack' ? h.kind : h.eid
+    let what = locked
+      ? `Requires level ${p.lvl}`
+      : had
+      ? 'You have one'
+      : p.slot
+      ? sortLine(p)
+      : p.heals
+      ? `Drink it to mend ${p.heals}`
+      : ''
+    return el(
+      Tile,
+      {
+        key,
+        mod: [on && 'on', (had || locked) && 'dim'],
+        'data-pick': `${from}:${key}`,
+        ...tipProps({ name: p.name }),
+        onClick: pick(from, key),
+      },
+      picture(icon(h.kind) || '•', { class: tint(p.rarity) }),
+      el(Tile.Title, { class: `Rarity ${tint(p.rarity)}` }, p.name),
+      what && el(Tile.Sub, { mod: locked && 'negative' }, what),
+      n > 1 ? el(Tile.End, {}, `×${n}`) : null,
+    )
+  }
+
+  // A slot worn, as a piece of gear framed in its rarity.
+  let slot = (s: Sheet, slot: Slot) => {
+    let h = s.worn[slot], t = h && piece(h)
+    return el(
+      'button',
+      {
+        key: slot,
+        type: 'button',
+        class: `Pack_Slot ${tint(t?.rarity)}${t ? '' : ' Pack_Slot-empty'}`,
+        'data-pick': `worn:${slot}`,
+        'aria-current': picked?.from == 'worn' && picked.key == slot,
+        ...(t ? tipProps({ name: t.name, note: sortLine(t) }) : {}),
+        onClick: pick('worn', slot),
+      },
+      el('small', {}, SLOT_NAMES[slot]),
+      el('i', {
+        dangerouslySetInnerHTML: {
+          __html: (h ? icon(h.kind) : '·') + tier(t),
+        },
+      }),
+      el(
+        'span',
+        { class: 'Rarity' },
+        t?.name ?? (slot == 'main' ? 'Bare hands' : 'Nothing'),
+      ),
+    )
   }
 
   // What a thing is, what wearing it would change, and what can be done.
@@ -283,50 +322,54 @@ export let pack = (panel: Page, acts: Acts) => {
   }
 
   let draw = (s: Sheet, f: Pick<Frame, 'rack'>) => {
-    let worn = SLOTS.map((slot) => {
-      let h = s.worn[slot], t = h && piece(h)
-      let on = picked?.from == 'worn' && picked.key == slot
-      return `<button class="Pack_Slot ${tint(t?.rarity)}${
-        on ? ' Pack_Tile-on' : ''
-      }${t ? '' : ' Pack_Slot-empty'}" data-pick="worn:${slot}"${
-        t ? tipped({ name: t.name, note: sortLine(t) }) : ''
-      }><small>${SLOT_NAMES[slot]}</small><i>${h ? icon(h.kind) : '·'}${
-        tier(t)
-      }</i><span class=Rarity>${
-        esc(t?.name ?? (slot == 'main' ? 'Bare hands' : 'Nothing'))
-      }</span></button>`
-    }).join('')
+    let at = (from: From, key: string) =>
+      picked?.from == from && picked.key == key
     let bag = carried(s).map(({ h, n }) =>
-      tile(
-        `bag:${h.eid}`,
+      row(
+        'bag',
         h,
         n,
-        picked?.from == 'bag' && picked.key == h.eid,
+        at('bag', h.eid),
         false,
         !!ITEMS[h.kind]?.slot && !canWear(h, s.lvl),
       )
-    ).join('')
-    let rack = f.rack
-      ? `<h3 class=Pack_Head>By the fire: plain arms for anyone to try</h3><div class=Pack_Grid>${
-        rackKinds().map((k) =>
-          tile(
-            `rack:${k}`,
-            { eid: k, kind: k, n: 1 },
-            1,
-            picked?.from == 'rack' && picked.key == k,
-            s.bag.some((h) => h.kind == k),
-          )
-        ).join('')
-      }</div>`
-      : ''
+    )
     panes.render(
-      `<div class=Pack>` +
-        `<h3 class=Pack_Head>In your bag</h3>` +
-        `<div class=Pack_Grid>${
-          bag || '<span class=Pack_Hint>Your bag is empty.</span>'
-        }</div>${rack}` +
-        `</div>`,
-      `<div class=Pack_Worn>${worn}</div>${card(s, f)}`,
+      el(
+        'div',
+        { class: 'Pack' },
+        el('h3', { class: 'Pack_Head' }, 'In your bag'),
+        bag.length
+          ? el(Rows, {}, bag)
+          : el('span', { class: 'Pack_Hint' }, 'Your bag is empty.'),
+        f.rack && [
+          el(
+            'h3',
+            { class: 'Pack_Head' },
+            'By the fire: plain arms for anyone to try',
+          ),
+          el(
+            Rows,
+            {},
+            rackKinds().map((k) =>
+              row(
+                'rack',
+                { eid: k, kind: k, n: 1 },
+                1,
+                at('rack', k),
+                s.bag.some((h) => h.kind == k),
+              )
+            ),
+          ),
+        ],
+      ),
+      [
+        el('div', { class: 'Pack_Worn' }, SLOTS.map((sl) => slot(s, sl))),
+        el('div', {
+          class: 'Pack_Detail',
+          dangerouslySetInnerHTML: { __html: card(s, f) },
+        }),
+      ],
       picked ? `${picked.from}:${picked.key}` : null,
     )
   }

@@ -1,8 +1,7 @@
-/* A station's crafting (station.ts), a pack showing what can be made there:
-   its tiers as tabs, and what the thing picked asks, each line red while the
+/* A station's crafting (station.ts): its tiers as tabs over a list of what
+   can be made there, and what the thing picked asks, each line red while the
    bag is short of it. The button fills as it is made. The last tab, set
-   apart, upgrades what the hero carries; on a narrow sheet it takes a row of
-   its own. */
+   apart, upgrades what the hero carries. */
 .Panel-craft .Panel_Sheet {
   width: min(64rem, 100%);
 }
@@ -32,47 +31,13 @@
 }
 
 .Craft_Tiers {
-  display: flex;
   flex-wrap: wrap;
-  align-items: end;
-  gap: 0.2rem;
-  padding: 0.3rem 0.4rem 0;
-  border: 2px solid var(--rim);
-  border-radius: 10px 10px 0 0;
-  background: var(--well);
-
-  & .Pack_Tile {
-    width: auto;
-    height: 2.25rem;
-    margin-bottom: -2px;
-    padding: 0 0.75rem;
-    border: 2px solid var(--rim);
-    border-radius: 8px 8px 0 0;
-    background: color-mix(in srgb, var(--rim) 36%, var(--well));
-    box-shadow: none;
-  }
-
-  & .Craft_Tier-on {
-    border-color: var(--rim);
-    border-bottom-color: var(--paper);
-    background: var(--paper);
-    box-shadow: none;
-  }
-
-  & .Craft_Up {
-    display: flex;
-    gap: 0.3rem;
-    margin-left: auto;
-  }
+  margin-bottom: 0.4rem;
 }
 
-.Craft_Tiers + .Pack_Grid {
-  min-height: 4.8rem;
-  padding: 0.65rem;
-  border: 2px solid var(--rim);
-  border-top: 0;
-  border-radius: 0 0 10px 10px;
-  background: var(--paper);
+/* Upgrading what the hero carries is set apart, at the far end. */
+.Craft_Up {
+  margin-left: auto;
 }
 
 .Craft_Needs {

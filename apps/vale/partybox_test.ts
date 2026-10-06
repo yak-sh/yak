@@ -1,5 +1,5 @@
 import { equal, ok, test } from '@yaks/testing'
-import { parseHTML } from 'linkedom'
+import { withDom } from './dom_fixture.ts'
 import { memberOf } from './party-state.ts'
 import { partybox } from './partybox.ts'
 import type { parties } from './party.ts'
@@ -10,16 +10,8 @@ import { ITEMS } from './items.ts'
 
 seedItems()
 
-test('party details show live character stats and gear, then clear them when away', () => {
-  let { document, window } = parseHTML(
-    '<html><body><main></main></body></html>',
-  )
-  let prior = Object.getOwnPropertyDescriptor(globalThis, 'Element')
-  Object.defineProperty(globalThis, 'Element', {
-    value: window.Element,
-    configurable: true,
-  })
-  try {
+test('party details show live character stats and gear, then clear them when away', () =>
+  withDom((_, body) => {
     let row: Bundle = {
       entity: { eid: 'ada' },
       player: {},
@@ -39,7 +31,6 @@ test('party details show live character stats and gear, then clear them when awa
       },
       location: () => 'Mossvale · 12 m N',
     } as unknown as ReturnType<typeof parties>
-    let body = document.querySelector('main')!
     let view = partybox(
       { body, open: true, show() {}, close() {}, toggle() {}, head() {} },
       party,
@@ -70,8 +61,4 @@ test('party details show live character stats and gear, then clear them when awa
     ok(text().includes('Live stats unavailable'))
     ok(!text().includes(ITEMS.sword1.name))
     ok(text().includes('Equipment unavailable'))
-  } finally {
-    if (prior) Object.defineProperty(globalThis, 'Element', prior)
-    else Reflect.deleteProperty(globalThis, 'Element')
-  }
-})
+  }))

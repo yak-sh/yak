@@ -1,6 +1,6 @@
 /* The menu (menu.ts): what a player sets, each a switch with its icon and
-   what it does now, then the touches and the keys the vale answers, the
-   each available as its own selectable section. */
+   what it does now, then the touches and the keys the vale answers, each
+   section picked from the list beside it. */
 .Menu {
   display: grid;
   gap: var(--gap);
@@ -105,15 +105,5 @@
 
   & dd {
     margin: 0;
-  }
-}
-
-.Menu_Row {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-
-  & .Glyph {
-    flex: none;
   }
 }

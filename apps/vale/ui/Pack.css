@@ -1,5 +1,7 @@
-/* The bag and rack scroll in the left pane; worn slots head the right pane,
-   above the selected item and its comparison. Rarity frames each piece. */
+/* The bag and rack, lists of Tiles, scroll in the left pane; worn slots head
+   the right pane, above the selected item and its comparison. Rarity frames
+   each piece. A slot worn is picked as a tile is (the skin's base.css), so
+   it paints its face with background-color, under the pick's wash. */
 .Pack {
   display: flex;
   flex-direction: column;
@@ -14,13 +16,12 @@
   gap: 0.35rem;
 }
 
-.Pack_Slot,
-.Pack_Tile {
+.Pack_Slot {
   --frame: var(--rarity, transparent);
   position: relative;
   border: 2px solid var(--rim);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--frame) 14%, var(--well));
+  background-color: color-mix(in srgb, var(--frame) 14%, var(--well));
   box-shadow:
     inset 0 0 0 2px var(--frame),
     inset 0 -3px 0 color-mix(in srgb, var(--rim) 50%, transparent);
@@ -66,15 +67,14 @@
 }
 
 .Pack_Slot-empty {
-  background: color-mix(in srgb, var(--well) 50%, transparent);
+  background-color: color-mix(in srgb, var(--well) 50%, transparent);
 
   & :is(i, span) {
     opacity: 0.5;
   }
 }
 
-.Pack_Slot.Rarity-legendary,
-.Pack_Tile.Rarity-legendary {
+.Pack_Slot.Rarity-legendary {
   box-shadow:
     inset 0 0 0 2px var(--frame),
     0 0 10px color-mix(in srgb, var(--legendary) 60%, transparent);
@@ -120,19 +120,10 @@
   color: #c0442a;
 }
 
-/* The card is the sheet's foot: its border closes the bag above it. */
-.Pack_Pick {
-  position: sticky;
-  bottom: -1rem;
-  z-index: 1;
+/* The picked thing's card and comparison, under the worn slots. */
+.Pack_Detail {
   display: grid;
-  gap: 0.35rem;
-  min-height: 3.2rem;
-  margin: auto -1rem -1rem;
-  padding: 0.65rem 1.55rem 1rem;
-  border-top: 3px solid var(--rim);
-  background: var(--well);
-  box-shadow: inset 0 2px 0 var(--paper);
+  gap: 0.65rem;
 }
 
 .Pack_Card {
@@ -182,31 +173,6 @@
   color: var(--amber);
 }
 
-.Pack_Grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.Pack_Tile {
-  display: grid;
-  place-items: center;
-  width: 3.1rem;
-  height: 3.1rem;
-  padding: 0;
-
-  & b {
-    position: absolute;
-    right: 0.2rem;
-    bottom: 0.1rem;
-    font-size: 0.72rem;
-  }
-}
-
-.Pack_Tile-had {
-  opacity: 0.45;
-}
-
 /* An item's own named stats and, when present, its legendary power. */
 .Pack_Rolled {
   display: grid;
@@ -236,19 +202,7 @@
   color: var(--deep);
 }
 
-/* The piece remains inspectable; dim its picture, keeping its rarity and selection ring. */
-.Pack_Tile-locked > i,
-.Pack_Tile-locked > b {
-  opacity: 0.45;
-}
-.Pack_Card .Pack_Requirement,
-.Pack_Lock {
+/* What a piece needs before it can be worn, in red. */
+.Pack_Card .Pack_Requirement {
   color: var(--char);
-}
-.Pack_Lock {
-  position: absolute;
-  left: 0.15rem;
-  bottom: 0.1rem;
-  font-size: 0.7rem;
-  line-height: 1;
 }

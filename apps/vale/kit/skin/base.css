@@ -1,4 +1,44 @@
 /* Shared Vale skin defaults for the game and guide, without page layout. */
+
+/* What the base kit's own defaults derive from every theme, and the parts
+   read: half a gap, a faint wash of the text, and the touch-target floor,
+   which grows under a coarse pointer. */
+:where(:root) {
+  --half-gap: calc(var(--gap) / 2);
+  --soft: color-mix(in srgb, var(--text) 6%, transparent);
+  --tap: 0px;
+}
+@media (pointer: coarse) {
+  :where(:root) {
+    --tap: 2.5rem;
+  }
+}
+
+/* Picking: the one look for whatever is picked from a set, a list's tile, a
+   piece of gear worn, a colour. Each says it is one of a set with
+   `aria-current`, true on the one picked. The one picked wears a moss ring
+   drawn just inside its edge, following its corners, over a pale moss wash
+   laid on top of its own face, so a piece's rarity and its frame still show
+   and nothing moves. The pointer lays a fainter wash; the keyboard rings it
+   outside, in the focus blue every control here uses. A thing paints its own
+   face with `background-color`, which lies under the wash, never with the
+   `background` shorthand, which would wipe it. */
+:is([aria-current='true'], [aria-current='false']) {
+  cursor: pointer;
+}
+:is([aria-current='true'], [aria-current='false']):hover {
+  background-image: linear-gradient(var(--hover-wash), var(--hover-wash));
+}
+[aria-current='true'] {
+  outline: 2px solid var(--pick);
+  outline-offset: -2px;
+  background-image: linear-gradient(var(--pick-wash), var(--pick-wash));
+}
+:is([aria-current='true'], [aria-current='false']):focus-visible {
+  outline: 2px solid var(--book-focus);
+  outline-offset: 2px;
+}
+
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--faint) var(--paper);
