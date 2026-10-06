@@ -6,204 +6,182 @@ description: >
   recurring task should live: a skill, the persona, a package README, a code
   comment or a task. Use it whenever you are about to create or edit a SKILL.md
   or a script beside one, write or tune a skill's description, fix a skill that
-  fired at the wrong moment or never fired, turn what a session learned about
-  an area into something the next agent will know, or find area knowledge
-  sitting in a memory, a README or a brief that every agent there needs, even
-  when the request only says "write this down", "so agents know how this
-  works" or "make a skill". Anthropic's `skill-creator` covers the format; this
-  is the judgment on top. A brief for one agent is `agent-briefs`; a proposal
-  for the owner is `design-docs`; how a README or guide page is written is
-  `writing-documentation`.
+  fired at the wrong moment, never fired or reads like a rulebook, turn what a
+  session learned about an area into something the next agent will know, or
+  find area knowledge sitting in a memory, a README or a brief that every agent
+  there needs, even when the request only says "write this down", "so agents
+  know how this works" or "make a skill". Anthropic's `skill-creator` covers
+  the format; this is the judgment on top. A brief for one agent is
+  `agent-briefs`; a proposal for the owner is `design-docs`; how a README or
+  guide page is written is `writing-documentation`.
 ---
 
 # Writing skills
 
-A skill is a folder under `.claude/skills/<name>/`: a SKILL.md, and scripts
-beside it when it needs them. Its name and description sit in every agent's
-context all the time; the body loads only when the description matches what
-the agent is doing. That makes a skill the home for knowledge an agent needs
-only in some situations: as much as teaching takes, at no cost until then.
+A skill is a note to a colleague who just walked in mid-task: sharp, capable,
+already carrying the persona, and about to act on whatever you hand them. It
+lives at `.claude/skills/<name>/SKILL.md`, with scripts beside it when a
+workflow needs them. Its name and description ride along in every agent's
+context, and the body loads only when the description matches the moment. So a
+skill can take as long as teaching takes, and costs nothing until it's needed.
 
-Jeff, verbatim: "for now at least, i really want to lean into skills. for
-documentation, workflows, tasks, etc etc." and "skills can also work well just
-for documentation. the auto-trigger is kinda what we were searching for with
-memories".
+The owner, verbatim:
 
-A repository skill reaches Claude Code, native harness sessions and agents
-connected to the box's MCP server. Native asks receive titles and descriptions;
-`skill_read` loads the matching instructions from the session's own checkout.
-MCP offers scoped prompts, resources and complete Skills manifests; resource
-reads are not activation, and automatic MCP activation is not established.
-The shared graph form is `skill{invoke, arguments, paths, fork, options}` beside
-`doc{title, body}` (name and description) and `content{body}` (instructions).
-The optional bidirectional mirror lands graph exports before acknowledging
-them; read-only session views never import local edits. The yaks.app connector's
-app-building skills remain separate work (T-61610).
+- "for now at least, i really want to lean into skills. for documentation,
+  workflows, tasks, etc etc."
+- "skills can also work well just for documentation. the auto-trigger is kinda
+  what we were searching for with memories"
+- "agents are so bad at prompting. you gotta put vibes no policeis!"
+- "we always want skills to do at least these two things: capture any
+  principles. capture what tools we have available. and set the vibe and
+  attitude, the posture and orientation. we don't want to set policies to
+  control behavior"
 
-## Where a piece of knowledge lives
+## What a skill carries
 
-Ask who needs it, and when.
+The reader is a frontier model. It already knows how to optimize Preact, shape
+a schema or write a test. What it can't know is what we believe here, what
+we've already built, and how good work in this area feels. So every skill
+carries at least those three things:
 
-- **The persona** (memories preloaded by `contains` edges, M-6995) holds what
-  is true for every agent in every task here: the principles, the invariants,
-  the owner's standing direction. Every session pays for every word of it, and it
-  reaches every harness, so it stays small.
-- **A skill** holds one area (how a subsystem works and the judgment around
-  it), a workflow (probing a change, migrating data) or a recurring task
-  (briefing an agent, writing a design). It sits beside the code it describes,
-  so the commit that moves the code fixes the skill too.
-- **A package README** is that package's reference: what it owns, what it
-  offers and depends on, its formats. It serves anyone using the package,
-  outside this repo too. A skill points at it and adds the judgment:
-  `vocabulary` leans on the keyword table in packages/vocab/README.md rather
-  than repeating it.
-- **The owner's words** stay verbatim in the memory or comment that recorded them
-  (M-31946). A skill cites the id where they set the direction (`testing` cites
-  M-39441) and does not paraphrase them into rules.
-- **A comment or doctest** holds the invariant of one file or function.
-- **A task or a design** holds what is to be done or proposed. A skill says
-  what is.
+- **The principles.** What we hold true in this area, and why: the ideas that
+  still guide the reader when the case in front of them is one nobody wrote
+  down.
+- **The tools we have.** The packages, parts, commands and scripts already
+  built for this work, and what each is for. A reader who knows the shelf
+  reaches for what's on it instead of building another.
+- **The vibe.** The attitude, posture and orientation good work here comes
+  from: what we care about, what we're proud of, what makes us wince.
 
-A memory preloaded into the persona that only one area needs is a skill waiting
-to be written. Moving it changes the persona, so propose it to the owner in a line
-(M-31947).
+What a skill doesn't carry is policy, rules written to control behavior. A
+rule teaches exactly the cases it names, and it gets obeyed right at the edge
+where it's wrong. A sense of what we're going for travels to cases nobody
+imagined. Put these side by side:
+
+> A part that re-renders when nothing it shows has changed is a bug.
+
+> We want screens that feel instant and light, the way a great native app does.
+> Build with the instincts of a frontend engineer who cares how it feels in the
+> hand.
+
+The first gets you a test that counts renders. The second gets you someone who
+notices.
+
+So write the way you'd talk a sharp new teammate into an area over coffee: what
+it's like, what tends to trip people up and why, what good looks like, where the
+taste lies (M-6994). Commands and literal syntax are worth giving exactly. The
+judgment around them rides on the why. When a sentence starts to sound like a
+sign on a fence, there's usually a reason underneath it that's worth saying
+instead. And skip what any good engineer already knows: generic advice buries
+the parts that are ours.
+
+## Where knowledge lives
+
+Think about who needs it, and when.
+
+- **The persona** carries what every agent needs in every task: the principles
+  and the owner's standing direction (M-6995). Everyone pays for every word, so
+  it stays lean.
+- **A skill** carries one area, one workflow or one recurring task: the spirit
+  and the specifics of one corner of the code, sitting beside it, so the commit
+  that moves the code fixes the skill too.
+- **A package README** is that package's reference, for anyone, including
+  readers outside this repo. A skill points at it rather than retelling it.
+- **A code comment** holds the invariant of one file or function. A fact about
+  one app lives in that app, not in a platform skill.
+- **The owner's words** stay verbatim where they were recorded (M-31946). A
+  skill quotes them or points at them; it never paraphrases them into rules.
+- **A task or a design** holds what's to be done. A skill says what is.
+
+A preloaded memory that only one area needs is a skill waiting to happen.
+Moving it changes the persona, so mention it to the owner first (M-31947).
+
+## The description is how it gets found
+
+An agent reaches for a skill from its description alone, mid-task, while
+thinking about its work and not about skills. Agents under-reach, most of all
+on work that looks simple. So write the description from inside the moment:
+- the files they're in;
+- the commands they're about to run;
+- the symptom in front of them;
+- the plain words of requests that never name the skill: "add a field", "make
+  sure it works".
+
+Say what it isn't for and which skill owns that, and let the neighbouring skill
+say the same, so the boundary is drawn from both sides.
+
+The frontmatter is just `name` and a folded `description: >`, under 1,024
+characters (the spec's limit; most here run 600 to 950). A good gut check:
+imagine three ways the owner might ask for something that needs the skill
+without naming it, and see whether the description would catch each one.
 
 ## The name
 
-The name is also the slash command (`/query-grammar`). A skill that teaches
-gets a longer name that says its subject (`query-grammar`,
-`graph-reads-and-writes`, `end-to-end-checks`); short verb-like names (`query`,
-`test`, `design`) are kept for skills that do something, someday (M-61646).
-Lowercase words and hyphens, the same as the folder. The owner kept `vocabulary`,
-`sharing` and `yaks-app` as they were.
-
-A rename is a rename (M-17871): `git mv` the folder, change `name:`, and change
-every mention in the other skills in the same commit
-(`grep -rn 'old-name' .claude/skills`).
-
-## The description is the trigger
-
-An agent decides whether to load a skill from its description alone, mid-task,
-thinking about the task and not about skills. Agents load too few skills, not
-too many, and skip them on work that looks simple (skill-creator's guidance),
-which is where a mistake here is cheapest to prevent. So the description is
-written to be found:
-
-- **What it covers, in a phrase**, first: "How a yaks query is written and
-  read".
-- **The situations, as the agent meets them**: the files it is touching
-  (`packages/ui`, any vocab.json), the commands and tools it is about to call
-  (`yak graph apply`, the Agent tool, `yak session spawn`), the symptom in
-  front of it ("a write that landed as the wrong writer", "a run that loops").
-  Say "whenever", and "even for a one-line fix" where that is the trap.
-- **The words of requests that never say the skill's word.** Nobody asks to
-  use the vocabulary; they ask to "add a field", "track whether X happened",
-  "link X to Y". `end-to-end-checks` fires on "make sure it works".
-- **What it is not for, and which skill owns that.** Two skills that could
-  claim one moment both say who owns it, in the same terms: `vocabulary` shapes
-  a component, `data-migration` moves its stored rows, `graph-reads-and-writes`
-  is how one read or write behaves. A boundary stated in one description only
-  is half a boundary.
-- **Under 1,024 characters**, the spec's limit; most here run 600 to 950.
-
-The frontmatter is `name` and a folded `description: >`. Nothing here reads
-any other key. All of "when to use it" goes in the description, since the body
-is read only after the choice is made.
-
-To check a description, write three requests that need the skill without
-naming it, the way the owner would type them, and find the words in the description
-each one would match. skill-creator's trigger evals measure it properly and
-cost time and money; save them for a skill that keeps failing to fire.
+The name is also the slash command. A skill that teaches gets a name that says
+its subject (`query-grammar`, `end-to-end-checks`); short verbs are saved for
+skills that do something (M-61646). A rename is a rename (M-17871): `git mv` the
+folder, change `name:`, and update every mention in the other skills in the same
+commit.
 
 ## The body
 
-Write for an agent who has just loaded it mid-task and will act on it at once.
+Open with how the area works: the picture everything else hangs on, so the
+reader can reason about cases you never listed. Then the principles, the tools
+and the feel, and what tends to go wrong and why.
 
-- **Open with what is**: a paragraph on how the area works, the model the rest
-  hangs on, so the reader can reason about a case the skill never lists.
-- **Explain; don't legislate** (M-6994). Say why agents get this area wrong
-  and what is true instead; `vocabulary` opens on what goes wrong when a word
-  is designed by feel. A list of don'ts teaches only the cases it names, and is
-  obeyed at the edge where it is wrong. Steps can be imperative; the reasons
-  carry the judgment.
-- **Pointers, not copies** (M-14370): a file and its section, a memory, task or
-  design id. A copied table or schema goes stale when the code moves, and the
-  skill then teaches the old shape with authority. Copy only what an agent
-  needs in hand to act: a command with its flags, a literal syntax.
-- **Run every command and open every path before writing it down**: `yak help
-  <command>`, `ls`, the query itself. A skill is trusted more than a guess, so
-  a wrong flag in one is repeated by every agent that loads it (M-37958).
-- **What is, and a bug is not what is.** Name the task that fixes it rather
-  than teaching the workaround. Today's behavior written as the rule is how a
-  skill, like a brief, preserves what the owner wants gone.
-- **Mark what is designed but not built**, with its id: "Namespacing (D-59567)
-  is designed, not built". The line changes when it lands.
-- **No dates, war stories, "used to" or "supersedes"** (M-4404). The history
-  is in git.
-- **Nothing the persona already says.** It is loaded already; cite the id when
-  the reader needs to know which rule bites here.
-- **Short enough to read in one go**: the skills here are 80 to 250 lines.
-  Past about 500, split it, or move reference material into a file beside it
-  and say when to read that file.
-- **Nothing private**: the repo is public (M-17876), so no secrets, fleet data
-  or owner data.
+A skill is trusted more than a guess, so it's worth the care of being true.
+Whatever you name, you've run or opened: a wrong flag in a skill spreads to
+everyone who reads it (M-37958). It describes the code as it is. Where that's a
+bug, it names the task that fixes it rather than teaching the reader to live
+with it, and what's designed but not built carries its id. It points at files
+and ids rather than copying what will go stale (M-14370), and it leaves the
+history to git (M-4404). The repo is public (M-17876), so nothing private.
 
-## Scripts beside the skill
+It reads in one sitting. One that keeps growing is usually two skills, or has
+reference material that wants a file of its own beside it.
 
-Code every agent in a workflow would otherwise write again goes in `scripts/`
-once, and the body says how to run it: `end-to-end-checks` reads a page's DOM
-over CDP with `deno run -A <this skill>/scripts/dom.ts <cdp port> <url>
-'<expression>'`. The script's header carries its usage. deno.json excludes
-`.claude`, so `deno task check` never sees the script; run it once before
-landing.
+## Scripts
+
+When every agent in a workflow would otherwise write the same helper, write it
+once in `scripts/` beside the skill, with its usage in its header.
+`end-to-end-checks` does this for reading a page's DOM over CDP. deno.json
+excludes `.claude`, so run a script yourself before landing it.
 
 ## One home per idea
 
-Each idea is taught in one skill, and the others point at it. Split where an
-agent's moment splits: `query-grammar` came out of `graph-reads-and-writes`
-because an agent filling in a board's query needs the grammar and none of how
-writes behave. Move the text rather than copying it, and the old skill says
-"How a query is written is `query-grammar`". Merge two skills that always fire
-together and never apart.
+Each idea lives in one skill, and the others point at it. Split where an agent's
+moment splits; merge what always fires together. Before landing a new skill or a
+changed description, skim the other descriptions
+(`head -n 22 .claude/skills/*/SKILL.md`) and grep for anything yours now teaches,
+so nothing is taught twice.
 
-Before landing a new skill or a changed description, in the same commit:
-
-1. Read every description: `head -n 22 .claude/skills/*/SKILL.md`.
-2. Put the boundary in both descriptions wherever another skill could claim a
-   moment yours claims.
-3. Grep the other skills for what yours now teaches
-   (`grep -rn 'topic' .claude/skills`), delete the copies, and point.
-
-`sharing` is the fleet's: the same file sits in every venture, from holdco's
-template (~/code/holdco/templates/new-venture/.claude/skills/sharing), so a
-change to it goes to the template too.
+`sharing` belongs to the fleet. It comes from holdco's template
+(~/code/holdco/templates/new-venture/.claude/skills/sharing), so a change to it
+goes there too.
 
 ## Writing one from a session
 
-A session that learned how an area works, by building it or from the owner's
-corrections, loses it at its end unless something holds it. The context that
-holds it writes the skill: a fork of that session, which has all of it, not a
-fresh agent handed a summary. Then the locus reads the skill before calling it
-done. The writer writes fluently whether or not it checked; the reader, who
-was there, catches the claim nobody ran, the paraphrase of the owner, the copy of
-what another skill owns.
+The session that learned an area, by building it or by being corrected, is the
+one to write it down. Ideally that's a fork that still holds everything, not a
+fresh agent handed a summary. Then read it back as the agent who will load it
+cold: would they have found it? Would they come away with the principles, the
+tools and the feel of the place, or just a list of orders?
 
-When the owner corrects something in one area, the fix is usually in that area's
-skill: find the line that produced the wrong behavior and rewrite it, rather
-than adding a line beside it (M-4404, M-14769).
+When the owner corrects something, the fix usually lives in that area's skill.
+Find the sentence that produced the miss and rewrite it, rather than adding a
+new one beside it (M-4404, M-14769).
 
-Reviewing a skill is reading it as the agent who loads it, cold and about to
-act, against the sections above: would the description have fired on the
-requests that needed it, does every command run, is any sentence a guess, does
-it repeat the persona or another skill, does it explain or only order.
+## Reach
+
+A skill here reaches Claude Code, native harness sessions and agents on the
+box's MCP server; packages/harness/README.md has how each one finds and loads
+it. The yaks.app connector's app-building skills are separate work (T-61610).
 
 ## The closing line
 
-Every skill here except `sharing` ends with the line that ends this one. A
-skill drifts from the code it describes, and the agent who notices is the only
-one who knows; the line gives that agent the license, so a skill gets better
-each time it is used instead of going stale. Nothing checks that agents follow
-a skill (M-37840): when one keeps being missed or misread, its words are what
-to fix.
+Every skill except `sharing` ends with the line below. Skills drift from the
+code, and the agent who notices is the one holding the fix; the line is their
+invitation. Nothing checks that a skill is followed (M-37840), so when one keeps
+being missed, its words are what to change.
 
 When this skill is wrong or missing something, fix it in the same change.
