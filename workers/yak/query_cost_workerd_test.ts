@@ -54,5 +54,11 @@ test('the full page query accounts for stale installation and uses lookup', asyn
   assertEquals(res.status, 200, await res.clone().text())
   let report = await res.json() as Awaited<ReturnType<typeof queryCost>>
   console.log('FULL_QUERY_COST', JSON.stringify(report))
-  for (let value of Object.values(report)) assertEquals(value.cost.written, 0)
+  for (let [name, value] of Object.entries(report)) {
+    assertEquals(value.cost.written, 0)
+    assert(
+      value.cost.read <= (name == 'cold' ? 60 : 40),
+      `${name}: ${value.cost.read} full-route billed rows`,
+    )
+  }
 })

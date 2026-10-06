@@ -74,6 +74,13 @@ export let deployCost = async (storage: State['storage'], history: number) => {
   }
   let costs: Record<string, typeof current> = {}
   try {
+    // Obsolete description-install bookkeeping cannot invalidate a physical
+    // schema already established by its own completed install.
+    driver({
+      sql: { exec: sql },
+      transactionSync: storage.transactionSync.bind(storage),
+    }).query({ t: 'delete', from: 'yak_kv', where: by({ k: 'schema-ready' }) })
+    current = { read: 0, written: 0, calls: 0 }
     // Runtime deploying new code cannot execute a request in an idle Store.
     store = new Store(ctx, {}, [])
     costs.constructed = { ...current }

@@ -95,8 +95,10 @@ Deployment POSTs materialize schema/lens descriptions, shipped rows, command
 identities and embedding queue triggers. Schema pages come from @yaks/code's
 `described`: `_vocab.hash` skips an unchanged vocabulary and a changed hash
 writes only changed rows. This is separate from the storage schema stamp.
-`schemaReady` is asserted only after a completed deployment install establishes
-metadata, epoch and archetypes for that vocabulary. Explicit mover commands arm
+`schemaReady` trusts the physical `schema` stamp established by completed
+schema installation, including epoch and archetypes. Description installation
+is separate: its bookkeeping never invalidates physical readiness. A cold
+ordinary request inspects no SQL schema signatures when that stamp matches. Explicit mover commands arm
 bounded migration work; a cold read never starts it.
 
 The idle regression is `workers/yak/idle_alarm_workerd_test.ts`, through the real

@@ -23,7 +23,15 @@ import {
   tally,
   val,
 } from '@yaks/sql'
-import { backfill, fit, indexed, retabled, retired } from '@yaks/sqlite'
+import {
+  backfill,
+  epoch,
+  epochAt,
+  fit,
+  indexed,
+  retabled,
+  retired,
+} from '@yaks/sqlite'
 import type { Index, Vocab } from '@yaks/vocab'
 
 import { type Bundle, type Comp, token } from '@yaks/graph'
@@ -490,6 +498,10 @@ export let install = (
   if (vocab.comp('archetype')) {
     backfill(d, false)
   }
+  // The physical schema stamp establishes the adapter's readiness. Mint
+  // lineage on installation only; later reads can trust the stamp without
+  // asking the adapter to inspect signatures or write missing metadata.
+  if (!unfit.length && !epochAt(d)) epoch(d)
   return unfit
 }
 

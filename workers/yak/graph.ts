@@ -464,7 +464,6 @@ type Word =
   | 'access'
   | 'mail'
   | 'schema'
-  | 'schema-ready'
   | 'descriptions'
   | 'wakes'
   | 'planted'
@@ -932,7 +931,7 @@ export class Store {
         // minted, while an app's entities are pointed at by the eid its client
         // minted and never by a number, so nothing mints one for them.
         number: numbered(vocab),
-        schemaReady: () => this.#get('schema-ready') == stamp,
+        schemaReady: () => this.#get('schema') == stamp,
         // The vocabulary says which prose is searched — @yaks/doc declares its
         // title and body, and an app's own vocab.json declares `"search": true`
         // on whatever of its words it wants found. sqlite owns no index. The
@@ -2010,7 +2009,6 @@ export class Store {
   #deployed = async (): Promise<void> => {
     this.#graph.storage.install()
     watchEmbedding(this.#sql, this.#texts.fields)
-    this.#put('schema-ready', this.#get('schema')!)
     // Schema pages are ordinary entities, made by the package that owns
     // their identities. Describe after boot, in bounded writes, with the
     // hash last so an interrupted pass resumes on the next request.

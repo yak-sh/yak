@@ -21,6 +21,10 @@ test('one changed word installs independently of retained Store history', async 
     assertEquals(report.costs.constructed, { read: 0, written: 0, calls: 0 })
     assertEquals(report.costs.unchanged.written, 0)
     assert(
+      report.costs.unchanged.read < 100,
+      `physical schema cold read: ${report.costs.unchanged.read}`,
+    )
+    assert(
       report.costs.description.written < 100,
       JSON.stringify(report.costs.description),
     )
