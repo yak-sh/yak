@@ -4,7 +4,9 @@ import { title, TitleEdit } from '../title.tsx'
 import { Pip } from './Show.tsx'
 import { Id } from './Inline.tsx'
 import { SessionDot } from '../session_status.tsx'
-import { useModel } from '../subscriptions.ts'
+import { useModel, useReference } from '../subscriptions.ts'
+import { renderView } from '../registry.ts'
+import { ent, jobOf } from '../../live.ts'
 
 let Frame = block('div', 'CardTitle', { Text: 'span' })
 let { Text } = Frame
@@ -78,6 +80,26 @@ export let SessionTitle = ({ e }: { e: Ent }) => {
       <Text>
         {friendly(model.name) ?? 'session'}
         {model.effort && ` · ${model.effort}`}
+      </Text>
+    </Frame>
+  )
+}
+
+// The bar over a session's page names what it is working on: the task it
+// holds, else the one it worked, else its own title. Its id is beside it
+// already, and its dot says how the run is doing.
+export let SessionBarTitle = ({ e }: { e: Ent }) => {
+  let job = jobOf(e)
+  let worked = useReference(e.refs.find((r) => r.type == 'worked')?.child)
+    .value
+  let task = job ? ent(job) : worked
+  return (
+    <Frame>
+      <SessionDot e={e} />
+      <Text>
+        {task
+          ? renderView(task, 'Title')
+          : <span {...title(e.doc?.title || 'Session')} />}
       </Text>
     </Frame>
   )

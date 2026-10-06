@@ -62,6 +62,7 @@ test('the sidebar lists its places, lights the one you are on, and goes where yo
     free()
     wire.free()
     owner.value = undefined
+    offer([])
     config.host = prior
     learn(docs)
   }

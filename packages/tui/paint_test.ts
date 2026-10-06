@@ -284,6 +284,25 @@ test('a block style lays an inline tag out on lines of its own', () => {
   )
 })
 
+test('a hidden style paints nothing and takes no room, inline, in a block or in a row', () => {
+  let tree = el(
+    'root',
+    {},
+    el(
+      'div',
+      { row: '1' },
+      el('div', { width: '4' }, el('span', { class: 'Off' }, '≡'), 'nav'),
+      el('div', { class: 'Off' }, 'shade'),
+      el('div', {}, 'page'),
+    ),
+    el('div', { class: 'Off' }, 'gone'),
+  )
+  assertEquals(words(screenful(tree, 12, 2, { Off: { hidden: true } }).lines), [
+    'nav page',
+    '',
+  ])
+})
+
 test('a style becomes the escapes, and nothing else does', () => {
   let line = screenful(
     el('root', {}, el('div', { class: 'Title' }, 'hi')),

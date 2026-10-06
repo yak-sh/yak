@@ -2,24 +2,12 @@ import { registry } from '../registry.ts'
 import { parse } from '@yaks/query'
 import { test } from '@yaks/testing'
 import '../../testing.ts'
-import { type ComponentChild, h, type VNode } from 'preact'
+import { h } from 'preact'
 import { assertEquals } from '@std/assert'
 import { applyLocal, cache, ent } from '../../live.ts'
 import { mount } from '../mount.ts'
 import { resolve } from '../Entity.tsx'
-import * as ui from '@yaks/ui'
-import { Dot } from '../Dot.tsx'
 import { Id, Inline, TaskInline } from './Inline.tsx'
-
-let vnode = (child: ComponentChild): child is VNode =>
-  typeof child == 'object' && child != null &&
-  'type' in child && 'props' in child
-
-let nodes = (child: ComponentChild): VNode[] => {
-  if (Array.isArray(child)) return child.flatMap(nodes)
-  if (!vnode(child)) return []
-  return [child, ...nodes(child.props.children)]
-}
 
 test('Inline renderers say the title without the id', () => {
   cache.value = {
@@ -39,13 +27,41 @@ test('Inline renderers say the title without the id', () => {
     let e = ent(eid)
     let task = eid == 'task'
     assertEquals(resolve(e, 'Inline').Render, task ? TaskInline : Inline)
-    let line = Inline({ e, dot: task })
-    let tree = nodes(line)
-    assertEquals(tree.some((node) => node.type == ui.Id), false)
-    assertEquals(tree.some((node) => node.type == Dot), task)
-    assertEquals(tree.some((node) => node.props.children == title), true)
+    let { root, free } = mount(<Inline e={e} dot={task} />)
+    try {
+      assertEquals(root.textContent?.trim(), title)
+      assertEquals(root.querySelector('.Id'), null)
+      assertEquals(!!root.querySelector('.Dot'), task)
+    } finally {
+      free()
+    }
   }
   cache.value = {}
+})
+
+// A link says what the entity's Title view says, so a package that titles its
+// kind (a bug by its headline, not its whole message) is read that way in
+// every link to it.
+test('a link draws its entity through the Title a package contributes', () => {
+  cache.value = {
+    bug: {
+      entity: { eid: 'bug', num: 1 },
+      doc: { eid: 'bug', title: 'TypeError: a long message\n  at frames' },
+    },
+  }
+  let prior = registry.renderers
+  registry.renderers = [
+    { view: 'Title', match: parse('.doc'), Render: () => <i>TypeError</i> },
+    ...prior,
+  ]
+  let { root, free } = mount(<Inline e={ent('bug')} />)
+  try {
+    assertEquals(root.textContent, 'TypeError')
+  } finally {
+    free()
+    registry.renderers = prior
+    cache.value = {}
+  }
 })
 
 // A dependency row paints a PEER: what an edge rider projected

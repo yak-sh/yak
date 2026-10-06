@@ -139,8 +139,9 @@ sheet for its components and these widgets from a composition
 `everforest` from `@yaks/ui`).
 
 A `Style` may set `fg`, `bg`, `bold`, `dim`, `italic`, `underline`, `strike`,
-`inverse`, `glyph`, `indent`, `gap`, and `block`, which lays an inline tag (a
-`button`, a `span`) out on lines of its own, as CSS's `display: block` does. The
+`inverse`, `glyph`, `indent`, `gap`, `block`, which lays an inline tag (a
+`button`, a `span`) out on lines of its own, as CSS's `display: block` does, and
+`hidden`, which paints nothing and takes no room, as `display: none` does. The
 painter also uses `href` internally for sanitized links.
 
 ## Widgets

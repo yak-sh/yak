@@ -35,6 +35,9 @@ export type Style = {
   indent?: number
   /** A blank line after this element's lines. */
   gap?: boolean
+  /** Paint nothing and take no room, as CSS's `display: none` does: for a
+   * part a terminal has no use for, such as a phone's menu. */
+  hidden?: boolean
   /** Lay this element out as a block, on lines of its own, whatever its tag:
    * CSS's `display: block` for a `button` or a `span`. */
   block?: boolean

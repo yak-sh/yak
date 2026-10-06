@@ -52,6 +52,7 @@ import {
   BoardTitle,
   DocTitle,
   RoleTitle,
+  SessionBarTitle,
   SessionTitle,
   TaskTitle,
   WebTitle,
@@ -271,6 +272,7 @@ define([
   { view: 'Card.Title', match: parse('.doc .role'), Render: RoleTitle },
   { view: 'Card.Title', match: parse('.web'), Render: WebTitle },
   { view: 'Card.Title', match: parse('.session'), Render: SessionTitle },
+  { view: 'Bar.Title', match: parse('.session'), Render: SessionBarTitle },
   { view: 'Card.Title', match: parse('.doc'), Render: DocTitle },
   { view: 'Card.Title', match: and(), Render: AnyTitle },
   {

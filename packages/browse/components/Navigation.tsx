@@ -24,11 +24,11 @@ import { useInboxCount } from './useInbox.ts'
 
 let { Brand, Find, Item, Label, Count } = Shell
 
-// What packages offer from their `./views` facets, set once by the door
-// before the app paints.
+// What packages offer from their `./views` facets, set by the door before
+// the app paints.
 let offered: Destination[] = []
-export let offer = (more: Destination[]): void => {
-  offered = [...offered, ...more]
+export let offer = (all: Destination[]): void => {
+  offered = all
 }
 
 /** Every destination this host offers, in the sidebar's order. */
@@ -105,8 +105,12 @@ export let Navigation = () => {
         {brand()}
       </Brand>
       <Find>
+        <Shell.Icon>
+          <Icon name='search' size={16} />
+        </Shell.Icon>
         <fields.Filter
           id={FIELD}
+          mod='bare'
           placeholder='Search'
           aria-label='Search'
           onKey={(ev: KeyboardEvent) => {

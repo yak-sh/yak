@@ -1,7 +1,9 @@
 /* An app's frame: the sidebar on the surface at the left, the page on the
-   floor beside it. A place is a line you can press, its icon then its name in
-   the body's type; where you are is lit. The page's bar is one quiet line,
-   its title in the text's ink; the body under it scrolls on its own.
+   floor beside it. Search is a box at its top, the field bare inside it. A
+   place is a line you can press, its icon then its name in the body's type;
+   where you are is lit. The page's bar is one quiet line,
+   its title in the text's ink then the page's tools; the body under it
+   scrolls on its own.
    Narrower than a tablet, the sidebar folds away behind the bar's menu and
    slides over the page when opened, a shade behind it. */
 .Shell {
@@ -31,7 +33,22 @@
   text-decoration: none;
 }
 .Shell_Find {
-  padding: 0 2px var(--half-gap);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: max(2rem, var(--tap));
+  margin: 0 0 var(--gap);
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--bg);
+}
+.Shell_Find:focus-within {
+  border-color: var(--accent);
+}
+.Shell_Find > :not(.Shell_Icon) {
+  flex: 1;
+  min-width: 0;
 }
 .Shell_Item {
   display: flex;
@@ -110,6 +127,16 @@
   font-weight: 600;
   color: var(--text);
 }
+.Shell_Tools {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  min-width: 0;
+}
+.Shell_Tools:empty {
+  display: none;
+}
 .Shell_Body {
   flex: 1;
   min-height: 0;
@@ -148,5 +175,14 @@
   .Shell_Menu {
     display: inline-flex;
     margin-left: calc(var(--half-gap) * -1);
+  }
+  .Shell_Bar {
+    flex-wrap: wrap;
+    row-gap: var(--half-gap);
+  }
+  .Shell_Tools {
+    flex: 1 0 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
 }

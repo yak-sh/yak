@@ -190,6 +190,7 @@ let inline = (n: TNode, st: Style, c: Ctx): Seg[] => {
   let el = n as TElement
   if (el.localName == 'br') return [{ text: '\n', style: st, owner: el }]
   let o = own(el, c.sheet)
+  if (o.hidden) return []
   let s = inherit(st, o)
   if (o.glyph) return [{ text: o.glyph, style: s, owner: el }]
   if (el.localName == 'input' || el.localName == 'textarea') {
@@ -422,7 +423,7 @@ let col = (el: TElement, s: Style, w: number, h: number | null, c: Ctx) => {
 // Under a grid, the grid's columns say how wide each is instead (`cells`).
 let row = (el: TElement, s: Style, w: number, h: number | null, c: Ctx) => {
   if (c.columns) return cells(el, s, w, h, c)
-  let all = kids(el)
+  let all = kids(el).filter((k) => !own(k, c.sheet).hidden)
   let fixed = all.map((k) => wide(k, c.sheet))
   let spare = w - fixed.reduce((n: number, v) => n + (v ?? 0), 0)
   let growers = fixed.filter((v) => v == null).length
@@ -712,6 +713,7 @@ export let lay = (
   c: Ctx,
 ): Line[] => {
   let o = own(el, c.sheet)
+  if (o.hidden) return []
   let boxed = el.viewport || el.attr('scroll') != null ||
     wide(el, c.sheet) != null || grows(el, c.sheet)
   let lines = layout(el, st, w, h, c)

@@ -121,87 +121,97 @@ export let Page = ({ at }: { at: string }) => {
     else url.searchParams.set('v', v)
     navigate(url.pathname + url.search, { replace: true })
   }
-  let home = url.pathname == '/' && !url.search && !vocab.comp('subscription')
+  // Home is the owner's inbox, or the host's own list where nothing composes
+  // an inbox; either way it is named for itself, never for the person.
+  let home = url.pathname == '/' && !url.search
+  let list = home && !vocab.comp('subscription')
   let named = titleAt(at)
+  let page = home ? undefined : e
   let filter = place
     ? `destination:${place.key}`
-    : home
+    : list
     ? 'app-browse'
-    : e && filterable.has(view ?? '')
-    ? e.eid
+    : page && filterable.has(view ?? '')
+    ? page.eid
     : undefined
   return (
     <>
       <Shell.Bar>
         <SidebarMenu />
         <Shell.Title>
-          {e
+          {page
             ? (
               <>
-                <Id e={e} />
-                <Entity eid={e.eid} view='Bar.Title' />
+                <Id e={page} />
+                <Entity eid={page.eid} view='Bar.Title' />
               </>
             )
             : search != null
             ? (
               <>
-                <Icon name='search' size={16} />
+                <Shell.Icon>
+                  <Icon name='search' size={16} />
+                </Shell.Icon>
                 Search
               </>
             )
             : named && (
               <>
-                <Icon name={named.icon} size={16} />
+                <Shell.Icon>
+                  <Icon name={named.icon} size={16} />
+                </Shell.Icon>
                 {named.name}
               </>
             )}
         </Shell.Title>
-        {filter && <FilterInput eid={filter} />}
-        {e && (
-          <Tabs>
-            {tabs.length > 1 && tabs.map((v) => (
-              <Tab
-                type='button'
-                key={v}
-                mod={v == view && 'on'}
-                aria-label={v}
-                data-tip={v}
-                onClick={() => v != view && show(v)}
-              >
-                <TabFace view={v} eid={e.eid} />
-              </Tab>
-            ))}
-            {
-              /* The page's dropdown: the same menu a card's right-click
+        <Shell.Tools>
+          {filter && <FilterInput eid={filter} />}
+          {page && (
+            <Tabs>
+              {tabs.length > 1 && tabs.map((v) => (
+                <Tab
+                  type='button'
+                  key={v}
+                  mod={v == view && 'on'}
+                  aria-label={v}
+                  data-tip={v}
+                  onClick={() => v != view && show(v)}
+                >
+                  <TabFace view={v} eid={page.eid} />
+                </Tab>
+              ))}
+              {
+                /* The page's dropdown: the same menu a card's right-click
               serves, hung from the bar's far edge. Pointerdown must not
               bubble — the shell's close-on-press would eat the toggle. */
-            }
-            <Tab
-              type='button'
-              aria-label='Menu'
-              data-tip='menu'
-              onPointerDown={(ev: Event) => ev.stopPropagation()}
-              onClick={(
-                ev: MouseEvent & { currentTarget: HTMLElement },
-              ) => {
-                if (menu.value) {
-                  menu.value = null
-                  return
-                }
-                let r = ev.currentTarget.getBoundingClientRect()
-                menu.value = {
-                  x: r.right,
-                  y: r.bottom,
-                  href: entityPath(idOf(e)),
-                  eid: e.eid,
-                  align: 'right',
-                }
-              }}
-            >
-              <Icon name='ellipsis-vertical' />
-            </Tab>
-          </Tabs>
-        )}
+              }
+              <Tab
+                type='button'
+                aria-label='Menu'
+                data-tip='menu'
+                onPointerDown={(ev: Event) => ev.stopPropagation()}
+                onClick={(
+                  ev: MouseEvent & { currentTarget: HTMLElement },
+                ) => {
+                  if (menu.value) {
+                    menu.value = null
+                    return
+                  }
+                  let r = ev.currentTarget.getBoundingClientRect()
+                  menu.value = {
+                    x: r.right,
+                    y: r.bottom,
+                    href: entityPath(idOf(page)),
+                    eid: page.eid,
+                    align: 'right',
+                  }
+                }}
+              >
+                <Icon name='ellipsis-vertical' />
+              </Tab>
+            </Tabs>
+          )}
+        </Shell.Tools>
       </Shell.Bar>
       <Viewport
         id={`browse:${at}`}
@@ -217,14 +227,14 @@ export let Page = ({ at }: { at: string }) => {
           ? <QueryList eid={filter!} query={place.query} />
           : e
           ? <Entity eid={e.eid} view={view} />
-          : home
+          : list
           ? (
             <QueryList
               eid='app-browse'
               query={hosting().home?.query ?? '.doc'}
             />
           )
-          : url.pathname == '/' && !url.search
+          : home
           ? (
             <LostFrame>
               <h1>Inbox</h1>
