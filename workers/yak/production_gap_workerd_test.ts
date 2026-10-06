@@ -49,7 +49,14 @@ test(
       `${k.base}/__play_cost/?production=1&history=100&villagers=6&turns=10240&outputs=50&cold=1&unsequenced=1`,
     )
     assertEquals(r.status, 200, await r.clone().text())
-    console.log('RETAINED_LONG_ALARM', JSON.stringify(await r.json()))
+    let report = await r.json()
+    console.log('RETAINED_LONG_ALARM', JSON.stringify(report))
+    assertEquals(report.answers, 8)
+    assertEquals(report.failures, [])
+    assert(
+      report.total.read < 800000,
+      `retained alarm rereads historical transcripts: ${report.total.read}`,
+    )
   },
   { tags: ['long'] },
 )
