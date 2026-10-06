@@ -1,47 +1,48 @@
-/* Carry the existing Vale token source until its consumers move. Semantic
-   roles dress the base kit in field-book paper and moss, not a new palette. */
+/* The vale's tokens (ui/theme.css), and the base kit's roles read from them,
+   so every part the kit draws wears the glass the game is painted in: paper
+   sheets, wells, rims and moss. Better and worse are the colours of a number
+   that changes (compare.ts), wherever one does. */
 @import url('../ui/theme.css');
 
 :root {
-  --bg: var(--book-paper);
-  --surface: var(--book-paper-dark);
-  --card: var(--book-paper-light);
-  --border: var(--book-line);
-  --border2: var(--book-gold);
-  --text: var(--book-ink);
-  --muted: var(--book-muted);
+  --bg: var(--paper);
+  --surface: var(--well);
+  --card: var(--paper);
+  --border: var(--line);
+  --border2: var(--rim);
+  --text: var(--ink);
   --dim: var(--faint);
-  --accent: var(--book-green);
+  --accent: var(--deep);
   --link: var(--book-rare);
-  --heading: var(--book-leather);
+  --heading: var(--deep);
   --info: var(--book-rare);
   --active: var(--amber);
-  --positive: var(--book-good);
-  --negative: var(--book-alert);
+  --positive: var(--better);
+  --negative: var(--worse);
   --caution: var(--amber);
   --special: var(--epic);
   --number: var(--amber);
-  --literal: var(--book-alert);
+  --literal: var(--char);
   --time: var(--book-rare);
-  --who: var(--book-green);
-  --keyword: var(--book-alert);
-  --string: var(--book-good);
+  --who: var(--deep);
+  --keyword: var(--char);
+  --string: var(--deep);
   --fn: var(--book-rare);
   --type: var(--amber);
-  --attr: var(--book-green);
+  --attr: var(--deep);
   --hue-0: var(--book-rare);
   --hue-1: var(--amber);
   --hue-2: var(--epic);
-  --hue-3: var(--book-good);
+  --hue-3: var(--deep);
   --hue-4: var(--legendary);
-  --hue-5: var(--book-alert);
+  --hue-5: var(--char);
   /* Picking (skin/base.css): a moss ring and wash for the one picked, a
      fainter wash under the pointer. */
   --pick: var(--deep);
   --pick-wash: color-mix(in srgb, var(--moss) 13%, transparent);
   --hover-wash: color-mix(in srgb, var(--moss) 7%, transparent);
-  --font: Georgia, 'Times New Roman', serif;
+  --font: 'Fredoka', system-ui, sans-serif;
   --mono: ui-monospace, monospace;
   --measure: 90ch;
-  --shadow: 0 8px 30px var(--book-shadow);
+  --shadow: var(--flat);
 }

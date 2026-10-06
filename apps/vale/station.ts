@@ -182,7 +182,8 @@ export let menu = (
       ? job.doing?.recipe == key && !job.doing.piece
       : job.doing?.piece == key
     return h(Button, {
-      class: `Btn Btn-go${active ? ' Craft_Go' : ''}`,
+      mod: 'go',
+      class: active ? 'Craft_Go' : undefined,
       'data-do': kind,
       disabled: active || !plan(r, bag),
       style: active ? { '--k': job.doing!.k.toFixed(3) } : undefined,

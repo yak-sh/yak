@@ -8,7 +8,7 @@ export let split = (host: HTMLElement) => {
   host.classList.add('Split_Host')
   host.closest('.Panel_Sheet')?.classList.add('Split_Sheet')
   host.innerHTML =
-    `<div class=Split><section class=Split_List aria-label="Things"></section><section class=Split_Detail aria-label="Selected thing"><button class="Btn Btn-small Split_Back" type=button>Back to list</button><div class=Split_Content></div></section></div>`
+    `<div class=Split><section class=Split_List aria-label="Things"></section><section class=Split_Detail aria-label="Selected thing"><button class="Button Split_Back" type=button>Back to list</button><div class=Split_Content></div></section></div>`
   let root = host.querySelector<HTMLElement>('.Split')!
   let list = root.querySelector<HTMLElement>('.Split_List')!
   let detail = root.querySelector<HTMLElement>('.Split_Content')!

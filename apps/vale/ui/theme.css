@@ -21,6 +21,9 @@
   --amber: #9a6a1c;
   --hp: #e0573f;
   --xp: #7fc6f2;
+  /* A number that changes (compare.ts): for the better, or the worse. */
+  --better: #3f8f2a;
+  --worse: #c0442a;
   /* How fine a piece of gear is (Rarity.css), green, blue, purple and
      orange, the way every loot goblin reads them. */
   --uncommon: #2f9a2a;

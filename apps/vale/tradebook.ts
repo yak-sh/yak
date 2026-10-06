@@ -108,7 +108,7 @@ export let ledger = (
           'section',
           { class: 'Split_Detail', 'aria-label': 'Selected trade' },
           h(Button, {
-            class: 'Btn Btn-small Split_Back',
+            class: 'Split_Back',
             type: 'button',
             onClick: () => {
               state.mutate([focused(e, 'list')])

@@ -32,6 +32,15 @@
 .Button-danger {
   --ink: var(--negative);
 }
+/* the one to press, where a sheet offers one */
+.Button-go {
+  --ink: var(--bg);
+  --line: var(--accent);
+  background: var(--accent);
+}
+.Button-go:hover {
+  background: color-mix(in srgb, var(--accent) 85%, var(--text));
+}
 /* a glyph that waits for the pointer */
 .Button-quiet {
   --ink: var(--dim);
@@ -59,4 +68,7 @@
 .Button-quiet {
   border-color: transparent;
   background: none;
+}
+.Button-go {
+  background: var(--accent);
 }

@@ -33,7 +33,9 @@ test('Vale composition puts the theme before kit and skin fallback assets', asyn
   let originals = await Promise.all(
     urls.map(async (url) => await (await fetch(url)).text()),
   )
-  assert(css.startsWith(originals[0].slice(0, originals[0].indexOf('@import'))))
+  assert(
+    css.startsWith(originals[0].slice(0, originals[0].indexOf('@import'))),
+  )
   assert(css.includes(new URL('./ui/theme.css', import.meta.url).href))
   for (let text of originals) {
     assert(css.includes(text.slice(text.lastIndexOf('}') - 20)))
@@ -64,8 +66,9 @@ test('Vale semantic colours in the terminal resolve the current browser tokens',
       .map(([, k, v]) => [k, tokens[v]]),
   )
   let { hues, ...colors } = composition.theme.colors
+  // A role is a token's, or a token of the same name.
   for (let [role, value] of Object.entries(colors)) {
-    assertEquals(roles[role], value, role)
+    assertEquals(roles[role] ?? tokens[role], value, role)
   }
   hues.forEach((value, i) => assertEquals(roles[`hue-${i}`], value))
 })

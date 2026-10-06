@@ -105,10 +105,17 @@
   }
 }
 
+/* A sheet with tabs wears them along the foot of its head (Tabs, in the
+   skin), the head's own rule running on under the close button; the tab
+   showing opens into the sheet. A narrow sheet shows only the glyph of a tab
+   that is not showing, a phone's only glyphs, so every tab fits beside the
+   close button, and a touched one no keys. */
 .Panel-tabs .Panel_Head {
   align-items: end;
   gap: 0.35rem;
-  padding: 0.4rem 0.6rem 0 0.6rem;
+  padding: 0.4rem 0.6rem 0;
+  border-bottom: 0;
+  box-shadow: inset 0 -2px 0 var(--rim);
 }
 
 .Panel-tabs .Panel_Body > * {
@@ -116,71 +123,27 @@
 }
 
 .Panel_Tabs {
-  display: flex;
   flex: 1;
-  align-items: end;
-  overflow-x: auto;
-  overflow-y: hidden;
-  gap: 0.2rem;
-  min-width: 0;
-  padding-bottom: 2px;
-}
-
-.Panel_Tab {
-  position: relative;
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  height: 2.45rem;
-  margin-bottom: -2px;
-  padding: 0 0.6rem;
-  border: 2px solid var(--rim);
-  border-radius: 8px 8px 0 0;
-  background: color-mix(in srgb, var(--rim) 36%, var(--well));
-  font: inherit;
-  font-size: 0.85rem;
-  color: var(--muted);
-  white-space: nowrap;
-  cursor: pointer;
-  touch-action: manipulation;
-
-  & .Glyph {
-    width: 1.1rem;
-    height: 1.1rem;
-  }
-
-  &[aria-selected='true'] {
-    border-color: var(--rim);
-    border-bottom-color: var(--paper);
-    background: var(--paper);
-    color: var(--deep);
-  }
-
-  &:hover:not([aria-selected='true']) {
-    background: var(--paper);
-  }
 }
 
 .Panel-tabs .Panel_Close {
   align-self: center;
-  margin-bottom: 0.2rem;
-}
-
-.Panel_Tab-new::after {
-  content: '';
-  position: absolute;
-  top: -0.1rem;
-  right: -0.1rem;
-  width: 0.6rem;
-  height: 0.6rem;
-  border-radius: 50%;
-  background: var(--ember);
-  box-shadow: 0 0 0 2px var(--paper);
 }
 
 @container panel (width < 42rem) {
-  .Panel_Tab:not([aria-selected='true']) > :is(.Panel_TabLabel, kbd) {
+  .Panel_Tabs .Tabs_Tab:not(.Tabs_Tab-on) > :is(.Panel_TabLabel, .ValeKeycap) {
+    display: none;
+  }
+}
+
+@container panel (width < 30rem) {
+  .Panel_Tabs .Tabs_Tab > :is(.Panel_TabLabel, .ValeKeycap) {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .Panel_Tabs .ValeKeycap {
     display: none;
   }
 }

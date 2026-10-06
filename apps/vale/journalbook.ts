@@ -59,7 +59,8 @@ export let journal = (
         h('b', { class: 'Journal_Title' }, t.title),
         tracked && t.state != 'done'
           ? h(Button, {
-            class: 'Orb Orb-small Journal_Pin',
+            mod: 'quiet',
+            class: 'Journal_Pin',
             'data-pin': t.id,
             'aria-label': t.pinned ? 'Stop tracking' : 'Track it',
             'aria-pressed': t.pinned,

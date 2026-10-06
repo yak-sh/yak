@@ -7,7 +7,8 @@ import { composition } from '../ui-kit.ts'
 import { withDom } from '../dom_fixture.ts'
 import { seedDesigns } from '../designs_fixture.ts'
 import { pageState } from '../page-state.ts'
-import type { Panel } from '../panel.ts'
+import { type Panel, panels } from '../panel.ts'
+import { SHEETS } from '../hud.ts'
 import type { Sheet } from '../play.ts'
 import type { Held } from '../rules.ts'
 import { kitOf } from '../gear.ts'
@@ -151,42 +152,47 @@ let deal = {
   ready: false,
 } as unknown as View
 
-// Each list drawn by its module into a panel shaped as the game's, with one
-// thing picked; `pick` clicks it, as a player would.
+// Each list drawn by its module into the panel the game draws it in, a tab
+// of the hero's sheet or a sheet of its own, with one thing picked; `pick`
+// clicks it, as a player would.
 type Draw = (panel: Panel, pick: (q: string) => void) => void | Promise<void>
-export let LISTS: [string, string, Draw][] = [
-  ['journal', 'Panel-hero Panel-tabs', async (p, pick) => {
+type Tab = keyof typeof SHEETS.hero.tabs
+type Own = Exclude<keyof typeof SHEETS, 'hero'>
+export let LISTS: [string, Tab | Own, Draw][] = [
+  ['journal', 'journal', async (p, pick) => {
     let state = pageState()
     await state.ready
     let view = journal(p, { pin: () => {} }, state)
     view.show(quests, 'mossvale')
     pick('[data-select=wolves]')
   }],
-  ['trades', 'Panel-hero Panel-tabs', async (p, pick) => {
+  ['trades', 'trades', async (p, pick) => {
     let state = pageState()
     await state.ready
     ledger(p, preview, state).show(hero(), job())
     pick('[data-select=forge]')
   }],
-  ['menu', 'Panel-hero Panel-tabs', (p, pick) => {
+  ['menu', 'menu', (p, pick) => {
     menu(p, settings()).show()
     pick('[data-select=controls]')
   }],
-  ['skills', 'Panel-hero Panel-tabs', (p, pick) => {
+  ['skills', 'skills', (p, pick) => {
     let view = board(p, { learn: () => {}, respec: () => {} })
-    let frame = { sheet: hero(), rack: true } as Parameters<typeof view.show>[0]
+    let frame = { sheet: hero(), rack: true } as Parameters<
+      typeof view.show
+    >[0]
     view.show(frame)
     pick('[data-skill=hide]')
     view.show(frame)
   }],
-  ['bag', 'Panel-hero Panel-tabs', (p, pick) => {
+  ['bag', 'bag', (p, pick) => {
     let view = pack(p, { wear: () => {}, take: () => {} })
     let frame = { sheet: hero(), rack: true }
     view.show(frame)
     pick('[data-pick="bag:heavy"]')
     view.show(frame)
   }],
-  ['crafting', 'Panel-craft', async (p, pick) => {
+  ['crafting', 'craft', async (p, pick) => {
     let state = pageState(), work = job()
     await state.ready
     let bench = station(p, { make: () => {}, upgrade: () => {} }, state)
@@ -195,7 +201,7 @@ export let LISTS: [string, string, Draw][] = [
     pick('[data-tier="1"]')
     pick('.Tile[data-pick]')
   }],
-  ['upgrades', 'Panel-craft', async (p, pick) => {
+  ['upgrades', 'craft', async (p, pick) => {
     let state = pageState(), work = job()
     await state.ready
     let bench = station(p, { make: () => {}, upgrade: () => {} }, state)
@@ -204,11 +210,11 @@ export let LISTS: [string, string, Draw][] = [
     pick('[data-tier=up]')
     pick('.Tile[data-pick]')
   }],
-  ['party', 'Panel-hero Panel-tabs', (p, pick) => {
+  ['party', 'party', (p, pick) => {
     partybox(p, party, () => {}).paint({ body: { x: 0, z: 0 } } as never)
     pick('[data-select="member:bo"]')
   }],
-  ['notices', 'Panel-notices', (p, pick) => {
+  ['notices', 'notices', (p, pick) => {
     let board = noticeboard(p, { take: () => {} })
     board.show([
       { ...quests[2], id: 'n1', where: '40 m north' } as Notice,
@@ -216,7 +222,7 @@ export let LISTS: [string, string, Draw][] = [
     ])
     pick('[data-select=n1]')
   }],
-  ['deals', 'Panel-deal', (p, pick) => {
+  ['deals', 'deal', (p, pick) => {
     let deals = dealbox(p, () => {})
     deals.open('wren', 'Wren')
     deals.paint([deal, { ...deal, eid: 'other', ready: true }], 'wren', 0)
@@ -225,31 +231,32 @@ export let LISTS: [string, string, Draw][] = [
 ]
 
 // The game's page: the kit's stylesheet, then the game's own, as main.ts
-// dresses it, and each list in a panel filling a window of its own.
+// dresses it, and each list in its panel (panel.ts), open over a glass
+// filling a window of its own.
 /** The page, written to a file of its own; its path. */
 export let listsPage = async (): Promise<string> => {
   seedDesigns()
   let body = await withDom(async ({ document, window }) => {
-    for (let [name, kind, draw] of LISTS) {
-      let at = document.createElement('div')
-      at.className = 'Case'
-      at.dataset.list = name
-      at.innerHTML =
-        `<section class="Panel ${kind}"><div class=Panel_Sheet><header class="Head Panel_Head"><h1 class=Panel_Title>${name}</h1></header><div class=Panel_Body></div></div></section>`
-      document.body.append(at)
-      let host = at.querySelector<HTMLElement>('.Panel_Body')!
+    let settle = () => new Promise((ok) => setTimeout(ok))
+    for (let [name, where, draw] of LISTS) {
+      let glass = document.createElement('div')
+      glass.className = 'Case'
+      glass.dataset.list = name
+      document.body.append(glass)
+      let state = pageState(`case-${name}`)
+      await state.ready
+      let shelf = panels(glass, () => false, state)
+      let page: Panel = where in SHEETS.hero.tabs
+        ? shelf.book('hero', SHEETS.hero)[where as Tab]
+        : shelf.add(where, SHEETS[where as Own])
+      page.show()
+      await settle()
       let pick = (q: string) =>
-        host.querySelector(q)!.dispatchEvent(
+        page.body.querySelector(q)!.dispatchEvent(
           new window.Event('click', { bubbles: true }),
         )
-      await draw({
-        body: host,
-        open: true,
-        show: () => {},
-        close: () => {},
-        toggle: () => {},
-        head: () => {},
-      }, pick)
+      await draw(page, pick)
+      await settle()
     }
     return document.body.innerHTML
   })

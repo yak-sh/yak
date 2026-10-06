@@ -12,10 +12,12 @@ import { LISTS, listsPage } from './lists_fixture.ts'
 let lines = () => {
   let shown = (e: Element) => e.getClientRects().length > 0
   let box = (e: Element) => e.getBoundingClientRect()
+  // The first words shown in `e`, if any show.
   let words = (e: Element) => {
     let walk = document.createTreeWalker(e, NodeFilter.SHOW_TEXT, {
       acceptNode: (n) =>
-        n.textContent!.trim() && !n.parentElement!.closest('svg')
+        n.textContent!.trim() && !n.parentElement!.closest('svg') &&
+          shown(n.parentElement!)
           ? NodeFilter.FILTER_ACCEPT
           : NodeFilter.FILTER_REJECT,
     })

@@ -77,12 +77,6 @@
 
 .Journal_Pin {
   flex: none;
-  --size: 1.9rem;
-
-  &[aria-pressed='true'] {
-    --face: var(--amber);
-    --tint: var(--paper);
-  }
 }
 
 .Journal_From {

@@ -69,7 +69,9 @@ test('panel and tabs keep native nodes, drafts, listeners and scroll across grap
       equal(tabs.quests.open, true)
       tabs.skills.mark(true)
       equal(state.marked('book/skills'), true)
-      let buttons = glass.querySelectorAll<HTMLButtonElement>('.Panel_Tab')
+      let buttons = glass.querySelectorAll<HTMLButtonElement>(
+        '.Panel_Tabs .Tabs_Tab',
+      )
       equal(buttons[1].getAttribute('aria-label'), 'Skills')
       equal(buttons[1].querySelector('.Panel_TabLabel')?.textContent, 'Skills')
       equal(
@@ -78,7 +80,7 @@ test('panel and tabs keep native nodes, drafts, listeners and scroll across grap
         ),
         'true',
       )
-      ok(buttons[1].classList.contains('Panel_Tab-new'))
+      ok(buttons[1].querySelector('.Tabs_Badge'))
       buttons[1].click()
       equal(state.pane, 'skills')
       equal(buttons[1].getAttribute('aria-selected'), 'true')
@@ -90,7 +92,7 @@ test('panel and tabs keep native nodes, drafts, listeners and scroll across grap
       await state.open('book', 'quests')
       equal(tabs.quests.body.hidden, false)
       await state.mark('book/skills', false)
-      ok(!buttons[1].classList.contains('Panel_Tab-new'))
+      ok(!buttons[1].querySelector('.Tabs_Badge'))
       await state.open('map')
       await state.head('map', '<em>External heading</em>')
       equal(

@@ -11,8 +11,16 @@
 // Each tab's owner holds it as it would a panel of its own.
 import { type Glyph, glyph } from './glyphs.ts'
 import { h, render } from 'preact'
-import { Body, Button, Head } from '@yaks/ui'
+import { Body, Button, Head, Tabs } from '@yaks/ui'
+import { ValeKeycap } from './kit/ValeKeycap.ts'
 import { type PageState, pageState } from './page-state.ts'
+
+// A glyph beside words, which a screen reader passes over.
+let mark = (icon: Glyph) =>
+  h('span', {
+    'aria-hidden': 'true',
+    dangerouslySetInnerHTML: { __html: glyph(icon) },
+  })
 
 /** Where an owner draws, and whether it shows: a panel, or one tab of one. */
 export type Page = {
@@ -112,53 +120,48 @@ export let panels = (
               { class: 'Panel_Head' },
               tabs
                 ? h(
-                  'nav',
+                  Tabs,
                   { class: 'Panel_Tabs', role: 'tablist' },
-                  leaves.map((leaf) =>
-                    h(
-                      Button,
+                  leaves.map((leaf) => {
+                    let on = state.pane == leaf.name
+                    let keycap = leaf.spec!.keys[0] && cap(leaf.spec!.keys[0])
+                    return h(
+                      Tabs.Tab,
                       {
                         key: leaf.name,
                         type: 'button',
-                        class: `Panel_Tab${
-                          state.marked(`${id}/${leaf.name}`)
-                            ? ' Panel_Tab-new'
-                            : ''
-                        }`,
+                        mod: on && 'on',
                         role: 'tab',
-                        'aria-selected': String(state.pane == leaf.name),
+                        'aria-selected': String(on),
                         'aria-label': leaf.spec!.title,
                         'data-tip': leaf.spec!.title,
-                        'data-tip-key': leaf.spec!.keys[0]
-                          ? cap(leaf.spec!.keys[0])
-                          : undefined,
+                        'data-tip-key': keycap || undefined,
                         onClick: leaf.page.show,
                       },
-                      h('span', {
-                        'aria-hidden': 'true',
-                        dangerouslySetInnerHTML: {
-                          __html: glyph(leaf.spec!.icon),
-                        },
-                      }),
+                      mark(leaf.spec!.icon),
                       h('span', { class: 'Panel_TabLabel' }, leaf.spec!.title),
-                      leaf.spec!.keys[0] &&
-                        h('kbd', { class: 'Key' }, cap(leaf.spec!.keys[0])),
+                      keycap && h(ValeKeycap, { keycap }),
+                      state.marked(`${id}/${leaf.name}`) && h(Tabs.Badge, {}),
                     )
-                  ),
+                  }),
                 )
                 : h('h2', {
                   class: 'Panel_Title',
                   dangerouslySetInnerHTML: { __html: state.heading(id) },
                 }),
-              h(Button, {
-                type: 'button',
-                class: 'Orb Orb-small Panel_Close',
-                'aria-label': 'Close',
-                'data-tip': 'Close',
-                'data-tip-key': key,
-                onClick: () => state.close(id),
-                dangerouslySetInnerHTML: { __html: glyph('x') },
-              }),
+              h(
+                Button,
+                {
+                  type: 'button',
+                  mod: 'quiet',
+                  class: 'Panel_Close',
+                  'aria-label': 'Close',
+                  'data-tip': 'Close',
+                  'data-tip-key': key,
+                  onClick: () => state.close(id),
+                },
+                mark('x'),
+              ),
             ),
             leaves.map((leaf) => {
               leaf.page.body.hidden = tabs && state.pane != leaf.name

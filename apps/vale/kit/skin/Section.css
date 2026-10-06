@@ -1,0 +1,44 @@
+/* Vale's rendering of Section: a part of a sheet under a small amber title,
+   an icon beside its words when it has one, a count or a note after them,
+   and what it is about under them; then what it holds. Sections stack a
+   little apart. */
+.Section {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.Section + .Section {
+  margin-top: 0.6rem;
+}
+.Section_Title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.1rem 0.35rem;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--amber);
+
+  & .Glyph {
+    flex: none;
+    width: 1.1em;
+    height: 1.1em;
+  }
+}
+.Section_Count,
+.Section_Note {
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+}
+.Section_Note-refused {
+  color: var(--negative);
+}
+.Section_Sub {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--faint);
+}
