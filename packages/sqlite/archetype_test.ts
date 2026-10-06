@@ -561,9 +561,17 @@ test('physical archetype discovery never inspects provider-owned SQLite tables',
 
 test('one-archetype paged reads use the compound ordering index', async () => {
   let d = mem()
-  let s = storage(d, vocab)
+  let numbered = loadVocab([...vocab.docs, {
+    $defs: {
+      entity: {
+        component: true,
+        properties: { num: { type: 'number', stamped: true } },
+      },
+    },
+  }])
+  let s = storage(d, numbered)
   s.install()
-  let g = graph({ storage: s, vocab, plugins: [archetypes()] })
+  let g = graph({ storage: s, vocab: numbered, plugins: [archetypes()] })
   await g.apply([{ entity: { eid: 'one' }, doc: { title: 'One' } }])
   let [{ archetype }] = scan(d, 'entity', by({ eid: 'one' }), ['archetype'])
   let plan = d.query({
@@ -582,6 +590,7 @@ test('one-archetype paged reads use the compound ordering index', async () => {
   d.query({ t: 'drop', kind: 'index', name: 'entity_archetype_num' })
   s.install()
   assert(indexes(d, 'entity').includes('entity_archetype_num'))
+  assert(!indexes(d, 'entity').includes('entity_archetype'))
 })
 
 test('archetype: reclassify classifies rows written past the graph, no triggers', () => {

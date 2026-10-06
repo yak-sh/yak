@@ -359,8 +359,9 @@ export let indexed = (vocab: Vocab): CreateIndex[] => [
   // they opt into archetypes/migration, do not index a column they lack.
   ...(vocab.comp('archetype')
     ? [
-      indexDdl('entity', { props: ['archetype'], unique: false }),
-      indexDdl('entity', { props: ['archetype', 'num'], unique: false }),
+      ...vocab.prop('entity', 'num')
+        ? [indexDdl('entity', { props: ['archetype', 'num'], unique: false })]
+        : [indexDdl('entity', { props: ['archetype'], unique: false })],
     ]
     : []),
   ...tables(vocab)
