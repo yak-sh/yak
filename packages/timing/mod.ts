@@ -14,6 +14,7 @@ export type { SummaryOptions } from './summary.ts'
 export { sample, thresholds } from './sample.ts'
 export type { Sample, SampleOptions, Thresholds } from './sample.ts'
 export { project } from './project.ts'
+export { TRACE_MAX_SPANS } from './cap.ts'
 export type { ProjectOptions } from './project.ts'
 export { sampleRequest, selectedRequest, selectRequest } from './request.ts'
 export type {

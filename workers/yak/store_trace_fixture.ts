@@ -165,6 +165,22 @@ export let traceCost = async (db: TraceStorage) => {
       await ask('/query?q=.recipe%20*%20.limit=2601')
       measuring = false
       reported.threshold = { cost, deliveries: deliveries.length }
+      await ask('/trace', { next: 1, rate: 0 }, true)
+      deliveries.length = 0
+      cost = empty()
+      measuring = true
+      await ask(
+        '/apply',
+        Array.from({ length: 100 }, (_, i) => ({
+          entity: {
+            eid: `10000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+          },
+          recipe: { title: 'Capped' },
+        })),
+      )
+      measuring = false
+      reported.capped = { cost, deliveries: deliveries.length }
+      traces.capped = deliveries.flat()
     }
     // Separate the tracker storage from the app; its schema and installation
     // are setup, not part of the measured trace admission.

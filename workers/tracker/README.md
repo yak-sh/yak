@@ -62,16 +62,18 @@ counts. Error intake does not share the trace allowance.
 ### Trace write ceiling
 
 The platform tracker object serializes admission for every space and reserves a
-conservative write bound before forwarding a trace. At most 700 reserved rows
-can overlap any rolling 60-second window. A reservation is 64 rows per bundle
-plus eight rows for the two durable metadata writes. Accepted captures contain
-one trace root and its complete span tree, at most ten bundles, with only the
-trace/context/metric components the bounded intake supports. Oversized,
+conservative write bound before forwarding a trace. At most 42,000 reserved rows
+can overlap any rolling hour. A reservation is 64 rows per bundle plus eight
+rows for the two durable metadata writes. Accepted captures contain one trace
+root and its complete span tree, at most 201 bundles (one trace and 200 spans),
+with only the trace/context/metric components the bounded intake supports. The
+source keeps the most expensive spans and their ancestors within 200 spans;
+omitted work remains in its retained parent's inclusive metrics. Oversized,
 incomplete, malformed and over-ceiling captures are dropped and acknowledged; no
 partial tree is stored and drops do not report new tracker errors.
 
-Successful reservations expire 60 seconds after delivery completes, not at a
-calendar-minute rollover. Reservations persist in the platform's existing
+Successful reservations expire one hour after delivery completes, not at a
+calendar-hour rollover. Reservations persist in the platform's existing
 `server_meta`. A failed or interrupted delivery leaves its reservation pending
 indefinitely: failure cannot refund writes that might already have happened.
 Redelivery consumes another reservation even if immutable intake writes nothing.

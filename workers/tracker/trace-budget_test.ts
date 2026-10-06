@@ -2,7 +2,7 @@
 import { equal, ok, test } from '@yaks/testing'
 import { durable } from '../../packages/durable-object/testing.ts'
 import type { Bundle } from '@yaks/graph'
-import { reserveTrace, traceBatch } from '@yaks/tracker/intake'
+import { reserveTrace, TRACE_CEILING, traceBatch } from '@yaks/tracker/intake'
 import { type State, Tracker } from './object.ts'
 import { platform } from './core.ts'
 import { consume } from './queue.ts'
@@ -10,9 +10,9 @@ import { sign } from './auth.ts'
 
 let space = '00000000-0000-4000-8000-000000000001'
 let uuid = () => crypto.randomUUID()
-let rows = (scope = space): Bundle[] => {
+let rows = (scope = space, spans = 1): Bundle[] => {
   let root = uuid()
-  return [{
+  let body: Bundle[] = [{
     entity: { eid: root },
     during: { space: scope },
     trace: {
@@ -34,6 +34,15 @@ let rows = (scope = space): Bundle[] => {
     statements: { n: 1 },
     repeats: { n: 2 },
   }]
+  let parent = body[1].entity.eid
+  for (let i = 1; i < spans; i++) {
+    body.push({
+      ...body[1],
+      entity: { eid: uuid() },
+      span: { trace: root, parent, op: 'sql', name: 'select' },
+    })
+  }
+  return body
 }
 let state = (storage: State['storage'], name: string): State => ({
   id: { name },
@@ -70,10 +79,12 @@ test('trace shapes bound components, references, root and whole capture', () => 
     traceBatch([...body, ...Array.from({ length: 9 }, () => rows()[1])]),
     undefined,
   )
+  equal(traceBatch(rows(space, 201)), undefined)
+  ok(traceBatch(rows(space, 200)))
   let capture = ok(traceBatch(body))
   equal(capture.cost, 136)
   let held = reserveTrace(undefined, 0, capture.cost)!
-  equal(reserveTrace(held, 1_000_000, 700), undefined)
+  equal(reserveTrace(held, 1_000_000, TRACE_CEILING), undefined)
 })
 
 test('global ceiling serializes spaces, persists across reboot, rolls from completion and counts drops', async () => {
@@ -89,24 +100,27 @@ test('global ceiling serializes spaces, persists across reboot, rolls from compl
   let authority = new Tracker(state(db, platform), env, () => clock)
   await authority.boot()
   let outcomes = await Promise.all(
-    Array.from({ length: 20 }, () => authority.admitTrace(space, rows())),
+    Array.from(
+      { length: 20 },
+      () => authority.admitTrace(space, rows(space, 200)),
+    ),
   )
-  equal(outcomes.filter((r) => r.accepted).length, 5)
-  equal(delivered, 5)
-  equal(authority.traceBudget().reserved, 680)
-  equal(authority.traceBudget().dropped, 15)
+  equal(outcomes.filter((r) => r.accepted).length, 3)
+  equal(delivered, 3)
+  equal(authority.traceBudget().reserved, 38616)
+  equal(authority.traceBudget().dropped, 17)
   authority = new Tracker(state(db, platform), env, () => clock)
-  equal((await authority.admitTrace(space, rows())).accepted, false)
-  clock = 60_999
-  equal((await authority.admitTrace(space, rows())).accepted, false)
-  clock = 61_000
-  equal((await authority.admitTrace(space, rows())).accepted, true)
+  equal((await authority.admitTrace(space, rows(space, 200))).accepted, false)
+  clock = 3_600_999
+  equal((await authority.admitTrace(space, rows(space, 200))).accepted, false)
+  clock = 3_601_000
+  equal((await authority.admitTrace(space, rows(space, 200))).accepted, true)
   // Clock rollback cannot expire a slot or restart the platform allowance.
   clock = -1
-  equal((await authority.admitTrace(space, rows())).accepted, false)
+  equal((await authority.admitTrace(space, rows(space, 200))).accepted, false)
   let coldTarget = new Tracker(state(db, space), {}, () => clock)
   equal(await coldTarget.ingestTrace(rows()), true)
-  equal((await coldTarget.tracker!.graph.read('.trace')).length, 7)
+  equal((await coldTarget.tracker!.graph.read('.trace')).length, 5)
 })
 
 test('failed forwarding keeps a pending durable charge rather than refunding on restart', async () => {
@@ -118,13 +132,15 @@ test('failed forwarding keeps a pending durable charge rather than refunding on 
   }
   let authority = new Tracker(state(db, platform), env, () => clock)
   await authority.boot()
-  for (let i = 0; i < 5; i++) await authority.admitTrace(space, rows())
+  for (let i = 0; i < 3; i++) {
+    await authority.admitTrace(space, rows(space, 200))
+  }
   equal(authority.traceBudget().pending, true)
-  equal(authority.traceBudget().reserved, 680)
-  clock = 1_000_000
+  equal(authority.traceBudget().reserved, 38616)
+  clock = 10_000_000
   authority = new Tracker(state(db, platform), env, () => clock)
-  equal((await authority.admitTrace(space, rows())).accepted, false)
-  equal(authority.traceBudget().reserved, 680)
+  equal((await authority.admitTrace(space, rows(space, 200))).accepted, false)
+  equal(authority.traceBudget().reserved, 38616)
 })
 
 test('queue acknowledges dropped traces without retrying or reporting and leaves errors independent', async () => {
@@ -199,8 +215,8 @@ test('corrupt durable reservations fail closed without writing or reporting', as
   let { meta } = await import('@yaks/sqlite')
   let { driver } = await import('@yaks/durable-object')
   meta(driver(db)).set('trace-budget', '{"slots":[{"reserved":-1,"until":0}]}')
-  equal((await authority.admitTrace(space, rows())).accepted, false)
-  equal(authority.traceBudget().reserved, 700)
+  equal((await authority.admitTrace(space, rows(space, 200))).accepted, false)
+  equal(authority.traceBudget().reserved, TRACE_CEILING)
 })
 
 test('trace authority transport failure retries without generating tracker errors', async () => {

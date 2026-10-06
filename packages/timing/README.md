@@ -54,11 +54,11 @@ equal(selected[1].elapsed, { start: 0, ms: 20 })
 
 ## Exports
 
-| Export               | Provides                                                                                                                                                      |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/timing`       | `summarize`, `bounds`, `sample`, `project`, `selectedRequest`, `selectRequest`, `sampleRequest`, `thresholds`, `timingDoc`; summary, trace and sampling types |
-| `@yaks/timing/views` | `views`, `inspectViews`: trace and span views, a trace's page and the trace list; `destinations`: the Traces page in a browsing app's sidebar                 |
-| `@yaks/timing/vocab` | `timingDoc`, `docs`, `description`                                                                                                                            |
+| Export               | Provides                                                                                                                                                                         |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/timing`       | `summarize`, `bounds`, `sample`, `project`, `selectedRequest`, `selectRequest`, `sampleRequest`, `TRACE_MAX_SPANS`, `thresholds`, `timingDoc`; summary, trace and sampling types |
+| `@yaks/timing/views` | `views`, `inspectViews`: trace and span views, a trace's page and the trace list; `destinations`: the Traces page in a browsing app's sidebar                                    |
+| `@yaks/timing/vocab` | `timingDoc`, `docs`, `description`                                                                                                                                               |
 
 ## Closed-minute summaries
 
@@ -299,4 +299,52 @@ let trace = {
 equal(page.asks!(trace, {} as never, {}), {
   spans: '.span.trace=example-trace * .order=elapsed.start',
 })
+```
+
+`sampleRequest` retains at most `TRACE_MAX_SPANS` (200) spans. It keeps the
+request root, then ranks spans by rows read plus rows written, breaking ties by
+elapsed time, and admits each span only together with its ancestors. Omitted
+work stays in the nearest retained parent's inclusive metrics: do not add it
+again. A parent's count minus its retained children's counts is its own plus
+folded work. Summing those exclusive counts over the retained tree gives the
+request total, including statements. Capture order, span identities and root
+totals do not change; an ancestor path too large to fit is folded rather than
+truncated.
+
+```ts
+import { sampleRequest, TRACE_MAX_SPANS } from '@yaks/timing'
+import type { Event } from '@yaks/trace'
+import { equal } from '@yaks/testing'
+
+let spans: Event[] = [
+  {
+    id: 'root',
+    kind: 'request',
+    name: 'query',
+    stage: 'end',
+    time: 0,
+    duration: 0,
+    counts: { rowsRead: 5000, statements: 5000 },
+  },
+  ...Array.from({ length: 5000 }, (_, i): Event => ({
+    id: String(i),
+    parent: 'root',
+    kind: 'sql',
+    name: 'select',
+    stage: 'end',
+    time: 0,
+    duration: 0,
+    counts: { rowsRead: 1, statements: 1 },
+  })),
+]
+let rows = sampleRequest(spans, {
+  requested: true,
+  rowsRead: 5000,
+  rowsWritten: 0,
+  origin: 0,
+  eid: 'a3f19c02-4b00-4000-8000-000000000001',
+})!
+equal(rows.length, TRACE_MAX_SPANS + 1)
+equal(rows[1].rows_read, { n: 5000 })
+equal(rows[1].statements, { n: 5000 })
 ```

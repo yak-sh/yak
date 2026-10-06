@@ -4,6 +4,10 @@ import { type Bundle, derivedEid } from '@yaks/graph'
 import type { Cost, TraceStorage } from './store_trace_fixture.ts'
 import { type State, Tracker } from '../tracker/object.ts'
 import { platform } from '../tracker/core.ts'
+import { sampleRequest } from '@yaks/timing'
+import { during, peek, record } from '@yaks/trace'
+import { driver } from '@yaks/durable-object'
+import { select, table } from '@yaks/sql'
 
 let empty = (): Cost => ({ read: 0, written: 0, statements: 0 })
 let space = derivedEid('T-66171|space')
@@ -127,28 +131,69 @@ export let trackerBound = async (db: TraceStorage) => {
         ...row,
         during: { ...(row.during as Record<string, unknown>), space: scope },
       }))
+    // Both useful ordinary captures and huge statement trees pass the same
+    // authority as queue intake. Projection bounds the latter before delivery.
+    let sql = driver(db), statement = select({ from: table('server_meta') })
+    let capture = (n: number) => {
+      let target = {}
+      cost = empty()
+      measuring = true
+      let captured = record(target, () => {
+        let c = peek(target)!
+        during(c.begin({ kind: 'request', name: 'query' }), () => {
+          for (let i = 0; i < n; i++) sql.query(statement)
+        })
+      }, { history: false })
+      measuring = false
+      return { captured, totals: { ...cost } }
+    }
+    let ordinaryRequest = capture(72), largeRequest = capture(5000)
+    let projectRequest = (n: number, request: ReturnType<typeof capture>) =>
+      sampleRequest(request.captured.spans, {
+        requested: true,
+        rowsRead: request.totals.read,
+        rowsWritten: request.totals.written,
+        eid: derivedEid(`T-66207|${n}`),
+        origin: 0,
+        during: { space },
+      })!
+    let ordinary = projectRequest(4000, ordinaryRequest)
+    let capped = projectRequest(4001, largeRequest)
+    cost = empty()
+    measuring = true
+    let useful = [
+      await authority.admitTrace(space, ordinary),
+      await authority.admitTrace(space, capped),
+    ]
+    measuring = false
+    let usefulCost = { ...cost }
+    let stored = await target.tracker!.graph.get(
+      capped.map((r) => r.entity.eid),
+    )
+    // Expire the successful reservations, not their metrics, before the flood.
+    now += 3_600_000
     cost = empty()
     measuring = true
     let flood = await Promise.all(Array.from({ length: 20 }, (_, i) => {
       let scope = scopes[i % 2]
-      return authority.admitTrace(scope, trace(1000 + i, scope))
+      return authority.admitTrace(scope, trace(1000 + i, scope, 200))
     }))
     measuring = false
     let floodCost = { ...cost }, budget = authority.traceBudget()
     let complete = []
     for (let i = 0; i < 20; i++) {
       let rows = await target.tracker!.graph.get(
-        trace(1000 + i).map((row) => row.entity.eid),
+        trace(1000 + i, space, 200).map((row) => row.entity.eid),
       )
       complete.push(rows.filter((row) => row.trace || row.span).length)
     }
     // Reincarnation is not a free allowance, and late target completion cannot
-    // cross into a new calendar minute and borrow that minute's ceiling.
+    // cross into a new calendar hour and borrow that minute's ceiling.
     authority = new Tracker(state(platform), settings, () => now)
-    now += 59_999
+    now += 3_599_999
     cost = empty()
     measuring = true
-    let before = await authority.admitTrace(space, trace(2000))
+    let before = await authority.admitTrace(space, trace(2000, space, 200))
     measuring = false
     let beforeCost = { ...cost }
     now += 1
@@ -158,7 +203,7 @@ export let trackerBound = async (db: TraceStorage) => {
     measuring = false
     let afterCost = { ...cost }
     // A marked target can be recreated and admit without fitting schema.
-    now += 60_000
+    now += 3_600_000
     let reopened = new Tracker(state(space))
     targets.set(space, reopened)
     cost = empty()
@@ -169,13 +214,23 @@ export let trackerBound = async (db: TraceStorage) => {
     // Entire oversized traces and later rootless chunks are dropped before SQL.
     cost = empty()
     measuring = true
-    let large = trace(3000, space, 72)
-    let oversized = await authority.admitTrace(space, large.slice(0, 100))
+    let large = trace(3000, space, 201)
+    let oversized = await authority.admitTrace(space, large)
     let orphan = await authority.admitTrace(space, large.slice(10, 20))
     measuring = false
     let droppedCost = { ...cost }
     return {
       shapes,
+      useful,
+      usefulCost,
+      ordinarySize: ordinary.length,
+      cappedSize: capped.length,
+      stored,
+      ordinaryStored: await target.tracker!.graph.get(
+        ordinary.map((r) => r.entity.eid),
+      ),
+      ordinaryTotals: ordinaryRequest.totals,
+      cappedTotals: largeRequest.totals,
       flood,
       floodCost,
       budget,

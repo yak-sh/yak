@@ -2023,11 +2023,9 @@ export class Store {
         })
         if (rows) {
           try {
-            // The intake accepts independently scoped chunks and immutable ids;
-            // queue order is not assumed.
-            for (let i = 0; i < rows.length; i += 100) {
-              await this.#bind.ERRORS.send(rows.slice(i, i + 100))
-            }
+            // Projection caps the tree. The authority admits a whole capture
+            // or nothing; splitting it would turn every chunk into a drop.
+            await this.#bind.ERRORS.send(rows)
           } catch (error) {
             defect(error, { request: 'trace delivery', store: this.#name() })
           }

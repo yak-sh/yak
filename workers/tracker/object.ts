@@ -232,7 +232,7 @@ export class Tracker {
       } catch {
         return drop('trace delivery failed')
       }
-      next.slots[next.slots.length - 1].until = this.now() + 60_000
+      next.slots[next.slots.length - 1].until = this.now() + 3_600_000
       try {
         kept.set('trace-budget', JSON.stringify(next))
       } catch {

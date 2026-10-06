@@ -3,6 +3,7 @@
 import type { Event } from '@yaks/trace'
 import type { TraceRow } from './model.ts'
 import { project, type ProjectOptions } from './project.ts'
+import { cap } from './cap.ts'
 
 export type RequestSelection = {
   rowsRead: number
@@ -110,5 +111,5 @@ export let sampleRequest = (
 ): TraceRow[] | undefined => {
   let root = spans[0]
   if (!root || root.stage == 'start' || !selectedRequest(options)) return
-  return project(spans, options)
+  return project(cap(spans), options)
 }

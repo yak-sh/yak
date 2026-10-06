@@ -50,6 +50,21 @@ test('Store trace selection adds no billed rows to an untriggered request', asyn
       )
     }
   }
+  equal(report.requests.capped.deliveries, 1)
+  equal(report.sizes.capped.spans, 200)
+  let capped = report.traces.capped
+  let root = capped.find((row) =>
+    row.span && !(row.span as { parent?: string }).parent
+  )!
+  equal((root.rows_read as { n: number }).n, report.requests.capped.cost.read)
+  equal(
+    (root.rows_written as { n: number }).n,
+    report.requests.capped.cost.written,
+  )
+  equal(
+    (root.statements as { n: number }).n,
+    report.requests.capped.cost.statements,
+  )
   equal(report.reordered.complete, report.reordered.expected)
   equal(report.intake['reordered/duplicate'].written, 0)
   ok(report.requests.sample.deliveries > 0)

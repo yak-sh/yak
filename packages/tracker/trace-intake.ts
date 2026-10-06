@@ -2,13 +2,13 @@
  * write plan; arbitrary reporter bundles keep the error intake contract. */
 import type { Bundle } from '@yaks/graph'
 
-export let TRACE_CEILING = 700
+export let TRACE_CEILING = 42_000
 // The accepted vocabulary writes at most 46 component/index/spine/stamp rows
 // per bundle; 64 reserves margin. Never accept arbitrary graph properties here.
 export let TRACE_ROW_BOUND = 64
 // Two durable meta upserts: reservation and successful completion.
 export let TRACE_RESERVATION_WRITES = 8
-export let TRACE_MAX_BUNDLES = 10
+export let TRACE_MAX_BUNDLES = 201
 
 export type TraceBatch = { scope: string; rows: Bundle[]; cost: number }
 let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -113,7 +113,10 @@ export let traceBudget = (
     return
   }
   if (
-    !object(value) || !Array.isArray(value.slots) || value.slots.length > 100
+    !object(value) || !Array.isArray(value.slots) ||
+    value.slots.length > Math.floor(
+        TRACE_CEILING / (2 * TRACE_ROW_BOUND + TRACE_RESERVATION_WRITES),
+      )
   ) return
   let slots: TraceReservation[] = []
   for (let slot of value.slots) {
@@ -130,7 +133,7 @@ export let traceBudget = (
   return { slots }
 }
 /** A pending reservation never expires after a crash. A completed one stays
- * charged for a full minute from completion, including across clock rollback. */
+ * charged for a full hour from completion, including across clock rollback. */
 export let reserveTrace = (
   held: TraceBudget | undefined,
   now: number,
