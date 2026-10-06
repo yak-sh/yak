@@ -1,9 +1,12 @@
-import { type Bundle, define, type H } from '@yaks/render'
+import { type Bundle } from '@yaks/render'
 // Domain faces and queries are checked with graph bundles, not a fleet boot.
 import { equal, ok, test } from '@yaks/testing'
 import { renderToString } from 'preact-render-to-string'
+import { h } from 'preact'
 import { render as preact } from '@yaks/preact'
-import { render as text, tree } from '@yaks/text'
+import { render as text } from '@yaks/text'
+import type { Answer, Io } from '@yaks/inspect'
+import { disclosureAt } from '@yaks/ux'
 import { occurrences, openBugs, relatedTraces, views } from './views.ts'
 import { inspectViews } from './inspect.ts'
 import { fixture } from './fixture_test.ts'
@@ -16,117 +19,182 @@ import { timingDoc } from '@yaks/timing/vocab'
 import { trackerDoc } from './vocab.ts'
 import { toolsDoc } from '@yaks/tools/vocab'
 
-let host = {
-  id: () => 'B-7',
-  name: (id: string) => id == 'symbol' ? 'group' : id,
-  link: (id: string) => `/${id == 'bug' ? 'B-7' : id}`,
-  when: (at: string) => at,
+let vocab = loadVocab([kernelDoc, toolsDoc, trackerDoc, timingDoc], [
+  kernelKeywords,
+])
+let ids: Record<string, string> = { bug: 'B-7', new: 'E-2', old: 'E-1' }
+let held: Record<string, Bundle> = {
+  proc: { entity: { eid: 'proc' }, doc: { title: 'yak serve' } },
+  bug: { entity: { eid: 'bug' }, bug: {} },
 }
-let bug = {
+let host = {
+  id: (b: Bundle) => ids[b.entity.eid] ?? b.entity.eid,
+  name: (eid: string) => `named ${eid}`,
+  link: (eid: string) => `/${ids[eid] ?? eid}`,
+  when: (at: string) => `at ${at}`,
+  get: (eid: string) => held[eid],
+  show: (b: Bundle, view: string) => `[${view} ${b.entity.eid}]`,
+}
+// A face drawn by the portable registry, in a terminal's words and as markup
+// with its tags left out (a title attribute is not read).
+let faces = (b: Bundle, view: string) => [
+  text(views, b, view, vocab, host, 'plain'),
+  renderToString(preact(views, b, view, vocab, host)!).replace(/<[^>]*>/g, ''),
+]
+// An inspector page, drawn with answers to its asks and its state closed
+// unless `open` names it.
+let page = (b: Bundle, answers: Record<string, Bundle[]>, open = '') => {
+  let view = inspectViews.find((v) =>
+    v.view == 'Full' && v.match && b[
+      v == inspectViews[0] ? 'bug' : 'error'
+    ]
+  )!
+  let answer = (rows: Bundle[] = []): Answer => ({ rows, ready: true })
+  let io = {
+    ...host,
+    vocab,
+    find: (q: string) => `/?q=${q}`,
+    kind: () => 'entity',
+    edits: false,
+    go: () => {},
+    apply: () => {},
+    can: () => true,
+    ask: (asks: Record<string, unknown>) =>
+      Object.fromEntries(Object.keys(asks).map((k) => [k, answer()])),
+    state: (eid: string) =>
+      eid == disclosureAt(open)
+        ? { entity: { eid }, Disclosure: { open: true } }
+        : undefined,
+    set: () => {},
+  } as unknown as Io
+  let got = Object.fromEntries(
+    Object.keys(view.asks?.(b, io, {}) ?? {}).map((
+      k,
+    ) => [k, answer(answers[k])]),
+  )
+  return renderToString(h(view.Render, { e: b, io, got, ctx: {} }))
+    .replace(/<[^>]*>/g, ' ').replace(/&#x27;/g, "'").replace(/\s+/g, ' ')
+}
+
+let message =
+  'TypeError: error sending request for url (http://127.0.0.1:5173/query?q=.entity.eid%3D99): refused (request 8340c228-dc11-464e-a9fe-1655ef354a15)\n    at fetch (ext:deno_fetch/26_fetch.js:103:11)'
+let headline =
+  'TypeError: error sending request for url (http://127.0.0.1:5173/query?…): refused (request 8340c228…)'
+let bug: Bundle = {
   entity: { eid: 'bug', num: 7 },
-  doc: { title: 'TypeError: no row' },
+  doc: { title: message },
   bug: {
-    fault: 'call|typeerror: no row',
-    hits: 5,
+    fault: 'call|typeerror: error sending request',
+    hits: 338,
     people: 2,
-    culprit: 'symbol',
-    first: '2026-10-01',
-    last: '2026-10-03',
+    spot: 'file:///home/yaks/code/tasks/packages/code/source.ts:56 Object.get',
+    first: '2026-10-01T00:00:00Z',
+    last: '2026-10-03T00:00:00Z',
   },
 }
-test('the same bug and error readings work in text and Preact, with related rows through the registry', () => {
-  let vocab = fixture().vocab
-  let refs = [{
-    view: 'Inline',
-    match: true as const,
-    render: <Node>(b: Bundle, h: H<Node>): Node =>
-      h('a', { href: host.link(b.entity.eid) }, host.name(b.entity.eid)),
-  }]
-  let registry = define([...views.renderers, ...refs])
-  let error = {
-    entity: { eid: 'error' },
-    error: {
-      at: '2026-10-03',
-      level: 'fatal',
-      message: 'no row',
-      commit: 'commit-new',
-    },
-    during: { entity: 'store', app: 'app', space: 'space', process: 'process' },
+let frames = [
+  { file: 'ext:deno_fetch/26_fetch.js', line: 103, column: 11 },
+  {
+    file: 'file:///home/yaks/code/tasks/packages/tracker/group.ts',
+    line: 42,
+    column: 3,
+    function: 'group',
+    app: true,
+  },
+]
+let sha = '9917d09d30a68730b83661652bdcaecc38670809'
+let occurrence = (n: number, over: Record<string, unknown> = {}): Bundle => ({
+  entity: { eid: `e${n}` },
+  error: {
+    at: `2026-10-0${1 + (n % 3)}T12:34:5${n % 10}Z`,
+    bug: 'bug',
+    message,
+    commit: n < 2 ? 'a'.repeat(40) : sha,
+    environment: ['live', 'live', 'live', 'dev', 'ci', 'test'][n % 6],
+    tags: { handler: 'mcp' },
+  },
+  during: { process: `p${n}` },
+  exception: { type: 'TypeError', value: message.slice(11), frames },
+  ...over,
+})
+
+test('a bug reads as its headline wherever it is named, its whole message on its page', () => {
+  for (let tile of faces(bug, 'List.Tile')) {
+    for (
+      let part of [
+        'B-7',
+        headline,
+        '338 hits',
+        'packages/code/source.ts:56',
+        'last at 2026-10-03',
+        'since at 2026-10-01',
+      ]
+    ) ok(tile.includes(part), part)
+    ok(!tile.includes('8340c228-dc11'))
+  }
+  for (let bar of faces(bug, 'Card.Title')) {
+    ok(bar.includes('B-7') && bar.includes(headline))
+  }
+  for (let whole of faces(bug, 'Page')) {
+    ok(whole.includes(message.split('\n')[0]))
+  }
+})
+
+test("an occurrence among its bug's others reads its moment, short commit and tags, naming only what the host holds", () => {
+  let e = occurrence(4, { during: { process: 'proc', entity: 'store' } })
+  for (let row of faces(e, 'Bug.List.Tile')) {
+    for (let part of [':34:54', '9917d09', 'handler mcp', '[Title proc]']) {
+      ok(row.includes(part), part)
+    }
+    ok(!row.includes('9917d09d'))
+    ok(!row.includes('store'))
+  }
+})
+
+test('a bug page says how often and since when, where it ran in brief, and its newest stack', () => {
+  let errors = [0, 1, 2, 3, 4, 5].map((n) => occurrence(n))
+  let html = page(bug, { errors })
+  for (
+    let part of [
+      headline.replace('TypeError: ', ''),
+      'TypeError',
+      '6 kept of 338',
+      'a bar is',
+      'first seen in aaaaaaa',
+      '6 different',
+      'live ×3',
+      '1 more',
+      'packages/tracker/group.ts:42:3',
+      'Grouping key',
+    ]
+  ) ok(html.includes(part), part)
+  // What a press opens is not drawn until pressed.
+  ok(!html.includes('call|typeerror'))
+  ok(page(bug, { errors }, 'bug|fault').includes('call|typeerror'))
+})
+
+test('an occurrence page says where it ran and what happened before it, and lists traces when the store has them', () => {
+  let e = occurrence(4, {
     breadcrumbs: {
       items: [{ at: '2026-10-03', category: 'fetch', message: 'GET /query' }],
     },
-    exception: {
-      stack: 'raw stack retained',
-      frames: [{
-        file: 'group.ts',
-        line: 42,
-        column: 3,
-        function: 'group',
-        app: true,
-        module: 'module',
-        symbol: 'symbol',
-      }, { file: 'dep.ts', line: 2 }],
-    },
-  }
-  let txt = text(registry, bug, 'Full', vocab, {
-    ...host,
-    errors: [error],
-    show: (b: Bundle, view: string) =>
-      tree(registry, b, view, vocab, {
-        ...host,
-        show: (ref: Bundle, v: string) => tree(registry, ref, v, vocab, host),
-      }),
-  }, 'plain')
-  let html = renderToString(
-    preact(registry, bug, 'Full', vocab, {
-      ...host,
-      errors: [error],
-      show: (b: Bundle, view: string) =>
-        preact(registry, b, view, vocab, {
-          ...host,
-          show: (b: Bundle, view: string) =>
-            preact(registry, b, view, vocab, host),
-        }),
-    })!,
-  )
-  for (let output of [txt, html]) {
-    for (
-      let part of [
-        'TypeError: no row',
-        'B-7',
-        '5 hits',
-        'fatal',
-        'group.ts:42:3',
-        'dep.ts:2',
-        'Newest occurrence',
-        'Store / context',
-        'store',
-        'app',
-        'space',
-        'process',
-        'commit-new',
-        'raw stack retained',
-        'GET /query',
-      ]
-    ) ok(output.includes(part), part)
-  }
-  ok(html.includes('href="/symbol"'))
-  ok(html.includes('<details><summary>Stack and frames</summary>'))
-  ok(html.includes('href="/?q=.trace"'))
-  let tile = renderToString(
-    preact(registry, bug, 'List.Tile', vocab, {
-      ...host,
-      show: (b: Bundle, view: string) => preact(registry, b, view, vocab, host),
-    })!,
-  )
-  ok(tile.includes('href="/B-7"'))
-  ok(tile.includes('first 2026-10-01'))
-  ok(tile.includes('last 2026-10-03'))
-  ok(tile.includes('href="/?q=.trace"'))
-  equal(inspectViews[0].asks!(bug, {} as never, {}), {
-    errors: occurrences('bug'),
   })
+  let html = page(e, { traces: [{ entity: { eid: 'trace' } }] })
+  for (
+    let part of [
+      'one occurrence of B-7',
+      '9917d09',
+      'packages/tracker/group.ts:42:3',
+      'GET /query',
+      '[List.Tile trace]',
+    ]
+  ) ok(html.includes(part), part)
+  let asks = (vocab: unknown) =>
+    inspectViews[1].asks!(e, { vocab } as never, {}).traces
+  ok(asks(vocab))
+  equal(asks(fixture().vocab), undefined)
 })
+
 test('open list and tools take worst first, and bug errors newest first', async () => {
   let g = fixture()
   await g.apply([
@@ -208,7 +276,7 @@ test('occurrence traces use request identity or bounded shared context, never ar
     new Set((await g.read(contextual.query)).map((b) => b.entity.eid)),
     new Set(['same-request', 'nearby']),
   )
-  ok(contextual.label.includes('not a causal link'))
+  ok(contextual.label.includes('rather than causal'))
   equal(
     relatedTraces({
       entity: { eid: 'empty' },
@@ -227,68 +295,4 @@ test('occurrence traces use request identity or bounded shared context, never ar
   equal((await g.read(process.query)).map((b) => b.entity.eid), [
     'same-process',
   ])
-  let occurrenceView = inspectViews.find((r) =>
-    r.view == 'Full' && r != inspectViews[0]
-  )!
-  equal(occurrenceView.asks!(error, { vocab } as never, {}).traces, exact.query)
-  equal(
-    occurrenceView.asks!(error, { vocab: fixture().vocab } as never, {}).traces,
-    undefined,
-  )
-  let refs = occurrenceView.asks!(error, { vocab } as never, {})
-    .references as string
-  equal(
-    new Set((await g.read(refs)).map((b) => b.entity.eid)),
-    new Set(['request', 'store', 'space']),
-  )
-  let output = renderToString(
-    preact(views, error, 'Full', vocab, {
-      ...host,
-      traces: [trace('same-request', {})],
-      traceLabel: exact.label,
-      tracesReady: true,
-      show: (b: Bundle, view: string) => {
-        if (b.entity.eid != 'same-request') return null
-        equal(view, 'List.Tile')
-        return preact(
-          define([{
-            view: 'List.Tile',
-            match: true as const,
-            render: <Node>(b: Bundle, h: H<Node>): Node =>
-              h('a', { href: `/${b.entity.eid}` }, 'trace-face'),
-          }]),
-          b,
-          view,
-          vocab,
-        )
-      },
-    })!,
-  )
-  ok(output.includes('href="/same-request"'))
-  ok(output.includes('trace-face'))
-})
-
-test('bug page identifies newest and retained affected contexts without hiding older occurrences', () => {
-  let errors: Bundle[] = [
-    {
-      entity: { eid: 'old' },
-      error: { at: '2026-10-01', commit: 'older-code' },
-      during: { entity: 'older-store' },
-    },
-    {
-      entity: { eid: 'new' },
-      error: { at: '2026-10-06', commit: 'newer-code' },
-      during: { entity: 'newer-store' },
-    },
-  ]
-  let output = text(views, bug, 'Full', fixture().vocab, {
-    ...host,
-    errors,
-    show: (b: Bundle, view: string) =>
-      view == 'Full' ? `occurrence-${b.entity.eid}` : b.entity.eid,
-  }, 'plain')
-  ok(output.indexOf('occurrence-new') < output.indexOf('occurrence-old'))
-  for (let part of ['older-store', 'newer-store', 'older-code', 'newer-code']) {
-    ok(output.includes(part), part)
-  }
 })

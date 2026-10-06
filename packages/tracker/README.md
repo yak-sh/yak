@@ -57,12 +57,14 @@ commit (or version without a commit).
 ## Browsing
 
 The tracker writes the first error's type and value (or message) to `doc.title`.
-`bug.fault` is the grouping key, shown beneath the title. The `./views` facet
-exports portable bug and error readings, and inspector views whose `asks`
-request the bug’s errors. The host answers those asks and draws each error
-through the same registry. The page lists retained errors newest first,
-displaying resolved code frames and unresolved text frames. The count includes
-trimmed errors.
+A bug's **headline** is the first line of that title, with terminal colours left
+out, an address without its query and an id or a long number cut to its start.
+Wherever a bug is named (a list row, a link, a card's bar) it reads as its
+headline; its page shows the whole message on a press. `bug.fault` is the
+grouping key, on the bug's page behind a press. The `./views` facet exports
+portable bug and error readings, and inspector views whose `asks` request the
+bug's errors. The host answers those asks and draws each error through the same
+registry. The count includes trimmed errors.
 
 The box config sets `@yaks/web`’s `with.home` (`title` and `query`) to list open
 bugs by descending `bug.hits` (worst first); resolved and archived bugs remain
@@ -184,15 +186,21 @@ decides which space owns a capture.
 
 `@yaks/tracker/views` contributes bug and occurrence readings through the host's
 shared renderer and inspector contracts. Open bugs are ranked by historical
-hits, not retained sample size. A bug page shows first/last occurrence, the
-affected contexts and commits among retained occurrences, the newest occurrence,
-and earlier occurrences. Full stacks, frames and breadcrumbs remain available
-behind disclosure controls.
+hits, not retained sample size. A bug's row gives its headline, hits, where it
+was thrown, and when it was last and first seen.
+
+A bug page shows when it happened, as a histogram of the retained occurrences
+from the first to now; where it ran, as the few values most occurrences share
+for each commit, tag and context reference, the rest on a press, and the commit
+it was first seen in; the newest occurrence's stack with the app's own frames
+marked; and the retained occurrences, newest first, each by its moment, commit
+and tags. An occurrence's page shows where it was thrown, its context, its stack
+and the breadcrumbs before it.
 
 An occurrence links traces with the same recorded request identity. Without that
 identity, it asks for traces of the same store/process, scoped by app and space,
-within five minutes of the occurrence; that context is labeled as nearby, not a
-causal link. Traces are drawn by the host registry: their trees, metrics,
+within five minutes of the occurrence; that context is labeled as nearby rather
+than causal. Traces are drawn by the host registry: their trees, metrics,
 flamegraphs and comparisons belong to
 [`@yaks/timing/views`](../timing/README.md#trace-views), not this package.
 
@@ -203,5 +211,5 @@ application and use this home query:
 .bug.status=open * .order=-bug.hits
 ```
 
-Each bug offers a Traces link to `/?q=.trace`. Missing affected context or
-missing traces are stated; they are not inferred from a stack's text.
+The trace list is at `/?q=.trace`. Missing affected context or missing traces
+are stated; they are not inferred from a stack's text.

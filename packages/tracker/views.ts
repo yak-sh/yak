@@ -1,361 +1,227 @@
-// Portable readings of bugs and errors, through the host's hyperscript and
-// shared entity renderer. Errors and contextual traces arrive from the host.
+// How a bug and an error read wherever one is drawn by name: its title, a row
+// in a list, a link, a card's bar, and a lone one's page in a terminal. These
+// are portable renderers through the host's hyperscript, so `yak bug list`
+// prints the same rows a browser lists. A message reads as its headline; the
+// whole of it is on the page (./inspect.ts), one press away.
 import { parse } from '@yaks/query'
 import { define, type H, type RenderContext } from '@yaks/render'
 import type { Shown } from '@yaks/render/views'
 import type { Bundle } from '@yaks/graph'
-import { comp, type Frame, str, title } from './model.ts'
+import { comp, type Frame, str } from './model.ts'
+import { count, headline, moment, sha, thrown } from './brief.ts'
+import { tags } from './spread.ts'
+import { frameAt, pip, said, standing, where } from './reading.ts'
 
-/** Worst first is historical occurrence count, not the retained sample size. */
-export let openBugs = '.bug.status=open * .order=-bug.hits'
-export let occurrences = (eid: string): string =>
-  `.error.bug=${eid} * .order=-error.at`
+export { occurrences, openBugs, relatedTraces } from './reading.ts'
 
-type Context<Node> = RenderContext<Node> & Partial<Shown<Node>> & {
-  errors?: Bundle[]
-  traces?: Bundle[]
-  traceLabel?: string
-  tracesReady?: boolean
-  tracesError?: string
-  find?: (query: string) => string
-}
-let shown = <Node>(ctx: RenderContext<Node>) => ctx as Context<Node>
-let frameText = (f: Frame) =>
-  `${f.function ? f.function + ' · ' : ''}${f.file}${
-    f.line ? ':' + f.line : ''
-  }${f.column ? ':' + f.column : ''}`
-let frames = <Node>(h: H<Node>, fs: Frame[], ctx: Context<Node>) =>
-  h(
-    'ol',
-    null,
-    fs.map((f) => {
-      let eid = f.symbol || f.module
-      return h(
-        'li',
-        null,
-        f.app ? 'in app · ' : '',
-        eid
-          ? [
-            ctx.show?.(
-              ctx.get?.(eid) ?? { entity: { eid } },
-              'Tracker.Frame.Inline',
-            ),
-            ' · ',
-            h('code', null, frameText(f)),
-          ]
-          : h('code', null, frameText(f)),
-      )
-    }),
-  )
-let queryLink = <Node>(
+type Ctx<Node> = RenderContext<Node> & Partial<Shown<Node>>
+let shown = <Node>(ctx: RenderContext<Node>) => ctx as Ctx<Node>
+let when = <Node>(s: Ctx<Node>, at: unknown) => s.when?.(str(at)) ?? str(at)
+
+let line = <Node>(h: H<Node>, cls: string | undefined, text: string): Node =>
+  h('span', { class: cls, title: text }, headline(text))
+
+// A tile as the kit lays one out (packages/ui/Tile.ts): an icon beside its
+// words, the title line (id, title, count) over a sub.
+let tile = <Node>(
   h: H<Node>,
-  s: Context<Node>,
-  query: string,
-  label: string,
+  href: string | undefined,
+  parts: {
+    icon?: Node
+    line: (Node | string | null)[]
+    sub?: (Node | string | null | undefined)[]
+  },
 ): Node =>
-  h('a', { href: s.find?.(query) ?? `/?q=${encodeURIComponent(query)}` }, label)
-let navigation = <Node>(h: H<Node>, s: Context<Node>): Node =>
   h(
-    'nav',
-    { 'aria-label': 'Tracker views' },
-    queryLink(h, s, openBugs, 'Bugs'),
-    ' · ',
-    queryLink(h, s, '.trace', 'Traces'),
-  )
-let bugTile = <Node>(e: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node => {
-  let s = shown(ctx), bug = comp(e, 'bug'), id = s.id?.(e) ?? e.entity.eid
-  return h(
-    'div',
-    null,
+    'a',
+    { class: 'Tile', href },
+    parts.icon ? [h('span', { class: 'Tile_Icon' }, parts.icon), ' '] : null,
     h(
-      'a',
-      { class: 'Tile', href: s.link?.(e.entity.eid) ?? `/${id}` },
-      h('span', { class: 'Tile_Id' }, id),
-      ' ',
-      h('span', { class: 'Tile_Title' }, str(comp(e, 'doc').title)),
-      ' ',
-      h(
-        'span',
-        { class: 'Tile_Note' },
-        `${bug.people ?? 0} people · first ${
-          s.when?.(str(bug.first)) ?? str(bug.first)
-        } · last ${s.when?.(str(bug.last)) ?? str(bug.last)}`,
-      ),
-      ' ',
-      h('span', { class: 'Tile_Count' }, `${bug.hits ?? 0} hits`),
+      'span',
+      { class: 'Tile_Text' },
+      h('span', { class: 'Tile_Line' }, ...parts.line),
+      parts.sub?.some(Boolean)
+        ? [' ', h('span', { class: 'Tile_Sub' }, ...dotted(parts.sub))]
+        : null,
     ),
-    queryLink(h, s, '.trace', 'Traces'),
   )
+
+// What is there, a dot between each.
+let dotted = <T>(parts: (T | string | null | undefined)[]): (T | string)[] =>
+  parts.filter((p): p is T | string => !!p)
+    .flatMap((p, i) => i ? [' · ', p] : [p])
+
+let dot = <Node>(h: H<Node>, e: Bundle): Node =>
+  h('span', {
+    class: ['Dot', ...pip(e).map((m) => `Dot-${m}`)].join(' '),
+    title: standing(e),
+  })
+
+let bugTile = <Node>(e: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node => {
+  let s = shown(ctx), bug = comp(e, 'bug')
+  return tile(h, s.link?.(e.entity.eid), {
+    icon: dot(h, e),
+    line: [
+      h('span', { class: 'Tile_Id' }, s.id?.(e) ?? ''),
+      ' ',
+      line(h, 'Tile_Title', said(e)),
+      ' ',
+      h('span', { class: 'Tile_Count' }, count(Number(bug.hits ?? 0), 'hit')),
+    ],
+    sub: [
+      where(e),
+      bug.last ? `last ${when(s, bug.last)}` : '',
+      bug.first ? `since ${when(s, bug.first)}` : '',
+    ],
+  })
 }
-/** Request identity is an exact association. Other context is a bounded time
- * neighbour, not evidence that a trace contains or caused this error. */
-export let relatedTraces = (
+
+let errorTile = <Node>(
   e: Bundle,
-): { query: string; label: string } | undefined => {
-  let during = comp(e, 'during'), at = Date.parse(str(comp(e, 'error').at))
-  let quote = (v: unknown) => JSON.stringify(str(v))
-  if (during.request) {
-    return {
-      query: `.trace .during.request=${
-        quote(during.request)
-      } * .order=-trace.at`,
-      label: 'Traces of the same request',
-    }
-  }
-  let key = during.entity ? 'entity' : during.process ? 'process' : undefined
-  if (!key || !Number.isFinite(at)) return
-  let scopes = ['space', 'app'].filter((k) => during[k])
-    .map((k) => `.during.${k}=${quote(during[k])}`).join(' ')
-  return {
-    query: `.trace .during.${key}=${quote(during[key])} ${scopes} .trace.at>=${
-      quote(new Date(at - 300_000).toISOString())
-    } .trace.at<=${
-      quote(new Date(at + 300_000).toISOString())
-    } * .order=-trace.at`,
-    label: `Traces within 5 minutes in the same ${
-      key == 'entity' ? 'store / context' : 'process'
-    } (not a causal link)`,
-  }
+  h: H<Node>,
+  ctx: RenderContext<Node>,
+): Node => {
+  let s = shown(ctx), error = comp(e, 'error')
+  return tile(h, s.link?.(e.entity.eid), {
+    line: [
+      h('span', { class: 'Tile_Id' }, s.id?.(e) ?? ''),
+      ' ',
+      line(h, 'Tile_Title', said(e)),
+    ],
+    sub: [
+      when(s, error.at),
+      ...tags(e).map(([k, v]) => `${k} ${v}`),
+      error.commit ? sha(str(error.commit)) : '',
+    ],
+  })
 }
-let reference = <Node>(h: H<Node>, s: Context<Node>, eid: string): Node =>
-  s.show?.(s.get?.(eid) ?? { entity: { eid } }, 'Tracker.Context.Inline') ??
-    h('a', { href: s.link?.(eid) }, s.name?.(eid) ?? eid)
-let context = <Node>(e: Bundle, h: H<Node>, s: Context<Node>): Node | null => {
-  let during = comp(e, 'during'), error = comp(e, 'error')
-  let refs = [
-    ['Store / context', during.entity],
-    ['App', during.app],
-    ['Space', during.space],
-    ['Process', during.process],
-    ['Request', during.request],
-  ].filter(([, eid]) => eid)
-  if (!refs.length && !error.commit && error.version == null) return null
-  return h(
-    'dl',
-    { class: 'Pairs' },
-    refs.map(([label, eid]) => [
-      h('dt', { class: 'Pairs_Key' }, str(label)),
-      h('dd', { class: 'Pairs_Value' }, reference(h, s, str(eid))),
-    ]),
-    error.commit
-      ? [
-        h('dt', { class: 'Pairs_Key' }, 'Commit'),
-        h(
-          'dd',
-          { class: 'Pairs_Value' },
-          h('code', { title: str(error.commit) }, str(error.commit)),
-        ),
-      ]
-      : null,
-    error.version != null
-      ? [
-        h('dt', { class: 'Pairs_Key' }, 'Version'),
-        h('dd', { class: 'Pairs_Value' }, str(error.version)),
-      ]
-      : null,
-  )
-}
-let traces = <Node>(h: H<Node>, s: Context<Node>): Node | null =>
-  s.traceLabel
-    ? h(
-      'section',
-      { class: 'Section' },
-      h('h3', { class: 'Section_Title' }, s.traceLabel),
-      s.tracesError
-        ? h(
-          'p',
-          { class: 'Section_Sub' },
-          `Traces unavailable: ${s.tracesError}`,
-        )
-        : s.tracesReady === false
-        ? h('p', { class: 'Section_Sub' }, 'Loading traces…')
-        : s.traces?.length
-        ? s.traces.map((b) => s.show?.(b, 'List.Tile'))
-        : h(
-          'p',
-          { class: 'Section_Sub' },
-          'No recorded traces matched this occurrence.',
-        ),
-    )
-    : null
+
+// An occurrence among its bug's others: when to the second, where it ran,
+// and what it was running, since its message is its bug's.
 let occurrence = <Node>(
   e: Bundle,
   h: H<Node>,
   ctx: RenderContext<Node>,
 ): Node => {
-  let s = shown(ctx), error = comp(e, 'error'), x = comp(e, 'exception')
-  return h(
-    'section',
-    { class: 'Section' },
-    h(
-      'h2',
-      { class: 'Section_Title' },
-      title(e),
+  let s = shown(ctx), error = comp(e, 'error'), d = comp(e, 'during')
+  // A reference this host holds, by name; one it does not is only a hash.
+  let ref = (k: string) => {
+    let held = d[k] ? s.get?.(str(d[k])) : undefined
+    return held ? s.show?.(held, 'Title') : null
+  }
+  let at = str(error.at)
+  return tile(h, s.link?.(e.entity.eid), {
+    line: [
+      h('span', { class: 'Tile_Title', title: when(s, at) }, moment(at)),
       ' ',
-      h(
-        'time',
-        { datetime: str(error.at), title: str(error.at) },
-        s.when?.(str(error.at)) ?? str(error.at),
-      ),
-    ),
-    h(
-      'p',
-      { class: 'Section_Sub' },
-      str(error.level),
-      error.environment ? ` · ${error.environment}` : '',
-    ),
-    context(e, h, s),
-    traces(h, s),
-    Array.isArray(x.frames) && x.frames.length || x.stack
-      ? h(
-        'details',
-        null,
-        h('summary', null, 'Stack and frames'),
-        Array.isArray(x.frames) && x.frames.length
-          ? frames(h, x.frames as Frame[], s)
-          : null,
-        x.stack ? h('pre', null, str(x.stack)) : null,
-      )
-      : null,
-    Array.isArray(comp(e, 'breadcrumbs').items)
-      ? h(
-        'details',
-        null,
-        h('summary', null, 'Breadcrumbs'),
-        h('pre', null, JSON.stringify(comp(e, 'breadcrumbs').items, null, 2)),
-      )
-      : null,
-  )
-}
-let bugPage = <Node>(e: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node => {
-  let s = shown(ctx), bug = comp(e, 'bug'), id = s.id?.(e) ?? e.entity.eid
-  let errors = [...s.errors ?? []].sort((a, b) =>
-    str(comp(b, 'error').at).localeCompare(str(comp(a, 'error').at))
-  )
-  let affected = ['entity', 'app', 'space', 'process'].flatMap((key) => {
-    let ids = [
-      ...new Set(
-        errors.map((b) => str(comp(b, 'during')[key])).filter(Boolean),
-      ),
-    ]
-    return ids.length ? [[key, ids] as const] : []
+      ref('process') ? h('span', { class: 'Tile_Note' }, ref('process')) : null,
+      ' ',
+      error.commit
+        ? h(
+          'span',
+          { class: 'Tile_Kind', title: str(error.commit) },
+          sha(str(error.commit)),
+        )
+        : null,
+    ],
+    sub: [ref('entity'), ...tags(e).map(([k, v]) => `${k} ${v}`)],
   })
-  let commits = [
-    ...new Set(errors.map((b) => str(comp(b, 'error').commit)).filter(Boolean)),
-  ]
+}
+
+let bar = <Node>(e: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node =>
+  h(
+    'span',
+    { class: 'CardTitle' },
+    ctx.render?.('Id') ?? h('span', { class: 'Id' }, shown(ctx).id?.(e) ?? ''),
+    ' ',
+    line(h, 'CardTitle_Text', said(e)),
+  )
+
+let inline = <Node>(e: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node =>
+  h(
+    'a',
+    { href: shown(ctx).link?.(e.entity.eid), title: said(e) },
+    headline(said(e)),
+  )
+
+// A lone bug or error in a terminal (`yak bug resolve B-7`): what it says,
+// where, how often and since when. The browser's page is ./inspect.ts.
+let page = <Node>(e: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node => {
+  let s = shown(ctx), bug = comp(e, 'bug'), error = comp(e, 'error')
+  let { type, message } = thrown(headline(said(e)))
+  let facts = e.bug
+    ? [
+      standing(e),
+      count(Number(bug.hits ?? 0), 'hit'),
+      bug.last ? `last ${when(s, bug.last)}` : '',
+      bug.first ? `since ${when(s, bug.first)}` : '',
+    ]
+    : [
+      when(s, error.at),
+      str(error.level),
+      str(error.environment),
+      error.commit ? sha(str(error.commit)) : '',
+      ...tags(e).map(([k, v]) => `${k} ${v}`),
+    ]
+  let frames = (comp(e, 'exception').frames ?? []) as Frame[]
   return h(
     'article',
-    { class: 'Body' },
-    navigation(h, s),
+    null,
     h(
       'header',
       { class: 'Head' },
       h(
         'h1',
         { class: 'Head_Title' },
-        str(comp(e, 'doc').title),
+        message,
         ' ',
-        h('span', { class: 'Head_Id' }, id),
+        h('span', { class: 'Head_Id' }, s.id?.(e) ?? ''),
+        type ? [' ', h('span', { class: 'Head_Kind' }, type)] : null,
       ),
+      e.bug ? h('p', { class: 'Head_Sub' }, where(e)) : null,
       h(
         'p',
         { class: 'Head_Facts' },
-        str(
-          bug.status ||
-            (e.archived ? 'archived' : e.resolved ? 'resolved' : 'open'),
-        ),
-        ' · ',
-        `${bug.hits ?? 0} hits · ${bug.people ?? 0} people`,
-        ' · first ',
-        s.when?.(str(bug.first)) ?? str(bug.first),
-        ' · last ',
-        s.when?.(str(bug.last)) ?? str(bug.last),
+        facts.filter(Boolean).join(' · '),
       ),
-      h('p', { class: 'Head_Sub' }, str(bug.fault)),
     ),
-    bug.culprit
-      ? h(
-        'p',
-        null,
-        'Culprit: ',
-        s.show?.(
-          s.get?.(str(bug.culprit)) ?? { entity: { eid: str(bug.culprit) } },
-          'Tracker.Culprit.Inline',
-        ),
-      )
-      : bug.spot
-      ? h('p', null, h('code', null, str(bug.spot)))
+    said(e) != headline(said(e))
+      ? h('p', null, h('span', { class: 'Value Value-text' }, said(e)))
       : null,
-    h(
-      'section',
-      { class: 'Section' },
-      h('h2', { class: 'Section_Title' }, 'Affected in retained occurrences'),
-      affected.length || commits.length
-        ? h(
-          'dl',
-          { class: 'Pairs' },
-          affected.map(([key, ids]) => [
-            h(
-              'dt',
-              { class: 'Pairs_Key' },
-              key == 'entity' ? 'Store / context' : key,
-            ),
-            h(
-              'dd',
-              { class: 'Pairs_Value' },
-              ids.map((eid, i) => [i ? ' · ' : '', reference(h, s, eid)]),
-            ),
-          ]),
-          commits.length
-            ? [
-              h('dt', { class: 'Pairs_Key' }, 'Commits'),
-              h(
-                'dd',
-                { class: 'Pairs_Value' },
-                commits.map((
-                  commit,
-                  i,
-                ) => [i ? ' · ' : '', h('code', null, commit)]),
-              ),
-            ]
-            : null,
-        )
-        : h(
-          'p',
-          { class: 'Section_Sub' },
-          'No affected store, app, process or commit was recorded.',
-        ),
-    ),
-    h(
-      'section',
-      { class: 'Section' },
-      h('h2', { class: 'Section_Title' }, 'Newest occurrence'),
-      errors.length
-        ? s.show?.(errors[0], 'Full')
-        : h('p', null, 'No retained occurrences.'),
-    ),
-    errors.length > 1
+    frames.length
       ? h(
-        'section',
-        { class: 'Section' },
-        h(
-          'h2',
-          { class: 'Section_Title' },
-          'Earlier occurrences · newest first',
+        'ol',
+        null,
+        frames.map((f) =>
+          h('li', null, f.app ? '● ' : '  ', h('code', null, frameAt(f)))
         ),
-        errors.slice(1).map((b) => s.show?.(b, 'Full')),
       )
       : null,
   )
 }
+
+/** Draws a bug or an error by name. */
 export let views = define([
-  { view: 'Full', match: parse('.bug'), render: bugPage },
-  { view: 'Page', match: parse('.bug'), render: bugPage },
-  { view: 'Tile', match: parse('.bug'), render: bugTile },
-  { view: 'List.Tile', match: parse('.bug'), render: bugTile },
-  { view: 'Full', match: parse('.error'), render: occurrence },
-  { view: 'Page', match: parse('.error'), render: occurrence },
-  { view: 'Tile', match: parse('.error'), render: occurrence },
-  { view: 'List.Tile', match: parse('.error'), render: occurrence },
+  {
+    view: 'Title',
+    match: parse('.bug .doc.title'),
+    render: (e, h) => line(h, undefined, said(e)),
+  },
+  {
+    view: 'Title',
+    match: parse('.error'),
+    render: (e, h) => line(h, undefined, said(e)),
+  },
+  ...['Tile', 'List.Tile'].flatMap((view) => [
+    { view, match: parse('.bug'), render: bugTile },
+    { view, match: parse('.error'), render: errorTile },
+  ]),
+  { view: 'Bug.List.Tile', match: parse('.error'), render: occurrence },
+  ...['.bug', '.error'].flatMap((q) => [
+    { view: 'Card.Title', match: parse(q), render: bar },
+    { view: 'Inline', match: parse(q), render: inline },
+    { view: 'Page', match: parse(q), render: page },
+  ]),
 ])
+
 export { inspectViews } from './inspect.ts'
