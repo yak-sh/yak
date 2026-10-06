@@ -55,9 +55,6 @@ under it that would serve the agent better.
   costs nothing while your context is short and gets heavy once it's long; a
   long coding job carrying all of it hits its turn limit (M-33551).
 - **A fresh agent** starts from the persona alone and needs the whole brief.
-  Coding goes to the model the owner named for it (M-37542, which carries the
-  `codex exec` command for gpt-6.1-sol in a worktree of its own); other fresh
-  work goes to the Agent tool with `isolation: "worktree"`.
 - **A native session** (`yak session new`, our own harness, on a GPT model)
   takes the whole brief plus what `native-sessions` adds. Its catalogue matches
   skill descriptions to the work and `skill_read` loads a body, so the skills

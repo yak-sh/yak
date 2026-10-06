@@ -6,13 +6,11 @@ description: >
   session new` from the worktree it should work in, then finding its S-id,
   watching it, saying more to it, waiting for its work and knowing what stops
   it. Use it whenever you are asked for a "native", "graph-native" or
-  "harness" session, to run a GPT model (Sol, Astra, gpt-6.1-sol) on a task
-  or "in the harness", or to hand work to a model other than Claude, and
-  whenever you are about to run `yak session new` or `yak session send`, even
-  if the request only says "have sol do it". Load it too before reaching for
-  the Codex plugin in Claude Code (the `codex:codex-rescue` agent type,
-  `/codex:rescue`, the other `codex:` skills) or `yak session spawn --provider
-  codex`: neither is a native session. What the brief says is `agent-briefs`.
+  "harness" session, or for a model to work "in the harness", and whenever you
+  are about to run `yak session new` or `yak session send`. `yak session spawn`
+  and the Codex plugin in Claude Code (`codex:codex-rescue`, `/codex:rescue`)
+  run outside agents, not native sessions. What the brief says is
+  `agent-briefs`.
 ---
 
 # Native sessions
@@ -38,29 +36,19 @@ door to answer questions, so what it needs to decide on its own has to be in
 the brief. `agent-briefs` is the larger pattern this one lives in: what any
 brief carries, and how a report is read when it comes back.
 
-## Which door
+## What it isn't
 
-A request naming a GPT model pulls toward whatever has "codex" in its name, and
-several doors reach those models. Only one is native:
+Two other things here run a model on a task, and the word "codex" in them makes
+them easy to mistake for this:
 
-- **`yak session new`**, the native harness. Its `openai` provider serves GPT
-  models through the OpenAI connection's ChatGPT sign-in, and the transcript
-  lives in the graph.
 - **`yak session spawn --provider claude|codex`**: an outside CLI agent (Claude
   Code, the Codex CLI) on a task, its output imported as a transcript
   (M-36709).
 - **The Codex plugin in Claude Code**: the `codex:codex-rescue` agent type,
   `/codex:rescue`, `codex:setup` and the plugin's other skills. They drive the
   Codex CLI from your conversation, outside the harness.
-- **`codex exec`**, run directly in a worktree of its own: the door M-37542
-  names for coding work on gpt-6.1-sol. The owner, 2026-10-02, verbatim: "use
-  the codex cli to delegate to gpt for now" and "the graph-native harness is
-  clearly not working well enough to rely on it".
 
-So a native session, a harness session, a graph-native one, is
-`yak session new`, and nothing with "codex" in its name is that. Coding work on
-a GPT model goes by M-37542 until the harness runs sessions dependably; the
-persona carries it.
+A native session, harness session or graph-native session is `yak session new`.
 
 ## Starting one
 
