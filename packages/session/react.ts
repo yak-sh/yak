@@ -299,7 +299,10 @@ let contentKinds = async (
   return entries
 }
 
-let statusEntries = async (g: Graph, session: Eid): Promise<Bundle[]> => {
+export let statusEntries = async (
+  g: Graph,
+  session: Eid,
+): Promise<Bundle[]> => {
   if (!g.vocab.comp('archetype')) return transcript(g, session)
   let components = [
     ENTRY,

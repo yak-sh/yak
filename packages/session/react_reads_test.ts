@@ -170,3 +170,58 @@ for (let fork of [false, true]) {
     assert(bodyRows <= 16, `finite window loaded ${bodyRows} content rows`)
   })
 }
+
+test('the runner inspects finite-window status without loading old transcript prose', async () => {
+  let vocab = loadVocab([
+    sessionDoc,
+    modelDoc,
+    toolsDoc,
+    contextDoc,
+    effectDoc,
+    kernelDoc,
+    archetypeDoc,
+  ], [kernelKeywords])
+  let s = storage(mem(), vocab, { derived: sessionDerived(vocab) })
+  let g = graph({ vocab, storage: s, plugins: [sessions()] }),
+    m = identityEid('model', ['fake'])
+  await g.apply([
+    { entity: { eid: m }, model: { name: 'fake' } },
+    { entity: { eid: 'runner' }, session: {} },
+    { entity: { eid: 'worker' } },
+    ...Array.from(
+      { length: 200 },
+      (_, i): Bundle => ({
+        entity: { eid: 'r' + i },
+        entry: { session: 'runner', seq: i + 1 },
+        content: { body: 'old line ' + i },
+      }),
+    ),
+    {
+      entity: { eid: 'input' },
+      entry: { session: 'runner', seq: 201 },
+      content: { body: 'now' },
+      using: { model: m, window: 16 },
+    },
+  ])
+  let bodies = 0, read = g.read.bind(g)
+  g.read = async (q, opts) => {
+    let rows = await read(q, opts)
+    if (
+      typeof q == 'string' && q.includes('.entry.session=runner') &&
+      q.includes('&*')
+    ) bodies += rows.filter((b) => b.content).length
+    return rows
+  }
+  let { settle } = await import('./run.ts')
+  await settle(g, 'runner', {
+    holder: 'worker',
+    tools: [],
+    model: () =>
+      Promise.resolve({
+        id: 'reply',
+        model: 'fake',
+        items: [{ kind: 'assistant', text: 'done' }],
+      }),
+  })
+  assertEquals(bodies, 0)
+})

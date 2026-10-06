@@ -52,7 +52,7 @@ import { active, admitNext, dispatchStatus, queue, swap } from './admission.ts'
 import { type ChildLimits, deliverChild } from './children.ts'
 import { CLAIM } from './comp.ts'
 import { STOP_ENTRY } from './native.ts'
-import { type Deps, react, type Step, transcript } from './react.ts'
+import { type Deps, react, statusEntries, type Step } from './react.ts'
 import {
   newestAsk,
   openCalls,
@@ -97,7 +97,7 @@ let one = async (g: Graph, eid: Eid): Promise<Bundle | undefined> =>
 // landed since it last looked.
 let newest = async (g: Graph, session: Eid): Promise<number> => {
   let [last] = await g.read(
-    `.entry.session=${session}&.order=-entry.seq&.limit=1&*`,
+    `.entry.session=${session}&.order=-entry.seq&.limit=1`,
   )
   return last ? seqOf(last) : 0
 }
@@ -117,7 +117,7 @@ let quit = async (g: Graph, session: Eid, entries: Bundle[]) => {
     entry: { session },
     [STOP_ENTRY]: {},
   }], { trusted: true })
-  return transcript(g, session)
+  return statusEntries(g, session)
 }
 
 // A transcript that has ended: its parent told, its dispatch settled, and its
@@ -303,7 +303,7 @@ let step = async (g: Graph, session: Eid, r: Runner): Promise<Step> => {
 // The steps a held transcript takes: until one does nothing, or it ends.
 // Answers the newest seq it saw.
 let turns = async (g: Graph, session: Eid, r: Runner): Promise<number> => {
-  let entries = await quit(g, session, await transcript(g, session))
+  let entries = await quit(g, session, await statusEntries(g, session))
   let status = statusOf(entries)
   let older = openCalls(entries).some((b) =>
     (b.call as Comp)?.source != newestAsk(entries)?.entity.eid
@@ -353,7 +353,7 @@ let held = async (
 // Whether something landed after `seen` that the transcript owes a turn for.
 let owed = async (g: Graph, session: Eid, seen: number) => {
   if (await newest(g, session) <= seen) return false
-  let status = statusOf(await transcript(g, session))
+  let status = statusOf(await statusEntries(g, session))
   return status == 'pending' || status == 'running'
 }
 
@@ -399,7 +399,7 @@ export let settle = (g: Graph, session: Eid, r: Runner): Promise<void> => {
       // The lease is released by held before owing another pass. A ready
       // replacement may have already swept while we were still draining.
       if (r.stopping?.aborted && g.vocab.comp('effect')) {
-        let status = statusOf(await transcript(g, session))
+        let status = statusOf(await statusEntries(g, session))
         if (['pending', 'running', 'queued'].includes(status)) {
           await g.apply([{
             entity: { eid: crypto.randomUUID() },
@@ -470,8 +470,8 @@ export let answering = async (
   session: Eid,
   r: Runner,
 ): Promise<boolean> => {
-  let asked = await g.read(`.entry.session=${session}&.using&*`)
-  let entries = asked.length ? asked : await transcript(g, session)
+  let asked = await g.read(`.entry.session=${session}&.using&?ask&?entry`)
+  let entries = asked.length ? asked : await statusEntries(g, session)
   if (!entries.some((b) => b.using || b.ask)) return false
   return r.answers ? await r.answers(usingBefore(entries)) : true
 }
@@ -503,7 +503,7 @@ let release = async (g: Graph, e: Event): Promise<void> => {
   if (typeof session != 'string') return
   let row = await one(g, session)
   if (row?.process && !row.exit) return
-  let status = statusOf(await transcript(g, session))
+  let status = statusOf(await statusEntries(g, session))
   if (status != 'stopped' && status != 'failed') return
   for (let held of await g.read(`.${CLAIM}.session=${session}&*`)) {
     try {
