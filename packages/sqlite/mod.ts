@@ -232,7 +232,7 @@ export type Store = {
    * every one, read in a unit that takes no write lock */
   get: (eids: Eid[], comps?: string[]) => Bundle[]
   /** run `body` in a transaction: commit on return, roll back on throw */
-  tx: <R>(body: (tx: Tx) => R) => R
+  tx: <R>(body: (tx: Tx) => R, opts?: { admission?: boolean }) => R
 }
 
 /**

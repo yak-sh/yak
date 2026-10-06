@@ -132,7 +132,7 @@ test('immutable admission content follows raw blob changes and rollback', () => 
 })
 
 test('immutable admission content observes blob commits by another file connection', () => {
-  let dir = Deno.makeTempDir({ prefix: 'T-65691-blob-' })
+  let dir = Deno.makeTempDirSync({ prefix: 'T-65691-blob-' })
   let a = open(`${dir}/data.db`), b = open(`${dir}/data.db`)
   try {
     let s = storage(a, blog, { derived: blobRead(blog) })
