@@ -4,7 +4,7 @@ import { tick, until } from './testing.ts'
 import { assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { learn, vocab } from './types.ts'
-import { cache, config, ent, problem } from './live.ts'
+import { cache, config, ent, problem, routeSub } from './live.ts'
 import { hostCommands } from './host_commands.ts'
 import { actionsFor } from './components/registry.ts'
 import { Entity } from './components/Entity.tsx'
@@ -58,6 +58,11 @@ test('a document-only vocabulary browses without task, session or box-only reads
       ['Home'],
     )
     assertEquals(wire.asked().length, 0)
+    // Its page holds the entity, and asks for no edges the store can't keep.
+    let held = routeSub('document')
+    await tick()
+    held()
+    assertEquals(wire.asked().some((a) => a.subscribe.includes('.edge')), false)
     assertEquals(problem.value, '')
     assertEquals(seen.root.textContent?.includes('ReferenceError'), false)
     let offered = hostCommands(vocab)

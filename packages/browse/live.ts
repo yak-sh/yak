@@ -2331,8 +2331,10 @@ export let routeSub = (eid: string, fields?: string) => {
   // silent match-all.
   // A whole route also holds the edges incident to the entity, each end its
   // own subscription: the edge rows land like any other, and the cache reads
-  // the sentences off them.
-  let ends = fields ? [] : ['from', 'to'].map((end) => `${sub}:${end}`)
+  // the sentences off them. A store that keeps no edges is never asked.
+  let ends = fields || !vocab.comp('edge')
+    ? []
+    : ['from', 'to'].map((end) => `${sub}:${end}`)
   if (!n) {
     ownBoard(sub, routeLine(eid, fields))
     for (let end of ends) {

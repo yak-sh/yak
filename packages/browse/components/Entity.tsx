@@ -135,7 +135,8 @@ define([
   },
   ...secretViews.renderers,
   ...connectionViews.renderers,
-  // A package's own Title (a bug's headline) outranks this by specificity.
+  // A package's own Title (a bug's headline) wins: it is as specific or more,
+  // and the views packages offer are overlaid ahead of these.
   { view: 'Title', match: parse('.doc.title'), Render: TitleText },
   ...genericViews.renderers.filter((r) => r.view == 'Title'),
   ...commentViews.renderers.map((r) => ({
