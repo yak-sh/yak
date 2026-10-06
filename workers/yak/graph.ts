@@ -136,6 +136,7 @@ import {
   identity as inspectIdentity,
   inspect as inspectStorage,
   schema,
+  storage as sqliteStorage,
 } from '@yaks/sqlite'
 import {
   driver,
@@ -145,7 +146,6 @@ import {
   profile,
   type Sockets,
   sockets,
-  storage,
   type Wire,
 } from '@yaks/durable-object'
 import { type Effects, effects } from '@yaks/effects'
@@ -924,8 +924,8 @@ export class Store {
     })
     let drive = this.#sql = driver(ctx.storage, observe, this.#measure)
     let bytes = sqliteBlobs(drive)
-    let store = storage(
-      ctx.storage,
+    let store = sqliteStorage(
+      drive,
       vocab,
       {
         // A number is @yaks/id's, and only the platform's own stores loaded it
@@ -946,8 +946,6 @@ export class Store {
         derived,
         ...(vocab.comp('_tx') ? { backed: journalBacked(vocab) } : {}),
       },
-      observe,
-      this.#measure,
     )
     this.#texts = {
       sql: drive,

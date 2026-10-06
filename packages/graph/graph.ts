@@ -1042,7 +1042,10 @@ export let graph = (opts: Options): Graph => {
           : audited(bundles, e)
       let committed: Bundle[] | Promise<Bundle[]>
       try {
-        committed = timed('transaction', () => storage.tx(run))
+        committed = timed(
+          'transaction',
+          () => storage.tx(run, { admission: checking }),
+        )
       } catch (e) {
         return fell(e)
       }

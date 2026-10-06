@@ -160,7 +160,11 @@ export type Storage = {
    * that settles once the transaction has committed. A refusal before the
    * body runs may carry `retryable: true`: no work ran or committed, so the
    * caller may safely retry the same transaction. */
-  tx: <R>(body: (tx: Tx) => R) => R | Promise<Awaited<R>>
+  tx: <R>(body: (tx: Tx) => R, opts?: {
+    /** Certified admission rehearses writes in memory. An adapter may reuse
+     * coherent authoritative reads; permissions and rules still run afresh. */
+    admission?: boolean
+  }) => R | Promise<Awaited<R>>
 }
 
 /**

@@ -9,33 +9,42 @@ import type { Driver, Stmt } from '@yaks/sql'
 let held = new WeakMap<Driver, {
   schema: number
   catalog: number
+  data: number
   schemaVersion?: unknown
   dataVersion?: unknown
 }>()
 
-type Scope = 'schema' | 'catalog'
+type Scope = 'schema' | 'catalog' | 'data'
 
 /** A monotonic invalidation token, not a stored row or catalog fingerprint. */
 export function revision(driver: Driver, scope: Scope): number {
   let state = held.get(driver)
   if (!state) {
-    state = { schema: 0, catalog: 0 }
+    state = { schema: 0, catalog: 0, data: 0 }
     held.set(driver, state)
     let current = state
     let invalidate = () => {
       current.schema++
       current.catalog++
+      current.data++
     }
-    let scopes: { name?: string; schema: number; catalog: number }[] = []
-    let undo = (at: { schema: number; catalog: number }) => {
+    let scopes: {
+      name?: string
+      schema: number
+      catalog: number
+      data: number
+    }[] = []
+    let undo = (at: { schema: number; catalog: number; data: number }) => {
       if (current.schema != at.schema) current.schema++
       if (current.catalog != at.catalog) current.catalog++
+      if (current.data != at.data) current.data++
     }
     let observe = (s: Stmt): void => {
       if (s.t == 'raw') {
         if (s.origin) observe(s.origin)
         return
       }
+      if (s.t == 'insert' || s.t == 'update' || s.t == 'delete') current.data++
       if (s.t == 'begin' || s.t == 'savepoint') {
         scopes.push({
           ...current,
@@ -106,13 +115,15 @@ export function revision(driver: Driver, scope: Scope): number {
       state.schemaVersion = schemaVersion
       state.schema++
       state.catalog++
+      state.data++
     }
-    if (scope == 'catalog') {
+    if (scope == 'catalog' || scope == 'data') {
       let dataVersion = driver.query({ t: 'pragma', name: 'data_version' })[0]
         ?.data_version
       if (dataVersion !== state.dataVersion) {
         state.dataVersion = dataVersion
         state.catalog++
+        state.data++
       }
     }
   }

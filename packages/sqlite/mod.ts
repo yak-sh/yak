@@ -83,6 +83,8 @@ import { backfill, entomb, ledger, reclassify } from './archetype.ts'
 import { componentTables, shape } from './physical.ts'
 import { patch, remove, revive } from './write.ts'
 import { bindings } from './rules.ts'
+import { memoized } from './memo.ts'
+import { revision } from './revision.ts'
 
 export * from './archetype.ts'
 export { catalog } from './catalog.ts'
@@ -336,6 +338,7 @@ export let storage = (
   let numbered = typeof base.number == 'object'
     ? !base.number.except.includes('archetype')
     : !!base.number
+  let memo = memoized(() => revision(driver, 'data'), vocab, base.derived)
   let tx: Tx = {
     read: (query, o) => read(driver, vocab, query, { ...opts(), ...o }),
     get: identity,
@@ -538,15 +541,19 @@ export let storage = (
       ensure()
       return unit(driver, () => identity(eids, comps), 'read')
     },
-    tx: <R>(body: (tx: Tx) => R): R => {
+    tx: <R>(body: (tx: Tx) => R, mode?: { admission?: boolean }): R => {
       ensure()
       return unit(driver, (): R => {
-        if (!classified) return body(tx)
+        let cached = (t: Tx): Tx =>
+          mode?.admission
+            ? { ...t, get: (eids, comps) => memo(t.get, eids, comps) }
+            : t
+        if (!classified) return body(cached(tx))
         let { tx: t, settle } = tracked()
         let tracing = context()
         // An async body settles what it owes before the unit closes, as the
         // unit waits for it (./unit.ts).
-        return after(body(t), (out) => {
+        return after(body(cached(t)), (out) => {
           if (tracing) scope(tracing, settle)
           else settle()
           return out
