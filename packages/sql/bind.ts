@@ -431,6 +431,15 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     if (!worn(ctx, hop.comp)) return unworn(op, '', '')
     let present = op == '~' || op == EXISTS
     if (present && hop.comp == ctx.present) return TRUE
+    if (ctx.present && hop.comp != 'entity' && !computed(ctx.v, hop.comp)) {
+      let hit = cond({
+        sql: `exists (select 1 from ${ctx.d.table(hop.comp)} where ${
+          ctx.d.ownerKey(hop.comp)
+        } = ${ctx.d.ownerKey('entity')})`,
+        params: [],
+      })
+      return present ? hit : not(hit)
+    }
     let shape = hop.comp == 'entity' ? null : byArchetype(
       ctx,
       present ? { all: [hop.comp] } : { none: [hop.comp] },
@@ -1190,7 +1199,7 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
     if (!f) rest.push(c)
     else (f.present ? all : none).push(f.comp)
   }
-  let shape = all.length + none.length > 1
+  let shape = !ctx.present && all.length + none.length > 1
     ? byArchetype(ctx, { all, none })
     : null
   if (!shape) return [...narrow, ...cs.map((x) => clause(ctx, x))]
@@ -1577,17 +1586,16 @@ export let bound = (
     }
   }
   let filters = cs.filter((c) => !directive(c) || claims(ctx, c.kind))
-  // A page of one stored component is already an owner-keyed table. Drive it
-  // directly: loading every archetype to rediscover that table buys nothing.
-  let only = filters.length == 1 ? filters[0] : undefined
+  // A component page (including the platform's negative listing screen)
+  // already has a keyed driving table. No catalog is needed to discover it.
+  let facets = flattened(filters).map((c) => facetOf(ctx, c))
+  let required = facets.filter((f) => f?.present)
   if (
     !spine && !claims(ctx, 'pred') && ctx.d.owned && find<Limit>(cs, 'limit') &&
-    only?.kind == 'pred' && !only.not && !only.where &&
-    only.path.length == 1 && opOf(only) == EXISTS
+    facets.every((f) => f != null) && required.length == 1
   ) {
-    let comp = only.path[0]
+    let comp = required[0]!.comp
     if (
-      comp != 'entity' && vocab.comp(comp) && !computed(vocab, comp) &&
       source(ctx, comp) == `"${comp}"` && ctx.d.table(comp) == `"${comp}"`
     ) ctx.present = comp
   }

@@ -1,6 +1,7 @@
 // Real Store query costs: every SQL cursor's billed reads and writes, including boot.
 import { doorOf } from './door.ts'
 import { Store } from './graph.ts'
+import { asking } from './listing.ts'
 import { directory, over } from './directory.ts'
 import { metaOf } from './meta.ts'
 import type { DurableStorage } from '@yaks/durable-object'
@@ -19,7 +20,7 @@ let plus = (a: Cost, b: Cost) => {
   a.written += b.written
   a.calls += b.calls
 }
-export let queryCost = async (db: Storage) => {
+export let queryCost = async (db: Storage, screened = false) => {
   let headers = {
     'x-store': 'probe/query-cost',
     'x-yak-access': 'public',
@@ -94,7 +95,14 @@ export let queryCost = async (db: Storage) => {
       shapes.clear()
       if (name == 'cold') store = new Store(context)
       let res = await store.fetch(
-        new Request('http://store/query?q=.recipe%26.limit=1', { headers }),
+        new Request(
+          `http://store/query?q=${
+            encodeURIComponent(
+              screened ? asking('.recipe&.limit=1') : '.recipe&.limit=1',
+            )
+          }`,
+          { headers },
+        ),
       )
       if (!res.ok) throw new Error(await res.text())
       let body = await res.json() as { recipe?: { title?: string } }[]

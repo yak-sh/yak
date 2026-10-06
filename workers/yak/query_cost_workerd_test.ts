@@ -32,3 +32,18 @@ test('directory routing reads one app rather than its space roster', async () =>
     )
   }
 })
+
+test('a screened page seeks its answer without loading unrelated archetypes', async () => {
+  let k = workerd()
+  let res = await fetch(`${k.base}/__play_cost/?query=1&screened=1`)
+  assertEquals(res.status, 200, await res.clone().text())
+  let report = await res.json() as Awaited<ReturnType<typeof queryCost>>
+  console.log('SCREENED_QUERY_COST', JSON.stringify(report))
+  for (let [name, value] of Object.entries(report)) {
+    assertEquals(value.cost.written, 0)
+    assert(
+      value.cost.read <= (name == 'cold' ? 60 : 40),
+      `${name}: ${value.cost.read} billed rows`,
+    )
+  }
+})

@@ -35,7 +35,12 @@ export class PlayCost {
       return Response.json(await directoryCost(this.ctx.storage))
     }
     if (new URL(req.url).searchParams.has('query')) {
-      return Response.json(await queryCost(this.ctx.storage))
+      return Response.json(
+        await queryCost(
+          this.ctx.storage,
+          new URL(req.url).searchParams.has('screened'),
+        ),
+      )
     }
     if (new URL(req.url).searchParams.has('writes')) {
       return Response.json(await writeCost(this.ctx.storage))

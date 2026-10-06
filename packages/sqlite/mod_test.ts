@@ -443,6 +443,7 @@ test('a driver over a FILE takes the write lock up front', () => {
 test('a stored presence page keeps order, graves, offsets and projections', () => {
   let vocab = loadVocab({
     $defs: {
+      doc: { component: true, properties: { title: { type: 'string' } } },
       recipe: {
         component: true,
         properties: {
@@ -472,6 +473,12 @@ test('a stored presence page keeps order, graves, offsets and projections', () =
     eid: 'second',
   }])
   assertEquals(s.rows('.recipe .limit=1 .after=last'), [{ eid: 'second' }])
+  assertEquals(s.rows('.recipe !doc .limit=1'), [{ eid: 'last' }])
+  s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'last' }, doc: { title: 'Hidden' } }])
+  )
+  assertEquals(s.rows('.recipe !doc .limit=1'), [{ eid: 'second' }])
+  s.tx((tx) => tx.patch([{ entity: { eid: 'last' }, doc: null }]))
   assertEquals(s.rows('.recipe .limit=1 .fields=recipe.title'), [{
     eid: 'last',
     'recipe.title': 'Last',
