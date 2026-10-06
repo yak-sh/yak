@@ -1,6 +1,7 @@
 // Test-only workerd door: real SQL row counters, no account or live app.
 import { queryCost } from './query_cost_fixture.ts'
 import { writeCost } from './write_cost_fixture.ts'
+import { productionGap } from './production_gap_fixture.ts'
 import { worldTick } from './play_world_fixture.ts'
 import { idleWake, playMinute } from './play_cost_fixture.ts'
 import type { DurableStorage } from '@yaks/durable-object'
@@ -35,6 +36,17 @@ export class PlayCost {
     }
     if (new URL(req.url).searchParams.has('writes')) {
       return Response.json(await writeCost(this.ctx.storage))
+    }
+    if (new URL(req.url).searchParams.has('production')) {
+      let q = new URL(req.url).searchParams
+      return Response.json(
+        await productionGap(
+          this.ctx.storage,
+          Number(q.get('history') ?? 79000),
+          Number(q.get('villagers') ?? 6),
+          Number(q.get('turns') ?? 16),
+        ),
+      )
     }
     if (new URL(req.url).searchParams.has('world')) {
       return Response.json(

@@ -1,5 +1,5 @@
 import { compactAsk } from './compact_ask.ts'
-import { CallError, runner, UnfinishedCall } from '@yaks/tools'
+import { CallError, runner, toolEid, UnfinishedCall } from '@yaks/tools'
 export { CallError as ToolError } from '@yaks/tools'
 import {
   argsOf,
@@ -691,12 +691,6 @@ export let react = async (
     deps.named ?? (() => []),
     usingBefore(entries)?.tools,
   )
-  let toolEntities = new Map<Eid, Tool>()
-  for (let b of await g.read(`.${TOOL}`)) {
-    let t = tools.find((t) => t.name == comp(b, TOOL)?.name)
-    if (t) toolEntities.set(b.entity.eid, t)
-  }
-
   // Open tool calls: perform every one the current ask asked for that has no
   // result yet, in one batch, so the model is never asked with a call it made
   // still unanswered (the provider refuses that). A tool that throws is an
@@ -705,6 +699,23 @@ export let react = async (
   // a transcript is never called settled with work left here (T-35230).
   let asked = newestAsk(entries)
   let open = openCalls(entries)
+  // Resolve the finite offered/called identities, not every tool in the
+  // store. Canonical tools are named by their declaration; retained calls
+  // may name an older stored identity and still resolve from that row.
+  let toolEntities = new Map<Eid, Tool>()
+  let targets = [
+    ...new Set([
+      ...tools.map((t) => toolEid(t.name)),
+      ...entries.flatMap((b) => {
+        let to = comp(b, CALL)?.to
+        return typeof to == 'string' ? [to] : []
+      }),
+    ]),
+  ]
+  for (let b of await g.get(targets, [TOOL])) {
+    let t = tools.find((t) => t.name == comp(b, TOOL)?.name)
+    if (t) toolEntities.set(b.entity.eid, t)
+  }
   if (open.length) {
     const added: Bundle[] = []
     // The runner is what runs a call — here and everywhere else (@yaks/tools).

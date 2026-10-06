@@ -1999,3 +1999,15 @@ test('private media checkpoint records cost on the original ask before delivery 
   let entries = await transcript(g, ids.s)
   assertEquals(entries.filter((b) => b.cost).length, 1)
 })
+
+test('a text-only turn never enumerates the graph tool catalog', async () => {
+  let g = world()
+  let read = g.read.bind(g), catalog = 0
+  g.read = (q, opts) => {
+    if (q == '.tool') catalog++
+    return read(q, opts)
+  }
+  let { model } = scripted([says('no-call', 'Done.')])
+  assertEquals(await rest(g, ids.s, { model, tools: [echo], mint }), 'settled')
+  assertEquals(catalog, 0)
+})
