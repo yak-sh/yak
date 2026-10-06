@@ -150,6 +150,13 @@ State a view needs lives in the page's graph, never in `useState`. A person's
 half-typed text is a draft in @yaks/draft, kept and synced everywhere, never
 lost (M-59093).
 
+## Render cost
+
+A screen renders only what changed: a part that re-renders when nothing it
+shows has changed is a bug, and on a screen painted every frame it costs the
+frame rate. @yaks/ui depends on @preact/signals for values that change often,
+and a test can count renders per update through Preact's `options.diffed`.
+
 ## Check it
 
 - Re-read the task’s comments before landing a screen slice, and address review
