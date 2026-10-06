@@ -36,7 +36,7 @@ the world, not the code: ask what the thing is, which aspect of it this is, who
 writes it and who reads it, and what already exists, before asking what the old
 code did.
 
-The owner judges a design by its properties. Jeff, verbatim (M-59030): "just
+The owner judges a design by its properties. In his words (M-59030): "just
 the names of comps without `comp{prop, ...}` is not very useful to me. i
 evaluate by what's in the comp, not just the name". So wherever a component is
 proposed (a design, a reply, a task), it is written `comp{prop, prop, …}`.
@@ -45,7 +45,7 @@ proposed (a design, a reply, a task), it is written `comp{prop, prop, …}`.
 
 Your recall returns a word's meaning, not its letters, so you will produce a
 synonym for something that already exists and it will feel like the same word.
-Jeff, verbatim (M-12915): "it's like agents really do run on "vibes". as long
+The owner, verbatim (M-12915): "it's like agents really do run on "vibes". as long
 as the vibe of the word is the same, they can't tell them apart". Look the
 string up: `grep '"<word>"' packages/*/vocab.json`, `yak graph schema`, or the
 component list in `yak inspect`. If the codebase already has the idea under
@@ -124,7 +124,7 @@ later as a migration.
 
 ## Identity: an eid, never a name
 
-Names change; Jeff: "names in any system must always be changeable. if you
+Names change; the owner: "names in any system must always be changeable. if you
 want non-changing values, use a UUID." And the graph is global (M-39645), so an
 eid means the same thing in every store. Anything that must not move (a
 reference, a stored query, a derived eid) holds an eid.
@@ -160,7 +160,7 @@ reference, a stored query, a derived eid) holds an eid.
   `sfx:water`, which @yaks/alias stores as a @yaks/key `key: true` row), a
   human number (`T-123`), a model's name. `g.address` resolves a handle to its
   eid at the door, on every write (packages/graph/README.md), and what is
-  stored is the eid. Jeff: "it's an external interface, not an internal one.
+  stored is the eid. The owner: "it's an external interface, not an internal one.
   e.g. model names, aliases, etc etc. But nothing internally has to be
   migrated when those are changed." So a thing that needs a readable name gets
   an alias, not a slug property of its own, and no component stores a word as
@@ -184,7 +184,7 @@ fact is a second copy.
 
 ## What happened is a mark; where it stands is computed
 
-Jeff, verbatim (M-59035): "i tend to think that `state` props are an
+The owner, verbatim (M-59035): "i tend to think that `state` props are an
 anti-pattern." A stored `state` or `status` is a snapshot of events kept
 somewhere else: it drifts from them, and every writer has to remember to update
 it. So each event is recorded as a **mark**: a component with stamped `at` and
@@ -219,7 +219,7 @@ or stale row into an exposure.
 When a component replaces something, its shape follows what it is for, not what
 the old code happened to do. Drafts were kept per browser tab only because
 sessionStorage did that, and a `durable: tab` lifetime was invented to keep it.
-Jeff, verbatim (M-59093): "a "draft" is not some throw-away thing; it is
+The owner, verbatim (M-59093): "a "draft" is not some throw-away thing; it is
 precious user data that should never be lost". The keyword was deleted. A draft
 is `draft{by, place, text, rev}` (@yaks/draft): synced, kept for good, on an eid
 every interface derives the same way, and a person's input never gets a short

@@ -28,7 +28,7 @@ nothing says so. packages/graph/README.md is the reference ("Writes and reads",
 
 The graph is also shared and lasting. The box, every page, every yaks.app store
 and every agent write into it at once, and the owner reads it as his working
-memory. Jeff, verbatim (M-39645): "assume that "the graph" is global and
+memory. The owner, verbatim (M-39645): "assume that "the graph" is global and
 boundless, hence UUIDs. the goal will be to converge towards a p2p (CRDT
 perhaps) sync model. this is part of why we had a journal."
 
@@ -79,7 +79,7 @@ Each entity in a batch is stamped as the writer its own first bundle names in
 `$actor`, else the batch's writer (`writers()` in packages/graph/stamp.ts;
 `signed()` sets one), and the journal records one transaction per writer. A
 session's own rows (a persona snapshot, a report) name the session, and a person
-is the writer only of what that person typed or asked for. Jeff, verbatim
+is the writer only of what that person typed or asked for. The owner, verbatim
 (M-31958): "i think "closing the door" is probably a fleet-wide prompt
 clarifying they should only mark me as the actor if i *explicitly* ask them to
 do that exact thing. any follow-ups or later things should be marked as the
@@ -134,7 +134,7 @@ How a query is written is `query-grammar`. How one is answered:
 A script writes through the graph: it opens one, or hands bundles to
 `yak graph apply`. That is what keeps the stamps, the journal, the archetype
 pointers and the full-text and vector indexes true. SQL is @yaks/sql's AST.
-Jeff, verbatim (M-39498): "nothing anywhere else should ever be writing raw sql
+The owner, verbatim (M-39498): "nothing anywhere else should ever be writing raw sql
 strings." A raw SQL writer that has to exist calls `reclassify(driver, eids)`
 from @yaks/sqlite in the same transaction (packages/sqlite/README.md), or the
 pointers go stale and presence filters, status filters and whole-entity reads
