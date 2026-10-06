@@ -50,6 +50,12 @@
   }
 }
 
+@media (pointer: coarse) {
+  .Tip_Head > .ValeKeycap {
+    display: none;
+  }
+}
+
 .Tip_Note {
   font-size: 0.75rem;
   color: var(--amber);

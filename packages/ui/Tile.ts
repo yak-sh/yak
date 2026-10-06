@@ -11,8 +11,12 @@
  * (el.ts); given an `onClick`, a button. A button is a thing picked from its
  * list: it says so with `aria-current`, true while it wears `on`. `dim` is a
  * thing that cannot be had yet, its icon and title faded and its sub saying
- * why (`Sub-negative`); an icon takes a tone (`Icon-positive` and the rest).
+ * why (`Sub-negative`); an icon takes a tone (`Icon-positive` and the rest),
+ * and an end that falls short says so (`End-negative`).
  * `hover` is the one under the pointer, for a terminal, which has none.
+ * `head` heads a page of the thing's own, above what it says of it: its
+ * icon and title larger, the end there what can be done with it, which goes
+ * under the words where there is no room beside them.
  *
  * @module
  */
@@ -83,6 +87,7 @@ export let sheet = (c: Colors): Sheet => ({
   'Tile-on': { bg: c.card, bold: true },
   'Tile-hover': { bg: c.surface },
   'Tile-dim': { dim: true },
+  'Tile-head': { bold: true },
   Tile_Text: { spaced: true },
   Tile_Line: { spaced: true },
   Tile_Id: { fg: c.dim },
@@ -91,6 +96,7 @@ export let sheet = (c: Colors): Sheet => ({
   Tile_Count: { fg: c.number },
   Tile_Sub: { fg: c.muted },
   'Tile_Sub-negative': { fg: c.negative },
+  'Tile_End-negative': { fg: c.negative },
   'Tile_Icon-info': { fg: c.info },
   'Tile_Icon-active': { fg: c.active },
   'Tile_Icon-positive': { fg: c.positive },
@@ -130,6 +136,16 @@ export let specimens = (): Specimen[] => [
       h(Title, {}, 'A title long enough to need the room it is given'),
       h(Sub, {}, 'what it is, under it'),
       h(End, {}, h(Count, {}, '12')),
+    ),
+  ],
+  [
+    'head: Tile heading its own page',
+    h(
+      Tile,
+      { mod: 'head' },
+      h(Icon, { mod: 'accent' }, h(Dot, { mod: 'accent' })),
+      h(Title, {}, 'Inspect the data model'),
+      h(Sub, {}, 'Task · open'),
     ),
   ],
 ]

@@ -1,0 +1,46 @@
+/* Numbers, a line each: the mark a letter's size beside the words, which
+   wrap under themselves; one changing reads in ink to its new number, in
+   green for better and red for worse. Two columns share what room there is. */
+.ValeStats {
+  display: grid;
+  gap: 0.2rem 0.7rem;
+  min-width: 0;
+  font-size: 0.85rem;
+  line-height: 1.3;
+  color: var(--text);
+}
+.ValeStats-two {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+}
+.ValeStats_Stat {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.3rem;
+  min-width: 0;
+}
+.ValeStats_Mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  height: 1.3em;
+  color: var(--muted);
+
+  & > svg {
+    width: 1.1em;
+    height: 1.1em;
+  }
+}
+.ValeStats_Words {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ValeStats_Better,
+.ValeStats_Worse {
+  font-style: normal;
+}
+.ValeStats_Better {
+  color: var(--positive);
+}
+.ValeStats_Worse {
+  color: var(--negative);
+}

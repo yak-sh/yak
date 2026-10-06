@@ -1,7 +1,7 @@
 import { assertEquals, assertMatch, assertNotMatch } from '@std/assert'
 import { test } from '@yaks/testing'
-import { parseHTML } from 'linkedom'
 import { seedAbilities } from './abilities_fixture.ts'
+import { drawn } from './dom_fixture.ts'
 import { seedItems } from './items_fixture.ts'
 import { numbers } from './compare.ts'
 import { skillDetail } from './skill-detail.ts'
@@ -11,23 +11,31 @@ let hero = (kind = 'hammer1', learned: string[] = []) => ({
   learned,
   worn: { main: { eid: 'weapon', kind, n: 1 } },
 })
+type Hero = ReturnType<typeof hero>
+// The skill's page, its words, and its line starting `name`, if any.
+let page = (s: Hero, id: string) => drawn(skillDetail(s, id))
+let text = (s: Hero, id: string) => page(s, id).textContent!
+let line = (s: Hero, id: string, name: string) =>
+  [...page(s, id).querySelectorAll('.ValeStats_Stat')].find((l) =>
+    l.textContent!.startsWith(name)
+  )
 
-test('skill bonuses use the same named stat colors and icons as gear', () => {
+test('skill bonuses read in ink with the icons gear uses', () => {
   seedItems()
   for (
     let [id, stats] of [
-      ['brawn', [['hp', '+10% Health']]],
-      ['heft', [['force', '+12% Attack bonus']]],
-      ['hide', [['armour', '+25% Armor']]],
-      ['momentum', [['haste', '+12% Attack speed bonus']]],
-      ['nimble', [['speed', '+8% Speed'], ['luck', '+5% Critical chance']]],
-    ] as [string, [string, string][]][]
+      ['brawn', ['+10% Health']],
+      ['heft', ['+12% Attack bonus']],
+      ['hide', ['+25% Armor']],
+      ['momentum', ['+12% Attack speed bonus']],
+      ['nimble', ['+8% Speed', '+5% Critical chance']],
+    ] as [string, string[]][]
   ) {
-    let { document } = parseHTML(skillDetail(hero(), id))
-    for (let [stat, text] of stats) {
-      let row = document.querySelector(`.Pack_Rolled .Stat-${stat}`)
-      assertEquals(row?.textContent?.trim(), text, `${id}: ${stat}`)
+    for (let words of stats) {
+      let row = line(hero(), id, words)
+      assertEquals(row?.textContent, words, id)
       assertEquals(row?.querySelectorAll('svg.Glyph').length, 1, id)
+      assertEquals(row?.querySelector('em'), null, id)
     }
   }
 })
@@ -35,27 +43,27 @@ test('skill bonuses use the same named stat colors and icons as gear', () => {
 test('skill details show bonuses and the hero changes with current gear', () => {
   seedItems()
   let s = hero(), hp = numbers(s, s.worn).hp
-  assertMatch(skillDetail(s, 'brawn'), /\+10% Health/)
+  assertMatch(text(s, 'brawn'), /\+10% Health/)
   assertMatch(
-    skillDetail(s, 'brawn'),
-    new RegExp(`Health ${hp} → .*${Math.round(hp * 1.1)}`),
+    text(s, 'brawn'),
+    new RegExp(`Health ${hp} → ${Math.round(hp * 1.1)}`),
   )
-  assertMatch(skillDetail(s, 'heft'), /Attack .* → .*Pack_Up/)
-  assertMatch(
-    skillDetail(hero('sword1'), 'heft'),
-    /No listed hero stats change/,
+  assertEquals(
+    !!line(s, 'heft', 'Attack ')?.querySelector('.ValeStats_Better'),
+    true,
   )
-  assertMatch(
-    skillDetail(hero('hammer1', ['heft']), 'heft'),
-    /\+12% Attack bonus/,
-  )
-  assertNotMatch(
-    skillDetail(hero('hammer1', ['heft']), 'heft'),
-    /If learned| → /,
-  )
-  assertMatch(
-    skillDetail(hero('hammer1', ['heft', 'aftershock']), 'momentum'),
-    /Attack interval .* → .*Pack_Up/,
+  assertMatch(text(hero('sword1'), 'heft'), /No listed hero stats change/)
+  let known = hero('hammer1', ['heft'])
+  assertMatch(text(known, 'heft'), /\+12% Attack bonus/)
+  assertNotMatch(text(known, 'heft'), /If learned| → /)
+  assertEquals(
+    !!line(
+      hero('hammer1', ['heft', 'aftershock']),
+      'momentum',
+      'Attack interval',
+    )
+      ?.querySelector('.ValeStats_Better'),
+    true,
   )
 })
 
@@ -63,19 +71,19 @@ test('skill details compare ability effects and cooldowns without changing the h
   seedItems()
   seedAbilities()
   let s = hero('tome1'), hp = numbers(s, s.worn).hp
-  let card = skillDetail(s, 'kindness')
   assertMatch(
-    card,
+    text(s, 'kindness'),
     new RegExp(
-      `Restores ${Math.round(hp * 0.3)} Health.*→.*Restores ${
-        Math.round(hp * 0.45)
-      } Health`,
+      `Restores ${Math.round(hp * 0.3)} → ${Math.round(hp * 0.45)} Health`,
     ),
   )
-  assertMatch(skillDetail(s, 'bulwark'), /Cooldown .*→ If learned.*Cooldown/)
-  assertMatch(skillDetail(s, 'earthbreaker'), /1\.5 s Stun/)
-  assertNotMatch(skillDetail(hero('tome1', ['kindness']), 'kindness'), / → /)
-  assertNotMatch(card, /Health \d+ → /)
-  assertMatch(skillDetail(hero('dagger1'), 'twin'), /Allows a second Dagger/)
-  assertNotMatch(skillDetail(hero('dagger1'), 'twin'), /Current|→ If learned/)
+  assertEquals(
+    !!line(s, 'bulwark', 'Cooldown')?.querySelector('.ValeStats_Better'),
+    true,
+  )
+  assertMatch(text(s, 'earthbreaker'), /1\.5 s Stun/)
+  assertNotMatch(text(hero('tome1', ['kindness']), 'kindness'), / → /)
+  assertNotMatch(text(s, 'kindness'), /Health \d+ → /)
+  assertMatch(text(hero('dagger1'), 'twin'), /Allows a second Dagger/)
+  assertNotMatch(text(hero('dagger1'), 'twin'), /now → if learned| → /)
 })

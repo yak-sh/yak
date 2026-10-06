@@ -141,15 +141,15 @@ for (let trade of MAKING) {
       ok(detail.querySelector('[data-tier="2"]'))
       click(`[data-pick=${r.makes}]`, detail)
       assertMatch(detail.textContent!, new RegExp(ITEMS[r.makes].name))
-      equal(detail.querySelectorAll('.Craft_Need').length, r.needs.length)
-      if (ITEMS[r.makes].slot) ok(detail.querySelector('.Craft_Ranges'))
+      equal(detail.querySelectorAll('[data-need]').length, r.needs.length)
+      if (ITEMS[r.makes].slot) ok(detail.querySelector('[data-ranges]'))
       equal(detail.querySelectorAll('[data-do]').length, 0)
       click('[data-tier="2"]', detail)
       equal(detail.querySelectorAll(`[data-pick=${r.makes}]`).length, 0)
-      equal(detail.querySelectorAll('.Craft_Need').length, 0)
+      equal(detail.querySelectorAll('[data-need]').length, 0)
       click('[data-tier="1"]', detail)
       click(`[data-pick=${r.makes}]`, detail)
-      equal(detail.querySelectorAll('.Craft_Need').length, r.needs.length)
+      equal(detail.querySelectorAll('[data-need]').length, r.needs.length)
     }))
 }
 
@@ -160,11 +160,8 @@ test('Trades exposes upgrade requirements and comparisons for carried pieces', (
     click('[data-tier=up]')
     click('[data-pick=sword]')
     let detail = tab.body.querySelector('.Split_Content')!
-    ok(detail.querySelector('.Craft_Need'))
-    assertMatch(
-      detail.textContent!,
-      /Now.*current → possible result.*→ .*[-–]/s,
-    )
+    ok(detail.querySelector('[data-need]'))
+    assertMatch(detail.textContent!, /now → at \+1.*→ .*[-–]/s)
     equal(detail.querySelectorAll('[data-do]').length, 0)
   }))
 

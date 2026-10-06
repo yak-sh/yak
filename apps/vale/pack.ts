@@ -13,23 +13,25 @@
 // would change in the other hand. B or the tray's bag opens it. It is written
 // again only when what it shows changed.
 import { h as el } from 'preact'
-import { Rows, Tile } from '@yaks/ui'
+import { Button, Rows, Tile } from '@yaks/ui'
 import { type Doer, does, GIVES, OFF } from './abilities.ts'
 import { HANDLES, type Slot, SLOT_NAMES, SLOTS, tierName } from './arms.ts'
 import {
   bare,
+  changes,
   doer,
   into,
   itemStats,
-  moved,
   numbers,
+  pieceTile,
   solo,
   sortLine,
+  stats,
   trying,
   versus,
 } from './compare.ts'
 import { canWear, rack as rackKinds } from './gear.ts'
-import { glyphText } from './glyphs.ts'
+import { glyph } from './glyphs.ts'
 import { ITEMS, type Thing } from './items.ts'
 import { piece, RARITIES, tint } from './rarity.ts'
 import { icon } from './sprites.ts'
@@ -38,10 +40,8 @@ import type { Frame, Sheet } from './play.ts'
 import type { Held } from './rules.ts'
 import { formOf } from './skills.ts'
 import { cards, tipProps } from './tip.ts'
-import { picture } from './tile.ts'
+import { hint, part, picture } from './tile.ts'
 import { split } from './ui/split.ts'
-
-let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
 export type Acts = {
   wear: (slot: Slot, item?: string) => void
@@ -61,12 +61,16 @@ let gives = (t: Thing, slot: Slot | undefined, learned: string[], d: Doer) => {
     let a = formOf(id, learned)
     return a
       ? [
-        `<span class=Pack_Ability>${glyphText(a.icon)}<b>${esc(a.name)}</b> ${
-          esc(does(a, d))
-        }</span>`,
+        el(
+          Tile,
+          { key: id },
+          picture(glyph(a.icon)),
+          el(Tile.Title, {}, a.name),
+          el(Tile.Sub, {}, does(a, d)),
+        ),
       ]
       : []
-  }).join('')
+  })
 }
 
 // A thing's tier, beside its picture.
@@ -205,8 +209,8 @@ export let pack = (panel: Page, acts: Acts) => {
       : p.heals
       ? `Drink it to mend ${p.heals}`
       : ''
-    return el(
-      Tile,
+    return pieceTile(
+      p,
       {
         key,
         mod: [on && 'on', (had || locked) && 'dim'],
@@ -214,8 +218,6 @@ export let pack = (panel: Page, acts: Acts) => {
         ...tipProps({ name: p.name }),
         onClick: pick(from, key),
       },
-      picture(icon(h.kind) || '•', { class: tint(p.rarity) }),
-      el(Tile.Title, { class: `Rarity ${tint(p.rarity)}` }, p.name),
       what && el(Tile.Sub, { mod: locked && 'negative' }, what),
       n > 1 ? el(Tile.End, {}, `×${n}`) : null,
     )
@@ -251,74 +253,66 @@ export let pack = (panel: Page, acts: Acts) => {
 
   // What a thing is, what wearing it would change, and what can be done.
   let card = (s: Sheet, f: Pick<Frame, 'rack'>) => {
-    if (!picked) {
-      return `<p class=Pack_Hint>Tap something to see what it is.</p>`
-    }
+    if (!picked) return hint('Tap something to see what it is.')
     let { from, key } = picked
     let h = heldAt(s, from, key)
     let t = h && ITEMS[h.kind] && piece(h)
-    if (!h || !t) return `<p class=Pack_Hint>Nothing worn there.</p>`
+    if (!h || !t) return hint('Nothing worn there.')
     let kind = h.kind
     let slot = from == 'worn' ? key as Slot : into(s, kind)
     let ready = canWear(h, s.lvl)
-    let now = numbers(s, s.worn)
-    let then = from == 'worn'
-      ? numbers(s, bare(s.worn, key))
-      : numbers(s, trying(s.worn, h, slot))
     let both = HANDLES[t.family ?? '']?.hands == 2 ? ' · both hands' : ''
     let what = t.slot
       ? `${sortLine(t)}${both}`
       : t.heals
       ? `Drink it to mend ${t.heals} (Q)`
       : 'Carried'
-    // Compare the hero before and after the action offered on this card.
-    let changes = !t.slot ? '' : moved(now, then)
     // The rack gives one of each, and a second of a blade for the other hand.
     let held = s.bag.filter((b) => b.kind == kind).length >=
       (slot == t.slot ? 1 : 2)
+    let button = (act: string, words: string, go = true) =>
+      el(Button, { mod: go && 'go', 'data-do': act }, words)
     let act = from == 'worn'
-      ? `<button class="Btn Btn-small" data-do=off>Take it off</button>`
+      ? button('off', 'Take it off', false)
       : from == 'rack'
-      ? f.rack
-        ? held
-          ? `<span class=Pack_Hint>You have one.</span>`
-          : `<button class="Btn Btn-go Btn-small" data-do=take>Take it</button>`
-        : ''
+      ? f.rack ? held ? 'You have one.' : button('take', 'Take it') : null
       : !ready && t.slot
-      ? `<span class=Pack_Requirement>Requires level ${t.lvl}</span>`
+      ? null
       : slot == 'off' && t.slot == 'main'
-      ? `<button class="Btn Btn-small" data-do=wear>Hold it</button><button class="Btn Btn-go Btn-small" data-do=twin>Other hand</button>`
+      ? [button('wear', 'Hold it', false), button('twin', 'Other hand')]
       : t.slot
-      ? `<button class="Btn Btn-go Btn-small" data-do=wear>${
-        t.slot == 'main' || t.slot == 'off' ? 'Hold it' : 'Wear it'
-      }</button>`
-      : ''
+      ? button(
+        'wear',
+        t.slot == 'main' || t.slot == 'off' ? 'Hold it' : 'Wear it',
+      )
+      : null
     let can = gives(
       t,
       slot,
       s.learned,
       doer(s, from == 'worn' ? s.worn : trying(s.worn, h, slot)),
     )
-    let stats = t.slot ? itemStats(t) : ''
-    return `<div class=Pack_Card><i class="Pack_Big ${tint(t.rarity)}">${
-      icon(kind)
-    }</i><div><b class="Rarity ${tint(t.rarity)}">${esc(t.name)}</b><span>${
-      esc(what)
-    }</span></div>${act}</div>${
-      stats
-        ? `<small class=Compare_Label>Item stats</small><div class="Pack_Rolled Rarity ${
-          tint(t.rarity)
-        }">${stats}</div>`
-        : ''
-    }${can ? `<div class=Pack_Abilities>${can}</div>` : ''}${
-      t.slot
-        ? `<small class=Compare_Label>${
-          from == 'worn' ? 'If removed' : 'If equipped'
-        }</small><div class=Pack_Nums>${
-          changes || '<span class=Pack_Hint>No listed stats change.</span>'
-        }</div>`
-        : ''
-    }`
+    return [
+      pieceTile(
+        t,
+        { mod: 'head' },
+        el(Tile.Sub, {}, what),
+        !ready && t.slot &&
+          el(Tile.Sub, { mod: 'negative' }, `Requires level ${t.lvl}`),
+        act && el(Tile.End, {}, act),
+      ),
+      t.slot && part('Item stats', stats(itemStats(t))),
+      can.length > 0 && part('Abilities', el(Rows, {}, can)),
+      // The hero before and after what this card offers.
+      t.slot && changes(
+        from == 'worn' ? 'If removed' : 'If equipped',
+        numbers(s, s.worn),
+        numbers(
+          s,
+          from == 'worn' ? bare(s.worn, key) : trying(s.worn, h, slot),
+        ),
+      ),
+    ]
   }
 
   let draw = (s: Sheet, f: Pick<Frame, 'rack'>) => {
@@ -338,16 +332,12 @@ export let pack = (panel: Page, acts: Acts) => {
       el(
         'div',
         { class: 'Pack' },
-        el('h3', { class: 'Pack_Head' }, 'In your bag'),
-        bag.length
-          ? el(Rows, {}, bag)
-          : el('span', { class: 'Pack_Hint' }, 'Your bag is empty.'),
-        f.rack && [
-          el(
-            'h3',
-            { class: 'Pack_Head' },
-            'By the fire: plain arms for anyone to try',
-          ),
+        part(
+          'In your bag',
+          bag.length ? el(Rows, {}, bag) : hint('Your bag is empty.'),
+        ),
+        f.rack && part(
+          'By the fire: plain arms for anyone to try',
           el(
             Rows,
             {},
@@ -361,14 +351,11 @@ export let pack = (panel: Page, acts: Acts) => {
               )
             ),
           ),
-        ],
+        ),
       ),
       [
         el('div', { class: 'Pack_Worn' }, SLOTS.map((sl) => slot(s, sl))),
-        el('div', {
-          class: 'Pack_Detail',
-          dangerouslySetInnerHTML: { __html: card(s, f) },
-        }),
+        card(s, f),
       ],
       picked ? `${picked.from}:${picked.key}` : null,
     )

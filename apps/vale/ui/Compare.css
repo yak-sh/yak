@@ -1,21 +1,14 @@
-/* A piece beside another (compare.ts `versus`), on a card in a tip: what
-   would be on the left, what is on the right, each named in its rarity's
-   colour with what it rolled, and under them, row by row, the hero's numbers
-   that would change, the left's marked by how much. A piece on its own
-   (`solo`), or what a step makes of it (`step`), is one column. */
+/* A comparison's card, in a tip (compare.ts): each side's piece and its own
+   stats side by side, then, across them, what would change. A piece on its
+   own, or what an upgrade may make of it, is one column, and so is every
+   card on a phone, where two would not fit. */
 .Compare {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.2rem 0.6rem;
-  font-size: 0.8rem;
+  gap: 0.6rem 0.9rem;
 
-  &:not(.Compare-one) > :nth-child(even) {
-    padding-left: 0.6rem;
-    border-left: 1px solid color-mix(in srgb, var(--rim) 55%, transparent);
-  }
-
-  & .Pack_Num {
-    white-space: normal;
+  & > :nth-child(n + 3) {
+    grid-column: 1 / -1;
   }
 }
 
@@ -23,41 +16,8 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
-.Compare_Side {
-  display: grid;
-  align-content: start;
-  gap: 0.1rem;
-  padding-bottom: 0.35rem;
-
-  & > b {
-    font-size: 0.95rem;
-    line-height: 1.2;
+@media (width < 32rem) {
+  .Compare {
+    grid-template-columns: minmax(0, 1fr);
   }
-
-  & > small {
-    color: var(--muted);
-  }
-
-  & .Pack_Rolled {
-    margin-top: 0.15rem;
-    font-size: 0.8rem;
-  }
-}
-
-.Compare_Label {
-  font-size: 0.8rem;
-  color: var(--amber);
-}
-
-.Compare_Same {
-  grid-column: 1 / -1;
-  color: var(--muted);
-}
-
-.Compare_Impact {
-  display: grid;
-  grid-column: 1 / -1;
-  gap: 0.2rem;
-  padding-top: 0.35rem;
-  border-top: 1px solid var(--rim);
 }

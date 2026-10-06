@@ -2,6 +2,7 @@
 import { equal, ok, test } from '@yaks/testing'
 import { JSDOM } from 'npm:jsdom@26.1.0'
 import { character } from './character.ts'
+import { LINES, numbers, said } from './compare.ts'
 import { kitOf } from './gear.ts'
 import { seedItems } from './items_fixture.ts'
 import { HAIRS, type Look, SKINS, TINTS } from './make.ts'
@@ -123,19 +124,19 @@ test('character stats have icons and conditional stats follow equipped gear', ()
     }
     for (let [s, extras] of [[sheet, []], [fast, ['twin', 'speed']]] as const) {
       view.show(s, look)
+      let n = numbers(s, s.worn)
+      let lines = [...body.querySelectorAll('.ValeStats_Stat')]
+      let shown = (k: string) => {
+        let l = LINES.find((l) => l.k == k)!
+        return lines.find((line) => line.textContent == said(l, n[l.k]))
+      }
       for (
         let k of ['blow', 'pace', 'reach', 'armour', 'hp', 'luck', ...extras]
       ) {
-        let line = body.querySelector(`.Stat-${k}`)!
-        ok(line, `The ${k} stat is visible`)
-        ok(line.querySelector('svg[aria-hidden=true]'), `${k} has a stat icon`)
-        ok(line.textContent?.trim(), `${k} has its number and name`)
+        ok(shown(k)?.querySelector('svg[aria-hidden=true]'), `${k} has an icon`)
       }
       for (let k of ['twin', 'speed']) {
-        equal(
-          !!body.querySelector(`.Stat-${k}`),
-          extras.some((extra) => extra == k),
-        )
+        equal(!!shown(k), extras.some((extra) => extra == k))
       }
     }
   }))

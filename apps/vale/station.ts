@@ -1,7 +1,7 @@
 // The station menu shared by the village bench and the Trades guide. Its
 // selection lives in the page graph; the guide omits every work action.
 import { type ComponentChildren, h, render } from 'preact'
-import { Button, Rows, Tabs, Tile } from '@yaks/ui'
+import { Button, Rows, Section, Tabs, Tile } from '@yaks/ui'
 import {
   able,
   have,
@@ -16,9 +16,15 @@ import {
 } from './craft.ts'
 import { SLOTS, sortOf, tierName, tierRange } from './arms.ts'
 import {
+  into,
+  pieceTile,
+  type Side,
   sortLine,
   statLine,
   statRangeValue,
+  stats,
+  statStep,
+  step,
   stepRange,
   trying,
 } from './compare.ts'
@@ -37,7 +43,7 @@ import {
 import type { Held } from './rules.ts'
 import { icon } from './sprites.ts'
 import type { Sheet } from './play.ts'
-import { picture as plate } from './tile.ts'
+import { hint, mark, part, picture as plate } from './tile.ts'
 import { cards, tipProps } from './tip.ts'
 import { type Craft, least, tradeNeed, TRADES, type Trades } from './trades.ts'
 import { madeBy, MOST, upgradeOf } from './upgrade.ts'
@@ -54,12 +60,6 @@ let tiers = (c: Craft) =>
       Object.values(recipes()).filter((r) => r.at == c).map((r) => r.tier),
     ),
   ].sort((a, b) => a - b)
-let picture = (kind: string, className?: string) =>
-  h('i', {
-    class: className,
-    dangerouslySetInnerHTML: { __html: icon(kind) || '•' },
-  })
-let hint = (words: string) => h('p', { class: 'Pack_Hint' }, words)
 let pieces = (s: Sheet, c: Craft): Held[] => {
   let worn = SLOTS.flatMap((slot) => s.worn[slot] ?? [])
   let rest = s.bag.filter((held) =>
@@ -75,66 +75,76 @@ let wearing = (s: Sheet, held: Held, x: Held) => {
   let slot = SLOTS.find((sl) => s.worn[sl]?.eid == held.eid)
   return trying(slot ? s.worn : trying(s.worn, held), x, slot)
 }
-let ahead = (s: Sheet, held: Held) => {
+// What upgrading `held` once may make of it: it now, and at the least and
+// the most, each worn as the hero would wear it.
+let ahead = (s: Sheet, held: Held): [Side, Side, Side] | undefined => {
   let [lo, hi] = upgradeRange(held)
+  let side = (label: string, x: Partial<Held>) => ({
+    label,
+    p: piece({ ...held, ...x }),
+    worn: wearing(s, held, { ...held, ...x }),
+  })
   return upgradeOf(held.kind, held.plus ?? 0)
-    ? stepRange(s, {
-      label: 'Now',
-      p: piece(held),
-      worn: wearing(s, held, held),
-    }, {
-      label: 'Least',
-      p: piece(lo),
-      worn: wearing(s, held, { ...held, ...lo }),
-    }, {
-      label: 'Most',
-      p: piece(hi),
-      worn: wearing(s, held, { ...held, ...hi }),
-    })
+    ? [side('Now', {}), side('Least', lo), side('Most', hi)]
     : undefined
 }
-let need = (bag: Sheet['bag'], r: Recipe, [what, n]: [string, number]) => {
-  let got = have(bag, what, r.tier), kinds = serves(what, r.tier)
-  let name = (kind: string) => ITEMS[kind]?.name ?? kind
-  let names = kinds.length < 2
-    ? ''
-    : STUFF[what]?.tiered
-    ? `${name(kinds[0])} or better`
-    : `${kinds.slice(0, -1).map(name).join(', ')} or ${
-      name(kinds[kinds.length - 1])
-    }`
-  return h(
-    'span',
-    { class: `Craft_Need${got < n ? ' Craft_Need-short' : ''}` },
-    picture(
-      kinds.find((kind) => bag.some((held) => held.kind == kind)) ?? kinds[0],
+// What a thing to make or upgrade asks, a stuff to a tile: what of it the
+// bag holds out of what is asked, short of it in red.
+let needs = (bag: Sheet['bag'], r: Recipe) =>
+  part(
+    'Needs',
+    h(
+      Rows,
+      {},
+      r.needs.map(([what, n]) => {
+        let got = have(bag, what, r.tier), kinds = serves(what, r.tier)
+        let name = (kind: string) => ITEMS[kind]?.name ?? kind
+        let names = kinds.length < 2
+          ? ''
+          : STUFF[what]?.tiered
+          ? `${name(kinds[0])} or better`
+          : `${kinds.slice(0, -1).map(name).join(', ')} or ${
+            name(kinds[kinds.length - 1])
+          }`
+        let shown = kinds.find((kind) => bag.some((x) => x.kind == kind)) ??
+          kinds[0]
+        return h(
+          Tile,
+          { key: what, 'data-need': what },
+          plate(icon(shown) || '•'),
+          h(Tile.Title, {}, stuffName(what)),
+          names && h(Tile.Sub, {}, names),
+          h(Tile.End, { mod: got < n && 'negative' }, `${got} / ${n}`),
+        )
+      }),
     ),
-    h('b', {}, stuffName(what)),
-    h('em', {}, `${got} / ${n}`),
-    names && h('small', {}, names),
   )
-}
-let makingRange = (kind: string) => {
+// What a piece made of `kind` may roll, each stat from what the piece worn
+// in its place has to what it may become.
+let makingRange = (s: Sheet, kind: string) => {
   let item = ITEMS[kind]
   if (!item?.slot || !item.tier) return null
   let [lo, hi] = tierRange(item.tier), values = statRange(kind)
+  let slot = into(s, kind), held = slot && s.worn[slot]
+  let worn = held ? piece(held) : undefined
   return h(
-    'div',
-    { class: 'Craft_Ranges' },
+    Section,
+    { 'data-ranges': '' },
     h(
-      'small',
+      Section.Title,
       {},
-      `Possible per-stat ranges · Level ${lo}–${hi} · Common–Legendary`,
+      'Possible stats',
+      h(Section.Note, {}, `Level ${lo}–${hi} · Common–Legendary`),
     ),
-    GEAR_STATS.flatMap((stat) => {
+    worn && h(Section.Sub, {}, `Against your ${worn.name}`),
+    stats(GEAR_STATS.flatMap((stat) => {
       let pair = values[stat]
-      if (!pair) return []
-      return [h('div', {
-        dangerouslySetInnerHTML: {
-          __html: statLine(stat, statRangeValue(stat, ...pair)),
-        },
-      })]
-    }),
+      return !pair
+        ? []
+        : worn
+        ? [statStep(stat, worn[stat] ?? 0, ...pair)]
+        : [statLine(stat, statRangeValue(stat, ...pair))]
+    })),
   )
 }
 
@@ -164,20 +174,16 @@ export let menu = (
     state.select(`${owner}/item`, null)
     change()
   }
+  let waits = (
+    r: Recipe,
+  ): [string, boolean] => [`Requires ${trade.name} ${least(r.tier)}`, true]
   let work = (
     r: Recipe,
     key: string,
     words: string,
     kind: 'make' | 'upgrade',
   ): ComponentChildren => {
-    if (!able(r, mine.lvl)) {
-      return h(
-        'span',
-        { class: 'Pack_Hint' },
-        `Requires ${trade.name} ${least(r.tier)}`,
-      )
-    }
-    if (!acts) return null
+    if (!able(r, mine.lvl) || !acts) return null
     let active = kind == 'make'
       ? job.doing?.recipe == key && !job.doing.piece
       : job.doing?.piece == key
@@ -192,6 +198,10 @@ export let menu = (
       },
     }, active ? `${kind == 'make' ? STATIONS[c].doing : 'Upgrading'}…` : words)
   }
+  // The trade level a recipe waits on, where the hero has not reached it.
+  let shut = (r?: Recipe) =>
+    r && !able(r, mine.lvl) &&
+    h(Tile.Sub, { mod: 'negative' }, waits(r)[0])
   let detail: ComponentChildren = hint(
     up
       ? 'Tap something you carry to upgrade it.'
@@ -205,27 +215,19 @@ export let menu = (
         r = upgradeOf(held.kind, plus),
         range = ahead(s, held)
       detail = [
-        h(
-          'div',
-          { class: 'Pack_Card' },
-          picture(held.kind, `Pack_Big ${tint(item.rarity)}`),
-          h(
-            'div',
+        pieceTile(
+          item,
+          { mod: 'head' },
+          h(Tile.Sub, {}, `${sortLine(item)} · +${plus} of ${MOST}`),
+          r ? shut(r) : h(Tile.Sub, {}, 'As fine as it gets.'),
+          r && h(
+            Tile.End,
             {},
-            h('b', { class: `Rarity ${tint(item.rarity)}` }, item.name),
-            h('span', {}, `${sortLine(item)} · +${plus} of ${MOST}`),
+            work(r, held.eid, `Upgrade to +${plus + 1}`, 'upgrade'),
           ),
-          r
-            ? work(r, held.eid, `Upgrade to +${plus + 1}`, 'upgrade')
-            : hint('As fine as it gets.'),
         ),
-        r &&
-        h(
-          'div',
-          { class: 'Craft_Needs' },
-          r.needs.map((n) => need(bag, r, n)),
-        ),
-        range && h('div', { dangerouslySetInnerHTML: { __html: range } }),
+        r && needs(bag, r),
+        range && stepRange(s, ...range),
       ]
     }
   } else {
@@ -234,27 +236,22 @@ export let menu = (
       let item = ITEMS[r.makes]
       detail = [
         h(
-          'div',
-          { class: 'Pack_Card' },
-          picture(r.makes, 'Pack_Big'),
-          h(
-            'div',
+          Tile,
+          { mod: 'head' },
+          plate(icon(r.makes) || '•'),
+          h(Tile.Title, {}, item?.name ?? r.makes),
+          item && h(
+            Tile.Sub,
             {},
-            h('b', {}, item?.name ?? r.makes),
-            h(
-              'span',
-              {},
-              !item
-                ? ''
-                : item.heals
-                ? `Drink it to mend ${item.heals} (Q)`
-                : `${sortOf(item)} · tier ${tierName(r.tier)}`,
-            ),
+            item.heals
+              ? `Drink it to mend ${item.heals} (Q)`
+              : `${sortOf(item)} · tier ${tierName(r.tier)}`,
           ),
-          work(r, r.makes, STATIONS[c].verb, 'make'),
+          shut(r),
+          h(Tile.End, {}, work(r, r.makes, STATIONS[c].verb, 'make')),
         ),
-        h('div', { class: 'Craft_Needs' }, r.needs.map((n) => need(bag, r, n))),
-        makingRange(r.makes),
+        needs(bag, r),
+        makingRange(s, r.makes),
       ]
     }
   }
@@ -283,9 +280,6 @@ export let menu = (
       sub[0] && h(Tile.Sub, { mod: sub[1] && 'negative' }, sub[0]),
       plus ? h(Tile.End, {}, `+${plus}`) : null,
     )
-  let waits = (
-    r: Recipe,
-  ): [string, boolean] => [`Requires ${trade.name} ${least(r.tier)}`, true]
   let tiles = up
     ? pieces(s, c).map((held) => {
       let item = piece(held), r = upgradeOf(held.kind, held.plus ?? 0)
@@ -337,11 +331,7 @@ export let menu = (
               'aria-pressed': tab == String(tier),
               onClick: () => switchTier(String(tier)),
             },
-            mine.lvl < least(tier)
-              ? h('span', {
-                dangerouslySetInnerHTML: { __html: glyphText('lock') },
-              })
-              : null,
+            mine.lvl < least(tier) ? mark('lock') : null,
             tierName(tier),
           )
         ),
@@ -358,9 +348,7 @@ export let menu = (
               'aria-pressed': up,
               onClick: () => switchTier('up'),
             },
-            h('span', {
-              dangerouslySetInnerHTML: { __html: glyphText('sparkles') },
-            }),
+            mark('sparkles'),
             'Upgrade',
           ),
       ),
@@ -400,7 +388,8 @@ export let station = (
     let held = state.cursor(`${owner}/tier`) == 'up'
       ? sheet?.bag.find((held) => held.eid == e.getAttribute('data-pick'))
       : null
-    return sheet && held ? ahead(sheet, held) : undefined
+    let range = sheet && held && ahead(sheet, held)
+    return range ? step(sheet!, ...range) : undefined
   })
   return {
     get at() {

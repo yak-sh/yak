@@ -1,14 +1,12 @@
 /* Vale's rendering of Section: a part of a sheet under a small amber title,
    an icon beside its words when it has one, a count or a note after them,
-   and what it is about under them; then what it holds. Sections stack a
-   little apart. */
+   and what it is about under them; then what it holds. What holds them
+   sets them apart. */
 .Section {
   display: grid;
+  align-content: start;
   gap: 0.35rem;
   min-width: 0;
-}
-.Section + .Section {
-  margin-top: 0.6rem;
 }
 .Section_Title {
   display: flex;

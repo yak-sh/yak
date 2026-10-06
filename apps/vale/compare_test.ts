@@ -1,7 +1,14 @@
-// A range reads with one sign and unit, and keeps its stat's presentation.
+// A range reads with one sign and unit, and a number is coloured only where
+// it would change.
 import { equal, ok, test } from '@yaks/testing'
-import { parseHTML } from 'linkedom'
-import { rangeText, statRangeValue, stepRange } from './compare.ts'
+import {
+  rangeText,
+  statName,
+  statRangeValue,
+  stepRange,
+  toRange,
+} from './compare.ts'
+import { drawn } from './dom_fixture.ts'
 import { seedItems } from './items_fixture.ts'
 import { piece, type Stat } from './rarity.ts'
 
@@ -32,7 +39,7 @@ test('stat ranges carry one positive sign and one unit', () => {
   ) equal(rangeText(low, high), text)
 })
 
-test('upgrade ranges use the same compact text and colored stat icons as finished gear', () => {
+test('upgrade ranges use the compact text and the icons of finished gear', () => {
   seedItems()
   let h = { eid: 'weapon', kind: 'sword1', n: 1, lvl: 1 }
   let p = piece(h)
@@ -48,16 +55,41 @@ test('upgrade ranges use the same compact text and colored stat icons as finishe
       p: { ...p, [stat]: value },
       worn: { main: h },
     })
-    let html = stepRange(
-      { lvl: 1, learned: [] },
-      side(0),
-      side(low),
-      side(high),
+    let line = [
+      ...drawn(stepRange(
+        { lvl: 1, learned: [] },
+        side(0),
+        side(low),
+        side(high),
+      )).querySelectorAll('.ValeStats_Stat'),
+    ].find((l) => l.textContent!.startsWith(statName(stat)))!
+    ok(line, stat)
+    ok(line.textContent!.endsWith(` → ${text}`), line.textContent!)
+    ok(line.querySelector('.ValeStats_Mark svg'), `${stat} has its icon`)
+  }
+})
+
+test('a number is coloured only where it would change, Better or Worse as it goes', () => {
+  let secs = (n: number) => `${n.toFixed(2)} s`
+  for (
+    let [more, now, low, high, marks, shows = String] of [
+      [true, 3, 3, 3, []],
+      [true, 3, 4, 6, [['Better', '4-6']]],
+      [true, 3, 1, 2, [['Worse', '1-2']]],
+      [true, 3, 1, 5, []],
+      [true, 0, 0, 17, []],
+      [false, 5, 4, 4, [['Better', '4']]],
+      [false, 5, 5, 6, []],
+      [false, 0.5, 0.498, 0.499, [], secs],
+    ] as [boolean, number, number, number, string[][], typeof String?][]
+  ) {
+    let ems = drawn(toRange(more, now, low, high, shows)).querySelectorAll('em')
+    equal(
+      [...ems].map((
+        e,
+      ) => [e.className.replace('ValeStats_', ''), e.textContent]),
+      marks,
+      `${now} → ${low}-${high}`,
     )
-    let { document } = parseHTML(html)
-    let range = document.querySelector(`.Stat-${stat} em`)!
-    ok(range, `${stat} has its own colored range`)
-    equal(range.textContent, text)
-    ok(range.parentElement!.querySelector('.Glyph'), `${stat} has its icon`)
   }
 })

@@ -5,7 +5,7 @@
 .Pack {
   display: flex;
   flex-direction: column;
-  gap: var(--gap);
+  gap: calc(2 * var(--gap));
   width: min(30rem, 100cqw - 2rem);
   min-height: 100%;
 }
@@ -93,71 +93,17 @@
   color: var(--amber);
 }
 
+.Pack_Head {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: var(--amber);
+}
+
 .Pack_Nums {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
   gap: 0.25rem 0.7rem;
   font-size: 0.85rem;
-
-  & .Pack_Num {
-    white-space: normal;
-  }
-}
-
-.Pack_Num {
-  white-space: nowrap;
-
-  & em {
-    font-style: normal;
-  }
-}
-
-.Pack_Up {
-  color: #3f8f2a;
-}
-
-.Pack_Down {
-  color: #c0442a;
-}
-
-/* The picked thing's card and comparison, under the worn slots. */
-.Pack_Detail {
-  display: grid;
-  gap: 0.65rem;
-}
-
-.Pack_Card {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-
-  & > div {
-    display: grid;
-    flex: 1;
-    min-width: 0;
-  }
-
-  & span {
-    font-size: 0.8rem;
-    color: var(--muted);
-  }
-
-  & .Btn {
-    white-space: nowrap;
-  }
-}
-
-.Pack_Big {
-  border-radius: 10px;
-  font-size: 2rem;
-  font-style: normal;
-  box-shadow: 0 0 0 2px var(--rarity, transparent);
-  background: color-mix(in srgb, var(--rarity, transparent) 14%, transparent);
-
-  & .Sprite {
-    width: 2.8rem;
-    height: 2.8rem;
-  }
 }
 
 .Pack_Hint {
@@ -165,44 +111,4 @@
   margin: 0;
   font-size: 0.85rem;
   color: var(--faint);
-}
-
-.Pack_Head {
-  margin: 0.2rem 0 0;
-  font-size: 0.85rem;
-  color: var(--amber);
-}
-
-/* An item's own named stats and, when present, its legendary power. */
-.Pack_Rolled {
-  display: grid;
-  gap: 0.2rem;
-  font-size: 0.85rem;
-
-  & .Pack_Num {
-    white-space: normal;
-  }
-}
-
-.Pack_Legend {
-  flex-basis: 100%;
-  font-style: italic;
-  color: var(--legendary);
-}
-
-/* The abilities a thing picked gives, each with what it does. */
-.Pack_Abilities {
-  display: grid;
-  gap: 0.3rem;
-  font-size: 0.85rem;
-}
-
-.Pack_Ability .Glyph {
-  margin-right: 0.3rem;
-  color: var(--deep);
-}
-
-/* What a piece needs before it can be worn, in red. */
-.Pack_Card .Pack_Requirement {
-  color: var(--char);
 }

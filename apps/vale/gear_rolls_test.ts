@@ -4,6 +4,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { tierRange } from './arms.ts'
 import { itemStats, numbers, statValue, stepRange, versus } from './compare.ts'
+import { drawn } from './dom_fixture.ts'
 import { ITEMS } from './items.ts'
 import { seedItems } from './items_fixture.ts'
 import {
@@ -92,13 +93,13 @@ test('upgrade preview shows current values and possible next values', () => {
     p: piece(x),
     worn: { main: x },
   })
-  let html = stepRange(
+  let html = drawn(stepRange(
     { lvl: 13, learned: [] },
     side(h),
     side({ ...h, ...lo }),
     side({ ...h, ...hi }),
-  )
-  assert(html.includes('Upgrade to +1: current → possible result'))
+  )).textContent!
+  assert(html.includes('now → at +1'))
   assert(html.includes('Weapon power '))
   assert(html.includes('Attack '))
   assert(html.includes(statValue('dmg', piece(h).dmg!)))
@@ -109,17 +110,21 @@ test('item stats and equipped hero changes read separately', () => {
   let h = { eid: 's', kind: 'sword2', n: 1, lvl: 13 }
   let hero = { lvl: 13, learned: [] }
   let p = piece(h)
-  let card = versus(
+  let card = drawn(versus(
     hero,
     { label: 'In your bag', p, worn: { main: h } },
     { label: 'Worn', worn: {} },
-  )
-  let own = itemStats(p)
+  ))
+  let own = [...drawn(itemStats(p)).querySelectorAll('.ValeStats_Stat')]
+    .map((line) => line.textContent!)
   let attack = numbers(hero, { main: h }).blow
+  let text = card.textContent!
   assert(own.includes(`${statValue('dmg', p.dmg!)} Weapon power`))
-  assert(!own.includes(' Attack</span>'))
-  assert(card.indexOf('Weapon power') < card.indexOf('If equipped'))
-  assert(card.includes(`>${attack}</em>`))
-  assert(card.includes('Attack '))
-  assert(!card.includes('a blow'))
+  assert(!own.some((line) => line.endsWith(' Attack')))
+  assert(text.indexOf('Weapon power') < text.indexOf('If equipped'))
+  assert(
+    [...card.querySelectorAll('em')].some((e) => e.textContent == `${attack}`),
+  )
+  assert(text.includes('Attack '))
+  assert(!text.includes('a blow'))
 })

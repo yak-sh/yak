@@ -45,6 +45,7 @@ export let skin: Skin = Object.fromEntries(
     'Tabs',
     'Head',
     'Section',
+    'Body',
     'Tile',
     'Rows',
     'Pairs',

@@ -6,17 +6,15 @@
 // be forgotten, free, to spend the points again. K or the tray's sparkles
 // opens it. It is written again only when what it shows changed.
 import { h } from 'preact'
-import { Rows, Tile } from '@yaks/ui'
+import { Body, Button, Rows, Section, Tile } from '@yaks/ui'
 import { ABILITIES, OFF } from './abilities.ts'
-import { glyph, glyphText } from './glyphs.ts'
+import { glyph } from './glyphs.ts'
 import type { Page } from './panel.ts'
 import type { Frame, Sheet } from './play.ts'
 import { canLearn, DISCIPLINES, SKILLS } from './skills.ts'
 import { skillDetail } from './skill-detail.ts'
-import { picture } from './tile.ts'
+import { hint, mark, picture } from './tile.ts'
 import { split } from './ui/split.ts'
-
-let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
 export type Learning = {
   learn: (skill: string) => void
@@ -29,12 +27,6 @@ let COLS = Object.entries(DISCIPLINES).map(([d, about]) => ({
   skills: Object.keys(SKILLS).filter((id) => SKILLS[id].discipline == d)
     .sort((a, b) => SKILLS[a].row - SKILLS[b].row),
 }))
-
-let svg = (html: string) =>
-  h('span', {
-    'aria-hidden': 'true',
-    dangerouslySetInnerHTML: { __html: html },
-  })
 
 /** The board, drawn into its tab (panel.ts). */
 export let board = (panel: Page, acts: Learning) => {
@@ -81,50 +73,63 @@ export let board = (panel: Page, acts: Learning) => {
         : null,
     )
   }
-
   // What the picked skill does, what it needs, and learning it.
   let card = (s: Sheet) => {
     let k = SKILLS[picked]
     if (!k) {
-      return `<p class=Pack_Hint>Tap a skill to see what it does. Deeper ones need the one above them first.</p>`
+      return hint(
+        'Tap a skill to see what it does. Deeper ones need the one above them first.',
+      )
     }
+    let known = s.learned.includes(picked)
+    let open = canLearn(picked, s.learned, s.lvl)
     let a = k.ability ? ABILITIES[k.ability] : undefined
     let second = k.hand ? ABILITIES[OFF[k.hand]] : undefined
     let what = a
-      ? `${glyphText(a.icon)} ${esc(a.name)}, made stronger`
+      ? `${a.name}, made stronger`
       : second
-      ? `The second gives ${glyphText(second.icon)} ${esc(second.name)}`
+      ? `The second gives ${second.name}`
       : 'Always on'
-    let need = k.after && !s.learned.includes(k.after)
-      ? `<span class=Pack_Hint>Needs ${esc(SKILLS[k.after].name)} first.</span>`
-      : ''
-    let act = s.learned.includes(picked)
-      ? `<span class=Pack_Hint>Learned.</span>`
-      : canLearn(picked, s.learned, s.lvl)
-      ? `<button class="Btn Btn-go Btn-small" data-do=learn>Learn it</button>`
-      : need ||
-        `<span class=Pack_Hint>No points left. A level brings one.</span>`
-    return `<div class="Pack_Card Board_Card Board_Discipline-${k.discipline}"><i class="Pack_Big Board_Icon">${
-      glyph(k.icon)
-    }</i><div><b class=Board_Name>${esc(k.name)}</b><small class=Board_Kind>${
-      esc(DISCIPLINES[k.discipline].name)
-    } · ${
-      k.boon ? 'Passive' : k.hand ? 'Second weapon' : 'Ability'
-    }</small><span>${esc(k.says)} ${what}.</span></div>${act}</div>${
-      skillDetail(s, picked)
-    }`
+    let why = known || open
+      ? ''
+      : k.after && !s.learned.includes(k.after)
+      ? `Needs ${SKILLS[k.after].name} first.`
+      : 'No points left. A level brings one.'
+    return [
+      h(
+        Tile,
+        { mod: 'head' },
+        picture(glyph(k.icon), { mod: known && 'positive' }),
+        h(Tile.Title, {}, k.name),
+        h(
+          Tile.Sub,
+          {},
+          `${DISCIPLINES[k.discipline].name} · ${
+            k.boon ? 'Passive' : k.hand ? 'Second weapon' : 'Ability'
+          }`,
+        ),
+        why && h(Tile.Sub, { mod: 'negative' }, why),
+        h(
+          Tile.End,
+          {},
+          known
+            ? 'Learned.'
+            : open && h(Button, { mod: 'go', 'data-do': 'learn' }, 'Learn it'),
+        ),
+      ),
+      h(Body, {}, h('p', {}, `${k.says} ${what}.`)),
+      ...skillDetail(s, picked),
+    ]
   }
 
   let draw = (s: Sheet, f: Frame) => {
     let forget = !s.learned.length ? null : f.rack
       ? h(
-        'button',
-        { class: 'Btn Btn-small', 'data-do': 'respec' },
+        Button,
+        { 'data-do': 'respec' },
         'Forget them all, to choose again',
       )
-      : h(
-        'p',
-        { class: 'Pack_Hint' },
+      : hint(
         "By a village's fire you can forget them all, free, to choose again.",
       )
     panes.render(
@@ -138,14 +143,10 @@ export let board = (panel: Page, acts: Learning) => {
         ),
         COLS.map((c) =>
           h(
-            'section',
-            { key: c.name, class: 'Board_Col' },
-            h(
-              'div',
-              { class: 'Board_Head' },
-              h('b', {}, svg(glyph(c.icon)), c.name),
-              h('small', {}, c.says),
-            ),
+            Section,
+            { key: c.name },
+            h(Section.Title, {}, mark(c.icon), c.name),
+            h(Section.Sub, {}, c.says),
             h(Rows, {}, c.skills.map((id) => tile(s, id))),
           )
         ),

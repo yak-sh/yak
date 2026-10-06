@@ -1,9 +1,10 @@
 // Character stats and a live portrait stay beside the appearance editor.
 // Mount once so frames and panel navigation preserve the canvas and draft.
+import { h, render } from 'preact'
 import { ABILITIES } from './abilities.ts'
-import { lineMark, LINES, numbers, said } from './compare.ts'
+import { LINES, numbers, sheetStats, stat, stats } from './compare.ts'
 import type { Dress } from './figures.ts'
-import { glyphText } from './glyphs.ts'
+import { ValeKeycap } from './kit/ValeKeycap.ts'
 import { fields, type Look, lookOf, picks } from './make.ts'
 import type { Page } from './panel.ts'
 import type { Sheet } from './play.ts'
@@ -30,13 +31,13 @@ export let character = (tab: Page, acts: Acts) => {
     `<section class=Character aria-label=Character>` +
     `<div class=Character_Top><div class=Character_Portrait>` +
     `<canvas class=Character_Face aria-label="Your portrait"></canvas></div>` +
-    `<div class=Character_Who></div></div><div class=Pack_Nums></div></section>` +
+    `<div class=Character_Who></div></div><div class=Character_Stats></div></section>` +
     `<section class=Character aria-label=Appearance>` +
     `<h3 class=Pack_Head>Your look</h3><form class=Make></form>` +
     `</section></div>`
   let face = box.querySelector<HTMLCanvasElement>('.Character_Face')!
   let who = box.querySelector<HTMLElement>('.Character_Who')!
-  let stats = box.querySelector<HTMLElement>('.Pack_Nums')!
+  let numbersBox = box.querySelector<HTMLElement>('.Character_Stats')!
   let form = box.querySelector<HTMLFormElement>('.Make')!
   // Keep the unfinished look even while another panel is open.
   let picking: Look = { name: '', tint: '', hair: '', skin: '' }
@@ -85,26 +86,33 @@ export let character = (tab: Page, acts: Acts) => {
       let n = numbers(s, s.worn)
       let from = need(s.lvl), to = need(s.lvl + 1)
       let xp = s.lvl == 60 ? 'Max level' : `${s.xp - from} / ${to - from} xp`
-      let nums =
-        LINES.filter((l) => (l.k != 'speed' && l.k != 'twin') || n[l.k])
-          .map((l) =>
-            `<span class="Pack_Num Stat Stat-${l.k}">${lineMark(l)} ${
-              said(l, n[l.k])
-            }</span>`
-          ).join(
-            '',
-          ) +
-        s.abilities.map((id, i) =>
-          ABILITIES[id]
-            ? `<span class=Pack_Num><kbd class=Key>${i + 1}</kbd> ${
-              glyphText(ABILITIES[id].icon)
-            } ${esc(ABILITIES[id].name)}</span>`
-            : ''
-        ).join('')
+      let lines = LINES.filter((l) =>
+        (l.k != 'speed' && l.k != 'twin') || n[l.k]
+      )
       who.innerHTML = `<b class=Character_Name>${
         esc(s.name)
       }</b><span class=Character_Level><span class=Badge>Level ${s.lvl}</span><small>${xp}</small></span>`
-      stats.innerHTML = nums
+      render(
+        stats(
+          [
+            ...sheetStats(n, lines),
+            ...s.abilities.flatMap((id, i) =>
+              ABILITIES[id]
+                ? [
+                  stat(
+                    ABILITIES[id].icon,
+                    h(ValeKeycap, { keycap: String(i + 1) }),
+                    ' ',
+                    ABILITIES[id].name,
+                  ),
+                ]
+                : []
+            ),
+          ],
+          true,
+        ),
+        numbersBox,
+      )
     },
   }
 }

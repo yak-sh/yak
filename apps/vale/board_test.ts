@@ -1,4 +1,4 @@
-// A selected skill has the same icon plate and named-stat display as gear,
+// A selected skill has the same icon plate and stat lines as gear,
 // while learning still respects points and the preceding skill.
 import { assertEquals, assertMatch } from '@std/assert'
 import { test } from '@yaks/testing'
@@ -47,22 +47,23 @@ let selected = (
   })
 }
 
-test('the selected skill shows a discipline-colored icon plate and title like gear', () => {
+test('the selected skill heads its page with its icon plate and title, like gear', () => {
   for (let id of ['brawn', 'fleet', 'kindness']) {
     selected(id, [], 5, (body) => {
-      let skill = SKILLS[id], card = body.querySelector('.Pack_Card')!
-      assertEquals(
-        card.classList.contains(`Board_Discipline-${skill.discipline}`),
-        true,
-      )
-      assertEquals(card.querySelector('.Board_Name')?.textContent, skill.name)
+      let skill = SKILLS[id], head = body.querySelector('.Tile-head')!
+      assertEquals(head.querySelector('.Tile_Title')?.textContent, skill.name)
       assertMatch(
-        card.querySelector('.Board_Kind')!.textContent!,
+        head.querySelector('.Tile_Sub')!.textContent!,
         new RegExp(DISCIPLINES[skill.discipline].name),
       )
-      assertEquals(card.querySelectorAll('.Pack_Big .Glyph').length, 1)
+      assertEquals(head.querySelectorAll('.Tile_Icon .Glyph').length, 1)
       if (skill.ability) {
-        assertEquals(body.querySelectorAll('.Board_Ability .Glyph').length, 1)
+        let detail = body.querySelector('.Split_Content')!
+        assertEquals(
+          detail.querySelectorAll('.Section_Title > [aria-hidden] .Glyph')
+            .length,
+          1,
+        )
       }
     })
   }

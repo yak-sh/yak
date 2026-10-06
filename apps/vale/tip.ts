@@ -13,6 +13,8 @@
 // one is looked at. A sheet drawn again while a tip waits to show (a station
 // filling its button as the hero works) puts a new thing where the old one
 // was, and the tip shows over that.
+import { type ComponentChild, h, render } from 'preact'
+import { ValeKeycap } from './kit/ValeKeycap.ts'
 
 /** What a tip says: its name, the key that does the same, a note in small
  * (an ability's cooldown), and what it does. */
@@ -74,7 +76,7 @@ export let tip = (e: HTMLElement, t: Tip) => {
  * keep them. A screen reader still hears the words. */
 export let cards = (
   box: HTMLElement,
-  card: (e: Element) => string | undefined,
+  card: (e: Element) => ComponentChild | undefined,
 ) =>
   box.addEventListener('tipcard', (ev) => {
     if (ev instanceof CustomEvent && ev.target instanceof Element) {
@@ -83,8 +85,8 @@ export let cards = (
   })
 
 // What the things around `e` would have its tip show in place of its words.
-let cardOf = (e: Element): string | undefined => {
-  let detail: { card?: string } = {}
+let cardOf = (e: Element): ComponentChild | undefined => {
+  let detail: { card?: ComponentChild } = {}
   e.dispatchEvent(new CustomEvent('tipcard', { bubbles: true, detail }))
   return detail.card
 }
@@ -95,6 +97,18 @@ let read = (e: Element): Tip => ({
   note: e.getAttribute('data-tip-note') ?? undefined,
   says: e.getAttribute('data-tip-says') ?? undefined,
 })
+
+// A tip's words: its name and key, its note, and what it does.
+let words = (t: Tip) => [
+  h(
+    'div',
+    { class: 'Tip_Head' },
+    h('b', {}, t.name),
+    t.key && h(ValeKeycap, { keycap: t.key }),
+  ),
+  t.note && h('small', { class: 'Tip_Note' }, t.note),
+  t.says && h('p', { class: 'Tip_Says' }, t.says),
+]
 
 type Box = { x: number; y: number; w: number; h: number }
 
@@ -150,12 +164,7 @@ export let tips = (glass: HTMLElement) => {
     let t = read(e)
     let card = cardOf(e)
     box.classList.toggle('Tip-card', !!card)
-    box.innerHTML = card ??
-      `<div class=Tip_Head><b>${esc(t.name)}</b>${
-        t.key ? `<kbd class=Key>${esc(t.key)}</kbd>` : ''
-      }</div>${t.note ? `<small class=Tip_Note>${esc(t.note)}</small>` : ''}${
-        t.says ? `<p class=Tip_Says>${esc(t.says)}</p>` : ''
-      }`
+    render(card ?? words(t), box)
     let s = getComputedStyle(glass)
     let px = (v: string) => parseFloat(v) || 0
     let room = {

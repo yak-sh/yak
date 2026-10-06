@@ -41,12 +41,14 @@ let lines = () => {
       let title = tile.querySelector('.Tile_Title')
       let text = tile.querySelector(':scope > .Tile_Text')
       let end = tile.querySelector(':scope > .Tile_End')
+      let head = tile.matches('.Tile-head')
       if (!shown(tile)) continue
       if (icon && title) seen[name]++
       if (icon && title && !beside(box(icon), box(title))) {
         say("icon off its title's line", tile)
       }
-      if (end && text && !beside(box(text), box(end))) {
+      // A head's end, what can be done, goes under its words for room.
+      if (end && text && !head && !beside(box(text), box(end))) {
         say('end off its row', tile)
       }
     }

@@ -40,7 +40,7 @@
 
 .Split_Content {
   display: grid;
-  gap: 0.65rem;
+  gap: calc(2 * var(--gap));
 }
 
 .Split_List > .Pack {

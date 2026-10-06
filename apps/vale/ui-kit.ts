@@ -7,6 +7,7 @@ import * as toast from './kit/ValeToast.ts'
 import * as orb from './kit/ValeOrb.ts'
 import * as recording from './kit/ValeRecording.ts'
 import * as compass from './kit/ValeCompass.ts'
+import * as stats from './kit/ValeStats.ts'
 import { skin, theme } from './skin.ts'
 
 export { ValeMeter } from './kit/ValeMeter.ts'
@@ -15,6 +16,7 @@ export { ValeToast } from './kit/ValeToast.ts'
 export { ValeOrb } from './kit/ValeOrb.ts'
 export { ValeRecording } from './kit/ValeRecording.ts'
 export { ValeCompass } from './kit/ValeCompass.ts'
+export { ValeStats } from './kit/ValeStats.ts'
 
 export let kit: Kit = {
   ValeRecording: {
@@ -46,6 +48,11 @@ export let kit: Kit = {
     ...compass,
     Component: compass.ValeCompass,
     css: new URL('./kit/ValeCompass.css', import.meta.url),
+  },
+  ValeStats: {
+    ...stats,
+    Component: stats.ValeStats,
+    css: new URL('./kit/ValeStats.css', import.meta.url),
   },
 }
 export let kits = { vale: kit }

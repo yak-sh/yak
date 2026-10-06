@@ -121,8 +121,20 @@ export let does = (a: Ability, d: Doer): string => {
     (when.length ? ` Ready again at once ${when.join(', or ')}.` : '')
 }
 
-/** Named effect lines, shared by ability descriptions and skill previews. */
-export let abilityStats = (a: Ability, d: Doer): string[] => {
+/** A displayed ability number, with whether increasing it improves the move. */
+export type AbilityNumber = {
+  key: string
+  n: number
+  text: string
+  more: boolean
+}
+
+/** One effect's words and calculated numbers, shared by descriptions and previews. */
+export type AbilityLine = { key: string; parts: (string | AbilityNumber)[] }
+
+/** Named effects with their numbers intact, so previews can compare the values
+ * that combat uses without interpreting their displayed words. */
+export let abilityLines = (a: Ability, d: Doer): AbilityLine[] => {
   let damage = effect(a.effects, 'damage')
   let bleed = effect(a.effects, 'bleed')
   let stun = effect(a.effects, 'stun')
@@ -130,57 +142,136 @@ export let abilityStats = (a: Ability, d: Doer): string[] => {
   let guard = effect(a.effects, 'guard')
   let ward = effect(a.effects, 'ward')
   let heal = effect(a.effects, 'heal')
-  return [
-    damage?.hits && damage.hits > 1 ? `${damage.hits} hits` : '',
-    damage
-      ? `${Math.round(d.blow * damage.scale)} Damage${
-        damage.hits && damage.hits > 1 ? ' each' : ''
-      }`
-      : '',
-    a.arc ? `${Math.round((a.arc * 360) / Math.PI)}° arc` : '',
-    a.far
-      ? a.shape == 'ring' || a.shape == 'burst'
-        ? `${a.far} m radius`
-        : `Extends reach by ${a.far} m`
-      : '',
-    dash ? `${dash.metres} m dash` : '',
-    stun ? `${secs(stun.ms)} Stun` : '',
-    bleed
-      ? `${Math.round((d.blow * bleed.scale) / BLEEDS) * BLEEDS} ${
-        a.element == 'fire' ? 'Burn' : 'Bleed'
-      } Damage over ${secs(BLEEDS * 1000)}`
-      : '',
-    guard ? `${secs(guard.ms)} Guard` : '',
-    ward
-      ? `Absorbs ${Math.round(d.max * ward.share)} Damage for ${secs(WARD)}`
-      : '',
-    heal ? `Restores ${Math.round(d.max * heal.share)} Health` : '',
-    ...a.effects.filter(lasting).map((e) =>
-      e.kind == 'dot'
-        ? `${Math.round(d.blow * e.scale)} Damage over ${secs(e.ms)}`
-        : e.kind == 'hot'
-        ? `${Math.round(d.max * e.share)} Healing over ${secs(e.ms)}`
-        : `${e.kind == 'buff' ? '+' : '-'}${
-          Math.round(e.share * 100)
-        }% ${e.stat} for ${secs(e.ms)}`
-    ),
-    ...a.effects.filter((e) => e.kind == 'area').map((e) =>
-      `${e.radius} m ground area for ${secs(e.ms)}: ${
-        abilityStats({
-          ...a,
-          far: undefined,
-          arc: undefined,
-          effects: e.effects,
-        }, d).join(', ')
-      } per pulse`
-    ),
-    damage?.sure
-      ? damage.hits && damage.hits > 1
-        ? 'Final hit is a great blow'
-        : 'Always a great blow'
-      : '',
-  ].filter(Boolean)
+  let num = (key: string, n: number, text = String(n)): AbilityNumber => ({
+    key,
+    n,
+    text,
+    more: true,
+  })
+  let span = (ms: number, more = true) => ({
+    ...num('duration', ms, secs(ms)),
+    more,
+  })
+  let rows: AbilityLine[] = []
+  let add = (key: string, ...parts: AbilityLine['parts']) =>
+    rows.push({ key, parts })
+  if (damage?.hits && damage.hits > 1) {
+    add('hits', num('hits', damage.hits), ' hits')
+  }
+  if (damage) {
+    add(
+      'damage',
+      num('damage', Math.round(d.blow * damage.scale)),
+      ` Damage${damage.hits && damage.hits > 1 ? ' each' : ''}`,
+    )
+  }
+  if (a.arc) {
+    add('arc', num('arc', Math.round((a.arc * 360) / Math.PI)), '° arc')
+  }
+  if (a.far) {
+    if (a.shape == 'ring' || a.shape == 'burst') {
+      add('far', num('far', a.far), ' m radius')
+    } else add('far', 'Extends reach by ', num('far', a.far), ' m')
+  }
+  if (dash) add('dash', num('metres', dash.metres), ' m dash')
+  if (stun) add('stun', span(stun.ms), ' Stun')
+  if (bleed) {
+    add(
+      'bleed',
+      num('damage', Math.round((d.blow * bleed.scale) / BLEEDS) * BLEEDS),
+      ` ${a.element == 'fire' ? 'Burn' : 'Bleed'} Damage over `,
+      span(BLEEDS * 1000),
+    )
+  }
+  if (guard) add('guard', span(guard.ms), ' Guard')
+  if (ward) {
+    add(
+      'ward',
+      'Absorbs ',
+      num('damage', Math.round(d.max * ward.share)),
+      ' Damage for ',
+      span(WARD),
+    )
+  }
+  if (heal) {
+    add(
+      'heal',
+      'Restores ',
+      num('health', Math.round(d.max * heal.share)),
+      ' Health',
+    )
+  }
+  for (let e of a.effects.filter(lasting)) {
+    if (e.kind == 'dot') {
+      add(
+        'dot',
+        num('damage', Math.round(d.blow * e.scale)),
+        ' Damage over ',
+        span(e.ms, false),
+      )
+    } else if (e.kind == 'hot') {
+      add(
+        'hot',
+        num('health', Math.round(d.max * e.share)),
+        ' Healing over ',
+        span(e.ms, false),
+      )
+    } else {
+      add(
+        `${e.kind}:${e.stat}`,
+        e.kind == 'buff' ? '+' : '-',
+        num('share', Math.round(e.share * 100)),
+        `% ${e.stat} for `,
+        span(e.ms),
+      )
+    }
+  }
+  for (let e of a.effects.filter((e) => e.kind == 'area')) {
+    let nested = abilityLines({
+      ...a,
+      far: undefined,
+      arc: undefined,
+      effects: e.effects,
+    }, d)
+    add(
+      'area',
+      num('radius', e.radius),
+      ' m ground area for ',
+      span(e.ms),
+      ': ',
+      ...nested.flatMap((line, i) => [
+        ...(i ? [', '] : []),
+        ...line.parts.map((part) =>
+          typeof part == 'string'
+            ? part
+            : { ...part, key: `${line.key}:${part.key}` }
+        ),
+      ]),
+      ' per pulse',
+    )
+  }
+  if (damage?.sure) {
+    add(
+      'sure',
+      num(
+        'sure',
+        1,
+        damage.hits && damage.hits > 1
+          ? 'Final hit is a great blow'
+          : 'Always a great blow',
+      ),
+    )
+  }
+  return rows
 }
+
+/** Named effect lines, shared by ability descriptions and skill previews. */
+export let abilityStats = (a: Ability, d: Doer): string[] =>
+  abilityLines(a, d).map((line) =>
+    line.parts.map((part) => typeof part == 'string' ? part : part.text).join(
+      '',
+    )
+  )
 
 /** How an ability's blow went, as far as its cooldown cares: it felled what
  * it struck, or it took nothing it was aimed at. */

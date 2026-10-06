@@ -3,6 +3,8 @@
 // globals they replaced are put back after, whether it returns, throws or
 // settles.
 import { parseHTML } from 'linkedom'
+import { type ComponentChildren, Fragment, h } from 'preact'
+import { renderToString } from 'preact-render-to-string'
 
 export type Dom = ReturnType<typeof parseHTML>
 
@@ -40,3 +42,9 @@ export let withDom = <T>(
   restore()
   return result
 }
+
+/** What `nodes` draw, as the body of a page of their own. */
+export let drawn = (nodes: ComponentChildren): HTMLElement =>
+  parseHTML(
+    `<html><body>${renderToString(h(Fragment, null, nodes))}</body></html>`,
+  ).document.body

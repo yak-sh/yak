@@ -1,17 +1,23 @@
 // The shared gear display: an item's named stats, the hero's resulting
-// numbers with a piece equipped, and current-to-result comparisons. The bag,
-// comparison tip, crafting station, and character sheet use these names.
+// numbers with a piece equipped, and current-to-result comparisons, each a
+// line of ValeStats. A number that would change reads from what it is to
+// what it would be, the new one Better or Worse; nothing else is coloured.
+// The bag, comparison tip, crafting station, skills and character sheet use
+// these names.
+import { type ComponentChildren, h, type JSX } from 'preact'
+import { Section, Tile } from '@yaks/ui'
 import type { Doer } from './abilities.ts'
 import { type Slot, sortOf, tierName } from './arms.ts'
 import { hands, kitOf, twins, type Worn } from './gear.ts'
-import { type Glyph, glyphText } from './glyphs.ts'
+import { type Glyph, glyph } from './glyphs.ts'
 import { ITEMS } from './items.ts'
+import { ValeStats } from './kit/ValeStats.ts'
 import type { Sheet } from './play.ts'
 import { GEAR_STATS, GRADES, type Piece, type Stat, tint } from './rarity.ts'
 import { blowOf, type Held, maxHp } from './rules.ts'
 import { skilled } from './skills.ts'
-
-let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+import { icon } from './sprites.ts'
+import { part, picture } from './tile.ts'
 
 type Hero = Pick<Sheet, 'lvl' | 'learned'>
 
@@ -114,22 +120,17 @@ export let LINES: Line[] = [
   },
 ]
 
-/** A named stat's mark, shared by gear, skills and their possible rolls. */
-export let statMark = (stat: Stat | 'dmg'): string =>
-  glyphText(
-    ({
-      dmg: 'blow',
-      force: 'blow',
-      haste: 'pace',
-      armour: 'armour',
-      hp: 'health',
-      speed: 'footprints',
-      luck: 'luck',
-    } as const)[stat],
-  )
-
-/** The mark of a number on the hero's sheet. */
-export let lineMark = (line: Line): string => glyphText(line.icon)
+// A named stat's icon, shared by gear, skills and their possible rolls.
+let statIcon = (stat: Stat | 'dmg'): Glyph =>
+  ({
+    dmg: 'blow',
+    force: 'blow',
+    haste: 'pace',
+    armour: 'armour',
+    hp: 'health',
+    speed: 'footprints',
+    luck: 'luck',
+  } as const)[stat]
 
 /** A hero's number, read in its line.
  *
@@ -141,16 +142,16 @@ export let lineMark = (line: Line): string => glyphText(line.icon)
  */
 export let said = (l: Line, n: number): string => `${l.shows(n)} ${l.name}`
 
-// Green where going from `a` to `b` is better, red where it is worse.
-let better = (more: boolean, a: number, b: number) =>
-  (more ? b > a : b < a) ? 'Pack_Up' : 'Pack_Down'
-
-/** What the hero would wear with `h` put on in `slot`, its own unless said
- * (gear.ts `hands`): a weapon for both hands empties the other, a thing for
- * the other hand drops one, and a new weapon drops a second blade that is no
- * longer its twin. */
-export let trying = (worn: Worn, h: Held, slot = ITEMS[h.kind]?.slot): Worn =>
-  slot ? hands({ ...worn, [slot]: h }, slot == 'off' ? 'off' : 'main') : worn
+/** What the hero would wear with `held` put on in `slot`, its own unless
+ * said (gear.ts `hands`): a weapon for both hands empties the other, a thing
+ * for the other hand drops one, and a new weapon drops a second blade that is
+ * no longer its twin. */
+export let trying = (
+  worn: Worn,
+  held: Held,
+  slot = ITEMS[held.kind]?.slot,
+): Worn =>
+  slot ? hands({ ...worn, [slot]: held }, slot == 'off' ? 'off' : 'main') : worn
 
 /** What the hero would wear with a slot taken off. */
 export let bare = (worn: Worn, slot: string): Worn =>
@@ -161,25 +162,53 @@ export let bare = (worn: Worn, slot: string): Worn =>
 export let into = (s: Sheet, kind: string): Slot | undefined =>
   twins(kind, s.worn, s.learned) ? 'off' : ITEMS[kind]?.slot
 
-// A number from what it is to what it would be, the new one in green where
-// that is better and red where it is worse.
-let arrow = (x: string, y: string, more: boolean, a: number, b: number) =>
-  `${x} → <em class="${better(more, a, b)}">${y}</em>`
+/** One line of numbers: its icon, then its words. */
+export let stat = (
+  mark: Glyph,
+  ...words: ComponentChildren[]
+): JSX.Element =>
+  h(
+    ValeStats.Stat,
+    {},
+    h(ValeStats.Mark, {
+      'aria-hidden': 'true',
+      dangerouslySetInnerHTML: { __html: glyph(mark) },
+    }),
+    h(ValeStats.Words, {}, ...words),
+  )
 
-/** Each line where `b` differs from `a`: from `a`'s number to `b`'s. */
-export let moved = (a: Numbers, b: Numbers): string =>
-  LINES.filter((l) => a[l.k] != b[l.k]).map((l) =>
-    `<span class="Pack_Num Stat Stat-${l.k}">${lineMark(l)} ${l.name} ${
-      arrow(l.shows(a[l.k]), l.shows(b[l.k]), l.more, a[l.k], b[l.k])
-    }</span>`
-  ).join('')
+/** Lines of numbers, in two columns where there is room for them. */
+export let stats = (lines: ComponentChildren, two = false): JSX.Element =>
+  h(ValeStats, { mod: two && 'two' }, lines)
 
-export let statValue = (s: Stat | 'dmg', n: number): string =>
-  s == 'dmg'
-    ? `${n}×`
-    : s == 'force' || s == 'luck' || s == 'speed' || s == 'haste'
-    ? `${n < 0 ? '' : '+'}${(n * 100).toFixed(1).replace(/\.0$/, '')}%`
-    : `${n < 0 ? '' : '+'}${n}`
+// Which way a number going from `a` to `b` goes, where it moves: the better
+// way (more of it, or less where less is better) or the worse.
+let way = (more: boolean, a: number, b: number) =>
+  a == b ? null : (more ? b > a : b < a) ? ValeStats.Better : ValeStats.Worse
+
+/** `text`, saying the number `b` that `a` would become, Better or Worse as
+ * it goes, and ink where it stays.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { h } from 'preact'
+ * import { renderToString } from 'preact-render-to-string'
+ * let read = (more: boolean, a: number, b: number) =>
+ *   renderToString(h('b', {}, toward(more, a, b, String(b))))
+ * assertEquals(read(true, 1, 2), '<b><em class="ValeStats_Better">2</em></b>')
+ * assertEquals(read(false, 1, 2), '<b><em class="ValeStats_Worse">2</em></b>')
+ * assertEquals(read(true, 2, 2), '<b>2</b>')
+ * ```
+ */
+export let toward = (
+  more: boolean,
+  a: number,
+  b: number,
+  text: string,
+): ComponentChildren => {
+  let to = way(more, a, b)
+  return to ? h(to, {}, text) : text
+}
 
 /** A range carries its shared unit once and its positive sign once. */
 export let rangeText = (a: string, b: string): string => {
@@ -189,6 +218,48 @@ export let rangeText = (a: string, b: string): string => {
   return `${a}-${b.replace(/^\+/, '')}`
 }
 
+// Whether every number reads as the first does.
+let stays = (shows: (n: number) => string, ...ns: number[]) =>
+  ns.every((n) => shows(n) == shows(ns[0]))
+
+/** What `now` may become, from `low` to `high`, as `rangeText` writes it:
+ * Better or Worse where all of it goes that way, and ink where it may read
+ * as it does now, or go either way. */
+export let toRange = (
+  more: boolean,
+  now: number,
+  low: number,
+  high: number,
+  shows: (n: number) => string,
+): ComponentChildren => {
+  let text = rangeText(shows(low), shows(high))
+  let [a, b] = [low, high].map((n) =>
+    stays(shows, now, n) ? null : way(more, now, n)
+  )
+  return a && a == b ? h(a, {}, text) : text
+}
+
+/** Each line where `b` differs from `a`: from `a`'s number to `b`'s. */
+export let moved = (a: Numbers, b: Numbers): JSX.Element[] =>
+  LINES.filter((l) => !stays(l.shows, a[l.k], b[l.k])).map((l) =>
+    stat(
+      l.icon,
+      `${l.name} ${l.shows(a[l.k])} → `,
+      toward(l.more, a[l.k], b[l.k], l.shows(b[l.k])),
+    )
+  )
+
+/** The hero's numbers, each a line in ink. */
+export let sheetStats = (n: Numbers, lines: Line[] = LINES): JSX.Element[] =>
+  lines.map((l) => stat(l.icon, said(l, n[l.k])))
+
+export let statValue = (s: Stat | 'dmg', n: number): string =>
+  s == 'dmg'
+    ? `${n}×`
+    : s == 'force' || s == 'luck' || s == 'speed' || s == 'haste'
+    ? `${n < 0 ? '' : '+'}${(n * 100).toFixed(1).replace(/\.0$/, '')}%`
+    : `${n < 0 ? '' : '+'}${n}`
+
 /** Possible item rolls, written just as a finished item's stat is. */
 export let statRangeValue = (
   stat: Stat | 'dmg',
@@ -196,22 +267,38 @@ export let statRangeValue = (
   high: number,
 ): string => rangeText(statValue(stat, low), statValue(stat, high))
 
-/** One item's own named stat, with its mark and color everywhere it appears. */
-export let statLine = (stat: Stat | 'dmg', value: string): string =>
-  `<span class="Pack_Num Stat Stat-${stat}">${statMark(stat)} ${value} ${
-    statName(stat)
-  }</span>`
+/** One named stat with its icon, a piece's own or a skill's, in ink. */
+export let statLine = (s: Stat | 'dmg', value: string): JSX.Element =>
+  stat(statIcon(s), `${value} ${statName(s)}`)
 
-/** Every number the item itself grants, including its rolled bonuses. */
-export let itemStats = (p: Piece): string =>
-  GEAR_STATS.filter((st) => p[st]).map((st) =>
+/** A named stat from `now` to what it may become, from `low` to `high`. */
+export let statStep = (
+  s: Stat | 'dmg',
+  now: number,
+  low: number,
+  high = low,
+): JSX.Element =>
+  stat(
+    statIcon(s),
+    `${statName(s)} ${statValue(s, now)} → `,
+    toRange(true, now, low, high, (n) => statValue(s, n)),
+  )
+
+/** Every number the item itself grants, including its rolled bonuses, and
+ * a legendary's power. */
+export let itemStats = (p: Piece): JSX.Element[] => [
+  ...GEAR_STATS.filter((st) => p[st]).map((st) =>
     statLine(st, statValue(st, p[st]!))
-  ).join('') +
-  (p.legend
-    ? `<span class=Pack_Legend>${glyphText(p.legend.icon)} ${
-      esc(p.legend.says)
-    }</span>`
-    : '')
+  ),
+  ...(p.legend
+    ? [
+      stat(
+        p.legend.icon,
+        h('i', { class: `Rarity ${tint('legendary')}` }, p.legend.says),
+      ),
+    ]
+    : []),
+]
 
 /** What sort of thing a piece of gear is, with its item level first. */
 export let sortLine = (t: Piece): string =>
@@ -219,30 +306,65 @@ export let sortLine = (t: Piece): string =>
     t.rarity == 'common' ? '' : `${GRADES[t.rarity].name} · `
   }${sortOf(t)}${t.tier ? ` · tier ${tierName(t.tier)}` : ''}`
 
+/** A piece as a tile (packages/ui/Tile.ts): its picture framed and its name
+ * set in its rarity, then the `Sub` and `End` given. */
+export let pieceTile = (
+  p: Piece,
+  props: Record<string, unknown>,
+  ...rest: ComponentChildren[]
+): JSX.Element =>
+  h(
+    Tile,
+    props,
+    picture(icon(p.kind) || '•', { class: tint(p.rarity) }),
+    h(Tile.Title, { class: `Rarity ${tint(p.rarity)}` }, p.name),
+    ...rest,
+  )
+
 /** One side of a comparison: what it is called there, its piece if it has
  * one, and what the hero would wear with it. */
 export type Side = { label: string; p?: Piece; worn: Worn }
 
-// A side's piece: its name, kind, and own stats.
-let side = ({ label, p }: Omit<Side, 'worn'>) => {
-  let stats = p && itemStats(p)
-  return `<div class="Compare_Side ${
-    tint(p?.rarity)
-  }"><small class=Compare_Label>${esc(label)}</small>${
+// A side's piece: what it is called there, the piece, and its own stats.
+let side = ({ label, p }: Omit<Side, 'worn'>) =>
+  part(
+    label,
     p
-      ? `<b class=Rarity>${esc(p.name)}</b><small>${esc(sortLine(p))}</small>`
-      : '<small>Nothing</small>'
-  }${stats ? `<div class="Pack_Rolled Rarity">${stats}</div>` : ''}</div>`
+      ? [
+        pieceTile(p, {}, h(Tile.Sub, {}, sortLine(p))),
+        stats(itemStats(p)),
+      ]
+      : h(Section.Sub, {}, 'Nothing'),
+  )
+
+/** Under `title`, how the hero's numbers would go from `a` to `b`, or that
+ * none would change. */
+export let changes = (
+  title: string,
+  a: Numbers,
+  b: Numbers,
+  none = 'No listed stats change.',
+): JSX.Element => {
+  let lines = moved(a, b)
+  return part(
+    title,
+    lines.length ? stats(lines, true) : h(Section.Sub, {}, none),
+  )
 }
 
+// A comparison's card, in a tip: its sides side by side, or `one` column.
+let card = (one: boolean, ...kids: ComponentChildren[]) =>
+  h('div', { class: one ? 'Compare Compare-one' : 'Compare' }, ...kids)
+
 /** A piece on its own, as a card. */
-export let solo = (label: string, p: Piece): string =>
-  `<div class="Compare Compare-one">${side({ label, p })}</div>`
+export let solo = (label: string, p: Piece): JSX.Element =>
+  card(true, side({ label, p }))
 
 /** Candidate and worn pieces, followed by the hero's resulting changes.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
+ * import { renderToString } from 'preact-render-to-string'
  * import { seedItems } from './items_fixture.ts'
  * import { piece } from './rarity.ts'
  * seedItems()
@@ -250,54 +372,55 @@ export let solo = (label: string, p: Piece): string =>
  * let h = { eid: 'a', kind: 'helm2', n: 1 }
  * let bag = { label: 'In your bag', p: piece(h), worn: { head: h } }
  * let bare = { label: 'Worn', worn: {} }
- * let card = versus(hero, bag, bare)
- * assertEquals(card.includes('Pack_Up'), true)
- * assertEquals(card.includes('Pack_Down'), false)
- * assertEquals(versus(hero, bare, bag).includes('Pack_Up'), false)
- * assertEquals(versus(hero, bag, bag).includes('No listed stats change'), true)
+ * let read = (a: typeof bag, b: typeof bag) => renderToString(versus(hero, a, b))
+ * assertEquals(read(bag, bare).includes('Better'), true)
+ * assertEquals(read(bag, bare).includes('Worse'), false)
+ * assertEquals(read(bare, bag).includes('Better'), false)
+ * assertEquals(read(bag, bag).includes('No listed stats change'), true)
  * ```
  */
-export let versus = (s: Hero, then: Side, now: Side): string => {
-  let changes = moved(numbers(s, now.worn), numbers(s, then.worn))
-  return `<div class=Compare>${side(then)}${
-    side(now)
-  }<div class=Compare_Impact><small class=Compare_Label>If equipped</small>${
-    changes || '<small class=Compare_Same>No listed stats change.</small>'
-  }</div></div>`
+export let versus = (s: Hero, then: Side, now: Side): JSX.Element =>
+  card(
+    false,
+    side(then),
+    side(now),
+    changes('If equipped', numbers(s, now.worn), numbers(s, then.worn)),
+  )
+
+/** What a piece's next upgrade may make of it, from `low` to `high`: its
+ * own stats, then the hero's numbers, through the same worn gear as a
+ * finished upgrade, each from now to what it may become. */
+export let stepRange = (
+  s: Hero,
+  now: Side,
+  low: Side,
+  high: Side,
+): JSX.Element[] => {
+  let at = `now → at +${low.p?.plus ?? 0}`
+  let own = GEAR_STATS.flatMap((st) => {
+    let [a, b, c] = [now, low, high].map((x) => x.p?.[st] ?? 0)
+    return stays((n) => statValue(st, n), a, b, c)
+      ? []
+      : [statStep(st, a, b, c)]
+  })
+  let [a, b, c] = [now, low, high].map((x) => numbers(s, x.worn))
+  let yours = LINES.flatMap((l) => {
+    let [x, y, z] = [a, b, c].map((n) => n[l.k])
+    return stays(l.shows, x, y, z) ? [] : [
+      stat(
+        l.icon,
+        `${l.name} ${l.shows(x)} → `,
+        toRange(l.more, x, y, z, l.shows),
+      ),
+    ]
+  })
+  let titled = (title: string) => [title, h(Section.Note, {}, at)]
+  return [
+    ...(own.length ? [part(titled('Item stats'), stats(own))] : []),
+    ...(yours.length ? [part(titled('If equipped'), stats(yours, true))] : []),
+  ]
 }
 
-/** An exact piece and the bounds of its next upgrade, calculated through
- * the same worn gear as a finished upgrade. */
-export let stepRange = (s: Hero, now: Side, low: Side, high: Side): string => {
-  let own = GEAR_STATS.flatMap((stat) => {
-    let a = now.p?.[stat] ?? 0, b = low.p?.[stat] ?? 0
-    let c = high.p?.[stat] ?? 0
-    if (a == b && a == c) return []
-    return [
-      `<span class="Pack_Num Stat Stat-${stat}">${statMark(stat)} ${
-        statName(stat)
-      } ${statValue(stat, a)} → <em>${statRangeValue(stat, b, c)}</em></span>`,
-    ]
-  }).join('')
-  let [a, b, c] = [now, low, high].map((x) => numbers(s, x.worn))
-  let yours = LINES.flatMap((line) => {
-    let x = a[line.k], y = b[line.k], z = c[line.k]
-    if (x == y && x == z) return []
-    return [
-      `<span class="Pack_Num Stat Stat-${line.k}">${
-        lineMark(line)
-      } ${line.name} ${line.shows(x)} → <em>${
-        rangeText(line.shows(y), line.shows(z))
-      }</em></span>`,
-    ]
-  }).join('')
-  return `<div class="Compare Compare-one">${
-    side(now)
-  }<small class=Compare_Label>Upgrade to +${
-    low.p?.plus ?? 0
-  }: current → possible result</small>${
-    own ? `<small class=Compare_Label>Item stats</small>${own}` : ''
-  }${
-    yours ? `<small class=Compare_Label>If equipped</small>${yours}` : ''
-  }</div>`
-}
+/** A piece, and what its next upgrade may make of it, as a card. */
+export let step = (s: Hero, now: Side, low: Side, high: Side): JSX.Element =>
+  card(true, side(now), ...stepRange(s, now, low, high))

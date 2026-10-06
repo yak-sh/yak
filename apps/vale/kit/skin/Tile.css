@@ -193,10 +193,44 @@ a.Tile:hover,
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+.Tile_End-negative {
+  color: var(--negative);
+}
 .Tile_Count {
   font-family: inherit;
   font-size: inherit;
 }
 .Tile-dim :is(.Tile_Icon, .Tile_Title) {
   opacity: 0.5;
+}
+/* A tile heading a picked thing's page: a bigger plate, its name a little
+   larger, and what can be done with it beside its words, or under them where
+   there is no room. */
+.Tile-head {
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+}
+.Tile-head > .Tile_Text {
+  flex-basis: 12rem;
+}
+.Tile-head > .Tile_End {
+  margin-left: auto;
+}
+.Tile-head .Tile_Icon {
+  width: 2.9rem;
+  height: 2.9rem;
+  border-radius: 0.75rem;
+
+  & .Glyph {
+    width: 1.6rem;
+    height: 1.6rem;
+  }
+
+  & .Sprite {
+    width: 2.4rem;
+    height: 2.4rem;
+  }
+}
+.Tile-head .Tile_Title {
+  font-size: 1.05rem;
 }

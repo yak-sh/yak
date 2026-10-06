@@ -95,8 +95,24 @@ a.Tile:hover,
   font-size: 12px;
   color: var(--muted);
 }
-.Tile_Sub-negative {
+.Tile_Sub-negative,
+.Tile_End-negative {
   color: var(--negative);
+}
+/* A tile heading the thing's own page: its title larger, and its end, what
+   can be done with it, under its words where there is no room beside them. */
+.Tile-head {
+  flex-wrap: wrap;
+}
+.Tile-head > .Tile_Text {
+  flex-basis: 12rem;
+}
+.Tile-head > .Tile_End {
+  margin-left: auto;
+}
+.Tile-head .Tile_Title {
+  font-size: 1.1em;
+  font-weight: 600;
 }
 .Tile_Icon-info {
   color: var(--info);

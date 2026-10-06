@@ -1,0 +1,23 @@
+/* Vale's rendering of Body: what a picked thing says of itself, in ink a
+   little under the page's size, its paragraphs a short step apart. A short
+   one is its gist, muted and smaller. */
+.Body {
+  min-width: 0;
+  max-width: var(--measure);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+
+  & > p {
+    margin: 0;
+  }
+
+  & > * + * {
+    margin-top: 0.4rem;
+  }
+}
+.Body-short {
+  font-size: 0.8rem;
+  color: var(--muted);
+}

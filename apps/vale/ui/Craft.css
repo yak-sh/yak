@@ -26,61 +26,17 @@
 
 .Craft_Detail {
   display: grid;
-  gap: 0.65rem;
+  gap: calc(2 * var(--gap));
   min-width: 0;
 }
 
 .Craft_Tiers {
   flex-wrap: wrap;
-  margin-bottom: 0.4rem;
 }
 
 /* Upgrading what the hero carries is set apart, at the far end. */
 .Craft_Up {
   margin-left: auto;
-}
-
-.Craft_Needs {
-  display: grid;
-  gap: 0.2rem;
-  font-size: 0.85rem;
-}
-
-.Craft_Need {
-  --have: #3f8f2a;
-  display: grid;
-  grid-template-columns: 1.5rem 1fr auto;
-  align-items: center;
-  column-gap: 0.3rem;
-
-  & i,
-  & em {
-    font-style: normal;
-  }
-
-  & em {
-    color: var(--have);
-  }
-
-  & small {
-    grid-column: 2 / -1;
-    font-size: 0.72rem;
-    color: var(--faint);
-  }
-}
-
-.Craft_Need-short {
-  --have: #c0442a;
-}
-
-.Craft_Ranges {
-  display: grid;
-  gap: 0.2rem;
-  margin-top: 0.6rem;
-
-  & small {
-    color: var(--faint);
-  }
 }
 
 .Craft_Go {

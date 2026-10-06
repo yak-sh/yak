@@ -163,7 +163,11 @@ test('unmet level requirements are visible in the bag before inspection and cann
       )
       tile.click()
       show()
-      assertEquals(!!body.querySelector('.Pack_Requirement'), locked, kind)
+      assertEquals(
+        !!body.querySelector('.Tile-head .Tile_Sub-negative'),
+        locked,
+        kind,
+      )
       if (locked) {
         assertEquals(body.querySelector('[data-do=wear]'), null)
         // A stale action from before a level change also respects admission.
