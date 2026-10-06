@@ -499,3 +499,20 @@ test('a known local save deadline owns one timer rather than polling SQLite each
   equal(reads, 1)
   equal(f.timers.size, 0)
 })
+
+test('save eligibility asks only for identity, not the eligible entity whole image', () => {
+  let f = fixture('.book (!position | .updated.at<="1s ago")')
+  f.g.apply([{
+    entity: { eid: 'a' },
+    book: { status: 'draft' },
+    doc: { title: 'private unrelated' },
+  }])
+  let read = f.g.read.bind(f.g), answer: Bundle[] = []
+  f.g.read = (...args) => {
+    answer = read(...args) as Bundle[]
+    return answer
+  }
+  f.saved.write('one', f.write(1))
+  equal(answer[0].doc, undefined)
+  equal(answer[0].book, undefined)
+})

@@ -187,7 +187,16 @@ export let saving = <C>(
     }
     let rows: Bundle[] | Promise<Bundle[]>
     try {
-      rows = graph.read(and(scope, condition), { now: now(), native: true })
+      rows = graph.read({
+        kind: 'and',
+        clauses: [
+          ...and(scope, condition).clauses,
+          ...parse('.fields=entity.eid').clauses,
+        ],
+      }, {
+        now: now(),
+        native: true,
+      })
     } catch (err) {
       return failedRead(err)
     }
