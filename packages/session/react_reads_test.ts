@@ -13,7 +13,7 @@ import { contextDoc } from '@yaks/context'
 import { effectDoc } from '@yaks/effects'
 import { sessionDoc } from './comp.ts'
 import { sessionDerived } from './status.ts'
-import { react, transcript } from './react.ts'
+import { currentStatus, react, transcript } from './react.ts'
 import { sessions } from './plugin.ts'
 
 for (let fork of [false, true]) {
@@ -338,3 +338,46 @@ for (let legacy of [false, true]) {
     ])
   })
 }
+
+test('status-only completion asks the existing derived fact without loading historical entries', async () => {
+  let vocab = loadVocab([
+    sessionDoc,
+    modelDoc,
+    toolsDoc,
+    contextDoc,
+    effectDoc,
+    kernelDoc,
+    archetypeDoc,
+  ], [kernelKeywords])
+  let d = mem(), s = storage(d, vocab, { derived: sessionDerived(vocab) })
+  let g = graph({ vocab, storage: s, plugins: [sessions()] })
+  let m = identityEid('model', ['fake'])
+  g.apply([{ entity: { eid: m }, model: { name: 'fake' } }, {
+    entity: { eid: 's' },
+    session: {},
+  }])
+  g.apply(
+    Array.from(
+      { length: 200 },
+      (_, n) => ({
+        entity: { eid: `old-${n}` },
+        entry: { session: 's' },
+        content: { body: 'Old prose' },
+        stop: {},
+      }),
+    ),
+  )
+  g.apply([{
+    entity: { eid: 'new' },
+    entry: { session: 's' },
+    content: { body: 'New request' },
+    using: { model: m },
+  }])
+  let read = g.read.bind(g), historyReads = 0
+  g.read = (q, o) => {
+    if (typeof q == 'string' && q.includes('.entry.session=')) historyReads++
+    return read(q, o)
+  }
+  assertEquals(await currentStatus(g, 's'), 'pending')
+  assertEquals(historyReads, 0)
+})

@@ -1,3 +1,4 @@
+import { Unsupported } from '@yaks/match'
 import { compactAsk } from './compact_ask.ts'
 import { CallError, runner, toolEid, UnfinishedCall } from '@yaks/tools'
 export { CallError as ToolError } from '@yaks/tools'
@@ -325,8 +326,30 @@ export let statusEntries = async (
     await transcript(g, session)
 }
 
-let currentStatus = async (g: Graph, session: Eid): Promise<TranscriptStatus> =>
-  statusOf(await statusEntries(g, session))
+export let currentStatus = async (
+  g: Graph,
+  session: Eid,
+): Promise<TranscriptStatus> => {
+  // A status-only caller can ask the adapter's existing derived fact. Forks
+  // still need their inherited logical transcript, and a replica/RAM adapter
+  // with no computed answer keeps the entry-based path.
+  let fields = 'session.status' + (g.vocab.comp(FORK) ? ',fork.from' : '')
+  try {
+    let [row] = await g.rows(`.entity.eid=${session}&.fields=${fields}`)
+    let status = row?.['session.status']
+    if (
+      !row?.['fork.from'] &&
+      ['empty', 'pending', 'running', 'settled', 'stopped', 'failed'].includes(
+        String(status),
+      )
+    ) {
+      return status as TranscriptStatus
+    }
+  } catch (error) {
+    if (!(error instanceof Unsupported)) throw error
+  }
+  return statusOf(await statusEntries(g, session))
+}
 
 // A bounded model turn needs all kind/reference facts for pairing and choosing
 // instructions, but only the selected lines' prose. Unbounded turns, tools,
