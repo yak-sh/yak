@@ -477,7 +477,7 @@ export let hud = (
       screen && h(ValeOrb, {
         key: 'screen',
         label: screen.on ? 'Leave full screen' : 'Full screen',
-        title: screen.on ? 'Leave full screen' : 'Full screen',
+        ...tipProps({ name: screen.on ? 'Leave full screen' : 'Full screen' }),
         selected: screen.on,
         disabled: screen.busy,
         onClick: screen.toggle,
