@@ -15,93 +15,130 @@ description: >
 
 # Migrating stored data
 
-Stored data is people's: the owner's on the box, everyone's in a yaks.app store. A
-migration is the one change that can lose it for good, so it earns more care
-than the code around it. The persona states the rules (M-17876 invariants,
+You're about to change the shape of something that already has rows. Those
+rows are people's: the owner's on the box, everyone's in a yaks.app store, and
+everything a person put into them is precious (M-59093). Code can be reverted
+and written again; a migration is the one part of a change that can lose
+something for good. The persona holds the standing words (M-17876 invariants,
 M-17871 one shape, M-37923 what people hold, M-59093 input is precious,
-M-37965 recover on its own); this is how to follow them.
+M-37965 recover on its own). This is how they play out when rows move.
 
-## Decide the shape first
+It's moving house. The new place has floors before the furniture arrives. The
+boxes are counted when they leave and when they land. Nobody keeps the old
+house as a second home just in case, and mail sent to the old address still
+finds you.
 
-- **One shape after.** The old shape is deleted in the same change, never kept
-  beside the new as a synonym or a fallback reader. During movement the
-  platform retains nonempty source columns; a declared lens serves old callers
-  after the mover contracts them.
-- **A missing value reads as the safe side.** When a row is lost, stale or
-  never written, the reader must fail closed: an app with no access mode is
-  private, not public (`mode()` in packages/member/words.ts). A default that
-  opens something, or a short lifetime that ends someone's data, is a loss
-  waiting for a stale row.
-- **What people hold keeps working.** Links, shared URLs, sign-ins, tokens and
-  saved queries (a board's filter, a wake's condition) are outside the store.
-  If the change re-derives an eid or renames what a saved query names, the old
-  form keeps resolving.
-- **Find every reader first.** grep the repo for the word, and run
-  `deno task app-grep` over every yaks app's live files and kept versions: an
-  app may declare the same component name or query it. A word the platform
-  takes that an app already holds breaks that app's store.
+## Where moves go wrong
+
+Keeping the old shape around feels like the safe choice, and it's the
+opposite. Two shapes of one thing are a standing source of bugs; the owner
+called a half-finished move "like leaving trash all over your house"
+(M-17871). So the old shape goes in the same change, with no synonym or
+fallback reader left beside the new. What can't be rewritten is shipped code:
+a kept version a rollback redeploys, a published release. Those keep speaking
+the old form, and the platform translates it at its door rather than a store
+holding both. While rows move, the platform keeps nonempty source columns, and
+a declared lens serves old callers after the mover contracts them.
+
+Some day a row will be lost, stale or never written, and what the reader makes
+of the missing value is the default that counts. Read as the closed side, a
+stale row is an inconvenience; read as the open side, it's an exposure or a
+loss. An app with no access mode is private, not public (`mode()` in
+packages/member/words.ts). A default that opens something, or a short lifetime
+that ends someone's data, is waiting for its stale row.
+
+Some of what a store means lives outside it: links, shared URLs, sign-ins,
+tokens, saved queries (a board's filter, a wake's condition). Re-deriving an
+eid, or renaming a word a saved query names, breaks them silently and far from
+the change. What people hold keeps resolving after the move, and a reshaped
+credential converts as it's used (M-37923); how the key itself is kept is
+`secrets-and-connections`.
+
+The readers that break are the ones nobody saw. grep finds ours.
+`deno task app-grep` (bin/app-grep.ts) searches every yaks app's live files
+and kept versions, where an app may declare the same component name or query
+it; a word the platform takes that an app already holds breaks that app's
+store.
+
+And every running process, `yak serve` and the `yak-work@` workers, runs the
+code it started with. Rows moved before the code that reads them is live are
+rows those processes can no longer find. The move and the code that reads its
+result go live together.
+
+So the posture is care without timidity: unhurried about proof, decisive about
+letting the old shape go. Rehearse on something you can throw away, count at
+both ends, and leave one shape behind.
 
 ## On the box (~/.yak/yak.db)
 
-1. **Write through the graph** where it can say the change (bundles through
-   `yak graph apply`, or a script that opens the graph), so stamps, the
-   journal, archetype pointers, full-text and vector indexes stay right. Raw
-   SQL past the graph leaves archetype pointers stale, and filters and whole
-   reads then answer wrong. If raw SQL is unavoidable, call
-   `reclassify(driver, eids)` inside its transaction (packages/sqlite/README.md).
-2. **Prove it on a copy.** `sqlite3 ~/.yak/yak.db "VACUUM INTO '<scratch>/copy.db'"`
-   (about three minutes on the live file), point a scratch config at the copy,
-   run the script, compare counts before and after, and run it again to show
-   it changes nothing the second time. Then delete the copy and its scratch
-   config: a copy is 6 to 9 GB on the disk the live graph writes to, and copies
-   left behind have filled it.
-3. **Back up.** `bin/backup` takes 8 to 20 minutes and holds a lock. If a run
-   finished minutes ago, `git -C ~/.yak log -1` shows it and it will do.
-4. **Run it live when the code that reads the new shape goes live, never
-   before.** The running `yak serve` and `yak-work@` processes run the code
-   they started with, so rows moved ahead of a landing and a restart are rows
-   they can no longer find. Land the code, then run the migration and
-   `yak restart` back to back. A session cannot restart the live server: it
-   lands, asks on its task, and the locus runs both. A change that drops a
-   column or renames a table is the same, done in that one sitting.
-5. **Delete the script** in the next commit. Its commit is the record; say in
-   the message what moved, with counts.
+Write through the graph wherever it can say the change: bundles through
+`yak graph apply`, or a script that opens the graph (`graph-reads-and-writes`,
+"Scripts against the db", has how each behaves). Then stamps, the journal,
+archetype pointers and the full-text and vector indexes stay right. Raw SQL
+past the graph leaves archetype pointers stale, and filters and whole reads
+then answer wrong; where SQL can't be avoided, `reclassify(driver, eids)`
+inside its transaction sets them right (packages/sqlite/README.md).
+
+Prove it on a copy first. `sqlite3 ~/.yak/yak.db "VACUUM INTO '<scratch>/copy.db'"`
+takes a few minutes; point a scratch config at the copy (`end-to-end-checks`
+has how a probe stays apart from the live graph), run the script, compare
+counts before and after, and run it again to show the second run changes
+nothing. A copy is as big as the live file (`ls -lh ~/.yak/yak.db`)
+and sits on the disk the live graph writes to. Copies left behind have filled
+that disk, so the copy and its scratch config go once the proof is done.
+
+`bin/backup` snapshots the db into ~/.yak's git history. Cron runs it daily
+and it takes about a quarter of an hour under a lock (each run is in
+~/.tasks-backup.log). When one finished recently, `git -C ~/.yak log -1` shows
+it, and it will do.
+
+The live run belongs to the moment the code that reads the new shape goes
+live: land, then run the migration and `yak restart` back to back. A session
+can't restart the live server, so it lands, asks on its task, and the locus
+runs both. A change that drops a column or renames a table is the same, done in
+that one sitting.
+
+The script is deleted in the next commit. Its commit is the record, and the
+message says what moved, with counts.
 
 ## On yaks.app stores
 
-Never in boot: a boot that throws leaves a store answering errors. Rows move
-with the store mover (workers/yak/mover.ts; workers/yak/README.md, "Migration
-passes: expand, then contract").
+A store that throws at boot answers nothing but errors, so rows don't move in
+boot. They move with the store mover (workers/yak/mover.ts), from each store's
+alarm once it serves, fifty rows to a transaction. workers/yak/README.md,
+"Migration passes: expand, then contract", is the reference.
 
-- A rule is data: a query for the rows still in the old shape, and the patch
-  that moves one. It lands rehearsal-only.
-- `yak admin move --rehearse --admin` moves every rule's rows in every store
-  inside a transaction that rolls back, and reports what each store found,
-  moved and failed.
+- A mover rule is data: a query for the rows still in the old shape, and the
+  patch that moves one. It lands rehearsal-only.
+- `yak admin move --rehearse --as admin@bot.yak.sh` moves every rule's rows in
+  every store inside a transaction the store rolls back, and reports what each
+  store found, moved and failed. A space or `space/app` narrows it.
 - A clean rule goes `live: 'apps'`, then `'all'`, the directory last; its mark
   joins `BOUNDARIES` in workers/yak/migrate.ts in that release, so a rollback
   never lands on code that can't read the moved rows.
-- A migration covered by a declared lens expands while source rows remain,
-  then contracts in the mover's final transaction. The store keeps the newest
+- A migration a declared lens covers expands while source rows remain, then
+  contracts in the mover's final transaction. The store keeps its newest
   vocabulary and immutable lens chain through a code rollback. Kept pages speak
   their deploy's timestamp, so old reads, writes and vocabulary declarations
   translate at the graph doors (packages/lens/README.md).
 - Other migrations ship as expand, migrate, contract: the first release reads
-  both shapes, the mover moves, and a later release deletes the old reader once
-  `yak admin move --admin` shows every store moved. Each release rolls back one
-  step safely.
-- A batch that fails unwinds, is reported, and the store keeps serving the shape
-  it holds; the next deploy tries again. Bound work by rows, never by time:
-  inside a Worker the clock does not move while code runs.
-- `store_restore` brings one store back if a move went wrong.
+  both shapes, the mover moves, and a later release deletes the old reader
+  once `yak admin move --as admin@bot.yak.sh` shows every store moved. Each
+  release rolls back one step safely.
+- A batch that fails unwinds, is reported, and the store keeps serving the
+  shape it holds until the next try. That's recovery rather than a gate
+  (M-37965). The mover bounds its work in rows, since a Worker's clock stands
+  still while code runs (`yaks-app`).
+- `store_restore` brings one store back to a moment before, if a move went
+  wrong.
 
-The owner's standing word for these, on D-45640 and D-59037: migrations must not
-bring down yaks apps.
+The owner's standing word for these, on D-45640 and D-59037, verbatim on the
+latter: "and let's ensure that the migrations don't bring down yaks apps".
 
-## Before calling it done
+## Knowing it landed
 
-- Counts before and after, on the copy and live, match what the script said.
-- A query that read wrong before the change now reads right.
-- `yak admin errors --admin` and the box's logs show nothing new.
+The counts match what the script said, on the copy and live. A query that read
+wrong before the change reads right now. `yak admin errors --as admin@bot.yak.sh`
+and the box's logs show nothing new.
 
 When this skill is wrong or missing something, fix it in the same change.
