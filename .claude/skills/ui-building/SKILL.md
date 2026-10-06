@@ -9,8 +9,8 @@ description: >
   inbox, panel or detail, restyles anything,
   touches packages/ui, packages/ux, packages/tui, packages/inspect,
   packages/visualize or packages/web/components, or a screen is confusing,
-  ugly, slow to read, slow to draw, re-renders too much, drops frames or
-  differs in the terminal, even if the request never says "UI". Reading platform anatomy or causal activity is
+  ugly, slow to read or different in the terminal, even if the request never
+  says "UI". Reading platform anatomy or causal activity is
   `platform-visualize`; building that screen takes this skill too. A yaks app's
   pages are its author's; platform pages from workers/yak also take `yaks-app`.
   Proving a screen is `end-to-end-checks`; wiring /views is
@@ -149,13 +149,6 @@ A generic property table is a fallback, not a page.
 State a view needs lives in the page's graph, never in `useState`. A person's
 half-typed text is a draft in @yaks/draft, kept and synced everywhere, never
 lost (M-59093).
-
-## Render cost
-
-Some screens repaint every frame: Mossvale's HUD is painted from the game loop
-(apps/vale/hud.ts `show`). There, a part that re-renders when nothing it shows
-has changed is a bug. @yaks/ui already depends on @preact/signals, and a test
-can count renders per update through Preact's `options.diffed`.
 
 ## Check it
 
