@@ -250,23 +250,73 @@ export let offered = (
 
 /** A transcript's entries: a fork's prefix from its parent up to the anchor,
  * then its own, in order. */
-export let transcript = async (g: Graph, session: Eid): Promise<Bundle[]> => {
+export let transcript = (g: Graph, session: Eid): Promise<Bundle[]> =>
+  readTranscript(g, session)
+
+let readTranscript = async (
+  g: Graph,
+  session: Eid,
+  components?: string[],
+): Promise<Bundle[]> => {
   let [self] = await g.read(
     `.entity.eid=${session}&.session&.fields=entity.eid` +
       (g.vocab.comp(FORK) ? ',fork.from' : ''),
   )
   if (!self) throw new UnknownSession(session)
-  let own = await g.read(`.${ENTRY}.session=${session}&*`)
+  let own = await g.read(
+    `.${ENTRY}.session=${session}&` +
+      (components ? components.map((c) => '?' + c).join('&') : '*'),
+  )
   let from = comp(self, FORK)?.from
   if (!from) return ordered(own)
   let [anchor] = await g.get([String(from)], [ENTRY])
   let parent = anchor && comp(anchor, ENTRY)
   if (!parent) return ordered(own)
-  let inherited = await transcript(g, String(parent.session))
+  let inherited = await readTranscript(g, String(parent.session), components)
   return [
     ...inherited.filter((b) => seqOf(b) <= seqOf(anchor)),
     ...ordered(own),
   ]
+}
+
+// Status reads every entry afresh, including mutable ancestors and legacy rows,
+// but prose is only a kind marker here. Archetypes give that presence without
+// fetching old content bodies. A composition without them keeps the full read.
+let currentStatus = async (
+  g: Graph,
+  session: Eid,
+): Promise<TranscriptStatus> => {
+  if (!g.vocab.comp('archetype')) return statusOf(await transcript(g, session))
+  let components = [
+    ENTRY,
+    ASK,
+    CALL,
+    RESULT,
+    OUTPUT,
+    USING,
+    'attempt',
+    'execution',
+    'interrupted',
+    'failed',
+    'provisional',
+    'notice',
+    'stop',
+    EXCEPTION,
+    REFUSAL,
+  ].filter((name) => g.vocab.comp(name))
+  let entries = await readTranscript(g, session, components)
+  let shapes = [...new Set(entries.map((b) => b.entity.archetype))]
+  if (shapes.includes(undefined)) return statusOf(await transcript(g, session))
+  let types = await g.get(shapes as Eid[], ['archetype'])
+  let byId = new Map(
+    types.map((b) => [b.entity.eid, comp(b, 'archetype')?.tables]),
+  )
+  for (let b of entries) {
+    let tables = byId.get(b.entity.archetype!)
+    if (typeof tables != 'string') return statusOf(await transcript(g, session))
+    if ((JSON.parse(tables) as string[]).includes(CONTENT)) b.content = {}
+  }
+  return statusOf(entries)
 }
 
 /** The model's view of a window of the transcript: inputs as user turns, what
@@ -603,13 +653,13 @@ export let react = async (
     added = await g.apply(added, { trusted: true })
     return {
       did: 'asked',
-      status: statusOf(await transcript(g, session)),
+      status: await currentStatus(g, session),
       added,
     }
   }
   let current = async (): Promise<Step> => ({
     did: 'nothing',
-    status: statusOf(await transcript(g, session)),
+    status: await currentStatus(g, session),
     added: [],
   })
   // Recovery and provider completion race for the same attempt. Guard the
@@ -815,7 +865,7 @@ export let react = async (
       }
       return {
         did: 'ran',
-        status: statusOf(await transcript(g, session)),
+        status: await currentStatus(g, session),
         added,
       }
     }
@@ -856,7 +906,7 @@ export let react = async (
         )
       }
     }
-    return { did: 'ran', status: statusOf(await transcript(g, session)), added }
+    return { did: 'ran', status: await currentStatus(g, session), added }
   }
   if (status == 'running') return nothing
 
