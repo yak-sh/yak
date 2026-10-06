@@ -4,7 +4,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
-import { match, reads } from '@yaks/graph'
+import { type Comp, match, reads } from '@yaks/graph'
 import { insert, val } from '@yaks/sql'
 import { blog, fixture, mem } from './testing.ts'
 import { blobKeywords } from './keywords.ts'
@@ -93,7 +93,7 @@ test('admission reuses immutable content reads until their authoritative SQL sta
   let f = fixture()
   f.g.apply([{ entity: { eid: 'p' }, post: { title: 'Hello', body: 'first' } }])
   let get = () => f.db.tx((tx) => tx.get(['p']), { admission: true })[0]
-  assertEquals(get().post?.body, 'first')
+  assertEquals((get().post as Comp)?.body, 'first')
   let query = f.driver.query, reads = 0
   f.driver.query = (stmt) => {
     if (stmt.t == 'select' || stmt.t == 'raw') reads++
@@ -103,7 +103,7 @@ test('admission reuses immutable content reads until their authoritative SQL sta
   get()
   assertEquals(reads, 0)
   f.g.apply([{ entity: { eid: 'p' }, post: { body: 'second' } }])
-  assertEquals(get().post?.body, 'second')
+  assertEquals((get().post as Comp)?.body, 'second')
 })
 
 test('immutable admission content follows raw blob changes and rollback', () => {
@@ -116,7 +116,7 @@ test('immutable admission content follows raw blob changes and rollback', () => 
     table: 'blob_text',
     set: { value: val('raw') },
   })
-  assertEquals(get().post?.body, 'raw')
+  assertEquals((get().post as Comp)?.body, 'raw')
   assertThrows(() =>
     f.db.tx(() => {
       f.driver.query({
@@ -124,11 +124,11 @@ test('immutable admission content follows raw blob changes and rollback', () => 
         table: 'blob_text',
         set: { value: val('temporary') },
       })
-      assertEquals(get().post?.body, 'temporary')
+      assertEquals((get().post as Comp)?.body, 'temporary')
       throw new Error('rollback')
     })
   )
-  assertEquals(get().post?.body, 'raw')
+  assertEquals((get().post as Comp)?.body, 'raw')
 })
 
 test('immutable admission content observes blob commits by another file connection', () => {
@@ -145,13 +145,13 @@ test('immutable admission content observes blob commits by another file connecti
     })
     g.apply([{ entity: { eid: 'p' }, post: { body: 'first' } }])
     let get = () => s.tx((tx) => tx.get(['p']), { admission: true })[0]
-    assertEquals(get().post?.body, 'first')
+    assertEquals((get().post as Comp)?.body, 'first')
     b.query({
       t: 'update',
       table: 'blob_text',
       set: { value: val('other connection') },
     })
-    assertEquals(get().post?.body, 'other connection')
+    assertEquals((get().post as Comp)?.body, 'other connection')
   } finally {
     a.close()
     b.close()

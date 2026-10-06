@@ -116,7 +116,7 @@ test('cached admission reads never cache standing or rules', () => {
 })
 
 test('admission snapshots observe another file connection commit', () => {
-  let dir = Deno.makeTempDir({ prefix: 'T-65691-memo-' })
+  let dir = Deno.makeTempDirSync({ prefix: 'T-65691-memo-' })
   let a = open(`${dir}/test.db`), b = open(`${dir}/test.db`)
   try {
     let f = fixture(a)
