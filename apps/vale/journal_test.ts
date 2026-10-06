@@ -53,7 +53,7 @@ test('quest selection and tracking preserve list nodes, scroll and quest meaning
     )
     equal(list.querySelector('[data-select]'), row)
     equal(list.scrollTop, 37)
-    equal(body.querySelector('.Journal_Says')!.textContent, quest.says)
+    equal(body.querySelector('.Quote_Text')!.textContent, quest.says)
   }))
 
 for (let pinned of [false, true]) {
@@ -69,6 +69,7 @@ for (let pinned of [false, true]) {
         [...body.querySelectorAll('[data-select]')].map((row) =>
           row.getAttribute('data-select')
         )
+      let title = () => body.querySelector('.Split_Content .Tile_Title')
       view.show(quests, 'mossvale')
       equal(rows(), ['active', 'offer'])
       equal(
@@ -86,11 +87,11 @@ for (let pinned of [false, true]) {
         'true',
       )
       click('[data-select=finished]')
-      equal(body.querySelector('.Journal_Title')!.textContent, quests[2].title)
+      equal(title()!.textContent, quests[2].title)
       equal(body.querySelector('[data-pin]'), null)
       click('[data-completed]')
       equal(rows(), ['active', 'offer'])
-      equal(body.querySelector('.Journal_Title'), null)
+      equal(title(), null)
       view.show(quests, 'mossvale')
       equal(rows(), ['active', 'offer'])
     }))

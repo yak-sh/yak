@@ -14,24 +14,7 @@ import { ITEMS } from './items.ts'
 import { SLOT_NAMES, SLOTS } from './arms.ts'
 import type { Member } from './party-state.ts'
 import { ValeMeter } from './kit/ValeMeter.ts'
-import { hint, part, picture } from './tile.ts'
-
-// A picked thing's head: its icon, its name, what it is, what can be done.
-let head = (
-  icon: 'user' | 'users',
-  tone: string | false,
-  title: string,
-  subs: string[],
-  end?: ComponentChildren,
-) =>
-  h(
-    Tile,
-    { mod: 'head' },
-    picture(glyph(icon), { mod: tone }),
-    h(Tile.Title, {}, title),
-    subs.map((sub) => h(Tile.Sub, { key: sub }, sub)),
-    end && h(Tile.End, {}, end),
-  )
+import { head, hint, part, picture } from './tile.ts'
 
 // How a member fares, and what they wear, as far as is known.
 let details = (m: Member) => [
@@ -166,8 +149,7 @@ export let partybox = (
     )
     let content: ComponentChildren = invite
       ? head(
-        'users',
-        'caution',
+        picture(glyph('users'), { mod: 'caution' }),
         party.name(invite.from),
         ['invited you to their party'],
         [
@@ -177,16 +159,22 @@ export let partybox = (
       )
       : member
       ? [
-        head('user', member.online && 'positive', member.name, [
-          location(member),
-          `${member.online ? 'Online' : 'Away'}${
-            member.vitals ? ` · Level ${member.vitals.lvl}` : ''
-          }`,
-        ]),
+        head(
+          picture(glyph('user'), { mod: member.online && 'positive' }),
+          member.name,
+          [
+            location(member),
+            `${member.online ? 'Online' : 'Away'}${
+              member.vitals ? ` · Level ${member.vitals.lvl}` : ''
+            }`,
+          ],
+        ),
         ...details(member),
       ]
       : picked == 'party'
-      ? head('users', false, 'Your party', [`${members.length} members`])
+      ? head(picture(glyph('users')), 'Your party', [
+        `${members.length} members`,
+      ])
       : hint('Select an invitation or member to see details.')
     panes.render(rows, [
       content,

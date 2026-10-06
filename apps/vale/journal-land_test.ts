@@ -102,7 +102,10 @@ test('journal renders land headings with local work before remote work', () =>
         node.getAttribute('data-select')
       )
     equal(shown(), ['local', 'offer', 'away'])
-    ok(body.querySelector('h2')!.textContent.endsWith(' · Here'))
+    equal(
+      body.querySelector('.Journal_Land .Section_Note')!.textContent,
+      'Here',
+    )
     click('[data-completed=mossvale]')
     equal(shown(), ['local', 'offer', 'done', 'away'])
     view.show(

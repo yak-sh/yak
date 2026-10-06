@@ -224,7 +224,7 @@ export let LISTS: [string, Tab | Own, Draw][] = [
     board.show([
       { ...quests[2], id: 'n1', where: '40 m north' } as Notice,
       { ...quests[0], id: 'n2', where: '' } as Notice,
-    ])
+    ], 'mossvale')
     pick('[data-select=n1]')
   }],
   ['deals', 'deal', (p, pick) => {

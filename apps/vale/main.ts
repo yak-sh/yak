@@ -1246,7 +1246,7 @@ let loop = (t: number) => {
       let jobs = deal.posted(f.sheet)
       let read = (b: Board) =>
         notices(f.sheet.quests, b.level, givers, [b.at[0], b.at[2]], jobs)
-      notes.show(job.board ? read(job.board) : [])
+      notes.show(job.board ? read(job.board) : [], job.board?.level ?? '')
       pins.tick([f.body.x, f.body.z], (b) => read(b).length, job)
       settings.show()
       w.focus.set(f.body.x, f.body.y, f.body.z)

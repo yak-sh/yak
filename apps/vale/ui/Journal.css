@@ -1,144 +1,27 @@
-/* The journal's lands and their groups of quests (each quest a Tile), and
-   the selected quest's text and steps. The split pane supplies the detail
-   surface; the quest does not draw a second card. */
-.Journal {
-  display: grid;
-  gap: 0.5rem;
-}
-
+/* The journal (journalbook.ts): each land a Section, titled a little larger
+   than the groups of quests under it, and its completed quests folded under
+   a toggle titled as a group is, + to show them and − to fold them. */
 .Journal_Land {
-  display: grid;
-  gap: 0.35rem;
-}
+  gap: calc(2 * var(--gap));
 
-.Journal_Completed {
-  color: var(--positive);
-}
-
-.Journal_Toggle {
-  display: flex;
-  align-items: center;
-  justify-content: start;
-  gap: 0.35rem;
-  width: 100%;
-  color: var(--positive);
-}
-
-.Journal_Toggle::after {
-  content: '+';
-  margin-left: auto;
-}
-
-.Journal_Toggle[aria-expanded='true']::after {
-  content: '−';
-}
-
-/* A land's or a group's heading, its icon beside its words like a letter. */
-.Journal_Head {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin: 0.4rem 0 0;
-  font-size: 0.82rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--faint);
-
-  & .Glyph {
-    flex: none;
-    width: 1.1em;
-    height: 1.1em;
-  }
-}
-
-.Journal_None {
-  margin: 0;
-  color: var(--muted);
-}
-
-.Journal_Task {
-  display: grid;
-  gap: 0.35rem;
-}
-
-.Journal_Top {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.Journal_Title {
-  flex: 1;
-  min-width: 0;
-  font-size: 1.05rem;
-  color: var(--deep);
-  text-wrap: balance;
-}
-
-.Journal_Pin {
-  flex: none;
-}
-
-.Journal_From {
-  margin: -0.2rem 0 0;
-  font-size: 0.75rem;
-  color: var(--faint);
-}
-
-.Journal_Steps {
-  display: grid;
-  gap: 0.2rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.Journal_Step {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.85rem;
-  color: var(--ink);
-
-  & .Glyph {
-    width: 1em;
-    height: 1em;
-    color: var(--faint);
-  }
-
-  /* Its mark keeps its size; its words take the room. */
-  & > [aria-hidden] {
-    flex: none;
-  }
-
-  & > span:not([aria-hidden]) {
-    flex: 1;
-    min-width: 0;
-  }
-
-  & em {
-    font-style: normal;
-    font-variant-numeric: tabular-nums;
+  & > .Section_Title {
+    font-size: 1rem;
     color: var(--deep);
   }
 }
 
-.Journal_Step-done {
-  color: var(--faint);
+.Journal_Completed {
+  --ink: var(--amber);
+  justify-content: start;
+  width: 100%;
+  font-size: 0.85rem;
 
-  & span {
-    text-decoration: line-through;
+  &::after {
+    content: '+';
+    margin-left: auto;
   }
 
-  & .Glyph,
-  & em {
-    color: var(--moss);
+  &[aria-expanded='true']::after {
+    content: '−';
   }
-}
-
-.Journal_Says {
-  margin: 0;
-  font-size: 0.8rem;
-  font-style: italic;
-  color: var(--muted);
 }

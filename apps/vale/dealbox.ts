@@ -6,14 +6,14 @@
 // once the hero walks off, and is drawn only while open and only when what it
 // shows changed.
 import { h } from 'preact'
-import { Rows, Tile } from '@yaks/ui'
+import { Button, Rows, Tile } from '@yaks/ui'
 import { BEASTS } from './beasts.ts'
 import type { View } from './deals.ts'
 import { ITEMS } from './items.ts'
 import type { Panel } from './panel.ts'
-import { glyph } from './glyphs.ts'
+import { type Glyph, glyph } from './glyphs.ts'
 import { said } from './stock.ts'
-import { picture } from './tile.ts'
+import { head, hint, picture, steps } from './tile.ts'
 import { split } from './ui/split.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -39,29 +39,57 @@ export let nameOf = (kind: string) =>
 // every step is done.
 let buttons = (v: View) => {
   let b = (act: Act, label: string, go = false) =>
-    `<button class="Btn${
-      go ? ' Btn-go' : ''
-    }" type=button data-do=${act} data-deal="${esc(v.eid)}">${label}</button>`
-  if (v.state == 'taken') return v.ready ? b('hand', 'Hand it in', true) : ''
-  return (v.ready && !v.steps.some((s) => s.deed)
-    ? b('hand', 'Trade', true)
-    : b('agree', 'Agree', true)) + b('refuse', 'No thanks')
+    h(Button, {
+      key: act,
+      mod: go && 'go',
+      type: 'button',
+      'data-do': act,
+      'data-deal': v.eid,
+    }, label)
+  if (v.state == 'taken') return v.ready ? [b('hand', 'Hand it in', true)] : []
+  return [
+    v.ready && !v.steps.some((s) => s.deed)
+      ? b('hand', 'Trade', true)
+      : b('agree', 'Agree', true),
+    b('refuse', 'No thanks'),
+  ]
 }
 
-let card = (v: View, now: number) =>
-  `<div class=Deal><p class=Deal_Give>${
-    v.state == 'taken' ? 'Promised you' : 'Offers you'
-  } <b>${esc(said(v.give))}</b>, for:</p><ul class=Deal_Steps>${
-    v.steps.map((s) =>
-      `<li class="Deal_Step${s.have >= s.n ? ' Deal_Step-done' : ''}">${
-        s.deed ? 'Fell' : 'Bring'
-      } ${esc(nameOf(s.kind))}<span>${s.have} / ${s.n}</span></li>`
-    ).join('')
-  }</ul><p class=Deal_Ends>${
-    v.state == 'taken' ? 'You agreed. It stands' : 'The offer stands'
-  } ${left(v.ends - now)} more.</p><div class=Deal_Acts>${
-    buttons(v)
-  }</div></div>`
+// A deal's icon and its tone: ready to hand in, agreed to, or offered.
+let mark = (v: View): [Glyph, string] =>
+  v.ready
+    ? ['done', 'positive']
+    : v.state == 'taken'
+    ? ['handHeart', 'info']
+    : ['handHeart', 'caution']
+
+// A deal picked: what it gives, for what, and how long it stands, what can
+// be done about it, and each step it asks.
+let page = (v: View, now: number) => {
+  let [icon, tone] = mark(v)
+  return [
+    head(
+      picture(glyph(icon), { mod: tone }),
+      said(v.give),
+      [
+        `${v.state == 'taken' ? 'Promised you' : 'Offered'} for ${
+          said(v.take)
+        }`,
+        `${v.state == 'taken' ? 'You agreed. It stands' : 'It stands'} ${
+          left(v.ends - now)
+        } more`,
+      ],
+      buttons(v),
+    ),
+    steps(v.steps.map((s) => ({
+      icon: s.deed ? 'blow' : 'backpack',
+      words: `${s.deed ? 'Fell' : 'Bring'} ${nameOf(s.kind)}`,
+      have: s.have,
+      need: s.n,
+      done: s.have >= s.n,
+    }))),
+  ]
+}
 
 /** The deals panel; `act` is told what the hero chose. */
 export let dealbox = (panel: Panel, act: (a: Act, v: View) => void) => {
@@ -96,13 +124,7 @@ export let dealbox = (panel: Panel, act: (a: Act, v: View) => void) => {
                 draw()
               },
             },
-            picture(glyph(v.ready ? 'done' : 'handHeart'), {
-              mod: v.ready
-                ? 'positive'
-                : v.state == 'taken'
-                ? 'info'
-                : 'caution',
-            }),
+            picture(glyph(mark(v)[0]), { mod: mark(v)[1] }),
             h(Tile.Title, {}, said(v.give)),
             h(
               Tile.Sub,
@@ -114,20 +136,14 @@ export let dealbox = (panel: Panel, act: (a: Act, v: View) => void) => {
           )
         ),
       )
-      : h(
-        'p',
-        { class: 'Deal_None' },
-        'Nothing stands between you. Ask what they might trade.',
-      )
+      : hint('Nothing stands between you. Ask what they might trade.')
     panes.render(
       rows,
-      selected
-        ? card(selected, now)
-        : `<p class=Deal_None>${
-          shown.length
-            ? 'Select a deal to see its steps and what you can do.'
-            : 'Talk to the villager about a new offer.'
-        }</p>`,
+      selected ? page(selected, now) : hint(
+        shown.length
+          ? 'Select a deal to see its steps and what you can do.'
+          : 'Talk to the villager about a new offer.',
+      ),
       picked,
     )
   }

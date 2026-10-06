@@ -11,7 +11,7 @@
 // to it, and it is the hero's alone, to do and hand in as any deal. The
 // papers pinned on a board are as many as its notices (papers.ts).
 import { h } from 'preact'
-import { Rows, Tile } from '@yaks/ui'
+import { Button, Rows, Tile } from '@yaks/ui'
 import { BEASTS } from './beasts.ts'
 import type { View } from './deals.ts'
 import { deal, quest, type Task, toward } from './journal.ts'
@@ -23,10 +23,9 @@ import type { Standing } from './rules.ts'
 import { said } from './stock.ts'
 import { glyph } from './glyphs.ts'
 import { builtNear, standAt, type Vale, villagesNear } from './terrain.ts'
-import { picture } from './tile.ts'
+import { head, hint, picture } from './tile.ts'
+import { questPage } from './journalbook.ts'
 import { split } from './ui/split.ts'
-
-let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
 /** How near a board a hero reads it, in metres from its foot. */
 export let READ = 2.4
@@ -156,18 +155,18 @@ export let noticeboard = (panel: Panel, acts: Acts) => {
     if (n) acts.take(n)
   })
 
-  let card = (n: Notice) =>
-    `<article class=Notice><b class=Notice_Title>${
-      esc(n.title)
-    }</b><p class=Notice_From>${esc(n.from)}${
-      n.where ? ` · ${esc(n.where)}` : ''
-    }</p>${
-      n.says ? `<p class=Notice_Says>${esc(n.says)}</p>` : ''
-    }<footer class=Notice_Foot><span class=Notice_Gives>${
-      esc(n.gives)
-    }</span><button class="Btn Btn-go" data-take="${
-      esc(n.id)
-    }">Take it</button></footer></article>`
+  let here = ''
+  // A notice read: the quest it posts, as the journal reads it, and the
+  // button that takes it.
+  let page = (n: Notice) => [
+    head(
+      picture(glyph('notices'), { mod: 'caution' }),
+      n.title,
+      [[n.from, n.where].filter(Boolean).join(' · ')],
+      h(Button, { mod: 'go', 'data-take': n.id }, 'Take it'),
+    ),
+    ...questPage(n, here),
+  ]
 
   let draw = () => {
     let selected = shown.find((n) => n.id == picked)
@@ -198,16 +197,14 @@ export let noticeboard = (panel: Panel, acts: Acts) => {
           )
         ),
       )
-      : h('p', { class: 'Notices_None' }, 'Nothing is pinned here just now.')
+      : hint('Nothing is pinned here just now.')
     panes.render(
       rows,
-      selected
-        ? card(selected)
-        : `<p class=Notices_None>${
-          shown.length
-            ? 'Select a notice to read it and take it.'
-            : 'Check back later for new notices.'
-        }</p>`,
+      selected ? page(selected) : hint(
+        shown.length
+          ? 'Select a notice to read it and take it.'
+          : 'Check back later for new notices.',
+      ),
       picked,
     )
   }
@@ -224,10 +221,11 @@ export let noticeboard = (panel: Panel, acts: Acts) => {
       panel.toggle()
     },
     close: panel.close,
-    /** show the board's notices, when the sheet is open and they changed */
-    show: (list: Notice[]) => {
+    /** show the notices of the board in `level`, while the sheet is open */
+    show: (list: Notice[], level: string) => {
       if (!panel.open) return
       shown = list
+      here = level
       panel.head(
         `Notice board <small class=Panel_Note>${list.length} ${
           list.length == 1 ? 'notice' : 'notices'
