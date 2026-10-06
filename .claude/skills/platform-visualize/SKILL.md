@@ -16,114 +16,151 @@ description: >
 
 # Platform anatomy and activity
 
-The visualizer reads the host that is actually serving it. Anatomy is the
-host's value-free description of its composed parts and connections. Activity
-is a bounded subscription to that host graph's existing process-local trace
-channel. Neither is an inspection of stored entities, a second composed
-platform, or a reconstruction of work from every process sharing a store.
+The owner asked for "an MRI machine for the platform and system" (T-61829,
+verbatim): one place where agents and humans see how the vocab, packages,
+plugins, effects, rules, views, kits and the rest fit together. He added: "i
+don't want a "dead" view only, i want to see data flowing in real-time", and
+"it'd be great if it doesn't add any overhead to existing servers".
+@yaks/visualize is that machine, and like MRI and fMRI it takes two kinds of
+scan.
 
-The reference is `packages/visualize/README.md`: read it for the DTOs, bounds,
-coverage and door parameters. `packages/visualize/snapshot.ts` owns selection;
-`capture.ts` owns a bounded activity capture; `http.ts`, `tools.ts` and `cli.ts`
-use those contracts. Use the same snapshot or capture when comparing doors,
-not a separately assembled graph whose bindings might differ.
+- **Anatomy** is the serving host's value-free description of its composed
+  parts and how they connect, in groups: packages, roles, facets, comps, tools,
+  commands, effects, rules, hooks, routes, views, inspectViews, tui, kits,
+  themes, skills and secrets.
+- **Activity** is a bounded subscription to that host graph's trace channel
+  (@yaks/trace): spans with a name, a causal parent, counts, a duration and an
+  outcome.
 
-## Choose the question before the door
+Both image the patient on the table, the host that is serving them. Neither
+reads stored entities, neither composes a second platform to look at, and
+neither reconstructs work done by other processes sharing the store.
 
-- **What parts are present and connected here?** Read anatomy. Filter by group,
-  plain-text search or an exact anatomy part id. A part id is not a stored
-  entity id. The selection counts nodes, not edges; retained edges connect two
-  included nodes. A plain HTTP snapshot preserves the full anatomy; selected
-  results report total, matched, shown and a truncation flag.
-- **What work ran, and what caused it?** Subscribe before the action, or take a
-  capture that remains subscribed while the action occurs. Start and end events
-  share a span id; parent span ids show causal relationships. An event is not
-  a graph row. A duration of zero is valid, not a missing observation.
-- **What data did a write store or a query return?** Use
-  `graph-reads-and-writes` and `query-grammar`. The visualizer deliberately
-  excludes entity contents, query text, payloads and secret values; secret
-  anatomy contains names only. An operation's name, count and duration do not
-  tell you its returned values.
+## The instrument
 
-Anatomy search is a plain-text match over part metadata, not a yaks query.
-Pasting `.task.status=open` into it does not inspect tasks. Filtering a view
-also does not change the composed host or prove a part is absent elsewhere.
+packages/visualize/README.md is the reference for the DTOs, bounds, coverage
+and each door's parameters. Inside the package, `snapshot.ts` owns selection and
+`capture.ts` a bounded activity capture; `http.ts`, `tools.ts` and `cli.ts` are
+doors over those two. To compare doors, compare the same snapshot or capture,
+never a graph assembled separately, whose bindings may differ.
+@yaks/code/anatomy maps a composition into anatomy, and packages/cli/anatomy.ts
+gathers a native host's evidence for it.
 
-## Read coverage before diagnosing absence
-
-Declaration, loading and binding are independent facts. A declared lazy facet
-need not have been imported; an imported tool need not be bound to this host.
-Anatomy does not import lazy facets or resolve secret getters to make the
-picture more complete. Use `packages-and-plugins` to change wiring,
-`vocabulary` to change the words a package declares, and `effects-and-rules`
-to change what follows a write.
-
-Read the snapshot's scope and per-group observed flags. An unobserved category
-is not globally absent. Empty results may be a filter, a limit, a host that
-cannot observe that category, or genuinely no parts in the observed category.
-Use selection counts and truncation to distinguish those cases rather than
-inferring from the visible nodes alone. Activity phase events do not add a
-synthetic anatomy group to the selection API.
-
-Activity coverage is process-local and recording is subscriber-only. Without
-an active subscriber, earlier idle work is not reconstructed. The page or an
-activity capture observes only the exact graph channel in that serving
-process; another process using the same database is outside that coverage.
-An empty capture therefore is not evidence that no work happened.
-
-Sequence numbers are meaningful within their epoch. A capture's `gap` is a
-known omitted record count, including records excluded by its limit or lost
-from its bounded history during capture. It cannot count work that was never
-recorded. The page's gap indicator counts discontinuity episodes, not omitted
-records. Read connection state and epoch changes before treating a disconnect
-or reconnect as a period of platform inactivity.
-
-## Use a door without changing the subject
-
-The page is `/visualize` on the selected serving origin. Its anatomy, selection
-and bounded live activity are a way to explore a host, not a replacement for
-its stored-data inspector. Building or changing that screen also takes
-`ui-building`; proving it works takes `end-to-end-checks`.
-
-The agent doors are `visualize_anatomy` and `visualize_activity`. They use the
-actual tool host, not a graph supplied as an unrelated runner argument. Read
-their advertised inputs for the current bounds. The activity tool's wait is a
-bounded observation window, not an instruction to run a query or write.
-
-The terminal door reads the serving process over HTTP, rather than composing
-a fresh graph to answer the question:
+- **The page** is `/visualize` on the serving origin: an anatomy map and list,
+  the apply pipeline's spine, a timeline and a causal drill-down. It's a way to
+  explore a host, not a replacement for the inspector.
+- **The agent tools** are `visualize_anatomy` and `visualize_activity`, on their
+  own tool host. Their advertised inputs carry the current bounds, and the
+  activity tool's wait only watches: it runs no query and makes no write.
+- **The terminal** reads the serving process over HTTP rather than composing a
+  graph of its own:
 
 ```sh
 yak visualize anatomy --group tools --json
 yak visualize activity --limit 32 --wait 250 --json
 ```
 
-Use `--url` to select an HTTP(S) serving origin when native config is not the
-host you intend. `--json` prints the exact returned DTO; human output is a
-bounded overview. The agent tool always selects anatomy, while an unfiltered
-HTTP anatomy read preserves the plain snapshot contract. Do not assume those
-two requests both contain a selection object.
+`--url` picks another HTTP(S) serving origin. `--json` prints the exact DTO;
+without it you get a bounded overview. `--search` is plain text over a part's
+name, package, facet and description, and `--id` is an anatomy part id.
 
-Authentication is the serving host's policy, not a bypass for metadata. A
-missing authenticator fails closed; anonymous access is only intentional when
-that policy permits it. The CLI chooses the selected origin's saved token,
-keeps the explicit `YAKS_TOKEN` convention, rejects URL credentials and
-non-HTTP(S) schemes, and refuses redirects. `x-via` is provenance, not a
-credential. Do not loosen authentication to make a probe pass.
+## A fuller picture, or the same patient
 
-## Observation earns a diagnosis, not proof
+It would be easy to make the picture look more complete: import the lazy
+facets, resolve the secret getters, compose a graph of one's own and draw that.
+Each would show a different patient. So visualize describes what is there and
+says plainly what it could not see.
 
-Use anatomy to narrow a wiring question and trace to identify a causal path.
-Then verify the claim with the owning subsystem's assertions: a visible rule
-is not proof it fired correctly, and an apply span is not proof its stored
-result is right. Automated door and helper contracts belong to `testing`.
-Manual page, CLI and runtime checks belong to `end-to-end-checks`, on an
-isolated scratch host running the branch's own code, never a live service.
+That's why declaration, loading and binding are three separate facts. A
+declared lazy facet need not have been imported; an imported tool need not be
+bound to this host. On the box most tools read declared and neither loaded nor
+bound, because a plugin's tool code is imported only by the first call of one
+of its tools. That's the system working, not a wiring fault.
 
-When adding observation, extend the existing trace stream rather than a
-parallel timing system. Keep fixed operation labels and counts value-free,
-preserve inactive-channel behavior, and release observers on cancellation.
-Read `packages/trace/mod.ts` and the visualizer reference before changing the
-recording lifecycle or treating spans as persistent history.
+## Insight, and nothing private
+
+Anatomy and activity carry no entity contents, query text, payloads or secret
+values; a secret part is a name. That restraint is what lets this be a web page
+and an agent door at all. It also means the visualizer is the wrong instrument
+when the question is about values: what a write stored or a query returned is
+`graph-reads-and-writes` and `query-grammar`. A span's name, count and duration
+don't tell you what it returned. Anatomy search isn't a yaks query either:
+`.task.status=open` pasted into it inspects no tasks.
+
+## Live, and nearly free when nobody watches
+
+Recording is subscriber-only. Producers peek at the channel, and with nobody
+listening they make no events, ids or clock reads. Even so, the idle branch
+measures roughly 128 to 214 ns per query, so every addition to it is paid on
+every query nobody is watching. The price of that bargain is that idle history
+doesn't exist: work done before you subscribed isn't reconstructed, and another
+process using the same database is on a different channel. So subscribe before
+the action, or take a capture whose wait spans it, and read an empty capture as
+"nothing seen", never as "nothing happened".
+
+## Reading the scan
+
+A radiologist reads the field of view before calling a shadow absent. Here the
+field of view is coverage, and it comes with every answer.
+
+- **Unobserved isn't absent.** A snapshot carries its scope and a per-group
+  `observed` flag. A native snapshot of the box marks views, inspectViews, tui
+  and skills unobserved; the box has views, the server just never loads them.
+- **Empty can mean four things**: a filter, a limit, a host that can't observe
+  that group, or no such parts. Selection's `{total, matched, shown,
+  truncated}` tells them apart. It counts nodes; an edge is kept only when both
+  its ends are. An unfiltered HTTP anatomy read returns the supplier's snapshot
+  unchanged, with no `selection`, while the agent tool always selects, so the
+  two needn't look alike.
+- **A part id isn't an entity id**, and an activity event isn't a graph row.
+- **Causes are parents.** Start and end share a span id, and parent span ids
+  are the causal path. A duration of 0 ms is a valid measurement: in a Worker
+  the clock moves only on I/O, so on yaks.app counts are the measure.
+- **Sequence numbers live within an epoch.** A changed epoch means continuity
+  is gone (restarting the host resets it), and spans aren't compared across
+  it.
+- **Two kinds of gap.** A capture's `gap` counts known omitted records, those
+  cut by its limit or overwritten while it ran; it can't count work never
+  recorded. The page's gap indicator counts discontinuity episodes: a pause
+  closes the stream, and its resume adds one. A disconnect alone doesn't
+  prove anything was lost. Read the connection state and the epoch before
+  taking a quiet stretch for a quiet platform.
+- **The page's pipeline labels** (normalize, admit, … commit, effect, audit)
+  are explanatory nodes drawn by the page, not a server anatomy group. Audit is
+  rollback notification, not what follows a successful apply.
+
+## The door asks like any other
+
+Metadata gets no back door. Every request goes through the serving host's
+`host.who`; a host with no policy fails closed, and anonymous access is only
+there when the policy grants it. The CLI uses the selected origin's saved
+token, keeps `YAKS_TOKEN` as the explicit override, refuses URL credentials,
+non-HTTP(S) schemes and redirects, and never forwards one host's credential to
+another. `x-via` is provenance, not a credential. A probe refused on auth is
+telling you about the policy; loosening the policy to get through would only
+silence what it's telling you.
+
+## A diagnosis, not proof
+
+Anatomy narrows a wiring question; a trace finds a causal path. The owning
+subsystem then confirms the claim: a rule in the picture isn't proof it fired
+correctly, and an apply span isn't proof its stored result is right. What the
+picture shows is wired by `packages-and-plugins`, named by `vocabulary` and set
+in motion after a write by `effects-and-rules`. Automated assertions over the
+doors are `testing`. Checking the page or the CLI by hand is
+`end-to-end-checks`, on an isolated scratch host running the branch's own code
+rather than the live service. Changing the page itself is `ui-building` too.
+
+## Adding to what it sees
+
+There is one measured stream. New observation extends @yaks/trace
+(packages/trace/mod.ts), and other consumers such as the tracker's timing
+(D-61711) read that same stream rather than timing things again. A label names
+code, never a query, URL, entity, credential or payload, and counts are finite
+numbers. The inactive path stays free of events, ids and clocks, observers
+release on cancellation, abort and close, and spans are not persistent history.
+`record(target, run)` captures one call's span tree, for timing an apply. Read
+packages/trace/mod.ts and the visualize README before changing the recording
+lifecycle.
 
 When this skill is wrong or missing something, fix it in the same change.
