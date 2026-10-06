@@ -19,10 +19,21 @@ description: >
 
 # The yaks.app platform
 
-Every person's apps run here, and every commit on main reaches them within
-minutes. A change that is merely wrong on the box can lock someone out, lose
-their input or break their app here. workers/yak/README.md is the reference for
-bindings, the Worker's own secrets and setup; this is the map and the judgment.
+Every person's apps run here: their recipe boxes and trip plans, their
+sign-ins, the message they haven't sent yet. Every commit on main reaches all of
+them within minutes, and nothing stands in between. A change that is merely
+wrong on the box can lock someone out here, lose what they typed or break their
+app, and a careless wake is billed by the row across every store at once.
+
+So work here the way you'd work in a building full of other people's things:
+gently with what they hold, quick to put back what you moved, aware that every
+room you walk into costs something. What we're proud of is quiet: an app that
+costs nothing while nobody is in it, a deploy nobody notices, a rename a client
+never feels. What makes us wince is a deploy that signs everyone out, a default
+that opens a door, a poll that wakes every store on the platform.
+
+workers/yak/README.md is the reference for bindings, the Worker's own secrets
+and setup; this is the map and the feel.
 
 ## The parts
 
@@ -38,180 +49,212 @@ bindings, the Worker's own secrets and setup; this is the map and the judgment.
   Every door asks it who may do what before a request reaches an app's store.
 - **Serving an app**: `apps.ts` serves its files and `./api/*`; `door.ts`
   hands the store the caller's standing, including its access mode
-  (`x-yak-access`).
+  (`x-yak-access`). A platform page's parts are `ui-building`'s.
 - **The connector**: `mcp.ts` and `tools.ts`, the tools Claude and ChatGPT
   call; `prompts/` and `public/docs/` are what those assistants read.
 - **Spending**: `models.ts` and its allowance, the one budget per account
-  (M-42105).
+  (M-42105). An app's builders are `builders-and-builds`.
 - **Keys**: a key a space or app uses is a connection, kept in the directory's
   vault; an app is handed only a sentinel, swapped for the key on the way out
-  (`outbound.ts`). The `secrets-and-connections` skill covers it.
+  (`outbound.ts`). That whole corner is `secrets-and-connections`.
 
 ## Deploying
 
 A push to main deploys, through Cloudflare Workers Builds (watch paths
 `workers/yak/*` and `packages/*`). Nothing gates it; the gate reports. So the
-safety is in recovery: `yak admin revert <sha> --admin` reverts a commit and
-waits for its deploy, `yak admin rollback --admin` refuses to cross a data
-migration boundary, and `deno task verify:yak` checks the doors and tails for
-5xx after a deploy. Staging (yaks.fyi) deploys after production from the same
-build, so it is a sandbox for billing, not a canary.
+safety lives in recovery, and recovery is quick:
 
-## What a Durable Object can't do
+- `yak admin revert <sha>` reverts a main commit in a fresh worktree, lands it
+  and waits for Workers Builds to serve the revert. Since main deploys on every
+  push, this is the usual way back.
+- `yak admin rollback` is for a broken build path. It refuses to cross a data
+  migration boundary, so it never lands on code that can't read what a newer
+  release moved.
+- `deno task verify:yak` checks the public doors and watches three minutes of
+  live traffic for a 5xx after a deploy.
+
+Staging (yaks.fyi) deploys after production from the same build, so it is a
+sandbox for billing, not a canary.
+
+## Inside a Durable Object
+
+A store is SQLite inside a Durable Object, and the room is smaller than the
+box. A query that works on the box can be refused in a store.
 
 - **SQLite limits** (packages/durable-object/testing.ts `LIMITS`): 100 bound
   values, an expression 100 deep, a compound select of 5 arms. Only
-  `transactionSync` makes a transaction. A query that works on the box can be
-  refused in a store.
-- **No clock while code runs.** Time advances only across I/O, so a time
-  budget reads 0 ms. Bound work by rows or batches (`mover.ts`).
+  `transactionSync` makes a transaction.
+- **No clock while code runs.** Time advances only across I/O, so a time budget
+  reads 0 ms. Work is bounded by rows or batches (`mover.ts`).
 - **128 MB per isolate**, shared by every object in it (`HELD` in
-  packages/embedding/held.ts caps vector copies at 48 MB).
+  packages/embedding/held.ts caps vector copies at 48 MB; the vectors are
+  `search-and-embeddings`).
 - **Rows read are billed**, and stores collect no planner statistics yet
   (T-61475): a filter that misses the archetype index scans the store.
-- **Boot must not fail.** A store whose post-boot pass throws keeps serving and
-  retries with backoff (`graph.ts` `#sowing`). Anything that could throw (a
-  shape change, a backfill) runs after boot, in slices, behind the store's own
-  traffic.
+- **A boot is all or nothing.** It runs in one transaction. A schema that won't
+  stand unwinds, and the store answers every request 503 with the reason
+  (`graph.ts` `#stalled`), still keeping the writes it is sent (`writes.ts`),
+  until fixed code arrives as a new incarnation. So a shape change or a backfill
+  has no place in boot. It goes to the store mover (`mover.ts`): from the
+  alarm, once the store serves, a few dozen rows a batch with requests in
+  between. A batch that fails unwinds and waits for the next incarnation while
+  the store keeps serving the shape it holds. `yak admin move --rehearse` runs
+  every rule in a transaction the store rolls back and says what it found.
+  Moving rows people already have is `data-migration`'s ground.
 
-## Journaling
+## Asleep is the normal state
 
-App stores do not load @yaks/journal (T-65227). Their inspector reads schema
-and entities without history. Standing journal tables and rows stay untouched;
-deleting them would itself incur billed writes. Declaring journal names in an
-app manifest does not enable the journal.
+Most apps, most of the time, have nobody in them, and an idle store is where
+cost hides. Vale (yourname/vale) once read 1.5M rows a minute with nobody
+playing (T-65228). Each MCP call once woke every app store in the caller's
+spaces (T-65378). Every store wake once asked the directory for every trashed
+store on the platform (T-65467). App journals were once 87% of the rows written
+(T-65227). Each was work that felt free in code and was billed by the row.
 
-## Idle alarms and schema pages
+Good work here keeps a clear sense of who owes what: a deploy installs, an
+alarm does what was recorded, a read reads, and a store nobody touches costs
+nothing.
 
-An app alarm fires its stored wakes, moves explicitly owed schema rows, drains
-recorded effects whose handlers it composes and drains queued embeddings
-(`graph.ts`). A read does not install descriptions, sweep sessions, reconcile
-calls, re-owe guest registration, or join a startup pool. Durable Objects use
-`singleOwner: true`: attempts and outcomes are durable; process presence and run
-leases are unnecessary. Pending effects without a composed handler do not arm
-an alarm.
+- **An alarm does recorded work.** An app alarm fires its stored wakes, moves
+  explicitly owed schema rows, drains recorded effects whose handlers it
+  composes and drains queued embeddings (`graph.ts`). Pending effects with no
+  composed handler don't arm it. Durable Objects run effects with
+  `singleOwner: true`: attempts and outcomes are durable, and process presence
+  and run leases have nothing left to guard.
+- **A read only reads.** It installs no descriptions, sweeps no sessions,
+  reconciles no calls, re-owes no guest registration and joins no startup
+  pool. Migration work is armed by a deploy or a mover command (`yak admin
+  move`), never by a cold read.
+- **A deploy installs.** Deployment POSTs materialize schema and lens
+  descriptions, shipped rows, command identities and embedding queue triggers.
+  Schema pages come from @yaks/code's `described`: `_vocab.hash` skips an
+  unchanged vocabulary, and a changed hash writes only the changed rows. That
+  is separate from the storage schema stamp. `schemaReady` trusts the physical
+  `schema` stamp a completed installation leaves, epoch and archetypes
+  included; description bookkeeping never invalidates it, and a cold ordinary
+  request inspects no SQL schema signatures when it matches. What installing a
+  changed word still reads is T-65622.
+- **App stores keep no journal** (T-65227). They don't load @yaks/journal, and
+  declaring journal names in an app manifest doesn't turn it on; their
+  inspector reads schema and entities without history. Journal tables and rows
+  already standing stay as they are, since deleting them would itself be billed
+  writes.
+- **A trashed store sleeps.** Trashing or restoring an app or its space commits
+  a `notify_trash` effect in the directory beside the mark (`trash.ts`). It
+  tells every affected store, retries until acknowledged, and reads the present
+  state so an older retry can't undo a restore. A directory restart reconciles
+  standing marks through its effect sweep; app wakes never ask the directory
+  about trash. The store keeps a `dormant` object-storage mark, deletes its
+  alarm and closes its sockets; every runtime entry checks that mark before
+  graph boot or SQL, and a dormant fetch answers 404. Restore clears the mark
+  and arms the store for owed wakes. Permanent erasure stays reachable while
+  dormant.
+- **Discovery leaves stores asleep** (T-65378). An app's accepted vocabulary
+  and commands are release metadata in R2 (`declaration.ts`), selected by the
+  directory's source and declaration pointers. A deploy writes that snapshot
+  before committing either pointer, including the retained words and
+  borrowed-home declarations the Store accepted; a space rename copies the
+  snapshots and app erasure sweeps them. `initialize`, `tools/list` and the
+  schema preparation before a named tool call read no app Store. A release from
+  before snapshots reads its pinned deploy files, translating kept command
+  grammar and reconstructing word homes without a Store fetch or a backfill.
+  Only a deploy can know a retired column is empty, so that file-only reader
+  keeps the declaration until the next deploy records what the Store accepted.
 
-Deployment POSTs materialize schema/lens descriptions, shipped rows, command
-identities and embedding queue triggers. Schema pages come from @yaks/code's
-`described`: `_vocab.hash` skips an unchanged vocabulary and a changed hash
-writes only changed rows. This is separate from the storage schema stamp.
-`schemaReady` trusts the physical `schema` stamp established by completed
-schema installation, including epoch and archetypes. Description installation
-is separate: its bookkeeping never invalidates physical readiness. A cold
-ordinary request inspects no SQL schema signatures when that stamp matches. Explicit mover commands arm
-bounded migration work; a cold read never starts it.
-
-The idle regression is `workers/yak/idle_alarm_workerd_test.ts`, through the real
-Store and SQL cursor counters. Its synthetic history includes linked sessions,
-answered calls and stale statistics. Returned rows are not billed rows; native
-plan/fullscan tests complement, not replace, the cursor measurement.
-
-## Trashed stores
-
-Trashing or restoring an app or its space commits a `notify_trash` effect
-in the directory alongside the mark (`trash.ts`). The effect tells every
-affected app store, retries failed delivery until acknowledged, and reads the
-present state so an older retry cannot undo a restore. A directory restart
-also reconciles existing trash marks through its effect sweep; app wakes
-never ask the directory about trash. The store keeps a `dormant` object-storage
-mark, deletes its alarm and closes sockets. Every runtime entry checks that
-mark before graph boot or SQL; dormant fetches answer 404. Restore clears the
-mark and arms the store for owed wakes. Permanent erasure remains reachable
-while dormant.
+The idle regression is `workers/yak/idle_alarm_workerd_test.ts`, measured
+through the real Store and SQL cursor counters over a synthetic history with
+linked sessions, answered calls and stale statistics. Rows returned aren't
+rows billed, so native plan and full-scan tests sit beside the cursor
+measurement rather than standing in for it.
 
 ## An app's words
 
 A store's vocabulary is the platform's core documents plus the app's own
-`vocab.json` (`vocab.ts` `appVocab`). Today they share one namespace:
+`vocab.json` (`vocab.ts` `appVocab`), and today they share one namespace. A new
+manifest can't declare a platform word (`RESERVED`, `unsaid`); a word the app
+held before the platform took it stays the app's in its own store (`beneath`).
 
-- A new manifest may not declare a platform word (`RESERVED`, `unsaid`).
-- A word the app held before the platform took it stays the app's in its own
-  store (`beneath`).
-- So before the platform takes a word, run `deno task app-grep` over every
-  app's live files and kept versions. A collision breaks that app's store and
-  every door that reads it.
-
-Namespacing (D-59567) is designed, not built. The `vocabulary` skill covers
-designing words; the `data-migration` skill covers moving stored rows.
+So the platform taking a word reaches into everyone's apps, and a collision
+breaks that app's store and every door that reads it. `deno task app-grep`
+searches every app's live files and kept versions; it is how you find out
+whether a word is free before you take it. Namespacing (D-59567) is designed,
+not built. Shaping the word is `vocabulary`'s ground.
 
 ## People's things
+
+The platform is where other people keep what matters to them, and these follow
+from that:
 
 - **Access fails closed.** A missing or unknown mode reads as private
   (packages/member/words.ts `mode()`), and the directory reports an app row
   with none. A default that opens something is a leak waiting for a stale row.
-- **A guest writes through a vouched via**, with no person (`session.ts`).
-  The same cookie holds the browser before sign-in and the person after it.
+- **A guest writes through a vouched via**, with no person (`session.ts`). The
+  same cookie holds the browser before sign-in and the person after it.
   `attribution.ts` follows directory receipts to fill missing authors in each
   app, preserving the original stamps. Analytics never receives this identity.
 - **Stored pace is per entity, component and vouched via** (`member/pace.ts`),
   with durable `_pace{writes}` clocks. Signing in keeps its browser clock;
-  different entities and instruments do not hold one another up. No via pools
-  only that entity/component’s unnamed instrument.
-- **What people hold keeps working**: sign-ins, links, tokens, tickets in an
-  inbox (M-37923). A change to how they are made migrates them.
-- **Input is precious** (M-59093): a draft, an unsent message or a form is
-  never given a short lifetime.
-- **Money spends from one budget per account** (M-42105), whatever the
-  source. Something new that costs money spends from it rather than adding an
-  allowance; embedding calls don't count yet (T-59279).
-
-## Release declarations and discovery
-
-An app's accepted vocabulary and commands are release metadata in R2
-(`declaration.ts`), selected by the directory's source and declaration pointers.
-Deploy writes that snapshot before committing either pointer, including the
-retained words and borrowed-home declarations the Store accepted. Space rename
-copies the snapshots; app erasure sweeps them. Discovery reads no app Store:
-`initialize`, `tools/list`, and the schema preparation before a named tool call
-must leave every non-target app asleep (T-65378).
-
-Existing releases without a snapshot read their pinned deploy files, translating
-kept command grammar and reconstructing word homes without a Store fetch or a
-backfill. Only a deploy can know whether a retired column is empty; the
-file-only reader conservatively retains its declaration until the next deploy
-records the Store's accepted document.
-
-`yak admin tail` streams local Wrangler stdout, not the MCP door. Its account
-check runs once before the stream; following logs is not app traffic.
+  different entities and instruments don't hold one another up. Writes with no
+  via share one clock on that entity's component.
+- **What people hold keeps working** (M-37923): sign-ins, links, tokens, tickets
+  in an inbox. The owner, verbatim: "signing everyone out is not acceptable if
+  it could be avoided. same goes for all other tokens". A change to how they are
+  made migrates them.
+- **Input is precious** (M-59093). The owner, verbatim: "everything they input
+  into a computer is precious and should be preserved". A draft, an unsent
+  message or a form gets no short lifetime.
+- **Money spends from one budget per account** (M-42105), whatever the source.
+  Something new that costs money spends from it rather than growing an
+  allowance of its own; embedding calls don't count yet (T-59279).
 
 ## The connector
 
-A tool's name, arguments, answer and `outputSchema`, as published in a
-directory listing, keep answering until the next listing (M-37853). A rename
-serves the old name as a translation. Prompts and examples take the person's
-own situation, never an invented one (M-37856). The guide's list of taken words
-lives in `public/docs/components.md`, and a test checks it.
+Once a listing is published, clients build on it. A tool's name, arguments,
+answer and `outputSchema` keep answering until the next listing (M-37853); a
+rename serves the old name as a translation (`published.ts`). Prompts and
+examples start from the person's own situation, never a scenario invented for
+them (M-37856; the owner on one such example, verbatim: "these are still
+made-up scenarios"). The guide's list of taken words lives in
+`public/docs/components.md`, and `guide_test.ts` keeps it true.
 
 ## Debugging an app
 
-- `yak admin query <space>/<app> <query> --admin` reads its store, and
-  `yak admin apply <space>/<app> <bundles> --admin` patches, adds or deletes
-  its rows through the store's own apply (`--check` rehearses). Both go
-  through the connector's graph tier (`graph_query` with `space` and `app`,
-  `graph_apply` likewise), where the platform's admin, an owner of `yak`,
-  stands as an owner in every space (tool.ts `roleIn`).
-- `yak admin errors --admin` lists errors by Sentry issue. Sentry runs out of
-  events monthly, so an empty answer may mean blind, not healthy, until the
-  platform's own tracker lands (D-45640).
-- `yak admin tail --admin` follows live events.
-- `yak admin throwaway` signs in a test account for probes. `--owner` acts as
-  the owner, only for an act he asked for (M-31958).
+These commands pick a yaks.app account with `--as`. Without it they act as the
+configured person's own account, which on this box is the owner's. A write is
+stamped with the account that made it, and his name belongs only on an act he
+asked for (M-31958), so platform work goes `--as admin@bot.yak.sh`: the
+platform's admin, an owner of `yak`, which stands as an owner in every space
+through the connector's graph tier (tool.ts `roleIn`).
+
+- `yak admin query <space>/<app> <query>` reads a store, and
+  `yak admin apply <space>/<app> <bundles>` patches, adds or deletes its rows
+  through the store's own apply (`--check` rehearses and keeps nothing). Both
+  go through `graph_query` and `graph_apply` with `space` and `app`.
+- `yak admin errors` lists errors by Sentry issue (`--since`, 10m by default).
+  Sentry runs out of events monthly, so an empty answer may mean blind, not
+  healthy, until the platform's own tracker lands (D-45640).
+- `yak admin tail` follows live events. It streams local Wrangler stdout, not
+  the MCP door; its account check runs once before the stream, so following
+  logs is not app traffic.
+- `yak admin throwaway [name]` signs this box in as `<name>@bot.yak.sh`, a test
+  account for probes, to name per command with `--as`.
 - An app's own errors surface through `app_errors` and the unseen block
   (`unseen.ts`).
-- Row profiles count SQL statements, not invocation events. Their operation
-  labels follow asynchronous work, including timers created by a socket close;
-  a repeated `ws close` bucket can be a pending save retry rather than repeated
-  close callbacks (`packages/durable-object/profile.ts`, `packages/api/save.ts`).
-  For a save query, distinguish an entity waiting on time from one missing its
-  non-time eligibility; only the former owns a clock retry.
-- Examples to look at live in the `yourname` space (M-37804).
+- Row profiles (packages/durable-object/profile.ts) count SQL statements, not
+  invocation events, and their labels follow asynchronous work, timers from a
+  socket close included: a repeated `ws close` bucket can be a pending save
+  retry (packages/api/save.ts) rather than repeated close callbacks. In a save
+  query, an entity waiting on time and one missing its non-time eligibility
+  look alike; only the former owns a clock retry.
+- The examples to look at live in the `yourname` space (M-37804).
 
 ## Tests
 
 Most worker tests run on the deno platform against the in-memory kernel its
 process shares (`probe.ts` `kernel`). One that needs a whole kernel takes its
-own (`fresh`). A `*_workerd_test.ts` is only for what the runtime alone has,
-and shares the run's one workerd (`workerd`). A test on a shared kernel keeps
-apart by its own data. The money paths use the Stripe sandbox.
+own (`fresh`). A `*_workerd_test.ts` is for what only the runtime has, and
+shares the run's one workerd (`workerd`). Tests on a shared kernel keep apart
+by their own data. The money paths use the Stripe sandbox. The rest is
+`testing`'s.
 
 When this skill is wrong or missing something, fix it in the same change.
