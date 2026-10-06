@@ -1085,3 +1085,36 @@ test('unsaved partial peer patches check the complete held value without storing
   assertEquals(relayed(late.take()), [{ ...row, cursor: { x: 3, y: 2 } }])
   subs.drop(writer.to)
 })
+
+test('unrelated durable commits do not reread peer query candidates', async () => {
+  let g = shop()
+  await g.apply([{ entity: { eid: 'p' }, book: { price: 5 } }])
+  let reads = 0
+  let spy: Graph = {
+    ...g,
+    read: (q, opts) => {
+      reads++
+      return g.read(q, opts)
+    },
+  }
+  let subs = subscriptions(spy), watcher = ear(), writer = ear()
+  await subs.open(watcher.to, 'near', '.book&.browsing.x<10&.fields=book.price')
+  await subs.relay(writer.to, [{ entity: { eid: 'p' }, browsing: { x: 1 } }])
+  watcher.take()
+  reads = 0
+  await g.apply([{
+    entity: { eid: 'unrelated' },
+    doc: { title: 'nothing to do with books' },
+  }])
+  await subs.relay(writer.to, [{ entity: { eid: 'p' }, browsing: { x: 2 } }])
+  assertEquals(reads, 0)
+  assertEquals(
+    watcher.take().every((frame) =>
+      !frame.bundles?.length && !frame.gone?.length
+    ),
+    true,
+  )
+  await g.apply([{ entity: { eid: 'p' }, book: { price: 8 } }])
+  await subs.snapshot('.book&.browsing.x<10&.fields=book.price')
+  assertEquals(watcher.take().at(-1)?.bundles?.[0].book, { price: 8 })
+})

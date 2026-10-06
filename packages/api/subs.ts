@@ -272,7 +272,7 @@ type Touch = Map<Eid, {
 // A write matters when it changes what the query tests or sends. A whole-row
 // projection also observes every component of an entity already in its set.
 let notices = (sub: Sub, b: Bundle): boolean => {
-  if (sub.peer || !sub.reads || sub.reads.unseen || b.$delete) return true
+  if (!sub.reads || sub.reads.unseen || b.$delete) return true
   if (sub.want === null && sub.members.has(b.entity.eid)) return true
   let i = sub.reads
   if (b.created && !i.own.length) return true
@@ -1018,7 +1018,6 @@ export let subscriptions = (graph: Graph, opts: {
     }
     let applied = txs.flat()
     let queries = subs.filter((s) => !s.raw)
-    for (let s of queries) if (s.peer) s.candidates = undefined
     let invalidated = new Set(
       queries.filter((s) =>
         opts.invalidate?.(s.query, applied) ||
@@ -1037,6 +1036,7 @@ export let subscriptions = (graph: Graph, opts: {
     let relevant = new Set(
       queries.filter((s) => invalidated.has(s) || noticedBy.get(s)!.size),
     )
+    for (let s of relevant) if (s.peer) s.candidates = undefined
     let touched = [
       ...new Set(
         applied.filter((b) =>
