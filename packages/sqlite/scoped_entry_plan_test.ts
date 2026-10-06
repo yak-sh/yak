@@ -40,7 +40,7 @@ test('finite entry window identities do not sort their unbounded session', () =>
       d.query(insert('entry', { entity: n, session: 1, seq: n }))
       d.query(insert('created', { entity: n, at: `${n}` }))
     }
-    let q = render(
+    let finite = render(
       compile(
         parse(
           '.entry.session=session&?created&.order=-created.at&.limit=2&.entity.eid=e2,e3,e4',
@@ -48,13 +48,27 @@ test('finite entry window identities do not sort their unbounded session', () =>
         v,
       ),
     )
-    let s = db.prepare(q.sql)
-    try {
-      ok(s.all(...q.params).length == 2)
-      let steps = status.symbols.sqlite3_stmt_status(s.unsafeHandle, 4, 0)
-      ok(steps < 500, `${steps} VM steps\n${q.sql}`)
-    } finally {
-      s.finalize()
+    for (
+      let q of [
+        finite,
+        render(
+          compile(
+            parse(
+              '.entry.session=session&.fields=entry.seq&.order=-entry.seq&.limit=1',
+            ),
+            v,
+          ),
+        ),
+      ]
+    ) {
+      let s = db.prepare(q.sql)
+      try {
+        ok(s.all(...q.params).length > 0)
+        let steps = status.symbols.sqlite3_stmt_status(s.unsafeHandle, 4, 0)
+        ok(steps < 500, `${steps} VM steps\n${q.sql}`)
+      } finally {
+        s.finalize()
+      }
     }
   } finally {
     db.close()

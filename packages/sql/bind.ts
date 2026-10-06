@@ -1797,6 +1797,31 @@ export let bound = (
       }),
       limit: val(limit.n),
     })
+    if (!ctx.spine && ctx.d.owned && ctx.d.spine == '"entity"') {
+      let projected = rel(ctx.d.spine, {
+        cols,
+        joins: joinsOf(ctx),
+        where: cond({ sql: '1', params: [] }),
+        order: ordered,
+      })
+      return {
+        ...projected,
+        with: [{
+          name: '__page',
+          q: raw(page.sql, page.params),
+          materialized: true,
+        }],
+        from: raw('"__page"'),
+        joins: [
+          {
+            how: 'cross',
+            src: raw(ctx.d.spine, [], 'entity'),
+            on: raw(`${owner} = "__page"."id"`),
+          },
+          ...projected.joins ?? [],
+        ],
+      }
+    }
     return relation(ctx.d.spine, {
       cols,
       joins: joinsOf(ctx),
