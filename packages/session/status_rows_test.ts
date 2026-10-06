@@ -80,6 +80,40 @@ test(
           insert('content', { entity: i + 1, body: 'done' }),
         ],
     ]
+    // A migrated active transcript can retain thousands of NULL-sequence
+    // rows from its old release, yet have no ask in its new positive range.
+    let legacyWrites = [
+      insert('entity', { id: 50000, eid: 'legacy-session' }),
+      insert('session', { entity: 50000, id: 'legacy' }),
+      ...Array.from({ length: 3000 }, (_, i) => [
+        insert('entity', {
+          id: 50001 + i,
+          eid: `legacy-${i}`,
+          archetype: 10003,
+        }),
+        insert('entry', { entity: 50001 + i, session: 50000, seq: null }),
+        insert('output', { entity: 50001 + i, source: null }),
+        insert('content', { entity: 50001 + i, body: 'old' }),
+      ]).flat(),
+      insert('entity', {
+        id: 60000,
+        eid: 'legacy-new-input',
+        archetype: 10001,
+      }),
+      insert('entry', { entity: 60000, session: 50000, seq: 1 }),
+      insert('content', { entity: 60000, body: 'new' }),
+      insert('using', { entity: 60000 }),
+    ].map(render)
+    let legacyStatement = render(
+      select({
+        cols: [
+          as(
+            sessionDerived(vocab)['session.status'].expr(val(50000)),
+            'status',
+          ),
+        ],
+      }),
+    )
     let transcript = Array.from(
       { length: 3000 },
       (_, i) => entry(i + 1).map(render),
@@ -91,12 +125,18 @@ test(
     }, transcript=${JSON.stringify(transcript)}, statement=${
       JSON.stringify(statement)
     };
+    const legacyWrites=${JSON.stringify(legacyWrites)}, legacyStatement=${
+      JSON.stringify(legacyStatement)
+    };
     export class Probe {
       constructor(ctx) {this.sql=ctx.storage.sql}
       fetch() {
         const run=s=>this.sql.exec(s.sql,...s.params);
         ddl.forEach(run); writes.forEach(run);
         const samples=[];
+        legacyWrites.forEach(run);
+        const legacyCursor=run(legacyStatement), legacyRows=legacyCursor.toArray();
+        samples.push({length:3000, rows:legacyRows, read:legacyCursor.rowsRead, legacy:true});
         for(let i=0;i<transcript.length;i++) {
           transcript[i].forEach(run);
           if(i===29 || i===2999) {
@@ -121,16 +161,19 @@ test(
         length: number
         rows: { status: string }[]
         read: number
+        legacy?: boolean
       }[]
       console.log('SESSION_STATUS_ROWS', samples)
       for (let sample of samples) {
-        assertEquals(sample.rows, [{ status: 'settled' }])
+        assertEquals(sample.rows, [{
+          status: sample.legacy ? 'running' : 'settled',
+        }])
         assert(
-          sample.read <= 25,
+          sample.read <= (sample.legacy ? 100 : 25),
           `${sample.length} entries read ${sample.read} rows`,
         )
       }
-      assertEquals(samples[0].read, samples[1].read)
+      assertEquals(samples[1].read, samples[2].read)
     } finally {
       await runtime.dispose()
     }

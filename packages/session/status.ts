@@ -520,13 +520,38 @@ export let sessionStatus = {
       order: [desc(col('seq', 'e'))],
       limit: lit(1),
     })
+    let sequencedAsk = select({
+      cols: [col('entity', 'e')],
+      from: table('entry', 'e'),
+      joins: [
+        join(table(ASK, 'a'), eq(col('entity', 'a'), col('entity', 'e'))),
+      ],
+      where: and(mine('e'), notNull(col('seq', 'e'))),
+      order: [desc(col('seq', 'e'))],
+      limit: lit(1),
+    })
+    let legacyAsk = select({
+      cols: [col('entity', 'e')],
+      from: table(ASK, 'a'),
+      joins: [{
+        how: 'cross' as const,
+        src: table('entry', 'e'),
+        on: eq(col('entity', 'a'), col('entity', 'e')),
+      }],
+      where: and(mine('e'), isNull(col('seq', 'e'))),
+      order: [desc(col('seq', 'e'))],
+      limit: lit(1),
+    })
     let ask = select({
       cols: [col('entity', 'e'), col('seq', 'e'), col('through', 'a')],
       from: table('entry', 'e'),
       joins: [
         join(table(ASK, 'a'), eq(col('entity', 'a'), col('entity', 'e'))),
       ],
-      where: mine('e'),
+      where: eq(
+        col('entity', 'e'),
+        fn('coalesce', sub(sequencedAsk), sub(legacyAsk)),
+      ),
       order: [desc(col('seq', 'e'))],
       limit: lit(1),
     })

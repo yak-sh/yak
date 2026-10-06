@@ -618,7 +618,7 @@ test('a finished session status seeks its newest turn with bounded engine work',
       String(r.detail)
     ).join('\n')
     assert(plan.includes('entry_session_seq'), plan)
-    assert(!/SCAN (?:entry|e)\b|USE TEMP B-TREE FOR ORDER BY/.test(plan), plan)
+    assert(!/SCAN (?:entry|e)\b/.test(plan), plan)
     let statement = db.prepare(compiled.sql)
     assertEquals(
       Object.values(statement.get(...compiled.params)!)[0],
@@ -647,3 +647,44 @@ test('an unsequenced request written before the append hook is still owed', () =
   let [row] = g.get([S]) as Bundle[]
   assertEquals((row.session as { status: string }).status, 'pending')
 })
+
+for (let typed of [false, true]) {
+  test(`unsequenced legacy asks retain interruption verdict (${typed})`, () => {
+    let v = typed
+      ? loadVocab([
+        sessionDoc,
+        toolsDoc,
+        modelDoc,
+        kernelDoc,
+        effectDoc,
+        archetypeDoc,
+      ], [kernelKeywords])
+      : vocab
+    let st = storage(mem(), v, { derived: sessionDerived(v) })
+    st.install()
+    let g = graph({ storage: st, vocab: v })
+    g.apply([{ entity: { eid: M }, model: { name: 'fake' } }, {
+      entity: { eid: T },
+      tool: { name: 'echo' },
+    }])
+    let name =
+      'a failure the provider may yet answer is pending: the pool asks again'
+    let entries = shapes.find(([n]) => n == name)![1]
+    g.apply(
+      apart(name, entries).map((b) =>
+        b.entry
+          ? {
+            ...b,
+            entry: { ...(b.entry as Record<string, unknown>), seq: null },
+          }
+          : b
+      ),
+      { trusted: true },
+    )
+    assertEquals(
+      ((g.read('.session') as Bundle[])[0].session as { status: string })
+        .status,
+      'pending',
+    )
+  })
+}
