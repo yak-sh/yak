@@ -757,3 +757,21 @@ test('tool listings publish schemas and preserve old and new command grammar', a
     await client.close()
   }
 })
+
+test('a read-only tool request performs no bookkeeping writes, including refusal', async () => {
+  let g = shopGraph(), writes = 0
+  g.apply = () => {
+    writes++
+    throw new Error('read request attempted to write')
+  }
+  let client = await connect({ graph: g })
+  try {
+    let found = await called(client, 'graph_query', { q: '.doc .count' })
+    assert(!found.isError, JSON.stringify(found))
+    let bad = await called(client, 'graph_query', { q: 42 })
+    assert(bad.isError)
+    assertEquals(writes, 0)
+  } finally {
+    await client.close()
+  }
+})

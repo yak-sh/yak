@@ -17,7 +17,9 @@ test('a graph read exits and leaves owed effects unclaimed', async () => {
     }),
   )
   try {
-    let host = await compose(read(file), ['graph'])
+    let host = await compose(read(file), ['graph'], undefined, {
+      install: true,
+    })
     try {
       await detached(host.storage).patch([{
         entity: { eid: 'owed' },

@@ -43,9 +43,8 @@ export class MigrationPending extends Error {
   }
 }
 
-/** Open at top level, before application schema installation. All peers must
- * deploy this control table before relying on announcement protection. */
-export function migrations(db: Driver): MigrationControl {
+/** Create the control table during installation, never when binding a reader. */
+export function installMigrations(db: Driver): void {
   db.query({
     t: 'create table',
     name: CONTROL,
@@ -66,6 +65,10 @@ export function migrations(db: Driver): MigrationControl {
       { name: 'error', type: 'text' },
     ],
   })
+}
+
+/** Bind migration control over a graph the installer prepared. */
+export function migrations(db: Driver): MigrationControl {
   const one = eq(col('singleton'), lit(1))
   const set = (set: Record<string, Expr>) =>
     db.query({ t: 'update', table: CONTROL, set, where: one })

@@ -5,7 +5,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { parse } from '@yaks/query'
 import { compile, tally } from '@yaks/sql'
-import { extend, meaning, plugins } from './graph.ts'
+import { extend, install, meaning, plugins } from './graph.ts'
 import { TABLE } from './ddl.ts'
 import { mem, none, shop, stocked } from './testing.ts'
 
@@ -13,10 +13,11 @@ let hash = { embedder: { provider: 'hash' } }
 
 test('plugins raises the vectors and adds no rule to apply()', () => {
   let sql = mem()
-  assertEquals(plugins({ sql }), [])
+  install({ sql })
+  assertEquals(plugins(), [])
   assertEquals(tally(sql, TABLE), 0)
-  // and it is idempotent, so a host that already had the table keeps it
-  plugins({ sql })
+  // Installation is idempotent. Binding is independent of installation.
+  install({ sql })
 })
 
 test('the extension a config builds answers .near over these vectors', async () => {

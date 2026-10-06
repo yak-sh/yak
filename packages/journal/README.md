@@ -82,6 +82,10 @@ twenty writes; `._tx.via=S-7` is what one session wrote, and
 written ahead of a tag for the store and the component, so `yak graph show` and
 a link open one directly.
 
+The graph installer calls `@yaks/journal/graph`'s `install(host)` to create and
+upgrade journal tables. Its `plugins(host)` only binds transaction hooks;
+opening a graph never creates indexes over its history.
+
 `backed(vocab)`, exported by the root and by `@yaks/journal/vocab`, is what a
 store reads them through: `storage(driver, vocab, { backed: backed(vocab) })`
 (@yaks/sql `Backing`). A host composed from a config passes it. Nothing is

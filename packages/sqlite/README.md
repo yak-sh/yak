@@ -229,20 +229,24 @@ template: the first one a process makes for a vocabulary is kept, and each later
 one is a copy of it, since copying a schema is a page copy and making one is
 hundreds of statements (@yaks/sql `Driver.template`).
 
-A store installs once, and an install over a file that already holds what it
-would make changes no schema (the doc view is made again only where the file's
-differs). When another connection changes the file's schema afterwards (a
-process running another vocabulary installing its own), the store re-raises only
-what of its own went missing, and drops, rebuilds and re-marks nothing, so
-processes on two vocabularies share a file without undoing each other's
-installs.
+A file-backed store reads and writes only the schema already installed. Bind it
+with `storage()` to query an existing graph; call `install()` explicitly when
+creating or upgrading that graph. Opening a store does not install schema, run
+migrations, inspect every table, analyze indexes, or repair objects another
+connection removed. A query needing a missing table or column fails rather than
+changing the file. An explicit install over a current file changes no schema,
+but may update planner statistics. Installation belongs to the graph's
+installer, not to commands opening it.
+
+In-memory stores belong to their caller alone and install automatically at the
+first operation unless a schema readiness check asserts they are prepared.
 
 A **schema readiness check** is a single-owner host's assertion that the bound
 vocabulary's schema, derived columns, metadata and archetypes already stand.
 `base.schemaReady` runs at the first graph operation, not at binding. True skips
 installation and schema inspection; false falls back to installation. The host
-must bind a new store when its schema changes. File drivers ignore the check and
-retain detection of other connections' changes. Explicit `install()` always
+must bind a new store when its schema changes. File drivers ignore the check:
+only an explicit `install()` changes their schema. Explicit `install()` always
 validates.
 
 ```ts
@@ -793,10 +797,12 @@ incremented with each committed announcement. A **migration watch**
 (`MigrationWatch`) polls a migration control and calls its callback once when
 the generation changes, pending or failed work appears, or polling fails.
 
-Initialize `migrations(driver)` and call `ready()` before installing application
-tables. `run(name, change)` commits an announcement, waits without holding a
-write transaction, then commits a synchronous migration and its completion
-record together. `announce`, `apply`, and `fail` expose the stages separately.
+The graph installer calls `installMigrations(driver)` to create the control
+table. Applications bind `migrations(driver)` and call `ready()` before opening
+their graph; binding never creates a table. `run(name, change)` commits an
+announcement, waits without holding a write transaction, then commits a
+synchronous migration and its completion record together. `announce`, `apply`,
+and `fail` expose the stages separately.
 
 This example uses a zero grace period and an explicit watch check because both
 connections are controlled by the example. Cooperating applications use the same
@@ -805,12 +811,18 @@ and `watchMigrations()` defaults to one second.
 
 ```ts
 import { open } from '@yaks/sqlite/db'
-import { columns, migrations, watchMigrations } from '@yaks/sqlite'
+import {
+  columns,
+  installMigrations,
+  migrations,
+  watchMigrations,
+} from '@yaks/sqlite'
 import { equal, throws } from '@yaks/testing'
 
 let path = await Deno.makeTempFile({ suffix: '.db' })
 let app = open(path), migrator = open(path)
 let notices: Error[] = []
+installMigrations(app)
 let control = migrations(app)
 let changes = migrations(migrator)
 let watch = watchMigrations(control, (reason) => notices.push(reason))

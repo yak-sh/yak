@@ -72,7 +72,9 @@ export let harness = async (
   db = ':memory:',
   lease?: number,
 ): Promise<Harness & { sql: Host['sql'] }> => {
-  let host = await compose(at(db, lease), ['graph'])
+  let host = await compose(at(db, lease), ['graph'], undefined, {
+    install: true,
+  })
   let g = host.graph
   await g.apply(await install(g.read), { trusted: true })
   await g.apply([

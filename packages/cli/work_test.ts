@@ -189,7 +189,7 @@ os.execvp(args[0], [arg.replace('$$', '$') for arg in args])
         ],
       }),
     )
-    host = await compose(read(config), ['graph'])
+    host = await compose(read(config), ['graph'], undefined, { install: true })
     let old = spawn('work', '--roles', 'effects', '--ready', `${dir}/old.ready`)
     await wait(async () =>
       (await Deno.readTextFile(`${dir}/old.ready`)

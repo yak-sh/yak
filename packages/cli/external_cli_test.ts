@@ -2,6 +2,7 @@
 // through the CLI without waiting for the old worker's shutdown.
 
 import { assert, assertEquals } from '@std/assert'
+import { compose, read } from './host.ts'
 import { test, until } from '@yaks/testing'
 
 let root = new URL('../../deno.json', import.meta.url).pathname
@@ -80,6 +81,13 @@ test('ordinary serve fallback outlives HTTP shutdown', async () => {
         ],
       }),
     )
+    let installed = await compose(
+      read(`${dir}/yak.json`),
+      ['graph'],
+      undefined,
+      { install: true, process: false },
+    )
+    await installed.close()
     web = child(dir, ['--config', `${dir}/yak.json`, 'serve'], {})
     await until(async () => {
       let found = (await rows()).find((row: {

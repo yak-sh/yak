@@ -2,7 +2,12 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { open as opened } from '@yaks/sqlite/db'
-import { MigrationPending, migrations, objects } from '@yaks/sqlite'
+import {
+  installMigrations,
+  MigrationPending,
+  migrations,
+  objects,
+} from '@yaks/sqlite'
 import { tally } from '@yaks/sql'
 import { local } from './local.ts'
 import { harness, repo } from './testing.ts'
@@ -33,6 +38,7 @@ test('pending migration refuses harness startup before installing domain tables'
   const path = dir + '/test.db'
   const sql = opened(path)
   try {
+    installMigrations(sql)
     const control = migrations(sql)
     control.announce('new-schema', 0)
     await assertRejects(() => harness(path), MigrationPending)

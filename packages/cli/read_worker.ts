@@ -22,7 +22,10 @@ let errorOf = (cause: unknown) => {
 self.onmessage = ({ data }: MessageEvent<Said>) => {
   if ('start' in data) {
     host = Promise.resolve().then(() =>
-      compose(read(data.start), ['graph'], facet, { process: false })
+      compose(read(data.start), ['graph'], facet, {
+        process: false,
+        readOnly: true,
+      })
     )
     host.catch(() => {})
     return

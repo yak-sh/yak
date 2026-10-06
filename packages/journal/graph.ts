@@ -1,5 +1,5 @@
 // `@yaks/journal/graph` — what a server composed from a config file imports to
-// switch the journal on. It creates the three append-only tables over the
+// switch the journal on. Its installer creates append-only tables over the
 // server's own database connection and returns the plugin that writes a row per
 // component every transaction touched.
 //
@@ -32,9 +32,9 @@ export let logFor = (host: Bound): Log => {
   return found
 }
 
-/** Record who wrote what, inside the transaction that wrote it. A store an
+/** Prepare journal storage explicitly. A store an
  * older journal made gains the columns it predates first. */
-export let plugins = (host: Bound): Plugin[] => {
+export let install = (host: Bound): void => {
   for (let s of ddl()) host.sql.query(s)
   let has = host.sql.query({
     t: 'pragma',
@@ -42,8 +42,10 @@ export let plugins = (host: Bound): Plugin[] => {
     arg: 'journal_tx',
   })
   for (let s of grown(has.map((c) => String(c.name)))) host.sql.query(s)
-  return [journal(logFor(host))]
 }
+
+/** Bind journal hooks over the tables the installer prepared. */
+export let plugins = (host: Bound): Plugin[] => [journal(logFor(host))]
 
 /** How often a host looks for what other hosts committed, in ms, unless the
  * config says (`{"use": "@yaks/journal", "with": {"every": 50}}`). */

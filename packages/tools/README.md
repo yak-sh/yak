@@ -687,3 +687,42 @@ load tools through
 effects through [@yaks/effects](../effects/README.md), and drive time through
 [@yaks/wake](../wake/README.md). Durable storage, stamping, and query
 capabilities depend on the graph's installed packages and adapter.
+
+## Direct read-only calls
+
+`runner.read(call)` validates arguments and invokes a read-only tool without
+recording tool rows, a call, a claim, a result, telemetry or reply bundles. It
+returns the same answer and transient result shape as a recorded call, including
+refusals; `runner.call(call)` retains recorded execution for stored work,
+including deferred reads.
+
+```ts
+import { graph, mint } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { answerOf, callDoc, runner, toolDoc, toolEid } from '@yaks/tools'
+import { equal } from '@yaks/testing'
+
+let vocab = loadVocab([kernelDoc, callDoc, toolDoc], [kernelKeywords])
+let g = graph({ vocab, storage: ram(vocab) })
+let r = runner(g, {
+  tools: [{
+    name: 'example_read',
+    description: 'Read without recording',
+    readOnly: true,
+    run: (call) => [{
+      entity: { eid: '$said' },
+      content: { body: 'read' },
+      output: { source: call.entity.eid },
+    }],
+  }],
+})
+let id = mint()
+let answer = await r.read({
+  entity: { eid: id },
+  call: { to: toolEid('example_read'), args: {} },
+})
+equal(answerOf(answer, id)[0].content, { body: 'read' })
+equal(await g.get([id]), [])
+```

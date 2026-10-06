@@ -171,7 +171,7 @@ let serving = (host: { handler?: Handler }): Handler => {
 // Every role the config's graph has: what a test here assembles, unless it is
 // about which roles a process serves.
 let compose = (config: Config, load?: Load) =>
-  composing(config, every(config), load)
+  composing(config, every(config), load, { install: true })
 
 let write = (path: string, body: unknown) =>
   Deno.writeTextFileSync(path, JSON.stringify(body))

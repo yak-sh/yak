@@ -65,7 +65,6 @@ import { context, scope } from '@yaks/trace'
 import type { Query } from './read.ts'
 import {
   analyzed,
-  atOnce,
   FIT,
   fit,
   grown,
@@ -246,9 +245,9 @@ export type Opts = BindOpts & {
   /** A single-owner host's readiness check, called on the first operation.
    * True asserts that this vocabulary and its derived schema, metadata and
    * archetypes already stand; false asks this adapter to install them. The
-   * host must bind a new store when its schema changes. File drivers ignore
-   * this assertion: other connections can alter their schema. Explicit
-   * `install()` always validates, regardless of this check. */
+   * host must bind a new store when its schema changes. File drivers never
+   * install on an operation: their schema belongs to the explicit installer.
+   * Explicit `install()` always validates, regardless of this check. */
   schemaReady?: () => boolean
   /** Give new spines a human-readable number. Opt-IN: left out, an entity is
    * its eid and nothing else, which is what a store whose entities nobody ever
@@ -410,14 +409,9 @@ export let storage = (
       settle,
     }
   }
-  // The file's schema version as this store last looked, and how its own
-  // objects stood then, all of them in place (physical.ts `shape`).
-  let ready = false, version: unknown, own: string | undefined
-  let changed = () =>
-    driver.query({ t: 'pragma', name: 'schema_version' })[0]?.schema_version
-  // Both, read in one snapshot.
-  let look = (made: string[]) =>
-    unit(driver, () => [changed(), shape(driver, made)] as const, 'read')
+  // File schema belongs to an explicit installer, never to an operation.
+  // In-memory stores are private scratch values and may prepare themselves.
+  let ready = false
   let install = () => {
     let { print, made } = plan(vocab, base.derived)
     let mark = (strays: string[]) =>
@@ -475,46 +469,12 @@ export let storage = (
       }
     }
     analyzed(driver)
-    if (driver.file) [version, own] = look(made)
     ready = true
   }
-  // Another connection changed the schema after this store installed: a peer
-  // installing its own vocabulary (code that landed while this process ran,
-  // or code it outlived), or now and then an installer that dropped something
-  // this vocabulary made. Installing again would undo the peer's install, and
-  // the peer's next read would undo this one: two vocabularies on one file
-  // would take turns at the write lock on every read of every process, for as
-  // long as both ran. So a store mends instead. Where one of its own objects
-  // moved, it raises what is missing (tables, then columns, then the rest) and
-  // drops, rebuilds and re-marks nothing; a change that moved none of them
-  // costs one read. A mend never waits on another writer: the read that asked
-  // goes on, and the next read mends.
-  let mend = () => {
-    let { raised, made } = plan(vocab, base.derived)
-    let [seen, now] = look(made)
-    if (now != own) {
-      let mended = atOnce(driver, () =>
-        unit(driver, () => {
-          let table = (s: Make) => s.t == 'create table'
-          for (let stmt of raised.filter(table)) driver.query(stmt)
-          for (let stmt of grown(vocab, standing(driver, vocab))) {
-            driver.query(stmt)
-          }
-          for (let stmt of raised) if (!table(stmt)) driver.query(stmt)
-          return [changed(), shape(driver, made)] as const
-        }))
-      if (!mended) return
-      ;[seen, now] = mended
-    }
-    ;[version, own] = [seen, now]
-  }
   let ensure = () => {
-    if (!ready) {
-      // A single owner can establish readiness through its persisted schema
-      // stamp. File stores must inspect: an assertion cannot exclude peers.
-      if (!driver.file && base.schemaReady?.()) ready = true
-      else install()
-    } else if (driver.file && version != changed()) mend()
+    if (driver.file || ready) return
+    if (base.schemaReady?.()) ready = true
+    else install()
   }
   return {
     worn: worn(vocab, base.derived),

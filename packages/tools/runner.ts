@@ -216,6 +216,8 @@ export type Runner = {
   /** invoke a tool: the call in, the answer's bundles out. The call is
    * written claimed and runs here; an `$alias` eid is given a fresh one. */
   call: (asked: Bundle) => Promise<Bundle[]>
+  /** Run a read-only tool without recording a call, claim, result or reply. */
+  read: (asked: Bundle) => Promise<Bundle[]>
   /** run one call that is already in the graph: its answer if it has one, the
    * same promise if it is in flight here, nothing if a live process holds it,
    * and {@link UnfinishedCall} if it was claimed anonymously and never
@@ -690,6 +692,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     call: Bundle,
     tool: NamedTool,
     direct = false,
+    transient = false,
   ): Promise<Bundle[]> => {
     let id = call.entity.eid
     let c = call.call as Comp
@@ -714,7 +717,9 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         : status(error) < 500
         ? (error as Error).name
         : undefined
-      if (code == undefined) await opts.report?.(error, call, tool.name)
+      if (code == undefined && !transient) {
+        await opts.report?.(error, call, tool.name)
+      }
       return [{
         entity: { eid: '$fault' },
         content: { body: String(error) },
@@ -740,6 +745,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         ...ending(call, started, state, made),
         ...code ? [{ entity: call.entity, interrupted: { code } }] : [],
       ]
+      if (transient) return [...made, ...ending(call, started, state, made)]
       let landed = await persist(
         () => g.apply(bundles),
         (e) => opts.report?.(e, call, tool.name),
@@ -785,7 +791,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     } finally {
       held.delete(id)
     }
-    if (!direct || !opts.reply) return answered
+    if (transient || !direct || !opts.reply) return answered
     try {
       return [
         ...answered,
@@ -897,9 +903,15 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       let batches = new Set(asked.map((t) => stood.get(t.name)!))
       return Promise.all(batches).then((all) => all.flat())
     },
-    // The call is written first, because it is the record: what was asked
-    // stands whether or not an answer ever does. It is written claimed, and
-    // the tool runs here, in this process, for this caller.
+    // A direct read has no stored lifecycle and owes no write reply.
+    read: async (asked) => {
+      let tool = toolOf(asked)
+      if (!tool?.readOnly) {
+        throw new CallError('read', 'a read needs a read-only tool')
+      }
+      return await execute(asked, tool, false, true)
+    },
+    // Recorded work is written claimed before the tool runs.
     call: async (asked) => {
       if (!asked.call) throw new CallError('call', 'a call needs a call')
       return await born(asked)

@@ -1,5 +1,5 @@
 // Where the vectors are kept and read: the `graph` export
-// (`@yaks/embedding/graph`) — the vector table created through the server's own
+// (`@yaks/embedding/graph`) — the vector table installed through the host's own
 // database connection, the `.near` compiler the read path consults, and the
 // reply a tool call that created something is answered with (./neighbours.ts).
 // "The server" here means whichever process opened the graph and loaded this
@@ -12,6 +12,7 @@
 // plugin can ask for a neighbourhood, and one that did not gets the compiler's
 // own refusal. Nobody wires it up by hand.
 //
+// The installer prepares the tables; composition only binds readers.
 // This package declares no component. No client ever writes a vector: it is
 // derived from text another package's vocabulary declares, it is never sent to
 // a client, and no patch creates one — which is why the table is created in SQL
@@ -30,15 +31,17 @@ import { type Options, ready, spaceOf } from './options.ts'
 import { type Hit, meaning as search, type MeaningOpts } from './search.ts'
 import { type Host, neighbours } from './neighbours.ts'
 
-/** The vector table and its dirty flag, in the server's own database. It
+/** Install the vector table and its dirty flag in the host's database. It
  * contributes no rule to `apply()`: nothing a client writes is a vector, and
  * what keeps the vectors in step with the text is the sweep (`./service`), off
  * the write path. */
-export let plugins = (host: { sql: Driver }): Plugin[] => {
+export let install = (host: { sql: Driver }): void => {
   rekey(host.sql)
   for (let statement of schema()) host.sql.query(statement)
-  return []
 }
+
+/** Binding the index does not create or migrate its tables. */
+export let plugins = (): Plugin[] => []
 
 /** The `.near` and `.order=similar` compiler, over the vectors this server
  * stores. One extension serves every query: it is told when a new one begins

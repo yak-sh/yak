@@ -43,7 +43,9 @@ test(
       }),
     )
     let config = read(`${dir}/yak.json`)
-    let host = await compose(config, ['graph', 'web'])
+    let host = await compose(config, ['graph', 'web'], undefined, {
+      install: true,
+    })
     // The config named the package that hosts routes, so there is one, and
     // the verb that serves them.
     assert(host.handler, 'a config naming @yaks/api composed no handler')

@@ -83,7 +83,12 @@ import {
   vanished,
 } from '@yaks/process'
 import type { Backings, Derived, Driver, Extension } from '@yaks/sql'
-import { migrations, storage, type Store } from '@yaks/sqlite'
+import {
+  installMigrations,
+  migrations,
+  storage,
+  type Store,
+} from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
 // Types only. A route and a request handler are @yaks/api's words, and a host
 // names the shape of what it passes through without importing a line of HTTP:
@@ -204,8 +209,8 @@ export type Host = {
    * Absent where no plugin offers any. */
   reply?: Reply
   /** the one tool runner over this graph: what writes a `call` row, runs the
-   * function and writes the result back, for a command line and an HTTP
-   * request alike. */
+   * function and writes the result back for recorded work. Direct read-only
+   * requests validate and answer without recording bookkeeping. */
   runner: Runner
   /** The work this process does that nobody asked for: the effect pool where
    * it serves `effects` (@yaks/effects `work` — any number of processes work
@@ -319,8 +324,8 @@ export type VocabFacet = {
 }
 
 /** `<plugin>/graph` — what a write means, what a query may ask for, and who
- * is writing. `plugins` runs while the host is being assembled and may create
- * tables of its own through `host.sql`; `extend` contributes the clause
+ * is writing. `install` prepares its tables only during explicit installation;
+ * `plugins` binds hooks without changing storage. `extend` contributes the clause
  * compilers every read path consults (@yaks/sql `Extension`), which is how a
  * package holding an index of its own — a text search, a vector, a link table
  * — can answer a clause the compiler would otherwise reject.
@@ -334,6 +339,8 @@ export type VocabFacet = {
  * graph. It is handed the host with nothing open on it yet — keep the
  * reference, do not call it. At most one plugin may export it. */
 export type GraphFacet = {
+  /** Schema and migrations, run only by the explicit graph installer. */
+  install?: (host: Host, options: Options) => void
   plugins?: (host: Host, options: Options) => Plugin[]
   /** Bundles owed to a caller beside the answer to a direct tool call. */
   reply?: (host: Host, options: Options) => Reply
@@ -546,6 +553,10 @@ export type Served = Host & {
 
 /** How a host is composed, beyond its roles. */
 export type ComposeOpts = {
+  /** Create or upgrade schema. Ordinary file-backed hosts only bind it. */
+  install?: boolean
+  /** Open SQLite read-only and record no process or tool-call bookkeeping. */
+  readOnly?: boolean
   /** the thread running the duties this host hands off */
   thread?: Thread
   /** the graph read door a web role uses while its own graph handles writes */
@@ -866,9 +877,9 @@ let composed = async (
   }
   let path = dbOf(config)
   let report = reporter(
-    config,
+    opts.readOnly ? {} : config,
     { by: selfEid(), via: selfEid() },
-    config.tracker ? await revision() : undefined,
+    config.tracker && !opts.readOnly ? await revision() : undefined,
   )
   // Where this graph's secrets are kept (./vault.ts), and each secret an
   // option names read once now, so the option has it the first time a factory
@@ -938,11 +949,18 @@ let composed = async (
   observed.declarations(docs, vocab)
 
   part?.('sqlite')
-  let sql = open(path)
+  let installing = opts.install ?? path == ':memory:'
+  if (installing && opts.readOnly) {
+    throw new Error('a reader cannot install a graph')
+  }
+  let sql = open(path, { readOnly: opts.readOnly })
   part?.('migrations')
   try {
+    if (installing) {
+      installMigrations(sql)
+      for (let statement of blobSchema()) sql.query(statement)
+    }
     migrations(sql).ready()
-    for (let statement of blobSchema()) sql.query(statement)
     part?.('host')
     let chosen = plugins.find(([name]) => name == '@yaks/blob')?.[1].store as
       | Backend
@@ -1069,7 +1087,7 @@ let composed = async (
       end: async (holder, why) => {
         // A thread that failed before it wrote itself in holds nothing.
         if (!self || !g || !(await g.get([holder])).length) return
-        await calls?.interrupt(why, holder)
+        if (!opts.readOnly) await calls?.interrupt(why, holder)
         await g.apply([
           ...await released(g, holder),
           { entity: { eid: holder }, [EXIT]: {} },
@@ -1110,7 +1128,10 @@ let composed = async (
       adopt: config.adopt ?? false,
     })
     part?.('install')
-    store.install()
+    if (installing) {
+      store.install()
+      for (let [r, options] of graphs) r.install?.(host, options)
+    }
     part?.('effects')
 
     // The registry, in every process. A process serving `effects` owes runs
@@ -1188,14 +1209,14 @@ let composed = async (
       fx.handle(code)
       observed.effects(by, true)
     }
-    // After every table exists, the plugins' own included: a full-text index is
+    // Only the installer adopts FTS, after every table exists: a full-text index is
     // built over the tables it reads, and a property the graph stores under a
     // content address is read through the plugin's table — so the index is
     // created once the plugins have installed theirs. `adopt` brings the indexes
     // into line with what the vocabulary declares and rebuilds one that
-    // drifted, and writes nothing on a start where nothing changed.
+    // drifted. Its health counts and any rebuild never belong to opening.
     part?.('fts')
-    if (text.length) adopt(sql, text, derived)
+    if (installing && text.length) adopt(sql, text, derived)
     // Each index owns its read. The search tool brings their ranked answers
     // together, then reads only the entities that will be returned.
     part?.('search')
@@ -1310,7 +1331,7 @@ let composed = async (
       // the machine that received it.
       process: started({ roles: [...roles] })[PROCESS] as Comp,
       report: (error, call, tool) =>
-        report(error, {
+        opts.readOnly ? console.error(error) : report(error, {
           actor: call.$actor ?? self ?? undefined,
           during: { entity: call.entity.eid, kind: 'call', process: host.me },
           tags: { tool },
@@ -1412,7 +1433,7 @@ let composed = async (
     // process starting owes is owed when it starts working the effects
     // (@yaks/effects `start`), not here.
     part?.('process')
-    if (self && opts.process !== false) {
+    if (self && opts.process !== false && !opts.readOnly) {
       await g.apply([started({ roles: [...roles] })])
     }
     return {
@@ -1439,14 +1460,14 @@ let composed = async (
       stop: () => {
         stopping.abort()
         dutiesHost.stop()
-        void drained()
+        if (!opts.readOnly) void drained()
       },
       close: async (code?: number) => {
         stopping.abort()
         dutiesHost.stop()
         await opts.thread?.close().catch(lose)
         await ending
-        await drained()
+        if (!opts.readOnly) await drained()
         await dutiesHost.close()
         let shut = () => {
           try {
@@ -1457,12 +1478,14 @@ let composed = async (
         // process. Ended as interrupted, rather than left claimed for a sweep
         // to run again in a process nobody asked — a server, a tail, a land in
         // somebody else's checkout.
-        await calls?.interrupt(
-          `interrupted: this process ended${
-            code == null ? '' : ` with code ${code}`
-          } before the tool returned`,
-        ).catch((e) => console.error('interrupting its calls failed —', e))
-        if (!self || opts.process === false) return shut()
+        if (!opts.readOnly) {
+          await calls?.interrupt(
+            `interrupted: this process ended${
+              code == null ? '' : ` with code ${code}`
+            } before the tool returned`,
+          ).catch((e) => console.error('interrupting its calls failed —', e))
+        }
+        if (!self || opts.process === false || opts.readOnly) return shut()
         try {
           await g!.apply([...await released(g!, selfEid()), ended(code)])
         } catch { /* the file is going either way */ }

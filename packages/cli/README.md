@@ -208,16 +208,16 @@ contributes nothing to that process.
 }
 ```
 
-| Subpath     | Role       | Expected exports                                                                                                   |
-| ----------- | ---------- | ------------------------------------------------------------------------------------------------------------------ |
-| `./vocab`   | `graph`    | `docs?`, `keywords?`, `derived?` and `backed?` declarations, and `description?` from deno.json                     |
-| `./graph`   | `graph`    | `plugins?: (host, options) => Plugin[]`, `extend?`, `reply?`, `meaning?`, `feed?`, and at most one `authenticate?` |
-| `./tools`   | `graph`    | `runs?: (host, options) => Runs`, keyed by declared tool name                                                      |
-| `./cli`     | `yak`      | `commands?: CliCommand[]`, direct terminal controls with a composed host                                           |
-| `./effects` | `effects`  | `effects?: (host, options) => Handlers`, keyed by declared effect name                                             |
-| `./routes`  | `web`      | `routes?: (host, options) => Route[]`, `filter?`, and at most one `handler?`                                       |
-| `./service` | its plugin | `service?: (host, options, signal)` for a duty                                                                     |
-| `.`         |            | Public types and library functions; not loaded by `compose`                                                        |
+| Subpath     | Role       | Expected exports                                                                                                               |
+| ----------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `./vocab`   | `graph`    | `docs?`, `keywords?`, `derived?` and `backed?` declarations, and `description?` from deno.json                                 |
+| `./graph`   | `graph`    | `install?`, `plugins?: (host, options) => Plugin[]`, `extend?`, `reply?`, `meaning?`, `feed?`, and at most one `authenticate?` |
+| `./tools`   | `graph`    | `runs?: (host, options) => Runs`, keyed by declared tool name                                                                  |
+| `./cli`     | `yak`      | `commands?: CliCommand[]`, direct terminal controls with a composed host                                                       |
+| `./effects` | `effects`  | `effects?: (host, options) => Handlers`, keyed by declared effect name                                                         |
+| `./routes`  | `web`      | `routes?: (host, options) => Route[]`, `filter?`, and at most one `handler?`                                                   |
+| `./service` | its plugin | `service?: (host, options, signal)` for a duty                                                                                 |
+| `.`         |            | Public types and library functions; not loaded by `compose`                                                                    |
 
 The web UI separately imports `./vocab` and `./views`, and `yak` imports
 `./views` to show a tool's answer. Those modules must work in a browser and must
@@ -302,9 +302,9 @@ lease instead.
    process serves `graph`.
 2. Combines vocabulary documents and keywords, rejecting duplicate component
    declarations.
-3. Opens SQLite, runs migrations, and builds storage with derived columns, the
-   backings of computed components, query extensions, optional entity numbers,
-   and full-text indexes for fields declared with `search: true`.
+3. Opens the installed SQLite graph, checks migration control, and binds storage
+   with derived columns, backings of computed components, query extensions,
+   optional entity numbers, and the installed full-text indexes.
 4. Builds the graph from plugins and the effect registry. Every process writes
    down the runs its commits owe, whatever roles it serves.
 5. Joins tool declarations to their `runs` implementations; a declared tool
@@ -315,7 +315,35 @@ lease instead.
    runner's two effects for calls another process wrote.
 6. Serving `web`, asks the plugin that hosts routes, if the config listed one,
    for the one handler this host answers with.
-7. Creates the current process entity after registrations are ready.
+7. Creates the current process entity after registrations are ready, except for
+   a read-only host (`readOnly: true`) or an installer (`process: false`).
+
+A **graph installer** prepares the schema and indexes explicitly. `yak init`
+uses it for a fresh graph. After changing the configured plugins or upgrading
+code that changes storage, run it as the operator before opening the graph:
+
+```sh
+yak upgrade --config /path/to/yak.json
+```
+
+The installer creates migration control and blob storage, installs component
+schema and archetypes, calls each graph facet's `install(host, options)`, and
+adopts full-text indexes. Refitting tables, backfilling data, counting index
+health and updating planner statistics belong to that operation, never to an
+ordinary command or service opening its graph. Library hosts invoke it with
+`compose(config, ['graph'], load, { install: true, process: false })`; in-memory
+scratch hosts install automatically. No service is started by installation.
+Coordinate an upgrade with the processes using that file: stop them before
+schema changes and start them with the matching code afterwards. An ordinary
+read never repairs a schema another process changed.
+
+A local read-only command opens SQLite with `readOnly: true`, records no
+process, tool, call, claim or result, and invokes no write reply. Failed reads
+return fault bundles without persisting them or writing telemetry to the graph.
+Its connection exposes no native-extension loader; semantic ranking uses the
+exact fallback rather than loading an extension that writes metadata. SQLite
+still coordinates concurrent WAL readers through its shared-memory index; this
+is not a database or WAL row write.
 
 It returns a `Served` object: the `Host` fields — which include `roles`,
 `tools`, `routes`, `handler`, `runner`, and `duties` — plus `fx` and `close`.

@@ -16,11 +16,11 @@
 // else its tool declares it needs — `serve` answers HTTP, so its process
 // serves `web`.
 //
-// A command line runs a tool exactly as the HTTP server does: it writes a
-// `call` row, the tool runner executes it, and what came back is shown through
-// the plugins' views (./answer.ts). So the record of a tool a person typed and
-// a tool an agent requested is identical, and the rules, the post-commit
-// effects and the attribution are one set for both.
+// A command line runs a tool through the tool runner. A read-only command
+// opens SQLite read-only and records nothing; a writing command records its
+// call and result. What came back is shown through
+// the plugins' views (./answer.ts). Recorded work uses the same rules,
+// post-commit effects and attribution whichever door asked for it.
 //
 // The effect pool and the plugins' services are never this thread's. A host
 // that stays up explicitly starts them through `host.duties()` (@yaks/threads),
@@ -102,6 +102,7 @@ let open = async (
   path: string,
   roles: Role[],
   duties: boolean,
+  readOnly = false,
 ): Promise<Served> => {
   let config = read(path)
   let reader = roles.includes('web') && dbOf(config) != ':memory:'
@@ -118,10 +119,11 @@ let open = async (
     }
     return host
   }
-  if (!duties) {
+  if (!duties || readOnly) {
     return withReader(
       await compose({ ...config, duties: false }, roles, facet, {
         reader,
+        readOnly,
       }),
     )
   }
@@ -160,11 +162,21 @@ export let opened = (
   path: string,
   roles: Role[],
   duties = true,
+  readOnly = false,
 ): Promise<Served> => {
-  let key = JSON.stringify([path, roles])
+  let key = JSON.stringify([path, roles, readOnly])
   let host = hosts.get(key)
-  if (!host) hosts.set(key, host = open(path, roles, duties))
+  if (!host) hosts.set(key, host = open(path, roles, duties, readOnly))
   return host
+}
+
+/** Install or upgrade the graph a config names. No services are started. */
+export let install = async (path: string): Promise<void> => {
+  let host = await compose(read(path), ['graph'], facet, {
+    install: true,
+    process: false,
+  })
+  await host.close()
 }
 
 /** The independent duty process. Its graph is registered with the same wind
@@ -310,14 +322,16 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
         c.config!,
         rolesOf(declared, !!said.vocab.comp(EFFECT)),
         c.duties,
+        !!declared.readOnly,
       )
       observe(host)
       // Write the `tool` rows a call's `to` points at first: a call naming an
       // entity nothing created would be a dangling reference. Done once per
       // process, by whichever caller gets there first (@yaks/tools `ensure`).
-      await host.runner.ensure()
+      if (!declared.readOnly) await host.runner.ensure([declared.name])
       let id = mint()
-      let landed = await host.runner.call({
+      let invoke = declared.readOnly ? host.runner.read : host.runner.call
+      let landed = await invoke({
         entity: { eid: id },
         call: { to: toolEid(declared.name), args: args ?? {} },
         ...await signer(host, c.via),
@@ -364,6 +378,7 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
         context.config!,
         rolesOf(declared, !!said.vocab.comp(EFFECT)),
         context.duties,
+        !!declared.readOnly,
       )
       observe(host)
       return await run(args, host, context)

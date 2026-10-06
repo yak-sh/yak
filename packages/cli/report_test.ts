@@ -26,7 +26,9 @@ export let trackerConfig = (dir: string) => ({
 test('a composed tracker drains a separate spool, preserving error attribution', async () => {
   let dir = await Deno.makeTempDir()
   let config = trackerConfig(dir)
-  let host = await compose(config, ['graph', '@yaks/tracker'])
+  let host = await compose(config, ['graph', '@yaks/tracker'], undefined, {
+    install: true,
+  })
   try {
     let report = reporter(
       config,

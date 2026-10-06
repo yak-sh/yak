@@ -734,9 +734,8 @@ test('a store over a file installs the sizes its planner reads it by', () => {
       eid: 'c',
     }))
     d.query(insert('product', { entity: 1, sku: 'x' }))
-    // A second install is what a later boot runs: the sizes are recorded
-    // there, so a query over `product` is planned as the one row it is rather
-    // than as a walk of the spine.
+    // Explicit installation records sizes for the planner; a read never
+    // analyzes tables to discover them.
     storage(d, shop).install()
     // The first word of a `stat` is the table's row count, whether the row is
     // an index's or the table's own.
@@ -761,7 +760,7 @@ test('a store that is not a file is left unmeasured', () => {
 })
 
 // A long-lived new worker and an older CLI open the same file. The CLI must
-// neither delete the worker's empty new column nor need an explicit install.
+// neither delete the worker's empty new column nor install during a read.
 test('opening an older vocabulary preserves newer empty columns', () => {
   let dir = Deno.makeTempDirSync({ prefix: 'yak-schema-peer-' })
   let old = open(`${dir}/graph.db`), newer = open(`${dir}/graph.db`)
@@ -769,8 +768,10 @@ test('opening an older vocabulary preserves newer empty columns', () => {
     let prior = pets(['name'], [])
     let next = pets(['name', 'sound'], [])
     let a = storage(old, prior)
+    a.install()
     a.tx((tx) => tx.patch([{ entity: { eid: 'rex' }, pet: { name: 'Rex' } }]))
     let b = storage(newer, next)
+    b.install()
     assertEquals(b.get(['rex'])[0].pet, { name: 'Rex', sound: null })
     storage(old, prior).install()
     assertEquals(b.get(['rex'])[0].pet, { name: 'Rex', sound: null })
@@ -836,6 +837,8 @@ test('two vocabularies open on one file leave its schema at rest', () => {
     a.query({ t: 'pragma', name: 'schema_version' })[0].schema_version
   try {
     let older = storage(a, words()), newer = storage(b, words('refusal'))
+    older.install()
+    newer.install()
     older.get(['x'])
     newer.get(['x'])
     older.get(['x'])
@@ -854,21 +857,23 @@ test('two vocabularies open on one file leave its schema at rest', () => {
   }
 })
 
-test('a read goes on while a writer holds the lock its mend needs', () => {
-  let dir = Deno.makeTempDirSync({ prefix: 'yak-schema-mend-' })
+test('a read never repairs an index, even after a writer releases its lock', () => {
+  let dir = Deno.makeTempDirSync({ prefix: 'yak-schema-read-' })
   let a = open(`${dir}/graph.db`), b = open(`${dir}/graph.db`)
   let sku = () => objects(a, { type: 'index', name: 'product_sku' }).length
   try {
     let s = storage(a, shop)
+    s.install()
+    a.query({ t: 'pragma', name: 'busy_timeout', value: 0 })
     s.get(['x'])
     b.query({ t: 'drop', kind: 'index', name: 'product_sku' })
     b.query({ t: 'begin', mode: 'immediate' })
-    let started = Date.now()
     assertEquals(s.get(['x']), [])
-    assert(Date.now() - started < 1000)
     assertEquals(sku(), 0)
     b.query({ t: 'rollback' })
     s.get(['x'])
+    assertEquals(sku(), 0)
+    s.install()
     assertEquals(sku(), 1)
   } finally {
     a.close()
@@ -877,13 +882,17 @@ test('a read goes on while a writer holds the lock its mend needs', () => {
   }
 })
 
-test('an open store repairs a column removed by a historical installer', () => {
+test('explicit installation repairs a column; reading does not', () => {
   let dir = Deno.makeTempDirSync({ prefix: 'yak-schema-repair-' })
   let a = open(`${dir}/graph.db`), b = open(`${dir}/graph.db`)
   try {
     let s = storage(a, pets(['name', 'sound'], []))
+    s.install()
     s.tx((tx) => tx.patch([{ entity: { eid: 'rex' }, pet: { name: 'Rex' } }]))
     b.query({ t: 'alter table', table: 'pet', drop: 'sound' })
+    assertThrows(() => s.get(['rex']), Error, 'no such column')
+    assertEquals(cols(a, 'pet').includes('sound'), false)
+    s.install()
     assertEquals(s.get(['rex'])[0].pet, { name: 'Rex', sound: null })
   } finally {
     a.close()

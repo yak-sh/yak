@@ -10,10 +10,30 @@
 // `Driver`, and only an application that wants an in-process database needs
 // this.
 
-import './sqlitepath.ts'
+import { sqlitePath } from './sqlitepath.ts'
 import { Database } from '@db/sqlite'
 import { type Driver, render } from '@yaks/sql'
 import { driver } from './native.ts'
+
+// SQLite attempts a last-connection checkpoint even for a read-only handle.
+// Disable it before the first schema access: a reader must never claim the
+// checkpoint/write locks on close. This C option has no SQL pragma equivalent.
+let config: ReturnType<typeof bind> | undefined
+let bind = () =>
+  Deno.dlopen(sqlitePath, {
+    sqlite3_db_config: {
+      parameters: ['pointer', 'i32', 'i32', 'pointer'],
+      result: 'i32',
+    },
+  })
+let noCheckpoint = (db: Database) => {
+  config ??= bind()
+  let rc = config.symbols.sqlite3_db_config(db.unsafeHandle, 1006, 1, null)
+  if (rc) {
+    db.close()
+    throw new Error(`SQLite cannot disable reader checkpoint-on-close (${rc})`)
+  }
+}
 
 /** A database this process opened: its {@link Driver}, and the way to close
  * it. */
@@ -22,7 +42,9 @@ export type Opened = Driver & { close: () => void }
 /**
  * Open (or create) the database at `path` — a file, whose directory is made
  * when missing, or `:memory:` — as a {@link Driver} to bind `storage()` to.
- * This is the one place a connection's settings are made.
+ * This is the one place a connection's settings are made. `readOnly: true`
+ * requires an existing file, changes no journal settings, and exposes no
+ * extension loader (loading an extension can write metadata).
  *
  * Every connection runs with foreign keys on. A file is one other processes
  * may have open too, so it also runs in WAL mode, with WAL's crash-safe pairing
@@ -40,12 +62,16 @@ export type Opened = Driver & { close: () => void }
  * sql.close()
  * ```
  */
-export let open = (path: string): Opened => {
-  if (path != ':memory:') {
+export let open = (path: string, opts: { readOnly?: boolean } = {}): Opened => {
+  if (path != ':memory:' && !opts.readOnly) {
     let dir = path.slice(0, path.lastIndexOf('/'))
     if (dir) Deno.mkdirSync(dir, { recursive: true })
   }
-  let db = new Database(path)
+  let db = new Database(path, {
+    readonly: opts.readOnly,
+    create: !opts.readOnly,
+  })
+  if (opts.readOnly) noCheckpoint(db)
   // The busy timeout before anything else: the driver reads the schema as it
   // is built, and a file another connection holds locked (its last checkpoint,
   // as it closes, or a large atomic batch) is waited for, never refused while
@@ -57,19 +83,21 @@ export let open = (path: string): Opened => {
   let set = (name: string, value: string | number) =>
     d.query({ t: 'pragma', name, value })
   set('foreign_keys', 'on')
-  if (path != ':memory:') {
+  if (path != ':memory:' && !opts.readOnly) {
     set('journal_mode', 'wal')
     set('synchronous', 'normal')
     set('journal_size_limit', 64 * 1024 * 1024)
   }
   return Object.assign(d, {
-    extension: (file: string) => {
-      db.enableLoadExtension = true
-      try {
-        db.loadExtension(file)
-      } finally {
-        db.enableLoadExtension = false
-      }
+    ...opts.readOnly ? {} : {
+      extension: (file: string) => {
+        db.enableLoadExtension = true
+        try {
+          db.loadExtension(file)
+        } finally {
+          db.enableLoadExtension = false
+        }
+      },
     },
     close: () => db.close(),
   })

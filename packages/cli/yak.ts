@@ -161,8 +161,9 @@ let init = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
     return 1
   }
   try {
-    let host = await (local ??= await import('./local.ts'))
-      .opened(path, ['graph'], false)
+    local ??= await import('./local.ts')
+    await local.install(path)
+    let host = await local.opened(path, ['graph'], false)
     await host.graph.apply([
       { entity: { eid: person }, person: {}, doc: { title: name } },
     ])
@@ -181,6 +182,18 @@ let init = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
  * from either list. */
 export let own: Command[] = [
   helpTool(YAK),
+  {
+    name: 'upgrade',
+    description: 'Install or upgrade the graph schema and indexes explicitly',
+    inputSchema: { type: 'object', properties: {} },
+    run: async (_args, c) => {
+      let path = c.config ?? ownConfig()
+      if (!path) throw new Usage('yak upgrade needs --config')
+      await (local ??= await import('./local.ts')).install(path)
+      c.out(`installed the graph at ${path}`)
+      return 0
+    },
+  },
   {
     name: 'work',
     description: 'Run the effects pool and plugin services without the web',

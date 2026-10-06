@@ -13,7 +13,7 @@ test('the web reader sees commits and closes after a refused query', async () =>
     file,
     JSON.stringify({ db: 'yak.db', plugins: ['@yaks/doc', '@yaks/process'] }),
   )
-  let host = await compose(read(file), ['graph'])
+  let host = await compose(read(file), ['graph'], undefined, { install: true })
   let reader = readThread(file)
   try {
     let processes = (await host.graph.read('.process')).length

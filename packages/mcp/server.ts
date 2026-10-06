@@ -467,8 +467,8 @@ export let server = (opts: Options): McpServer => {
         ...(actor ? { $actor: { ...actor } } : {}),
       }
       try {
-        await run.ensure([t.name])
-        let landed = await run.call(asked)
+        if (!t.readOnly) await run.ensure([t.name])
+        let landed = await (t.readOnly ? run.read(asked) : run.call(asked))
         out = said(t, answerOf(landed, id), faulted(landed, id))
       } catch (err) {
         // The runner answers a tool's own throw as a fault above; a throw that

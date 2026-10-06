@@ -2,7 +2,12 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { type CreateTable, insert, lit, scan } from '@yaks/sql'
 import { open, type Opened } from './db.ts'
-import { MigrationPending, migrations, watchMigrations } from './migration.ts'
+import {
+  installMigrations,
+  MigrationPending,
+  migrations,
+  watchMigrations,
+} from './migration.ts'
 import { objects } from './physical.ts'
 
 let raised = (name: string, col: string): CreateTable => ({
@@ -16,6 +21,7 @@ function fixture() {
   const databases: Opened[] = []
   const connect = () => {
     const db = open(path)
+    installMigrations(db)
     databases.push(db)
     return { db, control: migrations(db) }
   }

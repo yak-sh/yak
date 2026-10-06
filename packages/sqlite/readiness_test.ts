@@ -119,7 +119,7 @@ test('explicit install validates even when a host asserts schema readiness', () 
   )
 })
 
-test('file stores ignore single-owner readiness and mend external schema edits', () => {
+test('file operations never install or mend external schema edits', () => {
   let dir = Deno.makeTempDirSync({ prefix: 'yaks-readiness-' })
   let first = open(`${dir}/graph.sqlite`)
   let second = open(`${dir}/graph.sqlite`)
@@ -130,6 +130,7 @@ test('file stores ignore single-owner readiness and mend external schema edits',
       return true
     })
     let s = storage(first, shop, opts)
+    s.install()
     s.tx((tx) => tx.patch([{ entity: { eid: 'a' }, doc: { title: 'A' } }]))
     let drop = () => second.query({ t: 'drop', kind: 'table', name: 'shelf' })
     let exists = (d: Driver) =>
@@ -139,6 +140,8 @@ test('file stores ignore single-owner readiness and mend external schema edits',
     drop()
     assertEquals(exists(first), false)
     assertEquals(s.get(['a'], ['doc'])[0].doc, { title: 'A', body: null })
+    assertEquals(exists(first), false)
+    s.install()
     assertEquals(exists(first), true)
     drop()
     let reopened = storage(second, shop, opts)
@@ -146,6 +149,8 @@ test('file stores ignore single-owner readiness and mend external schema edits',
       title: 'A',
       body: null,
     })
+    assertEquals(exists(second), false)
+    reopened.install()
     assertEquals(exists(second), true)
     assertEquals(asked, 0)
   } finally {
