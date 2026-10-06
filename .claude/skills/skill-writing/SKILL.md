@@ -37,7 +37,7 @@ The owner, verbatim:
   attitude, the posture and orientation. we don't want to set policies to
   control behavior"
 
-## What a skill carries
+## Vibes, not policies
 
 The reader is a frontier model. It already knows how to optimize Preact, shape
 a schema or write a test. What it can't know is what we believe here, what
