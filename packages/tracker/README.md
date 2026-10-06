@@ -179,3 +179,29 @@ successful delivery's expiry. The
 [tracker Worker](../../workers/tracker/README.md) uses this with its
 platform-wide authority and durable metadata; no package creates a Worker or
 decides which space owns a capture.
+
+## Bug views
+
+`@yaks/tracker/views` contributes bug and occurrence readings through the host's
+shared renderer and inspector contracts. Open bugs are ranked by historical
+hits, not retained sample size. A bug page shows first/last occurrence, the
+affected contexts and commits among retained occurrences, the newest occurrence,
+and earlier occurrences. Full stacks, frames and breadcrumbs remain available
+behind disclosure controls.
+
+An occurrence links traces with the same recorded request identity. Without that
+identity, it asks for traces of the same store/process, scoped by app and space,
+within five minutes of the occurrence; that context is labeled as nearby, not a
+causal link. Traces are drawn by the host registry: their trees, metrics,
+flamegraphs and comparisons belong to
+[`@yaks/timing/views`](../timing/README.md#trace-views), not this package.
+
+For a box browser, configure this package and `@yaks/timing` beside the browser
+application and use this home query:
+
+```text
+.bug.status=open * .order=-bug.hits
+```
+
+Each bug offers a Traces link to `/?q=.trace`. Missing affected context or
+missing traces are stated; they are not inferred from a stack's text.
