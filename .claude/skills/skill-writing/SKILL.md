@@ -36,6 +36,9 @@ The owner, verbatim:
   principles. capture what tools we have available. and set the vibe and
   attitude, the posture and orientation. we don't want to set policies to
   control behavior"
+- "this actually reminds me of the design patterns book by Christopher
+  Alexander", and then "yes, let's lean in, both explicitly in skill-writing
+  and vibe-like in the others"
 
 ## Vibes, not policies
 
@@ -74,6 +77,31 @@ judgment around them rides on the why. When a sentence starts to sound like a
 sign on a fence, there's usually a reason underneath it that's worth saying
 instead. And skip what any good engineer already knows: generic advice buries
 the parts that are ours.
+
+## A pattern language
+
+Christopher Alexander's *A Pattern Language* is the model for how a skill reads.
+Each of his patterns sets a context, lets you feel the forces pulling against
+each other in it, and resolves them with a "Therefore:", a way of building you
+can carry into places he never saw. None of them is a rule. Each is a distilled
+sense of what makes a place alive, what he called the quality without a name,
+written for people who would build without him.
+
+A skill is one of these:
+
+- **Its context:** where the reader stands, and what this corner of the system
+  is like.
+- **Its forces:** what pulls against what here, the tensions that make the work
+  hard. This is where the principles live.
+- **Its therefore:** the posture that resolves those forces, and the tools that
+  make it easy.
+- **Its place in the language:** the larger skills it sits inside, and the
+  smaller ones that complete it, named where they meet. Every pattern of his
+  points up and down. Ours do it through pointers in the body and the
+  boundaries in the descriptions, which is why one idea has one home.
+
+Write it as prose that flows, not a form with those four headings. The shape
+should be felt, not filled in.
 
 ## Where knowledge lives
 
