@@ -72,10 +72,7 @@ test('entry registry specializes command and result faces', () => {
   assertEquals(resolve(ent(call), 'Entry.Full').Render, CommandFull)
   assertEquals(resolve(ent(answer), 'Entry.Summary').Render, ResultSummary)
   assertEquals(resolve(ent(answer), 'Entry.Full').Render, ResultFull)
-  assertEquals(
-    resolve(ent(answer), 'Entry.Inspect.Full').view,
-    'Entry.Inspect.Full',
-  )
+  assertEquals(resolve(ent(answer), 'Entry.Debug').view, 'Entry.Debug')
   cache.value = {}
 })
 
@@ -366,7 +363,7 @@ test('expanded entries offer only specifically rendered faces', () =>
     assertEquals(tabs.map((tab) => tab.getAttribute('aria-label')), [
       'Full',
       'JSON',
-      'Inspect.Full',
+      'Debug',
     ])
     assertEquals(root.querySelector('.Entry_Output')?.textContent, 'one\ntwo')
     assertEquals(
@@ -384,12 +381,12 @@ test('expanded entries offer only specifically rendered faces', () =>
       h(
         Ux,
         { host: ux },
-        h(resolve(result, 'Entry.Inspect.Full').Render, { e: result }),
+        h(resolve(result, 'Entry.Debug').Render, { e: result }),
       ),
       root,
     )
     assertEquals(
-      root.querySelector('[data-raw-properties]') != null,
+      root.querySelector('.Debug_Props') != null,
       true,
     )
   }))

@@ -51,6 +51,5 @@ for Inspect.
 ## Limits
 
 Inspect serves no page or terminal app, and owns no stack or URL. Browse
-integrates these views into its app. Its `Inspect.Full` view combines these
-readings with every raw property. The census asks the graph for archetype rows
-and counts, rather than running a count query for each component.
+integrates these views into its app. The census asks the graph for archetype
+rows and counts, rather than running a count query for each component.

@@ -135,7 +135,7 @@ export let inspectIo: Io = {
     `/${idOf(ent(eid))}?v=${
       ['_package', '_comp', '_prop'].some((n) => ent(eid)[n])
         ? 'Inspect.Page'
-        : 'Inspect.Full'
+        : 'Debug'
     }`,
   find: (q) => `/?q=${encodeURIComponent(q)}`,
   go: (href) => navigate(href),

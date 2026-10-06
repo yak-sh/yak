@@ -40,8 +40,8 @@ export let icons: Record<string, string> = {
   Session: 'bot',
   Markdown: 'hash',
   JSON: 'braces',
-  'Inspect.Full': 'scan-search',
   'Inspect.Page': 'table',
+  Debug: 'bug',
 }
 
 let { Tab, Badge } = ui.Tabs
@@ -88,7 +88,7 @@ export let pinStyle = (live: Signal<Pinned>) => {
 // drop. Tabs are native draggables: dropped on the canvas they spawn a new
 // card with that view (Canvas owns the drop); dragged to the desktop they
 // become a file when the view's renderer has a file form (the raw formats
-// nested under InspectFull use the same drag contract).
+// nested under Debug use the same drag contract).
 // The scroller (not the card) owns the padding, so the scrollbar rides the
 // card border and the padding scrolls away with the content.
 export let Card = (
@@ -105,7 +105,7 @@ export let Card = (
   // the entity streams in with the card, stays live, carries its edges (the
   // `.edges` rider), and is evicted when the last card on it closes.
   // Collection faces render the board header, not its incident history.
-  // Switching to Full/InspectFull acquires the ordinary route (and its edges).
+  // Switching to Full/Debug acquires the ordinary route (and its edges).
   let collection = p.view == 'Board' ||
     (p.view == 'List' && !!ent(p.target).board)
   useEntity(

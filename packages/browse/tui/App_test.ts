@@ -19,7 +19,7 @@ import { start } from '../terminal-route.ts'
 let eid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 test('terminal CLI routes ids, map and queries to Browse pages', () => {
   equal(start('', true), '/?map')
-  equal(start('T-3', true), '/T-3?v=Inspect.Full')
+  equal(start('T-3', true), '/T-3?v=Debug')
   equal(start('.task .count', true), '/?q=.task%20.count')
   equal(start('.doc.title~=Hello', true), '/?q=.doc.title~%3DHello')
 })

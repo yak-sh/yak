@@ -43,26 +43,6 @@
         }
       }
     },
-    "inspectFull": {
-      "component": true,
-      "type": "object",
-      "sync": "none",
-      "durable": "connection",
-      "description": "The full inspection\u2019s chosen file format and component picker in the page graph.",
-      "properties": {
-        "format": {
-          "type": "string",
-          "enum": [
-            "Inspect.Full",
-            "Markdown",
-            "JSON"
-          ]
-        },
-        "adding": {
-          "type": "boolean"
-        }
-      }
-    },
     "Sidebar": {
       "component": true,
       "type": "object",

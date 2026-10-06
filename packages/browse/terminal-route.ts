@@ -8,6 +8,6 @@ export let start = (what: string, inspect = false): string => {
     ? what
     : null
   return id
-    ? `/${encodeURIComponent(id)}${inspect ? '?v=Inspect.Full' : ''}`
+    ? `/${encodeURIComponent(id)}${inspect ? '?v=Debug' : ''}`
     : searchPath(what)
 }
