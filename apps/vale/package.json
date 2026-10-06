@@ -5,6 +5,7 @@
     "@yaks/draft": "platform",
     "@yaks/markdown": "platform",
     "@yaks/rtc": "platform",
+    "@yaks/tools": "platform",
     "@yaks/ux": "platform",
     "@yaks/vocab": "platform",
     "@preact/signals": "^2.9.0",
