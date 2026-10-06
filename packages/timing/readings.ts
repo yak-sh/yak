@@ -12,12 +12,14 @@ export let metrics = [
   'rows_read',
   'rows_written',
   'statements',
+  'repeats',
 ] as const
 export let labels: Record<string, string> = {
   elapsed: 'ms',
   rows_read: 'rows read',
   rows_written: 'rows written',
   statements: 'statements',
+  repeats: 'suppressed repeats',
 }
 export type Branch = { row: Bundle; children: Branch[]; orphan: boolean }
 /** Each stored span appears once, including missing-parent and cyclic fragments. */

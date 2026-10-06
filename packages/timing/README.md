@@ -262,12 +262,13 @@ request health. An absent candidate is stated, never substituted from another
 store or request kind.
 
 Metrics are inclusive: parents contain their descendants. Root measurements
-provide totals; child metrics are never added to their parents. Absent metrics
-are not zero. A Worker clock may report zero milliseconds, in which case the
-page recommends rows instead of inventing a time flamegraph. Row widths are
-inclusive counts laid out in span order, not a timing axis. Missing parents and
-cycles remain visible as fragments. Storage has no delivery-completion marker,
-so the page cannot guarantee a trace arrived in full.
+provide totals, including suppressed `repeats` when present; child metrics are
+never added to their parents. Absent metrics are not zero. A Worker clock may
+report zero milliseconds, in which case the page recommends rows instead of
+inventing a time flamegraph. Row widths are inclusive counts laid out in span
+order, not a timing axis. Missing parents and cycles remain visible as
+fragments. Storage has no delivery-completion marker, so the page cannot
+guarantee a trace arrived in full.
 
 ```ts
 import { inspectViews } from '@yaks/timing/views'

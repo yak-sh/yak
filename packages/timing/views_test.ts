@@ -50,6 +50,7 @@ test('root totals do not double-count inclusive children and missing measurement
     rows_read: 100,
     rows_written: 0,
     statements: 1,
+    repeats: undefined,
   })
   let missing = row('root')
   delete missing.rows_read
@@ -110,6 +111,7 @@ test('portable span readings expose each metric and flamegraph bars jump to exac
     when: (s: string) => s,
   } as Io
   let r = row('child', 'root')
+  r.repeats = { n: 7 }
   let html = renderToString(render(views, r, 'Timing.Span', vocab, io)!)
   for (
     let s of [
@@ -120,6 +122,7 @@ test('portable span readings expose each metric and flamegraph bars jump to exac
       '1 statements',
       '2 ms',
       'start +1 ms',
+      '7 suppressed repeats',
     ]
   ) ok(html.includes(s), s)
   let flame = renderToString(
