@@ -214,7 +214,11 @@ test('a screen the store compiles admits what its query selects, by archetype', 
     assertEquals(admitted, s.rows(q), q)
     let plan = driver.query({ t: 'explain query plan', of: within })
       .map((r) => String(r.detail)).join('\n')
-    assert(plan.includes('entity_archetype'), `${q}\n${plan}`)
+    assert(
+      plan.includes('entity_archetype') ||
+        (q != '.kind=doc' && !plan.includes('SCAN entity')),
+      `${q}\n${plan}`,
+    )
   }
 })
 

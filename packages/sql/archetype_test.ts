@@ -34,7 +34,7 @@ let ids = new Map([
 ])
 let archetypes = archetypeSet(cache, ids)
 
-test('archetype plans: facets/kinds use the spine, only values add joins', () => {
+test('archetype plans: positive facets drive their table while boolean kinds keep composition', () => {
   for (
     let [query, expected] of [
       ['.task', [12, 13]],
@@ -46,20 +46,34 @@ test('archetype plans: facets/kinds use the spine, only values add joins', () =>
   ) {
     let r = bind(parse(query), v, { archetypes })
     let sql = compile(parse(query), v, { archetypes })
-    assertEquals(r.joins, [], query)
-    assert(sql.sql.includes('"entity"."archetype" in ('), sql.sql)
+    assertEquals(
+      r.joins?.length ?? 0,
+      query.startsWith('.') && !query.startsWith('.kind') ? 1 : 0,
+      query,
+    )
+    assert(
+      query == '.task' || query == '.doc'
+        ? sql.sql.includes('cross join')
+        : sql.sql.includes('"entity"."archetype" in ('),
+      sql.sql,
+    )
     assertEquals(
       sql.params.map((p) => JSON.parse(String(p))),
-      [[...expected]],
+      query == '.task' || query == '.doc' ? [] : [[...expected]],
       query,
     )
   }
   let r = bind(parse('.task .doc !claim .doc.title=hello'), v, { archetypes })
-  assertEquals(r.joins?.map((j) => isRaw(j.src) && j.src.sql), ['"doc"'])
+  assertEquals(r.joins?.map((j) => isRaw(j.src) && j.src.sql), [
+    '"entity" not indexed',
+    '"doc" not indexed',
+  ])
   assertEquals(bind(parse('?doc'), v, { archetypes }).joins, [])
   let empty = archetypeSet(new Archetypes(), new Map())
   assertEquals(compile(parse('.doc'), v, { archetypes: empty }).params, [])
-  assert(compile(parse('.doc'), v, { archetypes: empty }).sql.includes('0'))
+  assert(
+    compile(parse('.doc'), v, { archetypes: empty }).sql.includes('from "doc"'),
+  )
 })
 
 test('archetype matching caches content, not a rolled-back id assignment', () => {
@@ -89,17 +103,16 @@ test('boolean presence trees retain their composition without component joins', 
 // bound kinds × archetypes parameters — 20,228 on the fleet graph, past V8's
 // spread and SQLite's variable ceiling (T-37437).
 test('an AND of facets binds one archetype list, not one per facet', () => {
-  let ids = (q: string): number[] =>
-    JSON.parse(String(compile(parse(q), v, { archetypes }).params[0] ?? '[]'))
   let sql = compile(parse('.task .doc !claim'), v, { archetypes })
   assertEquals(
     JSON.parse(String(sql.params[0])),
-    ids('.task').filter((x) =>
-      ids('.doc').includes(x) && ids('!claim').includes(x)
-    ),
+    [12],
   )
   assertEquals(sql.sql.split('"entity"."archetype" in (').length - 1, 1)
-  assertEquals(bind(parse('.task .doc !claim'), v, { archetypes }).joins, [])
+  assertEquals(
+    bind(parse('.task .doc !claim'), v, { archetypes }).joins?.length,
+    1,
+  )
   // A facet beside a value keeps the value's own join and its parameter.
   let mixed = compile(parse('.task !claim .doc.title=hello'), v, { archetypes })
   assertEquals(mixed.params, ['[12]', 'hello'])
@@ -145,7 +158,11 @@ test('a status filter on a ladder binds as a lookup on the archetype index', () 
   let archetypes = archetypeSet(cache, ids)
   let chosen = (q: string) => {
     let sql = compile(parse(q), v, { archetypes })
-    assertEquals(bind(parse(q), v, { archetypes }).joins, [], q)
+    assertEquals(
+      bind(parse(q), v, { archetypes }).joins?.length ?? 0,
+      q.startsWith('.doc ') ? 1 : 0,
+      q,
+    )
     assert(!sql.sql.includes('case'), sql.sql)
     return sql.params.flatMap((p) => JSON.parse(String(p))).sort()
   }

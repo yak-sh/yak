@@ -548,8 +548,13 @@ let cache = new Archetypes()
 let descriptor = cache.intern(['task'])
 let archetypes = archetypeSet(cache, new Map([[descriptor.eid, 7]]))
 let vocab = loadVocab({ $defs: { task: { component: true } } })
-equal(compile(parse('.task'), vocab, { archetypes }).params, ['[7]'])
+equal(compile(parse('.task'), vocab, { archetypes }).params, [])
+equal(compile(parse('!task'), vocab, { archetypes }).params, [])
 ```
+
+A mandatory positive presence test drives its stored component table directly,
+so catalog reads do not walk unrelated entity history. Other presence predicates
+retain their archetype composition.
 
 The resolver must describe a complete, current catalog. `undefined` declines;
 `[]` means nothing matches. Presence can then read `entity.archetype` instead of

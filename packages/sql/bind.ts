@@ -1599,6 +1599,27 @@ export let bound = (
       source(ctx, comp) == `"${comp}"` && ctx.d.table(comp) == `"${comp}"`
     ) ctx.present = comp
   }
+  if (
+    !ctx.present && !spine && !claims(ctx, 'pred') && ctx.d.owned &&
+    !find<Count>(cs, 'count') &&
+    !flattened(filters).some((c) =>
+      c.kind == 'pred' && c.path.join('.') == 'entity.eid' && !c.not
+    )
+  ) {
+    for (let c of flattened(filters)) {
+      if (
+        c.kind != 'pred' || c.not || c.where || c.path.length != 1 ||
+        opOf(c) != EXISTS
+      ) continue
+      let comp = c.path[0]
+      if (
+        comp == 'entity' || !vocab.comp(comp) || computed(vocab, comp) ||
+        source(ctx, comp) != `"${comp}"` || ctx.d.table(comp) != `"${comp}"`
+      ) continue
+      ctx.present = comp
+      break
+    }
+  }
   let where = and(
     ...conjuncts(ctx, filters),
     cond(ctx.d.live()),
