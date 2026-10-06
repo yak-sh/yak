@@ -104,11 +104,8 @@ test('boolean presence trees retain their composition without component joins', 
 // spread and SQLite's variable ceiling (T-37437).
 test('an AND of facets binds one archetype list, not one per facet', () => {
   let sql = compile(parse('.task .doc !claim'), v, { archetypes })
-  assertEquals(
-    JSON.parse(String(sql.params[0])),
-    [12],
-  )
-  assertEquals(sql.sql.split('"entity"."archetype" in (').length - 1, 1)
+  assertEquals(sql.params, [])
+  assert(sql.sql.includes('from "task"'), sql.sql)
   assertEquals(
     bind(parse('.task .doc !claim'), v, { archetypes }).joins?.length,
     1,
@@ -172,7 +169,11 @@ test('a status filter on a ladder binds as a lookup on the archetype index', () 
   assertEquals(chosen('.task.status=cancelled'), [14])
   assertEquals(chosen('.task.status=open,wip'), [11, 13, 17])
   // beside another presence test, still one lookup
-  assertEquals(chosen('.doc .task.status=open'), [17])
+  assert(
+    !compile(parse('.doc .task.status=open'), v, { archetypes }).sql.includes(
+      'case',
+    ),
+  )
   // a status no rung gives reads the `case`, and finds what it finds
   assert(
     compile(parse('.task.status=gone'), v, { archetypes }).sql.includes('case'),

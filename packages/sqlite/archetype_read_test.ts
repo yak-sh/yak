@@ -121,10 +121,10 @@ test('classified gathers select only present tables and only their owners', () =
   assertEquals(asked.length, 1) // value-only queries do not load the catalog
   asked = []
   s.rows('.doc .marker')
-  // completeness, one catalog snapshot, entity scan
-  assertEquals(asked.length, 3)
-  assert(asked[2].sql.includes('"entity"."archetype" in ('))
-  assert(!/join "(doc|marker)"/.test(asked[2].sql))
+  // Mandatory presence drives its component, without catalog discovery.
+  assertEquals(asked.length, 1)
+  assert(asked[0].sql.includes('from "doc"'), asked[0].sql)
+  assert(asked[0].sql.includes('"marker"'), asked[0].sql)
   asked = []
   s.rows('.doc .marker')
   assertEquals(asked.length, 1) // no catalog SQL until the connection mutates
