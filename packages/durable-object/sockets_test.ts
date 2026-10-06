@@ -748,3 +748,124 @@ test('hibernation hydrates saved positions only under surviving socket keys befo
     2,
   )
 })
+
+test('cold peer frames register static interests without reading their old snapshots', async () => {
+  let vocab = loadVocab([...shop.docs, {
+    $defs: {
+      cursor: {
+        component: true,
+        type: 'object',
+        sync: 'peers',
+        durable: 'connection',
+        properties: { x: { type: 'number' } },
+      },
+    },
+  }])
+  let storage = store(vocab), ctx = hibernation(), ws = wire()
+  ctx.live.push(ws)
+  ws.serializeAttachment({ writer: { actor: {} } })
+  let [g, first] = instance(storage, ctx, vocab)
+  await g.apply([{ entity: { eid: 'p' }, product: { price: 1 } }])
+  await first.message(ws, ask('products', '.product'))
+  ws.sent.length = 0
+  let cold = graph({ storage, vocab }), reads = 0
+  let spy: Graph = {
+    ...cold,
+    read: (q, o) => {
+      reads++
+      return cold.read(q, o)
+    },
+  }
+  let live = sockets(subscriptions(spy), ctx, undefined, { deferStatic: true })
+  await live.message(
+    ws,
+    JSON.stringify({
+      relay: [{ entity: { eid: 'cursor' }, cursor: { x: 1 } }],
+    }),
+  )
+  assertEquals(reads, 0)
+  assertEquals(ws.sent, [])
+  await cold.apply([{ entity: { eid: 'p' }, product: { price: 9 } }])
+  // Drain the same ordered registry after its committed notification.
+  await live.message(
+    ws,
+    JSON.stringify({
+      relay: [{ entity: { eid: 'cursor' }, cursor: { x: 2 } }],
+    }),
+  )
+  let reset = ws.sent.find((f) => f.id == 'products')!
+  assertEquals(reset.reset, true)
+  assertEquals(
+    ((reset.bundles as Bundle[])[0].product as { price: number }).price,
+    9,
+  )
+})
+
+test('deferred cold catalog resets empty after deletion and is never revived after unsubscribe', async () => {
+  let vocab = loadVocab([...shop.docs, {
+    $defs: {
+      cursor: {
+        component: true,
+        type: 'object',
+        sync: 'peers',
+        durable: 'connection',
+        properties: { x: { type: 'number' } },
+      },
+    },
+  }])
+  let storage = store(vocab), ctx = hibernation(), ws = wire()
+  ctx.live.push(ws)
+  ws.serializeAttachment({ writer: { actor: {} } })
+  let [g, first] = instance(storage, ctx, vocab)
+  await g.apply([{ entity: { eid: 'p' }, product: { price: 1 } }])
+  await first.message(ws, ask('products', '.product'))
+  ws.sent.length = 0
+  let cold = graph({ storage, vocab }),
+    subs = subscriptions(cold),
+    live = sockets(subs, ctx, undefined, { deferStatic: true })
+  await live.message(
+    ws,
+    JSON.stringify({ relay: [{ entity: { eid: 'c' }, cursor: { x: 1 } }] }),
+  )
+  await cold.apply([{ entity: { eid: 'p' }, $delete: true }])
+  await subs.snapshot('.product')
+  let frame = ws.sent.find((f) => f.id == 'products')!
+  assertEquals(frame.reset, true)
+  assertEquals(frame.bundles, [])
+  ws.sent.length = 0
+  await live.message(ws, JSON.stringify({ unsubscribe: 'products' }))
+  await cold.apply([{ entity: { eid: 'p' }, product: { price: 2 } }])
+  await subs.snapshot('.product')
+  assertEquals(ws.sent, [])
+})
+
+test('explicit read wake answers a deferred cold catalog immediately', async () => {
+  let vocab = loadVocab([...shop.docs, {
+    $defs: {
+      cursor: {
+        component: true,
+        type: 'object',
+        sync: 'peers',
+        durable: 'connection',
+        properties: { x: { type: 'number' } },
+      },
+    },
+  }])
+  let storage = store(vocab), ctx = hibernation(), ws = wire()
+  ctx.live.push(ws)
+  ws.serializeAttachment({ writer: { actor: {} } })
+  let [g, first] = instance(storage, ctx, vocab)
+  await g.apply([{ entity: { eid: 'p' }, product: { price: 1 } }])
+  await first.message(ws, ask('products', '.product'))
+  ws.sent.length = 0
+  let cold = graph({ storage, vocab }),
+    live = sockets(subscriptions(cold), ctx, undefined, { deferStatic: true })
+  await live.message(
+    ws,
+    JSON.stringify({ relay: [{ entity: { eid: 'c' }, cursor: { x: 1 } }] }),
+  )
+  assertEquals(ws.sent, [])
+  await live.wake()
+  assertEquals(ws.sent[0].id, 'products')
+  assertEquals(ws.sent[0].reset, true)
+})

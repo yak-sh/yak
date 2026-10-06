@@ -145,8 +145,11 @@ export type Subs = {
     query: Ask,
     opts?: ReadOpts,
   ) => void | Promise<void>
-  /** Reopen saved watches, reading each distinct initial query once. */
-  restore: (openings: Opening[]) => void | Promise<void>
+  /** Reopen saved watches. A cold peer-only recovery may register proven
+   * static durable interests without repeating the page's held snapshot. */
+  restore: (openings: Opening[], deferStatic?: boolean) => void | Promise<void>
+  /** Answer deferred static watches on an explicit read/handshake. */
+  resume?: () => void | Promise<void>
   /** close one subscription */
   close: (sink: Sink, id: string) => void | Promise<void>
   /** close every subscription a sink holds — a client went away */
@@ -188,6 +191,9 @@ type Sub = {
   sink: Sink
   /** the raw feed of committed transactions, rather than a query */
   raw: boolean
+  /** Interests stand, but the page's retained snapshot was not reread here.
+   * Its first relevant durable change owes a complete scoped reset. */
+  deferred?: boolean
   /** the query string (empty for a raw feed) */
   query: string
   ast?: And
@@ -272,7 +278,10 @@ type Touch = Map<Eid, {
 // A write matters when it changes what the query tests or sends. A whole-row
 // projection also observes every component of an entity already in its set.
 let notices = (sub: Sub, b: Bundle): boolean => {
-  if (!sub.reads || sub.reads.unseen || b.$delete) return true
+  if (
+    !sub.reads || sub.reads.unseen || b.$delete ||
+    (sub.deferred && sub.want === null)
+  ) return true
   if (sub.want === null && sub.members.has(b.entity.eid)) return true
   let i = sub.reads
   if (b.created && !i.own.length) return true
@@ -747,6 +756,7 @@ export let subscriptions = (graph: Graph, opts: {
     readOpts?: ReadOpts,
     rows?: Map<string, Answer>,
     answers?: Map<string, Reduced | Promise<Reduced>>,
+    deferStatic = false,
   ) => {
     flush()
     let mine = held.get(sink) ?? new Map<string, Sub>()
@@ -810,10 +820,18 @@ export let subscriptions = (graph: Graph, opts: {
             sub.durable = plan.durable
             sub.ref = plan.ref
             sub.agg = aggregate(ast)
-            if (sub.agg) return tell(sub, true, answers)
             sub.want = named(graph.vocab, ast, q !== line)
             sub.plan = projection(graph.vocab, ast)
             sub.cut = sub.plan?.cut ?? only(sub.want)
+            if (
+              deferStatic && !sub.peer && sub.reads && !sub.reads.unseen &&
+              sub.opts?.now == null && !sub.agg &&
+              !/\b(?:now|today|yesterday|tomorrow|ago)\b/.test(line)
+            ) {
+              sub.deferred = true
+              return
+            }
+            if (sub.agg) return tell(sub, true, answers)
             if (sub.peer && sub.plan?.reaches.length) {
               throw new Refused(
                 'a projection through a reference is not read over relayed values',
@@ -1020,6 +1038,7 @@ export let subscriptions = (graph: Graph, opts: {
     let queries = subs.filter((s) => !s.raw)
     let invalidated = new Set(
       queries.filter((s) =>
+        s.deferred && applied.some((b) => notices(s, b)) ||
         opts.invalidate?.(s.query, applied) ||
         s.view && applied.some((b) =>
             b.$delete ||
@@ -1079,6 +1098,7 @@ export let subscriptions = (graph: Graph, opts: {
           attempt(s, () => {
             if (!relevant.has(s)) return
             if (invalidated.has(s)) {
+              let reset = s.deferred
               if (s.agg) return tell(s)
               let loaded = s.view
                 ? viewed(s.view, s.opts)
@@ -1086,6 +1106,7 @@ export let subscriptions = (graph: Graph, opts: {
                 ? after(read(s), answered)
                 : load(s, s.query)
               return after(loaded, (answer) => {
+                s.deferred = false
                 let set = answer.found
                 let ids = new Set(set.map((b) => b.entity.eid))
                 let gone = [...s.members].filter((id) => !ids.has(id))
@@ -1096,6 +1117,7 @@ export let subscriptions = (graph: Graph, opts: {
                 return s.send({
                   id: s.id,
                   ...framed(s, set, answer),
+                  ...reset ? { reset: true } : {},
                   gone,
                   ...hail(s, joined),
                 })
@@ -1720,7 +1742,7 @@ export let subscriptions = (graph: Graph, opts: {
       flushPeers()
       return ordered(() => open(sink, id, query, readOpts))
     },
-    restore: (openings) => {
+    restore: (openings, deferStatic = false) => {
       flushPeers()
       return ordered(() => {
         let rows = new Map<string, Answer>()
@@ -1729,12 +1751,22 @@ export let subscriptions = (graph: Graph, opts: {
           over(
             openings,
             ({ sink, id, query, opts }) =>
-              open(sink, id, query, opts, rows, answers),
+              open(sink, id, query, opts, rows, answers, deferStatic),
           ),
           () => {},
         )
       })
     },
+    resume: () =>
+      after(
+        ordered(() =>
+          over(
+            all().filter((s) => s.deferred),
+            (s) => open(s.sink, s.id, s.query, s.opts),
+          )
+        ),
+        () => {},
+      ),
     close: (sink, id) => {
       flushPeers()
       return ordered(() => {

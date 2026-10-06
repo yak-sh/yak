@@ -87,8 +87,9 @@ export type Sockets = {
   /** a socket went away — the object's `webSocketClose` */
   close(ws: Wire): void | Promise<void>
   /** re-open the subscriptions of every socket this object inherited; call it
-   * at the top of `fetch`, so a batch applied on a woken object still pushes */
-  wake(): void | Promise<void>
+   * at the top of `fetch`, so a batch applied on a woken object still pushes.
+   * Cold peer-only recovery may omit proven static snapshots, not interests. */
+  wake(deferStatic?: boolean): void | Promise<void>
 }
 
 // The runtime's socket factory: two ends of one connection, the client half
@@ -249,6 +250,9 @@ export let sockets = (
   ctx: Hibernation,
   report?: (error: Error) => void,
   opts: {
+    /** On peer-only recovery, register static durable watch interests without
+     * repeating the snapshot already held by the page. Unknown queries open. */
+    deferStatic?: boolean
     /** A host whose authenticated standing expires on wake can require a
      * new handshake before this writer relays again. */
     writer?: (writer: PeerWriter) => boolean | Promise<boolean>
@@ -344,7 +348,11 @@ export let sockets = (
   // before may still be one it inherited, so its stored subscriptions are
   // re-opened here — the client is sent its current results, which is the
   // resync.
-  let sink = (ws: Wire, openings?: Opening[]): Sink | Promise<Sink> => {
+  let sink = (
+    ws: Wire,
+    openings?: Opening[],
+    deferStatic = false,
+  ): Sink | Promise<Sink> => {
     let to = sinks.get(ws)?.send
     if (to) return after(recovered.get(ws), () => to!)
     let held = ws.deserializeAttachment() as Held | null
@@ -378,7 +386,7 @@ export let sockets = (
     let send: Sink = (frame) => {
       let snapshot = reopening.has(frame.id) && reopening.get(frame.id) !== true
       if (snapshot) reopening.delete(frame.id)
-      if (snapshot && skip.delete(frame.id)) return
+      if (snapshot && skip.delete(frame.id) && !frame.reset) return
       fresh.send(snapshot ? { ...frame, reset: true } : frame)
     }
     sinks.set(ws, {
@@ -400,7 +408,14 @@ export let sockets = (
         over(Object.entries(asks(ws)), ([id, ask]) => {
           if (openings) {
             openings.push({ sink: send, id, query: ask, opts: held?.read })
-          } else return subs.open(send, id, ask, held?.read)
+          } else {
+            return subs.restore([{
+              sink: send,
+              id,
+              query: ask,
+              opts: held?.read,
+            }], deferStatic)
+          }
         }),
         () => {},
       )
@@ -460,50 +475,53 @@ export let sockets = (
             ws.close?.(1012, 'writer handshake required')
             return
           }
-          return after(sink(ws), (to) => {
-            let ask = asked('value' in input ? input.value : null)
-            let sender = sinks.get(ws)!
-            if (ask?.ack) return sender.ack(ask.ack)
-            if (ask) sender.forget(ask.id)
-            if (ask?.acks) sender.enable(ask.frames)
-            let was = subs.relaying(to).join('\n')
-            return after(
-              receive(
-                subs,
-                to,
-                data,
-                undefined,
-                input,
-                (ws.deserializeAttachment() as Held | null)?.read,
-                (ws.deserializeAttachment() as Held | null)?.writer,
-              ),
-              (verdict) => {
-                if (verdict == 'close') {
-                  finish(ws)
-                  ws.close?.(1008, 'relay flood')
-                  return
-                }
-                // Only when it moved: a frame that relays nothing should not rewrite
-                // an attachment, and most frames relay nothing.
-                let now = subs.relaying(to)
-                if (now.join('\n') != was) remember(ws, now, asks(ws))
-                if (!ask) return
-                let subscriptions = { ...asks(ws) }
-                if (ask.ask === undefined) delete subscriptions[ask.id]
-                else subscriptions[ask.id] = ask.ask
-                if (hold(ws, subscriptions, ask.acks, ask.frames)) return
-                subs.close(to, ask.id)
-                to({
-                  id: ask.id,
-                  refused: refusal(
-                    new RangeError(
-                      'too many subscriptions to survive hibernation',
+          return after(
+            sink(ws, undefined, !!opts.deferStatic && !!relay),
+            (to) => {
+              let ask = asked('value' in input ? input.value : null)
+              let sender = sinks.get(ws)!
+              if (ask?.ack) return sender.ack(ask.ack)
+              if (ask) sender.forget(ask.id)
+              if (ask?.acks) sender.enable(ask.frames)
+              let was = subs.relaying(to).join('\n')
+              return after(
+                receive(
+                  subs,
+                  to,
+                  data,
+                  undefined,
+                  input,
+                  (ws.deserializeAttachment() as Held | null)?.read,
+                  (ws.deserializeAttachment() as Held | null)?.writer,
+                ),
+                (verdict) => {
+                  if (verdict == 'close') {
+                    finish(ws)
+                    ws.close?.(1008, 'relay flood')
+                    return
+                  }
+                  // Only when it moved: a frame that relays nothing should not rewrite
+                  // an attachment, and most frames relay nothing.
+                  let now = subs.relaying(to)
+                  if (now.join('\n') != was) remember(ws, now, asks(ws))
+                  if (!ask) return
+                  let subscriptions = { ...asks(ws) }
+                  if (ask.ask === undefined) delete subscriptions[ask.id]
+                  else subscriptions[ask.id] = ask.ask
+                  if (hold(ws, subscriptions, ask.acks, ask.frames)) return
+                  subs.close(to, ask.id)
+                  to({
+                    id: ask.id,
+                    refused: refusal(
+                      new RangeError(
+                        'too many subscriptions to survive hibernation',
+                      ),
                     ),
-                  ),
-                })
-              },
-            )
-          })
+                  })
+                },
+              )
+            },
+          )
         })
       }
       let kind = messageKind('value' in input ? input.value : null)
@@ -520,8 +538,10 @@ export let sockets = (
 
     close: drop,
 
-    wake: () => {
-      if (waking) return waking
+    wake: (deferStatic = false) => {
+      if (waking) {
+        return deferStatic ? waking : waking.then(() => subs.resume?.())
+      }
       let openings: Opening[] = []
       let out = after(
         over(ctx.getWebSockets(), (ws) => {
@@ -535,7 +555,11 @@ export let sockets = (
             retire(ws, error)
           }
         }),
-        () => openings.length ? subs.restore(openings) : undefined,
+        () =>
+          after(
+            openings.length ? subs.restore(openings, deferStatic) : undefined,
+            () => !deferStatic ? subs.resume?.() : undefined,
+          ),
       )
       if (isPromise(out)) {
         waking = out

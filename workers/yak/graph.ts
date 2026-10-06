@@ -889,6 +889,7 @@ export class Store {
   }
 
   #build() {
+    let rebinding = !!this.#subs
     let ctx = this.#ctx
     this.#people.clear()
     // Which words this object speaks is a question of which object it is
@@ -1185,6 +1186,7 @@ export class Store {
       {
         // Restore current standing after hibernation; keep the verified identity.
         // Guest instruments have no standing to lose.
+        deferStatic: true,
         writer: ({ actor }) => this.#socketWriter(actor),
       },
     )
@@ -1213,7 +1215,7 @@ export class Store {
     // runtime and outlive every incarnation of this object, so whatever they
     // are watching is re-opened against the new one. Without this a deploy
     // would leave every open page subscribed to a registry nothing commits to.
-    let restored = this.#live.wake()
+    let restored = this.#live.wake(!rebinding)
     if (isPromise(restored)) {
       restored.catch((error) =>
         defect(error, { request: 'socket restore', store: name })
@@ -3321,6 +3323,7 @@ export class Store {
     return {
       read: subs.read,
       observe: subs.observe,
+      resume: subs.resume,
       snapshot: (query, opts) =>
         subs.snapshot(
           typeof query == 'string' ? asking(query, words) : query,
@@ -3333,13 +3336,16 @@ export class Store {
           query === true ? query : asking(query, words),
           opts,
         ),
-      restore: (openings) =>
-        subs.restore(openings.map(({ sink, id, query, opts }) => ({
-          sink: by(sink),
-          id,
-          query: query === true ? query : asking(query, words),
-          opts,
-        }))),
+      restore: (openings, deferStatic) =>
+        subs.restore(
+          openings.map(({ sink, id, query, opts }) => ({
+            sink: by(sink),
+            id,
+            query: query === true ? query : asking(query, words),
+            opts,
+          })),
+          deferStatic,
+        ),
       close: (sink, id) => subs.close(by(sink), id),
       drop: (sink) => subs.drop(by(sink)),
       commit: subs.commit,
