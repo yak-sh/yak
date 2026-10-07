@@ -1,9 +1,15 @@
-import { test } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import '../../testing.ts'
 import { assertEquals } from '@std/assert'
 import { threads } from '@yaks/inbox'
 import { act } from 'preact/test-utils'
 import { cache, ent, rows } from '../../live.ts'
+import { type Graph, graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { plugins } from '@yaks/inbox/graph'
+import { summaryQuery } from '@yaks/inbox/queries'
+import { host } from '../../host_testing.ts'
+import { uuid, vocab } from '../../types.ts'
 import { mount } from '../mount.ts'
 import { drafts } from '@yaks/draft/input'
 import { commentPlace } from '@yaks/kernel/Comments'
@@ -423,6 +429,126 @@ test('shared Full and Tile fallbacks identify a session without a doc and a deci
     assertEquals(resolve(ent('session'), 'Inbox.Full').view, 'Full')
     assertEquals(resolve(ent('decision'), 'Inbox.Full').view, 'Full')
   } finally {
+    cache.value = {}
+  }
+})
+
+test('person inbox draws summary root/latest rows and fetches historical words on expansion', async () => {
+  let actor = uuid(), root = uuid(), first = uuid(), latest = uuid()
+  let oldWords = 'Historical message available only in expanded detail. '
+    .repeat(20)
+  let storage = ram(vocab)
+  let g: Graph
+  g = graph({
+    vocab,
+    storage,
+    plugins: plugins({
+      get graph() {
+        return g
+      },
+    }),
+  })
+  await storage.tx((tx) =>
+    tx.patch([
+      { entity: { eid: actor }, person: {}, doc: { title: 'Owner' } },
+      {
+        entity: { eid: root },
+        conversation: {},
+        doc: { title: 'Choose a route', body: 'Initial question' },
+        created: { by: actor, at: '2026-10-02T12:00:00Z' },
+      },
+      {
+        entity: { eid: first },
+        comment: { target: root },
+        doc: { body: oldWords },
+        created: { by: actor, at: '2026-10-02T12:01:00Z' },
+      },
+      {
+        entity: { eid: latest },
+        comment: { target: root, reply_to: first },
+        doc: { body: 'Take the train.' },
+        created: { at: '2026-10-02T12:02:00Z' },
+      },
+    ])
+  )
+  cache.value = {}
+  let errors: unknown[] = []
+  let wire = host((a) => {
+    queueMicrotask(() => {
+      void Promise.resolve().then(() => g.read(a.subscribe)).then((bundles) =>
+        wire.say({ id: a.id, bundles })
+      ).catch((error) => {
+        errors.push(error)
+        return wire.say({
+          id: a.id,
+          refused: { error: 'read', message: String(error) },
+        })
+      })
+    })
+    return undefined
+  })
+  let prior = registry.renderers
+  extend([{
+    view: 'Inbox.Full',
+    match: parse('.conversation'),
+    Render: () => <section>{ent(root).doc?.body}</section>,
+  }])
+  let seen = mount(<PersonInbox e={ent(actor)} />)
+  let wait = (fact: () => boolean, label: string) =>
+    until(async () => {
+      await act(() => Promise.resolve())
+      return fact()
+    }, { label })
+  try {
+    await wait(
+      () => seen.root.textContent?.includes('Take the train.') == true,
+      'latest draw row delivered',
+    )
+    assertEquals(seen.root.querySelectorAll('[data-thread]').length, 1)
+    assertEquals(seen.root.textContent?.includes('Replies · 1'), true)
+    assertEquals(seen.root.textContent?.includes('Loading inbox…'), false)
+    assertEquals(seen.root.textContent?.includes(oldWords), false)
+    assertEquals(cache.peek()[first], undefined)
+    assertEquals(
+      wire.asked().filter((a) =>
+        a.subscribe.startsWith('.inbox_summary.actor=')
+      ).map((a) => a.subscribe.replace(/&\*$/, '')),
+      [summaryQuery(actor)],
+    )
+    await act(() =>
+      (seen.root.querySelector('button[aria-expanded]') as HTMLButtonElement)
+        .click()
+    )
+    await wait(
+      () =>
+        seen.root.querySelector('.Inbox_Detail')?.textContent?.includes(
+          oldWords,
+        ) == true,
+      'historical detail words delivered',
+    )
+    assertEquals(
+      wire.asked().filter((a) =>
+        a.subscribe.replace(/&\*$/, '') ==
+          summaryQuery(actor, { all: true }, root)
+      ).length,
+      1,
+    )
+    assertEquals(seen.root.querySelectorAll('textarea.Field').length, 2) // new conversation and thread composer
+    let detail = wire.asked().find((a) =>
+      a.subscribe.replace(/&\*$/, '') ==
+        summaryQuery(actor, { all: true }, root)
+    )!
+    await act(() =>
+      (seen.root.querySelector('button[aria-expanded]') as HTMLButtonElement)
+        .click()
+    )
+    assertEquals(seen.root.querySelector('.Inbox_Detail'), null)
+    assertEquals(wire.sent.some((m) => m.unsubscribe == detail.id), true)
+    assertEquals(errors, [])
+  } finally {
+    await act(() => seen.free())
+    registry.renderers = prior
+    wire.free()
     cache.value = {}
   }
 })

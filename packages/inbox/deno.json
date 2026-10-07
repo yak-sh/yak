@@ -5,10 +5,12 @@
     ".": "./mod.ts",
     "./queries": "./queries.ts",
     "./vocab": "./vocab.ts",
-    "./tools": "./tools.ts"
+    "./tools": "./tools.ts",
+    "./graph": "./graph.ts",
+    "./read": "./read.ts"
   },
   "license": "Apache-2.0",
-  "description": "Pure person and thread attention policy, with conversation rows shared by inbox doors.",
+  "description": "Exact person and thread attention policy, with server-owned summaries and lazy conversation reads shared by inbox doors.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

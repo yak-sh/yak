@@ -1,29 +1,14 @@
 /** Inbox email policy and rendering. The graph keeps each queued snapshot;
  * transports and clocks are supplied at the boundary. */
-import { type Bundle, type Comp, derivedEid, type Tx } from '@yaks/graph'
+import { type Bundle, type Comp, derivedEid, type Graph } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import { readerAt, type Row, type Thread, threads } from '@yaks/inbox'
-import {
-  candidates,
-  dependents,
-  discussion,
-  requirements,
-  words,
-} from '@yaks/inbox/queries'
+import type { Thread } from '@yaks/inbox'
+import { readInbox } from '@yaks/inbox/read'
 import type { Decision } from '@yaks/task'
 import type { Inbox } from './options.ts'
 
 let str = (v: unknown): string => String(v ?? '')
 let comp = (b: Bundle, name: string): Comp => b[name] as Comp ?? {}
-let rows = (bundles: Bundle[]): Row[] =>
-  bundles.map((b) => ({
-    eid: b.entity.eid,
-    comps: Object.fromEntries(
-      Object.entries(b).filter(([k, v]) =>
-        k != 'entity' && v && typeof v == 'object'
-      ),
-    ) as Row['comps'],
-  }))
 let link = (options: Inbox, eid: string) =>
   `${options.base.replace(/\/$/, '')}/${encodeURIComponent(eid)}`
 let reply = (options: Inbox, eid: string) =>
@@ -31,22 +16,35 @@ let reply = (options: Inbox, eid: string) =>
 
 /** Each door reads the same policy, including mute, archive and blockers. */
 export let inboxAt = async (
-  tx: Pick<Tx, 'get' | 'read'>,
+  tx: Pick<Graph, 'get' | 'read'>,
   vocab: Vocab,
   who: string,
 ): Promise<Thread[]> => {
-  let has = words(vocab)
-  let person = rows(await tx.get([who]))
-  let subs = has('subscription')
-    ? rows(await tx.read(`.subscription.actor=${JSON.stringify(who)}&*`))
-    : []
-  let reader = readerAt([...person, ...subs], who)
-  let read = async (query: string) => query ? rows(await tx.read(query)) : []
-  let first = await read(candidates(reader, has))
-  let second = await read(discussion(first, has))
-  let edges = await read(requirements([...first, ...second], has))
-  let tasks = await read(dependents(edges, has))
-  return threads([...first, ...second, ...edges, ...tasks], reader)
+  let inbox = await readInbox(tx, vocab, who)
+  // Inbox summaries deliberately carry no bodies or choice arrays. Mail
+  // renders complete words, but needs only each root and latest message,
+  // not the history of every thread in a daily digest.
+  let ids = [...new Set(inbox.flatMap((t) => [t.row.eid, t.latest.eid]))]
+  let comps = ['doc', 'content', 'decision'].filter((name) => vocab.comp(name))
+  let full = new Map((await tx.get(ids, comps)).map((b) => [b.entity.eid, b]))
+  let hydrate = (r: Thread['row']): Thread['row'] => {
+    let b = full.get(r.eid)
+    return {
+      ...r,
+      comps: {
+        ...r.comps,
+        ...Object.fromEntries(
+          comps.filter((name) => b?.[name])
+            .map((name) => [name, b![name] as Comp]),
+        ),
+      },
+    }
+  }
+  return inbox.map((t) => ({
+    ...t,
+    row: hydrate(t.row),
+    latest: hydrate(t.latest),
+  }))
 }
 
 /** Only outstanding needs and replies cross this door by default. */
@@ -182,7 +180,7 @@ export let planned = (
 
 /** Read and write at the boundary. Replays find the same queued letters. */
 export let queue = async (
-  tx: Pick<Tx, 'get' | 'read'>,
+  tx: Pick<Graph, 'get' | 'read'>,
   vocab: Vocab,
   options: Inbox,
   write: (bundles: Bundle[]) => unknown,

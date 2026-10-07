@@ -242,9 +242,17 @@ test('whole-thread input includes letters from the shared discussion read', asyn
       },
       input('comment', 'thread'),
     ])
+    let body = 'complete reply words '.repeat(1024) + 'reply ending'
+    await g.apply([{
+      ...input('long-comment', 'thread'),
+      doc: { body },
+      created: { at: '2026-10-02T12:00:02.000Z' },
+    }], { trusted: true })
     let prompt = await threadPrompt(g, 'thread', 'person')
     assertStringIncludes(prompt, 'Words that came by mail')
     assertStringIncludes(prompt, 'comment')
+    assertStringIncludes(prompt, body)
+    assertStringIncludes(prompt, 'From Person (person)')
   } finally {
     await h.close()
   }

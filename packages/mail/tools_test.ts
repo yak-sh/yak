@@ -122,6 +122,30 @@ test('the inbox is what is addressed to you and not archived', async () => {
   await assertRejects(() => ask(g, 'inbox_list'), Error, 'nobody is asking')
 })
 
+test('inbox list searches complete received words while default results are summaries', async () => {
+  let { g } = await club()
+  let body = 'ordinary words '.repeat(1024) + 'needle-in-full-body'
+  await g.apply([{
+    ...arrival('long-letter'),
+    doc: { title: 'Long letter', body },
+  }])
+  let [summary] = await ask(g, 'inbox_list', { who: 'desk' })
+  let [letter] = await g.get(['long-letter'], [])
+  assertEquals(summary.entity.num, letter.entity.num)
+  assertEquals(comp(summary, 'doc').title, 'Long letter')
+  assertEquals(comp(summary, 'doc').body, undefined)
+  let search = { who: 'desk', search: 'needle-in-full-body' }
+  assertEquals(ids(await ask(g, 'inbox_list', search)), ['long-letter'])
+  assertEquals(
+    ids(await ask(g, 'inbox_list', { ...search, direction: 'received' })),
+    ['long-letter'],
+  )
+  assertEquals(
+    ids(await ask(g, 'inbox_list', { ...search, direction: 'said' })),
+    [],
+  )
+})
+
 test('an address you wear puts a letter in your inbox', async () => {
   let { g } = await club()
   // Ana wears the address the letter was delivered to, and nothing routed it.

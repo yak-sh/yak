@@ -1,5 +1,5 @@
 import { test } from '@yaks/testing'
-import { assertEquals, assertMatch } from '@std/assert'
+import { assertEquals, assertMatch, assertStringIncludes } from '@std/assert'
 import { type Bundle, type Comp, detached, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
@@ -14,6 +14,7 @@ import { sessionDoc } from '@yaks/session/vocab'
 import { mailDoc } from './comp.ts'
 import { arrived } from './arrive.ts'
 import { inboxAt, planned, queue } from './door.ts'
+import { effects as mailEffects } from './effects.ts'
 import { payload } from './cloudflare.ts'
 import { message, sending } from './send.ts'
 import { stash } from './stash.ts'
@@ -108,6 +109,77 @@ let world = async () => {
   ])
   return g
 }
+
+test('mail loads complete root/latest words and choices without digest history', async () => {
+  let g = await world()
+  let body = 'root words '.repeat(1024) + 'root ending'
+  let latest = 'latest words '.repeat(1024) + 'latest ending'
+  await g.apply([
+    { entity: { eid: 'ask' }, doc: { body } },
+    {
+      entity: { eid: 'older' },
+      comment: { target: 'ask' },
+      doc: { body: 'older history' },
+      created: { at: at(1) },
+    },
+    {
+      entity: { eid: 'comment' },
+      doc: { body: latest },
+      created: { at: at(2) },
+    },
+  ], { trusted: true })
+  let got: string[] = []
+  let list = await inboxAt(
+    {
+      read: (query, opts) => g.read(query, opts),
+      get: (ids, comps, opts) => {
+        if (comps?.includes('doc') || comps?.includes('content')) {
+          got.push(...ids)
+        }
+        return g.get(ids, comps, opts)
+      },
+    },
+    g.vocab,
+    'person',
+  )
+  assertEquals(got.sort(), ['ask', 'comment'])
+  assertEquals(list[0].row.comps.doc?.body, body)
+  assertEquals(list[0].latest.comps.doc?.body, latest)
+  assertEquals(list[0].row.comps.decision?.choices, decision.choices)
+  let [letter] = planned(list, [], inbox, at(10))
+  assertStringIncludes(String(comp(letter, 'doc').body), latest)
+  assertStringIncludes(
+    String(comp(letter, 'doc').body),
+    '1. Train: Arrive earlier',
+  )
+  assertStringIncludes(String(comp(letter, 'doc').body), '2. Bus: Spend less')
+  let rootOnly = { ...list[0], latest: list[0].row }
+  assertStringIncludes(
+    String(comp(planned([rootOnly], [], inbox, at(10))[0], 'doc').body),
+    body,
+  )
+})
+
+test('inbox effects read the committed graph rather than the detached storage transaction', async () => {
+  let g = await world()
+  let handler = mailEffects({ graph: g }, { inbox }).mail_inbox
+  let noRead = () => {
+    throw new Error('raw storage cannot project inbox summaries')
+  }
+  await handler(
+    {
+      kind: 'created',
+      name: 'decision',
+      entity: { eid: 'ask' },
+      touched: ['decision'],
+    },
+    { ...detached(g.storage), read: noRead, get: noRead },
+    (bundles) => g.apply(bundles),
+  )
+  let [letter] = await g.read('.mail_notice&.mail&*')
+  assertEquals(comp(letter, 'mail').target, 'ask')
+  assertStringIncludes(String(comp(letter, 'doc').body), 'Can you choose?')
+})
 
 test('email queues blocking decisions once and digests the rest once daily, without alerts or updates', () => {
   let list = needs()

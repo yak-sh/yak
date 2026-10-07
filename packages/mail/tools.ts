@@ -5,15 +5,8 @@ import {
   readerAt,
   type Row as InboxRow,
   threadOf as inboxThread,
-  threads,
 } from '@yaks/inbox'
-import {
-  candidates,
-  dependents,
-  discussion,
-  requirements,
-  words,
-} from '@yaks/inbox/queries'
+import { readInbox } from '@yaks/inbox/read'
 // What an agent may ask for here: the `@yaks/mail/tools` entry point — the
 // implementations behind the `tool: true` declarations in ./vocab.json. Five
 // commands a person runs all day, and one check.
@@ -63,7 +56,7 @@ import {
 } from '@yaks/graph'
 import { BODY, DOC, TITLE } from '@yaks/doc'
 import { human } from '@yaks/id'
-import { absent, and, eq, every, list, parse, present } from '@yaks/query'
+import { absent, and, eq, every, list, present } from '@yaks/query'
 import { checked, type Finding } from '@yaks/tools'
 import type { Runs } from '@yaks/graph/tools'
 import { wearer } from './arrive.ts'
@@ -260,32 +253,20 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
   inbox_list: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)
     let who = reader(call)
-    let has = words(graph.vocab)
-    let read = async (query: string): Promise<Bundle[]> =>
-      query ? await graph.read(parse(query)) : []
-    let profile = await one(graph, who)
-    let standing = has('subscription')
-      ? await read(`.subscription.actor=${JSON.stringify(who)}&?subscription`)
-      : []
-    let person = readerAt(
-      rows([...(profile ? [profile] : []), ...standing]),
-      who,
-    )
-    let first = await read(candidates(person, has))
-    let conversation = await read(discussion(rows(first), has))
-    let edges = await read(requirements(rows([...first, ...conversation]), has))
-    let tasks = await read(dependents(rows(edges), has))
-    let bundles = [...first, ...conversation, ...edges, ...tasks]
-    let byId = new Map(bundles.map((b) => [b.entity.eid, b]))
-    let found = threads(rows(bundles), person, {
+    let found = await readInbox(graph, graph.vocab, who, {
       all: !!args.all,
       text: str(args.search),
       direction: args.direction as Direction | undefined,
       lane: args.lane as Lane | undefined,
     })
     let n = args.limit == null ? PAGE : Number(args.limit)
-    return found.slice(0, n)
-      .map((t) => byId.get(t.eid)!)
+    let page = found.slice(0, n)
+    let entities = new Map((await graph.get(page.map((t) => t.eid), []))
+      .map((b) => [b.entity.eid, b.entity]))
+    return page.map((t) => ({
+      entity: entities.get(t.eid) ?? { eid: t.eid },
+      ...t.row.comps,
+    }))
   },
 
   inbox_archive: async (call, graph): Promise<Bundle[]> => {

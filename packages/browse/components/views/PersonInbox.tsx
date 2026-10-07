@@ -15,7 +15,7 @@ import { Entity } from '../Entity.tsx'
 import { drafts, useDraft } from '@yaks/draft/input'
 import { Stamp } from '../Stamp.tsx'
 import { usePage } from '../page.ts'
-import { useInboxThreads } from '../useInbox.ts'
+import { useInboxThread, useInboxThreads } from '../useInbox.ts'
 import { useQuery } from '../useQuery.ts'
 
 export let inboxSearchPlace = (actor: string) => `${actor}.inbox.search`
@@ -97,7 +97,11 @@ export let AnsweringSessions = ({ root }: { root: string }) => {
     : null
 }
 
-let Conversation = ({ thread: t }: { thread: Thread<Row> }) => {
+let Conversation = (
+  { thread, actor }: { thread: Thread<Row>; actor?: string },
+) => {
+  let full = useInboxThread(actor ?? '', thread.eid)
+  let t = full.threads[0] ?? thread
   let notes = t.messages.filter((r) => r.comps.comment).map((r) => ent(r.eid))
   let other = t.messages.filter((r) =>
     !r.comps.comment && r.eid != t.eid && r.comps.entry?.session != t.eid
@@ -113,7 +117,9 @@ let Conversation = ({ thread: t }: { thread: Thread<Row> }) => {
   )
 }
 
-let ThreadRow = ({ thread: t }: { thread: Thread<Row> }) => {
+let ThreadRow = (
+  { thread: t, actor }: { thread: Thread<Row>; actor?: string },
+) => {
   let view = usePage<{ open: boolean }>('inboxView', `thread:${t.eid}`)
   let open = !!view.value?.open
   let e = ent(t.eid)
@@ -150,20 +156,21 @@ let ThreadRow = ({ thread: t }: { thread: Thread<Row> }) => {
       >
         archive
       </Button>
-      {open && <Conversation thread={t} />}
+      {open && <Conversation thread={t} actor={actor} />}
     </Frame.Thread>
   )
 }
 
 /** The shared view accepts completed policy records, never reclassifies them. */
 export let InboxThreads = (
-  { threads, ready, search, onSearch, limit, find }: {
+  { threads, ready, search, onSearch, limit, find, actor }: {
     threads: Thread<Row>[]
     ready: boolean
     search: Search
     onSearch: (search: Search) => void
     limit?: number
     find?: ComponentChild
+    actor?: string
   },
 ) => {
   let shown = limit == null ? threads : threads.slice(0, limit)
@@ -205,7 +212,9 @@ export let InboxThreads = (
             <Frame.Heading>
               {lane} · {items.length}
             </Frame.Heading>
-            {items.map((t) => <ThreadRow key={t.eid} thread={t} />)}
+            {items.map((t) => (
+              <ThreadRow key={t.eid} thread={t} actor={actor} />
+            ))}
             {ready && !items.length && (
               <Frame.Empty>No threads here.</Frame.Empty>
             )}
@@ -246,6 +255,7 @@ export let PersonInbox = ({ e, limit }: { e: Ent; limit?: number }) => {
       )}
       <InboxThreads
         {...found}
+        actor={e.eid}
         search={query}
         onSearch={setSearch}
         limit={limit}

@@ -12,7 +12,7 @@ import {
 } from '@yaks/graph'
 import { type Handlers, holding } from '@yaks/effects'
 import { link } from '@yaks/edge'
-import { readerAt, type Row, threads } from '@yaks/inbox'
+import { readThread } from '@yaks/inbox/read'
 import { promptEntry, type Snapshot } from '@yaks/context'
 import {
   kindOf,
@@ -25,7 +25,6 @@ import {
 import type { Host } from '@yaks/host'
 
 import { seed } from './agent.ts'
-import { discussion, words as declaredWords } from '@yaks/inbox/queries'
 import { cachedPrefixExpires } from '@yaks/model'
 
 export type InboxOptions = {
@@ -44,7 +43,6 @@ export type AnsweringOptions = InboxOptions & {
 }
 let comp = (b: Bundle | undefined, name: string): Comp =>
   b?.[name] as Comp ?? {}
-let row = (b: Bundle): Row => ({ eid: b.entity.eid, comps: b as Row['comps'] })
 let working = (status: string) =>
   ['pending', 'running', 'queued'].includes(status)
 
@@ -121,18 +119,13 @@ export let threadPrompt = async (
   person: string,
   extra: Bundle[] = [],
 ): Promise<string> => {
-  let roots = await g.get([root, person])
-  let query = discussion(
-    roots.filter((b) => b.entity.eid == root).map(row),
-    declaredWords(g.vocab),
-  )
-  let messages = query ? await g.read(query) : []
-  let all = [...roots, ...messages]
-  let thread = threads(all.map(row), readerAt(all.map(row), person), {
-    all: true,
-  })
-    .find((t) => t.eid == root)
-  let subject = roots.find((b) => b.entity.eid == root)
+  let thread = await readThread(g, g.vocab, person, root)
+  let [subject] = await g.get([root])
+  let messages = thread?.messages.map((r): Bundle => ({
+    entity: { eid: r.eid },
+    ...r.comps,
+  })) ?? []
+  let all = [...(subject ? [subject] : []), ...messages]
   let authors = [
     ...new Set(
       [...all, ...extra].map((b) => String(comp(b, 'created').by ?? '')).filter(
@@ -158,8 +151,7 @@ export let threadPrompt = async (
   return [
     'Answer the person’s newest words in this thread. Handle what they ask, including work and delegation when needed. Your final reply will be posted here automatically. Do not post a duplicate final comment yourself.',
     'Thread root (current data):\n' + JSON.stringify(subject),
-    ...thread?.messages.map((r) => words(r.comps as unknown as Bundle)) ??
-      messages.map(words),
+    ...messages.map(words),
     ...extra.map(words),
   ].join('\n\n')
 }

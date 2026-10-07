@@ -8,7 +8,9 @@
       "component": true,
       "type": "object",
       "kind": true,
-      "before": ["doc"],
+      "before": [
+        "doc"
+      ],
       "description": "a thread with no other subject; doc holds the person's words and its first line as the title",
       "properties": {}
     },
@@ -24,8 +26,52 @@
           "description": "the words that start the conversation; the first line is its title"
         }
       },
-      "required": ["text"],
-      "positional": ["text..."]
+      "required": [
+        "text"
+      ],
+      "positional": [
+        "text..."
+      ]
+    },
+    "inbox_summary": {
+      "component": true,
+      "computed": true,
+      "type": "object",
+      "description": "Exact person inbox thread summaries, derived at read; history bodies are included only for an explicitly requested thread or server-side search.",
+      "properties": {
+        "actor": {
+          "type": "string",
+          "ref": "entity",
+          "description": "the person whose attention is read"
+        },
+        "text": {
+          "type": "string",
+          "description": "text to find in said or received words"
+        },
+        "direction": {
+          "type": "string",
+          "description": "said or received; empty for both"
+        },
+        "all": {
+          "type": "boolean",
+          "description": "include archived threads"
+        },
+        "lane": {
+          "type": "string",
+          "description": "one lane, or empty for every lane"
+        },
+        "thread": {
+          "type": "string",
+          "description": "one thread requested in full, or empty for summaries"
+        },
+        "threads": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "exact ordered policy records with root/latest rows and lazy messages"
+        }
+      }
     }
   }
 }

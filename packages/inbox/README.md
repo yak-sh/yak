@@ -64,19 +64,58 @@ arbitrary edits do not resurface threads.
 apply**: remove the old mark, then add it, so the server supplies a fresh
 timestamp on repeated attention. No sweep is involved.
 
-Each door owns the following reads from `@yaks/inbox/queries`, using
-`words(vocab)` so sparse vocabularies are supported:
+A **thread summary** is an exact policy record without historical message
+bodies. `readInbox` reads metadata on the server and returns the same lanes,
+ordering, unread state and blockers as `threads`. Text and direction search read
+complete words on the server, then return thread summaries; they never send the
+candidate history to a browser.
 
-1. `candidates(reader, words)` — direct address, assignments, watches and
-   personal attention, including archived roots.
-2. `discussion(candidates, words)` — roots, full conversation and commits.
-3. `requirements([...candidates, ...discussion], words)` — requires edges to
-   those roots.
-4. `dependents(requirements, words)` — dependent task state, to exclude
-   completed or cancelled blockers.
+```ts
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { readInbox } from '@yaks/inbox/read'
+import { equal } from '@yaks/testing'
 
-Combine the results into `{eid, comps}` rows and pass them to `threads`. Do not
-count notification rows or filter out archive marks in the query. In web/TUI,
-`useInboxThreads(actor, search)` owns these subscriptions and returns
-`{threads, ready}`. The count uses the same records; failed or incomplete reads
-remain unknown.
+let v = loadVocab({
+  $defs: {
+    task: { component: true, type: 'object', properties: {} },
+    filed: {
+      component: true,
+      type: 'object',
+      properties: {
+        assignee: { type: 'string' },
+      },
+    },
+  },
+})
+let g = graph({ vocab: v, storage: ram(v) })
+await g.apply([{
+  entity: { eid: 'work' },
+  task: {},
+  filed: { assignee: 'person' },
+}])
+equal((await readInbox(g, v, 'person')).map((t) => [t.eid, t.lane]), [
+  ['work', 'Needs you'],
+])
+```
+
+`readThread(graph, vocab, actor, root)` reads one thread's complete messages,
+including archived history, for detail. A digest needs only its selected
+root/latest bodies and can get those explicitly. The read interface must be a
+Graph read, which folds projections, not a storage transaction's raw read.
+
+The graph facet answers the computed
+`inbox_summary{actor, text, direction,
+all, lane, thread, threads}` component.
+It is not stored policy state. `summaryQuery(actor, search, thread?)` builds its
+query. A summary's `messages` is empty; a query naming `thread` carries complete
+messages. Its subscription refreshes when inbox policy dependencies change. The
+web host executes it in its ordinary read worker. Browser/TUI hooks own one
+summary subscription and hold only the root/latest rows they draw; opening
+detail adds one full-thread subscription. Counts consume those same
+authoritative summaries.
+
+The lower-level `candidates`, `discussion`, `requirements` and `dependents`
+query helpers belong to this read implementation. Callers use `readInbox` or
+`readThread`, not a second copy of its read pipeline.

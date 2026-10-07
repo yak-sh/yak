@@ -1,136 +1,37 @@
-// Query ownership belongs to the mounted door; attention policy is pure.
-import {
-  activityAt,
-  readerAt,
-  type Search,
-  type Thread,
-  threads,
-} from '@yaks/inbox'
-import {
-  boundedReads,
-  candidates,
-  dependents,
-  discussion,
-  requirements,
-  threadRoots,
-  words,
-} from '@yaks/inbox/queries'
-import { isUnread, type Row, uniq } from '../client.ts'
-import {
-  dropQuery,
-  holdQuery,
-  inbox as seededInbox,
-  queryEids,
-  querySubscription,
-  row,
-} from '../live.ts'
-import { useLayoutEffect, useMemo, useRef } from 'preact/hooks'
-import { parseQuery, resolveRefs } from '../query.ts'
-import { findEid } from '../live.ts'
-import { kindOf, vocab } from '../types.ts'
-import { type QueryResult, useQueryResult } from './useQuery.ts'
-import { useEntity } from './subscriptions.ts'
+// The inbox policy is computed by its server-owned summary read. The page
+// holds just summaries and rows it draws; history bodies load with detail.
+import { activityAt, type Search, type Thread } from '@yaks/inbox'
+import { summaryQuery } from '@yaks/inbox/queries'
+import { isUnread, type Row } from '../client.ts'
+import { inbox as seededInbox, row } from '../live.ts'
+import { useQueryResult } from './useQuery.ts'
+import { useRows } from './subscriptions.ts'
 
-let rows = (eids: string[]): Row[] =>
-  eids.flatMap((eid) => {
-    let comps = row(eid).value
-    return comps
-      ? [{
-        eid,
-        num: Number(comps.entity?.num ?? 0),
-        kind: kindOf(comps),
-        comps: comps as Row['comps'],
-      }]
-      : []
-  })
-let has = words(vocab)
-
-let authoritative = (r: QueryResult) =>
-  r.ready && r.subscription?.state.status != 'failed'
-
-// The number of derived reads may change; one hook owns all their lifetimes.
-let useReads = (queries: string[], enabled: boolean) => {
-  let key = JSON.stringify(queries)
-  let reads = useMemo(() =>
-    queries.map((line) => ({
-      line,
-      preds: resolveRefs(parseQuery(line), findEid),
-    })), [key])
-  let held = useRef(new Map<string, typeof reads[number]>())
-  useLayoutEffect(() => {
-    let wanted = new Set(enabled ? queries : [])
-    // Retain unchanged query owners. Releasing the entire plan for one changed
-    // batch destroys otherwise ready subscriptions and downloads them again.
-    for (let [line, read] of held.current) {
-      if (wanted.has(line)) continue
-      dropQuery(read.preds)
-      held.current.delete(line)
-    }
-    if (enabled) {
-      for (let read of reads) {
-        if (held.current.has(read.line)) continue
-        holdQuery(read.preds, read.line)
-        held.current.set(read.line, read)
-      }
-    }
-  }, [reads, enabled])
-  useLayoutEffect(() => () => {
-    for (let read of held.current.values()) dropQuery(read.preds)
-    held.current.clear()
-  }, [])
-
-  let eids = new Set<string>()
-  let ready = enabled
-  if (enabled) {
-    for (let { preds, line } of reads) {
-      let sub = querySubscription(preds, line)
-      ready &&= !sub || sub.state.status == 'ready'
-      for (let eid of queryEids(preds, line).value) eids.add(eid)
-    }
-  }
-  return { eids: [...eids], ready }
-}
-
-/** Complete query-derived thread data for web, TUI and the inbox root screen. */
 export let useInboxThreads = (
   actor: string,
   search: Search = {},
+  thread?: string,
 ): { threads: Thread<Row>[]; ready: boolean } => {
-  let fields = ['project.color', 'email.address'].filter(has).join(',')
-  let profile = useEntity(actor, fields || 'entity.eid')
-  let subscriptions = useQueryResult(
-    has('subscription') ? `.subscription.actor=${actor}` : '',
-  )
-  let who = readerAt([
-    ...(profile?.value ? rows([actor]) : []),
-    ...rows(subscriptions.eids),
-  ], actor)
-  let ready = profile?.ready === true && authoritative(subscriptions)
-  let seed = useQueryResult(candidates(who, has), ready, true)
-  let first = rows(seed.eids)
-  let conversation = useReads(
-    boundedReads(threadRoots(first), (part) => discussion(part, has, search)),
-    ready && authoritative(seed),
-  )
-  let group = uniq([...first, ...rows(conversation.eids)])
-  let edges = useReads(
-    boundedReads(threadRoots(group), (part) => requirements(part, has)),
-    ready && authoritative(seed) && conversation.ready,
-  )
-  let tasks = useReads(
-    boundedReads(rows(edges.eids), (part) => dependents(part, has)),
-    ready && edges.ready,
-  )
+  let read = useQueryResult(summaryQuery(actor, search, thread), true, true)
+  let summaries = read.eids.flatMap((eid) => {
+    let value = row(eid).value?.inbox_summary?.threads
+    return Array.isArray(value) ? value as unknown as Thread<Row>[] : []
+  })
+  useRows([
+    ...new Set(summaries.flatMap((t) => [
+      t.row.eid,
+      t.latest.eid,
+      ...(thread ? t.messages.map((m) => m.eid) : []),
+    ])),
+  ])
   return {
-    threads: threads(
-      uniq([...group, ...rows(edges.eids), ...rows(tasks.eids)]),
-      who,
-      search,
-    ),
-    ready: ready && authoritative(seed) && conversation.ready &&
-      edges.ready && tasks.ready,
+    threads: summaries,
+    ready: read.ready && read.subscription?.state.status != 'failed',
   }
 }
+
+export let useInboxThread = (actor: string, eid: string) =>
+  useInboxThreads(actor, { all: true }, eid)
 
 export type InboxRow = Row & { inbox?: Thread<Row> }
 

@@ -246,3 +246,15 @@ export let threadRoots = (rows: Row[]): Row[] => {
   }
   return [...roots.values()]
 }
+
+export let summaryQuery = (
+  actor: string,
+  search: Search = {},
+  thread?: string,
+) =>
+  `.inbox_summary.actor=${JSON.stringify(actor)}` +
+  (search.text ? `&.inbox_summary.text=${JSON.stringify(search.text)}` : '') +
+  (search.direction ? `&.inbox_summary.direction=${search.direction}` : '') +
+  (search.all ? '&.inbox_summary.all=true' : '') +
+  (search.lane ? `&.inbox_summary.lane=${JSON.stringify(search.lane)}` : '') +
+  (thread ? `&.inbox_summary.thread=${JSON.stringify(thread)}` : '')

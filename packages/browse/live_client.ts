@@ -20,9 +20,12 @@ let browserVocab = () => {
   for (let doc of docs) {
     for (let [name, def] of Object.entries(doc.$defs ?? {})) {
       if (!def.component || name == 'entity') continue
+      // Computed query-result components are received data in this replica,
+      // never storage-backed computations to run in the page.
       let ladder = def.status
       delete def.status
       if (def.extends) continue
+      def.computed = false
       def.properties ??= {}
       def.properties.eid = { type: 'string' }
       if (ladder) def.properties.status = { type: 'string' }
