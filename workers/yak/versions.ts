@@ -239,8 +239,14 @@ export let draftManifest = async (
 export let releaseOf = (space: { slug: string }, app: App) =>
   `${space.slug}/.releases/${app.eid}/${crypto.randomUUID()}`
 
-let latest = async (dir: Directory, space: Space, app: App) =>
-  (await dir.apps(space)).find((row) => row.eid == app.eid) ?? app
+let latest = async (dir: Directory, space: Space, app: App) => {
+  // Reuse the addressed app's request-local read until a directory write
+  // invalidates it. A rename or reused slug still resolves by identity.
+  let current = await dir.app(space, app.slug)
+  return current?.eid == app.eid
+    ? current
+    : (await dir.apps(space)).find((row) => row.eid == app.eid) ?? app
+}
 
 /** A release fence holds new edits until its source switch or refusal. */
 export let waiting = async (

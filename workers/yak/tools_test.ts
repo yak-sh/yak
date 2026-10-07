@@ -26,7 +26,7 @@ import {
 } from './tools.ts'
 import { sha256 } from './versions.ts'
 import { platform } from './testing.ts'
-import { directory } from './directory.ts'
+import { appStore, directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { inApp } from './tool.ts'
 import { accept } from './invite.ts'
@@ -384,7 +384,17 @@ test('view metadata leaves portable sandbox selection to the host', () => {
 // Every app's store opened once. A store's first boot plants the models it may
 // ask (models.ts `planting`) and tells the directory what that weighs: the
 // store's cost, once, and not what the gesture measured after it costs.
-let booted = (ctx: Ctx) => call(ctx, 'app_list', {})
+let booted = async (ctx: Ctx) => {
+  for (let space of await ctx.dir.spaces(ctx.person)) {
+    for (let app of await ctx.dir.apps(space)) {
+      let deployed = await appStore(ctx.env.STORE, space, app)('/vocab', {
+        method: 'POST',
+        body: '{}',
+      }, KERNEL)
+      assertEquals(deployed.status, 200, await deployed.text())
+    }
+  }
+}
 
 // How many round trips a deploy took, on its own answer (timing.ts, hops.ts):
 // `hops` is the store doors it went through (door.ts), `stmts` their SQL,
