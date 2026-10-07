@@ -21,9 +21,10 @@
 // `restore()` creates it again at that commit, on the same branch, at the same
 // path.
 //
-// Scheduled sweeps take back every clean checkout landed on main. A checkout
+// Scheduled sweeps take back clean checkouts that committed work and landed it
+// on main. A checkout
 // whose Git metadata is missing stays: neither its cleanliness nor its landing
-// can be proved. Live graph homes and process directories protect resumed
+// can be proved. Live graph homes, process directories and open files protect resumed
 // sessions and agents that run outside the graph.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
@@ -32,7 +33,7 @@ import {
   discover,
   type Held,
   inUse,
-  processCwds,
+  processPaths,
   reclaim,
 } from '@yaks/git/host'
 
@@ -72,17 +73,18 @@ let take = async (
   g: Graph,
   path: string,
   live: () => Promise<Set<string>>,
+  processes: () => Promise<Set<string>>,
 ): Promise<Held | undefined> => {
   await discover(g, path).catch(() => {})
   // Discovery can take time. A session may have resumed while it ran, so the
-  // current graph homes and local process directories are checked afterwards.
+  // current graph homes and local process paths are checked afterwards.
   let real = await Deno.realPath(path).catch((error) => {
     // Another sweep may have taken the same checkout while discovery ran.
     if (error instanceof Deno.errors.NotFound) return undefined
     throw error
   })
   if (!real) return
-  if (inUse(real, await live()) || inUse(real, await processCwds())) return
+  if (inUse(real, await live()) || inUse(real, await processes())) return
   return reclaim(path, 'refs/heads/main')
 }
 
@@ -93,12 +95,13 @@ export let collect = async (
   g: Graph,
   session: Eid,
   dir: string,
+  processes: () => Promise<Set<string>> = processPaths,
 ): Promise<Held | undefined> => {
   let path = cutFor(session, dir)
   if (!await Deno.stat(path).then(() => true, () => false)) return undefined
   let b = await row(g, session)
   if (!b?.session || !over(b)) return undefined
-  return take(g, path, async () => homes(g, await going(g), dir))
+  return take(g, path, async () => homes(g, await going(g), dir), processes)
 }
 
 /** Register the effect handlers that remove a worktree the moment its session
@@ -112,13 +115,14 @@ export let collecting = (
   fx: Effects,
   report: (error: unknown, session: Eid) => void,
   dir: string,
+  processes: () => Promise<Set<string>> = processPaths,
 ): () => Promise<void> => {
   // Never awaited by the handler: a `git worktree remove` must not hold open
   // the transaction that ended the session, and whatever a crash leaves behind
   // is for the startup sweep to find.
   let running = new Set<Promise<void>>()
   let at = (session: Eid) => {
-    let done = collect(g, session, dir).then(
+    let done = collect(g, session, dir, processes).then(
       () => {},
       (error) => report(error, session),
     ).finally(() => running.delete(done))
@@ -179,6 +183,7 @@ export let sweep = async (
   g: Graph,
   dir: string,
   live: Set<string> = new Set(),
+  processes: () => Promise<Set<string>> = processPaths,
 ): Promise<Record<string, Held>> => {
   let began = Date.now()
   let kept: Record<string, Held> = {}
@@ -202,6 +207,7 @@ export let sweep = async (
       g,
       path,
       async () => new Set([...live, ...await homes(g, await going(g), dir)]),
+      processes,
     ).catch(() => 'failed' as Held)
     if (held) kept[path] = held
   }

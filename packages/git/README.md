@@ -457,11 +457,12 @@ are async, writing an object is async too.
 
 Here a **host** is the process that opened the graph and runs these operations.
 `@yaks/git/host` adds `discover`, `checkoutAt`, `createWorktree`, `holds`,
-`reclaim`, `lost`, `idleFor`, `linked`, `locate`, `reconcile` and `restore`,
-which run `git` as a subprocess and therefore need Deno. They are kept out of
-the main entry point, which still type-checks with only the web platform in
-scope. Load `checkoutDoc` to get just the four components below — `repository`,
-`worktree`, `ref` and `checkout` — without the Git object components.
+`reclaim`, `lost`, `idleFor`, `linked`, `locate`, `reconcile`, `restore`,
+`processCwds`, `processPaths` and `inUse`, which run `git` as a subprocess and
+therefore need Deno. They are kept out of the main entry point, which still
+type-checks with only the web platform in scope. Load `checkoutDoc` to get just
+the four components below — `repository`, `worktree`, `ref` and `checkout` —
+without the Git object components.
 
 Git is authoritative here; the graph holds an observation of it that can be
 refreshed at any time without changing anything.
@@ -512,19 +513,23 @@ nothing. `reclaim(path)` removes a worktree and the branch it was created on
 only when it holds nothing, and never with `--force`, so Git's own refusal
 stands behind that test; it returns what kept it, `failed` included. Pass a full
 local branch ref as the second argument to `holds` or `reclaim` to require
-landing there: `reclaim(path, "refs/heads/main")`. This also keeps a worktree
-whose gitdir Git has lost (`lost(path)`), because neither its cleanliness nor
-its landing can be proved. Without a required landing, lost worktrees are
-deleted outright. `restore(g, row)` creates a worktree again at the path, branch
-and commit its row recorded, so run `discover` on it before taking it back.
-`linked(common)` names a repository's linked worktrees, and `idleFor(path)` says
-how long since Git last wrote one's HEAD, index or reflog.
+landing there: `reclaim(path, "refs/heads/main")`. The branch reflog must also
+prove the branch committed work still contained in HEAD; a fresh branch, a
+branch only fast-forwarded from main, or missing evidence keeps the checkout.
+This also keeps a worktree whose gitdir Git has lost (`lost(path)`), because
+neither its cleanliness nor its landing can be proved. Without a required
+landing, lost worktrees are deleted outright. `restore(g, row)` creates a
+worktree again at the path, branch and commit its row recorded, so run
+`discover` on it before taking it back. `linked(common)` names a repository's
+linked worktrees, and `idleFor(path)` says how long since Git last wrote one's
+HEAD, index or reflog.
 
-`processCwds()` reads the working directories of this user's live Linux
-processes. An unreadable directory refuses collection, so agents outside the
-graph also keep their worktrees. Non-dumpable processes require a privileged
-read through a root-owned helper, launched by the systemd user manager. The
-helper accepts one positive PID and checks that it belongs to the sudo caller.
+`processPaths()` reads the working directories and open file paths of this
+user's live Linux processes. An unreadable process path refuses collection, so
+agents outside the graph also keep their worktrees. Non-dumpable processes
+require a privileged read through a root-owned helper, launched by the systemd
+user manager. The helper returns a JSON array of the cwd and absolute open file
+paths, accepts one positive PID and checks that it belongs to the sudo caller.
 Install it from this package as root:
 
 ```sh
@@ -537,15 +542,17 @@ is `collector ALL=(root) NOPASSWD: /usr/local/libexec/yak-process-cwd *`. The
 helper refuses additional arguments, other users' processes and path traversal.
 Enable the user's systemd manager with `loginctl enable-linger
 collector`.
-Collection retains every checkout if the helper or manager fails.
+Collection retains every checkout if the helper or manager fails, including an
+installed helper that still returns only a cwd. `processCwds()` remains
+available for callers needing only directories.
 
 `@yaks/git/service` is the caller for every worktree nobody else takes back.
 Once an hour it runs `collect` on each repository the graph knows that is on
 this machine: every linked worktree Git has left alone for six hours and that is
-clean and landed on main is reclaimed once no live graph session or local
-process uses it. A `managed` worktree is left to the harness, which takes those
-back when their session ends (@yaks/harness `worktrees.ts`). The `idle` and
-`every` options change the two durations.
+clean and has committed work landed on main is reclaimed once no live graph
+session or local process uses it. A `managed` worktree is left to the harness,
+which takes those back when their session ends (@yaks/harness `worktrees.ts`).
+The `idle` and `every` options change the two durations.
 
 `locate(cwd)` reads the canonical checkout root, common Git directory and
 worktree Git directory without writing to the graph. It returns no observation

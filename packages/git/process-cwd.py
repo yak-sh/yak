@@ -1,6 +1,7 @@
 #!/usr/bin/python3 -I
 # The privileged read for worktree collection. A held process directory ties
-# the owner check and cwd read to one process even if its PID is reused.
+# the owner check, cwd and descriptor reads to one process even if its PID is reused.
+import json
 import os
 import re
 import sys
@@ -20,7 +21,19 @@ try:
             raise ValueError("process directory is not absolute")
         # Like realpath/readlink -e, a deleted cwd refuses collection.
         os.stat(cwd)
-        print(cwd)
+        paths = [cwd]
+        descriptors = os.open("fd", os.O_RDONLY | os.O_DIRECTORY, dir_fd=fd)
+        try:
+            for name in os.listdir(descriptors):
+                try:
+                    path = os.readlink(name, dir_fd=descriptors)
+                    if path.startswith("/"):
+                        paths.append(path.removesuffix(" (deleted)"))
+                except FileNotFoundError:
+                    pass
+        finally:
+            os.close(descriptors)
+        print(json.dumps(paths))
     finally:
         os.close(fd)
 except (OSError, ValueError) as error:

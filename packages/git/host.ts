@@ -433,7 +433,8 @@ let processCwd = async (pid: string): Promise<string> => {
       stdout: 'piped',
       stderr: 'piped',
     }).output()
-    let cwd = new TextDecoder().decode(read.stdout).trimEnd()
+    let output = new TextDecoder().decode(read.stdout).trimEnd()
+    let cwd = output.startsWith('[') ? JSON.parse(output)[0] : output
     if (!read.success || !cwd.startsWith('/')) {
       // A process may have exited while the helper was starting.
       await Deno.stat(`/proc/${pid}`)
@@ -477,7 +478,92 @@ export let processCwds = async (): Promise<Set<string>> => {
   return paths
 }
 
-/** A process standing anywhere inside a worktree keeps the whole checkout. */
+/** Paths occupied by this user's processes: their directories and open files.
+ * Procfs links name the canonical file even when it was opened through a
+ * symlink. An unreadable descriptor table refuses collection; only a process
+ * or descriptor disappearing during the scan is harmless. */
+export let processPaths = async (
+  pids?: string[],
+): Promise<Set<string>> => {
+  if (Deno.build.os != 'linux') {
+    throw new Error('Worktree collection requires a local process path scan')
+  }
+  let paths = new Set<string>()
+  let processes = pids ?? []
+  if (!pids) {
+    for await (let entry of Deno.readDir('/proc')) {
+      if (/^\d+$/.test(entry.name)) processes.push(entry.name)
+    }
+  }
+  for (let pid of processes) {
+    try {
+      let proc = `/proc/${pid}`
+      if ((await Deno.stat(proc)).uid != Deno.uid()) continue
+      try {
+        paths.add(await Deno.realPath(proc + '/cwd'))
+        for await (let fd of Deno.readDir(proc + '/fd')) {
+          try {
+            let path = await Deno.readLink(proc + '/fd/' + fd.name)
+            if (path.startsWith('/')) {
+              paths.add(path.replace(/ \(deleted\)$/, ''))
+            }
+          } catch (error) {
+            if (!(error instanceof Deno.errors.NotFound)) throw error
+          }
+        }
+      } catch (error) {
+        if (!(error instanceof Deno.errors.PermissionDenied)) throw error
+        // The helper's JSON response proves both cwd and descriptors were
+        // inspected. An older cwd-only helper cannot prove safe collection.
+        let read = await new Deno.Command('systemd-run', {
+          args: [
+            '--user',
+            '--quiet',
+            '--wait',
+            '--pipe',
+            '--collect',
+            '/usr/bin/sudo',
+            '-n',
+            '/usr/local/libexec/yak-process-cwd',
+            pid,
+          ],
+          env: {
+            XDG_RUNTIME_DIR: `/run/user/${Deno.uid()}`,
+            DBUS_SESSION_BUS_ADDRESS: `unix:path=/run/user/${Deno.uid()}/bus`,
+          },
+          stdout: 'piped',
+          stderr: 'piped',
+        }).output()
+        await Deno.stat(proc)
+        let found: unknown
+        try {
+          found = JSON.parse(new TextDecoder().decode(read.stdout))
+        } catch { /* refused below */ }
+        if (
+          !read.success || !Array.isArray(found) ||
+          !found.length || !found.every((path) =>
+            typeof path == 'string' && path.startsWith('/')
+          )
+        ) {
+          throw new Error(`Worktree collection cannot inspect ${proc} paths`, {
+            cause: error,
+          })
+        }
+        for (let path of found) {
+          paths.add(path)
+        }
+      }
+    } catch (error) {
+      if (
+        !(error instanceof Deno.errors.NotFound) &&
+        !(error instanceof Error && /\(os error [23]\)/.test(error.message))
+      ) throw error
+    }
+  }
+  return paths
+}
+
+/** A process using any path inside a worktree keeps the whole checkout. */
 export let inUse = (path: string, cwds: Set<string>): boolean =>
   [...cwds].some((cwd) => cwd == path || cwd.startsWith(path + '/'))
 
@@ -554,6 +640,40 @@ let standing = async (path: string) => {
   }
 }
 
+// Containment on main proves landing only after the branch wrote work of its
+// own. Reflogs retain commits through a rebase; a creation or a fast-forward
+// alone is not work. Missing/expired evidence keeps the checkout.
+let committed = async (path: string, branch: string, head: string) => {
+  let log = await quiet(path, [
+    'reflog',
+    'show',
+    '--format=%H%x09%gs',
+    branch,
+  ])
+  let entries = log?.split('\n').filter(Boolean) ?? []
+  let start = entries.at(-1)?.split('\t')[0]
+  if (!start) return false
+  let headLog = await quiet(path, [
+    'reflog',
+    'show',
+    '--format=%H%x09%gs',
+    'HEAD',
+  ])
+  for (let entry of [...entries, ...headLog?.split('\n') ?? []]) {
+    let [hash, message] = entry.split('\t')
+    if (
+      !/^(commit(?: \([^)]*\))?|cherry-pick|rebase \(pick\)):/.test(
+        message ?? '',
+      )
+    ) continue
+    if (
+      await quiet(path, ['merge-base', '--is-ancestor', hash, start]) == null &&
+      await quiet(path, ['merge-base', '--is-ancestor', hash, head]) != null
+    ) return true
+  }
+  return false
+}
+
 // What a checkout holds, beside the branch it stands on.
 let holding = async (
   path: string,
@@ -564,7 +684,8 @@ let holding = async (
   if (!at?.head) return { held: 'unlanded' }
   let own = at.branch && `refs/heads/${at.branch}`
   if (landed) {
-    let merged = own != landed && await quiet(path, [
+    let merged = !!own && own != landed &&
+      await committed(path, own, at.head) && await quiet(path, [
           'merge-base',
           '--is-ancestor',
           at.head,
@@ -587,7 +708,9 @@ let holding = async (
  * created from, a parent's branch, main. Its own branch never counts; that is
  * what "unlanded" means. A path that is not a worktree at all is reported as
  * `unlanded` — kept, never guessed at. With `landed`, only that full local
- * branch ref counts as a landing (for example `refs/heads/main`). */
+ * branch ref counts as a landing (for example `refs/heads/main`), and the
+ * branch reflog must prove it committed work still contained in HEAD. A fresh
+ * branch or missing reflog evidence is kept. */
 export let holds = async (
   path: string,
   landed?: string,

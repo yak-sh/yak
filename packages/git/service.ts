@@ -22,7 +22,7 @@ import {
   idleFor,
   inUse,
   linked,
-  processCwds,
+  processPaths,
   reclaim,
   reconcile,
   repositoryEid,
@@ -52,6 +52,7 @@ export let collect = async (
   common: string,
   idle: number = IDLE,
   now: number = Date.now(),
+  processes: () => Promise<Set<string>> = processPaths,
 ): Promise<Record<string, Held>> => {
   await reconcile(g, common)
   let kept: Record<string, Held> = {}
@@ -88,7 +89,7 @@ export let collect = async (
     let tree = row?.worktree as Comp | undefined
     if (tree?.managed) continue
     if (tree) await discover(g, path).catch(() => {})
-    if (inUse(real, await live()) || inUse(real, await processCwds())) continue
+    if (inUse(real, await live()) || inUse(real, await processes())) continue
     let held = await reclaim(path, 'refs/heads/main').catch(() =>
       'failed' as Held
     )
@@ -106,6 +107,7 @@ export let service = async (
   host: { graph: Graph },
   options: Options = {},
   signal: AbortSignal = AbortSignal.abort(),
+  processes: () => Promise<Set<string>> = processPaths,
 ): Promise<void> => {
   for (;;) {
     for (let r of await host.graph.read('.repository')) {
@@ -113,7 +115,13 @@ export let service = async (
       if (typeof common != 'string' || !await there(common)) continue
       // One repository failing is reported and the pass goes on to the next;
       // what it left is the next pass's to find.
-      let kept = await collect(host.graph, common, options.idle).catch(
+      let kept = await collect(
+        host.graph,
+        common,
+        options.idle,
+        Date.now(),
+        processes,
+      ).catch(
         (error) => {
           console.warn('@yaks/git worktree collection —', common, error)
           return {} as Record<string, Held>

@@ -3,9 +3,26 @@
 // long enough, and nothing else does.
 import { test, until } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { discover, inUse, processCwds } from './host.ts'
-import { collect, IDLE, service } from './service.ts'
+import { discover, inUse, processPaths } from './host.ts'
+import {
+  collect as collectOnHost,
+  IDLE,
+  service as serviceOnHost,
+} from './service.ts'
 import { fixture as graphed, git, template } from './testing.ts'
+
+let pids = new Set([String(Deno.pid)])
+let processes = () => processPaths([...pids])
+let collect = (
+  g: Parameters<typeof collectOnHost>[0],
+  common: string,
+  idle?: number,
+  now?: number,
+) => collectOnHost(g, common, idle, now, processes)
+let service = (
+  host: Parameters<typeof serviceOnHost>[0],
+  options: Parameters<typeof serviceOnHost>[1],
+) => serviceOnHost(host, options, undefined, processes)
 
 let there = (path: string) => Deno.stat(path).then(() => true, () => false)
 
@@ -50,6 +67,12 @@ let fixture = async () => {
       await git(repo, 'worktree', 'add', '-q', '-b', name, path)
       return path
     },
+    land: async (path: string) => {
+      await Deno.writeTextFile(path + '/work', path)
+      await git(path, 'add', '.')
+      await git(path, 'commit', '-qm', 'work')
+      await git(repo, 'merge', '--ff-only', path.split('/').at(-1)!)
+    },
     free: () => Deno.remove(dir, { recursive: true }),
   }
 }
@@ -60,6 +83,7 @@ test('an idle worktree that holds nothing is taken back', async () => {
   let f = await fixture()
   try {
     let landed = await f.cut('landed')
+    await f.land(landed)
     let dirty = await f.cut('dirty')
     await Deno.writeTextFile(dirty + '/scratch', 'not committed')
     let ahead = await f.cut('ahead')
@@ -88,7 +112,9 @@ test('an idle checkout stays while a graph session or local process uses it', as
   let child: Deno.ChildProcess | undefined
   try {
     let busy = await f.cut('busy')
+    await f.land(busy)
     let occupied = await f.cut('occupied')
+    await f.land(occupied)
     let tree = await discover(f.g, busy)
     await f.g.apply([{
       entity: { eid: 'session' },
@@ -101,7 +127,8 @@ test('an idle checkout stays while a graph session or local process uses it', as
       stdout: 'null',
       stderr: 'null',
     }).spawn()
-    await until(async () => inUse(occupied, await processCwds()))
+    pids.add(String(child.pid))
+    await until(async () => inUse(occupied, await processes()))
     assertEquals(await collect(f.g, f.common, IDLE, later), {})
     assert(await there(busy))
     assert(await there(occupied))
@@ -114,6 +141,7 @@ test('an idle checkout stays while a graph session or local process uses it', as
     assert(await there(occupied))
   } finally {
     if (child) {
+      pids.delete(String(child.pid))
       child.kill('SIGTERM')
       await child.status
     }
@@ -125,6 +153,7 @@ test('a settled transcript keeps its checkout until its process exits', async ()
   let f = await fixture()
   try {
     let path = await f.cut('draining')
+    await f.land(path)
     let tree = await discover(f.g, path)
     await f.g.apply([{
       entity: { eid: 'draining' },
@@ -159,6 +188,7 @@ test('the service collects each repository the graph knows', async () => {
   let f = await fixture()
   try {
     let path = await f.cut('landed')
+    await f.land(path)
     await discover(f.g, f.repo)
     await service({ graph: f.g }, { idle: 0 })
     assertEquals(await there(path), false)

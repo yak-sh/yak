@@ -18,9 +18,25 @@ test('the privileged cwd reader accepts one owned PID', async () => {
   let result = await read([String(Deno.pid)])
   equal(result.success, true)
   equal(
-    new TextDecoder().decode(result.stdout).trimEnd(),
+    JSON.parse(new TextDecoder().decode(result.stdout))[0],
     await Deno.realPath(Deno.cwd()),
   )
+})
+
+test('the privileged reader reports open files even outside its cwd', async () => {
+  let dir = await Deno.makeTempDir()
+  let path = dir + '/held'
+  await Deno.writeTextFile(path, 'work')
+  let file = await Deno.open(path)
+  try {
+    let result = await read([String(Deno.pid)])
+    equal(result.success, true)
+    let paths: string[] = JSON.parse(new TextDecoder().decode(result.stdout))
+    equal(paths.includes(await Deno.realPath(path)), true)
+  } finally {
+    file.close()
+    await Deno.remove(dir, { recursive: true })
+  }
 })
 
 test('the privileged cwd reader refuses paths and extra arguments', async () => {

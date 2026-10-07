@@ -133,8 +133,8 @@ bodies or name their files. What it can't find anywhere is two things:
   reported to the session (packages/session/react.ts).
 - **Afterwards**, leave the worktree be. Every five minutes the harness's
   maintenance service, on whichever worker holds its lease, removes each
-  worktree under ~/.yak/worktrees that is clean, landed on main and used by no
-  running session, branch and all (packages/harness/service.ts,
+  worktree under ~/.yak/worktrees that is clean, has committed work landed on main, and is used by no
+  running session or local process (cwd or open files), branch and all (packages/harness/service.ts,
   packages/harness/worktrees.ts `sweep`).
 
 When this skill is wrong or missing something, fix it in the same change.

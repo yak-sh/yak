@@ -1,18 +1,46 @@
 import { test, until as eventually } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { discover, inUse, processCwds, reclaim, restore } from '@yaks/git/host'
+import {
+  discover,
+  inUse,
+  processCwds,
+  processPaths,
+  reclaim,
+  restore,
+} from '@yaks/git/host'
 import { swap } from '@yaks/session/admission'
 import { sessionCwd } from './workspace.ts'
 import {
-  collect,
-  collecting,
+  collect as collectOnHost,
+  collecting as collectingOnHost,
   cutFor,
   going,
   homes,
   over,
-  sweep,
+  sweep as sweepOnHost,
 } from './worktrees.ts'
 import { git, harness, scratchRepo } from './testing.ts'
+
+// Scan the actual test processes, not the host's opaque system services.
+// Production scans all PIDs; the process path reader itself is exercised here.
+let pids = new Set([String(Deno.pid)])
+let processes = () => processPaths([...pids])
+let sweep = (
+  g: Parameters<typeof sweepOnHost>[0],
+  dir: string,
+  live?: Set<string>,
+) => sweepOnHost(g, dir, live, processes)
+let collect = (
+  g: Parameters<typeof collectOnHost>[0],
+  session: string,
+  dir: string,
+) => collectOnHost(g, session, dir, processes)
+let collecting = (
+  g: Parameters<typeof collectingOnHost>[0],
+  fx: Parameters<typeof collectingOnHost>[1],
+  report: Parameters<typeof collectingOnHost>[2],
+  dir: string,
+) => collectingOnHost(g, fx, report, dir, processes)
 
 let there = (path: string) => Deno.stat(path).then(() => true, () => false)
 
@@ -85,12 +113,18 @@ test('a sweep takes back the root, keeps what is held, and skips a live home', a
     await git(f.repo, 'branch', 'parent', 'task-kept')
     let dirty = await f.cut('dirty')
     await Deno.writeTextFile(dirty + '/scratch', 'uncommitted')
+    let fresh = await f.cut('fresh')
     let live = await f.cut('live')
     await Deno.writeTextFile(f.root + '/not-a-directory', 'ignored')
     let held = await sweep(h.g, f.root, new Set([live]))
-    assertEquals(held, { [kept]: 'unlanded', [dirty]: 'dirty' })
+    assertEquals(held, {
+      [kept]: 'unlanded',
+      [dirty]: 'dirty',
+      [fresh]: 'unlanded',
+    })
     assertEquals(await there(gone), false)
     assert(await there(kept))
+    assert(await there(fresh))
     assert(await there(live))
     assert(await there(f.root + '/not-a-directory'))
     // Where each swept checkout stood is recorded before its bytes go: that
@@ -117,6 +151,8 @@ test('a sweep keeps an unrecorded local process and a session resumed during dis
   let child: Deno.ChildProcess | undefined
   try {
     let occupied = await f.cut('occupied')
+    await f.commit(occupied, 'occupied work')
+    await git(f.repo, 'merge', '--ff-only', 'task-occupied')
     await Deno.mkdir(occupied + '/subdir')
     // Git ignores the empty directory, so this is still a clean checkout.
     child = new Deno.Command('cat', {
@@ -125,9 +161,14 @@ test('a sweep keeps an unrecorded local process and a session resumed during dis
       stdout: 'null',
       stderr: 'null',
     }).spawn()
+    pids.add(String(child.pid))
     await eventually(async () => inUse(occupied, await processCwds()))
     let resumed = await f.cut('resumed')
+    await f.commit(resumed, 'resumed work')
+    await git(f.repo, 'merge', '--ff-only', 'task-resumed')
     let directory = await f.cut('directory')
+    await f.commit(directory, 'directory work')
+    await git(f.repo, 'merge', '--ff-only', 'task-directory')
     await Deno.mkdir(directory + '/subdir')
     await h.g.apply([{
       entity: { eid: 'using-directory' },
@@ -158,9 +199,77 @@ test('a sweep keeps an unrecorded local process and a session resumed during dis
     assert(await there(directory))
   } finally {
     if (child) {
+      pids.delete(String(child.pid))
       child.kill('SIGTERM')
       await child.status
     }
+    h.close()
+    await f.free()
+  }
+})
+
+test('an open file outside a process cwd keeps landed work until it closes', async () => {
+  let f = await fixture()
+  let h = await harness()
+  let child: Deno.ChildProcess | undefined
+  try {
+    let path = await f.cut('open-file')
+    await f.commit(path, 'landed work')
+    await git(f.repo, 'merge', '--ff-only', 'task-open-file')
+    let alias = f.dir + '/alias'
+    await Deno.symlink(path + '/work', alias)
+    child = new Deno.Command('python3', {
+      args: [
+        '-c',
+        'import sys; f=open(sys.argv[1]); print("ready",flush=True); sys.stdin.read()',
+        alias,
+      ],
+      cwd: f.repo,
+      stdin: 'piped',
+      stdout: 'piped',
+      stderr: 'null',
+    }).spawn()
+    pids.add(String(child.pid))
+    let ready = child.stdout.getReader()
+    await ready.read()
+    ready.releaseLock()
+    assertEquals(await sweep(h.g, f.root), {})
+    assert(await there(path))
+    assert((await f.branches()).includes('task-open-file'))
+    await child.stdin.close()
+    await child.status
+    pids.delete(String(child.pid))
+    child = undefined
+    assertEquals(await sweep(h.g, f.root), {})
+    assertEquals(await there(path), false)
+    assertEquals(await f.branches(), 'main')
+  } finally {
+    if (child) {
+      pids.delete(String(child.pid))
+      child.kill('SIGTERM')
+      await child.status
+    }
+    h.close()
+    await f.free()
+  }
+})
+
+test('a failed process path scan keeps landed checkouts and their branches', async () => {
+  let f = await fixture()
+  let h = await harness()
+  try {
+    let path = await f.cut('opaque')
+    await f.commit(path, 'landed work')
+    await git(f.repo, 'merge', '--ff-only', 'task-opaque')
+    assertEquals(
+      await sweepOnHost(h.g, f.root, undefined, () => {
+        throw new Deno.errors.PermissionDenied('cannot inspect descriptors')
+      }),
+      { [path]: 'failed' },
+    )
+    assert(await there(path))
+    assert((await f.branches()).includes('task-opaque'))
+  } finally {
     h.close()
     await f.free()
   }
@@ -171,6 +280,8 @@ test('a sweep accepts a checkout another sweep removed during discovery', async 
   let h = await harness()
   try {
     let path = await f.cut('raced')
+    await f.commit(path, 'raced work')
+    await git(f.repo, 'merge', '--ff-only', 'task-raced')
     let apply = h.g.apply
     h.g.apply = async (...args) => {
       let result = await apply(...args)
@@ -244,6 +355,10 @@ test('collect keeps a checkout while its session could still run', async () => {
     // A session with no checkout of its own finds nothing to take.
     assertEquals(await collect(h.g, 'child:two', f.root), undefined)
     await h.g.apply([said('child:one')])
+    assertEquals(await collect(h.g, 'child:one', f.root), 'unlanded')
+    assert(await there(path))
+    await f.commit(path, 'finished work')
+    await git(f.repo, 'merge', '--ff-only', 'task-child-one')
     assertEquals(await collect(h.g, 'child:one', f.root), undefined)
     assertEquals(await there(path), false)
   } finally {
@@ -277,10 +392,11 @@ test('a collected checkout is cut again where it stood', async () => {
     )
     assertEquals(await git(path, 'status', '--porcelain'), '')
     assertEquals(await Deno.readTextFile(path + '/work'), 'the work')
-    // Standing already, it is itself; and it can go and come back again.
+    // A restored branch has no commits of its own in its new reflog. Keep it
+    // until it lands more work, even though its inherited HEAD is on main.
     assertEquals(await restore(h.g, row), path)
-    assertEquals(await collect(h.g, 'child:one', f.root), undefined)
-    assertEquals(await there(path), false)
+    assertEquals(await collect(h.g, 'child:one', f.root), 'unlanded')
+    assert(await there(path))
   } finally {
     h.close()
     await f.free()
@@ -351,6 +467,8 @@ test('a settled child hands its checkout back when dispatch is removed', async (
   let collected = collecting(h.g, h.fx, (error) => failed.push(error), f.root)
   try {
     let path = await f.cut('child-one')
+    await f.commit(path, 'landed work')
+    await git(f.repo, 'merge', '--ff-only', 'task-child-one')
     await h.g.apply([
       {
         entity: { eid: 'child:one' },

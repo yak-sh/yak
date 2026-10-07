@@ -107,6 +107,44 @@ test('a required landing branch keeps commits held only by another task', async 
   }
 })
 
+test('a required landing keeps fresh and fast-forward-only branches', async () => {
+  let f = await fixture()
+  try {
+    let fresh = await f.cut('fresh')
+    let forwarded = await f.cut('forwarded')
+    assertEquals(await reclaim(fresh, 'refs/heads/main'), 'unlanded')
+    await f.commit(f.repo, 'main work')
+    await git(forwarded, 'merge', '--ff-only', 'main')
+    assertEquals(await reclaim(forwarded, 'refs/heads/main'), 'unlanded')
+    assertEquals(await reclaim(fresh, 'refs/heads/main'), 'unlanded')
+    assert(await there(fresh))
+    assert(await there(forwarded))
+    assertEquals(await f.branches(), 'main\ntask-forwarded\ntask-fresh')
+  } finally {
+    await f.free()
+  }
+})
+
+test('rebased commits count as landed work, but missing reflog evidence does not', async () => {
+  let f = await fixture()
+  try {
+    let path = await f.cut('rebased')
+    await f.commit(path, 'task work')
+    await Deno.writeTextFile(f.repo + '/other', 'main work')
+    await git(f.repo, 'add', '.')
+    await git(f.repo, 'commit', '-qm', 'main work')
+    await git(path, 'rebase', 'main')
+    assertEquals(await holds(path, 'refs/heads/main'), 'unlanded')
+    await git(f.repo, 'merge', '--ff-only', 'task-rebased')
+    assertEquals(await holds(path, 'refs/heads/main'), undefined)
+    await git(path, 'reflog', 'expire', '--expire=all', '--all')
+    assertEquals(await reclaim(path, 'refs/heads/main'), 'unlanded')
+    assert(await there(path))
+  } finally {
+    await f.free()
+  }
+})
+
 test('local process directories protect a worktree and its descendants', async () => {
   let cwd = await Deno.realPath(Deno.cwd())
   assert(inUse(cwd, await processCwds()))
