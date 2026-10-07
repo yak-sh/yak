@@ -131,12 +131,7 @@ export let inspectIo: Io = {
     await apply(bs)
   },
   get: (eid) => row(eid).value ? bundle(ent(eid)) : undefined,
-  link: (eid) =>
-    `/${idOf(ent(eid))}?v=${
-      ['_package', '_comp', '_prop'].some((n) => ent(eid)[n])
-        ? 'Inspect.Page'
-        : 'Debug'
-    }`,
+  link: (eid) => `/${idOf(ent(eid))}`,
   find: (q) => `/?q=${encodeURIComponent(q)}`,
   go: (href) => navigate(href),
   id: (b) =>

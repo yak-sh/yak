@@ -74,7 +74,8 @@ export type Host = {
   /** an entity the host holds, by eid, read reactively: one an answer
    * brought (the transactions a history asks for beside its changes) */
   get: (eid: string) => Bundle | undefined
-  /** where the inspector's page for an entity is */
+  /** where an entity's page is: the host opens it on the view it draws
+   * that entity with, as any link to it does */
   link: (eid: string) => string
   /** where the inspector's page for a query is */
   find: (query: string) => string
