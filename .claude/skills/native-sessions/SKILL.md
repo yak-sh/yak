@@ -15,6 +15,11 @@ description: >
 
 # Native sessions
 
+**Not in use.** The owner has banned starting or resuming graph-native sessions
+until the effects and graph speed work on T-95308 is fixed (C-121250). Delegate
+to Claude agents instead; this skill stays as the reference for when the ban
+lifts.
+
 A native session is a transcript in the graph that @yaks/harness runs: our own
 agent loop. `yak session new` writes the session and its first input, then only
 waits; the runner works the transcript wherever the effects role is served
