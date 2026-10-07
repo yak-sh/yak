@@ -15,7 +15,9 @@ import {
   command,
   members,
   runWrangler,
+  sameSibling,
   seen,
+  siblingDigest,
   SIBLINGS,
   siblings,
   stale,
@@ -270,4 +272,91 @@ test('wrangler: app-only pushes do not supersede a build, but Worker source and 
   } finally {
     Deno.removeSync(root, { recursive: true })
   }
+})
+
+test('sibling uploads use all bundled modules and configuration, not file order', async () => {
+  let bytes = (s: string) => new TextEncoder().encode(s)
+  let first = await siblingDigest('prod', {
+    'index.js': bytes('code'),
+    'compiler.wasm': bytes('wasm'),
+  })
+  assertEquals(
+    await siblingDigest('prod', {
+      'compiler.wasm': bytes('wasm'),
+      'index.js': bytes('code'),
+    }),
+    first,
+  )
+  assert(
+    (await siblingDigest('staging', {
+      'index.js': bytes('code'),
+      'compiler.wasm': bytes('wasm'),
+    })) != first,
+  )
+  assert(
+    (await siblingDigest('prod', {
+      'index.js': bytes('code'),
+      'compiler.wasm': bytes('new wasm'),
+    })) != first,
+  )
+  assert(
+    (await siblingDigest('prod', {
+      'index.js': bytes('new catalog'),
+      'compiler.wasm': bytes('wasm'),
+    })) != first,
+  )
+  assert(
+    (await siblingDigest('prod', {
+      'renamed.js': bytes('code'),
+      'compiler.wasm': bytes('wasm'),
+    })) != first,
+  )
+})
+
+test('only the fully serving sibling with matching upload inputs is reusable', () => {
+  let deployment = (digest: string, created_on: string) => ({
+    created_on,
+    versions: [{ version_id: 'v', percentage: 100 }],
+    annotations: { 'workers/message': `commit\ninputs:${digest}` },
+  })
+  let old = deployment('old', '2026-10-07T07:00:00Z')
+  let now = deployment('new', '2026-10-07T08:00:00Z')
+  assertEquals(sameSibling('new', [now, old]), true)
+  assertEquals(sameSibling('new', [old, now]), true)
+  assertEquals(sameSibling('old', [old, now]), false)
+  assertEquals(sameSibling('new', null), false)
+  assertEquals(sameSibling('new', []), false)
+  assertEquals(sameSibling('new', [{ ...now, annotations: {} }]), false)
+  assertEquals(
+    sameSibling('new', [{
+      ...now,
+      versions: [{ version_id: 'v', percentage: 50 }, {
+        version_id: 'v2',
+        percentage: 50,
+      }],
+    }]),
+    false,
+  )
+})
+
+test('base preparation overlaps sibling uploads and gates the kernel', async () => {
+  let base = Promise.withResolvers<string[]>(),
+    sibling = Promise.withResolvers<number>()
+  let prepared = false, kernel = false
+  let deploy = runWrangler(['deploy'], async (_args, unpinned) => {
+    if (unpinned) return await sibling.promise
+    kernel = true
+    return 0
+  }, () => {
+    prepared = true
+    return base.promise
+  })
+  await tick()
+  assert(prepared)
+  sibling.resolve(0)
+  await tick()
+  assertEquals(kernel, false)
+  base.resolve(['deploy'])
+  assertEquals(await deploy, 0)
+  assert(kernel)
 })

@@ -130,12 +130,20 @@ export let based = async (
   if (!from.startsWith(`${REGISTRY}/${account_id}/`)) {
     throw new Error(`${from} is not in this account's registry`)
   }
-  await must(
-    go,
-    ['docker', 'login', '--password-stdin', '--username', username, REGISTRY],
-    password,
-  )
-  if (await has(from, password)) return from
+  // Login prepares Docker to pull a missing base; the registry HEAD needs only
+  // the same credentials, not Docker's login. Settle both independent requests
+  // before deciding, so even a failure leaves no child process behind.
+  let [logged, checked] = await Promise.allSettled([
+    must(
+      go,
+      ['docker', 'login', '--password-stdin', '--username', username, REGISTRY],
+      password,
+    ),
+    has(from, password),
+  ])
+  if (logged.status == 'rejected') throw logged.reason
+  if (checked.status == 'rejected') throw checked.reason
+  if (checked.value) return from
   await must(go, [...BUILD, '-t', from, ...context()])
   if (dry) return from
   // The push is what timed out; a second or third try resumes it, since the

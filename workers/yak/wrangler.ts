@@ -202,15 +202,139 @@ export let siblings = (argv: string[]): string[][] => {
 export let runWrangler = async (
   argv: string[],
   run: (args: string[], unpinned?: boolean) => Promise<number>,
+  prepare: () => Promise<string[]> = () => Promise.resolve(argv),
 ): Promise<number> => {
   let completed = await Promise.allSettled(
-    siblings(argv).map((args) => Promise.resolve().then(() => run(args, true))),
+    [
+      ...siblings(argv).map((args) =>
+        Promise.resolve().then(() => run(args, true))
+      ),
+      Promise.resolve().then(prepare),
+    ],
   )
   for (let result of completed) {
     if (result.status == 'rejected') throw result.reason
-    if (result.value) return result.value
+    if (typeof result.value == 'number' && result.value) return result.value
   }
-  return await run(argv)
+  return await run((completed.at(-1) as PromiseFulfilledResult<string[]>).value)
+}
+
+/** Skip an upload only when the currently serving deployment carries the
+ * digest of exactly these bundled modules and configuration. Old releases
+ * without a digest, failed reads and split deployments always upload. */
+export let sameSibling = (digest: string, deployments: unknown): boolean => {
+  if (!Array.isArray(deployments)) return false
+  let latest =
+    deployments.toSorted((a, b) =>
+      Date.parse(b.created_on) - Date.parse(a.created_on)
+    )[0]
+  return latest?.versions?.length == 1 &&
+    latest.versions[0].percentage == 100 &&
+    latest.annotations?.['workers/message']?.endsWith(`\ninputs:${digest}`) ===
+      true
+}
+
+/** Wrangler's upload inputs, not source timestamps or the last main commit. */
+export let siblingDigest = async (
+  config: string,
+  modules: Record<string, Uint8Array>,
+) => {
+  let chunks: Uint8Array[] = []
+  for (
+    let [name, body] of [
+      ['config', new TextEncoder().encode(config)],
+      ...Object.entries(modules).sort(([a], [b]) => a.localeCompare(b)),
+    ] as [string, Uint8Array][]
+  ) {
+    chunks.push(
+      new TextEncoder().encode(`${name.length}:${name}:${body.length}:`),
+      body,
+    )
+  }
+  let bytes = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0))
+  let at = 0
+  for (let chunk of chunks) {
+    bytes.set(chunk, at)
+    at += chunk.length
+  }
+  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
+    .map((n) => n.toString(16).padStart(2, '0')).join('')
+}
+
+let uploadSibling = async (
+  args: string[],
+  run: (args: string[], unpinned?: boolean) => Promise<number>,
+) => {
+  if (args.includes('--dry-run')) return await run(args, true)
+  let config = args[args.indexOf('-c') + 1]
+  let output = Deno.makeTempDirSync({
+    dir: join(dir, '.wrangler'),
+    prefix: 'sibling-',
+  })
+  let query = async (argv: string[]) => {
+    let result = await new Deno.Command('env', {
+      args: [...PINNED.flatMap((v) => ['-u', v]), ...WRANGLER, ...argv],
+      cwd: dir,
+      stdout: 'piped',
+      stderr: 'piped',
+    }).output()
+    return result
+  }
+  try {
+    let [built, live] = await Promise.all([
+      query([...args, '--dry-run', '--outdir', output]),
+      query(['deployments', 'list', '-c', config, ...envs(args), '--json']),
+    ])
+    if (!built.success) {
+      console.error(new TextDecoder().decode(built.stderr))
+      return built.code
+    }
+    let modules: Record<string, Uint8Array> = {}
+    for (let file of Deno.readDirSync(output)) {
+      // Wrangler emits these beside the actual multipart upload modules.
+      if (
+        file.isFile && file.name != 'README.md' && !file.name.endsWith('.map')
+      ) {
+        modules[file.name] = Deno.readFileSync(join(output, file.name))
+      }
+    }
+    let digest = await siblingDigest(
+      JSON.stringify({
+        config: Deno.readTextFileSync(join(dir, config)),
+        wrangler: WRANGLER,
+        // Flags can override config bindings too; the commit annotation alone
+        // changes on every push and is not part of the serving code.
+        args: args.filter((arg, i) =>
+          arg != '--message' && args[i - 1] != '--message'
+        ),
+      }),
+      modules,
+    )
+    let deployments: unknown
+    try {
+      if (live.success) {
+        deployments = JSON.parse(new TextDecoder().decode(live.stdout))
+      }
+    } catch { /* unread means upload */ }
+    if (sameSibling(digest, deployments)) {
+      console.log(
+        `${config}: unchanged bundled upload ${
+          digest.slice(0, 12)
+        } — already serving`,
+      )
+      return 0
+    }
+    let annotated = [...args]
+    let message = annotated.indexOf('--message')
+    if (message >= 0) {
+      // Keep the commit identity; subjects can already consume the API's 512-byte message limit.
+      annotated[message + 1] = annotated[message + 1].slice(0, 40) +
+        `\ninputs:${digest}`
+    } else annotated.push('--message', `inputs:${digest}`)
+    return await run(annotated, true)
+  } finally {
+    Deno.removeSync(output, { recursive: true })
+  }
 }
 
 // What Workers Builds pins to this Worker. Inherited by another Worker's
@@ -397,11 +521,6 @@ if (import.meta.main) {
     }).output()
     if (!commit.success) Deno.exit(commit.code)
     argv.push('--message', new TextDecoder().decode(commit.stdout).trim())
-    // The sandbox image builds FROM a base the registry must already hold
-    // (sandbox/base.ts), unless this deploy builds no image at all.
-    if (!/(^| )--containers-rollout[= ]none( |$)/.test(argv.join(' '))) {
-      await based({ wrangler: WRANGLER, dry: argv.includes('--dry-run') })
-    }
   }
   let children = new Set<Deno.ChildProcess>()
   let interrupted = false
@@ -441,5 +560,18 @@ if (import.meta.main) {
       children.delete(child)
     }
   }
-  Deno.exit(await runWrangler(argv, run))
+  let prepare = async () => {
+    if (
+      command(argv) === 'deploy' &&
+      !/(^| )--containers-rollout[= ]none( |$)/.test(argv.join(' '))
+    ) await based({ wrangler: WRANGLER, dry: argv.includes('--dry-run') })
+    return argv
+  }
+  Deno.exit(
+    await runWrangler(
+      argv,
+      (args, unpinned) => unpinned ? uploadSibling(args, run) : run(args),
+      prepare,
+    ),
+  )
 }
