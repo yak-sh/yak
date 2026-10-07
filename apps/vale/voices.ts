@@ -4,9 +4,81 @@
 // fire and water a level keeps making, and a marsh's frogs. A voice plays
 // into whatever node it is given; sound.ts says where that is.
 
+import { audible } from './samples.ts'
+
 /** A sound: how long it lasts in seconds, how loud it is at its source, and
  * how it is made into `o`. */
-export type Voice = { dur: number; loud: number; play: (o: AudioNode) => void }
+export type Voice = {
+  dur: number
+  loud: number
+  key?: string
+  play: (o: AudioNode) => void | (() => void)
+}
+
+// One voice per action at a source; independent actions can sound together.
+// The gate also silences procedural voices when their next event steals them.
+export let oneShots = (into: AudioNode) => {
+  let playing = new Map<string, { until: number; end: () => void }>()
+  let prune = () => {
+    for (let [key, shot] of playing) {
+      if (shot.until > into.context.currentTime) continue
+      shot.end()
+      playing.delete(key)
+    }
+  }
+  return {
+    prune,
+    play: (v: Voice, key = v.key ?? 'action') => {
+      prune()
+      playing.get(key)?.end()
+      let gate = into.context.createGain()
+      gate.connect(into)
+      let stop = v.play(gate)
+      playing.set(key, {
+        until: into.context.currentTime + v.dur + 0.05,
+        end: () => {
+          gate.disconnect()
+          stop?.()
+        },
+      })
+    },
+  }
+}
+
+export let recorded = (
+  buffer: AudioBuffer,
+  fallback: Voice,
+  gain: number,
+  key: string,
+): Voice => {
+  let { offset, dur: length } = audible(buffer)
+  if (!length) return { ...fallback, key }
+  let dur = Math.min(length, fallback.dur)
+  return {
+    dur,
+    loud: fallback.loud,
+    key,
+    play: (into) => {
+      let c = into.context, at = c.currentTime
+      let s = new AudioBufferSourceNode(c, { buffer })
+      let g = c.createGain()
+      g.gain.setValueAtTime(gain, at)
+      g.gain.setValueAtTime(gain, at + Math.max(0, dur - 0.008))
+      g.gain.linearRampToValueAtTime(0, at + dur)
+      s.connect(g).connect(into)
+      let ended = false
+      s.onended = () => {
+        ended = true
+        s.disconnect()
+        g.disconnect()
+      }
+      s.start(at, offset, dur)
+      return () => {
+        if (!ended) s.stop()
+      }
+    },
+  }
+}
 
 let voice = (dur: number, loud: number, play: Voice['play']): Voice => ({
   dur,

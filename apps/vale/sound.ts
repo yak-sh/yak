@@ -50,6 +50,7 @@ type Source = {
   into: AudioNode
   until: number
   fixed: boolean
+  shots: ReturnType<typeof voices.oneShots>
   end?: () => void
 }
 
@@ -94,6 +95,7 @@ try {
 let ears: Ear | null = null
 let spots = new Map<string, Vec3>()
 let sources = new Map<string, Source>()
+let direct: ReturnType<typeof voices.oneShots> | null = null
 let points = 0
 let heard = noises()
 
@@ -117,6 +119,7 @@ let wake = () => {
     out = limit
     destination.effects = levels.effects.into(ctx, limit)
     destination.voice = levels.voice.into(ctx, limit)
+    direct = voices.oneShots(destination.effects!)
     speakers = ctx.destination
     loops = {
       fire: voices.fire(ctx),
@@ -178,48 +181,43 @@ let panner = (
   let into = new GainNode(ctx!, { gain: falloff.near })
   move(pan, at)
   into.connect(pan).connect(destination[channel]!)
-  let s: Source = { id, pan, into, until: 0, fixed }
+  let s: Source = {
+    id,
+    pan,
+    into,
+    until: 0,
+    fixed,
+    shots: voices.oneShots(into),
+  }
   sources.set(sourceKey(id, channel), s)
   return s
 }
 
 /** Make `v` at `from`: not at all while muted or asleep, or when it would be
  * too faint to hear. */
-let make = (from: From, v: Voice) => {
+let make = (from: From, v: Voice, key?: string) => {
   if (!ctx || !out || muted) return
-  if (from == null) return v.play(destination.effects!)
+  if (from == null) return direct!.play(v, key)
   let id = typeof from == 'string' ? from : `@${points++}`
   let at = typeof from == 'string' ? spots.get(from) : from
   if (!at || (ears && hear(ears, at).gain * v.loud < QUIET)) return
   let s = sources.get(sourceKey(id, 'effects')) ??
     panner(id, at, typeof from != 'string')
   s.until = Math.max(s.until, ctx.currentTime + v.dur + TAIL)
-  v.play(s.into)
+  s.shots.play(v, key)
 }
 
 // A decoded sample plays through the same source, falloff and effects bus as
 // its procedural voice. Until it arrives, the procedural voice still sounds.
 let sampled = (name: string, fallback: Voice, gain: number): Voice => {
-  if (!ctx) return fallback
+  let pending = { ...fallback, key: name }
+  if (!ctx) return pending
   let b = loaded(ctx, name)
   if (!b) {
     void load(ctx, name)
-    return fallback
+    return pending
   }
-  return {
-    dur: b.duration,
-    loud: fallback.loud,
-    play: (into) => {
-      let s = new AudioBufferSourceNode(into.context, { buffer: b })
-      let g = new GainNode(into.context, { gain })
-      s.connect(g).connect(into)
-      s.onended = () => {
-        s.disconnect()
-        g.disconnect()
-      }
-      s.start()
-    },
-  }
+  return voices.recorded(b, fallback, gain, name)
 }
 
 // A kept sound ends: it fades, and its source goes once it has.
@@ -332,6 +330,7 @@ let noisy = (n: Noise) =>
       : n.type == 'swing'
       ? sampled('swing', voices.whiff, 0.25)
       : sampled('roll', voices.roll, 0.25),
+    n.type,
   )
 
 export let sound = {
@@ -409,12 +408,15 @@ export let sound = {
     music.at(ears.at)
     let around = ambience(v, ears.at)
     for (let a of around) spots.set(a.id, a.at)
+    direct?.prune()
     let t = ctx.currentTime
     for (let [key, s] of sources) {
+      s.shots.prune()
       let at = s.fixed ? undefined : spots.get(s.id)
       if (at) move(s.pan, at)
       else if (s.end) end(s)
       if (t > s.until) {
+        s.into.disconnect()
         s.pan.disconnect()
         sources.delete(key)
       }
@@ -441,6 +443,7 @@ export let sound = {
       family == 'sword'
         ? sampled('sword', voices.whiff, 0.35)
         : sampled('swing', voices.whiff, 0.25),
+      'swing',
     ),
   fire: (from: From) => make(from, sampled('spell', voices.whiff, 0.4)),
   roll: (from: From) => make(from, sampled('roll', voices.roll, 0.25)),

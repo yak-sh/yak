@@ -31,7 +31,13 @@ test('sound samples retry a missing blob and share a successful load', async () 
   let fetchWas = globalThis.fetch
   let requests: string[] = [], failures: unknown[] = []
   let found = false
-  let buffer = { duration: 1 } as AudioBuffer
+  let buffer = {
+    duration: 1,
+    length: 1,
+    numberOfChannels: 1,
+    sampleRate: 1,
+    getChannelData: () => new Float32Array([1]),
+  } as AudioBuffer
   let ctx = {
     decodeAudioData: (_: ArrayBuffer) => Promise.resolve(buffer),
   } as AudioContext

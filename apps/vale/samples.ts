@@ -103,6 +103,39 @@ export let loaded = (ctx: BaseAudioContext, name: string) =>
     ? state(ctx).buffers.get(name)?.buffer
     : undefined
 
+// Analyze one-shots without changing the buffer loops and music share.
+let bounds = new WeakMap<AudioBuffer, { offset: number; dur: number }>()
+export let audible = (buffer: AudioBuffer) => {
+  let cached = bounds.get(buffer)
+  if (cached) return cached
+  let channels = Array.from(
+    { length: buffer.numberOfChannels },
+    (_, ch) => buffer.getChannelData(ch),
+  )
+  let peak = 0
+  for (let data of channels) {
+    for (let value of data) {
+      peak = Math.max(peak, Math.abs(value))
+    }
+  }
+  // Ignore codec noise, but keep quiet clips and their attack and decay.
+  let threshold = Math.max(0.0001, peak * 0.01)
+  let first = buffer.length, last = -1
+  for (let data of channels) {
+    for (let i = 0; i < data.length; i++) {
+      if (Math.abs(data[i]) < threshold) continue
+      first = Math.min(first, i)
+      last = Math.max(last, i)
+    }
+  }
+  let found = {
+    offset: last < 0 ? 0 : first / buffer.sampleRate,
+    dur: last < 0 ? 0 : (last + 1 - first) / buffer.sampleRate,
+  }
+  bounds.set(buffer, found)
+  return found
+}
+
 /** Overlap a recording's end with its start, then loop at adjacent samples. */
 export let blendLoop = (input: Float32Array, fade: number) => {
   let length = input.length - fade
@@ -150,6 +183,7 @@ export let load = (ctx: AudioContext, name: string) => {
       if (!response.ok) throw new Error(`Sound ${name}: ${response.status}`)
       let buffer = await ctx.decodeAudioData(await response.arrayBuffer())
       if (clips[name] != hash) return null
+      audible(buffer)
       s.buffers.set(name, { hash, buffer })
       return buffer
     } catch (error) {
