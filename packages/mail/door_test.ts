@@ -14,7 +14,6 @@ import { sessionDoc } from '@yaks/session/vocab'
 import { mailDoc } from './comp.ts'
 import { arrived } from './arrive.ts'
 import { inboxAt, planned, queue } from './door.ts'
-import { effects as mailEffects } from './effects.ts'
 import { payload } from './cloudflare.ts'
 import { message, sending } from './send.ts'
 import { stash } from './stash.ts'
@@ -160,25 +159,16 @@ test('mail loads complete root/latest words and choices without digest history',
   )
 })
 
-test('inbox effects read the committed graph rather than the detached storage transaction', async () => {
+test('the service queues a blocking decision before the digest hour, once', async () => {
   let g = await world()
-  let handler = mailEffects({ graph: g }, { inbox }).mail_inbox
-  let noRead = () => {
-    throw new Error('raw storage cannot project inbox summaries')
-  }
-  await handler(
-    {
-      kind: 'created',
-      name: 'decision',
-      entity: { eid: 'ask' },
-      touched: ['decision'],
-    },
-    { ...detached(g.storage), read: noRead, get: noRead },
-    (bundles) => g.apply(bundles),
-  )
-  let [letter] = await g.read('.mail_notice&.mail&*')
+  let early = { ...options, inbox: { ...inbox, hour: 24 } }
+  await service({ graph: g }, early)
+  let [letter, ...more] = await g.read('.mail_notice&.mail&*')
+  assertEquals(more, [])
   assertEquals(comp(letter, 'mail').target, 'ask')
   assertStringIncludes(String(comp(letter, 'doc').body), 'Can you choose?')
+  await service({ graph: g }, early)
+  assertEquals((await g.read('.mail_notice&.mail&*')).length, 1)
 })
 
 test('email queues blocking decisions once and digests the rest once daily, without alerts or updates', () => {

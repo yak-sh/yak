@@ -118,8 +118,8 @@ export let pending = async (
   session: Eid,
 ): Promise<{ item: Bundle; line: string }[]> => {
   let vocab = graph.vocab
-  // Native inbox replies are admitted by the thread router, not the bus.
-  // An outside harness claiming work retains its listener exception.
+  // A comment stays a thread message: the bus never feeds one to a native
+  // transcript. An outside harness claiming work retains its listener exception.
   let [owner] = await graph.get([session])
   let native = !owner?.process &&
     (await graph.read(`.entry.session=${session}&.using&.limit=1`)).length > 0

@@ -505,12 +505,13 @@ Automatic inbox mail is opt-in in the mail plugin's `with.inbox` option:
 ```
 
 The person needs `email.address`; the mail plugin still needs its sender and
-inbound route or pull configuration. `hour` is UTC, default 9. After that hour,
-the mail service queues at most one digest per UTC day. A missed day is not
-replayed as a backlog of digests. Blocking decisions queue at once through
-`mail_inbox`; the service also catches work written while no worker ran. Alerts
-and updates are excluded unless `alerts: true` or `updates: true` is explicitly
-requested. Read, muted and archived threads do not cross this door.
+inbound route or pull configuration. `hour` is UTC, default 9. The mail service
+reads the inbox on every pass (`pull.every`, 10 seconds by default) and queues a
+letter for each newly blocking decision then. After `hour`, it also queues at
+most one digest per UTC day. A missed day is not replayed as a backlog of
+digests. Alerts and updates are excluded unless `alerts: true` or
+`updates: true` is explicitly requested. Read, muted and archived threads do not
+cross this door.
 
 The door reads `@yaks/inbox`'s candidates, discussion, requirements and
 dependents; `./door` exports `inboxAt`, `planned`, `rendered` and `queue` for

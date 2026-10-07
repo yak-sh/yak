@@ -39,13 +39,6 @@
       ],
       "sweep": ".bug !completed !cancelled !claim",
       "description": "start a fixer on a new bug, behind the gates"
-    },
-    "fixer_exit": {
-      "effect": true,
-      "created": [
-        "exit"
-      ],
-      "description": "when a fixer exits, try the bugs the gates held back"
     }
   }
 }

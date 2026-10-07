@@ -184,18 +184,12 @@ test('muted: nofix on the project, or on home for all', async () => {
   }
 })
 
-test('at cap: the bug waits, and starts when a fixer exits', async () => {
+test('at cap: the bug waits', async () => {
   let g = await host({ cap: 1 })
   await fail(g, 'first')
   await fail(g, 'second')
   assertEquals((await bugs(g)).length, 2)
-  let [first, ...more] = await fixers(g)
-  assertEquals(more.length, 0)
-  await g.apply([
-    { entity: first.entity, process: {} },
-    { entity: first.entity, exit: { code: 0 } },
-  ], { trusted: true })
-  assertEquals((await fixers(g)).length, 2)
+  assertEquals((await fixers(g)).length, 1)
 })
 
 test('cooling down: a fault fixed a moment ago starts no second fixer', async () => {

@@ -535,7 +535,7 @@ These are the names, all of them:
     execution failed favorite fee feedback file filed finding fired former
     gallery gitobj grant home hook hostname image imported installed
     integration integration_install interrupted invite inviting key lease
-    lines mail mail_inbox mail_notice mail_post member memory meter model
+    lines mail mail_notice mail_post member memory meter model
     notice notified notify_trash opened openrouter order output output_of
     parent pending person plan price product project provider provisional
     published quarantined questions quote reads recalled ref referenced

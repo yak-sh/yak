@@ -5,9 +5,8 @@ import { attention, lanes, type Search, type Thread } from '@yaks/inbox'
 import { useRef, useState } from 'preact/hooks'
 import { Button, Field, Inbox as Frame, Say, Tabs } from '@yaks/ui'
 import { type Bundle, identityEid } from '@yaks/graph'
-import { useLayoutEffect } from 'preact/hooks'
 import { type Row } from '../../client.ts'
-import { apply, ent, rowsSub, uuid } from '../../live.ts'
+import { apply, ent, uuid } from '../../live.ts'
 import { type Ent, idOf, vocab } from '../../types.ts'
 import { Branches, Composer } from '@yaks/kernel/Comments'
 import { Dot } from '../Dot.tsx'
@@ -16,7 +15,6 @@ import { drafts, useDraft } from '@yaks/draft/input'
 import { Stamp } from '../Stamp.tsx'
 import { usePage } from '../page.ts'
 import { useInboxThread, useInboxThreads } from '../useInbox.ts'
-import { useQuery } from '../useQuery.ts'
 
 export let inboxSearchPlace = (actor: string) => `${actor}.inbox.search`
 export let markThread = (eid: string, mark: 'opened' | 'archived') =>
@@ -71,32 +69,6 @@ export let NewConversation = ({ actor }: { actor: string }) => {
   )
 }
 
-// Answer links hold the sessions themselves: their status is computed on the
-// session read, not copied onto a thread or inferred from its last reply.
-export let AnsweringSessions = ({ root }: { root: string }) => {
-  let links = useQuery(
-    vocab.comp('answers') ? `.answers&.edge.to=${root}&?edge` : '',
-  )
-  let ids = [
-    ...new Set(links.map((e) => String((e.edge as { from: string }).from))),
-  ]
-  let key = ids.join(',')
-  useLayoutEffect(() => rowsSub(key ? key.split(',') : []), [key])
-  return ids.length
-    ? (
-      <section aria-label='Answering sessions'>
-        {ids.map((eid) => (
-          <Entity
-            key={eid}
-            eid={eid}
-            view='Inbox.List.Tile'
-          />
-        ))}
-      </section>
-    )
-    : null
-}
-
 let Conversation = (
   { thread, actor }: { thread: Thread<Row>; actor?: string },
 ) => {
@@ -109,7 +81,6 @@ let Conversation = (
   return (
     <Frame.Detail>
       <Entity eid={t.eid} view='Inbox.Full' talkback={false} />
-      <AnsweringSessions root={t.eid} />
       {other.map((r) => <Entity key={r.eid} eid={r.eid} view='Full' />)}
       <Branches rows={notes.map(domainBundle)} />
       <Composer eid={t.eid} />

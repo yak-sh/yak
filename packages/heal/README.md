@@ -46,9 +46,9 @@ The `@yaks/heal/effects` handlers, after each commit:
    - at cap: `cap` fixers running: no `exit` yet, and a process or a start under
      five minutes old;
    - cooling down: a fixer for the same fault started within `cooldown`.
-3. `created(exit)` on a fixer: its slot is free, so every open bug nobody holds
-   is tried again. The `bug` registration's sweep does the same when the host
-   starts. A bug never gets a second fixer.
+
+   A bug a gate held back is tried again by the `bug` registration's sweep when
+   the host starts. A bug never gets a second fixer.
 
 ## Config
 

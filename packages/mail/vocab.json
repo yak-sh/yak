@@ -357,22 +357,6 @@
           "description": "the digest that included this thread activity"
         }
       }
-    },
-    "mail_inbox": {
-      "effect": true,
-      "created": [
-        "decision",
-        "comment",
-        "requires"
-      ],
-      "changed": [
-        "filed.assignee",
-        "archived",
-        "cancelled",
-        "completed",
-        "decided"
-      ],
-      "description": "Queue newly blocking inbox decisions at once for the opted-in mail recipient; the mail service queues the daily digest."
     }
   }
 }

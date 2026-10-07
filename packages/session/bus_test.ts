@@ -164,8 +164,8 @@ test('a process-backed harness claim still hears comments with a using entry', a
   let store = storage(mem(), vocab)
   store.install()
   let g = await fresh(store)
-  // The spawned runner's using entry is a request to its outside process,
-  // not permission for the native inbox router to inject it too.
+  // The spawned runner's using entry is a request to its outside process; it
+  // does not make the transcript native and deaf to claimed-work comments.
   await g.apply([
     { entity: { eid: 'outside' }, process: { pid: 1234 } },
     {

@@ -453,18 +453,17 @@ execution belongs to `@yaks/process`; command-line agent execution belongs to
 
 ## Claimed-work comments
 
-Inbox comments are answered by the
-[harness thread router](../harness/README.md#answering-inbox-threads), not
-delivered as another input by the session bus. Direct comments to a session
-remain thread messages. Knocks and addressed deliveries retain their bus. An
-outside harness claiming work can still hear comments on that work:
+The session bus delivers no comment to a native transcript: a comment stays a
+message in its thread. Direct comments to a session remain thread messages.
+Knocks and addressed deliveries retain their bus. An outside harness claiming
+work can still hear comments on that work:
 
 ```sh
 yak claim take <task> --session <outside-session>
 yak session listen --session <outside-session>
 ```
 
-A native transcript is recognized by a `using` entry. Its claimed-work comments
-stay unmarked by the bus so the thread router can admit them exactly once. A
-listener on an outside transcript uses the claimed-work exception; it does not
-hear comments merely addressed to that session.
+A native transcript is recognized by a `using` entry and no `process`. Its
+claimed-work comments stay unmarked by the bus. A listener on an outside
+transcript uses the claimed-work exception; it does not hear comments merely
+addressed to that session.

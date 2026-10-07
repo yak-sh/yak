@@ -19,8 +19,6 @@ import type { Sender } from './send.ts'
 import { letterOf, owed, sending } from './send.ts'
 import { cloudflare } from './cloudflare.ts'
 import { stash } from './stash.ts'
-import { queue } from './door.ts'
-import type { Graph } from '@yaks/graph'
 
 /** A named transport, built — or the reason there is none. A `via` nothing
  * here implements will never become a sender, and one whose credentials have
@@ -52,17 +50,11 @@ export let waiting = (reason: string): Handler => (event, tx, write) =>
  * sender cannot be built, nothing is sent and the letters wait in the graph
  * rather than the server refusing to start. */
 export let effects = (
-  host: { graph: Graph } | null,
+  _host: unknown,
   options: Options = {},
 ): Handlers => {
   let kept: Sender | undefined
   return {
-    ...(options.inbox
-      ? {
-        mail_inbox: (_event, _tx, write) =>
-          queue(host!.graph, host!.graph.vocab, options.inbox!, write),
-      }
-      : {}),
     mail_post: (event, tx, write, attempt) => {
       let said = options.sender
       let { sender, waiting: reason } = said?.via == 'stash'

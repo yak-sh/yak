@@ -17,8 +17,8 @@
 // - at cap: this many fixers running already;
 // - cooling down: a fixer was started for the same fault this recently.
 //
-// A bug a gate held back is tried again when a fixer's process exits and when
-// a worker starts (`bug_fix`'s sweep); one bug never gets a second fixer.
+// A bug a gate held back is tried again when a worker starts (`bug_fix`'s
+// sweep); one bug never gets a second fixer.
 //
 // Config:
 //
@@ -188,13 +188,6 @@ export let effects = (host: Host, options: Options = {}): Handlers => {
       ], { trusted: true })
     })
 
-  // Every open bug no fixer has started for: what a gate held back.
-  let retry = async () => {
-    for (let bug of await g.read(and(...open, absent('claim')))) {
-      await fix(bug.entity.eid)
-    }
-  }
-
   // File a failure: count it on the open bug for its fault, or open one.
   let file = async (eid: string) => {
     let row = await one(g, eid)
@@ -251,9 +244,5 @@ export let effects = (host: Host, options: Options = {}): Handlers => {
     exception_file: (e) => file(e.entity.eid),
     // Idempotent: a bug that has a fixer, or is held, starts nothing.
     bug_fix: (e) => fix(e.entity.eid),
-    // A fixer's process ended: its slot is free for a bug the cap held back.
-    fixer_exit: async (e) => {
-      if (comp(await one(g, e.entity.eid), 'fixer')) await retry()
-    },
   }
 }

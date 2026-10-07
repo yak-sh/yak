@@ -127,66 +127,6 @@
       "input": {},
       "readOnly": true
     },
-    "answers": {
-      "component": true,
-      "type": "object",
-      "edge": "answers",
-      "reversed": "answered by",
-      "description": "This native session answers the inbox thread at the other end.",
-      "properties": {}
-    },
-    "inbox_input": {
-      "component": true,
-      "type": "object",
-      "description": "The external message admitted as this native input; its reply is recorded when the settled answer is published.",
-      "properties": {
-        "message": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep"
-        },
-        "root": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep"
-        },
-        "reply": {
-          "type": "string",
-          "ref": "comment",
-          "death": "keep"
-        }
-      },
-      "index": [
-        [
-          "message",
-          "root"
-        ]
-      ]
-    },
-    "inbox_answer": {
-      "effect": true,
-      "created": [
-        "comment",
-        "conversation",
-        "decided"
-      ],
-      "description": "Admit external words to the session answering their whole inbox thread; the configured person filter is applied independently of system-authorship rejection."
-    },
-    "inbox_publish": {
-      "effect": true,
-      "created": [
-        "output",
-        "result"
-      ],
-      "removed": [
-        "provisional"
-      ],
-      "sweep": ".answers",
-      "description": "Publish a settled native answer into its thread once; a system reply never admits more work.",
-      "changed": [
-        "attempt.by"
-      ]
-    },
     "session_machine_release": {
       "effect": true,
       "changed": [

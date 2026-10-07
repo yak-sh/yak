@@ -289,59 +289,6 @@ test('new conversation keeps its exact draft across remount, rejects blank words
   }
 })
 
-test('answering session links follow answers edges and repaint the session status', async () => {
-  let { AnsweringSessions } = await import('./PersonInbox.tsx')
-  let { mutate } = await import('../../live.ts')
-  cache.value = {
-    root: { entity: { eid: 'root', num: 1 }, conversation: {} },
-    answer: {
-      entity: { eid: 'answer', num: 2 },
-      answers: {},
-      edge: { from: 'aaaaaaaa-0000-4000-8000-000000000042', to: 'root' },
-    },
-    unrelated: {
-      entity: { eid: 'unrelated', num: 3 },
-      answers: {},
-      edge: { from: 'other', to: 'elsewhere' },
-    },
-    'aaaaaaaa-0000-4000-8000-000000000042': {
-      entity: { eid: 'aaaaaaaa-0000-4000-8000-000000000042', num: 42 },
-      session: {
-        eid: 'aaaaaaaa-0000-4000-8000-000000000042',
-        id: 'S-42',
-        status: 'running',
-      },
-      doc: {
-        eid: 'aaaaaaaa-0000-4000-8000-000000000042',
-        title: 'Thread worker',
-      },
-    },
-  }
-  let seen = mount(<AnsweringSessions root='root' />)
-  try {
-    assertEquals(seen.root.querySelectorAll('a').length, 1)
-    assertEquals(
-      seen.root.querySelector('.Dot')?.getAttribute('title') == 'running',
-      true,
-    )
-    assertEquals(seen.root.querySelector('a')?.getAttribute('href'), '/S-42')
-    await act(() =>
-      mutate({
-        eid: 'aaaaaaaa-0000-4000-8000-000000000042',
-        name: 'session',
-        comp: { status: 'completed' },
-      })
-    )
-    assertEquals(
-      seen.root.querySelector('.Dot')?.getAttribute('title') == 'completed',
-      true,
-    )
-  } finally {
-    seen.free()
-    cache.value = {}
-  }
-})
-
 test('inbox roots and newest messages select contextual shared renderers without nested controls or duplicate roots', async () => {
   let eid = 'cccccccc-1111-4111-8111-cccccccccccc'
   let reply = 'cccccccc-2222-4222-8222-cccccccccccc'

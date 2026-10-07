@@ -12,8 +12,7 @@ import { running } from '@yaks/session'
 import { lend } from './agent.ts'
 import { here } from './local.ts'
 import { hosted } from './store.ts'
-import { inboxHandlers, type InboxOptions } from './answering.ts'
-import { homeAt, machineDone, machines, owing } from './session_machines.ts'
+import { machineDone, machines } from './session_machines.ts'
 
 let word = (options: Record<string, unknown>, name: string) =>
   typeof options[name] == 'string' ? options[name] : undefined
@@ -37,7 +36,7 @@ export let effects = (
     once: true,
   })
   let binding = machines(host.graph, host.machines)
-  let handlers = {
+  return {
     ...running(host.graph, { ...lend(lent), stopping: host.stopping }),
     session_machine_release: async (event: import('@yaks/graph').Bundle) => {
       let [subject] = await host.graph.get([event.entity.eid])
@@ -56,26 +55,5 @@ export let effects = (
         }
       }
     },
-  }
-  let inbox = options.inbox as InboxOptions | undefined
-  if (!inbox?.person) {
-    return { ...handlers, inbox_answer: () => {}, inbox_publish: () => {} }
-  }
-  return {
-    ...handlers,
-    ...inboxHandlers(host, {
-      ...inbox,
-      holder: host.me,
-      gone: host.gone,
-      stopping: host.stopping,
-      opening: async () => {
-        let home = homeAt()
-        let files: import('@yaks/context').Snapshot[] = []
-        return {
-          home,
-          files: [...files, ...await owing(host.graph, home, files)],
-        }
-      },
-    }),
   }
 }
