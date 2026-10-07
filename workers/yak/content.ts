@@ -386,12 +386,12 @@ export let WORDS: Record<string, Words> = {
   'app_delete': {
     'title': 'Delete an app',
     'description':
-      'Delete an app: it goes to the trash for 30 days. Its address stops answering, its tools and pages disappear from your tools, and it stops being the front page, but its files, everything it saved and its slug are all kept, and app_restore brings the whole app back within those 30 days. After that the platform erases it for good. app_files op: delete removes one file, and app_set moves an app rather than replacing it. forever: true skips the trash and erases it now; nothing is kept and there is no undo. To undo a delete: app_restore, any time in those 30 days. Returns what was trashed or erased and, for a trash operation, how to restore it. Documentation: https://yaks.app/docs/errors.',
+      'Delete an app: it goes to the trash for 30 days. Its address stops answering, its tools and pages disappear from your tools, and it stops being the front page, but its files, everything it saved and its slug are all kept, and app_restore brings the whole app back within those 30 days. After that the platform erases it for good. app_files op: delete removes one file, and app_set moves an app rather than replacing it. A platform admin may trash any app. Only the space owner may use forever: true, which skips the trash and erases it now; nothing is kept and there is no undo. To undo a delete: app_restore, any time in those 30 days. Returns what was trashed or erased and, for a trash operation, how to restore it. Documentation: https://yaks.app/docs/errors.',
   },
   'app_restore': {
     'title': 'Restore a deleted app',
     'description':
-      'Bring back an app that was deleted. It serves again at the address it always had, its tools and pages come back, and everything it saved is exactly as it was; nothing is touched while an app sits in the trash. Works within 30 days of app_delete; after that it has been erased and there is nothing to bring back. app_list shows what is in the trash and how long each app has left. Pass the deleted app slug (and its space if needed to find it). Returns its restored URL and a confirmation. Documentation: https://yaks.app/docs/errors.',
+      'Bring back an app that was deleted. It serves again at the address it always had, its tools and pages come back, and everything it saved is exactly as it was; nothing is touched while an app sits in the trash. A platform admin may restore any app. Works within 30 days of app_delete; after that it has been erased and there is nothing to bring back. app_list shows what is in the trash and how long each app has left. Pass the deleted app slug (and its space if needed to find it). Returns its restored URL and a confirmation. Documentation: https://yaks.app/docs/errors.',
   },
   'app_errors': {
     'title': 'List open errors',
