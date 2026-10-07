@@ -15,8 +15,10 @@ test('malformed or misaddressed descriptors are never trusted', () => {
       { eid: id, name: 'entity', comp: { eid: id } },
       { eid: id, name: 'archetype', comp: { tables } },
     ])
-  // Text that is not JSON never reaches the cache.
-  assertThrows(() => descriptor('bad-json', 'not JSON'), Error, 'JSON text')
+  // Raw replicated values are cached without domain validation. Readers must
+  // never trust malformed descriptor text or a mismatched identity.
+  descriptor('bad-json', 'not JSON')
+  assertThrows(() => archetypeTables('bad-json'), SyntaxError)
   // Names that hash to another id are refused when read.
   descriptor('wrong-id', '["task"]')
   assertThrows(() => archetypeTables('wrong-id'), Error, 'wrong-id')
