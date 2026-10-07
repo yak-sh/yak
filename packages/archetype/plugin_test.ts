@@ -92,6 +92,17 @@ test('same-shape edits read only their owner and current descriptor', () => {
   assertEquals(owners() - before, 2)
 })
 
+test('shape transitions reuse only descriptors validated in this transaction', () => {
+  let { g, owners } = fixture()
+  g.apply([{ entity: { eid: 'a' }, note: { text: 'one' } }])
+  g.apply([{ entity: { eid: 'a' }, other: {} }])
+  g.apply([{ entity: { eid: 'a' }, other: null }])
+  let before = owners()
+  g.apply([{ entity: { eid: 'a' }, other: {} }])
+  assertEquals(owners() - before, 4)
+  assertEquals((g.get(['a']) as Bundle[])[0].other, {})
+})
+
 test('archetype read hints follow a foreign shape change and ignore old descriptors', () => {
   let { g, storage } = fixture()
   g.apply([{ entity: { eid: 'a' }, note: { text: 'kept' } }])

@@ -251,10 +251,19 @@ function tracking(
       // at one self-classifying entity, rather than an infinite chain of
       // descriptors.
       needed.set(meta.eid, meta)
-      return after(tx.get([...needed.keys()]), (rows) => {
-        let existing = new Set(
-          rows.filter((b) => b.archetype != null).map((b) => b.entity.eid),
-        )
+      let missing = [...needed.keys()].filter((eid) => !validated.has(eid))
+      let gathered = missing.flatMap((eid) => {
+        let row = found(eid)
+        return row?.archetype != null ? [row] : []
+      })
+      let have = new Set(gathered.map((row) => row.entity.eid))
+      let unread = missing.filter((eid) => !have.has(eid))
+      return after(unread.length ? tx.get(unread) : [], (fresh) => {
+        let rows = [...gathered, ...fresh]
+        let existing = new Set([
+          ...validated.keys(),
+          ...rows.filter((b) => b.archetype != null).map((b) => b.entity.eid),
+        ])
         for (let b of rows) {
           if (existing.has(b.entity.eid)) descriptor(b)
           if (!existing.has(b.entity.eid) && (dead(b) || comps(b).length)) {
