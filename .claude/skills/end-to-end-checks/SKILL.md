@@ -144,7 +144,10 @@ A probe is done when nothing of it is left running or on disk:
   for the duty roles nobody serves, and that worker outlives the server by
   design. Kill every process whose command line names the config,
   `pkill -f "$D/yak.jso[n]"`, and confirm `pgrep -f "$D/yak.jso[n]"` finds
-  none and nothing answers on the port;
+  none and nothing answers on the port. A pattern without `$D` in it, such as
+  a command and its roles (`work --roles effects,@yaks/tracker`), also matches
+  the live service running that command, and a signal starts its wind-down;
+  run `pgrep -af` with the pattern before any `pkill`;
 - Chrome: the pid you started is a launcher, and the browser is a dozen
   processes. Kill every one whose command line names the profile,
   `pkill -f "user-data-dir=/tmp/cdp-<tas>[k]"` (the bracket keeps `pkill` from
