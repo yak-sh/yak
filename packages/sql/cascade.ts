@@ -15,12 +15,14 @@
 // A statement, but not necessarily one statement. Every backward term is a term
 // of the same compound SELECT, and workerd limits a compound SELECT to five
 // terms (./compound.ts). So the terms are grouped by table (a table's death
-// columns become one term, combined with OR) and cut into statements of
-// {@link ARMS} terms each, all seeded the same way. A vocabulary {@link narrow}
-// enough to fit in one statement is answered whole; a wider one is asked in
-// rounds — each statement is transitive within its own tables, so the caller
-// re-asks with whatever the last round turned up until nothing new comes back.
-// Two rounds answer the ordinary cascade, however deep it runs.
+// columns become one term, combined with OR) and cut into statements of as
+// many terms as the engine allows ({@link ARMS} unless its driver declares
+// more), all seeded the same way. A vocabulary {@link narrow} enough to fit in
+// one statement is answered whole, as an embedded SQLite answers any; a wider
+// one is asked in rounds — each statement is transitive within its own
+// tables, so the caller re-asks with whatever the last round turned up until
+// nothing new comes back. Two rounds answer the ordinary cascade, however deep
+// it runs.
 //
 // The depth count stops climbing where the walk would otherwise loop. A cycle
 // among cascade properties (an entity that exists to describe an entity that
@@ -59,12 +61,13 @@ let alive = (owner: string): string =>
   `not exists (select 1 from "tombstone" where "tombstone"."entity" = ${owner})`
 
 /**
- * Does this vocabulary's whole cascade fit in one statement? When it does, one
+ * Does this vocabulary's whole cascade fit in one statement of `terms` terms
+ * (what the engine's compound SELECT carries, past the seed)? When it does, one
  * query is the complete answer and {@link looseSql} can restate the closure
  * inside itself; when it does not, the caller asks in rounds (see the header).
  */
-export let narrow = (v: Vocab): boolean =>
-  arms(v.deaths('cascade')).length <= ARMS
+export let narrow = (v: Vocab, terms: number = ARMS): boolean =>
+  arms(v.deaths('cascade')).length <= terms
 
 // The recursive CTE one statement opens with: the seed at depth 0, then this
 // group's terms — the rows whose death column points at something already
@@ -115,8 +118,9 @@ let named = (eids: string[]): Frag => {
 export let doomSql = (
   v: Vocab,
   eids: string[],
+  terms: number = ARMS,
 ): Raw[] =>
-  cut(arms(v.deaths('cascade')), ARMS).map((group) => {
+  cut(arms(v.deaths('cascade')), terms).map((group) => {
     let head = closure(eids, group, sqlite)
     return raw(
       head.sql +
@@ -148,13 +152,14 @@ export let doomSql = (
 export let looseSql = (
   v: Vocab,
   eids: string[],
+  terms: number = ARMS,
 ): Raw[] => {
   let d = sqlite
   let soft = [...v.deaths('release'), ...v.deaths('detach')]
   if (!soft.length) return []
   let head = () =>
-    narrow(v) ? closure(eids, arms(v.deaths('cascade')), d) : named(eids)
-  return cut(soft, ARMS).map((group) => {
+    narrow(v, terms) ? closure(eids, arms(v.deaths('cascade')), d) : named(eids)
+  return cut(soft, terms).map((group) => {
     let open = head()
     return raw(
       open.sql + group.map(([comp, prop]) => {

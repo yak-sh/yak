@@ -17,6 +17,7 @@ import type { Prop, Vocab } from '@yaks/vocab'
 import {
   among,
   and,
+  ARMS,
   as,
   type Backings,
   type BindOpts,
@@ -800,9 +801,11 @@ export let tagOf = (epoch: string, comp: string): string =>
  * a network — and that walk is what an adapter unable to compile this still
  * gets.
  *
- * A vocabulary too wide for one statement (@yaks/sql `narrow`) is queried in
- * rounds: each statement is transitive within its own tables, so the result
- * is complete when a round turns up nothing the last one had not.
+ * A statement carries as many terms as the driver says its engine allows
+ * (@yaks/sql `Driver.arms`), so an embedded SQLite asks the whole cascade at
+ * once. A vocabulary too wide for one statement (@yaks/sql `narrow`) is
+ * queried in rounds: each statement is transitive within its own tables, so
+ * the result is complete when a round turns up nothing the last one had not.
  *
  * Asked inside the transaction, after the batch's patches have gone in, which
  * is what makes the result the one the cascade wants: who points at the dying
@@ -810,6 +813,7 @@ export let tagOf = (epoch: string, comp: string): string =>
  */
 export let doom = (driver: Driver, vocab: Vocab, eids: string[]): Doom => {
   let ask = (s: Raw) => driver.query(s)
+  let terms = driver.arms ?? ARMS
   let depth = new Map<string, number>()
   let gone: Gone[] = []
   let seed = eids
@@ -817,7 +821,7 @@ export let doom = (driver: Driver, vocab: Vocab, eids: string[]): Doom => {
   for (;;) {
     let fresh: string[] = []
     let least = DEEP
-    for (let s of doomSql(vocab, seed)) {
+    for (let s of doomSql(vocab, seed, terms)) {
       for (let r of ask(s)) {
         let eid = String(r.eid)
         if (depth.has(eid)) continue
@@ -828,13 +832,13 @@ export let doom = (driver: Driver, vocab: Vocab, eids: string[]): Doom => {
         least = Math.min(least, rung)
       }
     }
-    if (narrow(vocab) || !fresh.length) break
+    if (narrow(vocab, terms) || !fresh.length) break
     seed = fresh
     base = least
   }
   return {
     gone,
-    loose: looseSql(vocab, [...depth.keys()]).flatMap((s) =>
+    loose: looseSql(vocab, [...depth.keys()], terms).flatMap((s) =>
       ask(s).map((r) => ({
         eid: String(r.eid),
         comp: String(r.comp),

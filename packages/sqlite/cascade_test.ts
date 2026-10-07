@@ -98,24 +98,31 @@ let wide: Vocab = loadVocab({
 
 let AT = '2026-03-01T00:00:00.000Z'
 
-let db = (v: Vocab = words): Store => {
+// A store over an engine whose compound SELECT carries `arms` terms: an
+// embedded SQLite's own allowance, or workerd's.
+let db = (v: Vocab = words, arms?: number): Store => {
+  let driver = mem()
+  if (arms) driver.arms = arms
   // Numbered on both sides: the casualties come back in identity order, and
   // the two adapters must agree on what that order is.
-  let s = storage(mem(), v, { number: true })
+  let s = storage(driver, v, { number: true })
   s.install()
   return s
 }
 
-// The same batches through a graph over SQLite and a graph over a Map: what
-// the last one answered, asserted equal. The compiled closure and the walk are
-// the same rule or one of them is wrong.
+// The same batches through a graph over SQLite, as an embedded engine and as
+// workerd ask it, and a graph over a Map: what the last one answered, asserted
+// equal. The compiled closure and the walk are the same rule or one of them is
+// wrong.
 let both = (seed: Bundle[], kill: Bundle[], v: Vocab = words): Bundle[] => {
   let run = (g: Graph): Bundle[] => {
     g.apply(seed, { now: AT })
     return g.apply(kill, { now: AT }) as Bundle[]
   }
+  let walked = run(graph({ storage: ram(v, { number: true }), vocab: v }))
   let sql = run(graph({ storage: db(v), vocab: v }))
-  assertEquals(sql, run(graph({ storage: ram(v, { number: true }), vocab: v })))
+  assertEquals(sql, walked)
+  assertEquals(run(graph({ storage: db(v, ARMS), vocab: v })), walked)
   return sql
 }
 
@@ -260,6 +267,24 @@ test('a wide vocabulary asks no statement more than it may carry', () => {
     }
   }
   assert(narrow(words) && !narrow(wide))
+})
+
+test('an engine that carries every term is asked the whole cascade at once', () => {
+  let asked = (arms?: number) => {
+    let counting = false, n = 0
+    let driver = spy(mem(), () => void (counting && n++))
+    if (arms) driver.arms = arms
+    let s = storage(driver, wide)
+    s.install()
+    s.tx((tx) => {
+      counting = true
+      tx.doom(['k'])
+      counting = false
+    })
+    return n
+  }
+  assertEquals(asked(), 2)
+  assert(asked(ARMS) > 2)
 })
 
 test('a large delete stays atomic within the host bind limit', () => {
