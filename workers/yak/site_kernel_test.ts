@@ -5,7 +5,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
-import { kernel } from './probe.ts'
+import { fresh, kernel } from './probe.ts'
 import { ADDRESSES } from './seo.ts'
 
 // The generated addresses, through the kernel, at the apex and not on a space's
@@ -210,6 +210,59 @@ test('the apex answers the crawler and the model', async () => {
     let login = await k.at('yaks.app', '/login')
     assertEquals(login.headers.get('cache-control'), 'private, no-store')
     await login.body?.cancel()
+  } finally {
+    await k.stop()
+  }
+})
+
+test('the public site subrequest preserves deployment version overrides without forwarding credentials', async () => {
+  let wanted = '12345678-1234-1234-1234-123456789abc'
+  let override = `yak="${wanted}"`
+  let seen: Headers[] = []
+  let k = await fresh({
+    SITE: {
+      fetch: (request) => {
+        let req = new Request(request)
+        seen.push(req.headers)
+        let version =
+          req.headers.get('Cloudflare-Workers-Version-Overrides') == override
+            ? wanted
+            : 'previous'
+        return Promise.resolve(
+          new Response('site', { headers: { 'x-yak-version': version } }),
+        )
+      },
+    },
+  })
+  try {
+    seen.length = 0
+    for (let path of ['/', '/gallery']) {
+      for (let method of ['GET', 'HEAD']) {
+        let response = await k.at('yaks.app', path, {
+          method,
+          headers: {
+            'Cloudflare-Workers-Version-Overrides': override,
+            'cache-control': 'no-cache',
+            'if-none-match': '"site-validator"',
+            authorization: 'Bearer unrelated',
+            cookie: 'unrelated=yes',
+          },
+        })
+        assertEquals(response.headers.get('x-yak-version'), wanted)
+        assertEquals(await response.text(), method == 'HEAD' ? '' : 'site')
+      }
+    }
+    assertEquals(seen.length, 4)
+    for (let headers of seen) {
+      assertEquals(
+        headers.get('Cloudflare-Workers-Version-Overrides'),
+        override,
+      )
+      assertEquals(headers.get('cache-control'), 'no-cache')
+      assertEquals(headers.get('if-none-match'), '"site-validator"')
+      assertEquals(headers.get('authorization'), null)
+      assertEquals(headers.get('cookie'), null)
+    }
   } finally {
     await k.stop()
   }

@@ -227,8 +227,20 @@ let serve = async (req: Request, env: Env, r: Route) => {
     (req.method == 'GET' || req.method == 'HEAD') &&
     (path == '/' || path == gallery.PATH)
   ) {
-    let etag = req.headers.get('if-none-match')
-    let headers = etag ? { 'if-none-match': etag } : undefined
+    // A deploy probe selects a version at the gateway and at its cached Site
+    // entrypoint. Without the override here the body can come from the previous
+    // deployment even while the gateway runs the requested version.
+    let headers = new Headers()
+    for (
+      let name of [
+        'if-none-match',
+        'cache-control',
+        'Cloudflare-Workers-Version-Overrides',
+      ]
+    ) {
+      let value = req.headers.get(name)
+      if (value) headers.set(name, value)
+    }
     let shown = await bound(env.SITE, site.fetch, env).fetch(
       new Request(site.at(env, path), { headers }),
     )
