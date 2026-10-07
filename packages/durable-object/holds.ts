@@ -35,12 +35,18 @@ export let holds = (storage: DurableStorage) => {
       return JSON.parse(String(row.queries))
     },
     write: (id: string, queries: Record<string, string | true>) =>
+      // An update in place, not a replace: replacing deletes the row and its
+      // key and inserts both again, two rows billed for each watch a page
+      // opens or closes.
       void sql.query({
         t: 'insert',
-        or: 'replace',
         into: NAME,
         cols: ['id', 'queries'],
         rows: [[val(id), val(JSON.stringify(queries))]],
+        upsert: [{
+          on: [col('id')],
+          set: { queries: col('queries', 'excluded') },
+        }],
       }),
     delete: (id: string) =>
       void sql.query({
