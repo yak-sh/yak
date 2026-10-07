@@ -13,7 +13,8 @@ import {
   sealed,
 } from '@yaks/secrets'
 import { CallError, Interrupted } from '@yaks/tools'
-import { type Host, person } from '@yaks/cli/host'
+import type { Host } from '@yaks/host'
+import { person } from '@yaks/cli/host'
 import { accountCredential, AccountError, authorize } from '@yaks/connections'
 import { authorizeCLI } from '@yaks/connections/cli'
 import { yaksApp } from '@yaks/connections/yaks-app'

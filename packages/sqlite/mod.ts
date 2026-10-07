@@ -86,6 +86,11 @@ import { memoized } from './memo.ts'
 import { revision } from '@yaks/sql'
 
 export * from './archetype.ts'
+export { statements } from './statements.ts'
+import { statements } from './statements.ts'
+import { checks as diagnostics } from './check.ts'
+import type { Statements } from '@yaks/sql'
+import { type MigrationControl, migrations } from './migration.ts'
 export { catalog } from './catalog.ts'
 export {
   type Identity,
@@ -203,6 +208,9 @@ export type Tx = {
 // signature still satisfies `Storage` wherever the generic contract is what is
 // wanted.
 export type Store = {
+  statements: Statements
+  migrations: MigrationControl
+  checks: ReturnType<typeof diagnostics>
   /** Whether a value this store reads for the property means its entity
    * wears the component (@yaks/sql `worn`). */
   worn: (comp: string, prop: string) => boolean
@@ -478,6 +486,9 @@ export let storage = (
     else install()
   }
   return {
+    statements: statements(driver),
+    checks: diagnostics(driver),
+    migrations: migrations(driver),
     worn: worn(vocab, base.derived),
     // A caller replaying these statements over a standing file must add new
     // columns before creating their indexes. `schema()` alone describes a

@@ -6,7 +6,8 @@
 // box opened is let go when the host stops.
 
 import type { Handlers } from '@yaks/effects'
-import type { Host } from '@yaks/cli/host'
+import type { Host } from '@yaks/host'
+
 import { running } from '@yaks/session'
 import { lend } from './agent.ts'
 import { here } from './local.ts'

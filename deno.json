@@ -197,7 +197,8 @@
     "./packages/logic",
     "./packages/tracker",
     "./packages/timing",
-    "./packages/inbox"
+    "./packages/inbox",
+    "./packages/host"
   ],
   "exclude": [
     "packages/workerd/conform.ts",

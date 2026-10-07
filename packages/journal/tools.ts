@@ -37,7 +37,7 @@ let said = (b: Batch): Bundle[] =>
   applied(b).map((patch) => ({ ...patch, updated: stamp(b) }))
 
 /** The functions behind the tools ./vocab.json declares — read over this
- * server's own connection, which is why this export is a factory. */
+ * host's storage, which is why this export is a factory. */
 export let runs = (host: Bound): Runs => {
   let j = logFor(host)
   return {

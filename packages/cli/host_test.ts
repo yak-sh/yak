@@ -1719,3 +1719,30 @@ test('closing waits for service cleanup even with a caller-owned duty signal', a
     if (!closed) await host.close()
   }
 })
+
+// Factories see portable storage before query compilation, never box resources.
+test('query extensions receive storage capabilities without a driver or state directory', async () => {
+  let host = await composing({ db: ':memory:', plugins: ['contract'] }, [
+    'graph',
+  ], async (_name, part) => {
+    await Promise.resolve()
+    if (part == 'graph') {
+      return {
+        extend: (host) => {
+          assertEquals('sql' in host, false)
+          assertEquals('state' in host, false)
+          assert(host.storage.statements)
+          assertEquals(host.storage.statements.ownership, 'exclusive')
+          assertEquals('extension' in host.storage.statements, false)
+          return []
+        },
+      } as Facets[typeof part]
+    }
+    return null
+  }, { install: true, process: false })
+  try {
+    assertEquals(await host.graph.rows('.count'), [{ count: 0 }])
+  } finally {
+    await host.close()
+  }
+})

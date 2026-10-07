@@ -19,13 +19,13 @@ deno add jsr:@yaks/embedding
 
 ## Use
 
-Here `db` is @yaks/sql's synchronous `Driver`, which runs a statement with
-`query(statement)`, over an in-memory database holding two books.
+Here `db` is @yaks/sql's synchronous `Statements` capability, which runs a
+statement with `query(statement)`, over an in-memory database holding two books.
 
 ```ts
 import { loadVocab } from '@yaks/vocab'
 import { graph } from '@yaks/graph'
-import { storage } from '@yaks/sqlite'
+import { statements, storage } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
 import {
   fields,
@@ -39,9 +39,10 @@ import {
 let title = { type: 'string', search: true }
 let book = { component: true, properties: { title, price: { type: 'number' } } }
 let vocab = loadVocab([{ $defs: { book } }])
-let db = open(':memory:')
-for (let statement of storage(db, vocab).ddl()) db.query(statement)
-graph({ storage: storage(db, vocab), vocab }).apply([
+let driver = open(':memory:')
+let db = statements(driver)
+for (let statement of storage(driver, vocab).ddl()) db.query(statement)
+graph({ storage: storage(driver, vocab), vocab }).apply([
   { entity: { eid: 'book-1' }, book: { title: 'The Hobbit', price: 12 } },
   { entity: { eid: 'book-2' }, book: { title: 'The Silmarillion', price: 18 } },
 ])
@@ -53,7 +54,7 @@ let embedder = hashEmbedder()
 await sweep(db, text, embedder)
 
 let near = semantic(db, embedder)
-let store = storage(db, vocab, { extend: [near] })
+let store = storage(driver, vocab, { extend: [near] })
 let rows = store.read('.near=book-1&.order=similar .book.price<20')
 let ranked = near.rank(rows) // adds rank: { score } to matching bundles
 let hits = await meaning(
@@ -248,7 +249,7 @@ Triggers on each component a field lives on queue the entity a write touched in
 queues every entity wearing a field or holding a vector, which is how a new
 database or a new field is backfilled. With unchanged fields and schema, `watch`
 issues no SQL. Both trigger inspection and native-installation inspection reuse
-the driver's [schema revision](../sql/README.md#driver); DDL, rollback, and
+the statement capability's `revision('schema')` token; DDL, rollback, and
 file-peer schema changes discard those decisions.
 
 `sweep(db, fields, embedder, limit?)` calls `watch`, then takes the newest
@@ -368,10 +369,11 @@ row per entity whose vector changed since), kept by insert, update and delete
 triggers on `embedding` in the same statement as the vector change.
 
 To enable the index on an existing file, back it up first, then call
-`installNative(db)` once on a writable `@yaks/sqlite` connection. Loading
-sqlite-vector creates its `_sqliteai_vector` metadata table, so searches never
-install it on a database that lacks that table. The platform binaries are in the
-root import map; other SQL drivers read every vector.
+`installNative(db)` once on writable statements with `facilities.vector`. The
+storage adapter resolves and loads the native library. Loading sqlite-vector
+creates its `_sqliteai_vector` metadata table, so searches never install it on a
+database that lacks that table. The platform binaries are in the root import
+map; other SQL drivers read every vector.
 
 ## Held in memory
 
@@ -448,8 +450,8 @@ The root exports field selection, `Embedder`, `hashEmbedder`, `remote`,
 `workersAi`, `batched`, vector math/packing helpers, the schema, sweep
 operations, the index (`installNative`, `build`, `state`, `behind`), the vectors
 held in memory (`absorb`, `HELD`, `RESCORE`), `vectorOf`, `nearest`, `meaning`,
-`semantic` and supporting types such as `Rank`. The `Driver` it runs on is
-`@yaks/sql`'s.
+`semantic` and supporting types such as `Rank`. The `Statements` capability it
+runs on is `@yaks/sql`'s.
 
 | Sub-module export         | Purpose                                                                                                                                                                                        |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -460,8 +462,8 @@ held in memory (`absorb`, `HELD`, `RESCORE`), `vectorOf`, `nearest`, `meaning`,
 
 ## Compatibility
 
-Requires a synchronous SQLite driver that supports blob values. The package
+Requires synchronous SQL statements that support blob values. The package
 chooses no SQLite binding. A statement that unions a term per text field is cut
-to the terms the driver's `arms` allows (@yaks/sql `ARMS`: a Durable Object's
-SQLite takes five). Remote embedders also require `fetch`; the offline embedder
-needs no network access.
+to the terms the statement capability's `arms` allows (@yaks/sql `ARMS`: a
+Durable Object's SQLite takes five). Remote embedders also require `fetch`; the
+offline embedder needs no network access.

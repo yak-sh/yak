@@ -1,3 +1,4 @@
+import { statements } from '@yaks/sqlite'
 // What a Store's own storage is brought to at each wake (graph.ts): the schema
 // its vocabulary implies, raised over whatever the object holds ({@link
 // install}), changed definitions installed when that schema moves, a column
@@ -494,7 +495,7 @@ export let install = (
   // triggers that note which of them changed (@yaks/embedding). The triggers
   // that queue text to embed are the sweep's own (graph.ts `#embedding`).
   adopt(d, fields(vocab), derived, { heal: false })
-  rekey(d)
+  rekey(statements(d))
   for (let stmt of vectorSchema()) d.query(stmt)
   if (vocab.comp('archetype')) {
     backfill(d, false)

@@ -2,20 +2,21 @@
 // screen, across writes since its build, and on another connection.
 
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertThrows } from '@std/assert'
 import {
   among,
   col,
-  type Driver,
   each,
   gt,
   insert,
   render,
   select,
+  type Statements,
   table,
   val,
 } from '@yaks/sql'
 import { open } from '@yaks/sqlite/db'
+import { statements } from '@yaks/sqlite'
 import { bury, entity, SPINE, TOMBSTONE } from '../sqlite/testing.ts'
 import { schema, TABLE } from './ddl.ts'
 import { build, FEW, install, REBUILD, state } from './native.ts'
@@ -37,7 +38,7 @@ let random = (seed: number) => () => {
 let DIM = 64
 let point = (next: () => number, centre: Float32Array) =>
   unit(centre.map((x) => x + (next() - 0.5) * 0.6))
-let corpus = (db: Driver, n: number, from = 1) => {
+let corpus = (db: Statements, n: number, from = 1) => {
   let next = random(7)
   let centres = Array.from(
     { length: 40 },
@@ -49,39 +50,43 @@ let corpus = (db: Driver, n: number, from = 1) => {
     Array.from({ length: n }, (_, i) => point(next, centres[(from + i) % 40])),
   )
 }
-let put = (db: Driver, id: number, vec: Float32Array) =>
+let put = (db: Statements, id: number, vec: Float32Array) =>
   db.query(insert(TABLE, { owner: id, model, hash: '', vec: pack(vec) }))
 // Entities `v-<id>` numbered on from `from`, each with its vector, a few
 // hundred rows to a statement.
-let store = (db: Driver, from: number, vecs: Float32Array[]) => {
-  db.query({ t: 'begin' })
-  for (let i = 0; i < vecs.length; i += 500) {
-    let ids = vecs.slice(i, i + 500).map((_, j) => from + i + j)
-    db.query(insert('entity', ...ids.map((id) => ({ id, eid: `v-${id}` }))))
-    db.query(insert(
-      TABLE,
-      ...ids.map((id) => ({
-        owner: id,
-        model,
-        hash: '',
-        vec: pack(vecs[id - from]),
-      })),
-    ))
-  }
-  db.query({ t: 'commit' })
+let store = (db: Statements, from: number, vecs: Float32Array[]) => {
+  db.atomic(() => {
+    for (let i = 0; i < vecs.length; i += 500) {
+      let ids = vecs.slice(i, i + 500).map((_, j) => from + i + j)
+      db.query(insert('entity', ...ids.map((id) => ({ id, eid: `v-${id}` }))))
+      db.query(insert(
+        TABLE,
+        ...ids.map((id) => ({
+          owner: id,
+          model,
+          hash: '',
+          vec: pack(vecs[id - from]),
+        })),
+      ))
+    }
+  })
   return db
 }
 
 let fresh = (path = ':memory:') => {
-  let db = open(path)
+  let db = statements(open(path))
   for (let s of [SPINE, TOMBSTONE, ...schema()]) db.query(s)
   return db
 }
 
 // The same database without the extension: every vector read.
-let plain = (db: Driver): Driver => ({ query: (s) => db.query(s) })
+let plain = (db: Statements): Statements => ({
+  ...db,
+  ownership: 'shared',
+  facilities: undefined,
+})
 
-let anchor = (db: Driver, id: number) =>
+let anchor = (db: Statements, id: number) =>
   new Float32Array(
     (db.query(select({
       cols: [col('vec')],
@@ -90,7 +95,7 @@ let anchor = (db: Driver, id: number) =>
     }))[0].vec as Uint8Array).slice().buffer,
   )
 
-let names = (db: Driver, q: Float32Array, opts: Partial<NearOpts> = {}) =>
+let names = (db: Statements, q: Float32Array, opts: Partial<NearOpts> = {}) =>
   nearest(db, q, { model, limit: 8, ...opts }).map((n) => n.entity)
 
 let indexed = (n: number) => {
@@ -112,7 +117,7 @@ test('the index answers what reading every vector answers', () => {
   }
   // and it got there reading a fraction of the vectors
   let read = 0
-  let counted: Driver = {
+  let counted: Statements = {
     ...db,
     query: (s) => {
       let rows = db.query(s)
@@ -197,11 +202,14 @@ test('a build is made once, and again when enough vectors changed', () => {
 test('another connection loads the newer build', () => {
   let dir = Deno.makeTempDirSync()
   try {
-    let writer = fresh(`${dir}/g.db`)
+    let writerDriver = open(`${dir}/g.db`)
+    let writer = statements(writerDriver)
+    for (let s of [SPINE, TOMBSTONE, ...schema()]) writer.query(s)
     corpus(writer, 500)
     install(writer)
     build(writer)
-    let reader = open(`${dir}/g.db`)
+    let readerDriver = open(`${dir}/g.db`)
+    let reader = statements(readerDriver)
     let q = anchor(reader, 3)
     assertEquals(names(reader, q), names(plain(reader), q))
     // A build later the new vectors are no longer dirty, so only the codes
@@ -212,8 +220,8 @@ test('another connection loads the newer build', () => {
     assert(build(writer))
     assertEquals(names(reader, q, { without: 'v-3' })[0], 'v-999')
     assertEquals(names(reader, q), names(plain(reader), q))
-    reader.close()
-    writer.close()
+    readerDriver.close()
+    writerDriver.close()
   } finally {
     Deno.removeSync(dir, { recursive: true })
   }
@@ -222,6 +230,23 @@ test('another connection loads the newer build', () => {
 test('a database it was never installed on reads every vector', () => {
   let db = corpus(fresh(), 300)
   assert(!build(db))
+  let q = anchor(db, 9)
+  assertEquals(names(db, q), names(plain(db), q))
+})
+
+test('a native build shares the enclosing atomic unit and rolls back with it', () => {
+  let db = corpus(fresh(), 300)
+  install(db)
+  let before = state(db)
+  assertThrows(() =>
+    db.atomic(() => {
+      assert(build(db))
+      assertEquals([state(db).dirty, state(db).build.n], [0, 1])
+      throw new Error('undo build')
+    })
+  )
+  assertEquals(state(db), before)
+  assert(build(db))
   let q = anchor(db, 9)
   assertEquals(names(db, q), names(plain(db), q))
 })

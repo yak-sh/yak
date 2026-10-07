@@ -123,7 +123,10 @@ test('a deleted provider leaves past entries saying what answered', async () => 
       },
     ])
     h.g.apply([{ entity: { eid: P }, tombstone: {} }])
-    let using = h.store.read('.entry')[0].using as Record<string, unknown>
+    let using = (await h.store.read('.entry'))[0].using as Record<
+      string,
+      unknown
+    >
     assertEquals([using.provider, using.model], [P, A])
   } finally {
     h.close()

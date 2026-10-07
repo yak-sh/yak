@@ -4,7 +4,9 @@ import { type Graph, graph } from '@yaks/graph'
 import { type Authenticate, type Route, routed } from '@yaks/api'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
-import { type Driver, tally } from '@yaks/sql'
+import { tally } from '@yaks/sql'
+import { type Blobs, memoryBlobs } from './store.ts'
+import { ram } from '@yaks/ram'
 import { addressOf, type Artifact, artifactDoc } from './artifact.ts'
 import { mem } from './testing.ts'
 import type { Bucket } from './object.ts'
@@ -47,19 +49,21 @@ let spine: VocabDoc = {
 
 let vocab = loadVocab([spine, artifactDoc])
 
-// A host as `routes` reads one: a connection, and a graph over it.
-let host = (): { sql: Driver; graph: Graph } => {
+// A host as `routes` reads one: a blob store and a graph. The driver stays
+// outside the host, available only for assertions about the stored bytes.
+let host = () => {
   let sql = mem()
   let db = storage(sql, vocab)
   for (let stmt of [...db.ddl(), ...blobSchema()]) sql.query(stmt)
   return {
-    sql,
+    driver: sql,
+    blobs: sqliteBlobs(sql),
     graph: graph({ storage: db, vocab, plugins: [representations()] }),
   }
 }
 
 let door = (
-  h: { sql: Driver; graph: Graph; who?: Authenticate },
+  h: { blobs: Blobs; graph: Graph; who?: Authenticate; artifacts?: Blobs },
   options?: Options,
 ) => {
   let table: Route[] = routes(h, options)
@@ -143,13 +147,27 @@ test('a PUT to an address stores the bytes and mints the artifact', async () => 
   assertEquals(head.headers.get('content-length'), String(text.length))
 })
 
+test('the default backend uses supplied blobs without a SQL host', async () => {
+  let blobs = memoryBlobs()
+  let g = graph({ storage: ram(vocab), vocab, plugins: [representations()] })
+  let ask = door({ blobs, graph: g })
+  let sha = await addressOf(png)
+  let made = await ask(put(sha, png, 'image/png'))
+  assertEquals(made.status, 200)
+  assertEquals(await blobs.get(sha), png)
+  let got = await ask(
+    new Request(new URL(made.headers.get('location')!, at(sha))),
+  )
+  assertEquals(new Uint8Array(await got.arrayBuffer()), png)
+})
+
 test('the same upload twice is one object and one row', async () => {
   let h = host(), ask = door(h)
   let sha = await addressOf(text)
   await ask(put(sha, text, 'text/plain'))
   let again = await ask(put(sha, text, 'text/plain'))
   assertEquals(again.status, 200)
-  assertEquals(tally(h.sql, 'blob_text'), 1)
+  assertEquals(tally(h.driver, 'blob_text'), 1)
   assertEquals((await h.graph.read('.artifact')).length, 1)
   assertEquals((await h.graph.read('.representation')).length, 1)
 })
@@ -197,7 +215,7 @@ test('a changed text type gets a new URL without changing the old one', async ()
 test('an existing bare address gains a stable type on its first read', async () => {
   let h = host(), ask = door(h)
   let sha = await addressOf(text)
-  sqliteBlobs(h.sql).put(sha, text)
+  h.blobs.put(sha, text)
   await h.graph.apply([{
     entity: { eid: sha },
     artifact: { address: sha, media_type: 'text/markdown', size: text.length },
@@ -222,7 +240,7 @@ test('bytes that do not hash to their address are refused, and nothing lands', a
   assertEquals(res.status, 400)
   assert((await res.json()).message.startsWith('these bytes address '))
   assertEquals((await h.graph.read(`.entity.eid=${sha}`)).length, 0)
-  assertEquals(tally(h.sql, 'blob_text'), 0)
+  assertEquals(tally(h.driver, 'blob_text'), 0)
 })
 
 test('an address is 64 hex digits, whichever way the request points', async () => {
@@ -247,7 +265,7 @@ test('a text store that cannot keep the bytes says so at the write', async () =>
   assertEquals(res.status, 500)
   // and the store kept nothing: an address that answered mangled bytes is the
   // one thing content addressing promises never happens
-  assertEquals(tally(h.sql, 'blob_text'), 0)
+  assertEquals(tally(h.driver, 'blob_text'), 0)
   assertEquals((await ask(new Request(at(sha)))).status, 404)
   // and no row names an object nothing holds
   assertEquals((await h.graph.read('.artifact')).length, 0)
@@ -299,7 +317,7 @@ test('the store a host names is where the bytes land', async () => {
   assertEquals(new Uint8Array(await got.arrayBuffer()), png)
   assertEquals(got.headers.get('content-type'), 'image/png')
   // and the database kept nothing but the row
-  assertEquals(tally(h.sql, 'blob_text'), 0)
+  assertEquals(tally(h.driver, 'blob_text'), 0)
 })
 
 test('the bound is on the bytes, not on what a header claimed', async () => {

@@ -36,12 +36,11 @@ import {
   not,
   op,
   render,
-  revision,
   select,
   table,
   val,
 } from '@yaks/sql'
-import type { Driver } from '@yaks/sql'
+import type { Statements } from '@yaks/sql'
 import { type Field, wearers } from './fields.ts'
 import { OWED, TABLE } from './ddl.ts'
 
@@ -138,15 +137,15 @@ export let triggers = (fields: Field[]): CreateTrigger[] => {
 let body = (sql: string, name: string): string =>
   sql.slice(sql.indexOf(`"${name}"`)).trim()
 
-let watched = new WeakMap<Driver, { version: number; fields: string }>()
+let watched = new WeakMap<Statements, { version: number; fields: string }>()
 
 /**
  * Make the database's queue triggers the ones {@link triggers} says, and
  * queue everything when that changed anything. Returns whether it did. A
  * second call with the same fields and schema reads and writes nothing.
  */
-export let watch = (db: Driver, fields: Field[]): boolean => {
-  let version = revision(db, 'schema')
+export let watch = (db: Statements, fields: Field[]): boolean => {
+  let version = db.revision('schema')
   let definitions = triggers(fields)
   let key = JSON.stringify(definitions)
   let kept = watched.get(db)
@@ -175,12 +174,12 @@ export let watch = (db: Driver, fields: Field[]): boolean => {
   }
   for (let t of want.values()) db.query(t)
   if (moved || want.size) owe(db, fields)
-  watched.set(db, { version: revision(db, 'schema'), fields: key })
+  watched.set(db, { version: db.revision('schema'), fields: key })
   return moved || want.size > 0
 }
 
 /** Queue every entity that wears an embedded field or has a vector. */
-export let owe = (db: Driver, fields: Field[]): void => {
+export let owe = (db: Statements, fields: Field[]): void => {
   let vectors = select({ cols: [col('owner')], from: table(TABLE) })
   for (let worn of [...wearers(fields, db.arms), vectors]) {
     db.query(
@@ -196,7 +195,7 @@ export type Due = { owner: number; n: number }
 
 /** The newest `limit` queued entities, newest first: what was just said is
  * what someone is about to look for. */
-export let due = (db: Driver, limit: number): Due[] =>
+export let due = (db: Statements, limit: number): Due[] =>
   db.query(
     select({
       cols: [col('owner'), col('n')],
@@ -207,7 +206,7 @@ export let due = (db: Driver, limit: number): Due[] =>
   ).map((r) => ({ owner: Number(r.owner), n: Number(r.n) }))
 
 /** Settle a queued entity, unless a write queued it again since it was read. */
-export let paid = (db: Driver, d: Due): void =>
+export let paid = (db: Statements, d: Due): void =>
   void db.query({
     t: 'delete',
     from: OWED,
@@ -215,5 +214,5 @@ export let paid = (db: Driver, d: Due): void =>
   })
 
 /** How many entities are queued. */
-export let left = (db: Driver): number =>
+export let left = (db: Statements): number =>
   Number(db.query(select({ cols: [as(count(), 'n')], from: table(OWED) }))[0].n)

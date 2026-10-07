@@ -2,7 +2,7 @@
 // query vector; the stored vectors and their source text stay in this package.
 
 import type { Eid } from '@yaks/graph'
-import type { Driver, Screen } from '@yaks/sql'
+import type { Screen, Statements } from '@yaks/sql'
 import type { Embedder } from './embedder.ts'
 import type { Field } from './fields.ts'
 import { nearest } from './near.ts'
@@ -36,7 +36,7 @@ export let excerpt = (text: string, size = 180): string => {
  * `fields` must be the configured fields, resolved through any derived text
  * expressions that fed the stored vectors. */
 export let meaning = async (
-  db: Driver,
+  db: Statements,
   fields: Field[],
   embedder: Embedder,
   words: string,

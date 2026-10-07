@@ -4,7 +4,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
-import { col, type Driver, eq, val } from '@yaks/sql'
+import { col, eq, type Statements, val } from '@yaks/sql'
 import { mem, none, shelf, stocked } from './testing.ts'
 import { TABLE } from './ddl.ts'
 import { build, install } from './native.ts'
@@ -13,10 +13,10 @@ import { type Options, runs } from './tools.ts'
 // The offline embedder stands in for a host whose config is complete: what
 // these cases are about is the index, not what is missing.
 let checkup = async (
-  sql: Driver,
+  sql: Statements,
   options: Options = {},
 ) => {
-  let [said] = await runs({ sql, graph: none }, {
+  let [said] = await runs({ storage: { statements: sql }, graph: none }, {
     embedder: { provider: 'hash' },
     ...options,
   }).vector_check(
@@ -31,7 +31,7 @@ let checkup = async (
 
 // Move every vector's timestamp back, the way vectors nobody has touched for
 // hours look.
-let aged = (sql: Driver, hours: number) => {
+let aged = (sql: Statements, hours: number) => {
   sql.query({
     t: 'update',
     table: TABLE,
@@ -68,7 +68,7 @@ test('an empty table is not a stalled index', async () => {
 })
 
 // The same database as a file other processes may have open.
-let shared = (db: Driver): Driver => ({ ...db, file: true })
+let shared = (db: Statements): Statements => ({ ...db, ownership: 'shared' })
 
 test('where every search reads every vector, it says why', async () => {
   let bare = await checkup(shared(await stocked()))

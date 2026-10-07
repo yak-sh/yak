@@ -46,7 +46,11 @@ let stocked = async (yak: Yak) => {
     doc: { title: s.title },
     ...s.memory ? { memory: {} } : { task: {} },
   })))
-  await sweep(yak.sql, fields(yak.vocab, searched), hashEmbedder())
+  await sweep(
+    yak.storage.statements,
+    fields(yak.vocab, searched),
+    hashEmbedder(),
+  )
 }
 
 let call = async (yak: Yak, tool: string, args: Record<string, unknown>) => {

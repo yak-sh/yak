@@ -15,9 +15,9 @@ import { harness, repo } from './testing.ts'
 test('closing the agent stops its migration monitor', async () => {
   using time = new FakeTime()
   const h = await harness()
-  const read = h.migrations.read
+  const read = h.migrations!.read
   let reads = 0
-  h.migrations.read = () => {
+  h.migrations!.read = () => {
     reads++
     return read()
   }

@@ -229,7 +229,7 @@ export function migrations(db: Driver): MigrationControl {
  * caller owns admission/drain/close policy. Poll errors also stop the
  * monitor. */
 export function watchMigrations(
-  control: MigrationControl,
+  control: Pick<MigrationControl, 'read' | 'ready'>,
   changed: (reason: Error) => void,
   intervalMs = 1000,
 ): MigrationWatch {

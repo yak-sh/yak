@@ -97,7 +97,7 @@ try {
 | `@yaks/sqlite`       | Storage, schema/read/write helpers, [overlays](#querying-pending-changes-with-an-overlay), archetype helpers, metadata, and migrations |
 | `@yaks/sqlite/db`    | `open(path)`: an embedded Deno database as a cached driver                                                                             |
 | `@yaks/sqlite/vocab` | `sqliteDoc` and `docs`, declaring storage and archetype diagnostic tools                                                               |
-| `@yaks/sqlite/tools` | `runs({ sql }, options?)`, implementing those checks on the application's connection                                                   |
+| `@yaks/sqlite/tools` | `runs({ storage: storage(sql, vocab) }, options?)`, implementing those checks on the application's connection                          |
 
 The vocabulary export declares [tools](../tools/README.md), not graph
 components. The checks inspect foreign-key enforcement/violations, SQLite
@@ -713,8 +713,8 @@ try {
 component values; `identity(driver, eid)` reports physical presence and
 tombstoning. Both cap inspection at 160 tables. The tools declared by
 `sqliteDoc` check foreign keys, SQLite integrity, and archetype pointers;
-`runs({ sql }, { sample })` implements them on the application's connection.
-They report findings without repairing data.
+`runs({ storage: storage(sql, vocab) }, { sample })` implements them on the
+application's connection. They report findings without repairing data.
 
 ```ts
 import { open } from '@yaks/sqlite/db'
@@ -730,7 +730,7 @@ try {
   let vocab = loadVocab(sqliteDoc)
   let g = graph({ vocab, storage: storage(sql, vocab) })
   await g.install()
-  let checks = runs({ sql }, { sample: 3 })
+  let checks = runs({ storage: storage(sql, vocab) }, { sample: 3 })
   let call = { entity: { eid: 'check' }, call: { args: {} } }
   let [clean] = await checks.storage_check(call, g) as Bundle[]
   equal(clean.finding, undefined)
@@ -916,3 +916,34 @@ Deno environment and FFI APIs. Whole-entity reads require SQLite JSON support.
 ## License
 
 Apache-2.0
+
+## Statement capability
+
+`storage(driver, vocab).statements` is the adapter's stable
+[statement capability](../sql/README.md#statement-capability).
+`statements(driver)` binds the same capability for an index without a graph
+store. Both participate in the driver's current transaction; `atomic` uses the
+same nested units as graph writes. Transaction-control statements are refused at
+this door. The adapter loads its named vector facility, never a path supplied by
+a plugin.
+
+```ts
+import { open } from '@yaks/sqlite/db'
+import { statements } from '@yaks/sqlite'
+import { equal, throws } from '@yaks/testing'
+
+let driver = open(':memory:')
+try {
+  let sql = statements(driver)
+  equal(statements(driver), sql)
+  equal(sql.ownership, 'exclusive')
+  await throws(() => sql.query({ t: 'begin' }), 'storage owns transactions')
+} finally {
+  driver.close()
+}
+```
+
+The store also offers `checks`, bound diagnostics used by `@yaks/sqlite/tools`,
+and `migrations`, its cooperative migration control. Hosts lend only the
+migration monitor to portable plugins; operators use the adapter's migration
+control with a dedicated connection.

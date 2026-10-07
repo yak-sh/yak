@@ -825,3 +825,29 @@ let stmt = select({
 equal(statement(stmt), 'book select')
 equal(writing(stmt), false)
 ```
+
+## Statement capability
+
+A **statement capability** runs SQL AST statements over a host's storage without
+exposing its driver, connection or files. `Statements` offers `query`, coherent
+`revision` tokens, `ownership`, the engine's compound-select limit `arms`, and
+`atomic` for a synchronous unit of work. `statements(storage)` requires the
+optional capability on a storage adapter; it refuses if none is offered.
+
+`ownership: 'shared'` means other hosts can write this storage. Revision tokens
+include their commits, schema changes and rollback. `atomic` participates in the
+graph's transaction, nesting its rollback boundary rather than opening an
+unrelated connection. Named `facilities` let an adapter supply engine features
+without handing a plugin a native-library path.
+
+```ts
+import { statements } from '@yaks/sql'
+import { equal, throws } from '@yaks/testing'
+
+await throws(() => statements({}), 'this storage offers no SQL statements')
+equal(typeof statements, 'function')
+```
+
+The [SQLite adapter](../sqlite/README.md) binds this capability. Drivers stay
+with adapters; plugins holding a statement capability do not control transaction
+statements or load arbitrary extensions.

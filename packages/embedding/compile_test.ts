@@ -8,11 +8,11 @@ import { parse } from '@yaks/query'
 import { compile, Unsupported } from '@yaks/sql'
 import type { Bundle } from '@yaks/graph'
 import { semantic } from './compile.ts'
-import type { Driver } from '@yaks/sql'
+import type { Statements } from '@yaks/sql'
 import { embedder, shop, stocked } from './testing.ts'
 
 // The eids a query selects, in the order the statement yields them.
-let ask = (db: Driver, q: string, ext: ReturnType<typeof semantic>) => {
+let ask = (db: Statements, q: string, ext: ReturnType<typeof semantic>) => {
   return db.query(compile(parse(q), shop, { extend: [ext] }))
     .map((r) => String(r.eid))
 }

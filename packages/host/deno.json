@@ -1,0 +1,14 @@
+{
+  "name": "@yaks/host",
+  "version": "0.2.10",
+  "exports": {
+    ".": "./mod.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "The portable capabilities a host lends the plugins it composes.",
+  "publish": {
+    "exclude": [
+      "**/*_test.ts"
+    ]
+  }
+}

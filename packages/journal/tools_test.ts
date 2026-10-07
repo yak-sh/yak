@@ -13,11 +13,11 @@ import { journalDoc } from './vocab.ts'
 import { runs } from './tools.ts'
 
 let fixture = () => {
-  let { g, j, sql } = wikiGraph()
+  let { g, j, storage } = wikiGraph()
   return {
     g,
     j,
-    tools: runs({ sql, derived }),
+    tools: runs({ storage, derived }),
     apply: (bundles: Bundle[]) => sync(g.apply(bundles)),
   }
 }
@@ -37,7 +37,7 @@ let comp = (b: Bundle, name: string) => b[name] as Comp
 
 test('the journal declares one tool and implements it', () => {
   assertEquals(
-    loadTools(journalDoc, runs({ sql: null as never })).map((t) => [
+    loadTools(journalDoc, runs({ storage: wikiGraph().storage })).map((t) => [
       t.name,
       t.noun,
       t.verb,

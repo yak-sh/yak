@@ -54,13 +54,13 @@ test('a service over another graph leaves the live machine alone', async () => {
 test('maintenance refuses a foreign graph before affecting the machine', async () => {
   let { live, service } = await import('./service.ts')
   assertEquals(await live(':memory:'), false)
-  await service({ config: { db: ':memory:' } } as import('@yaks/cli/host').Host)
+  await service({ config: { db: ':memory:' } } as import('@yaks/host').Host)
   let dir = await Deno.makeTempDir()
   try {
     let path = dir + '/foreign.db'
     await Deno.writeTextFile(path, '')
     assertEquals(await live(path), false)
-    await service({ config: { db: path } } as import('@yaks/cli/host').Host)
+    await service({ config: { db: path } } as import('@yaks/host').Host)
   } finally {
     await Deno.remove(dir, { recursive: true })
   }

@@ -801,9 +801,9 @@ subsequent commands report that a restart is required. It does not automatically
 restart the worker. `migrationPollMs` can configure the interval in
 `agent`/`remote` options.
 
-Migration tooling can use `h.migrations.run(name, callback, options)` from an
-otherwise idle handle, or `migrations(driver)` on a dedicated connection. The
-migrator must allow at least the longest participating polling interval. See
+The harness observes `h.migrations` when storage offers a migration monitor.
+Migration tooling uses `migrations(driver)` on a dedicated adapter connection.
+The migrator must allow at least the longest participating polling interval. See
 [@yaks/sqlite migration announcements](../sqlite/README.md#preannounced-migrations)
 for failure recovery and timing limitations. In particular, the grace period is
 not a guarantee that all active callbacks finished.

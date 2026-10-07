@@ -13,7 +13,7 @@
  * start, and `scratchRepo()` when it cuts checkouts it will look at. */
 
 import { type Runner, running } from '@yaks/session'
-import { compose, type Config, type Host } from '@yaks/cli/host'
+import { compose, type Config } from '@yaks/cli/host'
 import { install } from '@yaks/connections'
 import { type Harness, hosted } from './store.ts'
 import { type ComponentType } from 'preact'
@@ -71,7 +71,7 @@ export let at = (db = ':memory:', lease?: number): Config => ({
 export let harness = async (
   db = ':memory:',
   lease?: number,
-): Promise<Harness & { sql: Host['sql'] }> => {
+): Promise<Harness & { sql: import('@yaks/sql').Statements }> => {
   let host = await compose(at(db, lease), ['graph'], undefined, {
     install: true,
   })
@@ -90,7 +90,7 @@ export let harness = async (
       serves: { name: 'gpt-6-astra' },
     },
   ], { trusted: true })
-  return { ...hosted(host, () => host.close()), sql: host.sql }
+  return { ...hosted(host, () => host.close()), sql: host.storage.statements }
 }
 
 /** The runner over `h`, lent `deps`, working its pool as an agent does;

@@ -551,19 +551,22 @@ the harness the same artifact store. By default, a file-backed graph keeps
 binary artifacts in `images/` beside its database; an in-memory graph keeps them
 in memory. The plugin's `store` option changes that store for both. Graph text
 properties remain in the SQLite text table. Standalone routes without a host
-artifact store use their `store` option or the SQLite default.
+artifact store use their `store` option or the host's blob store. Routes require
+`host.blobs`; they never open a database connection.
 
 The routes use these backends:
 
-- `{ "via": "sqlite" }`: the default text table; rejects invalid UTF-8 uploads.
+- `{ "via": "sqlite" }`: the host's blob store (`host.blobs`). A host using
+  `sqliteBlobs(driver)` lends the text table, which rejects invalid UTF-8
+  uploads.
 - `{ "via": "file", "dir": "..." }`: a directory for binary or text uploads.
 - `{ via: 'object', bucket, prefix? }`: an object-store binding supplied in
   code, not serializable JSON configuration.
 
 The `graph` sub-module keeps marked graph text properties in the host's blob
-store (`host.blobs`, a table in the server's database). A composed host refuses
-an invalid artifact backend at startup; standalone routes log the reason and
-mount no routes.
+store (`host.blobs`, supplied by the host). A composed host refuses an invalid
+artifact backend at startup; standalone routes log the reason and mount no
+routes.
 
 The representation plugin refuses changes and deletions to representations.
 `representation()` derives their identities; `represents()` verifies them. The
@@ -605,7 +608,7 @@ let db = storage(sql, vocab)
 for (let statement of [...db.ddl(), ...blobSchema()]) sql.query(statement)
 let bytes = memoryBlobs()
 let g = graph({ storage: db, vocab, plugins: plugins({ vocab, blobs: bytes }) })
-let table = routes({ sql, graph: g, artifacts: bytes })
+let table = routes({ blobs: bytes, graph: g, artifacts: bytes })
 let upload = table.find((route) => route.method == 'PUT')!
 let read = table.find((route) => route.method == 'GET')!
 let url = `https://blob.invalid/blob/${address('Hello')}`

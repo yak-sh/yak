@@ -8,16 +8,17 @@ import { assert, assertEquals } from '@std/assert'
 import {
   among,
   col,
-  type Driver,
   eq,
   gt,
   insert,
   render,
   select,
+  type Statements,
   table,
   val,
 } from '@yaks/sql'
 import { open } from '@yaks/sqlite/db'
+import { statements } from '@yaks/sqlite'
 import { bury, SPINE, TOMBSTONE } from '../sqlite/testing.ts'
 import { schema, TABLE } from './ddl.ts'
 import { absorb, hold, RESCORE } from './held.ts'
@@ -46,7 +47,7 @@ let point = (i: number) =>
 // length 1, 4 or 16: its direction is what ranks.
 let N = 5 * RESCORE
 let corpus = () => {
-  let db = open(':memory:')
+  let db = statements(open(':memory:'))
   for (let s of [SPINE, TOMBSTONE, ...schema()]) db.query(s)
   let ids = Array.from({ length: N }, (_, i) => i + 1)
   db.query(insert('entity', ...ids.map((id) => ({ id, eid: `v-${id}` }))))
@@ -63,7 +64,7 @@ let corpus = () => {
 }
 
 // The same database as a file other processes may have open: read row by row.
-let read = (db: Driver): Driver => ({ ...db, file: true })
+let read = (db: Statements): Statements => ({ ...db, ownership: 'shared' })
 
 let queries = Array.from({ length: 4 }, (_, i) => point(i))
 let screens = [
@@ -83,7 +84,7 @@ let screens = [
 ]
 
 // Every query, under every screen, answered alike by the copy and the rows.
-let alike = (db: Driver, opts: Partial<NearOpts> = {}) => {
+let alike = (db: Statements, opts: Partial<NearOpts> = {}) => {
   for (let q of queries) {
     for (let within of screens) {
       let o = { model, limit: 8, within, ...opts }
@@ -93,7 +94,7 @@ let alike = (db: Driver, opts: Partial<NearOpts> = {}) => {
 }
 
 // A copy as each owner's scale and codes, whichever slot holds them.
-let copy = (db: Driver) => {
+let copy = (db: Statements) => {
   let h = hold(db, model)!
   return new Map(
     [...h.slot].map(([owner, i]) => [
@@ -103,7 +104,7 @@ let copy = (db: Driver) => {
   )
 }
 
-let top = (db: Driver, q: Float32Array) =>
+let top = (db: Statements, q: Float32Array) =>
   nearest(db, q, { model, limit: 3 }).map((n) => n.entity)
 
 test('the copy answers what reading every vector answers', () => {
@@ -152,7 +153,7 @@ test('a write or delete after the copy loaded counts as it stands', () => {
 
 test('a copy whose dirty set another driver cleared loads again', () => {
   let db = corpus()
-  let other: Driver = { query: db.query }
+  let other: Statements = { ...db }
   let q = queries[1]
   top(db, q)
   other.query(insert('entity', { id: N + 1, eid: `v-${N + 1}` }))

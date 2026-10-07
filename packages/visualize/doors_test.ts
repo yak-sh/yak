@@ -4,7 +4,7 @@ import { connect, integrationEid, need } from '@yaks/connections'
 // and the serving process's HTTP replies, never a second composed graph.
 
 import type { Anatomy, AnatomyTool } from '@yaks/code/anatomy'
-import type { Host as CliHost } from '@yaks/cli/host'
+import type { Host as CliHost } from '@yaks/host'
 import type { Bundle, Graph } from '@yaks/graph'
 import { equal, ok, test } from '@yaks/testing'
 import { channel, peek } from '@yaks/trace'

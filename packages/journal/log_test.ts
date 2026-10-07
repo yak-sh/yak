@@ -7,7 +7,7 @@
 // rather than its bytes.
 
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { effects } from '@yaks/effects'
 import { ddl, journal, log } from './log.ts'
@@ -130,6 +130,24 @@ test('a dry run leaves no record either', () => {
     check: true,
   }))
   assertEquals(f.j.history('p1').length, 1)
+})
+
+test('journal statements roll back with an enclosing storage transaction', () => {
+  let { g, j, storage } = wikiGraph()
+  assertThrows(
+    () =>
+      storage.statements.atomic(() => {
+        sync(g.apply([{ entity: { eid: 'p1' }, page: { title: 'One' } }]))
+        assertEquals(j.history('p1').length, 1)
+        throw new Error('abort the storage transaction')
+      }),
+    Error,
+    'abort the storage transaction',
+  )
+  assertEquals(sync(g.read('.page')), [])
+  assertEquals(j.history('p1'), [])
+  sync(g.apply([{ entity: { eid: 'p1' }, page: { title: 'Two' } }]))
+  assertEquals(j.history('p1').length, 1)
 })
 
 test('a batch that moved nothing writes no row', () => {

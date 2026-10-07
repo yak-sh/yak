@@ -27,9 +27,10 @@ import {
   as,
   col,
   type Derived,
-  type Driver,
   each,
   select,
+  type Statements,
+  statements,
   table,
 } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
@@ -57,7 +58,7 @@ export let WAIT = 1000
 /** What a reply reads: the graph, its vocabulary, and the database the
  * vectors are kept in. */
 export type Host = {
-  sql: Driver
+  storage: { statements?: Statements }
   vocab: Vocab
   graph: Graph
   derived?: Derived
@@ -108,7 +109,7 @@ let hit = (
 
 // The integer ids these eids' rows are keyed by, for the ones this database
 // holds: a rehearsed create (`check: true`) holds none.
-let owners = (db: Driver, eids: Eid[]): number[] =>
+let owners = (db: Statements, eids: Eid[]): number[] =>
   db.query(select({
     cols: [as(col('id'), 'id')],
     from: table('entity'),
@@ -130,7 +131,7 @@ let within = <T>(p: Promise<T>): Promise<T | undefined> =>
 // made, and the rest made now and stored as the sweep stores them, where the
 // model answers in time.
 let vectored = async (
-  db: Driver,
+  db: Statements,
   embedder: Embedder,
   made: Source[],
 ): Promise<Set<Eid>> => {
@@ -161,6 +162,7 @@ let words = (s: string): string[] =>
  * `hit` bundles.
  */
 export let neighbours = (host: Host, options: Options = {}): Reply => {
+  let db = statements(host.storage)
   // Words are a query only where the vocabulary indexes words at all.
   let indexed = fields(host.vocab, searched).length > 0
   return async (_call, _answer, wrote) => {
@@ -175,13 +177,13 @@ export let neighbours = (host: Host, options: Options = {}): Reply => {
     let prose = resolved(now.text, host.derived)
     // The first few that have text: a plan's links come back beside its tasks.
     let made = sources(
-      host.sql,
+      db,
       prose,
-      owners(host.sql, born.map((b) => b.entity.eid)),
+      owners(db, born.map((b) => b.entity.eid)),
     ).slice(0, MOST)
     if (!made.length) return []
     let meant = now.embedder
-      ? await vectored(host.sql, now.embedder, made)
+      ? await vectored(db, now.embedder, made)
       : new Set<Eid>()
     let kinds = new Map(born.map((b) => [b.entity.eid, host.vocab.kindOf(b)]))
     let out: Bundle[] = []

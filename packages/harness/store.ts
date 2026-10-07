@@ -7,10 +7,10 @@
 
 import { type Blobs } from '@yaks/blob'
 import type { Effects } from '@yaks/effects'
-import type { Eid, Graph, NamedTool } from '@yaks/graph'
-import { migrations, type Store } from '@yaks/sqlite'
+import type { Eid, Graph, NamedTool, Storage } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import { dbOf, type Host } from '@yaks/cli/host'
+import type { Host, MigrationMonitor } from '@yaks/host'
+import { dbOf } from '@yaks/cli/host'
 import type { Vault } from '@yaks/secrets'
 import type { Reply } from '@yaks/tools'
 
@@ -21,7 +21,7 @@ export type Harness = {
   path: string
   /** The configured person whose default provider accounts serve native sessions. */
   person?: Eid
-  store: Store
+  store: Storage
   g: Graph
   fx: Effects
   vocab: Vocab
@@ -42,7 +42,7 @@ export type Harness = {
   /** every tool the host runs, its plugins' own among them (`memory_around`),
    * read when a transcript names one the harness does not carry for all */
   hostTools?: () => NamedTool[]
-  migrations: ReturnType<typeof migrations>
+  migrations?: MigrationMonitor
   close: () => void | Promise<void>
 }
 
@@ -67,7 +67,7 @@ export let hosted = (
     artifacts: host.artifacts,
     reply: host.reply,
     hostTools: () => host.tools,
-    migrations: migrations(host.sql),
+    migrations: host.storage.migrations,
     close,
   }
 }

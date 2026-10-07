@@ -36,7 +36,6 @@ import {
   call,
   col,
   count,
-  type Driver,
   eq,
   exists,
   type Expr,
@@ -45,40 +44,22 @@ import {
   lit,
   op,
   type Raw,
-  revision,
   select,
+  type Statements,
   table,
   val,
 } from '@yaks/sql'
 import { BUILD, DIRTY, TABLE } from './ddl.ts'
 import { pack } from './vector.ts'
 
-// The machine this runs on, where the runtime says: Deno does. A Worker does
-// not, and has no extension to load into its SQLite anyway.
-let host = (globalThis as { Deno?: { build: { os: string; arch: string } } })
-  .Deno?.build
-
-let binary = (): string | null => {
-  let names: Record<string, string> = {
-    'linux-x86_64': '@sqlite-vector-linux-x86_64',
-    'linux-aarch64': '@sqlite-vector-linux-aarch64',
-    'darwin-x86_64': '@sqlite-vector-darwin-x86_64',
-    'darwin-aarch64': '@sqlite-vector-darwin-aarch64',
-    'windows-x86_64': '@sqlite-vector-windows-x86_64',
-  }
-  let name = host && names[`${host.os}-${host.arch}`]
-  if (!host || !name) return null
-  let ext = host.os == 'windows' ? 'dll' : host.os == 'darwin' ? 'dylib' : 'so'
-  return new URL(`./vector.${ext}`, import.meta.resolve(name)).pathname
-}
-
 /** Explicit one-time installation: back up the database before calling this
- * on a file. Loading the extension adds its metadata table to the database. */
-export let install = (db: Driver): void => {
-  if (!db.extension) throw new Error('SQL driver cannot load sqlite-vector')
-  let path = binary()
-  if (!path) throw new Error('sqlite-vector has no binary for this platform')
-  db.extension(path)
+ * on shared storage. The adapter loads its vector facility, which adds the
+ * extension's metadata table to the database. */
+export let install = (db: Statements): void => {
+  if (!db.facilities?.vector) {
+    throw new Error('SQL statements cannot load sqlite-vector')
+  }
+  db.facilities.vector()
 }
 
 /** The quantization: 2-bit TurboQuant codes. */
@@ -101,7 +82,7 @@ export type Build = {
 }
 
 /** The current build, as any connection reads it. */
-export let current = (db: Driver): Build => {
+export let current = (db: Statements): Build => {
   let row = db.query(select({ from: table(BUILD) }))[0] ?? {}
   return {
     n: Number(row.n ?? 0),
@@ -111,18 +92,18 @@ export let current = (db: Driver): Build => {
   }
 }
 
-let tally = (db: Driver, name: string): number =>
+let tally = (db: Statements, name: string): number =>
   Number(db.query(select({ cols: [as(count(), 'n')], from: table(name) }))[0].n)
 
 /** Whether sqlite-vector was installed on this database: then the dirty set
  * is its index's, cleared only by {@link build}. */
 let installations = new WeakMap<
-  Driver,
+  Statements,
   { version: number; installed: boolean }
 >()
 
-export let installed = (db: Driver): boolean => {
-  let version = revision(db, 'schema')
+export let installed = (db: Statements): boolean => {
+  let version = db.revision('schema')
   let kept = installations.get(db)
   if (kept?.version == version) return kept.installed
   let found = !!db.query(select({
@@ -136,7 +117,7 @@ export let installed = (db: Driver): boolean => {
 
 // The one model every stored vector is under, or null while two spaces share
 // the table: an index over both would rank vectors of different lengths.
-let only = (db: Driver): string | null => {
+let only = (db: Statements): string | null => {
   let row = db.query(select({
     cols: [
       as(fn('min', col('model')), 'lo'),
@@ -159,7 +140,7 @@ export type State = {
 }
 
 /** The index's state. */
-export let state = (db: Driver): State => ({
+export let state = (db: Statements): State => ({
   installed: installed(db),
   build: current(db),
   model: only(db),
@@ -176,29 +157,29 @@ export let behind = (s: State): boolean =>
 // What one connection has done with the extension: loaded it, initialized
 // the table at a dimension, and loaded a build's codes into memory.
 type Conn = { dim: number; n: number }
-let conns = new WeakMap<Driver, Conn>()
+let conns = new WeakMap<Statements, Conn>()
 
 // This connection's state, loading the extension the first time, or null
-// where it cannot: a driver with no extensions, no binary for this platform,
-// or a database it was never installed on.
-let conn = (db: Driver): Conn | null => {
+// where it cannot: statements with no vector facility, or a database it was
+// never installed on.
+let conn = (db: Statements): Conn | null => {
   let had = conns.get(db)
   if (had) return had
-  if (!db.extension || !binary() || !installed(db)) return null
+  if (!db.facilities?.vector || !installed(db)) return null
   install(db)
   let made = { dim: 0, n: 0 }
   conns.set(db, made)
   return made
 }
 
-let ask = (db: Driver, name: string, ...args: (string | number)[]) =>
+let ask = (db: Statements, name: string, ...args: (string | number)[]) =>
   db.query(select({
     cols: [as(fn(name, lit(TABLE), lit('vec'), ...args.map(lit)), 'out')],
   }))[0]?.out
 
 // The table set up on this connection at a dimension, once: sqlite-vector
 // reads its metadata then, and a connection cannot take a second dimension.
-let init = (db: Driver, c: Conn, dim: number): boolean => {
+let init = (db: Statements, c: Conn, dim: number): boolean => {
   if (!c.dim) {
     ask(
       db,
@@ -217,7 +198,7 @@ let init = (db: Driver, c: Conn, dim: number): boolean => {
  * cleared. Only the process that runs the sweep calls this; returns whether
  * it built.
  */
-export let build = (db: Driver): boolean => {
+export let build = (db: Statements): boolean => {
   let c = conn(db)
   let now = c && state(db)
   if (!c || !now || !behind(now)) return false
@@ -228,23 +209,22 @@ export let build = (db: Driver): boolean => {
   }))
   let dim = Number(row.bytes) / 4
   if (!init(db, c, dim)) return false
-  db.query({ t: 'begin', mode: 'immediate' })
   try {
-    let rows = Number(ask(db, 'vector_quantize', `qtype=${QTYPE}`))
-    db.query({ t: 'delete', from: DIRTY })
-    db.query({
-      t: 'update',
-      table: BUILD,
-      set: {
-        n: op('+', col('n'), lit(1)),
-        model: val(now.model),
-        dim: lit(dim),
-        rows: lit(rows),
-      },
+    db.atomic(() => {
+      let rows = Number(ask(db, 'vector_quantize', `qtype=${QTYPE}`))
+      db.query({ t: 'delete', from: DIRTY })
+      db.query({
+        t: 'update',
+        table: BUILD,
+        set: {
+          n: op('+', col('n'), lit(1)),
+          model: val(now.model),
+          dim: lit(dim),
+          rows: lit(rows),
+        },
+      })
     })
-    db.query({ t: 'commit' })
   } catch (e) {
-    db.query({ t: 'rollback' })
     // What this connection had loaded may be ahead of the table now.
     c.n = 0
     throw e
@@ -268,7 +248,7 @@ export let admitted = (within: Raw, owner: Expr): Expr =>
 export let FEW = 5000
 
 // Whether the screen admits at most FEW entities, counting no further.
-let few = (db: Driver, within: Raw): boolean =>
+let few = (db: Statements, within: Raw): boolean =>
   Number(
     db.query(select({
       cols: [as(count(), 'n')],
@@ -291,7 +271,7 @@ let few = (db: Driver, within: Raw): boolean =>
  * model or dimension), or the screen admits {@link FEW} enough to read whole.
  */
 export let candidates = (
-  db: Driver,
+  db: Statements,
   query: Float32Array,
   opts: { model: string; need: number; within?: Raw },
 ): number[] | null => {

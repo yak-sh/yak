@@ -83,8 +83,12 @@ written ahead of a tag for the store and the component, so `yak graph show` and
 a link open one directly.
 
 The graph installer calls `@yaks/journal/graph`'s `install(host)` to create and
-upgrade journal tables. Its `plugins(host)` only binds transaction hooks;
-opening a graph never creates indexes over its history.
+upgrade journal tables. The host supplies `storage.statements`, the synchronous
+statement capability from `@yaks/sql`; storage without that capability cannot
+bind a journal. Journal statements participate in the graph's storage
+transaction, so a rollback removes both the graph write and its history. Its
+`plugins(host)` only binds transaction hooks; opening a graph never creates
+indexes over its history.
 
 `backed(vocab)`, exported by the root and by `@yaks/journal/vocab`, is what a
 store reads them through: `storage(driver, vocab, { backed: backed(vocab) })`
@@ -135,13 +139,13 @@ includes only the requested entity's changes in this response. The low-level
 
 ## What it returns
 
-Here `driver` is @yaks/sql's synchronous `Driver`, over an in-memory database.
-Graph storage and the journal use that same connection.
+Here the host lends the journal a statement capability over the same storage as
+the graph. The SQLite adapter binds it to an in-memory database.
 
 ```ts
 import { assertEquals } from '@std/assert'
 import { graph } from '@yaks/graph'
-import { storage } from '@yaks/sqlite'
+import { statements, storage } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
 import { loadVocab } from '@yaks/vocab'
 import { ddl, journal, undo } from '@yaks/journal'
@@ -155,7 +159,7 @@ let driver = open(':memory:')
 let store = storage(driver, vocab)
 store.install()
 for (let s of ddl()) driver.query(s)
-let j = logFor({ sql: driver })
+let j = logFor({ storage: { statements: statements(driver) } })
 let g = graph({ storage: store, vocab, plugins: [journal(j)] })
 
 g.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' } }])

@@ -64,7 +64,8 @@ imports `./views`, and `./tui` under `--tui`.
 
 ## Where a command runs
 
-A host is a process that opens and runs a graph. A config file describes a local
+A [host](../host/README.md) composes a graph and lends capabilities to its
+plugins. The CLI is the box's concrete host. A config file describes a local
 graph: its SQLite database, plugins, and host settings. A command that selects a
 config opens that graph in its own process, runs the requested tool, and exits.
 It does not require `yak serve`. SQLite uses WAL mode for file-backed graphs,
@@ -252,12 +253,13 @@ directory.
 A tool that declines a call throws `CallError`. The runner records the refusal,
 and `yak` returns exit code `1`.
 
-Factories can retain `host.storage`, `host.graph`, `host.handler`,
-`host.runner`, and `host.duties`, but must not access them before
-initialization. In particular, `extend` from `./graph` runs before the store
-exists. A route is an `@yaks/api` `Route` with `method`, `path`, and a
-`(Request) => Response` handler. Paths are exact unless they end in `*`; `*`
-also matches any method.
+Factories receive the [portable host interface](../host/README.md), with no SQL
+driver or state directory. They can retain `host.storage`, `host.graph`,
+`host.handler`, `host.runner`, and `host.duties`, but must not access them
+before initialization. Storage capabilities are available to `extend` from
+`./graph`; graph reads wait until composition has bound all extensions. A route
+is an `@yaks/api` `Route` with `method`, `path`, and a `(Request) => Response`
+handler. Paths are exact unless they end in `*`; `*` also matches any method.
 
 A process serving `web` answers requests only where a listed plugin exports
 `handler` from `./routes`. @yaks/api is that plugin: it is handed the host once
@@ -544,8 +546,9 @@ The package exports eight entry points:
 - `@yaks/cli/config` reads a config file: where its graph is, the plugins it
   names, and the release a plugin named without a version comes from. It imports
   no plugin, for a command that only needs to know where the graph is.
-- `@yaks/cli/host` exports config and host types, the facet loader, `compose`,
-  and supporting host functions for programs that assemble a graph.
+- `@yaks/cli/host` exports the facet loader, `compose`, and re-exports portable
+  host types from `@yaks/host`, and supporting host functions for programs that
+  assemble a graph.
 - `@yaks/cli/install` is the installer: run it and `yak` is on PATH at the
   installer's own release, under a config that lets Deno resolve that release
   the day it publishes.

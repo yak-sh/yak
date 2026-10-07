@@ -24,10 +24,10 @@
 import {
   col,
   type CreateTrigger,
-  type Driver,
   eq,
   lit,
   NOW,
+  type Statements,
   type Stmt,
 } from '@yaks/sql'
 
@@ -75,7 +75,7 @@ let triggers = (['insert', 'update', 'delete'] as const).map((
  * carries into every trigger and index that names it. Run it before
  * {@link schema}. It can be deleted once every store has opened with it.
  */
-export let rekey = (db: Driver): void => {
+export let rekey = (db: Statements): void => {
   for (let name of [TABLE, DIRTY, OWED]) {
     let cols = db.query({ t: 'pragma', name: 'table_info', arg: name })
     if (!cols.some((c) => c.name == 'entity')) continue

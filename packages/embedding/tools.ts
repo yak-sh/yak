@@ -30,7 +30,15 @@
 import type { Graph } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import { checked, type Finding } from '@yaks/tools'
-import { as, col, type Driver, fn, select, table } from '@yaks/sql'
+import {
+  as,
+  col,
+  fn,
+  select,
+  type Statements,
+  statements,
+  table,
+} from '@yaks/sql'
 import { TABLE } from './ddl.ts'
 import { behind, REBUILD, state } from './native.ts'
 import { embedderOf, type Options } from './options.ts'
@@ -40,7 +48,7 @@ export type { Options }
 let STALE = 30
 
 // When the newest vector was written, or null where there are none.
-let newest = (db: Driver): string | null =>
+let newest = (db: Statements): string | null =>
   (db.query(select({
     cols: [as(fn('max', col('at')), 'at')],
     from: table(TABLE),
@@ -49,71 +57,74 @@ let newest = (db: Driver): string | null =>
 /** The implementation behind the tool ./vocab.json declares, over this
  * server's own database connection — which is why this export is a factory. */
 export let runs = (
-  host: { sql: Driver; graph: Pick<Graph, 'get'> },
+  host: { storage: { statements?: Statements }; graph: Pick<Graph, 'get'> },
   options: Options = {},
-): Runs => ({
-  vector_check: async (call) => {
-    let about = 'the vector index is being built by the sweep that owns it'
-    let minutes = options.stale ?? STALE
-    let warn = (text: string) =>
-      checked(call.entity.eid, about, [{ level: 'warn', text }])
-    // What this server is waiting for, if anything: a sweep that cannot embed
-    // is not behind on a build, it has not started at all.
-    let { waiting } = await embedderOf(options, host.graph)
-    if (waiting) {
-      return warn(
-        `nothing is being embedded — ${waiting}. The sweep starts on its ` +
-          `own once the config is there; nothing has to be restarted`,
-      )
-    }
-    let said
-    try {
-      said = state(host.sql)
-    } catch {
-      // No vector table: this server never composed `@yaks/embedding/graph`,
-      // so there is no index and no sweep. Not a failure, and not a pass
-      // either.
-      return warn(
-        'this host keeps no vector table, so there is no index to build — ' +
-          '@yaks/embedding/graph is what raises one',
-      )
-    }
-    let last = newest(host.sql)
-    if (!last) return checked(call.entity.eid, about, [])
-    // Where no index serves, a database only this process has open holds its
-    // vectors in memory (./held.ts): no search reads them.
-    let held = !host.sql.file && (!said.installed || !said.model)
-    if (held) return checked(call.entity.eid, about, [])
-    if (!said.installed) {
-      return warn(
-        'sqlite-vector is not installed on this database, so every search ' +
-          'reads every stored vector — back the file up, then installNative() ' +
-          'once',
-      )
-    }
-    if (!said.model) {
-      return warn(
-        "two models' vectors share the table while the sweep re-embeds; " +
-          'the index waits for one model, and every search reads every ' +
-          'vector until then',
-      )
-    }
-    let at = Date.parse(last)
-    let stalled = behind(said) && !isNaN(at) &&
-      Date.now() - at > minutes * 60_000
-    let found: Finding[] = stalled
-      ? [{
-        level: 'fail',
-        text: `the index has been owed a build since ${last} (` +
-          (said.build.n
-            ? `${said.dirty} vectors changed since build ${said.build.n}, ` +
-              `${REBUILD} call for another`
-            : 'never built') +
-          `) — over ${minutes}m with nothing building it. Searches are ` +
-          `still exact, but each one scores every changed vector. No ` +
-          `process is running the sweep`,
-      }]
-      : []
-    return checked(call.entity.eid, about, found)
-  },
-})
+): Runs => {
+  let db = statements(host.storage)
+  return {
+    vector_check: async (call) => {
+      let about = 'the vector index is being built by the sweep that owns it'
+      let minutes = options.stale ?? STALE
+      let warn = (text: string) =>
+        checked(call.entity.eid, about, [{ level: 'warn', text }])
+      // What this server is waiting for, if anything: a sweep that cannot embed
+      // is not behind on a build, it has not started at all.
+      let { waiting } = await embedderOf(options, host.graph)
+      if (waiting) {
+        return warn(
+          `nothing is being embedded — ${waiting}. The sweep starts on its ` +
+            `own once the config is there; nothing has to be restarted`,
+        )
+      }
+      let said
+      try {
+        said = state(db)
+      } catch {
+        // No vector table: this server never composed `@yaks/embedding/graph`,
+        // so there is no index and no sweep. Not a failure, and not a pass
+        // either.
+        return warn(
+          'this host keeps no vector table, so there is no index to build — ' +
+            '@yaks/embedding/graph is what raises one',
+        )
+      }
+      let last = newest(db)
+      if (!last) return checked(call.entity.eid, about, [])
+      // Where no index serves, a database only this process has open holds its
+      // vectors in memory (./held.ts): no search reads them.
+      let held = db.ownership == 'exclusive' && (!said.installed || !said.model)
+      if (held) return checked(call.entity.eid, about, [])
+      if (!said.installed) {
+        return warn(
+          'sqlite-vector is not installed on this database, so every search ' +
+            'reads every stored vector — back the file up, then installNative() ' +
+            'once',
+        )
+      }
+      if (!said.model) {
+        return warn(
+          "two models' vectors share the table while the sweep re-embeds; " +
+            'the index waits for one model, and every search reads every ' +
+            'vector until then',
+        )
+      }
+      let at = Date.parse(last)
+      let stalled = behind(said) && !isNaN(at) &&
+        Date.now() - at > minutes * 60_000
+      let found: Finding[] = stalled
+        ? [{
+          level: 'fail',
+          text: `the index has been owed a build since ${last} (` +
+            (said.build.n
+              ? `${said.dirty} vectors changed since build ${said.build.n}, ` +
+                `${REBUILD} call for another`
+              : 'never built') +
+            `) — over ${minutes}m with nothing building it. Searches are ` +
+            `still exact, but each one scores every changed vector. No ` +
+            `process is running the sweep`,
+        }]
+        : []
+      return checked(call.entity.eid, about, found)
+    },
+  }
+}

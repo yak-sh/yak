@@ -1,6 +1,6 @@
 // `@yaks/journal/graph` — what a server composed from a config file imports to
 // switch the journal on. Its installer creates append-only tables over the
-// server's own database connection and returns the plugin that writes a row per
+// host's statement-capable storage and returns the plugin that writes a row per
 // component every transaction touched.
 //
 // `logFor` is here rather than inside `plugins` because `@yaks/journal/tools`
@@ -10,23 +10,24 @@
 // this host wrote itself.
 
 import type { Bundle, Plugin } from '@yaks/graph'
-import type { Derived, Driver, Stmt } from '@yaks/sql'
+import { type Derived, type Statements, statements, type Stmt } from '@yaks/sql'
 import { ddl, grown, journal, type Log, log } from './mod.ts'
 import { follow, type Heard } from './feed.ts'
 
 let logs = new WeakMap<object, Log>()
 
-/** What a log is bound to: the host's own connection, and the read overrides
+/** What a log is bound to: the host's storage, and the read overrides
  * its store was opened with, so a value the store keeps in another form reads
  * back the way the graph reads it (./log.ts `LogOpts.derived`). */
-export type Bound = { sql: Driver; derived?: Derived }
+export type Bound = { storage: { statements?: Statements }; derived?: Derived }
 
 /** The log bound to a host: the three tables, read and written over that
- * host's own connection, as that host. The same host gets the same log. */
+ * host's storage transaction, as that host. The same host gets the same log. */
 export let logFor = (host: Bound): Log => {
   let found = logs.get(host)
   if (!found) {
-    let rows = (s: Stmt) => host.sql.query(s)
+    let sql = statements(host.storage)
+    let rows = (s: Stmt) => sql.query(s)
     logs.set(host, found = log({ rows, derived: host.derived }))
   }
   return found
@@ -35,13 +36,14 @@ export let logFor = (host: Bound): Log => {
 /** Prepare journal storage explicitly. A store an
  * older journal made gains the columns it predates first. */
 export let install = (host: Bound): void => {
-  for (let s of ddl()) host.sql.query(s)
-  let has = host.sql.query({
+  let sql = statements(host.storage)
+  for (let s of ddl()) sql.query(s)
+  let has = sql.query({
     t: 'pragma',
     name: 'table_info',
     arg: 'journal_tx',
   })
-  for (let s of grown(has.map((c) => String(c.name)))) host.sql.query(s)
+  for (let s of grown(has.map((c) => String(c.name)))) sql.query(s)
 }
 
 /** Bind journal hooks over the tables the installer prepared. */

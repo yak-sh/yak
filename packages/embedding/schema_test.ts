@@ -2,9 +2,9 @@
 // data writes do not require inspecting the catalog again.
 import { assertEquals, assertThrows } from '@std/assert'
 import { test } from '@yaks/testing'
-import { type Driver, insert, render } from '@yaks/sql'
+import { insert, render, type Statements } from '@yaks/sql'
 import { open } from '@yaks/sqlite/db'
-import { unit } from '../sqlite/unit.ts'
+import { statements, storage } from '@yaks/sqlite'
 import { BOOKSHOP } from '../sqlite/testing.ts'
 import { fields } from './fields.ts'
 import { schema } from './ddl.ts'
@@ -29,7 +29,7 @@ let dropTrigger = () => ({
   name: 'embedding_owed_book_insert',
 })
 
-let exercise = (d: Driver, mutate: Driver = d) => {
+let exercise = (d: Statements, mutate: Pick<Statements, 'query'> = d) => {
   watch(d, text)
   assertEquals(installed(d), false)
   mutate.query(metadata())
@@ -64,24 +64,28 @@ test('embedding schema inspection stops across unchanged fields and data writes'
 })
 
 test('embedding schema decisions observe DDL through query and run', () => {
-  let d = shelf()
-  d.run = (s) => {
-    d.query(s)
-    return 0
+  let driver = open(':memory:')
+  let d = shelf(statements(driver))
+  try {
+    driver.run = (s) => {
+      driver.query(s)
+      return 0
+    }
+    exercise(d, {
+      query: (s) => {
+        driver.run!(s)
+        return []
+      },
+    })
+  } finally {
+    driver.close()
   }
-  let throughRun: Driver = {
-    query: (s) => {
-      d.run!(s)
-      return []
-    },
-  }
-  exercise(d, throughRun)
 })
 
 test('embedding schema decisions observe rendered and unannotated SQL changes', () => {
   for (let annotated of [true, false]) {
     let d = shelf()
-    let raw: Driver = {
+    let raw: Pick<Statements, 'query'> = {
       query: (s) => {
         let stmt = render(s)
         if (!annotated) delete stmt.origin
@@ -97,7 +101,7 @@ test('embedding snapshots taken in a rolled back transaction are discarded', () 
   watch(d, text)
   installed(d)
   assertThrows(() =>
-    unit(d, () => {
+    d.atomic(() => {
       d.query(metadata())
       assertEquals(installed(d), true)
       d.query(dropTrigger())
@@ -112,30 +116,33 @@ test('embedding snapshots taken in a rolled back transaction are discarded', () 
   assertEquals(watch(d, text), true)
 })
 
-test('embedding snapshots taken inside driver-owned rollback are discarded', () => {
-  let d = shelf()
-  d.tx = (body) => {
-    d.query({ t: 'begin' })
-    try {
-      let out = body()
-      d.query({ t: 'commit' })
-      return out
-    } catch (error) {
-      d.query({ t: 'rollback' })
-      throw error
-    }
+test('embedding snapshots inside a graph-owned unit are discarded on rollback', () => {
+  let driver = open(':memory:')
+  let store = storage(driver, shop)
+  store.install()
+  let d = store.statements
+  for (let stmt of schema()) d.query(stmt)
+  try {
+    watch(d, text)
+    assertEquals(installed(d), false)
+    assertThrows(() =>
+      store.tx(() => {
+        // The nested statement unit commits to the graph's transaction, not
+        // independently of it. The graph rolling back discards both snapshots.
+        d.atomic(() => {
+          d.query(metadata())
+          assertEquals(installed(d), true)
+          d.query(dropTrigger())
+          assertEquals(watch(d, fields(shop, (p) => p.prop == 'title')), true)
+        })
+        throw new Error('undo')
+      })
+    )
+    assertEquals(installed(d), false)
+    assertEquals(watch(d, text), false)
+  } finally {
+    driver.close()
   }
-  watch(d, text)
-  assertEquals(installed(d), false)
-  assertThrows(() =>
-    d.tx!(() => {
-      d.query(metadata())
-      assertEquals(installed(d), true)
-      throw new Error('undo')
-    })
-  )
-  assertEquals(installed(d), false)
-  assertEquals(watch(d, text), false)
 })
 
 test('embedding schema decisions observe file peer changes', () => {
@@ -143,7 +150,7 @@ test('embedding schema decisions observe file peer changes', () => {
   let a = open(`${dir}/test.db`), b = open(`${dir}/test.db`)
   try {
     for (let stmt of [...BOOKSHOP, ...schema()]) a.query(stmt)
-    exercise(a, b)
+    exercise(statements(a), statements(b))
   } finally {
     a.close()
     b.close()

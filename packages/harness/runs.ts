@@ -23,7 +23,8 @@ import {
   who,
 } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
-import type { Host } from '@yaks/cli/host'
+import type { Host } from '@yaks/host'
+
 import { MODEL, PROVIDER } from '@yaks/model'
 import { parse } from '@yaks/query'
 import { instructionFiles } from '@yaks/context/host'

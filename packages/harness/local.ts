@@ -282,7 +282,7 @@ export let local = (opts: Opts): Local => {
         anchor,
       }),
   })
-  watch = watchMigrations(h.migrations, (reason) => {
+  watch = h.migrations && watchMigrations(h.migrations, (reason) => {
     // Stop scheduling immediately, but leave SQLite open for admitted work to
     // drain. Restart is an explicit owner action, not a migration side effect.
     void l.close(reason).catch((error) =>

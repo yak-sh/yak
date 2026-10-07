@@ -1,8 +1,8 @@
 // The vectors held in this process's memory, so a search compares without
-// reading them all: one copy per driver, loaded the first time a search asks
+// reading them all: one copy per statement capability, loaded the first time a search asks
 // for it, for a database only this process has open (a Durable Object's, or
-// one in memory; @yaks/sql `Driver.file` says which). A file other processes
-// write is ranked by the quantized index (./native.ts) or read row by row
+// one in memory; @yaks/sql `Statements.ownership` says which). Shared storage
+// other processes write is ranked by the quantized index (./native.ts) or read row by row
 // instead.
 //
 // The copy is int8. Each vector is held as one signed byte per coordinate, its
@@ -40,7 +40,6 @@ import {
   as,
   at,
   col,
-  type Driver,
   each,
   eq,
   exists,
@@ -53,6 +52,7 @@ import {
   op,
   type Raw,
   select,
+  type Statements,
   table,
   tally,
   val,
@@ -152,11 +152,11 @@ let scores = (
 // Each driver's copy, gone with the driver. The copies are also listed, least
 // recently searched first, to share one budget; the list holds them weakly, so
 // an object the runtime let go of takes its copy with it.
-let copies = new WeakMap<Driver, Held>()
+let copies = new WeakMap<Statements, Held>()
 let lru = new Set<WeakRef<Held>>()
 let refs = new WeakMap<Held, WeakRef<Held>>()
 // The drivers whose vectors would not fit.
-let over = new WeakSet<Driver>()
+let over = new WeakSet<Statements>()
 
 let bytes = (h: Held) => h.ids.length * cost(h.dim)
 
@@ -254,7 +254,7 @@ let keep = (h: Held, owner: number, bytes: Uint8Array): boolean => {
 // What the dirty set names, as each entity's vector stands now: its bytes
 // under `model`, or null where it has none (deleted, or another model's).
 let d = at('d'), e = at('e')
-let dirty = (db: Driver, model: string): Map<number, Uint8Array | null> =>
+let dirty = (db: Statements, model: string): Map<number, Uint8Array | null> =>
   new Map(
     db.query(select({
       cols: [
@@ -277,8 +277,8 @@ let dirty = (db: Driver, model: string): Map<number, Uint8Array | null> =>
 // Where this process is the only one with the database open and no quantized
 // index reads the dirty set, the set is the copies' alone: cleared, with a new
 // build numbered so every other copy of it loads again.
-let owned = (db: Driver) => !db.file && !installed(db)
-let clear = (db: Driver): number => {
+let owned = (db: Statements) => db.ownership == 'exclusive' && !installed(db)
+let clear = (db: Statements): number => {
   db.query({ t: 'update', table: BUILD, set: { n: op('+', col('n'), lit(1)) } })
   db.query({ t: 'delete', from: DIRTY })
   return current(db).n
@@ -286,7 +286,7 @@ let clear = (db: Driver): number => {
 
 // Every vector under `model`, a page at a time, into a copy made to their
 // count; null where they will not fit.
-let load = (db: Driver, model: string): Held | null => {
+let load = (db: Statements, model: string): Held | null => {
   let was = copies.get(db)
   if (was) drop(was)
   let h: Held = {
@@ -343,8 +343,8 @@ let load = (db: Driver, model: string): Held | null => {
  * or its copy is from an older build; null where the vectors are not held:
  * a file other processes may write, or more than {@link HELD} of them.
  */
-export let hold = (db: Driver, model: string): Held | null => {
-  if (db.file || over.has(db)) return null
+export let hold = (db: Statements, model: string): Held | null => {
+  if (db.ownership == 'shared' || over.has(db)) return null
   let had = copies.get(db)
   let h = had && had.model == model && had.n == current(db).n
     ? had
@@ -359,7 +359,7 @@ export let hold = (db: Driver, model: string): Held | null => {
  * what a sweep pass wrote, from the process that wrote it (./sweep.ts
  * `drain`). Nothing where the set is not the copies' alone.
  */
-export let absorb = (db: Driver): void => {
+export let absorb = (db: Statements): void => {
   if (!owned(db)) return
   let h = copies.get(db)
   let now = current(db).n
@@ -418,7 +418,12 @@ let top = (owners: Int32Array, sims: Float64Array, m: number): number[] => {
 // space, and one the screen admits. Driven by the list, so each candidate
 // costs one read of its entity, its vector and its tombstone.
 let o = at('o'), j = at('j')
-let standing = (db: Driver, model: string, owners: number[], within?: Raw) =>
+let standing = (
+  db: Statements,
+  model: string,
+  owners: number[],
+  within?: Raw,
+) =>
   new Map(
     db.query(select({
       cols: [
@@ -455,7 +460,7 @@ let standing = (db: Driver, model: string, owners: number[], within?: Raw) =>
  * exact cosine of their stored vectors.
  */
 export let ranked = (
-  db: Driver,
+  db: Statements,
   h: Held,
   query: Float32Array,
   opts: { limit: number; floor: number; without?: number; within?: Raw },

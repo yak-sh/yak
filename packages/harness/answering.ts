@@ -22,7 +22,8 @@ import {
   transcript,
   usingBefore,
 } from '@yaks/session'
-import type { Host } from '@yaks/cli/host'
+import type { Host } from '@yaks/host'
+
 import { seed } from './agent.ts'
 import { discussion, words as declaredWords } from '@yaks/inbox/queries'
 import { cachedPrefixExpires } from '@yaks/model'

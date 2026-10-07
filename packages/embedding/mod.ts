@@ -34,7 +34,7 @@
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
  * import { graph } from '@yaks/graph'
- * import { storage } from '@yaks/sqlite'
+ * import { statements, storage } from '@yaks/sqlite'
  * import { open } from '@yaks/sqlite/db'
  * import {
  *   fields,
@@ -49,9 +49,10 @@
  * let shop = loadVocab([{
  *   $defs: { book: { component: true, properties: { title, price } } },
  * }])
- * let db = open(':memory:')
- * for (let stmt of storage(db, shop).ddl()) db.query(stmt)
- * graph({ storage: storage(db, shop), vocab: shop }).apply([
+ * let driver = open(':memory:')
+ * let db = statements(driver)
+ * for (let stmt of storage(driver, shop).ddl()) db.query(stmt)
+ * graph({ storage: storage(driver, shop), vocab: shop }).apply([
  *   { entity: { eid: 'book-1' }, book: { title: 'The Hobbit', price: 12 } },
  *   { entity: { eid: 'book-2' }, book: { title: 'Farmer Giles', price: 9 } },
  * ])
@@ -64,7 +65,7 @@
  *
  * // the books most like this one, still under the rest of the query's filters
  * let near = semantic(db, embedder)
- * let store = storage(db, shop, { extend: [near] })
+ * let store = storage(driver, shop, { extend: [near] })
  * let hits = near.rank(store.read('.near=book-1&.order=similar .book.price<20'))
  * // each with a `rank.score`
  * ```

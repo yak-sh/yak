@@ -7,7 +7,8 @@ import { assert, assertEquals } from '@std/assert'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { graph } from '@yaks/graph'
 import { col, insert, scan, tally } from '@yaks/sql'
-import { componentTables, drift, storage } from '@yaks/sqlite'
+import { componentTables, drift, statements, storage } from '@yaks/sqlite'
+import { open } from '@yaks/sqlite/db'
 import { loadVocab } from '@yaks/vocab'
 import { entity, raised, SPINE, text } from '../sqlite/testing.ts'
 import { DIRTY, OWED, rekey, schema, TABLE } from './ddl.ts'
@@ -28,7 +29,8 @@ test('the schema is idempotent — installing twice is a no-op', async () => {
 })
 
 test('a vector is no component: classification and its audit pass it by', async () => {
-  let sql = mem()
+  let sql = open(':memory:')
+  let db = statements(sql)
   let vocab = loadVocab([archetypeDoc, {
     $defs: {
       doc: {
@@ -43,8 +45,8 @@ test('a vector is no component: classification and its audit pass it by', async 
   for (let stmt of schema()) sql.query(stmt)
   let g = graph({ storage: store, vocab, plugins: [archetypes()] })
   await g.apply([{ entity: { eid: 'a' }, doc: { title: 'The Hobbit' } }])
-  await sweep(sql, fields(vocab), embedder)
-  assert(vectorOf(sql, 'a', embedder.model))
+  await sweep(db, fields(vocab), embedder)
+  assert(vectorOf(db, 'a', embedder.model))
   assertEquals(tally(sql, DIRTY), 1)
   let found = componentTables(sql)
   assertEquals([TABLE, DIRTY, OWED].filter((t) => found.includes(t)), [])

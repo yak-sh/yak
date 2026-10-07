@@ -1,3 +1,4 @@
+import { statements } from '@yaks/sqlite'
 import { ids } from '@yaks/id/graph'
 import { choices } from '@yaks/builders'
 import { recovering } from './models.ts'
@@ -916,7 +917,7 @@ export class Store {
     let unfit = install(this.#sql, vocab, blobRead(vocab))
     for (let e of unfit) defect(e, { request: 'schema fit', store: name })
     if (!unfit.length) {
-      watchEmbedding(this.#sql, texts(vocab, blobRead(vocab)))
+      watchEmbedding(statements(this.#sql), texts(vocab, blobRead(vocab)))
       this.#put('schema', stamp)
     }
   }
@@ -970,7 +971,10 @@ export class Store {
         // title and body, and an app's own vocab.json declares `"search": true`
         // on whatever of its words it wants found. sqlite owns no index. The
         // same text has a vector each (`#embedding`), which `.near` ranks.
-        extend: [search(searchable), semantic(drive, { model: SPACE })],
+        extend: [
+          search(searchable),
+          semantic(statements(drive), { model: SPACE }),
+        ],
         // A body is stored as its address (@yaks/blob `store: "blob"`), so the
         // reads and the `doc_value` view resolve it as prose. The FTS schema
         // receives the same resolution, keeping hashes out of the index
@@ -2138,7 +2142,7 @@ export class Store {
   // incarnation does not derive work, sweep history or inspect owed targets.
   #deployed = async (): Promise<void> => {
     this.#graph.storage.install()
-    watchEmbedding(this.#sql, this.#texts.fields)
+    watchEmbedding(statements(this.#sql), this.#texts.fields)
     // Schema pages are ordinary entities, made by the package that owns
     // their identities. Describe after boot, in bounded writes, with the
     // hash last so an interrupted pass resumes on the next request.
@@ -2383,7 +2387,7 @@ export class Store {
   // schema is not standing yet owes nothing: it has no table to owe it in.
   #owes = () =>
     !!this.#texts && !!this.#get('schema') &&
-    unembedded(this.#texts.sql, 1).length > 0
+    unembedded(statements(this.#texts.sql), 1).length > 0
 
   #embedding = () => {
     if (this.#dormant) return
@@ -2399,7 +2403,7 @@ export class Store {
       do {
         this.#vectorAgain = false
         let { sql, fields } = this.#texts
-        let done = await drain(sql, fields, model, {
+        let done = await drain(statements(sql), fields, model, {
           signal: AbortSignal.timeout(Store.EMBED),
         })
         if (this.#dormant) return
@@ -3081,7 +3085,7 @@ export class Store {
         let within = at.get('within')
         let { sql, fields, screen } = this.#texts
         return Response.json(
-          await meaning(sql, fields, model, at.get('q') ?? '', {
+          await meaning(statements(sql), fields, model, at.get('q') ?? '', {
             limit: Number(at.get('limit') ?? 20),
             screen: within ? () => screen(within) : undefined,
           }),

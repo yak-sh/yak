@@ -19,7 +19,6 @@
 
 import { type Authenticate, json, refuse, type Route, signed } from '@yaks/api'
 import { type Graph, Stale, token } from '@yaks/graph'
-import type { Driver } from '@yaks/sql'
 import { addressOf, type Artifact, keep } from './artifact.ts'
 import { type Backend, backend } from './backend.ts'
 import { type Served, served, servedOpen } from './serve.ts'
@@ -98,7 +97,7 @@ let mediaOf = (request: Request): string =>
 /** The two endpoints: `GET /blob/<sha256>` returns the bytes, and
  * `PUT /blob/<sha256>` stores them. */
 export let routes = (
-  host: { sql: Driver; graph: Graph; who?: Authenticate; artifacts?: Blobs },
+  host: { blobs: Blobs; graph: Graph; who?: Authenticate; artifacts?: Blobs },
   options: Options = {},
 ): Route[] => {
   let { store, waiting } = host.artifacts

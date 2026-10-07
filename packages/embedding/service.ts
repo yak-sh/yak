@@ -34,7 +34,7 @@
 import { sleep } from '@yaks/effects'
 import type { Graph } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import type { Derived, Driver } from '@yaks/sql'
+import { type Derived, type Statements, statements } from '@yaks/sql'
 import { resolved } from './fields.ts'
 import { type Options, ready } from './options.ts'
 import { drain } from './sweep.ts'
@@ -48,7 +48,7 @@ export let AFTER = 3_000
  * through which a body @yaks/blob stores by address is read as its text. */
 export type Host = {
   vocab: Vocab
-  sql: Driver
+  storage: { statements?: Statements }
   graph: Pick<Graph, 'get'>
   derived?: Derived
 }
@@ -60,6 +60,7 @@ export let service = async (
   options: Options = {},
   signal: AbortSignal = AbortSignal.abort(),
 ): Promise<void> => {
+  let db = statements(host.storage)
   let after = options.after ?? AFTER
   // Reported once per distinct message: a server waiting for a key says so on
   // the first pass and then goes quiet; `vector_check` keeps the answer.
@@ -69,7 +70,7 @@ export let service = async (
       let now = await ready(host.vocab, options, host.graph)
       if (now.embedder) {
         let text = resolved(now.text, host.derived)
-        let done = await drain(host.sql, text, now.embedder, {
+        let done = await drain(db, text, now.embedder, {
           batch: options.batch,
           signal,
         })
@@ -82,7 +83,7 @@ export let service = async (
           console.warn('@yaks/embedding —', now.waiting)
         }
         // The vectors already stored are still searched, through an index.
-        build(host.sql)
+        build(db)
       }
     } catch (error) {
       // A pass the host ended mid-way wrote nothing it had not settled: its

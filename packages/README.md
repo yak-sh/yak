@@ -123,6 +123,8 @@ grouped approximately by function, **not** by dependency order.
   ordering and unsupported queries differ; see the package's compatibility
   table.
 
+- **[@yaks/host](./host)** — The portable capabilities a host lends its plugins;
+  concrete hosts own connections, directories and resource lifetime.
 - **[@yaks/graph](./graph)** — The entity/component API and phased `apply()`
   operation: filter, normalize, validate and commit changes using a supplied
   `Storage` adapter. Plugins add schema declarations and lifecycle hooks.
@@ -583,11 +585,11 @@ factories taking `(host, options)`; `service` additionally takes an
 `AbortSignal`. Schema `docs`, `keywords` and renderer `views` are values, while
 `derived(vocab)` produces computed-property definitions. A **facet** is one of
 these sub-module exports, not another kind of plugin. For example, a check that
-queries a package's own SQL table gets the connection through `host.sql`, and a
-threshold or a relation name comes from config rather than being hard-coded.
-Everything a tool needs per call arrives with the call instead:
-`run(call, graph)` hands it the call's bundle — its arguments, the caller, the
-process that made it — and the graph it runs on.
+queries a package's own index gets its statement capability through
+`host.storage.statements`, and a threshold or a relation name comes from config
+rather than being hard-coded. Everything a tool needs per call arrives with the
+call instead: `run(call, graph)` hands it the call's bundle — its arguments, the
+caller, the process that made it — and the graph it runs on.
 
 ### Health checks are just tools named `check`
 

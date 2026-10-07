@@ -4,13 +4,14 @@
 // does with the journal (recast to subscribers, drive effects at most once).
 
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { applied } from './undo.ts'
 import { follow } from './feed.ts'
 import { ddl, grown } from './log.ts'
-import { install, plugins } from './graph.ts'
+import { install, logFor, plugins } from './graph.ts'
 import { mem } from '../sqlite/testing.ts'
+import { statements } from '@yaks/sqlite'
 import { sync, wikiGraph, wikiLog } from './testing.ts'
 
 let fixture = (n: number) => {
@@ -113,7 +114,22 @@ test('a store an older journal made takes the host once it is opened again', () 
     db.query({ t: 'pragma', name: 'table_info', arg: 'journal_tx' })
       .map((c) => String(c.name))
   assertEquals(grown(columns()).length, 1)
-  install({ sql: db })
-  plugins({ sql: db })
+  let host = { storage: { statements: statements(db) } }
+  install(host)
+  plugins(host)
   assertEquals(grown(columns()), [])
+})
+
+test('a journal requires storage that offers statements', () => {
+  let host = { storage: {} }
+  assertThrows(
+    () => install(host),
+    Error,
+    'this storage offers no SQL statements',
+  )
+  assertThrows(
+    () => logFor(host),
+    Error,
+    'this storage offers no SQL statements',
+  )
 })

@@ -43,7 +43,7 @@ import {
   val,
   when,
 } from '@yaks/sql'
-import type { Driver } from '@yaks/sql'
+import type { Statements } from '@yaks/sql'
 import { type Near, nearest, type Rank, vectorOf } from './near.ts'
 
 /** The `.order=` value that means "nearest first". */
@@ -83,7 +83,7 @@ export type Semantic = Extension & {
  * key ranks perfectly well over the vectors it already has.
  */
 export let semantic = (
-  db: Driver,
+  db: Statements,
   space: { model: string },
   opts: SemanticOpts = {},
 ): Semantic => {

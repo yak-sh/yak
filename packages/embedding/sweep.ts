@@ -16,7 +16,6 @@ import {
   as,
   at,
   col,
-  type Driver,
   eq,
   exists,
   fn,
@@ -25,6 +24,7 @@ import {
   lit,
   not,
   select,
+  type Statements,
   sub,
   table,
   val,
@@ -75,7 +75,7 @@ let assemble = (
  * are left out, so an entity stops being a neighbour as soon as it is deleted.
  */
 export let sources = (
-  db: Driver,
+  db: Statements,
   fields: Field[],
   owners?: number[],
 ): Source[] => {
@@ -118,7 +118,7 @@ export let sources = (
 
 /** Store one entity's vector, replacing whatever it had. */
 export let put = (
-  db: Driver,
+  db: Statements,
   owner: number,
   model: string,
   text: string,
@@ -149,7 +149,7 @@ export let put = (
 
 // Delete one entity's vector: it has no text to make one from, or its text
 // was refused.
-let drop = (db: Driver, owner: number): void =>
+let drop = (db: Statements, owner: number): void =>
   void db.query({
     t: 'delete',
     from: TABLE,
@@ -160,7 +160,7 @@ let drop = (db: Driver, owner: number): void =>
 // queue is empty, so a model change queues everything once, not every pass.
 // The smallest and largest model name, each read off the model index: a scan
 // for one that differs would read every vector.
-let moved = (db: Driver, model: string): boolean => {
+let moved = (db: Statements, model: string): boolean => {
   let edge = (f: string) =>
     sub(select({ cols: [fn(f, col('model'))], from: table(TABLE) }))
   let [r] = db.query(
@@ -211,7 +211,7 @@ export type Swept = {
  * swallowed into a quietly half-embedded corpus.
  */
 export let sweep = async (
-  db: Driver,
+  db: Statements,
   fields: Field[],
   embedder: Embedder,
   limit = BATCH,
@@ -265,7 +265,7 @@ export type Drained = { fresh: number; refused: Swept['refused'] }
  * be reached throws, and what it took stays owed.
  */
 export let drain = async (
-  db: Driver,
+  db: Statements,
   fields: Field[],
   embedder: Embedder,
   opts: { batch?: number; signal?: AbortSignal } = {},

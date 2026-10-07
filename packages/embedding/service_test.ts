@@ -4,12 +4,12 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { service } from './service.ts'
 import { TABLE } from './ddl.ts'
-import { type Driver, insert, tally } from '@yaks/sql'
+import { insert, type Statements, tally } from '@yaks/sql'
 import { entity } from '../sqlite/testing.ts'
 import type { Options, Rows } from './options.ts'
 import { none, serving, shelf, shop } from './testing.ts'
 
-let count = (db: Driver) => tally(db, TABLE)
+let count = (db: Statements) => tally(db, TABLE)
 
 let until = async (want: () => boolean) => {
   for (let i = 0; i < 400 && !want(); i++) {
@@ -21,7 +21,11 @@ let until = async (want: () => boolean) => {
 // A service running over a fresh shop until the test is done with it.
 let running = (options: Options, graph: Rows = none, db = shelf()) => {
   let stop = new AbortController()
-  let done = service({ vocab: shop, sql: db, graph }, options, stop.signal)
+  let done = service(
+    { vocab: shop, storage: { statements: db }, graph },
+    options,
+    stop.signal,
+  )
   return { db, end: () => (stop.abort(), done) }
 }
 
@@ -42,7 +46,7 @@ let quiet = async (test: (said: unknown[]) => Promise<void>) => {
 
 test('one pass when the signal has already ended, the way a command runs it', async () => {
   let db = shelf()
-  await service({ vocab: shop, sql: db, graph: none }, {
+  await service({ vocab: shop, storage: { statements: db }, graph: none }, {
     embedder: { provider: 'hash' },
   })
   assertEquals(count(db), 4)

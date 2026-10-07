@@ -1,9 +1,7 @@
 // One backend declaration yields the byte store shared by artifact writers
 // and readers. Text properties keep their separate SQL store.
-import type { Driver } from '@yaks/sql'
 import { fileBlobs } from './file.ts'
 import { type Bucket, objectBlobs } from './object.ts'
-import { sqliteBlobs } from './sqlite.ts'
 import { type Blobs, memoryBlobs } from './store.ts'
 
 /** A byte store, as a graph's configuration names one. */
@@ -25,9 +23,9 @@ export let artifactsAt = (path: string): Blobs =>
 /** Build the backend named by a config, or explain why it cannot serve. */
 export let backend = (
   said: Backend,
-  host: { sql: Driver },
+  host: { blobs: Blobs },
 ): { store?: Blobs; waiting?: string } => {
-  if (said.via == 'sqlite') return { store: sqliteBlobs(host.sql) }
+  if (said.via == 'sqlite') return { store: host.blobs }
   if (said.via == 'file') {
     return said.dir
       ? { store: fileBlobs(said.dir) }

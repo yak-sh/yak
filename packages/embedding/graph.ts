@@ -24,7 +24,7 @@ import type { Reply } from '@yaks/tools'
 import type { Derived, Extension } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import { semantic } from './compile.ts'
-import type { Driver } from '@yaks/sql'
+import { type Statements, statements } from '@yaks/sql'
 import { rekey, schema } from './ddl.ts'
 import { resolved } from './fields.ts'
 import { type Options, ready, spaceOf } from './options.ts'
@@ -35,9 +35,10 @@ import { type Host, neighbours } from './neighbours.ts'
  * contributes no rule to `apply()`: nothing a client writes is a vector, and
  * what keeps the vectors in step with the text is the sweep (`./service`), off
  * the write path. */
-export let install = (host: { sql: Driver }): void => {
-  rekey(host.sql)
-  for (let statement of schema()) host.sql.query(statement)
+export let install = (host: { storage: { statements?: Statements } }): void => {
+  let db = statements(host.storage)
+  rekey(db)
+  for (let statement of schema()) db.query(statement)
 }
 
 /** Binding the index does not create or migrate its tables. */
@@ -55,12 +56,13 @@ export let plugins = (): Plugin[] => []
  * that one contributes no extension, and `.near` gets the compiler's own
  * refusal. */
 export let extend = (
-  host: { sql: Driver },
+  host: { storage: { statements?: Statements } },
   options: Options = {},
 ): Extension[] => {
+  let db = statements(host.storage)
   let model = spaceOf(options.embedder)
   return model
-    ? [semantic(host.sql, { model }, {
+    ? [semantic(db, { model }, {
       limit: options.neighbours,
       floor: options.floor,
     })]
@@ -72,24 +74,26 @@ export let extend = (
  * or a provider arrived, without a new host or a new search function. */
 export let meaning = (
   host: {
-    sql: Driver
+    storage: { statements?: Statements }
     vocab: Vocab
     graph: Pick<Graph, 'get'>
     derived?: Derived
   },
   options: Options = {},
-): (words: string, opts?: MeaningOpts) => Promise<Hit[]> =>
-async (words, opts) => {
-  let now = await ready(host.vocab, options, host.graph)
-  return now.embedder
-    ? await search(
-      host.sql,
-      resolved(now.text, host.derived),
-      now.embedder,
-      words,
-      { ...opts, floor: opts?.floor ?? options.floor },
-    )
-    : []
+): (words: string, opts?: MeaningOpts) => Promise<Hit[]> => {
+  let db = statements(host.storage)
+  return async (words, opts) => {
+    let now = await ready(host.vocab, options, host.graph)
+    return now.embedder
+      ? await search(
+        db,
+        resolved(now.text, host.derived),
+        now.embedder,
+        words,
+        { ...opts, floor: opts?.floor ?? options.floor },
+      )
+      : []
+  }
 }
 
 /** What a direct tool call's answer carries beside the tool's own: for each

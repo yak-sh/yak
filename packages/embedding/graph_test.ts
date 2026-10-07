@@ -13,16 +13,16 @@ let hash = { embedder: { provider: 'hash' } }
 
 test('plugins raises the vectors and adds no rule to apply()', () => {
   let sql = mem()
-  install({ sql })
+  install({ storage: { statements: sql } })
   assertEquals(plugins(), [])
   assertEquals(tally(sql, TABLE), 0)
   // Installation is idempotent. Binding is independent of installation.
-  install({ sql })
+  install({ storage: { statements: sql } })
 })
 
 test('the extension a config builds answers .near over these vectors', async () => {
   let db = await stocked()
-  let [near] = extend({ sql: db }, hash)
+  let [near] = extend({ storage: { statements: db } }, hash)
   let q = compile(parse('.near=book-1&.order=similar'), shop, {
     extend: [near],
   })
@@ -31,12 +31,18 @@ test('the extension a config builds answers .near over these vectors', async () 
 
 test('the neighbourhood the config bounded is the one it gets', async () => {
   let db = await stocked()
-  let [near] = extend({ sql: db }, { ...hash, neighbours: 1 })
+  let [near] = extend({ storage: { statements: db } }, {
+    ...hash,
+    neighbours: 1,
+  })
   assertEquals(
     db.query(compile(parse('.near=book-1'), shop, { extend: [near] })).length,
     1,
   )
-  let [strict] = extend({ sql: db }, { ...hash, floor: 0.99 })
+  let [strict] = extend({ storage: { statements: db } }, {
+    ...hash,
+    floor: 0.99,
+  })
   let tight = compile(parse('.near=book-1'), shop, { extend: [strict] })
   assertEquals(db.query(tight).length, 0)
 })
@@ -44,7 +50,7 @@ test('the neighbourhood the config bounded is the one it gets', async () => {
 test('no embedder named is no space to rank in, and no extension', () => {
   // The host still comes up: `.near` gets the compiler's own refusal, which is
   // the same answer a host that never composed this plugin gives.
-  assertEquals(extend({ sql: mem() }, {}), [])
+  assertEquals(extend({ storage: { statements: mem() } }, {}), [])
   assertThrows(
     () => compile(parse('.near=book-1'), shop, { extend: [] }),
     Error,
@@ -55,7 +61,7 @@ test('a key that has not arrived still names the space it will fill', async () =
   // Waiting for a key is the sweep's problem: what a query needs is the model
   // name, and the config says that whether or not the environment has a token.
   let db = await stocked()
-  let [near] = extend({ sql: db }, {
+  let [near] = extend({ storage: { statements: db } }, {
     embedder: { provider: 'gpu', model: 'hash-64', key: undefined },
   })
   let q = compile(parse('.near=book-1&.order=similar'), shop, {
@@ -67,8 +73,21 @@ test('a key that has not arrived still names the space it will fill', async () =
 test('a phrase search sees an embedder that arrives after composition', async () => {
   let db = await stocked()
   let options: { embedder?: { provider: string } } = {}
-  let find = meaning({ sql: db, vocab: shop, graph: none }, options)
+  let find = meaning(
+    { storage: { statements: db }, vocab: shop, graph: none },
+    options,
+  )
   assertEquals(await find('dragon'), [])
   options.embedder = { provider: 'hash' }
   assert((await find('dragon')).length > 0)
+})
+
+test('SQL facets reject storage without a statement capability', () => {
+  assertThrows(() => install({ storage: {} }), Error, 'no SQL statements')
+  assertThrows(() => extend({ storage: {} }, hash), Error, 'no SQL statements')
+  assertThrows(
+    () => meaning({ storage: {}, vocab: shop, graph: none }),
+    Error,
+    'no SQL statements',
+  )
 })

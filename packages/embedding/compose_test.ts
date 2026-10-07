@@ -66,7 +66,7 @@ test('a config composes the vectors, and asking the door ranks by them', async (
   try {
     void yak.duties()
     await yak.graph.apply(shelf)
-    let vectors = () => tally(yak.sql, 'embedding')
+    let vectors = () => tally(yak.storage.statements, 'embedding')
     for (let i = 0; i < 400 && vectors() < 3; i++) {
       await new Promise((go) => setTimeout(go, 1))
     }
@@ -128,7 +128,7 @@ test('a config with no key composes, and nothing about the boot is different', a
     // The service has looked once it says what it is waiting for.
     await until(() => said.some((line) => line[0] == '@yaks/embedding —'))
     assertEquals(
-      tally(yak.sql, 'embedding'),
+      tally(yak.storage.statements, 'embedding'),
       0,
       'a host with no key embeds nothing',
     )

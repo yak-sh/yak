@@ -1,7 +1,8 @@
 // The command reads the serving process, not a freshly composed graph.
 
 import type { Ctx } from '@yaks/cli'
-import type { CliCommand, Host } from '@yaks/cli/host'
+import type { Host } from '@yaks/host'
+import type { CliCommand } from '@yaks/cli/host'
 import type { Capture } from './capture.ts'
 import { GROUPS, type Snapshot } from './snapshot.ts'
 

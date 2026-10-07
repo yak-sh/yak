@@ -1,6 +1,5 @@
 // Where a stored value lives: the module a server imports from
-// `@yaks/blob/graph`. The store is the host's own (@yaks/cli `Host.blobs`, a
-// table in the server's database); the schema declarations are in ./vocab.ts,
+// `@yaks/blob/graph`. The store is the host's own (`host.blobs`); the schema declarations are in ./vocab.ts,
 // where a browser can load them without a store coming with them.
 
 import type { Plugin } from '@yaks/graph'

@@ -24,9 +24,10 @@ import { isPromise } from '@yaks/fp'
 import { type Graph, graph, type Options } from '@yaks/graph'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { mem } from '../sqlite/testing.ts'
-import { storage } from '../sqlite/mod.ts'
-import { type Driver, lit } from '@yaks/sql'
-import { ddl, journal, type Log, log } from './log.ts'
+import { statements, storage } from '@yaks/sqlite'
+import { lit, type Statements } from '@yaks/sql'
+import { ddl, journal, type Log } from './log.ts'
+import { logFor } from './graph.ts'
 
 let doc: VocabDoc = {
   $defs: {
@@ -109,13 +110,12 @@ export let NOW = '2026-01-01T00:00:00.000Z'
 let ACTORS = ['ada', 'bob', 'cli']
 
 /** An embedded database with the wiki's tables and the journal's, and a log
- * bound to it — what a graph and a test both read through. The driver is
- * returned beside them, because `@yaks/journal/graph` and
- * `@yaks/journal/tools` are both built from the server's own connection. */
+ * bound to it — what a graph and a test both read through. The statement
+ * capability is returned beside them so the tools use the same storage. */
 export let wikiLog = (): {
   g: (p?: Options['plugins']) => Graph
   j: Log
-  sql: Driver
+  storage: { statements: Statements }
   /** another host over the same database: a graph journaling as a log of its
    * own, the way a second process or thread opening the file would */
   other: () => { g: Graph; j: Log }
@@ -142,12 +142,13 @@ export let wikiLog = (): {
         ...plugins,
       ],
     })
-  let bound = () => log({ rows: (s) => db.query(s), derived })
+  let held = { statements: statements(db) }
+  let bound = () => logFor({ storage: held, derived })
   let j = bound()
   return {
     g: (plugins = []) => as(j, plugins),
     j,
-    sql: db,
+    storage: held,
     other: () => {
       let j = bound()
       return { g: as(j), j }
@@ -159,9 +160,9 @@ export let wikiLog = (): {
  * brings — with the log it writes to beside it. */
 export let wikiGraph = (
   plugins: Options['plugins'] = [],
-): { g: Graph; j: Log; sql: Driver } => {
+): { g: Graph; j: Log; storage: { statements: Statements } } => {
   let held = wikiLog()
-  return { g: held.g(plugins), j: held.j, sql: held.sql }
+  return { g: held.g(plugins), j: held.j, storage: held.storage }
 }
 
 /** Every adapter under the tests here is synchronous; a promise means the

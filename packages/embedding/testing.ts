@@ -6,19 +6,20 @@
 // text property and no others.
 
 import { open } from '@yaks/sqlite/db'
+import { statements } from '@yaks/sqlite'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Comp, type Graph, graph, identityEid } from '@yaks/graph'
 import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { modelDoc } from '@yaks/model'
 import { ram } from '@yaks/ram'
-import { type Driver, insert } from '@yaks/sql'
+import { insert, type Statements } from '@yaks/sql'
 import { BOOKSHOP, entity } from '../sqlite/testing.ts'
 import { fields, schema, sweep } from './mod.ts'
 import { hashEmbedder } from './embedder.ts'
 import type { Rows } from './options.ts'
 
-/** A Driver over a fresh in-memory database. */
-export let mem = (): Driver => open(':memory:')
+/** Statements over a fresh in-memory database. */
+export let mem = (): Statements => statements(open(':memory:'))
 
 let doc: VocabDoc = {
   $defs: {
@@ -63,8 +64,7 @@ export let embedder = hashEmbedder()
 /** A shop with its tables (written out by hand: this package stores vectors
  * beside them, it does not create them), its vector table, and a few books to
  * find. */
-export let shelf = (): Driver => {
-  let db = mem()
+export let shelf = (db: Statements = mem()): Statements => {
   for (let stmt of [...BOOKSHOP, ...schema()]) db.query(stmt)
   let book = (id: number, title: string, blurb: string, price: number) => {
     entity(db, id, `book-${id}`)
@@ -84,7 +84,7 @@ export let shelf = (): Driver => {
 }
 
 /** That shop with every vector already stored. */
-export let stocked = async (): Promise<Driver> => {
+export let stocked = async (): Promise<Statements> => {
   let db = shelf()
   await sweep(db, fields(shop), embedder)
   return db

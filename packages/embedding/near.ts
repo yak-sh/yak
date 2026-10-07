@@ -26,7 +26,6 @@ import {
   as,
   at,
   col,
-  type Driver,
   each,
   eq,
   exists,
@@ -35,6 +34,7 @@ import {
   not,
   type Raw,
   select,
+  type Statements,
   table,
   val,
 } from '@yaks/sql'
@@ -75,7 +75,7 @@ export type Rank = (
 let e = at('e')
 let o = at('o')
 let vectors = (
-  db: Driver,
+  db: Statements,
   model: string,
   within?: Screen,
   pool?: number[],
@@ -102,7 +102,7 @@ let vectors = (
  * the model moved and its row belongs to the old space.
  */
 export let vectorOf = (
-  db: Driver,
+  db: Statements,
   entity: Eid,
   model: string,
 ): Float32Array | null => {
@@ -165,7 +165,7 @@ let replace = (heap: Hit[], hit: Hit) => {
 
 /** The entities nearest a query vector, most similar first. */
 export let nearest = (
-  db: Driver,
+  db: Statements,
   query: Float32Array,
   opts: NearOpts,
 ): Near[] => {
