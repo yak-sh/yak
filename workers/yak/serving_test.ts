@@ -1732,7 +1732,7 @@ test('an open visitor cannot choose generated media, and the editor browser can'
   let run = crypto.randomUUID(), call = crypto.randomUUID()
   let first = crypto.randomUUID(), second = crypto.randomUUID()
   await metaOf(store).apply([
-    { entity: { eid: run }, build: { key: 'take', call } },
+    { entity: { eid: run }, build: { key: 'take', call, inputs: 'i' } },
     { entity: { eid: call }, call: { source: run, args: {} } },
     {
       entity: { eid: first },

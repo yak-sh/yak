@@ -258,7 +258,7 @@ test('a finger lost to an eviction is still taken away', async () => {
   // cook arriving now is told nothing …
   let woken = new Store(ctx)
   let late = wire()
-  woken.webSocketMessage(
+  await woken.webSocketMessage(
     late,
     JSON.stringify({ subscribe: '.recipe', id: 'r' }),
   )
