@@ -9,6 +9,7 @@ import { entityPath, searchAt } from '../url.ts'
 import { useEffect, useLayoutEffect } from 'preact/hooks'
 import { idOf } from '../types.ts'
 import { ent, mode, routeSub } from '../live.ts'
+import { PersonInbox } from './views/PersonInbox.tsx'
 import { block, Shell, Tabs, Viewport } from '@yaks/ui'
 import { filterable, FilterInput } from './Filter.tsx'
 import { applicable } from './registry.ts'
@@ -97,11 +98,16 @@ export let Page = ({ at }: { at: string }) => {
   let search = searchAt(at)
   let place = destinationAt(at, allDestinations())
   let t = screenTarget(at)
+  let home = url.pathname == '/' && !url.search
+  let inbox = home && !!vocab.comp('subscription')
   let rootEid = t?.eid
   useEffect(() => {
     if (rootEid) return effect(() => opened(rootEid))
   }, [rootEid])
-  useLayoutEffect(() => rootEid ? routeSub(rootEid) : undefined, [rootEid])
+  useLayoutEffect(() => rootEid && !inbox ? routeSub(rootEid) : undefined, [
+    rootEid,
+    inbox,
+  ])
   let e = t ? ent(t.eid) : undefined
   let tabs = e ? applicable(e) : []
   // A coarse pointer with no explicit view defaults a Canvas to List: its
@@ -123,7 +129,6 @@ export let Page = ({ at }: { at: string }) => {
   }
   // Home is the owner's inbox, or the host's own list where nothing composes
   // an inbox; either way it is named for itself, never for the person.
-  let home = url.pathname == '/' && !url.search
   let list = home && !vocab.comp('subscription')
   let named = titleAt(at)
   let page = home ? undefined : e
@@ -225,6 +230,8 @@ export let Page = ({ at }: { at: string }) => {
           ? <SearchPage query={search} />
           : place
           ? <QueryList eid={filter!} query={place.query} />
+          : inbox && e
+          ? <PersonInbox e={e} />
           : e
           ? <Entity eid={e.eid} view={view} />
           : list

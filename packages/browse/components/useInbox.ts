@@ -5,7 +5,6 @@ import { summaryQuery } from '@yaks/inbox/queries'
 import { isUnread, type Row } from '../client.ts'
 import { inbox as seededInbox, row } from '../live.ts'
 import { useQueryResult } from './useQuery.ts'
-import { useRows } from './subscriptions.ts'
 
 export let useInboxThreads = (
   actor: string,
@@ -17,16 +16,27 @@ export let useInboxThreads = (
     let value = row(eid).value?.inbox_summary?.threads
     return Array.isArray(value) ? value as unknown as Thread<Row>[] : []
   })
-  useRows([
+  let drawIds = [
     ...new Set(summaries.flatMap((t) => [
       t.row.eid,
       t.latest.eid,
       ...(thread ? t.messages.map((m) => m.eid) : []),
     ])),
-  ])
+  ]
+  let draw = useQueryResult(
+    drawIds.length ? `.entity.eid=${drawIds.join(',')}&*` : '',
+    drawIds.length > 0,
+    true,
+  )
+  // A completed summary is not a populated page until its titles and latest
+  // rows arrived. Do not paint generic identity fallbacks as settled threads.
+  let ready = read.ready && read.subscription?.state.status != 'failed' &&
+    (!drawIds.length ||
+      draw.ready && draw.subscription?.state.status != 'failed')
+
   return {
-    threads: summaries,
-    ready: read.ready && read.subscription?.state.status != 'failed',
+    threads: ready ? summaries : [],
+    ready,
   }
 }
 

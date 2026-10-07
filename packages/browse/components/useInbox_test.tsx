@@ -1,3 +1,5 @@
+import { Ux } from '@yaks/ux'
+import { ux } from './registry.ts'
 // Exact server summaries, addressed readiness and lifecycle-owned draw/detail rows.
 import '../testing.ts'
 import { test, until } from '@yaks/testing'
@@ -14,6 +16,8 @@ import { cache } from '../live.ts'
 import { type Ask, host } from '../host_testing.ts'
 import { uuid, vocab } from '../types.ts'
 import { useInboxCount, useInboxThread, useInboxThreads } from './useInbox.ts'
+import { Page } from './App.tsx'
+import { owner } from '../live.ts'
 
 // The transport adds whole-row coverage to its authored query.
 let line = (query: string) => query.replace(/&\*$/, '')
@@ -369,6 +373,56 @@ test('summary replacement discovers and removes membership without subscribing t
   } finally {
     await act(() => render(null, p.root))
     s.wire.free()
+    p.free()
+  }
+})
+
+test('home holds exact inbox reads instead of loading the actor entity neighborhood', async () => {
+  let p = page(), actor = uuid(), target = uuid(), priorOwner = owner.peek()
+  let f = await shop([
+    { entity: { eid: actor }, person: {} },
+    {
+      entity: { eid: target },
+      task: {},
+      filed: { assignee: actor },
+      doc: { title: 'Complete title' },
+    },
+  ])
+  owner.value = actor
+  try {
+    await act(() =>
+      render(
+        <Ux host={ux}>
+          <Page at='/' />
+        </Ux>,
+        p.root,
+      )
+    )
+    await wait(
+      () => p.root.textContent?.includes('Complete title') == true,
+      'populated inbox title',
+    )
+    assertEquals(
+      f.wire.asked().some((a) => a.subscribe.includes(`.refs=${actor}`)),
+      false,
+    )
+    assertEquals(
+      f.wire.asked().some((a) =>
+        a.subscribe.includes(`.comment.target=${actor}`)
+      ),
+      false,
+    )
+    assertEquals(
+      f.wire.asked().filter((a) =>
+        a.subscribe.startsWith('.inbox_summary.actor=')
+      ).length,
+      1,
+    )
+  } finally {
+    await act(() => render(null, p.root))
+    f.wire.free()
+    owner.value = priorOwner
+    cache.value = {}
     p.free()
   }
 })
