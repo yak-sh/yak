@@ -58,8 +58,9 @@ export type Options = {
   lines?: number
 }
 
-/** What these tools are given: the open graph. */
-export type Host = { graph: Graph }
+/** What these tools are given: the open graph, and the signal that aborts
+ * when the process answering them starts to stop. */
+export type Host = { graph: Graph; stopping?: AbortSignal }
 
 let uuid = () => crypto.randomUUID() as string
 let str = (v: unknown): string => v == null ? '' : String(v)
@@ -144,7 +145,7 @@ export let briefOf = (row: Bundle | undefined, entries: Bundle[]): string => {
 let over = (row: Bundle | undefined, entries: Bundle[]): boolean =>
   row?.[PROCESS] ? comp(row, EXIT) != null : ENDED.has(statusOf(entries))
 
-export let runs = (_host: Host, options: Options = {}): Runs => {
+export let runs = (host: Host, options: Options = {}): Runs => {
   let beat = Number(options.poll ?? 250)
   let patience = (said: unknown) =>
     every(said, every(options.timeout, 30 * 60_000))
@@ -165,8 +166,10 @@ export let runs = (_host: Host, options: Options = {}): Runs => {
     return [head, briefOf(row, entries)].filter(Boolean).join('\n')
   }
 
-  // The wait itself: the same two reads, on the beat, until the run is over
-  // or the patience runs out.
+  // The wait itself: the same two reads, on the beat, until the run is over,
+  // the patience runs out, or the process answering it starts to stop, which
+  // answers now rather than holding that stop: the caller asks again, of
+  // whichever process answers next.
   let watched = async (
     graph: Graph,
     session: string,
@@ -176,10 +179,14 @@ export let runs = (_host: Host, options: Options = {}): Runs => {
       let row = (await one(graph, session))!
       let entries = await entriesOf(graph, session)
       if (over(row, entries)) return ending(graph, row, entries)
+      let still = `${human(graph.vocab)(row)} — ${
+        statusOf(entries)
+      }, still running`
+      if (host.stopping?.aborted) {
+        return `${still}; this server is stopping, so wait again`
+      }
       if (Date.now() >= end) {
-        return `${human(graph.vocab)(row)} — ${
-          statusOf(entries)
-        }, still running after ${Math.round(timeout / 1000)}s`
+        return `${still} after ${Math.round(timeout / 1000)}s`
       }
       await sleep(Math.min(beat, Math.max(0, end - Date.now())))
     }

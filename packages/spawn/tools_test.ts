@@ -353,6 +353,21 @@ test('a wait answers "still running" rather than killing anything', async () => 
   assertStringIncludes(said, 'still running')
 })
 
+test('a wait answers when the server answering it starts to stop', async () => {
+  let { g } = host()
+  await g.apply([
+    { entity: { eid: 's' }, session: {} },
+    { entity: { eid: 'e1' }, entry: { session: 's' }, content: { body: 'go' } },
+  ])
+  let stopping = new AbortController()
+  let wait = runs({ graph: g, stopping: stopping.signal }, { poll: 5 })
+    .session_wait!(...asked(g, { session: 's' }))
+  stopping.abort()
+  let said = body(await wait)
+  assertStringIncludes(said, 'still running')
+  assertStringIncludes(said, 'wait again')
+})
+
 // The whole machine, with a provider that is a shell script: the request
 // starts it, the wait blocks on the process ending rather than the transcript,
 // and the peek reads back what it said.
