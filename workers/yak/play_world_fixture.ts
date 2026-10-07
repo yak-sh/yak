@@ -1,3 +1,4 @@
+import { statements } from '@yaks/sqlite'
 // Vale's actual world scheduling path. Human dialogue can use the scripted
 // outside AI; playing nearby owes no periodic transcript/model turn.
 import { type Bundle, graph, identityEid } from '@yaks/graph'
@@ -129,7 +130,9 @@ export let settleWorld = async (store: Store, storage?: State['storage']) => {
     let pending = await store.door.graph.read(
       '.effect.state=pending,running&.fields=entity.eid',
     )
-    if (!pending.length && (!storage || left(driver(storage)) == 0)) return
+    if (
+      !pending.length && (!storage || left(statements(driver(storage))) == 0)
+    ) return
     await new Promise<void>((resolve) => setTimeout(resolve, 0))
   }
   throw new Error('world effects did not settle')

@@ -1728,7 +1728,7 @@ test('query extensions receive storage capabilities without a driver or state di
     await Promise.resolve()
     if (part == 'graph') {
       return {
-        extend: (host) => {
+        extend: (host: import('@yaks/host').Host) => {
           assertEquals('sql' in host, false)
           assertEquals('state' in host, false)
           assert(host.storage.statements)
@@ -1741,7 +1741,7 @@ test('query extensions receive storage capabilities without a driver or state di
     return null
   }, { install: true, process: false })
   try {
-    assertEquals(await host.graph.rows('.count'), [{ count: 0 }])
+    assertEquals(await host.graph.get(['absent']), [])
   } finally {
     await host.close()
   }

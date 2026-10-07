@@ -49,7 +49,7 @@
  * @module
  */
 
-import { gather } from '@yaks/ui/contributions'
+import { type Contributions, gather } from '@yaks/ui/contributions'
 import {
   type Actor,
   type Comp,
