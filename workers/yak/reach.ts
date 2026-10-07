@@ -66,7 +66,7 @@ import { compile, lensesIn } from '@yaks/lens'
 import { lensDocAt, spoken as lensSpoken } from './lenses.ts'
 import { appKeywords, appVocab, platformDocs, platformVocab } from './vocab.ts'
 import { matcher, rows } from '@yaks/match'
-import { parse } from '@yaks/query'
+import { parse, tokens } from '@yaks/query'
 import {
   loadVocab,
   type PropSchema,
@@ -180,7 +180,17 @@ let partOf = (seg: string) => {
   return LINE.includes(word) ? '' : word
 }
 
-let segsOf = (line: string) => bare(line).split('&').filter(Boolean)
+// Groups and quoted values stay whole. An OR run also stays one part: its
+// alternatives are asked together, rather than intersected as separate parts.
+let segsOf = (line: string): string[] => {
+  let segs: string[] = []
+  for (let tok of tokens(bare(line))) {
+    let last = segs.length - 1
+    if (last >= 0 && (tok == '|' || segs[last].endsWith('|'))) segs[last] += tok
+    else segs.push(tok)
+  }
+  return segs
+}
 
 let aggOf = (line: string) =>
   segsOf(line).map(firstWord).find((w) => AGGS.includes(w))

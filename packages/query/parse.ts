@@ -477,7 +477,9 @@ export let parseDot = (token: string): Clause[] | null => {
 // A `(` opening a token starts a group: everything to its matching `)` is one
 // token, parsed on its own (parse below), so `|` and `&` inside it bind there.
 // A `|` outside quotes, brackets and groups is its own token, the OR separator.
-let tokens = (q: string): string[] => {
+/** A query's tokens, with quoted values, path brackets and groups kept whole.
+ * `|` is its own token; whitespace and `&` separate tokens. */
+export let tokens = (q: string): string[] => {
   let out: string[] = []
   let cur = ''
   let quote = ''

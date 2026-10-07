@@ -25,6 +25,7 @@
 // line as the query string itself and the Store takes it as one parameter, and
 // three of the page's riders lost their leading dot on the way over.
 import type { Bundle } from '@yaks/graph'
+import { tokens } from '@yaks/query'
 import { minted } from './meta.ts'
 import { refuse } from './tool.ts'
 
@@ -53,16 +54,14 @@ let plain = (value: string) => {
   }
 }
 
-// A decoded value the grammar would otherwise read as structure. `&` separates
-// segments, and a ` .` inside one splits it into words; quotes glue a value
-// across both (@yaks/query `segments`/`words`), and a dot-param's own spaces
-// survive unquoted, which is why a bare term is left alone for them. There is
-// no escape for a quote inside a quoted run, so a value carrying one is handed
-// over as it stands rather than silently mangled into a different value.
+// A decoded value the grammar would otherwise read as structure. Tokenizing
+// before decoding keeps escaped separators inside their value; quotes then
+// keep that value whole when the Store parses it. Already quoted values keep
+// their quotes; literal quotes are escaped when an unquoted value needs them.
 let glued = (value: string, term = false) =>
-  (value.includes('&') || (!term && /\s\./.test(value))) &&
-    !value.includes('"')
-    ? `"${value}"`
+  (/[&|]/.test(value) || (!term && /\s/.test(value))) &&
+    !/^(['"])[\s\S]*\1$/.test(value)
+    ? JSON.stringify(value)
     : value
 
 /** A line without the `?` a query string opens with, and any `&` after it. A
@@ -82,13 +81,19 @@ export let bare = (line: string) =>
  * would.
  */
 export let lined = (search: string): string =>
-  bare(search).split('&').filter(Boolean).map((seg) => {
+  tokens(bare(search)).map((seg) => {
+    if (seg == '|') return seg
+    if (seg.startsWith('(')) return `(${lined(seg.slice(1, -1))})`
     let m = OPERATOR.exec(seg)
     if (!m) return glued(plain(seg), true)
     return `${RIDERS[m[1]] ?? m[1]}${m[2]}${
       glued(plain(seg.slice(m[0].length)))
     }`
-  }).join('&')
+  }).reduce(
+    (line, seg, i, all) =>
+      line + (i && seg != '|' && all[i - 1] != '|' ? '&' : '') + seg,
+    '',
+  )
 
 // The alias this door gives a bundle that names no entity: its own
 // bookkeeping, never part of the answer.

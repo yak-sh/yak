@@ -69,7 +69,7 @@ All exports are available from `@yaks/query`.
 
 | Part                      | Exports                                                                                                                 |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Parsing                   | `parse`, `parseDot`, `conjoin`, `valued`, `cursor`, `ParseOpts`                                                         |
+| Parsing                   | `parse`, `parseDot`, `tokens`, `conjoin`, `valued`, `cursor`, `ParseOpts`                                               |
 | Predicates                | `eq`, `ne`, `contains`, `lt`, `le`, `gt`, `ge`, `present`, `absent`, `want`, `pred`, `bare`                             |
 | Values and text           | `coerce`, `scalar`, `list`, `range`, `time`, `text`, `never`                                                            |
 | Composition               | `and`, `or`, `map`                                                                                                      |
@@ -158,7 +158,7 @@ presence.
 grouping a string with a top-level `|` before joining it.
 
 ```ts
-import { and, conjoin, eq, or, parse } from '@yaks/query'
+import { and, conjoin, eq, or, parse, tokens } from '@yaks/query'
 import { equal } from '@yaks/testing'
 
 equal(
@@ -168,6 +168,11 @@ equal(
     or(eq('task.priority', 1), eq('task.priority', 2)),
   ),
 )
+
+equal(tokens('.doc.title="two words" .count'), [
+  '.doc.title="two words"',
+  '.count',
+])
 equal(conjoin('.task|.note', '.doc', ''), '(.task|.note)&.doc')
 equal(parse('task.status=open'), parse('.task.status=open'))
 ```

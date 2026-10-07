@@ -4,6 +4,7 @@
 // a value carries the character the other wire writes structure with.
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
+import { parse } from '@yaks/query'
 import { batched, lined, receipt } from './wire.ts'
 
 let cases: [string, string][] = [
@@ -15,12 +16,11 @@ let cases: [string, string][] = [
   ['?doc&.recipe', '?doc&.recipe'],
   // A value the page escaped, so the whole line can be escaped once on the way
   // out: a space, and an `&` that is part of a title rather than a separator
-  ['.doc.title~=lemon%20cake', '.doc.title~=lemon cake'],
+  ['.doc.title~=lemon%20cake', '.doc.title~="lemon cake"'],
   // An `&` is the other wire's separator, so a value carrying one is glued
-  // back together with quotes (@yaks/query); a space inside one dot-param
-  // needs none, since a segment that is one keeps its spaces.
+  // back together with quotes (@yaks/query), as is an escaped space.
   ['.doc.title~=salt%26pepper', '.doc.title~="salt&pepper"'],
-  ['.doc.title~=two%20words', '.doc.title~=two words'],
+  ['.doc.title~=two%20words', '.doc.title~="two words"'],
   ['.doc.title~=a%20.b', '.doc.title~="a .b"'],
   // A bare word is a full-text term and carries no operator
   ['lemon%20drizzle', 'lemon drizzle'],
@@ -34,6 +34,30 @@ let cases: [string, string][] = [
 
 test('a page line, as the store writes it', () => {
   for (let [page, store] of cases) assertEquals(lined(page), store, page)
+})
+
+test('wire translation preserves query clauses and quoted values', () => {
+  for (
+    let q of [
+      '.call.source=ba39e5e9-0626-44bc-986d-f8a1471c6409 .count',
+      '.build.builder=5914ddc9-63b3-49bb-bf27-7ed74e327353 ?doc .count',
+      '(.call.source=a | .call.source=b) .count',
+      '.doc.title~="salt & pepper" .count',
+      ".doc.title~='salt & pepper' .count",
+      '.doc.title~="a&|&b" .count',
+      '.doc.title~=cake words',
+      '.call.source=a,b .fields=call.source',
+      '.comment.reply_to[<=3]->C-1 .count',
+    ]
+  ) assertEquals(parse(lined(q)), parse(q), q)
+  assertEquals(
+    parse(lined('(.doc.title~=a%20.b | .doc.title~=salt%26pepper) .count')),
+    parse('(.doc.title~="a .b" | .doc.title~="salt&pepper") .count'),
+  )
+  assertEquals(
+    parse(lined('.doc.title~=a%7Cb .count')),
+    parse('.doc.title~="a|b" .count'),
+  )
 })
 
 test(
