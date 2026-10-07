@@ -607,8 +607,13 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     let enabled = (s: Slot): boolean | Promise<boolean> => {
       let query = s.effect?.active
       if (!query) return true
+      // Whether any entity matches, so one is all it reads: the matches of
+      // `.error .error.bug` are a store's every grouped error.
       if (!active.has(query)) {
-        active.set(query, after(tx.read(query), (rows) => rows.length > 0))
+        active.set(
+          query,
+          after(tx.read(`${query} .limit=1`), (rows) => rows.length > 0),
+        )
       }
       return active.get(query)!
     }
