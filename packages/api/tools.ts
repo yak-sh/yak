@@ -23,15 +23,25 @@
 // how long it answered for. Two consequences worth knowing: nothing is printed
 // until it stops, which is why the address is reported on stderr as soon as
 // the port is bound; and a server is never run again by a sweep. Stopped by a
-// signal, it stops taking requests, answers the ones in flight and returns
-// (@yaks/process/wind); closed before it could, its call is ended as
-// interrupted (@yaks/cli host.ts `close`); killed outright, the next server to
-// start closes for its process (host.ts `bury`), and ends it the same way.
+// signal, it stops taking requests and closes its sockets, lets the requests
+// in flight finish for a grace of seconds, and returns either way, so the
+// process ending cuts whatever is still open (@yaks/process/wind): a request
+// that never ends, such as a long wait, cannot hold a stop. Closed before it
+// could, its call is ended as interrupted (@yaks/cli host.ts `close`); killed
+// outright, the next server to start closes for its process (host.ts `bury`),
+// and ends it the same way.
+//
+// A restart is invisible when the replacement answers before this one stops
+// taking requests. `share` lets two servers listen on one port at once, and
+// `ready` names a file written once this one is listening, which is what a
+// supervisor waits on before stopping the old one (@yaks/cli `restart`).
+// Sharing is asked for, never assumed: a second server started by mistake on a
+// taken port is refused rather than quietly handed half its requests.
 
 import { argsOf, type Bundle } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import { CallError, type Runner } from '@yaks/tools'
-import { denoListen } from './deno.ts'
+import { denoListen, denoReady } from './deno.ts'
 import type { Handler } from './route.ts'
 
 /** The port `serve` listens on when neither the call nor the config names
@@ -43,6 +53,10 @@ export let PORT = 8787
  * itself (@yaks/cli's `doorman`) is offered to a network only when a config
  * says so. */
 export let HOSTNAME = '127.0.0.1'
+
+/** How long a stopping server lets requests already in flight finish before
+ * it returns anyway, in seconds, when the call names no `grace`. */
+export let GRACE = 10
 
 /** What this tool needs from the host that composed it: the request handler to
  * answer with, the duties it takes over while it is up, and the config
@@ -74,6 +88,7 @@ export let runs = (host: Serving): Runs => ({
     let args = argsOf(call)
     let port = Number(args.port ?? host.config.port ?? PORT)
     let hostname = String(args.hostname ?? host.config.hostname ?? HOSTNAME)
+    let grace = Number(args.grace ?? GRACE) * 1000
     // Close for dead processes before accepting requests. Running their
     // unanswered calls belongs to recovery, independently of listening.
     await host.bury?.()
@@ -84,6 +99,7 @@ export let runs = (host: Serving): Runs => ({
       server = denoListen({
         port,
         hostname,
+        reusePort: args.share === true,
         onListen: (addr) => {
           at = `http://${addr.hostname}:${addr.port}`
           // The one thing printed while the call is still running, because a
@@ -98,21 +114,45 @@ export let runs = (host: Serving): Runs => ({
       }
       throw error
     }
-    // And the duties in their long-lived form: the effect pool, where this
-    // process serves `effects`, and the plugins' services, each under its own
-    // lease, for as long as this process is up. Commands passing through
-    // leave these roles to a host that stays up.
-    // Not awaited: it returns when the host closes.
-    let stop = () => void server.shutdown()
-    if (host.stopping.aborted) stop()
-    else {
-      host.stopping.addEventListener('abort', stop, { once: true })
-      void host.duties()
+    // Stopping: no new connection, every socket closed, and the requests in
+    // flight let finish until the grace is up, then left to the process
+    // ending to cut.
+    let cut = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let graced = new Promise<void>((done) => {
+      let stop = () => {
+        void server.shutdown()
+        timer = setTimeout(() => {
+          cut = true
+          done()
+        }, grace)
+      }
+      if (host.stopping.aborted) stop()
+      else host.stopping.addEventListener('abort', stop, { once: true })
+    })
+    let unready: (() => Promise<void>) | undefined
+    try {
+      if (typeof args.ready == 'string') unready = await denoReady(args.ready)
+      // And the duties in their long-lived form: the effect pool, where this
+      // process serves `effects`, and the plugins' services, each under its
+      // own lease, for as long as this process is up. Commands passing
+      // through leave these roles to a host that stays up.
+      // Not awaited: it returns when the host closes.
+      if (!host.stopping.aborted) void host.duties()
+      await Promise.race([server.finished, graced])
+    } finally {
+      // Already stopping unless saying it was ready failed; never awaited,
+      // since a shutdown settles only once every request has.
+      void server.shutdown()
+      clearTimeout(timer)
+      await unready?.()
     }
-    await server.finished
     return [{
       entity: { eid: '$served' },
-      content: { body: `served ${at} for ${seconds(Date.now() - began)}` },
+      content: {
+        body: `served ${at} for ${seconds(Date.now() - began)}` +
+          (cut ? `, cutting what was open after ${seconds(grace)}` : ''),
+      },
     }]
   },
 })

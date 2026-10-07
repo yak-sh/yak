@@ -281,5 +281,6 @@
     ],
     "jsx": "react-jsx",
     "jsxImportSource": "preact"
-  }
+  },
+  "unstable": ["net"]
 }

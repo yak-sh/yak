@@ -47,7 +47,7 @@
       "surfaces": ["cli"],
       "roles": ["web"],
       "title": "Answer HTTP for this graph",
-      "description": "Listen on a TCP port and answer HTTP requests for this graph: POST /apply, GET or POST /query, the /ws subscription socket, POST /mcp, and every route the loaded plugins add. The port and network interface come from the configuration that opened the graph unless these arguments override them. This call does not return while the server is up. It returns when the server stops, and its result reports where it listened and for how long; while it runs, its execution state stays 'running', which is how the record of a server that is still up differs from one that has stopped.",
+      "description": "Listen on a TCP port and answer HTTP requests for this graph: POST /apply, GET or POST /query, the /ws subscription socket, POST /mcp, and every route the loaded plugins add. The port and network interface come from the configuration that opened the graph unless these arguments override them. This call does not return while the server is up. It returns when the server stops: it stops taking requests, closes its sockets and lets the requests in flight finish for the grace, then returns either way. Its result reports where it listened and for how long; while it runs, its execution state stays 'running', which is how the record of a server that is still up differs from one that has stopped.",
       "input": {
         "port": {
           "type": "number",
@@ -56,6 +56,18 @@
         "hostname": {
           "type": "string",
           "description": "the network interface to bind, instead of the configured one"
+        },
+        "share": {
+          "type": "boolean",
+          "description": "share the port with another server started with share, so a replacement can answer before the one it replaces stops (Linux; Deno needs --unstable-net). Without it a taken port is refused"
+        },
+        "ready": {
+          "type": "string",
+          "description": "a file to write this process's pid to once the port is bound, removed when the server stops"
+        },
+        "grace": {
+          "type": "number",
+          "description": "seconds a stopping server lets requests in flight finish before it stops anyway (default 10)"
         }
       }
     }

@@ -31,12 +31,14 @@ let free = (): number => {
   return port
 }
 
-// Wait for the listener rather than count startup ticks.
+// Wait for the listener rather than count startup ticks. Each ask is a
+// connection of its own, so servers sharing a port each get their turn.
 let said = async (url: string, ms = 2000): Promise<string> => {
   let end = Date.now() + ms
   for (;;) {
     try {
-      return await fetch(url).then((r) => r.text())
+      let init = { headers: { connection: 'close' } }
+      return await fetch(url, init).then((r) => r.text())
     } catch (error) {
       if (Date.now() > end) throw error
       await new Promise((go) => setTimeout(go, 5))
@@ -52,12 +54,16 @@ let asked = (args: Record<string, unknown> = {}): Bundle => ({
 let graph = {} as Graph
 
 // What the tool is handed, and a tally of what it asked for.
-let fake = (port?: number) => {
+let fake = (
+  port?: number,
+  handler: (request: Request) => Response | Promise<Response> = () =>
+    new Response('ok'),
+) => {
   let told = { driven: 0, duties: 0 }
   let stopping = new AbortController()
   let host: Serving = {
     config: { db: 'graph.db', ...(port == null ? {} : { port }) },
-    handler: () => new Response('ok'),
+    handler,
     runner: {
       drive: (opts?: { redrive?: boolean }) => {
         told.driven += opts?.redrive ? 1 : 0
@@ -85,6 +91,69 @@ test('serve answers with the host handler until the host stops', async () => {
   let body = (answer.content as { body: string }).body
   // Named nowhere, the interface is this machine's own.
   assert(body.includes(`http://127.0.0.1:${port}`), body)
+})
+
+test('a stop cuts what is still in flight once its grace is up', async () => {
+  let port = free()
+  let asking = Promise.withResolvers<void>()
+  let { host, stopping } = fake(port, (request) => {
+    if (!request.url.endsWith('/hang')) return new Response('ok')
+    asking.resolve()
+    return new Promise<Response>(() => {})
+  })
+  let stopped = false
+  let call = (runs(host).serve(asked({ grace: 0.01 }), graph) as Promise<
+    Bundle[]
+  >).then(([answer]) => (stopped = true, answer))
+  await said(`http://127.0.0.1:${port}`)
+  let client = new AbortController()
+  let hung = fetch(`http://127.0.0.1:${port}/hang`, { signal: client.signal })
+    .catch(() => {})
+  try {
+    await asking.promise
+    stopping.abort()
+    await until(() => stopped, { label: 'serve to stop over a hung request' })
+    let body = (await call).content as { body: string }
+    assert(body.body.includes('cutting what was open'), body.body)
+  } finally {
+    client.abort()
+    await hung
+  }
+})
+
+test('servers sharing a port hand it over without a refusal', async () => {
+  let port = free()
+  let dir = await Deno.makeTempDir()
+  let ready = `${dir}/ready`
+  let serving = (name: string, args = {}) => {
+    let { host, stopping } = fake(port, () => new Response(name))
+    let call = runs(host).serve(asked({ share: true, ...args }), graph)
+    return { stopping, call: call as Promise<Bundle[]> }
+  }
+  let old = serving('old')
+  let next = serving('next', { ready })
+  try {
+    // Both answer while both listen, and the newer says when it does.
+    let heard = new Set<string>()
+    await until(
+      async () => heard.add(await said(`http://127.0.0.1:${port}`)).size == 2,
+      {
+        label: 'both servers answering',
+      },
+    )
+    assertEquals(await Deno.readTextFile(ready), `${Deno.pid}\n`)
+    old.stopping.abort()
+    await old.call
+    for (let i = 0; i < 20; i++) {
+      assertEquals(await said(`http://127.0.0.1:${port}`), 'next')
+    }
+  } finally {
+    old.stopping.abort()
+    next.stopping.abort()
+    await Promise.all([old.call, next.call])
+    await assertRejects(() => Deno.stat(ready), Deno.errors.NotFound)
+    await Deno.remove(dir, { recursive: true })
+  }
 })
 
 test('a host that composed no handler has nothing to serve', async () => {

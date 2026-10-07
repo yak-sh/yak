@@ -51,9 +51,17 @@ export type Listener = {
 /** Where a server ended up listening. */
 export type Addr = { hostname: string; port: number }
 
-/** How this package asks a runtime to listen on a port. */
+/** How this package asks a runtime to listen on a port. `reusePort` lets
+ * another server that asks the same way listen on it too (SO_REUSEPORT, Linux
+ * only; Deno needs `--unstable-net`), so a replacement can start answering
+ * before the server it replaces stops. */
 export type Listen = (
-  opts: { port: number; hostname?: string; onListen?: (addr: Addr) => void },
+  opts: {
+    port: number
+    hostname?: string
+    reusePort?: boolean
+    onListen?: (addr: Addr) => void
+  },
   handler: (request: Request) => Response | Promise<Response>,
 ) => Listener
 
@@ -84,4 +92,36 @@ export let denoListen: Listen = (opts, handler) => {
     )
   }
   return go(opts, handler)
+}
+
+// The file calls `denoReady` makes, on this runtime's `Deno`, found the same
+// way as the two above.
+type Files = {
+  pid: number
+  writeTextFile: (path: string, data: string) => Promise<void>
+  remove: (path: string) => Promise<void>
+}
+let files = (): Files => {
+  let host: unknown = globalThis
+  let deno = host && typeof host == 'object' && 'Deno' in host
+    ? host.Deno
+    : null
+  if (!deno || typeof deno != 'object' || !('writeTextFile' in deno)) {
+    throw new Error('@yaks/api: no Deno here to say a server is ready')
+  }
+  return deno as Files
+}
+
+/**
+ * Say this process is serving: its pid, written to `path` for whoever waits
+ * on a replacement before stopping the server it replaces (@yaks/cli
+ * `restart`). The function returned takes it back.
+ */
+export let denoReady = async (path: string): Promise<() => Promise<void>> => {
+  let fs = files()
+  await fs.writeTextFile(path, `${fs.pid}\n`)
+  return () =>
+    fs.remove(path).catch((error) => {
+      if ((error as Error).name != 'NotFound') throw error
+    })
 }
