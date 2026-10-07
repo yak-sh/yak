@@ -5,6 +5,8 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { parseTools } from '@yaks/tools/declared'
 import * as apps from './apps.ts'
 import { appStore } from './directory.ts'
+import { keepDeclaration } from './declaration.ts'
+import { releaseOf } from './directory.ts'
 import { listCommands } from './declared.ts'
 import type { Dispatch } from './door.ts'
 import { ADA, ADA_OWNS, as, platform, seeded, visit } from './serving-probe.ts'
@@ -65,6 +67,10 @@ test('a page invokes declared commands as its owner; the command door refuses an
     body: JSON.stringify(parseTools(words, ['doc'])),
   }, ADA_OWNS)
   assertEquals(declared.status, 200, await declared.text())
+  await keepDeclaration(env, space, app, releaseOf(app), {
+    vocab: {},
+    tools: parseTools(words, ['doc']),
+  })
   env.DISPATCH = {
     get: () => ({
       fetch: (req: Request) =>

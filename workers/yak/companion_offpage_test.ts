@@ -8,6 +8,8 @@ import { rows as themes } from '../../apps/vale/themes_fixture.ts'
 import { workerOf } from '../../apps/vale/worker.js'
 import { appStore, storeName } from './directory.ts'
 import { runCommand } from './declared.ts'
+import { keepDeclaration } from './declaration.ts'
+import { releaseOf } from './directory.ts'
 import { commandWorker, granted } from './dispatch.ts'
 import { Store } from './graph.ts'
 import { parseTools } from '@yaks/tools/declared'
@@ -55,6 +57,20 @@ test('a companion works off-page across pause, restart and retry', async () => {
       'notice',
     ]),
   )
+  await keepDeclaration(p.env, k.space, k.app, releaseOf(k.app), {
+    vocab: words,
+    tools: parseTools(words, [
+      ...components,
+      'session',
+      'call',
+      'wake',
+      'entry',
+      'content',
+      'using',
+      'questions',
+      'notice',
+    ]),
+  })
   // The region themes the app's seed gives its store, which its worker reads
   // before any terrain it grows.
   await write('/apply', { entities: themes })
