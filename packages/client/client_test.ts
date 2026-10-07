@@ -2,7 +2,7 @@
 // The assembly: one call, and a graph that renders at once, agrees with the
 // server afterwards, and keeps what the server will never send back.
 
-import { test } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { aliasDoc, aliasEid, aliases } from '@yaks/alias'
 import { type Bundle, graph } from '@yaks/graph'
@@ -172,6 +172,42 @@ test('a read answers the rows a watch on the same query holds', () => {
     w.close()
   }
   c.close()
+})
+
+test('API component-selected socket snapshots preserve unrelated cached components', async () => {
+  let srv = server()
+  await srv.graph.apply([{
+    ...dal(),
+    note: { stars: 5, recipe: 'r1' },
+  }])
+  let c = boxClient(srv)
+  try {
+    let unrelated = c.watch('.note')
+    await c.idle()
+    assertEquals(c.ent('r1')?.note, { stars: 5, recipe: 'r1' })
+
+    let selected = c.watch('.recipe&?doc')
+    await c.idle()
+    assertEquals(c.ent('r1')?.note, { stars: 5, recipe: 'r1' })
+    assertEquals(selected.value[0]?.doc, { title: 'Dal' })
+
+    await srv.graph.apply([{
+      entity: { eid: 'r1' },
+      recipe: { serves: 6 },
+      doc: null,
+    }])
+    await until(() => selected.value[0]?.doc === undefined)
+    await c.idle()
+    assertEquals(c.ent('r1')?.note, { stars: 5, recipe: 'r1' })
+    assertEquals(c.ent('r1')?.doc, undefined)
+    assertEquals(selected.value[0]?.recipe, { serves: 6, course: 'dinner' })
+    assertEquals(selected.value[0]?.doc, undefined)
+    assertEquals(c.trouble, [])
+    selected.close()
+    unrelated.close()
+  } finally {
+    c.close()
+  }
 })
 
 test('a read resolves the id a person types', () => {

@@ -43,6 +43,48 @@ test('a subscription opens on the set it already selects', () => {
   assertEquals(ids(first), ['b1'])
 })
 
+test('component-selected snapshots cover requested components, including absent ones', () => {
+  let graph = shop()
+  graph.apply([{ entity: { eid: 'b1', num: 1 }, book: { price: 12 } }])
+  let subs = subscriptions(graph)
+  let { to, take } = ear()
+  subs.open(to, 'books', '.book&?doc')
+  let coverage: Frame['coverage'] = { b1: { book: true, doc: true } }
+  assertEquals(take().map(told), [{
+    bundles: [{ entity: { eid: 'b1', num: 1 }, book: { price: 12 } }],
+    coverage,
+  }])
+
+  graph.apply([{ entity: { eid: 'b1', num: 1 }, doc: { title: 'Dune' } }])
+  assertEquals(take().map(told), [{
+    bundles: [{
+      entity: { eid: 'b1', num: 1 },
+      book: { price: 12 },
+      doc: { title: 'Dune' },
+    }],
+    coverage,
+  }])
+  graph.apply([{ entity: { eid: 'b1', num: 1 }, doc: null }])
+  assertEquals(take().map(told), [{
+    bundles: [{ entity: { eid: 'b1', num: 1 }, book: { price: 12 } }],
+    coverage,
+  }])
+})
+
+test('whole-entity subscription snapshots keep default whole coverage', () => {
+  let graph = shop()
+  graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+  let subs = subscriptions(graph)
+  for (let query of ['.entity.eid=b1', '.book&*']) {
+    let { to, take } = ear()
+    subs.open(to, query, query)
+    let [frame] = take()
+    assertEquals(ids(frame), ['b1'])
+    assertEquals(frame.coverage, undefined)
+    subs.drop(to)
+  }
+})
+
 test('restoring shared watches reads each answer once and keeps each live', () => {
   let g = shop()
   g.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])

@@ -744,7 +744,15 @@ export let subscriptions = (graph: Graph, opts: {
       })
     }
     let p = sub.plan
-    if (!p) return { bundles }
+    if (!p) {
+      // A component-selected answer knows whole components, not the entity.
+      // Include absent requested components so snapshots clear stale values.
+      if (sub.want == null) return { bundles }
+      let scope: Coverage = Object.fromEntries(
+        [...sub.want].map((comp) => [comp, true]),
+      )
+      return { bundles, coverage: covering(bundles, () => scope) }
+    }
     let own = { bundles, coverage: covering(bundles, () => p.own) }
     if (!p.reaches.length) return own
     let now = new Set(reached.map((b) => b.entity.eid))
