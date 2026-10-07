@@ -374,7 +374,7 @@ test('a page asks its store for a turn and the answer lands beside it', async ()
   let [ask] = await v.landed(`.entry.session=${s}&.cost&*`)
   assertEquals((ask.cost as Comp).reported, false)
   assertAlmostEquals(Number((ask.cost as Comp).dollars), cost)
-  let [session] = await v.landed(`.entity.eid=${s}&*`)
+  let [session] = await v.landed(`.entity.eid=${s}&?session.cost&*`)
   assertAlmostEquals(Number((session.session as Comp).cost), cost)
 })
 

@@ -125,12 +125,16 @@ test('the app lens mover rehearses, consumes its source, and is idempotent', asy
   assert(deployed.ok, await deployed.text())
   let rehearsal =
     await (await door('/move?rehearse=1', { method: 'POST' }, KERNEL)).json()
-  assertEquals(
-    rehearsal.rules.map((
-      r: { rows: number; moved: number },
-    ) => [r.rows, r.moved]),
-    [[1, 1]],
-  )
+  let rule = lensRule(name, next)!
+  let lens = rehearsal.rules.find((r: { mark: string }) => r.mark == rule.mark)
+  assertEquals([lens.rows, lens.moved], [1, 1])
+  for (
+    let other of rehearsal.rules.filter((r: { mark: string }) =>
+      r.mark != rule.mark
+    )
+  ) {
+    assertEquals([other.rows, other.moved], [0, 0])
+  }
   assertEquals(
     ((await meta.query('.recipe.title'))[0].recipe as Comp).title,
     'Seed cake',
@@ -142,7 +146,6 @@ test('the app lens mover rehearses, consumes its source, and is idempotent', asy
       arg: 'recipe',
     }).map((c) => c.name)
   assert(columns().includes('title'))
-  let rule = lensRule(name, next)!
   store = new Store(ctx)
   await store.alarm()
   await assertRejects(() => meta.query('.recipe.title'))
@@ -172,7 +175,7 @@ test('the app lens mover rehearses, consumes its source, and is idempotent', asy
   )
   assertEquals(
     (await (await door('/move?rehearse=1', { method: 'POST' }, KERNEL)).json())
-      .rules[0].moved,
+      .rules.find((r: { mark: string }) => r.mark == rule.mark).moved,
     0,
   )
 })
