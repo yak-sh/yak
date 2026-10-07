@@ -49,7 +49,14 @@ export let files = (dir: string): {
     }
     for (let name of names.sort()) {
       let path = `${dir}/${name}`
-      let text = await Deno.readTextFile(path)
+      let text: string
+      try {
+        text = await Deno.readTextFile(path)
+      } catch (error) {
+        // Another intake can acknowledge a segment after this directory read.
+        if (error instanceof Deno.errors.NotFound) continue
+        throw error
+      }
       // A writer may still be filling this segment. Neither a partial tail
       // nor a crash before its newline can hold later complete records back.
       if (!text.endsWith('\n')) continue
@@ -59,7 +66,11 @@ export let files = (dir: string): {
       yield {
         rows,
         ack: async () => {
-          await Deno.remove(path)
+          try {
+            await Deno.remove(path)
+          } catch (error) {
+            if (!(error instanceof Deno.errors.NotFound)) throw error
+          }
           sync(dir)
         },
       }

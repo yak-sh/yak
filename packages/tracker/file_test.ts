@@ -84,3 +84,33 @@ test('partial unpublished records remain while later complete appends drain', as
     await Deno.remove(dir, { recursive: true })
   }
 })
+
+test('concurrent intake acknowledges records listed by another reader without losing later appends', async () => {
+  let dir = await Deno.makeTempDir()
+  try {
+    await Deno.writeTextFile(
+      `${dir}/1.jsonl`,
+      JSON.stringify(record('first')) + '\n',
+    )
+    await Deno.writeTextFile(
+      `${dir}/2.jsonl`,
+      JSON.stringify(record('second')) + '\n',
+    )
+    let first = files(dir).source()
+    let held = ok((await first.next()).value)
+    let other = files(dir).source()
+    let same = ok((await other.next()).value)
+    await same.ack()
+    await held.ack()
+    let next = ok((await other.next()).value)
+    await next.ack()
+    equal((await first.next()).done, true)
+    await spool(files(dir).append)(record('later'))
+    let g = fixture()
+    await intake(g, files(dir).source)
+    equal((await g.read('.error'))[0].entity.eid, 'later')
+    equal(await left(dir), [])
+  } finally {
+    await Deno.remove(dir, { recursive: true })
+  }
+})
