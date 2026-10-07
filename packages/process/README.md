@@ -168,8 +168,8 @@ makes another for a test.
 
 ## Machines
 
-`./machine` offers `processMachine(g, opts?, env?, cwd?)` and
-`processProvider(g, opts)`, implementing the
+`./machine` offers `processMachine(g, opts?, env?, cwd?)`,
+`processProvider(g, opts)` and `sandboxProvider(opts)`, implementing the
 [Machine and provider contracts](../machine/README.md). The machine runs
 commands through this package's tracked process launcher and reads and writes
 this filesystem. Relative files and commands use its configured `cwd`; rooted
@@ -222,3 +222,90 @@ try {
   await Deno.remove(dir, { recursive: true })
 }
 ```
+
+### Isolated local sandboxes
+
+`sandboxProvider` lends a persistent `/workspace`, backed by one directory per
+sandbox under its configured `dir`. Commands see that workspace, read-only
+`/usr`, `/bin`, `/lib` and `/lib64`, a private `/tmp`, minimal `/dev`, and their
+own PID, IPC, UTS, user, network and cgroup namespaces. They do not see the
+host's home, `/etc`, other workspaces, the control socket or the user manager.
+Files read and written through Machine use the same restricted filesystem;
+absolute paths are guest paths, not host paths. Export resolves symlinks in that
+filesystem, so a symlink cannot expose a host file.
+
+The provider requires Linux, `/usr/bin/bwrap`, `/usr/bin/python3`, bash, a
+`flock`, a systemd user manager, usable unprivileged namespaces and delegated
+cgroup v2 CPU, memory and pids controllers. It refuses to lend a machine if
+bubblewrap cannot execute or the scope's limits are absent. It never falls back
+to the unrestricted process provider. No Docker daemon, image, or installation
+by this package is involved.
+
+The host supplies these **sandbox limits** for the whole machine:
+
+| Provider option    | Meaning                                                         |
+| ------------------ | --------------------------------------------------------------- |
+| `limits.cpuQuota`  | Percentage of one CPU, mapped to `CPUQuota`; 50 is half one CPU |
+| `limits.memoryMax` | Maximum resident bytes, mapped to `MemoryMax`; swap is disabled |
+| `limits.tasksMax`  | Maximum processes and threads, mapped to `TasksMax`             |
+
+All commands and the detached supervisor share one systemd scope. Starting
+another command does not grant another quota. CPU quota must be finite and at
+least 1; memory must be an integer of at least 16 MiB; tasks must be an integer
+of at least 16. The host chooses workable limits for its workload. An OOM kills
+the scope; `wake` replaces its supervisor, keeps the workspace and marks
+unfinished receipts with an unknown exit code. Waking with different limits or
+network policy is refused rather than silently changing a running machine.
+
+```ts
+import { equal } from '@yaks/testing'
+import { sandboxProvider } from '@yaks/process/machine'
+
+let dir = await Deno.makeTempDir({ prefix: 'sb-' })
+let options = {
+  dir,
+  limits: { cpuQuota: 50, memoryMax: 256 * 1024 * 1024, tasksMax: 64 },
+}
+let provider = sandboxProvider(options)
+let ref = { id: 'example' }
+try {
+  let { machine } = await provider.request!(ref)
+  await machine.write('hello.txt', 'hello')
+  equal(await machine.read('/workspace/hello.txt'), 'hello')
+  let command = await machine.start('sleep 30', undefined, 'durable-call')
+  let reopened = await sandboxProvider(options).wake(ref)
+  equal(await reopened.machine.receipt!('durable-call'), command)
+  await reopened.machine.kill(command, 'SIGKILL')
+} finally {
+  await provider.release(ref)
+  await Deno.remove(dir, { recursive: true })
+}
+```
+
+The example runs against the actual namespaces and user manager, not a fake
+launcher. The provider's root must be short enough for its Unix socket path (107
+bytes including the sandbox id and `/control/control.sock`). Control files are
+private to the host and separate from the workspace. Their receipts are local
+backend state, not graph rows or shell-visible files. A filesystem lock
+serializes lifecycle operations across hosts; command receipt creation is
+serialized by the supervisor. A durable call is never launched again, even when
+its launch was interrupted and its outcome is unknown. Output and exit status
+survive the requesting host's exit; `look`, `tail` and `kill` reach the same
+supervisor from a replacement host. Termination targets the command's process
+group and PID namespace; release stops the entire scope before removing the
+workspace and receipts. Export files before release.
+
+`request` optionally calls idempotent `prepare(from, machine, '/workspace')` to
+populate a graph commit. A failed preparation is retried by `request`; `wake`
+refuses incomplete preparation. Preparation is recorded outside the guest
+workspace and reused on retry. `image` and existing-machine attachment are
+unsupported: use the process provider to explicitly attach local disk.
+
+Network is isolated by default. `network: true` explicitly shares the host's
+network namespace, including access to loopback services, and therefore weakens
+isolation. DNS configuration and extra tools are not inherited; a host can
+provision what its workload needs through the workspace. `env(session?)`
+supplies only explicit command environment and short-lived graph grants; nothing
+in the launching host's environment is inherited by commands. This provider
+constructs a namespace sandbox, not a microVM: it shares the host kernel and
+does not claim protection against kernel exploits.
