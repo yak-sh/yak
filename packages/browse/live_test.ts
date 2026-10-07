@@ -2060,6 +2060,90 @@ test('reverse subs: held per open card, torn down on close (T-21489)', () => {
   }
 })
 
+test('server query projections index member wakes and preserve server membership', async () => {
+  let priorHost = config.host
+  let canvas = crypto.randomUUID()
+  let a = crypto.randomUUID(),
+    b = crypto.randomUUID(),
+    outside = crypto.randomUUID()
+  let preds = resolveRefs(
+    parseQuery(`.pin.canvas=${canvas}&.fields=pin.x,pin.z~`),
+    findEid,
+  )
+  config.host = 'browser.test'
+  cache.value = {}
+  resetSignals()
+  let remote = host()
+  let ids = holdQuery(preds)
+  let pin = (eid: string, x: number, z: number): Change[] => [
+    { eid, name: 'pin', comp: { canvas, x, z } },
+  ]
+  let stop = () => {}
+  try {
+    await tick()
+    let wire = remote.asked().find((q) =>
+      q.subscribe.includes(`.pin.canvas=${canvas}`)
+    )!
+    let bundles = (eids: string[]) =>
+      eids.map((eid, i) => ({
+        entity: { eid },
+        pin: { canvas, x: i, z: 0 },
+      }))
+    // Enough members and unrelated changes to represent a batched landing;
+    // the regression checks work shape, not machine-dependent elapsed time.
+    let members = [
+      b,
+      a,
+      ...Array.from({ length: 254 }, () => crypto.randomUUID()),
+    ]
+    await remote.say({ id: wire.id, reset: true, bundles: bundles(members) })
+    assertEquals(ids.peek(), members)
+    Object.defineProperty(ids.peek(), 'includes', {
+      value: () => {
+        throw new Error(
+          'a landed batch must not linearly scan query membership per row',
+        )
+      },
+    })
+    let runs = 0
+    stop = effect(() => {
+      ids.value
+      runs++
+    })
+    // Volatile columns and unrelated matching rows leave the ordered set asleep.
+    applyLocal(pin(a, 1, 9))
+    applyLocal(
+      Array.from({ length: 64 }, () => pin(crypto.randomUUID(), 3, 0)).flat(),
+    )
+    applyLocal(pin(outside, 3, 0))
+    assertEquals(runs, 1)
+    assertEquals([...ids.peek()], members)
+    applyLocal(pin(a, 10, 9))
+    assertEquals(runs, 2)
+    assertEquals(ids.peek(), members)
+    // A replacement updates the membership index; local edits cannot remove
+    // a server member merely because it no longer matches the predicate.
+    await remote.say({ id: wire.id, reset: true, bundles: bundles([b]) })
+    let replaced = runs
+    applyLocal(pin(a, 20, 9))
+    assertEquals(runs, replaced)
+    applyLocal([{
+      eid: b,
+      name: 'pin',
+      comp: { canvas: crypto.randomUUID(), x: 30 },
+    }])
+    assertEquals(runs, replaced + 1)
+    assertEquals(ids.peek(), [b])
+  } finally {
+    stop()
+    dropQuery(preds)
+    remote.free()
+    cache.value = {}
+    resetSignals()
+    config.host = priorHost
+  }
+})
+
 // T-21490: per-client singletons — cursor, camera, fold, shelf — ride one small
 // server sub per component per tab (`.fold.client=<uuid>`, …), held for the
 // tab's life; the readers stay LOCAL lookups over the rows they stream, so

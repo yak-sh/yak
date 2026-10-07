@@ -521,36 +521,24 @@ let refreshServerSets = (eids: Set<string>) => {
       ) s.ids.value = next
       continue
     }
+    // Only server frames change membership. Sets without a waking projection
+    // have nothing to refresh when other rows land.
+    if (!s.wake.length) continue
     let ids = s.ids.peek()
-    let next = ids
-    // A waking projected field of a STANDING member moved. Membership is
-    // unchanged, so the set would stay asleep — but the projection IS what the
-    // list renders (a pin's box), so its move is list news. A volatile (`~`)
-    // column is deliberately absent from `wake`, so its value lands in the cache
-    // and wakes nothing.
+    let members = new Set(ids)
+    // A waking projected field of a STANDING member moved. A volatile (`~`)
+    // column is absent from wake, so its value lands without waking the set.
     let moved = false
     for (let eid of eids) {
-      let had = next.includes(eid)
-      // FTS5 membership belongs to SQLite. A local write may refresh projected
-      // values, but only the subscription frame may add or remove a text hit.
-      let wants = had
-      if (had != wants) {
-        next = wants ? [...next, eid] : next.filter((x) => x != eid)
-        if (s.wake.length) {
-          wants ? s.vals.set(eid, wakeSig(eid, s.wake)) : s.vals.delete(eid)
-        }
-      } else if (had && s.wake.length) {
-        let now = wakeSig(eid, s.wake)
-        if (s.vals.get(eid) !== now) {
-          s.vals.set(eid, now)
-          moved = true
-        }
+      if (!members.has(eid)) continue
+      let now = wakeSig(eid, s.wake)
+      if (s.vals.get(eid) !== now) {
+        s.vals.set(eid, now)
+        moved = true
       }
     }
-    // A membership change publishes the new set; a pure move republishes the
-    // same members as a fresh array so the view re-reads their boxes.
-    if (next != ids) s.ids.value = next
-    else if (moved) s.ids.value = [...next]
+    // Republish the same ordered members so the view re-reads their boxes.
+    if (moved) s.ids.value = [...ids]
   }
 }
 
