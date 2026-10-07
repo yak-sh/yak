@@ -82,6 +82,18 @@ a loaded box, where any fixed sleep is either too short or wasted.
   spawned runs (packages/harness/README.md). Keep `HOME`, so Deno's module cache
   is reused.
 
+## Units of your own
+
+A change to how the box's units start, stop or hand over (`yak restart`, a
+unit file, how `serve` or `work` winds down) is proved on units named for your
+task, never on the live ones. Write templates into
+`$XDG_RUNTIME_DIR/systemd/user/` (systemd finds a new file there without a
+daemon-reload), each running your worktree's CLI over `$D/yak.json` with the
+unit's settings copied from ~/code/dotfiles, and drive `restart()` from
+packages/cli/restart.ts with `roles` naming only them. A client asking
+continuously through the handover (`connection: close` for a connection per
+request) counts what failed and the longest gap.
+
 ## The browser
 
 Chrome gets a profile of its own, under `/tmp` with a short name:
@@ -152,6 +164,8 @@ A probe is done when nothing of it is left running or on disk:
   processes. Kill every one whose command line names the profile,
   `pkill -f "user-data-dir=/tmp/cdp-<tas>[k]"` (the bracket keeps `pkill` from
   matching your own shell), and confirm `pgrep -f` finds none;
+- units: `systemctl --user stop '<task>-*'`, then remove their files from
+  `$XDG_RUNTIME_DIR/systemd/user/`;
 - tmux: `tmux kill-session -t <task>`;
 - then `rm -rf $D /tmp/cdp-<task>`.
 
