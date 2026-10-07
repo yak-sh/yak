@@ -12,7 +12,10 @@ deno task deploy:yak   # dev:yak for a local wrangler dev
 A deploy of the kernel deploys its sibling Workers first, from the same commit
 and to the same environment: `yak-out` (`outbound/`, the dispatch namespace's
 outbound Worker) and `yak-esbuild` (`esbuild/`, the compiler `app_deploy` asks
-for an app's TypeScript and npm imports, @yaks/esbuild).
+for an app's TypeScript and npm imports, @yaks/esbuild). The siblings do not
+call one another, so their deploys run concurrently. Both must finish
+successfully before the kernel deploy begins; a failure waits for the other
+sibling and refuses the kernel deploy.
 
 Never `wrangler deploy` by hand. Both tasks go through `wrangler.ts`, which runs
 `npm ci` when `node_modules` is behind `package-lock.json` — wrangler bundles
@@ -69,11 +72,11 @@ deploy gate judges the rows already recorded (`bench/deploys.md`).
 The build command is empty, so a Workers Build runs neither `deno task check`
 nor the tests. It clones, runs `npm ci`, and runs `bin/build-yak deploy`, which
 installs Deno (not on the Ubuntu 24.04 image), makes the deploy pre-flight check
-(`superseded`), deploys `yak-out` and `yak-esbuild`, bundles with esbuild and
-uploads. `bin/build-yak` with no argument still runs the check and the workers
-tests by hand. A push's build that fails is started once more through the
-`BUILD_HOOK` deploy hook (builds.ts), since most failures are the network's; the
-second build's failure stands.
+(`superseded`), deploys `yak-out` and `yak-esbuild` concurrently, then bundles
+with esbuild and uploads. `bin/build-yak` with no argument still runs the check
+and the workers tests by hand. A push's build that fails is started once more
+through the `BUILD_HOOK` deploy hook (builds.ts), since most failures are the
+network's; the second build's failure stands.
 
 Builds run on watched-path pushes and finish in any order, so the deploy door
 (`wrangler.ts` `superseded`) deploys a commit only while no later commit changes

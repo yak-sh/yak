@@ -196,6 +196,23 @@ export let siblings = (argv: string[]): string[][] => {
   return SIBLINGS.map((c) => [...args, '-c', c, '--containers-rollout=none'])
 }
 
+/** Deploy independent siblings together, settling every process before the
+ * kernel starts. A sibling failure never launches the kernel, and a rejected
+ * process wait cannot leave its other sibling running after this door exits. */
+export let runWrangler = async (
+  argv: string[],
+  run: (args: string[], unpinned?: boolean) => Promise<number>,
+): Promise<number> => {
+  let completed = await Promise.allSettled(
+    siblings(argv).map((args) => Promise.resolve().then(() => run(args, true))),
+  )
+  for (let result of completed) {
+    if (result.status == 'rejected') throw result.reason
+    if (result.value) return result.value
+  }
+  return await run(argv)
+}
+
 // What Workers Builds pins to this Worker. Inherited by another Worker's
 // deploy, the first deploys it under this Worker's name and the second fails
 // its tag check, so each sibling's deploy runs without them (bin/build-yak drops
@@ -386,7 +403,8 @@ if (import.meta.main) {
       await based({ wrangler: WRANGLER, dry: argv.includes('--dry-run') })
     }
   }
-  let child: Deno.ChildProcess | undefined
+  let children = new Set<Deno.ChildProcess>()
+  let interrupted = false
   // A signal to this door reaches wrangler too; otherwise a stopped `tail`
   // leaves wrangler streaming and its reader waiting on a pipe that never
   // closes (verify-deploy.ts hung ten minutes on a three-minute tail). The
@@ -396,8 +414,12 @@ if (import.meta.main) {
   // runs with an allowlist (npm, npx, git, pgrep, kill, docker, env).
   for (let signal of ['SIGINT', 'SIGTERM'] as const) {
     Deno.addSignalListener(signal, () => {
-      if (!child) return
-      let pids = [...descendants(child.pid), child.pid].map(String)
+      interrupted = true
+      let pids = [...children].flatMap((child) => [
+        ...descendants(child.pid),
+        child.pid,
+      ]).map(String)
+      if (!pids.length) return
       new Deno.Command('kill', {
         args: ['-s', signal.slice(3), ...pids],
         stderr: 'null',
@@ -406,16 +428,18 @@ if (import.meta.main) {
   }
   // env(1) execs wrangler in its own place, so the pid signalled is the same.
   let run = async (argv: string[], unpinned = false) => {
+    if (interrupted) return 130
     let [cmd, ...args] = unpinned
       ? ['env', ...PINNED.flatMap((v) => ['-u', v]), ...WRANGLER]
       : WRANGLER
-    child = new Deno.Command(cmd, { args: [...args, ...argv], cwd: dir })
+    let child = new Deno.Command(cmd, { args: [...args, ...argv], cwd: dir })
       .spawn()
-    return (await child.status).code
+    children.add(child)
+    try {
+      return (await child.status).code
+    } finally {
+      children.delete(child)
+    }
   }
-  for (let args of siblings(argv)) {
-    let code = await run(args, true)
-    if (code) Deno.exit(code)
-  }
-  Deno.exit(await run(argv))
+  Deno.exit(await runWrangler(argv, run))
 }

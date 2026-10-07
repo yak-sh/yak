@@ -6,7 +6,7 @@
 // `deno check` reads, and the workspace (wrangler.ts `members`) is what esbuild
 // bundles by. A workers.json entry pointing anywhere else type-checks one file
 // and bundles another.
-import { test } from '@yaks/testing'
+import { test, tick } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -14,6 +14,7 @@ import {
   aliased,
   command,
   members,
+  runWrangler,
   seen,
   SIBLINGS,
   siblings,
@@ -87,6 +88,77 @@ for (
     }
   })
 }
+
+test('independent sibling deploys overlap and the kernel waits for both successes', async () => {
+  let started: { args: string[]; unpinned?: boolean }[] = []
+  let waits = [Promise.withResolvers<number>(), Promise.withResolvers<number>()]
+  let deploy = runWrangler(['deploy', '--env', 'staging'], (args, unpinned) => {
+    started.push({ args, unpinned })
+    return unpinned ? waits[started.length - 1].promise : Promise.resolve(0)
+  })
+  try {
+    await tick()
+    assertEquals(
+      started.map((call) => call.args),
+      siblings(['deploy', '--env', 'staging']),
+    )
+    assertEquals(started.map((call) => call.unpinned), [true, true])
+    waits[0].resolve(0)
+    await tick()
+    assertEquals(started.length, 2)
+    waits[1].resolve(0)
+    assertEquals(await deploy, 0)
+    assertEquals(started[2], {
+      args: ['deploy', '--env', 'staging'],
+      unpinned: undefined,
+    })
+  } finally {
+    for (let wait of waits) wait.resolve(0)
+    await deploy
+  }
+})
+
+for (let failure of [7, Error('process wait failed')]) {
+  test(`a sibling ${typeof failure == 'number' ? 'exit' : 'rejection'} waits for the other sibling and never deploys the kernel`, async () => {
+    let other = Promise.withResolvers<number>()
+    let starts = 0, ended = false
+    let deploy = runWrangler(['deploy'], (_args, unpinned) => {
+      assert(unpinned, 'kernel must not start')
+      return ++starts == 1
+        ? typeof failure == 'number'
+          ? Promise.resolve(failure)
+          : Promise.reject(failure)
+        : other.promise
+    })
+    let outcome = deploy.then((code) => ({ code }), (error) => ({ error }))
+    void outcome.then(() => {
+      ended = true
+    })
+    try {
+      await tick()
+      assertEquals(starts, 2)
+      assertEquals(ended, false)
+      other.resolve(0)
+      assertEquals(
+        await outcome,
+        typeof failure == 'number' ? { code: failure } : { error: failure },
+      )
+    } finally {
+      other.resolve(0)
+      await outcome
+    }
+  })
+}
+
+test('a wrangler command with no sibling deploy runs once with its own pinned identity', async () => {
+  let called: unknown[] = []
+  let code = await runWrangler(['tail'], (args, unpinned) => {
+    called.push({ args, unpinned })
+    return Promise.resolve(3)
+  })
+  assertEquals(code, 3)
+  assertEquals(called, [{ args: ['tail'], unpinned: undefined }])
+})
 
 test('every @yaks/* the checker knows is the file the bundler gets', () => {
   let checked = (JSON.parse(read('./workers.json')) as {
