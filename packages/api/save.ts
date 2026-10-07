@@ -1,5 +1,6 @@
 // Saving is independent of relay cadence: hold the latest admitted value,
 // store it when its stored entity matches the query, even after disconnect.
+import { matcher } from '@yaks/match'
 import { after, isPromise, over } from '@yaks/fp'
 import {
   type Actor,
@@ -186,17 +187,48 @@ export let saving = <C>(
       throw err
     }
     let rows: Bundle[] | Promise<Bundle[]>
+    let local = (c: Clause): boolean => {
+      if (c.kind == 'and' || c.kind == 'or') return c.clauses.every(local)
+      if (
+        c.kind != 'pred' || c.where || graph.vocab.assoc(c.path[0]) ||
+        c.path.length > 2
+      ) return false
+      let name = c.path[0]
+      return !!graph.vocab.comp(name) && !graph.vocab.comp(name)?.computed &&
+        (c.path.length == 1 ||
+          !graph.vocab.prop(name, c.path[1])?.computed &&
+            graph.vocab.prop(name, c.path[1])?.category != 'ref')
+    }
+    let possibleLocal: Bundle[] | undefined
     try {
-      rows = graph.read({
-        kind: 'and',
-        clauses: [
-          ...and(scope, condition).clauses,
-          ...parse('.fields=entity.eid').clauses,
-        ],
-      }, {
-        now: now(),
-        native: true,
-      })
+      if (local(condition)) {
+        let names = [
+          ...new Set((function names(c: Clause): string[] {
+            return c.kind == 'and' || c.kind == 'or'
+              ? c.clauses.flatMap(names)
+              : c.kind == 'pred'
+              ? [c.path[0]]
+              : []
+          })(condition)),
+        ]
+        rows = after(
+          graph.get([v.row.entity.eid], names, { native: true, durable: true }),
+          (stored) => {
+            possibleLocal = stored
+            return matcher(and(scope, condition), graph.vocab, { now: now() })(
+              stored,
+            )
+          },
+        )
+      } else {
+        rows = graph.read({
+          kind: 'and',
+          clauses: [
+            ...and(scope, condition).clauses,
+            ...parse('.fields=entity.eid').clauses,
+          ],
+        }, { now: now(), native: true })
+      }
     } catch (err) {
       return failedRead(err)
     }
@@ -213,7 +245,11 @@ export let saving = <C>(
           let clock = clockQuery(condition)
           if (!clock) return
           return after(
-            graph.read(and(scope, clock), { now: now(), native: true }),
+            possibleLocal
+              ? matcher(and(scope, clock), graph.vocab, { now: now() })(
+                possibleLocal,
+              )
+              : graph.read(and(scope, clock), { now: now(), native: true }),
             (possible) => {
               if (possible.length) {
                 later(key, v, deadline(condition, possible[0]) ?? 1000)

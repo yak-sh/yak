@@ -381,8 +381,8 @@ test('save queries without a clock wake on relevant commits, not periodic reads'
 test('a relevant commit during an asynchronous eligibility read is rechecked', async () => {
   let f = fixture('.book.status=shelved')
   f.g.apply([{ entity: { eid: 'a' }, book: { status: 'draft' } }])
-  let read = f.g.read.bind(f.g), release!: () => void, first = true
-  f.g.read = (...args) => {
+  let read = f.g.get.bind(f.g), release!: () => void, first = true
+  f.g.get = (...args) => {
     let rows = read(...args)
     if (!first) return rows
     first = false
@@ -486,9 +486,9 @@ test('a known local save deadline owns one timer rather than polling SQLite each
   f.g.apply([{ entity: { eid: 'a' }, book: { status: 'draft' } }])
   f.saved.write('one', f.write(1))
   f.saved.write('one', f.write(2))
-  let read = f.g.read.bind(f.g), reads = 0
-  f.g.read = (...args) => {
-    reads++
+  let read = f.g.get.bind(f.g), reads = 0
+  f.g.get = (...args) => {
+    if (args[1]?.includes('updated')) reads++
     return read(...args)
   }
   for (let i = 0; i < 29; i++) f.tick(1000)
@@ -500,19 +500,28 @@ test('a known local save deadline owns one timer rather than polling SQLite each
   equal(f.timers.size, 0)
 })
 
-test('save eligibility asks only for identity, not the eligible entity whole image', () => {
+test('local save eligibility reads only its predicate components', () => {
   let f = fixture('.book (!position | .updated.at<="1s ago")')
   f.g.apply([{
     entity: { eid: 'a' },
     book: { status: 'draft' },
-    doc: { title: 'private unrelated' },
+    doc: { title: 'Unrelated' },
   }])
-  let read = f.g.read.bind(f.g), answer: Bundle[] = []
-  f.g.read = (...args) => {
-    answer = read(...args) as Bundle[]
+  let get = f.g.get.bind(f.g),
+    answer: Bundle[] = [],
+    query = f.g.read.bind(f.g),
+    queries = 0
+  f.g.get = (...args) => {
+    answer = get(...args) as Bundle[]
     return answer
   }
+  f.g.read = (...args) => {
+    queries++
+    return query(...args)
+  }
   f.saved.write('one', f.write(1))
+  equal(queries, 0)
   equal(answer[0].doc, undefined)
-  equal(answer[0].book, undefined)
+  equal(answer[0].book, { status: 'draft' })
+  equal(f.read(), { x: 1 })
 })
