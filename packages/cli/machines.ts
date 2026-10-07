@@ -2,7 +2,7 @@
 // process environments, and how a graph commit reaches a process sandbox.
 import type { Config, Host } from '@yaks/host'
 import type { Machine, MachineProvider } from '@yaks/machine'
-import { processProvider } from '@yaks/process/machine'
+import { processMachine, processProvider } from '@yaks/process/machine'
 import { sessionEnv } from '@yaks/session'
 import { objects } from '@yaks/git'
 
@@ -80,5 +80,9 @@ export let machineCapabilities = async (
   if (!providers[configured.defaultProvider]?.request) {
     throw new Error('Default machine provider cannot request a sandbox')
   }
-  return { providers, defaultProvider: configured.defaultProvider }
+  return {
+    local: processMachine(host.graph),
+    providers,
+    defaultProvider: configured.defaultProvider,
+  }
 }

@@ -4,6 +4,8 @@
 // and exports share a bounded queue and a per-pass lease; the watcher has its
 // own lease so graph edits need not wait for the polling duty to finish.
 
+import type { Blobs } from '@yaks/blob'
+import type { Machine } from '@yaks/machine'
 import { type Handlers, holding, sleep } from '@yaks/effects'
 import { derivedEid, type Eid, type Graph } from '@yaks/graph'
 import { dirname, join, resolve } from 'node:path'
@@ -15,6 +17,8 @@ export type SkillOptions = { skills?: boolean }
 /** Only the host capabilities this facet uses; fixtures need no server. */
 export type SkillHost = {
   graph: Graph
+  artifacts?: Blobs
+  machines?: { local?: Machine }
   config?: { db?: string }
   stopping?: AbortSignal
   me?: Eid
@@ -121,7 +125,10 @@ export let skillEffects = (
       async (signal) => {
         for (let root of await roots(host.graph)) {
           if (signal.aborted) break
-          let result = await sync(host.graph, root, await memory(root))
+          let result = await sync(host.graph, root, await memory(root), {
+            bytes: host.artifacts,
+            machine: host.machines?.local,
+          })
           for (let path of result.conflicts) {
             console.warn(`@yaks/persona skills — conflict: ${path}`)
           }

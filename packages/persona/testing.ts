@@ -19,6 +19,7 @@ import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { docDoc } from '@yaks/doc'
 import { idKeywords } from '@yaks/id'
 import { ram } from '@yaks/ram'
+import { gitDoc } from '@yaks/git'
 import { personaDoc } from './comp.ts'
 
 let doc: VocabDoc = {
@@ -89,6 +90,19 @@ let doc: VocabDoc = {
     },
     alias: { component: true, type: 'object' },
   },
+}
+
+// Mirror landings now store received Git objects in this graph too.
+let original = doc.$defs ?? {}
+doc.$defs = { ...gitDoc.$defs, ...original }
+for (let [name, declaration] of Object.entries(original)) {
+  let git = gitDoc.$defs?.[name]
+  if (git && typeof git == 'object' && typeof declaration == 'object') {
+    doc.$defs[name] = {
+      ...declaration,
+      properties: { ...git.properties, ...declaration.properties },
+    }
+  }
 }
 
 /** A vocabulary with the persona components, both relations, and ids. */

@@ -6,6 +6,7 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { integrationEid } from '@yaks/connections'
 import { reveal, secretEid } from '@yaks/secrets'
 import { CallError, Interrupted } from '@yaks/tools'
+import { processMachine } from '@yaks/process/machine'
 import { ADMIN } from '../../workers/yak/lib/bots.ts'
 import { ended, Refused, runs } from './tools.ts'
 
@@ -250,4 +251,49 @@ test('an interrupted platform operation is cut off, not refused', () => {
   equal(assertThrows(() => ended('errors', 130), Interrupted).code, 'signal')
   assertThrows(() => ended('errors', 1), Error, 'ended with status 1')
   equal(ended('errors', 0), [])
+})
+
+test('admin revert requires a lent CLI machine and uses the call checkout', async () => {
+  let { host, kept } = await box()
+  let cwd = await Deno.makeTempDir({ prefix: 'admin-revert-caller-' })
+  let call: Bundle = {
+    entity: { eid: 'call' },
+    call: { args: { sha: 'abcdef0' } },
+    process: { cwd },
+  }
+  try {
+    await kept('own@example.com')
+    let ask = (h: Parameters<typeof runs>[0], c = call) =>
+      runs(h).admin_revert(c, host.graph) as Promise<Bundle[]>
+    await assertRejects(
+      () => ask({ ...host, machines: undefined }),
+      CallError,
+      'explicitly lent local machine',
+    )
+    let machines = {
+      local: processMachine(host.graph),
+      providers: {},
+      defaultProvider: 'process',
+    }
+    await assertRejects(
+      () => ask({ ...host, machines }, { ...call, process: undefined }),
+      CallError,
+      'current checkout',
+    )
+    await assertRejects(
+      () => ask({ ...host, machines, roles: ['graph', 'web'] }),
+      CallError,
+      'explicitly lent local machine',
+    )
+    // This empty scratch checkout must fail before creating any revert. Using
+    // the module's checkout instead would enter the real repository.
+    await assertRejects(
+      () => ask({ ...host, machines }),
+      Error,
+      'git worktree exited 128',
+    )
+  } finally {
+    await host.close()
+    await Deno.remove(cwd, { recursive: true })
+  }
 })

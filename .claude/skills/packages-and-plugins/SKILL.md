@@ -6,7 +6,7 @@ description: >
   between packages (or out of workers/yak, packages/web or packages/browse),
   change a subpath export or facet (./vocab, ./graph, ./tools, ./effects,
   ./routes, ./ui, ./service, ./cli, ./views, ./tui, ./web), add a plugin to
-  ~/.yak/yak.json, hit an import cycle, publish to jsr, or land with `yak land
+  ~/.yak/yak.json, hit an import cycle, publish to jsr, or land a package change with `yak land
   --allow-revert`, even if the task says "put this somewhere", "share this
   helper" or "make it reusable". Reading composed anatomy and causal activity
   is `platform-visualize`, not wiring. Declared words are `vocabulary`; effects
@@ -156,6 +156,12 @@ deno task jsr --apply --create   # write them, and mint pages for new packages
 Writing needs a `JSR_TOKEN`, so it's often the owner's to run.
 
 ## Landing over someone's newer change
+
+Landing asks the graph to accept a commit from the caller's machine; it does
+not merge into a shared checkout. `--repository` and `--branch` select a named
+graph repository and accepted base. packages/git/README.md, "Landing a
+branch", is the reference. A moved base rebases the caller's branch and stops
+so the combined code can be tested before acceptance.
 
 `yak land` refuses when a file would end up with content no commit on your
 branch wrote. That almost always means your branch would quietly undo someone

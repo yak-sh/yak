@@ -1,11 +1,16 @@
-// Correct main, then wait for Workers Builds to serve the correction. Land is
-// the same git primitive `yak land` calls; its two outcomes matter here: a
-// rebase needs another gate, and a local landing is not proof of a push.
-import { land } from '@yaks/git/land'
+// Correct graph-backed main, publish it, then wait for Workers Builds. A
+// rebase needs another gate; graph acceptance alone is not proof of a push.
+import type { Blobs } from '@yaks/blob'
+import type { Graph } from '@yaks/graph'
+import type { Machine } from '@yaks/machine'
+import { landGraph } from '@yaks/git/landing'
 import { deploys, git, needGit, table } from './deploys.ts'
 import { output } from './subprocess.ts'
 
 export let revert = async (
+  g: Graph,
+  artifacts: Blobs,
+  machine: Machine,
   root: string,
   sha: string,
   out: (line: string) => void,
@@ -68,8 +73,7 @@ export let revert = async (
         throw new Error(`deno task check exited ${check.code}`)
       }
       let pushed = Date.now()
-      let outcome = await land({
-        cwd: tree,
+      let outcome = await landGraph(g, artifacts, machine, tree, {
         run: (args, cwd) => git(cwd, args, stopping),
         write: (line, error) => (error ? note : out)(line.trimEnd()),
       })
@@ -81,7 +85,12 @@ export let revert = async (
         continue
       }
       let commit = outcome.landed
-      // land deliberately treats a failed push as a successful local merge.
+      // Acceptance moves the graph ref, not the remote Workers Builds watches.
+      await needGit(tree, [
+        'push',
+        remote,
+        `${commit}:refs/heads/main`,
+      ], stopping)
       // Confirm remote ancestry before starting a deployment watch.
       await needGit(tree, ['fetch', remote, 'main'], stopping)
       let published = await git(tree, [
@@ -134,7 +143,7 @@ export let revert = async (
           )
           await needGit(root, ['worktree', 'remove', tree], stopping)
           kept = false
-          await needGit(outcome.root, ['branch', '-d', name], stopping)
+          await needGit(root, ['branch', '-d', name], stopping)
           return 0
         }
         await new Promise((ok) => setTimeout(ok, 10_000))

@@ -138,7 +138,16 @@ type Verb = (
 
 /** The implementations of the tools ./vocab.json declares. */
 export let runs = (
-  host: Pick<Host, 'vault' | 'config' | 'graph' | 'stopping'>,
+  host: Pick<
+    Host,
+    | 'vault'
+    | 'config'
+    | 'graph'
+    | 'stopping'
+    | 'artifacts'
+    | 'machines'
+    | 'roles'
+  >,
 ): Runs => {
   let acting = async (a: Args): Promise<Account> => {
     let owner = await person(host)
@@ -475,9 +484,29 @@ export let runs = (
       if (!/^[a-f\d]{7,40}$/i.test(sha)) {
         throw new CallError('sha', 'yak admin revert <sha>')
       }
+      let cwd = (call.process as Comp | undefined)?.cwd
+      let machine = host.machines?.local
+      if (
+        !machine || typeof cwd != 'string' || !cwd ||
+        host.roles.length != 1 || host.roles[0] != 'graph'
+      ) {
+        throw new CallError(
+          'machine',
+          'admin revert needs an explicitly lent local machine and current checkout',
+        )
+      }
       return ended(
         'revert',
-        await revert(root, sha, out, note, host.stopping),
+        await revert(
+          host.graph,
+          host.artifacts,
+          machine,
+          cwd,
+          sha,
+          out,
+          note,
+          host.stopping,
+        ),
       )
     }),
   }

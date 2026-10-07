@@ -9,10 +9,13 @@
     "./tools": "./tools.ts",
     "./vocab": "./vocab.ts",
     "./service": "./service.ts",
-    "./source": "./source.ts"
+    "./source": "./source.ts",
+    "./receive": "./receive.ts",
+    "./routes": "./routes.ts",
+    "./landing": "./landing.ts"
   },
   "license": "Apache-2.0",
-  "description": "Builds Git trees and commits from a file manifest, stores the objects as graph entities, and serves clones over Git's read-only smart HTTP protocol.",
+  "description": "Stores exact Git objects in the graph, serves clones and receives fast-forward pushes; machines lend checkouts and the graph accepts landings.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

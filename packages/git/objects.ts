@@ -79,7 +79,10 @@ export let objects = (g: Reads, store: Blobs): Objects => {
   // The far end of every edge of one relation leaving these objects.
   let out = async (relation: string, from: string[]): Promise<string[]> =>
     (await some(
-      (l) => `.${relation}&.edge.from=${l}&.order=edge.ord`,
+      (l) =>
+        `.${relation}&.edge.from=${l}` +
+        (relation == TREE_ENTRY ? `&.tree_entry.mode!=160000` : '') +
+        '&.order=edge.ord',
       from,
     )).map((r) => String(comp(r, 'edge').to))
 

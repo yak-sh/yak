@@ -4,10 +4,22 @@ import { and, eq, every, present } from '@yaks/query'
 import { type Comp, derivedEid, type Graph, identityEid } from '@yaks/graph'
 import { run } from '@yaks/git/land'
 import { repositoryEid } from '@yaks/git/host'
-import { syncSkills } from './skill-mirror.ts'
+import { store, testMachine } from '../git/testing.ts'
+import {
+  type SkillSyncOpts,
+  syncSkills as syncSkillsOnMachine,
+} from './skill-mirror.ts'
 import { repoSkills, skillFiles, skillLocation } from './skills.ts'
 import { world } from './testing.ts'
 
+let bytes = store()
+let machine = testMachine()
+let syncSkills = (
+  g: Graph,
+  root: string,
+  memory: string,
+  opts: SkillSyncOpts = {},
+) => syncSkillsOnMachine(g, root, memory, { bytes, machine, ...opts })
 let text = (name = 'sample', body = 'Instructions\n') =>
   `---\nname: ${name}\ndescription: A useful skill\n---\n${body}`
 let git = async (root: string, ...args: string[]) => {

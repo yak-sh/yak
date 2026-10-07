@@ -220,10 +220,11 @@ grouped approximately by function, **not** by dependency order.
   document to a place in one — with `revision`, `symbol`, `lines` and `quote`
   beside it, and staleness re-derived from Git. `cites check` reports the
   citations that moved or were never checked, and `cites verify` records that
-  somebody looked. Its `land` tool operates on the checkout at the calling
-  process's `cwd` (the CLI working directory), fast-forwarding its branch into
-  the base in the primary worktree. If the base moved, it rebases and returns
-  without landing; rerun tests and land again.
+  somebody looked. Its `land` operation checks the caller's checkout through a
+  supplied machine runner, then asks the graph to accept HEAD. Its receiver
+  verifies packs and accepts fast-forward branch updates with compare-and-set.
+  Landing never mutates another checkout; if the base moved, it rebases and
+  stops so the caller can rerun tests before asking for acceptance again.
 
 - **[@yaks/code](./code)** — a codebase read into the graph: a `package` per
   manifest, a `module` per file (wearing @yaks/git's `file`), a `symbol` per

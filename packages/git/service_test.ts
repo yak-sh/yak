@@ -9,20 +9,27 @@ import {
   IDLE,
   service as serviceOnHost,
 } from './service.ts'
-import { fixture as graphed, git, template } from './testing.ts'
+import { fixture as graphed, git, template, testMachine } from './testing.ts'
 
 let pids = new Set([String(Deno.pid)])
-let processes = () => processPaths([...pids])
+let machine = testMachine()
+let processes = () => processPaths([...pids], machine)
 let collect = (
   g: Parameters<typeof collectOnHost>[0],
   common: string,
   idle?: number,
   now?: number,
-) => collectOnHost(g, common, idle, now, processes)
+) => collectOnHost(g, common, idle, now, processes, machine)
 let service = (
   host: Parameters<typeof serviceOnHost>[0],
   options: Parameters<typeof serviceOnHost>[1],
-) => serviceOnHost(host, options, undefined, processes)
+) =>
+  serviceOnHost(
+    { ...host, machines: { local: machine } },
+    options,
+    undefined,
+    processes,
+  )
 
 let there = (path: string) => Deno.stat(path).then(() => true, () => false)
 
@@ -120,7 +127,7 @@ test('an idle checkout stays while a graph session or local process uses it', as
     await f.land(busy)
     let occupied = await f.cut('occupied')
     await f.land(occupied)
-    let tree = await discover(f.g, busy)
+    let tree = await discover(f.g, busy, machine)
     await f.g.apply([{ entity: tree.entity, machine: { address: busy } }, {
       entity: { eid: 'session' },
       session: { status: 'running' },
@@ -159,7 +166,7 @@ test('a settled transcript keeps its checkout until its process exits', async ()
   try {
     let path = await f.cut('draining')
     await f.land(path)
-    let tree = await discover(f.g, path)
+    let tree = await discover(f.g, path, machine)
     await f.g.apply([{ entity: tree.entity, machine: { address: path } }, {
       entity: { eid: 'draining' },
       session: { status: 'settled' },
@@ -180,7 +187,7 @@ test('a worktree the harness manages is left to it', async () => {
   let f = await fixture()
   try {
     let path = await f.cut('managed')
-    let tree = await discover(f.g, path)
+    let tree = await discover(f.g, path, machine)
     await f.g.apply([{ entity: tree.entity, worktree: { managed: true } }])
     assertEquals(await collect(f.g, f.common, IDLE, later), {})
     assert(await there(path))
@@ -194,7 +201,7 @@ test('the service collects each repository the graph knows', async () => {
   try {
     let path = await f.cut('landed')
     await f.land(path)
-    await discover(f.g, f.repo)
+    await discover(f.g, f.repo, machine)
     await service({ graph: f.g }, { idle: 0 })
     assertEquals(await there(path), false)
   } finally {
@@ -207,8 +214,8 @@ test('collection retires externally removed observations and preserves managed r
   try {
     let gone = await f.cut('gone')
     let managed = await f.cut('managed')
-    let tree = await discover(f.g, gone)
-    let saved = await discover(f.g, managed)
+    let tree = await discover(f.g, gone, machine)
+    let saved = await discover(f.g, managed, machine)
     await f.g.apply([{ entity: saved.entity, worktree: { managed: true } }])
     await git(f.repo, 'worktree', 'remove', gone)
     await git(f.repo, 'worktree', 'remove', managed)

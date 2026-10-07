@@ -53,6 +53,7 @@ import {
   watch,
 } from '@yaks/process'
 import { createWorktree, discover, reclaim } from '@yaks/git/host'
+import { processMachine } from '@yaks/process/machine'
 import { owed } from '@yaks/persona'
 import { promptEntry, snapshot } from '@yaks/context'
 import { type Adapter, adapters as known, type Job } from './adapters.ts'
@@ -252,7 +253,7 @@ let cut = async (g: Graph, session: string, o: Opts): Promise<string> => {
   let tree = await createWorktree(g, o.cwd ?? Deno.cwd(), {
     path: checkoutOf(session, o.worktrees!),
     branch: `session-${session}`,
-  })
+  }, processMachine(g))
   return String(comp(tree, 'worktree')?.path)
 }
 
@@ -423,8 +424,9 @@ let taken = async (g: Graph, path: string): Promise<void> => {
   } catch {
     return
   }
-  await discover(g, path).catch(() => {})
-  await reclaim(path)
+  let machine = processMachine(g)
+  await discover(g, path, machine).catch(() => {})
+  await reclaim(path, undefined, machine)
 }
 
 /**

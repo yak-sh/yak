@@ -154,12 +154,13 @@ readable in the graph but cannot be exported into a repository.
 import { loadSkill, skillsAt } from '@yaks/persona/skills'
 import { syncSkills } from '@yaks/persona/skill-mirror'
 
-let catalogue = await skillsAt(graph, sessionCheckout)
-let skill = await loadSkill(graph, 'testing', sessionCheckout)
+let catalogue = await skillsAt(graph, sessionCheckout, machine)
+let skill = await loadSkill(graph, 'testing', sessionCheckout, machine)
 let report = await syncSkills(
   graph,
   primaryCheckout,
   '/tmp/skills-baseline.json',
+  { bytes, machine },
 )
 ```
 

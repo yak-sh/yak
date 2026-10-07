@@ -1,3 +1,4 @@
+import { testMachine } from '../git/testing.ts'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import {
@@ -261,7 +262,7 @@ test('local description and body edits preserve graph identity without import', 
       '# Revised instructions\n',
     )
     await Deno.mkdir(`${root}/nested`)
-    let local = await loadSkill(g, 'review', `${root}/nested`)
+    let local = await loadSkill(g, 'review', `${root}/nested`, testMachine())
     assertEquals(local.entity.eid, 'held')
     assertEquals(local.doc, { title: 'review', body: 'Revised description' })
     assertEquals(local.content, { body: '# Revised instructions\n' })
@@ -273,7 +274,7 @@ test('local description and body edits preserve graph identity without import', 
       body: 'Instructions for review\n',
     })
     await write(root, 'review', 'Second edit', 'Second body')
-    assertEquals((await loadSkill(g, 'review', root)).content, {
+    assertEquals((await loadSkill(g, 'review', root, testMachine())).content, {
       body: 'Second body',
     })
   }))
@@ -291,7 +292,7 @@ test('untracked additions, folder renames and deletions replace the graph view',
       `${root}/.claude/skills/renamed`,
     )
     await write(root, 'renamed', 'Renamed description', 'Renamed instructions')
-    let local = await skillsAt(g, root)
+    let local = await skillsAt(g, root, testMachine())
     assertEquals(local.map((b) => b.doc), [
       { title: 'fresh', body: 'Local fresh' },
       { title: 'renamed', body: 'Renamed description' },
@@ -300,13 +301,17 @@ test('untracked additions, folder renames and deletions replace the graph view',
       local.every((b) => b.entity.eid != 'held' && b.entity.eid != 'deleted'),
     )
     assertEquals(
-      (await loadSkill(g, 'fresh', root)).entity.eid,
+      (await loadSkill(g, 'fresh', root, testMachine())).entity.eid,
       local[0].entity.eid,
     )
-    await assertRejects(() => loadSkill(g, 'old', root), Refused, 'No skill')
+    await assertRejects(
+      () => loadSkill(g, 'old', root, testMachine()),
+      Refused,
+      'No skill',
+    )
     assertEquals((await repoSkills(g, repository)).length, 2)
     await Deno.remove(`${root}/.claude`, { recursive: true })
-    assertEquals(await skillsAt(g, root), [])
+    assertEquals(await skillsAt(g, root, testMachine()), [])
   }))
 
 test('checkout overlays never borrow a matching title from another repository', () =>
@@ -316,10 +321,13 @@ test('checkout overlays never borrow a matching title from another repository', 
       ...skill('there', 'review', elsewhere),
     ])
     await write(root, 'review')
-    assertEquals((await loadSkill(g, 'review', root)).entity.eid, 'here')
+    assertEquals(
+      (await loadSkill(g, 'review', root, testMachine())).entity.eid,
+      'here',
+    )
     await assertRejects(() => loadSkill(g, 'review'), Refused, 'more than one')
     await Deno.remove(`${root}/.claude`, { recursive: true })
-    assertEquals(await skillsAt(g, root), [])
+    assertEquals(await skillsAt(g, root, testMachine()), [])
     assertEquals((await repoSkills(g, elsewhere)).map((b) => b.entity.eid), [
       'there',
     ])
@@ -337,12 +345,12 @@ test('local skill directories and documents never follow symlinks', () =>
       `${root}/.claude/skills/real/SKILL.md`,
       `${root}/.claude/skills/file-link/SKILL.md`,
     )
-    assertEquals((await skillsAt(g, root)).map((b) => b.doc), [
+    assertEquals((await skillsAt(g, root, testMachine())).map((b) => b.doc), [
       { title: 'real', body: 'Local real' },
     ])
     await Deno.rename(`${root}/.claude/skills`, `${root}/outside`)
     await Deno.symlink(`${root}/outside`, `${root}/.claude/skills`)
-    assertEquals(await skillsAt(g, root), [])
+    assertEquals(await skillsAt(g, root, testMachine()), [])
   }))
 
 test('malformed local frontmatter is refused, not replaced with stale graph text', () =>
@@ -353,7 +361,11 @@ test('malformed local frontmatter is refused, not replaced with stale graph text
       `${root}/.claude/skills/review/SKILL.md`,
       'not a skill',
     )
-    await assertRejects(() => skillsAt(g, root), Refused, 'Cannot load')
+    await assertRejects(
+      () => skillsAt(g, root, testMachine()),
+      Refused,
+      'Cannot load',
+    )
   }))
 
 test('linked checkouts scope graph identities by their shared git common directory', () =>
@@ -375,13 +387,22 @@ test('linked checkouts scope graph identities by their shared git common directo
     try {
       await git(root, 'worktree', 'add', '-q', '--detach', linked)
       await write(linked, 'review', 'Linked edit', 'Linked instructions')
-      assertEquals((await loadSkill(g, 'review', linked)).entity.eid, 'held')
-      assertEquals((await loadSkill(g, 'review', linked)).content, {
-        body: 'Linked instructions',
-      })
-      assertEquals((await loadSkill(g, 'review', root)).content, {
-        body: 'Local instructions for review\n',
-      })
+      assertEquals(
+        (await loadSkill(g, 'review', linked, testMachine())).entity.eid,
+        'held',
+      )
+      assertEquals(
+        (await loadSkill(g, 'review', linked, testMachine())).content,
+        {
+          body: 'Linked instructions',
+        },
+      )
+      assertEquals(
+        (await loadSkill(g, 'review', root, testMachine())).content,
+        {
+          body: 'Local instructions for review\n',
+        },
+      )
       assertEquals((await loadSkill(g, 'review')).content, {
         body: 'Instructions for review\n',
       })
@@ -396,7 +417,7 @@ test('unregistered repositories get temporary views rather than borrowing graph 
     await g.apply(skill('elsewhere', 'review', another))
     await write(root, 'review')
     let before = await repoSkills(g)
-    let local = await loadSkill(g, 'review', root)
+    let local = await loadSkill(g, 'review', root, testMachine())
     assert(local.entity.eid.startsWith('view:skill:'))
     assertEquals(await repoSkills(g), before)
   }))
@@ -428,10 +449,10 @@ test('a missing checkout has no local skills and never falls back to graph instr
   await g.apply(skill('held', 'review'))
   let dir = await Deno.makeTempDir({ prefix: 'missing-skills-' })
   try {
-    assertEquals(await skillsAt(g, dir + '/removed'), [])
+    assertEquals(await skillsAt(g, dir + '/removed', testMachine()), [])
     assertEquals((await repoSkills(g)).length, 1)
     await assertRejects(
-      () => loadSkill(g, 'review', dir + '/removed'),
+      () => loadSkill(g, 'review', dir + '/removed', testMachine()),
       Refused,
       'No skill',
     )
