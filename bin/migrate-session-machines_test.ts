@@ -264,3 +264,62 @@ test('composed CLI host translates a pre-machine home before any provisioning', 
     await host.close()
   }
 })
+
+test('ordinary CLI reads remain available before destination expansion', async () => {
+  let { compose, facet } = await import('../packages/cli/host.ts')
+  let { docs } = await import('../packages/harness/vocab.ts')
+  let dir = await Deno.makeTempDir()
+  let config = {
+    db: dir + '/graph.db',
+    plugins: [
+      '@yaks/kernel',
+      '@yaks/key',
+      '@yaks/archetype',
+      '@yaks/edge',
+      '@yaks/git',
+      '@yaks/process',
+      '@yaks/session',
+      '@yaks/harness',
+    ],
+  }
+  let old = await compose(config, ['graph'], async (plugin, name) => {
+    if (plugin == '@yaks/harness' && name == 'vocab') {
+      let legacy = structuredClone(docs)
+      for (let doc of legacy) {
+        if (doc.$defs?.home) {
+          delete doc.$defs.home.properties!.machine
+          doc.$defs.home.properties!.worktree = {
+            type: 'string',
+            ref: 'worktree',
+            death: 'keep',
+          }
+        }
+      }
+      return { docs: legacy }
+    }
+    return await facet(plugin, name)
+  }, { install: true, process: false })
+  try {
+    await old.graph.apply([
+      { entity: { eid: 'checkout' }, worktree: { path: '/kept/checkout' } },
+      {
+        entity: { eid: 'still-working' },
+        session: {},
+        home: { worktree: 'checkout', cwd: '/kept/checkout/sub' },
+      },
+    ])
+    await old.close()
+    let next = await compose(config, ['graph'], undefined, { process: false })
+    try {
+      let [session] = await next.graph.get(['still-working'])
+      equal((session.home as { cwd: string }).cwd, '/kept/checkout/sub')
+      equal((session.home as { machine: unknown }).machine ?? null, null)
+      equal((await next.graph.read('.session&.home&*')).length, 1)
+    } finally {
+      await next.close()
+    }
+  } finally {
+    await old.close()
+    await Deno.remove(dir, { recursive: true })
+  }
+})

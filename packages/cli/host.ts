@@ -85,8 +85,9 @@ import {
   store as machine,
   vanished,
 } from '@yaks/process'
-import type { Backings, Derived, Extension } from '@yaks/sql'
+import { type Backings, type Derived, type Extension, lit } from '@yaks/sql'
 import {
+  columns,
   installMigrations,
   migrations,
   storage,
@@ -847,6 +848,17 @@ let composed = async (
       for (let statement of blobSchema()) sql.query(statement)
     }
     migrations(sql).ready()
+    // Before explicit expansion, ordinary CLI reads still work over old homes.
+    // Only this SQLite boundary knows the absent destination; plugins see a
+    // canonical empty machine reference, and provisioning waits for expansion.
+    if (
+      !installing && vocab.prop('home', 'machine') &&
+      columns(sql, 'home').includes('worktree') &&
+      !columns(sql, 'home').includes('machine')
+    ) {
+      derived['home.machine'] = { tag: 'number', expr: () => lit(null) }
+    }
+
     part?.('host')
     let chosen = plugins.find(([name]) => name == '@yaks/blob')?.[1].store as
       | Backend
