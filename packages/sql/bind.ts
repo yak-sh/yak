@@ -1539,6 +1539,11 @@ let indexedRelation = (
   return {
     ...s,
     from: raw(src),
+    // The presence filter was elided when its table was the planned spine.
+    // An indexed predicate can replace that spine; keep requiring its rows.
+    where: ctx.present && root.comp != ctx.present
+      ? and(s.where ?? TRUE, owned(ctx, ctx.present))
+      : s.where,
     order: ctx.present || root.index
       ? s.order?.map((order) =>
         order.t == 'raw'

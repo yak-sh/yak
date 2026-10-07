@@ -26,6 +26,25 @@ test('a scalar filter selects the matching entities', () => {
   assertEquals(eids(s.read('.product.price>=15')), ['p2'])
 })
 
+test('indexed filters retain another component presence requirement', () => {
+  let s = store()
+  seed(s, [
+    { entity: { eid: 'maker' }, doc: { title: 'Maker' } },
+    ...['marked', 'unmarked'].map((eid) => ({
+      entity: { eid },
+      product: { maker: 'maker' },
+      shelf: { aisle: 'a', slot: eid == 'marked' ? 1 : 2 },
+      ...eid == 'marked' ? { doc: { title: 'Chosen' } } : {},
+    })),
+  ])
+  for (let filter of ['.product.maker=maker', '.shelf.aisle=a']) {
+    for (let query of [`${filter} .doc`, `.doc ${filter}`]) {
+      assertEquals(eids(s.read(query)), ['marked'])
+      assertEquals(eids(s.read(`${query} .fields=doc.title`)), ['marked'])
+    }
+  }
+})
+
 // A Durable Object's SQLite binds at most 100 parameters per statement, and an
 // any-of list is as long as its caller made it.
 test('an any-of list past 100 values binds under the Durable Object limit', () => {
