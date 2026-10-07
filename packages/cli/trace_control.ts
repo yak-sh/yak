@@ -68,6 +68,7 @@ export let traceControl = (db: string, pid = Deno.pid) => {
   let closed = false
   let timer: ReturnType<typeof setInterval> | undefined
   let signature: string | undefined
+  let changing = false
   let read = (): State => {
     if (memory) return state
     try {
@@ -96,10 +97,11 @@ export let traceControl = (db: string, pid = Deno.pid) => {
       return undefined
     }
   }
-  refresh()
   signature = fingerprint()
+  refresh()
   if (!memory) {
     timer = setInterval(() => {
+      if (changing) return
       let next = fingerprint()
       if (next !== signature) {
         signature = next
@@ -119,6 +121,7 @@ export let traceControl = (db: string, pid = Deno.pid) => {
       let file = await Deno.open(`${path}.lock`, { create: true, write: true })
       try {
         await file.lock(true)
+        changing = true
         state = read()
         let before = JSON.stringify(state)
         let result = change()
@@ -136,6 +139,7 @@ export let traceControl = (db: string, pid = Deno.pid) => {
         signature = fingerprint()
         return result
       } finally {
+        changing = false
         await file.unlock()
         file.close()
       }
