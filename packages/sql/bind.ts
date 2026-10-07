@@ -1464,9 +1464,7 @@ let indexedRelation = (
       }
     }
   }
-  let root: { comp: string; index?: string } | undefined = ctx.present
-    ? { comp: ctx.present }
-    : undefined
+  let root: { comp: string; index?: string } | undefined
   if (!ctx.spine && !claims(ctx, 'pred') && ctx.d.indexed) {
     let scalar = flattened(clauses).some((c) =>
       c.kind == 'pred' && !c.not &&
@@ -1511,6 +1509,10 @@ let indexedRelation = (
       break
     }
   }
+  // A presence table is the fallback, after a bounded indexed predicate.
+  // Otherwise `.using .entry.session=X` walks every request in the graph
+  // instead of seeking X's entries and checking their using component.
+  root ??= ctx.present ? { comp: ctx.present } : undefined
   let s = rel(from, o)
   if (!root) {
     if (!ctx.candidates || ctx.spine || from != '"entity"') return s

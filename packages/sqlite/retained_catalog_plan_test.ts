@@ -13,6 +13,75 @@ import { parse } from '@yaks/query'
 let status = Deno.dlopen(sqlitePath, {
   sqlite3_stmt_status: { parameters: ['pointer', 'i32', 'i32'], result: 'i32' },
 })
+
+test('a session request lookup reads its entries instead of unrelated requests', () => {
+  let db = new Database(':memory:'), d = driver(db)
+  try {
+    let vocab = loadVocab([archetypeDoc, {
+      $defs: {
+        session: { component: true, type: 'object' },
+        entry: {
+          component: true,
+          type: 'object',
+          index: [['session', 'seq']],
+          properties: {
+            session: { type: 'string', ref: 'session' },
+            seq: { type: 'number' },
+          },
+        },
+        using: {
+          component: true,
+          type: 'object',
+          properties: { provider: { type: 'string' } },
+        },
+      },
+    }])
+    let s = storage(d, vocab)
+    s.install()
+    let g = graph({ storage: s, vocab, plugins: [archetypes()] })
+    g.apply([
+      { entity: { eid: 'target' }, session: {} },
+      { entity: { eid: 'other' }, session: {} },
+      ...['old', 'new'].map((eid, i) => ({
+        entity: { eid },
+        entry: { session: 'target', seq: i + 1 },
+        using: { provider: 'fake' },
+      })),
+    ])
+    d.query({ t: 'pragma', name: 'optimize', value: 0x10002 })
+    for (let start = 0; start < 5000; start += 500) {
+      s.tx((tx) =>
+        tx.patch(Array.from({ length: 500 }, (_, n) => ({
+          entity: { eid: `request-${start + n}` },
+          entry: { session: 'other', seq: start + n },
+          using: { provider: 'fake' },
+        })))
+      )
+    }
+    for (
+      let [query, expected] of [
+        ['.entry.session=target .using .limit=1', ['new']],
+        ['.using .entry.session=target .order=-entry.seq .limit=2', [
+          'new',
+          'old',
+        ]],
+        ['.entry.session=target .using .order=entry.seq', ['old', 'new']],
+      ] as const
+    ) {
+      let q = render(compile(parse(query), vocab, { archetypes: catalog(d) }))
+      let stmt = db.prepare(q.sql)
+      try {
+        equal(stmt.all(...q.params).map((r) => r.eid), [...expected])
+        let steps = status.symbols.sqlite3_stmt_status(stmt.unsafeHandle, 4, 0)
+        ok(steps < 500, `${steps} VM steps\n${q.sql}`)
+      } finally {
+        stmt.finalize()
+      }
+    }
+  } finally {
+    db.close()
+  }
+})
 test('unbounded retained sound catalog reads grow with catalog, never transcript history', () => {
   let db = new Database(':memory:'), d = driver(db)
   try {
