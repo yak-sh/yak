@@ -157,6 +157,13 @@ bodies or name their files. What it can't find anywhere is two things:
 - **Saying more**: `yak session send S-<n> '<text>'` adds an input it reads on
   its next turn and waits for it to settle, so run it in the background too.
   When it's the owner's words, relay them verbatim.
+- **A long session drifts.** What it reads most is its own output and its
+  children's reports, and compaction keeps the newest lines verbatim, so any
+  quirk in them compounds: by the end of a two-day run on T-65275 its comments
+  ran words together and its children's did first. Give one session one slice
+  of work. For the next slice, start a fresh session from a brief you write,
+  saying what is true in your own words rather than quoting its reports,
+  instead of sending more into the old one.
 - **Waiting for the work, not the quiet.** `yak session new` and
   `yak session wait` return when the session's own transcript settles
   (packages/session/status.ts reads its transcript, never its children's). A
