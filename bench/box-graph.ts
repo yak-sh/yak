@@ -32,9 +32,9 @@ import {
   statements,
 } from './box-lib.ts'
 
-/** Single comments whose owed runs are stepped through one at a time. */
+/** Single comment edits whose owed runs are stepped through one at a time. */
 let STEPS = 6
-/** Comments, in one batch, whose owed runs one unbounded pass drains. */
+/** Comment edits, in one batch, whose owed runs one unbounded pass drains. */
 let DRAINED = 25
 
 class Rollback extends Error {}
@@ -64,6 +64,17 @@ export async function measure(path: string, target: string) {
       doc: { body: `box bench comment ${i}` },
       comment: { target },
     }))
+  /** Comments written, then each one's body edited: an edit owes a run (an
+   * agent's own files are kept from what it edits), where a new comment owes
+   * none. */
+  let edits = async (n: number): Promise<Bundle[]> => {
+    let made = comments(n)
+    await g.apply(made)
+    return made.map((b, i) => ({
+      entity: b.entity,
+      doc: { body: `box bench comment ${i}, edited` },
+    }))
+  }
   let applied = async (bundles: Bundle[]) => {
     let start = now()
     let { spans } = await record(g, () => g.apply(bundles))
@@ -208,7 +219,7 @@ export async function measure(path: string, target: string) {
 
     // What one unbounded pass, the pool's own default, takes per run.
     await aside(async () => {
-      await g.apply(comments(DRAINED))
+      await g.apply(await edits(DRAINED))
       let owed = pending()
       timings = []
       let start = now()
@@ -222,13 +233,13 @@ export async function measure(path: string, target: string) {
       })
     })
 
-    // A run's life, one at a time: owed inside its comment's own commit (the
-    // effects registry's share of that commit, per run it owed), then claimed,
-    // run and settled by a pass that starts one run.
+    // A run's life, one at a time: owed inside its comment edit's own commit
+    // (the effects registry's share of that commit, per run it owed), then
+    // claimed, run and settled by a pass that starts one run.
     await aside(async () => {
       recording = true
       for (let i = 0; i < STEPS; i++) {
-        let { spans } = await applied(comments(1))
+        let { spans } = await applied(await edits(1))
         let owed = spans.filter((e) =>
           e.kind == 'effect' && e.package == '@yaks/effects'
         ).length
