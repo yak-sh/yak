@@ -209,6 +209,7 @@ test('record disconnects on throws and rejections and restores nested calls', as
 })
 
 test('synchronous scopes restore callers on returns, throws and awaits', async () => {
+  let restore = installContext(undefined)
   let target = {}
   let c = channel(target)
   let stop = c.subscribe(() => {})
@@ -235,6 +236,7 @@ test('synchronous scopes restore callers on returns, throws and awaits', async (
     equal(peek(), undefined)
   } finally {
     stop()
+    restore()
   }
 })
 

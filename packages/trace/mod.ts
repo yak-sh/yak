@@ -78,8 +78,9 @@ let carrier: ContextCarrier | undefined
 
 /** Install task-local propagation once in a host. The returned cleanup restores
  * the prior carrier, useful for isolated hosts and tests. Without a carrier,
- * scopes retain their synchronous-only behavior. */
-export let installContext = (next: ContextCarrier): () => void => {
+ * scopes retain their synchronous-only behavior. Pass undefined to isolate
+ * that behavior from a host-installed carrier, and restore it after the scope. */
+export let installContext = (next: ContextCarrier | undefined): () => void => {
   let before = carrier
   carrier = next
   return () => {
