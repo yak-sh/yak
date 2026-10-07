@@ -450,13 +450,14 @@ test('a failed eligibility read can wake again on a relevant stored change', asy
   let f = fixture('.book.status=shelved')
   f.g.apply([{ entity: { eid: 'a' }, book: { status: 'draft' } }])
   f.saved.write('one', f.write(7))
-  let read = f.g.read.bind(f.g), broken = true
-  f.g.read = (...args) =>
+  let read = f.g.get.bind(f.g), broken = true
+  f.g.get = (...args) =>
     broken ? Promise.reject(new Error('read failed')) : read(...args)
   f.g.apply([{ entity: { eid: 'a' }, book: { price: 3 } }])
   f.tick(0)
   await Promise.resolve()
   await Promise.resolve()
+  equal(f.failures.length, 1)
   broken = false
   f.g.apply([{ entity: { eid: 'a' }, book: { status: 'shelved' } }])
   f.tick(0)
@@ -468,8 +469,8 @@ test('pending peer patches do not recheck unchanged stored eligibility on every 
   let f = fixture('.book (!position | .updated.at<="1s ago")')
   f.g.apply([{ entity: { eid: 'a' }, book: { status: 'draft' } }])
   f.saved.write('one', f.write(1))
-  let read = f.g.read.bind(f.g), reads = 0
-  f.g.read = (...args) => {
+  let read = f.g.get.bind(f.g), reads = 0
+  f.g.get = (...args) => {
     reads++
     return read(...args)
   }
