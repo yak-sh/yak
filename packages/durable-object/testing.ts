@@ -112,6 +112,8 @@ let out = (row: Record<string, unknown>) => {
 export let durable = (): DurableStorage & {
   sql: { databaseSize: number }
   deleteAll(): Promise<void>
+  get<T>(key: string): Promise<T | undefined>
+  put(key: string, value: unknown): Promise<void>
   getAlarm(): Promise<number | null>
   setAlarm(at: number): Promise<void>
   deleteAlarm(): Promise<void>
@@ -121,6 +123,7 @@ export let durable = (): DurableStorage & {
   // The one alarm, as the runtime holds it: an instant or nothing, cleared by
   // the delivery that fires it.
   let alarm: number | null = null
+  let kept = new Map<string, unknown>()
   let db = textual(LIMITS)
   let closed = false
   let depth = 0
@@ -170,11 +173,21 @@ export let durable = (): DurableStorage & {
           Number(Object.values(size ?? {})[0] ?? 0)
       },
     },
+    get: <T>(key: string) => {
+      if (closed) throw new Error('storage is disposed')
+      return Promise.resolve(structuredClone(kept.get(key)) as T | undefined)
+    },
+    put: (key: string, value: unknown) => {
+      if (closed) throw new Error('storage is disposed')
+      kept.set(key, structuredClone(value))
+      return Promise.resolve()
+    },
     // Empty, all of it — tables, indexes and the virtual tables a full-text
     // index is made of. The runtime throws the whole object's storage away;
     // this drops everything in the schema, which over one in-memory database
     // is the same end state.
     deleteAll: () => {
+      kept.clear()
       let names = said(select({
         cols: [col('type'), col('name')],
         from: table('sqlite_master'),

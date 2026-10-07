@@ -16,7 +16,7 @@ export type Stub = {
   admitTrace: (scope: string, rows: Bundle[]) => Promise<unknown>
   ingestTrace: (rows: Bundle[]) => Promise<boolean>
 }
-export type Env = Settings & {
+export type Env = Omit<Settings, 'TRACKERS'> & {
   TRACKERS: { getByName: (scope: string) => Stub }
 }
 let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

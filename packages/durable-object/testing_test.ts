@@ -1,5 +1,5 @@
 /// <reference lib="deno.ns" />
-import { test } from '@yaks/testing'
+import { equal, test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import {
   by,
@@ -86,4 +86,18 @@ test('disposed storage rejects queries and can be disposed twice', () => {
   d[Symbol.dispose]()
   d[Symbol.dispose]()
   assertThrows(() => sql.query(one), Error, 'storage is disposed')
+})
+
+test('Durable Object metadata survives reads without sharing mutable values and deleteAll erases it', async () => {
+  using storage = durable()
+  equal(await storage.get('heartbeat'), undefined)
+  let value = { timestamps: [12] }
+  await storage.put('heartbeat', value)
+  value.timestamps.push(34)
+  let read = await storage.get<typeof value>('heartbeat')
+  equal(read, { timestamps: [12] })
+  read!.timestamps.push(56)
+  equal(await storage.get('heartbeat'), { timestamps: [12] })
+  await storage.deleteAll()
+  equal(await storage.get('heartbeat'), undefined)
 })

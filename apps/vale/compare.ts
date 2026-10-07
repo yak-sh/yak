@@ -367,12 +367,13 @@ export let solo = (label: string, p: Piece): JSX.Element =>
  * import { renderToString } from 'preact-render-to-string'
  * import { seedItems } from './items_fixture.ts'
  * import { piece } from './rarity.ts'
+ * import type { Side } from './compare.ts'
  * seedItems()
  * let hero = { lvl: 3, learned: [] }
  * let h = { eid: 'a', kind: 'helm2', n: 1 }
  * let bag = { label: 'In your bag', p: piece(h), worn: { head: h } }
  * let bare = { label: 'Worn', worn: {} }
- * let read = (a: typeof bag, b: typeof bag) => renderToString(versus(hero, a, b))
+ * let read = (a: Side, b: Side) => renderToString(versus(hero, a, b))
  * assertEquals(read(bag, bare).includes('Better'), true)
  * assertEquals(read(bag, bare).includes('Worse'), false)
  * assertEquals(read(bare, bag).includes('Better'), false)
