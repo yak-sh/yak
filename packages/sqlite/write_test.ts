@@ -251,6 +251,33 @@ test('numbering exceptions ask once across tables and entities', () => {
   assertEquals(rows.map((b) => b.entity.num ?? null), [1, 150, null, null])
 })
 
+test('a patch asks about numbering exceptions only where they decide a number', () => {
+  let asked = 0
+  let driver = spy(mem(), (sql) => {
+    if (/^(select|update "entity")/.test(sql.trimStart())) asked++
+  })
+  let s = storage(driver, shop, { number: { except: ['shelf'] } })
+  s.install()
+  write(s, [
+    { entity: { eid: 's' }, shelf: { aisle: 'A', slot: 1 } },
+    { entity: { eid: 'p' }, product: { price: 1 } },
+  ])
+  let cost = (bundles: Bundle[]) => {
+    asked = 0
+    write(s, bundles)
+    return asked
+  }
+  // Only identity is read: the bundle names the exception, or gives nothing.
+  assertEquals(cost([{ entity: { eid: 's' }, shelf: { slot: 2 } }]), 1)
+  assertEquals(cost([{ entity: { eid: 's' }, doc: null }]), 1)
+  // A numbered entity given the exception still loses its number.
+  write(s, [{ entity: { eid: 'p' }, shelf: { aisle: 'B', slot: 1 } }])
+  assertEquals(
+    s.tx((tx) => tx.get(['s', 'p'])).map((b) => b.entity.num ?? null),
+    [null, null],
+  )
+})
+
 test('number:false reports explicit unnumbered births without consuming numbers', () => {
   let driver = mem()
   let s = storage(driver, shop, { number: false })

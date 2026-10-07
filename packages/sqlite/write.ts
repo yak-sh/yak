@@ -459,6 +459,24 @@ export let patch = (
   let known = spines(driver, [...new Set(touched(vocab, bundles))])
   let alive = bundles.filter((b) => !known.get(b.entity.eid)?.dead)
 
+  // What each bundle states its entity's number to be, where the store is
+  // adopting rather than minting: a number to take, or `null` for none. Only a
+  // birth honours it — a number in use is not something a later batch may
+  // reassign.
+  let stated = new Map<string, number | null>()
+  if (adopt) {
+    for (let b of alive) {
+      if (b.entity.num !== undefined) stated.set(b.entity.eid, b.entity.num)
+    }
+  }
+  // The eids a bundle of their own arrives for: one giving a component, or,
+  // where the store is adopting, one stating the number.
+  let own = new Set([
+    ...alive.filter((b) => comps(b).some(([, c]) => c != null))
+      .map((b) => b.entity.eid),
+    ...stated.keys(),
+  ])
+
   // Mint a spine for every eid the live bundles touch or point at, so a
   // reference can name a target created in the same batch, in any order. An
   // eid the store already knows is skipped here and would be a no-op anyway.
@@ -470,30 +488,25 @@ export let patch = (
     // A component no plugin here declares is worn by nothing: a config names
     // its exceptions once, for every graph it opens.
     let tables = [...new Set(number.except.filter((n) => vocab.comp(n)))]
-    let eids = [...new Set(alive.map((b) => b.entity.eid))]
-      .filter((eid) => known.has(eid))
-    excluded = wears(driver, tables, eids)
     for (let name of tables) {
       for (let b of alive) if (b[name] != null) excluded.add(b.entity.eid)
     }
+    // What a known entity already wears is asked only where it decides
+    // something: a number it has to lose, or one a bundle of its own would
+    // give it.
+    let asked = [...new Set(alive.map((b) => b.entity.eid))].filter((eid) => {
+      let k = known.get(eid)
+      return k && !excluded.has(eid) && (k.num != null || own.has(eid))
+    })
+    for (let eid of wears(driver, tables, asked)) excluded.add(eid)
     for (let eid of excluded) {
-      if (!known.has(eid)) continue
+      if (known.get(eid)?.num == null) continue
       driver.query({
         t: 'update',
         table: 'entity',
         set: { num: lit(null) },
         where: and(eq(col('eid'), val(eid)), notNull(col('num'))),
       })
-    }
-  }
-  // What each bundle states its entity's number to be, where the store is
-  // adopting rather than minting: a number to take, or `null` for none. Only a
-  // birth honours it — a number in use is not something a later batch may
-  // reassign.
-  let stated = new Map<string, number | null>()
-  if (adopt) {
-    for (let b of alive) {
-      if (b.entity.num !== undefined) stated.set(b.entity.eid, b.entity.num)
     }
   }
   // The number an entity is born with: none where the store numbers nothing or
@@ -505,13 +518,6 @@ export let patch = (
       : !stated.has(eid)
       ? true
       : stated.get(eid) ?? false
-  // The eids a bundle of their own arrives for: one giving a component, or,
-  // where the store is adopting, one stating the number.
-  let own = new Set([
-    ...alive.filter((b) => comps(b).some(([, c]) => c != null))
-      .map((b) => b.entity.eid),
-    ...stated.keys(),
-  ])
   let born: Entity[] = []
   let seen = new Set(known.keys())
   for (let eid of touched(vocab, alive)) {
