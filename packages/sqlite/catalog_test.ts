@@ -35,3 +35,33 @@ test('a warm catalog costs no storage calls until its rows change', () => {
   for (let n = 0; n < 100; n++) equal(match(), first)
   equal(calls, 0)
 })
+
+test('pointer-only changes reuse descriptor rows but still decline unclassified owners', () => {
+  let scans = 0,
+    d = spy(mem(), (s) => {
+      if (
+        s == 'select "entity", "tables" from "archetype"'
+      ) scans++
+    })
+  let store = storage(d, vocab)
+  store.install()
+  let g = graph({ storage: store, vocab, plugins: [archetypes()] })
+  g.apply([{ entity: { eid: 'one' }, doc: { title: 'One' } }])
+  let match = () => catalog(d)({ all: ['doc'], none: [] })
+  let before = match()
+  scans = 0
+  g.apply([{ entity: { eid: 'two' }, doc: { title: 'Two' } }])
+  equal(match(), before)
+  equal(scans, 0)
+  equal(store.read('.doc').map((b) => b.entity.eid), ['one', 'two'])
+  d.query({
+    t: 'insert',
+    into: 'entity',
+    cols: ['eid'],
+    rows: [[{ t: 'val', v: 'unclassified' }]],
+  })
+  equal(match(), undefined)
+  g.apply([{ entity: { eid: 'unclassified' }, doc: { title: 'Classified' } }])
+  equal(match(), before)
+  equal(scans, 0)
+})

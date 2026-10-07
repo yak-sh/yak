@@ -18,6 +18,8 @@ let caches = new WeakMap<Driver, {
   sets: Archetypes
   text: Map<string, Archetype>
   // The last snapshot and the catalog version it was read at (below).
+  descriptorVersion?: number
+  descriptors?: ArchetypeSet
   version?: number
   set?: ArchetypeSet
 }>()
@@ -59,17 +61,23 @@ function snapshot(driver: Driver): ArchetypeSet | undefined {
     cache.set = undefined
     return undefined
   }
-  let ids = new Map<string, number>()
-  let all = select({
-    cols: [col('entity'), col('tables')],
-    from: table('archetype'),
-  })
-  for (let row of driver.query(all)) {
-    let a = descriptor(driver, String(row.tables))
-    ids.set(a.eid, Number(row.entity))
+  let version = revision(driver, 'descriptors')
+  if (cache.descriptorVersion != version || !cache.descriptors) {
+    let ids = new Map<string, number>()
+    let all = select({
+      cols: [col('entity'), col('tables')],
+      from: table('archetype'),
+    })
+    for (let row of driver.query(all)) {
+      let a = descriptor(driver, String(row.tables))
+      ids.set(a.eid, Number(row.entity))
+    }
+    cache.descriptors = archetypeSet(cache.sets, ids)
+    cache.descriptorVersion = version
   }
+
   cache.version = v
-  return cache.set = archetypeSet(cache.sets, ids)
+  return cache.set = cache.descriptors
 }
 
 /**

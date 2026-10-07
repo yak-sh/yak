@@ -11,34 +11,45 @@ let held = new WeakMap<Driver, {
   schema: number
   catalog: number
   data: number
+  descriptors: number
   schemaVersion?: unknown
   dataVersion?: unknown
 }>()
 
-type Scope = 'schema' | 'catalog' | 'data'
+type Scope = 'schema' | 'catalog' | 'data' | 'descriptors'
 
 /** A monotonic invalidation token, not a stored row or catalog fingerprint. */
 export function revision(driver: Driver, scope: Scope): number {
   let state = held.get(driver)
   if (!state) {
-    state = { schema: 0, catalog: 0, data: 0 }
+    state = { schema: 0, catalog: 0, data: 0, descriptors: 0 }
     held.set(driver, state)
     let current = state
     let invalidate = () => {
       current.schema++
       current.catalog++
       current.data++
+      current.descriptors++
     }
     let scopes: {
       name?: string
       schema: number
       catalog: number
       data: number
+      descriptors: number
     }[] = []
-    let undo = (at: { schema: number; catalog: number; data: number }) => {
+    let undo = (
+      at: {
+        schema: number
+        catalog: number
+        data: number
+        descriptors: number
+      },
+    ) => {
       if (current.schema != at.schema) current.schema++
       if (current.catalog != at.catalog) current.catalog++
       if (current.data != at.data) current.data++
+      if (current.descriptors != at.descriptors) current.descriptors++
     }
     let observe = (s: Stmt): void => {
       if (s.t == 'raw') {
@@ -47,6 +58,11 @@ export function revision(driver: Driver, scope: Scope): number {
         return
       }
       if (s.t == 'insert' || s.t == 'update' || s.t == 'delete') current.data++
+      if (
+        s.t == 'insert' && s.into == 'archetype' ||
+        s.t == 'update' && s.table == 'archetype' ||
+        s.t == 'delete' && (s.from == 'archetype' || s.from == 'entity')
+      ) current.descriptors++
       if (s.t == 'begin' || s.t == 'savepoint') {
         scopes.push({
           ...current,
@@ -126,14 +142,16 @@ export function revision(driver: Driver, scope: Scope): number {
       state.schema++
       state.catalog++
       state.data++
+      state.descriptors++
     }
-    if (scope == 'catalog' || scope == 'data') {
+    if (scope == 'catalog' || scope == 'data' || scope == 'descriptors') {
       let dataVersion = driver.query({ t: 'pragma', name: 'data_version' })[0]
         ?.data_version
       if (dataVersion !== state.dataVersion) {
         state.dataVersion = dataVersion
         state.catalog++
         state.data++
+        state.descriptors++
       }
     }
   }
