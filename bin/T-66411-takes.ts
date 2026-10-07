@@ -20,7 +20,7 @@ let config = { ...read('/home/yaks/.yak/yak.json'), db: path }
 let loaded = await words(config)
 let sql = open(path)
 try {
-  let db = storage({ ...sql, file: false }, loaded.vocab, {
+  let db = storage(sql, loaded.vocab, {
     derived: loaded.derived,
     backed: loaded.backed,
     schemaReady: () => true,
