@@ -161,21 +161,24 @@ packages/cli/host.ts, and packages/cli/README.md is the reference.
 
 `yak serve` serves `web` only. When no live process serves a duty role, it
 starts an independent `yak work --roles <missing>` process, not a duty thread.
-Installed systemd runs `yak.service` with `--no-duties` and independent
+Installed systemd runs `yak-web@` units with `--no-duties` and independent
 `yak-work@` workers. A passing `yak` command serves `graph` and its own tool's
 roles; only over a graph that keeps no pool does it run effects where they
 were committed (`rolesOf` in packages/cli/local.ts). Each process records its
 roles in `process{roles}`, so `.process.roles` shows who serves what.
 
-`yak restart` is the agent's restart door: a new worker is ready first, then
-the old workers' graceful drain and the web restart are enqueued. It doesn't
-wait in a shell for shutdown.
+`yak restart` is the agent's restart door: a replacement for every worker and
+web is ready first, then the old units' stops are enqueued. It doesn't wait in
+a shell for shutdown. A web's replacement shares its port, so the handover
+refuses no request.
 
 Every process winds down one way (`@yaks/process/wind`). The first interrupt (a
 signal, or Ctrl-C in a terminal app) stops its hosts, so the pool claims
 nothing more, a transcript starts no new step and a server takes no new
 request, and the process waits for every run it started, with no deadline of
-its own, logging what it waits on. A second interrupt forces shutdown and may
+its own, logging what it waits on. A server is the exception: it lets requests
+in flight finish for a grace of seconds and then stops anyway, and each unit's
+`TimeoutStopSec` bounds the rest. A second interrupt forces shutdown and may
 cut off a run or an external action; it isn't guaranteed lossless. Recorded
 work left owed is the next worker's.
 

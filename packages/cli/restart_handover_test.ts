@@ -1,6 +1,7 @@
 // The restart interface drives isolated CLI processes, never the box's units.
 // Tracker intake already admitted to the old worker finishes before its lease
-// moves; its spool and independent HTTP process survive that graceful drain.
+// moves; its spool survives that graceful drain, and its web is handed over on
+// a shared port without refusing a request.
 
 import { assert, assertEquals } from '@std/assert'
 import { test, until } from '@yaks/testing'
@@ -28,7 +29,7 @@ let file = new URL('../tracker/file.ts', import.meta.url).href
 let wait = (fact: () => unknown | Promise<unknown>, label: string) =>
   until(fact, { timeout: 15_000, label })
 
-test('restart drains tracker intake without losing its spool or coupling its web', async () => {
+test('restart drains tracker intake without losing its spool or a web request', async () => {
   let dir = await Deno.makeTempDir({ prefix: 't63998-handover-' })
   let children: {
     unit: string
@@ -49,11 +50,12 @@ test('restart drains tracker intake without losing its spool or coupling its web
   let plugin = `${dir}/intake`
   let work = `${dir}/work.json`
   let tracker = `${dir}/tracker.json`
-  let start = (unit: string, config: string, web = false) => {
+  let start = (unit: string, config: string) => {
     let name = unit.slice(0, -'.service'.length).replace('@', '-')
-    let args = web
-      ? ['serve', '--no-duties']
-      : ['work', '--ready', `${dir}/${name}.ready`]
+    let ready = ['--ready', `${dir}/${name}.ready`]
+    let args = unit.includes('-web@')
+      ? ['serve', '--no-duties', '--share', ...ready]
+      : ['work', ...ready]
     let proc = new Deno.Command(Deno.execPath(), {
       args: ['run', '-A', '--config', root, cli, '--config', config, ...args],
       cwd: dir,
@@ -146,8 +148,26 @@ test('restart drains tracker intake without losing its spool or coupling its web
     let oldTracker = start('probe-tracker@old.service', tracker)
     await wait(() => exists(`${dir}/probe-work-old.ready`), 'primary ready')
     await wait(() => exists(`${dir}/probe-tracker-old.ready`), 'tracker ready')
-    let web = start('probe-tracker-web.service', tracker, true)
+    let web = start('probe-tracker-web@old.service', tracker)
     await wait(() => answering(ports[1]), 'tracker HTTP ready')
+    // A client asking all through the handover, on a connection per request.
+    let asked = 0
+    let refused = 0
+    let asking = true
+    let client = (async () => {
+      while (asking) {
+        asked++
+        try {
+          let response = await fetch(`http://127.0.0.1:${ports[1]}/vocab`, {
+            headers: { connection: 'close' },
+          })
+          await response.body?.cancel()
+          if (!response.ok) refused++
+        } catch {
+          refused++
+        }
+      }
+    })()
     let sink = spool(files(`${dir}/spool`).append)
     await caught(new Error('held report'), { sink, eid: 'held-occurrence' })
     await wait(() => exists(`${dir}/held`), 'tracker intake in flight')
@@ -172,22 +192,17 @@ test('restart drains tracker intake without losing its spool or coupling its web
         start(units[0], units[0].startsWith('probe-work@') ? work : tracker)
       } else if (action == 'stop') {
         for (let unit of units) stop(unit)
-      } else if (action == 'restart') {
-        for (let unit of units) {
-          let child = stop(unit)
-          void exit(child).then(() => start(unit, tracker, true))
-        }
       }
       return Promise.resolve({ code: 0, stdout: '', stderr: '' })
     }
     await restart({
       runtimeDir: dir,
       run,
-      workers: [
+      roles: [
         { unit: 'probe-work', old: [old.unit] },
         { unit: 'probe-tracker', old: [oldTracker.unit] },
+        { unit: 'probe-tracker-web', old: [web.unit] },
       ],
-      web: [web.unit],
       ready: async (path) => {
         let found = await exists(path)
         if (found) events.push('ready')
@@ -200,14 +215,16 @@ test('restart drains tracker intake without losing its spool or coupling its web
       'ready',
       'start',
       'ready',
+      'start',
+      'ready',
       'stop',
-      'restart',
     ])
     await exit(old)
-    await wait(
-      () => web.ended && answering(ports[1]),
-      'tracker HTTP rolled during intake drain',
-    )
+    await exit(web)
+    asking = false
+    await client
+    assert(asked > 0)
+    assertEquals(refused, 0, `${refused} of ${asked} requests failed`)
     assert(!oldTracker.ended, 'tracker lost the intake waiting to acknowledge')
     assert((await Array.fromAsync(files(`${dir}/spool`).source())).length > 0)
     await caught(new Error('after handover'), { sink, eid: 'next-occurrence' })

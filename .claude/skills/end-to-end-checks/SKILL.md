@@ -10,7 +10,7 @@ description: >
   or verifying UI, query, write path or migration by hand, even if asked only
   "make sure it works" or "check it". `platform-visualize` is causal observation,
   not proof; proving its page and CLI also takes this skill. Automated tests
-  are `testing`; a manual probe runs apart from the live graph and yak.service.
+  are `testing`; a manual probe runs apart from the live graph and its web units.
 ---
 
 # Probing a change

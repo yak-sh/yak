@@ -128,7 +128,7 @@ test('ordinary serve fallback outlives HTTP shutdown', async () => {
   }
 })
 
-test('restart CLI queues candidate before old stop with no blocking shutdown', async () => {
+test('restart CLI queues replacements before old stops with no blocking shutdown', async () => {
   let dir = await Deno.makeTempDir({ prefix: 'yak-restart-cli-' })
   let run: ReturnType<typeof child> | undefined
   try {
@@ -141,16 +141,16 @@ printf '%s\\n' "$*" >> "$XDG_RUNTIME_DIR/calls"
 case "$*" in
   '--user list-units '*)
     printf '%s\\n' 'yak-work@old.service loaded active running old'
+    printf '%s\\n' 'yak-web@old.service loaded active running old'
     ;;
-  '--user --no-block start yak-work@'*)
+  '--user --no-block start '*)
     unit="$4"
-    instance="\${unit#yak-work@}"
+    role="\${unit%%@*}"
+    instance="\${unit#*@}"
     instance="\${instance%.service}"
-    printf ready > "$XDG_RUNTIME_DIR/yak-work-$instance.ready"
-    printf '%s\\n' ready >> "$XDG_RUNTIME_DIR/calls"
+    printf ready > "$XDG_RUNTIME_DIR/$role-$instance.ready"
     ;;
-  '--user --no-block stop yak-work@old.service') ;;
-  '--user --no-block restart yak.service') ;;
+  '--user --no-block stop yak-work@old.service yak-web@old.service') ;;
   *)
     # Refuse any synchronous shutdown request instead of touching systemd.
     exit 91
@@ -161,21 +161,19 @@ esac
     await Deno.chmod(`${dir}/systemctl`, 0o755)
     run = child(dir, ['restart'], { PATH: dir, XDG_RUNTIME_DIR: dir })
     let result = await run.exit()
-    let candidate = text(result.stdout).trim()
-    assert(/^yak-work@[\w-]+\.service$/.test(candidate), candidate)
-    assert(candidate != 'yak-work@old.service')
-    assertEquals((await Deno.readTextFile(`${dir}/calls`)).trim().split('\n'), [
-      '--user list-units --state=active --plain --no-legend --no-pager ' +
-      'yak-work@*.service yak-tracker.service yak-tracker@*.service yak.service yak-tracker-web.service',
-      `--user --no-block start ${candidate}`,
-      'ready',
-      '--user --no-block stop yak-work@old.service',
+    let said = text(result.stdout).trim().split('\n')
+    let units = said.map((line) => line.split(' ')[0])
+    assertEquals(units.map((u) => u.split('@')[0]), ['yak-work', 'yak-web'])
+    assertEquals(said.map((line) => line.split('; ')[1]), [
+      'stopping yak-work@old.service',
+      'stopping yak-web@old.service',
     ])
-    let instance = candidate.slice('yak-work@'.length, -'.service'.length)
-    assertEquals(
-      await Deno.readTextFile(`${dir}/yak-work-${instance}.ready`),
-      'ready',
-    )
+    let calls = (await Deno.readTextFile(`${dir}/calls`)).trim().split('\n')
+    assertEquals(calls.slice(1), [
+      `--user --no-block start ${units[0]}`,
+      `--user --no-block start ${units[1]}`,
+      '--user --no-block stop yak-work@old.service yak-web@old.service',
+    ])
   } finally {
     run?.kill('SIGKILL')
     await run?.output

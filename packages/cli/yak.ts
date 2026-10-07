@@ -221,7 +221,8 @@ export let own: Command[] = [
   {
     name: 'restart',
     description:
-      'Hand over the box duty roles and web processes without waiting',
+      "Hand the box's workers and webs to replacements: returns once every " +
+      'replacement is ready, while the old units stop on their own',
     inputSchema: { type: 'object', properties: {} },
     run: async (_args, c) => {
       let runtimeDir = Deno.env.get('XDG_RUNTIME_DIR')

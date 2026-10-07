@@ -184,15 +184,17 @@ bodies or name their files. What it can't find anywhere is two things:
   stop` stops managed spawns and refuses a native one as "not a managed
   session" (T-42246).
 - **Restarting**: `yak restart` is the agent's restart door. It waits for a new
-  independent `yak-work@` worker to be ready, then queues the old workers'
-  graceful drain and the web restart; it doesn't sit in a shell waiting for
-  shutdown. `yak.service` runs `yak serve --no-duties`, so web and session
-  work are separate. A draining worker takes no new step and lets its step in
-  flight finish, a model request or a tool call that may run for minutes, and
-  the journal says which runs it's waiting on (@yaks/process/wind,
-  packages/cli/drain.ts). A second interrupt forces shutdown and may cut off a
-  step or an external action, so it isn't lossless. An interrupted step is
-  reported to the session (packages/session/react.ts).
+  independent `yak-work@` worker and a new `yak-web@` web to be ready, then
+  queues the old units' stops; it doesn't sit in a shell waiting for shutdown.
+  The web runs `yak serve --no-duties`, so web and session work are separate,
+  and the new web shares the port with the old, so no request is refused. A
+  draining worker takes no new step and lets its step in flight finish, a model
+  request or a tool call that may run for minutes, and the journal says which
+  runs it's waiting on (@yaks/process/wind, packages/cli/drain.ts). Its unit
+  kills it after 15 minutes (`TimeoutStopSec`), and a second interrupt forces
+  shutdown sooner; either may cut off a step or an external action, so it
+  isn't lossless. An interrupted step is reported to the session
+  (packages/session/react.ts).
 - **Afterwards**, ordinary settled turns keep their machine because the
   session can receive more input. Terminal completion or stopping asks the
   provider to release it; shared machines remain lent while another unfinished
