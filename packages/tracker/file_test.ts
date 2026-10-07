@@ -96,9 +96,9 @@ test('concurrent intake acknowledges records listed by another reader without lo
       `${dir}/2.jsonl`,
       JSON.stringify(record('second')) + '\n',
     )
-    let first = files(dir).source()
+    let first = files(dir).source()[Symbol.asyncIterator]()
     let held = ok((await first.next()).value)
-    let other = files(dir).source()
+    let other = files(dir).source()[Symbol.asyncIterator]()
     let same = ok((await other.next()).value)
     await same.ack()
     await held.ack()
