@@ -17,6 +17,15 @@ test(
         title: 'Inspector',
         access: 'private',
       })
+      await agent.tool('app_files', {
+        app: 'inspect',
+        op: 'write',
+        files: [
+          { path: 'index.html', content: '<h1>Inspector</h1>' },
+          { path: 'vocab.json', content: JSON.stringify({ $defs: {} }) },
+        ],
+      })
+      await agent.tool('app_deploy', { app: 'inspect' })
       let token = await bearerFor(k, owner.cookie)
       let space = owner.email.split('@')[0]
       let headers = { authorization: `Bearer ${token}` }

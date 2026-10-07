@@ -1364,19 +1364,20 @@ export class Store {
   // every request selects its declarations here, so a failed release keeps
   // answering with the old vocabulary and commands even after preparation.
   #select(req: Request): {
-    toolsMoved: boolean
+    deploymentMoved: boolean
     effects: (() => void | Promise<void>)[]
   } {
-    let unchanged = () => ({ toolsMoved: false, effects: [] })
+    let unchanged = () => ({ deploymentMoved: false, effects: [] })
     if (this.#candidate(req)) return unchanged()
     let release = req.headers.get('x-yak-release')
     if (release == null || !/^[a-z0-9-]+$/.test(release)) return unchanged()
     let active = this.#get('release')
     if (active == release) return unchanged()
-    let toolsMoved = false
+    let deploymentMoved = false
     let effects: (() => void | Promise<void>)[] = []
     this.#atomic(() => {
       if (active == null) {
+        deploymentMoved = release != '0' && !this.#get('descriptions')
         this.#put('release', release)
         return
       }
@@ -1413,9 +1414,10 @@ export class Store {
         }
         this.#put('seeded', release)
       }
-      toolsMoved = this.#get('tools') != toolsWas
+      deploymentMoved = this.#get('tools') != toolsWas ||
+        this.#get('vocab') != was || !this.#get('descriptions')
     })
-    return this.#refused ? unchanged() : { toolsMoved, effects }
+    return this.#refused ? unchanged() : { deploymentMoved, effects }
   }
 
   async #enter(draft: boolean): Promise<() => void> {
@@ -2633,7 +2635,7 @@ export class Store {
     await this.#live.wake()
     // A read does not owe deployment work. App declarations, descriptions and
     // shipped rows are installed by deployment POSTs, never by an eviction.
-    if (selected.toolsMoved) await this.#deployed()
+    if (selected.deploymentMoved) await this.#deployed()
     for (let run of selected.effects) await run()
 
     return null
