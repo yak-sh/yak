@@ -325,6 +325,11 @@ test('only the fully serving sibling with matching upload inputs is reusable', (
   assertEquals(sameSibling('new', [old, now]), true)
   assertEquals(sameSibling('old', [old, now]), false)
   assertEquals(sameSibling('new', null), false)
+  assertEquals(sameSibling('new', [null]), false)
+  assertEquals(
+    sameSibling('new', [{ ...now, created_on: 'not a date' }]),
+    false,
+  )
   assertEquals(sameSibling('new', []), false)
   assertEquals(sameSibling('new', [{ ...now, annotations: {} }]), false)
   assertEquals(

@@ -223,7 +223,12 @@ export let runWrangler = async (
  * digest of exactly these bundled modules and configuration. Old releases
  * without a digest, failed reads and split deployments always upload. */
 export let sameSibling = (digest: string, deployments: unknown): boolean => {
-  if (!Array.isArray(deployments)) return false
+  if (
+    !Array.isArray(deployments) ||
+    deployments.some((d) =>
+      !d || typeof d != 'object' || !Number.isFinite(Date.parse(d.created_on))
+    )
+  ) return false
   let latest =
     deployments.toSorted((a, b) =>
       Date.parse(b.created_on) - Date.parse(a.created_on)
@@ -271,6 +276,7 @@ let uploadSibling = async (
     dir: join(dir, '.wrangler'),
     prefix: 'sibling-',
   })
+  let started = performance.now()
   let query = async (argv: string[]) => {
     let result = await new Deno.Command('env', {
       args: [...PINNED.flatMap((v) => ['-u', v]), ...WRANGLER, ...argv],
@@ -298,6 +304,11 @@ let uploadSibling = async (
         modules[file.name] = Deno.readFileSync(join(output, file.name))
       }
     }
+    console.log(
+      `${config}: bundled and read serving deployment in ${
+        ((performance.now() - started) / 1000).toFixed(3)
+      }s`,
+    )
     let digest = await siblingDigest(
       JSON.stringify({
         config: Deno.readTextFileSync(join(dir, config)),
@@ -331,7 +342,13 @@ let uploadSibling = async (
       annotated[message + 1] = annotated[message + 1].slice(0, 40) +
         `\ninputs:${digest}`
     } else annotated.push('--message', `inputs:${digest}`)
-    return await run(annotated, true)
+    let result = await run(annotated, true)
+    console.log(
+      `${config}: upload path finished in ${
+        ((performance.now() - started) / 1000).toFixed(3)
+      }s`,
+    )
+    return result
   } finally {
     Deno.removeSync(output, { recursive: true })
   }
