@@ -171,6 +171,15 @@ pointer, not the truth (M-37958).
   the owner asked for; one he never asked for goes back to him before you call
   it done. Shipped tiles were 400 PNGs served from yaks.app, where he had asked
   for the page to chart each region once.
+- A question it says only the owner can answer: find who set the constraint it
+  ran into before passing it on. A brief tells an agent to stop and ask rather
+  than guess, so it asks about anything that reads like policy, including
+  numbers we wrote ourselves. A threshold a design marked as a guess, a default
+  we picked, a trade between two of our own recommendations is yours to
+  decide: decide it, write the decision and the reason on the design, and send
+  the answer back. His words, spending, irreversible acts and his preferences
+  are what go to him; a question that is ours, passed up to him, costs him the
+  decision and the context to make it.
 - File what it found as tasks, one thing each, and send follow-ups to the agent
   that holds the context rather than a new one.
 - Tell the owner what changed for him, in plain words, and only what he needs
