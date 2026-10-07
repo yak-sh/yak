@@ -55,7 +55,12 @@ let fixture = async () => {
           home: {
             component: true,
             type: 'object',
-            properties: { worktree: { type: 'string', ref: 'worktree' } },
+            properties: { machine: { type: 'string', ref: 'machine' } },
+          },
+          machine: {
+            component: true,
+            type: 'object',
+            properties: { address: { type: 'string' } },
           },
           process: { component: true, type: 'object' },
           exit: { component: true, type: 'object' },
@@ -116,10 +121,10 @@ test('an idle checkout stays while a graph session or local process uses it', as
     let occupied = await f.cut('occupied')
     await f.land(occupied)
     let tree = await discover(f.g, busy)
-    await f.g.apply([{
+    await f.g.apply([{ entity: tree.entity, machine: { address: busy } }, {
       entity: { eid: 'session' },
       session: { status: 'running' },
-      home: { worktree: tree.entity.eid },
+      home: { machine: tree.entity.eid },
     }])
     child = new Deno.Command('cat', {
       cwd: occupied,
@@ -155,10 +160,10 @@ test('a settled transcript keeps its checkout until its process exits', async ()
     let path = await f.cut('draining')
     await f.land(path)
     let tree = await discover(f.g, path)
-    await f.g.apply([{
+    await f.g.apply([{ entity: tree.entity, machine: { address: path } }, {
       entity: { eid: 'draining' },
       session: { status: 'settled' },
-      home: { worktree: tree.entity.eid },
+      home: { machine: tree.entity.eid },
       process: {},
     }])
     await collect(f.g, f.common, IDLE, later)

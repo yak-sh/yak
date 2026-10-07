@@ -1,18 +1,7 @@
-// The work this package keeps doing while a process is up
-// (`@yaks/git/service`): taking back the worktrees nobody takes back. An agent
-// cuts a worktree for its task, lands it and moves on, and nothing removed it:
-// 228 of them, 73 GB, filled the root disk in two days. The harness takes back
-// the worktrees it creates when their session ends (@yaks/harness
-// worktrees.ts). This takes back every other one, in every repository the
-// graph knows, once it holds nothing (`holds`) and Git has not touched it for
-// `idle`.
-//
-// A clean worktree whose commits are on main can go once no graph session or
-// local process uses it. Git's own refusal stands behind those checks. The
-// idle wait avoids taking back a checkout an agent has just landed. A worktree
-// the harness created (`managed`) is left to the harness, which brings one back when its session resumes; one
-// that has a row is brought up to date before it goes, as the harness does,
-// so the row records the commit it stood at.
+// Host-checkout maintenance: idle, landed worktrees can be reclaimed only
+// when no graph session's explicitly attached machine or local process uses
+// them. Machine-provisioned sandboxes are their provider's business, not this
+// service's. Managed checkout observations remain restore history.
 
 import type { Comp, Graph } from '@yaks/graph'
 import { sleep } from '@yaks/effects'
@@ -70,10 +59,10 @@ export let collect = async (
       let cwd = (b.home as Comp).cwd
       if (typeof cwd == 'string') paths.add(cwd)
     }
-    let ids = sessions.map((b) => (b.home as Comp).worktree)
+    let ids = sessions.map((b) => (b.home as Comp).machine)
       .filter((id): id is string => typeof id == 'string')
     for (let row of await g.get([...new Set(ids)])) {
-      let path = (row.worktree as Comp | undefined)?.path
+      let path = (row.machine as Comp | undefined)?.address
       if (typeof path == 'string') paths.add(path)
     }
     return new Set(
