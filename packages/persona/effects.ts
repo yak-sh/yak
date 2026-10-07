@@ -24,7 +24,11 @@ import { EDGE } from '@yaks/edge'
 import { DOC } from '@yaks/doc'
 import { sync } from '@yaks/mirror'
 import { personaMirror, remembered } from './files.ts'
-import { skillEffects, type SkillHost } from './skill-effects.ts'
+import {
+  skillEffects,
+  type SkillHost,
+  type SkillRuntime,
+} from './skill-effects.ts'
 
 /** What this plugin reads from its entry in a config. */
 export type Options = { files?: boolean; skills?: boolean }
@@ -32,12 +36,17 @@ export type Options = { files?: boolean; skills?: boolean }
 /** How long a burst of writes settles before one pass answers all of it. */
 export let AFTER = 1_000
 
+/** Injectable boundaries for tests: the skills' (./skill-effects.ts), and how
+ * long a burst settles. */
+export type Runtime = SkillRuntime & { after?: number }
+
 /** The code that keeps the persona files current, when `files` is on. */
 export let effects = (
   host: SkillHost,
   options: Options = {},
+  runtime: Runtime = {},
 ): Handlers => {
-  let skills = skillEffects(host, options)
+  let skills = skillEffects(host, options, runtime)
   if (!options.files) return skills
   let db = host.config?.db ?? Deno.env.get('DB_PATH')
   let said = new Set<Eid>()
@@ -59,7 +68,7 @@ export let effects = (
   let soon = () => {
     if (host.stopping?.aborted) return
     clearTimeout(timer)
-    timer = setTimeout(() => last = last.then(pass), AFTER)
+    timer = setTimeout(() => last = last.then(pass), runtime.after ?? AFTER)
   }
   host.stopping?.addEventListener('abort', () => clearTimeout(timer), {
     once: true,

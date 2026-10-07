@@ -1,28 +1,10 @@
 // The declaration owes work for skill inputs, including their disappearance,
 // and leaves the fleet's unrelated content and links alone.
 import { equal, test } from '@yaks/testing'
-import { graph, identityEid } from '@yaks/graph'
-import { effectDoc, effects } from '@yaks/effects'
-import { loadVocab } from '@yaks/vocab'
-import { ram } from '@yaks/ram'
-import { said } from './testing.ts'
+import { identityEid } from '@yaks/graph'
+import { owing } from './testing.ts'
 
-let fixture = () => {
-  let vocab = loadVocab([...said.docs, effectDoc])
-  let fx = effects(vocab, { owes: 'declared' })
-  let g = graph({ vocab, storage: ram(vocab), plugins: [fx] })
-  let queued = () => g.read('.effect.handler=skill_files')
-  let clear = async () => {
-    await g.apply(
-      (await g.read('.effect')).map((b) => ({
-        entity: b.entity,
-        $delete: true,
-      })),
-      { trusted: true },
-    )
-  }
-  return { g, fx, queued, clear }
-}
+let fixture = () => owing('skill_files')
 
 test('tool content owes no skill reconciliation; skill text and companion files do', async () => {
   let { g, queued, clear } = fixture()

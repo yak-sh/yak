@@ -1,36 +1,10 @@
 // Persona link births must owe durable work, not every edge in the graph;
 // the claimed runs still write the checkout's instruction files.
 import { equal, test, until } from '@yaks/testing'
-import { graph } from '@yaks/graph'
-import { edgeKeywords } from '@yaks/edge'
-import { idKeywords } from '@yaks/id'
-import { effectDoc, effects as registry } from '@yaks/effects'
-import { loadVocab } from '@yaks/vocab'
-import { ram } from '@yaks/ram'
 import { effects } from './effects.ts'
-import { link, said } from './testing.ts'
+import { link, owing } from './testing.ts'
 
-let fixture = () => {
-  let vocab = loadVocab([...said.docs, effectDoc], [edgeKeywords, idKeywords])
-  let errors: unknown[] = []
-  let fx = registry(vocab, {
-    owes: 'declared',
-    write: (b) => g.apply(b, { trusted: true }),
-    report: (e) => void errors.push(e),
-  })
-  let g = graph({ vocab, storage: ram(vocab), plugins: [fx] })
-  let queued = () => g.read('.effect.handler=persona_files')
-  let clear = async () => {
-    await g.apply(
-      (await g.read('.effect')).map((b) => ({
-        entity: b.entity,
-        $delete: true,
-      })),
-      { trusted: true },
-    )
-  }
-  return { g, fx, queued, clear, errors }
-}
+let fixture = () => owing('persona_files')
 
 test('only persona relations owe persona files, including a tag added to an existing edge', async () => {
   let { g, queued, clear } = fixture()
@@ -57,11 +31,15 @@ test('created contains and reads links rewrite persona files through the effects
   let root = await Deno.makeTempDir({ prefix: 'persona-links-' })
   let stopping = new AbortController()
   let { g, fx, queued, errors } = fixture()
-  fx.handle(effects({
-    graph: g,
-    config: { db: `${root}/graph.db` },
-    stopping: stopping.signal,
-  }, { files: true }))
+  fx.handle(effects(
+    {
+      graph: g,
+      config: { db: `${root}/graph.db` },
+      stopping: stopping.signal,
+    },
+    { files: true },
+    { after: 0 },
+  ))
   try {
     await g.apply([
       { entity: { eid: 'project' }, project: {}, repo: { repository: 'repo' } },

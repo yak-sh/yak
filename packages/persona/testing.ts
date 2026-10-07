@@ -19,6 +19,7 @@ import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { docDoc } from '@yaks/doc'
 import { idKeywords } from '@yaks/id'
 import { ram } from '@yaks/ram'
+import { effectDoc, effects } from '@yaks/effects'
 import { personaDoc } from './comp.ts'
 
 let doc: VocabDoc = {
@@ -105,6 +106,31 @@ export let thin: Vocab = loadVocab(
   [edgeDoc, docDoc, personaDoc, { $defs: rest }],
   [edgeKeywords, idKeywords],
 )
+
+/** {@link said} keeping the effects pool's rows: a graph that writes down a
+ * run for every effect it declares, the runs owed to `handler`, a way to clear
+ * every run, and what the pool reported while working. */
+export let owing = (handler: string) => {
+  let vocab = loadVocab([...said.docs, effectDoc], [edgeKeywords, idKeywords])
+  let errors: unknown[] = []
+  let fx = effects(vocab, {
+    owes: 'declared',
+    write: (b) => g.apply(b, { trusted: true }),
+    report: (e) => void errors.push(e),
+  })
+  let g = graph({ vocab, storage: ram(vocab), plugins: [fx] })
+  let queued = () => g.read(`.effect.handler=${handler}`)
+  let clear = async () => {
+    await g.apply(
+      (await g.read('.effect')).map((b) => ({
+        entity: b.entity,
+        $delete: true,
+      })),
+      { trusted: true },
+    )
+  }
+  return { g, fx, queued, clear, errors }
+}
 
 /** A graph over a fresh in-memory store. */
 export let world = (vocab: Vocab = said): Graph =>
