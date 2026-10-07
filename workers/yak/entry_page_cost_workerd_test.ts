@@ -24,3 +24,12 @@ test('descriptor hints do not read every target component column', async () => {
   )
   assertEquals(report.total.written, 0)
 })
+
+test('one patch reuses identity ids it just resolved', async () => {
+  let k = workerd(),
+    r = await fetch(`${k.base}/__play_cost/?descriptorgather=1&knownpatch=1`)
+  assertEquals(r.status, 200, await r.clone().text())
+  let report = await r.json()
+  console.log('KNOWN_PATCH_COST', JSON.stringify(report))
+  assert(report.total.read <= 10, `known patch reads ${report.total.read}`)
+})

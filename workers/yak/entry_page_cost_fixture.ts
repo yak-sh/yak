@@ -62,7 +62,7 @@ export let entryPageCost = (db: DurableStorage) => {
   }
 }
 
-export let descriptorGatherCost = (db: DurableStorage) => {
+export let descriptorGatherCost = (db: DurableStorage, patch = false) => {
   let vocab = loadVocab([archetypeDoc, {
     $defs: {
       holder: { component: true, type: 'object' },
@@ -103,7 +103,15 @@ export let descriptorGatherCost = (db: DurableStorage) => {
     }
   }
   try {
-    let rows = get(d, vocab, ['hero', descriptor])
+    if (patch) {
+      s.tx((tx) =>
+        tx.patch([{
+          entity: { eid: 'hero' },
+          player: { v0: 'holder', v1: 'holder', v2: 'holder' },
+        }])
+      )
+    }
+    let rows = patch ? [] : get(d, vocab, ['hero', descriptor])
     return { total, rows }
   } finally {
     db.sql.exec = exec

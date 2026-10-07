@@ -38,7 +38,12 @@ export class PlayCost {
   }
   async measure(req: Request): Promise<Response> {
     if (new URL(req.url).searchParams.has('descriptorgather')) {
-      return Response.json(descriptorGatherCost(this.ctx.storage))
+      return Response.json(
+        descriptorGatherCost(
+          this.ctx.storage,
+          new URL(req.url).searchParams.has('knownpatch'),
+        ),
+      )
     }
     if (new URL(req.url).searchParams.has('coldmessages')) {
       return Response.json(

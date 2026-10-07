@@ -109,16 +109,23 @@ let isRef = (v: Vocab, comp: string, prop: string): boolean =>
 // One property's value as what writes it: a reference names its target's eid
 // and the statement looks up the id, a JSON value goes in through `jsonb()`
 // (./jsonb.ts), and a scalar is bound as it is.
-let slot = (v: Vocab, comp: string, prop: string, raw: unknown): Expr =>
+type Resolve = (eid: string) => Expr
+let slot = (
+  v: Vocab,
+  comp: string,
+  prop: string,
+  raw: unknown,
+  resolve: Resolve = owner,
+): Expr =>
   raw != null && isRef(v, comp, prop)
-    ? owner(String(raw))
+    ? resolve(String(raw))
     : isJsonb(v, comp, prop)
     ? jsonb(val(jsonIn(raw)))
     : val(scalar(raw))
 
 /** What the store already knows about an eid: its number, and whether that
  * identity is tombstoned. An eid with no entry has no entity yet. */
-export type Spine = { num: number | null; dead: boolean }
+export type Spine = { id: number; num: number | null; dead: boolean }
 
 /** What the store knows about these eids — one statement and one bound
  * parameter, whatever the batch's size (a Durable Object binds at most 100).
@@ -132,13 +139,19 @@ export let spines = (
   if (!eids.length) return new Map()
   return new Map(
     driver.query(select({
-      cols: [col('eid', 'e'), col('num', 'e'), as(col('entity', 't'), 'dead')],
+      cols: [
+        col('id', 'e'),
+        col('eid', 'e'),
+        col('num', 'e'),
+        as(col('entity', 't'), 'dead'),
+      ],
       from: table('entity', 'e'),
       joins: [
         left(table('tombstone', 't'), eq(col('entity', 't'), col('id', 'e'))),
       ],
       where: among(col('eid', 'e'), each(eids)),
     })).map((r) => [String(r.eid), {
+      id: Number(r.id),
       num: r.num == null ? null : Number(r.num),
       dead: r.dead != null,
     }]),
@@ -240,13 +253,30 @@ export let upsertSql = (
   comp: string,
   patch: Comp,
   absent = false,
+  resolve?: Resolve,
 ): Insert => {
   let cols = Object.keys(patch).filter((c) =>
     v.prop(comp, c)?.computed === false
   )
+  let id = resolve?.(eid)
+  let source = id ? {} : { from: table('entity', 'e') }
   let where = and(
-    eq(col('eid', 'e'), val(eid)),
-    ...(absent ? [lacks(comp)] : []),
+    ...id ? [] : [eq(col('eid', 'e'), val(eid))],
+    ...(absent
+      ? [
+        id
+          ? not(
+            exists(
+              select({
+                cols: [lit(1)],
+                from: table(comp),
+                where: eq(col('entity', comp), id),
+              }),
+            ),
+          )
+          : lacks(comp),
+      ]
+      : []),
   )
   if (!cols.length) {
     return {
@@ -254,7 +284,7 @@ export let upsertSql = (
       or: 'ignore',
       into: comp,
       cols: ['entity'],
-      q: select({ cols: [col('id', 'e')], from: table('entity', 'e'), where }),
+      q: select({ cols: [id ?? col('id', 'e')], ...source, where }),
     }
   }
   // The value each column takes, as a select item beside the owner id: a
@@ -264,8 +294,11 @@ export let upsertSql = (
     into: comp,
     cols: ['entity', ...cols.map(field)],
     q: select({
-      cols: [col('id', 'e'), ...cols.map((c) => slot(v, comp, c, patch[c]))],
-      from: table('entity', 'e'),
+      cols: [
+        id ?? col('id', 'e'),
+        ...cols.map((c) => slot(v, comp, c, patch[c], resolve)),
+      ],
+      ...source,
       where,
     }),
     upsert: absent ? undefined : [{
@@ -316,24 +349,30 @@ let patchOne = (
   eid: string,
   name: string,
   comp: Comp | null,
+  resolve: Resolve = owner,
 ): { first: Insert | Update | Delete; fallback?: () => Insert } => {
-  if (comp == null) return { first: dropSql(eid, name) }
+  if (comp == null) {
+    return {
+      first: { ...dropSql(eid, name), where: eq(col('entity'), resolve(eid)) },
+    }
+  }
   // Insert checks NOT NULL before ON CONFLICT. Update existing rows first,
   // then insert only absent ones: partial patches need no invented defaults
   // or read/merge, and the same ordered statements work in a D1 batch.
   let cols = Object.keys(comp).filter((c) =>
     v.prop(name, c)?.computed === false
   )
-  let fallback = () => upsertSql(v, eid, name, comp, true)
+  let fallback = () =>
+    upsertSql(v, eid, name, comp, true, resolve == owner ? undefined : resolve)
   return cols.length
     ? {
       first: {
         t: 'update',
         table: name,
         set: Object.fromEntries(
-          cols.map((c) => [field(c), slot(v, name, c, comp[c])]),
+          cols.map((c) => [field(c), slot(v, name, c, comp[c], resolve)]),
         ),
-        where: eq(col('entity'), owner(eid)),
+        where: eq(col('entity'), resolve(eid)),
       },
       fallback,
     }
@@ -458,6 +497,8 @@ export let patch = (
   }
   let known = spines(driver, [...new Set(touched(vocab, bundles))])
   let alive = bundles.filter((b) => !known.get(b.entity.eid)?.dead)
+  let ids = new Map([...known].map(([eid, row]) => [eid, row.id]))
+  let resolve: Resolve = (eid) => ids.has(eid) ? val(ids.get(eid)!) : owner(eid)
 
   // What each bundle states its entity's number to be, where the store is
   // adopting rather than minting: a number to take, or `null` for none. Only a
@@ -523,7 +564,12 @@ export let patch = (
   for (let eid of touched(vocab, alive)) {
     if (seen.has(eid)) continue
     seen.add(eid)
-    let e = minted(driver.query(mintSql(eid, own.has(eid) && take(eid))))
+    let rows = driver.query({
+      ...mintSql(eid, own.has(eid) && take(eid)),
+      returning: [...IDENTITY, col('id')],
+    })
+    let e = minted(rows)
+    if (rows[0]) ids.set(eid, Number(rows[0].id))
     if (e) born.push(e)
   }
   // A spine an earlier reference minted is numbered now, if it still carries
@@ -573,11 +619,11 @@ export let patch = (
     let eid = b.entity.eid
     for (let [name, comp] of comps(b)) {
       if (comp != null && fresh.has(eid) && full(name, comp)) {
-        effect(driver, upsertSql(vocab, eid, name, comp))
+        effect(driver, upsertSql(vocab, eid, name, comp, false, resolve))
         moved?.(eid, name, true)
         continue
       }
-      let { first, fallback } = patchOne(vocab, eid, name, comp)
+      let { first, fallback } = patchOne(vocab, eid, name, comp, resolve)
       let changes = ran(driver, first)
       // A write's own result avoids the absent INSERT when UPDATE hit. D1
       // still sends the complete plan atomically via patchSql; no read/merge.
