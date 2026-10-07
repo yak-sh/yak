@@ -112,7 +112,9 @@ export let resolved = async (
       }
       throw error
     }
-    let held = new Map((await graph.get(eids)).map((b) => [b.entity.eid, b]))
+    let held = new Map(
+      (await graph.get(eids, [kind])).map((b) => [b.entity.eid, b]),
+    )
     for (let i = 0; i < said.length; i++) {
       let row = held.get(eids[i])
       if (
