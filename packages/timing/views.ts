@@ -61,7 +61,7 @@ let traceTile = <Node>(e: Bundle, h: H<Node>, ctx: RenderContext<Node>) => {
     h('span', { class: 'Tile_Title' }, named(e)),
     ' ',
     h('span', { class: 'Tile_Kind' }, str(t.op)),
-  ], [when(s, t.at), store(e, s), str(comp(e, 'during').kind)])
+  ], ['box', when(s, t.at), store(e, s), str(comp(e, 'during').kind)])
 }
 
 /// measured({entity: {eid: 's'}, span: {op: 'rule', name: 'r'}, elapsed: {ms: 1.5}, rows_read: {n: 1450}})

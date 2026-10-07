@@ -213,3 +213,41 @@ application and use this home query:
 
 The trace list is at `/?q=.trace`. Missing affected context or missing traces
 are stated; they are not inferred from a stack's text.
+
+## Reading remote traces on the box
+
+The `./routes` facet owns read-through access to the independent
+[tracker Worker](../../workers/tracker/README.md). It signs a one-minute
+platform-admin ticket on the server and forwards only `/traces` and `/trace`.
+The box keeps no remote bundles. The timing views use the returned bundles for
+both sides, label them `box` or `yaks.app`, and keep comparisons within the
+selected remote scope and matching request/store context.
+
+Set the Worker's URL and signing secret in this plugin's `with`:
+
+```json
+{
+  "use": "@yaks/tracker",
+  "with": {
+    "remote": {
+      "url": "https://your-tracker-worker.example",
+      "secret": { "secret": "TRACKER_SECRET" }
+    }
+  }
+}
+```
+
+Preserve the plugin's other options. The CLI resolves the secret from its vault
+each time it is read; never put its value in a config. The secret must match the
+Worker's `TRACKER_SECRET`. `./ticket` signs the ticket shared by the box and
+Worker authorization.
+
+With `@yaks/timing` composed, open `/?q=.trace`, choose `yaks.app`, and read
+`platform` or supply a space's global eid in **Tracker scope**. The independent
+Worker has no directory binding and cannot enumerate spaces. Each list page
+contains up to 100 traces; **Older traces** follows the Worker's cursor. Opening
+a trace reads every span page before drawing its flamegraph. Comparison uses the
+latest hundred traces in that scope. Missing configuration, unavailable
+credentials and refused reads show as errors, not empty lists. Tickets never
+reach the browser, redirects are refused, and HTTP remote URLs are allowed only
+on loopback for local probes.

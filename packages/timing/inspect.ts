@@ -31,6 +31,7 @@ import {
   noun,
   ordinary,
   peers,
+  sameKind,
   spans,
   str,
   totals,
@@ -38,6 +39,16 @@ import {
 } from './readings.ts'
 import { Flamegraph } from './Flamegraph.ts'
 import { Gaps, Line, list, Places } from './Places.ts'
+import {
+  address,
+  remoteAnswers,
+  Scope,
+  Side,
+  type Tree,
+  tree,
+} from './remote.ts'
+import { useEffect, useState } from 'preact/hooks'
+import { Button } from '@yaks/ui'
 
 let CONTEXT = ['entity', 'space', 'app', 'process', 'request']
 let WORST = 5
@@ -118,7 +129,7 @@ let Beside = (
   let t = comp(e, 'trace')
   let found = io.ask({ peers: peers(e) })
   let others = (found.peers?.rows ?? []).filter((b) =>
-    b.entity.eid != e.entity.eid
+    b.entity.eid != e.entity.eid && sameKind(b, e)
   )
   let tops = io.ask({
     tops: others.length
@@ -148,6 +159,14 @@ let Beside = (
       )
       : null,
   )
+  if (found.peers?.error || tops.tops?.error) {
+    return h(
+      Section,
+      {},
+      title,
+      status(found.peers?.error ? found.peers : tops.tops, 'comparison'),
+    )
+  }
   if (!found.peers?.ready || (others.length && !tops.tops?.ready)) {
     return h(Section, {}, title, status(undefined, 'traces of this kind'))
   }
@@ -233,7 +252,13 @@ let TracePage = ({ e, io, got }: Props): JSX.Element => {
         h(Head.Id, {}, io.id(e)),
         h(Head.Kind, {}, str(t.op)),
       ),
-      h(Head.Sub, {}, h(Where, { io, e })),
+      h(
+        Head.Sub,
+        {},
+        str(got.source?.rows[0]?.entity.eid) || 'box',
+        ' · ',
+        h(Where, { io, e }),
+      ),
       h(
         Head.Facts,
         {},
@@ -321,6 +346,7 @@ let TraceTile = ({ e, io, got }: Props): JSX.Element => {
       Tile.Sub,
       {},
       [
+        str(got.source?.rows[0]?.entity.eid) || 'box',
         io.when(str(t.at)),
         ...root.length ? axes.map((a) => amount(a, all[a])) : [],
       ].join(' · '),
@@ -406,7 +432,9 @@ let Measured = (
 
 /** Every recorded kind of request in each store, worst first on the measure
  * chosen, each trace a row of its root's measurements. */
-let TraceList = ({ io, query }: { io: Io; query: string }): JSX.Element => {
+export let TraceList = (
+  { io, query, side = 'box' }: { io: Io; query: string; side?: string },
+): JSX.Element => {
   let state = `timing-list:${query}`, axis = axisOf(io, state)
   let line = query.includes('*') ? query : `${query} *`
   let got = io.ask({
@@ -441,10 +469,12 @@ let TraceList = ({ io, query }: { io: Io; query: string }): JSX.Element => {
   return h(
     'article',
     { 'data-trace-list': true },
+    h(Side, { remote: side == 'yaks.app' }),
     h(
       Head,
       {},
       h(Head.Title, {}, 'Traces'),
+      h(Head.Sub, {}, side),
       h(
         Head.Sub,
         {},
@@ -458,6 +488,7 @@ let TraceList = ({ io, query }: { io: Io; query: string }): JSX.Element => {
     ),
     h(Measures, { io, id: state, axis }),
     status(got.traces, 'traces'),
+    status(tops.tops, 'root measurements'),
     !traces.length && got.traces?.ready
       ? h(Section.Sub, {}, 'No recorded trace matches this query.')
       : null,
@@ -490,6 +521,121 @@ let TraceList = ({ io, query }: { io: Io; query: string }): JSX.Element => {
   )
 }
 
+/** Remote data uses these very same views; only their read and link doors
+ * change. Nothing is admitted to the box or page's durable graph. */
+let Remote = (
+  { io, params }: { io: Io; params: URLSearchParams },
+): JSX.Element => {
+  let scope = params.get('scope') || 'platform', eid = params.get('trace') || ''
+  let after = params.get('after') || ''
+  let [page, setPage] = useState<
+    { rows: Bundle[]; next?: string; error?: string }
+  >()
+  useEffect(() => {
+    let abort = new AbortController()
+    let q = new URLSearchParams({
+      scope,
+      limit: '100',
+      ...after ? { after } : {},
+    })
+    void fetch(`/tracker/traces?${q}`, { signal: abort.signal }).then(
+      async (r) => {
+        let p = await r.json()
+        if (!r.ok) throw Error(p.error || 'Remote traces unavailable')
+        if (!abort.signal.aborted) setPage(p)
+      },
+    ).catch((e) => {
+      if (!abort.signal.aborted) setPage({ rows: [], error: e.message })
+    })
+    return () => abort.abort()
+  }, [scope, after])
+  let remoteIo: Io = {
+    ...io,
+    link: (id) => address(scope, id),
+    ask: (asks) => remoteAnswers(io, scope, asks),
+  }
+  // The list answer is the selected Worker page. Its root measurements and
+  // comparison asks still use the same shared query evaluator.
+  let listIo: Io = {
+    ...remoteIo,
+    ask: (asks) => {
+      let rest = Object.fromEntries(
+        Object.entries(asks).filter(([k]) => k != 'traces' && k != 'count'),
+      )
+      let got = remoteAnswers(io, scope, rest)
+      return {
+        ...got,
+        ...'traces' in asks
+          ? {
+            traces: {
+              rows: page?.rows ?? [],
+              ready: !!page && !page.error,
+              error: page?.error,
+            },
+          }
+          : {},
+        ...'count' in asks ? { count: { rows: [], ready: !!page } } : {},
+      }
+    },
+  }
+  let [selected, setSelected] = useState<
+    { key: string; tree?: Tree; error?: string }
+  >()
+  let selectedKey = `${scope}:${eid}`
+  useEffect(() => {
+    let abort = new AbortController()
+    if (eid) {
+      void tree(scope, eid, abort.signal).then((t) => {
+        if (!abort.signal.aborted) setSelected({ key: selectedKey, tree: t })
+      }).catch((e) => {
+        if (!abort.signal.aborted) {
+          setSelected({ key: selectedKey, error: e.message })
+        }
+      })
+    }
+    return () => abort.abort()
+  }, [scope, eid])
+  let held = selected?.key == selectedKey ? selected : undefined
+  let answer = {
+    rows: held?.tree?.spans ?? [],
+    ready: !!held?.tree,
+    error: held?.error,
+  }
+  return h(
+    'div',
+    {},
+    h(Scope, { scope }),
+    eid
+      ? [
+        h(Side, { remote: true }),
+        h('a', { href: address(scope) }, 'All traces in this scope'),
+        status(answer, 'remote trace'),
+        held?.tree
+          ? h(TracePage, {
+            e: held.tree.trace,
+            io: remoteIo,
+            ctx: {},
+            got: {
+              spans: answer,
+              source: { rows: [{ entity: { eid: 'yaks.app' } }], ready: true },
+            },
+          })
+          : null,
+      ]
+      : [
+        h(TraceList, { io: listIo, query: '.trace', side: 'yaks.app' }),
+        page?.next
+          ? h(
+            Button,
+            { href: address(scope, undefined, page.next) },
+            'Older traces',
+          )
+          : null,
+        after ? h(Button, { href: address(scope) }, 'Newest traces') : null,
+      ],
+  )
+}
+
 /** The pages this package draws in the inspector. */
 export let inspectViews: View[] = [
   {
@@ -509,6 +655,12 @@ export let inspectViews: View[] = [
     match: parse(".entity.eid~='browse-query:'"),
     Render: (props) => {
       let query = str(props.ctx.query)
+      let params = typeof location == 'undefined'
+        ? new URLSearchParams()
+        : new URLSearchParams(location.search)
+      if (params.get('side') == 'yaks.app') {
+        return h(Remote, { io: props.io, params })
+      }
       return /(^|[\s&(|])\.trace(?:[.\s&)|]|$)/.test(query)
         ? h(TraceList, { io: props.io, query })
         : h(baseViews.find((v) => v.view == 'Inspect.Query')!.Render, props)

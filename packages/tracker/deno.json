@@ -12,7 +12,9 @@
     "./tools": "./tools.ts",
     "./service": "./service.ts",
     "./file": "./file.ts",
-    "./views": "./views.ts"
+    "./views": "./views.ts",
+    "./routes": "./routes.ts",
+    "./ticket": "./ticket.ts"
   },
   "license": "Apache-2.0",
   "description": "Groups tracked errors into bugs, reports without interrupting callers, and retains and notifies their occurrences.",

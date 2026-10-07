@@ -1,17 +1,11 @@
 // Tracker access is a short-lived, signed scope, not a directory lookup. Yak
 // vouches for a member after its own authorization; the box holds platform scope.
 
-import { opened, seal } from '../yak/lib/token.ts'
+import { opened } from '../yak/lib/token.ts'
 import { platform } from './core.ts'
 
-export type Access = {
-  scope: string
-  person: string
-  exp: number
-  admin?: boolean
-}
-export let sign = (access: Access, secret: string) =>
-  seal('tracker', access, secret)
+import type { Access } from '@yaks/tracker/ticket'
+export { type Access, sign } from '@yaks/tracker/ticket'
 export let authorize = async (
   request: Request,
   secret: string | undefined,
