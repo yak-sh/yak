@@ -484,3 +484,30 @@ test('metadata projection carries classified spines without a duplicate identity
     close()
   }
 })
+
+test('one summary computation hydrates overlapping metadata identities once', async () => {
+  let { tx, close } = await setup('sqlite', fixture())
+  let seen = new Set<string>(), repeated = 0
+  let counted: Pick<Graph, 'read' | 'get'> = {
+    read: async (query, opts) => {
+      let found = await tx.read(query, opts)
+      if (
+        String(query).includes('.fields=entity.eid,entity.archetype,doc.title')
+      ) {
+        for (let b of found) {
+          if (seen.has(b.entity.eid)) repeated++
+          seen.add(b.entity.eid)
+        }
+      }
+      return found
+    },
+    get: (ids, comps) => tx.get(ids, comps),
+  }
+  try {
+    let first = await readInbox(counted, vocab, 'person')
+    assert(first.length > 0)
+    assertEquals(repeated, 0)
+  } finally {
+    close()
+  }
+})

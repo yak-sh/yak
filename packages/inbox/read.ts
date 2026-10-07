@@ -153,9 +153,15 @@ let reads = (tx: ReadTx, has: Words, mode: Mode) => {
     ...(mode == 'search' ? ['doc.body', 'content.body'].filter(has) : []),
   ].join(',')
   let descriptors = new Map<string, Set<string>>()
+  // One computation owns one metadata working set. Overlapping discussion
+  // arms must not hydrate the same entity repeatedly; never retain it across
+  // reads, where another commit could change policy.
+  let hydrated = new Map<string, Row>()
   let hydrate = async (members: Row[]): Promise<Row[]> => {
+    let uniqueMembers = unique(members)
     let out: Row[] = []
-    for (let part of batches(unique(members))) {
+    let missing = uniqueMembers.filter((r) => !hydrated.has(r.eid))
+    for (let part of batches(missing)) {
       if (mode == 'detail') {
         out.push(...rows(await tx.get(part.map((r) => r.eid), comps)))
         continue
@@ -216,7 +222,10 @@ let reads = (tx: ReadTx, has: Words, mode: Mode) => {
       }
       out.push(...projected.values())
     }
-    return unique(out)
+    for (let row of out) hydrated.set(row.eid, row)
+    return uniqueMembers.flatMap((r) =>
+      hydrated.has(r.eid) ? [hydrated.get(r.eid)!] : []
+    )
   }
   let read = async (queries: string[]): Promise<Row[]> => {
     let members: Row[] = []
