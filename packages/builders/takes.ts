@@ -42,7 +42,10 @@ export let frozenMove = (row: Bundle, call?: Bundle): Bundle[] => {
 export let takeMove = (row: Bundle, evidence: Bundle[]): Bundle[] => {
   let made = comp(row, 'built')
   if (!made) return []
-  if (!made.call || !made.build || !made.slot) {
+  // Pre-call builders left historical outputs without producing calls. There
+  // is no paid attempt to recover; keep those rows exactly as recorded.
+  if (!made.call) return []
+  if (!made.build || !made.slot) {
     throw new Error(
       `output ${row.entity.eid} has no producing call, build or slot`,
     )

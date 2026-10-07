@@ -169,3 +169,23 @@ test('missing call evidence fails before changing any rows', async () => {
   equal(failed, true)
   equal((await g.get(['new-output']))[0], row)
 })
+
+test('pre-call builder history stays unchanged without invented provenance', () => {
+  let run: Bundle = {
+    entity: { eid: 'ancient-build' },
+    build: { key: 'ancient-key', call: null, inputs: { 0: 203, 1: 38 } },
+  }
+  let output: Bundle = {
+    entity: { eid: 'ancient-output' },
+    built: {
+      build: 'ancient-build',
+      slot: 'summary',
+      key: 'ancient-key',
+      call: null,
+    },
+    doc: { body: 'keep ancient probe content' },
+  }
+  let locator = keyed('output_of', 'ancient-output', 'ancient-build/summary')
+  equal(frozenMove(run), [])
+  equal(takeMove(output, [run, locator]), [])
+})

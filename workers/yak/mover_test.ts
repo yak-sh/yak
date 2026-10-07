@@ -137,6 +137,16 @@ test('builder take rehearsal preserves a store, then conversion moves with no ca
     },
     keyed('output_of', 'take', 'build/kind'),
     keyed('build_of', 'build', buildOf('recipe', '["source"]')),
+    {
+      entity: { eid: 'ancient-build' },
+      build: { builder: 'recipe', call: null },
+    },
+    {
+      entity: { eid: 'ancient-output' },
+      built: { build: 'ancient-build', slot: 'summary', call: null },
+      doc: { body: 'historical pre-call output' },
+    },
+    keyed('output_of', 'ancient-output', 'ancient-build/summary'),
   ])
   // Activate a selected binding with its old paid attempt already recorded.
   await s.apply([{ entity: { eid: 'recipe' }, staged: null }])
@@ -161,8 +171,14 @@ test('builder take rehearsal preserves a store, then conversion moves with no ca
     ['take'],
   )
   assertEquals(await count(s, '.call'), 1)
-  assertEquals(await count(s, '.built'), 1)
-  let [key] = await s.query('.output_of&*')
+  assertEquals(await count(s, '.built'), 2)
+  assertEquals(
+    await s.query('.entity.eid=ancient-build,ancient-output&*'),
+    before.filter((r) =>
+      ['ancient-build', 'ancient-output'].includes(r.entity.eid)
+    ),
+  )
+  let [key] = await s.query('.output_of&.key.of=take&*')
   assertEquals(key.key, { of: 'take', value: 'build/kind/call' })
   let after = await s.query('*')
   let [second] = await s.rehearse()
