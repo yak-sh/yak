@@ -36,6 +36,7 @@ import { Builder } from './build.ts'
 import type { Env, Inbound } from './env.ts'
 import { DIM, MODEL as EMBEDDER } from './embedding.ts'
 import { Store } from './graph.ts'
+import { PLATFORM_STORE } from './door.ts'
 import { Wire as Wired } from './stream.ts'
 import type { Limiter } from './rate.ts'
 import { sha256 } from './versions.ts'
@@ -655,6 +656,7 @@ export let platform = (secret: string, vars: Partial<Env> = {}) => {
     return ctx
   }
   let objects = new Map<string, Store>()
+  let initialized: Promise<Response> | undefined
   let sockets = new Map<string, Wire[]>()
   // What the runtime did to each object, beside what the object did: the
   // restore it was told to wake at and the restart it was asked for, which
@@ -703,7 +705,23 @@ export let platform = (secret: string, vars: Partial<Env> = {}) => {
     STORE: {
       idFromName: (n: string) => n,
       get: (n: unknown) => ({
-        fetch: (r: Request) => Promise.resolve(object(String(n)).fetch(r)),
+        fetch: async (r: Request) => {
+          let store = object(String(n))
+          // The deployed directory carries the platform's shipped integrations
+          // and wakes. The fixture supplies that deployment once, before reads.
+          if (String(n) == PLATFORM_STORE) {
+            initialized ??= store.fetch(
+              new Request('http://store/vocab', {
+                method: 'POST',
+                headers: { 'x-store': PLATFORM_STORE, 'x-yak-kernel': '1' },
+                body: '{}',
+              }),
+            )
+            let deployed = await initialized
+            if (!deployed.ok) throw Error('fixture directory deployment failed')
+          }
+          return store.fetch(r)
+        },
       }),
     },
     WIRE: {
