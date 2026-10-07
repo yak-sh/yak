@@ -10,7 +10,7 @@ import { extend, ux } from './components/registry.ts'
 import { contributedViews, type Facet } from './components/inspect.tsx'
 import { offer } from './components/Navigation.tsx'
 import type { Hosting } from './hosting.ts'
-import { lone } from '@yaks/draft/ui'
+import { lone } from '@yaks/draft/input'
 import { Ux } from '@yaks/ux'
 
 export let mount = async (

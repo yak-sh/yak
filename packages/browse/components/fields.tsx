@@ -26,7 +26,7 @@ import { RANKS } from '../query.ts'
 import { idOf, kindOf, vocab } from '../types.ts'
 import { Float as Floating } from '@yaks/ui'
 import { wellOf, wells } from './wells.ts'
-import { drafts } from '@yaks/draft/ui'
+import { drafts } from '@yaks/draft/input'
 
 /** The page's own graph. */
 export let front = client(

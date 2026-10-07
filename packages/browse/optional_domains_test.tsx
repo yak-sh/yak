@@ -17,7 +17,7 @@ import { Web } from './components/views/Web.tsx'
 import { pasted } from './paste.ts'
 import { sessionQueries } from './tray_query.ts'
 import './domain-host.tsx'
-import { lone } from '@yaks/draft/ui'
+import { lone } from '@yaks/draft/input'
 import { people } from './components/hits.ts'
 
 let docs = vocab.docs

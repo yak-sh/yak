@@ -5,7 +5,7 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./graph": "./graph.ts",
-    "./ui": "./ui.ts"
+    "./input": "./input.ts"
   },
   "license": "Apache-2.0",
   "description": "What a person has typed and not yet sent, kept in the graph per person and place, synced to every interface they use, and merged when two type at once.",

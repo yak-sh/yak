@@ -2,7 +2,7 @@
 // packages know these interfaces, never the app that supplies them.
 import { computed, effect } from '@preact/signals'
 import type { Bundle } from '@yaks/graph'
-import { configureDrafts } from '@yaks/draft/ui'
+import { configureDrafts } from '@yaks/draft/input'
 import { configureComments } from '@yaks/kernel/comment-host'
 import {
   apply,

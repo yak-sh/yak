@@ -66,7 +66,7 @@ Deno, browsers and Workers: the package reaches no runtime API beyond
 
 ## Interface drafts
 
-`./ui` owns the interface's `drafts`, `lone` and `useDraft` hook. Its **draft
+`./input` owns the interface's `drafts`, `lone` and `useDraft` hook. Its **draft
 host** supplies the desk's watch/write client, actor, person query and storage
 through `configureDrafts`; it has no dependency on the application.
 `useDraft(place, ref)` mirrors durable text into a kit `Field`, and its
@@ -76,7 +76,7 @@ Binding needs the interface's client and identity; this sketch is not run
 because it stands in for a connected interface:
 
 ```ts ignore
-import { configureDrafts, drafts } from '@yaks/draft/ui'
+import { configureDrafts, drafts } from '@yaks/draft/input'
 configureDrafts({
   client,
   by: () => actor,

@@ -5,7 +5,7 @@ import type { JSX } from 'preact'
 import { useRef, useState } from 'preact/hooks'
 import type { Bundle, Comp } from '@yaks/graph'
 import { Button, Choices, Field, Notes, Say, Stamp } from '@yaks/ui'
-import { drafts, useDraft } from '@yaks/draft/ui'
+import { drafts, useDraft } from '@yaks/draft/input'
 import { commentHost } from './comment-host.ts'
 import { type Branch, branches, type CommentRow } from './comments.ts'
 
