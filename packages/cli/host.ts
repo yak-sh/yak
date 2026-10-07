@@ -1,3 +1,7 @@
+import { docs as machineDocs } from '@yaks/machine/vocab'
+import { gitDoc } from '@yaks/git/vocab'
+import { resolveSessionHome } from './session_home.ts'
+import { machineCapabilities } from './machines.ts'
 /**
  * The graph a config file names, opened by a process for the roles it serves.
  *
@@ -459,6 +463,16 @@ export let dbOf = (
 // something to guess about — so what is added here is only the difference,
 // never a second copy.
 let said = (docs: VocabDoc[]): VocabDoc[] => {
+  let supplied = new Set(docs.flatMap((d) => Object.keys(d.$defs ?? {})))
+  // Hosts lend machines; their durable records and commit references are host words,
+  // even when no plugin separately contributes these vocabulary facets.
+  let intrinsic = [...machineDocs, gitDoc].map((doc) => ({
+    ...doc,
+    $defs: Object.fromEntries(
+      Object.entries(doc.$defs ?? {}).filter(([name]) => !supplied.has(name)),
+    ),
+  }))
+  docs = [...intrinsic.filter((doc) => Object.keys(doc.$defs).length), ...docs]
   let taken = new Set(docs.flatMap((d) => Object.keys(d.$defs ?? {})))
   let $defs = Object.fromEntries(
     Object.entries(toolsDoc.$defs ?? {}).filter(([name]) => !taken.has(name)),
@@ -978,6 +992,7 @@ let composed = async (
       gone: async (holder) =>
         !!self && !!g && await gone(machine(g), holder, { me: selfEid() }),
     }
+    // Provider factories may retain the graph capability, but do no IO until a session asks.
     authenticate = doorman(graphs, host, self)
     // The clause compilers belong to the store, so they are gathered before it
     // is built: what a query may ask for is settled once, while the host is
@@ -1082,6 +1097,8 @@ let composed = async (
     // `effects` (their facets were never imported anywhere else). Each
     // declared effect has one handler, from whichever plugin gives it code.
     // An effect this config gives no code owes no run.
+    host.machines = await machineCapabilities(host, config, path)
+    host.machines.resolveHome = resolveSessionHome(sql, () => host.graph)
     part?.('bindings')
     observed.graphed()
     let effecting = roles.includes('effects')

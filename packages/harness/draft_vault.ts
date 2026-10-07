@@ -2,7 +2,12 @@
 import type { Saved, Vault } from '@yaks/client'
 import { join, resolve } from '@std/path'
 import { frontend } from './frontend.ts'
-import { dbPath, home } from './paths.ts'
+import { dbOf } from '@yaks/cli/host'
+
+let home = (env: (name: string) => string | undefined) =>
+  env('HARNESS_HOME') || `${env('HOME') || '.'}/.yak`
+let dbPath = (env: (name: string) => string | undefined) =>
+  env('HARNESS_DB') || dbOf({}, env)
 
 export let draftVault = async (directory: string): Promise<Vault> => {
   await Deno.mkdir(directory, { recursive: true, mode: 0o700 })

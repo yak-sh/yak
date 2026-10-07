@@ -29,6 +29,10 @@
             "released"
           ],
           "description": "the provider's last recorded lifecycle state"
+        },
+        "address": {
+          "type": "string",
+          "description": "An existing machine address the configured provider attaches, not a sandbox it owns."
         }
       }
     }

@@ -1,26 +1,23 @@
 # @yaks/harness
 
-An agent runner over a graph, and the host that runs it on this machine with
-SQLite persistence and a terminal interface. It is a `yak` plugin: its verbs are
-tools the `yak` command runs, and its terminal app is how `yak --tui` draws a
-session. The runner composes `@yaks/session` for model execution over
-graph-backed task and transcript storage, and names no machine: it runs on a box
-or in a Cloudflare Worker. The local host adds `@yaks/process` for running
-commands on this machine, a Git checkout per delegated child, MCP servers, and
-the `~/.yak` files. No server is required. Model calls may use an external
-provider; shell tools run on this machine and are not sandboxed.
+An agent runner over a graph, with provider-backed machine tools and a terminal
+interface. It is a `yak` plugin: its verbs are tools the `yak` command runs, and
+its terminal app is how `yak --tui` draws a session. The runner composes
+`@yaks/session` for model execution over graph-backed task and transcript
+storage. A host lends the graph, models, files and machine providers; the runner
+does not assume that a session's commands run beside the graph.
 
 - `agent()` lends a graph the session runner (@yaks/session `running`), works
   the runs its commits owe, and exposes session methods. Whatever touches a
   machine is an option its host lends: tools, remote tools, what a new session
   opens with, defect reports, and what to release on close. `lend()` is that
   runner alone.
-- `local()` is `agent()` here, over a graph a `yak` config composed: it lends
-  the shell, checkouts, instruction files, images, MCP and the OpenRouter
-  sign-in (`here()`), and adds the terminal's entry rendering.
+- `local()` is `agent()` over a graph a `yak` config composed: it lends
+  provider-backed machine tools, images, MCP and the OpenRouter sign-in
+  (`here()`), and adds the terminal's entry rendering.
 - `@yaks/harness/effects` handles `session_run` where a `yak` host lists the
-  harness: the same runner, lent the same machine, wherever that host's effects
-  are worked.
+  harness: the same runner and configured machine providers, wherever that
+  host's effects are worked.
 - `hosted()` is a graph a `yak` config composed (@yaks/cli `compose`), as the
   runner and its tools use it. The harness opens no graph of its own: which
   packages a graph is made of, and so what a write means, is the config's.
@@ -29,15 +26,14 @@ provider; shell tools run on this machine and are not sandboxed.
   `compose`): its own words and the functions behind its tools. `/tui` is its
   terminal view.
 
-The graph stores sessions, transcript entries, tasks, process records, and
-configuration in SQLite. Text bodies use blob tables in that database; binary
-artifacts and private credential files live separately on disk. Frontend
-selection and navigation state are local, with draft recovery files described
-below. A **bundle** is one entity's components as a JSON object. A **batch** is
-a list of bundles applied in one transaction. The **host** is the process that
-opened the graph. An **ask** is a recorded model request; a **settled** session
-has finished its current turn without more calls to execute and can accept new
-input.
+The graph stores sessions, transcript entries, tasks, machine records and
+configuration. Its host chooses the graph's storage, text and binary blob
+backends, and credential storage. Frontend selection and navigation state are
+local, with draft recovery files described below. A **bundle** is one entity's
+components as a JSON object. A **batch** is a list of bundles applied in one
+transaction. The **host** composes the graph and lends capabilities to plugins.
+An **ask** is a recorded model request; a **settled** session has finished its
+current turn without more calls to execute and can accept new input.
 
 ## Repository skills
 
@@ -47,13 +43,19 @@ read-only loader accepts `{skill: '<title>'}` and returns the exact instructions
 plus the supporting-file base path through the attributed graph runner. It does
 not execute scripts or start a fork from metadata.
 
-The shared `@yaks/persona/skills` view follows the session's
-`home{worktree, cwd}`. Local edits, additions and deletions are visible without
-importing them into the graph, and forks/resumed sessions use their own
-checkout. User-only skills are not model-discovered or loaded. Explicit tool
-registries and transcript allowlists remain exact: they do not gain a loader
-implicitly. Source-bound images remain beside their transcript entries; dynamic
-catalogue items are separate and count toward compaction budgets.
+A session without a running machine discovers the graph's repository skills
+without provisioning a machine. Once it has a running machine, the catalogue and
+loader read that machine's files through `Machine`. They follow
+`home{machine, cwd}` and the nearest ancestor with a `.git` or `.claude`
+directory. Edits, additions and deletions are visible without importing them
+into the graph; shared-machine forks see the same files. `skill_read` can be the
+first file call that provisions a session's machine. User-only skills are not
+model-discovered or loaded.
+
+Explicit tool registries and transcript allowlists remain exact: they do not
+gain a loader implicitly. Source-bound images remain beside their transcript
+entries; dynamic catalogue items are separate and count toward compaction
+budgets.
 
 ## Exports
 
@@ -71,10 +73,11 @@ catalogue items are separate and count toward compaction budgets.
 List `@yaks/harness` among a `yak` config's plugins, beside the packages whose
 words it runs over: `@yaks/session`, `@yaks/tools`, `@yaks/context`,
 `@yaks/model` and its providers (`@yaks/openai`, `@yaks/openrouter`),
-`@yaks/blob`, `@yaks/process`, `@yaks/secrets`, `@yaks/key`, `@yaks/alias`,
-`@yaks/connections`, `@yaks/mcp-client`, `@yaks/git`, `@yaks/effects`, and the
-work (`@yaks/doc`, `@yaks/edge`, `@yaks/task`, `@yaks/project`). `PLUGINS` in
-`testing.ts` is such a list, in a config's order. Then:
+`@yaks/blob`, `@yaks/machine`, `@yaks/process`, `@yaks/secrets`, `@yaks/key`,
+`@yaks/alias`, `@yaks/connections`, `@yaks/mcp-client`, `@yaks/git`,
+`@yaks/effects`, and the work (`@yaks/doc`, `@yaks/edge`, `@yaks/task`,
+`@yaks/project`). `PLUGINS` in `testing.ts` is such a list, in a config's order.
+Then:
 
 ```sh
 yak session new 'reply with the word pong'
@@ -105,16 +108,20 @@ newline). On a new session, NORMAL `P` chooses a persona from the graph for that
 session. `--persona` accepts a persona id or registered name; the session keeps
 that choice and snapshots its instructions before its first message.
 
-`$HARNESS_HOME` moves harness state without changing `HOME`: checkouts for
-children assigned tasks go under `$HARNESS_HOME/worktrees` and drafts under
-`$HARNESS_HOME/drafts`, with `~/.yak` as the state directory when unset.
-`$HARNESS_WORKTREE_DIR` (or `local({worktrees})`) moves the checkouts. Only a
-harness over the graph at `$HARNESS_HOME/yak.db` (`$HARNESS_DB`) sweeps that
-worktree root for checkouts nobody holds. For probes, set `HARNESS_HOME` and
-`TASKS_HOME` to scratch directories and clean them up; `TASKS_HOME` moves the
-process supervisor's files (unless `PROCESS_DIR` is set). Keep `HOME` unchanged
-so Deno reuses its module cache. If a probe must move `HOME`, export the
-invoking `DENO_DIR` before moving it.
+A session starts without borrowing the CLI's current directory or filesystem.
+Its first machine call requests a sandbox from the host's default provider.
+`--machine <machine-id>` names an existing machine record; `--cwd <directory>`
+sets the command directory on that machine. Its ancestor AGENTS.md files are
+admitted through Machine as immutable instruction snapshots, before the first
+message. See [Session machines](#session-machines) for provisioning, delegation
+and release.
+
+Frontend drafts are local to the terminal's machine. `HARNESS_DRAFT_DIR`
+relocates them; [Draft recovery](#draft-recovery) describes their lifetime.
+Process-provider state belongs to its configured host: `TASKS_HOME` moves the
+process supervisor's files unless `PROCESS_DIR` is set. Probes use their own
+provider directory and process state, while leaving `HOME` unchanged so Deno
+reuses its module cache.
 
 Name a model with `--model`, or set `using.model` on its provider row. It is
 reached with `$OPENAI_API_KEY` or the OpenAI connection. `yak auth` belongs to
@@ -138,7 +145,14 @@ let model: Model = async (request) => ({
 // A config naming a graph in memory, made of the packages listed above.
 let words = ['kernel', 'id', 'secrets', 'edge', 'blob', 'doc', 'effects']
 let work = ['task', 'project', 'session', 'tools', 'model', 'openai']
-let more = ['openrouter', 'process', 'context', 'connections', 'mcp-client']
+let more = [
+  'openrouter',
+  'machine',
+  'process',
+  'context',
+  'connections',
+  'mcp-client',
+]
 let plugins = [...words, ...work, ...more, 'git', 'harness']
   .map((p) => `@yaks/${p}`)
 let host = await compose({ db: ':memory:', plugins }, ['graph'])
@@ -349,18 +363,19 @@ queues again for a place before returning. Root sessions do not consume child
 places; `maxSessions` remains a limit checked when starting a root session. A
 waiting delegated parent gives up its place (`dispatch.state:
 waiting`), so
-capacity one supports nested delegation. Worktree preparation runs only when a
-queued child is admitted; failures and queued cancellation terminate with a
-completion message. A worker coming up sweeps up what a restart left owed; spawn
-replay preserves ID and fork boundary. `await a.close()` stops admission, lets
-the step in flight finish, leaves the pool and closes the harness database; it
-does not empty the persisted queue or complete assigned tasks. Independent
-supervised processes are untouched. A transcript is run under a lease named for
-it, renewed while it runs: one process runs it at a time. A holder known to be
-over (its pid gone, or its `exit` written, as a backend Worker ended where it
-stood writes its own) is passed at once; one nobody can tell is over holds it up
-until the take runs out (`hold`). The lease is not a security boundary against
-arbitrary graph writes. Provider limits still constrain model throughput.
+capacity one supports nested delegation. Child preparation records its machine
+home; provisioning waits for its first machine call. Preparation failures and
+queued cancellation terminate with a completion message. A worker coming up
+sweeps up what a restart left owed; spawn replay preserves ID and fork boundary.
+`await a.close()` stops admission, lets the step in flight finish, leaves the
+pool and closes the harness database; it does not empty the persisted queue or
+complete assigned tasks. Independent supervised processes are untouched. A
+transcript is run under a lease named for it, renewed while it runs: one process
+runs it at a time. A holder known to be over (its pid gone, or its `exit`
+written, as a backend Worker ended where it stood writes its own) is passed at
+once; one nobody can tell is over holds it up until the take runs out (`hold`).
+The lease is not a security boundary against arbitrary graph writes. Provider
+limits still constrain model throughput.
 
 `tools` replaces the default table when supplied. `sessionTools(graph, limits)`
 from `@yaks/session` is the standalone delegation table (its scheduling queries
@@ -402,49 +417,61 @@ persisted twice. Completed tasks still follow the existing open-task filtering.
 
 <a id="subagent-git-homes"></a>
 
-### Subagent working directories
+### Session machines
 
-Sessions carry `home{worktree,cwd}`. The worktree reference names a shared Git
-checkout entity owned by `@yaks/git`; cwd is a separate optional command
-default, not an isolation boundary. Root starts discover the existing checkout.
-Legacy sessions attach lazily on their first shell call. Ordinary children
-inherit home without making a checkout.
+Sessions carry `home{machine, cwd}`. The machine reference names a
+[record owned by `@yaks/machine`](../machine/README.md#graph-record). `cwd` is
+an optional command directory on that machine, not a path on the graph host.
+`session_machines.ts` binds those records to the providers its host lends.
 
-`spawn` and `fork` accept `worktree: {path, base?, branch?}` to create a
-checkout, or `home: <absolute-checkout-path>` to attach an existing one. When
-both are given, `home` is the source checkout and the new worktree becomes the
-child's home. `cwd` can override the command directory independently. The child
-and its initial input are recorded as queued before preparation. The scheduler
-prepares the checkout before executing the child. The generic session package
-only exposes a host preparation hook; it knows no Git.
+A session without a machine gets a sandbox from the default provider on its
+first shell or file call. Recording a session or asking a model a question
+provisions nothing. A stable machine id and `state: 'requested'` precede the
+external request. Successful provisioning records `running`; another worker can
+wake the same machine without a live handle. A released machine is requested or
+explicitly attached again if the session resumes. A provider must make repeated
+lifecycle calls safe.
 
-A new worktree defaults to detached committed HEAD, not the parent's dirty
-files. Its root becomes the default cwd unless explicitly overridden. Shell
-resolution is per call → persisted session cwd → home worktree root → harness
-directory; it inherits the harness environment. This is not sandboxing. Failed
-Git preparation is recorded on the `checkout` entity and the failed child
-session, with a completion receipt to the parent. Retrying preparation
-reconciles the same path.
+`spawn` and `fork` accept `machine: <machine-id>` for an existing record, or
+`machine: {provider?, from?, image?}` for a new sandbox request. `from` names a
+commit in the graph, not the parent's working directory or dirty files. The
+child records its home before any machine is provisioned. `cwd` can override the
+command directory; a relative override resolves from the parent's stored command
+directory. A new machine otherwise uses its provider's default command
+directory.
 
-The harness removes a child checkout only after the session ends and the
-checkout is clean with HEAD reachable from another branch (`worktrees.ts`).
-Session completion is determined from the transcript: a `stop` entry, an
-exception, or a finished turn with no pending calls. If the session has an
-associated process, that process must also have exited. A settled dispatch
-record alone is insufficient. No merge is performed; dirty checkouts and commits
-not on another branch are retained and reported. Before removal, the graph
-records the checkout's current branch and commit. If the session resumes, the
-harness recreates the checkout at the same path, branch, and commit before
-executing further work.
+Ordinary prompt children and forks share the parent's machine unless given a
+machine explicitly. Sharing is recorded even when the parent's own machine is
+still only a request. A task child defaults to a separate sandbox from its
+parent machine's recorded `from` commit, or an empty sandbox when no commit is
+recorded. Committing files inside a machine does not by itself change that
+provenance in the graph.
 
-The `@yaks/harness` service sweeps the live worktree root at startup and every
-five minutes. It keeps dirty worktrees, commits not on main, and homes used by
-unfinished sessions or live processes. An explicit resume awaits the same sweep.
-Each pass also checks available space on `/`: below 10 GiB it sends an alert to
-the existing production Sentry project, visible in `yak admin errors`. Repeated
-low readings stay quiet until space recovers; failed delivery retries on the
-next pass. Plugin options `every` (milliseconds) and `threshold` (bytes)
-configure the interval and free-space threshold.
+For example, a delegation tool can request a separate machine from a graph
+commit:
+
+```json
+{ "task": "T-123", "machine": { "provider": "process", "from": "<commit-id>" } }
+```
+
+A host can also attach an existing machine through a record whose `address` its
+provider understands. Naming an existing machine is explicit: substrate work can
+use a host machine, while ordinary work requests a sandbox. No session inherits
+that access merely because its graph host runs there.
+
+Machine tools resolve shell commands and relative file paths from the session's
+command directory, falling back to the provider's default. Binary artifact
+imports use the provider's `export` operation and stay under its export root.
+The process provider gives each sandbox a directory; this is not a security
+boundary or a CPU limit. Providers decide isolation and resource limits, not the
+session runner.
+
+Terminal session completion or stopping releases its machine through the
+provider. Ordinary settled turns keep the machine because more input may follow.
+A shared machine stays lent while another unfinished session uses it. Release
+succeeds before the record becomes `released`; a failed release remains
+retryable. Releasing an attached machine detaches it without deleting its files.
+The harness neither sweeps host worktrees nor monitors a host disk.
 
 <a id="prompt-context-pilot"></a>
 
@@ -457,28 +484,26 @@ instructions; it is an explicit wake-producing operation, not a passive notice.
 OpenAI receives ordered developer messages, including instructions added during
 the conversation.
 
-Root sessions snapshot global `~/.agents/AGENTS.md` then ancestor `AGENTS.md`
-files from filesystem root to cwd. Missing files are ignored, other read errors
-prevent session creation. Each file's canonical path and content SHA-256 are
-recorded. The persona the session's checkout carries (`@yaks/persona` `owed`)
-follows them as one more snapshot, recorded under its id, unless one of those
-files already is that persona's generated file. No mtime sorting or
-retrospective reload occurs. Existing `opts.instructions` and
-`using.instructions` remain the legacy base instruction channel; delegated
-`instructions` now append local guidance rather than replacing that base.
+Root sessions record their explicitly selected persona through `@yaks/persona`
+and `@yaks/context`, along with any prompt snapshots their caller supplies.
+Starting one does not read the CLI host's instruction files. Reading a machine
+file through a tool does not make it instructions: the caller must explicitly
+admit it through the prompt channel. Existing `opts.instructions` and
+`using.instructions` remain the base instruction channel; delegated
+`instructions` append local guidance rather than replacing that base.
 
 Fresh children copy shared prompt snapshots from their parent. Forks copy no
 files: their exact inherited prefix is followed by a local fork-execution note,
 optional child guidance, and the assignment. Fresh children intentionally
 inherit the parent's file snapshots even when assigned a different home; loading
 instruction files from the new directory requires an explicit action. A
-renamed/deleted source doesn't alter history. This implementation is designed
-for a local POSIX filesystem; it doesn't yet provide UI controls for choosing
-instruction files, or prompt supersession. Prompt entries have a query-matched
-transcript renderer that shows one clipped line with sequence, scope, and source
-name. Instruction text remains stored and is sent to the provider unchanged;
-compact display does not remove it from context. Fork notes are guidance, not a
-prohibition on useful delegation. Provider cache hits are not guaranteed.
+renamed/deleted source doesn't alter history. There are no UI controls for
+choosing instruction files or prompt supersession. Prompt entries have a
+query-matched transcript renderer that shows one clipped line with sequence,
+scope, and source name. Instruction text remains stored and is sent to the
+provider unchanged; compact display does not remove it from context. Fork notes
+are guidance, not a prohibition on useful delegation. Provider cache hits are
+not guaranteed.
 
 #### Prompt history and cache limits
 
@@ -692,10 +717,11 @@ query the latest local entry, not the entire transcript.
 
 The default tools include:
 
-- `artifact_import({path})`: copies a regular local file (up to 20 MiB) into
-  external artifact storage. Relative paths use the calling session's directory.
-  Later changes to the source file do not change the stored snapshot. Importing
-  does not attach the file or expose its contents to the model.
+- `artifact_import({path})`: exports a file (up to 20 MiB) from the calling
+  session's machine into artifact storage. Relative paths use its command
+  directory; the provider supplies binary bytes within its export root. Later
+  changes to the source file do not change the stored snapshot. Importing does
+  not attach the file or expose its contents to the model.
 - `artifact_attach({artifact})`: attaches an existing artifact to the current
   tool-call entry for the user. Images can use the configured terminal renderer;
   other formats retain a reference label. This does not enable model vision.
@@ -703,10 +729,10 @@ The default tools include:
   to the model following the inspection result. This requires a vision-capable
   provider/model. There is no automatic retry with the image removed.
 
-The tools use the same external storage directory as generated images. Image
-bytes are verified against the registered hash and size. The graph stores the
-reference, audience, and inspected revision, not base64. The OpenAI adapter adds
-an `input_image` user message after the tool results. Only the outgoing provider
+The tools use the same artifact backend as generated images. Image bytes are
+verified against the registered hash and size. The graph stores the reference,
+audience, and inspected revision, not base64. The OpenAI adapter adds an
+`input_image` user message after the tool results. Only the outgoing provider
 request contains a data URL. The original tool call/result pair remains intact.
 
 A replay, including inherited fork history, includes explicitly viewed images
@@ -779,11 +805,9 @@ relocate storage. See [frontend state](FRONTEND.md#local-draft-recovery) for
 isolation, retention, and crash-recovery limits.
 
 The CLI and terminal frontend do not add a built-in agent description or style
-instruction. Instruction files are loaded through `@yaks/context`; callers can
-still supply explicit `instructions`. Existing sessions retain their recorded
-request history, but the retired built-in harness instruction is omitted from
-future requests. A restart loads this behavior; it cannot retract instructions
-from a request already in progress.
+instruction. Callers can supply explicit `instructions` and recorded prompt
+snapshots through `@yaks/context`. Existing sessions retain their recorded
+request history; no filesystem reload rewrites it.
 
 ## Transcript loading
 
@@ -1127,12 +1151,12 @@ conversion to a conversation or comment. The configured person restriction is an
 independent eligibility check, not the loop guard.
 
 The answering session receives the current root and ordered thread, with each
-speaker identified, plus the checkout's common persona. A working native session
-claiming the task takes its reply. Otherwise the thread's working session takes
-it; a settled session takes it only when its recorded prefix expiry is still in
-the future and its measured input plus output is below `reuseAt` of the model's
-context window. Missing expiry, usage or window is cold. See
-[model cache observations](../model/README.md) for provider retention
+speaker identified, plus any explicitly supplied persona snapshots. A working
+native session claiming the task takes its reply. Otherwise the thread's working
+session takes it; a settled session takes it only when its recorded prefix
+expiry is still in the future and its measured input plus output is below
+`reuseAt` of the model's context window. Missing expiry, usage or window is
+cold. See [model cache observations](../model/README.md) for provider retention
 configuration. A cold reply starts a fresh session with the whole thread.
 
 Settled final prose becomes a session-authored comment. The input's reply

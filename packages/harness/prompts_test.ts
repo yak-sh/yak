@@ -2,13 +2,16 @@ import { test } from '@yaks/testing'
 import type { Comp } from '@yaks/graph'
 import { assertEquals, assertRejects } from '@std/assert'
 import { promptEntry, snapshot } from '@yaks/context'
-import { instructionFiles } from '@yaks/context/host'
+import { instructionFiles, instructionsFor } from './instructions.ts'
+import { processMachine, processProvider } from '@yaks/process/machine'
+import type { Harness } from './store.ts'
 import { input } from '../openai/responses.ts'
 import { voice, wear } from '@yaks/persona'
 import { begin } from './agent.ts'
 import { harness } from './testing.ts'
 
-test('instruction admission snapshots files in stable ancestor order', async () => {
+test('instruction admission snapshots machine files in stable ancestor order', async () => {
+  let h = await harness()
   let dir = await Deno.makeTempDir()
   try {
     await Deno.mkdir(dir + '/home/.agents', { recursive: true })
@@ -16,7 +19,11 @@ test('instruction admission snapshots files in stable ancestor order', async () 
     await Deno.writeTextFile(dir + '/home/.agents/AGENTS.md', 'global')
     await Deno.writeTextFile(dir + '/repo/AGENTS.md', 'repo')
     await Deno.writeTextFile(dir + '/repo/sub/AGENTS.md', 'nested')
-    let files = await instructionFiles(dir + '/repo/sub', dir + '/home')
+    let files = await instructionFiles(
+      processMachine(h.g),
+      dir + '/repo/sub',
+      dir + '/home',
+    )
     assertEquals(files.map((f) => f.body), ['global', 'repo', 'nested'])
     let snapshot = promptEntry(
       's',
@@ -30,12 +37,39 @@ test('instruction admission snapshots files in stable ancestor order', async () 
     assertEquals(snapshot.content, { body: 'repo' })
     assertEquals(files[1].revision.length, 64)
     assertEquals(
-      (await instructionFiles(dir + '/repo/sub', dir + '/missing')).length,
+      (await instructionFiles(processMachine(h.g), dir + '/repo/sub')).length,
       2,
     )
-    await assertRejects(() => instructionFiles(dir + '/absent'))
+    await assertRejects(() =>
+      instructionFiles(processMachine(h.g), dir + '/absent')
+    )
   } finally {
     await Deno.remove(dir, { recursive: true })
+    await h.close()
+  }
+})
+
+let attached = async (h: Harness, dir: string) => {
+  let machine = crypto.randomUUID()
+  await h.g.apply([{
+    entity: { eid: machine },
+    machine: { provider: 'process', address: dir, state: 'running' },
+  }])
+  return {
+    machine,
+    machines: {
+      defaultProvider: 'process',
+      providers: { process: processProvider(h.g, { dir: dir + '/machines' }) },
+    },
+  }
+}
+
+test('graph-only instruction admission never acquires a default machine', async () => {
+  let h = await harness()
+  try {
+    assertEquals(await instructionsFor(h.g, undefined, {}), [])
+  } finally {
+    await h.close()
   }
 })
 
@@ -85,8 +119,10 @@ test('root admission is snapshotted and explicit later context is an instruction
   let { local } = await import('./local.ts')
   let requests: import('@yaks/model').Request[] = []
   await Deno.writeTextFile(dir + '/AGENTS.md', 'shared rule')
+  let h = await harness()
   let a = await local({
-    h: await harness(),
+    h,
+    ...await attached(h, dir),
     model: (req) => {
       requests.push(req)
       return Promise.resolve({
@@ -136,6 +172,7 @@ test('a native session carries its chosen graph persona into the model request',
   await Deno.writeTextFile(dir + '/AGENTS.md', 'Repository guidance.')
   let a = local({
     h,
+    ...await attached(h, dir),
     cwd: dir,
     name: 'fake',
     model: (req) => {
@@ -174,6 +211,7 @@ test('retired CLI instructions are omitted on future asks without rewriting hist
   let requests: import('@yaks/model').Request[] = []
   let a = local({
     h,
+    ...await attached(h, dir),
     cwd: dir,
     name: 'fake',
     model: (req) => {

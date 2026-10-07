@@ -7,16 +7,16 @@
     "home": {
       "component": true,
       "type": "object",
-      "description": "An agent home checkout, separate from working directory; not a sandbox.",
+      "description": "The machine a session uses, with an optional command directory.",
       "properties": {
-        "worktree": {
-          "type": "string",
-          "ref": "worktree",
-          "death": "keep"
-        },
         "cwd": {
           "type": "string",
-          "description": "Optional default command directory, independent of the home checkout."
+          "description": "Optional command directory on the machine."
+        },
+        "machine": {
+          "type": "string",
+          "ref": "machine",
+          "death": "keep"
         }
       }
     },
@@ -63,6 +63,15 @@
           "type": "string",
           "ref": "persona",
           "description": "the persona to carry, by id or name (default: the checkout's persona)"
+        },
+        "machine": {
+          "type": "string",
+          "ref": "machine",
+          "description": "Existing machine to use; otherwise request a sandbox on first file or shell call."
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Command directory on the named machine."
         }
       },
       "positional": [
@@ -177,6 +186,25 @@
       "changed": [
         "attempt.by"
       ]
+    },
+    "session_machine_release": {
+      "effect": true,
+      "changed": [
+        "session.ended",
+        "dispatch.state"
+      ],
+      "created": [
+        "completed",
+        "stop",
+        "exit",
+        "content"
+      ],
+      "sweep": ".session&.home&(.session.ended=true | .completed | .session.status=stopped) | .task&.completed&.claim",
+      "description": "Release machines when sessions stop or finish completed work; live shared borrowers keep them.",
+      "removed": [
+        "dispatch"
+      ],
+      "target": ".session&.home | .entry&.entry.session.home | .task&.claim"
     }
   }
 }

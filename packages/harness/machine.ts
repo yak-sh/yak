@@ -150,7 +150,29 @@ export let machineDeclared = (o: MachineOpts = {}): MachineTool[] => [{
  * that does not answers its process id, still running, for `wait` and `stop`
  * to name.
  */
-export let machineTools = (m: Machine, o: MachineOpts = {}): Tool[] => {
+export let machineTools = (
+  source: Machine | ((ctx?: ToolContext) => Promise<Machine>),
+  o: MachineOpts = {},
+): Tool[] => {
+  if (typeof source == 'function') {
+    return machineDeclared(o).map((declaration) => ({
+      ...declaration,
+      run: async (args, ctx) => {
+        let tool = machineTools(await source(ctx), o).find((t) =>
+          t.name == declaration.name
+        )!
+        return tool.run(args, ctx)
+      },
+      ...declaration.name == 'shell'
+        ? {
+          recover: async (args, ctx) =>
+            machineTools(await source(ctx), o)
+              .find((t) => t.name == 'shell')!.recover!(args, ctx),
+        }
+        : {},
+    }))
+  }
+  let m = source
   let poll = m.poll ?? 100
   let lines = o.lines ?? 40
   let here = async (ctx?: ToolContext) => await o.cwd?.(ctx)

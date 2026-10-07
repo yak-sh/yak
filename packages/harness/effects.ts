@@ -13,8 +13,7 @@ import { lend } from './agent.ts'
 import { here } from './local.ts'
 import { hosted } from './store.ts'
 import { inboxHandlers, type InboxOptions } from './answering.ts'
-import { instructionFiles } from '@yaks/context/host'
-import { homeAt, owing } from './workspace.ts'
+import { homeAt, machineDone, machines, owing } from './session_machines.ts'
 
 let word = (options: Record<string, unknown>, name: string) =>
   typeof options[name] == 'string' ? options[name] : undefined
@@ -37,7 +36,27 @@ export let effects = (
   host.stopping.addEventListener('abort', () => void lent.release?.(), {
     once: true,
   })
-  let handlers = running(host.graph, { ...lend(lent), stopping: host.stopping })
+  let binding = machines(host.graph, host.machines)
+  let handlers = {
+    ...running(host.graph, { ...lend(lent), stopping: host.stopping }),
+    session_machine_release: async (event: import('@yaks/graph').Bundle) => {
+      let [subject] = await host.graph.get([event.entity.eid])
+      let candidates = subject?.session ? [subject] : []
+      let entry = subject?.entry as import('@yaks/graph').Comp | undefined
+      if (entry?.session) {
+        candidates.push(...await host.graph.get([String(entry.session)]))
+      }
+      let claim = subject?.claim as import('@yaks/graph').Comp | undefined
+      if (subject?.completed && claim?.session) {
+        candidates.push(...await host.graph.get([String(claim.session)]))
+      }
+      for (let session of candidates) {
+        if (await machineDone(host.graph, session)) {
+          await binding.release(session.entity.eid)
+        }
+      }
+    },
+  }
   let inbox = options.inbox as InboxOptions | undefined
   if (!inbox?.person) {
     return { ...handlers, inbox_answer: () => {}, inbox_publish: () => {} }
@@ -50,9 +69,8 @@ export let effects = (
       gone: host.gone,
       stopping: host.stopping,
       opening: async () => {
-        let cwd = Deno.cwd()
-        let home = await homeAt(host.graph, cwd)
-        let files = await instructionFiles(cwd)
+        let home = homeAt()
+        let files: import('@yaks/context').Snapshot[] = []
         return {
           home,
           files: [...files, ...await owing(host.graph, home, files)],

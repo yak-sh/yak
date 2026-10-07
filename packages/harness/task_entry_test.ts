@@ -88,7 +88,17 @@ test('Agent.taskEntry honors agent limits', async () => {
   let a = local({
     h: await harness(),
     cwd: r.repo,
-    worktrees: r.root,
+    machines: {
+      defaultProvider: 'process',
+      providers: {
+        process: {
+          request: () => Promise.reject(new Error('test never provisions')),
+          wake: () => Promise.reject(new Error('test never wakes')),
+          release: async () => {},
+          export: async function* () {},
+        },
+      },
+    },
     tools: [],
     maxChildren: 0,
     model: () =>
@@ -124,7 +134,17 @@ test('auto-task notice is lazy, reaches next ask, and contextual completion is i
   let a = local({
     h,
     cwd: r.repo,
-    worktrees: r.root,
+    machines: {
+      defaultProvider: 'process',
+      providers: {
+        process: {
+          request: () => Promise.reject(new Error('test never provisions')),
+          wake: () => Promise.reject(new Error('test never wakes')),
+          release: async () => {},
+          export: async function* () {},
+        },
+      },
+    },
     tools: [],
     model: async (req) => {
       let text = JSON.stringify(req.items)

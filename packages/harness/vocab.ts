@@ -9,7 +9,7 @@ import doc from './vocab.json' with { type: 'json' }
 import manifest from './deno.json' with { type: 'json' }
 
 const { home, ...core } = doc.$defs
-export let workspaceDoc: VocabDoc = { title: 'workspace', $defs: { home } }
+export let homeDoc: VocabDoc = { title: 'session home', $defs: { home } }
 export let harnessDoc: VocabDoc = { title: doc.title, $defs: core }
 
 /** What this package is: its manifest's description, the one place it is
@@ -17,4 +17,4 @@ export let harnessDoc: VocabDoc = { title: doc.title, $defs: core }
 export let description: string = manifest.description
 
 /** The harness's own words: the `home` a session works from, and its tools. */
-export let docs: VocabDoc[] = [harnessDoc, workspaceDoc]
+export let docs: VocabDoc[] = [harnessDoc, homeDoc]

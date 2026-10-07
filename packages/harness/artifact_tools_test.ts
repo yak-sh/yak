@@ -4,7 +4,12 @@ import { artifactTools, imageContext } from './artifact_tools.ts'
 import { input } from '@yaks/openai'
 import type { Bundle } from '@yaks/graph'
 import type { Item } from '@yaks/model'
-import { artifactStore, fileBlobs } from '@yaks/blob'
+import {
+  artifactBytes,
+  artifactStore,
+  fileBlobs,
+  memoryBlobs,
+} from '@yaks/blob'
 import { harness } from './testing.ts'
 
 const png = Uint8Array.from(
@@ -19,7 +24,14 @@ test('file import snapshots bytes; attach is user-only; explicit view projects b
   let h = await harness()
   let blobs = fileBlobs(dir + '/blobs')
   try {
-    await Deno.writeFile(dir + '/source.png', png)
+    let source = png
+    let machines = {
+      files: async function* (session: string, paths: string[]) {
+        assertEquals(session, 's')
+        assertEquals(paths, ['source.png'])
+        yield { path: paths[0], bytes: source.slice() }
+      },
+    }
     let call: Bundle = {
       entity: { eid: 'call' },
       entry: { session: 's', seq: 1 },
@@ -27,7 +39,7 @@ test('file import snapshots bytes; attach is user-only; explicit view projects b
     }
     await h.g.apply([{ entity: { eid: 's' }, session: {} }, call])
     let ctx = { session: 's', call, entries: [call] }
-    let tools = artifactTools(h.g, { cwd: dir, artifacts: blobs })
+    let tools = artifactTools(h.g, { machines, artifacts: blobs })
     let invoke = async (name: string, args: Record<string, unknown>) =>
       await tools.find((t) => t.name == name)!.run(args, ctx)
     let imported = JSON.parse(
@@ -39,7 +51,7 @@ test('file import snapshots bytes; attach is user-only; explicit view projects b
       ).artifact,
       imported.artifact,
     )
-    await Deno.writeTextFile(dir + '/source.png', 'changed')
+    source = new TextEncoder().encode('changed')
     await invoke('artifact_attach', { artifact: imported.artifact })
     let result: Bundle = {
       entity: { eid: 'result' },
@@ -201,5 +213,52 @@ test('vision admission rejects unsupported files and changed artifact revisions'
   } finally {
     h.close()
     await Deno.remove(dir, { recursive: true })
+  }
+})
+
+test('machine file export preserves arbitrary binary bytes and refuses oversize before storage', async () => {
+  let h = await harness()
+  let blobs = memoryBlobs()
+  let puts = 0
+  let originalPut = blobs.put
+  blobs.put = (address, bytes) => {
+    puts++
+    return originalPut(address, bytes)
+  }
+  let binary = new Uint8Array([0, 255, 128, 192, 32, 0, 254])
+  let source = binary
+  let requests: { session: string; paths: string[] }[] = []
+  let machines = {
+    files: async function* (session: string, paths: string[]) {
+      requests.push({ session, paths })
+      yield { path: paths[0], bytes: source }
+    },
+  }
+  let call: Bundle = {
+    entity: { eid: 'import-binary' },
+    entry: { session: 'remote', seq: 1 },
+  }
+  let ctx = { session: 'remote', call, entries: [call] }
+  try {
+    await h.g.apply([{ entity: { eid: 'remote' }, session: {} }, call])
+    let tool = artifactTools(h.g, { machines, artifacts: blobs })
+      .find((t) => t.name == 'artifact_import')!
+    let result = JSON.parse(
+      String(await tool.run({ path: '/machine/binary' }, ctx)),
+    )
+    assertEquals(requests, [{ session: 'remote', paths: ['/machine/binary'] }])
+    assertEquals(await artifactBytes(blobs, result), binary)
+    assertEquals(result.media_type, 'application/octet-stream')
+    assertEquals(puts, 1)
+    source = new Uint8Array(20 * 1024 * 1024 + 1)
+    await assertRejects(
+      async () => await tool.run({ path: 'too-big' }, ctx),
+      Error,
+      'up to 20 MiB',
+    )
+    assertEquals(puts, 1)
+    assertEquals((await h.g.read('.artifact')).length, 1)
+  } finally {
+    h.close()
   }
 })

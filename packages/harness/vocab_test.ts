@@ -8,7 +8,7 @@ import projection from '../render/vocab.json' with { type: 'json' }
 import runtime from './runtime/vocab.json' with { type: 'json' }
 import backend from './vocab.json' with { type: 'json' }
 import { frontendVocab } from './frontend.ts'
-import { harnessDoc, workspaceDoc } from './vocab.ts'
+import { harnessDoc, homeDoc } from './vocab.ts'
 import { words } from '@yaks/cli/host'
 import { at } from './testing.ts'
 
@@ -17,10 +17,10 @@ let { vocab } = await words(at())
 test('package JSON declarations preserve artifact references and compose with the rest', () => {
   assertEquals(artifactDoc, artifact)
   assertEquals<unknown>(
-    { ...harnessDoc.$defs, ...workspaceDoc.$defs },
+    { ...harnessDoc.$defs, ...homeDoc.$defs },
     backend.$defs,
   )
-  assertEquals(vocab.prop('home', 'worktree')?.ref, 'worktree')
+  assertEquals(vocab.prop('home', 'machine')?.ref, 'machine')
   assertEquals(vocab.prop('attachment', 'artifact')?.ref, 'artifact')
   assertEquals(vocab.prop('created', 'at')?.stamped, true)
   assertEquals(artifact.$defs.attachment.properties.artifact.death, 'keep')

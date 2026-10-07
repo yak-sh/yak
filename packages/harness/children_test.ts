@@ -1,3 +1,4 @@
+import { processProvider } from '@yaks/process/machine'
 // SQLite/runner integration tests; the fast-tier runner does not collect
 // packages. Deferred fake replies exercise concurrency without network calls.
 import { test } from '@yaks/testing'
@@ -62,7 +63,24 @@ for (let kind of ['fork', 'spawn']) {
     }
     let h = await harness()
     h.g.apply([{ entity: { eid: '$other' }, model: { name: 'alternate' } }])
-    let a = local({ h, model, cwd: directory, tools: sessionTools(h.g) })
+    let machine = crypto.randomUUID()
+    await h.g.apply([{
+      entity: { eid: machine },
+      machine: { provider: 'process', address: directory, state: 'running' },
+    }])
+    let a = local({
+      h,
+      model,
+      machine,
+      machines: {
+        defaultProvider: 'process',
+        providers: {
+          process: processProvider(h.g, { dir: directory + '/machines' }),
+        },
+      },
+      cwd: directory,
+      tools: sessionTools(h.g),
+    })
     let parent = await a.start('parent context')
     let req = await childAsked.promise
     await a.idle(parent) // parent progresses before child has answered

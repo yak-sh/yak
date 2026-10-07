@@ -240,6 +240,40 @@ plugins({}, options) // [mailbox({ domain: 'books.example' })]
 Object.keys(runs({}, options)) // the tools it runs, by name
 ```
 
+### Machine providers
+
+The CLI lends providers through `Host.machines`. A config can choose providers
+without making plugins know where commands run:
+
+```json
+{
+  "machines": {
+    "defaultProvider": "process",
+    "providers": {
+      "process": {
+        "use": "@yaks/process",
+        "with": { "dir": "/srv/yak/machines" }
+      }
+    }
+  }
+}
+```
+
+Absent that setting, the CLI lends the process provider, keeping sandbox
+directories beside a file-backed graph (under the test's temporary directory for
+a graph in memory). It is directory separation, not security or resource
+isolation. A provider module other than `@yaks/process` exports
+`provider(host, options)` and answers the
+[MachineProvider](../machine/README.md#providers) contract. Provisioning happens
+only when a session needs commands or files. Graph commits are prepared from
+objects in the host's binary artifact store, not from an ambient checkout.
+
+Machine vocabulary and its Git object references are host words, like invocation
+records: a config need not separately list their vocabulary plugins. Existing
+machines are explicit `machine{provider, address}` records. The CLI's legacy
+home translation lives at its SQLite boundary; the harness sees only machine
+homes.
+
 ### A tool that acts on the machine
 
 Some tools change the machine running them instead of only changing the graph.

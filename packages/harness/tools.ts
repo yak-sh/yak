@@ -25,15 +25,12 @@ import { type Blobs, valueTools } from '@yaks/blob'
 // That subpath loads no MCP SDK, so a session that serves nothing never pays
 // for a server.
 
-import { sessionCwd, workspace } from './workspace.ts'
-import { worktrees } from './paths.ts'
+import { machines, type SessionMachines } from './session_machines.ts'
 import type { Entity, Graph, Tool as GraphTool } from '@yaks/graph'
 import { core, type Depth, inputSchemaOf } from '@yaks/mcp/tools'
-import { processMachine } from '@yaks/process/machine'
 import { machineTools } from './machine.ts'
 import {
   type ChildLimits,
-  sessionEnv,
   sessionTools,
   type Tool,
   ToolError,
@@ -121,27 +118,19 @@ export let harnessTools = (
       /** where artifacts' bytes are kept (the harness's `artifacts`) */
       artifacts?: Blobs
       /** the root a task child's checkout is cut under */
-      worktrees?: string
+      machines?: SessionMachines
       /** what a direct graph tool call is owed beside its answer (the
        * harness's `reply`) */
       reply?: Reply
     }
     & ChildLimits = {},
 ): Tool[] => {
-  let directory = opts.cwd ?? Deno.cwd()
-  let machine = machineTools(
-    processMachine(g, {}, (session) => {
-      let env = Deno.env.toObject()
-      return session ? sessionEnv(session, env) : env
-    }),
-    {
-      cwd: (ctx) => ctx ? sessionCwd(g, ctx.session, directory) : directory,
-    },
-  )
-  let session = sessionTools(g, {
-    ...workspace(g, directory, opts.worktrees ?? worktrees()),
-    ...opts,
-  })
+  let binding = opts.machines ?? machines(g)
+  let machine = machineTools((ctx) => {
+    if (!ctx) throw new ToolError('machine', 'A machine call needs a session')
+    return binding.machine(ctx.session)
+  }, { cwd: (ctx) => ctx ? binding.cwd(ctx.session) : undefined })
+  let session = sessionTools(g, { ...binding.limits, ...opts })
   let processWait = machine.find((t) => t.name == 'wait')!
   let childWait = session.find((t) => t.name == 'wait')!
   let wait: Tool = {

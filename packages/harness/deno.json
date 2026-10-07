@@ -9,8 +9,7 @@
     "./machine": "./machine.ts",
     "./tools": "./runs.ts",
     "./cli": "./cli.ts",
-    "./effects": "./effects.ts",
-    "./service": "./service.ts"
+    "./effects": "./effects.ts"
   },
   "license": "Apache-2.0",
   "description": "Runs an agent on this machine over a yak graph: the machine the session runner is lent, the machine and graph tools, and the terminal app.",

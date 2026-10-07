@@ -12,6 +12,11 @@ export type Plug = string | { use: string; with?: Options }
 
 /** A config file: where the graph lives, and what reads and writes it. */
 export type Config = {
+  /** Configured machine providers, keyed by the durable machine.provider. */
+  machines?: {
+    defaultProvider: string
+    providers: Record<string, import('@yaks/machine').ProviderConfig>
+  }
   /** the SQLite file, or `:memory:` for a graph that lasts as long as the
    * process. Required — a host never guesses a database. */
   db?: string

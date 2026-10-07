@@ -39,6 +39,41 @@ handler, tool runner and duties become available as composition builds each one.
 Factories retain the host reference and use those parts only after their factory
 returns.
 
+## Machine providers
+
+`Host.machines` is an optional capability: configured
+[machine providers](../machine/README.md#providers), keyed by the durable
+`machine.provider`, and a `defaultProvider` that requests sandboxes. A plugin
+can ask for commands and files without learning where its host lives. An
+existing machine is explicitly attached by its provider's address; no host
+filesystem belongs to plugins by right.
+
+```ts
+import { equal } from '@yaks/testing'
+import type { Host } from '@yaks/host'
+
+let releases: string[] = []
+let machines: NonNullable<Host['machines']> = {
+  defaultProvider: 'remote',
+  providers: {
+    remote: {
+      wake: () => Promise.reject(new Error('not provisioned')),
+      release: (ref) => {
+        releases.push(ref.id)
+        return Promise.resolve()
+      },
+      export: async function* () {},
+    },
+  },
+}
+await machines.providers.remote.release({ id: 'job' })
+equal(releases, ['job'])
+```
+
+Concrete hosts may supply `resolveHome` at their compatibility door to translate
+stored homes into machine homes. Plugins only consume the returned machine
+reference and command directory.
+
 ## Concrete hosts
 
 [@yaks/cli](../cli/README.md) opens the box's database and binds this interface.

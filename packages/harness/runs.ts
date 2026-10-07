@@ -27,13 +27,13 @@ import type { Host } from '@yaks/host'
 
 import { MODEL, PROVIDER } from '@yaks/model'
 import { parse } from '@yaks/query'
-import { instructionFiles } from '@yaks/context/host'
 import { transcript, usingBefore } from '@yaks/session'
 import { begin, seed, through } from './agent.ts'
 import { defaultUsing, selectedUsing } from './model_selection.ts'
 import { openaiCredential } from './openai_auth.ts'
 import { hosted } from './store.ts'
-import { homeAt, owing } from './workspace.ts'
+import { homeAt, owing } from './session_machines.ts'
+import { instructionsFor } from './instructions.ts'
 
 type Args = Record<string, unknown>
 let word = (args: Args, name: string): string | undefined => {
@@ -122,11 +122,10 @@ export let runs = (host?: Host): Runs => ({
     let [row] = selected ? await graph.get([String(selected.model)]) : []
     let model = word(args, 'model') ?? String((row?.model as Comp)?.name)
     await graph.apply(seed({ provider, model }), { trusted: true })
-    let cwd = Deno.cwd()
     let effort = word(args, 'effort')
     let persona = word(args, 'persona')
-    let home = await homeAt(graph, cwd)
-    let files = await instructionFiles(cwd)
+    let home = homeAt(word(args, 'machine'), word(args, 'cwd'))
+    let files = await instructionsFor(graph, host?.machines, home)
     let s = await begin(graph, prompt || undefined, {
       home,
       files: [...files, ...await owing(graph, home, files, persona)],

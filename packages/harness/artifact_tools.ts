@@ -10,7 +10,7 @@ import {
   mediaTypeOf,
   sizeOf,
 } from '@yaks/blob'
-import { sessionCwd } from './workspace.ts'
+import type { MachineFile } from '@yaks/machine'
 
 const MAX = 20 * 1024 * 1024
 const VISION = ['image/png', 'image/jpeg', 'image/webp']
@@ -53,12 +53,17 @@ export let registered = async (g: Graph, eid: string, blobs?: Blobs) => {
 
 export let artifactTools = (
   g: Graph,
-  opts: { cwd?: string; artifacts?: Blobs } = {},
+  opts: {
+    artifacts?: Blobs
+    machines?: {
+      files(session: string, paths: string[]): AsyncIterable<MachineFile>
+    }
+  } = {},
 ): Tool[] => [
   {
     name: 'artifact_import',
     description:
-      'Snapshot a local file into external artifact storage (maximum 20 MiB). Relative paths use this session’s cwd. Does not attach or send it to the model.',
+      'Snapshot a file from the session machine into external artifact storage (maximum 20 MiB). Relative paths use this session’s cwd. Does not attach or send it to the model.',
     parameters: {
       type: 'object',
       properties: { path: { type: 'string' } },
@@ -68,42 +73,33 @@ export let artifactTools = (
       if (!ctx) throw new ToolError('artifact', 'Session context required')
       let path = String(args.path ?? '')
       if (!path) throw new ToolError('artifact', 'A file path is required')
-      if (!path.startsWith('/')) {
-        path = await sessionCwd(g, ctx.session, opts.cwd ?? Deno.cwd()) + '/' +
-          path
-      }
-      let file: Deno.FsFile
-      try {
-        file = await Deno.open(path, { read: true })
-      } catch {
-        throw new ToolError('artifact', 'Cannot open file')
-      }
-      let bytes: Uint8Array
-      try {
-        let stat = await file.stat()
-        if (!stat.isFile || stat.size > MAX) {
-          throw new ToolError(
-            'artifact',
-            'Expected a regular file up to 20 MiB',
-          )
-        }
-        bytes = new Uint8Array(stat.size)
-        let at = 0
-        while (at < bytes.length) {
-          let n = await file.read(bytes.subarray(at))
-          if (n == null) {
-            throw new ToolError('artifact', 'File changed while reading')
-          }
-          at += n
-        }
-        if (await file.read(new Uint8Array(1)) != null) {
-          throw new ToolError('artifact', 'File grew while reading')
-        }
-      } finally {
-        file.close()
-      }
       if (!opts.artifacts) {
         throw new ToolError('artifact', 'No artifact store here')
+      }
+      if (!opts.machines) {
+        throw new ToolError('artifact', 'No machine provider here')
+      }
+      let bytes: Uint8Array | undefined
+      try {
+        for await (let file of opts.machines.files(ctx.session, [path])) {
+          if (bytes) throw new ToolError('artifact', 'Expected one file')
+          if (file.bytes.length > MAX) {
+            throw new ToolError('artifact', 'Expected a file up to 20 MiB')
+          }
+          bytes = file.bytes
+        }
+      } catch (error) {
+        if (error instanceof ToolError) throw error
+        throw new ToolError(
+          'artifact',
+          'Cannot export file from session machine',
+        )
+      }
+      if (!bytes) {
+        throw new ToolError(
+          'artifact',
+          'Cannot export file from session machine',
+        )
       }
       let artifact = await artifactStore(opts.artifacts)(
         bytes,

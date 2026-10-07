@@ -2,8 +2,8 @@
 
 Commands and files through a `Machine`, with providers that lend sandboxes or
 attach existing machines. This package owns the `Machine` contract, the provider
-interface and `machine{provider, from, image, state}`. It touches no runtime,
-filesystem or graph storage.
+interface and `machine{provider, address, from, image, state}`. It touches no
+runtime, filesystem or graph storage.
 
 A **machine** is something you can run commands on and keep files on. `Machine`
 is its commands-and-files interface: `start`, `look`, `tail`, `kill`, `read` and
@@ -132,12 +132,16 @@ try {
 
 ## Graph record
 
-`machine{provider, from, image, state}` is the provider's last recorded
-lifecycle state: `requested`, `running`, `asleep` or `released`. `from`
-references a Git object in the graph and keeps provenance when that object is
-deleted; the request must name a commit. Absent `from`, a sandbox starts empty.
-Absent `image`, its provider chooses the image. The machine entity's id is also
-the id supplied to its provider, so wake and release can run in another process.
+`machine{provider, address, from, image, state}` is the provider's last recorded
+lifecycle state: `requested`, `running`, `asleep` or `released`. Optional
+`address` records an existing-machine address for its provider's `attach`,
+`wake`, `release` and `export` operations. Without it, the entity names a
+sandbox owned by the provider. An address stays in the record so another host
+process can attach the same machine. `from` references a Git object in the graph
+and keeps provenance when that object is deleted; the request must name a
+commit. Absent `from`, a sandbox starts empty. Absent `image`, its provider
+chooses the image. The machine entity's id is also the id supplied to its
+provider, so wake and release can run in another process.
 
 ```ts
 import { equal } from '@yaks/testing'

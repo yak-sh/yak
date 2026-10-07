@@ -1,14 +1,6 @@
-// The harness on this machine: the agent runner (./agent.ts) over the graph a
-// `yak` config composed (./store.ts `hosted`), with everything a box lends it.
-// The shell runs here (@yaks/process), a child assigned a
-// task gets its own checkout under the worktree root, a new session snapshots
-// the AGENTS.md files above its directory, pictures live in the image
-// directory, MCP servers and model-provider sign-ins are the person's own, and a
-// defect is an `exception` entity. What a box lends is `here()`: the harness
-// on its own lends it to its agent, and a `yak` host listing the harness lends
-// it to the runner its effects are worked with (./effects.ts). Every `~/.yak`
-// path is read here or in ./store.ts and passed down; nothing under the runner
-// reads one.
+// Provider-backed capabilities lent to the native runner. Sessions see the
+// graph and machines, never a host checkout. Credentials, MCP and diagnostics
+// remain host integrations; shell and file work is routed through providers.
 
 import { responses as openrouter } from '@yaks/openrouter'
 import { responses } from '@yaks/openai'
@@ -17,7 +9,6 @@ import type { Model } from '@yaks/model'
 import { type Bundle } from '@yaks/graph'
 import type { ChildLimits, Step, Tool } from '@yaks/session'
 import { watchMigrations } from '@yaks/sqlite'
-import { instructionFiles } from '@yaks/context/host'
 import { render as tree } from '@yaks/preact'
 import type { VNode } from 'preact'
 import { type Agent, agent, type Opts as AgentOpts } from './agent.ts'
@@ -29,10 +20,8 @@ import { streamingEnabled } from './streaming.ts'
 import { imageContext, registered } from './artifact_tools.ts'
 import { configuredImages, type ImageOptions } from './images.ts'
 import { diagnostics, type FailureContext } from './diagnostics.ts'
-import { homeAt, owing, workspace } from './workspace.ts'
-import { dbPath, worktrees } from './paths.ts'
-import { collecting } from './worktrees.ts'
-import { tidy } from './maintenance.ts'
+import { homeAt, machines, owing } from './session_machines.ts'
+import { instructionsFor } from './instructions.ts'
 import { transcriptViews } from './transcript.ts'
 import type { Harness } from './store.ts'
 import { graphTools, harnessTools } from './tools.ts'
@@ -43,13 +32,15 @@ export { graphTools, harnessTools, parametersOf } from './tools.ts'
 
 // A Harness must be passed under `h`, never spread into the options. Explicit
 // exclusions also catch spreads, which TypeScript's excess-property check skips.
-type NotHarness = { [K in keyof Harness]?: never }
+type NotHarness = { [K in Exclude<keyof Harness, 'machines'>]?: never }
 
 /** How the harness is started here: what it stores in, what serves it, and
  * what the agent may do. */
 export type Opts = ChildLimits & NotHarness & {
-  /** initial default directory; session home is discovered here */
+  /** Optional command directory on the explicitly named machine. */
   cwd?: string
+  /** Explicit existing machine entity; otherwise shell/files request a sandbox. */
+  machine?: string
   /** the graph to run over */
   h: Harness
   /** what serves an ask (default: @yaks/openai over the found credential) */
@@ -87,9 +78,8 @@ export type Opts = ChildLimits & NotHarness & {
   compactAt?: number
   /** each step of every transcript, as it lands */
   each?: (step: Step) => void
-  /** where a task child's checkout is cut (default `$HARNESS_WORKTREE_DIR`,
-   * else `~/.yak/worktrees`) */
-  worktrees?: string
+  /** Override the machine providers explicitly lent by the host. */
+  machines?: Harness['machines']
 }
 
 const refuse = (message: string): never => {
@@ -126,7 +116,7 @@ export type Here = {
 }
 
 /** What this machine lends an agent over `h`: the models behind its
- * credentials and sign-ins, the shell and a checkout per child, the MCP
+ * credentials and sign-ins, the machine providers, the MCP
  * servers, the pictures, the instruction files where a session opens, and
  * where a defect is written. */
 export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
@@ -134,8 +124,7 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
   let detach = diagnostics().attach(h.g)
   let report = (error: unknown, where: FailureContext) =>
     diagnostics().report(error, where)
-  let cwd = opts.cwd ?? Deno.cwd()
-  let root = opts.worktrees ?? worktrees(env)
+  let binding = machines(h.g, opts.machines ?? h.machines)
   let auth = authorize(h)
   let openaiAuth = openaiCredential(h, env, auth.signin)
   let model = opts.model ??
@@ -148,21 +137,9 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
   const mcp = mcpTools(h, auth.signin, auth.mcp)
   h.fx.created('mcp_server', mcp.refresh).changed('mcp_server', mcp.refresh)
     .removed('mcp_server', mcp.refresh)
-  // A child's own checkout is garbage the moment its session is over: no
-  // further step runs in it until somebody resumes it, and a resume cuts it
-  // again where it stood (worktrees.ts). The path is the one workspace.ts cut
-  // — named after the child — so a child that merely inherited its parent's
-  // home is not mistaken for the owner of it, and one without a checkout of
-  // its own finds nothing there.
-  let collected = collecting(
-    h.g,
-    h.fx,
-    (error, session) => report(error, { phase: 'worktree', session }),
-    root,
-  )
   let named: Tool[] | undefined
   let lent: AgentOpts<Harness> = {
-    ...workspace(h.g, cwd, root),
+    ...binding.limits,
     ...opts,
     h,
     model: opts.model,
@@ -183,11 +160,11 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
       [
         ...harnessTools(h.g, {
           ...opts,
-          worktrees: root,
+          machines: binding,
           artifacts: h.artifacts,
           reply: h.reply,
         }),
-        ...skillTools(h.g, cwd, h.reply),
+        ...skillTools(h.g, binding, h.reply),
       ],
     remote: mcp.snapshot,
     // The host's other tools, its plugins' own among them, adapted the first
@@ -197,8 +174,8 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
       named ??= graphTools(h.g, { tools: h.hostTools?.(), reply: h.reply }),
     streaming: streamingEnabled(opts, env),
     opening: async (persona) => {
-      let home = await homeAt(h.g, cwd)
-      let files = await instructionFiles(cwd)
+      let home = homeAt(opts.machine, opts.cwd)
+      let files = await instructionsFor(h.g, opts.machines ?? h.machines, home)
       return {
         home,
         files: [...files, ...await owing(h.g, home, files, persona)],
@@ -206,23 +183,10 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
     },
     context: (window, entries) =>
       imageContext(h.g, window, entries, h.artifacts),
-    requestItems: (_, __, current) => skillItems(h.g, current, cwd),
+    requestItems: (_, __, current) => skillItems(h.g, current, binding),
     report,
-    // What abnormal endings left in the worktree root, taken back by the same
-    // test one child's end applies. Only the harness running over the graph
-    // in its own home sweeps: another graph (a test's, a probe's) is not this
-    // one, and its run must never reach the live root.
-    resuming: async () => {
-      if (h.path != dbPath(env)) return
-      await tidy(h.g, root).catch(
-        (error) => report(error, { phase: 'worktree-sweep' }),
-      )
-    },
     release: async () => {
       await auth.close()
-      // The effects have stopped, so no removal starts after this; the ones
-      // under way read the graph, which closes once this returns.
-      await collected()
       await diagnostics().drain()
       detach()
     },

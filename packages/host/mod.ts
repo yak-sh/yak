@@ -1,3 +1,4 @@
+import type { MachineProvider } from '@yaks/machine'
 // The portable contract a host lends every plugin. Concrete hosts own drivers,
 // directories and resource lifetime; plugins see the graph and capabilities.
 import type { Bundle, Eid, Graph, NamedTool, Storage } from '@yaks/graph'
@@ -66,6 +67,14 @@ export interface Host {
   blobs: Blobs
   /** binary artifacts shared by the harness and the HTTP blob door */
   artifacts: Blobs
+  /** Providers this host explicitly lends; the default supplies sandboxes. */
+  machines?: {
+    providers: Record<string, MachineProvider>
+    defaultProvider: string
+    resolveHome?: (
+      session: string,
+    ) => Promise<import('@yaks/graph').Comp | undefined>
+  }
   /** every property the store reads through an expression rather than as
    * stored, keyed `comp.prop` — a @yaks/blob body resolves its address to its
    * text — so a plugin reading SQL directly reads what the store reads */

@@ -10,15 +10,13 @@ import type { Effects } from '@yaks/effects'
 import type { Eid, Graph, NamedTool, Storage } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import type { Host, MigrationMonitor } from '@yaks/host'
-import { dbOf } from '@yaks/cli/host'
 import type { Vault } from '@yaks/secrets'
 import type { Reply } from '@yaks/tools'
 
-/** A graph as a harness runs over it: its file, the store under it, the graph
+/** A graph as a harness runs over it: the store under it, the graph
  * over it, the effects registry the runner is handled on, and the process
  * working it. */
 export type Harness = {
-  path: string
   /** The configured person whose default provider accounts serve native sessions. */
   person?: Eid
   store: Storage
@@ -32,8 +30,9 @@ export type Harness = {
   gone: (holder: Eid) => Promise<boolean>
   /** where this graph's secrets are kept — its sign-ins among them */
   vault: Vault
-  /** where its artifacts' bytes are kept (@yaks/blob), shared with the host's
-   * blob door */
+  /** Explicitly lent machine providers; no host disk is assumed. */
+  machines?: Host['machines']
+  /** Binary artifacts shared with the host's blob door. */
   artifacts: Blobs
   /** what a tool call the agent makes directly is owed beside its answer,
    * as the host's own runner adds it (@yaks/cli `Host.reply`): the entities
@@ -53,9 +52,7 @@ export let hosted = (
   host: Host,
   close: () => void | Promise<void> = () => {},
 ): Harness => {
-  let path = dbOf(host.config)
   return {
-    path,
     person: host.config.person,
     store: host.storage,
     g: host.graph,
@@ -65,6 +62,7 @@ export let hosted = (
     gone: host.gone,
     vault: host.vault,
     artifacts: host.artifacts,
+    machines: host.machines,
     reply: host.reply,
     hostTools: () => host.tools,
     migrations: host.storage.migrations,

@@ -7,6 +7,7 @@ export type MachineState = 'requested' | 'running' | 'asleep' | 'released'
 /** What the graph records about a machine. */
 export type MachineRecord = {
   provider?: string
+  address?: string
   from?: string
   image?: string
   state?: MachineState

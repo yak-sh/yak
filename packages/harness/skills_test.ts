@@ -1,15 +1,10 @@
-// A fake provider sees descriptions first, asks the single loader, and receives
-// exact instructions beside its existing image context. All checkouts are ours.
+// Skills are a machine-file view: local edits are not imported into the graph,
+// and a transcript without a machine discovers descriptions without leasing one.
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, derivedEid } from '@yaks/graph'
-import { artifactStore } from '@yaks/blob'
-import { checkoutAt } from '@yaks/git/host'
-import type { Item, Request } from '@yaks/model'
-import { sessionTools, usingBefore } from '@yaks/session'
-import { local } from './local.ts'
-import { skillCwd, skillItems, skillTools } from './skills.ts'
-import { workspace } from './workspace.ts'
+import { processProvider } from '@yaks/process/machine'
+import { skillItems, type SkillMachines, skillTools } from './skills.ts'
 import { harness, scratchRepo } from './testing.ts'
 
 let write = async (
@@ -27,353 +22,280 @@ let write = async (
   )
   return body
 }
-let instructions = (req: Request) =>
-  req.items.filter((i) => i.kind == 'instruction').map((i) => i.text).join('\n')
-let text = (req: Request) =>
-  req.items.filter((i) => 'text' in i).map((i) => i.text).join('\n')
-let answer = (req: Request, items: Item[]) =>
-  Promise.resolve({ id: crypto.randomUUID(), model: req.model, items })
+let catalogue = async (
+  h: Awaited<ReturnType<typeof harness>>,
+  machines: SkillMachines,
+  session = 'session',
+) => {
+  let tools = skillTools(h.g, machines)
+  let items = await skillItems(h.g, { session, tools }, machines)
+  return items.map((item) => 'text' in item ? item.text : '').join('\n')
+}
+let attached = (
+  h: Awaited<ReturnType<typeof harness>>,
+  roots: Record<string, string>,
+): SkillMachines => {
+  let provider = processProvider(h.g, { dir: Object.values(roots)[0] })
+  return {
+    machine: async (session) => {
+      if (!roots[session]) throw new Error('No machine for ' + session)
+      return (await provider.attach!({ id: session, address: roots[session] }))
+        .machine
+    },
+    cwd: (session) => Promise.resolve(roots[session]),
+  }
+}
+let load = async (
+  h: Awaited<ReturnType<typeof harness>>,
+  machines: SkillMachines,
+  title: string,
+  session = 'session',
+) => {
+  let call: Bundle = {
+    entity: { eid: crypto.randomUUID() },
+    call: { id: title },
+    entry: { session },
+  }
+  await h.g.apply([call])
+  let result = await skillTools(h.g, machines)[0].run({ skill: title }, {
+    session,
+    call,
+    entries: [call],
+  })
+  return { call, result }
+}
 
-let png = Uint8Array.from(
-  atob(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aG7cAAAAASUVORK5CYII=',
-  ),
-  (c) => c.charCodeAt(0),
-)
-
-test('native descriptions load exact attributed instructions on demand and keep source-bound images', async () => {
+test('machine descriptions load exact attributed instructions without importing files', async () => {
   let at = await scratchRepo()
   let h = await harness()
-  let body = await write(at.repo)
-  let picture = await artifactStore(h.artifacts)(png, 'image/png')
-  await h.g.apply([{ entity: { eid: 'picture' }, artifact: picture }])
-  let seen: Request[] = []
-  let a = local({
-    h,
-    cwd: at.repo,
-    worktrees: at.root,
-    name: 'fake',
-    model: (req) => {
-      seen.push(req)
-      if (seen.length == 1) {
-        assert(instructions(req).includes('Check observable behavior'))
-        assert(!text(req).includes(body))
-        assertEquals(req.tools.filter((t) => t.name == 'skill_read').length, 1)
-        return answer(req, [{
-          kind: 'call',
-          id: 'load-skill',
-          name: 'skill_read',
-          args: '{"skill":"checking"}',
-        }, {
-          kind: 'call',
-          id: 'view-image',
-          name: 'image_view',
-          args: '{"artifact":"picture"}',
-        }])
-      }
-      let loaded = req.items.find((i) =>
-        i.kind == 'result' && i.id == 'load-skill'
-      )
-      assert(loaded?.kind == 'result')
-      assert(loaded.output.includes(body))
-      assert(loaded.output.includes(`${at.repo}/.claude/skills/checking`))
-      assertEquals(req.items.filter((i) => i.kind == 'image').length, 1)
-      assert(instructions(req).includes('Check observable behavior'))
-      return answer(req, [{ kind: 'assistant', text: 'checked' }])
-    },
-  })
+  await h.g.apply([{
+    entity: { eid: 'attached' },
+    machine: { provider: 'process', state: 'running' },
+  }])
   try {
-    let session = await a.start('Check the observable behavior')
-    await a.idle(session)
-    assertEquals(seen.length, 2)
-    let entries = await a.transcript(session)
-    assertEquals(entries.filter((e) => e.exception).length, 0)
-    let asked = entries.find((e) => (e.call as Comp)?.id == 'load-skill')!
-    let id = derivedEid(`harness graph tool ${asked.entity.eid}`)
-    let [call] = await h.g.get([id])
-    assertEquals((call.created as Comp).by, session)
-    // Read-only graph answers are not imported. The transcript's result keeps
-    // the loaded instructions with its outer call as output.source.
-    let outputs = await h.g.read(
-      `.output.source=${JSON.stringify(asked.entity.eid)}&*`,
-    )
-    assert(
-      outputs.some((e) => String((e.content as Comp)?.body).includes(body)),
-    )
+    let body = await write(at.repo)
+    await h.g.apply([{
+      entity: { eid: 'session' },
+      session: {},
+      home: { machine: 'attached', cwd: at.repo },
+    }])
+    let machines = attached(h, { session: at.repo })
+    let discovered = await catalogue(h, machines)
+    assert(discovered.includes('Check observable behavior'))
+    assert(!discovered.includes(body))
+    let { call, result } = await load(h, machines, 'checking')
+    assert(result.includes(body))
+    assert(result.includes(`${at.repo}/.claude/skills/checking`))
+    let id = derivedEid(`harness graph tool ${call.entity.eid}`)
+    let [inner] = await h.g.get([id])
+    assertEquals((inner.created as Comp).by, 'session')
     assertEquals((await h.g.read('.skill')).length, 0)
-    await a.send(session, 'Continue checking')
-    await a.idle(session)
-    assertEquals(seen.length, 3)
-    assertEquals(seen[2].items.filter((i) => i.kind == 'image').length, 1)
   } finally {
-    await a.close()
+    h.close()
     await at.free()
   }
 })
 
-test('native catalogue refreshes local edits, additions and deletions before each ask', async () => {
+test('machine catalogue refreshes dirty edits, untracked additions and deletions', async () => {
   let at = await scratchRepo()
   let h = await harness()
-  await write(at.repo)
-  let seen: Request[] = []
-  let a = local({
-    h,
-    cwd: at.repo,
-    name: 'fake',
-    model: (req) => {
-      seen.push(req)
-      return answer(req, [{ kind: 'assistant', text: 'ok' }])
-    },
-  })
+  await h.g.apply([{
+    entity: { eid: 'attached' },
+    machine: { provider: 'process', state: 'running' },
+  }])
   try {
-    let session = await a.start('First')
-    await a.idle(session)
+    await write(at.repo)
+    await h.g.apply([{
+      entity: { eid: 'session' },
+      session: {},
+      home: { machine: 'attached' },
+    }])
+    let machines = attached(h, { session: at.repo })
+    assert((await catalogue(h, machines)).includes('Check observable behavior'))
     await write(at.repo, 'checking', 'Changed description', 'Changed body\n')
     await write(at.repo, 'new-skill', 'A newly available workflow')
-    await a.send(session, 'Second')
-    await a.idle(session)
-    assert(instructions(seen[1]).includes('Changed description'))
-    assert(instructions(seen[1]).includes('A newly available workflow'))
-    assert(!text(seen[1]).includes('Changed body'))
+    let discovered = await catalogue(h, machines)
+    assert(discovered.includes('Changed description'))
+    assert(discovered.includes('A newly available workflow'))
+    assert(!discovered.includes('Changed body'))
     await Deno.remove(`${at.repo}/.claude/skills`, { recursive: true })
-    await a.send(session, 'Third')
-    await a.idle(session)
-    assert(!instructions(seen[2]).includes('Repository skills'))
+    assertEquals(await catalogue(h, machines), '')
     assertEquals((await h.g.read('.skill')).length, 0)
   } finally {
-    await a.close()
+    h.close()
     await at.free()
   }
 })
 
-test('explicit tool registries and transcript allowlists suppress loader and catalogue', async () => {
-  let at = await scratchRepo()
+test('graph discovery and tool allowlists never provision a machine', async () => {
   let h = await harness()
-  await write(at.repo)
-  let seen: Request[] = []
-  let a = local({
-    h,
-    cwd: at.repo,
-    name: 'fake',
-    tools: [],
-    model: (req) => {
-      seen.push(req)
-      return answer(req, [{ kind: 'assistant', text: 'ok' }])
-    },
-  })
+  await h.g.apply([{
+    entity: { eid: 'attached' },
+    machine: { provider: 'process', state: 'running' },
+  }])
   try {
-    let session = await a.start('First')
-    await a.idle(session)
-    assertEquals(seen[0].tools, [])
-    assert(!instructions(seen[0]).includes('Repository skills'))
-  } finally {
-    await a.close()
-  }
-  h = await harness()
-  a = local({
-    h,
-    cwd: at.repo,
-    name: 'fake',
-    model: (req) => {
-      seen.push(req)
-      return answer(req, [{ kind: 'assistant', text: 'ok' }])
-    },
-  })
-  try {
-    let session = await a.start('First default')
-    await a.idle(session)
-    assert(instructions(seen[1]).includes('Repository skills'))
     await h.g.apply([{
-      entity: { eid: crypto.randomUUID() },
-      entry: { session },
-      notice: {},
-      using: { ...usingBefore(await a.transcript(session)), tools: ['read'] },
-    }])
-    await a.send(session, 'Restricted')
-    await a.idle(session)
-    assertEquals(seen[2].tools.map((t) => t.name), ['read'])
-    assert(!instructions(seen[2]).includes('Repository skills'))
+      entity: { eid: 'graph-skill' },
+      skill: {
+        invoke: 'both',
+        arguments: [],
+        paths: [],
+        fork: false,
+        options: {},
+      },
+      doc: { title: 'checking', body: 'Description from the graph' },
+      content: { body: 'Instructions stay hidden' },
+    }, { entity: { eid: 'session' }, session: {} }])
+    let calls = 0
+    let machines: SkillMachines = {
+      machine: () => {
+        calls++
+        throw new Error('Discovery must not provision')
+      },
+      cwd: () => Promise.resolve(undefined),
+    }
+    let discovered = await catalogue(h, machines)
+    assert(discovered.includes('Description from the graph'))
+    assert(!discovered.includes('Instructions stay hidden'))
+    assertEquals(
+      await skillItems(h.g, { session: 'session', tools: [] }, machines),
+      [],
+    )
+    assertEquals(calls, 0)
   } finally {
-    await a.close()
-    await at.free()
+    h.close()
   }
 })
 
-test('user-only skills are absent from model discovery and refused by the loader', async () => {
+test('user-only skills are undiscoverable and the machine loader refuses them', async () => {
   let at = await scratchRepo()
   let h = await harness()
+  await h.g.apply([{
+    entity: { eid: 'attached' },
+    machine: { provider: 'process', state: 'running' },
+  }])
   try {
     await write(
       at.repo,
       'manual',
-      'Only a person asks for this',
+      'Only a person asks',
       'Manual\n',
       'disable-model-invocation: true\n',
     )
     await h.g.apply([{
       entity: { eid: 'session' },
       session: {},
-      home: { cwd: at.repo },
+      home: { machine: 'attached' },
     }])
-    let tools = skillTools(h.g, at.repo)
-    assertEquals(await skillItems(h.g, { session: 'session', tools }), [])
-    let call: Bundle = {
-      entity: { eid: 'outer' },
-      call: { id: 'manual' },
-      entry: { session: 'session' },
-    }
-    await h.g.apply([call])
-    let result = await tools[0].run({ skill: 'manual' }, {
-      session: 'session',
-      call,
-      entries: [call],
-    })
+    let machines = attached(h, { session: at.repo })
+    assertEquals(await catalogue(h, machines), '')
+    let { result } = await load(h, machines, 'manual')
     assert(result.includes('user invocation only'))
     assert(!result.includes('Manual\n'))
-    assertEquals((await h.g.get(['session']))[0].home, {
-      cwd: at.repo,
-      worktree: null,
-    })
-    let tree = await checkoutAt(h.g, at.repo)
-    assert(tree)
-    await h.g.apply([{
-      entity: { eid: 'session' },
-      home: { worktree: tree.entity.eid },
-    }, {
-      entity: tree.entity,
-      worktree: null,
-    }])
-    assertEquals(await skillCwd(h.g, 'session', at.repo), undefined)
   } finally {
     h.close()
     await at.free()
   }
 })
 
-test('fork and resumed sessions read their own home checkout without borrowing parent skills', async () => {
+test('resumed sessions use their own machines and never borrow parent files', async () => {
   let first = await scratchRepo()
   let second = await scratchRepo()
   let h = await harness()
-  await write(first.repo, 'first-skill', 'First repository description')
-  await write(second.repo, 'second-skill', 'Second repository description')
-  let seen = new Map<string, Request>()
-  let a = local({
-    h,
-    cwd: first.repo,
-    name: 'fake',
-    model: (req) => {
-      seen.set(req.conversation!, req)
-      return answer(req, [{ kind: 'assistant', text: 'ok' }])
-    },
-  })
+  await h.g.apply([{
+    entity: { eid: 'attached' },
+    machine: { provider: 'process', state: 'running' },
+  }])
   try {
-    let parent = await a.start('Parent')
-    await a.idle(parent)
-    let entries = await a.transcript(parent)
-    let call: Bundle = {
-      entity: { eid: crypto.randomUUID() },
-      call: {},
-      entry: { session: parent },
-      notice: {},
-    }
-    await h.g.apply([call])
-    let fork = sessionTools(h.g, workspace(h.g, first.repo, first.root))
-      .find((tool) => tool.name == 'fork')!
-    let child = String(
-      await fork.run({ prompt: 'Child', home: second.repo }, {
-        session: parent,
-        entries,
-        call,
-      }),
+    await write(first.repo, 'first-skill', 'First machine description')
+    await write(second.repo, 'second-skill', 'Second machine description')
+    await h.g.apply(
+      ['parent', 'child'].map((session) => ({
+        entity: { eid: session + '-machine' },
+        machine: { provider: 'process', state: 'running' },
+      })),
     )
-    await a.idle(child)
-    assert(instructions(seen.get(child)!).includes('Second repository'))
-    assert(!instructions(seen.get(child)!).includes('First repository'))
-    assert(instructions(seen.get(parent)!).includes('First repository'))
+    await h.g.apply(['parent', 'child'].map((session) => ({
+      entity: { eid: session },
+      session: {},
+      home: { machine: session + '-machine' },
+    })))
+    let machines = attached(h, { parent: first.repo, child: second.repo })
+    assert((await catalogue(h, machines, 'parent')).includes('First machine'))
+    let discovered = await catalogue(h, machines, 'child')
+    assert(discovered.includes('Second machine'))
+    assert(!discovered.includes('First machine'))
     await write(second.repo, 'second-skill', 'Resumed child description')
-    await a.send(child, 'Continue')
-    await a.idle(child)
-    assert(instructions(seen.get(child)!).includes('Resumed child description'))
-    assert(!instructions(seen.get(child)!).includes('First repository'))
+    assert((await catalogue(h, machines, 'child')).includes('Resumed child'))
   } finally {
-    await a.close()
+    h.close()
     await first.free()
     await second.free()
   }
 })
 
-test('a session command subdirectory loads from the repository root without changing home', async () => {
+test('command subdirectories load from the machine repository root without changing home', async () => {
   let at = await scratchRepo()
   let h = await harness()
+  await h.g.apply([{
+    entity: { eid: 'attached' },
+    machine: { provider: 'process', state: 'running' },
+  }])
   try {
     let body = await write(at.repo)
     await Deno.mkdir(`${at.repo}/commands`)
     await h.g.apply([{
-      entity: { eid: 'subdirectory' },
+      entity: { eid: 'session' },
       session: {},
-      home: { cwd: `${at.repo}/commands` },
+      home: { machine: 'attached', cwd: `${at.repo}/commands` },
     }])
-    let [before] = await h.g.get(['subdirectory'])
-    let call: Bundle = {
-      entity: { eid: 'load-from-command-directory' },
-      call: { id: 'load' },
-      entry: { session: 'subdirectory' },
-    }
-    await h.g.apply([call])
-    let tools = skillTools(h.g)
-    let result = await tools[0].run({ skill: 'checking' }, {
-      session: 'subdirectory',
-      call,
-      entries: [call],
-    })
+    let [before] = await h.g.get(['session'])
+    let machines = attached(h, { session: `${at.repo}/commands` })
+    let { result } = await load(h, machines, 'checking')
     assert(
       result.includes(`supporting files: ${at.repo}/.claude/skills/checking`),
     )
-    assert(!result.includes(`${at.repo}/commands/.claude/skills/checking`))
     assert(result.includes(body))
-    let [after] = await h.g.get(['subdirectory'])
-    assertEquals(after.home, before.home)
+    assertEquals((await h.g.get(['session']))[0].home, before.home)
   } finally {
     h.close()
     await at.free()
   }
 })
 
-test('retired checkout observations supply no catalogue and never borrow fallback skills', async () => {
+test('skill discovery ignores links and reports malformed authored metadata', async () => {
   let at = await scratchRepo()
+  let other = await scratchRepo()
   let h = await harness()
+  await h.g.apply([{
+    entity: { eid: 'attached' },
+    machine: { provider: 'process', state: 'running' },
+  }])
   try {
-    await write(at.repo)
-    await h.g.apply([
-      { entity: { eid: 'retired' }, worktree: { path: at.repo } },
-      {
-        entity: { eid: 'session' },
-        session: {},
-        home: { worktree: 'retired' },
-      },
-    ])
-    await h.g.apply([{ entity: { eid: 'retired' }, worktree: null }])
-    let tools = skillTools(h.g, at.repo)
-    assertEquals(await skillCwd(h.g, 'session', at.repo), undefined)
-    assertEquals(
-      await skillItems(h.g, { session: 'session', tools }, at.repo),
-      [],
+    await write(other.repo, 'borrowed', 'Files belonging to another machine')
+    await Deno.mkdir(`${at.repo}/.claude/skills`, { recursive: true })
+    await Deno.symlink(
+      `${other.repo}/.claude/skills/borrowed`,
+      `${at.repo}/.claude/skills/borrowed`,
     )
-    let call: Bundle = {
-      entity: { eid: 'retired-skill-call' },
-      call: { id: 'checking' },
-      entry: { session: 'session' },
-    }
-    await h.g.apply([call])
-    let result = await tools[0].run({ skill: 'checking' }, {
-      session: 'session',
-      call,
-      entries: [call],
-    })
-    assert(result.includes('no skill checkout'))
-    assert(!result.includes('Secret instruction body'))
+    await h.g.apply([{
+      entity: { eid: 'session' },
+      session: {},
+      home: { machine: 'attached' },
+    }])
+    let machines = attached(h, { session: at.repo })
+    assertEquals(await catalogue(h, machines), '')
+    await write(at.repo, 'bad', 'bad', 'body')
+    await Deno.writeTextFile(
+      `${at.repo}/.claude/skills/bad/SKILL.md`,
+      'not frontmatter',
+    )
+    let { result } = await load(h, machines, 'bad')
+    assert(result.includes('Cannot load'))
+    assert(!result.includes('Files belonging to another machine'))
   } finally {
     h.close()
     await at.free()
+    await other.free()
   }
 })

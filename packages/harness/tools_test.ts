@@ -1,3 +1,5 @@
+import { machines } from './session_machines.ts'
+import { processProvider } from '@yaks/process/machine'
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { graphTools, harnessTools, parametersOf } from './tools.ts'
@@ -92,8 +94,17 @@ test('the merged wait preserves process output and child status alongside task w
         exit: { code: 0 },
       },
     ])
-    let wait = harnessTools(h.g).find((t) => t.name == 'wait')!
-    let process = await wait.run({ process: 'command', timeout: 0 })
+    let wait = harnessTools(h.g, {
+      machines: machines(h.g, {
+        defaultProvider: 'process',
+        providers: { process: processProvider(h.g, { dir }) },
+      }),
+    }).find((t) => t.name == 'wait')!
+    let process = await wait.run({ process: 'command', timeout: 0 }, {
+      session: 'p',
+      call: { entity: { eid: 'process-call' } },
+      entries: [],
+    })
     assertEquals(process, 'process command exited 0\nprocess output')
     let children = await wait.run({ children: ['c'], timeout: 0 }, {
       session: 'p',
@@ -121,7 +132,7 @@ test('a transcript naming a plugin’s tool is offered it alone, and it runs', a
     cwd: repo(),
     h: await harness(),
     tools: [],
-    worktrees,
+
     model: (req) => {
       offered.push(req.tools?.map((t) => t.name) ?? [])
       return Promise.resolve({
