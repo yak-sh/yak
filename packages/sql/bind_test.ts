@@ -407,7 +407,8 @@ test('an OR compiles independent selections and keeps operand order', () => {
   let either = compile(parse('.doc.title=a|.task.priority=1'), v)
   assert(either.sql.includes('union'), either.sql)
   assert(either.sql.includes('"__candidates"'), either.sql)
-  assertEquals(either.params, ['a', 1, 'a', 1])
+  // the candidates drive the statement, so nothing tests them a second time
+  assertEquals(either.params, ['a', 1])
 })
 
 test('a wide OR nests capped compounds and keeps its operands', () => {
@@ -418,7 +419,7 @@ test('a wide OR nests capped compounds and keeps its operands', () => {
     v,
   )
   assert(wide.sql.includes('select * from ('), wide.sql)
-  assertEquals(wide.params, ['a', 'b', 1, 2, 'c', 3, 'a', 'b', 1, 2, 'c', 3])
+  assertEquals(wide.params, ['a', 'b', 1, 2, 'c', 3])
 })
 
 test('a spine value that is no operand list keeps the column road', () => {

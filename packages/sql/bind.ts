@@ -124,7 +124,8 @@ type Ctx = {
   now: number
   storageOrder?: boolean
   tables: Set<string>
-  candidates?: Frag
+  /** the first disjunction's entity ids, and the condition that tests them */
+  candidates?: Frag & { test: Cond }
   present?: string
   owner?: string
   archetypes?: ArchetypeSet
@@ -834,12 +835,23 @@ let union = (ctx: Ctx, alts: Clause[]): Cond => {
     ).join(' union '),
     params: groups.flatMap((g) => g.params),
   }
-  ctx.candidates ??= candidates
-  return cond({
+  let test = cond({
     sql: `${ctx.d.ownerKey('entity')} in (${candidates.sql})`,
     params: candidates.params,
   })
+  ctx.candidates ??= { ...candidates, test }
+  return test
 }
+
+// A condition with one of its top-level conjuncts known to hold: what drives
+// the statement already decides it, so testing it again only reads every row
+// twice. Under an OR or a NOT it still decides something, and stays.
+let holding = (where: Cond, known: Cond): Cond =>
+  where === known
+    ? TRUE
+    : where.t == 'op' && where.op == 'and'
+    ? and(...where.parts.map((p) => holding(p, known)))
+    : where
 
 // The left JOINs for the tables this bind touched, keyed on the row they hang
 // off: the entity table for an ordinary query, or the child table inside a
@@ -1521,6 +1533,7 @@ let indexedRelation = (
     if (!ctx.candidates || ctx.spine || from != '"entity"') return s
     return {
       ...s,
+      where: s.where && holding(s.where, ctx.candidates.test),
       from: raw(
         `(${ctx.candidates.sql}) as "__candidates"`,
         ctx.candidates.params,

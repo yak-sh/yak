@@ -81,3 +81,52 @@ test('indexed disjunction arms seek referents despite shared history', () => {
     db.close()
   }
 })
+
+// The ids a disjunction's arms select drive the statement. Testing them again
+// as a condition read every candidate twice and probed each arm per row.
+test('a disjunction reads its candidates once', () => {
+  let db = new Database(':memory:'), d = driver(db)
+  try {
+    let vocab = loadVocab([archetypeDoc, {
+      $defs: {
+        entity: { component: true, type: 'object' },
+        node: { component: true, type: 'object' },
+        place: {
+          component: true,
+          type: 'object',
+          properties: {
+            level: { type: 'string', index: true },
+            ci: { type: 'number' },
+          },
+        },
+      },
+    }])
+    let store = storage(d, vocab)
+    store.install()
+    let g = graph({ storage: store, vocab, plugins: [archetypes()] })
+    for (let i = 0; i < 2000; i += 500) {
+      g.apply(Array.from({ length: 500 }, (_, j) => ({
+        entity: { eid: `p${i + j}` },
+        place: { level: 'vale', ci: (i + j) % 40 },
+      })))
+    }
+    let steps = (q: string) => {
+      let sql = render(compile(parse(q), vocab, { archetypes: catalog(d) }))
+      let stmt = db.prepare(sql.sql)
+      try {
+        ok(stmt.all(...sql.params).length > 1000, q)
+        return status.symbols.sqlite3_stmt_status(stmt.unsafeHandle, 4, 0)
+      } finally {
+        stmt.finalize()
+      }
+    }
+    let alone = steps('.place.level=vale&.place.ci=0..30')
+    let either = steps('.place.level=vale&.place.ci=0..30|.node')
+    ok(
+      either < alone * 2.5,
+      `${either} VM steps for the disjunction, ${alone} for its arm`,
+    )
+  } finally {
+    db.close()
+  }
+})
