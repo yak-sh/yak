@@ -4,23 +4,25 @@
 import type { Bundle } from '@yaks/graph'
 import type { Source } from './service.ts'
 
-let sync = (dir: string) => {
-  let file = Deno.openSync(dir, { read: true })
+// Every write and sync is asynchronous: a host reporting into the spool keeps
+// its thread while a busy disk takes seconds over an fsync.
+let sync = async (dir: string) => {
+  let file = await Deno.open(dir, { read: true })
   try {
-    file.syncSync()
+    await file.sync()
   } finally {
     file.close()
   }
 }
 
 export let files = (dir: string): {
-  append: (line: string) => void
+  append: (line: string) => Promise<void>
   source: Source
 } => ({
-  append: (line) => {
-    Deno.mkdirSync(dir, { recursive: true, mode: 0o700 })
+  append: async (line) => {
+    await Deno.mkdir(dir, { recursive: true, mode: 0o700 })
     let name = `${dir}/${Date.now()}-${crypto.randomUUID()}`
-    let file = Deno.openSync(`${name}.jsonl`, {
+    let file = await Deno.open(`${name}.jsonl`, {
       write: true,
       createNew: true,
       mode: 0o600,
@@ -28,12 +30,12 @@ export let files = (dir: string): {
     try {
       let bytes = new TextEncoder().encode(line)
       let at = 0
-      while (at < bytes.length) at += file.writeSync(bytes.subarray(at))
-      file.syncSync()
+      while (at < bytes.length) at += await file.write(bytes.subarray(at))
+      await file.sync()
     } finally {
       file.close()
     }
-    sync(dir)
+    await sync(dir)
   },
   source: async function* () {
     let names: string[] = []
@@ -71,7 +73,7 @@ export let files = (dir: string): {
           } catch (error) {
             if (!(error instanceof Deno.errors.NotFound)) throw error
           }
-          sync(dir)
+          await sync(dir)
         },
       }
     }
