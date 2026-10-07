@@ -664,8 +664,8 @@ test('archetype: drift finds the pointer a raw writer left behind', () => {
   assertEquals(drift(driver), { checked: 2, drifted: 0, sample: [] })
 })
 
-test('archetype: component patches discover no unchanged physical schema', () => {
-  let { driver, store: s } = setup()
+test('archetype: patches and deletes discover no unchanged physical schema', () => {
+  let { driver, store: s, g } = setup()
   s.tx((tx) =>
     tx.patch([{ entity: { eid: 'same' }, doc: { title: 'before' } }])
   )
@@ -680,6 +680,9 @@ test('archetype: component patches discover no unchanged physical schema', () =>
     s.tx((tx) =>
       tx.patch([{ entity: { eid: 'same' }, task: i % 2 ? null : {} }])
     )
+    // A delete asks the cascade who goes with it.
+    g.apply([{ entity: { eid: `gone${i}` }, child: { of: 'same' } }])
+    g.apply([{ entity: { eid: `gone${i}` }, $delete: true }])
   }
   assertEquals(calls, 0)
 })

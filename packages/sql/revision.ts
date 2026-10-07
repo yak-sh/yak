@@ -52,9 +52,11 @@ export function revision(driver: Driver, scope: Scope): number {
       if (current.descriptors != at.descriptors) current.descriptors++
     }
     let observe = (s: Stmt): void => {
+      // A raw statement is SQL this package wrote: a rendered one keeps the
+      // statement it came from, and one without is a query the compiler
+      // lowered to text (the death cascade's closure), which moves nothing.
       if (s.t == 'raw') {
         if (s.origin) observe(s.origin)
-        else invalidate() // Unannotated SQL may change tables or triggers.
         return
       }
       if (s.t == 'insert' || s.t == 'update' || s.t == 'delete') current.data++

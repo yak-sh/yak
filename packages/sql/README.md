@@ -287,8 +287,10 @@ A **revision** is a connection-local invalidation token for a schema, catalog,
 or data snapshot. `revision(driver, 'schema')` changes after DDL and after a
 rollback that undoes DDL. Single-owner drivers observe statements through
 `query`, `run`, and `tx` without issuing SQL; file drivers additionally read
-SQLite's version pragmas to observe peer connections. Unannotated raw SQL,
-extension loading, and schema templates invalidate snapshots conservatively.
+SQLite's version pragmas to observe peer connections. A raw statement counts as
+the statement it was rendered from; one without that origin is a query the
+compiler lowered, and moves nothing. Extension loading and schema templates
+invalidate snapshots conservatively.
 
 ```ts
 import { revision } from '@yaks/sql'

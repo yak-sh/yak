@@ -82,18 +82,9 @@ test('embedding schema decisions observe DDL through query and run', () => {
   }
 })
 
-test('embedding schema decisions observe rendered and unannotated SQL changes', () => {
-  for (let annotated of [true, false]) {
-    let d = shelf()
-    let raw: Pick<Statements, 'query'> = {
-      query: (s) => {
-        let stmt = render(s)
-        if (!annotated) delete stmt.origin
-        return d.query(stmt)
-      },
-    }
-    exercise(d, raw)
-  }
+test('embedding schema decisions observe rendered SQL changes', () => {
+  let d = shelf()
+  exercise(d, { query: (s) => d.query(render(s)) })
 })
 
 test('embedding snapshots taken in a rolled back transaction are discarded', () => {
