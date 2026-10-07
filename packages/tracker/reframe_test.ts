@@ -88,6 +88,23 @@ test('a competing frame result is revalidated rather than overwritten stale', as
   equal(comp(bug, 'bug').hits, 1)
 })
 
+test('frames resolved again to the same answer write nothing', async () => {
+  let g = await occurrence()
+  await reframe(g, 'occurrence', linked(correct))
+  let writes = 0
+  let counted = {
+    ...g,
+    apply: (...args: Parameters<typeof g.apply>) => {
+      writes++
+      return g.apply(...args)
+    },
+  }
+  await reframe(counted, 'occurrence', linked(correct))
+  equal(writes, 0)
+  await reframe(counted, 'occurrence', linked(next))
+  equal(writes, 1)
+})
+
 test('frame resolver failures retain grouping and text without self enrichment', async () => {
   let g = fixture()
   let error = new TypeError('catalog refused')
