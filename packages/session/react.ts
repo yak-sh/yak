@@ -972,7 +972,14 @@ export let react = async (
         )
       }
     }
-    return { did: 'ran', status: await currentStatus(g, session), added }
+    // A live worker may hold a call, or win its claim while we read. The
+    // tool runner then leaves it alone. Report no work so settle yields;
+    // reporting a run here would spin through the same unanswered call.
+    return {
+      did: added.length ? 'ran' : 'nothing',
+      status: await currentStatus(g, session),
+      added,
+    }
   }
   if (status == 'running') return nothing
 

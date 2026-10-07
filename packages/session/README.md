@@ -373,12 +373,14 @@ reader whose lines are all side conversations) into a session of its own:
 summary becomes a checkpoint in the transcript; a native continuation starts
 there.
 
-Once an hour the duty finds the imported sessions whose newest entry is older
-than `full` (`stale()`), from any importer, and strips each to its prose
-(`strip()`, a small batch between looks): calls, results, thoughts, notices and
-a turn's ending go; what a person typed and what the model said stay. Compaction
-summaries stay too, so an older transcript can still resume, and so does an
-entry that records what a turn cost, since the session's cost is their sum.
+The duty scans sessions one at a time, starting another scan an hour after the
+last finishes. `stale()` yields pages of at most 50 imported entry identities
+from sessions whose newest entry is older than `full`, checking that age before
+each page. `strip()` deletes one page between looks: calls, results, thoughts,
+notices and a turn's ending go; what a person typed and what the model said
+stay. Compaction summaries stay too, so an older transcript can still resume,
+and so does an entry that records what a turn cost, since the session's cost is
+their sum.
 
 | Option        | Default              | Meaning                                 |
 | ------------- | -------------------- | --------------------------------------- |

@@ -296,30 +296,43 @@ let stripped = (g: Graph) =>
   })`
 
 /**
- * What a strip owes: each imported entry that is not prose, in a session whose
- * newest entry was written more than `full` milliseconds before `now`.
+ * One bounded page of imported entries to strip from a quiet session. Empty
+ * pages give the duty its turn back after a recent or already stripped session.
+ * The newest entry is checked before every page, so a session that speaks again
+ * keeps its remaining depth. Identity cursors survive the entries' deletion.
  */
-export let stale = async (
+export let stale = async function* (
   g: Graph,
-  o: { full?: number; now?: number } = {},
-): Promise<Eid[]> => {
+  o: { full?: number; now?: number; signal?: AbortSignal } = {},
+): AsyncGenerator<Eid[]> {
   let before = new Date((o.now ?? Date.now()) - (o.full ?? FULL))
     .toISOString()
-  let by = new Map<Eid, Eid[]>()
-  for (let b of await g.read(`${stripped(g)}&?entry.session`)) {
-    let session = (b.entry as { session: Eid }).session
-    if (!by.has(session)) by.set(session, [])
-    by.get(session)!.push(b.entity.eid)
+  let page = (query: string, after?: Eid, limit = 1) =>
+    `${query} .order=entity.eid .limit=${limit}${
+      after ? ` .after=${after}` : ''
+    }`
+  let after: Eid | undefined
+  while (!o.signal?.aborted) {
+    let [found] = await g.rows(
+      page('.session', after),
+    ) as { eid: Eid }[]
+    if (!found) return
+    after = found.eid
+    let cursor: Eid | undefined
+    while (!o.signal?.aborted) {
+      let [last] = await g.rows(
+        `.entry.session=${after} .order=-entry.seq .limit=1 .fields=created.at`,
+      ) as { 'created.at'?: string }[]
+      if ((last?.['created.at'] ?? '') >= before) break
+      let rows = await g.rows(
+        page(`${stripped(g)} .entry.session=${after}`, cursor, BATCH),
+      ) as { eid: Eid }[]
+      if (!rows.length) break
+      cursor = rows[rows.length - 1].eid
+      yield rows.map((b) => b.eid)
+    }
+    yield []
   }
-  let out: Eid[] = []
-  for (let [session, eids] of by) {
-    let [last] = await g.read(
-      `.entry.session=${session}&.order=-entry.seq&.limit=1&?created`,
-    )
-    let at = (last?.created as { at?: string } | undefined)?.at ?? ''
-    if (at < before) out.push(...eids)
-  }
-  return out
 }
 
 /** How many entries one step of a strip deletes. */
@@ -359,7 +372,7 @@ export let service = async (
   let said = host.config?.person
   let person = said && ((await host.graph.address([said])).get(said) ?? said)
   let seen: Seen = { tails: new Map(), done: new Set() }
-  let owed: Eid[] = []
+  let trimming: AsyncGenerator<Eid[]> | undefined
   let due = 0
   while (!signal.aborted) {
     try {
@@ -371,13 +384,26 @@ export let service = async (
           signal,
         })
       }
-      if (!owed.length && Date.now() >= due) {
-        owed = await stale(host.graph, { full: options.full })
-        due = Date.now() + HOUR
+      if (!trimming && Date.now() >= due) {
+        trimming = stale(host.graph, { full: options.full, signal })
       }
-      // Taken off the list before the delete, so a batch that fails is
-      // dropped rather than tried every pass; the next hour finds it again.
-      await strip(host.graph, owed.splice(0, BATCH))
+      if (trimming) {
+        let page: IteratorResult<Eid[]>
+        try {
+          page = await trimming.next()
+        } catch (e) {
+          trimming = undefined
+          throw e
+        }
+        if (page.done) {
+          trimming = undefined
+          due = Date.now() + HOUR
+        } else {
+          // The iterator has advanced before deletion, so a failed page is
+          // skipped until the next hourly pass rather than retried forever.
+          await strip(host.graph, page.value)
+        }
+      }
     } catch (e) {
       console.error('transcripts —', e)
     }

@@ -2,7 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { type Comp, type Graph, identityEid } from '@yaks/graph'
 import { ids, locked, lockOn, seed, store } from './testing.ts'
-import { look, type Seen, service, stale, strip } from './service.ts'
+import { BATCH, look, type Seen, service, stale, strip } from './service.ts'
 import { callOf } from './tail.ts'
 import { sessionEid } from './who.ts'
 
@@ -208,6 +208,16 @@ test('a managed run is read from its own output, not its transcript file', () =>
     assertEquals(await told(g, 'one'), ['do it'])
   }))
 
+let trim = async (g: Graph, o: Parameters<typeof stale>[1] = {}) => {
+  for await (let eids of stale(g, o)) await strip(g, eids)
+}
+
+let staleEntries = async (g: Graph, o: Parameters<typeof stale>[1] = {}) => {
+  let eids: string[] = []
+  for await (let batch of stale(g, o)) eids.push(...batch)
+  return eids
+}
+
 // A turn's ending, with what it cost.
 let ended = JSON.stringify({
   type: 'result',
@@ -225,7 +235,7 @@ test('a session quiet past its full depth is stripped to its prose and its cost'
     await look(g, dir, { tails: new Map(), done: new Set() }, {
       person: ids.ada,
     })
-    await strip(g, await stale(g))
+    await trim(g)
     assertEquals(await told(g, 'past'), ['long ago', 'said 0', '(call)'])
     let [past] = await g.read('.session.id=past')
     let [spent] = await g.read(`.entry.session=${past.entity.eid}&.cost&*`)
@@ -238,7 +248,7 @@ test('a session quiet past its full depth is stripped to its prose and its cost'
       '(call)',
       'a.txt',
     ])
-    assertEquals(await stale(g), [])
+    assertEquals(await staleEntries(g), [])
   }))
 
 test('stripping old imports removes refusals but keeps cost-bearing refusals', async () => {
@@ -258,9 +268,51 @@ test('stripping old imports removes refusals but keeps cost-bearing refusals', a
     content: { body: 'at the limit' },
     cost: { dollars: 0.25, reported: true },
   })
-  let eids = await stale(g, { full: 0, now: Date.now() + DAY })
+  let eids = await staleEntries(g, { full: 0, now: Date.now() + DAY })
   assertEquals(eids, ['refused'])
   await strip(g, eids)
   assertEquals((await g.read('.entity.eid=refused&.refusal')).length, 0)
   assertEquals((await g.get(['spent-refusal']))[0].refusal, { code: 'limit' })
 })
+
+for (let revived of [false, true]) {
+  test(`retention pages survive deletion${revived ? ' and stop when a session speaks again' : ''}`, async () => {
+    let s = store(), g = locked(s)
+    let now = Date.now()
+    let old = new Date(now - 30 * DAY).toISOString()
+    let entries = Array.from({ length: BATCH + 2 }, (_, seq) => ({
+      entity: { eid: `old-${String(seq).padStart(3, '0')}` },
+      entry: { session: ids.run1, seq },
+      imported: { source: 'old.jsonl', line: seq + 1 },
+      result: {},
+      content: { body: 'old tool output' },
+      created: { at: old },
+    }))
+    seed(s, ...entries)
+    let pages = stale(g, { now })
+    let first = await pages.next()
+    assertEquals(first.value?.length, BATCH)
+    await strip(g, first.value!)
+    if (revived) {
+      seed(s, {
+        entity: { eid: 'recent' },
+        entry: { session: ids.run1, seq: BATCH + 2 },
+        content: { body: 'back again' },
+        created: { at: new Date(now).toISOString() },
+      })
+    }
+    let rest: string[] = []
+    for await (let batch of pages) {
+      rest.push(...batch)
+      await strip(g, batch)
+    }
+    assertEquals(
+      rest,
+      revived ? [] : entries.slice(BATCH).map((b) => b.entity.eid),
+    )
+    assertEquals(
+      (await g.rows('.imported .entry.session=run1')).length,
+      revived ? 2 : 0,
+    )
+  })
+}

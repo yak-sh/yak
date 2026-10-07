@@ -16,10 +16,11 @@ import { loadVocab, pick } from '@yaks/vocab'
 import { kernelDoc } from '@yaks/kernel/vocab'
 import { type Model, modelDoc, type Request } from '@yaks/model'
 import { toolsDoc } from '@yaks/tools/vocab'
+import { toolEid } from '@yaks/tools'
 import { test } from '@yaks/testing'
 import { sessionDoc } from './comp.ts'
 import { sessions } from './plugin.ts'
-import { transcript } from './react.ts'
+import { react, transcript } from './react.ts'
 import { kindOf, sessionDerived, statusOf } from './status.ts'
 import { answers } from './providers.ts'
 import { RUN, type Runner, settle } from './run.ts'
@@ -88,6 +89,71 @@ let child = (eid: string, order?: number): Bundle[] => [
   },
 ]
 let dispatch = (b: Bundle) => b.dispatch as Comp | undefined
+
+let openCall = (owner?: string) => {
+  let p = fixture([
+    { entity: { eid: toolEid('empty') }, tool: { name: 'empty' } },
+    {
+      entity: { eid: 'input' },
+      entry: { session: 'root', seq: 1 },
+      content: { body: 'work' },
+      using: { provider: P, model: M },
+    },
+    {
+      entity: { eid: 'ask' },
+      entry: { session: 'root', seq: 2 },
+      ask: { through: 'input' },
+      attempt: {},
+    },
+    {
+      entity: { eid: 'call' },
+      entry: { session: 'root', seq: 3 },
+      call: { to: toolEid('empty'), source: 'ask', args: {} },
+      ...owner ? { execution: { by: owner } } : {},
+    },
+  ])
+  let calls = 0
+  p.r.owner = 'worker'
+  p.r.tools = [{
+    name: 'empty',
+    description: 'return an empty answer',
+    parameters: { type: 'object', properties: {} },
+    run: () => {
+      calls++
+      return ''
+    },
+  }]
+  return { ...p, calls: () => calls }
+}
+
+test('a skipped tool claim does no session work; an empty tool answer still does', async () => {
+  for (let owner of ['old-worker', 'worker', undefined]) {
+    let p = openCall(owner)
+    let step = await react(p.g, 'root', p.r)
+    assertEquals(step.did, owner ? 'nothing' : 'ran')
+    assertEquals(step.status, owner ? 'running' : 'pending')
+    assertEquals(step.added.some((b) => b.result), !owner)
+    assertEquals(p.calls(), owner ? 0 : 1)
+    assertEquals(p.asked.length, 0)
+  }
+})
+
+test('a session yields when another live worker holds its unanswered call', async () => {
+  let p = openCall('old-worker')
+  let steps = 0
+  p.r.each = () => {
+    assertEquals(++steps, 1, 'a skipped call must not spin another step')
+  }
+  await settle(p.g, 'root', p.r)
+  assertEquals(steps, 1)
+  assertEquals(p.calls(), 0)
+  assertEquals(p.asked.length, 0)
+  assertEquals((await p.g.get(['call']))[0].execution, {
+    by: 'old-worker',
+    state: 'running',
+  })
+  assertEquals(await p.g.read('.result.call=call'), [])
+})
 
 let output = (eid: string): Bundle => ({
   entity: { eid: `${eid}:output` },
