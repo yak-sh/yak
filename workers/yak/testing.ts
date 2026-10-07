@@ -115,12 +115,18 @@ export type Pitr = {
 /** One Durable Object's state, as the Store constructor takes it. */
 export let state = () => {
   let live: Wire[] = []
+  let pending = new Set<Promise<unknown>>()
   let pitr: Pitr = { restore: '', aborts: 0, marks: [] }
   let bookmark = (name: string) => {
     pitr.marks.push(name)
     return Promise.resolve(name)
   }
   return {
+    pending,
+    waitUntil: (work: Promise<unknown>) => {
+      pending.add(work)
+      work.then(() => pending.delete(work), () => pending.delete(work))
+    },
     storage: Object.assign(durable(), kvStorage(), {
       getCurrentBookmark: () => bookmark(`at-${pitr.marks.length}`),
       getBookmarkForTime: (at: number | Date) => {
@@ -732,6 +738,27 @@ export let platform = (secret: string, vars: Partial<Env> = {}) => {
       ringing = false
     }
   }
+  let closing: Promise<void> | null = null
+  let close = () => {
+    if (closing) return closing
+    let release = () => {
+      for (let ctx of stores) ctx.storage[Symbol.dispose]()
+      stores.length = 0
+    }
+    let pending = () => stores.flatMap((ctx) => [...ctx.pending])
+    // A Durable Object's runtime retains its storage for waitUntil work.
+    // Work may start another pass, or call another store, before it settles.
+    if (!pending().length) {
+      release()
+      return closing = Promise.resolve()
+    }
+    return closing = (async () => {
+      for (let work = pending(); work.length; work = pending()) {
+        await Promise.allSettled(work)
+      }
+      release()
+    })()
+  }
   return {
     env,
     files,
@@ -741,9 +768,7 @@ export let platform = (secret: string, vars: Partial<Env> = {}) => {
     builder,
     recovery,
     ring,
-    [Symbol.dispose]: () => {
-      for (let ctx of stores) ctx.storage[Symbol.dispose]()
-      stores.length = 0
-    },
+    [Symbol.dispose]: () => void close(),
+    [Symbol.asyncDispose]: close,
   }
 }

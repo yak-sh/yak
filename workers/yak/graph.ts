@@ -419,6 +419,9 @@ let shapeOf = (name: string, declared: string | null): Shape => {
  */
 export type State = Hibernation & {
   id?: { toString(): string }
+  // Detached work belongs to this incarnation's runtime context, which keeps
+  // its storage alive until that work has finished.
+  waitUntil?(work: Promise<unknown>): void
   storage: DurableStorage & {
     sql: DurableSql & { databaseSize: number }
     deleteAll(): Promise<void>
@@ -2355,6 +2358,7 @@ export class Store {
       this.#effectWork = null
       if (this.#effectAgain) this.#workingEffects()
     })
+    this.#ctx.waitUntil?.(this.#effectWork)
   }
 
   // ---- the vectors (@yaks/embedding, T-59101) -------------------------------
@@ -2422,6 +2426,7 @@ export class Store {
       this.#vectorWork = null
       if (this.#vectorAgain) this.#embedding()
     })
+    this.#ctx.waitUntil?.(this.#vectorWork)
   }
 
   // ---- the bytes it holds (meter.ts `weighed`) -----------------------------
@@ -2441,7 +2446,9 @@ export class Store {
   }
 
   #tell() {
-    this.#weighing ??= this.#telling().finally(() => (this.#weighing = null))
+    if (this.#weighing) return
+    this.#weighing = this.#telling().finally(() => (this.#weighing = null))
+    this.#ctx.waitUntil?.(this.#weighing)
   }
 
   async #telling(): Promise<void> {
