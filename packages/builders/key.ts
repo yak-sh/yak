@@ -2,12 +2,10 @@
 // identifies one attempt; definition edits never invalidate an input fingerprint.
 // Nested collections change the key without changing the build's identity.
 
-import { type Binding, type Bundle, type Eid, sha256 } from '@yaks/graph'
-import { content } from '@yaks/kernel'
-import type { Vocab } from '@yaks/vocab'
+import { type Binding, type Bundle, sha256 } from '@yaks/graph'
 import type { Wiring } from './answer.ts'
 
-export { content }
+export { content } from '@yaks/kernel'
 
 // Graph admission fills absent component properties with null. Those stored
 // blanks have the same meaning as omission in an authored definition.
@@ -17,26 +15,19 @@ let details = (using: unknown): [string, unknown][] =>
       .toSorted(([a], [b]) => a.localeCompare(b))
     : []
 
-let tree = (
-  binding: Binding,
-  rows: Map<Eid, Bundle>,
-  vocab: Vocab,
-): unknown => [
-  binding.entities.map((eid) =>
-    eid == null ? null : [eid, content(vocab)(rows.get(eid)!)]
-  ),
+let tree = (binding: Binding): unknown => [
+  binding.entities,
   Object.entries(binding.vars).toSorted(([a], [b]) => a.localeCompare(b)),
   (binding.collections ?? []).map((group) =>
-    group.members.map((one) => tree(one, rows, vocab))
+    group.members.map(tree)
       .toSorted((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))
   ),
 ]
 
-export let inputKey = (
-  binding: Binding,
-  rows: Map<Eid, Bundle>,
-  vocab: Vocab,
-): string => sha256(JSON.stringify(tree(binding, rows, vocab)))
+// A tool receives the frozen binding, not the rest of its entities. Hash only
+// those values, so gameplay and bookkeeping cannot redo unrelated work.
+export let inputKey = (binding: Binding): string =>
+  `binding:${sha256(JSON.stringify(tree(binding)))}`
 
 export let definitionKey = (
   builder: Bundle,
@@ -64,14 +55,12 @@ export let key = (
   builder: Bundle,
   tool: Bundle,
   binding: Binding,
-  rows: Map<Eid, Bundle>,
-  vocab: Vocab,
   template?: string,
   using?: Record<string, unknown>,
   nonce = '',
 ): string =>
   sha256(JSON.stringify([
     definitionKey(builder, tool, template, using),
-    inputKey(binding, rows, vocab),
+    inputKey(binding),
     nonce,
   ]))

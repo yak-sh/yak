@@ -1,4 +1,4 @@
-// Choosing a retained take changes only the chosen marks. The hook enforces
+// Choosing an output changes only the chosen marks. The hook enforces
 // one mark per build/slot at every graph door, including plain entity patches.
 
 import {
@@ -30,11 +30,11 @@ export let choosing: Hook = (bundles, tx) => {
         ...row.built as Comp,
       }
       if (!built.build || !built.slot) {
-        throw new Refused('chosen needs an output take')
+        throw new Refused('chosen needs an output')
       }
       let slot = JSON.stringify([built.build, built.slot])
       if (want.has(slot) && want.get(slot) != row.entity.eid) {
-        throw new Refused('choose only one take per build and slot')
+        throw new Refused('choose only one output per build and slot')
       }
       want.set(slot, row.entity.eid)
       builds.add(String(built.build))
@@ -84,7 +84,7 @@ export let choose = async (
   let names = await graph.address([output])
   let eid = names.get(output) ?? output
   let [row] = await graph.get([eid])
-  if (!row?.built) throw new CallError('refused', `${output} is no output take`)
+  if (!row?.built) throw new CallError('refused', `${output} is no output`)
   await graph.apply(signed([{ entity: row.entity, chosen: {} }], actor), {
     trusted: true,
   })

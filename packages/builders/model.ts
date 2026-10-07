@@ -134,7 +134,7 @@ export let modelTool = (desk: Desk = {}): Tool => ({
     },
     required: ['binding', 'key'],
   },
-  run: (call: Bundle, _graph: Graph): Bundle[] => {
+  run: async (call: Bundle, graph: Graph): Promise<Bundle[]> => {
     let args = comp(call, 'call')?.args as {
       binding: Binding
       template?: string
@@ -142,7 +142,14 @@ export let modelTool = (desk: Desk = {}): Tool => ({
     }
     let using = args.using ?? {}
     if (!using.model) throw new Error('model builder has no using.model')
-    let session: Eid = crypto.randomUUID()
+    // Retrying the adapter must not open another model session, including a
+    // call whose session was minted before this idempotency boundary existed.
+    if (
+      (await graph.read(`.session.source=${call.entity.eid}&.limit=1`)).length
+    ) {
+      return []
+    }
+    let session: Eid = derivedEid(`builder_session|${call.entity.eid}`)
     let prompt = request(args.template ?? '', args.binding)
     return [
       {
@@ -153,7 +160,7 @@ export let modelTool = (desk: Desk = {}): Tool => ({
         },
       },
       {
-        entity: { eid: crypto.randomUUID() },
+        entity: { eid: derivedEid(`builder_prompt|${call.entity.eid}`) },
         entry: { session, seq: 1 },
         content: { body: prompt },
         using: { ...using, instructions: instructions(using.instructions) },
@@ -201,7 +208,7 @@ export let adapted = async (
     // Its outputs alone: what a model session spent is its entries', never
     // what its answer says (./cost.ts). A reply that is not the contract (JSON
     // cut short, prose) is still answered, as the text it said, so the build
-    // refuses it and leaves its key clear to be asked again.
+    // records the failure without spending again on unchanged work.
     let text = textOf(said)
     try {
       let told = JSON.parse(text)

@@ -86,7 +86,7 @@ test('matching input changes reconcile inside transactionSync', () => {
     {
       entity: { eid: 'builder' },
       builder: {
-        query: '.doc.title=Source',
+        query: '.doc.title=Source, doc.body=$body',
         to: toolEid('code'),
         immediate: true,
       },

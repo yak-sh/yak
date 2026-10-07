@@ -1,7 +1,8 @@
 /**
  * A builder defines a graph query and registered tool. Each outer binding has
  * one stable build, whose changing key opens a tool call; named outputs keep
- * their ids, keys, citations and artifact references as build history.
+ * their ids while each successful answer replaces their components, citations
+ * and artifact references.
  *
  * @module
  */

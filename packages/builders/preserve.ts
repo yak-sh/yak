@@ -47,7 +47,7 @@ export let preserve = async (
     ),
   )
   let have = new Map(missing.map((row) => [row.entity.eid, row]))
-  for (let { binding, rows } of chosen) {
+  for (let { binding } of chosen) {
     for (
       let variant of new Set(
         missing.map((row) => String((row.build as Comp).variant)),
@@ -61,7 +61,7 @@ export let preserve = async (
       let b = row.build as Comp
       writes.push({
         entity: row.entity,
-        build: { inputs: inputKey(binding, rows, vocab) },
+        build: { inputs: inputKey(binding) },
         $was: { build: { key: token(b.key), inputs: token(b.inputs) } },
       })
     }

@@ -12,7 +12,9 @@ import { ids, shop } from './testing.ts'
 let source = 'input'
 let tool = toolEid('builder_model')
 let blob = 'blob'
-let seed = (query = '$input .doc, doc.title=Input'): Bundle[] => [{
+let seed = (
+  query = '$input .doc, doc.title=Input, doc.body=$body',
+): Bundle[] => [{
   entity: { eid: source },
   doc: { title: 'Input', body: 'Before' },
 }, {
@@ -65,14 +67,14 @@ test('supply is current, costs zero and rebuilds only after input edits', async 
   assertEquals(await outputFor(g, buildId, 'song'), id)
 })
 
-test('supply adds takes and keeps other chosen slots; replay does not undo a choice', async () => {
+test('supply replaces a slot and keeps other slots; replay keeps the latest answer', async () => {
   let { g, vocab } = await shop()
   await g.apply(seed())
   let main = await supply(g, vocab, ask(), null)
   let other = await supply(g, vocab, ask('other'), null)
   let next = await supply(g, vocab, ask(), null)
-  assertEquals(next == main, false)
-  assertEquals((await g.read('.built')).length, 3)
+  assertEquals(next, main)
+  assertEquals((await g.read('.built')).length, 2)
   assertEquals((await g.read('.built.current=true')).length, 2)
   let buildId = (await buildFor(g, ids.builder, [source]))!
   assertEquals(await outputFor(g, buildId), next)
@@ -95,7 +97,7 @@ test('supply adds takes and keeps other chosen slots; replay does not undo a cho
     )
   }
   assertEquals(await outputFor(g, buildId), main)
-  assertEquals((await g.read('.built')).length, 3)
+  assertEquals((await g.read('.built')).length, 2)
 })
 
 test('supply refuses invalid or ambiguous bindings without writing a call', async () => {

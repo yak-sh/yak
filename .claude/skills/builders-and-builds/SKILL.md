@@ -34,7 +34,7 @@ Redoing work under a new recipe is something you ask for.
 
 packages/builders/README.md is the reference. This is the feel of using it
 well: think in standing instructions, look at three before you build fifty,
-and treat every take as something worth keeping.
+and keep each output as the thing its consumers already hold.
 
 ## The shape
 
@@ -50,14 +50,15 @@ and treat every take as something worth keeping.
   `$region .region; [$sfx .sfx, sfx.region=$region]` is one build per region.
 - `$name` in the template is that variable's value in the binding; inside a
   bracket it renders as the README's `modelTool()` paragraph says.
-- Each answer adds `built{build, slot, key, inputs, definition, call, artifact,
-  current}` takes, keyed by build, slot and call. A replay keeps that call's
-  takes. Each slot's newest successful take is `chosen{at, by, via}` by
-  default; old takes and their sibling links stay queryable, and
-  `yak builder choose <output>` picks an earlier one without spending. The
-  server holds one choice per build and slot.
+- Each answer replaces `built{build, slot, key, inputs, definition, call,
+  artifact, current}` outputs, keyed by build and slot. A nonedge slot keeps its
+  eid, so consumers' references stay valid. Full answers delete omitted outputs
+  and links; supply replaces only its named slot. Calls keep the frozen answer
+  as provenance, without keeping additional live outputs beside the replacement.
 - `built.current` means chosen while the binding still exists. A pending
-  reroll keeps the choice playing; a late answer or a replay leaves it alone.
+  replacement keeps the output playing; late answers and replays leave it alone.
+  Legacy chosen rows are adopted at their next answer without changing their
+  ids or asking a model just to change a key.
 - A build's or an output's eid is minted, never derived from what made it, so
   it's an ordinary entity to cite and link. `buildFor` and `outputFor`
   (@yaks/builders) find one by its key.
@@ -73,8 +74,10 @@ script that loops a model over rows, gives up everything below.
 
 ## What rebuilds, and why
 
-`build.inputs` hashes the content of every entity in the binding tree. A
-changed input starts another attempt; an unchanged one asks nothing.
+`build.inputs` hashes the binding's entities and variable values, including
+nested collections. A changed value the query reads starts another attempt;
+an unrelated change to a bound entity asks nothing. A fingerprint change adopts
+the last call's frozen binding without making existing builds stale or spending.
 `build.key` is an opaque attempt key shared with its outputs, and an explicit
 reroll gets a fresh one. The definition has its own fingerprint:
 `builder.definition`, kept on each attempt as `build.definition` and on each
@@ -82,10 +85,10 @@ output as `built.definition` (packages/builders/key.ts).
 
 That split is the whole economy of a builder, and it pulls two ways:
 
-- Everything bound is hashed, so binding more makes rebuilds more frequent. A
-  shared catalogue bound into every binding means one edit there rebuilds them
-  all. Bind what a build depends on, and hand reference material over through
-  `using.tools`.
+- Variables are the build's input contract. Bind the properties the build uses.
+  A shared catalogue's values bound into every binding make one edit there
+  rebuild them all; hand reference material over through `using.tools` when it
+  should be read separately.
 - Editing the template, `using`, wiring, the tool or its revision never
   rebuilds current outputs, so tuning a prompt never silently spends on every
   row or swaps out what people already have. New bindings and changed inputs
@@ -120,11 +123,11 @@ designed in `vocabulary` like any other. Every write lands as one batch, or none
   `{"slot": "needs <item>", "inputs": [], "components": {"edge": {"from":
   "$tome", "to": "<item>"}, "needs": {"count": 2}}}`. It lands on the link's
   own eid (@yaks/edge) and carries an `output_of` key for its slot. One end is
-  a nonedge sibling, and a later answer leaves it linked to its take as
-  history.
+  a nonedge sibling, and a changed or omitted link is deleted on replacement.
 - A rejected answer, including store admission, or a model turn that failed
-  for good writes `failed{reason}` on the build and clears its key, so the next
-  reconciliation asks again; starting a fresh call clears the failure. A
+  for good writes `failed{reason}` on the build and keeps its key, so automatic
+  reconciliation does not spend twice. Changed inputs or an explicit rebuild
+  starts a fresh call and clears the failure. A
   refusal answered to the model, or a request the runner retries, doesn't.
 - The model adapter reads the reply of an ask that called no tools, once that
   ask completes; prose beside a tool call is the model working.
@@ -179,10 +182,11 @@ and `builder_supply` sit beside it. From the box:
 ## Chaining
 
 A downstream builder selects what an upstream one made with
-`.built.current=true`, so it gathers the chosen take while a replacement is
-pending. Shadows are never selected. A downstream build's input fingerprint
-hashes the upstream outputs it binds, so an upstream rebuild flows down by
-itself.
+`.built.current=true`, so it gathers the existing output while a replacement is
+pending. Shadows are never selected. Bind the upstream properties the
+downstream build uses, such as `built.artifact=$artifact` or
+`doc.body=$description`: output ids stay stable, and the bound values make a
+changed upstream output flow down by itself.
 
 ## Reading what was built
 
@@ -210,8 +214,8 @@ cost times the rows the query matches is what letting it loose will cost.
   whether it's stale; `.call.source=<build>&*` its calls, and the session a
   model call opened.
 - Rebuilding everything: something bound changed for every build, a shared
-  entity in the binding. A definition edit alone never does it; only bound
-  input content or an explicit redo.
+  entity in the binding. A definition edit alone never does it; only changed bound
+  values or an explicit redo.
 - Never building: a future `floor`, `staged`, `archived`, a builder that isn't
   `immediate` waiting for a door, or a missing tool.
 - `yak effect check` shows failed and overdue builder effects.

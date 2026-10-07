@@ -1,5 +1,5 @@
-// Current outputs are chosen takes of still-selected bindings. A pending
-// replacement keeps playing the chosen take; history remains queryable.
+// Current outputs belong to still-selected bindings. A pending replacement
+// keeps playing the existing output until its answer lands.
 
 import type { DerivedProp } from '@yaks/sql'
 import {

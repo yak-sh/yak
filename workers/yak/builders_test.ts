@@ -257,7 +257,7 @@ for (
       return rows.length ? rows : null
     }, { label: 'visible creature build failure' })
     assertStringIncludes(String((build.failed as Comp).reason), rejected.reason)
-    assertEquals((build.build as Comp).key, null)
+    assert((build.build as Comp).key)
     assertEquals((build.build as Comp).for, SOURCE)
     assertEquals((await v.read('.built')).length, 0)
     assertEquals((await v.read('.sfx')).length, 0)
@@ -269,6 +269,15 @@ for (
           String((row.effect as Comp).error).includes('step')
         )
     }, { label: 'settled output refusal' })
+    let before = await v.read('.call.source.build&*')
+    assertEquals(
+      (await v.kernel('/build', {
+        builder: creatures[0].entity.eid,
+        by: ADA,
+      })).status,
+      200,
+    )
+    assertEquals(await v.read('.call.source.build&*'), before)
     assertEquals(v.asked, [MODEL])
   })
 }
@@ -535,14 +544,19 @@ test('builder_supply in an app store is current without any model spending', asy
   assertEquals(v.asked, [])
 })
 
-test('hosted choose switches takes without a model turn and preserves earlier artifacts', async () => {
+test('hosted supply replaces a named slot without a model turn', async () => {
   let v = await app()
   let artifact = crypto.randomUUID()
+  let replacement = crypto.randomUUID()
   await v.send('/apply', [
     { entity: { eid: SOURCE }, doc: { title: 'Source' } },
     {
       entity: { eid: artifact },
       artifact: { address: 'audio', media_type: 'audio/wav', size: 4 },
+    },
+    {
+      entity: { eid: replacement },
+      artifact: { address: 'replacement', media_type: 'audio/wav', size: 8 },
     },
     {
       entity: { eid: BUILDER },
@@ -561,18 +575,22 @@ test('hosted choose switches takes without a model turn and preserves earlier ar
   let two = await v.kernel('/supply', {
     builder: BUILDER,
     for: SOURCE,
-    artifact,
+    artifact: replacement,
     slot: 'song',
     by: ADA,
   })
   let second = (await two.json()).output
-  assert(first != second)
+  assertEquals(first, second)
   assertEquals((await v.read('.built.current=true'))[0].entity.eid, second)
+  assertEquals(
+    ((await v.read('.built&*'))[0].built as Comp).artifact,
+    replacement,
+  )
   let calls = await v.read('.call.source.build&*')
   let choice = await v.kernel('/choose', { output: first, by: ADA })
   assertEquals(choice.status, 200)
   assertEquals((await v.read('.built.current=true'))[0].entity.eid, first)
-  assertEquals((await v.read('.built')).length, 2)
+  assertEquals((await v.read('.built')).length, 1)
   assertEquals((await v.read('.call.source.build')).length, calls.length)
   assertEquals(v.asked.length, 0)
 })

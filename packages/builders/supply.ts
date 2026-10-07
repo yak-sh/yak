@@ -1,6 +1,6 @@
 // Supply one binding's slot through the same plan and output keys as a tool
-// answer. Each supply adds a take; its call, zero-dollar answer and choice
-// land together, so no runner work is owed.
+// answer. Each supply replaces its slot; its call, zero-dollar answer and
+// output land together, so no runner work is owed.
 
 import { type Actor, type Comp, type Graph, signed } from '@yaks/graph'
 import { CallError } from '@yaks/tools'

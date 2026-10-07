@@ -69,8 +69,8 @@ export let due = (builder: Comp | undefined, at: string): boolean => {
 // A build and an output keep the eid they were minted with, which says nothing
 // about the builder that made them, and each is found again by a key
 // (@yaks/key): a row at an id derived from what it is the build or output of,
-// whose `key.of` names it. A new answer adds takes; replay finds the takes
-// of that same call without replacing earlier answers.
+// whose `key.of` names it. An answer replaces its build's named slots;
+// replay and late answers leave the current output alone.
 export let BUILD_OF = 'build_of'
 export let OUTPUT_OF = 'output_of'
 
@@ -79,9 +79,8 @@ export let OUTPUT_OF = 'output_of'
 export let buildOf = (builder: Eid, match: string, variant = 'main'): string =>
   `${builder}/${variant}/${match}`
 
-/** What one take's key says: build, slot and producing call. */
-export let outputOf = (build: Eid, slot: string, call: Eid): string =>
-  `${build}/${slot}/${call}`
+/** What an output's key says: its build and named slot. */
+export let outputOf = (build: Eid, slot: string): string => `${build}/${slot}`
 
 /** The build a builder made for an outer tuple, found by its key. */
 export let buildFor = async (
@@ -94,19 +93,24 @@ export let buildFor = async (
   return (await held(g, BUILD_OF, [value])).get(value)
 }
 
-/** One call's take in a slot; omitted call means the chosen take. */
+/** A stable output slot. Legacy outputs are found by their chosen mark until
+ * their next answer adopts the slot key. A call filter names only the answer
+ * currently stored on that output. */
 export let outputFor = async (
   g: Pick<ReadTx, 'get' | 'read'>,
   build: Eid,
   slot = 'main',
   call?: Eid,
 ): Promise<Eid | undefined> => {
-  if (!call) {
-    return (await g.read(`.built.build=${build}&.chosen&*`))
-      .find((row) => (row.built as Comp).slot == slot)?.entity.eid
-  }
-  let value = outputOf(build, slot, call)
-  return (await held(g, OUTPUT_OF, [value])).get(value)
+  let value = outputOf(build, slot)
+  let eid = (await held(g, OUTPUT_OF, [value])).get(value)
+  let row = eid
+    ? (await g.get([eid]))[0]
+    : (await g.read(`.built.build=${build}&.chosen&*`))
+      .find((row) => (row.built as Comp).slot == slot)
+  return row && (!call || comp(row, BUILT)?.call == call)
+    ? row.entity.eid
+    : undefined
 }
 
 export let current = (build: Comp, built: Comp, chosen: boolean): boolean =>
@@ -264,7 +268,6 @@ export let reconcile = (
   o: Options,
   at: string = (o.now ?? clock)(),
   scheduled = true,
-  retry = false,
 ):
   | { plans: Plan[]; writes: Bundle[] }
   | Promise<{ plans: Plan[]; writes: Bundle[] }> =>
@@ -321,7 +324,7 @@ export let reconcile = (
         builder: { definition: latest },
       })
     }
-    for (let { binding, rows } of wanted) {
+    for (let { binding } of wanted) {
       let entities = binding.entities
       let match = JSON.stringify(entities)
       let build = owners.get(buildOf(builder.entity.eid, match, variant)) ??
@@ -332,12 +335,12 @@ export let reconcile = (
         match,
         variant,
         binding,
-        inputs: inputKey(binding, rows, o.vocab),
+        inputs: inputKey(binding),
         definition: definitionKey(builder, tool, o.template, {
           ...comp(builder, 'using'),
           ...o.using,
         }),
-        key: key(builder, tool, binding, rows, o.vocab, o.template, {
+        key: key(builder, tool, binding, o.template, {
           ...comp(builder, 'using'),
           ...o.using,
         }),
@@ -349,8 +352,31 @@ export let reconcile = (
       plans.push(p)
       let before = comp(have.get(build), BUILD)
       left.delete(build)
-      let same = before?.key != null && before.inputs == p.inputs
-      if (same) p.key = String(before?.key)
+      // Adopt the fingerprint of the binding the existing call received.
+      // Changing the hash format must not spend again on unchanged work.
+      let fingerprint = before?.inputs
+      let keptKey = before?.key
+      if (
+        before?.call &&
+        (keptKey == null || !String(fingerprint).startsWith('binding:'))
+      ) {
+        let [call] = yield* step(tx.get([str(before, 'call')]))
+        let args = comp(call, 'call')?.args as
+          | { binding?: Binding; key?: string }
+          | undefined
+        let frozen = args?.binding
+        fingerprint = frozen ? inputKey(frozen) : p.inputs
+        keptKey ??= args?.key
+        writes.push({
+          entity: { eid: build },
+          [BUILD]: { inputs: fingerprint, ...keptKey ? { key: keptKey } : {} },
+          $was: {
+            [BUILD]: { inputs: token(before.inputs), key: token(before.key) },
+          },
+        })
+      }
+      let same = keptKey != null && fingerprint == p.inputs
+      if (same) p.key = String(keptKey)
       if (same && before?.stale) {
         writes.push({
           entity: { eid: build },
@@ -358,20 +384,13 @@ export let reconcile = (
           $was: { [BUILD]: { stale: token(true) } },
         })
       }
-      let failed = false
-      if (retry && same && before?.call) {
-        let [call] = yield* step(tx.get([String(before.call)]))
-        failed = comp(call, 'execution')?.state == 'failed'
-      }
       let redo = o.rebuild || o.outdated && before?.definition != p.definition
-      if (!same || failed || redo) {
+      if (!same || redo) {
         // Every attempt gets a distinct key, even when nothing changed.
         p.key = key(
           builder,
           tool,
           binding,
-          rows,
-          o.vocab,
           o.template,
           p.using,
           (o.eid ?? mint)(),

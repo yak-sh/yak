@@ -184,7 +184,7 @@
       "component": true,
       "type": "object",
       "key": true,
-      "description": "the key of one take: <build>/<slot>/<call>, so replaying one answer keeps its entity and another answer adds a take"
+      "description": "the key of one output: <build>/<slot>, so a rebuild replaces the same entity"
     },
     "built": {
       "component": true,
@@ -230,7 +230,7 @@
             "build.inputs",
             "build.stale"
           ],
-          "description": "chosen take of a still-selected binding; readers keep playing the chosen take while another attempt is pending"
+          "description": "chosen output of a still-selected binding; readers keep playing it while another attempt is pending"
         },
         "definition": {
           "type": "string",
@@ -240,10 +240,10 @@
         "inputs": {
           "type": "string",
           "stamped": true,
-          "description": "input fingerprint that produced this take"
+          "description": "binding fingerprint that produced this output"
         }
       },
-      "description": "one retained take in one named output slot; chosen marks the one in use"
+      "description": "one stable output in one named slot; a rebuild replaces it and chosen marks it in use"
     },
     "builder_model": {
       "tool": true,
@@ -459,20 +459,20 @@
           "description": "what the write was made through"
         }
       },
-      "description": "the take in use for its build and slot; server-owned, changed through builder_choose, with at most one choice per slot",
+      "description": "the output in use for its build and slot; server-owned, with at most one choice per slot",
       "wire": false
     },
     "builder_choose": {
       "tool": true,
       "noun": "builder",
       "verb": "choose",
-      "title": "Choose an output take",
-      "description": "Make one retained output the take in use for its build and slot, without a call or spending. Other slots stay chosen as they are.",
+      "title": "Choose an output",
+      "description": "Select an existing output for its build and slot without a call or spending. Other slots stay chosen as they are.",
       "input": {
         "output": {
           "type": "string",
           "ref": "built",
-          "description": "output take to use"
+          "description": "output to use"
         }
       },
       "required": [

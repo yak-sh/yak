@@ -34,7 +34,6 @@ let settle = async (
   write: Parameters<Handler>[2],
   o: Options,
   scheduled: boolean,
-  retry = false,
 ) => {
   for (let attempt = 0; attempt < 3; attempt++) {
     let [builder] = await tx.get([eid])
@@ -52,7 +51,6 @@ let settle = async (
       o,
       (o.now ?? clock)(),
       scheduled,
-      retry,
     )
     if (!writes.length) return
     try {
@@ -64,16 +62,15 @@ let settle = async (
   }
 }
 
-let stir =
-  (o: Options, scheduled: boolean, retry = false): Handler =>
-  (event, tx, write) => settle(event.entity.eid, tx, write, o, scheduled, retry)
+let stir = (o: Options, scheduled: boolean): Handler => (event, tx, write) =>
+  settle(event.entity.eid, tx, write, o, scheduled)
 
-export let opening = (o: Options): Handler => stir(o, true, true)
+export let opening = (o: Options): Handler => stir(o, true)
 export let editing = (o: Options): Handler => stir(o, false)
 
 export let ringing = (o: Options): Handler => async (event, tx, write) => {
   let [fired] = await tx.get([event.entity.eid])
-  await stir(o, true, true)(
+  await stir(o, true)(
     {
       ...event,
       entity: { eid: str(comp(fired, WAKE), 'target') || event.entity.eid },
@@ -109,7 +106,6 @@ export let modeling = (): Handler => async (event, tx, write) => {
     if (str(comp(build, BUILD), 'call') != call) return
     await write([{
       entity: build.entity,
-      [BUILD]: { key: null },
       failed: {
         reason: str(comp(said, 'failed'), 'reason') ||
           str(comp(said, 'refusal'), 'message') || 'Model session failed',
@@ -146,7 +142,6 @@ export let answering = (vocab: Vocab): Handler => async (event, tx, write) => {
       ...comp(build, BUILD)?.call == call.entity.eid
         ? [{
           entity: build.entity,
-          [BUILD]: { key: null },
           failed: { reason: err instanceof Error ? err.message : String(err) },
           $was: { [BUILD]: { call: token(call.entity.eid) } },
         }]
