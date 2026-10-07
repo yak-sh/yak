@@ -42,6 +42,7 @@
         "actor": {
           "type": "string",
           "ref": "entity",
+          "death": "keep",
           "description": "the person whose attention is read"
         },
         "text": {
