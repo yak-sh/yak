@@ -90,7 +90,7 @@ journaled when the journal plugin is composed in.
 Use `g.apply()` for ongoing writes. A low-level storage `patch`, `remove` or
 `revive` bypasses this plugin but not the pointer: every unit `@yaks/sqlite`
 opens classifies, before it closes, each entity whose rows came or went without
-a pointer written after, and its removal points the dead at the tombstone set
+a pointer written after, and points the dead it removed at the tombstone set
 (`entomb`). So an effect hook writing through a detached transaction, a reap at
 boot or a script patching through storage leaves no pointer behind, and the
 graph's own writes pay nothing for it. Raw SQL is below every door: an

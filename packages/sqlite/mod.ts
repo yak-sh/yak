@@ -393,7 +393,8 @@ export let storage = (
   // what those entities hold (`reclassify`), in the same unit. Through the
   // graph that is nothing, since its tracker points every entity it moved, so
   // its writes gain no read. Removal clears the tables its entities hold
-  // (`heldBy`) and points them at the tombstone set itself.
+  // (`heldBy`); the dead no pointer has been written for since are pointed at
+  // the tombstone set (`entomb`), which reads nothing.
   //
   // A unit opened inside another (a graph applied in a caller's transaction)
   // hears what the outer ones wrote and have not classified yet: their ledgers
@@ -406,10 +407,10 @@ export let storage = (
     open.push(l)
     let owed = () => [...new Set(open.flatMap((o) => o.owed()))]
     let settle = () => {
-      let owed = l.owed()
-      if (!owed.length) return
-      reclassify(driver, owed, numbered)
-      for (let eid of owed) l.pointed(eid)
+      let dead = l.buried(), owed = l.owed()
+      if (dead.length) entomb(driver, dead, numbered)
+      if (owed.length) reclassify(driver, owed, numbered)
+      for (let eid of [...dead, ...owed]) l.pointed(eid)
     }
     return {
       close: () => void open.splice(open.lastIndexOf(l), 1),
@@ -447,8 +448,7 @@ export let storage = (
         remove: (entities) => {
           let eids = entities.map((e) => e.eid)
           remove(driver, vocab, entities, heldBy(driver, eids, open))
-          entomb(driver, eids, numbered)
-          for (let eid of eids) l.pointed(eid)
+          for (let eid of eids) l.removed(eid)
         },
         revive: (eids) => revive(driver, eids, l.moved),
       },

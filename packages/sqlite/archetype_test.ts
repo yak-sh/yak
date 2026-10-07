@@ -263,6 +263,13 @@ test('archetype: a write past the graph keeps its pointer in step, by every door
   store.tx((tx) => tx.remove([{ eid: 'b' }]))
   store.tx((tx) => tx.revive(['b']))
   assertEquals(get('b').entity.archetype, eidOf([]))
+  // ... and in one unit, the dead brought back and given a row.
+  store.tx((tx) => {
+    tx.remove([{ eid: 'b' }])
+    tx.revive(['b'])
+    tx.patch([{ entity: { eid: 'b' }, task: {} }])
+  })
+  assertEquals(get('b').entity.archetype, eidOf(['task']))
   assertEquals(drift(driver), { checked: 3, drifted: 0, sample: [] })
 })
 

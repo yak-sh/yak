@@ -426,8 +426,10 @@ export let mend = (driver: Driver, number = false): number => {
 export type Ledger = {
   moved: (eid: string, table: string, held: boolean) => void
   born: (eid: string) => void
+  removed: (eid: string) => void
   pointed: (eid: string) => void
   owed: () => string[]
+  buried: () => string[]
   wrote: (eid: string) => Wrote
 }
 
@@ -439,21 +441,29 @@ export type Wrote = { born: boolean; tables: string[] }
 /**
  * One unit's account of what its writes did to each entity's archetype, kept
  * by the store that opened the unit (./mod.ts `storage`). `moved` hears a row
- * come or go (./write.ts `patch`), `born` a spine minted, `pointed` a pointer
- * written. `owed` is every entity whose rows ended the unit other than they
- * began it, or that was born, with no pointer written since: the ones no
- * tracker classified. A batch that adds a component and drops it again owes
- * nothing, and neither does anything @yaks/graph wrote, since its tracker
- * points every entity it moved after the rows are written. `wrote` is what
- * the stored pointer does not know yet about one entity ({@link Wrote}).
+ * come or go (./write.ts `patch`), `born` a spine minted, `removed` an entity
+ * removed, `pointed` a pointer written. `owed` is every entity whose rows
+ * ended the unit other than they began it, or that was born, with no pointer
+ * written since: the ones no tracker classified. `buried` is every entity
+ * removed with no pointer written since: each holds its tombstone and nothing
+ * else, so its set is known without reading a table, and a read passes it by
+ * as dead whatever its pointer says. A batch that adds a component and drops
+ * it again owes nothing, and neither does anything @yaks/graph wrote, since
+ * its tracker points every entity it moved after the rows are written.
+ * `wrote` is what the stored pointer does not know yet about one entity
+ * ({@link Wrote}).
  */
 export let ledger = (): Ledger => {
   // Per entity, per table: whether it held a row before the unit's first
   // write to it, and whether it holds one now.
   let rows = new Map<string, Map<string, [boolean, boolean]>>()
   let born = new Set<string>()
+  let dead = new Set<string>()
   return {
     moved: (eid: string, table: string, held: boolean) => {
+      // A row moving again (a revival, a patch after it) leaves the dead
+      // holding more than their tombstone, and owing a reading of what.
+      dead.delete(eid)
       let of = rows.get(eid) ?? new Map<string, [boolean, boolean]>()
       rows.set(eid, of)
       of.set(table, [of.get(table)?.[0] ?? !held, held])
@@ -461,17 +471,24 @@ export let ledger = (): Ledger => {
     born: (eid: string) => {
       born.add(eid)
     },
+    removed: (eid: string) => {
+      rows.delete(eid)
+      born.delete(eid)
+      dead.add(eid)
+    },
     // A pointer establishes the next presence comparison's starting shape.
     // Later changes owe classification against that shape, not the unit's
     // initial one, including when a query settled an intermediate patch.
     pointed: (eid: string) => {
       rows.delete(eid)
       born.delete(eid)
+      dead.delete(eid)
     },
     owed: (): string[] =>
       [...new Set([...born, ...rows.keys()])].filter((eid) => (born.has(eid) ||
         [...rows.get(eid)!.values()].some(([was, now]) => was != now))
       ),
+    buried: (): string[] => [...dead],
     wrote: (eid: string): Wrote => ({
       born: born.has(eid),
       tables: [...rows.get(eid) ?? []].filter(([, [, now]]) => now)
@@ -527,9 +544,10 @@ export function heldBy(
  * Point these entities, just removed, at the tombstone set, minting its
  * descriptor the first time a store needs one. A removal clears every table
  * its entities hold rows in ({@link heldBy}), so what each one holds afterwards
- * is its tombstone and nothing else, known without reading a table.
- * Storage's own removal calls this, so the dead leave their archetype
- * whichever door removed them, and a presence lookup passes them by.
+ * is its tombstone and nothing else, known without reading a table. A unit
+ * calls this for the dead its ledger still owes a pointer ({@link Ledger}
+ * `buried`) as it closes, so the dead leave their archetype whichever door
+ * removed them, and a presence lookup passes them by.
  */
 export function entomb(driver: Driver, eids: string[], number = false): void {
   if (!eids.length) return

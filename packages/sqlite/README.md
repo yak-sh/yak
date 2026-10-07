@@ -157,8 +157,9 @@ properties declare [death behavior](../vocab/README.md#routing-and-references).
 the full cascade. Where the store keeps archetypes, it clears only the tables
 each entity's archetype names, with any rows the open transactions wrote since
 its pointer (`heldBy`); an entity with no pointer, or one naming no descriptor,
-has every component table cleared. It then points each one at the tombstone set
-(`entomb`), so a presence lookup passes the dead by however they were removed.
+has every component table cleared. The transaction points each one no tracker
+has pointed at the tombstone set as it closes (`entomb`), so a presence lookup
+passes the dead by however they were removed.
 
 ## Read
 
