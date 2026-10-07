@@ -91,7 +91,7 @@ let count = async (s: { query: (q: string) => Promise<Bundle[]> }, q: string) =>
   (await s.query(q)).length
 
 test('builder take rehearsal preserves a store, then conversion moves with no calls', async () => {
-  let s = await store(0, takeRule)
+  let s = await store(0, { ...takeRule, live: undefined })
   let binding = {
     entities: ['source'],
     vars: { s: 'source', description: 'a turtle' },
