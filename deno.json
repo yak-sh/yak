@@ -142,6 +142,7 @@
     "./packages/workerd",
     "./packages/task",
     "./packages/session",
+    "./packages/machine",
     "./packages/process",
     "./packages/spawn",
     "./packages/model",

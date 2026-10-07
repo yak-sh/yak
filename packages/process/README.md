@@ -165,3 +165,60 @@ raw terminal. Whatever keeps the process open calls
 with no deadline; a second forces them. `wind.done` settles with the interrupt's
 code once every hold has answered. There is one `wind` per process; `winding()`
 makes another for a test.
+
+## Machines
+
+`./machine` offers `processMachine(g, opts?, env?, cwd?)` and
+`processProvider(g, opts)`, implementing the
+[Machine and provider contracts](../machine/README.md). The machine runs
+commands through this package's tracked process launcher and reads and writes
+this filesystem. Relative files and commands use its configured `cwd`; rooted
+paths remain rooted. Durable shell receipts are process entities, so a
+replacement host can recover a call without launching its command again. The
+`env(session?)` callback supplies a command's environment; the default inherits
+this process's environment. Hosts supply session identity and graph grants
+there; the process provider knows neither.
+
+The provider's `dir` contains one directory per requested sandbox id. `request`
+starts empty, or calls an optional idempotent `prepare(from, machine, cwd)` to
+populate a commit from the graph. A request with `from` but no preparation
+function is refused. The process provider cannot boot images and refuses
+`image`. `wake` reopens the same directory. `release` kills tracked processes
+whose working directories are under that sandbox and removes its directory;
+repetition is harmless. A sandbox is not a security boundary: bash and rooted
+file paths still reach this filesystem. CPU and memory limits need a provider
+that supplies them.
+
+`attach` names an existing directory by address; `release` detaches it without
+deleting it. The provider has no implicit host machine. `export` ships named
+relative files as bytes, including binary files, for the caller to store as
+blobs or put in a commit. [The machine package's examples](../machine/README.md)
+exercise request, wake, export and attachment.
+
+```ts
+import { equal } from '@yaks/testing'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { processDoc } from '@yaks/process'
+import { processProvider } from '@yaks/process/machine'
+
+let vocab = loadVocab([processDoc])
+let g = graph({ storage: ram(vocab), vocab })
+let dir = await Deno.makeTempDir()
+let provider = processProvider(g, {
+  dir,
+  prepare: async (from, machine) => {
+    // A host reads the commit through its graph tools here.
+    await machine.write('commit.txt', from)
+  },
+})
+let ref = { id: crypto.randomUUID(), from: 'a-commit-in-the-graph' }
+try {
+  let { machine } = await provider.request!(ref)
+  equal(await machine.read('commit.txt'), ref.from)
+} finally {
+  await provider.release(ref)
+  await Deno.remove(dir, { recursive: true })
+}
+```

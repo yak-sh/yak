@@ -9,12 +9,12 @@ import { type Comp, graph } from '@yaks/graph'
 import { modelDoc } from '@yaks/model'
 import { EXIT, processDoc, processes } from '@yaks/process'
 import { ram } from '@yaks/ram'
-import { sessionDoc } from '@yaks/session'
+import { sessionDoc, sessionEnv } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { type Opts } from '@yaks/process'
-import { boxMachine } from './box.ts'
-import { machineTools } from './machine.ts'
+import { processMachine } from '@yaks/process/machine'
+import { machineTools } from '@yaks/harness/machine'
 
 // Process rows, in a graph that also knows sessions and models.
 let vocab = loadVocab([processDoc, sessionDoc, toolsDoc, modelDoc])
@@ -27,7 +27,7 @@ let opts = (): Opts => ({
 })
 
 let named = (g: ReturnType<typeof tracked>, cwd?: string) => {
-  let tools = machineTools(boxMachine(g, opts()), {
+  let tools = machineTools(processMachine(g, opts()), {
     grace: 500,
     cwd: () => cwd,
   })
@@ -100,14 +100,16 @@ test('an interrupted shell call recovers its process without running twice', asy
   let command = `printf 'once\\n' >> '${dir}/started'; sleep 0.05; echo done`
   let call = { entity: { eid: crypto.randomUUID() } }
   let ctx = { session: crypto.randomUUID(), call, entries: [] }
-  let m = boxMachine(g, o)
+  let m = processMachine(g, o)
   let shell = machineTools(m).find((t) => t.name == 'shell')!
   let wait = machineTools(m).find((t) => t.name == 'wait')!
   try {
     let id = eidIn(await shell.run({ command, timeout: 1 }, ctx))
     assertEquals(await m.start(command, undefined, call.entity.eid), id)
     await wait.run({ process: id })
-    let resumed = machineTools(boxMachine(g, o)).find((t) => t.name == 'shell')!
+    let resumed = machineTools(processMachine(g, o)).find((t) =>
+      t.name == 'shell'
+    )!
     assertEquals(
       await resumed.recover!({ command }, ctx),
       `process ${id} exited 0\ndone`,
@@ -157,7 +159,9 @@ test('a session shell speaks as its transcript, not its launcher', async () => {
     CODEX_THREAD_ID: 'launcher-thread',
     TASKS_SESSION: 'launcher-task',
   }
-  let shell = machineTools(boxMachine(g, o, () => env))
+  let shell = machineTools(
+    processMachine(g, o, (session) => session ? sessionEnv(session, env) : env),
+  )
     .find((t) => t.name == 'shell')!
   let ctx = {
     session: 'native-session',

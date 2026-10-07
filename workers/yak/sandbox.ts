@@ -53,7 +53,7 @@
 // one per command ({@link signed}), and it dies with the container
 // ({@link destroyed}). It rides the SDK's per-invocation env and is never
 // exported into a shell, so nothing puts it in the builder's transcript.
-import type { Machine } from '@yaks/harness/machine'
+import type { Machine } from '@yaks/machine'
 import type { Space, Tier } from './directory.ts'
 import { retryOnce } from './door.ts'
 import { type Grant, type Kv, ledger, mint, tokenOf } from './grants.ts'

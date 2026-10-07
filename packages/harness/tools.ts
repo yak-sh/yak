@@ -29,10 +29,11 @@ import { sessionCwd, workspace } from './workspace.ts'
 import { worktrees } from './paths.ts'
 import type { Entity, Graph, Tool as GraphTool } from '@yaks/graph'
 import { core, type Depth, inputSchemaOf } from '@yaks/mcp/tools'
-import { boxMachine } from './box.ts'
+import { processMachine } from '@yaks/process/machine'
 import { machineTools } from './machine.ts'
 import {
   type ChildLimits,
+  sessionEnv,
   sessionTools,
   type Tool,
   ToolError,
@@ -128,9 +129,15 @@ export let harnessTools = (
     & ChildLimits = {},
 ): Tool[] => {
   let directory = opts.cwd ?? Deno.cwd()
-  let machine = machineTools(boxMachine(g), {
-    cwd: (ctx) => ctx ? sessionCwd(g, ctx.session, directory) : directory,
-  })
+  let machine = machineTools(
+    processMachine(g, {}, (session) => {
+      let env = Deno.env.toObject()
+      return session ? sessionEnv(session, env) : env
+    }),
+    {
+      cwd: (ctx) => ctx ? sessionCwd(g, ctx.session, directory) : directory,
+    },
+  )
   let session = sessionTools(g, {
     ...workspace(g, directory, opts.worktrees ?? worktrees()),
     ...opts,

@@ -1,6 +1,6 @@
 // The machine tools, declared once: run a command, wait for one that outlived
 // its tool call, stop one, read a file, write one. Which machine they reach is
-// the host's to lend: a box lends its own through @yaks/process (./box.ts),
+// the host's to lend: @yaks/process supplies local machines,
 // and the Cloudflare host lends its sandbox container (workers/yak/sandbox.ts).
 //
 // Every command is a process from its first moment, with an id the machine
@@ -11,37 +11,11 @@
 // running, and `wait` and `stop` reach it again by that id.
 //
 // Nothing here touches a runtime. The file is imported by the box and by a
-// Worker alike, and every effect is one of the machine's five verbs.
+// Worker alike; the Machine contract belongs to @yaks/machine.
 
 import type { Tool, ToolContext } from '@yaks/session'
 
-/** A process as the machine holds it: `exit` is absent while it runs, and its
- * code is null when the machine could not learn it. */
-export type Proc = { pid?: number; exit?: { code: number | null } }
-
-/** What a host lends the machine tools. */
-export type Machine = {
-  /** starts a command line, run by bash, and answers its id */
-  start(
-    command: string,
-    cwd?: string,
-    call?: string,
-    session?: string,
-  ): Promise<string>
-  /** the process a durable call started, where this machine can recover one */
-  receipt?: (call: string) => Promise<string | undefined>
-  /** the process by that id, or null when the machine has none */
-  look(id: string): Promise<Proc | null>
-  /** the last `n` lines it printed */
-  tail(id: string, n: number): Promise<string[]>
-  /** asks it to end */
-  kill(id: string, signal: 'SIGTERM' | 'SIGKILL'): Promise<void>
-  read(path: string): Promise<string>
-  /** replaces what the path held, making its directory where it has none */
-  write(path: string, content: string): Promise<void>
-  /** how often a waiting call looks again (ms, default 100) */
-  poll?: number
-}
+import type { Machine, Proc } from '@yaks/machine'
 
 /** How the machine tools behave, all optional. */
 export type MachineOpts = {

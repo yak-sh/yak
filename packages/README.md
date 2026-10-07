@@ -316,6 +316,11 @@ grouped approximately by function, **not** by dependency order.
   transcript entries and outstanding calls. The package also provides model
   execution, claims on entities and conflict records for competing claims.
 
+- **[@yaks/machine](./machine)** — Commands and files through a `Machine`, with
+  providers that lend sandboxes or attach existing machines. Owns
+  `machine{provider, from, image, state}` and the provider interface; touches no
+  runtime or graph storage.
+
 - **[@yaks/process](./process)** — a running program as an entity, so whatever
   needs one points at it instead of keeping a pid: `process{pid, command, cwd}`
   for the one that is running, `service{command, cwd, restart, attempts}` for

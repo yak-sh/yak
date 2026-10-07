@@ -269,9 +269,11 @@ bundles from graph-backed interfaces. To embed the app, mount `App` with
 ## The machine
 
 ./machine.ts declares the machine tools once: `shell`, `wait`, `stop`, `read`
-and `write`, over a `Machine` the host lends (`@yaks/harness/machine`, runtime
-neutral). A box lends its own through @yaks/process (./box.ts); the yaks.app
-Worker lends its sandbox container (workers/yak/sandbox.ts).
+and `write`, over a [Machine](../machine/README.md#machine) the host lends
+(`@yaks/machine`, runtime neutral). The
+[process provider](../process/README.md#machines) lends directory-separated
+sandboxes or explicitly attached local machines; the yaks.app Worker lends its
+sandbox container (workers/yak/sandbox.ts).
 
 `shell` runs `bash -c`. If the command outlives the call's timeout, it keeps
 running and the answer names its process id; `wait` looks for its exit and

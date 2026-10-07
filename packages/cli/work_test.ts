@@ -18,7 +18,7 @@ let reap = (pid: number) => {
 }
 let root = new URL('../../deno.json', import.meta.url).pathname
 let cli = new URL('./yak.ts', import.meta.url).pathname
-let box = new URL('../harness/box.ts', import.meta.url).href
+let box = new URL('../process/machine.ts', import.meta.url).href
 let machine = new URL('../harness/machine.ts', import.meta.url).href
 
 // Every child is owned here, including the detached shell's process group.
@@ -136,7 +136,7 @@ os.execvp(args[0], [arg.replace('$$', '$') for arg in args])
       import { running } from '@yaks/session'
       import { toolEid } from '@yaks/tools'
       import { machineTools } from '${machine}'
-      import { boxMachine } from '${box}'
+      import { processMachine } from '${box}'
       export let effects = (host, opts) => {
         let model = async req => {
           let res = await fetch(opts.url, {
@@ -151,9 +151,9 @@ os.execvp(args[0], [arg.replace('$$', '$') for arg in args])
         }, { once: true })
         return running(host.graph, {
           holder: host.me, model, stopping: host.stopping,
-          tools: machineTools(boxMachine(host.graph), { cwd: () => opts.dir }),
+          tools: machineTools(processMachine(host.graph), { cwd: () => opts.dir }),
           toolSnapshot: async () => {
-            let tools = machineTools(boxMachine(host.graph), {
+            let tools = machineTools(processMachine(host.graph), {
               cwd: () => opts.dir,
             })
             await host.graph.apply(tools.map(t => ({

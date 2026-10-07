@@ -1,0 +1,36 @@
+{
+  "$defs": {
+    "machine": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "description": "commands and files a provider lends as a sandbox or attaches by address; no machine belongs to a host by right",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "the configured provider that lends or attaches this machine"
+        },
+        "from": {
+          "type": "string",
+          "ref": "gitobj",
+          "death": "keep",
+          "description": "the commit in the graph this machine starts from; absent for an empty machine"
+        },
+        "image": {
+          "type": "string",
+          "description": "the image a sandbox boots, when its provider boots images"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "requested",
+            "running",
+            "asleep",
+            "released"
+          ],
+          "description": "the provider's last recorded lifecycle state"
+        }
+      }
+    }
+  }
+}

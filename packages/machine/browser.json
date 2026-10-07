@@ -1,0 +1,13 @@
+{
+  "entries": [
+    ".",
+    "./vocab"
+  ],
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "esnext"
+    ],
+    "strict": true
+  }
+}

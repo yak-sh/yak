@@ -1,0 +1,16 @@
+{
+  "name": "@yaks/machine",
+  "version": "0.2.10",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Commands and files through a Machine, with providers that lend sandboxes or attach existing machines and a graph record of their lifecycle.",
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "./browser.json"
+    ]
+  }
+}
