@@ -14,7 +14,7 @@ import { codeDoc } from './vocab.ts'
 import { codeMirror } from './sync.ts'
 import { sync } from '@yaks/mirror'
 import { ask } from '@yaks/api'
-import { catalogAt, sourceFrames, sourcePath } from './source.ts'
+import { catalogAt, remembered, sourceFrames, sourcePath } from './source.ts'
 
 let sources = {
   roots: ['/srv/app', '/srv/tree'],
@@ -40,6 +40,25 @@ test('source paths require a known root or origin and reject traversal', () => {
       'file:///srv/app/a%00.ts',
     ]
   ) equal(sourcePath(file, sources), undefined)
+})
+
+test('a remembered catalog asks again after a failure or once its answers age', async () => {
+  let asked = 0
+  let down = true
+  let catalog = remembered({
+    get: (ids) =>
+      ++asked && down
+        ? Promise.reject(Error('catalog down'))
+        : Promise.resolve(ids.map((eid) => ({ entity: { eid } }))),
+  }, 20)
+  await catalog.get(['f']).then(() => ok(false), () => ok(true))
+  down = false
+  equal((await catalog.get(['f'])).length, 1)
+  equal((await catalog.get(['f'])).length, 1)
+  equal(asked, 2)
+  await new Promise((wait) => setTimeout(wait, 25))
+  await catalog.get(['f'])
+  equal(asked, 3)
 })
 
 test('frames resolve only cataloged exports of the exact failing commit', async () => {
@@ -139,6 +158,11 @@ test('frames resolve only cataloged exports of the exact failing commit', async 
       })(frames, newer))[1].module,
       undefined,
     )
+    // What a resolver read of Git it keeps, so a run costs no process, and a
+    // checkout gone bad meanwhile changes no answer.
+    let kept = await resolver(frames, newer)
+    await Deno.rename(`${dir}/.git`, `${dir}/.git-gone`)
+    equal(await resolver(frames, newer), kept)
   } finally {
     await Deno.remove(dir, { recursive: true })
   }

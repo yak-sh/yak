@@ -84,7 +84,11 @@ door. File URLs must be under that repository's known checkout roots; browser
 module URLs must use an explicitly served origin. It reads no source path chosen
 by a frame, follows no symlink blob, and never substitutes HEAD for an unknown
 commit. Bundle URLs have no source module mapping without source maps and remain
-unresolved.
+unresolved. A resolver keeps what it read: the checkout once, each commit's
+blobs per path, and the worktree roots until a file frame falls under none of
+them (read again at most every five seconds), so a run starts no Git process
+once its commit is known. Its catalog by default is `remembered(catalog)`, which
+keeps each answer a minute and shares a request among callers asking at once.
 
 Deno doc's zero-based locations become one-based `symbol.line` at ingestion.
 

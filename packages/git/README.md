@@ -569,9 +569,12 @@ reconciles missing unmanaged checkouts on each pass.
 
 ## Reading a commit's source paths
 
-`@yaks/git/source` exports `treeAt(cwd, commit, paths)`, a map of regular-file
-paths to their Git blob ids. It accepts a full object id, verifies it as a
-commit, uses literal repository-relative paths and leaves unknown revisions,
-symlinks and submodules unresolved. It never reads the checkout's files.
-`rootsOf(common)` lists the repository's primary and linked checkout roots
-without pruning or changing Git state.
+`@yaks/git/source` exports `trees(cwd)`, a reader whose `(commit, paths)` maps
+regular-file paths to their Git blob ids. It accepts a full object id, verifies
+it as a commit, uses literal repository-relative paths and leaves unknown
+revisions, symlinks and submodules unresolved. It never reads the checkout's
+files. A commit never changes, so each path is asked of Git once per commit, for
+the 16 commits read most recently (`keep`), and callers asking at once share one
+read; a read Git refused is asked again. `rootsOf(common)` lists the
+repository's primary and linked checkout roots without pruning or changing Git
+state.
