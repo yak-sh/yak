@@ -20,8 +20,16 @@ export let ingest = async (g: Graph, rows: Bundle[]): Promise<void> => {
   if (fresh.length) await g.apply(fresh, { trusted: true })
 }
 
-export let intake = async (g: Graph, source: Source): Promise<void> => {
+/** Every complete record, admitted then acknowledged. A `stop` that aborts
+ * ends it between records: the one in hand is committed and acknowledged, and
+ * the rest stay in the source for the next intake. */
+export let intake = async (
+  g: Graph,
+  source: Source,
+  stop?: AbortSignal,
+): Promise<void> => {
   for await (let record of source()) {
+    if (stop?.aborted) return
     await ingest(g, record.rows)
     await record.ack()
   }

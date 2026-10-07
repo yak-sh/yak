@@ -26,9 +26,13 @@ export let service = async (
   let dir = options.spool ?? host.config?.tracker?.spool
   let source = options.source ?? (dir ? files(dir).source : undefined)
   if (!source) return
+  // A pass made with a signal already aborted takes the whole backlog once. A
+  // service that stays up stops between records when its signal aborts, so a
+  // drain never waits out a backlog: what it has not taken stays spooled.
+  let stop = signal.aborted ? undefined : signal
   do {
     try {
-      await intake(host.graph, source)
+      await intake(host.graph, source, stop)
     } catch (error) {
       try {
         if (options.report) options.report(error)

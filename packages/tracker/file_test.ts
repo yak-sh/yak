@@ -70,6 +70,28 @@ test('failed admission leaves the spool for restart; commit before ack replays o
   }
 })
 
+test('a service told to stop takes no more records, and leaves the rest spooled', async () => {
+  let dir = await Deno.makeTempDir()
+  try {
+    for (let i = 0; i < 3; i++) await spool(files(dir).append)(record(`e${i}`))
+    let g = fixture()
+    let up = new AbortController()
+    let stopping = {
+      ...g,
+      apply: async (...args: Parameters<typeof g.apply>) => {
+        let out = await g.apply(...args)
+        up.abort()
+        return out
+      },
+    }
+    await service({ graph: stopping }, { spool: dir }, up.signal)
+    equal((await g.read('.error')).length, 1)
+    equal((await left(dir)).length, 2)
+  } finally {
+    await Deno.remove(dir, { recursive: true })
+  }
+})
+
 test('partial unpublished records remain while later complete appends drain', async () => {
   let dir = await Deno.makeTempDir()
   try {
