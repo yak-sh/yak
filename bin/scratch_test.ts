@@ -151,3 +151,62 @@ test('scratch lends every machine state directory inside its own run', async () 
     Deno.removeSync(dir, { recursive: true })
   }
 })
+
+test('scratch git fixtures do not inherit the caller repository', async () => {
+  let root = Deno.makeTempDirSync({ prefix: 'scratch-git-' })
+  let caller = `${root}/caller`
+  let env = {
+    PATH: Deno.env.get('PATH') ?? '',
+    DENO_DIR: Deno.env.get('DENO_DIR') ?? '',
+  }
+  let git = async (...args: string[]) => {
+    let out = await new Deno.Command('git', {
+      args,
+      env,
+      clearEnv: true,
+      stdout: 'piped',
+      stderr: 'piped',
+    }).output()
+    assertEquals(out.code, 0, new TextDecoder().decode(out.stderr))
+    return new TextDecoder().decode(out.stdout).trim()
+  }
+  try {
+    await git('init', '-q', caller)
+    let config = Deno.readTextFileSync(`${caller}/.git/config`)
+    // As in a hook: cwd is not the repository selector. An init with no
+    // destination must create the fixture, not reinitialize this caller.
+    let script = `
+      let fixture = Deno.makeTempDirSync();
+      for (let args of [
+        ['init', '--bare', '-q'],
+        ['config', '--get', 'core.bare'],
+      ]) {
+        let out = await new Deno.Command('git', {
+          args: ['-C', fixture, ...args], stdout: 'piped', stderr: 'piped',
+        }).output();
+        if (!out.success) throw new Error(new TextDecoder().decode(out.stderr));
+        if (args[0] === 'config' && new TextDecoder().decode(out.stdout).trim() !== 'true') {
+          throw new Error('fixture is not bare');
+        }
+      }
+      if (!Deno.statSync(fixture + '/config').isFile) throw new Error('fixture was not created');
+    `
+    let code = await scratch([Deno.execPath(), 'eval', script], {
+      ...env,
+      TMPDIR: root,
+      GIT_DIR: `${caller}/.git`,
+      GIT_COMMON_DIR: `${caller}/.git`,
+      GIT_INDEX_FILE: `${caller}/.git/index`,
+      GIT_OBJECT_DIRECTORY: `${caller}/.git/objects`,
+    })
+    assertEquals(Deno.readTextFileSync(`${caller}/.git/config`), config)
+    assertEquals(code, 0)
+    assertEquals(
+      await git('-C', caller, 'rev-parse', '--is-bare-repository'),
+      'false',
+    )
+    assertEquals(await git('-C', caller, 'status', '--porcelain'), '')
+  } finally {
+    Deno.removeSync(root, { recursive: true })
+  }
+})

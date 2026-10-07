@@ -110,11 +110,29 @@ export let scratch = async (
   let dir = `${base}/tasks-run-${Deno.pid}`
   Deno.mkdirSync(dir, { recursive: true })
 
+  // Git hooks export repository-local coordinates. A fixture's `git -C`
+  // does not override GIT_DIR: `init --bare` can reinitialize the caller's
+  // checkout instead. Use Git's own list, including command-scope config,
+  // so every descendant discovers only the scratch repository it asks for.
+  let local = await new Deno.Command('git', {
+    args: ['rev-parse', '--local-env-vars'],
+    stdout: 'piped',
+    stderr: 'piped',
+  }).output()
+  if (!local.success) {
+    Deno.removeSync(dir, { recursive: true })
+    throw new Error(new TextDecoder().decode(local.stderr))
+  }
+  let clean = { ...env }
+  for (let name of new TextDecoder().decode(local.stdout).trim().split('\n')) {
+    delete clean[name]
+  }
+
   let child = new Deno.Command(argv[0], {
     args: argv.slice(1),
     clearEnv: true,
     env: {
-      ...env,
+      ...clean,
       TMPDIR: dir,
       TASKS_HOME: `${dir}/tasks`,
       PROCESS_DIR: `${dir}/processes`,

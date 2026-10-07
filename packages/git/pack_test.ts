@@ -77,7 +77,7 @@ test('git indexes the pack and walks every object in it', async () => {
   let bytes = await all(await from.pack([ONE_OID]))
   let dir = await Deno.makeTempDir({ prefix: 'yaks-git-' })
   try {
-    await git(dir, ['init', '--bare', '--quiet'])
+    await git(dir, ['init', '--bare', '--quiet', dir])
     // `index-pack` answers `pack\t<sha>` — what git named the pack we wrote.
     let name = (await git(dir, ['index-pack', '--stdin'], bytes)).trim()
       .split('\t')[1]
