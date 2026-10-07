@@ -111,5 +111,5 @@ export let sampleRequest = (
 ): TraceRow[] | undefined => {
   let root = spans[0]
   if (!root || root.stage == 'start' || !selectedRequest(options)) return
-  return project(cap(spans), options)
+  return project(spans, options, cap(spans))
 }

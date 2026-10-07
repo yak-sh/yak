@@ -176,7 +176,7 @@ let draw = (
   e: Bundle,
   lines: Record<string, Bundle[]>,
   ctx: Record<string, unknown> = {},
-  held: Record<string, Bundle> = {},
+  held: Record<string, Bundle> | ((eid: string) => Bundle | undefined) = {},
 ) => {
   let answer = (line: unknown): Answer => ({
     rows: lines[String(line)] ?? [],
@@ -196,7 +196,7 @@ let draw = (
     show: () => null,
     can: () => true,
     ask: answers,
-    state: (eid: string) => held[eid],
+    state: (eid: string) => typeof held == 'function' ? held(eid) : held[eid],
     set: () => {},
   } as unknown as Io
   let v = inspectViews.find((r) =>
@@ -250,17 +250,19 @@ test('the trace list puts each kind of request together, the most work first', (
   ok(list.indexOf('903') < list.indexOf('101'))
 })
 
+// A bundle drawn as `view` in a terminal and in a browser.
+let host = {
+  id: (b: Bundle) => b.entity.eid.toUpperCase(),
+  link: (eid: string) => `/${eid}`,
+  when: (s: string) => `at ${s}`,
+  get: (eid: string) => eid == 'trace' ? trace : undefined,
+}
+let faces = (b: Bundle, view: string) => [
+  text(views, b, view, vocab, host, 'plain'),
+  renderToString(preact(views, b, view, vocab, host)!),
+]
+
 test('a span and a trace read the same in a terminal and a browser', () => {
-  let host = {
-    id: (b: Bundle) => b.entity.eid.toUpperCase(),
-    link: (eid: string) => `/${eid}`,
-    when: (s: string) => `at ${s}`,
-    get: (eid: string) => eid == 'trace' ? trace : undefined,
-  }
-  let faces = (b: Bundle, view: string) => [
-    text(views, b, view, vocab, host, 'plain'),
-    renderToString(preact(views, b, view, vocab, host)!),
-  ]
   for (let face of faces(mine[1], 'List.Tile')) {
     for (
       let part of [
@@ -282,4 +284,34 @@ test('a span and a trace read the same in a terminal and a browser', () => {
   for (let face of faces(mine[1], 'Page')) {
     ok(face.includes('Part of') && face.includes('TRACE POST apply'))
   }
+})
+
+test("a span's page and a place opened on a trace's page say which statements ran", () => {
+  let sql = 'select title from book where id = ?'
+  let reads = mine.map((b) =>
+    b.entity.eid.startsWith('q')
+      ? {
+        ...b,
+        statements: {
+          n: 1,
+          ran: [{ sql, n: 1, rows_read: 300, rows_written: 0, ms: 0.1 }],
+        },
+      }
+      : b
+  )
+  for (let face of faces(reads[2], 'Full')) {
+    for (let part of ['Statements', sql, '300', '0.1']) {
+      ok(face.includes(part), part)
+    }
+  }
+  let rows = { ...lines(), [spans(['trace'])]: reads }
+  ok(!draw('Full', trace, rows).includes(sql))
+  let open = (eid: string) => ({ entity: { eid }, Disclosure: { open: true } })
+  let page = draw('Full', trace, rows, {}, open)
+  for (
+    let part of [
+      `query read ×3 900 statement × rows read rows written ms ${sql} 3 900 0 0.3`,
+      'Its 3 spans, the most rows read first: Q1 · Q2 · Q3',
+    ]
+  ) ok(page.includes(part), part)
 })

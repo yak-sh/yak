@@ -8,7 +8,18 @@ import { define, type H, type Registry, type RenderContext } from '@yaks/render'
 import { parse } from '@yaks/query'
 import type { Bundle } from '@yaks/graph'
 import type { Shown } from '@yaks/render/views'
-import { amount, axes, comp, hue, metric, number, str } from './readings.ts'
+import {
+  amount,
+  axes,
+  comp,
+  figure,
+  hue,
+  metric,
+  number,
+  str,
+} from './readings.ts'
+import type { Ran } from './ran.ts'
+import { statements } from './Statements.ts'
 
 type Ctx<Node> = RenderContext<Node> & Partial<Shown<Node>>
 let shown = <Node>(ctx: RenderContext<Node>) => ctx as Ctx<Node>
@@ -86,12 +97,13 @@ let spanTile = <Node>(e: Bundle, h: H<Node>, ctx: RenderContext<Node>) => {
   ], [str(c.plugin), ...measured(e)])
 }
 
-// A span on a page of its own: what ran, where in the code, what it measured
-// and the trace it is part of.
+// A span on a page of its own: what ran, where in the code, what it measured,
+// the trace it is part of and the statements it ran.
 let spanPage = <Node>(e: Bundle, h: H<Node>, ctx: RenderContext<Node>) => {
   let s = shown(ctx), c = comp(e, 'span'), trace = str(c.trace)
   let held = trace ? s.get?.(trace) : undefined
   let start = number(comp(e, 'elapsed').start)
+  let ran = (comp(e, 'statements').ran ?? []) as Ran[]
   return h(
     'article',
     null,
@@ -121,7 +133,7 @@ let spanPage = <Node>(e: Bundle, h: H<Node>, ctx: RenderContext<Node>) => {
         { class: 'Head_Facts' },
         ...dotted([
           ...measured(e),
-          start != null ? `began ${start} ms in` : '',
+          start != null ? `began ${figure('elapsed', start)} ms in` : '',
         ]),
       ),
     ),
@@ -136,6 +148,31 @@ let spanPage = <Node>(e: Bundle, h: H<Node>, ctx: RenderContext<Node>) => {
           held ? `${s.id?.(held) ?? ''} ${named(held)}`.trim() : 'its trace',
         ),
         '.',
+      )
+      : null,
+    ran.length
+      ? h(
+        'section',
+        { class: 'Section' },
+        h(
+          'h2',
+          { class: 'Section_Title' },
+          'Statements',
+          ' ',
+          h(
+            'span',
+            { class: 'Section_Count' },
+            ran.reduce((n, r) => n + r.n, 0).toLocaleString('en-US'),
+          ),
+        ),
+        h(
+          'p',
+          { class: 'Section_Sub' },
+          c.op == 'sql'
+            ? 'What it ran, every value in it masked.'
+            : 'What it ran, every value masked and alike statements together, the most rows first; with those of the spans under it that its trace left out.',
+        ),
+        statements(h, ran),
       )
       : null,
   )
@@ -186,7 +223,13 @@ export let views: Registry = define([
         ),
     },
   ]),
-  { view: 'Page', match: parse('.span'), render: spanPage },
+  ...['Page', 'Full'].map((view) => ({
+    view,
+    match: parse('.span'),
+    // The trace it names, so the page can say which.
+    needs: (e: Bundle) => [str(comp(e, 'span').trace)].filter(Boolean),
+    render: spanPage,
+  })),
 ])
 
 export { inspectViews } from './inspect.ts'

@@ -1,6 +1,7 @@
 /** Minute summaries and stored span entities. Hosts supply epoch origins,
  * trace identities and tracker context; this package never reads a clock. */
 import type { Kind, Outcome } from '@yaks/trace'
+import type { Ran } from './ran.ts'
 
 /** One completed minute's measurements of one piece of code. */
 export type Timing = {
@@ -56,7 +57,7 @@ export type TraceRow = {
   elapsed?: { start: number; ms?: number }
   rows_read?: { n: number }
   rows_written?: { n: number }
-  statements?: { n: number }
+  statements?: { n: number; ran?: Ran[] }
   repeats?: { n: number }
 }
 

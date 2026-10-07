@@ -35,6 +35,8 @@ export type Event = {
   readonly plugin?: string
   readonly outcome?: Outcome
   readonly counts?: Counts
+  /** A `sql` span's statement as text, every value in it masked */
+  readonly sql?: string
 }
 
 export type Activity = {
@@ -43,6 +45,9 @@ export type Activity = {
   parent?: string
   package?: string
   plugin?: string
+  /** A `sql` span's statement as text, every value in it masked (bound
+   * parameters and literals read `?`) and its length bounded by the producer */
+  sql?: string
 }
 export type End = { outcome?: Outcome; counts?: Counts }
 export type Span = {
@@ -156,6 +161,7 @@ let create = (): Channel => {
     time,
     package: a.package,
     plugin: a.plugin,
+    sql: a.sql,
   })
   let out: Channel = {
     get active() {

@@ -38,7 +38,8 @@ import {
   walk,
 } from './readings.ts'
 import { Flamegraph } from './Flamegraph.ts'
-import { Gaps, Line, list, Places } from './Places.ts'
+import { Gaps, Line, Places } from './Places.ts'
+import { list } from './layout.ts'
 import {
   address,
   remoteAnswers,
@@ -328,7 +329,14 @@ let TracePage = (
             'Some spans name a parent that never arrived; they stand at the top.',
           )
           : null,
-        h(Places, { roots, axis, id: ids }),
+        h(Places, {
+          roots,
+          axis,
+          id: ids,
+          io,
+          at: `timing-place:${e.entity.eid}`,
+          pages: side == 'box',
+        }),
       )
       : null,
   )

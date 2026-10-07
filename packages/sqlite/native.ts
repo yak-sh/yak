@@ -6,7 +6,7 @@
 import './sqlitepath.ts'
 import { Database } from '@db/sqlite'
 import { context, during, measure, peek } from '@yaks/trace'
-import { statement, writing } from '@yaks/sql'
+import { excerpt, statement, writing } from '@yaks/sql'
 import {
   call,
   col,
@@ -206,7 +206,7 @@ export let driver = (db: Database): Driver => {
     where: eq(col('name'), val('main')),
   }))
   let file = !!run(main.sql, main.params)[0]?.file
-  let execute = (s: Stmt): Row[] => {
+  let execute = (s: Stmt, { sql, params } = render(s)): Row[] => {
     if (s.t == 'create index') {
       let cols = new Set(
         query({ t: 'pragma', name: 'table_info', arg: s.on })
@@ -222,18 +222,21 @@ export let driver = (db: Database): Driver => {
         }
       }
     }
-    let { sql, params } = render(s)
     return run(sql, params)
   }
   let query = (s: Stmt): Row[] => {
     let c = peek() ?? peek(d)
     if (!c) return execute(s)
+    // Rendered once, before the span begins, so the span can say what it ran;
+    // the span times the engine's work on it.
+    let rendered = render(s)
     return during(
       c.begin({
         kind: 'sql',
         name: statement(s),
         package: '@yaks/sqlite',
         parent: context()?.channel == c ? context()?.parent : undefined,
+        sql: excerpt(rendered),
       }),
       () => {
         // Count the attempted statement even if SQLite refuses it. Rows come
@@ -241,7 +244,7 @@ export let driver = (db: Database): Driver => {
         // count on a failed write. measure charges this span and its open
         // ancestors once, preserving inclusive request/phase totals.
         measure({ statements: 1, rowsRead: 0, rowsWritten: 0 })
-        let rows = execute(s)
+        let rows = execute(s, rendered)
         measure(
           writing(s) ? { rowsWritten: db.changes } : { rowsRead: rows.length },
         )

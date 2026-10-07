@@ -444,39 +444,68 @@ export let render = (node: Stmt | Expr): Raw => {
 
 /** The statement's SQL shape, without values. Bound parameters were never in
  * the SQL text; literals are masked here too, including those inside a
- * fragment lowered by this package. Identifiers stay visible for diagnosis. */
-export let shape = (rendered: Raw): string => {
-  let sql = rendered.sql
-  let out = ''
-  for (let i = 0; i < sql.length;) {
-    let ch = sql[i]
-    if (ch == "'") {
-      out += '?'
-      i++
-      while (i < sql.length) {
-        if (sql[i++] != "'") continue
-        if (sql[i] == "'") i++
-        else break
-      }
-    } else if (ch == '"') {
-      let start = i++
-      while (i < sql.length) {
-        if (sql[i++] != '"') continue
-        if (sql[i] == '"') i++
-        else break
-      }
-      out += sql.slice(start, i)
-    } else if (/[0-9]/.test(ch)) {
-      out += '?'
-      do i++
-      while (i < sql.length && /[0-9.eE+-]/.test(sql[i]))
-    } else {
-      out += ch
-      i++
-    }
+ * fragment lowered by this package. Identifiers stay visible for diagnosis.
+ * Reading stops once `limit` characters are written, for a caller that keeps
+ * only the start. */
+export let shape = (rendered: Raw, limit = Infinity): string => {
+  let sql = rendered.sql, out = '', from = 0, i = 0
+  // Runs of plain text are copied whole; each literal becomes one `?`.
+  let mask = (to: number) => {
+    out += sql.slice(from, i) + '?'
+    from = i = to
   }
-  return out
+  while (i < sql.length && out.length + i - from < limit) {
+    let c = sql.charCodeAt(i)
+    if (c == QUOTE) mask(quoted(sql, i, QUOTE))
+    else if (c == NAME) i = quoted(sql, i, NAME)
+    else if (digit(c)) {
+      let j = i + 1
+      while (j < sql.length && numeric(sql.charCodeAt(j))) j++
+      mask(j)
+    } else i++
+  }
+  return out + sql.slice(from, i)
 }
+let QUOTE = 39, NAME = 34
+let digit = (c: number) => c >= 48 && c <= 57
+// A number's characters after its first digit: digits, `.`, `e`, `E`, `+`, `-`.
+let numeric = (c: number) =>
+  digit(c) || c == 46 || c == 101 || c == 69 || c == 43 || c == 45
+// Where a quoted run that opens at `i` ends: past its closing quote, a
+// doubled quote inside it being one quote.
+let quoted = (sql: string, i: number, q: number): number => {
+  for (i++; i < sql.length;) {
+    if (sql.charCodeAt(i++) != q) continue
+    if (sql.charCodeAt(i) == q) i++
+    else break
+  }
+  return i
+}
+
+/** A statement as a trace keeps it: its shape, and when that runs past `max`
+ * characters, its start and how many parameters it binds, so a long batched
+ * write still says what it is and how big it was. */
+export let excerpt = (rendered: Raw, max = 512): string => {
+  let { sql } = rendered, memo = excerpts.get(max)
+  let had = memo?.get(sql)
+  if (had != null) return had
+  let text = shape(rendered, max + 1)
+  if (text.length > max) {
+    let n = rendered.params.length
+    let size = ` … (${n} parameter${n == 1 ? '' : 's'})`
+    text = text.slice(0, max - size.length) + size
+  }
+  if (sql.length > MEMO_TEXT) return text
+  if (!memo) excerpts.set(max, memo = new Map())
+  if (memo.size >= MEMO_SIZE) memo.clear()
+  memo.set(sql, text)
+  return text
+}
+// A trace runs the same statements over and over: each text is shaped once,
+// and every span that ran it holds the one excerpt. Bounded by count and by
+// the length of a text kept.
+let excerpts = new Map<number, Map<string, string>>()
+let MEMO_SIZE = 1024, MEMO_TEXT = 4096
 
 /** An expression written with every value as a literal, parenthesized where an
  * operator around it would take it apart: what an ORDER BY term or a derived

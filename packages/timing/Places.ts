@@ -1,66 +1,28 @@
 /** A trace's places in the code as lines: each a name, indented under what
  * called it, and the work done there at the end of its line, in columns
- * that line up. A name wraps rather than being cut, and on a narrow screen
- * its figures drop below it, so a deep tree reads on a phone. Laid out in
- * place, as the page's sheet holds no rules of this package's own.
+ * that line up (./layout.ts), so a deep tree reads on a phone too.
  * @module
  */
 import { type ComponentChildren, h, type JSX } from 'preact'
-import { Chip } from '@yaks/ui'
+import type { Io } from '@yaks/inspect'
+import { Button, Chip } from '@yaks/ui'
+import { disclosed, disclosureAt, isOpen } from '@yaks/ux'
 import {
+  amount,
+  comp,
   type Difference,
   figure,
   hue,
   labels,
   type Merged,
+  metric,
   noun,
   said,
   walk,
 } from './readings.ts'
-
-export let list = {
-  listStyle: 'none',
-  margin: 0,
-  padding: 0,
-  fontSize: '13px',
-}
-let line = {
-  display: 'flex',
-  flexWrap: 'wrap',
-  alignItems: 'baseline',
-  columnGap: '1em',
-  padding: '3px var(--half-gap)',
-  borderBottom: '1px solid var(--border)',
-}
-let name = (depth: number) => ({
-  flex: '1 1 14em',
-  minWidth: 0,
-  paddingLeft: `${depth * 1.1}em`,
-  overflowWrap: 'anywhere',
-})
-let figures = {
-  display: 'flex',
-  alignItems: 'center',
-  columnGap: '1em',
-  marginLeft: 'auto',
-}
-// A fixed width, so the figures of every line stand in columns; a heading
-// wider than its column wraps.
-let number = {
-  width: '6em',
-  flex: 'none',
-  textAlign: 'right',
-  fontFamily: 'var(--mono)',
-  fontSize: '11px',
-  fontVariantNumeric: 'tabular-nums',
-  color: 'var(--number)',
-}
-let heading = {
-  fontFamily: 'var(--mono)',
-  fontSize: '11px',
-  color: 'var(--dim)',
-}
-let quiet = { color: 'var(--dim)' }
+import { figures, heading, line, list, name, number, quiet } from './layout.ts'
+import { type Ran, tally } from './ran.ts'
+import { statements } from './Statements.ts'
 
 /** A place's name: the kind of work as a chip in its hue, which one, how
  * many spans ran it, and the plugin it belongs to. */
@@ -124,15 +86,62 @@ export let Bar = (
       : null,
   )
 
+/** What a place opens to: the statements its spans ran, alike ones
+ * together, and its spans, each a link to its page where they have one. */
+let Opened = (
+  { node, axis, io, pages }: {
+    node: Merged
+    axis: string
+    io: Io
+    pages: boolean
+  },
+): JSX.Element => {
+  let ran = tally(
+    node.spans.flatMap((b) => (comp(b, 'statements').ran ?? []) as Ran[]),
+  )
+  let spans = node.spans.toSorted((a, b) =>
+    (metric(b, axis) ?? 0) - (metric(a, axis) ?? 0)
+  )
+  return h(
+    'div',
+    { style: { margin: '4px 0 10px' } },
+    ran.length
+      ? statements(h, ran)
+      : h('p', { style: quiet }, 'No statement of its own was recorded.'),
+    pages
+      ? h(
+        'p',
+        { style: { ...quiet, margin: '6px var(--half-gap) 0' } },
+        spans.length == 1
+          ? 'Its span: '
+          : `Its ${spans.length} spans, the most ${noun(axis)} first: `,
+        spans.map((b, i) => [
+          i ? ' · ' : '',
+          h('a', {
+            key: b.entity.eid,
+            href: io.link(b.entity.eid),
+            title: amount(axis, metric(b, axis)),
+          }, io.id(b)),
+        ]),
+      )
+      : null,
+  )
+}
+
 /** Every place that did work on `axis`, in reading order, with the work
  * done there and in what it called, and its share of the whole; `id` names
  * each line by its place in the whole tree, so a press on a bar can find
- * it. The places that did none are counted. */
+ * it. The places that did none are counted. A press on a place opens it
+ * under its line, kept open in the page's graph under `at`; `pages` says
+ * whether its spans have pages to link to. */
 export let Places = (
-  { roots, axis, id }: {
+  { roots, axis, id, io, at, pages }: {
     roots: Merged[]
     axis: string
     id: (i: number) => string
+    io: Io
+    at: string
+    pages: boolean
   },
 ): JSX.Element => {
   let whole = roots.reduce((a, r) => a + (r.total[axis] ?? 0), 0)
@@ -151,24 +160,51 @@ export let Places = (
       'ul',
       { style: list },
       h(Line, { head: true, label: 'place', cells: [labels[axis], 'share'] }),
-      some.map(({ node, depth, i }) =>
-        h(Line, {
-          key: i,
-          id: id(i),
-          depth,
-          label: h(Place, { n: node }),
-          cells: [
-            figure(axis, node.total[axis]),
-            h(Bar, {
-              of: node.total[axis],
-              whole,
-              tone: node.error
-                ? 'var(--negative)'
-                : `var(--hue-${hue(node.op)})`,
-            }),
-          ],
-        })
-      ),
+      some.map(({ node, depth, i, path }) => {
+        let state = disclosureAt(`${at}:${path.join('\n')}`)
+        let e = io.state(state) ?? { entity: { eid: state } }
+        let open = isOpen(e), opened = `${id(i)}-opened`
+        return [
+          h(Line, {
+            key: i,
+            id: id(i),
+            depth,
+            label: h(
+              Button,
+              {
+                type: 'button',
+                mod: 'quiet',
+                'aria-expanded': open,
+                'aria-controls': opened,
+                onClick: () => io.set([disclosed(e, !open)]),
+              },
+              open ? '▾ ' : '▸ ',
+              h(Place, { n: node }),
+            ),
+            cells: [
+              figure(axis, node.total[axis]),
+              h(Bar, {
+                of: node.total[axis],
+                whole,
+                tone: node.error
+                  ? 'var(--negative)'
+                  : `var(--hue-${hue(node.op)})`,
+              }),
+            ],
+          }),
+          open
+            ? h(
+              'li',
+              {
+                key: opened,
+                id: opened,
+                style: { paddingLeft: `${depth * 1.1}em` },
+              },
+              h(Opened, { node, axis, io, pages }),
+            )
+            : null,
+        ]
+      }),
     ),
     none
       ? note(

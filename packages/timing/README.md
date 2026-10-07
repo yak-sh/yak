@@ -14,11 +14,20 @@ span** is a separate entity with
 `span{trace, parent, op, name, plugin, package,
 outcome}` referring to its trace
 and containing span. Each measurement has its own component:
-`elapsed{start, ms}`, `rows_read{n}`, `rows_written{n}`, `statements{n}` and
-`repeats{n}`. `repeats` is carried only by a root span and counts suppressed
+`elapsed{start, ms}`, `rows_read{n}`, `rows_written{n}`, `statements{n, ran}`
+and `repeats{n}`. `repeats` is carried only by a root span and counts suppressed
 automatic requests of the same operation and name. `elapsed.start` is relative
 to the trace root; unfinished spans omit `elapsed.ms`. The components can be
 removed independently.
+
+`statements.ran` lists the SQL statements a span ran, read whole: each entry is
+`{sql, n, rows_read, rows_written, ms}`, alike statements (the same text)
+summed, those that read and wrote the most rows first. A `sql` span lists its
+own statement; any other span lists those its `sql` spans ran, with those of any
+span under it that the trace left out, so every statement whose producer gave
+its text is listed on a stored span. The text is the producer's, every value in
+it masked (@yaks/trace's `sql`). A list keeps twenty statements with their text;
+one last entry without `sql` sums the rest.
 
 ```ts
 import { sample, summarize } from '@yaks/timing'
@@ -232,7 +241,10 @@ equal(next.repeats, 1)
 selection. It returns one trace bundle followed by one bundle per span, copying
 tracker context onto every bundle so independently delivered chunks retain their
 scope. Projection maps the numeric `rowsRead`, `rowsWritten` and `statements`
-counts to separate components. A supplied nonzero `repeats` count becomes
+counts to separate components, and lists each span's statements in
+`statements.ran`. `project(spans, options, kept)` stores only the `kept` spans,
+listing on them the statements of those left out, as `sampleRequest` does with
+the spans its bound keeps. A supplied nonzero `repeats` count becomes
 `repeats{n}` only on the root span. Missing metrics stay absent; zero counts are
 retained. Other runtime counts are not stored. Resends retain every entity id.
 Neither projection nor selection reads a clock, draws randomness or mutates
@@ -246,10 +258,12 @@ functions perform no I/O or graph writes.
 
 `@yaks/timing/views` draws a stored trace and a stored span wherever an entity
 is drawn by name: as a `Title`, a `Tile` or `List.Tile`, a `Card.Title` and an
-`Inline` link, and a span on a `Page` of its own. These render through the
-host's hyperscript, so a terminal lists the same rows a browser does. Configure
-`@yaks/timing` beside `@yaks/tracker`, `@yaks/inspect` and a browser
-application; the inspector then draws a trace's page and the trace list.
+`Inline` link, and a span on a page of its own (`Page` and `Full`): what it
+measured, its trace, and the statements it ran, each with how many times it ran,
+its rows and its time. These render through the host's hyperscript, so a
+terminal lists the same rows a browser does. Configure `@yaks/timing` beside
+`@yaks/tracker`, `@yaks/inspect` and a browser application; the inspector then
+draws a trace's page and the trace list.
 
 A **place** is the code a span ran: its `op`, `name` and `plugin`. Sibling spans
 at one place read as one, their measurements summed, so a rule's two hundred
@@ -260,15 +274,16 @@ the one chosen in the page's own graph.
 A trace's page asks for its stored spans and shows where its work went on the
 measure: a flamegraph draws each place as wide as the work done there and in
 what it called, which hangs under it, and the places list beneath gives each
-one's figure and share, leaving out the places that recorded none. Beside it
-stands the newest ordinary trace of the same request kind in the same store,
-among the latest 100 matching traces, drawn at its own scale, with the places
-whose own work differs most between the two. An **ordinary trace** has recorded
-root rows read and written at most 10,000, no error outcome or missing-parent
-fragment, and at most 500 ms if time is recorded. The recording reason is not
-stored; the page does not claim this proves random sampling or request health.
-An absent ordinary trace is stated, never substituted from another store or
-request kind.
+one's figure and share, leaving out the places that recorded none. A press on a
+place opens it under its line: the statements its spans ran, alike ones summed,
+and on the box its spans, each a link to its page. Beside it stands the newest
+ordinary trace of the same request kind in the same store, among the latest 100
+matching traces, drawn at its own scale, with the places whose own work differs
+most between the two. An **ordinary trace** has recorded root rows read and
+written at most 10,000, no error outcome or missing-parent fragment, and at most
+500 ms if time is recorded. The recording reason is not stored; the page does
+not claim this proves random sampling or request health. An absent ordinary
+trace is stated, never substituted from another store or request kind.
 
 Metrics are inclusive: parents contain their descendants. Root measurements
 provide totals, including suppressed `repeats` when present; child metrics are

@@ -35,7 +35,7 @@ let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
   return out
 }
 
-test('SQL spans count returned and affected rows without values or SQL text', () => {
+test('SQL spans count returned and affected rows and say what they ran without its values', () => {
   let db = open(':memory:')
   try {
     db.query({
@@ -81,8 +81,8 @@ test('SQL spans count returned and affected rows without values or SQL text', ()
           },
         })
         db.query({ t: 'pragma', name: 'table_info', arg: 'sample' })
-        db.query({ t: 'savepoint', name: 'private-savepoint' })
-        db.query({ t: 'release', name: 'private-savepoint' })
+        db.query({ t: 'savepoint', name: 'unit' })
+        db.query({ t: 'release', name: 'unit' })
         throws(() => db.query(insert('sample', { value: 'private-value' })))
       })
     })
@@ -115,6 +115,17 @@ test('SQL spans count returned and affected rows without values or SQL text', ()
       rowsWritten: 0,
     })
     ok(sql.every((s) => s.parent == captured.spans[0].id))
+    equal(sql.map((s) => s.sql), [
+      'insert into "sample" ("value") values (?), (?)',
+      'update "sample" set "value" = ? where "value" = ?',
+      'select * from (select * from "sample" union all select * from "sample")',
+      'select * from "sample" union all select * from "sample"',
+      'delete from "sample" where "value" = ?',
+      'pragma table_info("sample")',
+      'savepoint "unit"',
+      'release "unit"',
+      'insert into "sample" ("value") values (?)',
+    ])
     ok(!JSON.stringify(captured.spans).includes('private'))
     equal(context(), undefined)
   } finally {

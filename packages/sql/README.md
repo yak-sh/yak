@@ -59,7 +59,7 @@ All exports use the single import path `@yaks/sql`.
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | Query compilation     | `compile`, `bind`, `BindOpts`, `Compiled`, `screen`, `tallied`, `Unsupported`, `whole`                                      |
 | SQL nodes             | `Expr`, `Query`, `Stmt`, `Select`, `Insert`, `Update`, `Delete`, schema-operation types, `Raw`, `Param`, and their builders |
-| Rendering             | `render`, `shape`, `isRaw`                                                                                                  |
+| Rendering             | `render`, `shape`, `excerpt`, `isRaw`                                                                                       |
 | Drivers               | `Driver`, `Row`, `effect`, `scan`, `tally`, `revision`                                                                      |
 | Property reads        | `Tag`, `tagOf`, `held`, `field`, `Derived`, `DerivedProp`, `ladders`, `derivedOf`, `worn`                                   |
 | Computed components   | `Backing`, `Backings`, `eidOf`, `idOf`, `eidAt`                                                                             |
@@ -86,6 +86,7 @@ import {
   col,
   each,
   eq,
+  excerpt,
   insert,
   render,
   select,
@@ -115,6 +116,15 @@ let schema = render({
 equal(schema.sql, `create table "book" ("title" text default 'O''Brien')`)
 equal(schema.params, [])
 equal(shape(schema), 'create table "book" ("title" text default ?)')
+
+// What a trace keeps: the shape, cut short with how many parameters it binds.
+let batch = render(
+  insert('book', ...Array.from({ length: 300 }, (_, i) => ({ title: `${i}` }))),
+)
+equal(
+  excerpt(batch, 64),
+  'insert into "book" ("title") values (?), (?), … (300 parameters)',
+)
 ```
 
 Compose queries from nodes without writing SQL text:
@@ -232,8 +242,10 @@ stores SQL to execute later (triggers, views, defaults, checks and partial index
 conditions); there it renders a quoted literal. `lit` always renders a literal.
 AND and OR nest in halves when large to avoid SQLite's expression depth limit.
 `shape` masks literals as well as leaving parameter placeholders visible, while
-keeping identifiers for diagnosis. Treat built nodes as immutable: rendering
-caches parameter-free parts.
+keeping identifiers for diagnosis. `excerpt` is the shape a trace keeps of a
+statement it ran: at most 512 characters, and past that its start and how many
+parameters it binds. Treat built nodes as immutable: rendering caches
+parameter-free parts.
 
 ## Driver
 

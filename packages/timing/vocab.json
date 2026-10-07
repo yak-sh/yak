@@ -206,6 +206,33 @@
           "stamped": true,
           "minimum": 0,
           "description": "The measured count; parent spans include their descendants."
+        },
+        "ran": {
+          "type": "array",
+          "stamped": true,
+          "items": {
+            "type": "object",
+            "properties": {
+              "sql": {
+                "type": "string",
+                "description": "The statement with every value masked as ?, cut at 512 characters with how many parameters it binds; absent on the one entry summing those past the twenty kept."
+              },
+              "n": {
+                "type": "integer",
+                "description": "How many times it ran."
+              },
+              "rows_read": {
+                "type": "number"
+              },
+              "rows_written": {
+                "type": "number"
+              },
+              "ms": {
+                "type": "number"
+              }
+            }
+          },
+          "description": "The statements themselves, alike ones together, those that read and wrote the most rows first: a sql span's own, and for any other span those its sql spans ran with those of descendants its trace left out. Read whole."
         }
       }
     },

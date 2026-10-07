@@ -76,20 +76,23 @@ concurrent subscribers keep their subscriptions and history.
 
 `Event` exports `id`, optional `parent`, `kind`, `name`, `stage`, monotonic
 `time`, optional `start` and `duration`, optional `package` and `plugin`,
-optional `outcome`, and numeric `counts`. Kinds are `apply`, `phase`, `rule`,
-`query`, `get`, `effect`, `request`, `fanout`, `sql`, `bench`, and
-`process-start`. Outcomes are `ok`, `check`, `refused`, `error`, and
-`interrupted`. A span's start and end share one string ID; pass that ID as a
-child's `parent`. IDs are channel-local, not durable or cross-process
-identities. `instant(activity, end?)` records a point event without an open
-span.
+optional `outcome`, numeric `counts`, and a `sql` span's optional `sql`. Kinds
+are `apply`, `phase`, `rule`, `query`, `get`, `effect`, `request`, `fanout`,
+`sql`, `bench`, and `process-start`. Outcomes are `ok`, `check`, `refused`,
+`error`, and `interrupted`. A span's start and end share one string ID; pass
+that ID as a child's `parent`. IDs are channel-local, not durable or
+cross-process identities. `instant(activity, end?)` records a point event
+without an open span.
 
 Names identify code, not data. Producers must never include entity IDs, bundle
 values, query text, URLs, secrets or credentials. Counts contain only numeric
-metrics. Events and count objects are frozen; subscriber failures are isolated
-from the producer. A span opened in one recording cannot end in a later
-recording after all subscribers disconnected. Duration measures local runtime
-work and may be zero on runtimes whose clocks advance only with I/O.
+metrics. A `sql` span may also carry `sql`, the statement it ran as text with
+every value masked: bound parameters and literals read `?` (@yaks/sql's
+`excerpt`, which also bounds its length). Identifiers stay, as they name code.
+Events and count objects are frozen; subscriber failures are isolated from the
+producer. A span opened in one recording cannot end in a later recording after
+all subscribers disconnected. Duration measures local runtime work and may be
+zero on runtimes whose clocks advance only with I/O.
 
 The channel owns no scheduler, durable telemetry, transport, API authentication
 or UI. SSE, tools and other views consume this same channel and own their queue,
@@ -182,13 +185,21 @@ try {
     let c = ok(peek(target))
     return during(c.begin({ kind: 'request', name: 'request' }), async () => {
       await Promise.resolve()
-      return during(c.begin({ kind: 'sql', name: 'book select' }), () => {
-        measure({ statements: 1, rowsRead: 4 })
-        equal(context()?.channel, c)
-      })
+      return during(
+        c.begin({
+          kind: 'sql',
+          name: 'book select',
+          sql: 'select "title" from "book" where "author" = ?',
+        }),
+        () => {
+          measure({ statements: 1, rowsRead: 4 })
+          equal(context()?.channel, c)
+        },
+      )
     })
   })
   equal(captured.spans[1].parent, captured.spans[0].id)
+  equal(captured.spans[1].sql, 'select "title" from "book" where "author" = ?')
   equal(captured.spans[0].counts, { statements: 1, rowsRead: 4 })
 } finally {
   restore()
