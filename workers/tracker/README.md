@@ -64,13 +64,17 @@ counts. Error intake does not share the trace allowance.
 The platform tracker object serializes admission for every space and reserves a
 conservative write bound before forwarding a trace. At most 42,000 reserved rows
 can overlap any rolling hour. A reservation is 64 rows per bundle plus eight
-rows for the two durable metadata writes. Accepted captures contain one trace
-root and its complete span tree, at most 201 bundles (one trace and 200 spans),
-with only the trace/context/metric components the bounded intake supports. The
-source keeps the most expensive spans and their ancestors within 200 spans;
-omitted work remains in its retained parent's inclusive metrics. Oversized,
-incomplete, malformed and over-ceiling captures are dropped and acknowledged; no
-partial tree is stored and drops do not report new tracker errors.
+rows for the two durable metadata writes, plus 512 rows for setup (256 for the
+platform tracker and 256 for the destination tracker). This setup bound is
+reserved on every capture, including warm trackers and redelivery; platform
+captures reserve both bounds even though they use one tracker. Accepted captures
+contain one trace root and its complete span tree, at most 201 bundles (one
+trace and 200 spans), with only the trace/context/metric components the bounded
+intake supports. The source keeps the most expensive spans and their ancestors
+within 200 spans; omitted work remains in its retained parent's inclusive
+metrics. Oversized, incomplete, malformed and over-ceiling captures are dropped
+and acknowledged; no partial tree is stored and drops do not report new tracker
+errors.
 
 Successful reservations expire one hour after delivery completes, not at a
 calendar-hour rollover. Reservations persist in the platform's existing
@@ -85,12 +89,14 @@ object is evicted; the spent allowance does not. Tracing does not arm alarms or
 send error reports. Direct error `ingest` rejects traces so it cannot bypass the
 authority.
 
-Activation initializes each tracker through its authenticated ordinary read.
-That explicit boot installs the schema and its readiness marker. Trace intake
-can reopen a marked store after eviction without installation or mail writes; an
-uninitialized tracker drops captures. The platform authority also needs that
-explicit initialization before reserving traces. Large captures exceeding the
-ten-bundle limit are discarded rather than split and partly admitted.
+The first admitted trace installs an empty tracker without an ordinary read. The
+platform authority creates its metadata table and pending reservation in one
+transaction before installing its own schema or forwarding a trace. Setup
+installs only into empty storage (or the authority's metadata-only storage),
+never fits standing data or backfills it. A failed setup or delivery keeps the
+reservation pending. Marked trackers reopen without installation writes after
+eviction. Trace setup does not initialize notification mail, arm alarms or
+report errors; ordinary tracker work handles notifications independently.
 
 Platform-only `POST /heartbeat` renews the box heartbeat. Cron probes the MCP
 endpoint and tracks an activated box heartbeat older than five minutes. The

@@ -5,6 +5,7 @@ import {
   driver,
   type DurableStorage,
   type Hibernation,
+  reserved,
   type Sockets,
   sockets,
   storage,
@@ -18,7 +19,8 @@ import { door, json } from './door.ts'
 import { authorize } from './auth.ts'
 import { monitor } from './monitor.ts'
 import type { Bundle } from '@yaks/graph'
-import { meta } from '@yaks/sqlite'
+import { meta, schema } from '@yaks/sqlite'
+import { col, eq, select, table, val } from '@yaks/sql'
 import {
   reserveTrace,
   TRACE_CEILING,
@@ -64,6 +66,15 @@ export type Settings = {
   MAIL_TO?: string
 }
 let TRACE_READY = 'trace-ceiling-v1'
+// Reserve both installations on every capture, including warm/redeliveries.
+// Only empty storage may be installed by tracing; standing data never gets
+// schema fitting, archetype backfill or mail writes under this fixed bound.
+export let TRACE_SETUP_BOUND = 256
+export let TRACE_ADMISSION_SETUP = 2 * TRACE_SETUP_BOUND
+let metaDdl = schema(vocab, options.derived).find((stmt) =>
+  stmt.t == 'create table' && stmt.name == 'server_meta'
+)!
+
 export class Tracker {
   tracker?: TrackerStore
   live?: Sockets
@@ -82,19 +93,43 @@ export class Tracker {
       ? queue(env.ERRORS)
       : (rows) => console.error(JSON.stringify(rows))
   }
-  boot = async (install = true) => {
-    if (this.tracker) return this.tracker
-    let kept = this.#traceMeta()
-    if (!install && kept.get('trace-ready') != TRACE_READY) {
-      throw Error('tracker trace schema not initialized')
+  #mailReady = false
+  #traceStorage = () => {
+    let sql = driver(this.ctx.storage), kept = meta(sql)
+    let tables = sql.query(select({
+      cols: [col('name')],
+      from: table('sqlite_schema'),
+      where: eq(col('type'), val('table')),
+    })).map((row) => String(row.name))
+      .filter((name) => !reserved(name) && name != '__miniflare_do_name')
+    let marked = tables.includes('server_meta') &&
+      kept.get('trace-ready') == TRACE_READY
+    if (!marked && tables.some((name) => name != 'server_meta')) {
+      throw Error('tracker trace schema requires ordinary installation')
     }
     let saved = storage(this.ctx.storage, vocab, {
       ...options,
-      schemaReady: () => !install,
+      schemaReady: () => true,
     })
+    if (!marked) {
+      this.ctx.storage.transactionSync(() => {
+        saved.install()
+        kept.set('trace-ready', TRACE_READY)
+      })
+    }
+    return saved
+  }
+  boot = async (install = true) => {
+    if (this.tracker) {
+      if (install) await this.#mail()
+      return this.tracker
+    }
+    let saved = install
+      ? storage(this.ctx.storage, vocab, options)
+      : this.#traceStorage()
     if (install) {
       saved.install()
-      kept.set('trace-ready', TRACE_READY)
+      this.#traceMeta().set('trace-ready', TRACE_READY)
     }
     let tracker = store(saved, {
       sink: this.sink,
@@ -116,15 +151,20 @@ export class Tracker {
         }
         : {},
     })
-    if (install && this.scope == platform && this.env.MAIL_TO) {
-      await tracker.graph.apply([{
+    this.live = sockets(subscriptions(tracker.graph), this.ctx)
+    this.tracker = tracker
+    if (install) await this.#mail()
+    return tracker
+  }
+  #mail = async () => {
+    if (this.#mailReady) return
+    if (this.scope == platform && this.env.MAIL_TO) {
+      await this.tracker!.graph.apply([{
         entity: { eid: platform },
         email: { address: this.env.MAIL_TO },
       }], { trusted: true })
     }
-    this.live = sockets(subscriptions(tracker.graph), this.ctx)
-    this.tracker = tracker
-    return tracker
+    this.#mailReady = true
   }
   recover = async (error: unknown) => {
     await caught(error, { sink: this.sink })
@@ -150,7 +190,8 @@ export class Tracker {
     }
   }
   // This RPC is reached only by the queue's platform authority, never HTTP.
-  // Existing schema can be reopened after eviction without installation writes.
+  // Empty storage is installed inside the reserved setup bound; marked storage
+  // reopens without installation writes. Notification setup is ordinary work.
   ingestTrace = async (rows: Bundle[]): Promise<boolean> => {
     let capture = traceBatch(rows)
     if (!capture || capture.scope != this.scope) return false
@@ -204,25 +245,36 @@ export class Tracker {
       if (!capture || capture.scope != scope) {
         return drop('incomplete or oversized trace')
       }
-      let kept = this.#traceMeta(), held: TraceBudget
+      let kept = this.#traceMeta(), next: TraceBudget | undefined
       try {
-        if (kept.get('trace-ready') != TRACE_READY) {
-          return drop('tracker not initialized')
-        }
-        let parsed = traceBudget(kept.get('trace-budget'))
-        if (!parsed) return drop('invalid trace reservations')
-        held = parsed
-      } catch {
-        return drop('tracker not initialized')
-      }
-      let next = reserveTrace(held, this.now(), capture.cost)
-      if (!next) return drop('trace ceiling')
-      // Persist before any target write. A crash or failed target leaves this
-      // reservation pending forever rather than reopening a spent allowance.
-      try {
-        kept.set('trace-budget', JSON.stringify(next))
+        // Bootstrap only the authority's metadata table and pending charge
+        // atomically. Schema setup follows that durable reservation: even a
+        // failed installation may have billed writes and cannot refund it.
+        this.ctx.storage.transactionSync(() => {
+          let sql = driver(this.ctx.storage)
+          let exists = sql.query(select({
+            cols: [col('name')],
+            from: table('sqlite_schema'),
+            where: eq(col('name'), val('server_meta')),
+          })).length
+          if (!exists) sql.query(metaDdl)
+          let held = traceBudget(kept.get('trace-budget'))
+          if (!held) throw Error('invalid trace reservations')
+          next = reserveTrace(
+            held,
+            this.now(),
+            capture.cost + TRACE_ADMISSION_SETUP,
+          )
+          if (next) kept.set('trace-budget', JSON.stringify(next))
+        })
       } catch {
         return drop('trace reservation unavailable')
+      }
+      if (!next) return drop('trace ceiling')
+      try {
+        if (!this.tracker) this.#traceStorage()
+      } catch {
+        return drop('trace setup unavailable')
       }
       let accepted = false
       try {
@@ -232,13 +284,13 @@ export class Tracker {
       } catch {
         return drop('trace delivery failed')
       }
+      if (!accepted) return drop('trace target unavailable')
       next.slots[next.slots.length - 1].until = this.now() + 3_600_000
       try {
         kept.set('trace-budget', JSON.stringify(next))
       } catch {
         return drop('trace completion unavailable')
       }
-      if (!accepted) return drop('target not initialized')
       return {
         accepted: true,
         dropped: this.#traceDropped,

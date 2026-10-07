@@ -3,7 +3,7 @@ import { equal, ok, test } from '@yaks/testing'
 import { durable } from '../../packages/durable-object/testing.ts'
 import type { Bundle } from '@yaks/graph'
 import { reserveTrace, TRACE_CEILING, traceBatch } from '@yaks/tracker/intake'
-import { type State, Tracker } from './object.ts'
+import { type State, TRACE_ADMISSION_SETUP, Tracker } from './object.ts'
 import { platform } from './core.ts'
 import { consume } from './queue.ts'
 import { sign } from './auth.ts'
@@ -107,7 +107,7 @@ test('global ceiling serializes spaces, persists across reboot, rolls from compl
   )
   equal(outcomes.filter((r) => r.accepted).length, 3)
   equal(delivered, 3)
-  equal(authority.traceBudget().reserved, 38616)
+  equal(authority.traceBudget().reserved, 40152)
   equal(authority.traceBudget().dropped, 17)
   authority = new Tracker(state(db, platform), env, () => clock)
   equal((await authority.admitTrace(space, rows(space, 200))).accepted, false)
@@ -136,11 +136,11 @@ test('failed forwarding keeps a pending durable charge rather than refunding on 
     await authority.admitTrace(space, rows(space, 200))
   }
   equal(authority.traceBudget().pending, true)
-  equal(authority.traceBudget().reserved, 38616)
+  equal(authority.traceBudget().reserved, 40152)
   clock = 10_000_000
   authority = new Tracker(state(db, platform), env, () => clock)
   equal((await authority.admitTrace(space, rows(space, 200))).accepted, false)
-  equal(authority.traceBudget().reserved, 38616)
+  equal(authority.traceBudget().reserved, 40152)
 })
 
 test('queue acknowledges dropped traces without retrying or reporting and leaves errors independent', async () => {
@@ -237,4 +237,65 @@ test('trace authority transport failure retries without generating tracker error
     () => Promise.reject(Error('authority unavailable')),
   )
   equal([retried, reported], [1, 0])
+})
+
+test('first admission initializes separate untouched trackers and charges setup', async () => {
+  let target = new Tracker(state(durable(), space))
+  let authority = new Tracker(state(durable(), platform), {
+    TRACKERS: { getByName: () => target },
+    MAIL_TO: 'scratch@example.test',
+  })
+  let body = rows()
+  let admitted = await authority.admitTrace(space, body)
+  equal(admitted.accepted, true)
+  equal(admitted.reserved, traceBatch(body)!.cost + TRACE_ADMISSION_SETUP)
+  equal((await target.tracker!.graph.read('.trace')).length, 1)
+  let own = rows(platform)
+  equal((await authority.admitTrace(platform, own)).accepted, true)
+  equal((await authority.tracker!.graph.read('.trace')).length, 1)
+  equal((await authority.tracker!.graph.read('.email')).length, 0)
+  await authority.boot()
+  equal((await authority.tracker!.graph.read('.email')).length, 1)
+})
+
+test('trace initialization refuses an unmarked standing graph without fitting its data', async () => {
+  let target = new Tracker(state(durable(), space))
+  await target.boot()
+  let { meta } = await import('@yaks/sqlite')
+  let { driver } = await import('@yaks/durable-object')
+  meta(driver(target.ctx.storage)).del('trace-ready')
+  let reopened = new Tracker(target.ctx)
+  equal(await reopened.ingestTrace(rows()), false)
+  equal(reopened.tracker, undefined)
+})
+
+test('failed empty schema setup retains its charge across restart without reporting', async () => {
+  let db = durable(), sql = db.sql.exec.bind(db.sql), failed = false
+  db.sql.exec = (text, ...args) => {
+    if (/create table.*entity/i.test(text)) {
+      failed = true
+      throw Error('setup interrupted')
+    }
+    return sql(text, ...args)
+  }
+  let reports = 0
+  let authority = new Tracker(state(db, platform), {
+    ERRORS: {
+      send: () => {
+        reports++
+        return Promise.resolve()
+      },
+    },
+  }, () => 0)
+  let result = await authority.admitTrace(platform, rows(platform))
+  equal(failed, true)
+  equal(result.accepted, false)
+  equal(authority.traceBudget().pending, true)
+  equal(authority.traceBudget().reserved, 136 + TRACE_ADMISSION_SETUP)
+  db.sql.exec = sql
+  authority = new Tracker(state(db, platform), {}, () => 10_000_000)
+  equal((await authority.admitTrace(platform, rows(platform))).accepted, true)
+  equal(authority.traceBudget().pending, true)
+  equal(authority.traceBudget().reserved, 2 * (136 + TRACE_ADMISSION_SETUP))
+  equal(reports, 0)
 })

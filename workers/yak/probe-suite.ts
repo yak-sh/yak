@@ -234,11 +234,11 @@ export let probeSuite = async () => {
             bindings: [{
               name: 'TRACKER_BOUND',
               class_name: 'TrackerTraceBound',
-            }],
+            }, { name: 'FRESH', class_name: 'TrackerTraceFresh' }],
           },
           migrations: [{
             tag: 'v1',
-            new_sqlite_classes: ['TrackerTraceBound'],
+            new_sqlite_classes: ['TrackerTraceBound', 'TrackerTraceFresh'],
           }],
         },
       },
