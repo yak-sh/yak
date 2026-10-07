@@ -117,22 +117,24 @@ export let aliased = (root = repo, to = TSCONFIG) => {
  */
 export let ready = async (root = dir, timeout = 600_000) => {
   aliased()
-  let web = await new Deno.Command('deno', {
-    args: [
-      'run',
-      '--no-lock',
-      '-A',
-      join(repo, 'packages/web/assets.ts'),
-      join(root, 'public/_web'),
-      '@yaks/browse/web',
-    ],
-    stdin: 'null',
-  }).spawn().status
+  let [web, generated] = await Promise.all([
+    new Deno.Command('deno', {
+      args: [
+        'run',
+        '--no-lock',
+        '-A',
+        join(repo, 'packages/web/assets.ts'),
+        join(root, 'public/_web'),
+        '@yaks/browse/web',
+      ],
+      stdin: 'null',
+    }).spawn().status,
+    new Deno.Command('deno', {
+      args: ['run', '--no-lock', '-A', join(repo, 'bin/compiler-packages.ts')],
+      stdin: 'null',
+    }).spawn().status,
+  ])
   if (!web.success) throw new Error('Web asset generation failed')
-  let generated = await new Deno.Command('deno', {
-    args: ['run', '--no-lock', '-A', join(repo, 'bin/compiler-packages.ts')],
-    stdin: 'null',
-  }).spawn().status
   if (!generated.success) throw new Error('Compiler catalog generation failed')
   if (!stale(root)) return false
   let lock = `${root}/node_modules.lock`
@@ -512,10 +514,20 @@ let serving = async (env: string[]): Promise<string[]> => {
 }
 
 if (import.meta.main) {
-  await ready()
   let argv = [...Deno.args]
-  if (command(argv) === 'deploy' && !argv.includes('--dry-run')) {
-    let saw = await seen(dir, await serving(envs(argv)))
+  // Generated assets/catalog and the read-only supersession guard are
+  // independent. Both settle before any upload; neither delays the other.
+  let guarded = command(argv) === 'deploy' && !argv.includes('--dry-run')
+  let [prepared, inspected] = await Promise.allSettled([
+    ready(),
+    guarded
+      ? serving(envs(argv)).then((live) => seen(dir, live))
+      : Promise.resolve(null),
+  ])
+  if (prepared.status == 'rejected') throw prepared.reason
+  if (inspected.status == 'rejected') throw inspected.reason
+  if (inspected.value) {
+    let saw = inspected.value
     let live = saw.live.map((l) => short(l.sha) + (l.ahead == null ? '?' : ''))
     console.log(
       `deploy ${short(saw.head)}: main at ${
